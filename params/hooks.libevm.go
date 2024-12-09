@@ -69,8 +69,8 @@ type RulesAllowlistHooks interface {
 // Hooks returns the hooks registered with [RegisterExtras], or [NOOPHooks] if
 // none were registered.
 func (c *ChainConfig) Hooks() ChainConfigHooks {
-	if e := registeredExtras; e != nil {
-		return e.payloads.hooksFromChainConfig(c)
+	if e := registeredExtras; e.Registered() {
+		return e.Get().payloads.hooksFromChainConfig(c)
 	}
 	return NOOPHooks{}
 }
@@ -78,8 +78,8 @@ func (c *ChainConfig) Hooks() ChainConfigHooks {
 // Hooks returns the hooks registered with [RegisterExtras], or [NOOPHooks] if
 // none were registered.
 func (r *Rules) Hooks() RulesHooks {
-	if e := registeredExtras; e != nil {
-		return e.payloads.hooksFromRules(r)
+	if e := registeredExtras; e.Registered() {
+		return e.Get().payloads.hooksFromRules(r)
 	}
 	return NOOPHooks{}
 }

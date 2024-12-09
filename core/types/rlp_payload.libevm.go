@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/libevm/testonly"
 	"github.com/ava-labs/libevm/rlp"
 )
@@ -37,18 +38,15 @@ import (
 // The payload can be accessed via the [ExtraPayloads.FromPayloadCarrier] method
 // of the accessor returned by RegisterExtras.
 func RegisterExtras[SA any]() ExtraPayloads[SA] {
-	if registeredExtras != nil {
-		panic("re-registration of Extras")
-	}
 	var extra ExtraPayloads[SA]
-	registeredExtras = &extraConstructors{
+	registeredExtras.MustRegister(&extraConstructors{
 		stateAccountType: func() string {
 			var x SA
 			return fmt.Sprintf("%T", x)
 		}(),
 		newStateAccount:   pseudo.NewConstructor[SA]().Zero,
 		cloneStateAccount: extra.cloneStateAccount,
-	}
+	})
 	return extra
 }
 
@@ -59,12 +57,10 @@ func RegisterExtras[SA any]() ExtraPayloads[SA] {
 // defer-called afterwards, either directly or via testing.TB.Cleanup(). This is
 // a workaround for the single-call limitation on [RegisterExtras].
 func TestOnlyClearRegisteredExtras() {
-	testonly.OrPanic(func() {
-		registeredExtras = nil
-	})
+	registeredExtras.TestOnlyClear()
 }
 
-var registeredExtras *extraConstructors
+var registeredExtras register.AtMostOnce[*extraConstructors]
 
 type extraConstructors struct {
 	stateAccountType  string
@@ -74,10 +70,10 @@ type extraConstructors struct {
 
 func (e *StateAccountExtra) clone() *StateAccountExtra {
 	switch r := registeredExtras; {
-	case r == nil, e == nil:
+	case !r.Registered(), e == nil:
 		return nil
 	default:
-		return r.cloneStateAccount(e)
+		return r.Get().cloneStateAccount(e)
 	}
 }
 
@@ -146,7 +142,7 @@ func (a *SlimAccount) extra() *StateAccountExtra {
 func getOrSetNewStateAccountExtra(curr **StateAccountExtra) *StateAccountExtra {
 	if *curr == nil {
 		*curr = &StateAccountExtra{
-			t: registeredExtras.newStateAccount(),
+			t: registeredExtras.Get().newStateAccount(),
 		}
 	}
 	return *curr
@@ -154,7 +150,7 @@ func getOrSetNewStateAccountExtra(curr **StateAccountExtra) *StateAccountExtra {
 
 func (e *StateAccountExtra) payload() *pseudo.Type {
 	if e.t == nil {
-		e.t = registeredExtras.newStateAccount()
+		e.t = registeredExtras.Get().newStateAccount()
 	}
 	return e.t
 }
@@ -196,13 +192,13 @@ var _ interface {
 // EncodeRLP implements the [rlp.Encoder] interface.
 func (e *StateAccountExtra) EncodeRLP(w io.Writer) error {
 	switch r := registeredExtras; {
-	case r == nil:
+	case !r.Registered():
 		return nil
 	case e == nil:
 		e = &StateAccountExtra{}
 		fallthrough
 	case e.t == nil:
-		e.t = r.newStateAccount()
+		e.t = r.Get().newStateAccount()
 	}
 	return e.t.EncodeRLP(w)
 }
@@ -210,10 +206,10 @@ func (e *StateAccountExtra) EncodeRLP(w io.Writer) error {
 // DecodeRLP implements the [rlp.Decoder] interface.
 func (e *StateAccountExtra) DecodeRLP(s *rlp.Stream) error {
 	switch r := registeredExtras; {
-	case r == nil:
+	case !r.Registered():
 		return nil
 	case e.t == nil:
-		e.t = r.newStateAccount()
+		e.t = r.Get().newStateAccount()
 		fallthrough
 	default:
 		return s.Decode(e.t)
@@ -224,10 +220,10 @@ func (e *StateAccountExtra) DecodeRLP(s *rlp.Stream) error {
 func (e *StateAccountExtra) Format(s fmt.State, verb rune) {
 	var out string
 	switch r := registeredExtras; {
-	case r == nil:
+	case !r.Registered():
 		out = "<nil>"
 	case e == nil, e.t == nil:
-		out = fmt.Sprintf("<nil>[*StateAccountExtra[%s]]", r.stateAccountType)
+		out = fmt.Sprintf("<nil>[*StateAccountExtra[%s]]", r.Get().stateAccountType)
 	default:
 		e.t.Format(s, verb)
 		return

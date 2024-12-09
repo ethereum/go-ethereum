@@ -22,7 +22,7 @@ import (
 	"reflect"
 
 	"github.com/ava-labs/libevm/libevm/pseudo"
-	"github.com/ava-labs/libevm/libevm/testonly"
+	"github.com/ava-labs/libevm/libevm/register"
 )
 
 // Extras are arbitrary payloads to be added as extra fields in [ChainConfig]
@@ -68,20 +68,17 @@ type Extras[C ChainConfigHooks, R RulesHooks] struct {
 // alter Ethereum behaviour; if this isn't desired then they can embed
 // [NOOPHooks] to satisfy either interface.
 func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPayloads[C, R] {
-	if registeredExtras != nil {
-		panic("re-registration of Extras")
-	}
 	mustBeStructOrPointerToOne[C]()
 	mustBeStructOrPointerToOne[R]()
 
 	payloads := e.payloads()
-	registeredExtras = &extraConstructors{
+	registeredExtras.MustRegister(&extraConstructors{
 		newChainConfig: pseudo.NewConstructor[C]().Zero,
 		newRules:       pseudo.NewConstructor[R]().Zero,
 		reuseJSONRoot:  e.ReuseJSONRoot,
 		newForRules:    e.newForRules,
 		payloads:       payloads,
-	}
+	})
 	return payloads
 }
 
@@ -92,14 +89,12 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 // defer-called afterwards, either directly or via testing.TB.Cleanup(). This is
 // a workaround for the single-call limitation on [RegisterExtras].
 func TestOnlyClearRegisteredExtras() {
-	testonly.OrPanic(func() {
-		registeredExtras = nil
-	})
+	registeredExtras.TestOnlyClear()
 }
 
 // registeredExtras holds non-generic constructors for the [Extras] types
 // registered via [RegisterExtras].
-var registeredExtras *extraConstructors
+var registeredExtras register.AtMostOnce[*extraConstructors]
 
 type extraConstructors struct {
 	newChainConfig, newRules func() *pseudo.Type
@@ -115,7 +110,7 @@ type extraConstructors struct {
 
 func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type {
 	if e.NewRules == nil {
-		return registeredExtras.newRules()
+		return registeredExtras.Get().newRules()
 	}
 	rExtra := e.NewRules(c, r, e.payloads().FromChainConfig(c), blockNum, isMerge, timestamp)
 	return pseudo.From(rExtra).Type
@@ -209,8 +204,8 @@ func (e ExtraPayloads[C, R]) hooksFromRules(r *Rules) RulesHooks {
 // abstract the libevm-specific behaviour outside of original geth code.
 func (c *ChainConfig) addRulesExtra(r *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) {
 	r.extra = nil
-	if registeredExtras != nil {
-		r.extra = registeredExtras.newForRules(c, r, blockNum, isMerge, timestamp)
+	if registeredExtras.Registered() {
+		r.extra = registeredExtras.Get().newForRules(c, r, blockNum, isMerge, timestamp)
 	}
 }
 
@@ -218,7 +213,7 @@ func (c *ChainConfig) addRulesExtra(r *Rules, blockNum *big.Int, isMerge bool, t
 // already been called. If the payload hasn't been populated (typically via
 // unmarshalling of JSON), a nil value is constructed and returned.
 func (c *ChainConfig) extraPayload() *pseudo.Type {
-	if registeredExtras == nil {
+	if !registeredExtras.Registered() {
 		// This will only happen if someone constructs an [ExtraPayloads]
 		// directly, without a call to [RegisterExtras].
 		//
@@ -226,19 +221,19 @@ func (c *ChainConfig) extraPayload() *pseudo.Type {
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", c))
 	}
 	if c.extra == nil {
-		c.extra = registeredExtras.newChainConfig()
+		c.extra = registeredExtras.Get().newChainConfig()
 	}
 	return c.extra
 }
 
 // extraPayload is equivalent to [ChainConfig.extraPayload].
 func (r *Rules) extraPayload() *pseudo.Type {
-	if registeredExtras == nil {
+	if !registeredExtras.Registered() {
 		// See ChainConfig.extraPayload() equivalent.
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", r))
 	}
 	if r.extra == nil {
-		r.extra = registeredExtras.newRules()
+		r.extra = registeredExtras.Get().newRules()
 	}
 	return r.extra
 }

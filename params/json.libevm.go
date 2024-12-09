@@ -42,11 +42,11 @@ type chainConfigWithExportedExtra struct {
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	switch reg := registeredExtras; {
-	case reg != nil && !reg.reuseJSONRoot:
+	case reg.Registered() && !reg.Get().reuseJSONRoot:
 		return c.unmarshalJSONWithExtra(data)
 
-	case reg != nil && reg.reuseJSONRoot: // although the latter is redundant, it's clearer
-		c.extra = reg.newChainConfig()
+	case reg.Registered() && reg.Get().reuseJSONRoot: // although the latter is redundant, it's clearer
+		c.extra = reg.Get().newChainConfig()
 		if err := json.Unmarshal(data, c.extra); err != nil {
 			c.extra = nil
 			return err
@@ -63,7 +63,7 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 func (c *ChainConfig) unmarshalJSONWithExtra(data []byte) error {
 	cc := &chainConfigWithExportedExtra{
 		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(c),
-		Extra:                     registeredExtras.newChainConfig(),
+		Extra:                     registeredExtras.Get().newChainConfig(),
 	}
 	if err := json.Unmarshal(data, cc); err != nil {
 		return err
@@ -75,10 +75,10 @@ func (c *ChainConfig) unmarshalJSONWithExtra(data []byte) error {
 // MarshalJSON implements the [json.Marshaler] interface.
 func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 	switch reg := registeredExtras; {
-	case reg == nil:
+	case !reg.Registered():
 		return json.Marshal((*chainConfigWithoutMethods)(c))
 
-	case !reg.reuseJSONRoot:
+	case !reg.Get().reuseJSONRoot:
 		return c.marshalJSONWithExtra()
 
 	default: // reg.reuseJSONRoot == true

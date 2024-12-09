@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm/register"
 )
 
 type rawJSON struct {
@@ -255,18 +256,21 @@ func TestExtrasPanic(t *testing.T) {
 		t, func() {
 			RegisterExtras(Extras[struct{ ChainConfigHooks }, struct{ RulesHooks }]{})
 		},
-		"re-registration",
+		register.ErrReRegistration.Error(),
 	)
 }
 
 func assertPanics(t *testing.T, fn func(), wantContains string) {
 	t.Helper()
 	defer func() {
+		t.Helper()
 		switch r := recover().(type) {
 		case nil:
-			t.Error("function did not panic as expected")
+			t.Error("function did not panic when panic expected")
 		case string:
 			assert.Contains(t, r, wantContains)
+		case error:
+			assert.Contains(t, r.Error(), wantContains)
 		default:
 			t.Fatalf("BAD TEST SETUP: recover() got unsupported type %T", r)
 		}
