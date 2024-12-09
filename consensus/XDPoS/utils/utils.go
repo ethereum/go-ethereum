@@ -9,9 +9,9 @@ import (
 	"strconv"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 func Position(list []common.Address, x common.Address) int {
@@ -91,7 +91,7 @@ func DecodeBytesExtraFields(b []byte, val interface{}) error {
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewKeccak256()
+	hw := sha3.NewLegacyKeccak256()
 	err := rlp.Encode(hw, x)
 	if err != nil {
 		log.Error("[rlpHash] Fail to hash item", "Error", err)

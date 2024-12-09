@@ -14,9 +14,9 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/ethclient"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
+	"golang.org/x/crypto/sha3"
 )
 
 type LendingMsg struct {
@@ -63,7 +63,7 @@ func getLendingNonce(userAddress common.Address) (uint64, error) {
 
 func (l *LendingMsg) computeHash() common.Hash {
 	borrowing := l.Side == lendingstate.Borrowing
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	if l.Type == lendingstate.Repay {
 		sha.Write(common.BigToHash(big.NewInt(int64(l.AccountNonce))).Bytes())
 		sha.Write([]byte(l.Status))
@@ -83,7 +83,7 @@ func (l *LendingMsg) computeHash() common.Hash {
 		sha.Write(common.BigToHash(l.Quantity).Bytes())
 	} else {
 		if l.Status == lendingstate.LendingStatusCancelled {
-			sha := sha3.NewKeccak256()
+			sha := sha3.NewLegacyKeccak256()
 			sha.Write(l.Hash.Bytes())
 			sha.Write(common.BigToHash(big.NewInt(int64(l.AccountNonce))).Bytes())
 			sha.Write(l.UserAddress.Bytes())

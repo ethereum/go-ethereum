@@ -542,7 +542,7 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 	if err != nil {
 		return nil, err
 	}
-	signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+	signature[crypto.RecoveryIDOffset] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	return signature, nil
 }
 
@@ -3264,7 +3264,7 @@ func (s *PublicTransactionPoolAPI) Sign(addr common.Address, data hexutil.Bytes)
 	// Sign the requested hash with the wallet
 	signature, err := wallet.SignHash(account, signHash(data))
 	if err == nil {
-		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+		signature[crypto.RecoveryIDOffset] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	}
 	return signature, err
 }

@@ -200,7 +200,7 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 	}
 	// We must make sure not to modify the 'input', so placing the 'v' along with
 	// the signature needs to be done on a new allocation
-	sig := make([]byte, 65)
+	sig := make([]byte, crypto.SignatureLength)
 	copy(sig, input[64:128])
 	sig[64] = v
 	// v needs to be at the end for libsecp256k1

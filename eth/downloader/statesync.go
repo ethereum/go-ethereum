@@ -25,11 +25,11 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/trie"
+	"golang.org/x/crypto/sha3"
 )
 
 // stateReq represents a batch of state fetch requests groupped together into
@@ -242,7 +242,7 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	return &stateSync{
 		d:       d,
 		sched:   state.NewStateSync(root, d.stateDB, trie.NewSyncBloom(1, memorydb.New())),
-		keccak:  sha3.NewKeccak256(),
+		keccak:  sha3.NewLegacyKeccak256(),
 		tasks:   make(map[common.Hash]*stateTask),
 		deliver: make(chan *stateReq),
 		cancel:  make(chan struct{}),

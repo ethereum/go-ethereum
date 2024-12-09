@@ -37,19 +37,19 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/crypto/ecies"
 	"github.com/XinFinOrg/XDPoSChain/crypto/secp256k1"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/golang/snappy"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
 	maxUint24 = ^uint32(0) >> 8
 
-	sskLen = 16 // ecies.MaxSharedKeyLength(pubKey) / 2
-	sigLen = 65 // elliptic S256
-	pubLen = 64 // 512 bit pubkey in uncompressed representation without format byte
-	shaLen = 32 // hash length (for nonce etc)
+	sskLen = 16                     // ecies.MaxSharedKeyLength(pubKey) / 2
+	sigLen = crypto.SignatureLength // elliptic S256
+	pubLen = 64                     // 512 bit pubkey in uncompressed representation without format byte
+	shaLen = 32                     // hash length (for nonce etc)
 
 	authMsgLen  = sigLen + shaLen + pubLen + shaLen + 1
 	authRespLen = pubLen + shaLen + 1
@@ -255,10 +255,10 @@ func (h *encHandshake) secrets(auth, authResp []byte) (secrets, error) {
 	}
 
 	// setup sha3 instances for the MACs
-	mac1 := sha3.NewKeccak256()
+	mac1 := sha3.NewLegacyKeccak256()
 	mac1.Write(xor(s.MAC, h.respNonce))
 	mac1.Write(auth)
-	mac2 := sha3.NewKeccak256()
+	mac2 := sha3.NewLegacyKeccak256()
 	mac2.Write(xor(s.MAC, h.initNonce))
 	mac2.Write(authResp)
 	if h.initiator {

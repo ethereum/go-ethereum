@@ -477,7 +477,7 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 	}
 	// encode the snature in uncompressed format
 	r, s := R.Bytes(), S.Bytes()
-	sig := make([]byte, 65)
+	sig := make([]byte, crypto.SignatureLength)
 	copy(sig[32-len(r):32], r)
 	copy(sig[64-len(s):64], s)
 	sig[64] = V
