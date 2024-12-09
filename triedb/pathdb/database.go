@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-verkle"
 )
 
 const (
@@ -147,6 +148,18 @@ var Defaults = &Config{
 
 // ReadOnly is the config in order to open database in read only mode.
 var ReadOnly = &Config{ReadOnly: true}
+
+// nodeToHash computes the hash of the given node based on the tree structure.
+func nodeToHash(blob []byte, isVerkle bool) (common.Hash, error) {
+	if !isVerkle {
+		return crypto.Keccak256Hash(blob), nil
+	}
+	n, err := verkle.ParseNode(blob, 0)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return n.Commit().Bytes(), nil
+}
 
 // Database is a multiple-layered structure for maintaining in-memory states
 // along with its dirty trie nodes. It consists of one persistent base layer
@@ -350,11 +363,17 @@ func (db *Database) Enable(root common.Hash) error {
 		return errDatabaseReadOnly
 	}
 	// Ensure the provided state root matches the stored one.
-	root = types.TrieRootHash(root)
-	stored := types.EmptyRootHash
+	var (
+		err    error
+		stored = types.EmptyRootHash
+	)
 	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		stored = crypto.Keccak256Hash(blob)
+		stored, err = nodeToHash(blob, db.isVerkle)
+		if err != nil {
+			return err
+		}
 	}
+	root = types.TrieRootHash(root)
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}

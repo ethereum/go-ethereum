@@ -26,10 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-verkle"
 )
 
 var (
@@ -94,16 +92,14 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 // loadLayers loads a pre-existing state layer backed by a key-value store.
 func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
-	var root = types.EmptyRootHash
+	var (
+		err  error
+		root = types.EmptyRootHash
+	)
 	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		if db.isVerkle {
-			rootnode, err := verkle.ParseNode(blob, 0)
-			if err != nil {
-				log.Crit("Could not decode verkle root node")
-			}
-			root = rootnode.Commit().Bytes()
-		} else {
-			root = crypto.Keccak256Hash(blob)
+		root, err = nodeToHash(blob, db.isVerkle)
+		if err != nil {
+			log.Crit("Invalid root verkle node", "err", err)
 		}
 	}
 	// Load the layers by resolving the journal
@@ -269,14 +265,18 @@ func (db *Database) Journal(root common.Hash) error {
 	}
 	// Firstly write out the metadata of journal
 	journal := new(bytes.Buffer)
-	if err := rlp.Encode(journal, journalVersion); err != nil {
+	err := rlp.Encode(journal, journalVersion)
+	if err != nil {
 		return err
 	}
 	// Secondly write out the state root in disk, ensure all layers
 	// on top are continuous with disk.
 	diskRoot := types.EmptyRootHash
 	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		diskRoot = crypto.Keccak256Hash(blob)
+		diskRoot, err = nodeToHash(blob, db.isVerkle)
+		if err != nil {
+			return err
+		}
 	}
 	if err := rlp.Encode(journal, diskRoot); err != nil {
 		return err
