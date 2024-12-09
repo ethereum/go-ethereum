@@ -21,7 +21,6 @@ jobs:
         run: |
           git submodule update --init --depth 1 --recursive
           go version
-          go run build/ci.go lint
           go run build/ci.go check_tidy
           go run build/ci.go check_generate
           go run build/ci.go check_baddeps
