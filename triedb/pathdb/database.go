@@ -151,8 +151,16 @@ var ReadOnly = &Config{ReadOnly: true}
 
 // nodeToHash computes the hash of the given node based on the tree structure.
 func nodeToHash(blob []byte, isVerkle bool) (common.Hash, error) {
+	// Compute the node hash in merkle tree manner
 	if !isVerkle {
+		if len(blob) == 0 {
+			return types.EmptyRootHash, nil
+		}
 		return crypto.Keccak256Hash(blob), nil
+	}
+	// Compute the node hash in verkle tree manner
+	if len(blob) == 0 {
+		return types.EmptyVerkleHash, nil
 	}
 	n, err := verkle.ParseNode(blob, 0)
 	if err != nil {
@@ -363,15 +371,9 @@ func (db *Database) Enable(root common.Hash) error {
 		return errDatabaseReadOnly
 	}
 	// Ensure the provided state root matches the stored one.
-	var (
-		err    error
-		stored = types.EmptyRootHash
-	)
-	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		stored, err = nodeToHash(blob, db.isVerkle)
-		if err != nil {
-			return err
-		}
+	stored, err := nodeToHash(rawdb.ReadAccountTrieNode(db.diskdb, nil), db.isVerkle)
+	if err != nil {
+		return err
 	}
 	root = types.TrieRootHash(root)
 	if stored != root {
@@ -521,9 +523,15 @@ func (db *Database) Size() (diffs common.StorageSize, nodes common.StorageSize) 
 // Initialized returns an indicator if the state data is already
 // initialized in path-based scheme.
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
-	var inited bool
+	var (
+		inited    bool
+		emptyRoot = types.EmptyRootHash
+	)
+	if db.isVerkle {
+		emptyRoot = types.EmptyVerkleHash
+	}
 	db.tree.forEach(func(layer layer) {
-		if layer.rootHash() != types.EmptyRootHash {
+		if layer.rootHash() != emptyRoot {
 			inited = true
 		}
 	})
