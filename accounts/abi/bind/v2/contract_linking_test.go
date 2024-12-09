@@ -247,5 +247,16 @@ func TestContractLinking(t *testing.T) {
 			'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {},
 		})
 
+	// test nested libraries that share deps at different levels of the tree.. with override.
+	testLinkCase(t, map[rune][]rune{
+		'a': {'b', 'c', 'd', 'e'},
+		'e': {'f', 'g', 'h', 'i', 'm'},
+		'i': {'j', 'k', 'l', 'm'}},
+		map[rune]struct{}{
+			'i': {},
+		},
+		map[rune]struct{}{
+			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {},
+		})
 	// TODO: same as the above case but nested one level of dependencies deep (?)
 }
