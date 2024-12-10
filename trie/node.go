@@ -45,6 +45,21 @@ type (
 	}
 	hashNode  []byte
 	valueNode []byte
+
+	//fullnodeEncoder is a type used exclusively for encoding. Briefly instantiating
+	// a fullnodeEncoder and initializing with existing slices is less memory
+	// intense than using the fullNode type.
+	fullnodeEncoder struct {
+		Children [17][]byte
+	}
+
+	//shortNodeEncoder is a type used exclusively for encoding. Briefly instantiating
+	// a shortNodeEncoder and initializing with existing slices is less memory
+	// intense than using the shortNode type.
+	shortNodeEncoder struct {
+		Key []byte
+		Val []byte
+	}
 )
 
 // nilValueNode is used when collapsing internal trie nodes for hashing, since
@@ -89,6 +104,7 @@ func (n *fullNode) fstring(ind string) string {
 	}
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
+
 func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
 }
@@ -97,19 +113,6 @@ func (n hashNode) fstring(ind string) string {
 }
 func (n valueNode) fstring(ind string) string {
 	return fmt.Sprintf("%x ", []byte(n))
-}
-
-// rawNode is a simple binary blob used to differentiate between collapsed trie
-// nodes and already encoded RLP binary blobs (while at the same time store them
-// in the same cache fields).
-type rawNode []byte
-
-func (n rawNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
-func (n rawNode) fstring(ind string) string { panic("this should never end up in a live trie") }
-
-func (n rawNode) EncodeRLP(w io.Writer) error {
-	_, err := w.Write(n)
-	return err
 }
 
 // mustDecodeNode is a wrapper of decodeNode and panic if any error is encountered.
