@@ -71,20 +71,23 @@ func (s stun) ExternalIP() (net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
-	var response *stunV2.Event
+
+	var responseError error
+	var mappedAddr stunV2.XORMappedAddress
 	err = conn.Do(message, func(event stunV2.Event) {
-		response = &event
+		if event.Error != nil {
+			responseError = event.Error
+			return
+		}
+		if err := mappedAddr.GetFrom(event.Message); err != nil {
+			responseError = err
+		}
 	})
 	if err != nil {
 		return nil, err
 	}
-	if response.Error != nil {
-		return nil, response.Error
-	}
-
-	var mappedAddr stunV2.XORMappedAddress
-	if err := mappedAddr.GetFrom(response.Message); err != nil {
-		return nil, err
+	if responseError != nil {
+		return nil, responseError
 	}
 
 	return mappedAddr.IP, nil
