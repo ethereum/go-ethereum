@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/exp/rand"
+	"runtime/debug"
 	"testing"
 )
 
@@ -144,6 +145,7 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 	}
 
 	if len(res.Addrs) != len(tcInput.expectDeployed) {
+		debug.PrintStack()
 		t.Fatalf("got %d deployed contracts.  expected %d.\n", len(res.Addrs), len(tcInput.expectDeployed))
 	}
 	for contract, _ := range tcInput.expectDeployed {
@@ -164,6 +166,7 @@ func TestContractLinking(t *testing.T) {
 		},
 	})
 
+	fmt.Println("2")
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
