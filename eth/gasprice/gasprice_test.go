@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -148,7 +147,10 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
-	var engine consensus.Engine = beacon.New(ethash.NewFaker())
+
+	engine := beacon.New(ethash.NewFaker())
+	engine.TestingTTDBlock(testHead + 1)
+
 	td := params.GenesisDifficulty.Uint64()
 
 	if cancunBlock != nil {
