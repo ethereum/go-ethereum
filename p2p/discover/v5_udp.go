@@ -281,6 +281,11 @@ func (t *UDPv5) DeleteNode(n *enode.Node) {
 	t.tab.deleteNode(n)
 }
 
+// WaitInit waits for the routing table to be initialized.
+func (t *UDPv5) WaitInit() {
+	t.tab.waitInit()
+}
+
 // LocalNode returns the current local Node running the
 // protocol.
 func (t *UDPv5) LocalNode() *enode.LocalNode {

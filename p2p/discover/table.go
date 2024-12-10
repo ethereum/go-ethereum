@@ -695,6 +695,11 @@ func pushNode(list []*tableNode, n *tableNode, max int) ([]*tableNode, *tableNod
 	return list, removed
 }
 
+// waitInit waits until the table is initialized.
+func (tab *Table) waitInit() {
+	<-tab.initDone
+}
+
 // nodeList returns all nodes contained in the table.
 func (tab *Table) nodeList() []*enode.Node {
 	if !tab.isInitDone() {
