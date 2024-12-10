@@ -21,58 +21,58 @@ import (
 	"net"
 	"time"
 
-	"github.com/pion/stun/v2"
+	stunV2 "github.com/pion/stun/v2"
 )
 
 // The code are from erigon p2p/nat/nat_stun.go
 // This stun server is part of the mainnet infrastructure.
 // The addr are from https://github.com/ethereum/trin/blob/master/portalnet/src/socket.rs
-const STUNDefaultServerAddr = "159.223.0.83:3478"
+const stunDefaultServerAddr = "159.223.0.83:3478"
 
-type STUN struct {
-	serverAddr *net.UDPAddr
+type stun struct {
+	server *net.UDPAddr
 }
 
-func NewSTUN(serverAddr string) (Interface, error) {
+func newSTUN(serverAddr string) (Interface, error) {
 	if serverAddr == "default" {
-		serverAddr = STUNDefaultServerAddr
+		serverAddr = stunDefaultServerAddr
 	}
 	addr, err := net.ResolveUDPAddr("udp4", serverAddr)
 	if err != nil {
 		return nil, err
 	}
-	return STUN{serverAddr: addr}, nil
+	return stun{server: addr}, nil
 }
 
-func (s STUN) String() string {
-	return fmt.Sprintf("STUN(%s)", s.serverAddr)
+func (s stun) String() string {
+	return fmt.Sprintf("STUN(%s)", s.server)
 }
 
-func (STUN) SupportsMapping() bool {
+func (stun) SupportsMapping() bool {
 	return false
 }
 
-func (STUN) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) (uint16, error) {
+func (stun) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) (uint16, error) {
 	return uint16(extport), nil
 }
 
-func (STUN) DeleteMapping(string, int, int) error {
+func (stun) DeleteMapping(string, int, int) error {
 	return nil
 }
 
-func (s STUN) ExternalIP() (net.IP, error) {
-	conn, err := stun.Dial("udp4", s.serverAddr.String())
+func (s stun) ExternalIP() (net.IP, error) {
+	conn, err := stunV2.Dial("udp4", s.server.String())
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	message, err := stun.Build(stun.TransactionID, stun.BindingRequest)
+	message, err := stunV2.Build(stunV2.TransactionID, stunV2.BindingRequest)
 	if err != nil {
 		return nil, err
 	}
-	var response *stun.Event
-	err = conn.Do(message, func(event stun.Event) {
+	var response *stunV2.Event
+	err = conn.Do(message, func(event stunV2.Event) {
 		response = &event
 	})
 	if err != nil {
@@ -82,7 +82,7 @@ func (s STUN) ExternalIP() (net.IP, error) {
 		return nil, response.Error
 	}
 
-	var mappedAddr stun.XORMappedAddress
+	var mappedAddr stunV2.XORMappedAddress
 	if err := mappedAddr.GetFrom(response.Message); err != nil {
 		return nil, err
 	}
