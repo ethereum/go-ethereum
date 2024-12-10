@@ -114,12 +114,14 @@ func (t *rlpxTransport) close(err error) {
 	// We only bother doing this if the underlying connection supports
 	// setting a timeout tough.
 	if t.conn != nil {
-		if r, ok := err.(DiscReason); ok && r != DiscNetworkError {
+		if reason, ok := err.(DiscReason); ok && reason != DiscNetworkError {
+			// We do not use the WriteMsg func since we want a custom deadline
 			deadline := time.Now().Add(discWriteTimeout)
 			if err := t.conn.SetWriteDeadline(deadline); err == nil {
 				// Connection supports write deadline.
 				t.wbuf.Reset()
-				rlp.Encode(&t.wbuf, []DiscReason{r})
+				size, reader, _ := rlp.EncodeToReader(reason)
+				io.CopyN(&t.wbuf, reader, int64(size))
 				t.conn.Write(discMsg, t.wbuf.Bytes())
 			}
 		}
@@ -165,9 +167,9 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 		// spec and we send it ourself if the post-handshake checks fail.
 		// We can't return the reason directly, though, because it is echoed
 		// back otherwise. Wrap it in a string instead.
-		var reason [1]DiscReason
-		rlp.Decode(msg.Payload, &reason)
-		return nil, reason[0]
+		var m struct{ R DiscReason }
+		rlp.Decode(msg.Payload, &m)
+		return nil, m.R
 	}
 	if msg.Code != handshakeMsg {
 		return nil, fmt.Errorf("expected handshake, got %x", msg.Code)
