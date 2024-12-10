@@ -89,7 +89,7 @@ func Parse(spec string) (Interface, error) {
 	case "pmp", "natpmp", "nat-pmp":
 		return PMP(ip), nil
 	case "stun":
-		return NewSTUN(after)
+		return newSTUN(after)
 	default:
 		return nil, fmt.Errorf("unknown mechanism %q", before)
 	}
