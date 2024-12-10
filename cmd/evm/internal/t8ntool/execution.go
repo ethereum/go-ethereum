@@ -70,11 +70,11 @@ type ExecutionResult struct {
 	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 	RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
-	Requests             [][]byte              `json:"requests,omitempty"`
+	Requests             [][]byte              `json:"requests"`
 }
 
 type executionResultMarshaling struct {
-	Requests []hexutil.Bytes `json:"requests,omitempty"`
+	Requests []hexutil.Bytes `json:"requests"`
 }
 
 type ommer struct {
