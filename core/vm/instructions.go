@@ -462,7 +462,7 @@ func getBlockHashFromContract(number uint64, statedb StateDB, witness *state.Acc
 	ringIndex := number % params.Eip2935BlockHashHistorySize
 	var pnum common.Hash
 	binary.BigEndian.PutUint64(pnum[24:], ringIndex)
-	statelessGas := witness.TouchSlotAndChargeGas(params.HistoryStorageAddress[:], pnum, false, availableGas, false)
+	statelessGas := witness.TouchSlotAndChargeGas(params.HistoryStorageAddress[:], pnum, false, availableGas, true)
 	return statedb.GetState(params.HistoryStorageAddress, pnum), statelessGas
 }
 
