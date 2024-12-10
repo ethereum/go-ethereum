@@ -583,7 +583,8 @@ func (evm *EVM) resolveCode(addr common.Address) []byte {
 
 // resolveCodeHash returns the code hash associated with the provided address.
 // After Prague, it can also resolve code hash of the account pointed to by a
-// delegation designator.
+// delegation designator. Although this is not accessible in the EVM it is used
+// internally to associate jumpdest analysis to code.
 func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
 	if evm.chainRules.IsPrague {
 		code := evm.StateDB.GetCode(addr)
