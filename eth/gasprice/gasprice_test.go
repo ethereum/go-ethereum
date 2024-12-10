@@ -213,7 +213,7 @@ func TestSuggestTipCap(t *testing.T) {
 
 func TestSuggestTipCapCongestedThreshold(t *testing.T) {
 	expectedDefaultBasePricePreCurie := big.NewInt(2000)
-	expectedDefaultBasePricePostCurie := big.NewInt(1)
+	expectedDefaultBasePricePostCurie := big.NewInt(100)
 
 	config := Config{
 		Blocks:             3,
