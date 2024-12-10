@@ -40,6 +40,20 @@ func (n *fullNode) encode(w rlp.EncoderBuffer) {
 	w.ListEnd(offset)
 }
 
+func (n *fullnodeEncoder) encode(w rlp.EncoderBuffer) {
+	offset := w.List()
+	for _, c := range n.Children {
+		if c == nil {
+			w.Write(rlp.EmptyString)
+		} else if len(c) < 32 {
+			w.Write(c) // rawNode
+		} else {
+			w.WriteBytes(c) // hashNode
+		}
+	}
+	w.ListEnd(offset)
+}
+
 func (n *shortNode) encode(w rlp.EncoderBuffer) {
 	offset := w.List()
 	w.WriteBytes(n.Key)
@@ -47,6 +61,20 @@ func (n *shortNode) encode(w rlp.EncoderBuffer) {
 		n.Val.encode(w)
 	} else {
 		w.Write(rlp.EmptyString)
+	}
+	w.ListEnd(offset)
+}
+
+func (n *shortNodeEncoder) encode(w rlp.EncoderBuffer) {
+	offset := w.List()
+	w.WriteBytes(n.Key)
+
+	if n.Val == nil {
+		w.Write(rlp.EmptyString)
+	} else if len(n.Val) < 32 {
+		w.Write(n.Val) // rawNode
+	} else {
+		w.WriteBytes(n.Val) // hashNode
 	}
 	w.ListEnd(offset)
 }
