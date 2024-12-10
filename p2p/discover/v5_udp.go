@@ -141,7 +141,7 @@ func ListenV5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	if err != nil {
 		return nil, err
 	}
-	go t.tab.Loop()
+	go t.tab.loop()
 	t.wg.Add(2)
 	go t.readLoop()
 	go t.dispatch()
@@ -181,7 +181,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		cancelCloseCtx: cancelCloseCtx,
 	}
 	t.talk = newTalkSystem(t)
-	tab, err := NewTable(t, t.db, cfg)
+	tab, err := newTable(t, t.db, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -201,20 +201,20 @@ func (t *UDPv5) Close() {
 		t.conn.Close()
 		t.talk.wait()
 		t.wg.Wait()
-		t.tab.Close()
+		t.tab.close()
 	})
 }
 
 // PingWithoutResp sends a ping message to the given node.
 func (t *UDPv5) PingWithoutResp(n *enode.Node) error {
-	_, err := t.Ping(n)
+	_, err := t.ping(n)
 	return err
 }
 
 // Resolve searches for a specific node with the given ID and tries to get the most recent
 // version of the node record for it. It returns n if the node could not be resolved.
 func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
-	if intable := t.tab.GetNode(n.ID()); intable != nil && intable.Seq() > n.Seq() {
+	if intable := t.tab.getNode(n.ID()); intable != nil && intable.Seq() > n.Seq() {
 		n = intable
 	}
 	// Try asking directly. This works if the node is still responding on the endpoint we have.
@@ -238,7 +238,7 @@ func (t *UDPv5) ResolveNodeId(id enode.ID) *enode.Node {
 		return t.Self()
 	}
 
-	n := t.tab.GetNode(id)
+	n := t.tab.getNode(id)
 	if n != nil {
 		// Try asking directly. This works if the Node is still responding on the endpoint we have.
 		if resp, err := t.RequestENR(n); err == nil {
@@ -263,11 +263,22 @@ func (t *UDPv5) ResolveNodeId(id enode.ID) *enode.Node {
 
 // AllNodes returns all the nodes stored in the local table.
 func (t *UDPv5) AllNodes() []*enode.Node {
-	return t.tab.NodeList()
+	return t.tab.nodeList()
 }
 
+// RoutingTableInfo returns the routing table information. Used for Portal discv5 RoutingTableInfo API.
 func (t *UDPv5) RoutingTableInfo() [][]string {
-	return t.tab.NodeIds()
+	return t.tab.nodeIds()
+}
+
+// AddKnownNode adds a node to the routing table. Used for Portal discv5 AddEnr API.
+func (t *UDPv5) AddKnownNode(n *enode.Node) bool {
+	return t.tab.addFoundNode(n, true)
+}
+
+// DeleteNode removes a node from the routing table. Used for Portal discv5 DeleteEnr API.
+func (t *UDPv5) DeleteNode(n *enode.Node) {
+	t.tab.deleteNode(n)
 }
 
 // LocalNode returns the current local Node running the
@@ -323,29 +334,29 @@ func (t *UDPv5) RandomNodes() enode.Iterator {
 // Lookup performs a recursive lookup for the given target.
 // It returns the closest nodes to target.
 func (t *UDPv5) Lookup(target enode.ID) []*enode.Node {
-	return t.newLookup(t.closeCtx, target).Run()
+	return t.newLookup(t.closeCtx, target).run()
 }
 
 // lookupRandom looks up a random target.
 // This is needed to satisfy the transport interface.
-func (t *UDPv5) LookupRandom() []*enode.Node {
-	return t.newRandomLookup(t.closeCtx).Run()
+func (t *UDPv5) lookupRandom() []*enode.Node {
+	return t.newRandomLookup(t.closeCtx).run()
 }
 
 // lookupSelf looks up our own node ID.
 // This is needed to satisfy the transport interface.
-func (t *UDPv5) LookupSelf() []*enode.Node {
-	return t.newLookup(t.closeCtx, t.Self().ID()).Run()
+func (t *UDPv5) lookupSelf() []*enode.Node {
+	return t.newLookup(t.closeCtx, t.Self().ID()).run()
 }
 
-func (t *UDPv5) newRandomLookup(ctx context.Context) *Lookup {
+func (t *UDPv5) newRandomLookup(ctx context.Context) *lookup {
 	var target enode.ID
 	crand.Read(target[:])
 	return t.newLookup(ctx, target)
 }
 
-func (t *UDPv5) newLookup(ctx context.Context, target enode.ID) *Lookup {
-	return NewLookup(ctx, t.tab, target, func(n *enode.Node) ([]*enode.Node, error) {
+func (t *UDPv5) newLookup(ctx context.Context, target enode.ID) *lookup {
+	return newLookup(ctx, t.tab, target, func(n *enode.Node) ([]*enode.Node, error) {
 		return t.lookupWorker(n, target)
 	})
 }
@@ -354,20 +365,20 @@ func (t *UDPv5) newLookup(ctx context.Context, target enode.ID) *Lookup {
 func (t *UDPv5) lookupWorker(destNode *enode.Node, target enode.ID) ([]*enode.Node, error) {
 	var (
 		dists = LookupDistances(target, destNode.ID())
-		nodes = NodesByDistance{Target: target}
+		nodes = nodesByDistance{target: target}
 		err   error
 	)
 	var r []*enode.Node
 	r, err = t.Findnode(destNode, dists)
-	if errors.Is(err, ErrClosed) {
+	if errors.Is(err, errClosed) {
 		return nil, err
 	}
 	for _, n := range r {
 		if n.ID() != t.Self().ID() {
-			nodes.Push(n, findnodeResultLimit)
+			nodes.push(n, findnodeResultLimit)
 		}
 	}
-	return nodes.Entries, err
+	return nodes.entries, err
 }
 
 // LookupDistances computes the distance parameter for FINDNODE calls to dest.
@@ -388,7 +399,7 @@ func LookupDistances(target, dest enode.ID) (dists []uint) {
 }
 
 // ping calls PING on a node and waits for a PONG response.
-func (t *UDPv5) Ping(n *enode.Node) (uint64, error) {
+func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 	pong, err := t.PingWithResp(n)
 	if err != nil {
 		return 0, err
@@ -475,7 +486,7 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 		return nil, errors.New("not contained in netrestrict list")
 	}
 	if node.UDP() <= 1024 {
-		return nil, ErrLowPort
+		return nil, errLowPort
 	}
 	if distances != nil {
 		nd := enode.LogDist(c.id, node.ID())
@@ -519,7 +530,7 @@ func (t *UDPv5) initCall(c *callV5, responseType byte, packet v5wire.Packet) {
 	select {
 	case t.callCh <- c:
 	case <-t.closeCtx.Done():
-		c.err <- ErrClosed
+		c.err <- errClosed
 	}
 }
 
@@ -612,12 +623,12 @@ func (t *UDPv5) dispatch() {
 			close(t.readNextCh)
 			for id, queue := range t.callQueue {
 				for _, c := range queue {
-					c.err <- ErrClosed
+					c.err <- errClosed
 				}
 				delete(t.callQueue, id)
 			}
 			for id, c := range t.activeCallByNode {
-				c.err <- ErrClosed
+				c.err <- errClosed
 				delete(t.activeCallByNode, id)
 				delete(t.activeCallByAuth, c.nonce)
 			}
@@ -774,7 +785,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	}
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
-		t.tab.AddInboundNode(fromNode)
+		t.tab.addInboundNode(fromNode)
 		t.putCache(fromAddr.String(), fromNode)
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
@@ -809,7 +820,7 @@ func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr netip.AddrPort, p v
 
 // GetNode looks for a node record in table and database.
 func (t *UDPv5) GetNode(id enode.ID) *enode.Node {
-	if n := t.tab.GetNode(id); n != nil {
+	if n := t.tab.getNode(id); n != nil {
 		return n
 	}
 	if n := t.localNode.Database().Node(id); n != nil {
@@ -934,7 +945,7 @@ func (t *UDPv5) collectTableNodes(rip netip.Addr, distances []uint, limit int) [
 		processed[dist] = struct{}{}
 
 		checkLive := !t.tab.cfg.NoFindnodeLivenessCheck
-		for _, n := range t.tab.AppendBucketNodes(dist, bn[:0], checkLive) {
+		for _, n := range t.tab.appendBucketNodes(dist, bn[:0], checkLive) {
 			// Apply some pre-checks to avoid sending invalid nodes.
 			// Note liveness is checked by appendLiveNodes.
 			if netutil.CheckRelayAddr(rip, n.IPAddr()) != nil {

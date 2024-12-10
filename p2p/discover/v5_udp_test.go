@@ -143,7 +143,7 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 
 	// Make Node known.
 	n := test.getNode(test.remotekey, test.remoteaddr).Node()
-	test.table.AddFoundNode(n, false)
+	test.table.addFoundNode(n, false)
 
 	test.packetIn(&v5wire.Unknown{Nonce: nonce})
 	test.waitPacketOut(func(p *v5wire.Whoareyou, addr netip.AddrPort, _ v5wire.Nonce) {
@@ -237,7 +237,7 @@ func TestUDPv5_pingCall(t *testing.T) {
 
 	// This ping times out.
 	go func() {
-		_, err := test.udp.Ping(remote)
+		_, err := test.udp.ping(remote)
 		done <- err
 	}()
 	test.waitPacketOut(func(p *v5wire.Ping, addr netip.AddrPort, _ v5wire.Nonce) {})
@@ -247,7 +247,7 @@ func TestUDPv5_pingCall(t *testing.T) {
 
 	// This ping works.
 	go func() {
-		_, err := test.udp.Ping(remote)
+		_, err := test.udp.ping(remote)
 		done <- err
 	}()
 	test.waitPacketOut(func(p *v5wire.Ping, addr netip.AddrPort, _ v5wire.Nonce) {
@@ -259,7 +259,7 @@ func TestUDPv5_pingCall(t *testing.T) {
 
 	// This ping gets a reply from the wrong endpoint.
 	go func() {
-		_, err := test.udp.Ping(remote)
+		_, err := test.udp.ping(remote)
 		done <- err
 	}()
 	test.waitPacketOut(func(p *v5wire.Ping, addr netip.AddrPort, _ v5wire.Nonce) {
@@ -330,11 +330,11 @@ func TestUDPv5_callResend(t *testing.T) {
 	remote := test.getNode(test.remotekey, test.remoteaddr).Node()
 	done := make(chan error, 2)
 	go func() {
-		_, err := test.udp.Ping(remote)
+		_, err := test.udp.ping(remote)
 		done <- err
 	}()
 	go func() {
-		_, err := test.udp.Ping(remote)
+		_, err := test.udp.ping(remote)
 		done <- err
 	}()
 
@@ -367,7 +367,7 @@ func TestUDPv5_multipleHandshakeRounds(t *testing.T) {
 	remote := test.getNode(test.remotekey, test.remoteaddr).Node()
 	done := make(chan error, 1)
 	go func() {
-		_, err := test.udp.Ping(remote)
+		_, err := test.udp.ping(remote)
 		done <- err
 	}()
 
@@ -817,7 +817,7 @@ func (test *udpV5Test) waitPacketOut(validate interface{}) (closed bool) {
 	exptype := fn.Type().In(0)
 
 	dgram, err := test.pipe.receive()
-	if err == ErrClosed {
+	if err == errClosed {
 		return true
 	}
 	if err == errTimeout {
