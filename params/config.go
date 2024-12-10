@@ -319,6 +319,7 @@ type ChainConfig struct {
 	CancunTime   *uint64 `json:"cancunTime,omitempty"`   // Cancun switch time (nil = no fork, 0 = already on cancun)
 	PragueTime   *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
 	VerkleTime   *uint64 `json:"verkleTime,omitempty"`   // Verkle switch time (nil = no fork, 0 = already on verkle)
+	EVMMAXTime   *uint64 `json:"evmmaxTime,omitempty"`   // EVMMAX switch time (nil = no fork, 0 = already on verkle)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -518,6 +519,11 @@ func (c *ChainConfig) IsCancun(num *big.Int, time uint64) bool {
 // IsPrague returns whether time is either equal to the Prague fork time or greater.
 func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.PragueTime, time)
+}
+
+func (c *ChainConfig) IsEVMMAX(num *big.Int, time uint64) bool {
+	res := c.IsLondon(num) && isTimestampForked(c.EVMMAXTime, time)
+	return res
 }
 
 // IsVerkle returns whether time is either equal to the Verkle fork time or greater.
@@ -863,6 +869,7 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
 	IsVerkle                                                bool
+	IsEVMMAX                                                bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -891,6 +898,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsShanghai:       isMerge && c.IsShanghai(num, timestamp),
 		IsCancun:         isMerge && c.IsCancun(num, timestamp),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
+		IsEVMMAX:         isMerge && c.IsEVMMAX(num, timestamp),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
 	}
