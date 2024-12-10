@@ -179,7 +179,7 @@ func TestAllHooksCalled(t *testing.T) {
 			continue
 		}
 		// Skip non-hooks, i.e. Copy
-		if field.Name == "Copy" {
+		if field.Name == "copy" {
 			continue
 		}
 

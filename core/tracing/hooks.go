@@ -207,8 +207,10 @@ type Hooks struct {
 	OnBlockHashRead BlockHashReadHook
 }
 
-// Copy creates a new Hooks instance with all implemented hooks copied from the original.
-func (h *Hooks) Copy() *Hooks {
+// copy creates a new Hooks instance with all implemented hooks copied from the original.
+// Note: it is not a deep copy. If a hook has been implemented as a closure and acts on
+// a mutable state, the copied hook will still act on the same state.
+func (h *Hooks) copy() *Hooks {
 	copied := &Hooks{}
 	srcValue := reflect.ValueOf(h).Elem()
 	dstValue := reflect.ValueOf(copied).Elem()

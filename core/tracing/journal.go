@@ -62,7 +62,7 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	}
 
 	// Create a new Hooks instance and copy all hooks
-	wrapped := hooks.Copy()
+	wrapped := hooks.copy()
 	// Create journal
 	j := &journal{entries: make([]entry, 0), hooks: hooks}
 	// Scope hooks need to be re-implemented.
