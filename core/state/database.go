@@ -17,8 +17,6 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -274,6 +272,9 @@ func mustCopyTrie(t Trie) Trie {
 	case *trie.VerkleTrie:
 		return t.Copy()
 	default:
-		panic(fmt.Errorf("unknown trie type %T", t))
+		// Rare case: Return the identity if the trie type is not directly
+		// implemented within go-ethereum. Any copy logic would need to be handled
+		// by the caller outside go-ethereum.
+		return t
 	}
 }
