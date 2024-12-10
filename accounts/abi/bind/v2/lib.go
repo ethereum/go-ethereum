@@ -39,12 +39,8 @@ type ContractDeployParams struct {
 // set of contracts, their dependency libraries.  It takes an optional override
 // list to specify libraries that have already been deployed on-chain.
 type DeploymentParams struct {
-	// Contracts is the set of contract deployment parameters for contracts
-	// that are about to be deployed.
-	Contracts []ContractDeployParams
-	// Libraries is a map of pattern to metadata for library contracts that
-	// are to be deployed.
-	Libraries []*bind.MetaData
+	Contracts []*bind.MetaData
+	Inputs    map[string][]byte
 	// Overrides is an optional map of pattern to deployment address.
 	// Contracts/libraries that refer to dependencies in the override
 	// set are linked to the provided address (an already-deployed contract).
@@ -69,13 +65,15 @@ func (d *DeploymentResult) Accumulate(other *DeploymentResult) {
 	}
 }
 
-type ContractDeployer interface {
-	DeployContract(input []byte, deployer []byte) (common.Address, *types.Transaction, error)
-}
-
 type depTreeBuilder struct {
 	overrides map[string]common.Address
-	libs      map[string]string
+	// map of pattern to unlinked contract bytecode (for libraries or contracts)
+	contracts map[string]string
+	// map of pattern to subtree represented by contract
+	subtrees map[string]*depTreeNode
+
+	// map of nodes that aren't referenced by other dependencies (these can be libraries too if user is doing lib-only deployment)
+	roots map[string]struct{}
 }
 type depTreeNode struct {
 	pattern      string
@@ -83,27 +81,58 @@ type depTreeNode struct {
 	nodes        []*depTreeNode
 }
 
-func (d *depTreeBuilder) buildDepTree(pattern string, contractBin string) *depTreeNode {
-	node := depTreeNode{pattern, contractBin, nil}
-
+func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
 	if err != nil {
 		panic(err)
 	}
-	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contractBin, -1) {
-		pattern := match[1]
-		if _, ok := d.overrides[pattern]; ok {
+	node := &depTreeNode{
+		pattern:      pattern,
+		unlinkedCode: contract,
+	}
+	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contract, -1) {
+		depPattern := match[1]
+		if _, ok := d.subtrees[depPattern]; ok {
 			continue
 		}
-		node.nodes = append(node.nodes, d.buildDepTree(pattern, d.libs[pattern]))
+		delete(d.roots, depPattern)
+		d.buildDepTrees(depPattern, d.contracts[depPattern])
+		node.nodes = append(node.nodes, d.subtrees[depPattern])
 	}
-	return &node
+	d.subtrees[pattern] = node
+}
+
+func (d *depTreeBuilder) BuildDepTrees() (roots []*depTreeNode) {
+	for pattern, _ := range d.contracts {
+		d.roots[pattern] = struct{}{}
+	}
+	for pattern, contract := range d.contracts {
+		if _, ok := d.subtrees[pattern]; ok {
+			continue
+		}
+		reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
+		if err != nil {
+			panic(err)
+		}
+		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contract, -1) {
+			depPattern := match[1]
+			delete(d.roots, depPattern)
+			if _, ok := d.subtrees[depPattern]; ok {
+				continue
+			}
+			d.buildDepTrees(depPattern, d.contracts[depPattern])
+		}
+	}
+	for pattern, _ := range d.roots {
+		roots = append(roots, d.subtrees[pattern])
+	}
+	return roots
 }
 
 type treeDeployer struct {
 	deployedAddrs map[string]common.Address
 	deployerTxs   map[string]*types.Transaction
-	inputs        map[string][]byte
+	input         map[string][]byte // map of the root contract pattern to the constructor input (if there is any)
 	deploy        func(input, deployer []byte) (common.Address, *types.Transaction, error)
 	err           error
 }
@@ -114,11 +143,13 @@ func (d *treeDeployer) linkAndDeploy(node *depTreeNode) {
 	}
 	// link in all node dependencies and produce the deployer bytecode
 	deployerCode := node.unlinkedCode
+
 	for _, child := range node.nodes {
-		deployerCode = strings.ReplaceAll(deployerCode, child.pattern, d.deployedAddrs[child.pattern].String()[2:])
+		deployerCode = strings.ReplaceAll(deployerCode, "__$"+child.pattern+"$__", strings.ToLower(d.deployedAddrs[child.pattern].String()[2:]))
 	}
+
 	// deploy the contract.
-	addr, tx, err := d.deploy(d.inputs[node.pattern], common.Hex2Bytes(deployerCode))
+	addr, tx, err := d.deploy(d.input[node.pattern], common.Hex2Bytes(deployerCode))
 	if err != nil {
 		d.err = err
 	} else {
@@ -141,32 +172,34 @@ func (d *treeDeployer) Result() (*DeploymentResult, error) {
 // libraries.  If an error occurs, only contracts which were successfully
 // deployed are returned in the result.
 func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []byte) (common.Address, *types.Transaction, error)) (res *DeploymentResult, err error) {
-	// re-express libraries as a map of pattern -> pre-link binary
-	unlinkedLibs := make(map[string]string)
-	for _, meta := range deployParams.Libraries {
-		unlinkedLibs[meta.Pattern] = meta.Bin
-	}
+	unlinkedContracts := make(map[string]string)
 	accumRes := &DeploymentResult{
 		Txs:   make(map[string]*types.Transaction),
 		Addrs: make(map[string]common.Address),
 	}
-	for _, contract := range deployParams.Contracts {
-		if _, ok := deployParams.Overrides[contract.Meta.Pattern]; ok {
-			continue
-		}
-		treeBuilder := depTreeBuilder{deployParams.Overrides, unlinkedLibs}
-		tree := treeBuilder.buildDepTree(contract.Meta.Pattern, contract.Meta.Bin)
+	for _, meta := range deployParams.Contracts {
+		unlinkedContracts[meta.Pattern] = meta.Bin
+	}
+	// TODO: instantiate this using constructor
+	treeBuilder := depTreeBuilder{
+		overrides: deployParams.Overrides,
+		contracts: unlinkedContracts,
+	}
+
+	deps := treeBuilder.BuildDepTrees()
+	for _, tr := range deps {
+		// TODO: instantiate deployer with its tree?
 		deployer := treeDeployer{
 			deploy:        deploy,
 			deployedAddrs: make(map[string]common.Address),
-			deployerTxs:   make(map[string]*types.Transaction)}
-		deployer.linkAndDeploy(tree)
+			deployerTxs:   make(map[string]*types.Transaction),
+			input:         map[string][]byte{tr.pattern: deployParams.Inputs[tr.pattern]}}
+		deployer.linkAndDeploy(tr)
 		res, err := deployer.Result()
 		if err != nil {
 			return accumRes, err
 		}
 		accumRes.Accumulate(res)
-
 	}
 	return accumRes, nil
 }

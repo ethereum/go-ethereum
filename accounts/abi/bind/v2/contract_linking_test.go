@@ -120,17 +120,13 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 	}
 
 	var (
-		contracts []ContractDeployParams
-		libs      []*bind.MetaData
+		deployParams DeploymentParams
 	)
 	for pattern, bin := range tc.contractCodes {
-		contracts = append(contracts, ContractDeployParams{
-			Meta:  &bind.MetaData{Pattern: pattern, Bin: "0x" + bin},
-			Input: nil,
-		})
+		deployParams.Contracts = append(deployParams.Contracts, &bind.MetaData{Pattern: pattern, Bin: "0x" + bin})
 	}
 	for pattern, bin := range tc.libCodes {
-		libs = append(libs, &bind.MetaData{
+		deployParams.Contracts = append(deployParams.Contracts, &bind.MetaData{
 			Bin:     "0x" + bin,
 			Pattern: pattern,
 		})
@@ -140,11 +136,7 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 	for pattern, override := range tc.overrides {
 		overridePatterns[pattern] = override
 	}
-	deployParams := DeploymentParams{
-		Contracts: contracts,
-		Libraries: libs,
-		Overrides: overridePatterns,
-	}
+	deployParams.Overrides = overridePatterns
 
 	res, err := LinkAndDeploy(deployParams, mockDeploy)
 	if err != nil {
@@ -160,11 +152,6 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 			t.Fatalf("expected contract %s was not deployed\n", string(contract))
 		}
 	}
-
-	// note that the link-and-deploy functionality assumes that the combined-abi is well-formed.
-
-	// test-case ideas:
-	// * libraries that are disjount from the rest of dep graph (they don't get deployed)
 }
 
 func TestContractLinking(t *testing.T) {
@@ -263,7 +250,7 @@ func TestContractLinking(t *testing.T) {
 			'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {},
 		}})
 
-	// test nested libraries that share deps at different levels of the tree.. with override.
+	// test nested libraries that share deps at different levels of the tree... with override.
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
