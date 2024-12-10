@@ -98,6 +98,17 @@ func (s *stateSet) account(hash common.Hash) ([]byte, bool) {
 	return nil, false // account is unknown in this set
 }
 
+// mustAccount returns the account data associated with the specified address
+// hash. The difference is this function will return an error if the account
+// is not found.
+func (s *stateSet) mustAccount(hash common.Hash) ([]byte, error) {
+	// If the account is known locally, return it
+	if data, ok := s.accountData[hash]; ok {
+		return data, nil
+	}
+	return nil, fmt.Errorf("account is not found, %x", hash)
+}
+
 // storage returns the storage slot associated with the specified address hash
 // and storage key hash.
 func (s *stateSet) storage(accountHash, storageHash common.Hash) ([]byte, bool) {
@@ -108,6 +119,19 @@ func (s *stateSet) storage(accountHash, storageHash common.Hash) ([]byte, bool) 
 		}
 	}
 	return nil, false // storage is unknown in this set
+}
+
+// mustStorage returns the storage slot associated with the specified address
+// hash and storage key hash. The difference is this function will return an
+// error if the storage slot is not found.
+func (s *stateSet) mustStorage(accountHash, storageHash common.Hash) ([]byte, error) {
+	// If the account is known locally, try to resolve the slot locally
+	if storage, ok := s.storageData[accountHash]; ok {
+		if data, ok := storage[storageHash]; ok {
+			return data, nil
+		}
+	}
+	return nil, fmt.Errorf("storage slot is not found, %x %x", accountHash, storageHash)
 }
 
 // check sanitizes accounts and storage slots to ensure the data validity.
@@ -132,8 +156,6 @@ func (s *stateSet) check() uint64 {
 // the deleted ones.
 //
 // Note, the returned slice is not a copy, so do not modify it.
-//
-// nolint:unused
 func (s *stateSet) accountList() []common.Hash {
 	// If an old list already exists, return it
 	s.listLock.RLock()
@@ -160,8 +182,6 @@ func (s *stateSet) accountList() []common.Hash {
 // storage slot.
 //
 // Note, the returned slice is not a copy, so do not modify it.
-//
-// nolint:unused
 func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
 	s.listLock.RLock()
 	if _, ok := s.storageData[accountHash]; !ok {
