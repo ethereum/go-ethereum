@@ -95,7 +95,13 @@ func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 		if _, ok := d.subtrees[depPattern]; ok {
 			continue
 		}
+		if _, ok := d.overrides[depPattern]; ok {
+			continue
+		}
+
+		// this library was referenced by another contract.  it's not a dependency tree root.
 		delete(d.roots, depPattern)
+
 		d.buildDepTrees(depPattern, d.contracts[depPattern])
 		node.nodes = append(node.nodes, d.subtrees[depPattern])
 	}
@@ -103,25 +109,16 @@ func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 }
 
 func (d *depTreeBuilder) BuildDepTrees() (roots []*depTreeNode) {
-	for pattern, _ := range d.contracts {
-		d.roots[pattern] = struct{}{}
-	}
 	for pattern, contract := range d.contracts {
 		if _, ok := d.subtrees[pattern]; ok {
 			continue
 		}
-		reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
-		if err != nil {
-			panic(err)
+		if _, ok := d.overrides[pattern]; ok {
+			continue
 		}
-		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contract, -1) {
-			depPattern := match[1]
-			delete(d.roots, depPattern)
-			if _, ok := d.subtrees[depPattern]; ok {
-				continue
-			}
-			d.buildDepTrees(depPattern, d.contracts[depPattern])
-		}
+		// pattern has not been explored, it's potentially a root
+		d.roots[pattern] = struct{}{}
+		d.buildDepTrees(pattern, contract)
 	}
 	for pattern, _ := range d.roots {
 		roots = append(roots, d.subtrees[pattern])
@@ -184,16 +181,21 @@ func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []
 	treeBuilder := depTreeBuilder{
 		overrides: deployParams.Overrides,
 		contracts: unlinkedContracts,
+		subtrees:  make(map[string]*depTreeNode),
+		roots:     make(map[string]struct{}),
 	}
 
 	deps := treeBuilder.BuildDepTrees()
 	for _, tr := range deps {
 		// TODO: instantiate deployer with its tree?
+
 		deployer := treeDeployer{
 			deploy:        deploy,
 			deployedAddrs: make(map[string]common.Address),
-			deployerTxs:   make(map[string]*types.Transaction),
-			input:         map[string][]byte{tr.pattern: deployParams.Inputs[tr.pattern]}}
+			deployerTxs:   make(map[string]*types.Transaction)}
+		if deployParams.Inputs != nil {
+			deployer.input = map[string][]byte{tr.pattern: deployParams.Inputs[tr.pattern]}
+		}
 		deployer.linkAndDeploy(tr)
 		res, err := deployer.Result()
 		if err != nil {
