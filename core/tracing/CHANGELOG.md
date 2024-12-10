@@ -4,7 +4,7 @@ All notable changes to the tracing interface will be documented in this file.
 
 ## [Unreleased]
 
-The tracing interface has been extended with backwards-compatible changes to support more use-cases and simplify tracer code. The most notable changes are state read hooks as well a state journaling library which emits events when a call is reverted.
+The tracing interface has been extended with backwards-compatible changes to support more use-cases and simplify tracer code. The most notable change is a state journaling library which emits reverse events when a call is reverted.
 
 ### Deprecated methods
 
@@ -12,11 +12,6 @@ The tracing interface has been extended with backwards-compatible changes to sup
 
 ### New methods
 
-- `OnBalanceRead(addr common.Address, balance *big.Int)`: This hook is called when an account balance is read.
-- `OnNonceRead(addr common.Address, nonce uint64)`: This hook is called when an account nonce is read.
-- `OnCodeRead(addr common.Address, code []byte)`: This hook is called when an account code is read.
-- `OnCodeHashRead(addr common.Address, codeHash common.Hash)`: This hook is called when an account code hash is read.
-- `OnStorageRead(addr common.Address, slot common.Hash, value common.Hash)`: This hook is called when an account storage slot is read.
 - `OnBlockHashRead(blockNum uint64, hash common.Hash)`: This hook is called when a block hash is read by EVM.
 - `OnSystemCallStartV2(vm *VMContext)`. This allows access to EVM context during system calls. It is a successor to `OnSystemCallStart`.
 
