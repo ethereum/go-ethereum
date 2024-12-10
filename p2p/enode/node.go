@@ -149,6 +149,7 @@ func Parse(validSchemes enr.IdentityScheme, input string) (*Node, error) {
 	return New(validSchemes, &r)
 }
 
+// Portal network not filter multicast address, any other way to support this?
 func ParseForAddEnr(validSchemes enr.IdentityScheme, input string) (*Node, error) {
 	if strings.HasPrefix(input, "enode://") {
 		return ParseV4(input)
