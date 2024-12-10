@@ -97,7 +97,6 @@ func Transition(ctx *cli.Context) error {
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
 			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
-			Debug:            true,
 		}
 		getTracer = func(txIndex int, txHash common.Hash, _ *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
 			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
