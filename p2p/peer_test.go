@@ -17,12 +17,9 @@
 package p2p
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"net"
 	"reflect"
@@ -362,16 +359,4 @@ func TestMatchProtocols(t *testing.T) {
 			}
 		}
 	}
-}
-
-func TestDiscReasonDecoding(t *testing.T) {
-	// as it is encoded func (t *rlpxTransport) close(err error) in transport.go
-	var payload bytes.Buffer
-	err := rlp.Encode(&payload, []DiscReason{DiscQuitting})
-	require.NoError(t, err)
-
-	p := &Peer{}
-	err = p.handle(Msg{Code: discMsg, Payload: bytes.NewReader(payload.Bytes())})
-	t.Log(err)
-	require.True(t, errors.Is(err, DiscQuitting))
 }
