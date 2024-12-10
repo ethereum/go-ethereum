@@ -77,6 +77,7 @@ var (
 	errRecentlyDialed   = errors.New("recently dialed")
 	errNetRestrict      = errors.New("not contained in netrestrict list")
 	errNoPort           = errors.New("node does not provide TCP port")
+	errNoResolvedIP     = errors.New("node does not provide a resolved IP")
 )
 
 // dialer creates outbound connections and submits them into Server.
@@ -274,7 +275,7 @@ loop:
 		case node := <-d.addStaticCh:
 			id := node.ID()
 			_, exists := d.static[id]
-			d.log.Trace("Adding static node", "id", id, "ip", node.IPAddr(), "added", !exists)
+			d.log.Trace("Adding static node", "id", id, "endpoint", node.Endpoint(), "added", !exists)
 			if exists {
 				continue loop
 			}
@@ -433,10 +434,42 @@ func (d *dialScheduler) removeFromStaticPool(idx int) {
 	task.staticPoolIndex = -1
 }
 
+func (d *dialScheduler) resolve(n *enode.Node) (*enode.Node, error) {
+	if n.NeedResolve() {
+		d.log.Debug("Attempting DNS resolution", "id", n.ID(), "name", n.Hostname())
+		ips, err := net.LookupIP(n.Hostname())
+		if err != nil {
+			d.log.Debug("DNS resolution failed", "id", n.ID(), "name", n.Hostname(), "err", err)
+			return n, err
+		}
+		d.log.Debug("DNS lookup succeeded", "id", n.ID(), "name", n.Hostname(), "ipcount", len(ips))
+
+		// Try IPv4 first
+		for _, ip := range ips {
+			if ip4 := ip.To4(); ip4 != nil {
+				resolved := enode.NewV4WithDNS(n.Pubkey(), ip4, n.Hostname(), n.TCP(), n.UDP())
+				d.log.Debug("DNS resolved to IPv4", "id", n.ID(), "name", n.Hostname(), "ip", ip4)
+				return resolved, nil
+			}
+		}
+		// Then try IPv6
+		for _, ip := range ips {
+			if ip6 := ip.To16(); ip6 != nil {
+				resolved := enode.NewV4WithDNS(n.Pubkey(), ip6, n.Hostname(), n.TCP(), n.UDP())
+				d.log.Debug("DNS resolved to IPv6", "id", n.ID(), "name", n.Hostname(), "ip", ip6)
+				return resolved, nil
+			}
+		}
+		d.log.Debug("DNS resolution found no usable IPs", "id", n.ID(), "name", n.Hostname())
+		return n, errNoResolvedIP
+	}
+	return n, nil
+}
+
 // startDial runs the given dial task in a separate goroutine.
 func (d *dialScheduler) startDial(task *dialTask) {
 	node := task.dest()
-	d.log.Trace("Starting p2p dial", "id", node.ID(), "ip", node.IPAddr(), "flag", task.flags)
+	d.log.Trace("Starting p2p dial", "id", node.ID(), "endpoint", node.Endpoint(), "flag", task.flags)
 	hkey := string(node.ID().Bytes())
 	d.history.add(hkey, d.clock.Now().Add(dialHistoryExpiration))
 	d.dialing[node.ID()] = task
@@ -473,6 +506,15 @@ func (t *dialTask) dest() *enode.Node {
 }
 
 func (t *dialTask) run(d *dialScheduler) {
+	node := t.dest()
+	if node.NeedResolve() {
+		resolved, err := d.resolve(node)
+		if err != nil {
+			return
+		}
+		t.destPtr.Store(resolved)
+	}
+
 	if t.needResolve() && !t.resolve(d) {
 		return
 	}
