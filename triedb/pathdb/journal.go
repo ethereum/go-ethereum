@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -93,9 +92,9 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 // loadLayers loads a pre-existing state layer backed by a key-value store.
 func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
-	var root = types.EmptyRootHash
-	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		root = crypto.Keccak256Hash(blob)
+	root, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
+	if err != nil {
+		log.Crit("Failed to compute node hash", "err", err)
 	}
 	// Load the layers by resolving the journal
 	head, err := db.loadJournal(root)
@@ -105,7 +104,7 @@ func (db *Database) loadLayers() layer {
 	// journal is not matched(or missing) with the persistent state, discard
 	// it. Display log for discarding journal, but try to avoid showing
 	// useless information when the db is created from scratch.
-	if !(root == types.EmptyRootHash && errors.Is(err, errMissJournal)) {
+	if !(root == types.EmptyRootHash(db.isVerkle) && errors.Is(err, errMissJournal)) {
 		log.Info("Failed to load journal, discard it", "err", err)
 	}
 	// Return single layer with persistent state.
@@ -265,9 +264,9 @@ func (db *Database) Journal(root common.Hash) error {
 	}
 	// Secondly write out the state root in disk, ensure all layers
 	// on top are continuous with disk.
-	diskRoot := types.EmptyRootHash
-	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		diskRoot = crypto.Keccak256Hash(blob)
+	diskRoot, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
+	if err != nil {
+		return err
 	}
 	if err := rlp.Encode(journal, diskRoot); err != nil {
 		return err

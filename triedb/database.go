@@ -146,7 +146,7 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	}
 	switch b := db.backend.(type) {
 	case *hashdb.Database:
-		return b.Update(root, parent, block, nodes)
+		return b.Update(parent, nodes)
 	case *pathdb.Database:
 		return b.Update(root, parent, block, nodes, states.internal())
 	}

@@ -36,10 +36,14 @@ type StateAccount struct {
 }
 
 // NewEmptyStateAccount constructs an empty state account.
-func NewEmptyStateAccount() *StateAccount {
+func NewEmptyStateAccount(isVerkle bool) *StateAccount {
+	emptyRoot := EmptyMerkleHash
+	if isVerkle {
+		emptyRoot = EmptyVerkleHash
+	}
 	return &StateAccount{
 		Balance:  new(uint256.Int),
-		Root:     EmptyRootHash,
+		Root:     emptyRoot,
 		CodeHash: EmptyCodeHash.Bytes(),
 	}
 }
@@ -74,7 +78,11 @@ func SlimAccountRLP(account StateAccount) []byte {
 		Nonce:   account.Nonce,
 		Balance: account.Balance,
 	}
-	if account.Root != EmptyRootHash {
+	// It is highly unlikely for a valid hash (value = [32]byte{}) to appear
+	// in a Merkle tree, or for a valid hash (value = EmptyMerkleHash) to appear
+	// in a Verkle tree. Therefore, in both cases, any other value is considered
+	// a non-empty root hash.
+	if account.Root != EmptyMerkleHash && account.Root != EmptyVerkleHash {
 		slim.Root = account.Root[:]
 	}
 	if !bytes.Equal(account.CodeHash, EmptyCodeHash[:]) {
@@ -89,7 +97,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 
 // FullAccount decodes the data on the 'slim RLP' format and returns
 // the consensus format account.
-func FullAccount(data []byte) (*StateAccount, error) {
+func FullAccount(data []byte, isVerkle bool) (*StateAccount, error) {
 	var slim SlimAccount
 	if err := rlp.DecodeBytes(data, &slim); err != nil {
 		return nil, err
@@ -99,7 +107,11 @@ func FullAccount(data []byte) (*StateAccount, error) {
 
 	// Interpret the storage root and code hash in slim format.
 	if len(slim.Root) == 0 {
-		account.Root = EmptyRootHash
+		if isVerkle {
+			account.Root = EmptyVerkleHash
+		} else {
+			account.Root = EmptyMerkleHash
+		}
 	} else {
 		account.Root = common.BytesToHash(slim.Root)
 	}
@@ -112,8 +124,8 @@ func FullAccount(data []byte) (*StateAccount, error) {
 }
 
 // FullAccountRLP converts data on the 'slim RLP' format into the full RLP-format.
-func FullAccountRLP(data []byte) ([]byte, error) {
-	account, err := FullAccount(data)
+func FullAccountRLP(data []byte, isVerkle bool) ([]byte, error) {
+	account, err := FullAccount(data, isVerkle)
 	if err != nil {
 		return nil, err
 	}

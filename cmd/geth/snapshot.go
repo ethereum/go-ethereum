@@ -265,6 +265,8 @@ func checkDanglingStorage(ctx *cli.Context) error {
 // traverseState is a helper function used for pruning verification.
 // Basically it just iterates the trie, ensure all nodes and associated
 // contract codes are present.
+//
+// TODO(rjl493456442) this command is not compatible with verkle.
 func traverseState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -324,7 +326,7 @@ func traverseState(ctx *cli.Context) error {
 			log.Error("Invalid account encountered during traversal", "err", err)
 			return err
 		}
-		if acc.Root != types.EmptyRootHash {
+		if acc.Root != types.EmptyMerkleHash {
 			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
 			storageTrie, err := trie.NewStateTrie(id, triedb)
 			if err != nil {
@@ -374,6 +376,8 @@ func traverseState(ctx *cli.Context) error {
 // Basically it just iterates the trie, ensure all nodes and associated
 // contract codes are present. It's basically identical to traverseState
 // but it will check each trie node.
+//
+// TODO(rjl493456442) this command is not compatible with verkle.
 func traverseRawState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -462,7 +466,7 @@ func traverseRawState(ctx *cli.Context) error {
 				log.Error("Invalid account encountered during traversal", "err", err)
 				return errors.New("invalid account")
 			}
-			if acc.Root != types.EmptyRootHash {
+			if acc.Root != types.EmptyMerkleHash {
 				id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
 				storageTrie, err := trie.NewStateTrie(id, triedb)
 				if err != nil {
@@ -537,6 +541,7 @@ func parseRoot(input string) (common.Hash, error) {
 	return h, nil
 }
 
+// dumpState is not compatible with verkle mode.
 func dumpState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -578,7 +583,7 @@ func dumpState(ctx *cli.Context) error {
 		Root common.Hash `json:"root"`
 	}{root})
 	for accIt.Next() {
-		account, err := types.FullAccount(accIt.Account())
+		account, err := types.FullAccount(accIt.Account(), false)
 		if err != nil {
 			return err
 		}

@@ -582,7 +582,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 				if bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
 					dataLen -= 32
 				}
-				if acc.Root == types.EmptyRootHash {
+				if acc.Root == types.EmptyMerkleHash {
 					dataLen -= 32
 				}
 				snapRecoveredAccountMeter.Mark(1)
@@ -609,7 +609,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 
 		// If the iterated account is the contract, create a further loop to
 		// verify or regenerate the contract storage.
-		if acc.Root == types.EmptyRootHash {
+		if acc.Root == types.EmptyMerkleHash {
 			ctx.removeStorageAt(account)
 		} else {
 			var storeMarker []byte
@@ -627,7 +627,11 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 	origin := common.CopyBytes(accMarker)
 	for {
 		id := trie.StateTrieID(dl.root)
-		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountCheckRange, onAccount, types.FullAccountRLP)
+		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountCheckRange, onAccount,
+			func(data []byte) ([]byte, error) {
+				return types.FullAccountRLP(data, false)
+			},
+		)
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}

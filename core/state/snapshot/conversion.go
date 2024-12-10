@@ -290,7 +290,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 				fullData []byte
 			)
 			if leafCallback == nil {
-				fullData, err = types.FullAccountRLP(it.(AccountIterator).Account())
+				fullData, err = types.FullAccountRLP(it.(AccountIterator).Account(), false)
 				if err != nil {
 					return stop(err)
 				}
@@ -302,7 +302,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 					return stop(err)
 				}
 				// Fetch the next account and process it concurrently
-				account, err := types.FullAccount(it.(AccountIterator).Account())
+				account, err := types.FullAccount(it.(AccountIterator).Account(), false)
 				if err != nil {
 					return stop(err)
 				}

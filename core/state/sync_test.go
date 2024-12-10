@@ -53,7 +53,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 	db := rawdb.NewMemoryDatabase()
 	nodeDb := triedb.NewDatabase(db, config)
 	sdb := NewDatabase(nodeDb, nil)
-	state, _ := New(types.EmptyRootHash, sdb)
+	state, _ := New(types.EmptyMerkleHash, sdb)
 
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
@@ -134,11 +134,11 @@ func TestEmptyStateSync(t *testing.T) {
 	dbA := triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)
 	dbB := triedb.NewDatabase(rawdb.NewMemoryDatabase(), &triedb.Config{PathDB: pathdb.Defaults})
 
-	sync := NewStateSync(types.EmptyRootHash, rawdb.NewMemoryDatabase(), nil, dbA.Scheme())
+	sync := NewStateSync(types.EmptyMerkleHash, rawdb.NewMemoryDatabase(), nil, dbA.Scheme())
 	if paths, nodes, codes := sync.Missing(1); len(paths) != 0 || len(nodes) != 0 || len(codes) != 0 {
 		t.Errorf("content requested for empty state: %v, %v, %v", nodes, paths, codes)
 	}
-	sync = NewStateSync(types.EmptyRootHash, rawdb.NewMemoryDatabase(), nil, dbB.Scheme())
+	sync = NewStateSync(types.EmptyMerkleHash, rawdb.NewMemoryDatabase(), nil, dbB.Scheme())
 	if paths, nodes, codes := sync.Missing(1); len(paths) != 0 || len(nodes) != 0 || len(codes) != 0 {
 		t.Errorf("content requested for empty state: %v, %v, %v", nodes, paths, codes)
 	}

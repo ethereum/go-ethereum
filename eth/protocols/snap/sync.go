@@ -1907,7 +1907,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 			}
 		}
 		// Check if the account is a contract with an unknown storage trie
-		if account.Root != types.EmptyRootHash {
+		if account.Root != types.EmptyMerkleHash {
 			// If the storage was already retrieved in the last cycle, there's no need
 			// to resync it again, regardless of whether the storage root is consistent
 			// or not.
@@ -2422,7 +2422,7 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		if !task.needHeal[i] {
 			// If the storage task is complete, drop it into the stack trie
 			// to generate account trie nodes for it
-			full, err := types.FullAccountRLP(slim) // TODO(karalabe): Slim parsing can be omitted
+			full, err := types.FullAccountRLP(slim, false) // TODO(karalabe): Slim parsing can be omitted
 			if err != nil {
 				panic(err) // Really shouldn't ever happen
 			}

@@ -202,10 +202,10 @@ func (test *stateTest) run() bool {
 			Recovery:   false,
 			NoBuild:    false,
 			AsyncBuild: false,
-		}, disk, tdb, types.EmptyRootHash)
+		}, disk, tdb, types.EmptyMerkleHash)
 	}
 	for i, actions := range test.actions {
-		root := types.EmptyRootHash
+		root := types.EmptyMerkleHash
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
@@ -239,7 +239,7 @@ func (test *stateTest) run() bool {
 		roots = append(roots, ret.root)
 	}
 	for i := 0; i < len(test.actions); i++ {
-		root := types.EmptyRootHash
+		root := types.EmptyMerkleHash
 		if i != 0 {
 			root = roots[i-1]
 		}
@@ -275,7 +275,7 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *triedb.Databa
 	if len(nBlob) == 0 {
 		return fmt.Errorf("missing account in new trie, %x", addrHash)
 	}
-	full, err := types.FullAccountRLP(account)
+	full, err := types.FullAccountRLP(account, false)
 	if err != nil {
 		return err
 	}
@@ -289,7 +289,7 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *triedb.Databa
 		return err
 	}
 	// Account has no slot, empty slot set is expected
-	if nAcct.Root == types.EmptyRootHash {
+	if nAcct.Root == types.EmptyMerkleHash {
 		if len(storagesOrigin) != 0 {
 			return fmt.Errorf("unexpected slot changes %x", addrHash)
 		}
@@ -319,7 +319,7 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *triedb.Databa
 	if len(storagesOrigin) != len(storages) {
 		return fmt.Errorf("extra storage found, want: %d, got: %d", len(storagesOrigin), len(storages))
 	}
-	if st.Hash() != types.EmptyRootHash {
+	if st.Hash() != types.EmptyMerkleHash {
 		return errors.New("invalid slot changes")
 	}
 	return nil
@@ -346,7 +346,7 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *triedb.Database
 	if len(oBlob) == 0 {
 		return fmt.Errorf("missing account in old trie, %x", addrHash)
 	}
-	full, err := types.FullAccountRLP(accountOrigin)
+	full, err := types.FullAccountRLP(accountOrigin, false)
 	if err != nil {
 		return err
 	}
@@ -358,7 +358,7 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *triedb.Database
 			return errors.New("unexpected account data")
 		}
 	} else {
-		full, _ = types.FullAccountRLP(account)
+		full, _ = types.FullAccountRLP(account, false)
 		if !bytes.Equal(full, nBlob) {
 			return fmt.Errorf("unexpected account data, %x, want %v, got: %v", addrHash, full, nBlob)
 		}
@@ -373,7 +373,7 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *triedb.Database
 		return err
 	}
 	if len(nBlob) == 0 {
-		nRoot = types.EmptyRootHash
+		nRoot = types.EmptyMerkleHash
 	} else {
 		if err := rlp.DecodeBytes(nBlob, &nAcct); err != nil {
 			return err

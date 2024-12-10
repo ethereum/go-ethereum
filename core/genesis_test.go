@@ -175,11 +175,18 @@ func TestGenesisHashes(t *testing.T) {
 		want    common.Hash
 	}{
 		{DefaultGenesisBlock(), params.MainnetGenesisHash},
+		{DefaultHoleskyGenesisBlock(), params.HoleskyGenesisHash},
 		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
+
+		// TODO (rjl493456442, gballet) add verkle genesis tests
 	} {
 		// Test via MustCommit
 		db := rawdb.NewMemoryDatabase()
-		if have := c.genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults)).Hash(); have != c.want {
+		config := triedb.HashDefaults
+		if c.genesis.IsVerkle() {
+			config = triedb.VerkleDefaults
+		}
+		if have := c.genesis.MustCommit(db, triedb.NewDatabase(db, config)).Hash(); have != c.want {
 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 		// Test via ToBlock

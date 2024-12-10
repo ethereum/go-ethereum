@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-verkle"
 )
 
 const (
@@ -148,6 +149,29 @@ var Defaults = &Config{
 // ReadOnly is the config in order to open database in read only mode.
 var ReadOnly = &Config{ReadOnly: true}
 
+// nodeHasher is the function to compute the hash of supplied node blob.
+type nodeHasher func([]byte) (common.Hash, error)
+
+// merkleNodeHasher computes the hash of the given merkle node.
+func merkleNodeHasher(blob []byte) (common.Hash, error) {
+	if len(blob) == 0 {
+		return types.EmptyMerkleHash, nil
+	}
+	return crypto.Keccak256Hash(blob), nil
+}
+
+// verkleNodeHasher computes the hash of the given verkle node.
+func verkleNodeHasher(blob []byte) (common.Hash, error) {
+	if len(blob) == 0 {
+		return types.EmptyVerkleHash, nil
+	}
+	n, err := verkle.ParseNode(blob, 0)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return n.Commit().Bytes(), nil
+}
+
 // Database is a multiple-layered structure for maintaining in-memory states
 // along with its dirty trie nodes. It consists of one persistent base layer
 // backed by a key-value store, on top of which arbitrarily many in-memory diff
@@ -164,9 +188,10 @@ type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
 	// the shutdown to reject all following unexpected mutations.
-	readOnly bool // Flag if database is opened in read only mode
-	waitSync bool // Flag if database is deactivated due to initial state sync
-	isVerkle bool // Flag if database is used for verkle tree
+	readOnly bool       // Flag if database is opened in read only mode
+	waitSync bool       // Flag if database is deactivated due to initial state sync
+	isVerkle bool       // Flag if database is used for verkle tree
+	hasher   nodeHasher // Trie node hasher
 
 	config  *Config                      // Configuration for database
 	diskdb  ethdb.Database               // Persistent storage for matured trie nodes
@@ -184,19 +209,21 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	}
 	config = config.sanitize()
 
+	db := &Database{
+		readOnly: config.ReadOnly,
+		isVerkle: isVerkle,
+		config:   config,
+		diskdb:   diskdb,
+		hasher:   merkleNodeHasher,
+	}
 	// Establish a dedicated database namespace tailored for verkle-specific
 	// data, ensuring the isolation of both verkle and merkle tree data. It's
 	// important to note that the introduction of a prefix won't lead to
 	// substantial storage overhead, as the underlying database will efficiently
 	// compress the shared key prefix.
 	if isVerkle {
-		diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
-	}
-	db := &Database{
-		readOnly: config.ReadOnly,
-		isVerkle: isVerkle,
-		config:   config,
-		diskdb:   diskdb,
+		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
+		db.hasher = verkleNodeHasher
 	}
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.
@@ -300,6 +327,8 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 // Commit traverses downwards the layer tree from a specified layer with the
 // provided state root and all the layers below are flattened downwards. It
 // can be used alone and mostly for test purposes.
+//
+// The supplied root must be a valid trie hash value.
 func (db *Database) Commit(root common.Hash, report bool) error {
 	// Hold the lock to prevent concurrent mutations.
 	db.lock.Lock()
@@ -341,6 +370,8 @@ func (db *Database) Disable() error {
 
 // Enable activates database and resets the state tree with the provided persistent
 // state root once the state sync is finished.
+//
+// The supplied root must be a valid trie hash value.
 func (db *Database) Enable(root common.Hash) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -350,10 +381,9 @@ func (db *Database) Enable(root common.Hash) error {
 		return errDatabaseReadOnly
 	}
 	// Ensure the provided state root matches the stored one.
-	root = types.TrieRootHash(root)
-	stored := types.EmptyRootHash
-	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		stored = crypto.Keccak256Hash(blob)
+	stored, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
+	if err != nil {
+		return err
 	}
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
@@ -389,6 +419,8 @@ func (db *Database) Enable(root common.Hash) error {
 // Recover rollbacks the database to a specified historical point.
 // The state is supported as the rollback destination only if it's
 // canonical state and the corresponding trie histories are existent.
+//
+// The supplied root must be a valid trie hash value.
 func (db *Database) Recover(root common.Hash) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -401,7 +433,6 @@ func (db *Database) Recover(root common.Hash) error {
 		return errors.New("state rollback is non-supported")
 	}
 	// Short circuit if the target state is not recoverable
-	root = types.TrieRootHash(root)
 	if !db.Recoverable(root) {
 		return errStateUnrecoverable
 	}
@@ -434,9 +465,10 @@ func (db *Database) Recover(root common.Hash) error {
 }
 
 // Recoverable returns the indicator if the specified state is recoverable.
+//
+// The supplied root must be a valid trie hash value.
 func (db *Database) Recoverable(root common.Hash) bool {
 	// Ensure the requested state is a known state.
-	root = types.TrieRootHash(root)
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
 		return false
@@ -504,7 +536,7 @@ func (db *Database) Size() (diffs common.StorageSize, nodes common.StorageSize) 
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
 	var inited bool
 	db.tree.forEach(func(layer layer) {
-		if layer.rootHash() != types.EmptyRootHash {
+		if layer.rootHash() != types.EmptyRootHash(db.isVerkle) {
 			inited = true
 		}
 	})

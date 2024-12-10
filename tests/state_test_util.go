@@ -465,7 +465,9 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	}
 	triedb := triedb.NewDatabase(db, tconf)
 	sdb := state.NewDatabase(triedb, nil)
-	statedb, _ := state.New(types.EmptyRootHash, sdb)
+
+	// TODO (rjl493456442) support verkle state tests
+	statedb, _ := state.New(types.EmptyMerkleHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)

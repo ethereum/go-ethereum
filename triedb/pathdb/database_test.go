@@ -91,6 +91,7 @@ func newCtx(stateRoot common.Hash) *genctx {
 	}
 }
 
+// TODO(rjl493456442) support verkle for testing
 type tester struct {
 	db        *Database
 	roots     []common.Hash
@@ -121,7 +122,7 @@ func newTester(t *testing.T, historyLimit uint64) *tester {
 		}
 	)
 	for i := 0; i < 12; i++ {
-		var parent = types.EmptyRootHash
+		var parent = types.EmptyMerkleHash
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
 		}
@@ -159,7 +160,7 @@ func (t *tester) generateStorage(ctx *genctx, addr common.Address) common.Hash {
 		storage[hash] = v
 		origin[hash] = nil
 	}
-	root, set := updateTrie(t.db, ctx.stateRoot, addrHash, types.EmptyRootHash, storage)
+	root, set := updateTrie(t.db, ctx.stateRoot, addrHash, types.EmptyMerkleHash, storage)
 
 	ctx.storages[addrHash] = storage
 	ctx.storageOrigin[addr] = origin
@@ -207,7 +208,7 @@ func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash
 		storage[hash] = nil
 	}
 	root, set := updateTrie(t.db, ctx.stateRoot, addrHash, root, storage)
-	if root != types.EmptyRootHash {
+	if root != types.EmptyMerkleHash {
 		panic("failed to clear storage trie")
 	}
 	ctx.storages[addrHash] = storage
@@ -252,7 +253,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 			}
 			dirties[addrHash] = struct{}{}
 
-			acct, _ := types.FullAccount(account)
+			acct, _ := types.FullAccount(account, false)
 			stRoot := t.mutateStorage(ctx, addr, acct.Root)
 			newAccount := types.SlimAccountRLP(generateAccount(stRoot))
 
@@ -271,8 +272,8 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 			}
 			dirties[addrHash] = struct{}{}
 
-			acct, _ := types.FullAccount(account)
-			if acct.Root != types.EmptyRootHash {
+			acct, _ := types.FullAccount(account, false)
+			if acct.Root != types.EmptyMerkleHash {
 				t.clearStorage(ctx, addr, acct.Root)
 			}
 			ctx.accounts[addrHash] = nil
@@ -371,7 +372,7 @@ func (t *tester) verifyHistory() error {
 		if err != nil {
 			return err
 		}
-		parent := types.EmptyRootHash
+		parent := types.EmptyMerkleHash
 		if i != 0 {
 			parent = t.roots[i-1]
 		}
@@ -412,7 +413,7 @@ func TestDatabaseRollback(t *testing.T) {
 	}
 	// Revert database from top to bottom
 	for i := tester.bottomIndex(); i >= 0; i-- {
-		parent := types.EmptyRootHash
+		parent := types.EmptyMerkleHash
 		if i > 0 {
 			parent = tester.roots[i-1]
 		}
@@ -451,10 +452,10 @@ func TestDatabaseRecoverable(t *testing.T) {
 		{common.Hash{0x1}, false},
 
 		// Initial state should be recoverable
-		{types.EmptyRootHash, true},
+		{types.EmptyMerkleHash, true},
 
-		// Initial state should be recoverable
-		{common.Hash{}, true},
+		// Invalid (unknown) state should be rejected
+		{common.Hash{}, false},
 
 		// Layers below current disk layer are recoverable
 		{tester.roots[index-1], true},
@@ -489,7 +490,7 @@ func TestDisable(t *testing.T) {
 	if err := tester.db.Disable(); err != nil {
 		t.Fatalf("Failed to deactivate database: %v", err)
 	}
-	if err := tester.db.Enable(types.EmptyRootHash); err == nil {
+	if err := tester.db.Enable(types.EmptyMerkleHash); err == nil {
 		t.Fatal("Invalid activation should be rejected")
 	}
 	if err := tester.db.Enable(stored); err != nil {

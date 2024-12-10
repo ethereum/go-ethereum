@@ -567,6 +567,8 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 
 // ExportSnapshotPreimages exports the preimages corresponding to the enumeration of
 // the snapshot for a given root.
+//
+// TODO(rjl493456442) this command is not compatible with verkle.
 func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn string, root common.Hash) error {
 	log.Info("Exporting preimages", "file", fn)
 
@@ -608,7 +610,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 		defer accIt.Release()
 
 		for accIt.Next() {
-			acc, err := types.FullAccount(accIt.Account())
+			acc, err := types.FullAccount(accIt.Account(), false)
 			if err != nil {
 				log.Error("Failed to get full account", "error", err)
 				return
@@ -616,7 +618,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 			preimages += 1
 			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: common.AddressLength}
 
-			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
+			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyMerkleHash {
 				stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
 				if err != nil {
 					log.Error("Failed to create storage iterator", "error", err)

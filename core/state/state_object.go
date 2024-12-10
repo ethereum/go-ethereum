@@ -93,7 +93,7 @@ func (s *stateObject) empty() bool {
 func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *stateObject {
 	origin := acct
 	if acct == nil {
-		acct = types.NewEmptyStateAccount()
+		acct = types.NewEmptyStateAccount(db.db.TrieDB().IsVerkle())
 	}
 	return &stateObject{
 		db:                 db,
@@ -142,7 +142,8 @@ func (s *stateObject) getTrie() (Trie, error) {
 func (s *stateObject) getPrefetchedTrie() Trie {
 	// If there's nothing to meaningfully return, let the user figure it out by
 	// pulling the trie from disk.
-	if (s.data.Root == types.EmptyRootHash && !s.db.db.TrieDB().IsVerkle()) || s.db.prefetcher == nil {
+	isVerkle := s.db.db.TrieDB().IsVerkle()
+	if (s.data.Root == types.EmptyRootHash(isVerkle) && !isVerkle) || s.db.prefetcher == nil {
 		return nil
 	}
 	// Attempt to retrieve the trie from the prefetcher
@@ -197,9 +198,17 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	s.db.StorageReads += time.Since(start)
 
 	// Schedule the resolved storage slots for prefetching if it's enabled.
-	if s.db.prefetcher != nil && s.data.Root != types.EmptyRootHash {
-		if err = s.db.prefetcher.prefetch(s.addrHash, s.origin.Root, s.address, nil, []common.Hash{key}, true); err != nil {
-			log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
+	// Verkle tree is always available for prefetching, or the storage trie is
+	// existent in merkle.
+	if s.db.prefetcher != nil {
+		if s.db.db.TrieDB().IsVerkle() {
+			if err = s.db.prefetcher.prefetch(s.addrHash, common.Hash{}, s.address, nil, []common.Hash{key}, true); err != nil {
+				log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
+			}
+		} else if s.data.Root != types.EmptyMerkleHash {
+			if err = s.db.prefetcher.prefetch(s.addrHash, s.origin.Root, s.address, nil, []common.Hash{key}, true); err != nil {
+				log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
+			}
 		}
 	}
 	s.originStorage[key] = value
@@ -258,9 +267,17 @@ func (s *stateObject) finalise() {
 		// byzantium fork) and entry is necessary to modify the value back.
 		s.pendingStorage[key] = value
 	}
-	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
-		if err := s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
-			log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
+	// Verkle tree is always available for prefetching, or the storage trie is
+	// existent in merkle.
+	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 {
+		if s.db.db.TrieDB().IsVerkle() {
+			if err := s.db.prefetcher.prefetch(s.addrHash, common.Hash{}, s.address, nil, slotsToPrefetch, false); err != nil {
+				log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
+			}
+		} else if s.data.Root != types.EmptyMerkleHash {
+			if err := s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
+				log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
+			}
 		}
 	}
 	if len(s.dirtyStorage) > 0 {

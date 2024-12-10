@@ -125,15 +125,17 @@ func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) 
 
 // flatReader wraps a database state reader.
 type flatReader struct {
-	reader database.StateReader
-	buff   crypto.KeccakState
+	reader   database.StateReader
+	buff     crypto.KeccakState
+	isVerkle bool
 }
 
 // newFlatReader constructs a state reader with on the given state root.
-func newFlatReader(reader database.StateReader) *flatReader {
+func newFlatReader(reader database.StateReader, isVerkle bool) *flatReader {
 	return &flatReader{
-		reader: reader,
-		buff:   crypto.NewKeccakState(),
+		reader:   reader,
+		buff:     crypto.NewKeccakState(),
+		isVerkle: isVerkle,
 	}
 }
 
@@ -160,8 +162,9 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 	if len(acct.CodeHash) == 0 {
 		acct.CodeHash = types.EmptyCodeHash.Bytes()
 	}
+	// Annotate the empty root hash, especially for merkle tree.
 	if acct.Root == (common.Hash{}) {
-		acct.Root = types.EmptyRootHash
+		acct.Root = types.EmptyRootHash(r.isVerkle)
 	}
 	return acct, nil
 }
@@ -240,7 +243,7 @@ func (r *trieReader) Account(addr common.Address) (*types.StateAccount, error) {
 		return nil, err
 	}
 	if account == nil {
-		r.subRoots[addr] = types.EmptyRootHash
+		r.subRoots[addr] = types.EmptyRootHash(r.db.IsVerkle())
 	} else {
 		r.subRoots[addr] = account.Root
 	}

@@ -87,7 +87,7 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 	defer h.release()
 
 	addrHash := h.hash(addr.Bytes())
-	prev, err := types.FullAccount(ctx.accounts[addr])
+	prev, err := types.FullAccount(ctx.accounts[addr], false) // TODO support verkle mode
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 	if err != nil {
 		return err
 	}
-	post := types.NewEmptyStateAccount()
+	post := types.NewEmptyStateAccount(false) // TODO support verkle mode
 	if len(blob) != 0 {
 		if err := rlp.DecodeBytes(blob, &post); err != nil {
 			return err
@@ -171,7 +171,7 @@ func deleteAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 		}
 	}
 	root, result := st.Commit(false)
-	if root != types.EmptyRootHash {
+	if root != types.EmptyMerkleHash { // TODO (rjl493456442) support verkle
 		return errors.New("failed to clear storage trie")
 	}
 	// The returned set can be nil if storage trie is not changed

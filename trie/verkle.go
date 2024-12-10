@@ -46,13 +46,13 @@ type VerkleTrie struct {
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
 func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
-	reader, err := newTrieReader(root, common.Hash{}, db)
+	reader, err := newTrieReader(true, root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 	// Parse the root verkle node if it's not empty.
 	node := verkle.New()
-	if root != types.EmptyVerkleHash && root != types.EmptyRootHash {
+	if root != types.EmptyVerkleHash {
 		blob, err := reader.node(nil, common.Hash{})
 		if err != nil {
 			return nil, err

@@ -31,7 +31,7 @@ import (
 )
 
 func filledStateDB() *StateDB {
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	state, _ := New(types.EmptyMerkleHash, NewDatabaseForTesting())
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -71,7 +71,7 @@ func TestVerklePrefetcher(t *testing.T) {
 	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
 	sdb := NewDatabase(db, nil)
 
-	state, err := New(types.EmptyRootHash, sdb)
+	state, err := New(types.EmptyVerkleHash, sdb)
 	if err != nil {
 		t.Fatalf("failed to initialize state: %v", err)
 	}

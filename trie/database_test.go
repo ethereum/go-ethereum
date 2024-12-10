@@ -66,7 +66,7 @@ type testDb struct {
 func newTestDatabase(diskdb ethdb.Database, scheme string) *testDb {
 	return &testDb{
 		disk:    diskdb,
-		root:    types.EmptyRootHash,
+		root:    types.EmptyMerkleHash,
 		scheme:  scheme,
 		nodes:   make(map[common.Hash]*trienode.MergedNodeSet),
 		parents: make(map[common.Hash]common.Hash),

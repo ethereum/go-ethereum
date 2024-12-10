@@ -77,6 +77,8 @@ var Defaults = &Config{
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
+//
+// This database is not compatible with verkle tree node.
 type Database struct {
 	diskdb  ethdb.Database              // Persistent storage for matured trie nodes
 	cleans  *fastcache.Cache            // GC friendly memory cache of clean node RLPs
@@ -540,9 +542,9 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 
 // Update inserts the dirty nodes in provided nodeset into database and link the
 // account trie with multiple storage tries if necessary.
-func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet) error {
+func (db *Database) Update(parent common.Hash, nodes *trienode.MergedNodeSet) error {
 	// Ensure the parent state is present and signal a warning if not.
-	if parent != types.EmptyRootHash {
+	if parent != types.EmptyMerkleHash {
 		if blob, _ := db.node(parent); len(blob) == 0 {
 			log.Error("parent state is not present")
 		}
@@ -583,7 +585,7 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 			if err := rlp.DecodeBytes(n.Blob, &account); err != nil {
 				return err
 			}
-			if account.Root != types.EmptyRootHash {
+			if account.Root != types.EmptyMerkleHash {
 				db.reference(account.Root, n.Parent)
 			}
 		}

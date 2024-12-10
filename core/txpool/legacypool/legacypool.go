@@ -302,7 +302,7 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserve txpool.A
 	// fully synced).
 	statedb, err := pool.chain.StateAt(head.Root)
 	if err != nil {
-		statedb, err = pool.chain.StateAt(types.EmptyRootHash)
+		statedb, err = pool.chain.StateAt(types.EmptyMerkleHash) // TODO (rjl493456442) support verkle
 	}
 	if err != nil {
 		return err

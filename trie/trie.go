@@ -84,7 +84,7 @@ func (t *Trie) Copy() *Trie {
 // empty, otherwise, the root node must be present in database or returns
 // a MissingNodeError if not.
 func New(id *ID, db database.NodeDatabase) (*Trie, error) {
-	reader, err := newTrieReader(id.StateRoot, id.Owner, db)
+	reader, err := newTrieReader(false, id.StateRoot, id.Owner, db)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func New(id *ID, db database.NodeDatabase) (*Trie, error) {
 		reader: reader,
 		tracer: newTracer(),
 	}
-	if id.Root != (common.Hash{}) && id.Root != types.EmptyRootHash {
+	if id.Root != types.EmptyMerkleHash {
 		rootnode, err := trie.resolveAndTrack(id.Root[:], nil)
 		if err != nil {
 			return nil, err
@@ -105,7 +105,7 @@ func New(id *ID, db database.NodeDatabase) (*Trie, error) {
 
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
 func NewEmpty(db database.NodeDatabase) *Trie {
-	tr, _ := New(TrieID(types.EmptyRootHash), db)
+	tr, _ := New(TrieID(types.EmptyMerkleHash), db)
 	return tr
 }
 
@@ -621,13 +621,13 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	if t.root == nil {
 		paths := t.tracer.deletedNodes()
 		if len(paths) == 0 {
-			return types.EmptyRootHash, nil // case (a)
+			return types.EmptyMerkleHash, nil // case (a)
 		}
 		nodes := trienode.NewNodeSet(t.owner)
 		for _, path := range paths {
 			nodes.AddNode([]byte(path), trienode.NewDeleted())
 		}
-		return types.EmptyRootHash, nodes // case (b)
+		return types.EmptyMerkleHash, nodes // case (b)
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
@@ -654,7 +654,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 // hashRoot calculates the root hash of the given trie
 func (t *Trie) hashRoot() (node, node) {
 	if t.root == nil {
-		return hashNode(types.EmptyRootHash.Bytes()), nil
+		return hashNode(types.EmptyMerkleHash.Bytes()), nil
 	}
 	// If the number of changes is below 100, we let one thread handle it
 	h := newHasher(t.unhashed >= 100)

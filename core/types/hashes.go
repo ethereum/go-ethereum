@@ -19,13 +19,9 @@ package types
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
-	// EmptyRootHash is the known root hash of an empty merkle trie.
-	EmptyRootHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-
 	// EmptyUncleHash is the known hash of the empty uncle set.
 	EmptyUncleHash = rlpHash([]*Header(nil)) // 1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347
 
@@ -46,14 +42,15 @@ var (
 
 	// EmptyVerkleHash is the known hash of an empty verkle trie.
 	EmptyVerkleHash = common.Hash{}
+
+	// EmptyMerkleHash is the known root hash of an empty merkle trie.
+	EmptyMerkleHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
 
-// TrieRootHash returns the hash itself if it's non-empty or the predefined
-// emptyHash one instead.
-func TrieRootHash(hash common.Hash) common.Hash {
-	if hash == (common.Hash{}) {
-		log.Error("Zero trie root hash!")
-		return EmptyRootHash
+// EmptyRootHash returns the empty root tree hash of the specific tree type.
+func EmptyRootHash(isVerkle bool) common.Hash {
+	if !isVerkle {
+		return EmptyMerkleHash
 	}
-	return hash
+	return EmptyVerkleHash
 }
