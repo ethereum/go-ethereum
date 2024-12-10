@@ -369,12 +369,12 @@ func (t *UDPv5) newLookup(ctx context.Context, target enode.ID) *lookup {
 // lookupWorker performs FINDNODE calls against a single node during lookup.
 func (t *UDPv5) lookupWorker(destNode *enode.Node, target enode.ID) ([]*enode.Node, error) {
 	var (
-		dists = LookupDistances(target, destNode.ID())
+		dists = lookupDistances(target, destNode.ID())
 		nodes = nodesByDistance{target: target}
 		err   error
 	)
 	var r []*enode.Node
-	r, err = t.Findnode(destNode, dists)
+	r, err = t.findnode(destNode, dists)
 	if errors.Is(err, errClosed) {
 		return nil, err
 	}
@@ -386,10 +386,10 @@ func (t *UDPv5) lookupWorker(destNode *enode.Node, target enode.ID) ([]*enode.No
 	return nodes.entries, err
 }
 
-// LookupDistances computes the distance parameter for FINDNODE calls to dest.
+// lookupDistances computes the distance parameter for FINDNODE calls to dest.
 // It chooses distances adjacent to logdist(target, dest), e.g. for a target
 // with logdist(target, dest) = 255 the result is [255, 256, 254].
-func LookupDistances(target, dest enode.ID) (dists []uint) {
+func lookupDistances(target, dest enode.ID) (dists []uint) {
 	td := enode.LogDist(target, dest)
 	dists = append(dists, uint(td))
 	for i := 1; len(dists) < lookupRequestLimit; i++ {
@@ -429,7 +429,7 @@ func (t *UDPv5) PingWithResp(n *enode.Node) (*v5wire.Pong, error) {
 
 // RequestENR requests n's record.
 func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
-	nodes, err := t.Findnode(n, []uint{0})
+	nodes, err := t.findnode(n, []uint{0})
 	if err != nil {
 		return nil, err
 	}
@@ -439,8 +439,8 @@ func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
 	return nodes[0], nil
 }
 
-// Findnode calls FINDNODE on a node and waits for responses.
-func (t *UDPv5) Findnode(n *enode.Node, distances []uint) ([]*enode.Node, error) {
+// findnode calls FINDNODE on a node and waits for responses.
+func (t *UDPv5) findnode(n *enode.Node, distances []uint) ([]*enode.Node, error) {
 	resp := t.callToNode(n, v5wire.NodesMsg, &v5wire.Findnode{Distances: distances})
 	return t.waitForNodes(resp, distances)
 }
@@ -721,7 +721,6 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 	t.logcontext = packet.AppendLogInfo(t.logcontext)
 
 	enc, nonce, err := t.codec.Encode(toID, addr, packet, c)
-	t.logcontext = append(t.logcontext, "nonce", fmt.Sprintf("%x", nonce[:]))
 	if err != nil {
 		t.logcontext = append(t.logcontext, "err", err)
 		t.log.Warn(">> "+packet.Name(), t.logcontext...)
@@ -879,7 +878,7 @@ var (
 func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr netip.AddrPort) {
 	c, err := t.matchWithCall(fromID, p.Nonce)
 	if err != nil {
-		t.log.Debug("Invalid "+p.Name(), "addr", fromAddr, "nonce", fmt.Sprintf("%x", p.Nonce[:]), "err", err)
+		t.log.Debug("Invalid "+p.Name(), "addr", fromAddr, "err", err)
 		return
 	}
 
@@ -890,7 +889,7 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr n
 		return
 	}
 	// Resend the call that was answered by WHOAREYOU.
-	t.log.Trace("<< "+p.Name(), "id", c.node.ID(), "addr", fromAddr, "nonce", fmt.Sprintf("%x", p.Nonce[:]))
+	t.log.Trace("<< "+p.Name(), "id", c.node.ID(), "addr", fromAddr)
 	c.handshakeCount++
 	c.challenge = p
 	p.Node = c.node
@@ -1006,8 +1005,4 @@ func (t *UDPv5) putCache(addr string, node *enode.Node) {
 
 func (t *UDPv5) GetCachedNode(addr string) (*enode.Node, bool) {
 	return t.cachedAddrNode.Get(addr)
-}
-
-func (t *UDPv5) Table() *Table {
-	return t.tab
 }
