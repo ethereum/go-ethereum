@@ -89,11 +89,12 @@ type WatchOpts struct {
 
 // MetaData collects all metadata for a bound contract.
 type MetaData struct {
-	mu   sync.Mutex
-	Sigs map[string]string
-	Bin  string
-	ABI  string
-	ab   *abi.ABI
+	mu      sync.Mutex
+	Sigs    map[string]string
+	Bin     string
+	ABI     string
+	ab      *abi.ABI
+	Pattern string
 }
 
 func (m *MetaData) GetAbi() (*abi.ABI, error) {
@@ -151,15 +152,25 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return c.address, tx, c, nil
 }
 
+// DeployContractRaw deploys a contract onto the Ethereum blockchain and binds the
+// deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
+// bytes.
+func DeployContractRaw(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *BoundContract, error) {
+	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
+
+	tx, err := c.transact(opts, nil, append(bytecode, packedParams...))
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	c.address = crypto.CreateAddress(opts.From, tx.Nonce())
+	return c.address, tx, c, nil
+}
+
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
 func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method string, params ...interface{}) error {
-	// Don't crash on a lazy user
-	if opts == nil {
-		opts = new(CallOpts)
-	}
 	if results == nil {
 		results = new([]interface{})
 	}
@@ -168,59 +179,10 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 	if err != nil {
 		return err
 	}
-	var (
-		msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}
-		ctx    = ensureContext(opts.Context)
-		code   []byte
-		output []byte
-	)
-	if opts.Pending {
-		pb, ok := c.caller.(PendingContractCaller)
-		if !ok {
-			return ErrNoPendingState
-		}
-		output, err = pb.PendingCallContract(ctx, msg)
-		if err != nil {
-			return err
-		}
-		if len(output) == 0 {
-			// Make sure we have a contract to operate on, and bail out otherwise.
-			if code, err = pb.PendingCodeAt(ctx, c.address); err != nil {
-				return err
-			} else if len(code) == 0 {
-				return ErrNoCode
-			}
-		}
-	} else if opts.BlockHash != (common.Hash{}) {
-		bh, ok := c.caller.(BlockHashContractCaller)
-		if !ok {
-			return ErrNoBlockHashState
-		}
-		output, err = bh.CallContractAtHash(ctx, msg, opts.BlockHash)
-		if err != nil {
-			return err
-		}
-		if len(output) == 0 {
-			// Make sure we have a contract to operate on, and bail out otherwise.
-			if code, err = bh.CodeAtHash(ctx, c.address, opts.BlockHash); err != nil {
-				return err
-			} else if len(code) == 0 {
-				return ErrNoCode
-			}
-		}
-	} else {
-		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
-		if err != nil {
-			return err
-		}
-		if len(output) == 0 {
-			// Make sure we have a contract to operate on, and bail out otherwise.
-			if code, err = c.caller.CodeAt(ctx, c.address, opts.BlockNumber); err != nil {
-				return err
-			} else if len(code) == 0 {
-				return ErrNoCode
-			}
-		}
+
+	output, err := c.call(opts, input)
+	if err != nil {
+		return err
 	}
 
 	if len(*results) == 0 {
@@ -230,6 +192,73 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 	}
 	res := *results
 	return c.abi.UnpackIntoInterface(res[0], method, output)
+}
+
+func (c *BoundContract) CallRaw(opts *CallOpts, input []byte) ([]byte, error) {
+	return c.call(opts, input)
+}
+
+func (c *BoundContract) call(opts *CallOpts, input []byte) ([]byte, error) {
+	// Don't crash on a lazy user
+	if opts == nil {
+		opts = new(CallOpts)
+	}
+	var (
+		msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}
+		ctx    = ensureContext(opts.Context)
+		code   []byte
+		output []byte
+		err    error
+	)
+	if opts.Pending {
+		pb, ok := c.caller.(PendingContractCaller)
+		if !ok {
+			return nil, ErrNoPendingState
+		}
+		output, err = pb.PendingCallContract(ctx, msg)
+		if err != nil {
+			return nil, err
+		}
+		if len(output) == 0 {
+			// Make sure we have a contract to operate on, and bail out otherwise.
+			if code, err = pb.PendingCodeAt(ctx, c.address); err != nil {
+				return nil, err
+			} else if len(code) == 0 {
+				return nil, ErrNoCode
+			}
+		}
+	} else if opts.BlockHash != (common.Hash{}) {
+		bh, ok := c.caller.(BlockHashContractCaller)
+		if !ok {
+			return nil, ErrNoBlockHashState
+		}
+		output, err = bh.CallContractAtHash(ctx, msg, opts.BlockHash)
+		if err != nil {
+			return nil, err
+		}
+		if len(output) == 0 {
+			// Make sure we have a contract to operate on, and bail out otherwise.
+			if code, err = bh.CodeAtHash(ctx, c.address, opts.BlockHash); err != nil {
+				return nil, err
+			} else if len(code) == 0 {
+				return nil, ErrNoCode
+			}
+		}
+	} else {
+		output, err = c.caller.CallContract(ctx, msg, opts.BlockNumber)
+		if err != nil {
+			return nil, err
+		}
+		if len(output) == 0 {
+			// Make sure we have a contract to operate on, and bail out otherwise.
+			if code, err = c.caller.CodeAt(ctx, c.address, opts.BlockNumber); err != nil {
+				return nil, err
+			} else if len(code) == 0 {
+				return nil, ErrNoCode
+			}
+		}
+	}
+	return output, nil
 }
 
 // Transact invokes the (paid) contract method with params as input values.
@@ -431,16 +460,25 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	return signedTx, nil
 }
 
+// FilterLogsById filters contract logs for past blocks, returning the necessary
+// channels to construct a strongly typed bound iterator on top of them.
+func (c *BoundContract) FilterLogsById(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+	return c.filterLogs(opts, eventID, query...)
+}
+
 // FilterLogs filters contract logs for past blocks, returning the necessary
 // channels to construct a strongly typed bound iterator on top of them.
-func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+	return c.filterLogs(opts, c.abi.Events[name].ID, query...)
+}
+
+func (c *BoundContract) filterLogs(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(FilterOpts)
 	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{c.abi.Events[name].ID}}, query...)
-
+	query = append([][]interface{}{{eventID}}, query...)
 	topics, err := abi.MakeTopics(query...)
 	if err != nil {
 		return nil, nil, err
@@ -479,13 +517,23 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 
 // WatchLogs filters subscribes to contract logs for future blocks, returning a
 // subscription object that can be used to tear down the watcher.
-func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+	return c.watchLogs(opts, c.abi.Events[name].ID, query...)
+}
+
+// WatchLogsForId filters subscribes to contract logs for future blocks, returning a
+// subscription object that can be used to tear down the watcher.
+func (c *BoundContract) WatchLogsForId(opts *WatchOpts, id common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+	return c.watchLogs(opts, id, query...)
+}
+
+func (c *BoundContract) watchLogs(opts *WatchOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(WatchOpts)
 	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{c.abi.Events[name].ID}}, query...)
+	query = append([][]interface{}{{eventID}}, query...)
 
 	topics, err := abi.MakeTopics(query...)
 	if err != nil {
