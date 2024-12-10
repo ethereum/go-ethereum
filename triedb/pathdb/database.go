@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-verkle"
 )
 
 const (
@@ -147,6 +148,26 @@ var Defaults = &Config{
 
 // ReadOnly is the config in order to open database in read only mode.
 var ReadOnly = &Config{ReadOnly: true}
+
+// nodeToHash computes the hash of the given node based on the tree structure.
+func nodeToHash(blob []byte, isVerkle bool) (common.Hash, error) {
+	// Compute the node hash in merkle tree manner
+	if !isVerkle {
+		if len(blob) == 0 {
+			return types.EmptyRootHash, nil
+		}
+		return crypto.Keccak256Hash(blob), nil
+	}
+	// Compute the node hash in verkle tree manner
+	if len(blob) == 0 {
+		return types.EmptyVerkleHash, nil
+	}
+	n, err := verkle.ParseNode(blob, 0)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return n.Commit().Bytes(), nil
+}
 
 // Database is a multiple-layered structure for maintaining in-memory states
 // along with its dirty trie nodes. It consists of one persistent base layer
@@ -350,11 +371,11 @@ func (db *Database) Enable(root common.Hash) error {
 		return errDatabaseReadOnly
 	}
 	// Ensure the provided state root matches the stored one.
-	root = types.TrieRootHash(root)
-	stored := types.EmptyRootHash
-	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		stored = crypto.Keccak256Hash(blob)
+	stored, err := nodeToHash(rawdb.ReadAccountTrieNode(db.diskdb, nil), db.isVerkle)
+	if err != nil {
+		return err
 	}
+	root = types.TrieRootHash(root)
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}
@@ -502,9 +523,15 @@ func (db *Database) Size() (diffs common.StorageSize, nodes common.StorageSize) 
 // Initialized returns an indicator if the state data is already
 // initialized in path-based scheme.
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
-	var inited bool
+	var (
+		inited    bool
+		emptyRoot = types.EmptyRootHash
+	)
+	if db.isVerkle {
+		emptyRoot = types.EmptyVerkleHash
+	}
 	db.tree.forEach(func(layer layer) {
-		if layer.rootHash() != types.EmptyRootHash {
+		if layer.rootHash() != emptyRoot {
 			inited = true
 		}
 	})
