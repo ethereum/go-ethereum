@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
@@ -287,9 +286,6 @@ func importChain(ctx *cli.Context) error {
 
 	// Start metrics export if enabled
 	utils.SetupMetrics(&cfg.Metrics)
-
-	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
 
 	chain, db := utils.MakeChain(ctx, stack, false)
 	defer db.Close()

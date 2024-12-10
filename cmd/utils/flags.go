@@ -1969,12 +1969,15 @@ func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.H
 	log.Info("Registered full-sync tester", "hash", target)
 }
 
+// SetupMetrics configures the metrics system.
 func SetupMetrics(cfg *metrics.Config) {
 	if !cfg.Enabled {
 		return
 	}
-	metrics.Enable()
 	log.Info("Enabling metrics collection")
+	metrics.Enable()
+
+	// InfluxDB exporter.
 	var (
 		enableExport   = cfg.EnableInfluxDB
 		enableExportV2 = cfg.EnableInfluxDBV2
@@ -1991,22 +1994,18 @@ func SetupMetrics(cfg *metrics.Config) {
 		token        = cfg.InfluxDBToken
 		bucket       = cfg.InfluxDBBucket
 		organization = cfg.InfluxDBOrganization
+		tagsMap      = SplitTagsFlag(cfg.InfluxDBTags)
 	)
-
 	if enableExport {
-		tagsMap := SplitTagsFlag(cfg.InfluxDBTags)
-
 		log.Info("Enabling metrics export to InfluxDB")
-
 		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
 	} else if enableExportV2 {
 		tagsMap := SplitTagsFlag(cfg.InfluxDBTags)
-
 		log.Info("Enabling metrics export to InfluxDB (v2)")
-
 		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
 	}
 
+	// Expvar exporter.
 	if cfg.HTTP != "" {
 		address := net.JoinHostPort(cfg.HTTP, fmt.Sprintf("%d", cfg.Port))
 		log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
@@ -2014,6 +2013,9 @@ func SetupMetrics(cfg *metrics.Config) {
 	} else if cfg.HTTP == "" && cfg.Port != 0 {
 		log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
 	}
+
+	// Enable system metrics collection.
+	go metrics.CollectProcessMetrics(3 * time.Second)
 }
 
 // SplitTagsFlag parses a comma-separated list of k=v metrics tags.
