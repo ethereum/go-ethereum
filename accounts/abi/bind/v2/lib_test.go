@@ -122,13 +122,8 @@ func TestDeploymentLibraries(t *testing.T) {
 		t.Fatalf("failed to pack constructor: %v", err)
 	}
 	deploymentParams := DeploymentParams{
-		Contracts: []ContractDeployParams{
-			{
-				Meta:  nested_libraries.C1MetaData,
-				Input: constructorInput,
-			},
-		},
-		Libraries: nested_libraries.C1LibraryDeps,
+		Contracts: append(nested_libraries.C1LibraryDeps, nested_libraries.C1MetaData),
+		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput},
 		Overrides: nil,
 	}
 
@@ -186,7 +181,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 
 	// deploy some library deps
 	deploymentParams := DeploymentParams{
-		Libraries: nested_libraries.C1LibraryDeps,
+		Contracts: nested_libraries.C1LibraryDeps,
 	}
 
 	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
@@ -216,13 +211,8 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	overrides := res.Addrs
 	// deploy the contract
 	deploymentParams = DeploymentParams{
-		Contracts: []ContractDeployParams{
-			{
-				Meta:  nested_libraries.C1MetaData,
-				Input: constructorInput,
-			},
-		},
-		Libraries: nil,
+		Contracts: []*bind.MetaData{nested_libraries.C1MetaData},
+		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput},
 		Overrides: overrides,
 	}
 	res, err = LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
@@ -281,11 +271,7 @@ func TestEvents(t *testing.T) {
 	}
 
 	deploymentParams := DeploymentParams{
-		Contracts: []ContractDeployParams{
-			{
-				Meta: events.CMetaData,
-			},
-		},
+		Contracts: []*bind.MetaData{events.CMetaData},
 	}
 
 	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
