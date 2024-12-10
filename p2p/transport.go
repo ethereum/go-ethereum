@@ -120,8 +120,7 @@ func (t *rlpxTransport) close(err error) {
 			if err := t.conn.SetWriteDeadline(deadline); err == nil {
 				// Connection supports write deadline.
 				t.wbuf.Reset()
-				size, reader, _ := rlp.EncodeToReader(reason)
-				io.CopyN(&t.wbuf, reader, int64(size))
+				rlp.Encode(&t.wbuf, []interface{}{reason})
 				t.conn.Write(discMsg, t.wbuf.Bytes())
 			}
 		}
