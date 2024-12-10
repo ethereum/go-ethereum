@@ -43,7 +43,7 @@ func (c *counter) add(size int) {
 }
 
 // report uploads the cached statistics to meters.
-func (c *counter) report(count metrics.Meter, size metrics.Meter) {
+func (c *counter) report(count, size *metrics.Meter) {
 	count.Mark(int64(c.n))
 	size.Mark(int64(c.size))
 }

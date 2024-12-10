@@ -282,13 +282,14 @@ func importChain(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
+	stack, cfg := makeConfigNode(ctx)
+	defer stack.Close()
+
 	// Start metrics export if enabled
-	utils.SetupMetrics(ctx)
+	utils.SetupMetrics(&cfg.Metrics)
+
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
-
-	stack, _ := makeConfigNode(ctx)
-	defer stack.Close()
 
 	chain, db := utils.MakeChain(ctx, stack, false)
 	defer db.Close()
