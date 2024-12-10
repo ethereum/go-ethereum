@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/exp/rand"
-	"runtime/debug"
 	"testing"
 )
 
@@ -107,12 +106,14 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 		contractAddr := crypto.CreateAddress(testAddr, testAddrNonce)
 		testAddrNonce++
 
-		// assert that this contract only references libs that are known to be deployed or in the override set
-		for i := 0; i < len(deployer)/20; i += 20 {
-			var dep common.Address
-			dep.SetBytes(deployer[i : i+20])
-			if _, ok := overridesAddrs[dep]; !ok {
-				t.Fatalf("reference to dependent contract that has not yet been deployed: %x\n", dep)
+		if len(deployer) >= 20 {
+			// assert that this contract only references libs that are known to be deployed or in the override set
+			for i := 0; i < len(deployer); i += 20 {
+				var dep common.Address
+				dep.SetBytes(deployer[i : i+20])
+				if _, ok := overridesAddrs[dep]; !ok {
+					t.Fatalf("reference to dependent contract that has not yet been deployed: %x\n", dep)
+				}
 			}
 		}
 		overridesAddrs[contractAddr] = struct{}{}
@@ -145,7 +146,6 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 	}
 
 	if len(res.Addrs) != len(tcInput.expectDeployed) {
-		debug.PrintStack()
 		t.Fatalf("got %d deployed contracts.  expected %d.\n", len(res.Addrs), len(tcInput.expectDeployed))
 	}
 	for contract, _ := range tcInput.expectDeployed {
@@ -166,7 +166,6 @@ func TestContractLinking(t *testing.T) {
 		},
 	})
 
-	fmt.Println("2")
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},

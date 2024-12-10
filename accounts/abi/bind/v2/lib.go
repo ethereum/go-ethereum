@@ -208,8 +208,6 @@ func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []
 
 	deps := treeBuilder.BuildDepTrees()
 	for _, tr := range deps {
-		// TODO: instantiate deployer with its tree?
-
 		deployer := treeDeployer{
 			deploy:        deploy,
 			deployedAddrs: make(map[string]common.Address),
