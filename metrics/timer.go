@@ -13,7 +13,6 @@ type TimerSnapshot interface {
 // Timer capture the duration and rate of events.
 type Timer interface {
 	Snapshot() TimerSnapshot
-	Stop()
 	Time(func())
 	UpdateSince(time.Time)
 	Update(time.Duration)
@@ -21,8 +20,6 @@ type Timer interface {
 
 // GetOrRegisterTimer returns an existing Timer or constructs and registers a
 // new StandardTimer.
-// Be sure to unregister the meter from the registry once it is of no use to
-// allow for garbage collection.
 func GetOrRegisterTimer(name string, r Registry) Timer {
 	if nil == r {
 		r = DefaultRegistry
@@ -31,7 +28,6 @@ func GetOrRegisterTimer(name string, r Registry) Timer {
 }
 
 // NewCustomTimer constructs a new StandardTimer from a Histogram and a Meter.
-// Be sure to call Stop() once the timer is of no use to allow for garbage collection.
 func NewCustomTimer(h Histogram, m Meter) Timer {
 	if !Enabled {
 		return NilTimer{}
@@ -43,8 +39,6 @@ func NewCustomTimer(h Histogram, m Meter) Timer {
 }
 
 // NewRegisteredTimer constructs and registers a new StandardTimer.
-// Be sure to unregister the meter from the registry once it is of no use to
-// allow for garbage collection.
 func NewRegisteredTimer(name string, r Registry) Timer {
 	c := NewTimer()
 	if nil == r {
@@ -56,7 +50,6 @@ func NewRegisteredTimer(name string, r Registry) Timer {
 
 // NewTimer constructs a new StandardTimer using an exponentially-decaying
 // sample with the same reservoir size and alpha as UNIX load averages.
-// Be sure to call Stop() once the timer is of no use to allow for garbage collection.
 func NewTimer() Timer {
 	if !Enabled {
 		return NilTimer{}
@@ -71,7 +64,6 @@ func NewTimer() Timer {
 type NilTimer struct{}
 
 func (NilTimer) Snapshot() TimerSnapshot { return (*emptySnapshot)(nil) }
-func (NilTimer) Stop()                   {}
 func (NilTimer) Time(f func())           { f() }
 func (NilTimer) Update(time.Duration)    {}
 func (NilTimer) UpdateSince(time.Time)   {}
@@ -92,11 +84,6 @@ func (t *StandardTimer) Snapshot() TimerSnapshot {
 		histogram: t.histogram.Snapshot(),
 		meter:     t.meter.Snapshot(),
 	}
-}
-
-// Stop stops the meter.
-func (t *StandardTimer) Stop() {
-	t.meter.Stop()
 }
 
 // Time record the duration of the execution of the given function.
