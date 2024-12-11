@@ -813,6 +813,33 @@ func TestMVHashMapReadWriteDelete(t *testing.T) {
 	assert.Equal(t, uint256.NewInt(0), b)
 }
 
+func TestMVHashMapCreateContract(t *testing.T) {
+	t.Parallel()
+
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	mvhm := blockstm.MakeMVHashMap()
+	s, _ := NewWithMVHashmap(common.Hash{}, db, nil, mvhm)
+
+	states := []*StateDB{s}
+
+	// Create copies of the original state for each transition
+	for i := 1; i <= 4; i++ {
+		sCopy := s.Copy()
+		sCopy.txIndex = i
+		states = append(states, sCopy)
+	}
+
+	addr := common.HexToAddress("0x01")
+	states[0].SetBalance(addr, uint256.NewInt(100), tracing.BalanceChangeTransfer)
+	states[0].FlushMVWriteSet()
+
+	states[1].CreateContract(addr)
+	states[1].FlushMVWriteSet()
+
+	b := states[1].GetBalance(addr)
+	assert.Equal(t, uint256.NewInt(100), b)
+}
+
 func TestMVHashMapRevert(t *testing.T) {
 	t.Parallel()
 

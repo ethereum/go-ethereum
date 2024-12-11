@@ -11,5 +11,5 @@ do
     fi
 done
 
-echo $peers
-echo $block
+echo "$peers"
+echo "$block"

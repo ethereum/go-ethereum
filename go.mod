@@ -36,7 +36,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08
 	github.com/gofrs/flock v0.8.1
-	github.com/golang-jwt/jwt/v4 v4.5.0
+	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.4
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb
@@ -65,7 +65,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0
 	github.com/maticnetwork/crand v1.0.2
 	github.com/maticnetwork/heimdall v1.0.7
-	github.com/maticnetwork/polyproto v0.0.3-0.20230216113155-340ea926ca53
+	github.com/maticnetwork/polyproto v0.0.4
 	github.com/mattn/go-colorable v0.1.13
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mitchellh/cli v1.1.5

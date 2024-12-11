@@ -2374,6 +2374,20 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			status WriteStatus
 		)
 
+		// Before the actual db insertion happens, verify the block against the whitelisted
+		// milestone and checkpoint. This is to prevent a race condition where a milestone
+		// or checkpoint was whitelisted while the block execution happened (and wasn't
+		// available sometime before) and the block turns out to be inavlid (i.e. not
+		// honouring the milestone or checkpoint). Use the block itself as current block
+		// so that it's considered as a `past` chain and the validation doesn't get bypassed.
+		isValid, err = bc.forker.ValidateReorg(block.Header(), []*types.Header{block.Header()})
+		if err != nil {
+			return it.index, err
+		}
+		if !isValid {
+			return it.index, whitelist.ErrMismatch
+		}
+
 		if !setHead {
 			// Don't set the head, only insert the block
 			_, err = bc.writeBlockWithState(block, receipts, logs, statedb)
