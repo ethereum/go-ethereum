@@ -24,3 +24,20 @@ jobs:
       - name: Run non-flaky tests concurrently
         run: |
           go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
+          
+  go_generate:
+    env:
+      EXCLUDE_REGEX: 'ava-labs/libevm/(accounts/usbwallet/trezor)$'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.21.4
+
+      - name: Run `go generate`
+        run: go list ./... | grep -Pv "${EXCLUDE_REGEX}" | xargs go generate;
+
+      - name: git diff
+        run: git diff --exit-code
