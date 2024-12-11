@@ -135,7 +135,8 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	for it.Next() {
 		var data types.StateAccount
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
-			panic(err)
+			log.Error("Failed to decode", "err", err)
+			continue
 		}
 		var (
 			account = DumpAccount{
@@ -149,15 +150,13 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			addr      common.Address
 			addrBytes = s.trie.GetKey(it.Key)
 		)
-		if addrBytes == nil {
-			missingPreimages++
-			if conf.OnlyWithAddresses {
-				continue
-			}
-		} else {
+		if addrBytes != nil {
 			addr = common.BytesToAddress(addrBytes)
-			address = &addr
-			account.Address = address
+			account.Address = &addr
+		} else if conf.OnlyWithAddresses {
+			continue
+		} else {
+			missingPreimages++
 		}
 		obj := newObject(s, addr, &data)
 		if !conf.SkipCode {
