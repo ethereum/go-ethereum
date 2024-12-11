@@ -1,9 +1,8 @@
 package tests
 
 import (
+	"strings"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestTrie(t *testing.T) {
@@ -14,12 +13,11 @@ func TestTrie(t *testing.T) {
 	tm.skipLoad("hex_encoded_securetrie_test.json")
 	tm.skipLoad("trieanyorder_secureTrie.json")
 	tm.skipLoad("trieanyorder.json")
-	tm.skipLoad("trietest_secureTrie.json")
 	tm.skipLoad("trietestnextprev.json")
 
 	tm.walk(t, trieTestDir, func(t *testing.T, name string, test *TrieTest) {
-		cfg := params.MainnetChainConfig
-		if err := tm.checkFailure(t, test.Run(cfg)); err != nil {
+		secure := strings.Contains(name, "secure")
+		if err := tm.checkFailure(t, test.Run(secure)); err != nil {
 			t.Error(err)
 		}
 	})

@@ -2,47 +2,37 @@ package tests
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
 )
-
-//go:generate go run github.com/fjl/gencodec -type TrieTest -field-override trieTestMarshaling -out gen_trietest.go
 
 type TrieTest struct {
 	In   [][]string  `json:"in"`
 	Root common.Hash `json:"root"`
 }
 
-type trieTestMarshaling struct {
-	In   [][]string  `json:"in"`
-	Root common.Hash `json:"root"`
-}
-
-func (tt *TrieTest) Run(config *params.ChainConfig) error {
-	// dbConf := new(triedb.Config)
-	// tdb := triedb.NewDatabase(rawdb.NewMemoryDatabase(), dbConf)
-	// trie := trie.NewEmpty(tdb)
-	id := &trie.ID{
-		Root: tt.Root,
-	}
-
+func (tt *TrieTest) Run(secure bool) error {
+	tr := trie.NewEmpty(nil)
 	for _, slices := range tt.In {
-		slices := slices
-		if len(slices) == 0 {
-			return fmt.Errorf("empty input")
-		}
+		key := []byte(slices[0])
+		val := []byte(slices[1])
 
-		for _, v := range slices {
-			id.Owner = common.HexToHash(v)
-			tr, _ := trie.New(id, nil)
-			actual := tr.Hash()
-
-			if id.Root != actual {
-				return fmt.Errorf("root hash mismatch: %s != %s", id.Root.Hex(), actual.Hex())
-			}
+		if strings.HasPrefix(slices[0], "0x") {
+			key, _ = FromHex(slices[0])
 		}
+		if secure {
+			key = crypto.Keccak256(key)
+		}
+		if strings.HasPrefix(slices[1], "0x") {
+			val, _ = FromHex(slices[1])
+		}
+		tr.Update(key, val)
+	}
+	if have, want := tr.Hash(), tt.Root; have != want {
+		return fmt.Errorf("root mismatch: have %#x want %#x", have, want)
 	}
 	return nil
 }
