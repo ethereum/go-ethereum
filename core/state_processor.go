@@ -220,7 +220,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 	}
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  30_000_000,
+		GasLimit:  36_000_000,
 		GasPrice:  common.Big0,
 		GasFeeCap: common.Big0,
 		GasTipCap: common.Big0,
@@ -229,7 +229,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(params.BeaconRootsAddress)
-	_, _, _ = evm.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
+	_, _, _ = evm.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 36_000_000, common.U2560)
 	evm.StateDB.Finalise(true)
 }
 
@@ -244,7 +244,7 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	}
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  30_000_000,
+		GasLimit:  36_000_000,
 		GasPrice:  common.Big0,
 		GasFeeCap: common.Big0,
 		GasTipCap: common.Big0,
@@ -253,7 +253,7 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(params.HistoryStorageAddress)
-	_, _, _ = evm.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
+	_, _, _ = evm.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 36_000_000, common.U2560)
 	evm.StateDB.Finalise(true)
 }
 
@@ -278,7 +278,7 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	}
 	msg := &Message{
 		From:      params.SystemAddress,
-		GasLimit:  30_000_000,
+		GasLimit:  36_000_000,
 		GasPrice:  common.Big0,
 		GasFeeCap: common.Big0,
 		GasTipCap: common.Big0,
@@ -286,7 +286,7 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(addr)
-	ret, _, _ := evm.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
+	ret, _, _ := evm.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 36_000_000, common.U2560)
 	evm.StateDB.Finalise(true)
 	if len(ret) == 0 {
 		return // skip empty output
