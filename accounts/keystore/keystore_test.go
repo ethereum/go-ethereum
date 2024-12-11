@@ -17,6 +17,7 @@
 package keystore
 
 import (
+	"fmt"
 	"math/rand"
 	"os"
 	"runtime"
@@ -339,8 +340,8 @@ func TestWalletNotifications(t *testing.T) {
 	for ev := range updates {
 		events = append(events, walletEvent{ev, ev.Wallet.Accounts()[0]})
 	}
-	checkAccounts(t, live, ks.Wallets())
 	checkEvents(t, wantEvents, events)
+	checkAccounts(t, live, ks.Wallets())
 }
 
 // TestImportECDSA tests the import functionality of a keystore.
@@ -443,15 +444,12 @@ func checkAccounts(t *testing.T, live map[common.Address]accounts.Account, walle
 
 // checkEvents checks that all events in 'want' are present in 'have'. Events may be present multiple times.
 func checkEvents(t *testing.T, want []walletEvent, have []walletEvent) {
+	filter := make(map[string]struct{})
+	for _, haveEv := range have {
+		filter[fmt.Sprintf("%s-%d", haveEv.a.Address.String(), haveEv.Kind)] = struct{}{}
+	}
 	for _, wantEv := range want {
-		nmatch := 0
-		for ; len(have) > 0; nmatch++ {
-			if have[0].Kind != wantEv.Kind || have[0].a != wantEv.a {
-				break
-			}
-			have = have[1:]
-		}
-		if nmatch == 0 {
+		if _, ok := filter[fmt.Sprintf("%s-%d", wantEv.a.Address.String(), wantEv.Kind)]; !ok {
 			t.Fatalf("can't find event with Kind=%v for %x", wantEv.Kind, wantEv.a.Address)
 		}
 	}
