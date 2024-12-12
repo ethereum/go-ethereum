@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/events"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/nested_libraries"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/solc_errors"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -263,6 +264,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		t.Fatalf("expected internal call count of 6.  got %d.", internalCallCount.Uint64())
 	}
 }
+
 func TestEvents(t *testing.T) {
 	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
 	txAuth, backend, err := testSetup()
@@ -371,6 +373,39 @@ done:
 	if e2Count != 1 {
 		t.Fatalf("expected e2Count of 1 from filter call.  got %d", e1Count)
 	}
+}
+
+func TestErrors(t *testing.T) {
+	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
+	txAuth, backend, err := testSetup()
+	if err != nil {
+		t.Fatalf("error setting up testing env: %v", err)
+	}
+
+	deploymentParams := DeploymentParams{
+		Contracts: []*bind.MetaData{solc_errors.CMetaData},
+	}
+
+	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
+	if err != nil {
+		t.Fatalf("error deploying contract for testing: %v", err)
+	}
+
+	backend.Commit()
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[solc_errors.CMetaData.Pattern]); err != nil {
+		t.Fatalf("WaitDeployed failed %v", err)
+	}
+
+	var packedInput []byte
+	opts := &bind.CallOpts{
+		From: res.Addrs[solc_errors.CMetaData.Pattern],
+	}
+	instance := ContractInstance{res.Addrs[solc_errors.CMetaData.Pattern], backend}
+	_, err := Call[struct{}](&instance, opts, packedInput, func(packed []byte) (*struct{}, error) { return nil, nil })
+	if err == nil {
+		t.Fatalf("expected call to fail")
+	}
+
 }
 
 func TestBindingGeneration(t *testing.T) {

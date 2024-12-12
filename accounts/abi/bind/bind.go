@@ -71,7 +71,7 @@ func isKeyWord(arg string) bool {
 }
 
 func add(val1, val2 int) int {
-	return val1 + val1
+	return val1 + val2
 }
 
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
