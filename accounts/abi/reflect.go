@@ -116,7 +116,7 @@ func requireUnpackKind(v reflect.Value, t reflect.Type, k reflect.Kind,
 func requireUniqueStructFieldNames(args Arguments) error {
 	exists := make(map[string]bool)
 	for _, arg := range args {
-		field := capitalise(arg.Name)
+		field := ToCamelCase(arg.Name)
 		if field == "" {
 			return errors.New("abi: purely underscored output cannot unpack to struct")
 		}
