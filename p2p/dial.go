@@ -24,6 +24,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,16 +93,17 @@ var (
 //     to create peer connections to nodes arriving through the iterator.
 type dialScheduler struct {
 	dialConfig
-	setupFunc   dialSetupFunc
-	wg          sync.WaitGroup
-	cancel      context.CancelFunc
-	ctx         context.Context
-	nodesIn     chan *enode.Node
-	doneCh      chan *dialTask
-	addStaticCh chan *enode.Node
-	remStaticCh chan *enode.Node
-	addPeerCh   chan *conn
-	remPeerCh   chan *conn
+	setupFunc     dialSetupFunc
+	dnsLookupFunc func(ctx context.Context, network string, name string) ([]netip.Addr, error)
+	wg            sync.WaitGroup
+	cancel        context.CancelFunc
+	ctx           context.Context
+	nodesIn       chan *enode.Node
+	doneCh        chan *dialTask
+	addStaticCh   chan *enode.Node
+	remStaticCh   chan *enode.Node
+	addPeerCh     chan *conn
+	remPeerCh     chan *conn
 
 	// Everything below here belongs to loop and
 	// should only be accessed by code on the loop goroutine.
@@ -161,18 +163,19 @@ func (cfg dialConfig) withDefaults() dialConfig {
 func newDialScheduler(config dialConfig, it enode.Iterator, setupFunc dialSetupFunc) *dialScheduler {
 	cfg := config.withDefaults()
 	d := &dialScheduler{
-		dialConfig:   cfg,
-		historyTimer: mclock.NewAlarm(cfg.clock),
-		setupFunc:    setupFunc,
-		dialing:      make(map[enode.ID]*dialTask),
-		static:       make(map[enode.ID]*dialTask),
-		peers:        make(map[enode.ID]struct{}),
-		doneCh:       make(chan *dialTask),
-		nodesIn:      make(chan *enode.Node),
-		addStaticCh:  make(chan *enode.Node),
-		remStaticCh:  make(chan *enode.Node),
-		addPeerCh:    make(chan *conn),
-		remPeerCh:    make(chan *conn),
+		dialConfig:    cfg,
+		historyTimer:  mclock.NewAlarm(cfg.clock),
+		setupFunc:     setupFunc,
+		dnsLookupFunc: net.DefaultResolver.LookupNetIP,
+		dialing:       make(map[enode.ID]*dialTask),
+		static:        make(map[enode.ID]*dialTask),
+		peers:         make(map[enode.ID]struct{}),
+		doneCh:        make(chan *dialTask),
+		nodesIn:       make(chan *enode.Node),
+		addStaticCh:   make(chan *enode.Node),
+		remStaticCh:   make(chan *enode.Node),
+		addPeerCh:     make(chan *conn),
+		remPeerCh:     make(chan *conn),
 	}
 	d.lastStatsLog = d.clock.Now()
 	d.ctx, d.cancel = context.WithCancel(context.Background())
@@ -442,37 +445,53 @@ func (d *dialScheduler) dnsResolveHostname(n *enode.Node) (*enode.Node, error) {
 		return n, nil
 	}
 
-	d.log.Trace("Attempting DNS resolution", "id", n.ID(), "name", n.Hostname())
-	ips, err := net.LookupIP(n.Hostname())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	foundIPs, err := d.dnsLookupFunc(ctx, "ip", n.Hostname())
 	if err != nil {
 		return n, err
 	}
-	d.log.Debug("DNS lookup succeeded", "id", n.ID(), "name", n.Hostname(), "ipcount", len(ips))
 
-	// Set new IPs in node record.
-	rec := n.Record()
-	var foundIP bool
-	for _, ip := range ips {
-		if ip4 := ip.To4(); ip4 != nil {
-			rec.Set(enr.IPv4(ip4))
-			foundIP = true
-			break
+	// Check for IP updates.
+	var (
+		nodeIP4, nodeIP6   netip.Addr
+		foundIP4, foundIP6 netip.Addr
+	)
+	n.Load((*enr.IPv4Addr)(&nodeIP4))
+	n.Load((*enr.IPv6Addr)(&nodeIP6))
+	for _, ip := range foundIPs {
+		if ip.Is4() && !foundIP4.IsValid() {
+			foundIP4 = ip
 		}
-	}
-	for _, ip := range ips {
-		if ip6 := ip.To16(); ip6 != nil {
-			rec.Set(enr.IPv6(ip6))
-			foundIP = true
-			break
+		if ip.Is6() && !foundIP6.IsValid() {
+			foundIP6 = ip
 		}
 	}
 
-	if !foundIP {
+	if !foundIP4.IsValid() && !foundIP6.IsValid() {
+		// Lookup failed.
 		return n, errNoResolvedIP
 	}
+	if foundIP4 == nodeIP4 && foundIP6 == nodeIP6 {
+		// No updates necessary.
+		d.log.Trace("Node DNS lookup had no update", "id", n.ID(), "name", n.Hostname(), "ip", foundIP4, "ip6", foundIP6)
+		return n, nil
+	}
 
-	// Update the node.
+	// Update the node. Note this invalidates the ENR signature, because we use SignNull
+	// to create a modified copy. But this should be OK, since we just use the node as a
+	// dial target. And nodes will usually only have a DNS hostname if they came from a
+	// enode:// URL, which has no signature anyway. If it ever becomes a problem, the
+	// resolved IP could also be stored into dialTask instead of the node.
+	rec := n.Record()
+	if foundIP4.IsValid() {
+		rec.Set(enr.IPv4Addr(foundIP4))
+	}
+	if foundIP6.IsValid() {
+		rec.Set(enr.IPv6Addr(foundIP6))
+	}
 	newNode := enode.SignNull(rec, n.ID()).WithHostname(n.Hostname())
+	d.log.Trace("Node updated from DNS lookup", "id", n.ID(), "name", n.Hostname(), "ip", newNode.IP())
 	return newNode, nil
 }
 
@@ -518,19 +537,18 @@ func (t *dialTask) dest() *enode.Node {
 func (t *dialTask) run(d *dialScheduler) {
 	if t.isStatic() {
 		// Resolve DNS.
-		node := t.dest()
-		if node.Hostname() != "" {
-			resolved, err := d.dnsResolveHostname(node)
+		if n := t.dest(); n.Hostname() != "" {
+			resolved, err := d.dnsResolveHostname(n)
 			if err != nil {
-				d.log.Warn("DNS resolve of static node failed", "id", node.ID(), "name", node.Hostname(), "err", err)
+				d.log.Warn("DNS lookup of static node failed", "id", n.ID(), "name", n.Hostname(), "err", err)
 			} else {
 				t.destPtr.Store(resolved)
 			}
 		}
 		// Try resolving node ID through the DHT if there is no IP address.
-		if !node.IPAddr().IsValid() {
+		if !t.dest().IPAddr().IsValid() {
 			if !t.resolve(d) {
-				return // DHT resolve failed
+				return // DHT resolve failed, skip dial.
 			}
 		}
 	}
