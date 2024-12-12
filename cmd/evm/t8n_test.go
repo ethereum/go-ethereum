@@ -341,103 +341,6 @@ func lineIterator(path string) func() (string, error) {
 	}
 }
 
-// TestT8nTracing is a test that checks the tracing-output from t8n.
-func TestT8nTracing(t *testing.T) {
-	t.Parallel()
-	tt := new(testT8n)
-	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
-	for i, tc := range []struct {
-		base           string
-		input          t8nInput
-		expExitCode    int
-		extraArgs      []string
-		expectedTraces []string
-	}{
-		{
-			base: "./testdata/31",
-			input: t8nInput{
-				"alloc.json", "txs.json", "env.json", "Cancun", "",
-			},
-			extraArgs: []string{"--trace"},
-			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.jsonl",
-				"trace-1-0x03a7b0a91e61a170d64ea94b8263641ef5a8bbdb10ac69f466083a6789c77fb8.jsonl",
-				"trace-2-0xd96e0ce6418ee3360e11d3c7b6886f5a9a08f7ef183da72c23bb3b2374530128.jsonl"},
-		},
-		{
-			base: "./testdata/31",
-			input: t8nInput{
-				"alloc.json", "txs.json", "env.json", "Cancun", "",
-			},
-			extraArgs: []string{"--trace.tracer", `
-{   count: 0,
-	result: function(){
-		this.count = this.count + 1;
-		return "hello world " + this.count
-	},
-	fault: function(){}
-}`},
-			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.json",
-				"trace-1-0x03a7b0a91e61a170d64ea94b8263641ef5a8bbdb10ac69f466083a6789c77fb8.json",
-				"trace-2-0xd96e0ce6418ee3360e11d3c7b6886f5a9a08f7ef183da72c23bb3b2374530128.json"},
-		},
-		{
-			base: "./testdata/32",
-			input: t8nInput{
-				"alloc.json", "txs.json", "env.json", "Paris", "",
-			},
-			extraArgs:      []string{"--trace", "--trace.callframes"},
-			expectedTraces: []string{"trace-0-0x47806361c0fa084be3caa18afe8c48156747c01dbdfc1ee11b5aecdbe4fcf23e.jsonl"},
-		},
-	} {
-		args := []string{"t8n"}
-		args = append(args, tc.input.get(tc.base)...)
-		// Place the output somewhere we can find it
-		outdir := t.TempDir()
-		args = append(args, "--output.basedir", outdir)
-		args = append(args, tc.extraArgs...)
-
-		var qArgs []string // quoted args for debugging purposes
-		for _, arg := range args {
-			if len(arg) == 0 {
-				qArgs = append(qArgs, `""`)
-			} else {
-				qArgs = append(qArgs, arg)
-			}
-		}
-		tt.Logf("args: %v\n", strings.Join(qArgs, " "))
-		tt.Run("evm-test", args...)
-		t.Log(string(tt.Output()))
-
-		// Compare the expected traces
-		for _, traceFile := range tc.expectedTraces {
-			haveFn := lineIterator(filepath.Join(outdir, traceFile))
-			wantFn := lineIterator(filepath.Join(tc.base, traceFile))
-
-			for line := 0; ; line++ {
-				want, wErr := wantFn()
-				have, hErr := haveFn()
-				if want != have {
-					t.Fatalf("test %d, trace %v, line %d\nwant: %v\nhave: %v\n",
-						i, traceFile, line, want, have)
-				}
-				if wErr != nil && hErr != nil {
-					break
-				}
-				if wErr != nil {
-					t.Fatal(wErr)
-				}
-				if hErr != nil {
-					t.Fatal(hErr)
-				}
-				t.Logf("%v\n", want)
-			}
-		}
-		if have, want := tt.ExitStatus(), tc.expExitCode; have != want {
-			t.Fatalf("test %d: wrong exit code, have %d, want %d", i, have, want)
-		}
-	}
-}
-
 type t9nInput struct {
 	inTxs  string
 	stFork string
@@ -695,18 +598,18 @@ func TestEvmRun(t *testing.T) {
 			wantStdout: "./testdata/evmrun/1.out.1.txt",
 			wantStderr: "./testdata/evmrun/1.out.2.txt",
 		},
-		{ // default tracing (struct)
-			input:      []string{"run", "--trace", "0x6040"},
+		{ // Struct tracing
+			input:      []string{"run", "--trace", "--trace.format=struct", "0x6040"},
 			wantStdout: "./testdata/evmrun/2.out.1.txt",
 			wantStderr: "./testdata/evmrun/2.out.2.txt",
 		},
-		{ // default tracing (struct), plus alloc-dump
-			input:      []string{"run", "--trace", "--dump", "0x6040"},
+		{ // struct-tracing, plus alloc-dump
+			input:      []string{"run", "--trace", "--trace.format=struct", "--dump", "0x6040"},
 			wantStdout: "./testdata/evmrun/3.out.1.txt",
 			//wantStderr: "./testdata/evmrun/3.out.2.txt",
 		},
-		{ // json-tracing, plus alloc-dump
-			input:      []string{"run", "--trace", "--trace.format=json", "--dump", "0x6040"},
+		{ // json-tracing (default), plus alloc-dump
+			input:      []string{"run", "--trace", "--dump", "0x6040"},
 			wantStdout: "./testdata/evmrun/4.out.1.txt",
 			//wantStderr: "./testdata/evmrun/4.out.2.txt",
 		},
@@ -787,7 +690,10 @@ func TestEVMTracing(t *testing.T) {
 				"--input.env=./testdata/31/env.json", "--state.fork=Cancun",
 				"--trace",
 			},
-			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.jsonl"},
+			//expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.jsonl"},
+			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.jsonl",
+				"trace-1-0x03a7b0a91e61a170d64ea94b8263641ef5a8bbdb10ac69f466083a6789c77fb8.jsonl",
+				"trace-2-0xd96e0ce6418ee3360e11d3c7b6886f5a9a08f7ef183da72c23bb3b2374530128.jsonl"},
 		},
 		{
 			base: "./testdata/31",
@@ -795,14 +701,17 @@ func TestEVMTracing(t *testing.T) {
 				"--input.alloc=./testdata/31/alloc.json", "--input.txs=./testdata/31/txs.json",
 				"--input.env=./testdata/31/env.json", "--state.fork=Cancun",
 				"--trace.tracer", `
-{ 
-	result: function(){ 
-		return "hello world"
-	}, 
-	fault: function(){} 
+{   count: 0,
+	result: function(){
+		this.count = this.count + 1;
+		return "hello world " + this.count
+	},
+	fault: function(){}
 }`,
 			},
-			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.json"},
+			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.json",
+				"trace-1-0x03a7b0a91e61a170d64ea94b8263641ef5a8bbdb10ac69f466083a6789c77fb8.json",
+				"trace-2-0xd96e0ce6418ee3360e11d3c7b6886f5a9a08f7ef183da72c23bb3b2374530128.json"},
 		},
 		{
 			base: "./testdata/32",
