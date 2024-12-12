@@ -322,7 +322,7 @@ var namedType = map[Lang]func(string, abi.Type) string{
 // methodNormalizer is a name transformer that modifies Solidity method names to
 // conform to target language naming concentions.
 var methodNormalizer = map[Lang]func(string) string{
-	LangGo: capitalise,
+	LangGo: abi.ToCamelCase,
 }
 
 // capitalise makes a camel-case string which starts with an upper case character.
@@ -332,9 +332,12 @@ func capitalise(input string) string {
 
 // decapitalise makes a camel-case string which starts with a lower case character.
 func decapitalise(input string) string {
-	// NOTE: This is the current behavior, it doesn't match the comment
-	// above and needs to be investigated.
-	return abi.ToCamelCase(input)
+	if len(input) == 0 {
+		return input
+	}
+
+	goForm := abi.ToCamelCase(input)
+	return strings.ToLower(goForm[:1]) + goForm[1:]
 }
 
 // structured checks whether a list of ABI data types has enough information to
