@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -59,6 +60,15 @@ var (
 		Usage: "Solidity compiler to use if source builds are requested",
 		Value: "solc",
 	}
+	vyFlag = &cli.StringFlag{
+		Name:  "vy",
+		Usage: "Path to the Ethereum contract Vyper source to build and bind",
+	}
+	vyperFlag = &cli.StringFlag{
+		Name:  "vyper",
+		Usage: "Vyper compiler to use if source builds are requested",
+		Value: "vyper",
+	}
 	excFlag = &cli.StringFlag{
 		Name:  "exc",
 		Usage: "Comma separated types to exclude from binding",
@@ -87,6 +97,8 @@ func init() {
 		typeFlag,
 		solFlag,
 		solcFlag,
+		vyFlag,
+		vyperFlag,
 		excFlag,
 		pkgFlag,
 		outFlag,
@@ -96,11 +108,14 @@ func init() {
 }
 
 func abigen(c *cli.Context) error {
-	if c.String(abiFlag.Name) == "" && c.String(solFlag.Name) == "" {
-		fmt.Printf("No contract ABI (--abi) or Solidity source (--sol) specified\n")
+	if c.String(abiFlag.Name) == "" && c.String(solFlag.Name) == "" && c.String(vyFlag.Name) == "" {
+		fmt.Printf("No contract ABI (--abi), Solidity source (--sol), or Vyper source (--vy) specified\n")
 		os.Exit(-1)
-	} else if (c.String(abiFlag.Name) != "" || c.String(binFlag.Name) != "" || c.String(typeFlag.Name) != "") && c.String(solFlag.Name) != "" {
-		fmt.Printf("Contract ABI (--abi), bytecode (--bin) and type (--type) flags are mutually exclusive with the Solidity source (--sol) flag\n")
+	} else if (c.String(abiFlag.Name) != "" || c.String(binFlag.Name) != "" || c.String(typeFlag.Name) != "") && (c.String(solFlag.Name) != "" || c.String(vyFlag.Name) != "") {
+		fmt.Printf("Contract ABI (--abi), bytecode (--bin) and type (--type) flags are mutually exclusive with the Solidity (--sol) and Vyper (--vy) flags\n")
+		os.Exit(-1)
+	} else if c.String(solFlag.Name) != "" && c.String(vyFlag.Name) == "" {
+		fmt.Printf("Solidity (--sol) and Vyper (--vy) flags are mutually exclusive\n")
 		os.Exit(-1)
 	}
 	if c.String(pkgFlag.Name) == "" {
@@ -121,23 +136,47 @@ func abigen(c *cli.Context) error {
 		bins  []string
 		types []string
 	)
-	if c.String(solFlag.Name) != "" {
+	if c.String(solFlag.Name) != "" || c.String(vyFlag.Name) != "" || (c.String(abiFlag.Name) == "-" && c.String(pkgFlag.Name) == "") {
 		// Generate the list of types to exclude from binding
 		exclude := make(map[string]bool)
 		for _, kind := range strings.Split(c.String(excFlag.Name), ",") {
 			exclude[strings.ToLower(kind)] = true
 		}
-		contracts, err := compiler.CompileSolidity(c.String(solcFlag.Name), c.String(solFlag.Name))
-		if err != nil {
-			fmt.Printf("Failed to build Solidity contract: %v\n", err)
-			os.Exit(-1)
+
+		var contracts map[string]*compiler.Contract
+		var err error
+
+		switch {
+		case c.String(solFlag.Name) != "":
+			contracts, err = compiler.CompileSolidity(c.String(solcFlag.Name), c.String(solFlag.Name))
+			if err != nil {
+				fmt.Printf("Failed to build Solidity contract: %v\n", err)
+				os.Exit(-1)
+			}
+		case c.String(vyFlag.Name) != "":
+			contracts, err = compiler.CompileVyper(c.String(vyperFlag.Name), c.String(vyFlag.Name))
+			if err != nil {
+				fmt.Printf("Failed to build Vyper contract: %v\n", err)
+				os.Exit(-1)
+			}
+		default:
+			contracts, err = contractsFromStdin()
+			if err != nil {
+				fmt.Printf("Failed to read input ABIs from STDIN: %v\n", err)
+				os.Exit(-1)
+			}
 		}
+
 		// Gather all non-excluded contract for binding
 		for name, contract := range contracts {
 			if exclude[strings.ToLower(name)] {
 				continue
 			}
-			abi, _ := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
+			abi, err := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
+			if err != nil {
+				fmt.Printf("Failed to parse ABIs from compiler output: %v\n", err)
+				os.Exit(-1)
+			}
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
 
@@ -146,14 +185,20 @@ func abigen(c *cli.Context) error {
 		}
 	} else {
 		// Otherwise load up the ABI, optional bytecode and type name from the parameters
-		abi, err := os.ReadFile(c.String(abiFlag.Name))
+		var abi []byte
+		var err error
+		if c.String(abiFlag.Name) == "-" {
+			abi, err = io.ReadAll(os.Stdin)
+		} else {
+			abi, err = os.ReadFile(c.String(abiFlag.Name))
+		}
 		if err != nil {
 			fmt.Printf("Failed to read input ABI: %v\n", err)
 			os.Exit(-1)
 		}
 		abis = append(abis, string(abi))
 
-		bin := []byte{}
+		var bin []byte
 		if c.String(binFlag.Name) != "" {
 			if bin, err = os.ReadFile(c.String(binFlag.Name)); err != nil {
 				fmt.Printf("Failed to read input bytecode: %v\n", err)
@@ -193,4 +238,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func contractsFromStdin() (map[string]*compiler.Contract, error) {
+	bytes, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return nil, err
+	}
+	return compiler.ParseCombinedJSON(bytes, "", "", "", "")
 }
