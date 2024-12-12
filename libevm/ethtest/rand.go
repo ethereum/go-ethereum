@@ -23,6 +23,7 @@ import (
 	"golang.org/x/exp/rand"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
 )
 
 // PseudoRand extends [rand.Rand] (*not* crypto/rand).
@@ -87,4 +88,16 @@ func (r *PseudoRand) Uint64Ptr() *uint64 {
 // Uint256 returns a random 256-bit unsigned int.
 func (r *PseudoRand) Uint256() *uint256.Int {
 	return new(uint256.Int).SetBytes(r.Bytes(32))
+}
+
+// Bloom returns a pseudorandom Bloom.
+func (r *PseudoRand) Bloom() (b types.Bloom) {
+	r.Read(b[:])
+	return b
+}
+
+// BlockNonce returns a pseudorandom BlockNonce.
+func (r *PseudoRand) BlockNonce() (n types.BlockNonce) {
+	r.Read(n[:])
+	return n
 }
