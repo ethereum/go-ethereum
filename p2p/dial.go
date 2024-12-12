@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
@@ -275,7 +276,7 @@ loop:
 		case node := <-d.addStaticCh:
 			id := node.ID()
 			_, exists := d.static[id]
-			d.log.Trace("Adding static node", "id", id, "endpoint", node.Endpoint(), "added", !exists)
+			d.log.Trace("Adding static node", "id", id, "endpoint", nodeEndpointForLog(node), "added", !exists)
 			if exists {
 				continue loop
 			}
@@ -434,42 +435,51 @@ func (d *dialScheduler) removeFromStaticPool(idx int) {
 	task.staticPoolIndex = -1
 }
 
-func (d *dialScheduler) resolve(n *enode.Node) (*enode.Node, error) {
-	if n.NeedResolve() {
-		d.log.Debug("Attempting DNS resolution", "id", n.ID(), "name", n.Hostname())
-		ips, err := net.LookupIP(n.Hostname())
-		if err != nil {
-			d.log.Debug("DNS resolution failed", "id", n.ID(), "name", n.Hostname(), "err", err)
-			return n, err
-		}
-		d.log.Debug("DNS lookup succeeded", "id", n.ID(), "name", n.Hostname(), "ipcount", len(ips))
+// dnsResolve updates the given node from its DNS hostname.
+// This is used to resolve static dial targets.
+func (d *dialScheduler) dnsResolve(n *enode.Node) (*enode.Node, error) {
+	if n.Hostname() == "" {
+		return n, nil
+	}
 
-		// Try IPv4 first
-		for _, ip := range ips {
-			if ip4 := ip.To4(); ip4 != nil {
-				resolved := enode.NewV4WithDNS(n.Pubkey(), ip4, n.Hostname(), n.TCP(), n.UDP())
-				d.log.Debug("DNS resolved to IPv4", "id", n.ID(), "name", n.Hostname(), "ip", ip4)
-				return resolved, nil
-			}
+	d.log.Trace("Attempting DNS resolution", "id", n.ID(), "name", n.Hostname())
+	ips, err := net.LookupIP(n.Hostname())
+	if err != nil {
+		return n, err
+	}
+	d.log.Debug("DNS lookup succeeded", "id", n.ID(), "name", n.Hostname(), "ipcount", len(ips))
+
+	// Set new IPs in node record.
+	rec := n.Record()
+	var foundIP bool
+	for _, ip := range ips {
+		if ip4 := ip.To4(); ip4 != nil {
+			rec.Set(enr.IPv4(ip4))
+			foundIP = true
+			break
 		}
-		// Then try IPv6
-		for _, ip := range ips {
-			if ip6 := ip.To16(); ip6 != nil {
-				resolved := enode.NewV4WithDNS(n.Pubkey(), ip6, n.Hostname(), n.TCP(), n.UDP())
-				d.log.Debug("DNS resolved to IPv6", "id", n.ID(), "name", n.Hostname(), "ip", ip6)
-				return resolved, nil
-			}
+	}
+	for _, ip := range ips {
+		if ip6 := ip.To16(); ip6 != nil {
+			rec.Set(enr.IPv6(ip6))
+			foundIP = true
+			break
 		}
-		d.log.Debug("DNS resolution found no usable IPs", "id", n.ID(), "name", n.Hostname())
+	}
+
+	if !foundIP {
 		return n, errNoResolvedIP
 	}
-	return n, nil
+
+	// Update the node.
+	newNode := enode.SignNull(rec, n.ID()).WithHostname(n.Hostname())
+	return newNode, nil
 }
 
 // startDial runs the given dial task in a separate goroutine.
 func (d *dialScheduler) startDial(task *dialTask) {
 	node := task.dest()
-	d.log.Trace("Starting p2p dial", "id", node.ID(), "endpoint", node.Endpoint(), "flag", task.flags)
+	d.log.Trace("Starting p2p dial", "id", node.ID(), "endpoint", nodeEndpointForLog(node), "flag", task.flags)
 	hkey := string(node.ID().Bytes())
 	d.history.add(hkey, d.clock.Now().Add(dialHistoryExpiration))
 	d.dialing[node.ID()] = task
@@ -506,23 +516,30 @@ func (t *dialTask) dest() *enode.Node {
 }
 
 func (t *dialTask) run(d *dialScheduler) {
-	node := t.dest()
-	if node.NeedResolve() {
-		resolved, err := d.resolve(node)
-		if err != nil {
-			return
+	if t.isStatic() {
+		// Resolve DNS.
+		node := t.dest()
+		if node.Hostname() != "" {
+			resolved, err := d.dnsResolve(node)
+			if err != nil {
+				d.log.Warn("DNS resolve of static node failed", "id", node.ID(), "name", node.Hostname(), "err", err)
+			} else {
+				t.destPtr.Store(resolved)
+			}
 		}
-		t.destPtr.Store(resolved)
-	}
-
-	if t.needResolve() && !t.resolve(d) {
-		return
+		// Try resolving node ID through the DHT if there is no IP address.
+		if !node.IPAddr().IsValid() {
+			if !t.resolve(d) {
+				return // DHT resolve failed
+			}
+		}
 	}
 
 	err := t.dial(d, t.dest())
 	if err != nil {
 		// For static nodes, resolve one more time if dialing fails.
-		if _, ok := err.(*dialError); ok && t.flags&staticDialedConn != 0 {
+		var dialErr *dialError
+		if errors.As(err, &dialErr) && t.isStatic() {
 			if t.resolve(d) {
 				t.dial(d, t.dest())
 			}
@@ -530,8 +547,8 @@ func (t *dialTask) run(d *dialScheduler) {
 	}
 }
 
-func (t *dialTask) needResolve() bool {
-	return t.flags&staticDialedConn != 0 && !t.dest().IPAddr().IsValid()
+func (t *dialTask) isStatic() bool {
+	return t.flags&staticDialedConn != 0
 }
 
 // resolve attempts to find the current endpoint for the destination
@@ -594,4 +611,11 @@ func cleanupDialErr(err error) error {
 		return netErr.Err
 	}
 	return err
+}
+
+func nodeEndpointForLog(n *enode.Node) string {
+	if n.Hostname() != "" {
+		return n.Hostname()
+	}
+	return n.IPAddr().String()
 }
