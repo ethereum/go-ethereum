@@ -457,6 +457,74 @@ func TestTraceTransaction(t *testing.T) {
 	}
 }
 
+func TestTracePanicTransaction(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	accounts := newAccounts(2)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	target := common.Hash{}
+	signer := types.HomesteadSigner{}
+	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		// Transfer from account[0] to account[1]
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+		target = tx.Hash()
+	})
+	defer backend.chain.Stop()
+
+	// Create API with a backend that uses a panic-inducing StateDB
+	panicBackend := &panicBackend{backend}
+	api := NewAPI(panicBackend)
+
+	result, err := api.TraceTransaction(context.Background(), target, nil)
+
+	// Verify panic was caught and handled
+	if err == nil {
+		t.Fatal("Expected error from panic recovery, got nil")
+	}
+	if result != nil {
+		t.Errorf("Expected nil result after panic, got %v", result)
+	}
+}
+
+type panicBackend struct {
+	Backend
+}
+
+// StateAtTransaction overrides the backend's StateAtTransaction to use a panic-inducing StateDB
+func (b *panicBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, vm.StateDB, StateReleaseFunc, error) {
+	tx, vmctx, _, release, err := b.Backend.StateAtTransaction(ctx, block, txIndex, reexec)
+	if err != nil {
+		return nil, vm.BlockContext{}, nil, nil, err
+	}
+	// Return a StateDB that panics on ApplyTransactionWithEVM
+	return tx, vmctx, &panicStateDB{}, release, nil
+}
+
+// panicStateDB is a mock StateDB that panics during ApplyTransactionWithEVM
+type panicStateDB struct {
+	vm.StateDB
+}
+
+// ApplyTransactionWithEVM is overridden to panic
+func (s *panicStateDB) ApplyTransactionWithEVM(message *core.Message, config *params.ChainConfig, gasPool *core.GasPool, statedb vm.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) ([]byte, error) {
+	panic("intentional panic for testing")
+}
+
 func TestTraceBlock(t *testing.T) {
 	t.Parallel()
 
