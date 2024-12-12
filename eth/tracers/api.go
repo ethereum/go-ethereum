@@ -955,7 +955,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	defer func() {
 		if r := recover(); r != nil {
 			value = nil
-			returnErr = fmt.Errorf("panic occured: %s, could not trace tx: %s", r, tx.Hash())
+			returnErr = fmt.Errorf("panic occured: %v, could not trace tx: %s", r, tx.Hash())
 		}
 	}()
 	if config == nil {
