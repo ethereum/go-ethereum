@@ -1597,7 +1597,7 @@ func TestUnderpricing(t *testing.T) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, txpool.ErrUnderpriced)
 	}
 	// Replace a future transaction with a future transaction
-	if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(2), keys[1])); err != nil { // +K1:1 => -K1:1 => Pend K0:0, K0:1, K2:0; Que K1:1
+	if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(5), keys[1])); err != nil { // +K1:1 => -K1:1 => Pend K0:0, K0:1, K2:0; Que K1:1
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 	// Ensure that adding high priced transactions drops cheap ones, but not own
