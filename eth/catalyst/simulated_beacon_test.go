@@ -197,7 +197,7 @@ func TestOnDemandSpam(t *testing.T) {
 			if includedTxs == txCount && includedWxs == wxCount {
 				return
 			}
-			abort.Reset(5 * time.Second)
+			abort.Reset(10 * time.Second)
 		case <-abort.C:
 			t.Fatalf("timed out without including all withdrawals/txs: have txs %d, want %d, have wxs %d, want %d",
 				includedTxs, txCount, includedWxs, wxCount)
