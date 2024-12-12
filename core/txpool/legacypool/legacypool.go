@@ -1754,19 +1754,9 @@ func (pool *LegacyPool) Clear() {
 		senderAddr, _ := types.Sender(pool.signer, tx)
 		pool.reserve(senderAddr, false)
 	}
-	for localSender, _ := range pool.locals.accounts {
-		pool.reserve(localSender, false)
-	}
 
 	pool.all = newLookup()
 	pool.priced = newPricedList(pool.all)
 	pool.pending = make(map[common.Address]*list)
 	pool.queue = make(map[common.Address]*list)
-
-	if !pool.config.NoLocals && pool.config.Journal != "" {
-		pool.journal = newTxJournal(pool.config.Journal)
-		if err := pool.journal.rotate(pool.local()); err != nil {
-			log.Warn("Failed to rotate transaction journal", "err", err)
-		}
-	}
 }
