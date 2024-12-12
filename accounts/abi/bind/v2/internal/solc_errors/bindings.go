@@ -67,10 +67,10 @@ func (_C *C) PackFoo() ([]byte, error) {
 
 func (_C *C) UnpackError(raw []byte) any {
 
-	if val, err := _C.UnpackBadThingError(raw); err != nil {
+	if val, err := _C.UnpackBadThingError(raw); err == nil {
 		return val
 
-	} else if val, err := _C.UnpackBadThing2Error(raw); err != nil {
+	} else if val, err := _C.UnpackBadThing2Error(raw); err == nil {
 		return val
 
 	}

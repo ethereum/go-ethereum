@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -396,18 +397,32 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("WaitDeployed failed %v", err)
 	}
 
+	ctrct, _ := solc_errors.NewC()
+
 	var packedInput []byte
 	opts := &bind.CallOpts{
 		From: res.Addrs[solc_errors.CMetaData.Pattern],
 	}
+	packedInput, _ = ctrct.PackFoo()
+
 	instance := ContractInstance{res.Addrs[solc_errors.CMetaData.Pattern], backend}
-	_, err := Call[struct{}](&instance, opts, packedInput, func(packed []byte) (*struct{}, error) { return nil, nil })
+	_, err = Call[struct{}](&instance, opts, packedInput, func(packed []byte) (*struct{}, error) { return nil, nil })
 	if err == nil {
 		t.Fatalf("expected call to fail")
 	}
-
+	raw, hasRevertErrorData := ethclient.RevertErrorData(err)
+	if !hasRevertErrorData {
+		t.Fatalf("expected call error to contain revert error data.")
+	}
+	unpackedErr := ctrct.UnpackError(raw)
+	if unpackedErr == nil {
+		t.Fatalf("expected to unpack error")
+	}
+	// TODO: check anything about the error?
 }
 
+// TODO: this test will pass if the code is changed but not compiled to a combined-abi.json.
+// Not really possible to test this without including solc in the path when running CI.
 func TestBindingGeneration(t *testing.T) {
 	matches, _ := filepath.Glob("internal/*")
 	var dirs []string

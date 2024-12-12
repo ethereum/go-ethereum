@@ -373,3 +373,15 @@ func Call[T any](instance *ContractInstance, opts *bind.CallOpts, packedInput []
 	}
 	return unpack(packedOutput)
 }
+
+/*
+func UnpackError(metadata *bind.MetaData, raw []byte) (any, error) {
+	fmt.Printf("raw is %x\n", raw[0:4])
+	errType := metadata.Errors[fmt.Sprintf("%x", raw[0:4])]
+	abi, _ := metadata.GetAbi() // TODO: check error here?
+	res := reflect.New(errType).Interface()
+	fmt.Printf("err type name is %s\n", errType.Name())
+	err := abi.UnpackIntoInterface(&res, errType.Name(), raw)
+	return res, err
+}
+*/
