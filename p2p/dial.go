@@ -435,9 +435,9 @@ func (d *dialScheduler) removeFromStaticPool(idx int) {
 	task.staticPoolIndex = -1
 }
 
-// dnsResolve updates the given node from its DNS hostname.
+// dnsResolveHostname updates the given node from its DNS hostname.
 // This is used to resolve static dial targets.
-func (d *dialScheduler) dnsResolve(n *enode.Node) (*enode.Node, error) {
+func (d *dialScheduler) dnsResolveHostname(n *enode.Node) (*enode.Node, error) {
 	if n.Hostname() == "" {
 		return n, nil
 	}
@@ -520,7 +520,7 @@ func (t *dialTask) run(d *dialScheduler) {
 		// Resolve DNS.
 		node := t.dest()
 		if node.Hostname() != "" {
-			resolved, err := d.dnsResolve(node)
+			resolved, err := d.dnsResolveHostname(node)
 			if err != nil {
 				d.log.Warn("DNS resolve of static node failed", "id", node.ID(), "name", node.Hostname(), "err", err)
 			} else {
