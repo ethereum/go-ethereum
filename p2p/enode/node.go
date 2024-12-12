@@ -81,6 +81,8 @@ func newNodeWithID(r *enr.Record, id ID) *Node {
 		n.setIP4(ip4)
 	case valid6:
 		n.setIP6(ip6)
+	default:
+		n.setIPv4Ports()
 	}
 	return n
 }
@@ -107,6 +109,10 @@ func localityScore(ip netip.Addr) int {
 
 func (n *Node) setIP4(ip netip.Addr) {
 	n.ip = ip
+	n.setIPv4Ports()
+}
+
+func (n *Node) setIPv4Ports() {
 	n.Load((*enr.UDP)(&n.udp))
 	n.Load((*enr.TCP)(&n.tcp))
 }

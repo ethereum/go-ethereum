@@ -91,6 +91,7 @@ func TestNodeEndpoints(t *testing.T) {
 				r.Set(enr.UDP(9000))
 				return SignNull(&r, id)
 			}(),
+			wantUDP: 9000,
 		},
 		{
 			name: "tcp-only",
@@ -99,6 +100,7 @@ func TestNodeEndpoints(t *testing.T) {
 				r.Set(enr.TCP(9000))
 				return SignNull(&r, id)
 			}(),
+			wantTCP: 9000,
 		},
 		{
 			name: "quic-only",
@@ -273,10 +275,9 @@ func TestNodeEndpoints(t *testing.T) {
 			name: "dns-only",
 			node: func() *Node {
 				var r enr.Record
-				n := SignNull(&r, id)
-				n.hostname = "example.com"
-				n.tcp = 30303
-				n.udp = 30303
+				r.Set(enr.UDP(30303))
+				r.Set(enr.TCP(30303))
+				n := SignNull(&r, id).WithHostname("example.com")
 				return n
 			}(),
 			wantTCP: 30303,
