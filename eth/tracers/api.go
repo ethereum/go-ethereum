@@ -612,20 +612,12 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			TxHash:      tx.Hash(),
 		}
 
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					results[i] = &txTraceResult{TxHash: tx.Hash(), Error: fmt.Sprintf("panic: %v", r)}
-				}
-			}()
-
-			res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, config)
-			if err != nil {
-				results[i] = &txTraceResult{TxHash: tx.Hash(), Error: err.Error()}
-				return
-			}
+		res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, config)
+		if err != nil {
+			results[i] = &txTraceResult{TxHash: tx.Hash(), Error: err.Error()}
+		} else {
 			results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
-		}()
+		}
 	}
 	return results, nil
 }
@@ -953,13 +945,20 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
-func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb vm.StateDB, config *TraceConfig) (interface{}, error) {
+func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb vm.StateDB, config *TraceConfig) (value interface{}, returnErr error) {
+	// Note that traceTx could panic, so we want to catch it and send a generic error message
 	var (
 		tracer  *Tracer
 		err     error
 		timeout = defaultTraceTimeout
 		usedGas uint64
 	)
+	defer func() {
+		if r := recover(); r != nil {
+			value = nil
+			returnErr = fmt.Errorf("panic occured: %s, could not trace tx: %s", r, tx.Hash())
+		}
+	}()
 	if config == nil {
 		config = &TraceConfig{}
 	}
