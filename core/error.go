@@ -118,12 +118,13 @@ var (
 	// -- EIP-7702 errors --
 
 	// Message validation errors:
-	ErrEmptyAuthList         = errors.New("EIP-7702 transaction with empty auth list")
-	ErrSetCodeTxCreate       = errors.New("EIP-7702 transaction cannot be used to create contract")
-	ErrAuthSignatureVeryHigh = errors.New("EIP-7702 authorization with R or S value greater than 2^256 - 1")
+	ErrEmptyAuthList   = errors.New("EIP-7702 transaction with empty auth list")
+	ErrSetCodeTxCreate = errors.New("EIP-7702 transaction cannot be used to create contract")
+)
 
-	// EIP-7702 state transition errors:
-	// Note these are just informational, and do not cause tx execution abort.
+// EIP-7702 state transition errors.
+// Note these are just informational, and do not cause tx execution abort.
+var (
 	ErrAuthorizationWrongChainID       = errors.New("EIP-7702 authorization chain ID mismatch")
 	ErrAuthorizationNonceOverflow      = errors.New("EIP-7702 authorization nonce > 64 bit")
 	ErrAuthorizationInvalidSignature   = errors.New("EIP-7702 authorization has invalid signature")
