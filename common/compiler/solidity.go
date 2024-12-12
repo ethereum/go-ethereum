@@ -39,6 +39,7 @@ type solcOutput struct {
 		BinRuntime                                  string `json:"bin-runtime"`
 		SrcMapRuntime                               string `json:"srcmap-runtime"`
 		Bin, SrcMap, Abi, Devdoc, Userdoc, Metadata string
+		Hashes                                      map[string]string
 	}
 	Version string
 }
@@ -49,7 +50,7 @@ func (s *Solidity) makeArgs() []string {
 		"--optimize", // code optimizer switched on
 	}
 	if s.Major > 0 || s.Minor > 4 || s.Patch > 6 {
-		p[1] += ",metadata"
+		p[1] += ",metadata,hashes"
 	}
 	return p
 }
@@ -161,6 +162,7 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 		contracts[name] = &Contract{
 			Code:        "0x" + info.Bin,
 			RuntimeCode: "0x" + info.BinRuntime,
+			Hashes:      info.Hashes,
 			Info: ContractInfo{
 				Source:          source,
 				Language:        "Solidity",

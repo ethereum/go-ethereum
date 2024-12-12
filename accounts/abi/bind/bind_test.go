@@ -36,6 +36,7 @@ var bindTests = []struct {
 	abi      string
 	imports  string
 	tester   string
+	fsigs    []map[string]string
 }{
 	// Test that the binding is available in combined and separate forms too
 	{
@@ -55,6 +56,7 @@ var bindTests = []struct {
 				t.Fatalf("transactor binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 	},
 	// Test that all the official sample contracts bind correctly
 	{
@@ -68,6 +70,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 	},
 	{
 		`Crowdsale`,
@@ -80,6 +83,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 	},
 	{
 		`DAO`,
@@ -92,6 +96,7 @@ var bindTests = []struct {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 			}
 		`,
+		nil,
 	},
 	// Test that named and anonymous inputs are handled correctly
 	{
@@ -125,6 +130,7 @@ var bindTests = []struct {
 
 			 fmt.Println(err)
 		 }`,
+		nil,
 	},
 	// Test that named and anonymous outputs are handled correctly
 	{
@@ -161,6 +167,7 @@ var bindTests = []struct {
 
 			 fmt.Println(str1, str2, res.Str1, res.Str2, err)
 		 }`,
+		nil,
 	},
 	// Tests that named, anonymous and indexed events are handled correctly
 	{
@@ -226,6 +233,7 @@ var bindTests = []struct {
 		 if _, ok := reflect.TypeOf(&EventChecker{}).MethodByName("FilterAnonymous"); ok {
 		 	t.Errorf("binding has disallowed method (FilterAnonymous)")
 		 }`,
+		nil,
 	},
 	// Test that contract interactions (deploy, transact and call) generate working code
 	{
@@ -283,6 +291,7 @@ var bindTests = []struct {
 				t.Fatalf("Transact string mismatch: have '%s', want 'Transact string'", str)
 			}
 		`,
+		nil,
 	},
 	// Tests that plain values can be properly returned and deserialized
 	{
@@ -324,6 +333,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", str, num, "Hi", 1)
 			}
 		`,
+		nil,
 	},
 	// Tests that tuples can be properly returned and deserialized
 	{
@@ -365,6 +375,7 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", res.A, res.B, "Hi", 1)
 			}
 		`,
+		nil,
 	},
 	// Tests that arrays/slices can be properly returned and deserialized.
 	// Only addresses are tested, remainder just compiled to keep the test small.
@@ -418,6 +429,7 @@ var bindTests = []struct {
 					t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{auth.From, common.Address{}})
 			}
 		`,
+		nil,
 	},
 	// Tests that anonymous default methods can be correctly invoked
 	{
@@ -464,6 +476,7 @@ var bindTests = []struct {
 				t.Fatalf("Address mismatch: have %v, want %v", caller, auth.From)
 			}
 		`,
+		nil,
 	},
 	// Tests that non-existent contracts are reported as such (though only simulator test)
 	{
@@ -498,6 +511,7 @@ var bindTests = []struct {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
 			}
 		`,
+		nil,
 	},
 	// Tests that gas estimation works for contracts with weird gas mechanics too.
 	{
@@ -549,6 +563,7 @@ var bindTests = []struct {
 				t.Fatalf("Field mismatch: have %v, want %v", field, "automatic")
 			}
 		`,
+		nil,
 	},
 	// Test that constant functions can be called from an (optional) specified address
 	{
@@ -598,6 +613,7 @@ var bindTests = []struct {
 				}
 			}
 		`,
+		nil,
 	},
 	// Tests that methods and returns with underscores inside work correctly.
 	{
@@ -673,6 +689,7 @@ var bindTests = []struct {
 
 			fmt.Println(a, b, err)
 		`,
+		nil,
 	},
 	// Tests that logs can be successfully filtered and decoded.
 	{
@@ -855,6 +872,7 @@ var bindTests = []struct {
 			case <-time.After(250 * time.Millisecond):
 			}
 		`,
+		nil,
 	},
 	{
 		`DeeplyNestedArray`,
@@ -931,6 +949,47 @@ var bindTests = []struct {
 				t.Fatalf("Retrieved value does not match expected value! got: %d, expected: %d. %v", retrievedArr[4][3][2], testArr[4][3][2], err)
 			}
 		`,
+		nil,
+	},
+	{
+		`CallbackParam`,
+		`
+			contract FunctionPointerTest {
+				function test(function(uint256) external callback) external {
+					callback(1);
+				}
+			}
+		`,
+		`608060405234801561001057600080fd5b5061015e806100206000396000f3fe60806040526004361061003b576000357c010000000000000000000000000000000000000000000000000000000090048063d7a5aba214610040575b600080fd5b34801561004c57600080fd5b506100be6004803603602081101561006357600080fd5b810190808035806c0100000000000000000000000090049068010000000000000000900463ffffffff1677ffffffffffffffffffffffffffffffffffffffffffffffff169091602001919093929190939291905050506100c0565b005b818160016040518263ffffffff167c010000000000000000000000000000000000000000000000000000000002815260040180828152602001915050600060405180830381600087803b15801561011657600080fd5b505af115801561012a573d6000803e3d6000fd5b50505050505056fea165627a7a7230582062f87455ff84be90896dbb0c4e4ddb505c600d23089f8e80a512548440d7e2580029`,
+		`[
+			{
+				"constant": false,
+				"inputs": [
+					{
+						"name": "callback",
+						"type": "function"
+					}
+				],
+				"name": "test",
+				"outputs": [],
+				"payable": false,
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		]`,
+		`
+			"strings"
+		`,
+		`
+			if strings.Compare("test(function)", CallbackParamFuncSigs["d7a5aba2"]) != 0 {
+				t.Fatalf("")
+			}
+		`,
+		[]map[string]string{
+			{
+				"test(function)": "d7a5aba2",
+			},
+		},
 	},
 }
 
@@ -957,7 +1016,7 @@ func TestGolangBindings(t *testing.T) {
 	// Generate the test suite for all the contracts
 	for i, tt := range bindTests {
 		// Generate the binding and create a Go source file in the workspace
-		bind, err := Bind([]string{tt.name}, []string{tt.abi}, []string{tt.bytecode}, "bindtest", LangGo)
+		bind, err := Bind([]string{tt.name}, []string{tt.abi}, []string{tt.bytecode}, tt.fsigs, "bindtest", LangGo)
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}

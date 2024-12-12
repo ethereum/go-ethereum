@@ -135,6 +135,7 @@ func abigen(c *cli.Context) error {
 		abis  []string
 		bins  []string
 		types []string
+		sigs  []map[string]string
 	)
 	if c.String(solFlag.Name) != "" || c.String(vyFlag.Name) != "" || c.String(abiFlag.Name) == "-" {
 		// Generate the list of types to exclude from binding
@@ -179,6 +180,7 @@ func abigen(c *cli.Context) error {
 			}
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
+			sigs = append(sigs, contract.Hashes)
 
 			nameParts := strings.Split(name, ":")
 			types = append(types, nameParts[len(nameParts)-1])
@@ -209,7 +211,7 @@ func abigen(c *cli.Context) error {
 		types = append(types, kind)
 	}
 	// Generate the contract binding
-	code, err := bind.Bind(types, abis, bins, c.String(pkgFlag.Name), lang)
+	code, err := bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), lang)
 	if err != nil {
 		fmt.Printf("Failed to generate ABI binding: %v\n", err)
 		os.Exit(-1)
