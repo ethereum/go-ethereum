@@ -490,6 +490,7 @@ func (d *dialScheduler) dnsResolveHostname(n *enode.Node) (*enode.Node, error) {
 	if foundIP6.IsValid() {
 		rec.Set(enr.IPv6Addr(foundIP6))
 	}
+	rec.SetSeq(n.Seq()) // ensure seq not bumped by update
 	newNode := enode.SignNull(rec, n.ID()).WithHostname(n.Hostname())
 	d.log.Trace("Node updated from DNS lookup", "id", n.ID(), "name", n.Hostname(), "ip", newNode.IP())
 	return newNode, nil
