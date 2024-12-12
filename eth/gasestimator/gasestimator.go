@@ -184,9 +184,16 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 // returns true if the transaction fails for a reason that might be related to
 // not enough gas. A non-nil error means execution failed due to reasons unrelated
 // to the gas limit.
-func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit uint64) (bool, *core.ExecutionResult, error) {
+func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit uint64) (failed bool, execResult *core.ExecutionResult, err error) {
 	// Configure the call for this specific execution (and revert the change after)
 	defer func(gas uint64) { call.GasLimit = gas }(call.GasLimit)
+	defer func() {
+		if r := recover(); r != nil {
+			failed = true
+			execResult = nil
+			err = nil
+		}
+	}()
 	call.GasLimit = gasLimit
 
 	// Execute the call and separate execution faults caused by a lack of gas or
