@@ -151,6 +151,24 @@ var (
 		}
 	{{end}}
 
+    {{ if .Errors }}
+    func (_{{$contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) any {
+        {{$i := 0}}
+        {{range $k, $v := .Errors}}
+            {{ if eq $i 0 }}
+                if val, err := _{{$contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err != nil {
+                    return val
+            {{ else }}
+                } else if val, err := _{{$contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err != nil {
+                    return val
+            {{ end -}}
+            {{$i = add $i 1}}
+        {{end -}}
+        }
+        return nil
+    }
+    {{ end -}}
+
     {{range .Errors}}
 		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} error raised by the {{$contract.Type}} contract.
 		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}

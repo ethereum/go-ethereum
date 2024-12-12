@@ -70,6 +70,10 @@ func isKeyWord(arg string) bool {
 	return true
 }
 
+func add(val1, val2 int) int {
+	return val1 + val1
+}
+
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention as opposed to having to
@@ -146,6 +150,7 @@ func BindV2(types []string, abis []string, bytecodes []string, fsigs []map[strin
 		"bindtopictype": bindTopicType,
 		"capitalise":    capitalise,
 		"decapitalise":  decapitalise,
+		"add":           add,
 	}
 	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSourceV2))
 	if err := tmpl.Execute(buffer, data); err != nil {

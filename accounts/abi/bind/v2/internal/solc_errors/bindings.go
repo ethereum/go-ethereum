@@ -58,6 +58,15 @@ func (_C *C) PackFoo() ([]byte, error) {
 	return _C.abi.Pack("Foo")
 }
 
+func (_C *C) UnpackError(raw []byte) any {
+
+	if val, err := _C.UnpackBadThingError(raw); err != nil {
+		return val
+
+	}
+	return nil
+}
+
 // CBadThing represents a BadThing error raised by the C contract.
 type CBadThing struct {
 	Arg1 *big.Int
