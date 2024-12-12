@@ -37,11 +37,14 @@ var errMissingPrefix = errors.New("missing 'enr:' prefix for base64-encoded reco
 type Node struct {
 	r  enr.Record
 	id ID
-	// endpoint information
-	ip       netip.Addr
-	udp      uint16
-	tcp      uint16
+
+	// hostname tracks the DNS name of the node.
 	hostname string
+
+	// endpoint information
+	ip  netip.Addr
+	udp uint16
+	tcp uint16
 }
 
 // New wraps a node record. The record must be valid according to the given
@@ -185,20 +188,16 @@ func (n *Node) TCP() int {
 	return int(n.tcp)
 }
 
-// Endpoint returns the hostname of the node if set, otherwise the IP address.
-func (n *Node) Endpoint() string {
-	if n.hostname != "" {
-		return n.hostname
-	}
-	if n.ip.IsValid() {
-		return n.ip.String()
-	}
-	return ""
+// WithHostname adds a DNS hostname to the node.
+func (n *Node) WithHostname(hostname string) *Node {
+	cpy := *n
+	cpy.hostname = hostname
+	return &cpy
 }
 
-// NeedResolve checks if the node requires DNS resolution.
-func (n *Node) NeedResolve() bool {
-	return n.hostname != "" //TODO: Add check for n.ip.IsValid(), but we need to implement invalidation for the previous resolved IP
+// Hostname returns the DNS name assigned by WithHostname.
+func (n *Node) Hostname() string {
+	return n.hostname
 }
 
 // UDPEndpoint returns the announced UDP endpoint.
@@ -245,9 +244,6 @@ func (n *Node) Pubkey() *ecdsa.PublicKey {
 func (n *Node) Record() *enr.Record {
 	cpy := n.r
 	return &cpy
-}
-func (n *Node) Hostname() string {
-	return n.hostname
 }
 
 // ValidateComplete checks whether n has a valid IP and UDP port.

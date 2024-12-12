@@ -100,28 +100,6 @@ func NewV4(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int) *Node {
 	return n
 }
 
-func NewV4WithDNS(pubkey *ecdsa.PublicKey, ip net.IP, hostname string, tcp, udp int) *Node {
-	var r enr.Record
-	if tcp != 0 {
-		r.Set(enr.TCP(tcp))
-	}
-	if udp != 0 {
-		r.Set(enr.UDP(udp))
-	}
-	if len(ip) > 0 {
-		r.Set(enr.IP(ip))
-	}
-	signV4Compat(&r, pubkey)
-	n, err := New(v4CompatID{}, &r)
-	if err != nil {
-		panic(err)
-	}
-	n.tcp = uint16(tcp)
-	n.udp = uint16(udp)
-	n.hostname = hostname
-	return n
-}
-
 // isNewV4 returns true for nodes created by NewV4.
 func isNewV4(n *Node) bool {
 	var k s256raw
@@ -132,7 +110,6 @@ func parseComplete(rawurl string) (*Node, error) {
 	var (
 		id               *ecdsa.PublicKey
 		tcpPort, udpPort uint64
-		node             *Node
 	)
 	u, err := url.Parse(rawurl)
 	if err != nil {
@@ -149,15 +126,8 @@ func parseComplete(rawurl string) (*Node, error) {
 		return nil, fmt.Errorf("invalid public key (%v)", err)
 	}
 
-	// Parse the IP address if its one.
+	// Parse the IP and ports.
 	ip := net.ParseIP(u.Hostname())
-	if ip != nil {
-		// Ensure the IP is 4 bytes long for IPv4 addresses.
-		if ipv4 := ip.To4(); ipv4 != nil {
-			ip = ipv4
-		}
-	}
-	// Parse the port numbers.
 	if tcpPort, err = strconv.ParseUint(u.Port(), 10, 16); err != nil {
 		return nil, errors.New("invalid port")
 	}
@@ -170,12 +140,11 @@ func parseComplete(rawurl string) (*Node, error) {
 		}
 	}
 
-	if ip != nil {
-		node = NewV4(id, ip, int(tcpPort), int(udpPort))
-	} else {
-		node = NewV4WithDNS(id, nil, u.Hostname(), int(tcpPort), int(udpPort))
+	// Create the node.
+	node := NewV4(id, ip, int(tcpPort), int(udpPort))
+	if ip == nil && u.Hostname() != "" {
+		node = node.WithHostname(u.Hostname())
 	}
-
 	return node, nil
 }
 
@@ -207,7 +176,7 @@ func (n *Node) URLv4() string {
 	}
 	u := url.URL{Scheme: "enode"}
 	if n.Hostname() != "" {
-		// For DNS nodes: include DNS name, TCP port, and optional UDP port
+		// For nodes with a DNS name: include DNS name, TCP port, and optional UDP port
 		u.User = url.User(nodeid)
 		u.Host = fmt.Sprintf("%s:%d", n.Hostname(), n.TCP())
 		if n.UDP() != n.TCP() {
