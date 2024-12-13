@@ -22,11 +22,13 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
@@ -80,6 +82,16 @@ type StateDB struct {
 	nextRevisionId int
 
 	lock sync.Mutex
+
+	// Measurements gathered during execution for debugging purposes
+	AccountReads   time.Duration
+	AccountHashes  time.Duration
+	AccountUpdates time.Duration
+	AccountCommits time.Duration
+	StorageReads   time.Duration
+	StorageHashes  time.Duration
+	StorageUpdates time.Duration
+	StorageCommits time.Duration
 }
 
 type AccountInfo struct {
@@ -446,7 +458,13 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 
 // updateStateObject writes the given object to the trie.
 func (s *StateDB) updateStateObject(stateObject *stateObject) {
+	// Track the amount of time wasted on updating the account from the trie
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
+	}
+	// Encode the account and update the account trie
 	addr := stateObject.Address()
+
 	data, err := rlp.EncodeToBytes(stateObject)
 	if err != nil {
 		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
@@ -456,7 +474,13 @@ func (s *StateDB) updateStateObject(stateObject *stateObject) {
 
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(stateObject *stateObject) {
+	// Track the amount of time wasted on deleting the account from the trie
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
+	}
+	// Delete the account from the trie
 	stateObject.deleted = true
+
 	addr := stateObject.Address()
 	s.setError(s.trie.TryDelete(addr[:]))
 }
@@ -471,15 +495,18 @@ func (s *StateDB) DeleteAddress(addr common.Address) {
 
 // Retrieve a state object given my the address. Returns nil if not found.
 func (s *StateDB) getStateObject(addr common.Address) (stateObject *stateObject) {
-	// Prefer 'live' objects.
+	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		if obj.deleted {
 			return nil
 		}
 		return obj
 	}
-
-	// Load the object from the database.
+	// Track the amount of time wasted on loading the object from the database
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountReads += time.Since(start) }(time.Now())
+	}
+	// Load the object from the database
 	enc, err := s.trie.TryGet(addr[:])
 	if len(enc) == 0 {
 		s.setError(err)
@@ -490,7 +517,7 @@ func (s *StateDB) getStateObject(addr common.Address) (stateObject *stateObject)
 		log.Error("Failed to decode state object", "addr", addr, "err", err)
 		return nil
 	}
-	// Insert into the live set.
+	// Insert into the live set
 	obj := newObject(s, addr, data, s.MarkStateObjectDirty)
 	s.setStateObject(obj)
 	return obj
@@ -672,6 +699,11 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	s.Finalise(deleteEmptyObjects)
+
+	// Track the amount of time wasted on hashing the account trie
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
+	}
 	return s.trie.Hash()
 }
 
@@ -714,7 +746,7 @@ func (s *StateDB) clearJournalAndRefund() {
 func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) {
 	defer s.clearJournalAndRefund()
 
-	// Commit objects to the trie.
+	// Commit objects to the trie, measuring the elapsed time
 	for addr, stateObject := range s.stateObjects {
 		_, isDirty := s.stateObjectsDirty[addr]
 		switch {
@@ -737,7 +769,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		delete(s.stateObjectsDirty, addr)
 	}
-	// Write trie changes.
+	// Write the account trie changes, measuing the amount of wasted time
+	if metrics.EnabledExpensive {
+		defer func(start time.Time) { s.AccountCommits += time.Since(start) }(time.Now())
+	}
 	root, err = s.trie.Commit(func(leaf []byte, parent common.Hash) error {
 		var account Account
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {

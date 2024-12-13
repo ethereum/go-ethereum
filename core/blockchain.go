@@ -56,6 +56,16 @@ import (
 )
 
 var (
+	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
+	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
+	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
+	accountCommitTimer = metrics.NewRegisteredTimer("chain/account/commits", nil)
+
+	storageReadTimer   = metrics.NewRegisteredTimer("chain/storage/reads", nil)
+	storageHashTimer   = metrics.NewRegisteredTimer("chain/storage/hashes", nil)
+	storageUpdateTimer = metrics.NewRegisteredTimer("chain/storage/updates", nil)
+	storageCommitTimer = metrics.NewRegisteredTimer("chain/storage/commits", nil)
+
 	blockInsertTimer     = metrics.NewRegisteredTimer("chain/inserts", nil)
 	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
 	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
@@ -1686,8 +1696,22 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			return i, events, coalescedLogs, err
 		}
 
+		// Update the metrics subsystem with all the measurements
+		accountReadTimer.Update(statedb.AccountReads)
+		accountHashTimer.Update(statedb.AccountHashes)
+		accountUpdateTimer.Update(statedb.AccountUpdates)
+		accountCommitTimer.Update(statedb.AccountCommits)
+
+		storageReadTimer.Update(statedb.StorageReads)
+		storageHashTimer.Update(statedb.StorageHashes)
+		storageUpdateTimer.Update(statedb.StorageUpdates)
+		storageCommitTimer.Update(statedb.StorageCommits)
+
+		trieAccess := statedb.AccountReads + statedb.AccountHashes + statedb.AccountUpdates + statedb.AccountCommits
+		trieAccess += statedb.StorageReads + statedb.StorageHashes + statedb.StorageUpdates + statedb.StorageCommits
+
 		blockInsertTimer.UpdateSince(bstart)
-		blockExecutionTimer.Update(t1.Sub(t0))
+		blockExecutionTimer.Update(t1.Sub(t0) - trieAccess)
 		blockValidationTimer.Update(t2.Sub(t1))
 		blockWriteTimer.Update(t3.Sub(t2))
 

@@ -50,7 +50,7 @@ var (
 		Usage:    "Enable light client mode",
 		Category: flags.DeprecatedCategory,
 	}
-	// (Deprecated May 2020, shown in aliased flags section)
+	// Deprecated May 2020, shown in aliased flags section
 	NoUSBFlag = &cli.BoolFlag{
 		Name:     "nousb",
 		Usage:    "Disables monitoring for and managing USB hardware wallets (deprecated)",
