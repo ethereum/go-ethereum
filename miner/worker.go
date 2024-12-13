@@ -116,7 +116,9 @@ type worker struct {
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
-	wg           sync.WaitGroup
+	resetCh      chan time.Duration // Channel to request timer resets
+
+	wg sync.WaitGroup
 
 	agents map[Agent]struct{}
 	recv   chan *Result
@@ -158,6 +160,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		txsCh:          make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
+		resetCh:        make(chan time.Duration, 1),
 		chainDb:        eth.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		chain:          eth.BlockChain(),
@@ -273,6 +276,7 @@ func (self *worker) update() {
 	minePeriod := 2
 	MinePeriodCh := self.engine.(*XDPoS.XDPoS).MinePeriodCh
 	defer close(MinePeriodCh)
+	NewRoundCh := self.engine.(*XDPoS.XDPoS).NewRoundCh
 
 	timeout := time.NewTimer(time.Duration(minePeriod) * time.Second)
 	c := make(chan struct{})
@@ -283,6 +287,16 @@ func (self *worker) update() {
 		for {
 			// A real event arrived, process interesting content
 			select {
+			case d := <-self.resetCh:
+				// Reset the timer to the new duration.
+				if !timeout.Stop() {
+					// Drain the timer channel if it had already expired.
+					select {
+					case <-timeout.C:
+					default:
+					}
+				}
+				timeout.Reset(d)
 			case <-timeout.C:
 				c <- struct{}{}
 			case <-finish:
@@ -291,26 +305,31 @@ func (self *worker) update() {
 		}
 	}()
 	for {
-		prevReset0TimeMillisec := int64(0)
 		// A real event arrived, process interesting content
 		select {
 		case v := <-MinePeriodCh:
 			log.Info("[worker] update wait period", "period", v)
 			minePeriod = v
-			timeout.Reset(time.Duration(minePeriod) * time.Second)
+			self.resetCh <- time.Duration(minePeriod) * time.Second
 
 		case <-c:
 			if atomic.LoadInt32(&self.mining) == 1 {
 				self.commitNewWork()
 			}
-			resetTime := getResetTime(self.chain, minePeriod, &prevReset0TimeMillisec)
-			timeout.Reset(resetTime)
+			resetTime := getResetTime(self.chain, minePeriod)
+			self.resetCh <- resetTime
 
 		// Handle ChainHeadEvent
 		case <-self.chainHeadCh:
 			self.commitNewWork()
-			resetTime := getResetTime(self.chain, minePeriod, &prevReset0TimeMillisec)
-			timeout.Reset(resetTime)
+			resetTime := getResetTime(self.chain, minePeriod)
+			self.resetCh <- resetTime
+
+		// Handle new round
+		case <-NewRoundCh:
+			self.commitNewWork()
+			resetTime := getResetTime(self.chain, minePeriod)
+			self.resetCh <- resetTime
 
 		// Handle ChainSideEvent
 		case <-self.chainSideCh:
@@ -357,26 +376,14 @@ func (self *worker) update() {
 	}
 }
 
-func getResetTime(chain *core.BlockChain, minePeriod int, prevReset0TimeMillisec *int64) time.Duration {
+func getResetTime(chain *core.BlockChain, minePeriod int) time.Duration {
 	minePeriodDuration := time.Duration(minePeriod) * time.Second
 	currentBlockTime := chain.CurrentBlock().Time().Int64()
 	nowTime := time.Now().UnixMilli()
 	resetTime := time.Duration(currentBlockTime)*time.Second + minePeriodDuration - time.Duration(nowTime)*time.Millisecond
 	// in case the current block time is not very accurate
-	if resetTime > minePeriodDuration {
+	if resetTime > minePeriodDuration || resetTime <= 0 {
 		resetTime = minePeriodDuration
-	}
-	// in case the current block is too far in the past, the block time already is huge, we wait for mine period
-	if resetTime < 0 {
-		resetTime = minePeriodDuration
-	}
-	if resetTime == 0 {
-		if nowTime == *prevReset0TimeMillisec {
-			// in case it resets to 0 in one millisecond too many times, we wait for mine period
-			resetTime = minePeriodDuration
-		} else {
-			*prevReset0TimeMillisec = nowTime
-		}
 	}
 	log.Debug("[update] Miner worker timer reset", "resetMilliseconds", resetTime.Milliseconds(), "minePeriodSec", minePeriod, "currentBlockTimeSec", fmt.Sprintf("%d", currentBlockTime), "currentSystemTimeSec", fmt.Sprintf("%d.%03d", nowTime/1000, nowTime%1000))
 	return resetTime
