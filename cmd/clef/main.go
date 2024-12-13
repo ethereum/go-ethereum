@@ -923,7 +923,7 @@ func testExternalUI(api *core.SignerAPI) {
 		}
 	}
 	expectApprove := func(testcase string, err error) {
-		if errors.Is(err, accounts.ErrUnknownAccount) {
+		if err == nil || errors.Is(err, accounts.ErrUnknownAccount) {
 			return
 		}
 		addErr(fmt.Sprintf("%v: expected no error, got %v", testcase, err.Error()))
