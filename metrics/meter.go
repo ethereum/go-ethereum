@@ -15,7 +15,7 @@ type MeterSnapshot interface {
 	RateMean() float64
 }
 
-// Meters count events to produce exponentially-weighted moving average rates
+// Meter count events to produce exponentially-weighted moving average rates
 // at one-, five-, and fifteen-minutes and a mean rate.
 type Meter interface {
 	Mark(int64)
