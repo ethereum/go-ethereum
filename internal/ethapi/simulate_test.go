@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 )
 
 func TestSimulateSanitizeBlockOrder(t *testing.T) {
@@ -45,37 +46,37 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 		{
 			baseNumber:    10,
 			baseTimestamp: 50,
-			blocks:        []simBlock{{BlockOverrides: &BlockOverrides{Number: newInt(13), Time: newUint64(70)}}, {}},
+			blocks:        []simBlock{{BlockOverrides: &override.BlockOverrides{Number: newInt(13), Time: newUint64(70)}}, {}},
 			expected:      []result{{number: 11, timestamp: 51}, {number: 12, timestamp: 52}, {number: 13, timestamp: 70}, {number: 14, timestamp: 71}},
 		},
 		{
 			baseNumber:    10,
 			baseTimestamp: 50,
-			blocks:        []simBlock{{BlockOverrides: &BlockOverrides{Number: newInt(11)}}, {BlockOverrides: &BlockOverrides{Number: newInt(14)}}, {}},
+			blocks:        []simBlock{{BlockOverrides: &override.BlockOverrides{Number: newInt(11)}}, {BlockOverrides: &override.BlockOverrides{Number: newInt(14)}}, {}},
 			expected:      []result{{number: 11, timestamp: 51}, {number: 12, timestamp: 52}, {number: 13, timestamp: 53}, {number: 14, timestamp: 54}, {number: 15, timestamp: 55}},
 		},
 		{
 			baseNumber:    10,
 			baseTimestamp: 50,
-			blocks:        []simBlock{{BlockOverrides: &BlockOverrides{Number: newInt(13)}}, {BlockOverrides: &BlockOverrides{Number: newInt(12)}}},
+			blocks:        []simBlock{{BlockOverrides: &override.BlockOverrides{Number: newInt(13)}}, {BlockOverrides: &override.BlockOverrides{Number: newInt(12)}}},
 			err:           "block numbers must be in order: 12 <= 13",
 		},
 		{
 			baseNumber:    10,
 			baseTimestamp: 50,
-			blocks:        []simBlock{{BlockOverrides: &BlockOverrides{Number: newInt(13), Time: newUint64(52)}}},
+			blocks:        []simBlock{{BlockOverrides: &override.BlockOverrides{Number: newInt(13), Time: newUint64(52)}}},
 			err:           "block timestamps must be in order: 52 <= 52",
 		},
 		{
 			baseNumber:    10,
 			baseTimestamp: 50,
-			blocks:        []simBlock{{BlockOverrides: &BlockOverrides{Number: newInt(11), Time: newUint64(60)}}, {BlockOverrides: &BlockOverrides{Number: newInt(12), Time: newUint64(55)}}},
+			blocks:        []simBlock{{BlockOverrides: &override.BlockOverrides{Number: newInt(11), Time: newUint64(60)}}, {BlockOverrides: &override.BlockOverrides{Number: newInt(12), Time: newUint64(55)}}},
 			err:           "block timestamps must be in order: 55 <= 60",
 		},
 		{
 			baseNumber:    10,
 			baseTimestamp: 50,
-			blocks:        []simBlock{{BlockOverrides: &BlockOverrides{Number: newInt(11), Time: newUint64(60)}}, {BlockOverrides: &BlockOverrides{Number: newInt(13), Time: newUint64(61)}}},
+			blocks:        []simBlock{{BlockOverrides: &override.BlockOverrides{Number: newInt(11), Time: newUint64(60)}}, {BlockOverrides: &override.BlockOverrides{Number: newInt(13), Time: newUint64(61)}}},
 			err:           "block timestamps must be in order: 61 <= 61",
 		},
 	} {
