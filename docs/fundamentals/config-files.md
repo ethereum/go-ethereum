@@ -14,8 +14,8 @@ The benefit of writing a shell script for starting a Geth node is that it is mor
 To create a shell script, save the Geth startup commands in a shell file, prepended with `#!/bin/bash`. The contents of the file might look like this:
 
 ```sh
-#! /bin/bash
-./geth --sepolia --datadir sepoliadata --authrpc.addr localhost --authrpc.port 8551, 8545 --authrpc.vhosts localhost --authrpc.jwtsecret sepoliadata/jwtsecret --http --http.api eth,net --metrics.expensive --metric.addr 127.0.0.1 --metrics.port 6060
+#!/bin/bash
+./geth --sepolia --datadir sepoliadata --authrpc.addr localhost --authrpc.port 8551, 8545 --authrpc.vhosts localhost --authrpc.jwtsecret sepoliadata/jwtsecret --http --http.api eth,net --metrics --metric.addr 127.0.0.1 --metrics.port 6060
 ```
 
 Save the file as (e.g.) `start-geth.sh`. Then make the file executable using
