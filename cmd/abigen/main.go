@@ -136,7 +136,7 @@ func abigen(c *cli.Context) error {
 		bins  []string
 		types []string
 	)
-	if c.String(solFlag.Name) != "" || c.String(vyFlag.Name) != "" || (c.String(abiFlag.Name) == "-" && c.String(pkgFlag.Name) == "") {
+	if c.String(solFlag.Name) != "" || c.String(vyFlag.Name) != "" || c.String(abiFlag.Name) == "-" {
 		// Generate the list of types to exclude from binding
 		exclude := make(map[string]bool)
 		for _, kind := range strings.Split(c.String(excFlag.Name), ",") {
@@ -185,13 +185,8 @@ func abigen(c *cli.Context) error {
 		}
 	} else {
 		// Otherwise load up the ABI, optional bytecode and type name from the parameters
-		var abi []byte
-		var err error
-		if c.String(abiFlag.Name) == "-" {
-			abi, err = io.ReadAll(os.Stdin)
-		} else {
-			abi, err = os.ReadFile(c.String(abiFlag.Name))
-		}
+		abi, err := os.ReadFile(c.String(abiFlag.Name))
+
 		if err != nil {
 			fmt.Printf("Failed to read input ABI: %v\n", err)
 			os.Exit(-1)
