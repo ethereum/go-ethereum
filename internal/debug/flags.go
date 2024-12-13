@@ -313,7 +313,9 @@ func Setup(ctx *cli.Context) error {
 	// pprof server
 	if ctx.Bool(pprofFlag.Name) {
 		address := fmt.Sprintf("%s:%d", ctx.String(pprofAddrFlag.Name), ctx.Int(pprofPortFlag.Name))
-		StartPProf(address)
+		// This context value ("metrics-addr") represents the utils.MetricsHTTPFlag.Name.
+		// It cannot be imported because it will cause a cyclical dependency.
+		StartPProf(address, !ctx.IsSet("metrics-addr") && !ctx.IsSet("metrics.addr"))
 	}
 
 	if len(logFile) > 0 || rotation {
@@ -323,10 +325,12 @@ func Setup(ctx *cli.Context) error {
 	return nil
 }
 
-func StartPProf(address string) {
+func StartPProf(address string, withMetrics bool) {
 	// Hook go-metrics into expvar on any /debug/metrics request, load all vars
 	// from the registry into expvar, and execute regular expvar handler.
-	exp.Exp(metrics.DefaultRegistry)
+	if withMetrics {
+		exp.Exp(metrics.DefaultRegistry)
+	}
 	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
 	go func() {
 		if err := http.ListenAndServe(address, nil); err != nil {
