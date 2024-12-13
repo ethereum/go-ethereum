@@ -77,6 +77,9 @@ type depTreeBuilder struct {
 	roots map[string]struct{}
 }
 
+// depTreeNode represents a node (contract) in a dependency tree.  it contains its unlinked code, and references to any
+// library contracts that it requires.  If it is specified as an override, it contains the address where it has already
+// been deployed at.
 type depTreeNode struct {
 	pattern      string
 	unlinkedCode string
@@ -85,11 +88,10 @@ type depTreeNode struct {
 }
 
 func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
-	// if the node is in the subtree set already, bail out early
+	// if the node is in the subtree set already, it has already been fully recursed/built so we can bail out.
 	if _, ok := d.subtrees[pattern]; ok {
 		return
 	}
-
 	node := &depTreeNode{
 		pattern:      pattern,
 		unlinkedCode: contract,
@@ -97,7 +99,7 @@ func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 	if addr, ok := d.overrides[pattern]; ok {
 		node.overrideAddr = &addr
 	}
-
+	// iterate each referenced library in the unlinked code, recurse and built its subtree.
 	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
 	if err != nil {
 		panic(err)
@@ -107,12 +109,15 @@ func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 		d.buildDepTrees(depPattern, d.contracts[depPattern])
 		node.nodes = append(node.nodes, d.subtrees[depPattern])
 
-		// this dep can't be a root dependency if it is referenced by other contracts.
+		// this library can't be a root dependency if it is referenced by other contracts.
 		delete(d.roots, depPattern)
 	}
 	d.subtrees[pattern] = node
 }
 
+// BuildDepTrees will compute a set of dependency trees from a set of unlinked contracts.  The root of each tree
+// corresponds to a contract/library that is not referenced as a dependency anywhere else.  Children of each node are
+// its library dependencies.
 func (d *depTreeBuilder) BuildDepTrees() (roots []*depTreeNode) {
 	// before the trees of dependencies are known, consider that any provided contract could be a root.
 	for pattern, _ := range d.contracts {
@@ -129,26 +134,46 @@ func (d *depTreeBuilder) BuildDepTrees() (roots []*depTreeNode) {
 	return roots
 }
 
-// depTreeDeployer is responsible for taking a built dependency, deploying-and-linking its components in the proper
-// order.
+func newDepTreeBuilder(overrides map[string]common.Address, contracts map[string]string) *depTreeBuilder {
+	return &depTreeBuilder{
+		overrides: overrides,
+		contracts: contracts,
+		subtrees:  make(map[string]*depTreeNode),
+		roots:     make(map[string]struct{}),
+	}
+}
+
+type deployFn func(input, deployer []byte) (common.Address, *types.Transaction, error)
+
+// depTreeDeployer is responsible for taking a dependency, deploying-and-linking its components in the proper
+// order.  A depTreeDeployer cannot be used after calling LinkAndDeploy other than to retrieve the deployment result.
 type depTreeDeployer struct {
 	deployedAddrs map[string]common.Address
 	deployerTxs   map[string]*types.Transaction
 	input         map[string][]byte // map of the root contract pattern to the constructor input (if there is any)
-	deploy        func(input, deployer []byte) (common.Address, *types.Transaction, error)
+	deploy        deployFn
 	err           error
 }
 
+// linkAndDeploy recursively deploys a contract/library:  starting by linking/deploying its dependencies.
+// The deployment result (deploy addresses/txs or an error) is stored in the depTreeDeployer object.
 func (d *depTreeDeployer) linkAndDeploy(node *depTreeNode) {
-	if node.overrideAddr != nil {
-		// don't recurse on override nodes
+	// short-circuit further deployment of contracts if a previous deployment encountered an error.
+	if d.err != nil {
 		return
 	}
 
+	// don't deploy contracts specified as overrides.  don't deploy their dependencies.
+	if node.overrideAddr != nil {
+		return
+	}
+
+	// if this contract/library depends on other libraries deploy them (and their dependencies) first
 	for _, childNode := range node.nodes {
 		d.linkAndDeploy(childNode)
 	}
-	// link in all node dependencies and produce the deployer bytecode
+	// if we just deployed any prerequisite contracts, link their deployed addresses into the bytecode to produce
+	// a deployer bytecode for this contract.
 	deployerCode := node.unlinkedCode
 	for _, child := range node.nodes {
 		var linkAddr common.Address
@@ -160,7 +185,7 @@ func (d *depTreeDeployer) linkAndDeploy(node *depTreeNode) {
 		deployerCode = strings.ReplaceAll(deployerCode, "__$"+child.pattern+"$__", strings.ToLower(linkAddr.String()[2:]))
 	}
 
-	// deploy the contract.
+	// Finally, deploy the contract.
 	addr, tx, err := d.deploy(d.input[node.pattern], common.Hex2Bytes(deployerCode))
 	if err != nil {
 		d.err = err
@@ -170,7 +195,8 @@ func (d *depTreeDeployer) linkAndDeploy(node *depTreeNode) {
 	}
 }
 
-func (d *depTreeDeployer) Result() (*DeploymentResult, error) {
+// result returns a result for this deployment, or an error if it failed.
+func (d *depTreeDeployer) result() (*DeploymentResult, error) {
 	if d.err != nil {
 		return nil, d.err
 	}
@@ -180,10 +206,17 @@ func (d *depTreeDeployer) Result() (*DeploymentResult, error) {
 	}, nil
 }
 
+func newDepTreeDeployer(deploy deployFn) *depTreeDeployer {
+	return &depTreeDeployer{
+		deploy:        deploy,
+		deployedAddrs: make(map[string]common.Address),
+		deployerTxs:   make(map[string]*types.Transaction)}
+}
+
 // LinkAndDeploy deploys a specified set of contracts and their dependent
 // libraries.  If an error occurs, only contracts which were successfully
 // deployed are returned in the result.
-func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []byte) (common.Address, *types.Transaction, error)) (res *DeploymentResult, err error) {
+func LinkAndDeploy(deployParams DeploymentParams, deploy deployFn) (res *DeploymentResult, err error) {
 	unlinkedContracts := make(map[string]string)
 	accumRes := &DeploymentResult{
 		Txs:   make(map[string]*types.Transaction),
@@ -192,25 +225,16 @@ func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []
 	for _, meta := range deployParams.Contracts {
 		unlinkedContracts[meta.Pattern] = meta.Bin[2:]
 	}
-	// TODO: instantiate this using constructor
-	treeBuilder := depTreeBuilder{
-		overrides: deployParams.Overrides,
-		contracts: unlinkedContracts,
-		subtrees:  make(map[string]*depTreeNode),
-		roots:     make(map[string]struct{}),
-	}
-
+	treeBuilder := newDepTreeBuilder(deployParams.Overrides, unlinkedContracts)
 	deps := treeBuilder.BuildDepTrees()
+
 	for _, tr := range deps {
-		deployer := depTreeDeployer{
-			deploy:        deploy,
-			deployedAddrs: make(map[string]common.Address),
-			deployerTxs:   make(map[string]*types.Transaction)}
+		deployer := newDepTreeDeployer(deploy)
 		if deployParams.Inputs != nil {
 			deployer.input = map[string][]byte{tr.pattern: deployParams.Inputs[tr.pattern]}
 		}
 		deployer.linkAndDeploy(tr)
-		res, err := deployer.Result()
+		res, err := deployer.result()
 		if err != nil {
 			return accumRes, err
 		}
