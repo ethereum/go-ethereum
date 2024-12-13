@@ -23,8 +23,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -45,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -547,6 +550,111 @@ func TestTraceTransaction(t *testing.T) {
 	}
 }
 
+func TestTraceBlockFromFile(t *testing.T) {
+	t.Parallel()
+
+	// Set up test accounts and a simple genesis block
+	accounts := newAccounts(2)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	genBlock := 3
+	signer := types.HomesteadSigner{}
+	backend := newTestBackend(nil, genBlock, genesis, func(i int, b *core.BlockGen) {
+		// Add a simple transaction to the block
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+
+	defer backend.teardown()
+
+	api := NewAPI(backend)
+
+	var testCases = []struct {
+		name      string
+		file      string
+		setupFile func(file string) // Optional setup for the file
+		expectErr bool
+		expected  common.Hash // Expected trace results
+		expectMsg string      // For error assertions
+	}{
+		{
+			name: "Valid trace from file",
+			file: "valid_block.rlp",
+			setupFile: func(file string) {
+				createTestFile(file, validBlockData(backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64())))
+			},
+			expected: backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64()).Transactions()[0].Hash(),
+		},
+		{
+			name:      "File not found",
+			file:      "non_existent_file.rlp",
+			expectErr: true,
+			expectMsg: "could not read file",
+		},
+		{
+			name: "Invalid block data",
+			file: "invalid_block.rlp",
+			setupFile: func(file string) {
+				createTestFile(file, []byte("invalid data"))
+			},
+			expectErr: true,
+			expectMsg: "could not decode block",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.setupFile != nil {
+				defer os.Remove(tc.file) // Clean up
+				tc.setupFile(tc.file)
+			}
+
+			ctx := context.Background()
+			result, err := api.TraceBlockFromFile(ctx, tc.file, nil)
+			fmt.Println(&result)
+
+			if tc.expectErr {
+				if err == nil || !strings.Contains(err.Error(), tc.expectMsg) {
+					t.Fatalf("expected error containing '%s', got '%v'", tc.expectMsg, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !reflect.DeepEqual(result[0].TxHash, tc.expected) {
+				t.Errorf("result mismatch, want %v, got %v", tc.expected, result)
+			}
+		})
+	}
+}
+
+func createTestFile(name string, data []byte) {
+	_ = os.WriteFile(name, data, 0644)
+}
+
+func validBlockData(block *types.Block) []byte {
+	// Fetch the first block and RLP encode it
+	encodedBlock, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		panic(fmt.Errorf("failed to encode block: %v", err))
+	}
+	return encodedBlock
+}
+
 func TestTraceBlock(t *testing.T) {
 	t.Parallel()
 
@@ -635,6 +743,318 @@ func TestTraceBlock(t *testing.T) {
 			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, string(have), want)
 		}
 	}
+}
+
+func TestTraceBadBlock(t *testing.T) {
+	t.Parallel()
+
+	// Setup a test backend with valid transactions
+	accounts := newAccounts(2)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	signer := types.HomesteadSigner{}
+	var badBlockHash, genesisHash common.Hash
+
+	backend := newTestBackend(t, 2, genesis, func(i int, b *core.BlockGen) {
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+	defer backend.teardown()
+
+	// Add the genesis block to the bad block database
+	genesisBlock := backend.chain.GetBlockByNumber(0)
+	if genesisBlock == nil {
+		t.Fatalf("failed to fetch genesis block")
+	}
+	genesisHash = genesisBlock.Hash()
+	rawdb.WriteBadBlock(backend.chaindb, genesisBlock)
+
+	// Create a bad block by corrupting the first block after genesis
+	badBlock := backend.chain.GetBlockByNumber(1)
+	if badBlock == nil {
+		t.Fatalf("failed to fetch block 1")
+	}
+	badBlock.Header().ParentHash = common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef") // Simulate corruption
+	badBlockHash = badBlock.Hash()
+	rawdb.WriteBadBlock(backend.chaindb, badBlock)
+
+	// Test cases
+	api := NewAPI(backend)
+	var testCases = []struct {
+		name      string
+		hash      common.Hash
+		expectErr bool
+		expectMsg string
+	}{
+		{
+			name:      "Genesis block",
+			hash:      genesisHash,
+			expectErr: true,
+			expectMsg: "genesis is not traceable",
+		},
+		{
+			name:      "Valid bad block",
+			hash:      badBlockHash,
+			expectErr: false,
+		},
+		{
+			name:      "Non-existent block",
+			hash:      common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+			expectErr: true,
+			expectMsg: fmt.Sprintf("block %s not found", common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")),
+		},
+	}
+
+	// Execute test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			result, err := api.TraceBadBlock(ctx, tc.hash, nil)
+
+			if tc.expectErr {
+				if err == nil || !strings.Contains(err.Error(), tc.expectMsg) {
+					t.Fatalf("expected error containing '%s', got: %v", tc.expectMsg, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tc.name == "Valid bad block" && len(result) == 0 {
+				t.Fatalf("expected trace results for bad block, got none")
+			}
+		})
+	}
+}
+
+func TestStandardTraceBadBlockToFile(t *testing.T) {
+	t.Parallel()
+
+	// Setup a test backend with valid transactions
+	accounts := newAccounts(2)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	signer := types.HomesteadSigner{}
+	var badBlockHash common.Hash
+
+	backend := newTestBackend(t, 2, genesis, func(i int, b *core.BlockGen) {
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+	defer backend.teardown()
+
+	// Create a bad block by corrupting the first block after genesis
+	badBlock := backend.chain.GetBlockByNumber(1)
+	if badBlock == nil {
+		t.Fatalf("failed to fetch block 1")
+	}
+	badBlock.Header().ParentHash = common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef") // Simulate corruption
+	badBlockHash = badBlock.Hash()
+	rawdb.WriteBadBlock(backend.chaindb, badBlock)
+
+	// Test cases
+	api := NewAPI(backend)
+	var testCases = []struct {
+		name       string
+		hash       common.Hash
+		config     *StdTraceConfig
+		expectErr  bool
+		expectMsg  string
+		validateFn func(files []string)
+	}{
+		{
+			name:      "Valid bad block",
+			hash:      badBlockHash,
+			config:    nil, // Use default StdTraceConfig
+			expectErr: false,
+			validateFn: func(files []string) {
+				if len(files) == 0 {
+					t.Fatalf("expected at least one output file, got none")
+				}
+				for _, file := range files {
+					if _, err := os.Stat(file); os.IsNotExist(err) {
+						t.Fatalf("expected output file %s to exist", file)
+					}
+					// Clean up the file after test
+					os.Remove(file)
+				}
+			},
+		},
+		{
+			name:      "Non-existent block",
+			hash:      common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+			config:    nil,
+			expectErr: true,
+			expectMsg: fmt.Sprintf("block %s not found", common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")),
+		},
+	}
+
+	// Execute test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			files, err := api.StandardTraceBadBlockToFile(ctx, tc.hash, tc.config)
+
+			if tc.expectErr {
+				if err == nil || !strings.Contains(err.Error(), tc.expectMsg) {
+					t.Fatalf("expected error containing '%s', got: %v", tc.expectMsg, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// Validate the output files
+			if tc.validateFn != nil {
+				tc.validateFn(files)
+			}
+		})
+	}
+}
+
+func TestIntermediateRoots(t *testing.T) {
+    t.Parallel()
+
+    // Setup a test backend with valid transactions
+    accounts := newAccounts(2)
+    genesis := &core.Genesis{
+        Config: params.TestChainConfig,
+        Alloc: types.GenesisAlloc{
+            accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+        },
+    }
+    signer := types.HomesteadSigner{}
+    var badBlockHash, genesisHash common.Hash
+
+    backend := newTestBackend(t, 2, genesis, func(i int, b *core.BlockGen) {
+        tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+            Nonce:    uint64(i),
+            To:       &accounts[1].addr,
+            Value:    big.NewInt(1000),
+            Gas:      params.TxGas,
+            GasPrice: b.BaseFee(),
+            Data:     nil,
+        }), signer, accounts[0].key)
+        b.AddTx(tx)
+    })
+    defer backend.teardown()
+
+    // Fetch a valid block and store its hash
+    validBlock := backend.chain.GetBlockByNumber(1)
+    if validBlock == nil {
+        t.Fatalf("failed to fetch block 1")
+    }
+    // validBlockHash = validBlock.Hash()
+
+    // Corrupt the valid block to create a bad block
+    badBlock := backend.chain.GetBlockByNumber(1)
+    badBlock.Header().ParentHash = common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+    badBlockHash = badBlock.Hash()
+    rawdb.WriteBadBlock(backend.chaindb, badBlock)
+
+    // Add the genesis block for testing
+    genesisBlock := backend.chain.GetBlockByNumber(0)
+    genesisHash = genesisBlock.Hash()
+
+    // Test cases
+    api := NewAPI(backend)
+    var testCases = []struct {
+        name       string
+        hash       common.Hash
+        config     *TraceConfig
+        expectErr  bool
+        expectMsg  string
+        validateFn func(roots []common.Hash)
+    }{
+        // {
+        //     name:      "Valid block",
+        //     hash:      validBlockHash,
+        //     config:    nil, // Default TraceConfig
+        //     expectErr: false,
+        //     validateFn: func(roots []common.Hash) {
+        //         if len(roots) == 0 {
+        //             t.Fatalf("expected non-empty intermediate roots, got none")
+        //         }
+        //         if roots[len(roots)-1] != validBlock.Root() {
+        //             t.Fatalf("final intermediate root does not match block state root")
+        //         }
+        //     },
+        // },
+        {
+            name:      "Bad block",
+            hash:      badBlockHash,
+            config:    nil,
+            expectErr: false,
+            validateFn: func(roots []common.Hash) {
+                if len(roots) == 0 {
+                    t.Fatalf("expected non-empty intermediate roots, got none")
+                }
+            },
+        },
+        {
+            name:      "Genesis block",
+            hash:      genesisHash,
+            config:    nil,
+            expectErr: true,
+            expectMsg: "genesis is not traceable",
+        },
+        {
+            name:      "Non-existent block",
+            hash:      common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+            config:    nil,
+            expectErr: true,
+            expectMsg: fmt.Sprintf("block %s not found", common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")),
+        },
+    }
+
+    // Execute test cases
+    for _, tc := range testCases {
+        t.Run(tc.name, func(t *testing.T) {
+            ctx := context.Background()
+            roots, err := api.IntermediateRoots(ctx, tc.hash, tc.config)
+
+            if tc.expectErr {
+                if err == nil || !strings.Contains(err.Error(), tc.expectMsg) {
+                    t.Fatalf("expected error containing '%s', got: %v", tc.expectMsg, err)
+                }
+                return
+            }
+
+            if err != nil {
+                t.Fatalf("unexpected error: %v", err)
+            }
+
+            if tc.validateFn != nil {
+                tc.validateFn(roots)
+            }
+        })
+    }
 }
 
 func TestTracingWithOverrides(t *testing.T) {
