@@ -707,6 +707,30 @@ var (
 		Category: flags.MetricsCategory,
 	}
 
+	MetricsEnableInfluxDBV2Flag = &cli.BoolFlag{
+		Name:     "metrics-influxdbv2",
+		Usage:    "Enable metrics export/push to an external InfluxDB v2 database",
+		Category: flags.MetricsCategory,
+	}
+	MetricsInfluxDBTokenFlag = &cli.StringFlag{
+		Name:     "metrics-influxdb.token",
+		Usage:    "Token to authorize access to the database (v2 only)",
+		Value:    metrics.DefaultConfig.InfluxDBToken,
+		Category: flags.MetricsCategory,
+	}
+	MetricsInfluxDBBucketFlag = &cli.StringFlag{
+		Name:     "metrics-influxdb.bucket",
+		Usage:    "InfluxDB bucket name to push reported metrics to (v2 only)",
+		Value:    metrics.DefaultConfig.InfluxDBBucket,
+		Category: flags.MetricsCategory,
+	}
+	MetricsInfluxDBOrganizationFlag = &cli.StringFlag{
+		Name:     "metrics-influxdb.organization",
+		Usage:    "InfluxDB organization name (v2 only)",
+		Value:    metrics.DefaultConfig.InfluxDBOrganization,
+		Category: flags.MetricsCategory,
+	}
+
 	// MISC settings
 	RollbackFlag = &cli.StringFlag{
 		Name:     "rollback",
@@ -1517,11 +1541,36 @@ func SetupMetrics(ctx *cli.Context) {
 	if metrics.Enabled {
 		log.Info("Enabling metrics collection")
 		var (
-			enableExport = ctx.Bool(MetricsEnableInfluxDBFlag.Name)
-			endpoint     = ctx.String(MetricsInfluxDBEndpointFlag.Name)
-			database     = ctx.String(MetricsInfluxDBDatabaseFlag.Name)
-			username     = ctx.String(MetricsInfluxDBUsernameFlag.Name)
-			password     = ctx.String(MetricsInfluxDBPasswordFlag.Name)
+			enableExport   = ctx.Bool(MetricsEnableInfluxDBFlag.Name)
+			enableExportV2 = ctx.Bool(MetricsEnableInfluxDBV2Flag.Name)
+		)
+
+		if enableExport || enableExportV2 {
+			checkExclusive(ctx, MetricsEnableInfluxDBFlag, MetricsEnableInfluxDBV2Flag)
+
+			v1FlagIsSet := ctx.IsSet(MetricsInfluxDBUsernameFlag.Name) ||
+				ctx.IsSet(MetricsInfluxDBPasswordFlag.Name)
+
+			v2FlagIsSet := ctx.IsSet(MetricsInfluxDBTokenFlag.Name) ||
+				ctx.IsSet(MetricsInfluxDBOrganizationFlag.Name) ||
+				ctx.IsSet(MetricsInfluxDBBucketFlag.Name)
+
+			if enableExport && v2FlagIsSet {
+				Fatalf("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
+			} else if enableExportV2 && v1FlagIsSet {
+				Fatalf("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
+			}
+		}
+
+		var (
+			endpoint = ctx.String(MetricsInfluxDBEndpointFlag.Name)
+			database = ctx.String(MetricsInfluxDBDatabaseFlag.Name)
+			username = ctx.String(MetricsInfluxDBUsernameFlag.Name)
+			password = ctx.String(MetricsInfluxDBPasswordFlag.Name)
+
+			token        = ctx.String(MetricsInfluxDBTokenFlag.Name)
+			bucket       = ctx.String(MetricsInfluxDBBucketFlag.Name)
+			organization = ctx.String(MetricsInfluxDBOrganizationFlag.Name)
 		)
 
 		if enableExport {
@@ -1530,6 +1579,12 @@ func SetupMetrics(ctx *cli.Context) {
 			tagsMap := SplitTagsFlag(ctx.String(MetricsInfluxDBTagsFlag.Name))
 
 			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "xdc.", tagsMap)
+		} else if enableExportV2 {
+			log.Info("Enabling metrics export to InfluxDB (v2)")
+
+			tagsMap := SplitTagsFlag(ctx.String(MetricsInfluxDBTagsFlag.Name))
+
+			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "xdc.", tagsMap)
 		}
 
 		if ctx.IsSet(MetricsHTTPFlag.Name) {
