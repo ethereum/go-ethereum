@@ -26,6 +26,7 @@ func TestMeterDecay(t *testing.T) {
 		ticker: time.NewTicker(time.Millisecond),
 		meters: make(map[*StandardMeter]struct{}),
 	}
+	defer ma.ticker.Stop()
 	m := newStandardMeter()
 	ma.meters[m] = struct{}{}
 	go ma.tick()
