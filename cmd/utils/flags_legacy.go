@@ -50,7 +50,7 @@ var (
 		Usage:    "Enable light client mode",
 		Category: flags.DeprecatedCategory,
 	}
-	// (Deprecated May 2020, shown in aliased flags section)
+	// Deprecated May 2020, shown in aliased flags section
 	NoUSBFlag = &cli.BoolFlag{
 		Name:     "nousb",
 		Usage:    "Disables monitoring for and managing USB hardware wallets (deprecated)",
@@ -66,6 +66,12 @@ var (
 	LogDebugFlag = &cli.BoolFlag{
 		Name:     "log-debug",
 		Usage:    "Prepends log messages with call-site location (deprecated)",
+		Category: flags.DeprecatedCategory,
+	}
+	// Deprecated February 2024
+	MetricsEnabledExpensiveFlag = &cli.BoolFlag{
+		Name:     "metrics-expensive",
+		Usage:    "Enable expensive metrics collection and reporting (deprecated)",
 		Category: flags.DeprecatedCategory,
 	}
 )

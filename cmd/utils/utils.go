@@ -1,6 +1,10 @@
 package utils
 
 import (
+	"fmt"
+	"runtime"
+	"strings"
+
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
 	"github.com/XinFinOrg/XDPoSChain/eth"
@@ -8,11 +12,12 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/ethstats"
 	"github.com/XinFinOrg/XDPoSChain/les"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/node"
 )
 
 // RegisterEthService adds an Ethereum client to the stack.
-func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) {
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config, version string) {
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
@@ -29,6 +34,21 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)
 			}
+
+			// TODO: move the following code to function makeFullNode
+			// Ref: #21105, #22641, #23761, #24877
+			// Create gauge with geth system and build information
+			var protos []string
+			for _, p := range fullNode.Protocols() {
+				protos = append(protos, fmt.Sprintf("%v/%d", p.Name, p.Version))
+			}
+			metrics.NewRegisteredGaugeInfo("xdc/info", nil).Update(metrics.GaugeInfoValue{
+				"arch":          runtime.GOARCH,
+				"os":            runtime.GOOS,
+				"version":       version, // cfg.Node.Version
+				"eth_protocols": strings.Join(protos, ","),
+			})
+
 			return fullNode, err
 		})
 	}

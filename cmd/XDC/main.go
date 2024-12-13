@@ -126,9 +126,6 @@ var (
 		utils.HTTPCORSDomainFlag,
 		utils.HTTPVirtualHostsFlag,
 		utils.EthStatsURLFlag,
-		utils.MetricsEnabledFlag,
-		utils.MetricsHTTPFlag,
-		utils.MetricsPortFlag,
 		//utils.FakePoWFlag,
 		//utils.NoCompactionFlag,
 		//utils.GpoBlocksFlag,
@@ -163,6 +160,23 @@ var (
 		utils.IPCPathFlag,
 		utils.RPCGlobalTxFeeCap,
 	}
+
+	metricsFlags = []cli.Flag{
+		utils.MetricsEnabledFlag,
+		utils.MetricsEnabledExpensiveFlag,
+		utils.MetricsHTTPFlag,
+		utils.MetricsPortFlag,
+		utils.MetricsEnableInfluxDBFlag,
+		utils.MetricsInfluxDBEndpointFlag,
+		utils.MetricsInfluxDBDatabaseFlag,
+		utils.MetricsInfluxDBUsernameFlag,
+		utils.MetricsInfluxDBPasswordFlag,
+		utils.MetricsInfluxDBTagsFlag,
+		utils.MetricsEnableInfluxDBV2Flag,
+		utils.MetricsInfluxDBTokenFlag,
+		utils.MetricsInfluxDBBucketFlag,
+		utils.MetricsInfluxDBOrganizationFlag,
+	}
 )
 
 func init() {
@@ -194,6 +208,7 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
+	app.Flags = append(app.Flags, metricsFlags...)
 	flags.AutoEnvVars(app.Flags, "XDC")
 
 	app.Before = func(ctx *cli.Context) error {
@@ -203,6 +218,9 @@ func init() {
 			return err
 		}
 		flags.CheckEnvVars(ctx, app.Flags, "XDC")
+
+		// Start system runtime metrics collection
+		go metrics.CollectProcessMetrics(3 * time.Second)
 
 		utils.SetupNetwork(ctx)
 		return nil
@@ -303,11 +321,6 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	if ctx.Bool(utils.LightModeFlag.Name) || ctx.String(utils.SyncModeFlag.Name) == "light" {
 		utils.Fatalf("Light clients do not support staking")
 	}
-	// Start metrics export if enabled
-	utils.SetupMetrics(ctx)
-
-	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
 
 	var ethereum *eth.Ethereum
 	if err := stack.Service(&ethereum); err != nil {

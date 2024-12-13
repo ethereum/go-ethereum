@@ -401,7 +401,7 @@ type Ethash struct {
 	rand     *rand.Rand    // Properly seeded random source for nonces
 	threads  int           // Number of threads to mine on if mining
 	update   chan struct{} // Notification channel to update mining parameters
-	hashrate metrics.Meter // Meter tracking the average hashrate
+	hashrate *metrics.Meter // Meter tracking the average hashrate
 
 	// The fields below are hooks for testing
 	shared    *Ethash       // Shared PoW verifier to avoid cache regeneration
@@ -562,7 +562,7 @@ func (ethash *Ethash) SetThreads(threads int) {
 // Hashrate implements PoW, returning the measured rate of the search invocations
 // per second over the last minute.
 func (ethash *Ethash) Hashrate() float64 {
-	return ethash.hashrate.Rate1()
+	return ethash.hashrate.Snapshot().Rate1()
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs. Currently

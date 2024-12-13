@@ -35,7 +35,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/urfave/cli/v2"
 )
 
@@ -71,6 +70,18 @@ It expects the genesis file as argument.`,
 			utils.GCModeFlag,
 			utils.CacheDatabaseFlag,
 			utils.CacheGCFlag,
+			utils.MetricsEnabledFlag,
+			utils.MetricsEnabledExpensiveFlag,
+			utils.MetricsEnableInfluxDBFlag,
+			utils.MetricsEnableInfluxDBV2Flag,
+			utils.MetricsInfluxDBEndpointFlag,
+			utils.MetricsInfluxDBDatabaseFlag,
+			utils.MetricsInfluxDBUsernameFlag,
+			utils.MetricsInfluxDBPasswordFlag,
+			utils.MetricsInfluxDBTagsFlag,
+			utils.MetricsInfluxDBTokenFlag,
+			utils.MetricsInfluxDBBucketFlag,
+			utils.MetricsInfluxDBOrganizationFlag,
 		},
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
@@ -227,13 +238,11 @@ func importChain(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	// Start metrics export if enabled
-	utils.SetupMetrics(ctx)
-	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
-
-	stack, _ := makeFullNode(ctx)
+	stack, cfg := makeFullNode(ctx)
 	defer stack.Close()
+
+	// Start metrics export if enabled
+	utils.SetupMetrics(&cfg.Metrics)
 
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
