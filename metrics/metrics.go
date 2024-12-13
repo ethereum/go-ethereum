@@ -46,7 +46,7 @@ func init() {
 			}
 		}
 		for _, enabler := range expensiveEnablerFlags {
-			if !Enabled && flag == enabler {
+			if !EnabledExpensive && flag == enabler {
 				log.Info("Enabling expensive metrics collection")
 				EnabledExpensive = true
 			}
