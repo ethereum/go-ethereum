@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build !windows
 // +build !windows
 
 package metrics
@@ -31,5 +32,5 @@ func getProcessCPUTime() int64 {
 		log.Warn("Failed to retrieve CPU time", "err", err)
 		return 0
 	}
-	return int64(usage.Utime.Sec+usage.Stime.Sec)*100 + int64(usage.Utime.Usec+usage.Stime.Usec)/10000 //nolint:unconvert
+	return (usage.Utime.Sec+usage.Stime.Sec)*100 + int64(usage.Utime.Usec+usage.Stime.Usec)/10000 //nolint:unconvert
 }
