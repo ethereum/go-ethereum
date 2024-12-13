@@ -58,6 +58,16 @@ func NewMeter() Meter {
 	return m
 }
 
+// NewInactiveMeter returns a meter but does not start any goroutines. This
+// method is mainly intended for testing.
+func NewInactiveMeter() Meter {
+	if !Enabled {
+		return NilMeter{}
+	}
+	m := newStandardMeter()
+	return m
+}
+
 // NewMeterForced constructs a new StandardMeter and launches a goroutine no matter
 // the global switch is enabled or not.
 // Be sure to call Stop() once the meter is of no use to allow for garbage collection.

@@ -237,7 +237,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	// Register XDCX's OrderBook service if requested.
 	// enable in default
 	utils.RegisterXDCXService(stack, &cfg.XDCX)
-	utils.RegisterEthService(stack, &cfg.Eth)
+	utils.RegisterEthService(stack, &cfg.Eth, cfg.Node.Version)
 
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
