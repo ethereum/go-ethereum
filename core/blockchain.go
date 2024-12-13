@@ -268,15 +268,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
-	// Open trie database with provided config
-	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(genesis != nil && genesis.IsVerkle()))
-
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
-	chainConfig, genesisHash, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
-	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
-		return nil, genesisErr
+	chainConfig, genesisHash, compactErr, err := SetupGenesisBlockWithOverride(db, cacheConfig.StateScheme, cacheConfig.Preimages, genesis, overrides)
+	if err != nil {
+		return nil, err
 	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
@@ -285,6 +282,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	log.Info(strings.Repeat("-", 153))
 	log.Info("")
+
+	// TODO (rjl493456442) Verkle mode is only supported if it is enabled at the
+	// genesis block. Verkle transition will be gradually supported.
+	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(chainConfig.IsVerkleGenesis()))
 
 	bc := &BlockChain{
 		chainConfig:   chainConfig,
@@ -303,7 +304,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		vmConfig:      vmConfig,
 		logger:        vmConfig.Tracer,
 	}
-	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
 	if err != nil {
 		return nil, err
@@ -453,12 +453,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 
 	// Rewind the chain in case of an incompatible config upgrade.
-	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
-		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		if compat.RewindToTime > 0 {
-			bc.SetHeadWithTimestamp(compat.RewindToTime)
+	if compactErr != nil {
+		log.Warn("Rewinding chain to upgrade configuration", "err", compactErr)
+		if compactErr.RewindToTime > 0 {
+			bc.SetHeadWithTimestamp(compactErr.RewindToTime)
 		} else {
-			bc.SetHead(compat.RewindToBlock)
+			bc.SetHead(compactErr.RewindToBlock)
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
