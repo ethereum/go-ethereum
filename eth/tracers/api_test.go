@@ -939,122 +939,122 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 }
 
 func TestIntermediateRoots(t *testing.T) {
-    t.Parallel()
+	t.Parallel()
 
-    // Setup a test backend with valid transactions
-    accounts := newAccounts(2)
-    genesis := &core.Genesis{
-        Config: params.TestChainConfig,
-        Alloc: types.GenesisAlloc{
-            accounts[0].addr: {Balance: big.NewInt(params.Ether)},
-        },
-    }
-    signer := types.HomesteadSigner{}
-    var badBlockHash, genesisHash common.Hash
+	// Setup a test backend with valid transactions
+	accounts := newAccounts(2)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	signer := types.HomesteadSigner{}
+	var badBlockHash, genesisHash common.Hash
 
-    backend := newTestBackend(t, 2, genesis, func(i int, b *core.BlockGen) {
-        tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
-            Nonce:    uint64(i),
-            To:       &accounts[1].addr,
-            Value:    big.NewInt(1000),
-            Gas:      params.TxGas,
-            GasPrice: b.BaseFee(),
-            Data:     nil,
-        }), signer, accounts[0].key)
-        b.AddTx(tx)
-    })
-    defer backend.teardown()
+	backend := newTestBackend(t, 2, genesis, func(i int, b *core.BlockGen) {
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+	defer backend.teardown()
 
-    // Fetch a valid block and store its hash
-    validBlock := backend.chain.GetBlockByNumber(1)
-    if validBlock == nil {
-        t.Fatalf("failed to fetch block 1")
-    }
-    // validBlockHash = validBlock.Hash()
+	// Fetch a valid block and store its hash
+	validBlock := backend.chain.GetBlockByNumber(1)
+	if validBlock == nil {
+		t.Fatalf("failed to fetch block 1")
+	}
+	// validBlockHash = validBlock.Hash()
 
-    // Corrupt the valid block to create a bad block
-    badBlock := backend.chain.GetBlockByNumber(1)
-    badBlock.Header().ParentHash = common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-    badBlockHash = badBlock.Hash()
-    rawdb.WriteBadBlock(backend.chaindb, badBlock)
+	// Corrupt the valid block to create a bad block
+	badBlock := backend.chain.GetBlockByNumber(1)
+	badBlock.Header().ParentHash = common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	badBlockHash = badBlock.Hash()
+	rawdb.WriteBadBlock(backend.chaindb, badBlock)
 
-    // Add the genesis block for testing
-    genesisBlock := backend.chain.GetBlockByNumber(0)
-    genesisHash = genesisBlock.Hash()
+	// Add the genesis block for testing
+	genesisBlock := backend.chain.GetBlockByNumber(0)
+	genesisHash = genesisBlock.Hash()
 
-    // Test cases
-    api := NewAPI(backend)
-    var testCases = []struct {
-        name       string
-        hash       common.Hash
-        config     *TraceConfig
-        expectErr  bool
-        expectMsg  string
-        validateFn func(roots []common.Hash)
-    }{
-        // {
-        //     name:      "Valid block",
-        //     hash:      validBlockHash,
-        //     config:    nil, // Default TraceConfig
-        //     expectErr: false,
-        //     validateFn: func(roots []common.Hash) {
-        //         if len(roots) == 0 {
-        //             t.Fatalf("expected non-empty intermediate roots, got none")
-        //         }
-        //         if roots[len(roots)-1] != validBlock.Root() {
-        //             t.Fatalf("final intermediate root does not match block state root")
-        //         }
-        //     },
-        // },
-        {
-            name:      "Bad block",
-            hash:      badBlockHash,
-            config:    nil,
-            expectErr: false,
-            validateFn: func(roots []common.Hash) {
-                if len(roots) == 0 {
-                    t.Fatalf("expected non-empty intermediate roots, got none")
-                }
-            },
-        },
-        {
-            name:      "Genesis block",
-            hash:      genesisHash,
-            config:    nil,
-            expectErr: true,
-            expectMsg: "genesis is not traceable",
-        },
-        {
-            name:      "Non-existent block",
-            hash:      common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
-            config:    nil,
-            expectErr: true,
-            expectMsg: fmt.Sprintf("block %s not found", common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")),
-        },
-    }
+	// Test cases
+	api := NewAPI(backend)
+	var testCases = []struct {
+		name       string
+		hash       common.Hash
+		config     *TraceConfig
+		expectErr  bool
+		expectMsg  string
+		validateFn func(roots []common.Hash)
+	}{
+		// {
+		//     name:      "Valid block",
+		//     hash:      validBlockHash,
+		//     config:    nil, // Default TraceConfig
+		//     expectErr: false,
+		//     validateFn: func(roots []common.Hash) {
+		//         if len(roots) == 0 {
+		//             t.Fatalf("expected non-empty intermediate roots, got none")
+		//         }
+		//         if roots[len(roots)-1] != validBlock.Root() {
+		//             t.Fatalf("final intermediate root does not match block state root")
+		//         }
+		//     },
+		// },
+		{
+			name:      "Bad block",
+			hash:      badBlockHash,
+			config:    nil,
+			expectErr: false,
+			validateFn: func(roots []common.Hash) {
+				if len(roots) == 0 {
+					t.Fatalf("expected non-empty intermediate roots, got none")
+				}
+			},
+		},
+		{
+			name:      "Genesis block",
+			hash:      genesisHash,
+			config:    nil,
+			expectErr: true,
+			expectMsg: "genesis is not traceable",
+		},
+		{
+			name:      "Non-existent block",
+			hash:      common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+			config:    nil,
+			expectErr: true,
+			expectMsg: fmt.Sprintf("block %s not found", common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")),
+		},
+	}
 
-    // Execute test cases
-    for _, tc := range testCases {
-        t.Run(tc.name, func(t *testing.T) {
-            ctx := context.Background()
-            roots, err := api.IntermediateRoots(ctx, tc.hash, tc.config)
+	// Execute test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			roots, err := api.IntermediateRoots(ctx, tc.hash, tc.config)
 
-            if tc.expectErr {
-                if err == nil || !strings.Contains(err.Error(), tc.expectMsg) {
-                    t.Fatalf("expected error containing '%s', got: %v", tc.expectMsg, err)
-                }
-                return
-            }
+			if tc.expectErr {
+				if err == nil || !strings.Contains(err.Error(), tc.expectMsg) {
+					t.Fatalf("expected error containing '%s', got: %v", tc.expectMsg, err)
+				}
+				return
+			}
 
-            if err != nil {
-                t.Fatalf("unexpected error: %v", err)
-            }
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-            if tc.validateFn != nil {
-                tc.validateFn(roots)
-            }
-        })
-    }
+			if tc.validateFn != nil {
+				tc.validateFn(roots)
+			}
+		})
+	}
 }
 
 func TestTracingWithOverrides(t *testing.T) {
