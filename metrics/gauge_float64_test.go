@@ -2,7 +2,7 @@ package metrics
 
 import "testing"
 
-func BenchmarkGuageFloat64(b *testing.B) {
+func BenchmarkGaugeFloat64(b *testing.B) {
 	g := NewGaugeFloat64()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
