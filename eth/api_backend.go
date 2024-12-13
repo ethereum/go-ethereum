@@ -250,7 +250,7 @@ func (b *EthAPIBackend) GetEVM(ctx context.Context, state *state.StateDB, header
 	if blockCtx != nil {
 		context = *blockCtx
 	} else {
-		context = core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
+		context = core.NewEVMBlockContext(header, b.eth.BlockChain(), b.eth.BlockChain().Config(), nil)
 	}
 	return vm.NewEVM(context, state, b.ChainConfig(), *vmConfig)
 }
@@ -356,7 +356,7 @@ func (b *EthAPIBackend) FeeHistory(ctx context.Context, blockCount uint64, lastB
 
 func (b *EthAPIBackend) BlobBaseFee(ctx context.Context) *big.Int {
 	if excess := b.CurrentHeader().ExcessBlobGas; excess != nil {
-		return eip4844.CalcBlobFee(*excess)
+		return eip4844.CalcBlobFee(b.ChainConfig(), b.CurrentHeader())
 	}
 	return nil
 }

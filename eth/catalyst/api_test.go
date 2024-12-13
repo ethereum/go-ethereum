@@ -1227,6 +1227,7 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	genesis.Config.ShanghaiTime = &time
 	genesis.Config.CancunTime = &time
 	genesis.Config.PragueTime = &time
+	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	n, ethservice := startEthService(t, genesis, blocks)
 
@@ -1543,6 +1544,7 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	time := blocks[len(blocks)-1].Time() + 5
 	genesis.Config.ShanghaiTime = &time
 	genesis.Config.CancunTime = &time
+	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
@@ -1625,6 +1627,7 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 	timestamp := blocks[len(blocks)-2].Time() + 5
 	genesis.Config.ShanghaiTime = &timestamp
 	genesis.Config.CancunTime = &timestamp
+	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()

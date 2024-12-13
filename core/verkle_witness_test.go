@@ -58,6 +58,9 @@ var (
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
 		EnableVerkleAtGenesis:   true,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Verkle: params.DefaultPragueBlobConfig,
+		},
 		// TODO uncomment when proof generation is merged
 		// ProofInBlocks:                 true,
 	}
@@ -79,6 +82,9 @@ var (
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
 		EnableVerkleAtGenesis:   true,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Verkle: params.DefaultPragueBlobConfig,
+		},
 	}
 )
 
@@ -226,11 +232,11 @@ func TestProcessParentBlockHash(t *testing.T) {
 		var num = 2
 		for i := 1; i <= num; i++ {
 			header := &types.Header{ParentHash: common.Hash{byte(i)}, Number: big.NewInt(int64(i)), Difficulty: new(big.Int)}
-			vmContext := NewEVMBlockContext(header, nil, new(common.Address))
 			chainConfig := params.MergedTestChainConfig
 			if isVerkle {
 				chainConfig = testVerkleChainConfig
 			}
+			vmContext := NewEVMBlockContext(header, nil, chainConfig, new(common.Address))
 			evm := vm.NewEVM(vmContext, statedb, chainConfig, vm.Config{})
 			ProcessParentBlockHash(header.ParentHash, evm)
 		}

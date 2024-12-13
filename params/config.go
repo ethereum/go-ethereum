@@ -60,6 +60,9 @@ var (
 		CancunTime:              newUint64(1710338135),
 		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"),
 		Ethash:                  new(EthashConfig),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+		},
 	}
 	// HoleskyChainConfig contains the chain parameters to run a node on the Holesky test network.
 	HoleskyChainConfig = &ChainConfig{
@@ -84,6 +87,9 @@ var (
 		ShanghaiTime:            newUint64(1696000704),
 		CancunTime:              newUint64(1707305664),
 		Ethash:                  new(EthashConfig),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+		},
 	}
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
 	SepoliaChainConfig = &ChainConfig{
@@ -108,6 +114,9 @@ var (
 		ShanghaiTime:            newUint64(1677557088),
 		CancunTime:              newUint64(1706655072),
 		Ethash:                  new(EthashConfig),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+		},
 	}
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
@@ -157,6 +166,10 @@ var (
 		CancunTime:              newUint64(0),
 		TerminalTotalDifficulty: big.NewInt(0),
 		PragueTime:              newUint64(0),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
+		},
 	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
@@ -244,6 +257,10 @@ var (
 		TerminalTotalDifficulty: big.NewInt(0),
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
+		},
 	}
 
 	// NonActivatedConfig defines the chain configuration without activating
@@ -275,6 +292,26 @@ var (
 		Clique:                  nil,
 	}
 	TestRules = TestChainConfig.Rules(new(big.Int), false, 0)
+)
+
+var (
+	// DefaultCancunBlobConfig is the default blob configuration for the Cancun fork.
+	DefaultCancunBlobConfig = &BlobConfig{
+		Target:         3,
+		Max:            6,
+		UpdateFraction: 3338477,
+	}
+	// DefaultPragueBlobConfig is the default blob configuration for the Cancun fork.
+	DefaultPragueBlobConfig = &BlobConfig{
+		Target:         6,
+		Max:            9,
+		UpdateFraction: 5007716,
+	}
+	// DefaultBlobSchedule is the latest configured blob schedule for test chains.
+	DefaultBlobSchedule = &BlobScheduleConfig{
+		Cancun: DefaultCancunBlobConfig,
+		Prague: DefaultPragueBlobConfig,
+	}
 )
 
 // NetworkNames are user friendly names to use in the chain spec banner.
@@ -340,8 +377,9 @@ type ChainConfig struct {
 	EnableVerkleAtGenesis bool `json:"enableVerkleAtGenesis,omitempty"`
 
 	// Various consensus engines
-	Ethash *EthashConfig `json:"ethash,omitempty"`
-	Clique *CliqueConfig `json:"clique,omitempty"`
+	Ethash             *EthashConfig       `json:"ethash,omitempty"`
+	Clique             *CliqueConfig       `json:"clique,omitempty"`
+	BlobScheduleConfig *BlobScheduleConfig `json:"blobSchedule,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -436,6 +474,78 @@ func (c *ChainConfig) Description() string {
 		banner += fmt.Sprintf(" - Verkle:                      @%-10v\n", *c.VerkleTime)
 	}
 	return banner
+}
+
+// BlobConfig specifies the target and max blobs per block for the associated
+// fork.
+type BlobConfig struct {
+	Target         uint64 `json:"target"`
+	Max            uint64 `json:"max"`
+	UpdateFraction uint64 `json:"baseFeeUpdateFraction"`
+}
+
+// BlobScheduleConfig determines target and max number of blobs allow per fork.
+type BlobScheduleConfig struct {
+	Cancun *BlobConfig `json:"cancun,omitempty"`
+	Prague *BlobConfig `json:"prague,omitempty"`
+	Verkle *BlobConfig `json:"verkle,omitempty"`
+}
+
+// TargetBlobsPerBlock returns the target blobs per block associated with
+// requested time.
+func (c *ChainConfig) TargetBlobsPerBlock(time uint64) uint64 {
+	if c.BlobScheduleConfig == nil {
+		return 0
+	}
+	var (
+		london = c.LondonBlock
+		s      = c.BlobScheduleConfig
+	)
+	switch {
+	case c.IsPrague(london, time) && s.Prague != nil:
+		return s.Prague.Target
+	case c.IsCancun(london, time) && s.Cancun != nil:
+		return s.Cancun.Target
+	default:
+		return 0
+	}
+}
+
+// MaxBlobsPerBlock returns the max blobs per block associated with
+// requested time.
+func (c *ChainConfig) MaxBlobsPerBlock(time uint64) uint64 {
+	if c.BlobScheduleConfig == nil {
+		return 0
+	}
+	var (
+		london = c.LondonBlock
+		s      = c.BlobScheduleConfig
+	)
+	switch {
+	case c.IsPrague(london, time) && s.Prague != nil:
+		return s.Prague.Max
+	case c.IsCancun(london, time) && s.Cancun != nil:
+		return s.Cancun.Max
+	default:
+		return 0
+	}
+}
+
+// LatestMaxBlobsPerBlock returns the latest max blobs per block defined by the
+// configuration, regardless of the currently active fork.
+func (c *ChainConfig) LatestMaxBlobsPerBlock() uint64 {
+	s := c.BlobScheduleConfig
+	if s == nil {
+		return 0
+	}
+	switch {
+	case s.Prague != nil:
+		return s.Prague.Max
+	case s.Cancun != nil:
+		return s.Cancun.Max
+	default:
+		return 0
+	}
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
@@ -647,6 +757,27 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			lastFork = cur
 		}
 	}
+
+	// Check that all forks with blobs explicitly define the blob schedule
+	// configuration.
+	bsc := c.BlobScheduleConfig
+	if bsc == nil {
+		bsc = &BlobScheduleConfig{}
+	}
+	for _, cur := range []struct {
+		name      string
+		timestamp *uint64
+		config    *BlobConfig
+	}{
+		{name: "cancun", timestamp: c.CancunTime, config: bsc.Cancun},
+		{name: "prague", timestamp: c.PragueTime, config: bsc.Prague},
+		{name: "verkle", timestamp: c.VerkleTime, config: bsc.Verkle},
+	} {
+		if cur.timestamp != nil && cur.config == nil {
+			return fmt.Errorf("unsupported fork configuration: missing blob configuration entry for %v in schedule", cur.name)
+		}
+	}
+
 	return nil
 }
 

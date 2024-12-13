@@ -98,7 +98,7 @@ func (b *BlockGen) Difficulty() *big.Int {
 // block.
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
-	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
+	blockContext := NewEVMBlockContext(b.header, b.cm, b.cm.config, &b.header.Coinbase)
 	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}))
 }
 
@@ -114,7 +114,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		b.SetCoinbase(common.Address{})
 	}
 	var (
-		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
+		blockContext = NewEVMBlockContext(b.header, bc, b.cm.config, &b.header.Coinbase)
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
@@ -323,7 +323,7 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 			panic(fmt.Sprintf("failed to parse deposit log: %v", err))
 		}
 		// create EVM for system calls
-		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
+		blockContext := NewEVMBlockContext(b.header, b.cm, b.cm.config, &b.header.Coinbase)
 		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
 		// EIP-7002
 		ProcessWithdrawalQueue(&requests, evm)
@@ -386,7 +386,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 		if config.IsPrague(b.header.Number, b.header.Time) || config.IsVerkle(b.header.Number, b.header.Time) {
 			// EIP-2935
-			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			blockContext := NewEVMBlockContext(b.header, cm, cm.config, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
 			ProcessParentBlockHash(b.header.ParentHash, evm)
@@ -445,7 +445,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		var blobGasPrice *big.Int
 		if block.ExcessBlobGas() != nil {
-			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas())
+			blobGasPrice = eip4844.CalcBlobFee(cm.config, block.Header())
 		}
 		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, txs); err != nil {
 			panic(err)
@@ -493,7 +493,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		// preState := statedb.Copy()
 
 		// EIP-2935 / 7709
-		blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+		blockContext := NewEVMBlockContext(b.header, cm, cm.Config(), &b.header.Coinbase)
 		blockContext.Random = &common.Hash{} // enable post-merge instruction set
 		evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
 		ProcessParentBlockHash(b.header.ParentHash, evm)
@@ -548,7 +548,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		}
 		var blobGasPrice *big.Int
 		if block.ExcessBlobGas() != nil {
-			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas())
+			blobGasPrice = eip4844.CalcBlobFee(cm.config, block.Header())
 		}
 		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, txs); err != nil {
 			panic(err)
@@ -598,15 +598,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 		}
 	}
 	if cm.config.IsCancun(header.Number, header.Time) {
-		var (
-			parentExcessBlobGas uint64
-			parentBlobGasUsed   uint64
-		)
-		if parent.ExcessBlobGas() != nil {
-			parentExcessBlobGas = *parent.ExcessBlobGas()
-			parentBlobGasUsed = *parent.BlobGasUsed()
-		}
-		excessBlobGas := eip4844.CalcExcessBlobGas(parentExcessBlobGas, parentBlobGasUsed)
+		excessBlobGas := eip4844.CalcExcessBlobGas(cm.config, parent.Header())
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)

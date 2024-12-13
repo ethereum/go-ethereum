@@ -159,13 +159,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if sim.chainConfig.IsCancun(header.Number, header.Time) {
 		var excess uint64
 		if sim.chainConfig.IsCancun(parent.Number, parent.Time) {
-			excess = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
-		} else {
-			excess = eip4844.CalcExcessBlobGas(0, 0)
+			excess = eip4844.CalcExcessBlobGas(sim.chainConfig, parent)
 		}
 		header.ExcessBlobGas = &excess
 	}
-	blockContext := core.NewEVMBlockContext(header, sim.newSimulatedChainContext(ctx, headers), nil)
+	blockContext := core.NewEVMBlockContext(header, sim.newSimulatedChainContext(ctx, headers), sim.chainConfig, nil)
 	if block.BlockOverrides.BlobBaseFee != nil {
 		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
 	}

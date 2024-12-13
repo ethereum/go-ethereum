@@ -277,6 +277,11 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		EnableVerkleAtGenesis:   true,
 		Ethash:                  nil,
 		Clique:                  nil,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+			Verkle: params.DefaultPragueBlobConfig,
+		},
 	}
 
 	genesis := &Genesis{

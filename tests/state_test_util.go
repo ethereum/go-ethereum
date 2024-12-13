@@ -281,7 +281,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		// - the block body is verified against the header in block_validator.go:ValidateBody
 		// Here, we just do this shortcut smaller fix, since state tests do not
 		// utilize those codepaths
-		if len(msg.BlobHashes)*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
+		if config.IsCancun(new(big.Int), block.Time()) && uint64(len(msg.BlobHashes)) > config.MaxBlobsPerBlock(block.Time()) {
 			return st, common.Hash{}, 0, errors.New("blob gas exceeds maximum")
 		}
 	}
@@ -299,7 +299,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 
 	// Prepare the EVM.
-	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
+	context := core.NewEVMBlockContext(block.Header(), nil, config, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
 	context.Random = nil
@@ -312,8 +312,13 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		context.Difficulty = big.NewInt(0)
 	}
 	if config.IsCancun(new(big.Int), block.Time()) && t.json.Env.ExcessBlobGas != nil {
-		context.BlobBaseFee = eip4844.CalcBlobFee(*t.json.Env.ExcessBlobGas)
+		header := &types.Header{
+			Time:          block.Time(),
+			ExcessBlobGas: t.json.Env.ExcessBlobGas,
+		}
+		context.BlobBaseFee = eip4844.CalcBlobFee(config, header)
 	}
+
 	evm := vm.NewEVM(context, st.StateDB, config, vmconfig)
 
 	if tracer := vmconfig.Tracer; tracer != nil && tracer.OnTxStart != nil {

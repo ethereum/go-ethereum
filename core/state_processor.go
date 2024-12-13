@@ -79,7 +79,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)
 	}
-	context = NewEVMBlockContext(header, p.chain, nil)
+	context = NewEVMBlockContext(header, p.chain, p.config, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
