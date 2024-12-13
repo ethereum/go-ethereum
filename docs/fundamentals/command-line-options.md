@@ -27,7 +27,7 @@ USAGE:
    geth [global options] command [command options] [arguments...]
 
 VERSION:
-   1.13.1-stable-3f40e65c
+   1.14.13-unstable-804d45cc-20241213
 
 COMMANDS:
    account                Manage accounts
@@ -38,8 +38,9 @@ COMMANDS:
    dumpconfig             Export configuration values in a TOML format
    dumpgenesis            Dumps genesis block JSON configuration to stdout
    export                 Export blockchain into file
-   export-preimages       Export the preimage database into an RLP stream
+   export-history         Export blockchain history to Era archives
    import                 Import a blockchain file
+   import-history         Import an Era archive
    import-preimages       Import the preimage database from an RLP stream
    init                   Bootstrap and initialize a new genesis block
    js                     (DEPRECATED) Execute the specified JavaScript files
@@ -54,15 +55,8 @@ COMMANDS:
    help, h                Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-
-    --log.rotate                        (default: false)                   ($GETH_LOG_ROTATE)
-          Enables log file rotation
-
    ACCOUNT
 
-
-    --allow-insecure-unlock             (default: false)                   ($GETH_ALLOW_INSECURE_UNLOCK)
-          Allow insecure account unlocking when account-related RPCs are exposed by http
 
     --keystore value                                                       ($GETH_KEYSTORE)
           Directory for the keystore (default = inside the datadir)
@@ -79,14 +73,15 @@ GLOBAL OPTIONS:
     --signer value                                                         ($GETH_SIGNER)
           External signer (url or path to ipc file)
 
-    --unlock value                                                         ($GETH_UNLOCK)
-          Comma separated list of accounts to unlock
-
     --usb                               (default: false)                   ($GETH_USB)
           Enable monitoring and management of USB hardware wallets
 
    ALIASED (deprecated)
 
+
+    --allow-insecure-unlock             (default: false)                   ($GETH_ALLOW_INSECURE_UNLOCK)
+          Allow insecure account unlocking when account-related RPCs are exposed by http
+          (deprecated)
 
     --cache.trie.journal value                                             ($GETH_CACHE_TRIE_JOURNAL)
           Disk journal directory for trie cache to survive node restarts
@@ -94,12 +89,55 @@ GLOBAL OPTIONS:
     --cache.trie.rejournal value        (default: 0s)                      ($GETH_CACHE_TRIE_REJOURNAL)
           Time interval to regenerate the trie cache journal
 
+    --light.egress value                (default: 0)                       ($GETH_LIGHT_EGRESS)
+          Outgoing bandwidth limit for serving light clients (deprecated)
+
+    --light.ingress value               (default: 0)                       ($GETH_LIGHT_INGRESS)
+          Incoming bandwidth limit for serving light clients (deprecated)
+
+    --light.maxpeers value              (default: 0)                       ($GETH_LIGHT_MAXPEERS)
+          Maximum number of light clients to serve, or light servers to attach to
+          (deprecated)
+
+    --light.nopruning                   (default: false)                   ($GETH_LIGHT_NOPRUNING)
+          Disable ancient light chain data pruning (deprecated)
+
+    --light.nosyncserve                 (default: false)                   ($GETH_LIGHT_NOSYNCSERVE)
+          Enables serving light clients before syncing (deprecated)
+
+    --light.serve value                 (default: 0)                       ($GETH_LIGHT_SERVE)
+          Maximum percentage of time allowed for serving LES requests (deprecated)
+
+    --log.backtrace value                                                  ($GETH_LOG_BACKTRACE)
+          Request a stack trace at a specific logging statement (deprecated)
+
+    --log.debug                         (default: false)                   ($GETH_LOG_DEBUG)
+          Prepends log messages with call-site location (deprecated)
+
+    --metrics.expensive                 (default: false)                   ($GETH_METRICS_EXPENSIVE)
+          Enable expensive metrics collection and reporting (deprecated)
+
+    --mine                              (default: false)                   ($GETH_MINE)
+          Enable mining (deprecated)
+
+    --miner.etherbase value                                                ($GETH_MINER_ETHERBASE)
+          0x prefixed public address for block mining rewards (deprecated)
+
+    --miner.newpayload-timeout value    (default: 2s)                      ($GETH_MINER_NEWPAYLOAD_TIMEOUT)
+          Specify the maximum time allowance for creating a new payload (deprecated)
+
     --nousb                             (default: false)                   ($GETH_NOUSB)
           Disables monitoring for and managing USB hardware wallets (deprecated)
+
+    --rpc.enabledeprecatedpersonal      (default: false)                   ($GETH_RPC_ENABLEDEPRECATEDPERSONAL)
+          This used to enable the 'personal' namespace.
 
     --txlookuplimit value               (default: 2350000)                 ($GETH_TXLOOKUPLIMIT)
           Number of recent blocks to maintain transactions index for (default = about one
           year, 0 = entire chain) (deprecated, use history.transactions instead)
+
+    --unlock value                                                         ($GETH_UNLOCK)
+          Comma separated list of accounts to unlock (deprecated)
 
     --v5disc                            (default: false)                   ($GETH_V5DISC)
           Enables the experimental RLPx V5 (Topic Discovery) mechanism (deprecated, use
@@ -140,7 +178,7 @@ GLOBAL OPTIONS:
           Comma separated list of virtual hostnames from which to accept requests (server
           enforced). Accepts '*' wildcard.
 
-    --header value, -H value
+    --header value, -H value                                               ($GETH_HEADER)
           Pass custom headers to the RPC server when using --remotedb or the geth attach
           console. This flag can be given multiple times.
 
@@ -161,8 +199,7 @@ GLOBAL OPTIONS:
           HTTP-RPC server listening port
 
     --http.rpcprefix value                                                 ($GETH_HTTP_RPCPREFIX)
-          HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all
-          paths.
+          HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
 
     --http.vhosts value                 (default: "localhost")             ($GETH_HTTP_VHOSTS)
           Comma separated list of virtual hostnames from which to accept requests (server
@@ -189,16 +226,13 @@ GLOBAL OPTIONS:
     --rpc.batch-response-max-size value (default: 25000000)                ($GETH_RPC_BATCH_RESPONSE_MAX_SIZE)
           Maximum number of bytes returned from a batched call
 
-    --rpc.enabledeprecatedpersonal      (default: false)                   ($GETH_RPC_ENABLEDEPRECATEDPERSONAL)
-          Enables the (deprecated) personal namespace
-
     --rpc.evmtimeout value              (default: 5s)                      ($GETH_RPC_EVMTIMEOUT)
           Sets a timeout used for eth_call (0=infinite)
 
     --rpc.gascap value                  (default: 50000000)                ($GETH_RPC_GASCAP)
           Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)
 
-    --rpc.txfeecap value                (default: 1)
+    --rpc.txfeecap value                (default: 1)                       ($GETH_RPC_TXFEECAP)
           Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 =
           no cap)
 
@@ -219,6 +253,34 @@ GLOBAL OPTIONS:
 
     --ws.rpcprefix value                                                   ($GETH_WS_RPCPREFIX)
           HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.
+
+   BEACON CHAIN
+
+
+    --beacon.api value                                                     ($GETH_BEACON_API)
+          Beacon node (CL) light client API URL. This flag can be given multiple times.
+
+    --beacon.api.header value                                              ($GETH_BEACON_API_HEADER)
+          Pass custom HTTP header fields to the remote beacon node API in "key:value"
+          format. This flag can be given multiple times.
+
+    --beacon.checkpoint value                                              ($GETH_BEACON_CHECKPOINT)
+          Beacon chain weak subjectivity checkpoint block hash
+
+    --beacon.config value                                                  ($GETH_BEACON_CONFIG)
+          Beacon chain config YAML file
+
+    --beacon.genesis.gvroot value                                          ($GETH_BEACON_GENESIS_GVROOT)
+          Beacon chain genesis validators root
+
+    --beacon.genesis.time value         (default: 0)                       ($GETH_BEACON_GENESIS_TIME)
+          Beacon chain genesis time
+
+    --beacon.nofilter                   (default: false)                   ($GETH_BEACON_NOFILTER)
+          Disable future slot signature filter
+
+    --beacon.threshold value            (default: 342)                     ($GETH_BEACON_THRESHOLD)
+          Beacon sync committee participation threshold
 
    DEVELOPER CHAIN
 
@@ -262,18 +324,15 @@ GLOBAL OPTIONS:
     --exitwhensynced                    (default: false)                   ($GETH_EXITWHENSYNCED)
           Exits after block synchronisation completes
 
-    --goerli                            (default: false)                   ($GETH_GOERLI)
-          Görli network: pre-configured proof-of-authority test network
-
     --holesky                           (default: false)                   ($GETH_HOLESKY)
           Holesky network: pre-configured proof-of-stake test network
 
     --mainnet                           (default: false)                   ($GETH_MAINNET)
           Ethereum mainnet
 
-    --networkid value                   (default: 1)                       ($GETH_NETWORKID)
-          Explicitly set network id (integer)(For testnets: use --goerli, --sepolia,
-          --holesky instead)
+    --networkid value                   (default: 0)                       ($GETH_NETWORKID)
+          Explicitly set network id (integer)(For testnets: use --sepolia, --holesky
+          instead)
 
     --override.cancun value             (default: 0)                       ($GETH_OVERRIDE_CANCUN)
           Manually specify the Cancun fork timestamp, overriding the bundled setting
@@ -293,10 +352,10 @@ GLOBAL OPTIONS:
     --gpo.blocks value                  (default: 20)                      ($GETH_GPO_BLOCKS)
           Number of recent blocks to check for gas prices
 
-    --gpo.ignoreprice value             (default: 2)
+    --gpo.ignoreprice value             (default: 2)                       ($GETH_GPO_IGNOREPRICE)
           Gas price below which gpo will ignore transactions
 
-    --gpo.maxprice value                (default: 500000000000)
+    --gpo.maxprice value                (default: 500000000000)            ($GETH_GPO_MAXPRICE)
           Maximum transaction priority fee (or gasprice before London fork) to be
           recommended by gpo
 
@@ -304,41 +363,14 @@ GLOBAL OPTIONS:
           Suggested gas price is the given percentile of a set of recent transaction gas
           prices
 
-   LIGHT CLIENT
-
-
-    --light.egress value                (default: 0)                       ($GETH_LIGHT_EGRESS)
-          Outgoing bandwidth limit for serving light clients (kilobytes/sec, 0 =
-          unlimited)
-
-    --light.ingress value               (default: 0)                       ($GETH_LIGHT_INGRESS)
-          Incoming bandwidth limit for serving light clients (kilobytes/sec, 0 =
-          unlimited)
-
-    --light.maxpeers value              (default: 100)                     ($GETH_LIGHT_MAXPEERS)
-          Maximum number of light clients to serve, or light servers to attach to
-
-    --light.nopruning                   (default: false)                   ($GETH_LIGHT_NOPRUNING)
-          Disable ancient light chain data pruning
-
-    --light.nosyncserve                 (default: false)                   ($GETH_LIGHT_NOSYNCSERVE)
-          Enables serving light clients before syncing
-
-    --light.serve value                 (default: 0)                       ($GETH_LIGHT_SERVE)
-          Maximum percentage of time allowed for serving LES requests (multi-threaded
-          processing allows values over 100)
-
    LOGGING AND DEBUGGING
 
 
-    --log.backtrace value                                                  ($GETH_LOG_BACKTRACE)
-          Request a stack trace at a specific logging statement (e.g. "block.go:271")
+    --go-execution-trace value                                             ($GETH_GO_EXECUTION_TRACE)
+          Write Go execution trace to the given file
 
     --log.compress                      (default: false)                   ($GETH_LOG_COMPRESS)
           Compress the log files
-
-    --log.debug                         (default: false)                   ($GETH_LOG_DEBUG)
-          Prepends log messages with call-site location (file and line number)
 
     --log.file value                                                       ($GETH_LOG_FILE)
           Write logs to a file
@@ -354,6 +386,9 @@ GLOBAL OPTIONS:
 
     --log.maxsize value                 (default: 100)                     ($GETH_LOG_MAXSIZE)
           Maximum size in MBs of a single log file
+
+    --log.rotate                        (default: false)                   ($GETH_LOG_ROTATE)
+          Enables log file rotation
 
     --log.vmodule value                                                    ($GETH_LOG_VMODULE)
           Per-module verbosity: comma-separated list of <pattern>=<level> (e.g.
@@ -383,9 +418,6 @@ GLOBAL OPTIONS:
     --remotedb value                                                       ($GETH_REMOTEDB)
           URL for remote database
 
-    --trace value                                                          ($GETH_TRACE)
-          Write execution trace to the given file
-
     --verbosity value                   (default: 3)                       ($GETH_VERBOSITY)
           Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail
 
@@ -400,9 +432,6 @@ GLOBAL OPTIONS:
 
     --metrics.addr value                                                   ($GETH_METRICS_ADDR)
           Enable stand-alone metrics HTTP server listening interface.
-
-    --metrics.expensive                 (default: false)                   ($GETH_METRICS_EXPENSIVE)
-          Enable expensive metrics collection and reporting
 
     --metrics.influxdb                  (default: false)                   ($GETH_METRICS_INFLUXDB)
           Enable metrics export/push to an external InfluxDB database
@@ -442,23 +471,18 @@ GLOBAL OPTIONS:
    MINER
 
 
-    --mine                              (default: false)                   ($GETH_MINE)
-          Enable mining
-
-    --miner.etherbase value                                                ($GETH_MINER_ETHERBASE)
-          0x prefixed public address for block mining rewards
-
     --miner.extradata value                                                ($GETH_MINER_EXTRADATA)
           Block extra data set by the miner (default = client version)
 
     --miner.gaslimit value              (default: 30000000)                ($GETH_MINER_GASLIMIT)
           Target gas ceiling for mined blocks
 
-    --miner.gasprice value              (default: 0)                       ($GETH_MINER_GASPRICE)
+    --miner.gasprice value              (default: 1000000)                 ($GETH_MINER_GASPRICE)
           Minimum gas price for mining a transaction
 
-    --miner.newpayload-timeout value    (default: 2s)                      ($GETH_MINER_NEWPAYLOAD_TIMEOUT)
-          Specify the maximum time allowance for creating a new payload
+    --miner.pending.feeRecipient value                                     ($GETH_MINER_PENDING_FEERECIPIENT)
+          0x prefixed public address for the pending block producer (not used for actual
+          block production)
 
     --miner.recommit value              (default: 2s)                      ($GETH_MINER_RECOMMIT)
           Time interval to recreate the block being mined
@@ -470,7 +494,7 @@ GLOBAL OPTIONS:
           show help
 
     --synctarget value                                                     ($GETH_SYNCTARGET)
-          File for containing the hex-encoded block-rlp as sync target(dev feature)
+          Hash of the block to full sync to (dev testing feature)
 
     --version, -v                       (default: false)
           print the version
@@ -490,8 +514,8 @@ GLOBAL OPTIONS:
     --discovery.v4, --discv4            (default: true)                    ($GETH_DISCOVERY_V4)
           Enables the V4 discovery mechanism
 
-    --discovery.v5, --discv5            (default: false)                   ($GETH_DISCOVERY_V5)
-          Enables the experimental RLPx V5 (Topic Discovery) mechanism
+    --discovery.v5, --discv5            (default: true)                    ($GETH_DISCOVERY_V5)
+          Enables the V5 discovery mechanism
 
     --identity value                                                       ($GETH_IDENTITY)
           Custom node name
@@ -573,16 +597,16 @@ GLOBAL OPTIONS:
           Number of recent blocks to maintain transactions index for (default = about one
           year, 0 = entire chain)
 
-    --state.scheme value                (default: "hash")                  ($GETH_STATE_SCHEME)
+    --state.scheme value                                                   ($GETH_STATE_SCHEME)
           Scheme to use for storing ethereum state ('hash' or 'path')
 
-    --syncmode value                    (default: snap)                    ($GETH_SYNCMODE)
-          Blockchain sync mode ("snap", "full" or "light")
+    --syncmode value                    (default: "snap")                  ($GETH_SYNCMODE)
+          Blockchain sync mode ("snap" or "full")
 
    TRANSACTION POOL (BLOB)
 
 
-    --blobpool.datacap value            (default: 10737418240)             ($GETH_BLOBPOOL_DATACAP)
+    --blobpool.datacap value            (default: 2684354560)              ($GETH_BLOBPOOL_DATACAP)
           Disk space to allocate for pending blob transactions (soft limit)
 
     --blobpool.datadir value            (default: "blobpool")              ($GETH_BLOBPOOL_DATADIR)
@@ -633,7 +657,13 @@ GLOBAL OPTIONS:
     --vmdebug                           (default: false)                   ($GETH_VMDEBUG)
           Record information useful for VM and contract debugging
 
+    --vmtrace value                                                        ($GETH_VMTRACE)
+          Name of tracer which should record internal VM operations (costly)
+
+    --vmtrace.jsonconfig value          (default: "{}")                    ($GETH_VMTRACE_JSONCONFIG)
+          Tracer configuration (JSON)
+
 
 COPYRIGHT:
-   Copyright 2013-2023 The go-ethereum Authors
+   Copyright 2013-2024 The go-ethereum Authors
 ```
