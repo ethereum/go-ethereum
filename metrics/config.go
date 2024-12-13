@@ -41,5 +41,5 @@ var DefaultConfig = Config{
 	InfluxDBDatabase: "xdc",
 	InfluxDBUsername: "test",
 	InfluxDBPassword: "test",
-	InfluxDBTags:     "localhost",
+	InfluxDBTags:     "host=localhost",
 }
