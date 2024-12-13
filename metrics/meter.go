@@ -173,7 +173,7 @@ type meterArbiter struct {
 
 var arbiter = meterArbiter{ticker: time.NewTicker(5 * time.Second), meters: make(map[*StandardMeter]struct{})}
 
-// Ticks meters on the scheduled interval
+// tick meters on the scheduled interval
 func (ma *meterArbiter) tick() {
 	for range ma.ticker.C {
 		ma.tickMeters()
