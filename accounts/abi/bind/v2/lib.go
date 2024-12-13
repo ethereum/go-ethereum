@@ -101,7 +101,7 @@ func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 		node.overrideAddr = &addr
 	}
 	// iterate each referenced library in the unlinked code, recurse and built its subtree.
-	reMatchSpecificPattern, err := regexp.Compile(`__\\$([a-f0-9]+)\\$__`)
+	reMatchSpecificPattern, err := regexp.Compile(`__\$([a-f0-9]+)\$__`)
 	if err != nil {
 		panic(err)
 	}

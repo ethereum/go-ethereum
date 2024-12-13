@@ -421,7 +421,7 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		var findDeps func(contract *tmplContract) map[string]struct{}
 		findDeps = func(contract *tmplContract) map[string]struct{} {
 			// 1) match all libraries that this contract depends on
-			re, err := regexp.Compile(`__\\$([a-f0-9]+)\\$__`)
+			re, err := regexp.Compile(`__\$([a-f0-9]+)\$__`)
 			if err != nil {
 				panic(err)
 			}
