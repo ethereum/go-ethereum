@@ -562,7 +562,7 @@ func (ethash *Ethash) SetThreads(threads int) {
 // Hashrate implements PoW, returning the measured rate of the search invocations
 // per second over the last minute.
 func (ethash *Ethash) Hashrate() float64 {
-	return ethash.hashrate.Rate1()
+	return ethash.hashrate.Snapshot().Rate1()
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs. Currently

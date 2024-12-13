@@ -65,15 +65,15 @@ func (c *OpenTSDBConfig) writeRegistry(w io.Writer, now int64, shortHostname str
 	c.Registry.Each(func(name string, i interface{}) {
 		switch metric := i.(type) {
 		case Counter:
-			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, metric.Count(), shortHostname)
+			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)
 		case CounterFloat64:
-			fmt.Fprintf(w, "put %s.%s.count %d %f host=%s\n", c.Prefix, name, now, metric.Count(), shortHostname)
+			fmt.Fprintf(w, "put %s.%s.count %d %f host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)
 		case Gauge:
-			fmt.Fprintf(w, "put %s.%s.value %d %d host=%s\n", c.Prefix, name, now, metric.Value(), shortHostname)
+			fmt.Fprintf(w, "put %s.%s.value %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Value(), shortHostname)
 		case GaugeFloat64:
-			fmt.Fprintf(w, "put %s.%s.value %d %f host=%s\n", c.Prefix, name, now, metric.Value(), shortHostname)
+			fmt.Fprintf(w, "put %s.%s.value %d %f host=%s\n", c.Prefix, name, now, metric.Snapshot().Value(), shortHostname)
 		case GaugeInfo:
-			fmt.Fprintf(w, "put %s.%s.value %d %s host=%s\n", c.Prefix, name, now, metric.Value().String(), shortHostname)
+			fmt.Fprintf(w, "put %s.%s.value %d %s host=%s\n", c.Prefix, name, now, metric.Snapshot().Value().String(), shortHostname)
 		case Histogram:
 			h := metric.Snapshot()
 			ps := h.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
