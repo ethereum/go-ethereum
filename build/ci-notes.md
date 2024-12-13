@@ -1,7 +1,7 @@
 # Debian Packaging
 
 Tagged releases and develop branch commits are available as installable Debian packages
-for Ubuntu. Packages are built for the all Ubuntu versions which are supported by
+for Ubuntu. Packages are built for all Ubuntu versions which are supported by
 Canonical.
 
 Packages of develop branch commits have suffix -unstable and cannot be installed alongside
