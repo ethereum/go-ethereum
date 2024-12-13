@@ -73,3 +73,19 @@ func TestMeterZero(t *testing.T) {
 		t.Errorf("m.Count(): 0 != %v\n", count)
 	}
 }
+
+func TestMeterRepeat(t *testing.T) {
+	m := NewMeter()
+	for i := 0; i < 101; i++ {
+		m.Mark(int64(i))
+	}
+	if count := m.Count(); count != 5050 {
+		t.Errorf("m.Count(): 5050 != %v\n", count)
+	}
+	for i := 0; i < 101; i++ {
+		m.Mark(int64(i))
+	}
+	if count := m.Count(); count != 10100 {
+		t.Errorf("m.Count(): 10100 != %v\n", count)
+	}
+}

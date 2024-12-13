@@ -101,8 +101,12 @@ func NewRegisteredMeterForced(name string, r Registry) Meter {
 
 // MeterSnapshot is a read-only copy of another Meter.
 type MeterSnapshot struct {
-	count                          int64
+	// WARNING: The `temp` field is accessed atomically.
+	// On 32 bit platforms, only 64-bit aligned fields can be atomic. The struct is
+	// guaranteed to be so aligned, so take advantage of that. For more information,
+	// see https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
 	temp                           int64
+	count                          int64
 	rate1, rate5, rate15, rateMean float64
 }
 
@@ -253,7 +257,7 @@ func (m *StandardMeter) updateSnapshot() {
 
 func (m *StandardMeter) updateMeter() {
 	// should only run with write lock held on m.lock
-	n := atomic.LoadInt64(&m.snapshot.temp)
+	n := atomic.SwapInt64(&m.snapshot.temp, 0)
 	m.snapshot.count += n
 	m.a1.Update(n)
 	m.a5.Update(n)
