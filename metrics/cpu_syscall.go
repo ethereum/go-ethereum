@@ -20,7 +20,7 @@
 package metrics
 
 import (
-	"syscall"
+	syscall "golang.org/x/sys/unix"
 
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
