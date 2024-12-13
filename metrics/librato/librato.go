@@ -40,15 +40,15 @@ func Librato(r metrics.Registry, d time.Duration, e string, t string, s string, 
 	NewReporter(r, d, e, t, s, p, u).Run()
 }
 
-func (re *Reporter) Run() {
+func (rep *Reporter) Run() {
 	log.Printf("WARNING: This client has been DEPRECATED! It has been moved to https://github.com/mihasya/go-metrics-librato and will be removed from rcrowley/go-metrics on August 5th 2015")
-	ticker := time.NewTicker(re.Interval)
+	ticker := time.NewTicker(rep.Interval)
 	defer ticker.Stop()
-	metricsApi := &LibratoClient{re.Email, re.Token}
+	metricsApi := &LibratoClient{rep.Email, rep.Token}
 	for now := range ticker.C {
 		var metrics Batch
 		var err error
-		if metrics, err = re.BuildRequest(now, re.Registry); err != nil {
+		if metrics, err = rep.BuildRequest(now, rep.Registry); err != nil {
 			log.Printf("ERROR constructing librato request body %s", err)
 			continue
 		}
@@ -80,21 +80,21 @@ func sumSquaresTimer(t metrics.Timer) float64 {
 	return sumSquares
 }
 
-func (re *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Batch, err error) {
+func (rep *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Batch, err error) {
 	snapshot = Batch{
 		// coerce timestamps to a stepping fn so that they line up in Librato graphs
-		MeasureTime: (now.Unix() / re.intervalSec) * re.intervalSec,
-		Source:      re.Source,
+		MeasureTime: (now.Unix() / rep.intervalSec) * rep.intervalSec,
+		Source:      rep.Source,
 	}
 	snapshot.Gauges = make([]Measurement, 0)
 	snapshot.Counters = make([]Measurement, 0)
-	histogramGaugeCount := 1 + len(re.Percentiles)
+	histogramGaugeCount := 1 + len(rep.Percentiles)
 	r.Each(func(name string, metric interface{}) {
-		if re.Namespace != "" {
-			name = fmt.Sprintf("%s.%s", re.Namespace, name)
+		if rep.Namespace != "" {
+			name = fmt.Sprintf("%s.%s", rep.Namespace, name)
 		}
 		measurement := Measurement{}
-		measurement[Period] = re.Interval.Seconds()
+		measurement[Period] = rep.Interval.Seconds()
 		switch m := metric.(type) {
 		case metrics.Counter:
 			if m.Count() > 0 {
@@ -141,7 +141,7 @@ func (re *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Ba
 				measurement[Sum] = float64(s.Sum())
 				measurement[SumSquares] = sumSquares(s)
 				gauges[0] = measurement
-				for i, p := range re.Percentiles {
+				for i, p := range rep.Percentiles {
 					gauges[i+1] = Measurement{
 						Name:   fmt.Sprintf("%s.%.2f", measurement[Name], p),
 						Value:  s.Percentile(p),
@@ -158,7 +158,7 @@ func (re *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Ba
 				Measurement{
 					Name:   fmt.Sprintf("%s.%s", name, "1min"),
 					Value:  m.Rate1(),
-					Period: int64(re.Interval.Seconds()),
+					Period: int64(rep.Interval.Seconds()),
 					Attributes: map[string]interface{}{
 						DisplayUnitsLong:  Operations,
 						DisplayUnitsShort: OperationsShort,
@@ -168,7 +168,7 @@ func (re *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Ba
 				Measurement{
 					Name:   fmt.Sprintf("%s.%s", name, "5min"),
 					Value:  m.Rate5(),
-					Period: int64(re.Interval.Seconds()),
+					Period: int64(rep.Interval.Seconds()),
 					Attributes: map[string]interface{}{
 						DisplayUnitsLong:  Operations,
 						DisplayUnitsShort: OperationsShort,
@@ -178,7 +178,7 @@ func (re *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Ba
 				Measurement{
 					Name:   fmt.Sprintf("%s.%s", name, "15min"),
 					Value:  m.Rate15(),
-					Period: int64(re.Interval.Seconds()),
+					Period: int64(rep.Interval.Seconds()),
 					Attributes: map[string]interface{}{
 						DisplayUnitsLong:  Operations,
 						DisplayUnitsShort: OperationsShort,
@@ -200,15 +200,15 @@ func (re *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Ba
 					Max:        float64(m.Max()),
 					Min:        float64(m.Min()),
 					SumSquares: sumSquaresTimer(m),
-					Period:     int64(re.Interval.Seconds()),
-					Attributes: re.TimerAttributes,
+					Period:     int64(rep.Interval.Seconds()),
+					Attributes: rep.TimerAttributes,
 				}
-				for i, p := range re.Percentiles {
+				for i, p := range rep.Percentiles {
 					gauges[i+1] = Measurement{
 						Name:       fmt.Sprintf("%s.timer.%2.0f", name, p*100),
 						Value:      m.Percentile(p),
-						Period:     int64(re.Interval.Seconds()),
-						Attributes: re.TimerAttributes,
+						Period:     int64(rep.Interval.Seconds()),
+						Attributes: rep.TimerAttributes,
 					}
 				}
 				snapshot.Gauges = append(snapshot.Gauges, gauges...)
@@ -216,7 +216,7 @@ func (re *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Ba
 					Measurement{
 						Name:   fmt.Sprintf("%s.%s", name, "rate.1min"),
 						Value:  m.Rate1(),
-						Period: int64(re.Interval.Seconds()),
+						Period: int64(rep.Interval.Seconds()),
 						Attributes: map[string]interface{}{
 							DisplayUnitsLong:  Operations,
 							DisplayUnitsShort: OperationsShort,
@@ -226,7 +226,7 @@ func (re *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Ba
 					Measurement{
 						Name:   fmt.Sprintf("%s.%s", name, "rate.5min"),
 						Value:  m.Rate5(),
-						Period: int64(re.Interval.Seconds()),
+						Period: int64(rep.Interval.Seconds()),
 						Attributes: map[string]interface{}{
 							DisplayUnitsLong:  Operations,
 							DisplayUnitsShort: OperationsShort,
@@ -236,7 +236,7 @@ func (re *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Ba
 					Measurement{
 						Name:   fmt.Sprintf("%s.%s", name, "rate.15min"),
 						Value:  m.Rate15(),
-						Period: int64(re.Interval.Seconds()),
+						Period: int64(rep.Interval.Seconds()),
 						Attributes: map[string]interface{}{
 							DisplayUnitsLong:  Operations,
 							DisplayUnitsShort: OperationsShort,
