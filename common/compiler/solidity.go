@@ -142,7 +142,6 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 	if err := json.Unmarshal(combinedJSON, &output); err != nil {
 		return nil, err
 	}
-
 	// Compilation succeeded, assemble and return the contracts.
 	contracts := make(map[string]*Contract)
 	for name, info := range output.Contracts {
@@ -151,14 +150,10 @@ func ParseCombinedJSON(combinedJSON []byte, source string, languageVersion strin
 		if err := json.Unmarshal([]byte(info.Abi), &abi); err != nil {
 			return nil, fmt.Errorf("solc: error reading abi definition (%v)", err)
 		}
-		var userdoc interface{}
-		if err := json.Unmarshal([]byte(info.Userdoc), &userdoc); err != nil {
-			return nil, fmt.Errorf("solc: error reading user doc: %v", err)
-		}
-		var devdoc interface{}
-		if err := json.Unmarshal([]byte(info.Devdoc), &devdoc); err != nil {
-			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
-		}
+		var userdoc, devdoc interface{}
+		json.Unmarshal([]byte(info.Userdoc), &userdoc)
+		json.Unmarshal([]byte(info.Devdoc), &devdoc)
+
 		contracts[name] = &Contract{
 			Code:        "0x" + info.Bin,
 			RuntimeCode: "0x" + info.BinRuntime,
