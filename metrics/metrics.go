@@ -19,7 +19,7 @@ import (
 //
 // This global kill-switch helps quantify the observer effect and makes
 // for less cluttered pprof profiles.
-var Enabled bool = false
+var Enabled = false
 
 // MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
 const MetricsEnabledFlag = "metrics"
