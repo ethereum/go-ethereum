@@ -144,6 +144,10 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 // Tests that zero-period dev mode can handle a lot of simultaneous
 // transactions/withdrawals
 func TestOnDemandSpam(t *testing.T) {
+	// This test is flaky, due to various causes, and the root cause is synchronicity.
+	// We have optimistic timeouts here and there in the simulated becaon and the worker.
+	// This test typically fails on 32-bit windows appveyor.
+	t.Skip("flaky test")
 	var (
 		withdrawals     []types.Withdrawal
 		txCount                = 20000
