@@ -10,6 +10,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
+	"github.com/XinFinOrg/XDPoSChain/metrics/prometheus"
 )
 
 type exp struct {
@@ -43,6 +44,7 @@ func Exp(r metrics.Registry) {
 	// http.HandleFunc("/debug/vars", e.expHandler)
 	// haven't found an elegant way, so just use a different endpoint
 	http.Handle("/debug/metrics", h)
+	http.Handle("/debug/metrics/prometheus", prometheus.Handler(r))
 }
 
 // ExpHandler will return an expvar powered metrics handler.
