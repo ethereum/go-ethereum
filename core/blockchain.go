@@ -56,6 +56,10 @@ import (
 )
 
 var (
+	headBlockGauge     = metrics.NewRegisteredGauge("chain/head/block", nil)
+	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
+	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
+
 	accountReadTimer   = metrics.NewRegisteredTimer("chain/account/reads", nil)
 	accountHashTimer   = metrics.NewRegisteredTimer("chain/account/hashes", nil)
 	accountUpdateTimer = metrics.NewRegisteredTimer("chain/account/updates", nil)
@@ -355,6 +359,7 @@ func (bc *BlockChain) loadLastState() error {
 	}
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock.Store(currentBlock)
+	headBlockGauge.Update(int64(currentBlock.NumberU64()))
 
 	// Restore the last known head header
 	currentHeader := currentBlock.Header()
@@ -374,9 +379,12 @@ func (bc *BlockChain) loadLastState() error {
 
 	// Restore the last known head fast block
 	bc.currentFastBlock.Store(currentBlock)
+	headFastBlockGauge.Update(int64(currentBlock.NumberU64()))
+
 	if head := GetHeadFastBlockHash(bc.db); head != (common.Hash{}) {
 		if block := bc.GetBlockByHash(head); block != nil {
 			bc.currentFastBlock.Store(block)
+			headFastBlockGauge.Update(int64(block.NumberU64()))
 		}
 	}
 
@@ -422,23 +430,28 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	// Rewind the block chain, ensuring we don't end up with a stateless head block
 	if currentBlock := bc.CurrentBlock(); currentBlock != nil && currentHeader.Number.Uint64() < currentBlock.NumberU64() {
 		bc.currentBlock.Store(bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64()))
+		headBlockGauge.Update(int64(currentHeader.Number.Uint64()))
 	}
 	if currentBlock := bc.CurrentBlock(); currentBlock != nil {
 		if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
 			// Rewound state missing, rolled back to before pivot, reset to genesis
 			bc.currentBlock.Store(bc.genesisBlock)
+			headBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
 		}
 	}
 	// Rewind the fast block in a simpleton way to the target head
 	if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock != nil && currentHeader.Number.Uint64() < currentFastBlock.NumberU64() {
 		bc.currentFastBlock.Store(bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64()))
+		headFastBlockGauge.Update(int64(currentHeader.Number.Uint64()))
 	}
 	// If either blocks reached nil, reset to the genesis state
 	if currentBlock := bc.CurrentBlock(); currentBlock == nil {
 		bc.currentBlock.Store(bc.genesisBlock)
+		headBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
 	}
 	if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock == nil {
 		bc.currentFastBlock.Store(bc.genesisBlock)
+		headFastBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
 	}
 	currentBlock := bc.CurrentBlock()
 	currentFastBlock := bc.CurrentFastBlock()
@@ -463,6 +476,7 @@ func (bc *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	// If all checks out, manually set the head block
 	bc.mu.Lock()
 	bc.currentBlock.Store(block)
+	headBlockGauge.Update(int64(block.NumberU64()))
 	bc.mu.Unlock()
 
 	log.Info("Committed new head block", "number", block.Number(), "hash", hash)
@@ -593,9 +607,12 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	bc.genesisBlock = genesis
 	bc.insert(bc.genesisBlock, false)
 	bc.currentBlock.Store(bc.genesisBlock)
+	headBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
+
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
 	bc.currentFastBlock.Store(bc.genesisBlock)
+	headFastBlockGauge.Update(int64(bc.genesisBlock.NumberU64()))
 
 	return nil
 }
@@ -695,7 +712,9 @@ func (bc *BlockChain) insert(block *types.Block, writeBlock bool) {
 	if writeBlock {
 		rawdb.WriteBlock(bc.db, block)
 	}
+
 	bc.currentBlock.Store(block)
+	headBlockGauge.Update(int64(block.NumberU64()))
 
 	// save cache BlockSigners
 	if bc.chainConfig.XDPoS != nil && !bc.chainConfig.IsTIPSigning(block.Number()) {
@@ -713,6 +732,7 @@ func (bc *BlockChain) insert(block *types.Block, writeBlock bool) {
 			log.Crit("Failed to insert head fast block hash", "err", err)
 		}
 		bc.currentFastBlock.Store(block)
+		headFastBlockGauge.Update(int64(block.NumberU64()))
 	}
 }
 
@@ -1050,10 +1070,12 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 			newFastBlock := bc.GetBlock(currentFastBlock.ParentHash(), currentFastBlock.NumberU64()-1)
 			bc.currentFastBlock.Store(newFastBlock)
 			WriteHeadFastBlockHash(bc.db, newFastBlock.Hash())
+			headFastBlockGauge.Update(int64(newFastBlock.NumberU64()))
 		}
 		if currentBlock := bc.CurrentBlock(); currentBlock.Hash() == hash {
 			newBlock := bc.GetBlock(currentBlock.ParentHash(), currentBlock.NumberU64()-1)
 			bc.currentBlock.Store(newBlock)
+			headBlockGauge.Update(int64(newBlock.NumberU64()))
 			rawdb.WriteHeadBlockHash(bc.db, newBlock.Hash())
 		}
 	}
@@ -1136,6 +1158,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				log.Crit("Failed to update head fast block hash", "err", err)
 			}
 			bc.currentFastBlock.Store(head)
+			headFastBlockGauge.Update(int64(head.NumberU64()))
 		}
 	}
 	bc.mu.Unlock()

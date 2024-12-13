@@ -49,6 +49,7 @@ require (
 	github.com/crate-crypto/go-kzg-4844 v0.7.0
 	github.com/deckarep/golang-set v1.8.0
 	github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498
+	github.com/elastic/gosigar v0.14.3
 	github.com/ethereum/c-kzg-4844 v0.4.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mattn/go-isatty v0.0.17
