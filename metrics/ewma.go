@@ -75,7 +75,7 @@ func (NilEWMA) Update(n int64) {}
 // of uncounted events and processes them on each tick.  It uses the
 // sync/atomic package to manage uncounted events.
 type StandardEWMA struct {
-	uncounted int64 // /!\ this should be the first member to ensure 64-bit alignment
+	uncounted atomic.Int64
 	alpha     float64
 	rate      float64
 	init      bool
@@ -97,8 +97,8 @@ func (a *StandardEWMA) Snapshot() EWMA {
 // Tick ticks the clock to update the moving average.  It assumes it is called
 // every five seconds.
 func (a *StandardEWMA) Tick() {
-	count := atomic.LoadInt64(&a.uncounted)
-	atomic.AddInt64(&a.uncounted, -count)
+	count := a.uncounted.Load()
+	a.uncounted.Add(-count)
 	instantRate := float64(count) / float64(5*time.Second)
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
@@ -112,5 +112,5 @@ func (a *StandardEWMA) Tick() {
 
 // Update adds n uncounted events.
 func (a *StandardEWMA) Update(n int64) {
-	atomic.AddInt64(&a.uncounted, n)
+	a.uncounted.Add(n)
 }
