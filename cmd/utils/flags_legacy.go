@@ -68,6 +68,12 @@ var (
 		Usage:    "Prepends log messages with call-site location (deprecated)",
 		Category: flags.DeprecatedCategory,
 	}
+	// Deprecated February 2024
+	MetricsEnabledExpensiveFlag = &cli.BoolFlag{
+		Name:     "metrics-expensive",
+		Usage:    "Enable expensive metrics collection and reporting (deprecated)",
+		Category: flags.DeprecatedCategory,
+	}
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.

@@ -32,6 +32,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/internal/flags"
+	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -271,7 +272,7 @@ func applyMetricConfig(ctx *cli.Context, cfg *XDCConfig) {
 		cfg.Metrics.Enabled = ctx.Bool(utils.MetricsEnabledFlag.Name)
 	}
 	if ctx.IsSet(utils.MetricsEnabledExpensiveFlag.Name) {
-		cfg.Metrics.EnabledExpensive = ctx.Bool(utils.MetricsEnabledExpensiveFlag.Name)
+		log.Warn("Expensive metrics are collected by default, please remove this flag", "flag", utils.MetricsEnabledExpensiveFlag.Name)
 	}
 	if ctx.IsSet(utils.MetricsHTTPFlag.Name) {
 		cfg.Metrics.HTTP = ctx.String(utils.MetricsHTTPFlag.Name)
