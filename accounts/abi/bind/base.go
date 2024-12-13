@@ -194,6 +194,8 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 	return c.abi.UnpackIntoInterface(res[0], method, output)
 }
 
+// CallRaw executes an eth_call against the contract with the raw calldata as
+// input.  It returns the call's return data or an error.
 func (c *BoundContract) CallRaw(opts *CallOpts, input []byte) ([]byte, error) {
 	return c.call(opts, input)
 }

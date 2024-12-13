@@ -241,28 +241,29 @@ func TestContractLinking(t *testing.T) {
 		map[rune]struct{}{'a': {}},
 		map[rune]struct{}{}})
 
-	// two contracts share some dependencies.  one contract is marked as an override.  only the override contract
-	// is not deployed.  its dependencies are all deployed (even the ones not used by f), and the ones shared with f
-	// are not redeployed
+	// two contracts ('a' and 'f') share some dependencies.  contract 'a' is marked as an override.  expect that any of
+	// its depdencies that aren't shared with 'f' are not deployed.
 	testLinkCase(t, linkTestCaseInput{map[rune][]rune{
 		'a': {'b', 'c', 'd', 'e'},
 		'f': {'g', 'c', 'd', 'h'}},
 		map[rune]struct{}{'a': {}},
 		map[rune]struct{}{
-			'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {},
+			'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {},
 		}})
 
 	// test nested libraries that share deps at different levels of the tree... with override.
+	// same condition as above test:  no sub-dependencies of
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
 			'e': {'f', 'g', 'h', 'i', 'm'},
-			'i': {'j', 'k', 'l', 'm'}},
+			'i': {'j', 'k', 'l', 'm'},
+			'l': {'n', 'o', 'p'}},
 		map[rune]struct{}{
 			'i': {},
 		},
 		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'j': {}, 'k': {}, 'l': {}, 'm': {},
+			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {},
 		}})
 	// TODO: same as the above case but nested one level of dependencies deep (?)
 }

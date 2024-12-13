@@ -65,12 +65,14 @@ func (d *DeploymentResult) Accumulate(other *DeploymentResult) {
 	}
 }
 
+// depTreeBuilder turns a set of unlinked contracts and their dependent libraries into a collection of trees
+// representing the relation of their dependencies.
 type depTreeBuilder struct {
 	overrides map[string]common.Address
 	// map of pattern to unlinked contract bytecode (for libraries or contracts)
 	contracts map[string]string
 	// map of pattern to subtree represented by contract
-	subtrees map[string]any
+	subtrees map[string]*depTreeNode
 	// map of nodes that aren't referenced by other dependencies (these can be libraries too if user is doing lib-only deployment)
 	roots map[string]struct{}
 }
@@ -78,12 +80,8 @@ type depTreeBuilder struct {
 type depTreeNode struct {
 	pattern      string
 	unlinkedCode string
-	nodes        []any
-}
-
-type overrideNode struct {
-	pattern string
-	addr    common.Address
+	nodes        []*depTreeNode
+	overrideAddr *common.Address
 }
 
 func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
@@ -91,50 +89,49 @@ func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 	if _, ok := d.subtrees[pattern]; ok {
 		return
 	}
-	if addr, ok := d.overrides[pattern]; ok {
-		node := &overrideNode{
-			pattern: pattern,
-			addr:    addr,
-		}
-		d.subtrees[pattern] = node
-	} else {
-		node := &depTreeNode{
-			pattern:      pattern,
-			unlinkedCode: contract,
-		}
-		// if the node is an override node:  add it to the node map but don't recurse on it.
-		// else if the node is depNode:  recurse on it, and add it to the dep map.
-		reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
-		if err != nil {
-			panic(err)
-		}
-		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contract, -1) {
-			depPattern := match[1]
-			d.buildDepTrees(depPattern, d.contracts[depPattern])
-			node.nodes = append(node.nodes, d.subtrees[depPattern])
 
-			// this dep can't be a root dependency if it is referenced by other contracts.
-			delete(d.roots, depPattern)
-		}
-		d.subtrees[pattern] = node
+	node := &depTreeNode{
+		pattern:      pattern,
+		unlinkedCode: contract,
 	}
+	if addr, ok := d.overrides[pattern]; ok {
+		node.overrideAddr = &addr
+	}
+
+	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
+	if err != nil {
+		panic(err)
+	}
+	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contract, -1) {
+		depPattern := match[1]
+		d.buildDepTrees(depPattern, d.contracts[depPattern])
+		node.nodes = append(node.nodes, d.subtrees[depPattern])
+
+		// this dep can't be a root dependency if it is referenced by other contracts.
+		delete(d.roots, depPattern)
+	}
+	d.subtrees[pattern] = node
 }
 
 func (d *depTreeBuilder) BuildDepTrees() (roots []*depTreeNode) {
-	for pattern, contract := range d.contracts {
+	// before the trees of dependencies are known, consider that any provided contract could be a root.
+	for pattern, _ := range d.contracts {
 		d.roots[pattern] = struct{}{}
+	}
+
+	// recursively build each part of the dependency subtree by starting at
+	for pattern, contract := range d.contracts {
 		d.buildDepTrees(pattern, contract)
 	}
 	for pattern, _ := range d.roots {
-		switch node := d.subtrees[pattern].(type) {
-		case *depTreeNode:
-			roots = append(roots, node)
-		}
+		roots = append(roots, d.subtrees[pattern])
 	}
 	return roots
 }
 
-type treeDeployer struct {
+// depTreeDeployer is responsible for taking a built dependency, deploying-and-linking its components in the proper
+// order.
+type depTreeDeployer struct {
 	deployedAddrs map[string]common.Address
 	deployerTxs   map[string]*types.Transaction
 	input         map[string][]byte // map of the root contract pattern to the constructor input (if there is any)
@@ -142,10 +139,9 @@ type treeDeployer struct {
 	err           error
 }
 
-func (d *treeDeployer) linkAndDeploy(n any) {
-	node, ok := n.(*depTreeNode)
-	if !ok {
-		// this was an override node
+func (d *depTreeDeployer) linkAndDeploy(node *depTreeNode) {
+	if node.overrideAddr != nil {
+		// don't recurse on override nodes
 		return
 	}
 
@@ -154,16 +150,14 @@ func (d *treeDeployer) linkAndDeploy(n any) {
 	}
 	// link in all node dependencies and produce the deployer bytecode
 	deployerCode := node.unlinkedCode
-	for _, c := range node.nodes {
-		switch child := c.(type) {
-		case *depTreeNode:
-			deployerCode = strings.ReplaceAll(deployerCode, "__$"+child.pattern+"$__", strings.ToLower(d.deployedAddrs[child.pattern].String()[2:]))
-		case *overrideNode:
-			deployerCode = strings.ReplaceAll(deployerCode, "__$"+child.pattern+"$__", strings.ToLower(child.addr.String()[2:]))
-		default:
-			panic("invalid node type")
+	for _, child := range node.nodes {
+		var linkAddr common.Address
+		if child.overrideAddr != nil {
+			linkAddr = *child.overrideAddr
+		} else {
+			linkAddr = d.deployedAddrs[child.pattern]
 		}
-
+		deployerCode = strings.ReplaceAll(deployerCode, "__$"+child.pattern+"$__", strings.ToLower(linkAddr.String()[2:]))
 	}
 
 	// deploy the contract.
@@ -176,7 +170,7 @@ func (d *treeDeployer) linkAndDeploy(n any) {
 	}
 }
 
-func (d *treeDeployer) Result() (*DeploymentResult, error) {
+func (d *depTreeDeployer) Result() (*DeploymentResult, error) {
 	if d.err != nil {
 		return nil, d.err
 	}
@@ -202,13 +196,13 @@ func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []
 	treeBuilder := depTreeBuilder{
 		overrides: deployParams.Overrides,
 		contracts: unlinkedContracts,
-		subtrees:  make(map[string]any),
+		subtrees:  make(map[string]*depTreeNode),
 		roots:     make(map[string]struct{}),
 	}
 
 	deps := treeBuilder.BuildDepTrees()
 	for _, tr := range deps {
-		deployer := treeDeployer{
+		deployer := depTreeDeployer{
 			deploy:        deploy,
 			deployedAddrs: make(map[string]common.Address),
 			deployerTxs:   make(map[string]*types.Transaction)}
@@ -373,15 +367,3 @@ func Call[T any](instance *ContractInstance, opts *bind.CallOpts, packedInput []
 	}
 	return unpack(packedOutput)
 }
-
-/*
-func UnpackError(metadata *bind.MetaData, raw []byte) (any, error) {
-	fmt.Printf("raw is %x\n", raw[0:4])
-	errType := metadata.Errors[fmt.Sprintf("%x", raw[0:4])]
-	abi, _ := metadata.GetAbi() // TODO: check error here?
-	res := reflect.New(errType).Interface()
-	fmt.Printf("err type name is %s\n", errType.Name())
-	err := abi.UnpackIntoInterface(&res, errType.Name(), raw)
-	return res, err
-}
-*/

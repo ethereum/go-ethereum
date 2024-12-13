@@ -311,10 +311,10 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
 		}
 		for _, original := range evmABI.Errors {
-			// TODO: I copied this from events.  I think it should be correct but not totally sure
+			// TODO: I copied this from events (above in this function).  I think it should be correct but not totally sure
 			// even if it is correct, should consider deduplicating this into its own function.
 
-			// Normalize the event for capital cases and non-anonymous outputs
+			// Normalize the error for capital cases and non-anonymous outputs
 			normalized := original
 
 			// Ensure there is no duplicated identifier
