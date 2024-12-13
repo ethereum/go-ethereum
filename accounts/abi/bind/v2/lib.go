@@ -17,14 +17,15 @@
 package v2
 
 import (
+	"regexp"
+	"strings"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
-	"regexp"
-	"strings"
 )
 
 // ContractDeployParams represents state needed to deploy a contract:
@@ -100,7 +101,7 @@ func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 		node.overrideAddr = &addr
 	}
 	// iterate each referenced library in the unlinked code, recurse and built its subtree.
-	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
+	reMatchSpecificPattern, err := regexp.Compile(`__\\$([a-f0-9]+)\\$__`)
 	if err != nil {
 		panic(err)
 	}

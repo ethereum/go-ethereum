@@ -19,7 +19,14 @@ package v2
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"io"
+	"math/big"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
@@ -36,13 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"io"
-	"math/big"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -76,12 +76,10 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 			if err != nil {
-				panic(fmt.Sprintf("error signing tx: %v", err))
 				return nil, err
 			}
 			signedTx, err := tx.WithSignature(signer, signature)
 			if err != nil {
-				panic(fmt.Sprintf("error creating tx with sig: %v", err))
 				return nil, err
 			}
 			return signedTx, nil
@@ -304,7 +302,13 @@ func TestEvents(t *testing.T) {
 		Context: context.Background(),
 	}
 	sub1, err := WatchEvents(&boundContract, watchOpts, events.CBasic1EventID(), ctrct.UnpackBasic1Event, newCBasic1Ch)
+	if err != nil {
+		t.Fatalf("WatchEvents returned error: %v", err)
+	}
 	sub2, err := WatchEvents(&boundContract, watchOpts, events.CBasic2EventID(), ctrct.UnpackBasic2Event, newCBasic2Ch)
+	if err != nil {
+		t.Fatalf("WatchEvents returned error: %v", err)
+	}
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
 
@@ -327,11 +331,11 @@ func TestEvents(t *testing.T) {
 	e2Count := 0
 	for {
 		select {
-		case _ = <-newCBasic1Ch:
+		case <-newCBasic1Ch:
 			e1Count++
-		case _ = <-newCBasic2Ch:
+		case <-newCBasic2Ch:
 			e2Count++
-		case _ = <-timeout.C:
+		case <-timeout.C:
 			goto done
 		}
 		if e1Count == 2 && e2Count == 1 {
@@ -478,6 +482,9 @@ func TestBindingGeneration(t *testing.T) {
 		}
 
 		existingBindings, err := os.ReadFile(filepath.Join(basePath, "bindings.go"))
+		if err != nil {
+			t.Fatalf("ReadFile returned error: %v", err)
+		}
 		if code != string(existingBindings) {
 			t.Fatalf("code mismatch for %s", dir)
 		}
