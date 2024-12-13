@@ -203,8 +203,6 @@ func init() {
 			return err
 		}
 		flags.CheckEnvVars(ctx, app.Flags, "XDC")
-		// Start system runtime metrics collection
-		go metrics.CollectProcessMetrics(3 * time.Second)
 
 		utils.SetupNetwork(ctx)
 		return nil
@@ -307,6 +305,7 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	}
 	// Start metrics export if enabled
 	utils.SetupMetrics(ctx)
+
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
 
