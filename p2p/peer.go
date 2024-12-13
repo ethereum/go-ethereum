@@ -345,9 +345,7 @@ func (p *Peer) handle(msg Msg) error {
 	case msg.Code == discMsg:
 		// This is the last message. We don't need to discard or
 		// check errors because, the connection will be closed after it.
-		var m struct{ R DiscReason }
-		rlp.Decode(msg.Payload, &m)
-		return m.R
+		return decodeDisconnectMessage(msg.Payload)
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
 		return msg.Discard()
@@ -357,7 +355,7 @@ func (p *Peer) handle(msg Msg) error {
 		if err != nil {
 			return fmt.Errorf("msg code out of range: %v", msg.Code)
 		}
-		if metrics.Enabled {
+		if metrics.Enabled() {
 			m := fmt.Sprintf("%s/%s/%d/%#02x", ingressMeterName, proto.Name, proto.Version, msg.Code-proto.offset)
 			metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
 			metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
@@ -370,6 +368,27 @@ func (p *Peer) handle(msg Msg) error {
 		}
 	}
 	return nil
+}
+
+// decodeDisconnectMessage decodes the payload of discMsg.
+func decodeDisconnectMessage(r io.Reader) (reason DiscReason) {
+	s := rlp.NewStream(r, 100)
+	k, _, err := s.Kind()
+	if err != nil {
+		return DiscInvalid
+	}
+	if k == rlp.List {
+		s.List()
+		err = s.Decode(&reason)
+	} else {
+		// Legacy path: some implementations, including geth, used to send the disconnect
+		// reason as a byte array by accident.
+		err = s.Decode(&reason)
+	}
+	if err != nil {
+		reason = DiscInvalid
+	}
+	return reason
 }
 
 func countMatchingProtocols(protocols []Protocol, caps []Cap) int {

@@ -112,7 +112,7 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 
 // markError registers the error with the corresponding metric.
 func markError(p *Peer, err error) {
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return
 	}
 	m := meters.get(p.Inbound())
