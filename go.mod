@@ -49,7 +49,6 @@ require (
 	github.com/crate-crypto/go-kzg-4844 v0.7.0
 	github.com/deckarep/golang-set v1.8.0
 	github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498
-	github.com/elastic/gosigar v0.14.3
 	github.com/ethereum/c-kzg-4844 v0.4.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mattn/go-isatty v0.0.17
@@ -80,6 +79,8 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/steakknife/hamming v0.0.0-20180906055917-c99c65617cd3 // indirect
 	github.com/supranational/blst v0.3.11 // indirect
+	github.com/tklauser/go-sysconf v0.3.14 // indirect
+	github.com/tklauser/numcpus v0.8.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/term v0.26.0 // indirect
