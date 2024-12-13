@@ -28,6 +28,7 @@ import (
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/accounts"
@@ -52,6 +53,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/metrics/exp"
+	"github.com/XinFinOrg/XDPoSChain/metrics/influxdb"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
@@ -659,6 +661,45 @@ var (
 		Aliases:  []string{"metrics.port"},
 		Usage:    "Metrics HTTP server listening port",
 		Value:    metrics.DefaultConfig.Port,
+		Category: flags.MetricsCategory,
+	}
+	MetricsEnableInfluxDBFlag = &cli.BoolFlag{
+		Name:     "metrics-influxdb",
+		Usage:    "Enable metrics export/push to an external InfluxDB database",
+		Category: flags.MetricsCategory,
+	}
+	MetricsInfluxDBEndpointFlag = &cli.StringFlag{
+		Name:     "metrics-influxdb.endpoint",
+		Usage:    "InfluxDB API endpoint to report metrics to",
+		Value:    metrics.DefaultConfig.InfluxDBEndpoint,
+		Category: flags.MetricsCategory,
+	}
+	MetricsInfluxDBDatabaseFlag = &cli.StringFlag{
+		Name:     "metrics-influxdb.database",
+		Usage:    "InfluxDB database name to push reported metrics to",
+		Value:    metrics.DefaultConfig.InfluxDBDatabase,
+		Category: flags.MetricsCategory,
+	}
+	MetricsInfluxDBUsernameFlag = &cli.StringFlag{
+		Name:     "metrics-influxdb.username",
+		Usage:    "Username to authorize access to the database",
+		Value:    metrics.DefaultConfig.InfluxDBUsername,
+		Category: flags.MetricsCategory,
+	}
+	MetricsInfluxDBPasswordFlag = &cli.StringFlag{
+		Name:     "metrics-influxdb.password",
+		Usage:    "Password to authorize access to the database",
+		Value:    metrics.DefaultConfig.InfluxDBPassword,
+		Category: flags.MetricsCategory,
+	}
+	// The `host` tag is part of every measurement sent to InfluxDB. Queries on tags are faster in InfluxDB.
+	// It is used so that we can group all nodes and average a measurement across all of them, but also so
+	// that we can select a specific node and inspect its measurements.
+	// https://docs.influxdata.com/influxdb/v1.4/concepts/key_concepts/#tag-key
+	MetricsInfluxDBHostTagFlag = &cli.StringFlag{
+		Name:     "metrics-influxdb.host.tag",
+		Usage:    "InfluxDB `host` tag attached to all measurements",
+		Value:    metrics.DefaultConfig.InfluxDBTags,
 		Category: flags.MetricsCategory,
 	}
 
@@ -1468,6 +1509,35 @@ func SetupNetwork(ctx *cli.Context) {
 	params.TargetGasLimit = ctx.Uint64(MinerGasLimitFlag.Name)
 }
 
+func SetupMetrics(ctx *cli.Context) {
+	if metrics.Enabled {
+		log.Info("Enabling metrics collection")
+		var (
+			enableExport = ctx.Bool(MetricsEnableInfluxDBFlag.Name)
+			endpoint     = ctx.String(MetricsInfluxDBEndpointFlag.Name)
+			database     = ctx.String(MetricsInfluxDBDatabaseFlag.Name)
+			username     = ctx.String(MetricsInfluxDBUsernameFlag.Name)
+			password     = ctx.String(MetricsInfluxDBPasswordFlag.Name)
+			hosttag      = ctx.String(MetricsInfluxDBHostTagFlag.Name)
+		)
+
+		if enableExport {
+			log.Info("Enabling metrics export to InfluxDB")
+			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "xdc.", map[string]string{
+				"host": hosttag,
+			})
+		}
+
+		if ctx.IsSet(MetricsHTTPFlag.Name) {
+			address := fmt.Sprintf("%s:%d", ctx.String(MetricsHTTPFlag.Name), ctx.Int(MetricsPortFlag.Name))
+			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+			exp.Setup(address)
+		} else if ctx.IsSet(MetricsPortFlag.Name) {
+			log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
+		}
+	}
+}
+
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	var (
@@ -1594,16 +1664,4 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 		Service:   filters.NewFilterAPI(filterSystem, isLightClient),
 	}})
 	return filterSystem
-}
-
-func SetupMetrics(ctx *cli.Context) {
-	if metrics.Enabled {
-		log.Info("Enabling metrics collection")
-
-		if ctx.IsSet(MetricsHTTPFlag.Name) {
-			address := fmt.Sprintf("%s:%d", ctx.String(MetricsHTTPFlag.Name), ctx.Int(MetricsPortFlag.Name))
-			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
-			exp.Setup(address)
-		}
-	}
 }

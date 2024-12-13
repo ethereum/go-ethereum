@@ -126,9 +126,6 @@ var (
 		utils.HTTPCORSDomainFlag,
 		utils.HTTPVirtualHostsFlag,
 		utils.EthStatsURLFlag,
-		utils.MetricsEnabledFlag,
-		utils.MetricsHTTPFlag,
-		utils.MetricsPortFlag,
 		//utils.FakePoWFlag,
 		//utils.NoCompactionFlag,
 		//utils.GpoBlocksFlag,
@@ -163,6 +160,18 @@ var (
 		utils.IPCPathFlag,
 		utils.RPCGlobalTxFeeCap,
 	}
+
+	metricsFlags = []cli.Flag{
+		utils.MetricsEnabledFlag,
+		utils.MetricsHTTPFlag,
+		utils.MetricsPortFlag,
+		utils.MetricsEnableInfluxDBFlag,
+		utils.MetricsInfluxDBEndpointFlag,
+		utils.MetricsInfluxDBDatabaseFlag,
+		utils.MetricsInfluxDBUsernameFlag,
+		utils.MetricsInfluxDBPasswordFlag,
+		utils.MetricsInfluxDBHostTagFlag,
+	}
 )
 
 func init() {
@@ -194,6 +203,7 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
+	app.Flags = append(app.Flags, metricsFlags...)
 	flags.AutoEnvVars(app.Flags, "XDC")
 
 	app.Before = func(ctx *cli.Context) error {
@@ -203,6 +213,9 @@ func init() {
 			return err
 		}
 		flags.CheckEnvVars(ctx, app.Flags, "XDC")
+
+		// Start system runtime metrics collection
+		go metrics.CollectProcessMetrics(3 * time.Second)
 
 		utils.SetupNetwork(ctx)
 		return nil

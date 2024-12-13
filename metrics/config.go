@@ -22,6 +22,12 @@ type Config struct {
 	EnabledExpensive bool   `toml:",omitempty"`
 	HTTP             string `toml:",omitempty"`
 	Port             int    `toml:",omitempty"`
+	EnableInfluxDB   bool   `toml:",omitempty"`
+	InfluxDBEndpoint string `toml:",omitempty"`
+	InfluxDBDatabase string `toml:",omitempty"`
+	InfluxDBUsername string `toml:",omitempty"`
+	InfluxDBPassword string `toml:",omitempty"`
+	InfluxDBTags     string `toml:",omitempty"`
 }
 
 // DefaultConfig is the default config for metrics used in go-ethereum.
@@ -30,4 +36,10 @@ var DefaultConfig = Config{
 	EnabledExpensive: false,
 	HTTP:             "127.0.0.1",
 	Port:             6060,
+	EnableInfluxDB:   false,
+	InfluxDBEndpoint: "http://localhost:8086",
+	InfluxDBDatabase: "xdc",
+	InfluxDBUsername: "test",
+	InfluxDBPassword: "test",
+	InfluxDBTags:     "localhost",
 }
