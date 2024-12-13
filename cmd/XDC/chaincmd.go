@@ -35,7 +35,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/urfave/cli/v2"
 )
 
@@ -239,13 +238,11 @@ func importChain(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	// Start metrics export if enabled
-	utils.SetupMetrics(ctx)
-	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
-
-	stack, _ := makeFullNode(ctx)
+	stack, cfg := makeFullNode(ctx)
 	defer stack.Close()
+
+	// Start metrics export if enabled
+	utils.SetupMetrics(&cfg.Metrics)
 
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()

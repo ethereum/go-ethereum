@@ -1586,7 +1586,7 @@ func (d *Downloader) DeliverNodeData(id string, data [][]byte) (err error) {
 }
 
 // deliver injects a new batch of data received from a remote node.
-func (d *Downloader) deliver(id string, destCh chan dataPack, packet dataPack, inMeter, dropMeter metrics.Meter) (err error) {
+func (d *Downloader) deliver(id string, destCh chan dataPack, packet dataPack, inMeter, dropMeter *metrics.Meter) (err error) {
 	// Update the delivery metrics for both good and failed deliveries
 	inMeter.Mark(int64(packet.Items()))
 	defer func() {

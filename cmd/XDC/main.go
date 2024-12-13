@@ -321,11 +321,6 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	if ctx.Bool(utils.LightModeFlag.Name) || ctx.String(utils.SyncModeFlag.Name) == "light" {
 		utils.Fatalf("Light clients do not support staking")
 	}
-	// Start metrics export if enabled
-	utils.SetupMetrics(ctx)
-
-	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
 
 	var ethereum *eth.Ethereum
 	if err := stack.Service(&ethereum); err != nil {

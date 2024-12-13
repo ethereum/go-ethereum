@@ -401,7 +401,7 @@ type Ethash struct {
 	rand     *rand.Rand    // Properly seeded random source for nonces
 	threads  int           // Number of threads to mine on if mining
 	update   chan struct{} // Notification channel to update mining parameters
-	hashrate metrics.Meter // Meter tracking the average hashrate
+	hashrate *metrics.Meter // Meter tracking the average hashrate
 
 	// The fields below are hooks for testing
 	shared    *Ethash       // Shared PoW verifier to avoid cache regeneration

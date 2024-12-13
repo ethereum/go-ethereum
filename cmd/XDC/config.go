@@ -235,6 +235,9 @@ func applyValues(values []string, params *[]string) {
 func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	stack, cfg := makeConfigNode(ctx)
 
+	// Start metrics export if enabled
+	utils.SetupMetrics(&cfg.Metrics)
+
 	// Register XDCX's OrderBook service if requested.
 	// enable in default
 	utils.RegisterXDCXService(stack, &cfg.XDCX)
@@ -309,5 +312,26 @@ func applyMetricConfig(ctx *cli.Context, cfg *XDCConfig) {
 	}
 	if ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
 		cfg.Metrics.InfluxDBOrganization = ctx.String(utils.MetricsInfluxDBOrganizationFlag.Name)
+	}
+	// Sanity-check the commandline flags. It is fine if some unused fields is part
+	// of the toml-config, but we expect the commandline to only contain relevant
+	// arguments, otherwise it indicates an error.
+	var (
+		enableExport   = ctx.Bool(utils.MetricsEnableInfluxDBFlag.Name)
+		enableExportV2 = ctx.Bool(utils.MetricsEnableInfluxDBV2Flag.Name)
+	)
+	if enableExport || enableExportV2 {
+		v1FlagIsSet := ctx.IsSet(utils.MetricsInfluxDBUsernameFlag.Name) ||
+			ctx.IsSet(utils.MetricsInfluxDBPasswordFlag.Name)
+
+		v2FlagIsSet := ctx.IsSet(utils.MetricsInfluxDBTokenFlag.Name) ||
+			ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) ||
+			ctx.IsSet(utils.MetricsInfluxDBBucketFlag.Name)
+
+		if enableExport && v2FlagIsSet {
+			utils.Fatalf("Flags --influxdb-metrics.organization, --influxdb-metrics.token, --influxdb-metrics.bucket are only available for influxdb-v2")
+		} else if enableExportV2 && v1FlagIsSet {
+			utils.Fatalf("Flags --influxdb-metrics.username, --influxdb-metrics.password are only available for influxdb-v1")
+		}
 	}
 }

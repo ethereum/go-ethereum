@@ -42,7 +42,7 @@ type meteredConn struct {
 // returns the original object.
 func newMeteredConn(conn net.Conn, ingress bool) net.Conn {
 	// Short circuit if metrics are disabled
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return conn
 	}
 	// Otherwise bump the connection counters and wrap the connection
