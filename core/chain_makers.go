@@ -595,15 +595,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 		}
 	}
 	if cm.config.IsCancun(header.Number, header.Time) {
-		var (
-			parentExcessBlobGas uint64
-			parentBlobGasUsed   uint64
-		)
-		if parent.ExcessBlobGas() != nil {
-			parentExcessBlobGas = *parent.ExcessBlobGas()
-			parentBlobGasUsed = *parent.BlobGasUsed()
-		}
-		excessBlobGas := eip4844.CalcExcessBlobGas(parentExcessBlobGas, parentBlobGasUsed)
+		excessBlobGas := eip4844.CalcExcessBlobGas(cm.config, parent.Header())
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)

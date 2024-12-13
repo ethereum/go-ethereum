@@ -360,6 +360,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	cancunTime := uint64(0)
 	gspec.Config.ShanghaiTime = &cancunTime
 	gspec.Config.CancunTime = &cancunTime
+	gspec.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	postCancunOutput, postCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {

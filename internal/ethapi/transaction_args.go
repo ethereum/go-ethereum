@@ -32,13 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
-)
-
-var (
-	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -125,7 +120,8 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
 		return errors.New(`need at least 1 blob for a blob transaction`)
 	}
-	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobsPerTransaction {
+	maxBlobsPerTransaction := b.ChainConfig().LatestMaxBlobsPerBlock()
+	if args.BlobHashes != nil && uint64(len(args.BlobHashes)) > maxBlobsPerTransaction {
 		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobsPerTransaction)
 	}
 

@@ -190,7 +190,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		parentExcessBlobGas := pre.Env.ParentExcessBlobGas
 		parentBlobGasUsed := pre.Env.ParentBlobGasUsed
 		if parentExcessBlobGas != nil && parentBlobGasUsed != nil {
-			excessBlobGas = eip4844.CalcExcessBlobGas(*parentExcessBlobGas, *parentBlobGasUsed)
+			parent := &types.Header{
+				Time:          pre.Env.ParentTimestamp,
+				ExcessBlobGas: pre.Env.ParentExcessBlobGas,
+				BlobGasUsed:   pre.Env.ParentBlobGasUsed,
+			}
+			excessBlobGas = eip4844.CalcExcessBlobGas(chainConfig, parent)
 			vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
 		}
 	}
@@ -234,7 +239,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		txBlobGas := uint64(0)
 		if tx.Type() == types.BlobTxType {
 			txBlobGas = uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
-			if used, max := blobGasUsed+txBlobGas, uint64(params.MaxBlobGasPerBlock); used > max {
+			if used, max := blobGasUsed+txBlobGas, chainConfig.MaxBlobsPerBlock(pre.Env.Number)*params.BlobTxBlobGasPerBlob; used > max {
 				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", used, max)
 				log.Warn("rejected tx", "index", i, "err", err)
 				rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})

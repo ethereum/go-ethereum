@@ -21,10 +21,16 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestCalcExcessBlobGas(t *testing.T) {
+	var (
+		config        = params.MainnetChainConfig
+		targetBlobs   = config.TargetBlobsPerBlock(*config.CancunTime)
+		targetBlobGas = targetBlobs * params.BlobTxBlobGasPerBlob
+	)
 	var tests = []struct {
 		excess uint64
 		blobs  uint64
@@ -34,23 +40,29 @@ func TestCalcExcessBlobGas(t *testing.T) {
 		// slots are below - or equal - to the target.
 		{0, 0, 0},
 		{0, 1, 0},
-		{0, params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob, 0},
+		{0, targetBlobs, 0},
 
 		// If the target blob gas is exceeded, the excessBlobGas should increase
 		// by however much it was overshot
-		{0, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) + 1, params.BlobTxBlobGasPerBlob},
-		{1, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) + 1, params.BlobTxBlobGasPerBlob + 1},
-		{1, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) + 2, 2*params.BlobTxBlobGasPerBlob + 1},
+		{0, targetBlobs + 1, params.BlobTxBlobGasPerBlob},
+		{1, targetBlobs + 1, params.BlobTxBlobGasPerBlob + 1},
+		{1, targetBlobs + 2, 2*params.BlobTxBlobGasPerBlob + 1},
 
 		// The excess blob gas should decrease by however much the target was
 		// under-shot, capped at zero.
-		{params.BlobTxTargetBlobGasPerBlock, params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob, params.BlobTxTargetBlobGasPerBlock},
-		{params.BlobTxTargetBlobGasPerBlock, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) - 1, params.BlobTxTargetBlobGasPerBlock - params.BlobTxBlobGasPerBlob},
-		{params.BlobTxTargetBlobGasPerBlock, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) - 2, params.BlobTxTargetBlobGasPerBlock - (2 * params.BlobTxBlobGasPerBlob)},
-		{params.BlobTxBlobGasPerBlob - 1, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) - 1, 0},
+		{targetBlobGas, targetBlobs, targetBlobGas},
+		{targetBlobGas, targetBlobs - 1, targetBlobGas - params.BlobTxBlobGasPerBlob},
+		{targetBlobGas, targetBlobs - 2, targetBlobGas - (2 * params.BlobTxBlobGasPerBlob)},
+		{params.BlobTxBlobGasPerBlob - 1, targetBlobs - 1, 0},
 	}
 	for i, tt := range tests {
-		result := CalcExcessBlobGas(tt.excess, tt.blobs*params.BlobTxBlobGasPerBlob)
+		blobGasUsed := tt.blobs * params.BlobTxBlobGasPerBlob
+		parent := &types.Header{
+			Time:          *config.CancunTime,
+			ExcessBlobGas: &tt.excess,
+			BlobGasUsed:   &blobGasUsed,
+		}
+		result := CalcExcessBlobGas(config, parent)
 		if result != tt.want {
 			t.Errorf("test %d: excess blob gas mismatch: have %v, want %v", i, result, tt.want)
 		}
