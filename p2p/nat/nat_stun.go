@@ -24,28 +24,58 @@ import (
 	stunV2 "github.com/pion/stun/v2"
 )
 
-// The code are from erigon p2p/nat/nat_stun.go
-// This stun server is part of the mainnet infrastructure.
-// The addr are from https://github.com/ethereum/trin/blob/master/portalnet/src/socket.rs
-const stunDefaultServerAddr = "159.223.0.83:3478"
+var stunDefaultServerList = []string{
+	"159.223.0.83:3478",
+	"stun.l.google.com:19302",
+	"stun1.l.google.com:19302",
+	"stun2.l.google.com:19302",
+	"stun3.l.google.com:19302",
+	"stun4.l.google.com:19302",
+	"stun01.sipphone.com",
+	"stun.ekiga.net",
+	"stun.fwdnet.net",
+	"stun.ideasip.com",
+	"stun.iptel.org",
+	"stun.rixtelecom.se",
+	"stun.schlund.de",
+	"stunserver.org",
+	"stun.softjoys.com",
+	"stun.voiparound.com",
+	"stun.voipbuster.com",
+	"stun.voipstunt.com",
+	"stun.voxgratia.org",
+	"stun.xten.com",
+}
+
+const requestLimit = 3
 
 type stun struct {
-	server *net.UDPAddr
+	serverList      []string
+	activeIndex     int // the server index which return the IP
+	pendingRequests int // request in flight
+	askedIndex      map[int]struct{}
+	replyCh         chan stunResponse
 }
 
 func newSTUN(serverAddr string) (Interface, error) {
+	serverList := make([]string, 0)
 	if serverAddr == "default" {
-		serverAddr = stunDefaultServerAddr
+		serverList = stunDefaultServerList
+	} else {
+		_, err := net.ResolveUDPAddr("udp4", serverAddr)
+		if err != nil {
+			return nil, err
+		}
+		serverList = append(serverList, serverAddr)
 	}
-	addr, err := net.ResolveUDPAddr("udp4", serverAddr)
-	if err != nil {
-		return nil, err
-	}
-	return stun{server: addr}, nil
+
+	return &stun{
+		serverList: serverList,
+	}, nil
 }
 
 func (s stun) String() string {
-	return fmt.Sprintf("STUN(%s)", s.server)
+	return fmt.Sprintf("STUN(%s)", s.serverList[s.activeIndex])
 }
 
 func (stun) SupportsMapping() bool {
@@ -60,8 +90,51 @@ func (stun) DeleteMapping(string, int, int) error {
 	return nil
 }
 
-func (s stun) ExternalIP() (net.IP, error) {
-	conn, err := stunV2.Dial("udp4", s.server.String())
+type stunResponse struct {
+	ip    net.IP
+	err   error
+	index int
+}
+
+func (s *stun) ExternalIP() (net.IP, error) {
+	var err error
+	s.replyCh = make(chan stunResponse, requestLimit)
+	s.askedIndex = make(map[int]struct{})
+	for s.startQueries() {
+		response := <-s.replyCh
+		s.pendingRequests--
+		if response.err != nil {
+			err = response.err
+			continue
+		}
+		s.activeIndex = response.index
+		return response.ip, nil
+	}
+	return nil, err
+}
+
+func (s *stun) startQueries() bool {
+	for i := 0; s.pendingRequests < requestLimit && i < len(s.serverList); i++ {
+		_, exist := s.askedIndex[i]
+		if exist {
+			continue
+		}
+		s.pendingRequests++
+		s.askedIndex[i] = struct{}{}
+		go func(index int, server string) {
+			ip, err := externalIP(server)
+			s.replyCh <- stunResponse{
+				ip:    ip,
+				index: index,
+				err:   err,
+			}
+		}(i, s.serverList[i])
+	}
+	return s.pendingRequests > 0
+}
+
+func externalIP(server string) (net.IP, error) {
+	conn, err := stunV2.Dial("udp4", server)
 	if err != nil {
 		return nil, err
 	}
