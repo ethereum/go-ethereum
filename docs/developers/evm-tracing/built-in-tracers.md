@@ -221,11 +221,17 @@ The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode re
 In `diff` mode the result object will contain a `pre` and a `post` object:
 
 1. The result only includes accounts that were modified. Accounts without changes will be omitted in this mode.
-2. The `pre` object within the result captures the account’s state at the beginning of the transaction, showcasing its initial values, while the `post` object represents the account’s state once the transaction has been fully executed, revealing the outcome of the changes.
-3. It’s important to note that the `pre` object may also contain the `nonce, balance, code` fields that have not been altered if other fields associated with the same account have experienced modifications. This holistic view ensures that all changes are contextualized within the account’s original state.
-4. `post` will contain only the modified fields. e.g. if `nonce` of an account hasn't changed it will be omitted from `post`.
-5. Deletion (i.e. account selfdestruct, or storage clearing) will be signified by inclusion in `pre` and omission in `post`.
-6. Insertion (i.e. account creation or new slots) will be signified by omission in `pre` and inclusion in `post`.
+2. The `pre` object within the result captures the account's state at the beginning of the transaction, showcasing its initial values, while the `post` object represents the account's state once the transaction has been fully executed, revealing the outcome of the changes.
+3. Due to historical implementation reasons, if the `nonce`, `balance` or `code` of a contract is modified during the transaction, the `pre` object will include ALL fields (`nonce`, `balance`, `code`) for that account, and the `post` will only include the modified fields.
+4. The `post` object is more selective - it only contains the specific fields that were actually modified during the transaction. For example, if only the storage was modified, `post` will not include unchanged fields like `nonce`, `balance`, or `code`.
+5. Deletion operations are represented by:
+
+   - Account selfdestruct: Account appears in `pre` but not in `post`
+   - Storage clearing (setting a storage value to zero is also treated as clearing): Storage slot appears in `pre` but not in `post`
+
+6. Insertion operations are represented by:
+   - New account creation: Account appears in `post` but not in `pre`
+   - New storage slot: Storage slot appears in `post` but not in `pre`
 
 To run this tracer in `diff` mode, pass `tracerConfig: {diffMode: true}` in the API call.
 
