@@ -123,19 +123,26 @@ Return:
 
 The `callTracer` tracks all the call frames executed during a transaction, including depth 0. The result will be a nested list of call frames, resembling how EVM works. They form a tree with the top-level call at root and sub-calls as children of the higher levels. Each call frame has the following fields:
 
-| field        | type        | description                          |
-| ------------ | ----------- | ------------------------------------ |
-| type         | string      | CALL or CREATE                       |
-| from         | string      | address                              |
-| to           | string      | address                              |
-| value        | string      | hex-encoded amount of value transfer |
-| gas          | string      | hex-encoded gas provided for call    |
-| gasUsed      | string      | hex-encoded gas used during call     |
-| input        | string      | call data                            |
-| output       | string      | return data                          |
-| error        | string      | error, if any                        |
-| revertReason | string      | Solidity revert reason, if any       |
-| calls        | []callframe | list of sub-calls                    |
+| field        | type        | description                                                                      |
+| ------------ | ----------- | -------------------------------------------------------------------------------- |
+| type         | string      | the type of call (CALL, STATICCALL, DELEGATECALL, CREATE, CREATE2, SELFDESTRUCT) |
+| from         | string      | the address initiating the call                                                  |
+| to           | string      | the target address receiving the call                                            |
+| value        | string      | hex-encoded amount of ETH transfer                                               |
+| gas          | string      | hex-encoded gas provided for call                                                |
+| gasUsed      | string      | hex-encoded gas used during call                                                 |
+| input        | string      | call data                                                                        |
+| output       | string      | return data                                                                      |
+| error        | string      | error informaction if the call failed                                            |
+| revertReason | string      | Solidity revert reason, if any                                                   |
+| calls        | []callframe | list of nested sub-calls                                                         |
+
+Hints the `to` address, which varies by call type:
+
+- `CALL/STATICCALL`: The contract or receiving address being called
+- `DELEGATECALL`: The contract whose code is being executed
+- `CREATE/CREATE2`: The address of the newly deployed contract
+- `SELFDESTRUCT/SUICIDE`: The address of the refund recipient
 
 Example Call:
 
