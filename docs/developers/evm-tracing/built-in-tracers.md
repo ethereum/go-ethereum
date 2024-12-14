@@ -59,43 +59,35 @@ Return:
 
 ```terminal
 {
-   "gas":25523,
-   "failed":false,
-   "returnValue":"",
-   "structLogs":[
-      {
-         "pc":0,
-         "op":"PUSH1",
-         "gas":64580,
-         "gasCost":3,
-         "depth":1,
-         "error":null,
-         "stack":[
-
-         ],
-         "memory":null,
-         "storage":{
-
-         }
-      },
-      {
-         "pc":2,
-         "op":"PUSH1",
-         "gas":64577,
-         "gasCost":3,
-         "depth":1,
-         "error":null,
-         "stack":[
-            "0000000000000000000000000000000000000000000000000000000000000060"
-         ],
-         "memory":null,
-         "storage":{
-
-         }
-      },
-
-      ...
-
+    "gas": 25523,
+    "failed": false,
+    "returnValue": "",
+    "structLogs": [
+        {
+            "pc": 0,
+            "op": "PUSH1",
+            "gas": 64580,
+            "gasCost": 3,
+            "depth": 1,
+            "error": null,
+            "stack": [ ... ],
+            "memory": null,
+            "storage": { ... }
+        },
+        {
+            "pc": 2,
+            "op": "PUSH1",
+            "gas": 64577,
+            "gasCost": 3,
+            "depth": 1,
+            "error": null,
+            "stack": [
+                "0000000000000000000000000000000000000000000000000000000000000060"
+            ],
+            "memory": null,
+            "storage": { ... }
+        },
+        ...
 ```
 
 ## Native tracers {#native-tracers}
@@ -112,7 +104,7 @@ The `4byteTracer` collects the function selectors of every function executed in 
 Example call:
 
 ```sh
-debug.traceTransaction( "0x214e597e35da083692f5386141e69f47e973b2c56e7a8073b1ea08fd7571e9de", {tracer: "4byteTracer"})
+debug.traceTransaction("0x214e597e35da083692f5386141e69f47e973b2c56e7a8073b1ea08fd7571e9de", {tracer: "4byteTracer"})
 ```
 
 Return:
