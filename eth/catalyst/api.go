@@ -697,9 +697,6 @@ func (api *ConsensusAPI) NewPayloadV5(params engine.ExecutableData, versionedHas
 	if executionRequests == nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil executionRequests post-prague"))
 	}
-	if inclusionList == nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil inclusionList post-prague"))
-	}
 
 	// Note: Osaka fork is a placeholder for FOCIL fork.
 	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Osaka {
