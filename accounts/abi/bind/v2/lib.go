@@ -25,13 +25,14 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-// TODO: this will be generated as part of the bindings, contain the ABI (or metadata object?) and errors
+// ContractInstance represents a contract deployed on-chain that can be interacted with (filter for past logs, watch
+// for new logs, call, transact).
 type ContractInstance struct {
 	Address common.Address
 	Backend bind.ContractBackend
 }
 
-// TODO: adding docs soon (jwasinger)
+// FilterEvents returns an EventIterator instance for filtering historical events based on the event id and a block range.
 func FilterEvents[T any](instance *ContractInstance, opts *bind.FilterOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
 	backend := instance.Backend
 	c := bind.NewBoundContract(instance.Address, abi.ABI{}, backend, backend, backend)
