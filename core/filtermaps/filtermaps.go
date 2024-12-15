@@ -242,7 +242,8 @@ func (f *FilterMaps) Start() {
 			log.Error("Could not load head filter map snapshot", "error", err)
 		}
 	}
-	f.closeWg.Add(1)
+	f.closeWg.Add(2)
+	go f.removeBloomBits()
 	go f.indexerLoop()
 }
 
@@ -333,6 +334,13 @@ func (f *FilterMaps) init() error {
 	}
 	f.setRange(batch, f.targetView, fmr, false)
 	return batch.Write()
+}
+
+// removeBloomBits removes old bloom bits data from the database.
+func (f *FilterMaps) removeBloomBits() {
+	f.removeDbWithPrefix(rawdb.BloomBitsPrefix, "Removing old bloom bits database")
+	f.removeDbWithPrefix(rawdb.BloomBitsIndexPrefix, "Removing old bloom bits chain index")
+	f.closeWg.Done()
 }
 
 // removeDbWithPrefix removes data with the given prefix from the database and
