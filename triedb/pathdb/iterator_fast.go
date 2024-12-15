@@ -57,9 +57,6 @@ func (it *weightedIterator) Cmp(other *weightedIterator) int {
 // fastIterator is a more optimized multi-layer iterator which maintains a
 // direct mapping of all iterators leading down to the bottom layer.
 type fastIterator struct {
-	db   *Database   // Database to reinitialize stale sub-iterators with
-	root common.Hash // Root hash to reinitialize stale sub-iterators through
-
 	curAccount []byte
 	curSlot    []byte
 
@@ -78,8 +75,6 @@ func newFastIterator(db *Database, root common.Hash, account common.Hash, seek c
 		return nil, fmt.Errorf("unknown layer: %x", root)
 	}
 	fi := &fastIterator{
-		db:      db,
-		root:    root,
 		account: accountIterator,
 	}
 	for depth := 0; current != nil; depth++ {

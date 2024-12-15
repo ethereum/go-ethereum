@@ -889,6 +889,53 @@ func TestStorageIteratorDeletions(t *testing.T) {
 	verifyIterator(t, 2, db.tree.get(common.HexToHash("0x06")).(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{}), verifyStorage)
 }
 
+// TestStaleIterator tests if the iterator could correctly terminate the iteration
+// if the associated layers are outdated.
+func TestStaleIterator(t *testing.T) {
+	testStaleIterator(t, func(db *Database, hash common.Hash) Iterator {
+		it, _ := db.StorageIterator(hash, common.HexToHash("0xaa"), common.Hash{})
+		return it
+	})
+	testStaleIterator(t, func(db *Database, hash common.Hash) Iterator {
+		head := db.tree.get(hash)
+		return head.(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{})
+	})
+}
+
+func testStaleIterator(t *testing.T, newIter func(db *Database, hash common.Hash) Iterator) {
+	config := &Config{
+		WriteBufferSize: 16 * 1024 * 1024,
+	}
+	db := New(rawdb.NewMemoryDatabase(), config, false)
+	// db.WaitGeneration()
+
+	// [02 (disk), 03]
+	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01"}}, nil), nil, nil))
+	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 2, trienode.NewMergedNodeSet(),
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x02"}}, nil), nil, nil))
+	db.tree.cap(common.HexToHash("0x03"), 1)
+
+	// [02 (disk), 03, 04]
+	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 3, trienode.NewMergedNodeSet(),
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x03"}}, nil), nil, nil))
+	iter := newIter(db, common.HexToHash("0x04"))
+
+	// [04 (disk), 05]
+	db.Update(common.HexToHash("0x05"), common.HexToHash("0x04"), 3, trienode.NewMergedNodeSet(),
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x04"}}, nil), nil, nil))
+	db.tree.cap(common.HexToHash("0x05"), 1)
+
+	// Iterator can't finish the traversal as the layer 02 has becoming stale.
+	for iter.Next() {
+	}
+	err := iter.Error()
+	t.Log(err)
+	if err == nil {
+		t.Fatalf("Expected iterator error is not reported")
+	}
+}
+
 // BenchmarkAccountIteratorTraversal is a bit notorious -- all layers contain the
 // exact same 200 accounts. That means that we need to process 2000 items, but
 // only spit out 200 values eventually.

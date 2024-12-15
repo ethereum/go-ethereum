@@ -559,17 +559,11 @@ func (db *Database) HistoryRange() (uint64, uint64, error) {
 // AccountIterator creates a new account iterator for the specified root hash and
 // seeks to a starting account hash.
 func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
-	//if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
-	//	return nil, errNotConstructed
-	//}
 	return newFastAccountIterator(db, root, seek)
 }
 
 // StorageIterator creates a new storage iterator for the specified root hash and
-// account. The iterator will be move to the specific start position.
+// account. The iterator will be moved to the specific start position.
 func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
-	//if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
-	//	return nil, errNotConstructed
-	//}
 	return newFastStorageIterator(db, root, account, seek)
 }

@@ -24,7 +24,14 @@ import (
 
 // binaryIterator is a simplistic iterator to step over the accounts or storage
 // in a snapshot, which may or may not be composed of multiple layers. Performance
-// wise this iterator is slow, it's meant for cross validating the fast one,
+// wise this iterator is slow, it's meant for cross validating the fast one.
+//
+// This iterator cannot be used on its own; it should be wrapped with an outer
+// iterator, such as accountBinaryIterator or storageBinaryIterator.
+//
+// This iterator can only traverse the keys of the entries stored in the layers,
+// but cannot obtain the corresponding values. Besides, the deleted entry will
+// also be traversed, the outer iterator must check the emptiness before returning.
 type binaryIterator struct {
 	a     Iterator
 	b     Iterator
@@ -41,18 +48,13 @@ func (dl *diskLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 	// Create two iterators for state buffer and the persistent state in disk
 	// respectively and combine them as a binary iterator.
 	l := &binaryIterator{
-		// The state set in the disk layer is mutable, and the entire state becomes stale
-		// if a diff layer above is merged into it. Therefore, staleness must be checked,
-		// and the account data should be retrieved with read lock protection.
-		a: newDiffAccountIterator(seek, dl.buffer.states, func(hash common.Hash) ([]byte, error) {
-			dl.lock.RLock()
-			defer dl.lock.RUnlock()
-
-			if dl.stale {
-				return nil, errSnapshotStale
-			}
-			return dl.buffer.states.mustAccount(hash)
-		}),
+		// The account loader function is unnecessary; the account key list
+		// produced by the supplied buffer alone is sufficient for iteration.
+		//
+		// The account key list for iteration is deterministic once the iterator
+		// is constructed, no matter the referenced disk layer is stale or not
+		// later.
+		a: newDiffAccountIterator(seek, dl.buffer.states, nil),
 		b: newDiskAccountIterator(dl.db.diskdb, seek),
 	}
 	l.aDone = !l.a.Next()
@@ -67,9 +69,13 @@ func (dl *diffLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
 		l := &binaryIterator{
-			// The state set in diff layer is immutable and will never be stale,
-			// so the read lock protection is unnecessary.
-			a: newDiffAccountIterator(seek, dl.states.stateSet, dl.states.mustAccount),
+			// The account loader function is unnecessary; the account key list
+			// produced by the supplied state set alone is sufficient for iteration.
+			//
+			// The account key list for iteration is deterministic once the iterator
+			// is constructed, no matter the referenced disk layer is stale or not
+			// later.
+			a: newDiffAccountIterator(seek, dl.states.stateSet, nil),
 			b: dl.parent.(*diskLayer).initBinaryAccountIterator(seek),
 		}
 		l.aDone = !l.a.Next()
@@ -77,9 +83,13 @@ func (dl *diffLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 		return l
 	}
 	l := &binaryIterator{
-		// The state set in diff layer is immutable and will never
-		// be stale. The supplied staleness checker is nil.
-		a: newDiffAccountIterator(seek, dl.states.stateSet, dl.states.mustAccount),
+		// The account loader function is unnecessary; the account key list
+		// produced by the supplied state set alone is sufficient for iteration.
+		//
+		// The account key list for iteration is deterministic once the iterator
+		// is constructed, no matter the referenced disk layer is stale or not
+		// later.
+		a: newDiffAccountIterator(seek, dl.states.stateSet, nil),
 		b: parent.initBinaryAccountIterator(seek),
 	}
 	l.aDone = !l.a.Next()
@@ -94,18 +104,13 @@ func (dl *diskLayer) initBinaryStorageIterator(account common.Hash, seek common.
 	// Create two iterators for state buffer and the persistent state in disk
 	// respectively and combine them as a binary iterator.
 	l := &binaryIterator{
-		// The state set in the disk layer is mutable, and the entire state becomes stale
-		// if a diff layer above is merged into it. Therefore, staleness must be checked,
-		// and the storage slot should be retrieved with read lock protection.
-		a: newDiffStorageIterator(account, seek, dl.buffer.states, func(addrHash common.Hash, slotHash common.Hash) ([]byte, error) {
-			dl.lock.RLock()
-			defer dl.lock.RUnlock()
-
-			if dl.stale {
-				return nil, errSnapshotStale
-			}
-			return dl.buffer.states.mustStorage(addrHash, slotHash)
-		}),
+		// The storage loader function is unnecessary; the storage key list
+		// produced by the supplied buffer alone is sufficient for iteration.
+		//
+		// The storage key list for iteration is deterministic once the iterator
+		// is constructed, no matter the referenced disk layer is stale or not
+		// later.
+		a: newDiffStorageIterator(account, seek, dl.buffer.states, nil),
 		b: newDiskStorageIterator(dl.db.diskdb, account, seek),
 	}
 	l.aDone = !l.a.Next()
@@ -120,9 +125,13 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash, seek common.
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
 		l := &binaryIterator{
-			// The state set in diff layer is immutable and will never be stale,
-			// so the read lock protection is unnecessary.
-			a: newDiffStorageIterator(account, seek, dl.states.stateSet, dl.states.mustStorage),
+			// The storage loader function is unnecessary; the storage key list
+			// produced by the supplied state set alone is sufficient for iteration.
+			//
+			// The storage key list for iteration is deterministic once the iterator
+			// is constructed, no matter the referenced disk layer is stale or not
+			// later.
+			a: newDiffStorageIterator(account, seek, dl.states.stateSet, nil),
 			b: dl.parent.(*diskLayer).initBinaryStorageIterator(account, seek),
 		}
 		l.aDone = !l.a.Next()
@@ -130,8 +139,12 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash, seek common.
 		return l
 	}
 	l := &binaryIterator{
-		// The state set in diff layer is immutable and will never
-		// be stale. The supplied staleness checker is nil.
+		// The storage loader function is unnecessary; the storage key list
+		// produced by the supplied state set alone is sufficient for iteration.
+		//
+		// The storage key list for iteration is deterministic once the iterator
+		// is constructed, no matter the referenced disk layer is stale or not
+		// later.
 		a: newDiffStorageIterator(account, seek, dl.states.stateSet, nil),
 		b: parent.initBinaryStorageIterator(account, seek),
 	}
@@ -145,7 +158,8 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash, seek common.
 // (e.g., when an account is deleted but still accessible for iteration).
 // The outer iterator must verify emptiness before terminating the iteration.
 //
-// TODO (rjl493456442) the error of two iterators are not checked, please fix it.
+// There’s no need to check for errors in the two iterators, as we only iterate
+// through the entries without retrieving their values.
 func (it *binaryIterator) Next() bool {
 	if it.aDone && it.bDone {
 		return false
@@ -229,11 +243,17 @@ func (it *accountBinaryIterator) Next() bool {
 		if !it.binaryIterator.Next() {
 			return false
 		}
+		// Retrieve the account data referenced by the current iterator, the
+		// associated layers might be outdated due to chain progressing,
+		// the relative error will be set to it.fail just in case.
+		//
+		// Skip the null account which was deleted before and move to the
+		// next account.
 		if len(it.Account()) != 0 {
 			return true
 		}
-		// it.fail might be set if error occurs by calling
-		// it.Account() stop iteration if so.
+		// it.fail might be set if error occurs by calling it.Account().
+		// Stop iteration if so.
 		if it.fail != nil {
 			return false
 		}
@@ -292,11 +312,17 @@ func (it *storageBinaryIterator) Next() bool {
 		if !it.binaryIterator.Next() {
 			return false
 		}
+		// Retrieve the storage data referenced by the current iterator, the
+		// associated layers might be outdated due to chain progressing,
+		// the relative error will be set to it.fail just in case.
+		//
+		// Skip the null storage which was deleted before and move to the
+		// next account.
 		if len(it.Slot()) != 0 {
 			return true
 		}
-		// it.fail might be set if error occurs by calling
-		// it.Slot() stop iteration if so.
+		// it.fail might be set if error occurs by calling it.Slot().
+		// Stop iteration if so.
 		if it.fail != nil {
 			return false
 		}

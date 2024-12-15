@@ -159,8 +159,8 @@ func (it *diffAccountIterator) Release() {}
 // To simplify, the staleness of the persistent state is not tracked. The disk
 // iterator is not intended to be used alone. It should always be wrapped with
 // a diff iterator, as the bottom-most disk layer uses both the in-memory
-// aggregated buffer and the persistent disk layer as data sources. The staleness
-// of the diff iterator is sufficient to invalidate the iterator pair.
+// aggregated buffer and the persistent disk layer as the data sources. The
+// staleness of the diff iterator is sufficient to invalidate the iterator pair.
 type diskAccountIterator struct {
 	it ethdb.Iterator
 }
@@ -304,8 +304,8 @@ func (it *diffStorageIterator) Release() {}
 // To simplify, the staleness of the persistent state is not tracked. The disk
 // iterator is not intended to be used alone. It should always be wrapped with
 // a diff iterator, as the bottom-most disk layer uses both the in-memory
-// aggregated buffer and the persistent disk layer as data sources. The staleness
-// of the diff iterator is sufficient to invalidate the iterator pair.
+// aggregated buffer and the persistent disk layer as the data sources. The
+// staleness of the diff iterator is sufficient to invalidate the iterator pair.
 type diskStorageIterator struct {
 	account common.Hash
 	it      ethdb.Iterator
