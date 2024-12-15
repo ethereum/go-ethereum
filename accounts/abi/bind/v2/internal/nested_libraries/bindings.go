@@ -176,7 +176,9 @@ func (_L1 *L1) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-var L2LibraryDeps = []*bind.MetaData{}
+var L2LibraryDeps = []*bind.MetaData{
+	L1MetaData,
+}
 
 // TODO: convert this type to value type after everything works.
 // L2MetaData contains all meta data concerning the L2 contract.
@@ -224,7 +226,9 @@ func (_L2 *L2) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-var L2bLibraryDeps = []*bind.MetaData{}
+var L2bLibraryDeps = []*bind.MetaData{
+	L1MetaData,
+}
 
 // TODO: convert this type to value type after everything works.
 // L2bMetaData contains all meta data concerning the L2b contract.
@@ -320,7 +324,11 @@ func (_L3 *L3) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-var L4LibraryDeps = []*bind.MetaData{}
+var L4LibraryDeps = []*bind.MetaData{
+	L1MetaData,
+	L2MetaData,
+	L3MetaData,
+}
 
 // TODO: convert this type to value type after everything works.
 // L4MetaData contains all meta data concerning the L4 contract.
@@ -368,7 +376,10 @@ func (_L4 *L4) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-var L4bLibraryDeps = []*bind.MetaData{}
+var L4bLibraryDeps = []*bind.MetaData{
+	L1MetaData,
+	L2bMetaData,
+}
 
 // TODO: convert this type to value type after everything works.
 // L4bMetaData contains all meta data concerning the L4b contract.

@@ -121,13 +121,13 @@ func TestDeploymentLibraries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to pack constructor: %v", err)
 	}
-	deploymentParams := DeploymentParams{
+	deploymentParams := bind.DeploymentParams{
 		Contracts: append(nested_libraries.C1LibraryDeps, nested_libraries.C1MetaData),
 		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput},
 		Overrides: nil,
 	}
 
-	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -180,11 +180,11 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	defer bindBackend.Backend.Close()
 
 	// deploy some library deps
-	deploymentParams := DeploymentParams{
+	deploymentParams := bind.DeploymentParams{
 		Contracts: nested_libraries.C1LibraryDeps,
 	}
 
-	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -210,12 +210,12 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 	overrides := res.Addrs
 	// deploy the contract
-	deploymentParams = DeploymentParams{
+	deploymentParams = bind.DeploymentParams{
 		Contracts: []*bind.MetaData{nested_libraries.C1MetaData},
 		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput},
 		Overrides: overrides,
 	}
-	res, err = LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
+	res, err = bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -271,11 +271,11 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := DeploymentParams{
+	deploymentParams := bind.DeploymentParams{
 		Contracts: []*bind.MetaData{events.CMetaData},
 	}
 
-	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
 	}
@@ -387,11 +387,11 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := DeploymentParams{
+	deploymentParams := bind.DeploymentParams{
 		Contracts: []*bind.MetaData{solc_errors.CMetaData},
 	}
 
-	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
 	}

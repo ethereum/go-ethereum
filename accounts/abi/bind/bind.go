@@ -404,57 +404,31 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		contracts[types[i]].Library = ok
 	}
 
-	// compute the full set of libraries that each contract depends on.
-	for _, contract := range contracts {
-		if contract.Library {
-			continue
-		}
-		// recursively traverse the library dependency graph
-		// of the contract, flattening it into a set.
-		//
-		// For abigenv2, we do not generate contract deploy
-		// methods (which in v1 recursively deploy their
-		// library dependencies).  So, the entire set of
-		// library dependencies is required, and we will
-		// determine the order to deploy and link them at
-		// runtime.
-		var findDeps func(contract *tmplContract) map[string]struct{}
-		findDeps = func(contract *tmplContract) map[string]struct{} {
-			// 1) match all libraries that this contract depends on
-			re, err := regexp.Compile(`__\$([a-f0-9]+)\$__`)
-			if err != nil {
-				panic(err)
-			}
-			libBin := contracts[contract.Type].InputBin
-			matches := re.FindAllStringSubmatch(libBin, -1)
-			result := make(map[string]struct{})
-
-			// 2) recurse, gathering nested library dependencies
-			for _, match := range matches {
-				pattern := match[1]
-				result[pattern] = struct{}{}
-				depContract := contracts[libs[pattern]]
-				for subPattern, _ := range findDeps(depContract) {
-					result[subPattern] = struct{}{}
-				}
-			}
-			return result
-		}
-		// take the set of library patterns, convert it to a map of type -> pattern
-		deps := findDeps(contract)
-		contract.AllLibraries = make(map[string]string)
-		for contractPattern, _ := range deps {
-			contractType := libs[contractPattern]
-			contract.AllLibraries[contractType] = contractPattern
-		}
-	}
-
 	// map of contract name -> pattern
 	invertedLibs := make(map[string]string)
 	// assume that this is invertible/onto because I assume library names are unique now
 	// TODO: check that they've been sanitized at this point.
 	for pattern, name := range libs {
 		invertedLibs[name] = pattern
+	}
+
+	contractsBins := make(map[string]string)
+	for typ, contract := range contracts {
+		pattern := invertedLibs[typ]
+		contractsBins[pattern] = contract.InputBin
+	}
+	builder := newDepTreeBuilder(nil, contractsBins)
+	roots, deps := builder.BuildDepTrees()
+	allNodes := append(roots, deps...)
+	for _, dep := range allNodes {
+		contractType := libs[dep.pattern]
+		for subDepPattern, _ := range dep.Flatten() {
+			if subDepPattern == dep.pattern {
+				continue
+			}
+			subDepType := libs[subDepPattern]
+			contracts[contractType].AllLibraries[subDepType] = subDepPattern
+		}
 	}
 
 	// Generate the contract template data content and render it

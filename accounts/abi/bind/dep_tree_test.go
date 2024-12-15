@@ -13,13 +13,12 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-package v2
+package bind
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -87,6 +86,8 @@ func makeLinkTestCase(input map[rune][]rune, overrides map[rune]common.Address) 
 	}
 }
 
+var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+
 type linkTestCaseInput struct {
 	input          map[rune][]rune
 	overrides      map[rune]struct{}
@@ -141,10 +142,10 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 		deployParams DeploymentParams
 	)
 	for pattern, bin := range tc.contractCodes {
-		deployParams.Contracts = append(deployParams.Contracts, &bind.MetaData{Pattern: pattern, Bin: "0x" + bin})
+		deployParams.Contracts = append(deployParams.Contracts, &MetaData{Pattern: pattern, Bin: "0x" + bin})
 	}
 	for pattern, bin := range tc.libCodes {
-		deployParams.Contracts = append(deployParams.Contracts, &bind.MetaData{
+		deployParams.Contracts = append(deployParams.Contracts, &MetaData{
 			Bin:     "0x" + bin,
 			Pattern: pattern,
 		})
