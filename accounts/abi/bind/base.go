@@ -470,11 +470,11 @@ func (c *BoundContract) FilterLogsById(opts *FilterOpts, eventID common.Hash, qu
 
 // FilterLogs filters contract logs for past blocks, returning the necessary
 // channels to construct a strongly typed bound iterator on top of them.
-func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
 	return c.filterLogs(opts, c.abi.Events[name].ID, query...)
 }
 
-func (c *BoundContract) filterLogs(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+func (c *BoundContract) filterLogs(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(FilterOpts)
@@ -519,17 +519,17 @@ func (c *BoundContract) filterLogs(opts *FilterOpts, eventID common.Hash, query 
 
 // WatchLogs filters subscribes to contract logs for future blocks, returning a
 // subscription object that can be used to tear down the watcher.
-func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
 	return c.watchLogs(opts, c.abi.Events[name].ID, query...)
 }
 
 // WatchLogsForId filters subscribes to contract logs for future blocks, returning a
 // subscription object that can be used to tear down the watcher.
-func (c *BoundContract) WatchLogsForId(opts *WatchOpts, id common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+func (c *BoundContract) WatchLogsForId(opts *WatchOpts, id common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
 	return c.watchLogs(opts, id, query...)
 }
 
-func (c *BoundContract) watchLogs(opts *WatchOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+func (c *BoundContract) watchLogs(opts *WatchOpts, eventID common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(WatchOpts)

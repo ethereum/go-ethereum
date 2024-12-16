@@ -144,6 +144,35 @@ func BindV2(types []string, abis []string, bytecodes []string, fsigs []map[strin
 			call.Structured = true
 		}
 	}
+
+	// map of contract name -> pattern
+	invertedLibs := make(map[string]string)
+	// assume that this is invertible/onto because I assume library names are unique now
+	// TODO: check that they've been sanitized at this point.
+	for pattern, name := range libs {
+		invertedLibs[name] = pattern
+	}
+	data.InvertedLibs = invertedLibs
+
+	contractsBins := make(map[string]string)
+	for typ, contract := range data.Contracts {
+		pattern := invertedLibs[typ]
+		contractsBins[pattern] = contract.InputBin
+	}
+	builder := newDepTreeBuilder(nil, contractsBins)
+	roots, deps := builder.BuildDepTrees()
+	allNodes := append(roots, deps...)
+	for _, dep := range allNodes {
+		contractType := libs[dep.pattern]
+		for subDepPattern, _ := range dep.Flatten() {
+			if subDepPattern == dep.pattern {
+				continue
+			}
+			subDepType := libs[subDepPattern]
+			data.Contracts[contractType].AllLibraries[subDepType] = subDepPattern
+		}
+	}
+
 	buffer := new(bytes.Buffer)
 	funcs := map[string]interface{}{
 		"bindtype":      bindType,
@@ -404,40 +433,12 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		contracts[types[i]].Library = ok
 	}
 
-	// map of contract name -> pattern
-	invertedLibs := make(map[string]string)
-	// assume that this is invertible/onto because I assume library names are unique now
-	// TODO: check that they've been sanitized at this point.
-	for pattern, name := range libs {
-		invertedLibs[name] = pattern
-	}
-
-	contractsBins := make(map[string]string)
-	for typ, contract := range contracts {
-		pattern := invertedLibs[typ]
-		contractsBins[pattern] = contract.InputBin
-	}
-	builder := newDepTreeBuilder(nil, contractsBins)
-	roots, deps := builder.BuildDepTrees()
-	allNodes := append(roots, deps...)
-	for _, dep := range allNodes {
-		contractType := libs[dep.pattern]
-		for subDepPattern, _ := range dep.Flatten() {
-			if subDepPattern == dep.pattern {
-				continue
-			}
-			subDepType := libs[subDepPattern]
-			contracts[contractType].AllLibraries[subDepType] = subDepPattern
-		}
-	}
-
 	// Generate the contract template data content and render it
 	data := &tmplData{
-		Package:      pkg,
-		Contracts:    contracts,
-		Libraries:    libs,
-		InvertedLibs: invertedLibs,
-		Structs:      structs,
+		Package:   pkg,
+		Contracts: contracts,
+		Libraries: libs,
+		Structs:   structs,
 	}
 	return data, nil
 }
