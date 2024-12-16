@@ -36,7 +36,7 @@ var jt vm.JumpTable
 const initcode = "INITCODE"
 
 func init() {
-	jt = vm.NewPragueEOFInstructionSetForTesting()
+	jt = vm.NewEOFInstructionSetForTesting()
 }
 
 var (

@@ -28,39 +28,39 @@ import (
 func TestStatesMerge(t *testing.T) {
 	a := newStates(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa0},
-			common.Hash{0xb}: {0xb0},
-			common.Hash{0xc}: {0xc0},
+			{0xa}: {0xa0},
+			{0xb}: {0xb0},
+			{0xc}: {0xc0},
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: {0x10},
 				common.Hash{0x2}: {0x20},
 			},
-			common.Hash{0xb}: {
+			{0xb}: {
 				common.Hash{0x1}: {0x10},
 			},
-			common.Hash{0xc}: {
+			{0xc}: {
 				common.Hash{0x1}: {0x10},
 			},
 		},
 	)
 	b := newStates(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa1},
-			common.Hash{0xb}: {0xb1},
-			common.Hash{0xc}: nil, // delete account
+			{0xa}: {0xa1},
+			{0xb}: {0xb1},
+			{0xc}: nil, // delete account
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: {0x11},
 				common.Hash{0x2}: nil, // delete slot
 				common.Hash{0x3}: {0x31},
 			},
-			common.Hash{0xb}: {
+			{0xb}: {
 				common.Hash{0x1}: {0x11},
 			},
-			common.Hash{0xc}: {
+			{0xc}: {
 				common.Hash{0x1}: nil, // delete slot
 			},
 		},
@@ -116,39 +116,39 @@ func TestStatesMerge(t *testing.T) {
 func TestStatesRevert(t *testing.T) {
 	a := newStates(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa0},
-			common.Hash{0xb}: {0xb0},
-			common.Hash{0xc}: {0xc0},
+			{0xa}: {0xa0},
+			{0xb}: {0xb0},
+			{0xc}: {0xc0},
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: {0x10},
 				common.Hash{0x2}: {0x20},
 			},
-			common.Hash{0xb}: {
+			{0xb}: {
 				common.Hash{0x1}: {0x10},
 			},
-			common.Hash{0xc}: {
+			{0xc}: {
 				common.Hash{0x1}: {0x10},
 			},
 		},
 	)
 	b := newStates(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa1},
-			common.Hash{0xb}: {0xb1},
-			common.Hash{0xc}: nil,
+			{0xa}: {0xa1},
+			{0xb}: {0xb1},
+			{0xc}: nil,
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: {0x11},
 				common.Hash{0x2}: nil,
 				common.Hash{0x3}: {0x31},
 			},
-			common.Hash{0xb}: {
+			{0xb}: {
 				common.Hash{0x1}: {0x11},
 			},
-			common.Hash{0xc}: {
+			{0xc}: {
 				common.Hash{0x1}: nil,
 			},
 		},
@@ -156,20 +156,20 @@ func TestStatesRevert(t *testing.T) {
 	a.merge(b)
 	a.revertTo(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa0},
-			common.Hash{0xb}: {0xb0},
-			common.Hash{0xc}: {0xc0},
+			{0xa}: {0xa0},
+			{0xb}: {0xb0},
+			{0xc}: {0xc0},
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: {0x10},
 				common.Hash{0x2}: {0x20},
 				common.Hash{0x3}: nil,
 			},
-			common.Hash{0xb}: {
+			{0xb}: {
 				common.Hash{0x1}: {0x10},
 			},
-			common.Hash{0xc}: {
+			{0xc}: {
 				common.Hash{0x1}: {0x10},
 			},
 		},
@@ -227,14 +227,14 @@ func TestStateRevertAccountNullMarker(t *testing.T) {
 	a := newStates(nil, nil) // empty initial state
 	b := newStates(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa},
+			{0xa}: {0xa},
 		},
 		nil,
 	)
 	a.merge(b) // create account 0xa
 	a.revertTo(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: nil,
+			{0xa}: nil,
 		},
 		nil,
 	) // revert the transition b
@@ -253,13 +253,13 @@ func TestStateRevertAccountNullMarker(t *testing.T) {
 // entry in the set.
 func TestStateRevertStorageNullMarker(t *testing.T) {
 	a := newStates(map[common.Hash][]byte{
-		common.Hash{0xa}: {0xa},
+		{0xa}: {0xa},
 	}, nil) // initial state with account 0xa
 
 	b := newStates(
 		nil,
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: {0x1},
 			},
 		},
@@ -268,7 +268,7 @@ func TestStateRevertStorageNullMarker(t *testing.T) {
 	a.revertTo(
 		nil,
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: nil,
 			},
 		},
@@ -286,10 +286,10 @@ func TestStateRevertStorageNullMarker(t *testing.T) {
 func TestStatesEncode(t *testing.T) {
 	s := newStates(
 		map[common.Hash][]byte{
-			common.Hash{0x1}: {0x1},
+			{0x1}: {0x1},
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0x1}: {
+			{0x1}: {
 				common.Hash{0x1}: {0x1},
 			},
 		},
@@ -313,18 +313,18 @@ func TestStatesEncode(t *testing.T) {
 func TestStateWithOriginEncode(t *testing.T) {
 	s := NewStateSetWithOrigin(
 		map[common.Hash][]byte{
-			common.Hash{0x1}: {0x1},
+			{0x1}: {0x1},
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0x1}: {
+			{0x1}: {
 				common.Hash{0x1}: {0x1},
 			},
 		},
 		map[common.Address][]byte{
-			common.Address{0x1}: {0x1},
+			{0x1}: {0x1},
 		},
 		map[common.Address]map[common.Hash][]byte{
-			common.Address{0x1}: {
+			{0x1}: {
 				common.Hash{0x1}: {0x1},
 			},
 		},
@@ -359,19 +359,19 @@ func TestStateSizeTracking(t *testing.T) {
 
 	a := newStates(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa0}, // common.HashLength+1
-			common.Hash{0xb}: {0xb0}, // common.HashLength+1
-			common.Hash{0xc}: {0xc0}, // common.HashLength+1
+			{0xa}: {0xa0}, // common.HashLength+1
+			{0xb}: {0xb0}, // common.HashLength+1
+			{0xc}: {0xc0}, // common.HashLength+1
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: {0x10}, // 2*common.HashLength+1
 				common.Hash{0x2}: {0x20}, // 2*common.HashLength+1
 			},
-			common.Hash{0xb}: {
+			{0xb}: {
 				common.Hash{0x1}: {0x10, 0x11, 0x12}, // 2*common.HashLength+3
 			},
-			common.Hash{0xc}: {
+			{0xc}: {
 				common.Hash{0x1}: {0x10}, // 2*common.HashLength+1
 			},
 		},
@@ -386,21 +386,21 @@ func TestStateSizeTracking(t *testing.T) {
 		3*2*common.HashLength /* storage data of 0xc */
 	b := newStates(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa1, 0xa1},       // common.HashLength+2
-			common.Hash{0xb}: {0xb1, 0xb1, 0xb1}, // common.HashLength+3
-			common.Hash{0xc}: nil,                // common.HashLength, account deletion
+			{0xa}: {0xa1, 0xa1},       // common.HashLength+2
+			{0xb}: {0xb1, 0xb1, 0xb1}, // common.HashLength+3
+			{0xc}: nil,                // common.HashLength, account deletion
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: {0x11, 0x11, 0x11}, // 2*common.HashLength+3
 				common.Hash{0x3}: {0x31, 0x31},       // 2*common.HashLength+2, slot creation
 			},
-			common.Hash{0xb}: {
+			{0xb}: {
 				common.Hash{0x1}: {0x11, 0x11}, // 2*common.HashLength+2
 				common.Hash{0x2}: {0x22, 0x22}, // 2*common.HashLength+2, slot creation
 			},
 			// The storage of 0xc is entirely removed
-			common.Hash{0xc}: {
+			{0xc}: {
 				common.Hash{0x1}: nil, // 2*common.HashLength, slot deletion
 				common.Hash{0x2}: nil, // 2*common.HashLength, slot deletion
 				common.Hash{0x3}: nil, // 2*common.HashLength, slot deletion
@@ -424,21 +424,21 @@ func TestStateSizeTracking(t *testing.T) {
 	// Revert the set to original status
 	a.revertTo(
 		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa0},
-			common.Hash{0xb}: {0xb0},
-			common.Hash{0xc}: {0xc0},
+			{0xa}: {0xa0},
+			{0xb}: {0xb0},
+			{0xc}: {0xc0},
 		},
 		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
+			{0xa}: {
 				common.Hash{0x1}: {0x10},
 				common.Hash{0x2}: {0x20},
 				common.Hash{0x3}: nil, // revert slot creation
 			},
-			common.Hash{0xb}: {
+			{0xb}: {
 				common.Hash{0x1}: {0x10, 0x11, 0x12},
 				common.Hash{0x2}: nil, // revert slot creation
 			},
-			common.Hash{0xc}: {
+			{0xc}: {
 				common.Hash{0x1}: {0x10},
 				common.Hash{0x2}: {0x20}, // resurrected slot
 				common.Hash{0x3}: {0x30}, // resurrected slot

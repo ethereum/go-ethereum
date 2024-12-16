@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/netip"
 	"reflect"
 	"sync"
 	"testing"
@@ -389,6 +390,34 @@ func TestDialSchedResolve(t *testing.T) {
 			},
 			wantNewDials: []*enode.Node{
 				resolved2,
+			},
+		},
+	})
+}
+
+func TestDialSchedDNSHostname(t *testing.T) {
+	t.Parallel()
+
+	config := dialConfig{
+		maxActiveDials: 1,
+		maxDialPeers:   1,
+	}
+	node := newNode(uintID(0x01), ":30303").WithHostname("node-hostname")
+	resolved := newNode(uintID(0x01), "1.2.3.4:30303").WithHostname("node-hostname")
+	runDialTest(t, config, []dialTestRound{
+		{
+			update: func(d *dialScheduler) {
+				d.dnsLookupFunc = func(ctx context.Context, network string, name string) ([]netip.Addr, error) {
+					if name != "node-hostname" {
+						t.Error("wrong hostname in DNS lookup:", name)
+					}
+					result := []netip.Addr{netip.MustParseAddr("1.2.3.4")}
+					return result, nil
+				}
+				d.addStatic(node)
+			},
+			wantNewDials: []*enode.Node{
+				resolved,
 			},
 		},
 	})
