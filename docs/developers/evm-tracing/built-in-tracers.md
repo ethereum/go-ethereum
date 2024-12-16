@@ -59,43 +59,35 @@ Return:
 
 ```terminal
 {
-   "gas":25523,
-   "failed":false,
-   "returnValue":"",
-   "structLogs":[
-      {
-         "pc":0,
-         "op":"PUSH1",
-         "gas":64580,
-         "gasCost":3,
-         "depth":1,
-         "error":null,
-         "stack":[
-
-         ],
-         "memory":null,
-         "storage":{
-
-         }
-      },
-      {
-         "pc":2,
-         "op":"PUSH1",
-         "gas":64577,
-         "gasCost":3,
-         "depth":1,
-         "error":null,
-         "stack":[
-            "0000000000000000000000000000000000000000000000000000000000000060"
-         ],
-         "memory":null,
-         "storage":{
-
-         }
-      },
-
-      ...
-
+    "gas": 25523,
+    "failed": false,
+    "returnValue": "",
+    "structLogs": [
+        {
+            "pc": 0,
+            "op": "PUSH1",
+            "gas": 64580,
+            "gasCost": 3,
+            "depth": 1,
+            "error": null,
+            "stack": [ ... ],
+            "memory": null,
+            "storage": { ... }
+        },
+        {
+            "pc": 2,
+            "op": "PUSH1",
+            "gas": 64577,
+            "gasCost": 3,
+            "depth": 1,
+            "error": null,
+            "stack": [
+                "0000000000000000000000000000000000000000000000000000000000000060"
+            ],
+            "memory": null,
+            "storage": { ... }
+        },
+        ...
 ```
 
 ## Native tracers {#native-tracers}
@@ -112,7 +104,7 @@ The `4byteTracer` collects the function selectors of every function executed in 
 Example call:
 
 ```sh
-debug.traceTransaction( "0x214e597e35da083692f5386141e69f47e973b2c56e7a8073b1ea08fd7571e9de", {tracer: "4byteTracer"})
+debug.traceTransaction("0x214e597e35da083692f5386141e69f47e973b2c56e7a8073b1ea08fd7571e9de", {tracer: "4byteTracer"})
 ```
 
 Return:
@@ -131,19 +123,26 @@ Return:
 
 The `callTracer` tracks all the call frames executed during a transaction, including depth 0. The result will be a nested list of call frames, resembling how EVM works. They form a tree with the top-level call at root and sub-calls as children of the higher levels. Each call frame has the following fields:
 
-| field        | type        | description                          |
-| ------------ | ----------- | ------------------------------------ |
-| type         | string      | CALL or CREATE                       |
-| from         | string      | address                              |
-| to           | string      | address                              |
-| value        | string      | hex-encoded amount of value transfer |
-| gas          | string      | hex-encoded gas provided for call    |
-| gasUsed      | string      | hex-encoded gas used during call     |
-| input        | string      | call data                            |
-| output       | string      | return data                          |
-| error        | string      | error, if any                        |
-| revertReason | string      | Solidity revert reason, if any       |
-| calls        | []callframe | list of sub-calls                    |
+| field        | type        | description                                                                      |
+| ------------ | ----------- | -------------------------------------------------------------------------------- |
+| type         | string      | the type of call (CALL, STATICCALL, DELEGATECALL, CREATE, CREATE2, SELFDESTRUCT) |
+| from         | string      | the address initiating the call                                                  |
+| to           | string      | the target address receiving the call                                            |
+| value        | string      | hex-encoded amount of ETH transfer                                               |
+| gas          | string      | hex-encoded gas provided for call                                                |
+| gasUsed      | string      | hex-encoded gas used during call                                                 |
+| input        | string      | call data                                                                        |
+| output       | string      | return data                                                                      |
+| error        | string      | error informaction if the call failed                                            |
+| revertReason | string      | Solidity revert reason, if any                                                   |
+| calls        | []callframe | list of nested sub-calls                                                         |
+
+Hints the `to` address, which varies by call type:
+
+- `CALL/STATICCALL`: The contract or receiving address being called
+- `DELEGATECALL`: The contract whose code is being executed
+- `CREATE/CREATE2`: The address of the newly deployed contract
+- `SELFDESTRUCT/SUICIDE`: The address of the refund recipient
 
 Example Call:
 
@@ -222,11 +221,17 @@ The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode re
 In `diff` mode the result object will contain a `pre` and a `post` object:
 
 1. The result only includes accounts that were modified. Accounts without changes will be omitted in this mode.
-2. In `pre` you will find the state of an account before the tx started, and in `post` its state after tx execution finished.
-3. `pre` can include fields that were not modified, if some other fields for the same account were modified.
-4. `post` will contain only the modified fields. e.g. if `nonce` of an account hasn't changed it will be omitted from `post`.
-5. Deletion (i.e. account selfdestruct, or storage clearing) will be signified by inclusion in `pre` and omission in `post`.
-6. Insertion (i.e. account creation or new slots) will be signified by omission in `pre` and inclusion in `post`.
+2. The `pre` object within the result captures the account's state at the beginning of the transaction, showcasing its initial values, while the `post` object represents the account's state once the transaction has been fully executed, revealing the outcome of the changes.
+3. The accounts in the `pre` object will still contain all of their basic fields—nonce, balance, and code—even if those fields have not been modified. Storage slots, however, are an exception. Only non-empty slots that have been modified will be included. In other words, if a new slot was written to, it will not appear in the `pre` object.
+4. The `post` object is more selective - it only contains the specific fields that were actually modified during the transaction. For example, if only the storage was modified, `post` will not include unchanged fields like `nonce`, `balance`, or `code`.
+5. Deletion operations are represented by:
+
+   - Account selfdestruct: Account appears in `pre` but not in `post`
+   - Storage clearing (setting a storage value to zero is also treated as clearing): Storage slot appears in `pre` but not in `post`
+
+6. Insertion operations are represented by:
+   - New account creation: Account appears in `post` but not in `pre`
+   - New storage slot: Storage slot appears in `post` but not in `pre`
 
 To run this tracer in `diff` mode, pass `tracerConfig: {diffMode: true}` in the API call.
 
