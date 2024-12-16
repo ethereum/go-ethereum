@@ -282,5 +282,4 @@ func TestContractLinking(t *testing.T) {
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {},
 		}})
-	// TODO: same as the above case but nested one level of dependencies deep (?)
 }
