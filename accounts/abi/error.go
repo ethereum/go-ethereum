@@ -38,8 +38,6 @@ type Error struct {
 	// ID returns the canonical representation of the error's signature used by the
 	// abi definition to identify event names and types.
 	ID common.Hash
-
-	Selector string
 }
 
 func NewError(name string, inputs Arguments) Error {
@@ -71,12 +69,11 @@ func NewError(name string, inputs Arguments) Error {
 	id := common.BytesToHash(crypto.Keccak256([]byte(sig)))
 
 	return Error{
-		Name:     name,
-		Inputs:   inputs,
-		str:      str,
-		Sig:      sig,
-		ID:       id,
-		Selector: fmt.Sprintf("%x", id[0:4]),
+		Name:   name,
+		Inputs: inputs,
+		str:    str,
+		Sig:    sig,
+		ID:     id,
 	}
 }
 
