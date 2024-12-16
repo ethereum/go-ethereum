@@ -629,12 +629,13 @@ func TestEstimateGas(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
 	var (
-		accounts = newAccounts(2)
+		accounts = newAccounts(4)
 		genesis  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
 			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[2].addr: {Balance: big.NewInt(params.Ether), Code: append(types.DelegationPrefix, accounts[3].addr.Bytes()...)},
 			},
 		}
 		genBlocks      = 10
@@ -818,6 +819,26 @@ func TestEstimateGas(t *testing.T) {
 			},
 			blockOverrides: override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
 			expectErr:      newRevertError(packRevert("block 11")),
+		},
+		// Should be able to send to an EIP-7702 delegated account.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[2].addr,
+				Value: (*hexutil.Big)(big.NewInt(1)),
+			},
+			want: 21000,
+		},
+		// Should be able to send as EIP-7702 delegated account.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[2].addr,
+				To:    &accounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(1)),
+			},
+			want: 21000,
 		},
 	}
 	for i, tc := range testSuite {
