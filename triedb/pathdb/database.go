@@ -555,3 +555,15 @@ func (db *Database) StorageHistory(address common.Address, slot common.Hash, sta
 func (db *Database) HistoryRange() (uint64, uint64, error) {
 	return historyRange(db.freezer)
 }
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
+	return newFastAccountIterator(db, root, seek)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be moved to the specific start position.
+func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+	return newFastStorageIterator(db, root, account, seek)
+}
