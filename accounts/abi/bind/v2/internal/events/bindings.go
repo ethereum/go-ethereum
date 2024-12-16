@@ -129,13 +129,9 @@ type CBasic1 struct {
 	Raw  *types.Log // Blockchain specific contextual infos
 }
 
-func CBasic1EventID() common.Hash {
-	return common.HexToHash("0x8f17dc823e2f9fcdf730b8182c935574691e811e7d46399fe0ff0087795cd207")
-}
+const CBasic1EventName = "basic1"
 
 func (_C *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
-	// TODO: okay to index by the original name here?  I think so because we assume that the abi json is well-formed.
-	// and we only need normalized name when dealing with generated go symbols.
 	event := "basic1"
 	if log.Topics[0] != _C.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
@@ -166,13 +162,9 @@ type CBasic2 struct {
 	Raw  *types.Log // Blockchain specific contextual infos
 }
 
-func CBasic2EventID() common.Hash {
-	return common.HexToHash("0x3b29b9f6d15ba80d866afb3d70b7548ab1ffda3ef6e65f35f1cb05b0e2b29f4e")
-}
+const CBasic2EventName = "basic2"
 
 func (_C *C) UnpackBasic2Event(log *types.Log) (*CBasic2, error) {
-	// TODO: okay to index by the original name here?  I think so because we assume that the abi json is well-formed.
-	// and we only need normalized name when dealing with generated go symbols.
 	event := "basic2"
 	if log.Topics[0] != _C.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")

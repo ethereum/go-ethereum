@@ -120,9 +120,7 @@ var (
 			Raw *types.Log // Blockchain specific contextual infos
 		}
 
-		func {{$contract.Type}}{{.Normalized.Name}}EventID() common.Hash {
-			return common.HexToHash("{{.Original.ID}}")
-		}
+        const {{$contract.Type}}{{.Normalized.Name}}EventName = "{{.Original.Name}}"
 
 		func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := "{{.Original.Name}}"

@@ -290,9 +290,11 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error instantiating contract instance: %v", err)
 	}
 
-	boundContract := ContractInstance{
+	ctrctABI, _ := events.CMetaData.GetAbi()
+	ctrctInstance := ContractInstance{
 		res.Addrs[events.CMetaData.Pattern],
 		backend,
+		*ctrctABI,
 	}
 
 	newCBasic1Ch := make(chan *events.CBasic1)
@@ -301,23 +303,19 @@ func TestEvents(t *testing.T) {
 		Start:   nil,
 		Context: context.Background(),
 	}
-	sub1, err := WatchEvents(&boundContract, watchOpts, events.CBasic1EventID(), ctrct.UnpackBasic1Event, newCBasic1Ch)
+	sub1, err := WatchEvents(&ctrctInstance, watchOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event, newCBasic1Ch)
 	if err != nil {
 		t.Fatalf("WatchEvents returned error: %v", err)
 	}
-	sub2, err := WatchEvents(&boundContract, watchOpts, events.CBasic2EventID(), ctrct.UnpackBasic2Event, newCBasic2Ch)
+	sub2, err := WatchEvents(&ctrctInstance, watchOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event, newCBasic2Ch)
 	if err != nil {
 		t.Fatalf("WatchEvents returned error: %v", err)
 	}
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
 
-	crtctInstance := &ContractInstance{
-		Address: res.Addrs[events.CMetaData.Pattern],
-		Backend: backend,
-	}
 	packedInput, _ := ctrct.PackEmitMulti()
-	tx, err := Transact(crtctInstance, txAuth, packedInput)
+	tx, err := Transact(&ctrctInstance, txAuth, packedInput)
 	if err != nil {
 		t.Fatalf("failed to send transaction: %v", err)
 	}
@@ -356,11 +354,11 @@ done:
 		Start:   0,
 		Context: context.Background(),
 	}
-	it, err := FilterEvents[events.CBasic1](crtctInstance, filterOpts, events.CBasic1EventID(), ctrct.UnpackBasic1Event)
+	it, err := FilterEvents[events.CBasic1](&ctrctInstance, filterOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
-	it2, err := FilterEvents[events.CBasic2](crtctInstance, filterOpts, events.CBasic2EventID(), ctrct.UnpackBasic2Event)
+	it2, err := FilterEvents[events.CBasic2](&ctrctInstance, filterOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
@@ -409,7 +407,8 @@ func TestErrors(t *testing.T) {
 	}
 	packedInput, _ = ctrct.PackFoo()
 
-	instance := ContractInstance{res.Addrs[solc_errors.CMetaData.Pattern], backend}
+	ctrctABI, _ := solc_errors.CMetaData.GetAbi()
+	instance := ContractInstance{res.Addrs[solc_errors.CMetaData.Pattern], backend, *ctrctABI}
 	_, err = Call[struct{}](&instance, opts, packedInput, func(packed []byte) (*struct{}, error) { return nil, nil })
 	if err == nil {
 		t.Fatalf("expected call to fail")

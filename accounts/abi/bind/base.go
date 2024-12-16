@@ -462,25 +462,15 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	return signedTx, nil
 }
 
-// FilterLogsById filters contract logs for past blocks, returning the necessary
-// channels to construct a strongly typed bound iterator on top of them.
-func (c *BoundContract) FilterLogsById(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
-	return c.filterLogs(opts, eventID, query...)
-}
-
 // FilterLogs filters contract logs for past blocks, returning the necessary
 // channels to construct a strongly typed bound iterator on top of them.
 func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
-	return c.filterLogs(opts, c.abi.Events[name].ID, query...)
-}
-
-func (c *BoundContract) filterLogs(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(FilterOpts)
 	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{eventID}}, query...)
+	query = append([][]interface{}{{c.abi.Events[name].ID}}, query...)
 	topics, err := abi.MakeTopics(query...)
 	if err != nil {
 		return nil, nil, err
