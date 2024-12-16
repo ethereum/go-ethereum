@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -564,16 +565,36 @@ func TestTraceBlockFromFile(t *testing.T) {
 	genBlock := 3
 	signer := types.HomesteadSigner{}
 	backend := newTestBackend(nil, genBlock, genesis, func(i int, b *core.BlockGen) {
-		// Add a simple transaction to the block
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
-			Nonce:    uint64(i),
-			To:       &accounts[1].addr,
-			Value:    big.NewInt(1000),
-			Gas:      params.TxGas,
-			GasPrice: b.BaseFee(),
-			Data:     nil,
-		}), signer, accounts[0].key)
-		b.AddTx(tx)
+		// Deploy a simple smart contract
+		if i == 0 {
+			// Simple contract with a storage setter
+			contractCode := []byte{
+				0x60, 0x0a, 0x60, 0x00, 0x55, // PUSH1 10 PUSH1 0 SSTORE
+				0x60, 0x00, 0x60, 0x20, 0x52, // PUSH1 0 PUSH1 32 MSTORE
+				0x60, 0x20, 0x60, 0x00, 0xf3, // RETURN
+			}
+
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    uint64(i),
+				Value:    big.NewInt(0),
+				Gas:      53204,
+				GasPrice: b.BaseFee(),
+				Data:     contractCode,
+			}), signer, accounts[0].key)
+			b.AddTx(tx)
+		} else {
+			// Interact with the contract (store a value)
+			contractAddr := crypto.CreateAddress(accounts[0].addr, 0) // First tx contract address
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    uint64(i),
+				To:       &contractAddr,
+				Value:    big.NewInt(0),
+				Gas:      53204,
+				GasPrice: b.BaseFee(),
+				Data:     []byte{0x60, 0x05, 0x60, 0x00, 0x55}, // PUSH1 5 PUSH1 0 SSTORE
+			}), signer, accounts[0].key)
+			b.AddTx(tx)
+		}
 	})
 
 	defer backend.teardown()
@@ -583,18 +604,18 @@ func TestTraceBlockFromFile(t *testing.T) {
 	var testCases = []struct {
 		name      string
 		file      string
-		setupFile func(file string) // Optional setup for the file
+		setupFile func(file string) string // Optional setup for the file
 		expectErr bool
-		expected  common.Hash // Expected trace results
-		expectMsg string      // For error assertions
+		expected  string // Expected trace results
+		expectMsg string // For error assertions
 	}{
 		{
 			name: "Valid trace from file",
 			file: "valid_block.rlp",
-			setupFile: func(file string) {
-				createTestFile(file, validBlockData(backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64())))
+			setupFile: func(file string) string {
+				return createTestFile(t, file, validBlockData(t, backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64())))
 			},
-			expected: backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64()).Transactions()[0].Hash(),
+			expected: fmt.Sprintf(`{"txHash":"%s","result":{"gas":21068,"failed":false,"returnValue":"","structLogs":[]}}`, backend.chain.GetBlockByNumber(backend.chain.CurrentBlock().Number.Uint64()).Transactions()[0].Hash()),
 		},
 		{
 			name:      "File not found",
@@ -605,8 +626,8 @@ func TestTraceBlockFromFile(t *testing.T) {
 		{
 			name: "Invalid block data",
 			file: "invalid_block.rlp",
-			setupFile: func(file string) {
-				createTestFile(file, []byte("invalid data"))
+			setupFile: func(file string) string {
+				return createTestFile(t, file, []byte("invalid data"))
 			},
 			expectErr: true,
 			expectMsg: "could not decode block",
@@ -615,14 +636,14 @@ func TestTraceBlockFromFile(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			var filePath string
 			if tc.setupFile != nil {
-				defer os.Remove(tc.file) // Clean up
-				tc.setupFile(tc.file)
+				defer os.Remove(filePath) // Clean up
+				filePath = tc.setupFile(tc.file)
 			}
 
 			ctx := context.Background()
-			result, err := api.TraceBlockFromFile(ctx, tc.file, nil)
-			fmt.Println(&result)
+			result, err := api.TraceBlockFromFile(ctx, filePath, nil)
 
 			if tc.expectErr {
 				if err == nil || !strings.Contains(err.Error(), tc.expectMsg) {
@@ -635,22 +656,35 @@ func TestTraceBlockFromFile(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if !reflect.DeepEqual(result[0].TxHash, tc.expected) {
-				t.Errorf("result mismatch, want %v, got %v", tc.expected, result)
+			have, _ := json.Marshal(result[0])
+			want := tc.expected
+			if string(have) != want {
+				t.Errorf("result mismatch, have\n%v\n, want\n%v\n", string(have), want)
 			}
 		})
 	}
 }
 
-func createTestFile(name string, data []byte) {
-	_ = os.WriteFile(name, data, 0644)
+func createTestFile(t *testing.T, name string, data []byte) string {
+	tempDir := t.TempDir()
+
+	filePath := filepath.Join(tempDir, name)
+
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		t.Fatalf("failed to create test file '%s': %v", filePath, err)
+	}
+
+	return filePath
 }
 
-func validBlockData(block *types.Block) []byte {
+func validBlockData(t *testing.T, block *types.Block) []byte {
+	if block == nil {
+		t.Fatalf("block is nil")
+	}
 	// Fetch the first block and RLP encode it
 	encodedBlock, err := rlp.EncodeToBytes(block)
 	if err != nil {
-		panic(fmt.Errorf("failed to encode block: %v", err))
+		t.Fatalf("failed to encode block: %v", err)
 	}
 	return encodedBlock
 }
@@ -943,106 +977,64 @@ func TestIntermediateRoots(t *testing.T) {
 
 	// Setup a test backend with valid transactions
 	accounts := newAccounts(2)
-	genesis := &core.Genesis{
-		Config: params.TestChainConfig,
-		Alloc: types.GenesisAlloc{
-			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
-		},
-	}
-	signer := types.HomesteadSigner{}
-	var badBlockHash, genesisHash common.Hash
-
-	backend := newTestBackend(t, 2, genesis, func(i int, b *core.BlockGen) {
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
-			Nonce:    uint64(i),
-			To:       &accounts[1].addr,
-			Value:    big.NewInt(1000),
-			Gas:      params.TxGas,
-			GasPrice: b.BaseFee(),
-			Data:     nil,
-		}), signer, accounts[0].key)
-		b.AddTx(tx)
-	})
+	genesis := setupGenesis(accounts)
+	backend := setupTestBackend(t, genesis, accounts)
 	defer backend.teardown()
 
-	// Fetch a valid block and store its hash
-	validBlock := backend.chain.GetBlockByNumber(1)
-	if validBlock == nil {
-		t.Fatalf("failed to fetch block 1")
-	}
-	// validBlockHash = validBlock.Hash()
+	// Precompute important block hashes
+	validBlock := fetchBlockByNumber(t, backend.chain, 1)
+	headBlock := fetchBlockByNumber(t, backend.chain, 5)
+	genesisBlock := fetchBlockByNumber(t, backend.chain, 0)
 
-	// Corrupt the valid block to create a bad block
-	badBlock := backend.chain.GetBlockByNumber(1)
-	badBlock.Header().ParentHash = common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-	badBlockHash = badBlock.Hash()
-	rawdb.WriteBadBlock(backend.chaindb, badBlock)
+	validBlockHash := validBlock.Hash()
+	genesisHash := genesisBlock.Hash()
+	badBlockHash := corruptBlock(backend, headBlock)
 
-	// Add the genesis block for testing
-	genesisBlock := backend.chain.GetBlockByNumber(0)
-	genesisHash = genesisBlock.Hash()
-
-	// Test cases
-	api := NewAPI(backend)
-	var testCases = []struct {
+	// Define test cases
+	testCases := []struct {
 		name       string
 		hash       common.Hash
 		config     *TraceConfig
 		expectErr  bool
 		expectMsg  string
-		validateFn func(roots []common.Hash)
+		validateFn func(t *testing.T, roots []common.Hash)
 	}{
-		// {
-		//     name:      "Valid block",
-		//     hash:      validBlockHash,
-		//     config:    nil, // Default TraceConfig
-		//     expectErr: false,
-		//     validateFn: func(roots []common.Hash) {
-		//         if len(roots) == 0 {
-		//             t.Fatalf("expected non-empty intermediate roots, got none")
-		//         }
-		//         if roots[len(roots)-1] != validBlock.Root() {
-		//             t.Fatalf("final intermediate root does not match block state root")
-		//         }
-		//     },
-		// },
 		{
-			name:      "Bad block",
-			hash:      badBlockHash,
-			config:    nil,
-			expectErr: false,
-			validateFn: func(roots []common.Hash) {
-				if len(roots) == 0 {
-					t.Fatalf("expected non-empty intermediate roots, got none")
-				}
+			name: "Valid block",
+			hash: validBlockHash,
+			validateFn: func(t *testing.T, roots []common.Hash) {
+				validateIntermediateRoots(t, backend, validBlock, roots)
+			},
+		},
+		{
+			name: "Bad block",
+			hash: badBlockHash,
+			validateFn: func(t *testing.T, roots []common.Hash) {
+				validateIntermediateRoots(t, backend, headBlock, roots)
 			},
 		},
 		{
 			name:      "Genesis block",
 			hash:      genesisHash,
-			config:    nil,
 			expectErr: true,
 			expectMsg: "genesis is not traceable",
 		},
 		{
 			name:      "Non-existent block",
 			hash:      common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
-			config:    nil,
 			expectErr: true,
 			expectMsg: fmt.Sprintf("block %s not found", common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")),
 		},
 	}
 
-	// Execute test cases
+	// Run test cases
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			roots, err := api.IntermediateRoots(ctx, tc.hash, tc.config)
+			roots, err := NewAPI(backend).IntermediateRoots(ctx, tc.hash, tc.config)
 
 			if tc.expectErr {
-				if err == nil || !strings.Contains(err.Error(), tc.expectMsg) {
-					t.Fatalf("expected error containing '%s', got: %v", tc.expectMsg, err)
-				}
+				assertErrorContains(t, err, tc.expectMsg)
 				return
 			}
 
@@ -1051,9 +1043,156 @@ func TestIntermediateRoots(t *testing.T) {
 			}
 
 			if tc.validateFn != nil {
-				tc.validateFn(roots)
+				tc.validateFn(t, roots)
 			}
 		})
+	}
+}
+
+// Helpers
+func setupGenesis(accounts []Account) *core.Genesis {
+	return &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+}
+
+func setupTestBackend(t *testing.T, genesis *core.Genesis, accounts []Account) *testBackend {
+	return newTestBackend(t, 5, genesis, func(i int, b *core.BlockGen) {
+		populateTransactions(t, i, b, accounts)
+	})
+}
+
+func populateTransactions(t *testing.T, i int, b *core.BlockGen, accounts []Account) {
+	signer := types.HomesteadSigner{}
+
+	switch i {
+	case 0:
+		deployContract(b, signer, accounts[0])
+	case 1:
+		interactWithContract(b, signer, accounts[0])
+	default:
+		transferFunds(i, b, signer, accounts[0], accounts[1])
+	}
+}
+
+func deployContract(b *core.BlockGen, signer types.Signer, account Account) {
+	contractCode := []byte{
+		0x60, 0x0a, 0x60, 0x00, 0x55,
+		0x60, 0x00, 0x60, 0x20, 0x52,
+		0x60, 0x20, 0x60, 0x00, 0xf3,
+	}
+	tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+		Nonce:    0,
+		Value:    big.NewInt(0),
+		Gas:      3000000,
+		GasPrice: b.BaseFee(),
+		Data:     contractCode,
+	}), signer, account.key)
+
+	b.AddTx(tx)
+}
+
+func interactWithContract(b *core.BlockGen, signer types.Signer, account Account) {
+	contractAddress := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
+	setMethodSig := []byte{0x60, 0x0b}
+	tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+		Nonce:    1,
+		To:       &contractAddress,
+		Value:    big.NewInt(0),
+		Gas:      100000,
+		GasPrice: b.BaseFee(),
+		Data:     setMethodSig,
+	}), signer, account.key)
+
+	b.AddTx(tx)
+}
+
+func transferFunds(i int, b *core.BlockGen, signer types.Signer, from, to Account) {
+	tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+		Nonce:    uint64(i),
+		To:       &to.addr,
+		Value:    big.NewInt(1000),
+		Gas:      params.TxGas,
+		GasPrice: b.BaseFee(),
+		Data:     nil,
+	}), signer, from.key)
+	b.AddTx(tx)
+}
+
+func fetchBlockByNumber(t *testing.T, chain *core.BlockChain, number uint64) *types.Block {
+	block := chain.GetBlockByNumber(number)
+	if block == nil {
+		t.Fatalf("failed to fetch block %d", number)
+	}
+	return block
+}
+
+func corruptBlock(backend *testBackend, headBlock *types.Block) common.Hash {
+	badBlock := *headBlock
+	badBlock.Header().ParentHash = common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	badBlockHash := badBlock.Hash()
+	rawdb.WriteBadBlock(backend.chaindb, &badBlock)
+	return badBlockHash
+}
+
+func validateIntermediateRoots(t *testing.T, backend *testBackend, block *types.Block, roots []common.Hash) {
+	// Fetch the parent block
+	parentBlock := backend.chain.GetBlockByNumber(block.NumberU64() - 1)
+	if parentBlock == nil {
+		t.Fatalf("failed to fetch parent block")
+	}
+
+	// Initialize state for the parent block
+	statedb, _ := backend.chain.StateAt(parentBlock.Root())
+	vmctx := core.NewEVMBlockContext(block.Header(), backend.chain, nil)
+	evm := vm.NewEVM(vmctx, statedb, backend.chainConfig, vm.Config{})
+	deleteEmptyObjects := backend.chainConfig.IsEIP158(block.Number())
+
+	// Process beacon and parent hash if applicable
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+	}
+	if backend.chainConfig.IsPrague(block.Number(), block.Time()) {
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
+	}
+
+	// Compute expected intermediate roots
+	expectedRoots := make([]common.Hash, 0)
+	signer := types.MakeSigner(backend.chainConfig, block.Number(), block.Time())
+
+	for i, tx := range block.Transactions() {
+		// Convert the transaction to a message
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+		statedb.SetTxContext(tx.Hash(), i)
+
+		// Apply the transaction
+		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit)); err != nil {
+			t.Logf("Transaction failed at index %d: %v", i, err)
+			// Continue with other transactions even if one fails
+		}
+
+		// Append the intermediate root after applying the transaction
+		expectedRoots = append(expectedRoots, statedb.IntermediateRoot(deleteEmptyObjects))
+	}
+
+	// Validate the roots returned by the API
+	if len(roots) != len(expectedRoots) {
+		t.Fatalf("unexpected number of intermediate roots: got %d, want %d", len(roots), len(expectedRoots))
+	}
+
+	for i, root := range roots {
+		if root != expectedRoots[i] {
+			t.Fatalf("unexpected intermediate root at index %d: got %s, want %s", i, root.Hex(), expectedRoots[i].Hex())
+		}
+	}
+}
+
+func assertErrorContains(t *testing.T, err error, msg string) {
+	if err == nil || !strings.Contains(err.Error(), msg) {
+		t.Fatalf("expected error containing '%s', got: %v", msg, err)
 	}
 }
 
