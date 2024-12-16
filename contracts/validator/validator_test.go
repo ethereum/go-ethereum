@@ -29,6 +29,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -68,7 +69,7 @@ func TestValidator(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	defer cancel()
 	code, _ := contractBackend.CodeAt(ctx, validatorAddress, nil)
-	t.Log("contract code", common.ToHex(code))
+	t.Log("contract code", hexutil.Encode(code))
 	f := func(key, val common.Hash) bool {
 		t.Log(key.Hex(), val.Hex())
 		return true

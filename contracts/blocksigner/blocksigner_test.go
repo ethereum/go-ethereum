@@ -18,14 +18,14 @@ package blocksigner
 import (
 	"context"
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
-
-	"math/rand"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -50,7 +50,7 @@ func TestBlockSigner(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), d)
 	defer cancel()
 	code, _ := contractBackend.CodeAt(ctx, blockSignerAddress, nil)
-	t.Log("contract code", common.ToHex(code))
+	t.Log("contract code", hexutil.Encode(code))
 	f := func(key, val common.Hash) bool {
 		t.Log(key.Hex(), val.Hex())
 		return true

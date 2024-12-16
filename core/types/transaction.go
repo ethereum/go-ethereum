@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
@@ -513,7 +514,7 @@ func (tx *Transaction) IsSigningTransaction() bool {
 	if len(data) != (32*2 + 4) {
 		return false
 	}
-	method := common.ToHex(data[0:4])
+	method := hexutil.Encode(data[0:4])
 	return method == common.SignMethod
 }
 
@@ -524,7 +525,7 @@ func (tx *Transaction) IsVotingTransaction() (bool, *common.Address) {
 	}
 	var end int
 	data := tx.Data()
-	method := common.ToHex(data[0:4])
+	method := hexutil.Encode(data[0:4])
 	if method == common.VoteMethod || method == common.ProposeMethod || method == common.ResignMethod {
 		end = len(data)
 	} else if method == common.UnvoteMethod {
@@ -558,7 +559,7 @@ func (tx *Transaction) IsXDCXApplyTransaction() bool {
 	if len(data) != (32 + 4) {
 		return false
 	}
-	method := common.ToHex(data[0:4])
+	method := hexutil.Encode(data[0:4])
 	return method == common.XDCXApplyMethod
 }
 
@@ -581,7 +582,7 @@ func (tx *Transaction) IsXDCZApplyTransaction() bool {
 	if len(data) != (32 + 4) {
 		return false
 	}
-	method := common.ToHex(data[0:4])
+	method := hexutil.Encode(data[0:4])
 	return method == common.XDCZApplyMethod
 }
 
