@@ -222,7 +222,7 @@ In `diff` mode the result object will contain a `pre` and a `post` object:
 
 1. The result only includes accounts that were modified. Accounts without changes will be omitted in this mode.
 2. The `pre` object within the result captures the account's state at the beginning of the transaction, showcasing its initial values, while the `post` object represents the account's state once the transaction has been fully executed, revealing the outcome of the changes.
-3. Due to historical implementation reasons, if the `nonce`, `balance` or `code` of a contract is modified during the transaction, the `pre` object will include ALL fields (`nonce`, `balance`, `code`) for that account, and the `post` will only include the modified fields.
+3. The accounts in the `pre` object will still contain all of their basic fields—nonce, balance, and code—even if those fields have not been modified. Storage slots, however, are an exception. Only non-empty slots that have been modified will be included. In other words, if a new slot was written to, it will not appear in the `pre` object.
 4. The `post` object is more selective - it only contains the specific fields that were actually modified during the transaction. For example, if only the storage was modified, `post` will not include unchanged fields like `nonce`, `balance`, or `code`.
 5. Deletion operations are represented by:
 
