@@ -339,7 +339,7 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
-	code := interpreter.evm.resolveCode(addr)
+	code := interpreter.evm.StateDB.GetCode(addr)
 	contract := &Contract{
 		Code: code,
 		self: AccountRef(addr),
