@@ -7,28 +7,22 @@ import (
 	"strings"
 )
 
-// ContractDeployParams represents state needed to deploy a contract:
-// the metdata and constructor input (which can be nil if no input is specified).
-type ContractDeployParams struct {
-	Meta *MetaData
-	// Input is the ABI-encoded constructor input for the contract deployment.
-	Input []byte
-}
-
 // DeploymentParams represents parameters needed to deploy a
-// set of contracts, their dependency libraries.  It takes an optional override
-// list to specify libraries that have already been deployed on-chain.
+// set of contracts.  It takes an optional override
+// list to specify contracts/libraries that have already been deployed on-chain.
 type DeploymentParams struct {
 	Contracts []*MetaData
-	Inputs    map[string][]byte
+	// map of solidity library pattern to constructor input.
+	Inputs map[string][]byte
 	// Overrides is an optional map of pattern to deployment address.
 	// Contracts/libraries that refer to dependencies in the override
 	// set are linked to the provided address (an already-deployed contract).
 	Overrides map[string]common.Address
 }
 
-// DeploymentResult contains the relevant information from the deployment of
-// multiple contracts:  their deployment txs and addresses.
+// DeploymentResult encapsulates information about the result of the deployment
+// of a set of contracts: the pending deployment transactions, and the addresses
+// where the contracts will be deployed at.
 type DeploymentResult struct {
 	// map of contract library pattern -> deploy transaction
 	Txs map[string]*types.Transaction
@@ -36,6 +30,7 @@ type DeploymentResult struct {
 	Addrs map[string]common.Address
 }
 
+// Accumulate merges two DeploymentResult objects together.
 func (d *DeploymentResult) Accumulate(other *DeploymentResult) {
 	for pattern, tx := range other.Txs {
 		d.Txs[pattern] = tx
@@ -45,8 +40,8 @@ func (d *DeploymentResult) Accumulate(other *DeploymentResult) {
 	}
 }
 
-// depTreeBuilder turns a set of unlinked contracts and their dependent libraries into a collection of trees
-// representing the relation of their dependencies.
+// depTreeBuilder turns a set of unlinked contracts libraries into a set of one
+// or more dependency trees.
 type depTreeBuilder struct {
 	overrides map[string]common.Address
 	// map of pattern to unlinked contract bytecode (for libraries or contracts)
@@ -67,8 +62,7 @@ type depTreeNode struct {
 	overrideAddr *common.Address
 }
 
-// returns the subtree as a map of pattern -> unlinked contract bytecode.  it excludes the code of the top-level
-// node.
+// Flatten returns the subtree into a map of pattern -> unlinked contract bytecode.
 func (n *depTreeNode) Flatten() (res map[string]string) {
 	res = map[string]string{n.pattern: n.unlinkedCode}
 	for _, child := range n.children {
@@ -81,6 +75,7 @@ func (n *depTreeNode) Flatten() (res map[string]string) {
 	return res
 }
 
+// buildDepTrees is the internal version of BuildDepTrees that recursively calls itself.
 func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 	// if the node is in the subtree set already, it has already been fully recursed/built so we can bail out.
 	if _, ok := d.subtrees[pattern]; ok {
@@ -93,7 +88,7 @@ func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 	if addr, ok := d.overrides[pattern]; ok {
 		node.overrideAddr = &addr
 	}
-	// iterate each referenced library in the unlinked code, recurse and built its subtree.
+	// iterate each referenced library in the unlinked code, recurse and build its subtree.
 	reMatchSpecificPattern, err := regexp.Compile(`__\$([a-f0-9]+)\$__`)
 	if err != nil {
 		panic(err)
@@ -111,14 +106,12 @@ func (d *depTreeBuilder) buildDepTrees(pattern, contract string) {
 
 // BuildDepTrees will compute a set of dependency trees from a set of unlinked contracts.  The root of each tree
 // corresponds to a contract/library that is not referenced as a dependency anywhere else.  Children of each node are
-// its library dependencies.
+// its library dependencies.  It returns nodes that are roots of a dependency tree and nodes that aren't.
 func (d *depTreeBuilder) BuildDepTrees() (roots []*depTreeNode, nonRoots []*depTreeNode) {
 	// before the trees of dependencies are known, consider that any provided contract could be a root.
 	for pattern, _ := range d.contracts {
 		d.roots[pattern] = struct{}{}
 	}
-
-	// recursively build each part of the dependency subtree by starting at
 	for pattern, contract := range d.contracts {
 		d.buildDepTrees(pattern, contract)
 	}
@@ -141,7 +134,9 @@ func newDepTreeBuilder(overrides map[string]common.Address, contracts map[string
 	}
 }
 
-type deployFn func(input, deployer []byte) (common.Address, *types.Transaction, error)
+// DeployFn deploys a contract given a deployer and optional input.  It returns
+// the address and a pending transaction, or an error if the deployment failed.
+type DeployFn func(input, deployer []byte) (common.Address, *types.Transaction, error)
 
 // depTreeDeployer is responsible for taking a dependency, deploying-and-linking its components in the proper
 // order.  A depTreeDeployer cannot be used after calling LinkAndDeploy other than to retrieve the deployment result.
@@ -149,26 +144,22 @@ type depTreeDeployer struct {
 	deployedAddrs map[string]common.Address
 	deployerTxs   map[string]*types.Transaction
 	input         map[string][]byte // map of the root contract pattern to the constructor input (if there is any)
-	deploy        deployFn
-	err           error
+	deploy        DeployFn
 }
 
-// linkAndDeploy recursively deploys a contract/library:  starting by linking/deploying its dependencies.
+// linkAndDeploy recursively deploys a contract and its dependencies:  starting by linking/deploying its dependencies.
 // The deployment result (deploy addresses/txs or an error) is stored in the depTreeDeployer object.
-func (d *depTreeDeployer) linkAndDeploy(node *depTreeNode) {
-	// short-circuit further deployment of contracts if a previous deployment encountered an error.
-	if d.err != nil {
-		return
-	}
-
+func (d *depTreeDeployer) linkAndDeploy(node *depTreeNode) error {
 	// don't deploy contracts specified as overrides.  don't deploy their dependencies.
 	if node.overrideAddr != nil {
-		return
+		return nil
 	}
 
 	// if this contract/library depends on other libraries deploy them (and their dependencies) first
 	for _, childNode := range node.children {
-		d.linkAndDeploy(childNode)
+		if err := d.linkAndDeploy(childNode); err != nil {
+			return err
+		}
 	}
 	// if we just deployed any prerequisite contracts, link their deployed addresses into the bytecode to produce
 	// a deployer bytecode for this contract.
@@ -186,25 +177,23 @@ func (d *depTreeDeployer) linkAndDeploy(node *depTreeNode) {
 	// Finally, deploy the contract.
 	addr, tx, err := d.deploy(d.input[node.pattern], common.Hex2Bytes(deployerCode))
 	if err != nil {
-		d.err = err
-	} else {
-		d.deployedAddrs[node.pattern] = addr
-		d.deployerTxs[node.pattern] = tx
+		return err
 	}
+
+	d.deployedAddrs[node.pattern] = addr
+	d.deployerTxs[node.pattern] = tx
+	return nil
 }
 
 // result returns a result for this deployment, or an error if it failed.
-func (d *depTreeDeployer) result() (*DeploymentResult, error) {
-	if d.err != nil {
-		return nil, d.err
-	}
+func (d *depTreeDeployer) result() *DeploymentResult {
 	return &DeploymentResult{
 		Txs:   d.deployerTxs,
 		Addrs: d.deployedAddrs,
-	}, nil
+	}
 }
 
-func newDepTreeDeployer(deploy deployFn) *depTreeDeployer {
+func newDepTreeDeployer(deploy DeployFn) *depTreeDeployer {
 	return &depTreeDeployer{
 		deploy:        deploy,
 		deployedAddrs: make(map[string]common.Address),
@@ -214,7 +203,7 @@ func newDepTreeDeployer(deploy deployFn) *depTreeDeployer {
 // LinkAndDeploy deploys a specified set of contracts and their dependent
 // libraries.  If an error occurs, only contracts which were successfully
 // deployed are returned in the result.
-func LinkAndDeploy(deployParams DeploymentParams, deploy deployFn) (res *DeploymentResult, err error) {
+func LinkAndDeploy(deployParams DeploymentParams, deploy DeployFn) (res *DeploymentResult, err error) {
 	unlinkedContracts := make(map[string]string)
 	accumRes := &DeploymentResult{
 		Txs:   make(map[string]*types.Transaction),
@@ -231,12 +220,12 @@ func LinkAndDeploy(deployParams DeploymentParams, deploy deployFn) (res *Deploym
 		if deployParams.Inputs != nil {
 			deployer.input = map[string][]byte{tr.pattern: deployParams.Inputs[tr.pattern]}
 		}
-		deployer.linkAndDeploy(tr)
-		res, err := deployer.result()
+		err := deployer.linkAndDeploy(tr)
+		res := deployer.result()
+		accumRes.Accumulate(res)
 		if err != nil {
 			return accumRes, err
 		}
-		accumRes.Accumulate(res)
 	}
 	return accumRes, nil
 }
