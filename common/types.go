@@ -209,11 +209,10 @@ func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
 // Ethereum address or not.
 func IsHexAddress(s string) bool {
-	if hasXDCPrefix(s) {
-		s = s[3:]
-	}
-	if hasHexPrefix(s) {
+	if has0xPrefix(s) {
 		s = s[2:]
+	} else if hasXdcPrefix(s) {
+		s = s[3:]
 	}
 	return len(s) == 2*AddressLength && isHex(s)
 }

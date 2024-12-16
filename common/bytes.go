@@ -34,13 +34,10 @@ func ToHex(b []byte) string {
 // FromHex returns the bytes represented by the hexadecimal string s.
 // s may be prefixed with "0x".
 func FromHex(s string) []byte {
-	if len(s) > 1 {
-		if s[0:2] == "0x" || s[0:2] == "0X" {
-			s = s[2:]
-		}
-		if (s[0] == 'x' || s[0] == 'X') && (s[1] == 'd' || s[1] == 'D') && (s[2] == 'c' || s[2] == 'C') {
-			s = s[3:]
-		}
+	if has0xPrefix(s) {
+		s = s[2:]
+	} else if hasXdcPrefix(s) {
+		s = s[3:]
 	}
 	if len(s)%2 == 1 {
 		s = "0" + s
@@ -59,14 +56,14 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	return
 }
 
-// hasXDCPrefix validates str begins with 'xdc' or 'XDC'.
-func hasXDCPrefix(str string) bool {
-	return len(str) >= 3 && (str[0] == 'x' || str[0] == 'X') && (str[1] == 'd' || str[1] == 'D') && (str[2] == 'c' || str[2] == 'C')
+// has0xPrefix validates str begins with '0x' or '0X'.
+func has0xPrefix(str string) bool {
+	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
 }
 
-// hasHexPrefix validates str begins with '0x' or '0X'.
-func hasHexPrefix(str string) bool {
-	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
+// hasXdcPrefix validates s begins with 'xdc' or 'XDC'.
+func hasXdcPrefix(s string) bool {
+	return len(s) >= 3 && (s[0] == 'x' || s[0] == 'X') && (s[1] == 'd' || s[1] == 'D') && (s[2] == 'c' || s[2] == 'C')
 }
 
 // isHexCharacter returns bool of c being a valid hexadecimal.
@@ -103,15 +100,13 @@ func Hex2BytesFixed(str string, flen int) []byte {
 	h, _ := hex.DecodeString(str)
 	if len(h) == flen {
 		return h
-	} else {
-		if len(h) > flen {
-			return h[len(h)-flen:]
-		} else {
-			hh := make([]byte, flen)
-			copy(hh[flen-len(h):flen], h[:])
-			return hh
-		}
 	}
+	if len(h) > flen {
+		return h[len(h)-flen:]
+	}
+	hh := make([]byte, flen)
+	copy(hh[flen-len(h):flen], h[:])
+	return hh
 }
 
 // RightPadBytes zero-pads slice to the right up to length l.
