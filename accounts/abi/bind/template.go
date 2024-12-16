@@ -64,6 +64,8 @@ type tmplEvent struct {
 	Normalized abi.Event // Normalized version of the parsed fields
 }
 
+// tmplError is a wrapper around an abi.Error that contains a few preprocessed
+// and cached data fields.
 type tmplError struct {
 	Original   abi.Error
 	Normalized abi.Error
