@@ -1078,7 +1078,7 @@ func (s *StateDB) handleDestruction() (map[common.Hash]*accountDelete, []*trieno
 		// Short circuit if the origin storage was empty. Notably, this
 		// condition is always true for verkle and storage deletion is
 		// not supported.
-		if prev.Root == types.EmptyRootHash(s.db.TrieDB().IsVerkle()) {
+		if prev.Root == types.EmptyTreeRootHash(s.db.TrieDB().IsVerkle()) {
 			continue
 		}
 		// Remove storage slots belonging to the account.

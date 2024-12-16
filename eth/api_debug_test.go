@@ -66,7 +66,7 @@ func TestAccountRange(t *testing.T) {
 	var (
 		mdb     = rawdb.NewMemoryDatabase()
 		statedb = state.NewDatabase(triedb.NewDatabase(mdb, &triedb.Config{Preimages: true}), nil)
-		sdb, _  = state.New(types.EmptyMerkleHash, statedb)
+		sdb, _  = state.New(types.EmptyRootHash, statedb)
 		addrs   = [AccountRangeMaxResults * 2]common.Address{}
 		m       = map[common.Address]bool{}
 	)
@@ -137,11 +137,11 @@ func TestEmptyAccountRange(t *testing.T) {
 
 	var (
 		statedb = state.NewDatabaseForTesting()
-		st, _   = state.New(types.EmptyMerkleHash, statedb)
+		st, _   = state.New(types.EmptyRootHash, statedb)
 	)
 	// Commit(although nothing to flush) and re-init the statedb
 	st.Commit(0, true)
-	st, _ = state.New(types.EmptyMerkleHash, statedb)
+	st, _ = state.New(types.EmptyRootHash, statedb)
 
 	results := st.RawDump(&state.DumpConfig{
 		SkipCode:          true,
@@ -165,7 +165,7 @@ func TestStorageRangeAt(t *testing.T) {
 		mdb    = rawdb.NewMemoryDatabase()
 		tdb    = triedb.NewDatabase(mdb, &triedb.Config{Preimages: true})
 		db     = state.NewDatabase(tdb, nil)
-		sdb, _ = state.New(types.EmptyMerkleHash, db)
+		sdb, _ = state.New(types.EmptyRootHash, db)
 		addr   = common.Address{0x01}
 		keys   = []common.Hash{ // hashes of Keys of storage
 			common.HexToHash("340dd630ad21bf010b4e676dbfa9ba9a02175262d1fa356232cfde6cb5b47ef2"),

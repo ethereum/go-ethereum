@@ -51,7 +51,7 @@ func init() {
 func TestEmptyTrie(t *testing.T) {
 	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
 	res := trie.Hash()
-	exp := types.EmptyMerkleHash
+	exp := types.EmptyRootHash
 	if res != exp {
 		t.Errorf("expected %x got %x", exp, res)
 	}
@@ -98,7 +98,7 @@ func testMissingNode(t *testing.T, memonly bool, scheme string) {
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, nodes := trie.Commit(false)
-	triedb.Update(root, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodes))
+	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
 	if !memonly {
 		triedb.Commit(root)
@@ -212,7 +212,7 @@ func TestGet(t *testing.T) {
 			return
 		}
 		root, nodes := trie.Commit(false)
-		db.Update(root, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodes))
+		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 		trie, _ = New(TrieID(root), db)
 	}
 }
@@ -285,7 +285,7 @@ func TestReplication(t *testing.T) {
 		updateString(trie, val.k, val.v)
 	}
 	root, nodes := trie.Commit(false)
-	db.Update(root, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodes))
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
 	// create a new trie on top of the database and check that lookups work.
 	trie2, err := New(TrieID(root), db)
@@ -304,7 +304,7 @@ func TestReplication(t *testing.T) {
 
 	// recreate the trie after commit
 	if nodes != nil {
-		db.Update(hash, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodes))
+		db.Update(hash, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	}
 	trie2, err = New(TrieID(hash), db)
 	if err != nil {
@@ -493,7 +493,7 @@ func runRandTest(rt randTest) error {
 		scheme = rawdb.PathScheme
 	}
 	var (
-		origin   = types.EmptyMerkleHash
+		origin   = types.EmptyRootHash
 		triedb   = newTestDatabase(rawdb.NewMemoryDatabase(), scheme)
 		tr       = NewEmpty(triedb)
 		values   = make(map[string]string) // tracks content of the trie
@@ -518,7 +518,7 @@ func runRandTest(rt randTest) error {
 			}
 		case opProve:
 			hash := tr.Hash()
-			if hash == types.EmptyMerkleHash {
+			if hash == types.EmptyRootHash {
 				continue
 			}
 			proofDb := rawdb.NewMemoryDatabase()
@@ -790,7 +790,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 	for i := 0; i < len(accounts); i++ {
 		var (
 			nonce = uint64(random.Int63())
-			root  = types.EmptyMerkleHash
+			root  = types.EmptyRootHash
 			code  = crypto.Keccak256(nil)
 		)
 		// The big.Rand function is not deterministic with regards to 64 vs 32 bit systems,
@@ -897,7 +897,7 @@ func TestCommitSequence(t *testing.T) {
 		}
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
-		db.Update(root, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodes))
+		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 		// Flush memdb -> disk (sponge)
 		db.Commit(root)
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
@@ -938,7 +938,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		}
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
-		db.Update(root, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodes))
+		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 		// Flush memdb -> disk (sponge)
 		db.Commit(root)
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
@@ -988,7 +988,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
 		// Flush memdb -> disk (sponge)
-		db.Update(root, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodes))
+		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 		db.Commit(root)
 		s.Flush()
 
@@ -1046,7 +1046,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	// Flush trie -> database
 	root, nodes := trie.Commit(false)
 	// Flush memdb -> disk (sponge)
-	db.Update(root, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodes))
+	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	db.Commit(root)
 
 	// And flush stacktrie -> disk

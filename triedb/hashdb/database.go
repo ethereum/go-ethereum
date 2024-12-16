@@ -544,7 +544,7 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 // account trie with multiple storage tries if necessary.
 func (db *Database) Update(parent common.Hash, nodes *trienode.MergedNodeSet) error {
 	// Ensure the parent state is present and signal a warning if not.
-	if parent != types.EmptyMerkleHash {
+	if parent != types.EmptyRootHash {
 		if blob, _ := db.node(parent); len(blob) == 0 {
 			log.Error("parent state is not present")
 		}
@@ -585,7 +585,7 @@ func (db *Database) Update(parent common.Hash, nodes *trienode.MergedNodeSet) er
 			if err := rlp.DecodeBytes(n.Blob, &account); err != nil {
 				return err
 			}
-			if account.Root != types.EmptyMerkleHash {
+			if account.Root != types.EmptyRootHash {
 				db.reference(account.Root, n.Parent)
 			}
 		}

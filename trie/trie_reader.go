@@ -35,7 +35,7 @@ func newTrieReader(isVerkle bool, stateRoot, owner common.Hash, db database.Node
 	if isVerkle && stateRoot == types.EmptyVerkleHash {
 		return &trieReader{owner: owner}, nil
 	}
-	if !isVerkle && stateRoot == types.EmptyMerkleHash {
+	if !isVerkle && stateRoot == types.EmptyRootHash {
 		return &trieReader{owner: owner}, nil
 	}
 	reader, err := db.NodeReader(stateRoot)

@@ -155,7 +155,7 @@ type nodeHasher func([]byte) (common.Hash, error)
 // merkleNodeHasher computes the hash of the given merkle node.
 func merkleNodeHasher(blob []byte) (common.Hash, error) {
 	if len(blob) == 0 {
-		return types.EmptyMerkleHash, nil
+		return types.EmptyRootHash, nil
 	}
 	return crypto.Keccak256Hash(blob), nil
 }
@@ -536,7 +536,7 @@ func (db *Database) Size() (diffs common.StorageSize, nodes common.StorageSize) 
 func (db *Database) Initialized(genesisRoot common.Hash) bool {
 	var inited bool
 	db.tree.forEach(func(layer layer) {
-		if layer.rootHash() != types.EmptyRootHash(db.isVerkle) {
+		if layer.rootHash() != types.EmptyTreeRootHash(db.isVerkle) {
 			inited = true
 		}
 	})

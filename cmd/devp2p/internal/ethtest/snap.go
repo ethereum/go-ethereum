@@ -479,7 +479,7 @@ func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 		{
 			desc:      `Here we request the empty state root (which is not an existing code hash). The server should deliver an empty response with no items.`,
 			nBytes:    10000,
-			hashes:    []common.Hash{types.EmptyMerkleHash}, // TODO add verkle tests
+			hashes:    []common.Hash{types.EmptyRootHash}, // TODO add verkle tests
 			expHashes: 0,
 		},
 		{

@@ -17,6 +17,7 @@
 package override
 
 import (
+	"github.com/ethereum/go-ethereum/core/types"
 	"maps"
 	"testing"
 
@@ -36,7 +37,7 @@ func (p *precompileContract) Run(input []byte) ([]byte, error) { return nil, nil
 
 func TestStateOverrideMovePrecompile(t *testing.T) {
 	db := state.NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
-	statedb, err := state.New(common.Hash{}, db)
+	statedb, err := state.New(types.EmptyRootHash, db)
 	if err != nil {
 		t.Fatalf("failed to create statedb: %v", err)
 	}

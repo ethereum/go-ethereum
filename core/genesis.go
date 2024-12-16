@@ -128,7 +128,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	db := rawdb.NewMemoryDatabase()
-	statedb, err := state.New(types.EmptyRootHash(isVerkle), state.NewDatabase(triedb.NewDatabase(db, config), nil))
+	statedb, err := state.New(types.EmptyTreeRootHash(isVerkle), state.NewDatabase(triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -148,7 +148,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 // flushAlloc is very similar with hash, but the main difference is all the
 // generated states will be persisted into the given database.
 func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, error) {
-	statedb, err := state.New(types.EmptyRootHash(triedb.IsVerkle()), state.NewDatabase(triedb, nil))
+	statedb, err := state.New(types.EmptyTreeRootHash(triedb.IsVerkle()), state.NewDatabase(triedb, nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -169,7 +169,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, e
 		return common.Hash{}, err
 	}
 	// Commit newly generated states into disk if it's not empty.
-	if root != types.EmptyRootHash(triedb.IsVerkle()) {
+	if root != types.EmptyTreeRootHash(triedb.IsVerkle()) {
 		if err := triedb.Commit(root, true); err != nil {
 			return common.Hash{}, err
 		}
@@ -292,7 +292,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 	// is initialized with an external ancient store. Commit genesis state
 	// in this case.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if header.Root != types.EmptyRootHash(triedb.IsVerkle()) && !triedb.Initialized(header.Root) {
+	if header.Root != types.EmptyTreeRootHash(triedb.IsVerkle()) && !triedb.Initialized(header.Root) {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -495,7 +495,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 		return nil, errors.New("can't start clique chain without signers")
 	}
 	if g.IsVerkle() != triedb.IsVerkle() {
-		return nil, errors.New("supplied triedb is in wrong mode")
+		return nil, fmt.Errorf("supplied triedb is in wrong mode, verkle genesis: %v, verkle triedb: %v", g.IsVerkle(), triedb.IsVerkle())
 	}
 	// flush the data to disk and compute the state root
 	root, err := flushAlloc(&g.Alloc, triedb)

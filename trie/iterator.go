@@ -162,7 +162,7 @@ func (e seekError) Error() string {
 }
 
 func newNodeIterator(trie *Trie, start []byte) NodeIterator {
-	if trie.Hash() == types.EmptyMerkleHash {
+	if trie.Hash() == types.EmptyRootHash {
 		return &nodeIterator{
 			trie: trie,
 			err:  errIteratorEnd,
@@ -323,7 +323,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 func (it *nodeIterator) init() (*nodeIteratorState, error) {
 	root := it.trie.Hash()
 	state := &nodeIteratorState{node: it.trie.root, index: -1}
-	if root != types.EmptyMerkleHash {
+	if root != types.EmptyRootHash {
 		state.hash = root
 	}
 	return state, state.resolve(it, nil)

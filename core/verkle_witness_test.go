@@ -237,7 +237,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		}
 	}
 	t.Run("MPT", func(t *testing.T) {
-		statedb, _ := state.New(types.EmptyMerkleHash, state.NewDatabaseForTesting())
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		checkBlockHashes(statedb)
 	})
 	t.Run("Verkle", func(t *testing.T) {

@@ -34,7 +34,7 @@ type stateEnv struct {
 }
 
 func newStateEnv() *stateEnv {
-	sdb, _ := New(types.EmptyMerkleHash, NewDatabaseForTesting())
+	sdb, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 	return &stateEnv{state: sdb}
 }
 
@@ -42,7 +42,7 @@ func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
 	tdb := NewDatabase(triedb, nil)
-	sdb, _ := New(types.EmptyMerkleHash, tdb)
+	sdb, _ := New(types.EmptyRootHash, tdb)
 	s := &stateEnv{state: sdb}
 
 	// generate a few entries
@@ -100,7 +100,7 @@ func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
 	tdb := NewDatabase(triedb, nil)
-	sdb, _ := New(types.EmptyMerkleHash, tdb)
+	sdb, _ := New(types.EmptyRootHash, tdb)
 	s := &stateEnv{state: sdb}
 
 	// generate a few entries
@@ -193,7 +193,7 @@ func TestSnapshotEmpty(t *testing.T) {
 }
 
 func TestCreateObjectRevert(t *testing.T) {
-	state, _ := New(types.EmptyMerkleHash, NewDatabaseForTesting())
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 	addr := common.BytesToAddress([]byte("so0"))
 	snap := state.Snapshot()
 

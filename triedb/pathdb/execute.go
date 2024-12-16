@@ -87,7 +87,7 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 	defer h.release()
 
 	addrHash := h.hash(addr.Bytes())
-	prev, err := types.FullAccount(ctx.accounts[addr], false) // TODO support verkle mode
+	prev, err := types.FullAccount(ctx.accounts[addr]) // TODO(rjl493456442) annotate root hash in verkle
 	if err != nil {
 		return err
 	}
@@ -171,7 +171,7 @@ func deleteAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 		}
 	}
 	root, result := st.Commit(false)
-	if root != types.EmptyMerkleHash { // TODO (rjl493456442) support verkle
+	if root != types.EmptyRootHash { // TODO (rjl493456442) support verkle
 		return errors.New("failed to clear storage trie")
 	}
 	// The returned set can be nil if storage trie is not changed

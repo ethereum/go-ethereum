@@ -98,7 +98,7 @@ func CheckJournalAccount(db ethdb.KeyValueStore, hash common.Hash) error {
 	baseRoot := rawdb.ReadSnapshotRoot(db)
 	fmt.Printf("Disklayer: Root: %x\n", baseRoot)
 	if data := rawdb.ReadAccountSnapshot(db, hash); data != nil {
-		account, err := types.FullAccount(data, false)
+		account, err := types.FullAccount(data)
 		if err != nil {
 			panic(err)
 		}
@@ -128,7 +128,7 @@ func CheckJournalAccount(db ethdb.KeyValueStore, hash common.Hash) error {
 		}
 		fmt.Printf("Disklayer+%d: Root: %x, parent %x\n", depth, root, pRoot)
 		if data, ok := accounts[hash]; ok {
-			account, err := types.FullAccount(data, false)
+			account, err := types.FullAccount(data)
 			if err != nil {
 				panic(err)
 			}

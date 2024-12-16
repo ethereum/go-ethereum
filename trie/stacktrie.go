@@ -312,7 +312,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		return
 
 	case emptyNode:
-		st.val = types.EmptyMerkleHash.Bytes()
+		st.val = types.EmptyRootHash.Bytes()
 		st.key = st.key[:0]
 		st.typ = hashedNode
 		return

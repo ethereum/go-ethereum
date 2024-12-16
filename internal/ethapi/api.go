@@ -387,7 +387,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 
 	if len(keys) > 0 {
 		var storageTrie state.Trie
-		if storageRoot != types.EmptyMerkleHash && storageRoot != (common.Hash{}) {
+		if storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
 			id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
 			st, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
 			if err != nil {

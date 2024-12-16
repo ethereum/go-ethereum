@@ -427,7 +427,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB {
 	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
 	sdb := state.NewDatabase(tdb, nil)
-	statedb, _ := state.New(types.EmptyMerkleHash, sdb) // TODO support verkle node in t8n
+	statedb, _ := state.New(types.EmptyRootHash, sdb) // TODO support verkle node in t8n
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)

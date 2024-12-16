@@ -43,7 +43,7 @@ func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[co
 			v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
 			storages[addr][testrand.Hash()] = v
 		}
-		account := generateAccount(types.EmptyMerkleHash)
+		account := generateAccount(types.EmptyRootHash)
 		accounts[addr] = types.SlimAccountRLP(account)
 	}
 	return accounts, storages
@@ -51,12 +51,12 @@ func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[co
 
 func makeHistory() *history {
 	accounts, storages := randomStateSet(3)
-	return newHistory(testrand.Hash(), types.EmptyMerkleHash, 0, accounts, storages)
+	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages)
 }
 
 func makeHistories(n int) []*history {
 	var (
-		parent = types.EmptyMerkleHash
+		parent = types.EmptyRootHash
 		result []*history
 	)
 	for i := 0; i < n; i++ {

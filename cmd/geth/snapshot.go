@@ -326,7 +326,7 @@ func traverseState(ctx *cli.Context) error {
 			log.Error("Invalid account encountered during traversal", "err", err)
 			return err
 		}
-		if acc.Root != types.EmptyMerkleHash {
+		if acc.Root != types.EmptyRootHash {
 			id := trie.StorageTrieID(root, common.BytesToHash(accIter.Key), acc.Root)
 			storageTrie, err := trie.NewStateTrie(id, triedb)
 			if err != nil {
@@ -466,7 +466,7 @@ func traverseRawState(ctx *cli.Context) error {
 				log.Error("Invalid account encountered during traversal", "err", err)
 				return errors.New("invalid account")
 			}
-			if acc.Root != types.EmptyMerkleHash {
+			if acc.Root != types.EmptyRootHash {
 				id := trie.StorageTrieID(root, common.BytesToHash(accIter.LeafKey()), acc.Root)
 				storageTrie, err := trie.NewStateTrie(id, triedb)
 				if err != nil {
@@ -583,7 +583,7 @@ func dumpState(ctx *cli.Context) error {
 		Root common.Hash `json:"root"`
 	}{root})
 	for accIt.Next() {
-		account, err := types.FullAccount(accIt.Account(), false)
+		account, err := types.FullAccount(accIt.Account())
 		if err != nil {
 			return err
 		}

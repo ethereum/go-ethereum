@@ -143,7 +143,7 @@ func (s *stateObject) getPrefetchedTrie() Trie {
 	// If there's nothing to meaningfully return, let the user figure it out by
 	// pulling the trie from disk.
 	isVerkle := s.db.db.TrieDB().IsVerkle()
-	if (s.data.Root == types.EmptyRootHash(isVerkle) && !isVerkle) || s.db.prefetcher == nil {
+	if (s.data.Root == types.EmptyTreeRootHash(isVerkle) && !isVerkle) || s.db.prefetcher == nil {
 		return nil
 	}
 	// Attempt to retrieve the trie from the prefetcher
@@ -205,7 +205,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			if err = s.db.prefetcher.prefetch(s.addrHash, common.Hash{}, s.address, nil, []common.Hash{key}, true); err != nil {
 				log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
 			}
-		} else if s.data.Root != types.EmptyMerkleHash {
+		} else if s.data.Root != types.EmptyRootHash {
 			if err = s.db.prefetcher.prefetch(s.addrHash, s.origin.Root, s.address, nil, []common.Hash{key}, true); err != nil {
 				log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
 			}
@@ -274,7 +274,7 @@ func (s *stateObject) finalise() {
 			if err := s.db.prefetcher.prefetch(s.addrHash, common.Hash{}, s.address, nil, slotsToPrefetch, false); err != nil {
 				log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
 			}
-		} else if s.data.Root != types.EmptyMerkleHash {
+		} else if s.data.Root != types.EmptyRootHash {
 			if err := s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {
 				log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
 			}

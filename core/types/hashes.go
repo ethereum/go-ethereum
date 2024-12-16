@@ -43,14 +43,16 @@ var (
 	// EmptyVerkleHash is the known hash of an empty verkle trie.
 	EmptyVerkleHash = common.Hash{}
 
-	// EmptyMerkleHash is the known root hash of an empty merkle trie.
-	EmptyMerkleHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	// EmptyRootHash is the known root hash of an empty merkle trie.
+	//
+	// TODO(rjl493456442) rename it to EmptyMerkleHash.
+	EmptyRootHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
 
-// EmptyRootHash returns the empty root tree hash of the specific tree type.
-func EmptyRootHash(isVerkle bool) common.Hash {
+// EmptyTreeRootHash returns the empty root tree hash of the specific tree type.
+func EmptyTreeRootHash(isVerkle bool) common.Hash {
 	if !isVerkle {
-		return EmptyMerkleHash
+		return EmptyRootHash
 	}
 	return EmptyVerkleHash
 }

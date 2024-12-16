@@ -104,7 +104,7 @@ func (db *Database) loadLayers() layer {
 	// journal is not matched(or missing) with the persistent state, discard
 	// it. Display log for discarding journal, but try to avoid showing
 	// useless information when the db is created from scratch.
-	if !(root == types.EmptyRootHash(db.isVerkle) && errors.Is(err, errMissJournal)) {
+	if !(root == types.EmptyTreeRootHash(db.isVerkle) && errors.Is(err, errMissJournal)) {
 		log.Info("Failed to load journal, discard it", "err", err)
 	}
 	// Return single layer with persistent state.

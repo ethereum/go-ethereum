@@ -37,7 +37,7 @@ type StateAccount struct {
 
 // NewEmptyStateAccount constructs an empty state account.
 func NewEmptyStateAccount(isVerkle bool) *StateAccount {
-	emptyRoot := EmptyMerkleHash
+	emptyRoot := EmptyRootHash
 	if isVerkle {
 		emptyRoot = EmptyVerkleHash
 	}
@@ -79,10 +79,10 @@ func SlimAccountRLP(account StateAccount) []byte {
 		Balance: account.Balance,
 	}
 	// It is highly unlikely for a valid hash (value = [32]byte{}) to appear
-	// in a Merkle tree, or for a valid hash (value = EmptyMerkleHash) to appear
+	// in a Merkle tree, or for a valid hash (value = EmptyRootHash) to appear
 	// in a Verkle tree. Therefore, in both cases, any other value is considered
 	// a non-empty root hash.
-	if account.Root != EmptyMerkleHash && account.Root != EmptyVerkleHash {
+	if account.Root != EmptyRootHash && account.Root != EmptyVerkleHash {
 		slim.Root = account.Root[:]
 	}
 	if !bytes.Equal(account.CodeHash, EmptyCodeHash[:]) {
@@ -97,7 +97,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 
 // FullAccount decodes the data on the 'slim RLP' format and returns
 // the consensus format account.
-func FullAccount(data []byte, isVerkle bool) (*StateAccount, error) {
+func FullAccount(data []byte) (*StateAccount, error) {
 	var slim SlimAccount
 	if err := rlp.DecodeBytes(data, &slim); err != nil {
 		return nil, err
@@ -107,11 +107,7 @@ func FullAccount(data []byte, isVerkle bool) (*StateAccount, error) {
 
 	// Interpret the storage root and code hash in slim format.
 	if len(slim.Root) == 0 {
-		if isVerkle {
-			account.Root = EmptyVerkleHash
-		} else {
-			account.Root = EmptyMerkleHash
-		}
+		account.Root = EmptyRootHash
 	} else {
 		account.Root = common.BytesToHash(slim.Root)
 	}
@@ -124,8 +120,8 @@ func FullAccount(data []byte, isVerkle bool) (*StateAccount, error) {
 }
 
 // FullAccountRLP converts data on the 'slim RLP' format into the full RLP-format.
-func FullAccountRLP(data []byte, isVerkle bool) ([]byte, error) {
-	account, err := FullAccount(data, isVerkle)
+func FullAccountRLP(data []byte) ([]byte, error) {
+	account, err := FullAccount(data)
 	if err != nil {
 		return nil, err
 	}

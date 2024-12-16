@@ -164,7 +164,7 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 	}
 	// Annotate the empty root hash, especially for merkle tree.
 	if acct.Root == (common.Hash{}) {
-		acct.Root = types.EmptyRootHash(r.isVerkle)
+		acct.Root = types.EmptyTreeRootHash(r.isVerkle)
 	}
 	return acct, nil
 }
@@ -243,8 +243,11 @@ func (r *trieReader) Account(addr common.Address) (*types.StateAccount, error) {
 		return nil, err
 	}
 	if account == nil {
-		r.subRoots[addr] = types.EmptyRootHash(r.db.IsVerkle())
+		r.subRoots[addr] = types.EmptyTreeRootHash(r.db.IsVerkle())
 	} else {
+		// The root hash will be these values if the storage is empty:
+		// - merkle: types.EmptyRootHash
+		// - verkle: types.EmptyVerkleHash
 		r.subRoots[addr] = account.Root
 	}
 	return account, nil

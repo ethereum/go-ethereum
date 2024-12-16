@@ -106,7 +106,7 @@ func TestExecute(t *testing.T) {
 }
 
 func TestCall(t *testing.T) {
-	state, _ := state.New(types.EmptyMerkleHash, state.NewDatabaseForTesting())
+	state, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	address := common.HexToAddress("0xaa")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,
@@ -162,7 +162,7 @@ func BenchmarkCall(b *testing.B) {
 }
 func benchmarkEVM_Create(bench *testing.B, code string) {
 	var (
-		statedb, _ = state.New(types.EmptyMerkleHash, state.NewDatabaseForTesting())
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		sender     = common.BytesToAddress([]byte("sender"))
 		receiver   = common.BytesToAddress([]byte("receiver"))
 	)
@@ -228,7 +228,7 @@ func BenchmarkEVM_SWAP1(b *testing.B) {
 		return contract
 	}
 
-	state, _ := state.New(types.EmptyMerkleHash, state.NewDatabaseForTesting())
+	state, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	contractAddr := common.BytesToAddress([]byte("contract"))
 
 	b.Run("10k", func(b *testing.B) {
@@ -256,7 +256,7 @@ func BenchmarkEVM_RETURN(b *testing.B) {
 		return contract
 	}
 
-	state, _ := state.New(types.EmptyMerkleHash, state.NewDatabaseForTesting())
+	state, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	contractAddr := common.BytesToAddress([]byte("contract"))
 
 	for _, n := range []uint64{1_000, 10_000, 100_000, 1_000_000} {
@@ -394,7 +394,7 @@ func TestBlockhash(t *testing.T) {
 func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode string, b *testing.B) {
 	cfg := new(Config)
 	setDefaults(cfg)
-	cfg.State, _ = state.New(types.EmptyMerkleHash, state.NewDatabaseForTesting())
+	cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	cfg.GasLimit = gas
 	if len(tracerCode) > 0 {
 		tracer, err := tracers.DefaultDirectory.New(tracerCode, new(tracers.Context), nil, cfg.ChainConfig)
@@ -780,7 +780,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 	main := common.HexToAddress("0xaa")
 	for i, jsTracer := range jsTracers {
 		for j, tc := range tests {
-			statedb, _ := state.New(types.EmptyMerkleHash, state.NewDatabaseForTesting())
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			statedb.SetCode(main, tc.code)
 			statedb.SetCode(common.HexToAddress("0xbb"), calleeCode)
 			statedb.SetCode(common.HexToAddress("0xcc"), calleeCode)
@@ -822,7 +822,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 	exit: function(res) { this.exits++ }}`
 	code := []byte{byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN)}
 
-	statedb, _ := state.New(types.EmptyMerkleHash, state.NewDatabaseForTesting())
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil, params.MergedTestChainConfig)
 	if err != nil {
 		t.Fatal(err)

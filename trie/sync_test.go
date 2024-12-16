@@ -37,7 +37,7 @@ func makeTestTrie(scheme string) (ethdb.Database, *testDb, *StateTrie, map[strin
 	// Create an empty trie
 	db := rawdb.NewMemoryDatabase()
 	triedb := newTestDatabase(db, scheme)
-	trie, _ := NewStateTrie(TrieID(types.EmptyMerkleHash), triedb)
+	trie, _ := NewStateTrie(TrieID(types.EmptyRootHash), triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -59,7 +59,7 @@ func makeTestTrie(scheme string) (ethdb.Database, *testDb, *StateTrie, map[strin
 		}
 	}
 	root, nodes := trie.Commit(false)
-	if err := triedb.Update(root, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodes)); err != nil {
+	if err := triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes)); err != nil {
 		panic(fmt.Errorf("failed to commit db %v", err))
 	}
 	if err := triedb.Commit(root); err != nil {
@@ -139,9 +139,9 @@ func TestEmptySync(t *testing.T) {
 	dbD := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
 
 	emptyA := NewEmpty(dbA)
-	emptyB, _ := New(TrieID(types.EmptyMerkleHash), dbB)
+	emptyB, _ := New(TrieID(types.EmptyRootHash), dbB)
 	emptyC := NewEmpty(dbC)
-	emptyD, _ := New(TrieID(types.EmptyMerkleHash), dbD)
+	emptyD, _ := New(TrieID(types.EmptyRootHash), dbD)
 
 	for i, trie := range []*Trie{emptyA, emptyB, emptyC, emptyD} {
 		sync := NewSync(trie.Hash(), memorydb.New(), nil, []*testDb{dbA, dbB, dbC, dbD}[i].Scheme())
@@ -821,7 +821,7 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 	var (
 		srcDisk    = rawdb.NewMemoryDatabase()
 		srcTrieDB  = newTestDatabase(srcDisk, scheme)
-		srcTrie, _ = New(TrieID(types.EmptyMerkleHash), srcTrieDB)
+		srcTrie, _ = New(TrieID(types.EmptyRootHash), srcTrieDB)
 
 		deleteFn = func(key []byte, tr *Trie, states map[string][]byte) {
 			tr.Delete(key)
@@ -848,7 +848,7 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 	writeFn([]byte{0x13, 0x44}, nil, srcTrie, stateA)
 
 	rootA, nodesA := srcTrie.Commit(false)
-	if err := srcTrieDB.Update(rootA, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodesA)); err != nil {
+	if err := srcTrieDB.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodesA)); err != nil {
 		panic(err)
 	}
 	if err := srcTrieDB.Commit(rootA); err != nil {
@@ -922,7 +922,7 @@ func testSyncAbort(t *testing.T, scheme string) {
 	var (
 		srcDisk    = rawdb.NewMemoryDatabase()
 		srcTrieDB  = newTestDatabase(srcDisk, scheme)
-		srcTrie, _ = New(TrieID(types.EmptyMerkleHash), srcTrieDB)
+		srcTrie, _ = New(TrieID(types.EmptyRootHash), srcTrieDB)
 
 		deleteFn = func(key []byte, tr *Trie, states map[string][]byte) {
 			tr.Delete(key)
@@ -947,7 +947,7 @@ func testSyncAbort(t *testing.T, scheme string) {
 	writeFn(key, val, srcTrie, stateA)
 
 	rootA, nodesA := srcTrie.Commit(false)
-	if err := srcTrieDB.Update(rootA, types.EmptyMerkleHash, trienode.NewWithNodeSet(nodesA)); err != nil {
+	if err := srcTrieDB.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodesA)); err != nil {
 		panic(err)
 	}
 	if err := srcTrieDB.Commit(rootA); err != nil {

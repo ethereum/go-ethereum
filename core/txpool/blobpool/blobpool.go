@@ -373,7 +373,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 	// fully synced).
 	state, err := p.chain.StateAt(head.Root)
 	if err != nil {
-		state, err = p.chain.StateAt(types.EmptyMerkleHash) // TODO (rjl493456442) support verkle
+		state, err = p.chain.StateAt(types.EmptyRootHash) // TODO (rjl493456442) support verkle
 	}
 	if err != nil {
 		return err
