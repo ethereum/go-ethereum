@@ -184,13 +184,9 @@ type DBInsert struct {
 	Raw    *types.Log // Blockchain specific contextual infos
 }
 
-func DBInsertEventID() common.Hash {
-	return common.HexToHash("0x8b39ff47dca36ab5b8b80845238af53aa579625ac7fb173dc09376adada41769")
-}
+const DBInsertEventName = "Insert"
 
 func (_DB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
-	// TODO: okay to index by the original name here?  I think so because we assume that the abi json is well-formed.
-	// and we only need normalized name when dealing with generated go symbols.
 	event := "Insert"
 	if log.Topics[0] != _DB.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
@@ -221,13 +217,9 @@ type DBKeyedInsert struct {
 	Raw   *types.Log // Blockchain specific contextual infos
 }
 
-func DBKeyedInsertEventID() common.Hash {
-	return common.HexToHash("0x40bed843c6c5f72002f9b469cf4c1ee9f7fb1eb48f091c1267970f98522ac02d")
-}
+const DBKeyedInsertEventName = "KeyedInsert"
 
 func (_DB *DB) UnpackKeyedInsertEvent(log *types.Log) (*DBKeyedInsert, error) {
-	// TODO: okay to index by the original name here?  I think so because we assume that the abi json is well-formed.
-	// and we only need normalized name when dealing with generated go symbols.
 	event := "KeyedInsert"
 	if log.Topics[0] != _DB.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
