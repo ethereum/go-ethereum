@@ -4,7 +4,6 @@ go 1.22
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
-	github.com/aristanetworks/goarista v0.0.0-20231019142648-8c6f0862ab98
 	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6
 	github.com/cespare/cp v1.1.1
 	github.com/davecgh/go-spew v1.1.1
