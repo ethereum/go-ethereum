@@ -28,7 +28,12 @@ type Prque struct {
 
 // New creates a new priority queue.
 func New(setIndex SetIndexCallback) *Prque {
-	return &Prque{newSstack(setIndex)}
+	return &Prque{newSstack(setIndex, false)}
+}
+
+// NewWrapAround creates a new priority queue with wrap-around priority handling.
+func NewWrapAround(setIndex SetIndexCallback) *Prque {
+	return &Prque{newSstack(setIndex, true)}
 }
 
 // Pushes a value with a given priority into the queue, expanding if necessary.
@@ -36,13 +41,13 @@ func (p *Prque) Push(data interface{}, priority int64) {
 	heap.Push(p.cont, &item{data, priority})
 }
 
-// Peek returns the value with the greates priority but does not pop it off.
+// Peek returns the value with the greatest priority but does not pop it off.
 func (p *Prque) Peek() (interface{}, int64) {
 	item := p.cont.blocks[0][0]
 	return item.value, item.priority
 }
 
-// Pops the value with the greates priority off the stack and returns it.
+// Pops the value with the greatest priority off the stack and returns it.
 // Currently no shrinking is done.
 func (p *Prque) Pop() (interface{}, int64) {
 	item := heap.Pop(p.cont).(*item)

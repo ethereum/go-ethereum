@@ -21,7 +21,7 @@ func TestSstack(t *testing.T) {
 	for i := 0; i < size; i++ {
 		data[i] = &item{rand.Int(), rand.Int63()}
 	}
-	stack := newSstack(nil)
+	stack := newSstack(nil, false)
 	for rep := 0; rep < 2; rep++ {
 		// Push all the data into the stack, pop out every second
 		secs := []*item{}
@@ -55,7 +55,7 @@ func TestSstackSort(t *testing.T) {
 		data[i] = &item{rand.Int(), int64(i)}
 	}
 	// Push all the data into the stack
-	stack := newSstack(nil)
+	stack := newSstack(nil, false)
 	for _, val := range data {
 		stack.Push(val)
 	}
@@ -76,7 +76,7 @@ func TestSstackReset(t *testing.T) {
 	for i := 0; i < size; i++ {
 		data[i] = &item{rand.Int(), rand.Int63()}
 	}
-	stack := newSstack(nil)
+	stack := newSstack(nil, false)
 	for rep := 0; rep < 2; rep++ {
 		// Push all the data into the stack, pop out every second
 		secs := []*item{}
