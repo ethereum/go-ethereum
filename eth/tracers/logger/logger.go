@@ -240,10 +240,11 @@ func NewStructLogger(cfg *Config) *StructLogger {
 
 func (l *StructLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnTxStart: l.OnTxStart,
-		OnTxEnd:   l.OnTxEnd,
-		OnExit:    l.OnExit,
-		OnOpcode:  l.OnOpcode,
+		OnTxStart:           l.OnTxStart,
+		OnTxEnd:             l.OnTxEnd,
+		OnSystemCallStartV2: l.OnSystemCallStart,
+		OnExit:              l.OnExit,
+		OnOpcode:            l.OnOpcode,
 	}
 }
 
@@ -358,6 +359,9 @@ func (l *StructLogger) Stop(err error) {
 }
 
 func (l *StructLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	l.env = env
+}
+func (l *StructLogger) OnSystemCallStart(env *tracing.VMContext) {
 	l.env = env
 }
 
