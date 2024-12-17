@@ -20,16 +20,16 @@ func (a Authorization) MarshalJSON() ([]byte, error) {
 		Address common.Address `json:"address" gencodec:"required"`
 		Nonce   hexutil.Uint64 `json:"nonce" gencodec:"required"`
 		V       hexutil.Uint64 `json:"v" gencodec:"required"`
-		R       uint256.Int    `json:"r" gencodec:"required"`
-		S       uint256.Int    `json:"s" gencodec:"required"`
+		R       hexutil.U256   `json:"r" gencodec:"required"`
+		S       hexutil.U256   `json:"s" gencodec:"required"`
 	}
 	var enc Authorization
 	enc.ChainID = hexutil.Uint64(a.ChainID)
 	enc.Address = a.Address
 	enc.Nonce = hexutil.Uint64(a.Nonce)
 	enc.V = hexutil.Uint64(a.V)
-	enc.R = a.R
-	enc.S = a.S
+	enc.R = hexutil.U256(a.R)
+	enc.S = hexutil.U256(a.S)
 	return json.Marshal(&enc)
 }
 
@@ -40,8 +40,8 @@ func (a *Authorization) UnmarshalJSON(input []byte) error {
 		Address *common.Address `json:"address" gencodec:"required"`
 		Nonce   *hexutil.Uint64 `json:"nonce" gencodec:"required"`
 		V       *hexutil.Uint64 `json:"v" gencodec:"required"`
-		R       *uint256.Int    `json:"r" gencodec:"required"`
-		S       *uint256.Int    `json:"s" gencodec:"required"`
+		R       *hexutil.U256   `json:"r" gencodec:"required"`
+		S       *hexutil.U256   `json:"s" gencodec:"required"`
 	}
 	var dec Authorization
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -66,10 +66,10 @@ func (a *Authorization) UnmarshalJSON(input []byte) error {
 	if dec.R == nil {
 		return errors.New("missing required field 'r' for Authorization")
 	}
-	a.R = *dec.R
+	a.R = uint256.Int(*dec.R)
 	if dec.S == nil {
 		return errors.New("missing required field 's' for Authorization")
 	}
-	a.S = *dec.S
+	a.S = uint256.Int(*dec.S)
 	return nil
 }
