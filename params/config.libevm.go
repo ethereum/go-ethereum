@@ -186,7 +186,8 @@ func (c *ChainConfig) addRulesExtra(r *Rules, blockNum *big.Int, isMerge bool, t
 func (c *ChainConfig) extraPayload() *pseudo.Type {
 	if !registeredExtras.Registered() {
 		// This will only happen if someone constructs an [ExtraPayloads]
-		// directly, without a call to [RegisterExtras].
+		// directly, without a call to [RegisterExtras]. It would also panic on
+		// the next call anyway so this is at least a useful message.
 		//
 		// See https://google.github.io/styleguide/go/best-practices#when-to-panic
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", c))

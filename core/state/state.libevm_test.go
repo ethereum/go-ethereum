@@ -45,7 +45,7 @@ func TestGetSetExtra(t *testing.T) {
 	t.Cleanup(types.TestOnlyClearRegisteredExtras)
 	// Just as its Data field is a pointer, the registered type is a pointer to
 	// test deep copying.
-	payloads := types.RegisterExtras[*accountExtra]()
+	payloads := types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, *accountExtra]().StateAccount
 
 	rng := ethtest.NewPseudoRand(42)
 	addr := rng.Address()
@@ -87,7 +87,7 @@ func TestGetSetExtra(t *testing.T) {
 				Root:     types.EmptyRootHash,
 				CodeHash: types.EmptyCodeHash[:],
 			}
-			payloads.StateAccount.Set(want, extra)
+			payloads.Set(want, extra)
 
 			if diff := cmp.Diff(want, got); diff != "" {
 				t.Errorf("types.FullAccount(%T.Account()) diff (-want +got):\n%s", iter, diff)

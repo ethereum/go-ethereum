@@ -28,6 +28,7 @@ import (
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -93,6 +94,8 @@ type Header struct {
 
 	// ParentBeaconRoot was added by EIP-4788 and is ignored in legacy headers.
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
+
+	extra *pseudo.Type // See RegisterExtras()
 }
 
 // field type overrides for gencodec

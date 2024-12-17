@@ -73,7 +73,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 		{
 			name: "true-boolean payload",
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
-				e := types.RegisterExtras[bool]()
+				e := types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, bool]()
 				e.StateAccount.Set(a, true)
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
 					assert.Truef(t, e.StateAccount.Get(got), "")
@@ -84,7 +84,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 		{
 			name: "explicit false-boolean payload",
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
-				e := types.RegisterExtras[bool]()
+				e := types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, bool]()
 				e.StateAccount.Set(a, false) // the explicit part
 
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
@@ -96,7 +96,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 		{
 			name: "implicit false-boolean payload",
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
-				e := types.RegisterExtras[bool]()
+				e := types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, bool]()
 				// Note that `a` is reflected, unchanged (the implicit part).
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
 					assert.Falsef(t, e.StateAccount.Get(got), "")
@@ -107,7 +107,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 		{
 			name: "arbitrary payload",
 			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
-				e := types.RegisterExtras[arbitraryPayload]()
+				e := types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, arbitraryPayload]()
 				p := arbitraryPayload{arbitraryData}
 				e.StateAccount.Set(a, p)
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper

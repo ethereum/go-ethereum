@@ -19,40 +19,41 @@ package state
 import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/libevm/pseudo"
 )
 
 // GetExtra returns the extra payload from the [types.StateAccount] associated
-// with the address, or a zero-value `SA` if not found. The
-// [types.ExtraPayloads] MUST be sourced from [types.RegisterExtras].
-func GetExtra[SA any](s *StateDB, p types.ExtraPayloads[SA], addr common.Address) SA {
+// with the address, or a zero-value `SA` if not found. The [pseudo.Accessor]
+// MUST be sourced from [types.RegisterExtras].
+func GetExtra[SA any](s *StateDB, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address) SA {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return p.StateAccount.Get(&stateObject.data)
+		return a.Get(&stateObject.data)
 	}
 	var zero SA
 	return zero
 }
 
 // SetExtra sets the extra payload for the address. See [GetExtra] for details.
-func SetExtra[SA any](s *StateDB, p types.ExtraPayloads[SA], addr common.Address, extra SA) {
+func SetExtra[SA any](s *StateDB, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
-		setExtraOnObject(stateObject, p, addr, extra)
+		setExtraOnObject(stateObject, a, addr, extra)
 	}
 }
 
-func setExtraOnObject[SA any](s *stateObject, p types.ExtraPayloads[SA], addr common.Address, extra SA) {
+func setExtraOnObject[SA any](s *stateObject, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
 	s.db.journal.append(extraChange[SA]{
-		payloads: p,
+		accessor: a,
 		account:  &addr,
-		prev:     p.StateAccount.Get(&s.data),
+		prev:     a.Get(&s.data),
 	})
-	p.StateAccount.Set(&s.data, extra)
+	a.Set(&s.data, extra)
 }
 
 // extraChange is a [journalEntry] for [SetExtra] / [setExtraOnObject].
 type extraChange[SA any] struct {
-	payloads types.ExtraPayloads[SA]
+	accessor pseudo.Accessor[types.StateOrSlimAccount, SA]
 	account  *common.Address
 	prev     SA
 }
@@ -60,5 +61,5 @@ type extraChange[SA any] struct {
 func (e extraChange[SA]) dirtied() *common.Address { return e.account }
 
 func (e extraChange[SA]) revert(s *StateDB) {
-	e.payloads.StateAccount.Set(&s.getStateObject(*e.account).data, e.prev)
+	e.accessor.Set(&s.getStateObject(*e.account).data, e.prev)
 }
