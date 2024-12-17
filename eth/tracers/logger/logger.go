@@ -411,7 +411,7 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 func (t *mdLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
 		OnTxStart:           t.OnTxStart,
-		OnSystemCallStartV2: t.OnTxStart,
+		OnSystemCallStartV2: t.OnSystemCallStart,
 		OnEnter:             t.OnEnter,
 		OnExit:              t.OnExit,
 		OnOpcode:            t.OnOpcode,
