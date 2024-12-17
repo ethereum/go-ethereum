@@ -866,3 +866,83 @@ func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 	benchmarkNonModifyingCode(10000000, code, "tracer-step-10M", stepTracer, b)
 	benchmarkNonModifyingCode(10000000, code, "tracer-call-frame-10M", callFrameTracer, b)
 }
+
+// TestDelegatedAccountAccessCost tests that calling an account with an EIP-7702
+// delegation designator incurs the correct amount of gas based on the tracer.
+func TestDelegatedAccountAccessCost(t *testing.T) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.SetCode(common.HexToAddress("0xff"), types.AddressToDelegation(common.HexToAddress("0xaa")))
+	statedb.SetCode(common.HexToAddress("0xaa"), program.New().Return(0, 0).Bytes())
+
+	for i, tc := range []struct {
+		code []byte
+		step int
+		want uint64
+	}{
+		{ // CALL(0xff)
+			code: []byte{
+				byte(vm.PUSH1), 0x0,
+				byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xff, byte(vm.DUP1), byte(vm.CALL), byte(vm.POP),
+			},
+			step: 7,
+			want: 5455,
+		},
+		{ // CALLCODE(0xff)
+			code: []byte{
+				byte(vm.PUSH1), 0x0,
+				byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xff, byte(vm.DUP1), byte(vm.CALLCODE), byte(vm.POP),
+			},
+			step: 7,
+			want: 5455,
+		},
+		{ // DELEGATECALL(0xff)
+			code: []byte{
+				byte(vm.PUSH1), 0x0,
+				byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xff, byte(vm.DUP1), byte(vm.DELEGATECALL), byte(vm.POP),
+			},
+			step: 6,
+			want: 5455,
+		},
+		{ // STATICCALL(0xff)
+			code: []byte{
+				byte(vm.PUSH1), 0x0,
+				byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xff, byte(vm.DUP1), byte(vm.STATICCALL), byte(vm.POP),
+			},
+			step: 6,
+			want: 5455,
+		},
+		{ // SELFDESTRUCT(0xff): should not be affected by resolution
+			code: []byte{
+				byte(vm.PUSH1), 0xff, byte(vm.SELFDESTRUCT),
+			},
+			step: 1,
+			want: 7600,
+		},
+	} {
+		var step = 0
+		var have = uint64(0)
+		Execute(tc.code, nil, &Config{
+			ChainConfig: params.MergedTestChainConfig,
+			State:       statedb,
+			EVMConfig: vm.Config{
+				Tracer: &tracing.Hooks{
+					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+						// Uncomment to investigate failures:
+						t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
+						if step == tc.step {
+							have = cost
+						}
+						step++
+					},
+				},
+			},
+		})
+		if want := tc.want; have != want {
+			t.Fatalf("testcase %d, gas report wrong, step %d, have %d want %d", i, tc.step, have, want)
+		}
+	}
+}
