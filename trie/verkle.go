@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -27,12 +28,11 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-ethereum/triedb/database"
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 )
 
 var (
-	zero               [32]byte
 	errInvalidRootType = errors.New("invalid node type for root")
 )
 
@@ -45,7 +45,7 @@ type VerkleTrie struct {
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
-func NewVerkleTrie(root common.Hash, db database.Database, cache *utils.PointCache) (*VerkleTrie, error) {
+func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
 	reader, err := newTrieReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
@@ -67,6 +67,10 @@ func NewVerkleTrie(root common.Hash, db database.Database, cache *utils.PointCac
 		cache:  cache,
 		reader: reader,
 	}, nil
+}
+
+func (t *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
+	return t.reader.node(path, common.Hash{})
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was previously used
@@ -96,20 +100,10 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	if values == nil {
 		return nil, nil
 	}
-	// Decode nonce in little-endian
-	if len(values[utils.NonceLeafKey]) > 0 {
-		acc.Nonce = binary.LittleEndian.Uint64(values[utils.NonceLeafKey])
-	}
-	// Decode balance in little-endian
-	var balance [32]byte
-	copy(balance[:], values[utils.BalanceLeafKey])
-	for i := 0; i < len(balance)/2; i++ {
-		balance[len(balance)-i-1], balance[i] = balance[i], balance[len(balance)-i-1]
-	}
-	acc.Balance = new(uint256.Int).SetBytes32(balance[:])
-
-	// Decode codehash
-	acc.CodeHash = values[utils.CodeKeccakLeafKey]
+	basicData := values[utils.BasicDataLeafKey]
+	acc.Nonce = binary.BigEndian.Uint64(basicData[utils.BasicDataNonceOffset:])
+	acc.Balance = new(uint256.Int).SetBytes(basicData[utils.BasicDataBalanceOffset : utils.BasicDataBalanceOffset+16])
+	acc.CodeHash = values[utils.CodeHashLeafKey]
 
 	// TODO account.Root is leave as empty. How should we handle the legacy account?
 	return acc, nil
@@ -129,38 +123,36 @@ func (t *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error)
 
 // UpdateAccount implements state.Trie, writing the provided account into the tree.
 // If the tree is corrupted, an error will be returned.
-func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount) error {
+func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount, codeLen int) error {
 	var (
-		err            error
-		nonce, balance [32]byte
-		values         = make([][]byte, verkle.NodeWidth)
+		err       error
+		basicData [32]byte
+		values    = make([][]byte, verkle.NodeWidth)
+		stem      = t.cache.GetStem(addr[:])
 	)
-	values[utils.VersionLeafKey] = zero[:]
-	values[utils.CodeKeccakLeafKey] = acc.CodeHash[:]
 
-	// Encode nonce in little-endian
-	binary.LittleEndian.PutUint64(nonce[:], acc.Nonce)
-	values[utils.NonceLeafKey] = nonce[:]
-
-	// Encode balance in little-endian
-	bytes := acc.Balance.Bytes()
-	if len(bytes) > 0 {
-		for i, b := range bytes {
-			balance[len(bytes)-i-1] = b
-		}
+	// Code size is encoded in BasicData as a 3-byte big-endian integer. Spare bytes are present
+	// before the code size to support bigger integers in the future. PutUint32(...) requires
+	// 4 bytes, so we need to shift the offset 1 byte to the left.
+	binary.BigEndian.PutUint32(basicData[utils.BasicDataCodeSizeOffset-1:], uint32(codeLen))
+	binary.BigEndian.PutUint64(basicData[utils.BasicDataNonceOffset:], acc.Nonce)
+	if acc.Balance.ByteLen() > 16 {
+		panic("balance too large")
 	}
-	values[utils.BalanceLeafKey] = balance[:]
+	acc.Balance.WriteToSlice(basicData[utils.BasicDataBalanceOffset : utils.BasicDataBalanceOffset+16])
+	values[utils.BasicDataLeafKey] = basicData[:]
+	values[utils.CodeHashLeafKey] = acc.CodeHash[:]
 
-	switch n := t.root.(type) {
+	switch root := t.root.(type) {
 	case *verkle.InternalNode:
-		err = n.InsertValuesAtStem(t.cache.GetStem(addr[:]), values, t.nodeResolver)
-		if err != nil {
-			return fmt.Errorf("UpdateAccount (%x) error: %v", addr, err)
-		}
+		err = root.InsertValuesAtStem(stem, values, t.nodeResolver)
 	default:
 		return errInvalidRootType
 	}
-	// TODO figure out if the code size needs to be updated, too
+	if err != nil {
+		return fmt.Errorf("UpdateAccount (%x) error: %v", addr, err)
+	}
+
 	return nil
 }
 
@@ -178,25 +170,73 @@ func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) er
 	return t.root.Insert(k, v[:], t.nodeResolver)
 }
 
-// DeleteAccount implements state.Trie, deleting the specified account from the
-// trie. If the account was not existent in the trie, no error will be returned.
-// If the trie is corrupted, an error will be returned.
+// DeleteAccount leaves the account untouched, as no account deletion can happen
+// in verkle.
+// There is a special corner case, in which an account that is prefunded, CREATE2-d
+// and then SELFDESTRUCT-d should see its funds drained. EIP161 says that account
+// should be removed, but this is verboten by the verkle spec. This contains a
+// workaround in which the method checks for this corner case, and if so, overwrites
+// the balance with 0. This will be removed once the spec has been clarified.
 func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
-	var (
-		err    error
-		values = make([][]byte, verkle.NodeWidth)
-	)
-	for i := 0; i < verkle.NodeWidth; i++ {
-		values[i] = zero[:]
+	k := utils.BasicDataKeyWithEvaluatedAddress(t.cache.Get(addr.Bytes()))
+	values, err := t.root.(*verkle.InternalNode).GetValuesAtStem(k, t.nodeResolver)
+	if err != nil {
+		return fmt.Errorf("Error getting data at %x in delete: %w", k, err)
 	}
-	switch n := t.root.(type) {
-	case *verkle.InternalNode:
-		err = n.InsertValuesAtStem(t.cache.GetStem(addr.Bytes()), values, t.nodeResolver)
-		if err != nil {
-			return fmt.Errorf("DeleteAccount (%x) error: %v", addr, err)
+	var prefunded bool
+	for i, v := range values {
+		switch i {
+		case 0:
+			prefunded = len(v) == 32
+		case 1:
+			prefunded = len(v) == 32 && bytes.Equal(v, types.EmptyCodeHash[:])
+		default:
+			prefunded = v == nil
 		}
-	default:
-		return errInvalidRootType
+		if !prefunded {
+			break
+		}
+	}
+	if prefunded {
+		t.root.Insert(k, common.Hash{}.Bytes(), t.nodeResolver)
+	}
+	return nil
+}
+
+// RollBackAccount removes the account info + code from the tree, unlike DeleteAccount
+// that will overwrite it with 0s. The first 64 storage slots are also removed.
+func (t *VerkleTrie) RollBackAccount(addr common.Address) error {
+	var (
+		evaluatedAddr = t.cache.Get(addr.Bytes())
+		basicDataKey  = utils.BasicDataKeyWithEvaluatedAddress(evaluatedAddr)
+	)
+	basicDataBytes, err := t.root.Get(basicDataKey, t.nodeResolver)
+	if err != nil {
+		return fmt.Errorf("rollback: error finding code size: %w", err)
+	}
+	if len(basicDataBytes) == 0 {
+		return errors.New("rollback: basic data is not existent")
+	}
+	// The code size is encoded in BasicData as a 3-byte big-endian integer. Spare bytes are present
+	// before the code size to support bigger integers in the future.
+	// LittleEndian.Uint32(...) expects 4-bytes, so we need to shift the offset 1-byte to the left.
+	codeSize := binary.BigEndian.Uint32(basicDataBytes[utils.BasicDataCodeSizeOffset-1:])
+
+	// Delete the account header + first 64 slots + first 128 code chunks
+	_, err = t.root.(*verkle.InternalNode).DeleteAtStem(basicDataKey[:31], t.nodeResolver)
+	if err != nil {
+		return fmt.Errorf("error rolling back account header: %w", err)
+	}
+
+	// Delete all further code
+	for i, chunknr := uint64(31*128), uint64(128); i < uint64(codeSize); i, chunknr = i+31*256, chunknr+256 {
+		// evaluate group key at the start of a new group
+		offset := uint256.NewInt(chunknr)
+		key := utils.CodeChunkKeyWithEvaluatedAddress(evaluatedAddr, offset)
+
+		if _, err = t.root.(*verkle.InternalNode).DeleteAtStem(key[:], t.nodeResolver); err != nil {
+			return fmt.Errorf("error deleting code chunk stem (addr=%x, offset=%d) error: %w", addr[:], offset, err)
+		}
 	}
 	return nil
 }
@@ -217,22 +257,21 @@ func (t *VerkleTrie) Hash() common.Hash {
 }
 
 // Commit writes all nodes to the tree's memory database.
-func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
-	root, ok := t.root.(*verkle.InternalNode)
-	if !ok {
-		return common.Hash{}, nil, errors.New("unexpected root node type")
-	}
+func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
+	root := t.root.(*verkle.InternalNode)
 	nodes, err := root.BatchSerialize()
 	if err != nil {
-		return common.Hash{}, nil, fmt.Errorf("serializing tree nodes: %s", err)
+		// Error return from this function indicates error in the code logic
+		// of BatchSerialize, and we fail catastrophically if this is the case.
+		panic(fmt.Errorf("BatchSerialize failed: %v", err))
 	}
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
-		// hash parameter is not used in pathdb
+		// Hash parameter is not used in pathdb
 		nodeset.AddNode(node.Path, trienode.New(common.Hash{}, node.SerializedBytes))
 	}
 	// Serialize root commitment form
-	return t.Hash(), nodeset, nil
+	return t.Hash(), nodeset
 }
 
 // NodeIterator implements state.Trie, returning an iterator that returns
@@ -268,6 +307,25 @@ func (t *VerkleTrie) Copy() *VerkleTrie {
 // IsVerkle indicates if the trie is a Verkle trie.
 func (t *VerkleTrie) IsVerkle() bool {
 	return true
+}
+
+// Proof builds and returns the verkle multiproof for keys, built against
+// the pre tree. The post tree is passed in order to add the post values
+// to that proof.
+func (t *VerkleTrie) Proof(posttrie *VerkleTrie, keys [][]byte) (*verkle.VerkleProof, verkle.StateDiff, error) {
+	var postroot verkle.VerkleNode
+	if posttrie != nil {
+		postroot = posttrie.root
+	}
+	proof, _, _, _, err := verkle.MakeVerkleMultiProof(t.root, postroot, keys, t.FlatdbNodeResolver)
+	if err != nil {
+		return nil, nil, err
+	}
+	p, kvps, err := verkle.SerializeProof(proof)
+	if err != nil {
+		return nil, nil, err
+	}
+	return p, kvps, nil
 }
 
 // ChunkedCode represents a sequence of 32-bytes chunks of code (31 bytes of which
@@ -327,6 +385,7 @@ func ChunkifyCode(code []byte) ChunkedCode {
 
 // UpdateContractCode implements state.Trie, writing the provided contract code
 // into the trie.
+// Note that the code-size *must* be already saved by a previous UpdateAccount call.
 func (t *VerkleTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
 	var (
 		chunks = ChunkifyCode(code)
@@ -342,12 +401,6 @@ func (t *VerkleTrie) UpdateContractCode(addr common.Address, codeHash common.Has
 		}
 		values[groupOffset] = chunks[i : i+32]
 
-		// Reuse the calculated key to also update the code size.
-		if i == 0 {
-			cs := make([]byte, 32)
-			binary.LittleEndian.PutUint64(cs, uint64(len(code)))
-			values[utils.CodeSizeLeafKey] = cs
-		}
 		if groupOffset == 255 || len(chunks)-i <= 32 {
 			switch root := t.root.(type) {
 			case *verkle.InternalNode:
@@ -369,4 +422,9 @@ func (t *VerkleTrie) ToDot() string {
 
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
 	return t.reader.node(path, common.Hash{})
+}
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *VerkleTrie) Witness() map[string]struct{} {
+	panic("not implemented")
 }

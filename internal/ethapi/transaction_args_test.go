@@ -42,6 +42,8 @@ import (
 
 // TestSetFeeDefaults tests the logic for filling in default fee values works as expected.
 func TestSetFeeDefaults(t *testing.T) {
+	t.Parallel()
+
 	type test struct {
 		name string
 		fork string // options: legacy, london, cancun
@@ -236,7 +238,7 @@ func TestSetFeeDefaults(t *testing.T) {
 			t.Fatalf("failed to set fork: %v", err)
 		}
 		got := test.in
-		err := got.setFeeDefaults(ctx, b)
+		err := got.setFeeDefaults(ctx, b, b.CurrentHeader())
 		if err != nil {
 			if test.err == nil {
 				t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
@@ -373,9 +375,6 @@ func (b *backendMock) GetEVM(ctx context.Context, msg *core.Message, state *stat
 }
 func (b *backendMock) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription { return nil }
 func (b *backendMock) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return nil
-}
-func (b *backendMock) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return nil
 }
 func (b *backendMock) SendTx(ctx context.Context, signedTx *types.Transaction) error { return nil }

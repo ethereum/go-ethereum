@@ -53,7 +53,7 @@ type Config struct {
 // DefaultConfig contains default settings for miner.
 var DefaultConfig = Config{
 	GasCeil:  30_000_000,
-	GasPrice: big.NewInt(params.GWei),
+	GasPrice: big.NewInt(params.GWei / 1000),
 
 	// The default recommit time is chosen as two seconds since
 	// consensus-layer usually will wait a half slot of time(6s)
@@ -126,8 +126,8 @@ func (miner *Miner) SetGasTip(tip *big.Int) error {
 }
 
 // BuildPayload builds the payload according to the provided parameters.
-func (miner *Miner) BuildPayload(args *BuildPayloadArgs) (*Payload, error) {
-	return miner.buildPayload(args)
+func (miner *Miner) BuildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
+	return miner.buildPayload(args, witness)
 }
 
 // getPending retrieves the pending block based on the current head block.
@@ -156,7 +156,7 @@ func (miner *Miner) getPending() *newPayloadResult {
 		withdrawals: withdrawal,
 		beaconRoot:  nil,
 		noTxs:       false,
-	})
+	}, false) // we will never make a witness for a pending block
 	if ret.err != nil {
 		return nil
 	}

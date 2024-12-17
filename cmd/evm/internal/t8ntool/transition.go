@@ -82,7 +82,9 @@ type input struct {
 }
 
 func Transition(ctx *cli.Context) error {
-	var getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) { return nil, nil, nil }
+	var getTracer = func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
+		return nil, nil, nil
+	}
 
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
@@ -97,7 +99,7 @@ func Transition(ctx *cli.Context) error {
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 			Debug:            true,
 		}
-		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+		getTracer = func(txIndex int, txHash common.Hash, _ *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
 			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
@@ -121,12 +123,12 @@ func Transition(ctx *cli.Context) error {
 		if ctx.IsSet(TraceTracerConfigFlag.Name) {
 			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
 		}
-		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+		getTracer = func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
 			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config, chainConfig)
 			if err != nil {
 				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
 			}
@@ -181,7 +183,7 @@ func Transition(ctx *cli.Context) error {
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
-	if txIt, err = loadTransactions(txStr, inputData, prestate.Env, chainConfig); err != nil {
+	if txIt, err = loadTransactions(txStr, inputData, chainConfig); err != nil {
 		return err
 	}
 	if err := applyLondonChecks(&prestate.Env, chainConfig); err != nil {
@@ -217,7 +219,7 @@ func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 		return nil
 	}
 	if env.ParentBaseFee == nil || env.Number == 0 {
-		return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
+		return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'parentBaseFee' in env section"))
 	}
 	env.BaseFee = eip1559.CalcBaseFee(chainConfig, &types.Header{
 		Number:   new(big.Int).SetUint64(env.Number - 1),
@@ -296,7 +298,7 @@ func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
 	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 0)
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
-		storage = make(map[common.Hash]common.Hash)
+		storage = make(map[common.Hash]common.Hash, len(dumpAccount.Storage))
 		for k, v := range dumpAccount.Storage {
 			storage[k] = common.HexToHash(v)
 		}

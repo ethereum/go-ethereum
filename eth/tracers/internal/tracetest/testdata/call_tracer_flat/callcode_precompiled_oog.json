@@ -10,7 +10,6 @@
     "number": "1555277",
     "stateRoot": "0x6290d79215a2eebc25d5e456b35876c6d78ffc1ea47bdd70e375ebb3cf325620",
     "timestamp": "1590795308",
-    "totalDifficulty": "2242609643446",
     "alloc": {
       "0x0000000000000000000000000000000000000001": {
         "balance": "0x0",
@@ -52,6 +51,7 @@
     {
       "type": "create",
       "action": {
+        "creationMethod": "create",
         "from": "0x877bd459c9b7d8576b44e59e09d076c25946f443",
         "value": "0x0",
         "gas": "0x1a758",
@@ -67,8 +67,7 @@
       "transactionPosition": 141,
       "transactionHash": "0x1592cbda0d928b8d18eed98857942b91ade32d088e55b8bf63418917cb0231f1",
       "blockNumber": 1555278,
-      "blockHash": "0x755bd54de4b2f5a7a589a10d69888b4ead48a6311d5d69f2f69ca85ec35fbe0b",
-      "time": "300.9µs"
+      "blockHash": "0x755bd54de4b2f5a7a589a10d69888b4ead48a6311d5d69f2f69ca85ec35fbe0b"
     },
     {
       "type": "call",
@@ -81,9 +80,7 @@
         "callType": "callcode"
       },
       "error": "out of gas",
-      "traceAddress": [
-        0
-      ],
+      "traceAddress": [0],
       "subtraces": 0,
       "transactionPosition": 141,
       "transactionHash": "0x1592cbda0d928b8d18eed98857942b91ade32d088e55b8bf63418917cb0231f1",

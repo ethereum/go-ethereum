@@ -29,28 +29,30 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/holiman/uint256"
 )
 
-func updateTrie(addrHash common.Hash, root common.Hash, dirties, cleans map[common.Hash][]byte) (common.Hash, *trienode.NodeSet) {
-	h, err := newTestHasher(addrHash, root, cleans)
+func updateTrie(db *Database, stateRoot common.Hash, addrHash common.Hash, root common.Hash, dirties map[common.Hash][]byte) (common.Hash, *trienode.NodeSet) {
+	var id *trie.ID
+	if addrHash == (common.Hash{}) {
+		id = trie.StateTrieID(stateRoot)
+	} else {
+		id = trie.StorageTrieID(stateRoot, addrHash, root)
+	}
+	tr, err := trie.New(id, db)
 	if err != nil {
-		panic(fmt.Errorf("failed to create hasher, err: %w", err))
+		panic(fmt.Errorf("failed to load trie, err: %w", err))
 	}
 	for key, val := range dirties {
 		if len(val) == 0 {
-			h.Delete(key.Bytes())
+			tr.Delete(key.Bytes())
 		} else {
-			h.Update(key.Bytes(), val)
+			tr.Update(key.Bytes(), val)
 		}
 	}
-	root, nodes, err := h.Commit(false)
-	if err != nil {
-		panic(fmt.Errorf("failed to commit hasher, err: %w", err))
-	}
-	return root, nodes
+	return tr.Commit(false)
 }
 
 func generateAccount(storageRoot common.Hash) types.StateAccount {
@@ -70,6 +72,7 @@ const (
 )
 
 type genctx struct {
+	stateRoot     common.Hash
 	accounts      map[common.Hash][]byte
 	storages      map[common.Hash]map[common.Hash][]byte
 	accountOrigin map[common.Address][]byte
@@ -77,8 +80,9 @@ type genctx struct {
 	nodes         *trienode.MergedNodeSet
 }
 
-func newCtx() *genctx {
+func newCtx(stateRoot common.Hash) *genctx {
 	return &genctx{
+		stateRoot:     stateRoot,
 		accounts:      make(map[common.Hash][]byte),
 		storages:      make(map[common.Hash]map[common.Hash][]byte),
 		accountOrigin: make(map[common.Address][]byte),
@@ -103,9 +107,9 @@ func newTester(t *testing.T, historyLimit uint64) *tester {
 	var (
 		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 		db      = New(disk, &Config{
-			StateHistory:   historyLimit,
-			CleanCacheSize: 16 * 1024,
-			DirtyCacheSize: 16 * 1024,
+			StateHistory:    historyLimit,
+			CleanCacheSize:  16 * 1024,
+			WriteBufferSize: 16 * 1024,
 		}, false)
 		obj = &tester{
 			db:           db,
@@ -116,7 +120,7 @@ func newTester(t *testing.T, historyLimit uint64) *tester {
 			snapStorages: make(map[common.Hash]map[common.Hash]map[common.Hash][]byte),
 		}
 	)
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 12; i++ {
 		var parent = types.EmptyRootHash
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
@@ -155,7 +159,7 @@ func (t *tester) generateStorage(ctx *genctx, addr common.Address) common.Hash {
 		storage[hash] = v
 		origin[hash] = nil
 	}
-	root, set := updateTrie(addrHash, types.EmptyRootHash, storage, nil)
+	root, set := updateTrie(t.db, ctx.stateRoot, addrHash, types.EmptyRootHash, storage)
 
 	ctx.storages[addrHash] = storage
 	ctx.storageOrigin[addr] = origin
@@ -184,7 +188,7 @@ func (t *tester) mutateStorage(ctx *genctx, addr common.Address, root common.Has
 		storage[hash] = v
 		origin[hash] = nil
 	}
-	root, set := updateTrie(crypto.Keccak256Hash(addr.Bytes()), root, storage, t.storages[addrHash])
+	root, set := updateTrie(t.db, ctx.stateRoot, crypto.Keccak256Hash(addr.Bytes()), root, storage)
 
 	ctx.storages[addrHash] = storage
 	ctx.storageOrigin[addr] = origin
@@ -202,7 +206,7 @@ func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash
 		origin[hash] = val
 		storage[hash] = nil
 	}
-	root, set := updateTrie(addrHash, root, storage, t.storages[addrHash])
+	root, set := updateTrie(t.db, ctx.stateRoot, addrHash, root, storage)
 	if root != types.EmptyRootHash {
 		panic("failed to clear storage trie")
 	}
@@ -212,9 +216,9 @@ func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash
 	return root
 }
 
-func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNodeSet, *triestate.Set) {
+func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNodeSet, *StateSetWithOrigin) {
 	var (
-		ctx     = newCtx()
+		ctx     = newCtx(parent)
 		dirties = make(map[common.Hash]struct{})
 	)
 	for i := 0; i < 20; i++ {
@@ -275,7 +279,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 			ctx.accountOrigin[addr] = account
 		}
 	}
-	root, set := updateTrie(common.Hash{}, parent, ctx.accounts, t.accounts)
+	root, set := updateTrie(t.db, parent, common.Hash{}, parent, ctx.accounts)
 	ctx.nodes.Merge(set)
 
 	// Save state snapshot before commit
@@ -301,8 +305,11 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 				t.storages[addrHash][sHash] = slot
 			}
 		}
+		if len(t.storages[addrHash]) == 0 {
+			delete(t.storages, addrHash)
+		}
 	}
-	return root, ctx.nodes, triestate.New(ctx.accountOrigin, ctx.storageOrigin)
+	return root, ctx.nodes, NewStateSetWithOrigin(ctx.accountOrigin, ctx.storageOrigin)
 }
 
 // lastHash returns the latest root hash, or empty if nothing is cached.
@@ -314,25 +321,31 @@ func (t *tester) lastHash() common.Hash {
 }
 
 func (t *tester) verifyState(root common.Hash) error {
-	reader, err := t.db.Reader(root)
+	tr, err := trie.New(trie.StateTrieID(root), t.db)
 	if err != nil {
 		return err
 	}
-	_, err = reader.Node(common.Hash{}, nil, root)
-	if err != nil {
-		return errors.New("root node is not available")
-	}
 	for addrHash, account := range t.snapAccounts[root] {
-		path := crypto.Keccak256(addrHash.Bytes())
-		blob, err := reader.Node(common.Hash{}, path, crypto.Keccak256Hash(account))
+		blob, err := tr.Get(addrHash.Bytes())
 		if err != nil || !bytes.Equal(blob, account) {
 			return fmt.Errorf("account is mismatched: %w", err)
 		}
 	}
 	for addrHash, slots := range t.snapStorages[root] {
+		blob := t.snapAccounts[root][addrHash]
+		if len(blob) == 0 {
+			return fmt.Errorf("account %x is missing", addrHash)
+		}
+		account := new(types.StateAccount)
+		if err := rlp.DecodeBytes(blob, account); err != nil {
+			return err
+		}
+		storageIt, err := trie.New(trie.StorageTrieID(root, addrHash, account.Root), t.db)
+		if err != nil {
+			return err
+		}
 		for hash, slot := range slots {
-			path := crypto.Keccak256(hash.Bytes())
-			blob, err := reader.Node(addrHash, path, crypto.Keccak256Hash(slot))
+			blob, err := storageIt.Get(hash.Bytes())
 			if err != nil || !bytes.Equal(blob, slot) {
 				return fmt.Errorf("slot is mismatched: %w", err)
 			}
@@ -399,13 +412,11 @@ func TestDatabaseRollback(t *testing.T) {
 	}
 	// Revert database from top to bottom
 	for i := tester.bottomIndex(); i >= 0; i-- {
-		root := tester.roots[i]
 		parent := types.EmptyRootHash
 		if i > 0 {
 			parent = tester.roots[i-1]
 		}
-		loader := newHashLoader(tester.snapAccounts[root], tester.snapStorages[root])
-		if err := tester.db.Recover(parent, loader); err != nil {
+		if err := tester.db.Recover(parent); err != nil {
 			t.Fatalf("Failed to revert db, err: %v", err)
 		}
 		if i > 0 {
@@ -474,7 +485,7 @@ func TestDisable(t *testing.T) {
 	tester := newTester(t, 0)
 	defer tester.release()
 
-	_, stored := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
+	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
 	if err := tester.db.Disable(); err != nil {
 		t.Fatalf("Failed to deactivate database: %v", err)
 	}
@@ -580,7 +591,7 @@ func TestCorruptedJournal(t *testing.T) {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
 	tester.db.Close()
-	_, root := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
+	root := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
 
 	// Mutate the journal in disk, it should be regarded as invalid
 	blob := rawdb.ReadTrieJournal(tester.db.diskdb)

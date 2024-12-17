@@ -29,7 +29,7 @@ GLOBAL OPTIONS:
    --loglevel value        log level to emit to the screen (default: 4)
    --keystore value        Directory for the keystore (default: "$HOME/.ethereum/keystore")
    --configdir value       Directory for Clef configuration (default: "$HOME/.clef")
-   --chainid value         Chain id to use for signing (1=mainnet, 5=Goerli) (default: 1)
+   --chainid value         Chain id to use for signing (1=mainnet, 17000=Holesky) (default: 1)
    --lightkdf              Reduce key-derivation RAM & CPU usage at some expense of KDF strength
    --nousb                 Disables monitoring for and managing USB hardware wallets
    --pcscdpath value       Path to the smartcard daemon (pcscd) socket file (default: "/run/pcscd/pcscd.comm")
@@ -225,8 +225,8 @@ Response
      - `value` [number:optional]: amount of Wei to send with the transaction
      - `data` [data:optional]:  input data
      - `nonce` [number]: account nonce
-  1. method signature [string:optional]
-     - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
+  2. method signature [string:optional]
+       - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
 
 
 #### Result

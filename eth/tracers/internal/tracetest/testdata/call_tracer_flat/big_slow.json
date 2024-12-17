@@ -10,7 +10,6 @@
     "number": "1719576",
     "stateRoot": "0xab5eec2177a92d633e282936af66c46e24cfa8f2fdc2b8155f33885f483d06f3",
     "timestamp": "1466150166",
-    "totalDifficulty": "28295412423546970038",
     "alloc": {
       "0xf8bda96b67036ee48107f2a0695ea673479dda56": {
         "balance": "0x1529e844f9ecdeec",
@@ -45,6 +44,7 @@
   "result": [
     {
       "action": {
+        "creationMethod": "create",
         "from": "0xf8bda96b67036ee48107f2a0695ea673479dda56",
         "gas": "0x231860",
         "init": "0x5b620186a05a131560135760016020526000565b600080601f600039601f565b6000f3",

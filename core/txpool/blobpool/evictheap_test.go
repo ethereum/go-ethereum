@@ -37,17 +37,17 @@ func verifyHeapInternals(t *testing.T, evict *evictHeap) {
 	seen := make(map[common.Address]struct{})
 	for i, addr := range evict.addrs {
 		seen[addr] = struct{}{}
-		if _, ok := (*evict.metas)[addr]; !ok {
+		if _, ok := evict.metas[addr]; !ok {
 			t.Errorf("heap contains unexpected address at slot %d: %v", i, addr)
 		}
 	}
-	for addr := range *evict.metas {
+	for addr := range evict.metas {
 		if _, ok := seen[addr]; !ok {
 			t.Errorf("heap is missing required address %v", addr)
 		}
 	}
-	if len(evict.addrs) != len(*evict.metas) {
-		t.Errorf("heap size %d mismatches metadata size %d", len(evict.addrs), len(*evict.metas))
+	if len(evict.addrs) != len(evict.metas) {
+		t.Errorf("heap size %d mismatches metadata size %d", len(evict.addrs), len(evict.metas))
 	}
 	// Ensure that all accounts are present in the heap order index and no extras
 	have := make([]common.Address, len(evict.index))
@@ -159,7 +159,7 @@ func TestPriceHeapSorting(t *testing.T) {
 			}}
 		}
 		// Create a price heap and check the pop order
-		priceheap := newPriceHeap(uint256.NewInt(tt.basefee), uint256.NewInt(tt.blobfee), &index)
+		priceheap := newPriceHeap(uint256.NewInt(tt.basefee), uint256.NewInt(tt.blobfee), index)
 		verifyHeapInternals(t, priceheap)
 
 		for j := 0; j < len(tt.order); j++ {
@@ -218,7 +218,7 @@ func benchmarkPriceHeapReinit(b *testing.B, datacap uint64) {
 		}}
 	}
 	// Create a price heap and reinit it over and over
-	heap := newPriceHeap(uint256.NewInt(rand.Uint64()), uint256.NewInt(rand.Uint64()), &index)
+	heap := newPriceHeap(uint256.NewInt(rand.Uint64()), uint256.NewInt(rand.Uint64()), index)
 
 	basefees := make([]*uint256.Int, b.N)
 	blobfees := make([]*uint256.Int, b.N)
@@ -239,9 +239,25 @@ func BenchmarkPriceHeapOverflow10MB(b *testing.B)  { benchmarkPriceHeapOverflow(
 func BenchmarkPriceHeapOverflow100MB(b *testing.B) { benchmarkPriceHeapOverflow(b, 100*1024*1024) }
 func BenchmarkPriceHeapOverflow1GB(b *testing.B)   { benchmarkPriceHeapOverflow(b, 1024*1024*1024) }
 func BenchmarkPriceHeapOverflow10GB(b *testing.B)  { benchmarkPriceHeapOverflow(b, 10*1024*1024*1024) }
-func BenchmarkPriceHeapOverflow25GB(b *testing.B)  { benchmarkPriceHeapOverflow(b, 25*1024*1024*1024) }
-func BenchmarkPriceHeapOverflow50GB(b *testing.B)  { benchmarkPriceHeapOverflow(b, 50*1024*1024*1024) }
-func BenchmarkPriceHeapOverflow100GB(b *testing.B) { benchmarkPriceHeapOverflow(b, 100*1024*1024*1024) }
+
+func BenchmarkPriceHeapOverflow25GB(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
+	benchmarkPriceHeapOverflow(b, 25*1024*1024*1024)
+}
+func BenchmarkPriceHeapOverflow50GB(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
+	benchmarkPriceHeapOverflow(b, 50*1024*1024*1024)
+}
+func BenchmarkPriceHeapOverflow100GB(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
+	benchmarkPriceHeapOverflow(b, 100*1024*1024*1024)
+}
 
 func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 	// Calculate how many unique transactions we can fit into the provided disk
@@ -278,7 +294,7 @@ func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 		}}
 	}
 	// Create a price heap and overflow it over and over
-	evict := newPriceHeap(uint256.NewInt(rand.Uint64()), uint256.NewInt(rand.Uint64()), &index)
+	evict := newPriceHeap(uint256.NewInt(rand.Uint64()), uint256.NewInt(rand.Uint64()), index)
 	var (
 		addrs = make([]common.Address, b.N)
 		metas = make([]*blobTxMeta, b.N)

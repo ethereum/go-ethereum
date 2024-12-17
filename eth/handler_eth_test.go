@@ -98,8 +98,8 @@ func testForkIDSplit(t *testing.T, protocol uint) {
 		gspecNoFork  = &core.Genesis{Config: configNoFork}
 		gspecProFork = &core.Genesis{Config: configProFork}
 
-		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, gspecNoFork, nil, engine, vm.Config{}, nil, nil)
-		chainProFork, _ = core.NewBlockChain(dbProFork, nil, gspecProFork, nil, engine, vm.Config{}, nil, nil)
+		chainNoFork, _  = core.NewBlockChain(dbNoFork, nil, gspecNoFork, nil, engine, vm.Config{}, nil)
+		chainProFork, _ = core.NewBlockChain(dbProFork, nil, gspecProFork, nil, engine, vm.Config{}, nil)
 
 		_, blocksNoFork, _  = core.GenerateChainWithGenesis(gspecNoFork, engine, 2, nil)
 		_, blocksProFork, _ = core.GenerateChainWithGenesis(gspecProFork, engine, 2, nil)
@@ -390,8 +390,6 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	}
 	// Interconnect all the sink handlers with the source handler
 	for i, sink := range sinks {
-		sink := sink // Closure for goroutine below
-
 		sourcePipe, sinkPipe := p2p.MsgPipe()
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()

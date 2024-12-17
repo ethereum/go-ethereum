@@ -200,7 +200,7 @@ func TestBlockSubscription(t *testing.T) {
 	)
 
 	for _, blk := range chain {
-		chainEvents = append(chainEvents, core.ChainEvent{Hash: blk.Hash(), Block: blk})
+		chainEvents = append(chainEvents, core.ChainEvent{Header: blk.Header()})
 	}
 
 	chan0 := make(chan *types.Header)
@@ -213,13 +213,13 @@ func TestBlockSubscription(t *testing.T) {
 		for i1 != len(chainEvents) || i2 != len(chainEvents) {
 			select {
 			case header := <-chan0:
-				if chainEvents[i1].Hash != header.Hash() {
-					t.Errorf("sub0 received invalid hash on index %d, want %x, got %x", i1, chainEvents[i1].Hash, header.Hash())
+				if chainEvents[i1].Header.Hash() != header.Hash() {
+					t.Errorf("sub0 received invalid hash on index %d, want %x, got %x", i1, chainEvents[i1].Header.Hash(), header.Hash())
 				}
 				i1++
 			case header := <-chan1:
-				if chainEvents[i2].Hash != header.Hash() {
-					t.Errorf("sub1 received invalid hash on index %d, want %x, got %x", i2, chainEvents[i2].Hash, header.Hash())
+				if chainEvents[i2].Header.Hash() != header.Hash() {
+					t.Errorf("sub1 received invalid hash on index %d, want %x, got %x", i2, chainEvents[i2].Header.Hash(), header.Hash())
 				}
 				i2++
 			}
@@ -601,7 +601,9 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	subs := make([]*Subscription, 20)
 	for i := 0; i < len(subs); i++ {
 		fid := api.NewPendingTransactionFilter(nil)
+		api.filtersMu.Lock()
 		f, ok := api.filters[fid]
+		api.filtersMu.Unlock()
 		if !ok {
 			t.Fatalf("Filter %s should exist", fid)
 		}

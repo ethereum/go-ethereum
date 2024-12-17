@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -115,9 +116,6 @@ func errOut(n int, err error) chan error {
 func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) ([]*types.Header, []*types.Header, error) {
 	// TTD is not defined yet, all headers should be in legacy format.
 	ttd := chain.Config().TerminalTotalDifficulty
-	if ttd == nil {
-		return headers, nil, nil
-	}
 	ptd := chain.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
 	if ptd == nil {
 		return nil, nil, consensus.ErrUnknownAncestor
@@ -229,7 +227,7 @@ func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 // (c) the extradata is limited to 32 bytes
 func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
 	// Ensure that the header's extra-data section is of a reasonable size
-	if len(header.Extra) > 32 {
+	if len(header.Extra) > int(params.MaximumExtraDataSize) {
 		return fmt.Errorf("extra-data longer than 32 bytes (%d)", len(header.Extra))
 	}
 	// Verify the seal parts. Ensure the nonce and uncle hash are the expected value.
@@ -349,7 +347,7 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 }
 
 // Finalize implements consensus.Engine and processes withdrawals on top.
-func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body) {
+func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
 	if !beacon.IsPoSHeader(header) {
 		beacon.ethone.Finalize(chain, header, state, body)
 		return
@@ -387,8 +385,43 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(true)
 
-	// Assemble and return the final block.
-	return types.NewBlockWithWithdrawals(header, body.Transactions, body.Uncles, receipts, body.Withdrawals, trie.NewStackTrie(nil)), nil
+	// Assemble the final block.
+	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+
+	// Create the block witness and attach to block.
+	// This step needs to happen as late as possible to catch all access events.
+	if chain.Config().IsVerkle(header.Number, header.Time) {
+		keys := state.AccessEvents().Keys()
+
+		// Open the pre-tree to prove the pre-state against
+		parent := chain.GetHeaderByNumber(header.Number.Uint64() - 1)
+		if parent == nil {
+			return nil, fmt.Errorf("nil parent header for block %d", header.Number)
+		}
+		preTrie, err := state.Database().OpenTrie(parent.Root)
+		if err != nil {
+			return nil, fmt.Errorf("error opening pre-state tree root: %w", err)
+		}
+		vktPreTrie, okpre := preTrie.(*trie.VerkleTrie)
+		vktPostTrie, okpost := state.GetTrie().(*trie.VerkleTrie)
+
+		// The witness is only attached iff both parent and current block are
+		// using verkle tree.
+		if okpre && okpost {
+			if len(keys) > 0 {
+				verkleProof, stateDiff, err := vktPreTrie.Proof(vktPostTrie, keys)
+				if err != nil {
+					return nil, fmt.Errorf("error generating verkle proof for block %d: %w", header.Number, err)
+				}
+				block = block.WithWitness(&types.ExecutionWitness{
+					StateDiff:   stateDiff,
+					VerkleProof: verkleProof,
+				})
+			}
+		}
+	}
+
+	return block, nil
 }
 
 // Seal generates a new sealing request for the given input block and pushes
@@ -463,9 +496,6 @@ func (beacon *Beacon) SetThreads(threads int) {
 // It depends on the parentHash already being stored in the database.
 // If the parentHash is not stored in the database a UnknownAncestor error is returned.
 func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, parentNumber uint64) (bool, error) {
-	if chain.Config().TerminalTotalDifficulty == nil {
-		return false, nil
-	}
 	td := chain.GetTd(parentHash, parentNumber)
 	if td == nil {
 		return false, consensus.ErrUnknownAncestor

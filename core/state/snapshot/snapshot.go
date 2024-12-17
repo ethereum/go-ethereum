@@ -258,24 +258,11 @@ func (t *Tree) Disable() {
 	for _, layer := range t.layers {
 		switch layer := layer.(type) {
 		case *diskLayer:
-
-			layer.lock.RLock()
-			generating := layer.genMarker != nil
-			layer.lock.RUnlock()
-			if !generating {
-				// Generator is already aborted or finished
-				break
-			}
-			// If the base layer is generating, abort it
-			if layer.genAbort != nil {
-				abort := make(chan *generatorStats)
-				layer.genAbort <- abort
-				<-abort
-			}
-			// Layer should be inactive now, mark it as stale
-			layer.lock.Lock()
-			layer.stale = true
-			layer.lock.Unlock()
+			// TODO this function will hang if it's called twice. Will
+			// fix it in the following PRs.
+			layer.stopGeneration()
+			layer.markStale()
+			layer.Release()
 
 		case *diffLayer:
 			// If the layer is a simple diff, simply mark as stale
@@ -666,6 +653,9 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 
 // Release releases resources
 func (t *Tree) Release() {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	if dl := t.disklayer(); dl != nil {
 		dl.Release()
 	}
@@ -727,16 +717,11 @@ func (t *Tree) Rebuild(root common.Hash) {
 	for _, layer := range t.layers {
 		switch layer := layer.(type) {
 		case *diskLayer:
-			// If the base layer is generating, abort it and save
-			if layer.genAbort != nil {
-				abort := make(chan *generatorStats)
-				layer.genAbort <- abort
-				<-abort
-			}
-			// Layer should be inactive now, mark it as stale
-			layer.lock.Lock()
-			layer.stale = true
-			layer.lock.Unlock()
+			// TODO this function will hang if it's called twice. Will
+			// fix it in the following PRs.
+			layer.stopGeneration()
+			layer.markStale()
+			layer.Release()
 
 		case *diffLayer:
 			// If the layer is a simple diff, simply mark as stale
@@ -829,6 +814,8 @@ func (t *Tree) disklayer() *diskLayer {
 	case *diskLayer:
 		return layer
 	case *diffLayer:
+		layer.lock.RLock()
+		defer layer.lock.RUnlock()
 		return layer.origin
 	default:
 		panic(fmt.Sprintf("%T: undefined layer", snap))
@@ -848,8 +835,8 @@ func (t *Tree) diskRoot() common.Hash {
 // generating is an internal helper function which reports whether the snapshot
 // is still under the construction.
 func (t *Tree) generating() (bool, error) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+	t.lock.RLock()
+	defer t.lock.RUnlock()
 
 	layer := t.disklayer()
 	if layer == nil {
@@ -860,10 +847,10 @@ func (t *Tree) generating() (bool, error) {
 	return layer.genMarker != nil, nil
 }
 
-// DiskRoot is a external helper function to return the disk layer root.
+// DiskRoot is an external helper function to return the disk layer root.
 func (t *Tree) DiskRoot() common.Hash {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+	t.lock.RLock()
+	defer t.lock.RUnlock()
 
 	return t.diskRoot()
 }

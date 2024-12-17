@@ -27,18 +27,18 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
 )
 
-// freezerdb is a database wrapper that enables freezer data retrievals.
+// freezerdb is a database wrapper that enables ancient chain segment freezing.
 type freezerdb struct {
-	ancientRoot string
 	ethdb.KeyValueStore
-	ethdb.AncientStore
+	*chainFreezer
+
+	readOnly    bool
+	ancientRoot string
 }
 
 // AncientDatadir returns the path of root ancient directory.
@@ -50,7 +50,7 @@ func (frdb *freezerdb) AncientDatadir() (string, error) {
 // the slow ancient tables.
 func (frdb *freezerdb) Close() error {
 	var errs []error
-	if err := frdb.AncientStore.Close(); err != nil {
+	if err := frdb.chainFreezer.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := frdb.KeyValueStore.Close(); err != nil {
@@ -66,12 +66,12 @@ func (frdb *freezerdb) Close() error {
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
 func (frdb *freezerdb) Freeze() error {
-	if frdb.AncientStore.(*chainFreezer).readonly {
+	if frdb.readOnly {
 		return errReadOnly
 	}
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
-	frdb.AncientStore.(*chainFreezer).trigger <- trigger
+	frdb.chainFreezer.trigger <- trigger
 	<-trigger
 	return nil
 }
@@ -147,12 +147,6 @@ func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) 
 	return fn(db)
 }
 
-// MigrateTable processes the entries in a given table in sequence
-// converting them to a new format if they're of an old format.
-func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
-	return errNotSupported
-}
-
 // AncientDatadir returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) AncientDatadir() (string, error) {
 	return "", errNotSupported
@@ -192,8 +186,14 @@ func resolveChainFreezerDir(ancient string) string {
 // storage. The passed ancient indicates the path of root ancient directory
 // where the chain freezer can be opened.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-	// Create the idle freezer instance
-	frdb, err := newChainFreezer(resolveChainFreezerDir(ancient), namespace, readonly)
+	// Create the idle freezer instance. If the given ancient directory is empty,
+	// in-memory chain freezer is used (e.g. dev mode); otherwise the regular
+	// file-based freezer is created.
+	chainFreezerDir := ancient
+	if chainFreezerDir != "" {
+		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
+	}
+	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly)
 	if err != nil {
 		printChainMetadata(db)
 		return nil, err
@@ -277,7 +277,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !frdb.readonly {
+	if !readonly {
 		frdb.wg.Add(1)
 		go func() {
 			frdb.freeze(db)
@@ -287,7 +287,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	return &freezerdb{
 		ancientRoot:   ancient,
 		KeyValueStore: db,
-		AncientStore:  frdb,
+		chainFreezer:  frdb,
 	}, nil
 }
 
@@ -297,37 +297,9 @@ func NewMemoryDatabase() ethdb.Database {
 	return NewDatabase(memorydb.New())
 }
 
-// NewMemoryDatabaseWithCap creates an ephemeral in-memory key-value database
-// with an initial starting capacity, but without a freezer moving immutable
-// chain segments into cold storage.
-func NewMemoryDatabaseWithCap(size int) ethdb.Database {
-	return NewDatabase(memorydb.NewWithCap(size))
-}
-
-// NewLevelDBDatabase creates a persistent key-value database without a freezer
-// moving immutable chain segments into cold storage.
-func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
-	db, err := leveldb.New(file, cache, handles, namespace, readonly)
-	if err != nil {
-		return nil, err
-	}
-	log.Info("Using LevelDB as the backing database")
-	return NewDatabase(db), nil
-}
-
-// NewPebbleDBDatabase creates a persistent key-value database without a freezer
-// moving immutable chain segments into cold storage.
-func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly, ephemeral bool) (ethdb.Database, error) {
-	db, err := pebble.New(file, cache, handles, namespace, readonly, ephemeral)
-	if err != nil {
-		return nil, err
-	}
-	return NewDatabase(db), nil
-}
-
 const (
-	dbPebble  = "pebble"
-	dbLeveldb = "leveldb"
+	DBPebble  = "pebble"
+	DBLeveldb = "leveldb"
 )
 
 // PreexistingDatabase checks the given data directory whether a database is already
@@ -341,75 +313,9 @@ func PreexistingDatabase(path string) string {
 		if err != nil {
 			panic(err) // only possible if the pattern is malformed
 		}
-		return dbPebble
+		return DBPebble
 	}
-	return dbLeveldb
-}
-
-// OpenOptions contains the options to apply when opening a database.
-// OBS: If AncientsDirectory is empty, it indicates that no freezer is to be used.
-type OpenOptions struct {
-	Type              string // "leveldb" | "pebble"
-	Directory         string // the datadir
-	AncientsDirectory string // the ancients-dir
-	Namespace         string // the namespace for database relevant metrics
-	Cache             int    // the capacity(in megabytes) of the data caching
-	Handles           int    // number of files to be open simultaneously
-	ReadOnly          bool
-	// Ephemeral means that filesystem sync operations should be avoided: data integrity in the face of
-	// a crash is not important. This option should typically be used in tests.
-	Ephemeral bool
-}
-
-// openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
-//
-//	                      type == null          type != null
-//	                   +----------------------------------------
-//	db is non-existent |  pebble default  |  specified type
-//	db is existent     |  from db         |  specified type (if compatible)
-func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
-	// Reject any unsupported database type
-	if len(o.Type) != 0 && o.Type != dbLeveldb && o.Type != dbPebble {
-		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
-	}
-	// Retrieve any pre-existing database's type and use that or the requested one
-	// as long as there's no conflict between the two types
-	existingDb := PreexistingDatabase(o.Directory)
-	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
-		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
-	}
-	if o.Type == dbPebble || existingDb == dbPebble {
-		log.Info("Using pebble as the backing database")
-		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
-	}
-	if o.Type == dbLeveldb || existingDb == dbLeveldb {
-		log.Info("Using leveldb as the backing database")
-		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
-	}
-	// No pre-existing database, no user-requested one either. Default to Pebble.
-	log.Info("Defaulting to pebble as the backing database")
-	return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
-}
-
-// Open opens both a disk-based key-value database such as leveldb or pebble, but also
-// integrates it with a freezer database -- if the AncientDir option has been
-// set on the provided OpenOptions.
-// The passed o.AncientDir indicates the path of root ancient directory where
-// the chain freezer can be opened.
-func Open(o OpenOptions) (ethdb.Database, error) {
-	kvdb, err := openKeyValueDatabase(o)
-	if err != nil {
-		return nil, err
-	}
-	if len(o.AncientsDirectory) == 0 {
-		return kvdb, nil
-	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly)
-	if err != nil {
-		kvdb.Close()
-		return nil, err
-	}
-	return frdb, nil
+	return DBLeveldb
 }
 
 type counter uint64
@@ -472,6 +378,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		bloomBits       stat
 		beaconHeaders   stat
 		cliqueSnaps     stat
+
+		// Verkle statistics
+		verkleTries        stat
+		verkleStateLookups stat
 
 		// Les statistic
 		chtTrieNodes   stat
@@ -542,6 +452,24 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
 			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
 			bloomTrieNodes.Add(size)
+
+		// Verkle trie data is detected, determine the sub-category
+		case bytes.HasPrefix(key, VerklePrefix):
+			remain := key[len(VerklePrefix):]
+			switch {
+			case IsAccountTrieNode(remain):
+				verkleTries.Add(size)
+			case bytes.HasPrefix(remain, stateIDPrefix) && len(remain) == len(stateIDPrefix)+common.HashLength:
+				verkleStateLookups.Add(size)
+			case bytes.Equal(remain, persistentStateIDKey):
+				metadata.Add(size)
+			case bytes.Equal(remain, trieJournalKey):
+				metadata.Add(size)
+			case bytes.Equal(remain, snapSyncStatusFlagKey):
+				metadata.Add(size)
+			default:
+				unaccounted.Add(size)
+			}
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
@@ -582,6 +510,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
 		{"Key-Value store", "Path trie account nodes", accountTries.Size(), accountTries.Count()},
 		{"Key-Value store", "Path trie storage nodes", storageTries.Size(), storageTries.Count()},
+		{"Key-Value store", "Verkle trie nodes", verkleTries.Size(), verkleTries.Count()},
+		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.Size(), verkleStateLookups.Count()},
 		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
 		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},

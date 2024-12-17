@@ -17,27 +17,19 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.
 type NewTxsEvent struct{ Txs []*types.Transaction }
 
-// NewMinedBlockEvent is posted when a block has been imported.
-type NewMinedBlockEvent struct{ Block *types.Block }
-
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }
 
 type ChainEvent struct {
-	Block *types.Block
-	Hash  common.Hash
-	Logs  []*types.Log
+	Header *types.Header
 }
 
-type ChainSideEvent struct {
-	Block *types.Block
+type ChainHeadEvent struct {
+	Header *types.Header
 }
-
-type ChainHeadEvent struct{ Block *types.Block }

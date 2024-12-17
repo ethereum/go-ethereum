@@ -22,8 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // diffLayer represents a collection of modifications made to the in-memory tries
@@ -33,45 +31,28 @@ import (
 // made to the state, that have not yet graduated into a semi-immutable state.
 type diffLayer struct {
 	// Immutables
-	root   common.Hash                               // Root hash to which this layer diff belongs to
-	id     uint64                                    // Corresponding state id
-	block  uint64                                    // Associated block number
-	nodes  map[common.Hash]map[string]*trienode.Node // Cached trie nodes indexed by owner and path
-	states *triestate.Set                            // Associated state change set for building history
-	memory uint64                                    // Approximate guess as to how much memory we use
+	root   common.Hash         // Root hash to which this layer diff belongs to
+	id     uint64              // Corresponding state id
+	block  uint64              // Associated block number
+	nodes  *nodeSet            // Cached trie nodes indexed by owner and path
+	states *StateSetWithOrigin // Associated state changes along with origin value
 
 	parent layer        // Parent layer modified by this one, never nil, **can be changed**
 	lock   sync.RWMutex // Lock used to protect parent
 }
 
 // newDiffLayer creates a new diff layer on top of an existing layer.
-func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
-	var (
-		size  int64
-		count int
-	)
+func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer {
 	dl := &diffLayer{
 		root:   root,
 		id:     id,
 		block:  block,
+		parent: parent,
 		nodes:  nodes,
 		states: states,
-		parent: parent,
 	}
-	for _, subset := range nodes {
-		for path, n := range subset {
-			dl.memory += uint64(n.Size() + len(path))
-			size += int64(len(n.Blob) + len(path))
-		}
-		count += len(subset)
-	}
-	if states != nil {
-		dl.memory += uint64(states.Size())
-	}
-	dirtyWriteMeter.Mark(size)
-	diffLayerNodesMeter.Mark(int64(count))
-	diffLayerBytesMeter.Mark(int64(dl.memory))
-	log.Debug("Created new diff layer", "id", id, "block", block, "nodes", count, "size", common.StorageSize(dl.memory))
+	dirtyNodeWriteMeter.Mark(int64(nodes.size))
+	log.Debug("Created new diff layer", "id", id, "block", block, "nodesize", common.StorageSize(nodes.size), "statesize", common.StorageSize(states.size))
 	return dl
 }
 
@@ -104,15 +85,12 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	defer dl.lock.RUnlock()
 
 	// If the trie node is known locally, return it
-	subset, ok := dl.nodes[owner]
+	n, ok := dl.nodes.node(owner, path)
 	if ok {
-		n, ok := subset[string(path)]
-		if ok {
-			dirtyHitMeter.Mark(1)
-			dirtyNodeHitDepthHist.Update(int64(depth))
-			dirtyReadMeter.Mark(int64(len(n.Blob)))
-			return n.Blob, n.Hash, &nodeLoc{loc: locDiffLayer, depth: depth}, nil
-		}
+		dirtyNodeHitMeter.Mark(1)
+		dirtyNodeHitDepthHist.Update(int64(depth))
+		dirtyNodeReadMeter.Mark(int64(len(n.Blob)))
+		return n.Blob, n.Hash, &nodeLoc{loc: locDiffLayer, depth: depth}, nil
 	}
 	// Trie node unknown to this layer, resolve from parent
 	return dl.parent.node(owner, path, depth+1)
@@ -120,7 +98,7 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 
 // update implements the layer interface, creating a new layer on top of the
 // existing layer tree with the specified data items.
-func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer {
 	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 
@@ -143,6 +121,11 @@ func (dl *diffLayer) persist(force bool) (layer, error) {
 		dl.lock.Unlock()
 	}
 	return diffToDisk(dl, force)
+}
+
+// size returns the approximate memory size occupied by this diff layer.
+func (dl *diffLayer) size() uint64 {
+	return dl.nodes.size + dl.states.size
 }
 
 // diffToDisk merges a bottom-most diff into the persistent disk layer underneath

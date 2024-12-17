@@ -22,7 +22,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -68,7 +67,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -142,31 +141,38 @@ type Message struct {
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
 
-	// When SkipAccountChecks is true, the message nonce is not checked against the
-	// account nonce in state. It also disables checking that the sender is an EOA.
+	// When SkipNonceChecks is true, the message nonce is not checked against the
+	// account nonce in state.
 	// This field will be set to true for operations like RPC eth_call.
-	SkipAccountChecks bool
+	SkipNonceChecks bool
+
+	// When SkipFromEOACheck is true, the message sender is not checked to be an EOA.
+	SkipFromEOACheck bool
 }
 
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
-		Nonce:             tx.Nonce(),
-		GasLimit:          tx.Gas(),
-		GasPrice:          new(big.Int).Set(tx.GasPrice()),
-		GasFeeCap:         new(big.Int).Set(tx.GasFeeCap()),
-		GasTipCap:         new(big.Int).Set(tx.GasTipCap()),
-		To:                tx.To(),
-		Value:             tx.Value(),
-		Data:              tx.Data(),
-		AccessList:        tx.AccessList(),
-		SkipAccountChecks: false,
-		BlobHashes:        tx.BlobHashes(),
-		BlobGasFeeCap:     tx.BlobGasFeeCap(),
+		Nonce:            tx.Nonce(),
+		GasLimit:         tx.Gas(),
+		GasPrice:         new(big.Int).Set(tx.GasPrice()),
+		GasFeeCap:        new(big.Int).Set(tx.GasFeeCap()),
+		GasTipCap:        new(big.Int).Set(tx.GasTipCap()),
+		To:               tx.To(),
+		Value:            tx.Value(),
+		Data:             tx.Data(),
+		AccessList:       tx.AccessList(),
+		SkipNonceChecks:  false,
+		SkipFromEOACheck: false,
+		BlobHashes:       tx.BlobHashes(),
+		BlobGasFeeCap:    tx.BlobGasFeeCap(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
-		msg.GasPrice = cmath.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
+		msg.GasPrice = msg.GasPrice.Add(msg.GasTipCap, baseFee)
+		if msg.GasPrice.Cmp(msg.GasFeeCap) > 0 {
+			msg.GasPrice = msg.GasFeeCap
+		}
 	}
 	var err error
 	msg.From, err = types.Sender(s, tx)
@@ -240,8 +246,9 @@ func (st *StateTransition) buyGas() error {
 	if st.msg.GasFeeCap != nil {
 		balanceCheck.SetUint64(st.msg.GasLimit)
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
-		balanceCheck.Add(balanceCheck, st.msg.Value)
 	}
+	balanceCheck.Add(balanceCheck, st.msg.Value)
+
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
 		if blobGas := st.blobGasUsed(); blobGas > 0 {
 			// Check that the user has enough funds to cover blobGasUsed * tx.BlobGasFeeCap
@@ -279,7 +286,7 @@ func (st *StateTransition) buyGas() error {
 func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
 	msg := st.msg
-	if !msg.SkipAccountChecks {
+	if !msg.SkipNonceChecks {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(msg.From)
 		if msgNonce := msg.Nonce; stNonce < msgNonce {
@@ -292,6 +299,8 @@ func (st *StateTransition) preCheck() error {
 			return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
 				msg.From.Hex(), stNonce)
 		}
+	}
+	if !msg.SkipFromEOACheck {
 		// Make sure the sender is an EOA
 		codeHash := st.state.GetCodeHash(msg.From)
 		if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
@@ -405,6 +414,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	st.gasRemaining -= gas
 
+	if rules.IsEIP4762 {
+		st.evm.AccessEvents.AddTxOrigin(msg.From)
+
+		if targetAddr := msg.To; targetAddr != nil {
+			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0)
+		}
+	}
+
 	// Check clause 6
 	value, overflow := uint256.FromBig(msg.Value)
 	if overflow {
@@ -446,7 +463,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
-		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
+		effectiveTip = new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee)
+		if effectiveTip.Cmp(msg.GasTipCap) > 0 {
+			effectiveTip = msg.GasTipCap
+		}
 	}
 	effectiveTipU256, _ := uint256.FromBig(effectiveTip)
 
@@ -458,6 +478,11 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		fee := new(uint256.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTipU256)
 		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
+
+		// add the coinbase to the witness iff the fee is greater than 0
+		if rules.IsEIP4762 && fee.Sign() != 0 {
+			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true)
+		}
 	}
 
 	return &ExecutionResult{

@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	gomath "math"
 	"math/big"
 	"reflect"
 	"testing"
@@ -254,7 +255,7 @@ func makeBenchBlock() *Block {
 			Extra:      []byte("benchmark uncle"),
 		}
 	}
-	return NewBlock(header, txs, uncles, receipts, blocktest.NewHasher())
+	return NewBlock(header, &Body{Transactions: txs, Uncles: uncles}, receipts, blocktest.NewHasher())
 }
 
 func TestRlpDecodeParentHash(t *testing.T) {
@@ -277,9 +278,9 @@ func TestRlpDecodeParentHash(t *testing.T) {
 	if rlpData, err := rlp.EncodeToBytes(&Header{
 		ParentHash: want,
 		Difficulty: mainnetTd,
-		Number:     new(big.Int).SetUint64(math.MaxUint64),
+		Number:     new(big.Int).SetUint64(gomath.MaxUint64),
 		Extra:      make([]byte, 65+32),
-		BaseFee:    new(big.Int).SetUint64(math.MaxUint64),
+		BaseFee:    new(big.Int).SetUint64(gomath.MaxUint64),
 	}); err != nil {
 		t.Fatal(err)
 	} else {

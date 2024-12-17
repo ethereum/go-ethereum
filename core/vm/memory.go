@@ -17,8 +17,16 @@
 package vm
 
 import (
+	"sync"
+
 	"github.com/holiman/uint256"
 )
+
+var memoryPool = sync.Pool{
+	New: func() any {
+		return &Memory{}
+	},
+}
 
 // Memory implements a simple memory model for the ethereum virtual machine.
 type Memory struct {
@@ -28,7 +36,18 @@ type Memory struct {
 
 // NewMemory returns a new memory model.
 func NewMemory() *Memory {
-	return &Memory{}
+	return memoryPool.Get().(*Memory)
+}
+
+// Free returns the memory to the pool.
+func (m *Memory) Free() {
+	// To reduce peak allocation, return only smaller memory instances to the pool.
+	const maxBufferSize = 16 << 10
+	if cap(m.store) <= maxBufferSize {
+		m.store = m.store[:0]
+		m.lastGasCost = 0
+		memoryPool.Put(m)
+	}
 }
 
 // Set sets offset + size to value
@@ -66,32 +85,25 @@ func (m *Memory) Resize(size uint64) {
 }
 
 // GetCopy returns offset + size as a new slice
-func (m *Memory) GetCopy(offset, size int64) (cpy []byte) {
+func (m *Memory) GetCopy(offset, size uint64) (cpy []byte) {
 	if size == 0 {
 		return nil
 	}
 
-	if len(m.store) > int(offset) {
-		cpy = make([]byte, size)
-		copy(cpy, m.store[offset:offset+size])
-
-		return
-	}
-
+	// memory is always resized before being accessed, no need to check bounds
+	cpy = make([]byte, size)
+	copy(cpy, m.store[offset:offset+size])
 	return
 }
 
 // GetPtr returns the offset + size
-func (m *Memory) GetPtr(offset, size int64) []byte {
+func (m *Memory) GetPtr(offset, size uint64) []byte {
 	if size == 0 {
 		return nil
 	}
 
-	if len(m.store) > int(offset) {
-		return m.store[offset : offset+size]
-	}
-
-	return nil
+	// memory is always resized before being accessed, no need to check bounds
+	return m.store[offset : offset+size]
 }
 
 // Len returns the length of the backing slice

@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 //go:generate go run github.com/fjl/gencodec -type flatCallAction -field-override flatCallActionMarshaling -out gen_flatcallaction_json.go
@@ -53,6 +55,7 @@ var parityErrorMapping = map[string]string{
 }
 
 var parityErrorMappingStartingWith = map[string]string{
+	"out of gas:":     "Out of gas", // convert OOG wrapped errors, eg `out of gas: not enough gas for reentrancy sentry`
 	"invalid opcode:": "Bad instruction",
 	"stack underflow": "Stack underflow",
 }
@@ -113,8 +116,9 @@ type flatCallResultMarshaling struct {
 type flatCallTracer struct {
 	tracer            *callTracer
 	config            flatCallTracerConfig
+	chainConfig       *params.ChainConfig
 	ctx               *tracers.Context // Holds tracer context data
-	reason            error            // Textual reason for the interruption
+	interrupt         atomic.Bool      // Atomic flag to signal execution interruption
 	activePrecompiles []common.Address // Updated on tx start based on given rules
 }
 
@@ -124,22 +128,20 @@ type flatCallTracerConfig struct {
 }
 
 // newFlatCallTracer returns a new flatCallTracer.
-func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
+func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	var config flatCallTracerConfig
-	if cfg != nil {
-		if err := json.Unmarshal(cfg, &config); err != nil {
-			return nil, err
-		}
+	if err := json.Unmarshal(cfg, &config); err != nil {
+		return nil, err
 	}
 
 	// Create inner call tracer with default configuration, don't forward
 	// the OnlyTopCall or WithLog to inner for now
-	t, err := newCallTracerObject(ctx, nil)
+	t, err := newCallTracerObject(ctx, json.RawMessage("{}"))
 	if err != nil {
 		return nil, err
 	}
 
-	ft := &flatCallTracer{tracer: t, ctx: ctx, config: config}
+	ft := &flatCallTracer{tracer: t, ctx: ctx, config: config, chainConfig: chainConfig}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: ft.OnTxStart,
@@ -154,6 +156,9 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trac
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnEnter(depth, typ, from, to, input, gas, value)
 
 	if depth == 0 {
@@ -169,6 +174,9 @@ func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to co
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnExit(depth, output, gasUsed, err, reverted)
 
 	if depth == 0 {
@@ -194,13 +202,19 @@ func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 }
 
 func (t *flatCallTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnTxStart(env, tx, from)
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
+	rules := t.chainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 }
 
 func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnTxEnd(receipt, err)
 }
 
@@ -219,12 +233,13 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return res, t.reason
+	return res, t.tracer.reason
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *flatCallTracer) Stop(err error) {
 	t.tracer.Stop(err)
+	t.interrupt.Store(true)
 }
 
 // isPrecompiled returns whether the addr is a precompile.
@@ -260,16 +275,14 @@ func flatFromNested(input *callFrame, traceAddress []int, convertErrs bool, ctx 
 	}
 
 	output = append(output, *frame)
-	if len(input.Calls) > 0 {
-		for i, childCall := range input.Calls {
-			childAddr := childTraceAddress(traceAddress, i)
-			childCallCopy := childCall
-			flat, err := flatFromNested(&childCallCopy, childAddr, convertErrs, ctx)
-			if err != nil {
-				return nil, err
-			}
-			output = append(output, flat...)
+	for i, childCall := range input.Calls {
+		childAddr := childTraceAddress(traceAddress, i)
+		childCallCopy := childCall
+		flat, err := flatFromNested(&childCallCopy, childAddr, convertErrs, ctx)
+		if err != nil {
+			return nil, err
 		}
+		output = append(output, flat...)
 	}
 
 	return output, nil
@@ -284,10 +297,11 @@ func newFlatCreate(input *callFrame) *flatCallFrame {
 	return &flatCallFrame{
 		Type: strings.ToLower(vm.CREATE.String()),
 		Action: flatCallAction{
-			From:  &input.From,
-			Gas:   &input.Gas,
-			Value: input.Value,
-			Init:  &actionInit,
+			CreationMethod: strings.ToLower(input.Type.String()),
+			From:           &input.From,
+			Gas:            &input.Gas,
+			Value:          input.Value,
+			Init:           &actionInit,
 		},
 		Result: &flatCallResult{
 			GasUsed: &input.GasUsed,
@@ -358,6 +372,7 @@ func convertErrorToParity(call *flatCallFrame) {
 		for gethError, parityError := range parityErrorMappingStartingWith {
 			if strings.HasPrefix(call.Error, gethError) {
 				call.Error = parityError
+				break
 			}
 		}
 	}

@@ -80,25 +80,6 @@ func TestCreation(t *testing.T) {
 				{50000000, 2000000000, ID{Hash: checksumToBytes(0x9f3d2254), Next: 0}},          // Future Cancun block
 			},
 		},
-		// Goerli test cases
-		{
-			params.GoerliChainConfig,
-			core.DefaultGoerliGenesisBlock().ToBlock(),
-			[]testcase{
-				{0, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},                   // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople and first Petersburg block
-				{1561650, 0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},             // Last Petersburg block
-				{1561651, 0, ID{Hash: checksumToBytes(0xc25efa5c), Next: 4460644}},             // First Istanbul block
-				{4460643, 0, ID{Hash: checksumToBytes(0xc25efa5c), Next: 4460644}},             // Last Istanbul block
-				{4460644, 0, ID{Hash: checksumToBytes(0x757a1c47), Next: 5062605}},             // First Berlin block
-				{5000000, 0, ID{Hash: checksumToBytes(0x757a1c47), Next: 5062605}},             // Last Berlin block
-				{5062605, 0, ID{Hash: checksumToBytes(0xB8C6299D), Next: 1678832736}},          // First London block
-				{6000000, 1678832735, ID{Hash: checksumToBytes(0xB8C6299D), Next: 1678832736}}, // Last London block
-				{6000001, 1678832736, ID{Hash: checksumToBytes(0xf9843abf), Next: 1705473120}}, // First Shanghai block
-				{6500002, 1705473119, ID{Hash: checksumToBytes(0xf9843abf), Next: 1705473120}}, // Last Shanghai block
-				{6500003, 1705473120, ID{Hash: checksumToBytes(0x70cc14e2), Next: 0}},          // First Cancun block
-				{6500003, 2705473120, ID{Hash: checksumToBytes(0x70cc14e2), Next: 0}},          // Future Cancun block
-			},
-		},
 		// Sepolia test cases
 		{
 			params.SepoliaChainConfig,
@@ -397,26 +378,25 @@ func TestTimeBasedForkInGenesis(t *testing.T) {
 		forkidHash = checksumToBytes(crc32.ChecksumIEEE(genesis.Hash().Bytes()))
 		config     = func(shanghai, cancun uint64) *params.ChainConfig {
 			return &params.ChainConfig{
-				ChainID:                       big.NewInt(1337),
-				HomesteadBlock:                big.NewInt(0),
-				DAOForkBlock:                  nil,
-				DAOForkSupport:                true,
-				EIP150Block:                   big.NewInt(0),
-				EIP155Block:                   big.NewInt(0),
-				EIP158Block:                   big.NewInt(0),
-				ByzantiumBlock:                big.NewInt(0),
-				ConstantinopleBlock:           big.NewInt(0),
-				PetersburgBlock:               big.NewInt(0),
-				IstanbulBlock:                 big.NewInt(0),
-				MuirGlacierBlock:              big.NewInt(0),
-				BerlinBlock:                   big.NewInt(0),
-				LondonBlock:                   big.NewInt(0),
-				TerminalTotalDifficulty:       big.NewInt(0),
-				TerminalTotalDifficultyPassed: true,
-				MergeNetsplitBlock:            big.NewInt(0),
-				ShanghaiTime:                  &shanghai,
-				CancunTime:                    &cancun,
-				Ethash:                        new(params.EthashConfig),
+				ChainID:                 big.NewInt(1337),
+				HomesteadBlock:          big.NewInt(0),
+				DAOForkBlock:            nil,
+				DAOForkSupport:          true,
+				EIP150Block:             big.NewInt(0),
+				EIP155Block:             big.NewInt(0),
+				EIP158Block:             big.NewInt(0),
+				ByzantiumBlock:          big.NewInt(0),
+				ConstantinopleBlock:     big.NewInt(0),
+				PetersburgBlock:         big.NewInt(0),
+				IstanbulBlock:           big.NewInt(0),
+				MuirGlacierBlock:        big.NewInt(0),
+				BerlinBlock:             big.NewInt(0),
+				LondonBlock:             big.NewInt(0),
+				TerminalTotalDifficulty: big.NewInt(0),
+				MergeNetsplitBlock:      big.NewInt(0),
+				ShanghaiTime:            &shanghai,
+				CancunTime:              &cancun,
+				Ethash:                  new(params.EthashConfig),
 			}
 		}
 	)

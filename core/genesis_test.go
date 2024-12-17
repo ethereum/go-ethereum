@@ -35,15 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
-func TestInvalidCliqueConfig(t *testing.T) {
-	block := DefaultGoerliGenesisBlock()
-	block.ExtraData = []byte{}
-	db := rawdb.NewMemoryDatabase()
-	if _, err := block.Commit(db, triedb.NewDatabase(db, nil)); err == nil {
-		t.Fatal("Expected error on invalid clique config")
-	}
-}
-
 func TestSetupGenesis(t *testing.T) {
 	testSetupGenesis(t, rawdb.HashScheme)
 	testSetupGenesis(t, rawdb.PathScheme)
@@ -105,15 +96,15 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			wantConfig: customg.Config,
 		},
 		{
-			name: "custom block in DB, genesis == goerli",
+			name: "custom block in DB, genesis == sepolia",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
 				customg.Commit(db, tdb)
-				return SetupGenesisBlock(db, tdb, DefaultGoerliGenesisBlock())
+				return SetupGenesisBlock(db, tdb, DefaultSepoliaGenesisBlock())
 			},
-			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.GoerliGenesisHash},
-			wantHash:   params.GoerliGenesisHash,
-			wantConfig: params.GoerliChainConfig,
+			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.SepoliaGenesisHash},
+			wantHash:   params.SepoliaGenesisHash,
+			wantConfig: params.SepoliaChainConfig,
 		},
 		{
 			name: "compatible config in DB",
@@ -133,7 +124,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
 				oldcustomg.Commit(db, tdb)
 
-				bc, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), &oldcustomg, nil, ethash.NewFullFaker(), vm.Config{}, nil, nil)
+				bc, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), &oldcustomg, nil, ethash.NewFullFaker(), vm.Config{}, nil)
 				defer bc.Stop()
 
 				_, blocks, _ := GenerateChainWithGenesis(&oldcustomg, ethash.NewFaker(), 4, nil)
@@ -184,7 +175,6 @@ func TestGenesisHashes(t *testing.T) {
 		want    common.Hash
 	}{
 		{DefaultGenesisBlock(), params.MainnetGenesisHash},
-		{DefaultGoerliGenesisBlock(), params.GoerliGenesisHash},
 		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
 	} {
 		// Test via MustCommit
@@ -267,31 +257,30 @@ func newDbConfig(scheme string) *triedb.Config {
 func TestVerkleGenesisCommit(t *testing.T) {
 	var verkleTime uint64 = 0
 	verkleConfig := &params.ChainConfig{
-		ChainID:                       big.NewInt(1),
-		HomesteadBlock:                big.NewInt(0),
-		DAOForkBlock:                  nil,
-		DAOForkSupport:                false,
-		EIP150Block:                   big.NewInt(0),
-		EIP155Block:                   big.NewInt(0),
-		EIP158Block:                   big.NewInt(0),
-		ByzantiumBlock:                big.NewInt(0),
-		ConstantinopleBlock:           big.NewInt(0),
-		PetersburgBlock:               big.NewInt(0),
-		IstanbulBlock:                 big.NewInt(0),
-		MuirGlacierBlock:              big.NewInt(0),
-		BerlinBlock:                   big.NewInt(0),
-		LondonBlock:                   big.NewInt(0),
-		ArrowGlacierBlock:             big.NewInt(0),
-		GrayGlacierBlock:              big.NewInt(0),
-		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  &verkleTime,
-		CancunTime:                    &verkleTime,
-		PragueTime:                    &verkleTime,
-		VerkleTime:                    &verkleTime,
-		TerminalTotalDifficulty:       big.NewInt(0),
-		TerminalTotalDifficultyPassed: true,
-		Ethash:                        nil,
-		Clique:                        nil,
+		ChainID:                 big.NewInt(1),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		GrayGlacierBlock:        big.NewInt(0),
+		MergeNetsplitBlock:      nil,
+		ShanghaiTime:            &verkleTime,
+		CancunTime:              &verkleTime,
+		PragueTime:              &verkleTime,
+		VerkleTime:              &verkleTime,
+		TerminalTotalDifficulty: big.NewInt(0),
+		Ethash:                  nil,
+		Clique:                  nil,
 	}
 
 	genesis := &Genesis{
@@ -304,25 +293,25 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		},
 	}
 
-	expected := common.Hex2Bytes("14398d42be3394ff8d50681816a4b7bf8d8283306f577faba2d5bc57498de23b")
+	expected := common.FromHex("4a83dc39eb688dbcfaf581d60e82de18f875e38786ebce5833342011d6fef37b")
 	got := genesis.ToBlock().Root().Bytes()
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, PathDB: pathdb.Defaults})
+	triedb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
-		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
+		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, block.Root())
 	}
 
 	// Test that the trie is verkle
 	if !triedb.IsVerkle() {
 		t.Fatalf("expected trie to be verkle")
 	}
-
-	if !rawdb.ExistsAccountTrieNode(db, nil) {
+	vdb := rawdb.NewTable(db, string(rawdb.VerklePrefix))
+	if !rawdb.HasAccountTrieNode(vdb, nil) {
 		t.Fatal("could not find node")
 	}
 }

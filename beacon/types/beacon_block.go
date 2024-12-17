@@ -48,7 +48,7 @@ func BlockFromJSON(forkName string, data []byte) (*BeaconBlock, error) {
 	case "capella":
 		obj = new(capella.BeaconBlock)
 	default:
-		return nil, fmt.Errorf("unsupported fork: " + forkName)
+		return nil, fmt.Errorf("unsupported fork: %s", forkName)
 	}
 	if err := json.Unmarshal(data, obj); err != nil {
 		return nil, err

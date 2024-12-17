@@ -173,11 +173,7 @@ func opByte(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 
 func opAddmod(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y, z := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.peek()
-	if z.IsZero() {
-		z.Clear()
-	} else {
-		z.AddMod(&x, &y, z)
-	}
+	z.AddMod(&x, &y, z)
 	return nil, nil
 }
 
@@ -236,7 +232,7 @@ func opSAR(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 
 func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.peek()
-	data := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	data := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 
 	if interpreter.hasher == nil {
 		interpreter.hasher = crypto.NewKeccakState()
@@ -363,9 +359,9 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	if overflow {
 		uint64CodeOffset = math.MaxUint64
 	}
+
 	codeCopy := getData(scope.Contract.Code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
-
 	return nil, nil
 }
 
@@ -382,7 +378,8 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
-	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
+	code := interpreter.evm.StateDB.GetCode(addr)
+	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
 	return nil, nil
@@ -438,6 +435,7 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		num.Clear()
 		return nil, nil
 	}
+
 	var upper, lower uint64
 	upper = interpreter.evm.Context.BlockNumber.Uint64()
 	if upper < 257 {
@@ -446,7 +444,11 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		lower = upper - 256
 	}
 	if num64 >= lower && num64 < upper {
-		num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
+		res := interpreter.evm.Context.GetHash(num64)
+		if witness := interpreter.evm.StateDB.Witness(); witness != nil {
+			witness.AddBlockHash(num64)
+		}
+		num.SetBytes(res[:])
 	} else {
 		num.Clear()
 	}
@@ -493,7 +495,7 @@ func opPop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 
 func opMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v := scope.Stack.peek()
-	offset := int64(v.Uint64())
+	offset := v.Uint64()
 	v.SetBytes(scope.Memory.GetPtr(offset, 32))
 	return nil, nil
 }
@@ -574,6 +576,86 @@ func opGas(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	return nil, nil
 }
 
+func opSwap1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap1()
+	return nil, nil
+}
+
+func opSwap2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap2()
+	return nil, nil
+}
+
+func opSwap3(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap3()
+	return nil, nil
+}
+
+func opSwap4(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap4()
+	return nil, nil
+}
+
+func opSwap5(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap5()
+	return nil, nil
+}
+
+func opSwap6(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap6()
+	return nil, nil
+}
+
+func opSwap7(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap7()
+	return nil, nil
+}
+
+func opSwap8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap8()
+	return nil, nil
+}
+
+func opSwap9(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap9()
+	return nil, nil
+}
+
+func opSwap10(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap10()
+	return nil, nil
+}
+
+func opSwap11(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap11()
+	return nil, nil
+}
+
+func opSwap12(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap12()
+	return nil, nil
+}
+
+func opSwap13(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap13()
+	return nil, nil
+}
+
+func opSwap14(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap14()
+	return nil, nil
+}
+
+func opSwap15(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap15()
+	return nil, nil
+}
+
+func opSwap16(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.swap16()
+	return nil, nil
+}
+
 func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	if interpreter.readOnly {
 		return nil, ErrWriteProtection
@@ -581,12 +663,13 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	var (
 		value        = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
-		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 		gas          = scope.Contract.Gas
 	)
 	if interpreter.evm.chainRules.IsEIP150 {
 		gas -= gas / 64
 	}
+
 	// reuse size int for stackvalue
 	stackvalue := size
 
@@ -624,9 +707,10 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		endowment    = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		salt         = scope.Stack.pop()
-		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 		gas          = scope.Contract.Gas
 	)
+
 	// Apply EIP150
 	gas -= gas / 64
 	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
@@ -641,7 +725,6 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		stackvalue.SetBytes(addr.Bytes())
 	}
 	scope.Stack.push(&stackvalue)
-
 	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
@@ -662,7 +745,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get the arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	if interpreter.readOnly && !value.IsZero() {
 		return nil, ErrWriteProtection
@@ -698,7 +781,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	if !value.IsZero() {
 		gas += params.CallStipend
@@ -731,7 +814,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas)
 	if err != nil {
@@ -760,7 +843,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
 	if err != nil {
@@ -781,14 +864,14 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 
 func opReturn(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.pop()
-	ret := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	ret := scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 
 	return ret, errStopToken
 }
 
 func opRevert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.pop()
-	ret := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	ret := scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 
 	interpreter.returnData = ret
 	return ret, ErrExecutionReverted
@@ -829,7 +912,7 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
 	interpreter.evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
-	interpreter.evm.StateDB.Selfdestruct6780(scope.Contract.Address())
+	interpreter.evm.StateDB.SelfDestruct6780(scope.Contract.Address())
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
 			tracer.OnEnter(interpreter.evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance.ToBig())
@@ -857,7 +940,7 @@ func makeLog(size int) executionFunc {
 			topics[i] = addr.Bytes32()
 		}
 
-		d := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
+		d := scope.Memory.GetCopy(mStart.Uint64(), mSize.Uint64())
 		interpreter.evm.StateDB.AddLog(&types.Log{
 			Address: scope.Contract.Address(),
 			Topics:  topics,
@@ -894,12 +977,13 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 			start   = min(codeLen, int(*pc+1))
 			end     = min(codeLen, start+pushByteSize)
 		)
-		scope.Stack.push(new(uint256.Int).SetBytes(
-			common.RightPadBytes(
-				scope.Contract.Code[start:end],
-				pushByteSize,
-			)),
-		)
+		a := new(uint256.Int).SetBytes(scope.Contract.Code[start:end])
+
+		// Missing bytes: pushByteSize - len(pushData)
+		if missing := pushByteSize - (end - start); missing > 0 {
+			a.Lsh(a, uint(8*missing))
+		}
+		scope.Stack.push(a)
 		*pc += size
 		return nil, nil
 	}
@@ -909,16 +993,6 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 func makeDup(size int64) executionFunc {
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 		scope.Stack.dup(int(size))
-		return nil, nil
-	}
-}
-
-// make swap instruction function
-func makeSwap(size int64) executionFunc {
-	// switch n + 1 otherwise n would be swapped with n
-	size++
-	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-		scope.Stack.swap(int(size))
 		return nil, nil
 	}
 }

@@ -18,12 +18,18 @@ package apitypes
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBytesPadding(t *testing.T) {
@@ -238,5 +244,48 @@ func TestConvertAddressDataToSlice(t *testing.T) {
 	_, err := convertDataToSlice(it)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTypedDataArrayValidate(t *testing.T) {
+	t.Parallel()
+
+	type testDataInput struct {
+		Name        string           `json:"name"`
+		Domain      TypedDataDomain  `json:"domain"`
+		PrimaryType string           `json:"primaryType"`
+		Types       Types            `json:"types"`
+		Message     TypedDataMessage `json:"data"`
+		Digest      string           `json:"digest"`
+	}
+	fc, err := os.ReadFile("./testdata/typed-data.json")
+	require.NoError(t, err, "error reading test data file")
+
+	var tests []testDataInput
+	err = json.Unmarshal(fc, &tests)
+	require.NoError(t, err, "error unmarshalling test data file contents")
+
+	for _, tc := range tests {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
+			td := TypedData{
+				Types:       tc.Types,
+				PrimaryType: tc.PrimaryType,
+				Domain:      tc.Domain,
+				Message:     tc.Message,
+			}
+
+			domainSeparator, tErr := td.HashStruct("EIP712Domain", td.Domain.Map())
+			assert.NoError(t, tErr, "failed to hash domain separator: %v", tErr)
+
+			messageHash, tErr := td.HashStruct(td.PrimaryType, td.Message)
+			assert.NoError(t, tErr, "failed to hash message: %v", tErr)
+
+			digest := crypto.Keccak256Hash([]byte(fmt.Sprintf("%s%s%s", "\x19\x01", string(domainSeparator), string(messageHash))))
+			assert.Equal(t, tc.Digest, digest.String(), "digest doesn't not match")
+
+			assert.NoError(t, td.validate(), "validation failed", tErr)
+		})
 	}
 }

@@ -18,6 +18,7 @@ package trie
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -42,12 +43,12 @@ func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool) *
 }
 
 // Commit collapses a node down into a hash node.
-func (c *committer) Commit(n node) hashNode {
-	return c.commit(nil, n).(hashNode)
+func (c *committer) Commit(n node, parallel bool) hashNode {
+	return c.commit(nil, n, parallel).(hashNode)
 }
 
 // commit collapses a node down into a hash node and returns it.
-func (c *committer) commit(path []byte, n node) node {
+func (c *committer) commit(path []byte, n node, parallel bool) node {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
@@ -62,7 +63,7 @@ func (c *committer) commit(path []byte, n node) node {
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
 		if _, ok := cn.Val.(*fullNode); ok {
-			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val)
+			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val, false)
 		}
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
@@ -73,7 +74,7 @@ func (c *committer) commit(path []byte, n node) node {
 		}
 		return collapsed
 	case *fullNode:
-		hashedKids := c.commitChildren(path, cn)
+		hashedKids := c.commitChildren(path, cn, parallel)
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
@@ -91,8 +92,12 @@ func (c *committer) commit(path []byte, n node) node {
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
-	var children [17]node
+func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]node {
+	var (
+		wg       sync.WaitGroup
+		nodesMu  sync.Mutex
+		children [17]node
+	)
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
 		if child == nil {
@@ -108,7 +113,24 @@ func (c *committer) commitChildren(path []byte, n *fullNode) [17]node {
 		// Commit the child recursively and store the "hashed" value.
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
-		children[i] = c.commit(append(path, byte(i)), child)
+		if !parallel {
+			children[i] = c.commit(append(path, byte(i)), child, false)
+		} else {
+			wg.Add(1)
+			go func(index int) {
+				p := append(path, byte(index))
+				childSet := trienode.NewNodeSet(c.nodes.Owner)
+				childCommitter := newCommitter(childSet, c.tracer, c.collectLeaf)
+				children[index] = childCommitter.commit(p, child, false)
+				nodesMu.Lock()
+				c.nodes.MergeSet(childSet)
+				nodesMu.Unlock()
+				wg.Done()
+			}(i)
+		}
+	}
+	if parallel {
+		wg.Wait()
 	}
 	// For the 17th child, it's possible the type is valuenode.
 	if n.Children[16] != nil {
@@ -154,12 +176,8 @@ func (c *committer) store(path []byte, n node) node {
 	return hash
 }
 
-// MerkleResolver the children resolver in merkle-patricia-tree.
-type MerkleResolver struct{}
-
-// ForEach implements childResolver, decodes the provided node and
-// traverses the children inside.
-func (resolver MerkleResolver) ForEach(node []byte, onChild func(common.Hash)) {
+// ForGatherChildren decodes the provided node and traverses the children inside.
+func ForGatherChildren(node []byte, onChild func(common.Hash)) {
 	forGatherChildren(mustDecodeNodeUnsafe(nil, node), onChild)
 }
 

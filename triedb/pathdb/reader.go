@@ -45,14 +45,14 @@ func (loc *nodeLoc) string() string {
 	return fmt.Sprintf("loc: %s, depth: %d", loc.loc, loc.depth)
 }
 
-// reader implements the database.Reader interface, providing the functionalities to
+// reader implements the database.NodeReader interface, providing the functionalities to
 // retrieve trie nodes by wrapping the internal state layer.
 type reader struct {
 	layer       layer
 	noHashCheck bool
 }
 
-// Node implements database.Reader interface, retrieving the node with specified
+// Node implements database.NodeReader interface, retrieving the node with specified
 // node info. Don't modify the returned byte slice since it's not deep-copied
 // and still be referenced by database.
 func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
@@ -78,14 +78,14 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 		if len(blob) > 0 {
 			blobHex = hexutil.Encode(blob)
 		}
-		log.Error("Unexpected trie node", "location", loc.loc, "owner", owner, "path", path, "expect", hash, "got", got, "blob", blobHex)
+		log.Error("Unexpected trie node", "location", loc.loc, "owner", owner.Hex(), "path", path, "expect", hash.Hex(), "got", got.Hex(), "blob", blobHex)
 		return nil, fmt.Errorf("unexpected node: (%x %v), %x!=%x, %s, blob: %s", owner, path, hash, got, loc.string(), blobHex)
 	}
 	return blob, nil
 }
 
-// Reader retrieves a layer belonging to the given state root.
-func (db *Database) Reader(root common.Hash) (database.Reader, error) {
+// NodeReader retrieves a layer belonging to the given state root.
+func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	layer := db.tree.get(root)
 	if layer == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)

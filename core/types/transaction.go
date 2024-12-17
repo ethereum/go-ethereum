@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -355,10 +354,16 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	}
 	var err error
 	gasFeeCap := tx.GasFeeCap()
-	if gasFeeCap.Cmp(baseFee) == -1 {
+	if gasFeeCap.Cmp(baseFee) < 0 {
 		err = ErrGasFeeCapTooLow
 	}
-	return math.BigMin(tx.GasTipCap(), gasFeeCap.Sub(gasFeeCap, baseFee)), err
+	gasFeeCap = gasFeeCap.Sub(gasFeeCap, baseFee)
+
+	gasTipCap := tx.GasTipCap()
+	if gasTipCap.Cmp(gasFeeCap) < 0 {
+		return gasTipCap, err
+	}
+	return gasFeeCap, err
 }
 
 // EffectiveGasTipValue is identical to EffectiveGasTip, but does not return an
@@ -556,11 +561,11 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	}
 }
 
-// TxDifference returns a new set which is the difference between a and b.
+// TxDifference returns a new set of transactions that are present in a but not in b.
 func TxDifference(a, b Transactions) Transactions {
 	keep := make(Transactions, 0, len(a))
 
-	remove := make(map[common.Hash]struct{})
+	remove := make(map[common.Hash]struct{}, b.Len())
 	for _, tx := range b {
 		remove[tx.Hash()] = struct{}{}
 	}
@@ -574,7 +579,7 @@ func TxDifference(a, b Transactions) Transactions {
 	return keep
 }
 
-// HashDifference returns a new set which is the difference between a and b.
+// HashDifference returns a new set of hashes that are present in a but not in b.
 func HashDifference(a, b []common.Hash) []common.Hash {
 	keep := make([]common.Hash, 0, len(a))
 

@@ -24,13 +24,23 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
+// preimageStore wraps the methods of a backing store for reading and writing
+// trie node preimages.
+type preimageStore interface {
+	// Preimage retrieves the preimage of the specified hash.
+	Preimage(hash common.Hash) []byte
+
+	// InsertPreimage commits a set of preimages along with their hashes.
+	InsertPreimage(preimages map[common.Hash][]byte)
+}
+
 // SecureTrie is the old name of StateTrie.
 // Deprecated: use StateTrie.
 type SecureTrie = StateTrie
 
 // NewSecure creates a new StateTrie.
 // Deprecated: use NewStateTrie.
-func NewSecure(stateRoot common.Hash, owner common.Hash, root common.Hash, db database.Database) (*SecureTrie, error) {
+func NewSecure(stateRoot common.Hash, owner common.Hash, root common.Hash, db database.NodeDatabase) (*SecureTrie, error) {
 	id := &ID{
 		StateRoot: stateRoot,
 		Owner:     owner,
@@ -51,7 +61,8 @@ func NewSecure(stateRoot common.Hash, owner common.Hash, root common.Hash, db da
 // StateTrie is not safe for concurrent use.
 type StateTrie struct {
 	trie             Trie
-	db               database.Database
+	db               database.NodeDatabase
+	preimages        preimageStore
 	hashKeyBuf       [common.HashLength]byte
 	secKeyCache      map[string][]byte
 	secKeyCacheOwner *StateTrie // Pointer to self, replace the key cache on mismatch
@@ -62,7 +73,7 @@ type StateTrie struct {
 // If root is the zero hash or the sha3 hash of an empty string, the
 // trie is initially empty. Otherwise, New will panic if db is nil
 // and returns MissingNodeError if the root node cannot be found.
-func NewStateTrie(id *ID, db database.Database) (*StateTrie, error) {
+func NewStateTrie(id *ID, db database.NodeDatabase) (*StateTrie, error) {
 	if db == nil {
 		panic("trie.NewStateTrie called without a database")
 	}
@@ -70,7 +81,14 @@ func NewStateTrie(id *ID, db database.Database) (*StateTrie, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &StateTrie{trie: *trie, db: db}, nil
+	tr := &StateTrie{trie: *trie, db: db}
+
+	// link the preimage store if it's supported
+	preimages, ok := db.(preimageStore)
+	if ok {
+		tr.preimages = preimages
+	}
+	return tr, nil
 }
 
 // MustGet returns the value for key stored in the trie.
@@ -164,7 +182,7 @@ func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 }
 
 // UpdateAccount will abstract the write of an account to the secure trie.
-func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccount) error {
+func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccount, _ int) error {
 	hk := t.hashKey(address.Bytes())
 	data, err := rlp.EncodeToBytes(acc)
 	if err != nil {
@@ -211,7 +229,15 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
 		return key
 	}
-	return t.db.Preimage(common.BytesToHash(shaKey))
+	if t.preimages == nil {
+		return nil
+	}
+	return t.preimages.Preimage(common.BytesToHash(shaKey))
+}
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *StateTrie) Witness() map[string]struct{} {
+	return t.trie.Witness()
 }
 
 // Commit collects all dirty nodes in the trie and replaces them with the
@@ -221,14 +247,16 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 // All cached preimages will be also flushed if preimages recording is enabled.
 // Once the trie is committed, it's not usable anymore. A new trie must
 // be created with new root and updated trie database for following usage
-func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
+func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
-		preimages := make(map[common.Hash][]byte)
-		for hk, key := range t.secKeyCache {
-			preimages[common.BytesToHash([]byte(hk))] = key
+		if t.preimages != nil {
+			preimages := make(map[common.Hash][]byte, len(t.secKeyCache))
+			for hk, key := range t.secKeyCache {
+				preimages[common.BytesToHash([]byte(hk))] = key
+			}
+			t.preimages.InsertPreimage(preimages)
 		}
-		t.db.InsertPreimage(preimages)
 		t.secKeyCache = make(map[string][]byte)
 	}
 	// Commit the trie and return its modified nodeset.
@@ -283,4 +311,8 @@ func (t *StateTrie) getSecKeyCache() map[string][]byte {
 		t.secKeyCache = make(map[string][]byte)
 	}
 	return t.secKeyCache
+}
+
+func (t *StateTrie) IsVerkle() bool {
+	return false
 }

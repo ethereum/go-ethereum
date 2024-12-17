@@ -22,11 +22,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	pbeth "github.com/ethereum/go-ethereum/pb/sf/ethereum/type/v2"
@@ -298,7 +298,7 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 	f.chainConfig = chainConfig
 
 	if wasNeverSent := f.initSent.CompareAndSwap(false, true); wasNeverSent {
-		f.printToFirehose("INIT", FirehoseProtocolVersion, "geth", params.Version)
+		f.printToFirehose("INIT", FirehoseProtocolVersion, "geth", version.Semantic)
 	} else {
 		f.panicInvalidState("The OnBlockchainInit callback was called more than once", 0)
 	}
@@ -333,29 +333,35 @@ func chainNeedsLegacyBackwardCompatibility(id *big.Int) bool {
 }
 
 func (f *Firehose) OnBlockStart(event tracing.BlockEvent) {
-	b := event.Block
-	firehoseInfo("block start (number=%d hash=%s)", b.NumberU64(), b.Hash())
+	// Hash is usually pre-computed within `event.Block`, so it's better to take from there
+	block := event.Block
+	hash := block.Hash()
+	header := event.Block.Header()
+
+	firehoseInfo("block start (number=%d hash=%s)", block.NumberU64(), hash)
 
 	f.ensureBlockChainInit()
 
-	f.blockRules = f.chainConfig.Rules(b.Number(), f.chainConfig.TerminalTotalDifficultyPassed, b.Time())
+	f.blockRules = f.chainConfig.Rules(header.Number, blockIsMerge(event.Block), block.Time())
 	f.blockIsPrecompiledAddr = getActivePrecompilesChecker(f.blockRules)
 
 	f.block = &pbeth.Block{
-		Hash:   b.Hash().Bytes(),
-		Number: b.Number().Uint64(),
-		Header: newBlockHeaderFromChainHeader(b.Header(), firehoseBigIntFromNative(new(big.Int).Add(event.TD, b.Difficulty()))),
-		Size:   b.Size(),
+		Hash:   hash.Bytes(),
+		Number: block.NumberU64(),
+		// FIXME: Avoid calling 'Header()', it makes a copy while accessing event.Block getters directly avoids it
+		Header: newBlockHeaderFromChainHeader(hash, block.Header(), firehoseBigIntFromNative(new(big.Int).Add(event.TD, block.Difficulty()))),
 		Ver:    4,
+
+		// FIXME: 'block.Size()' is a relatively heavy operation, could we do it async?
+		Size: block.Size(),
 	}
 
 	if *f.applyBackwardCompatibility {
 		f.block.Ver = 3
 	}
 
-	for _, uncle := range b.Uncles() {
-		// TODO: check if td should be part of uncles
-		f.block.Uncles = append(f.block.Uncles, newBlockHeaderFromChainHeader(uncle, nil))
+	for _, uncle := range block.Uncles() {
+		f.block.Uncles = append(f.block.Uncles, newBlockHeaderFromChainHeader(uncle.Hash(), uncle, nil))
 	}
 
 	if f.block.Header.BaseFeePerGas != nil {
@@ -363,6 +369,10 @@ func (f *Firehose) OnBlockStart(event tracing.BlockEvent) {
 	}
 
 	f.blockFinality.populateFromChain(event.Finalized)
+}
+
+func blockIsMerge(block *types.Block) bool {
+	return block.Difficulty().Sign() == 0
 }
 
 func (f *Firehose) OnSkippedBlock(event tracing.BlockEvent) {
@@ -1546,7 +1556,7 @@ func (f *Firehose) InternalTestingBuffer() *bytes.Buffer {
 }
 
 // FIXME: Create a unit test that is going to fail as soon as any header is added in
-func newBlockHeaderFromChainHeader(h *types.Header, td *pbeth.BigInt) *pbeth.BlockHeader {
+func newBlockHeaderFromChainHeader(hash common.Hash, h *types.Header, td *pbeth.BigInt) *pbeth.BlockHeader {
 	var withdrawalsHashBytes []byte
 	if hash := h.WithdrawalsHash; hash != nil {
 		withdrawalsHashBytes = hash.Bytes()
@@ -1558,7 +1568,7 @@ func newBlockHeaderFromChainHeader(h *types.Header, td *pbeth.BigInt) *pbeth.Blo
 	}
 
 	pbHead := &pbeth.BlockHeader{
-		Hash:             h.Hash().Bytes(),
+		Hash:             hash.Bytes(),
 		Number:           h.Number.Uint64(),
 		ParentHash:       h.ParentHash.Bytes(),
 		UncleHash:        h.UncleHash.Bytes(),
@@ -1808,15 +1818,23 @@ func gasPrice(tx *types.Transaction, baseFee *big.Int) *pbeth.BigInt {
 	case types.LegacyTxType, types.AccessListTxType:
 		return firehoseBigIntFromNative(tx.GasPrice())
 
+	// In the context of dynamic fee transactions, `GasPrice() == GasFeeCap()`
 	case types.DynamicFeeTxType, types.BlobTxType:
 		if baseFee == nil {
 			return firehoseBigIntFromNative(tx.GasPrice())
 		}
 
-		return firehoseBigIntFromNative(math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap()))
+		return firehoseBigIntFromNative(bigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap()))
 	}
 
 	panic(errUnhandledTransactionType("gasPrice", tx.Type()))
+}
+
+func bigMin(x, y *big.Int) *big.Int {
+	if x.Cmp(y) > 0 {
+		return y
+	}
+	return x
 }
 
 func FirehoseDebug(msg string, args ...interface{}) {

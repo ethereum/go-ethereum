@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -26,6 +27,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -219,7 +221,13 @@ func (t *freezerTable) repair() error {
 			return err
 		} // New file can't trigger this path
 	}
-	// Retrieve the file sizes and prepare for truncation
+	// Validate the index file as it might contain some garbage data after the
+	// power failures.
+	if err := t.repairIndex(); err != nil {
+		return err
+	}
+	// Retrieve the file sizes and prepare for truncation. Note the file size
+	// might be changed after index validation.
 	if stat, err = t.index.Stat(); err != nil {
 		return err
 	}
@@ -360,6 +368,133 @@ func (t *freezerTable) repair() error {
 		t.logger.Info("Chain freezer table opened", "items", t.items.Load(), "deleted", t.itemOffset.Load(), "hidden", t.itemHidden.Load(), "tailId", t.tailId, "headId", t.headId, "size", t.headBytes)
 	} else {
 		t.logger.Debug("Chain freezer table opened", "items", t.items.Load(), "size", common.StorageSize(t.headBytes))
+	}
+	return nil
+}
+
+// repairIndex validates the integrity of the index file. According to the design,
+// the initial entry in the file denotes the earliest data file along with the
+// count of deleted items. Following this, all subsequent entries in the file must
+// be in order. This function identifies any corrupted entries and truncates items
+// occurring after the corruption point.
+//
+// corruption can occur because of the power failure. In the Linux kernel, the
+// file metadata update and data update are not necessarily performed at the
+// same time. Typically, the metadata will be flushed/journalled ahead of the file
+// data. Therefore, we make the pessimistic assumption that the file is first
+// extended with invalid "garbage" data (normally zero bytes) and that afterwards
+// the correct data replaces the garbage. As all the items in index file are
+// supposed to be in-order, the leftover garbage must be truncated before the
+// index data is utilized.
+//
+// It's important to note an exception that's unfortunately undetectable: when
+// all index entries in the file are zero. Distinguishing whether they represent
+// leftover garbage or if all items in the table have zero size is impossible.
+// In such instances, the file will remain unchanged to prevent potential data
+// loss or misinterpretation.
+func (t *freezerTable) repairIndex() error {
+	// Retrieve the file sizes and prepare for validation
+	stat, err := t.index.Stat()
+	if err != nil {
+		return err
+	}
+	size := stat.Size()
+
+	// Move the read cursor to the beginning of the file
+	_, err = t.index.Seek(0, io.SeekStart)
+	if err != nil {
+		return err
+	}
+	fr := bufio.NewReader(t.index)
+
+	var (
+		start = time.Now()
+		buff  = make([]byte, indexEntrySize)
+		prev  indexEntry
+		head  indexEntry
+
+		read = func() (indexEntry, error) {
+			n, err := io.ReadFull(fr, buff)
+			if err != nil {
+				return indexEntry{}, err
+			}
+			if n != indexEntrySize {
+				return indexEntry{}, fmt.Errorf("failed to read from index, n: %d", n)
+			}
+			var entry indexEntry
+			entry.unmarshalBinary(buff)
+			return entry, nil
+		}
+		truncate = func(offset int64) error {
+			if t.readonly {
+				return fmt.Errorf("index file is corrupted at %d, size: %d", offset, size)
+			}
+			if err := truncateFreezerFile(t.index, offset); err != nil {
+				return err
+			}
+			log.Warn("Truncated index file", "offset", offset, "truncated", size-offset)
+			return nil
+		}
+	)
+	for offset := int64(0); offset < size; offset += indexEntrySize {
+		entry, err := read()
+		if err != nil {
+			return err
+		}
+		if offset == 0 {
+			head = entry
+			continue
+		}
+		// Ensure that the first non-head index refers to the earliest file,
+		// or the next file if the earliest file has no space to place the
+		// first item.
+		if offset == indexEntrySize {
+			if entry.filenum != head.filenum && entry.filenum != head.filenum+1 {
+				log.Error("Corrupted index item detected", "earliest", head.filenum, "filenumber", entry.filenum)
+				return truncate(offset)
+			}
+			prev = entry
+			continue
+		}
+		// ensure two consecutive index items are in order
+		if err := t.checkIndexItems(prev, entry); err != nil {
+			log.Error("Corrupted index item detected", "err", err)
+			return truncate(offset)
+		}
+		prev = entry
+	}
+	// Move the read cursor to the end of the file. While theoretically, the
+	// cursor should reach the end by reading all the items in the file, perform
+	// the seek operation anyway as a precaution.
+	_, err = t.index.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	log.Debug("Verified index file", "items", size/indexEntrySize, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// checkIndexItems validates the correctness of two consecutive index items based
+// on the following rules:
+//
+//   - The file number of two consecutive index items must either be the same or
+//     increase monotonically. If the file number decreases or skips in a
+//     non-sequential manner, the index item is considered invalid.
+//
+//   - For index items with the same file number, the data offset must be in
+//     non-decreasing order. Note: Two index items with the same file number
+//     and the same data offset are permitted if the entry size is zero.
+//
+//   - The first index item in a new data file must not have a zero data offset.
+func (t *freezerTable) checkIndexItems(a, b indexEntry) error {
+	if b.filenum != a.filenum && b.filenum != a.filenum+1 {
+		return fmt.Errorf("index items with inconsistent file number, prev: %d, next: %d", a.filenum, b.filenum)
+	}
+	if b.filenum == a.filenum && b.offset < a.offset {
+		return fmt.Errorf("index items with unordered offset, prev: %d, next: %d", a.offset, b.offset)
+	}
+	if b.filenum == a.filenum+1 && b.offset == 0 {
+		return fmt.Errorf("index items with zero offset, file number: %d", b.filenum)
 	}
 	return nil
 }

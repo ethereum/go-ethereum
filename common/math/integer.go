@@ -22,22 +22,6 @@ import (
 	"strconv"
 )
 
-// Integer limit values.
-const (
-	MaxInt8   = 1<<7 - 1
-	MinInt8   = -1 << 7
-	MaxInt16  = 1<<15 - 1
-	MinInt16  = -1 << 15
-	MaxInt32  = 1<<31 - 1
-	MinInt32  = -1 << 31
-	MaxInt64  = 1<<63 - 1
-	MinInt64  = -1 << 63
-	MaxUint8  = 1<<8 - 1
-	MaxUint16 = 1<<16 - 1
-	MaxUint32 = 1<<32 - 1
-	MaxUint64 = 1<<64 - 1
-)
-
 // HexOrDecimal64 marshals uint64 as hex or decimal.
 type HexOrDecimal64 uint64
 
@@ -46,7 +30,7 @@ type HexOrDecimal64 uint64
 // It is similar to UnmarshalText, but allows parsing real decimals too, not just
 // quoted decimal strings.
 func (i *HexOrDecimal64) UnmarshalJSON(input []byte) error {
-	if len(input) > 0 && input[0] == '"' {
+	if len(input) > 1 && input[0] == '"' {
 		input = input[1 : len(input)-1]
 	}
 	return i.UnmarshalText(input)
@@ -54,11 +38,11 @@ func (i *HexOrDecimal64) UnmarshalJSON(input []byte) error {
 
 // UnmarshalText implements encoding.TextUnmarshaler.
 func (i *HexOrDecimal64) UnmarshalText(input []byte) error {
-	int, ok := ParseUint64(string(input))
+	n, ok := ParseUint64(string(input))
 	if !ok {
 		return fmt.Errorf("invalid hex or decimal integer %q", input)
 	}
-	*i = HexOrDecimal64(int)
+	*i = HexOrDecimal64(n)
 	return nil
 }
 
