@@ -293,6 +293,41 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	b.header.Difficulty = b.engine.CalcDifficulty(b.cm, b.header.Time, b.parent.Header())
 }
 
+// ConsensusLayerRequests returns the EIP-7685 requests which have accumulated so far.
+func (b *BlockGen) ConsensusLayerRequests() [][]byte {
+	return b.collectRequests(true)
+}
+
+func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
+	statedb := b.statedb
+	if readonly {
+		// The system contracts clear themselves on a system-initiated read.
+		// When reading the requests mid-block, we don't want this behavior, so fork
+		// off the statedb before executing the system calls.
+		statedb = statedb.Copy()
+	}
+
+	if b.cm.config.IsPrague(b.header.Number, b.header.Time) {
+		requests = [][]byte{}
+		// EIP-6110 deposits
+		var blockLogs []*types.Log
+		for _, r := range b.receipts {
+			blockLogs = append(blockLogs, r.Logs...)
+		}
+		if err := ParseDepositLogs(&requests, blockLogs, b.cm.config); err != nil {
+			panic(fmt.Sprintf("failed to parse deposit log: %v", err))
+		}
+		// create EVM for system calls
+		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
+		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
+		// EIP-7002
+		ProcessWithdrawalQueue(&requests, evm)
+		// EIP-7251
+		ProcessConsolidationQueue(&requests, evm)
+	}
+	return requests
+}
+
 // GenerateChain creates a chain of n blocks. The first block's
 // parent will be the provided parent. db is used to store
 // intermediate states and should contain the parent's state trie.
@@ -330,6 +365,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 				b.header.Difficulty = big.NewInt(0)
 			}
 		}
+
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
@@ -342,30 +378,21 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
+
+		if config.IsPrague(b.header.Number, b.header.Time) {
+			// EIP-2935
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			blockContext.Random = &common.Hash{} // enable post-merge instruction set
+			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+			ProcessParentBlockHash(b.header.ParentHash, evm)
+		}
+
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
 		}
 
-		var requests [][]byte
-		if config.IsPrague(b.header.Number, b.header.Time) {
-			requests = [][]byte{}
-			// EIP-6110 deposits
-			var blockLogs []*types.Log
-			for _, r := range b.receipts {
-				blockLogs = append(blockLogs, r.Logs...)
-			}
-			if err := ParseDepositLogs(&requests, blockLogs, config); err != nil {
-				panic(fmt.Sprintf("failed to parse deposit log: %v", err))
-			}
-			// create EVM for system calls
-			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
-			// EIP-7002
-			ProcessWithdrawalQueue(&requests, evm)
-			// EIP-7251
-			ProcessConsolidationQueue(&requests, evm)
-		}
+		requests := b.collectRequests(false)
 		if requests != nil {
 			reqHash := types.CalcRequestsHash(requests)
 			b.header.RequestsHash = &reqHash
