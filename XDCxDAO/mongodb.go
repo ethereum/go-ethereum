@@ -10,11 +10,11 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/globalsign/mgo"
 	"github.com/globalsign/mgo/bson"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -32,7 +32,7 @@ type MongoDatabase struct {
 	Session          *mgo.Session
 	dbName           string
 	emptyKey         []byte
-	cacheItems       *lru.Cache // Cache for reading
+	cacheItems       *lru.Cache[string, interface{}] // Cache for reading
 	orderBulk        *mgo.Bulk
 	tradeBulk        *mgo.Bulk
 	epochPriceBulk   *mgo.Bulk
@@ -64,12 +64,11 @@ func NewMongoDatabase(session *mgo.Session, dbName string, mongoURL string, repl
 	if cacheLimit > 0 {
 		itemCacheLimit = cacheLimit
 	}
-	cacheItems, _ := lru.New(itemCacheLimit)
 
 	db := &MongoDatabase{
 		Session:    session,
 		dbName:     dbName,
-		cacheItems: cacheItems,
+		cacheItems: lru.NewCache[string, interface{}](itemCacheLimit),
 	}
 	if err := db.EnsureIndexes(); err != nil {
 		return nil, err

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
@@ -35,7 +36,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -59,9 +59,9 @@ type LightChain struct {
 	mu      sync.RWMutex
 	chainmu sync.RWMutex
 
-	bodyCache    *lru.Cache // Cache for the most recent block bodies
-	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
-	blockCache   *lru.Cache // Cache for the most recent entire blocks
+	bodyCache    *lru.Cache[common.Hash, *types.Body]
+	bodyRLPCache *lru.Cache[common.Hash, rlp.RawValue]
+	blockCache   *lru.Cache[common.Hash, *types.Block]
 
 	quit    chan struct{}
 	running int32 // running must be called automically
@@ -76,17 +76,13 @@ type LightChain struct {
 // available in the database. It initialises the default Ethereum header
 // validator.
 func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine) (*LightChain, error) {
-	bodyCache, _ := lru.New(bodyCacheLimit)
-	bodyRLPCache, _ := lru.New(bodyCacheLimit)
-	blockCache, _ := lru.New(blockCacheLimit)
-
 	bc := &LightChain{
 		chainDb:      odr.Database(),
 		odr:          odr,
 		quit:         make(chan struct{}),
-		bodyCache:    bodyCache,
-		bodyRLPCache: bodyRLPCache,
-		blockCache:   blockCache,
+		bodyCache:    lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
+		bodyRLPCache: lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
+		blockCache:   lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		engine:       engine,
 	}
 	var err error
@@ -218,9 +214,8 @@ func (lc *LightChain) State() (*state.StateDB, error) {
 // or ODR service by hash, caching it if found.
 func (lc *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Body, error) {
 	// Short circuit if the body's already in the cache, retrieve otherwise
-	if cached, ok := lc.bodyCache.Get(hash); ok {
-		body := cached.(*types.Body)
-		return body, nil
+	if cached, ok := lc.bodyCache.Get(hash); ok && cached != nil {
+		return cached, nil
 	}
 	body, err := GetBody(ctx, lc.odr, hash, lc.hc.GetBlockNumber(hash))
 	if err != nil {
@@ -236,7 +231,7 @@ func (lc *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Bod
 func (lc *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.RawValue, error) {
 	// Short circuit if the body's already in the cache, retrieve otherwise
 	if cached, ok := lc.bodyRLPCache.Get(hash); ok {
-		return cached.(rlp.RawValue), nil
+		return cached, nil
 	}
 	body, err := GetBodyRLP(ctx, lc.odr, hash, lc.hc.GetBlockNumber(hash))
 	if err != nil {
@@ -258,8 +253,8 @@ func (lc *LightChain) HasBlock(hash common.Hash, number uint64) bool {
 // caching it if found.
 func (lc *LightChain) GetBlock(ctx context.Context, hash common.Hash, number uint64) (*types.Block, error) {
 	// Short circuit if the block's already in the cache, retrieve otherwise
-	if block, ok := lc.blockCache.Get(hash); ok {
-		return block.(*types.Block), nil
+	if block, ok := lc.blockCache.Get(hash); ok && block != nil {
+		return block, nil
 	}
 	block, err := GetBlock(ctx, lc.odr, hash, number)
 	if err != nil {

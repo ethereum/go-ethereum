@@ -13,6 +13,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/XDCxDAO"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/common/prque"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -20,7 +21,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -42,8 +42,8 @@ type Lending struct {
 	orderNonce map[common.Address]*big.Int
 
 	XDCx                *XDCx.XDCX
-	lendingItemHistory  *lru.Cache
-	lendingTradeHistory *lru.Cache
+	lendingItemHistory  *lru.Cache[common.Hash, map[common.Hash]lendingstate.LendingItemHistoryItem]
+	lendingTradeHistory *lru.Cache[common.Hash, map[common.Hash]lendingstate.LendingTradeHistoryItem]
 }
 
 func (l *Lending) Protocols() []p2p.Protocol {
@@ -62,13 +62,11 @@ func (l *Lending) Stop() error {
 }
 
 func New(XDCx *XDCx.XDCX) *Lending {
-	itemCache, _ := lru.New(defaultCacheLimit)
-	lendingTradeCache, _ := lru.New(defaultCacheLimit)
 	lending := &Lending{
 		orderNonce:          make(map[common.Address]*big.Int),
 		Triegc:              prque.New(nil),
-		lendingItemHistory:  itemCache,
-		lendingTradeHistory: lendingTradeCache,
+		lendingItemHistory:  lru.NewCache[common.Hash, map[common.Hash]lendingstate.LendingItemHistoryItem](defaultCacheLimit),
+		lendingTradeHistory: lru.NewCache[common.Hash, map[common.Hash]lendingstate.LendingTradeHistoryItem](defaultCacheLimit),
 	}
 	lending.StateCache = lendingstate.NewDatabase(XDCx.GetLevelDB())
 	lending.XDCx = XDCx
@@ -705,12 +703,9 @@ func (l *Lending) GetLendingStateRoot(block *types.Block, author common.Address)
 }
 
 func (l *Lending) UpdateLendingItemCache(LendingToken, CollateralToken common.Address, hash common.Hash, txhash common.Hash, lastState lendingstate.LendingItemHistoryItem) {
-	var lendingCacheAtTxHash map[common.Hash]lendingstate.LendingItemHistoryItem
-	c, ok := l.lendingItemHistory.Get(txhash)
-	if !ok || c == nil {
+	lendingCacheAtTxHash, ok := l.lendingItemHistory.Get(txhash)
+	if !ok || lendingCacheAtTxHash == nil {
 		lendingCacheAtTxHash = make(map[common.Hash]lendingstate.LendingItemHistoryItem)
-	} else {
-		lendingCacheAtTxHash = c.(map[common.Hash]lendingstate.LendingItemHistoryItem)
 	}
 	orderKey := lendingstate.GetLendingItemHistoryKey(LendingToken, CollateralToken, hash)
 	_, ok = lendingCacheAtTxHash[orderKey]
@@ -722,11 +717,9 @@ func (l *Lending) UpdateLendingItemCache(LendingToken, CollateralToken common.Ad
 
 func (l *Lending) UpdateLendingTradeCache(hash common.Hash, txhash common.Hash, lastState lendingstate.LendingTradeHistoryItem) {
 	var lendingCacheAtTxHash map[common.Hash]lendingstate.LendingTradeHistoryItem
-	c, ok := l.lendingTradeHistory.Get(txhash)
-	if !ok || c == nil {
+	lendingCacheAtTxHash, ok := l.lendingTradeHistory.Get(txhash)
+	if !ok || lendingCacheAtTxHash == nil {
 		lendingCacheAtTxHash = make(map[common.Hash]lendingstate.LendingTradeHistoryItem)
-	} else {
-		lendingCacheAtTxHash = c.(map[common.Hash]lendingstate.LendingTradeHistoryItem)
 	}
 	_, ok = lendingCacheAtTxHash[hash]
 	if !ok {
@@ -743,16 +736,15 @@ func (l *Lending) RollbackLendingData(txhash common.Hash) error {
 	items := db.GetListItemByTxHash(txhash, &lendingstate.LendingItem{})
 	if items != nil {
 		for _, item := range items.([]*lendingstate.LendingItem) {
-			c, ok := l.lendingItemHistory.Get(txhash)
-			log.Debug("XDCxlending reorg: rollback lendingItem", "txhash", txhash.Hex(), "item", lendingstate.ToJSON(item), "lendingItemHistory", c)
-			if !ok {
+			cacheAtTxHash, ok := l.lendingItemHistory.Get(txhash)
+			log.Debug("XDCxlending reorg: rollback lendingItem", "txhash", txhash.Hex(), "item", lendingstate.ToJSON(item), "lendingItemHistory", cacheAtTxHash)
+			if !ok || cacheAtTxHash == nil {
 				log.Debug("XDCxlending reorg: remove item due to no lendingItemHistory", "item", lendingstate.ToJSON(item))
 				if err := db.DeleteObject(item.Hash, &lendingstate.LendingItem{}); err != nil {
 					return fmt.Errorf("failed to remove reorg LendingItem. Err: %v . Item: %s", err.Error(), lendingstate.ToJSON(item))
 				}
 				continue
 			}
-			cacheAtTxHash := c.(map[common.Hash]lendingstate.LendingItemHistoryItem)
 			lendingItemHistory := cacheAtTxHash[lendingstate.GetLendingItemHistoryKey(item.LendingToken, item.CollateralToken, item.Hash)]
 			if (lendingItemHistory == lendingstate.LendingItemHistoryItem{}) {
 				log.Debug("XDCxlending reorg: remove item due to empty lendingItemHistory", "item", lendingstate.ToJSON(item))
@@ -776,16 +768,15 @@ func (l *Lending) RollbackLendingData(txhash common.Hash) error {
 	items = db.GetListItemByTxHash(txhash, &lendingstate.LendingTrade{})
 	if items != nil {
 		for _, trade := range items.([]*lendingstate.LendingTrade) {
-			c, ok := l.lendingTradeHistory.Get(txhash)
-			log.Debug("XDCxlending reorg: rollback LendingTrade", "txhash", txhash.Hex(), "trade", lendingstate.ToJSON(trade), "LendingTradeHistory", c)
-			if !ok {
+			cacheAtTxHash, ok := l.lendingTradeHistory.Get(txhash)
+			log.Debug("XDCxlending reorg: rollback LendingTrade", "txhash", txhash.Hex(), "trade", lendingstate.ToJSON(trade), "LendingTradeHistory", cacheAtTxHash)
+			if !ok || cacheAtTxHash == nil {
 				log.Debug("XDCxlending reorg: remove trade due to no LendingTradeHistory", "trade", lendingstate.ToJSON(trade))
 				if err := db.DeleteObject(trade.Hash, &lendingstate.LendingTrade{}); err != nil {
 					return fmt.Errorf("failed to remove reorg LendingTrade. Err: %v . Trade: %s", err.Error(), lendingstate.ToJSON(trade))
 				}
 				continue
 			}
-			cacheAtTxHash := c.(map[common.Hash]lendingstate.LendingTradeHistoryItem)
 			lendingTradeHistoryItem := cacheAtTxHash[trade.Hash]
 			if (lendingTradeHistoryItem == lendingstate.LendingTradeHistoryItem{}) {
 				log.Debug("XDCxlending reorg: remove trade due to empty LendingTradeHistory", "trade", lendingstate.ToJSON(trade))

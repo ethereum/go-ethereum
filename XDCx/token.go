@@ -4,15 +4,14 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/XinFinOrg/XDPoSChain/contracts/XDCx/contract"
-	"github.com/XinFinOrg/XDPoSChain/core"
-	"github.com/XinFinOrg/XDPoSChain/log"
-
 	"github.com/XinFinOrg/XDPoSChain"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/contracts/XDCx/contract"
+	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 // GetTokenAbi return token abi
@@ -45,8 +44,8 @@ func RunContract(chain consensus.ChainContext, statedb *state.StateDB, contractA
 }
 
 func (XDCx *XDCX) GetTokenDecimal(chain consensus.ChainContext, statedb *state.StateDB, tokenAddr common.Address) (*big.Int, error) {
-	if tokenDecimal, ok := XDCx.tokenDecimalCache.Get(tokenAddr); ok {
-		return tokenDecimal.(*big.Int), nil
+	if tokenDecimal, ok := XDCx.tokenDecimalCache.Get(tokenAddr); ok && tokenDecimal != nil {
+		return tokenDecimal, nil
 	}
 	if tokenAddr == common.XDCNativeAddressBinary {
 		XDCx.tokenDecimalCache.Add(tokenAddr, common.BasePrice)

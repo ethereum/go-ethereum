@@ -30,9 +30,8 @@ func (x *XDPoS_v2) getPreviousEpochSwitchInfoByHash(chain consensus.ChainReader,
 // Given header and its hash, get epoch switch info from the epoch switch block of that epoch,
 // header is allow to be nil.
 func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types.Header, hash common.Hash) (*types.EpochSwitchInfo, error) {
-	e, ok := x.epochSwitches.Get(hash)
-	if ok {
-		epochSwitchInfo := e.(*types.EpochSwitchInfo)
+	epochSwitchInfo, ok := x.epochSwitches.Get(hash)
+	if ok && epochSwitchInfo != nil {
 		log.Debug("[getEpochSwitchInfo] cache hit", "number", epochSwitchInfo.EpochSwitchBlockInfo.Number, "hash", hash.Hex())
 		return epochSwitchInfo, nil
 	}
@@ -88,7 +87,7 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 		x.epochSwitches.Add(hash, epochSwitchInfo)
 		return epochSwitchInfo, nil
 	}
-	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, nil, h.ParentHash)
+	epochSwitchInfo, err = x.getEpochSwitchInfo(chain, nil, h.ParentHash)
 	if err != nil {
 		log.Error("[getEpochSwitchInfo] recursive error", "err", err, "hash", hash.Hex(), "number", h.Number.Uint64())
 		return nil, err

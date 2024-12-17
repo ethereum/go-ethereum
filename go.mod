@@ -15,7 +15,6 @@ require (
 	github.com/golang/protobuf v1.5.3
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb
 	github.com/gorilla/websocket v1.4.2
-	github.com/hashicorp/golang-lru v0.5.4
 	github.com/holiman/uint256 v1.2.4
 	github.com/huin/goupnp v1.3.0
 	github.com/jackpal/go-nat-pmp v1.0.2

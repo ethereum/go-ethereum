@@ -331,20 +331,19 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 	for i := prevCheckpoint + (rCheckpoint * 2) - 1; i >= startBlockNumber; i-- {
 		header = chain.GetHeader(header.ParentHash, i)
 		mapBlkHash[i] = header.Hash()
-		signData, ok := c.GetCachedSigningTxs(header.Hash())
+		signingTxs, ok := c.GetCachedSigningTxs(header.Hash())
 		if !ok {
 			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
 			block := chain.GetBlock(header.Hash(), i)
 			txs := block.Transactions()
 			if !chain.Config().IsTIPSigning(header.Number) {
 				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
-				signData = c.CacheNoneTIPSigningTxs(header, txs, receipts)
+				signingTxs = c.CacheNoneTIPSigningTxs(header, txs, receipts)
 			} else {
-				signData = c.CacheSigningTxs(header.Hash(), txs)
+				signingTxs = c.CacheSigningTxs(header.Hash(), txs)
 			}
 		}
-		txs := signData.([]*types.Transaction)
-		for _, tx := range txs {
+		for _, tx := range signingTxs {
 			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
 			from := *tx.From()
 			data[blkHash] = append(data[blkHash], from)

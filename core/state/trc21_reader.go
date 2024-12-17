@@ -5,8 +5,7 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	lru "github.com/hashicorp/golang-lru"
-
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 )
 
 var (
@@ -22,21 +21,18 @@ var (
 	}
 	transferFuncHex     = common.Hex2Bytes("0xa9059cbb")
 	transferFromFuncHex = common.Hex2Bytes("0x23b872dd")
-	cache, _            = lru.NewARC(128)
+	cache               = lru.NewCache[common.Hash, map[common.Address]*big.Int](128)
 )
 
 func GetTRC21FeeCapacityFromStateWithCache(trieRoot common.Hash, statedb *StateDB) map[common.Address]*big.Int {
 	if statedb == nil {
 		return map[common.Address]*big.Int{}
 	}
-	data, _ := cache.Get(trieRoot)
-	var info map[common.Address]*big.Int
-	if data != nil {
-		info = data.(map[common.Address]*big.Int)
-	} else {
+	info, ok := cache.Get(trieRoot)
+	if !ok || info == nil {
 		info = GetTRC21FeeCapacityFromState(statedb)
+		cache.Add(trieRoot, info)
 	}
-	cache.Add(trieRoot, info)
 	tokensFee := map[common.Address]*big.Int{}
 	for key, value := range info {
 		tokensFee[key] = big.NewInt(0).SetBytes(value.Bytes())

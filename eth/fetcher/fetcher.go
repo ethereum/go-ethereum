@@ -22,9 +22,8 @@ import (
 	"math/rand"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/common/prque"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -135,7 +134,8 @@ type Fetcher struct {
 	queue  *prque.Prque            // Queue containing the import operations (block number sorted)
 	queues map[string]int          // Per peer block counts to prevent memory exhaustion
 	queued map[common.Hash]*inject // Set of already queued blocks (to dedup imports)
-	knowns *lru.ARCCache
+	knowns *lru.Cache[common.Hash, struct{}]
+
 	// Callbacks
 	getBlock            blockRetrievalFn      // Retrieves a block from the local chain
 	verifyHeader        headerVerifierFn      // Checks if a block's headers have a valid proof of work
@@ -157,7 +157,6 @@ type Fetcher struct {
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
 func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, handleProposedBlock proposeBlockHandlerFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertBlock blockInsertFn, prepareBlock blockPrepareFn, dropPeer peerDropFn) *Fetcher {
-	knownBlocks, _ := lru.NewARC(blockLimit)
 	return &Fetcher{
 		notify:              make(chan *announce),
 		inject:              make(chan *inject),
@@ -174,7 +173,7 @@ func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, handlePropose
 		queue:               prque.New(nil),
 		queues:              make(map[string]int),
 		queued:              make(map[common.Hash]*inject),
-		knowns:              knownBlocks,
+		knowns:              lru.NewCache[common.Hash, struct{}](blockLimit),
 		getBlock:            getBlock,
 		verifyHeader:        verifyHeader,
 		handleProposedBlock: handleProposedBlock,
@@ -641,7 +640,7 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 		}
 		f.queues[peer] = count
 		f.queued[hash] = op
-		f.knowns.Add(hash, true)
+		f.knowns.Add(hash, struct{}{})
 		f.queue.Push(op, -int64(block.NumberU64()))
 		if f.queueChangeHook != nil {
 			f.queueChangeHook(op.block.Hash(), true)

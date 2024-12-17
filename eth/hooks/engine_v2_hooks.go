@@ -115,15 +115,14 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			if blockNumber%common.MergeSignRange == 0 {
 				mapBlockHash[bhash] = true
 			}
-			signData, ok := adaptor.GetCachedSigningTxs(bhash)
+			signingTxs, ok := adaptor.GetCachedSigningTxs(bhash)
 			if !ok {
 				block := chain.GetBlock(bhash, blockNumber)
 				txs := block.Transactions()
-				signData = adaptor.CacheSigningTxs(bhash, txs)
+				signingTxs = adaptor.CacheSigningTxs(bhash, txs)
 			}
-			txs := signData.([]*types.Transaction)
 			// Check signer signed?
-			for _, tx := range txs {
+			for _, tx := range signingTxs {
 				blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
 				from := *tx.From()
 				if mapBlockHash[blkHash] {
@@ -245,15 +244,14 @@ func GetSigningTxCount(c *XDPoS.XDPoS, chain consensus.ChainReader, header *type
 			}
 		}
 		mapBlkHash[i] = header.Hash()
-		signData, ok := c.GetCachedSigningTxs(header.Hash())
+		signingTxs, ok := c.GetCachedSigningTxs(header.Hash())
 		if !ok {
 			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
 			block := chain.GetBlock(header.Hash(), i)
 			txs := block.Transactions()
-			signData = c.CacheSigningTxs(header.Hash(), txs)
+			signingTxs = c.CacheSigningTxs(header.Hash(), txs)
 		}
-		txs := signData.([]*types.Transaction)
-		for _, tx := range txs {
+		for _, tx := range signingTxs {
 			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
 			from := *tx.From()
 			data[blkHash] = append(data[blkHash], from)

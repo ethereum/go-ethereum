@@ -190,6 +190,6 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return utils.ErrNotItsTurn
 	}
 
-	x.verifiedHeaders.Add(header.Hash(), true)
+	x.verifiedHeaders.Add(header.Hash(), struct{}{})
 	return nil
 }

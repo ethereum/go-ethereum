@@ -14,8 +14,8 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
-
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
@@ -26,7 +26,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -44,10 +43,10 @@ type XDPoS_v1 struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
 	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
-	recents             *lru.ARCCache // Snapshots for recent block to speed up reorgs
-	signatures          *lru.ARCCache // Signatures of recent blocks to speed up mining
-	validatorSignatures *lru.ARCCache // Signatures of recent blocks to speed up mining
-	verifiedHeaders     *lru.ARCCache
+	recents             *lru.Cache[common.Hash, *SnapshotV1] // Snapshots for recent block to speed up reorgs
+	signatures          *utils.SigLRU                        // Signatures of recent blocks to speed up mining
+	validatorSignatures *utils.SigLRU                        // Signatures of recent blocks to speed up mining
+	verifiedHeaders     *lru.Cache[common.Hash, struct{}]
 	proposals           map[common.Address]bool // Current list of proposals we are pushing
 
 	signer common.Address  // Ethereum address of the signing key
@@ -92,20 +91,16 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS_v1 {
 		conf.Epoch = utils.EpochLength
 	}
 
-	recents, _ := lru.NewARC(utils.InmemorySnapshots)
-	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
-	validatorSignatures, _ := lru.NewARC(utils.InmemorySnapshots)
-	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 	return &XDPoS_v1{
 		chainConfig: chainConfig,
 
 		config: &conf,
 		db:     db,
 
-		recents:             recents,
-		signatures:          signatures,
-		verifiedHeaders:     verifiedHeaders,
-		validatorSignatures: validatorSignatures,
+		recents:             lru.NewCache[common.Hash, *SnapshotV1](utils.InmemorySnapshots),
+		signatures:          lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
+		verifiedHeaders:     lru.NewCache[common.Hash, struct{}](utils.InmemorySnapshots),
+		validatorSignatures: lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
 		proposals:           make(map[common.Address]bool),
 	}
 }
@@ -145,7 +140,7 @@ func (x *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *ty
 	}
 	err := x.verifyHeader(chain, header, parents, fullVerify)
 	if err == nil {
-		x.verifiedHeaders.Add(header.Hash(), true)
+		x.verifiedHeaders.Add(header.Hash(), struct{}{})
 	}
 	return err
 }
@@ -483,8 +478,8 @@ func (x *XDPoS_v1) snapshot(chain consensus.ChainReader, number uint64, hash com
 	)
 	for {
 		// If an in-memory SnapshotV1 was found, use that
-		if s, ok := x.recents.Get(hash); ok {
-			snap = s.(*SnapshotV1)
+		if s, ok := x.recents.Get(hash); ok && s != nil {
+			snap = s
 			break
 		}
 		// If an on-disk checkpoint snapshot can be found, use that
@@ -979,7 +974,7 @@ func (x *XDPoS_v1) RecoverValidator(header *types.Header) (common.Address, error
 	// If the signature's already cached, return that
 	hash := header.Hash()
 	if address, known := x.validatorSignatures.Get(hash); known {
-		return address.(common.Address), nil
+		return address, nil
 	}
 	// Retrieve the signature from the header.Validator
 	// len equals 65 bytes
@@ -1044,20 +1039,15 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS_v1 {
 	// Set any missing consensus parameters to their defaults
 	conf := chainConfig.XDPoS
 
-	// Allocate the snapshot caches and create the engine
-	recents, _ := lru.NewARC(utils.InmemorySnapshots)
-	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
-	validatorSignatures, _ := lru.NewARC(utils.InmemorySnapshots)
-	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 	fakeEngine = &XDPoS_v1{
 		chainConfig: chainConfig,
 
 		config:              conf,
 		db:                  db,
-		recents:             recents,
-		signatures:          signatures,
-		verifiedHeaders:     verifiedHeaders,
-		validatorSignatures: validatorSignatures,
+		recents:             lru.NewCache[common.Hash, *SnapshotV1](utils.InmemorySnapshots),
+		signatures:          lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
+		verifiedHeaders:     lru.NewCache[common.Hash, struct{}](utils.InmemorySnapshots),
+		validatorSignatures: lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
 		proposals:           make(map[common.Address]bool),
 	}
 	return fakeEngine

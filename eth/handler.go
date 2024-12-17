@@ -25,9 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
@@ -104,14 +103,14 @@ type ProtocolManager struct {
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg             sync.WaitGroup
-	knownTxs       *lru.Cache
-	knowOrderTxs   *lru.Cache
-	knowLendingTxs *lru.Cache
+	knownTxs       *lru.Cache[common.Hash, struct{}]
+	knowOrderTxs   *lru.Cache[common.Hash, struct{}]
+	knowLendingTxs *lru.Cache[common.Hash, struct{}]
 
 	// V2 messages
-	knownVotes     *lru.Cache
-	knownSyncInfos *lru.Cache
-	knownTimeouts  *lru.Cache
+	knownVotes     *lru.Cache[common.Hash, struct{}]
+	knownSyncInfos *lru.Cache[common.Hash, struct{}]
+	knownTimeouts  *lru.Cache[common.Hash, struct{}]
 }
 
 // NewProtocolManagerEx add order pool to protocol
@@ -128,14 +127,6 @@ func NewProtocolManagerEx(config *params.ChainConfig, mode downloader.SyncMode, 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
 func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
-	knownTxs, _ := lru.New(maxKnownTxs)
-	knowOrderTxs, _ := lru.New(maxKnownOrderTxs)
-	knowLendingTxs, _ := lru.New(maxKnownLendingTxs)
-
-	knownVotes, _ := lru.New(maxKnownVote)
-	knownSyncInfos, _ := lru.New(maxKnownSyncInfo)
-	knownTimeouts, _ := lru.New(maxKnownTimeout)
-
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:      networkID,
@@ -148,12 +139,12 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		noMorePeers:    make(chan struct{}),
 		txsyncCh:       make(chan *txsync),
 		quitSync:       make(chan struct{}),
-		knownTxs:       knownTxs,
-		knowOrderTxs:   knowOrderTxs,
-		knowLendingTxs: knowLendingTxs,
-		knownVotes:     knownVotes,
-		knownSyncInfos: knownSyncInfos,
-		knownTimeouts:  knownTimeouts,
+		knownTxs:       lru.NewCache[common.Hash, struct{}](maxKnownTxs),
+		knowOrderTxs:   lru.NewCache[common.Hash, struct{}](maxKnownOrderTxs),
+		knowLendingTxs: lru.NewCache[common.Hash, struct{}](maxKnownLendingTxs),
+		knownVotes:     lru.NewCache[common.Hash, struct{}](maxKnownVote),
+		knownSyncInfos: lru.NewCache[common.Hash, struct{}](maxKnownSyncInfo),
+		knownTimeouts:  lru.NewCache[common.Hash, struct{}](maxKnownTimeout),
 		orderpool:      nil,
 		lendingpool:    nil,
 		orderTxSub:     nil,
@@ -776,9 +767,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return errResp(ErrDecode, "transaction %d is nil", i)
 			}
 			p.MarkTransaction(tx.Hash())
-			exist, _ := pm.knownTxs.ContainsOrAdd(tx.Hash(), true)
-			if exist {
+			if pm.knownTxs.Contains(tx.Hash()) {
 				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce(), "to", tx.To())
+			} else {
+				pm.knownTxs.Add(tx.Hash(), struct{}{})
 			}
 
 		}
@@ -801,11 +793,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return errResp(ErrDecode, "transaction %d is nil", i)
 			}
 			p.MarkOrderTransaction(tx.Hash())
-			exist, _ := pm.knowOrderTxs.ContainsOrAdd(tx.Hash(), true)
-			if exist {
+			if pm.knowOrderTxs.Contains(tx.Hash()) {
 				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce())
+			} else {
+				pm.knowOrderTxs.Add(tx.Hash(), struct{}{})
 			}
-
 		}
 
 		if pm.orderpool != nil {
@@ -829,11 +821,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return errResp(ErrDecode, "transaction %d is nil", i)
 			}
 			p.MarkLendingTransaction(tx.Hash())
-			exist, _ := pm.knowLendingTxs.ContainsOrAdd(tx.Hash(), true)
-			if exist {
+			if pm.knowLendingTxs.Contains(tx.Hash()) {
 				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce())
+			} else {
+				pm.knowLendingTxs.Add(tx.Hash(), struct{}{})
 			}
-
 		}
 
 		if pm.lendingpool != nil {
@@ -850,11 +842,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		p.MarkVote(vote.Hash())
 
-		exist, _ := pm.knownVotes.ContainsOrAdd(vote.Hash(), true)
-		if !exist {
-			go pm.bft.Vote(p.id, &vote)
-		} else {
+		if pm.knownVotes.Contains(vote.Hash()) {
 			log.Trace("Discarded vote, known vote", "vote hash", vote.Hash(), "voted block hash", vote.ProposedBlockInfo.Hash.Hex(), "number", vote.ProposedBlockInfo.Number, "round", vote.ProposedBlockInfo.Round)
+		} else {
+			pm.knownVotes.Add(vote.Hash(), struct{}{})
+			go pm.bft.Vote(p.id, &vote)
 		}
 
 	case msg.Code == TimeoutMsg:
@@ -868,12 +860,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		p.MarkTimeout(timeout.Hash())
 
-		exist, _ := pm.knownTimeouts.ContainsOrAdd(timeout.Hash(), true)
-
-		if !exist {
-			go pm.bft.Timeout(p.id, &timeout)
-		} else {
+		if pm.knownTimeouts.Contains(timeout.Hash()) {
 			log.Trace("Discarded Timeout, known Timeout", "Signature", timeout.Signature, "hash", timeout.Hash(), "round", timeout.Round)
+		} else {
+			pm.knownTimeouts.Add(timeout.Hash(), struct{}{})
+			go pm.bft.Timeout(p.id, &timeout)
 		}
 
 	case msg.Code == SyncInfoMsg:
@@ -887,11 +878,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		p.MarkSyncInfo(syncInfo.Hash())
 
-		exist, _ := pm.knownSyncInfos.ContainsOrAdd(syncInfo.Hash(), true)
-		if !exist {
-			go pm.bft.SyncInfo(p.id, &syncInfo)
-		} else {
+		if pm.knownSyncInfos.Contains(syncInfo.Hash()) {
 			log.Trace("Discarded SyncInfo, known SyncInfo", "hash", syncInfo.Hash())
+		} else {
+			pm.knownSyncInfos.Add(syncInfo.Hash(), struct{}{})
+			go pm.bft.SyncInfo(p.id, &syncInfo)
 		}
 
 	default:

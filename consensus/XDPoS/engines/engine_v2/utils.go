@@ -13,7 +13,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
-	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -47,11 +46,11 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
+func ecrecover(header *types.Header, sigcache *utils.SigLRU) (common.Address, error) {
 	// If the signature's already cached, return that
 	hash := header.Hash()
 	if address, known := sigcache.Get(hash); known {
-		return address.(common.Address), nil
+		return address, nil
 	}
 
 	// Recover the public key and the Ethereum address
@@ -224,9 +223,8 @@ func (x *XDPoS_v2) CalculateMissingRounds(chain consensus.ChainReader, header *t
 func (x *XDPoS_v2) getBlockByEpochNumberInCache(chain consensus.ChainReader, estRound types.Round) *types.BlockInfo {
 	epochSwitchInCache := make([]*types.BlockInfo, 0)
 	for r := estRound; r < estRound+types.Round(x.config.Epoch); r++ {
-		info, ok := x.round2epochBlockInfo.Get(r)
-		if ok {
-			blockInfo := info.(*types.BlockInfo)
+		blockInfo, ok := x.round2epochBlockInfo.Get(r)
+		if ok && blockInfo != nil {
 			epochSwitchInCache = append(epochSwitchInCache, blockInfo)
 		}
 	}
