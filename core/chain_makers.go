@@ -330,6 +330,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 				b.header.Difficulty = big.NewInt(0)
 			}
 		}
+
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
@@ -342,6 +343,15 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
+
+		if config.IsPrague(b.header.Number, b.header.Time) {
+			// EIP-2935
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			blockContext.Random = &common.Hash{} // enable post-merge instruction set
+			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+			ProcessParentBlockHash(b.header.ParentHash, evm)
+		}
+
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
