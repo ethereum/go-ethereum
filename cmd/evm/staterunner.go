@@ -63,7 +63,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	// If path is provided, run the tests at that path.
 	if len(path) != 0 {
 		var (
-			collected = collectJSONFiles(path)
+			collected = collectFiles(path)
 			results   []testResult
 		)
 		for _, fname := range collected {
