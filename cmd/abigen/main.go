@@ -213,7 +213,7 @@ func abigen(c *cli.Context) error {
 		err  error
 	)
 	if c.IsSet(v2Flag.Name) {
-		code, err = bind.BindV2(types, abis, bins, sigs, c.String(pkgFlag.Name), libs, aliases)
+		code, err = bind.BindV2(types, abis, bins, c.String(pkgFlag.Name), libs, aliases)
 	} else {
 		code, err = bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), libs, aliases)
 	}

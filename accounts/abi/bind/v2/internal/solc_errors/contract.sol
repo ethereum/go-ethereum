@@ -24,7 +24,7 @@ contract C {
 }
 
 // purpose of this is to test that generation of metadata for contract that emits one error produces valid Go code
-contract C2 {
+contract 2C2 {
     function Foo() public pure {
         revert BadThing({
             arg1: uint256(0),
