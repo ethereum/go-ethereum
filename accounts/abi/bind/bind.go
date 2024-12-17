@@ -99,6 +99,229 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 	return string(code), nil
 }
 
+type binder struct {
+	// contracts is the map of each individual contract requested binding
+	contracts map[string]*tmplContractV2
+
+	// structs is the map of all redeclared structs shared by passed contracts.
+	structs map[string]*tmplStruct
+
+	// isLib is the map used to flag each encountered library as such
+	isLib map[string]struct{}
+
+	// identifiers are used to detect duplicated identifiers of functions
+	// and events. For all calls, transacts and events, abigen will generate
+	// corresponding bindings. However we have to ensure there is no
+	// identifier collisions in the bindings of these categories.
+	callIdentifiers  map[string]bool
+	eventIdentifiers map[string]bool
+	errorIdentifiers map[string]bool
+
+	aliases map[string]string
+}
+
+func (b *binder) registerIdentifier(identifiers map[string]bool, original string) (normalized string, err error) {
+	normalized = alias(b.aliases, methodNormalizer(original))
+	// Name shouldn't start with a digit. It will make the generated code invalid.
+	if len(normalized) > 0 && unicode.IsDigit(rune(normalized[0])) {
+		normalized = fmt.Sprintf("E%s", normalized)
+		normalized = abi.ResolveNameConflict(normalized, func(name string) bool {
+			_, ok := identifiers[name]
+			return ok
+		})
+	}
+
+	if _, ok := identifiers[normalized]; ok {
+		return "", fmt.Errorf("duplicate symbol '%s'", normalized)
+	}
+	identifiers[normalized] = true
+	return normalized, nil
+}
+
+func (b *binder) RegisterCallIdentifier(id string) (string, error) {
+	return b.registerIdentifier(b.callIdentifiers, id)
+}
+
+func (b *binder) RegisterEventIdentifier(id string) (string, error) {
+	return b.registerIdentifier(b.eventIdentifiers, id)
+}
+
+func (b *binder) RegisterErrorIdentifier(id string) (string, error) {
+	return b.registerIdentifier(b.errorIdentifiers, id)
+}
+
+func (b *binder) BindStructType(typ abi.Type) {
+	bindStructType(typ, b.structs)
+}
+
+type contractBinder struct {
+	binder    *binder
+	calls     map[string]*tmplMethod
+	transacts map[string]*tmplMethod
+	events    map[string]*tmplEvent
+	errors    map[string]*tmplError
+}
+
+func bindArguments() {
+
+}
+
+func (cb *contractBinder) bindMethod(original abi.Method) error {
+	normalized := original
+	normalizedName, err := cb.binder.RegisterCallIdentifier(original.Name)
+	if err != nil {
+		return err
+	}
+
+	normalized.Name = normalizedName
+	normalized.Inputs = make([]abi.Argument, len(original.Inputs))
+	copy(normalized.Inputs, original.Inputs)
+	for j, input := range normalized.Inputs {
+		if input.Name == "" || isKeyWord(input.Name) {
+			normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
+		}
+		if hasStruct(input.Type) {
+			cb.binder.BindStructType(input.Type)
+		}
+	}
+	normalized.Outputs = make([]abi.Argument, len(original.Outputs))
+	copy(normalized.Outputs, original.Outputs)
+	for j, output := range normalized.Outputs {
+		if output.Name != "" {
+			normalized.Outputs[j].Name = capitalise(output.Name)
+		}
+		if hasStruct(output.Type) {
+			cb.binder.BindStructType(output.Type)
+		}
+	}
+
+	cb.calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
+	return nil
+}
+
+func (cb *contractBinder) normalizeErrorOrEventFields(originalInputs abi.Arguments) abi.Arguments {
+	normalizedArguments := make([]abi.Argument, len(originalInputs))
+	used := make(map[string]bool)
+
+	for i, input := range normalizedArguments {
+		if input.Name == "" || isKeyWord(input.Name) {
+			normalizedArguments[i].Name = fmt.Sprintf("arg%d", i)
+		}
+		for index := 0; ; index++ {
+			if !used[capitalise(normalizedArguments[i].Name)] {
+				used[capitalise(normalizedArguments[i].Name)] = true
+				break
+			}
+			normalizedArguments[i].Name = fmt.Sprintf("%s%d", normalizedArguments[i].Name, index)
+		}
+		if hasStruct(input.Type) {
+			cb.binder.BindStructType(input.Type)
+		}
+	}
+	return normalizedArguments
+}
+
+func (cb *contractBinder) bindEvent(original abi.Event) error {
+	// Skip anonymous events as they don't support explicit filtering
+	if original.Anonymous {
+		return nil
+	}
+	normalizedName, err := cb.binder.RegisterEventIdentifier(original.Name)
+	if err != nil {
+		return err
+	}
+
+	normalized := original
+	normalized.Name = normalizedName
+	normalized.Inputs = cb.normalizeErrorOrEventFields(original.Inputs)
+	cb.events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
+	return nil
+}
+
+func (cb *contractBinder) bindError(original abi.Error) error {
+	normalizedName, err := cb.binder.RegisterErrorIdentifier(original.Name)
+	if err != nil {
+		return err
+	}
+
+	normalized := original
+	normalized.Name = normalizedName
+	normalized.Inputs = cb.normalizeErrorOrEventFields(original.Inputs)
+	cb.errors[original.Name] = &tmplError{Original: original, Normalized: normalized}
+	return nil
+}
+
+func BindV22(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, libs map[string]string, aliases map[string]string) (string, error) {
+
+	// TODO: validate each alias (ensure it doesn't begin with a digit or other invalid character)
+
+	b := binder{}
+	for i := 0; i < len(types); i++ {
+		// Parse the actual ABI to generate the binding for
+		evmABI, err := abi.JSON(strings.NewReader(abis[i]))
+		if err != nil {
+			return nil, err
+		}
+		// Strip any whitespace from the JSON ABI
+		strippedABI := strings.Map(func(r rune) rune {
+			if unicode.IsSpace(r) {
+				return -1
+			}
+			return r
+		}, abis[i])
+
+		for _, input := range evmABI.Constructor.Inputs {
+			if hasStruct(input.Type) {
+				bindStructType(input.Type, b.structs)
+			}
+		}
+
+		cb := contractBinder{}
+		for _, original := range evmABI.Methods {
+			if err := cb.bindMethod(original); err != nil {
+				// TODO: do something bad here...
+			}
+		}
+
+		for _, original := range evmABI.Events {
+			if err := cb.bindEvent(original); err != nil {
+				// TODO: do something bad here...
+			}
+		}
+		for _, original := range evmABI.Errors {
+			if err := cb.bindError(original); err != nil {
+				// TODO: do something bad here...
+			}
+		}
+
+		// replace this with a method call to cb (name it BoundContract()?)
+		b.contracts[types[i]] = &tmplContractV2{
+			Type:        capitalise(types[i]),
+			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
+			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
+			Constructor: evmABI.Constructor,
+			Calls:       cb.calls,
+			Events:      cb.events,
+			Errors:      cb.errors,
+			Libraries:   make(map[string]string),
+		}
+	}
+
+	invertedLibs := make(map[string]string) // map of pattern -> unlinked bytecode
+	for pattern, name := range libs {
+		invertedLibs[name] = pattern
+	}
+
+	data := tmplDataV2{
+		Package:      pkg,
+		Contracts:    b.contracts,
+		InvertedLibs: invertedLibs,
+		Libraries: b
+		Structs:      b.structs,
+	}
+
+}
+
 func BindV2(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, libs map[string]string, aliases map[string]string) (string, error) {
 	data, err := bind(types, abis, bytecodes, fsigs, pkg, libs, aliases)
 

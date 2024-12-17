@@ -46,7 +46,25 @@ type tmplContract struct {
 	Libraries    map[string]string      // Same as tmplData, but filtered to only keep direct deps that the contract needs
 	AllLibraries map[string]string      // same as Libraries, but all direct/indirect library dependencies
 	Library      bool                   // Indicator whether the contract is a library
-	Errors       map[string]*tmplError
+}
+
+type tmplContractV2 struct {
+	Type        string                 // Type name of the main contract binding
+	InputABI    string                 // JSON ABI used as the input to generate the binding from
+	InputBin    string                 // Optional EVM bytecode used to generate deploy code from
+	Constructor abi.Method             // Contract constructor for deploy parametrization
+	Calls       map[string]*tmplMethod // All contract methods (excluding fallback, receive)
+	Events      map[string]*tmplEvent  // Contract events accessors
+	Libraries   map[string]string      // all direct/indirect library dependencies
+	Errors      map[string]*tmplError  // all errors defined
+}
+
+type tmplDataV2 struct {
+	Package      string                     // Name of the package to place the generated file in
+	Contracts    map[string]*tmplContractV2 // List of contracts to generate into this file
+	Libraries    map[string]string          // Map the bytecode's link pattern to the library name
+	InvertedLibs map[string]string          // map of the contract's name to the link pattern
+	Structs      map[string]*tmplStruct     // Contract struct type definitions
 }
 
 // tmplMethod is a wrapper around an abi.Method that contains a few preprocessed
