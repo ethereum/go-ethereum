@@ -410,15 +410,19 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 
 func (t *mdLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnTxStart: t.OnTxStart,
-		OnEnter:   t.OnEnter,
-		OnExit:    t.OnExit,
-		OnOpcode:  t.OnOpcode,
-		OnFault:   t.OnFault,
+		OnTxStart:           t.OnTxStart,
+		OnSystemCallStartV2: t.OnTxStart,
+		OnEnter:             t.OnEnter,
+		OnExit:              t.OnExit,
+		OnOpcode:            t.OnOpcode,
+		OnFault:             t.OnFault,
 	}
 }
 
 func (t *mdLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	t.env = env
+}
+func (t *mdLogger) OnSystemCallStart(env *tracing.VMContext) {
 	t.env = env
 }
 
