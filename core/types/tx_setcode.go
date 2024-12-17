@@ -83,6 +83,8 @@ type authorizationMarshaling struct {
 	ChainID hexutil.Uint64
 	Nonce   hexutil.Uint64
 	V       hexutil.Uint64
+	R       hexutil.U256
+	S       hexutil.U256
 }
 
 // SignAuth signs the provided authorization.
