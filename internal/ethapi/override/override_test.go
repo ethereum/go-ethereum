@@ -17,7 +17,6 @@
 package override
 
 import (
-	"github.com/ethereum/go-ethereum/core/types"
 	"maps"
 	"testing"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/triedb"
 )
