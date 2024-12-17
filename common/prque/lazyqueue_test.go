@@ -40,7 +40,7 @@ type lazyItem struct {
 	index   int
 }
 
-func testPriority(a interface{}, now mclock.AbsTime) int64 {
+func testPriority(a interface{}) int64 {
 	return a.(*lazyItem).p
 }
 
@@ -56,7 +56,6 @@ func testSetIndex(a interface{}, i int) {
 }
 
 func TestLazyQueue(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
 	clock := &mclock.Simulated{}
 	q := NewLazyQueue(testSetIndex, testPriority, testMaxPriority, clock, testQueueRefresh)
 
