@@ -194,7 +194,7 @@ func (t *topicTable) addEntry(node *Node, topic Topic) {
 		topic:   topic,
 		fifoIdx: fifoIdx,
 		node:    node,
-		expire:  tm + mclock.AbsTime(fallbackRegistrationExpiry),
+		expire:  tm.Add(fallbackRegistrationExpiry),
 	}
 	if printTestImgLogs {
 		fmt.Printf("*+ %d %v %016x %016x\n", tm/1000000, topic, t.self.sha[:8], node.sha[:8])
@@ -251,7 +251,7 @@ func (t *topicTable) useTicket(node *Node, serialNo uint32, topics []Topic, idx 
 	}
 	if serialNo != n.lastUsedTicket {
 		n.lastUsedTicket = serialNo
-		n.noRegUntil = tm + mclock.AbsTime(noRegTimeout())
+		n.noRegUntil = tm.Add(noRegTimeout())
 		t.storeTicketCounters(node)
 	}
 
@@ -263,7 +263,7 @@ func (t *topicTable) useTicket(node *Node, serialNo uint32, topics []Topic, idx 
 			t.addEntry(node, topics[idx])
 		} else {
 			// if there is an active entry, don't move to the front of the FIFO but prolong expire time
-			e.expire = tm + mclock.AbsTime(fallbackRegistrationExpiry)
+			e.expire = tm.Add(fallbackRegistrationExpiry)
 		}
 		return true
 	}
@@ -293,7 +293,7 @@ func (topictab *topicTable) getTicket(node *Node, topics []Topic) *ticket {
 			waitPeriod = minWaitPeriod
 		}
 
-		t.regTime[i] = now + mclock.AbsTime(waitPeriod)
+		t.regTime[i] = now.Add(waitPeriod)
 	}
 	return t
 }
