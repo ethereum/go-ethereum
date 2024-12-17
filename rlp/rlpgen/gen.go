@@ -35,8 +35,6 @@ type buildContext struct {
 	rawValueType *types.Named
 
 	typeToStructCache map[types.Type]*rlpstruct.Type
-
-	internalMethods bool
 }
 
 func newBuildContext(packageRLP *types.Package) *buildContext {
@@ -100,8 +98,6 @@ type genContext struct {
 	inPackage   *types.Package
 	imports     map[string]struct{}
 	tempCounter int
-
-	internalMethods bool
 }
 
 func newGenContext(inPackage *types.Package) *genContext {
@@ -740,7 +736,7 @@ func generateDecoder(ctx *genContext, typ string, op op) []byte {
 
 	result, code := op.genDecode(ctx)
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "func (obj *%s) %s(dec *rlp.Stream) error {\n", typ, ctx.decoderMethod())
+	fmt.Fprintf(&b, "func (obj *%s) DecodeRLP(dec *rlp.Stream) error {\n", typ)
 	fmt.Fprint(&b, code)
 	fmt.Fprintf(&b, "  *obj = %s\n", result)
 	fmt.Fprintf(&b, "  return nil\n")
@@ -755,7 +751,7 @@ func generateEncoder(ctx *genContext, typ string, op op) []byte {
 	ctx.addImport(pathOfPackageRLP)
 
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "func (obj *%s) %s(_w io.Writer) error {\n", typ, ctx.encoderMethod())
+	fmt.Fprintf(&b, "func (obj *%s) EncodeRLP(_w io.Writer) error {\n", typ)
 	fmt.Fprintf(&b, "  w := rlp.NewEncoderBuffer(_w)\n")
 	fmt.Fprint(&b, op.genWrite(ctx, "obj"))
 	fmt.Fprintf(&b, "  return w.Flush()\n")
@@ -777,7 +773,6 @@ func (bctx *buildContext) generate(typ *types.Named, encoder, decoder bool) ([]b
 		encSource []byte
 		decSource []byte
 	)
-	ctx.internalMethods = bctx.internalMethods
 	if encoder {
 		encSource = generateEncoder(ctx, typ.Obj().Name(), op)
 	}

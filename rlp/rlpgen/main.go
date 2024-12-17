@@ -36,7 +36,6 @@ func main() {
 		genEncoder = flag.Bool("encoder", true, "generate EncodeRLP?")
 		genDecoder = flag.Bool("decoder", false, "generate DecodeRLP?")
 		typename   = flag.String("type", "", "type to generate methods for")
-		internal   = flag.Bool("internal_methods", false, "generate internal (lower-case) method names")
 	)
 	flag.Parse()
 
@@ -45,7 +44,6 @@ func main() {
 		Type:            *typename,
 		GenerateEncoder: *genEncoder,
 		GenerateDecoder: *genDecoder,
-		InternalMethods: *internal,
 	}
 	code, err := cfg.process()
 	if err != nil {
@@ -69,8 +67,6 @@ type Config struct {
 
 	GenerateEncoder bool
 	GenerateDecoder bool
-
-	InternalMethods bool
 }
 
 // process generates the Go code.
@@ -105,7 +101,6 @@ func (cfg *Config) process() (code []byte, err error) {
 		}
 	}
 	bctx := newBuildContext(packageRLP)
-	bctx.internalMethods = cfg.InternalMethods
 
 	// Find the type and generate.
 	typ, err := lookupStructType(pkg.Scope(), cfg.Type)
