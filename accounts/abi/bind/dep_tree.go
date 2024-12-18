@@ -39,7 +39,7 @@ type DeploymentResult struct {
 	Addrs map[string]common.Address
 }
 
-// Accumulate merges two DeploymentResult objects together.
+// Accumulate merges `other` into `d`
 func (d *DeploymentResult) Accumulate(other *DeploymentResult) {
 	for pattern, tx := range other.Txs {
 		d.Txs[pattern] = tx
