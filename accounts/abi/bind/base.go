@@ -95,6 +95,7 @@ type MetaData struct {
 	ABI     string
 	ab      *abi.ABI
 	Pattern string
+	Deps    []*MetaData
 }
 
 func (m *MetaData) GetAbi() (*abi.ABI, error) {

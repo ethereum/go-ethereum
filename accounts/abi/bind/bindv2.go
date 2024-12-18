@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"go/format"
+	"regexp"
 	"strings"
 	"text/template"
 	"unicode"
@@ -190,6 +191,17 @@ func (cb *contractBinder) bindError(original abi.Error) error {
 	return nil
 }
 
+func parseLibraryDeps(unlinkedCode string) (res []string) {
+	reMatchSpecificPattern, err := regexp.Compile(`__\$([a-f0-9]+)\$__`)
+	if err != nil {
+		panic(err)
+	}
+	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(unlinkedCode, -1) {
+		res = append(res, match[1])
+	}
+	return res
+}
+
 // BindV2 generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention as opposed to having to
@@ -271,23 +283,9 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		Structs:   b.structs,
 	}
 
-	contractsBins := make(map[string]string)
 	for typ, contract := range data.Contracts {
-		pattern := invertedLibs[typ]
-		contractsBins[pattern] = contract.InputBin
-	}
-	builder := newDepTreeBuilder(nil, contractsBins)
-	roots, deps := builder.BuildDepTrees()
-	allNodes := append(roots, deps...)
-	for _, dep := range allNodes {
-		contractType := libs[dep.pattern]
-		for subDepPattern, _ := range dep.Flatten() {
-			if subDepPattern == dep.pattern {
-				// don't include the dep as a dependency of itself
-				continue
-			}
-			subDepType := libs[subDepPattern]
-			data.Contracts[contractType].Libraries[subDepType] = subDepPattern
+		for _, depPattern := range parseLibraryDeps(contract.InputBin) {
+			data.Contracts[typ].Libraries[libs[depPattern]] = depPattern
 		}
 	}
 	buffer := new(bytes.Buffer)

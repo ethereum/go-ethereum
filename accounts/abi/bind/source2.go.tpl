@@ -33,12 +33,6 @@ var (
 {{end}}
 
 {{range $contract := .Contracts}}
-	var {{$contract.Type}}LibraryDeps = []*bind.MetaData{
-	{{range $name, $pattern := .Libraries -}}
-		{{$name}}MetaData,
-	{{ end}}
-	}
-
 	// TODO: convert this type to value type after everything works.
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
 	var {{.Type}}MetaData = &bind.MetaData{
@@ -47,6 +41,9 @@ var (
 		{{if .InputBin -}}
 		Bin: "0x{{.InputBin}}",
 		{{end}}
+		{{if .Libraries -}}{{range $name, $pattern := .Libraries}}
+		    {{$name}}MetaData,
+		{{end}}{{end}}
 	}
 
 	// {{.Type}} is an auto generated Go binding around an Ethereum contract.

@@ -94,6 +94,36 @@ type linkTestCaseInput struct {
 	expectDeployed map[rune]struct{}
 }
 
+// linkDeps will return a set of root dependencies and their sub-dependencies connected via the Deps field
+func linkDeps(deps map[string]*MetaData) []*MetaData {
+	roots := make(map[string]struct{})
+	for pattern, _ := range deps {
+		roots[pattern] = struct{}{}
+	}
+
+	connectedDeps := make(map[string]MetaData)
+	for pattern, dep := range deps {
+		connectedDeps[pattern] = __linkDeps(*dep, deps, &roots)
+	}
+	rootMetadatas := []*MetaData{}
+	for pattern, _ := range roots {
+		dep := connectedDeps[pattern]
+		rootMetadatas = append(rootMetadatas, &dep)
+	}
+	return rootMetadatas
+}
+
+func __linkDeps(metadata MetaData, depMap map[string]*MetaData, roots *map[string]struct{}) MetaData {
+	linked := metadata
+	depPatterns := parseLibraryDeps(metadata.Bin)
+	for _, pattern := range depPatterns {
+		delete(*roots, pattern)
+		connectedDep := __linkDeps(*depMap[pattern], depMap, roots)
+		linked.Deps = append(linked.Deps, &connectedDep)
+	}
+	return linked
+}
+
 func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	var testAddrNonce uint64
@@ -138,24 +168,26 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 		return contractAddr, nil, nil
 	}
 
-	var contracts []*MetaData
+	var contracts map[string]*MetaData
 	overrides := make(map[string]common.Address)
 
 	for pattern, bin := range tc.contractCodes {
-		contracts = append(contracts, &MetaData{Pattern: pattern, Bin: "0x" + bin})
+		contracts[pattern] = &MetaData{Pattern: pattern, Bin: "0x" + bin}
 	}
 	for pattern, bin := range tc.libCodes {
-		contracts = append(contracts, &MetaData{
+		contracts[pattern] = &MetaData{
 			Bin:     "0x" + bin,
 			Pattern: pattern,
-		})
+		}
 	}
+
+	contractsList := linkDeps(contracts)
 
 	for pattern, override := range tc.overrides {
 		overrides[pattern] = override
 	}
 
-	deployParams := NewDeploymentParams(contracts, nil, overrides)
+	deployParams := NewDeploymentParams(contractsList, nil, overrides)
 	res, err := LinkAndDeploy(deployParams, mockDeploy)
 	if err != nil {
 		t.Fatalf("got error from LinkAndDeploy: %v\n", err)
