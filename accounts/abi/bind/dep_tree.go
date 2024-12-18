@@ -170,11 +170,9 @@ func (d *depTreeDeployer) linkAndDeploy(node *depTreeNode) error {
 	// a deployer bytecode for this contract.
 	deployerCode := node.unlinkedCode
 	for _, child := range node.children {
-		var linkAddr common.Address
+		linkAddr := d.deployedAddrs[child.pattern]
 		if child.overrideAddr != nil {
 			linkAddr = *child.overrideAddr
-		} else {
-			linkAddr = d.deployedAddrs[child.pattern]
 		}
 		deployerCode = strings.ReplaceAll(deployerCode, "__$"+child.pattern+"$__", strings.ToLower(linkAddr.String()[2:]))
 	}
