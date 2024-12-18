@@ -424,8 +424,7 @@ func TestErrors(t *testing.T) {
 	// TODO: check anything about the error?
 }
 
-// TODO: this test will pass if the code is changed but not compiled to a combined-abi.json.
-// Not really possible to test this without including solc in the path when running CI.
+// TestBindingGeneration tests that re-running generation of bindings does not result in mutations to the binding code
 func TestBindingGeneration(t *testing.T) {
 	matches, _ := filepath.Glob("internal/*")
 	var dirs []string

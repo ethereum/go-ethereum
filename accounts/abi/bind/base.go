@@ -510,22 +510,12 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 // WatchLogs filters subscribes to contract logs for future blocks, returning a
 // subscription object that can be used to tear down the watcher.
 func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
-	return c.watchLogs(opts, c.abi.Events[name].ID, query...)
-}
-
-// WatchLogsForId filters subscribes to contract logs for future blocks, returning a
-// subscription object that can be used to tear down the watcher.
-func (c *BoundContract) WatchLogsForId(opts *WatchOpts, id common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
-	return c.watchLogs(opts, id, query...)
-}
-
-func (c *BoundContract) watchLogs(opts *WatchOpts, eventID common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(WatchOpts)
 	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{eventID}}, query...)
+	query = append([][]interface{}{{c.abi.Events[name].ID}}, query...)
 
 	topics, err := abi.MakeTopics(query...)
 	if err != nil {
