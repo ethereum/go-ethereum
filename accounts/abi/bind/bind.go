@@ -347,11 +347,14 @@ type binder struct {
 	// structs is the map of all redeclared structs shared by passed contracts.
 	structs map[string]*tmplStruct
 
+	// aliases is a map for renaming instances of named events/functions/errors to specified values
 	aliases map[string]string
 }
 
+// registerIdentifier applies alias renaming, name normalization (conversion to camel case), and registers the normalized
+// name in the specified identifier map.  It returns an error if the normalized name already exists in the map.
 func (b *contractBinder) registerIdentifier(identifiers map[string]bool, original string) (normalized string, err error) {
-	normalized = alias(b.binder.aliases, methodNormalizer(original))
+	normalized = methodNormalizer(alias(b.binder.aliases, original))
 	// Name shouldn't start with a digit. It will make the generated code invalid.
 	if len(normalized) > 0 && unicode.IsDigit(rune(normalized[0])) {
 		normalized = fmt.Sprintf("E%s", normalized)
@@ -368,22 +371,28 @@ func (b *contractBinder) registerIdentifier(identifiers map[string]bool, origina
 	return normalized, nil
 }
 
+// RegisterCallIdentifier applies registerIdentifier for contract methods.
 func (b *contractBinder) RegisterCallIdentifier(id string) (string, error) {
 	return b.registerIdentifier(b.callIdentifiers, id)
 }
 
+// RegisterEventIdentifier applies registerIdentifier for contract events.
 func (b *contractBinder) RegisterEventIdentifier(id string) (string, error) {
 	return b.registerIdentifier(b.eventIdentifiers, id)
 }
 
+// RegisterErrorIdentifier applies registerIdentifier for contract errors.
 func (b *contractBinder) RegisterErrorIdentifier(id string) (string, error) {
 	return b.registerIdentifier(b.errorIdentifiers, id)
 }
 
+// BindStructType register the type to be emitted as a struct in the
+// bindings.
 func (b *binder) BindStructType(typ abi.Type) {
 	bindStructType(typ, b.structs)
 }
 
+// contractBinder holds state for binding of a single contract
 type contractBinder struct {
 	binder *binder
 	calls  map[string]*tmplMethod
@@ -395,6 +404,11 @@ type contractBinder struct {
 	errorIdentifiers map[string]bool
 }
 
+// bindMethod registers a method to be emitted in the bindings.
+// The name, inputs and outputs are normalized.  If any inputs are
+// struct-type their structs are registered to be emitted in the bindings.
+// Any methods that return more than one output have their result coalesced
+// into a struct.
 func (cb *contractBinder) bindMethod(original abi.Method) error {
 	normalized := original
 	normalizedName, err := cb.RegisterCallIdentifier(original.Name)
@@ -449,6 +463,8 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 	return nil
 }
 
+// normalizeErrorOrEventFields normalizes errors/events for emitting through bindings:
+// Any anonymous fields are given generated names.
 func (cb *contractBinder) normalizeErrorOrEventFields(originalInputs abi.Arguments) abi.Arguments {
 	normalizedArguments := make([]abi.Argument, len(originalInputs))
 	copy(normalizedArguments, originalInputs)
@@ -472,6 +488,7 @@ func (cb *contractBinder) normalizeErrorOrEventFields(originalInputs abi.Argumen
 	return normalizedArguments
 }
 
+// bindEvent normalizes an event and registers it to be emitted in the bindings.
 func (cb *contractBinder) bindEvent(original abi.Event) error {
 	// Skip anonymous events as they don't support explicit filtering
 	if original.Anonymous {
@@ -489,6 +506,7 @@ func (cb *contractBinder) bindEvent(original abi.Event) error {
 	return nil
 }
 
+// bindEvent normalizes an error and registers it to be emitted in the bindings.
 func (cb *contractBinder) bindError(original abi.Error) error {
 	normalizedName, err := cb.RegisterErrorIdentifier(original.Name)
 	if err != nil {
@@ -502,14 +520,15 @@ func (cb *contractBinder) bindError(original abi.Error) error {
 	return nil
 }
 
+// BindV2 generates a Go wrapper around a contract ABI. This wrapper isn't meant
+// to be used as is in client code, but rather as an intermediate struct which
+// enforces compile time type safety and naming convention as opposed to having to
+// manually maintain hard coded strings that break on runtime.
 func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs map[string]string, aliases map[string]string) (string, error) {
-
-	// TODO: validate each alias (ensure it doesn't begin with a digit or other invalid character)
-
 	b := binder{
 		contracts: make(map[string]*tmplContractV2),
 		structs:   make(map[string]*tmplStruct),
-		aliases:   make(map[string]string),
+		aliases:   aliases,
 	}
 	for i := 0; i < len(types); i++ {
 		// Parse the actual ABI to generate the binding for
