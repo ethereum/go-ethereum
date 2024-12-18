@@ -4273,12 +4273,12 @@ func TestEIP7702(t *testing.T) {
 	// 1. tx -> addr1 which is delegated to 0xaaaa
 	// 2. addr1:0xaaaa calls into addr2:0xbbbb
 	// 3. addr2:0xbbbb  writes to storage
-	auth1, _ := types.SignAuth(types.Authorization{
+	auth1, _ := types.SignAuth(types.SetCodeAuthorization{
 		ChainID: gspec.Config.ChainID.Uint64(),
 		Address: aa,
 		Nonce:   1,
 	}, key1)
-	auth2, _ := types.SignAuth(types.Authorization{
+	auth2, _ := types.SignAuth(types.SetCodeAuthorization{
 		ChainID: 0,
 		Address: bb,
 		Nonce:   0,
@@ -4293,7 +4293,7 @@ func TestEIP7702(t *testing.T) {
 			Gas:       500000,
 			GasFeeCap: uint256.MustFromBig(newGwei(5)),
 			GasTipCap: uint256.NewInt(2),
-			AuthList:  []types.Authorization{auth1, auth2},
+			AuthList:  []types.SetCodeAuthorization{auth1, auth2},
 		}
 		tx := types.MustSignNewTx(key1, signer, txdata)
 		b.AddTx(tx)
