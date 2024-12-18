@@ -34,7 +34,7 @@ var (
 
 {{range $contract := .Contracts}}
 	var {{$contract.Type}}LibraryDeps = []*bind.MetaData{
-	{{range $name, $pattern := .AllLibraries -}}
+	{{range $name, $pattern := .Libraries -}}
 		{{$name}}MetaData,
 	{{ end}}
 	}
@@ -43,13 +43,7 @@ var (
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
 	var {{.Type}}MetaData = &bind.MetaData{
 		ABI: "{{.InputABI}}",
-		Pattern: "{{index $.InvertedLibs .Type}}",
-		{{if $contract.FuncSigs -}}
-		Sigs: map[string]string{
-			{{range $strsig, $binsig := .FuncSigs}}"{{$binsig}}": "{{$strsig}}",
-			{{end}}
-		},
-		{{end -}}
+		Pattern: "{{index $.Libraries .Type}}",
 		{{if .InputBin -}}
 		Bin: "0x{{.InputBin}}",
 		{{end}}

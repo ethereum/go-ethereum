@@ -347,19 +347,11 @@ type binder struct {
 	// structs is the map of all redeclared structs shared by passed contracts.
 	structs map[string]*tmplStruct
 
-	// identifiers are used to detect duplicated identifiers of functions
-	// and events. For all calls, transacts and events, abigen will generate
-	// corresponding bindings. However we have to ensure there is no
-	// identifier collisions in the bindings of these categories.
-	callIdentifiers  map[string]bool
-	eventIdentifiers map[string]bool
-	errorIdentifiers map[string]bool
-
 	aliases map[string]string
 }
 
-func (b *binder) registerIdentifier(identifiers map[string]bool, original string) (normalized string, err error) {
-	normalized = alias(b.aliases, methodNormalizer(original))
+func (b *contractBinder) registerIdentifier(identifiers map[string]bool, original string) (normalized string, err error) {
+	normalized = alias(b.binder.aliases, methodNormalizer(original))
 	// Name shouldn't start with a digit. It will make the generated code invalid.
 	if len(normalized) > 0 && unicode.IsDigit(rune(normalized[0])) {
 		normalized = fmt.Sprintf("E%s", normalized)
@@ -376,15 +368,15 @@ func (b *binder) registerIdentifier(identifiers map[string]bool, original string
 	return normalized, nil
 }
 
-func (b *binder) RegisterCallIdentifier(id string) (string, error) {
+func (b *contractBinder) RegisterCallIdentifier(id string) (string, error) {
 	return b.registerIdentifier(b.callIdentifiers, id)
 }
 
-func (b *binder) RegisterEventIdentifier(id string) (string, error) {
+func (b *contractBinder) RegisterEventIdentifier(id string) (string, error) {
 	return b.registerIdentifier(b.eventIdentifiers, id)
 }
 
-func (b *binder) RegisterErrorIdentifier(id string) (string, error) {
+func (b *contractBinder) RegisterErrorIdentifier(id string) (string, error) {
 	return b.registerIdentifier(b.errorIdentifiers, id)
 }
 
@@ -393,20 +385,19 @@ func (b *binder) BindStructType(typ abi.Type) {
 }
 
 type contractBinder struct {
-	binder    *binder
-	calls     map[string]*tmplMethod
-	transacts map[string]*tmplMethod
-	events    map[string]*tmplEvent
-	errors    map[string]*tmplError
-}
+	binder *binder
+	calls  map[string]*tmplMethod
+	events map[string]*tmplEvent
+	errors map[string]*tmplError
 
-func bindArguments() {
-
+	callIdentifiers  map[string]bool
+	eventIdentifiers map[string]bool
+	errorIdentifiers map[string]bool
 }
 
 func (cb *contractBinder) bindMethod(original abi.Method) error {
 	normalized := original
-	normalizedName, err := cb.binder.RegisterCallIdentifier(original.Name)
+	normalizedName, err := cb.RegisterCallIdentifier(original.Name)
 	if err != nil {
 		return err
 	}
@@ -460,6 +451,7 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 
 func (cb *contractBinder) normalizeErrorOrEventFields(originalInputs abi.Arguments) abi.Arguments {
 	normalizedArguments := make([]abi.Argument, len(originalInputs))
+	copy(normalizedArguments, originalInputs)
 	used := make(map[string]bool)
 
 	for i, input := range normalizedArguments {
@@ -485,7 +477,7 @@ func (cb *contractBinder) bindEvent(original abi.Event) error {
 	if original.Anonymous {
 		return nil
 	}
-	normalizedName, err := cb.binder.RegisterEventIdentifier(original.Name)
+	normalizedName, err := cb.RegisterEventIdentifier(original.Name)
 	if err != nil {
 		return err
 	}
@@ -498,7 +490,7 @@ func (cb *contractBinder) bindEvent(original abi.Event) error {
 }
 
 func (cb *contractBinder) bindError(original abi.Error) error {
-	normalizedName, err := cb.binder.RegisterErrorIdentifier(original.Name)
+	normalizedName, err := cb.RegisterErrorIdentifier(original.Name)
 	if err != nil {
 		return err
 	}
@@ -515,12 +507,9 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 	// TODO: validate each alias (ensure it doesn't begin with a digit or other invalid character)
 
 	b := binder{
-		contracts:        make(map[string]*tmplContractV2),
-		structs:          make(map[string]*tmplStruct),
-		callIdentifiers:  nil,
-		eventIdentifiers: nil,
-		errorIdentifiers: nil,
-		aliases:          nil,
+		contracts: make(map[string]*tmplContractV2),
+		structs:   make(map[string]*tmplStruct),
+		aliases:   make(map[string]string),
 	}
 	for i := 0; i < len(types); i++ {
 		// Parse the actual ABI to generate the binding for
@@ -542,7 +531,16 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 			}
 		}
 
-		cb := contractBinder{}
+		cb := contractBinder{
+			binder: &b,
+			calls:  make(map[string]*tmplMethod),
+			events: make(map[string]*tmplEvent),
+			errors: make(map[string]*tmplError),
+
+			callIdentifiers:  make(map[string]bool),
+			errorIdentifiers: make(map[string]bool),
+			eventIdentifiers: make(map[string]bool),
+		}
 		for _, original := range evmABI.Methods {
 			if err := cb.bindMethod(original); err != nil {
 				return "", err
@@ -624,255 +622,6 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		return "", fmt.Errorf("%v\n%s", err, buffer)
 	}
 	return string(code), nil
-}
-
-func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, libs map[string]string, aliases map[string]string) (*tmplData, error) {
-	var (
-		// contracts is the map of each individual contract requested binding
-		contracts = make(map[string]*tmplContract)
-
-		// structs is the map of all redeclared structs shared by passed contracts.
-		structs = make(map[string]*tmplStruct)
-
-		// isLib is the map used to flag each encountered library as such
-		isLib = make(map[string]struct{})
-	)
-	for i := 0; i < len(types); i++ {
-		// Parse the actual ABI to generate the binding for
-		evmABI, err := abi.JSON(strings.NewReader(abis[i]))
-		if err != nil {
-			return nil, err
-		}
-		// Strip any whitespace from the JSON ABI
-		strippedABI := strings.Map(func(r rune) rune {
-			if unicode.IsSpace(r) {
-				return -1
-			}
-			return r
-		}, abis[i])
-
-		// Extract the call and transact methods; events, struct definitions; and sort them alphabetically
-		var (
-			calls     = make(map[string]*tmplMethod)
-			transacts = make(map[string]*tmplMethod)
-			events    = make(map[string]*tmplEvent)
-			errors    = make(map[string]*tmplError)
-			fallback  *tmplMethod
-			receive   *tmplMethod
-
-			// identifiers are used to detect duplicated identifiers of functions
-			// and events. For all calls, transacts and events, abigen will generate
-			// corresponding bindings. However we have to ensure there is no
-			// identifier collisions in the bindings of these categories.
-			callIdentifiers     = make(map[string]bool)
-			transactIdentifiers = make(map[string]bool)
-			eventIdentifiers    = make(map[string]bool)
-		)
-
-		for _, input := range evmABI.Constructor.Inputs {
-			if hasStruct(input.Type) {
-				bindStructType(input.Type, structs)
-			}
-		}
-
-		for _, original := range evmABI.Methods {
-			// Normalize the method for capital cases and non-anonymous inputs/outputs
-			normalized := original
-			normalizedName := methodNormalizer(alias(aliases, original.Name))
-			// Ensure there is no duplicated identifier
-			var identifiers = callIdentifiers
-			if !original.IsConstant() {
-				identifiers = transactIdentifiers
-			}
-			// Name shouldn't start with a digit. It will make the generated code invalid.
-			if len(normalizedName) > 0 && unicode.IsDigit(rune(normalizedName[0])) {
-				normalizedName = fmt.Sprintf("M%s", normalizedName)
-				normalizedName = abi.ResolveNameConflict(normalizedName, func(name string) bool {
-					_, ok := identifiers[name]
-					return ok
-				})
-			}
-			if identifiers[normalizedName] {
-				return nil, fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
-			}
-			identifiers[normalizedName] = true
-
-			normalized.Name = normalizedName
-			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
-			copy(normalized.Inputs, original.Inputs)
-			for j, input := range normalized.Inputs {
-				if input.Name == "" || isKeyWord(input.Name) {
-					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
-				}
-				if hasStruct(input.Type) {
-					bindStructType(input.Type, structs)
-				}
-			}
-			normalized.Outputs = make([]abi.Argument, len(original.Outputs))
-			copy(normalized.Outputs, original.Outputs)
-			for j, output := range normalized.Outputs {
-				if output.Name != "" {
-					normalized.Outputs[j].Name = capitalise(output.Name)
-				}
-				if hasStruct(output.Type) {
-					bindStructType(output.Type, structs)
-				}
-			}
-			// Append the methods to the call or transact lists
-			if original.IsConstant() {
-				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
-			} else {
-				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
-			}
-		}
-		for _, original := range evmABI.Events {
-			// Skip anonymous events as they don't support explicit filtering
-			if original.Anonymous {
-				continue
-			}
-			// Normalize the event for capital cases and non-anonymous outputs
-			normalized := original
-
-			// Ensure there is no duplicated identifier
-			normalizedName := methodNormalizer(alias(aliases, original.Name))
-			// Name shouldn't start with a digit. It will make the generated code invalid.
-			if len(normalizedName) > 0 && unicode.IsDigit(rune(normalizedName[0])) {
-				normalizedName = fmt.Sprintf("E%s", normalizedName)
-				normalizedName = abi.ResolveNameConflict(normalizedName, func(name string) bool {
-					_, ok := eventIdentifiers[name]
-					return ok
-				})
-			}
-			if eventIdentifiers[normalizedName] {
-				return nil, fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
-			}
-			eventIdentifiers[normalizedName] = true
-			normalized.Name = normalizedName
-
-			used := make(map[string]bool)
-			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
-			copy(normalized.Inputs, original.Inputs)
-			for j, input := range normalized.Inputs {
-				if input.Name == "" || isKeyWord(input.Name) {
-					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
-				}
-				// Event is a bit special, we need to define event struct in binding,
-				// ensure there is no camel-case-style name conflict.
-				for index := 0; ; index++ {
-					if !used[capitalise(normalized.Inputs[j].Name)] {
-						used[capitalise(normalized.Inputs[j].Name)] = true
-						break
-					}
-					normalized.Inputs[j].Name = fmt.Sprintf("%s%d", normalized.Inputs[j].Name, index)
-				}
-				if hasStruct(input.Type) {
-					bindStructType(input.Type, structs)
-				}
-			}
-			// Append the event to the accumulator list
-			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
-		}
-		for _, original := range evmABI.Errors {
-			// TODO: I copied this from events (above in this function).  I think it should be correct but not totally sure
-			// even if it is correct, should consider deduplicating this into its own function.
-
-			// Normalize the error for capital cases and non-anonymous outputs
-			normalized := original
-
-			// Ensure there is no duplicated identifier
-			normalizedName := methodNormalizer(alias(aliases, original.Name))
-			// Name shouldn't start with a digit. It will make the generated code invalid.
-			if len(normalizedName) > 0 && unicode.IsDigit(rune(normalizedName[0])) {
-				normalizedName = fmt.Sprintf("E%s", normalizedName)
-				normalizedName = abi.ResolveNameConflict(normalizedName, func(name string) bool {
-					_, ok := eventIdentifiers[name]
-					return ok
-				})
-			}
-			if eventIdentifiers[normalizedName] {
-				return nil, fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
-			}
-			eventIdentifiers[normalizedName] = true
-			normalized.Name = normalizedName
-
-			used := make(map[string]bool)
-			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
-			copy(normalized.Inputs, original.Inputs)
-			for j, input := range normalized.Inputs {
-				if input.Name == "" || isKeyWord(input.Name) {
-					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
-				}
-				// Event is a bit special, we need to define event struct in binding,
-				// ensure there is no camel-case-style name conflict.
-				for index := 0; ; index++ {
-					if !used[capitalise(normalized.Inputs[j].Name)] {
-						used[capitalise(normalized.Inputs[j].Name)] = true
-						break
-					}
-					normalized.Inputs[j].Name = fmt.Sprintf("%s%d", normalized.Inputs[j].Name, index)
-				}
-				if hasStruct(input.Type) {
-					bindStructType(input.Type, structs)
-				}
-			}
-			errors[original.Name] = &tmplError{Original: original, Normalized: normalized}
-		}
-		// Add two special fallback functions if they exist
-		if evmABI.HasFallback() {
-			fallback = &tmplMethod{Original: evmABI.Fallback}
-		}
-		if evmABI.HasReceive() {
-			receive = &tmplMethod{Original: evmABI.Receive}
-		}
-
-		contracts[types[i]] = &tmplContract{
-			Type:         capitalise(types[i]),
-			InputABI:     strings.ReplaceAll(strippedABI, "\"", "\\\""),
-			InputBin:     strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
-			Constructor:  evmABI.Constructor,
-			Calls:        calls,
-			Transacts:    transacts,
-			Fallback:     fallback,
-			Receive:      receive,
-			Events:       events,
-			Libraries:    make(map[string]string),
-			AllLibraries: make(map[string]string),
-		}
-
-		// Function 4-byte signatures are stored in the same sequence
-		// as types, if available.
-		if len(fsigs) > i {
-			contracts[types[i]].FuncSigs = fsigs[i]
-		}
-		// Parse library references.
-		for pattern, name := range libs {
-			matched, err := regexp.MatchString("__\\$"+pattern+"\\$__", contracts[types[i]].InputBin)
-			if err != nil {
-				log.Error("Could not search for pattern", "pattern", pattern, "contract", contracts[types[i]], "err", err)
-			}
-			if matched {
-				contracts[types[i]].Libraries[pattern] = name
-				// keep track that this type is a library
-				if _, ok := isLib[name]; !ok {
-					isLib[name] = struct{}{}
-				}
-			}
-		}
-	}
-	// Check if that type has already been identified as a library
-	for i := 0; i < len(types); i++ {
-		_, ok := isLib[types[i]]
-		contracts[types[i]].Library = ok
-	}
-
-	// Generate the contract template data content and render it
-	data := &tmplData{
-		Package:   pkg,
-		Contracts: contracts,
-		Libraries: libs,
-		Structs:   structs,
-	}
-	return data, nil
 }
 
 // bindBasicType converts basic solidity types(except array, slice and tuple) to Go ones.

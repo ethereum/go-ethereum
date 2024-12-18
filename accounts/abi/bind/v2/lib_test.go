@@ -475,7 +475,7 @@ func TestBindingGeneration(t *testing.T) {
 			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36] // the first 2 chars are 0x
 			libs[libPattern] = typeName
 		}
-		code, err := bind.BindV2(types, abis, bins, sigs, dir, libs, make(map[string]string))
+		code, err := bind.BindV2(types, abis, bins, dir, libs, make(map[string]string))
 		if err != nil {
 			t.Fatalf("error creating bindings for package %s: %v", dir, err)
 		}
