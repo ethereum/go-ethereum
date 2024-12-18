@@ -78,7 +78,7 @@ func ParseBig256(s string) (*big.Int, bool) {
 	return bigint, ok
 }
 
-// MustParseBig parses s as a 256 bit big integer and panics if the string is invalid.
+// MustParseBig256 parses s as a 256 bit big integer and panics if the string is invalid.
 func MustParseBig256(s string) *big.Int {
 	v, ok := ParseBig256(s)
 	if !ok {
@@ -179,16 +179,15 @@ func U256(x *big.Int) *big.Int {
 // S256 interprets x as a two's complement number.
 // x must not exceed 256 bits (the result is undefined if it does) and is not modified.
 //
-//   S256(0)        = 0
-//   S256(1)        = 1
-//   S256(2**255)   = -2**255
-//   S256(2**256-1) = -1
+//	S256(0)        = 0
+//	S256(1)        = 1
+//	S256(2**255)   = -2**255
+//	S256(2**256-1) = -1
 func S256(x *big.Int) *big.Int {
 	if x.Cmp(tt255) < 0 {
 		return x
-	} else {
-		return new(big.Int).Sub(x, tt256)
 	}
+	return new(big.Int).Sub(x, tt256)
 }
 
 // Exp implements exponentiation by squaring.

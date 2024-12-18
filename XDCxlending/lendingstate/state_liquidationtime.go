@@ -116,7 +116,7 @@ func (lt *liquidationTimeState) getAllTradeIds(db Database) []common.Hash {
 		return tradeIds
 	}
 	for id, value := range lt.cachedStorage {
-		if !common.EmptyHash(value) {
+		if !value.IsZero() {
 			tradeIds = append(tradeIds, id)
 		}
 	}

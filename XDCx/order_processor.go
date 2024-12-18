@@ -525,7 +525,7 @@ func DoSettleBalance(coinbase common.Address, takerOrder, makerOrder *tradingsta
 	matchingFee = new(big.Int).Add(matchingFee, common.RelayerFee)
 	matchingFee = new(big.Int).Add(matchingFee, common.RelayerFee)
 
-	if common.EmptyHash(takerExOwner.Hash()) || common.EmptyHash(makerExOwner.Hash()) {
+	if takerExOwner.Hash().IsZero() || makerExOwner.Hash().IsZero() {
 		return fmt.Errorf("empty echange owner: taker: %v , maker : %v", takerExOwner, makerExOwner)
 	}
 	mapBalances := map[common.Address]map[common.Address]*big.Int{}

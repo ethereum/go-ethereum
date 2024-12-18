@@ -957,7 +957,7 @@ func (bc *BlockChain) saveData() {
 					author, _ := bc.Engine().Author(recent.Header())
 					if tradingService != nil {
 						tradingRoot, _ := tradingService.GetTradingStateRoot(recent, author)
-						if !common.EmptyHash(tradingRoot) && tradingTriedb != nil {
+						if !tradingRoot.IsZero() && tradingTriedb != nil {
 							if err := tradingTriedb.Commit(tradingRoot, true); err != nil {
 								log.Error("Failed to commit trading state recent state trie", "err", err)
 							}
@@ -965,7 +965,7 @@ func (bc *BlockChain) saveData() {
 					}
 					if lendingService != nil {
 						lendingRoot, _ := lendingService.GetLendingStateRoot(recent, author)
-						if !common.EmptyHash(lendingRoot) && lendingTriedb != nil {
+						if !lendingRoot.IsZero() && lendingTriedb != nil {
 							if err := lendingTriedb.Commit(lendingRoot, true); err != nil {
 								log.Error("Failed to commit lending state recent state trie", "err", err)
 							}

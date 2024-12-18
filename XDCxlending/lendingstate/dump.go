@@ -48,7 +48,7 @@ func (ls *LendingStateDB) DumpInvestingTrie(orderBook common.Hash) (map[*big.Int
 	it := trie.NewIterator(exhangeObject.getInvestingTrie(ls.db).NodeIterator(nil))
 	for it.Next() {
 		interestHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(interestHash) {
+		if interestHash.IsZero() {
 			continue
 		}
 		interest := new(big.Int).SetBytes(interestHash.Bytes())
@@ -91,7 +91,7 @@ func (ls *LendingStateDB) DumpBorrowingTrie(orderBook common.Hash) (map[*big.Int
 	it := trie.NewIterator(exhangeObject.getBorrowingTrie(ls.db).NodeIterator(nil))
 	for it.Next() {
 		interestHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(interestHash) {
+		if interestHash.IsZero() {
 			continue
 		}
 		interest := new(big.Int).SetBytes(interestHash.Bytes())
@@ -134,7 +134,7 @@ func (ls *LendingStateDB) GetInvestings(orderBook common.Hash) (map[*big.Int]*bi
 	it := trie.NewIterator(exhangeObject.getInvestingTrie(ls.db).NodeIterator(nil))
 	for it.Next() {
 		interestHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(interestHash) {
+		if interestHash.IsZero() {
 			continue
 		}
 		interest := new(big.Int).SetBytes(interestHash.Bytes())
@@ -177,7 +177,7 @@ func (ls *LendingStateDB) GetBorrowings(orderBook common.Hash) (map[*big.Int]*bi
 	it := trie.NewIterator(exhangeObject.getBorrowingTrie(ls.db).NodeIterator(nil))
 	for it.Next() {
 		interestHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(interestHash) {
+		if interestHash.IsZero() {
 			continue
 		}
 		interest := new(big.Int).SetBytes(interestHash.Bytes())
@@ -216,7 +216,7 @@ func (il *itemListState) DumpItemList(db Database) DumpOrderList {
 	orderListIt := trie.NewIterator(il.getTrie(db).NodeIterator(nil))
 	for orderListIt.Next() {
 		keyHash := common.BytesToHash(orderListIt.Key)
-		if common.EmptyHash(keyHash) {
+		if keyHash.IsZero() {
 			continue
 		}
 		if _, exist := il.cachedStorage[keyHash]; exist {
@@ -227,7 +227,7 @@ func (il *itemListState) DumpItemList(db Database) DumpOrderList {
 		}
 	}
 	for key, value := range il.cachedStorage {
-		if !common.EmptyHash(value) {
+		if !value.IsZero() {
 			mapResult.Orders[new(big.Int).SetBytes(key.Bytes())] = new(big.Int).SetBytes(value.Bytes())
 		}
 	}
@@ -265,7 +265,7 @@ func (lts *liquidationTimeState) DumpItemList(db Database) DumpOrderList {
 	orderListIt := trie.NewIterator(lts.getTrie(db).NodeIterator(nil))
 	for orderListIt.Next() {
 		keyHash := common.BytesToHash(orderListIt.Key)
-		if common.EmptyHash(keyHash) {
+		if keyHash.IsZero() {
 			continue
 		}
 		if _, exist := lts.cachedStorage[keyHash]; exist {
@@ -276,7 +276,7 @@ func (lts *liquidationTimeState) DumpItemList(db Database) DumpOrderList {
 		}
 	}
 	for key, value := range lts.cachedStorage {
-		if !common.EmptyHash(value) {
+		if !value.IsZero() {
 			mapResult.Orders[new(big.Int).SetBytes(key.Bytes())] = new(big.Int).SetBytes(value.Bytes())
 		}
 	}
@@ -303,7 +303,7 @@ func (ls *LendingStateDB) DumpLiquidationTimeTrie(orderBook common.Hash) (map[*b
 	it := trie.NewIterator(exhangeObject.getLiquidationTimeTrie(ls.db).NodeIterator(nil))
 	for it.Next() {
 		unixTimeHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(unixTimeHash) {
+		if unixTimeHash.IsZero() {
 			continue
 		}
 		unixTime := new(big.Int).SetBytes(unixTimeHash.Bytes())
@@ -346,7 +346,7 @@ func (ls *LendingStateDB) DumpLendingOrderTrie(orderBook common.Hash) (map[*big.
 	it := trie.NewIterator(exhangeObject.getLendingItemTrie(ls.db).NodeIterator(nil))
 	for it.Next() {
 		orderIdHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(orderIdHash) {
+		if orderIdHash.IsZero() {
 			continue
 		}
 		orderId := new(big.Int).SetBytes(orderIdHash.Bytes())
@@ -386,7 +386,7 @@ func (ls *LendingStateDB) DumpLendingTradeTrie(orderBook common.Hash) (map[*big.
 	it := trie.NewIterator(exhangeObject.getLendingTradeTrie(ls.db).NodeIterator(nil))
 	for it.Next() {
 		tradeIdHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(tradeIdHash) {
+		if tradeIdHash.IsZero() {
 			continue
 		}
 		tradeId := new(big.Int).SetBytes(tradeIdHash.Bytes())

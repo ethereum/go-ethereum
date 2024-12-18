@@ -106,7 +106,7 @@ func (h Hash) Cmp(other Hash) int {
 // IsZero returns if a Hash is empty
 func (h Hash) IsZero() bool { return h == Hash{} }
 
-// Get the string representation of the underlying hash
+// Str get the string representation of the underlying hash
 func (h Hash) Str() string { return string(h[:]) }
 
 // Bytes gets the byte representation of the underlying hash.
@@ -161,14 +161,6 @@ func (h *Hash) SetBytes(b []byte) {
 	copy(h[HashLength-len(b):], b)
 }
 
-// Set string `s` to h. If s is larger than len(h) s will be cropped (from left) to fit.
-func (h *Hash) SetString(s string) { h.SetBytes([]byte(s)) }
-
-// Sets h to other
-func (h *Hash) Set(other Hash) {
-	copy(h[:], other[:])
-}
-
 // Generate implements testing/quick.Generator.
 func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 	m := rand.Intn(len(h))
@@ -176,10 +168,6 @@ func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 		h[i] = byte(rand.Uint32())
 	}
 	return reflect.ValueOf(h)
-}
-
-func EmptyHash(h Hash) bool {
-	return h == Hash{}
 }
 
 // UnprefixedHash allows marshaling a Hash without 0x prefix.
@@ -200,6 +188,8 @@ func (h UnprefixedHash) MarshalText() ([]byte, error) {
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte
 
+// BytesToAddress returns Address with value b.
+// If b is larger than len(h), b will be cropped from the left.
 func BytesToAddress(b []byte) Address {
 	var a Address
 	a.SetBytes(b)
@@ -231,11 +221,17 @@ func IsHexAddress(s string) bool {
 // IsZero returns if a address is empty
 func (a Address) IsZero() bool { return a == Address{} }
 
-// Get the string representation of the underlying address
-func (a Address) Str() string   { return string(a[:]) }
+// Str gets the string representation of the underlying address
+func (a Address) Str() string { return string(a[:]) }
+
+// Bytes gets the string representation of the underlying address.
 func (a Address) Bytes() []byte { return a[:] }
+
+// Big converts an address to a big integer.
 func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
-func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
+
+// Hash converts an address to a hash by left-padding it with zeros.
+func (a Address) Hash() Hash { return BytesToHash(a[:]) }
 
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
@@ -259,7 +255,7 @@ func (a Address) Hex() string {
 	return "xdc" + string(result)
 }
 
-// String implements the stringer interface and is used also by the logger.
+// String implements fmt.Stringer.
 func (a Address) String() string {
 	return a.Hex()
 }
@@ -270,20 +266,13 @@ func (a Address) Format(s fmt.State, c rune) {
 	fmt.Fprintf(s, "%"+string(c), a[:])
 }
 
-// Sets the address to the value of b. If b is larger than len(a) it will panic
+// SetBytes sets the address to the value of b.
+// If b is larger than len(a) it will panic.
 func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
 		b = b[len(b)-AddressLength:]
 	}
 	copy(a[AddressLength-len(b):], b)
-}
-
-// Set string `s` to a. If s is larger than len(a) it will panic
-func (a *Address) SetString(s string) { a.SetBytes([]byte(s)) }
-
-// Sets a to other
-func (a *Address) Set(other Address) {
-	copy(a[:], other[:])
 }
 
 // MarshalText returns the hex representation of a.
@@ -306,7 +295,7 @@ func (a *Address) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalFixedJSON(addressT, input, a[:])
 }
 
-// UnprefixedHash allows marshaling an Address without 0x prefix.
+// UnprefixedAddress allows marshaling an Address without 0x prefix.
 type UnprefixedAddress Address
 
 // UnmarshalText decodes the address from hex. The 0x prefix is optional.
@@ -319,7 +308,7 @@ func (a UnprefixedAddress) MarshalText() ([]byte, error) {
 	return []byte(hex.EncodeToString(a[:])), nil
 }
 
-// Extract validators from byte array.
+// RemoveItemFromArray extracts validators from byte array.
 func RemoveItemFromArray(array []Address, items []Address) []Address {
 	// Create newArray to stop append change array value
 	newArray := make([]Address, len(array))
@@ -340,7 +329,7 @@ func RemoveItemFromArray(array []Address, items []Address) []Address {
 	return newArray
 }
 
-// Extract validators from byte array.
+// ExtractAddressToBytes extracts validators from byte array.
 func ExtractAddressToBytes(penalties []Address) []byte {
 	data := []byte{}
 	for _, signer := range penalties {

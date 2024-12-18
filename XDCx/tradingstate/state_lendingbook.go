@@ -118,7 +118,7 @@ func (s *stateLendingBook) getAllTradeIds(db Database) []common.Hash {
 		return tradeIds
 	}
 	for id, value := range s.cachedStorage {
-		if !common.EmptyHash(value) {
+		if !value.IsZero() {
 			tradeIds = append(tradeIds, id)
 		}
 	}

@@ -56,7 +56,7 @@ func (t *TradingStateDB) DumpAskTrie(orderBook common.Hash) (map[*big.Int]DumpOr
 	it := trie.NewIterator(exhangeObject.getAsksTrie(t.db).NodeIterator(nil))
 	for it.Next() {
 		priceHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(priceHash) {
+		if priceHash.IsZero() {
 			continue
 		}
 		price := new(big.Int).SetBytes(priceHash.Bytes())
@@ -99,7 +99,7 @@ func (t *TradingStateDB) DumpBidTrie(orderBook common.Hash) (map[*big.Int]DumpOr
 	it := trie.NewIterator(exhangeObject.getBidsTrie(t.db).NodeIterator(nil))
 	for it.Next() {
 		priceHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(priceHash) {
+		if priceHash.IsZero() {
 			continue
 		}
 		price := new(big.Int).SetBytes(priceHash.Bytes())
@@ -142,7 +142,7 @@ func (t *TradingStateDB) GetBids(orderBook common.Hash) (map[*big.Int]*big.Int, 
 	it := trie.NewIterator(exhangeObject.getBidsTrie(t.db).NodeIterator(nil))
 	for it.Next() {
 		priceHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(priceHash) {
+		if priceHash.IsZero() {
 			continue
 		}
 		price := new(big.Int).SetBytes(priceHash.Bytes())
@@ -185,7 +185,7 @@ func (t *TradingStateDB) GetAsks(orderBook common.Hash) (map[*big.Int]*big.Int, 
 	it := trie.NewIterator(exhangeObject.getAsksTrie(t.db).NodeIterator(nil))
 	for it.Next() {
 		priceHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(priceHash) {
+		if priceHash.IsZero() {
 			continue
 		}
 		price := new(big.Int).SetBytes(priceHash.Bytes())
@@ -224,7 +224,7 @@ func (s *stateOrderList) DumpOrderList(db Database) DumpOrderList {
 	orderListIt := trie.NewIterator(s.getTrie(db).NodeIterator(nil))
 	for orderListIt.Next() {
 		keyHash := common.BytesToHash(orderListIt.Key)
-		if common.EmptyHash(keyHash) {
+		if keyHash.IsZero() {
 			continue
 		}
 		if _, exist := s.cachedStorage[keyHash]; exist {
@@ -235,7 +235,7 @@ func (s *stateOrderList) DumpOrderList(db Database) DumpOrderList {
 		}
 	}
 	for key, value := range s.cachedStorage {
-		if !common.EmptyHash(value) {
+		if !value.IsZero() {
 			mapResult.Orders[new(big.Int).SetBytes(key.Bytes())] = new(big.Int).SetBytes(value.Bytes())
 		}
 	}
@@ -277,7 +277,7 @@ func (s *stateLendingBook) DumpOrderList(db Database) DumpOrderList {
 	orderListIt := trie.NewIterator(s.getTrie(db).NodeIterator(nil))
 	for orderListIt.Next() {
 		keyHash := common.BytesToHash(orderListIt.Key)
-		if common.EmptyHash(keyHash) {
+		if keyHash.IsZero() {
 			continue
 		}
 		if _, exist := s.cachedStorage[keyHash]; exist {
@@ -288,7 +288,7 @@ func (s *stateLendingBook) DumpOrderList(db Database) DumpOrderList {
 		}
 	}
 	for key, value := range s.cachedStorage {
-		if !common.EmptyHash(value) {
+		if !value.IsZero() {
 			mapResult.Orders[new(big.Int).SetBytes(key.Bytes())] = new(big.Int).SetBytes(value.Bytes())
 		}
 	}
@@ -311,7 +311,7 @@ func (l *liquidationPriceState) DumpLendingBook(db Database) (DumpLendingBook, e
 	it := trie.NewIterator(l.getTrie(db).NodeIterator(nil))
 	for it.Next() {
 		lendingBook := common.BytesToHash(it.Key)
-		if common.EmptyHash(lendingBook) {
+		if lendingBook.IsZero() {
 			continue
 		}
 		if _, exist := l.stateLendingBooks[lendingBook]; exist {
@@ -326,7 +326,7 @@ func (l *liquidationPriceState) DumpLendingBook(db Database) (DumpLendingBook, e
 		}
 	}
 	for lendingBook, stateLendingBook := range l.stateLendingBooks {
-		if !common.EmptyHash(lendingBook) {
+		if !lendingBook.IsZero() {
 			result.LendingBooks[lendingBook] = stateLendingBook.DumpOrderList(db)
 		}
 	}
@@ -342,7 +342,7 @@ func (t *TradingStateDB) DumpLiquidationPriceTrie(orderBook common.Hash) (map[*b
 	it := trie.NewIterator(exhangeObject.getLiquidationPriceTrie(t.db).NodeIterator(nil))
 	for it.Next() {
 		priceHash := common.BytesToHash(it.Key)
-		if common.EmptyHash(priceHash) {
+		if priceHash.IsZero() {
 			continue
 		}
 		price := new(big.Int).SetBytes(priceHash.Bytes())
