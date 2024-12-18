@@ -177,7 +177,7 @@ type worker struct {
 	skipTxHash   common.Hash
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
+func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool, daSyncingEnabled bool) *worker {
 	worker := &worker{
 		config:       config,
 		chainConfig:  chainConfig,
@@ -192,6 +192,12 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		startCh:      make(chan struct{}, 1),
 		reorgCh:      make(chan reorgTrigger, 1),
 	}
+
+	if daSyncingEnabled {
+		log.Info("Worker will not start, because DA syncing is enabled")
+		return worker
+	}
+
 	worker.asyncChecker = ccc.NewAsyncChecker(worker.chain, config.CCCMaxWorkers, false).WithOnFailingBlock(worker.onBlockFailingCCC)
 
 	// Subscribe NewTxsEvent for tx pool

@@ -18,21 +18,21 @@ func TestL1Client(t *testing.T) {
 	ctx := context.Background()
 	mockClient := &mockEthClient{}
 
-	scrollChainABI, err := scrollChainMetaData.GetAbi()
+	scrollChainABI, err := ScrollChainMetaData.GetAbi()
 	if err != nil {
 		t.Fatal("failed to get scroll chain abi", "err", err)
 	}
 	scrollChainAddress := common.HexToAddress("0x0123456789abcdef")
-	l1Client, err := newL1Client(ctx, mockClient, 11155111, scrollChainAddress, scrollChainABI)
+	l1Client, err := NewL1Client(ctx, mockClient, 11155111, scrollChainAddress, scrollChainABI)
 	require.NoError(t, err, "Failed to initialize L1Client")
 
-	blockNumber, err := l1Client.getLatestFinalizedBlockNumber()
+	blockNumber, err := l1Client.GetLatestFinalizedBlockNumber()
 	assert.NoError(t, err, "Error getting latest confirmed block number")
 	assert.Equal(t, uint64(36), blockNumber, "Unexpected block number")
 
-	logs, err := l1Client.fetchRollupEventsInRange(0, blockNumber)
+	logs, err := l1Client.FetchRollupEventsInRange(0, blockNumber)
 	assert.NoError(t, err, "Error fetching rollup events in range")
-	assert.Empty(t, logs, "Expected no logs from fetchRollupEventsInRange")
+	assert.Empty(t, logs, "Expected no logs from FetchRollupEventsInRange")
 }
 
 type mockEthClient struct {

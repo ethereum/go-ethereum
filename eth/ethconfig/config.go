@@ -37,6 +37,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/miner"
 	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/da_syncer"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -218,6 +219,12 @@ type Config struct {
 
 	// List of peer ids that take part in the shadow-fork
 	ShadowForkPeerIDs []string
+
+	// Enable syncing node from DA
+	EnableDASyncing bool
+
+	// DA syncer options
+	DA da_syncer.Config
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

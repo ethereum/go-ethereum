@@ -197,6 +197,8 @@ type Config struct {
 	L1Confirmations rpc.BlockNumber `toml:",omitempty"`
 	// L1 bridge deployment block number
 	L1DeploymentBlock uint64 `toml:",omitempty"`
+	// Is daSyncingEnabled
+	DaSyncingEnabled bool `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

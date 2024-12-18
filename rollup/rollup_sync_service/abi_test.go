@@ -13,7 +13,7 @@ import (
 )
 
 func TestEventSignatures(t *testing.T) {
-	scrollChainABI, err := scrollChainMetaData.GetAbi()
+	scrollChainABI, err := ScrollChainMetaData.GetAbi()
 	if err != nil {
 		t.Fatal("failed to get scroll chain abi", "err", err)
 	}
@@ -24,7 +24,7 @@ func TestEventSignatures(t *testing.T) {
 }
 
 func TestUnpackLog(t *testing.T) {
-	scrollChainABI, err := scrollChainMetaData.GetAbi()
+	scrollChainABI, err := ScrollChainMetaData.GetAbi()
 	require.NoError(t, err)
 
 	mockBatchIndex := big.NewInt(123)

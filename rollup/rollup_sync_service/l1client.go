@@ -27,9 +27,9 @@ type L1Client struct {
 	l1FinalizeBatchEventSignature common.Hash
 }
 
-// newL1Client initializes a new L1Client instance with the provided configuration.
+// NewL1Client initializes a new L1Client instance with the provided configuration.
 // It checks for a valid scrollChainAddress and verifies the chain ID.
-func newL1Client(ctx context.Context, l1Client sync_service.EthClient, l1ChainId uint64, scrollChainAddress common.Address, scrollChainABI *abi.ABI) (*L1Client, error) {
+func NewL1Client(ctx context.Context, l1Client sync_service.EthClient, l1ChainId uint64, scrollChainAddress common.Address, scrollChainABI *abi.ABI) (*L1Client, error) {
 	if scrollChainAddress == (common.Address{}) {
 		return nil, errors.New("must pass non-zero scrollChainAddress to L1Client")
 	}
@@ -55,9 +55,9 @@ func newL1Client(ctx context.Context, l1Client sync_service.EthClient, l1ChainId
 	return &client, nil
 }
 
-// fetcRollupEventsInRange retrieves and parses commit/revert/finalize rollup events between block numbers: [from, to].
-func (c *L1Client) fetchRollupEventsInRange(from, to uint64) ([]types.Log, error) {
-	log.Trace("L1Client fetchRollupEventsInRange", "fromBlock", from, "toBlock", to)
+// FetchRollupEventsInRange retrieves and parses commit/revert/finalize rollup events between block numbers: [from, to].
+func (c *L1Client) FetchRollupEventsInRange(from, to uint64) ([]types.Log, error) {
+	log.Trace("L1Client FetchRollupEventsInRange", "fromBlock", from, "toBlock", to)
 
 	query := ethereum.FilterQuery{
 		FromBlock: big.NewInt(int64(from)), // inclusive
@@ -79,8 +79,8 @@ func (c *L1Client) fetchRollupEventsInRange(from, to uint64) ([]types.Log, error
 	return logs, nil
 }
 
-// getLatestFinalizedBlockNumber fetches the block number of the latest finalized block from the L1 chain.
-func (c *L1Client) getLatestFinalizedBlockNumber() (uint64, error) {
+// GetLatestFinalizedBlockNumber fetches the block number of the latest finalized block from the L1 chain.
+func (c *L1Client) GetLatestFinalizedBlockNumber() (uint64, error) {
 	header, err := c.client.HeaderByNumber(c.ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
 	if err != nil {
 		return 0, err
@@ -89,4 +89,70 @@ func (c *L1Client) getLatestFinalizedBlockNumber() (uint64, error) {
 		return 0, fmt.Errorf("received unexpected block number in L1Client: %v", header.Number)
 	}
 	return header.Number.Uint64(), nil
+}
+
+// FetchTxData fetches tx data corresponding to given event log
+func (c *L1Client) FetchTxData(vLog *types.Log) ([]byte, error) {
+	tx, _, err := c.client.TransactionByHash(c.ctx, vLog.TxHash)
+	if err != nil {
+		log.Debug("failed to get transaction by hash, probably an unindexed transaction, fetching the whole block to get the transaction",
+			"tx hash", vLog.TxHash.Hex(), "block number", vLog.BlockNumber, "block hash", vLog.BlockHash.Hex(), "err", err)
+		block, err := c.client.BlockByHash(c.ctx, vLog.BlockHash)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get block by hash, block number: %v, block hash: %v, err: %w", vLog.BlockNumber, vLog.BlockHash.Hex(), err)
+		}
+
+		found := false
+		for _, txInBlock := range block.Transactions() {
+			if txInBlock.Hash() == vLog.TxHash {
+				tx = txInBlock
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("transaction not found in the block, tx hash: %v, block number: %v, block hash: %v", vLog.TxHash.Hex(), vLog.BlockNumber, vLog.BlockHash.Hex())
+		}
+	}
+
+	return tx.Data(), nil
+}
+
+// FetchTxBlobHash fetches tx blob hash corresponding to given event log
+func (c *L1Client) FetchTxBlobHash(vLog *types.Log) (common.Hash, error) {
+	tx, _, err := c.client.TransactionByHash(c.ctx, vLog.TxHash)
+	if err != nil {
+		log.Debug("failed to get transaction by hash, probably an unindexed transaction, fetching the whole block to get the transaction",
+			"tx hash", vLog.TxHash.Hex(), "block number", vLog.BlockNumber, "block hash", vLog.BlockHash.Hex(), "err", err)
+		block, err := c.client.BlockByHash(c.ctx, vLog.BlockHash)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("failed to get block by hash, block number: %v, block hash: %v, err: %w", vLog.BlockNumber, vLog.BlockHash.Hex(), err)
+		}
+
+		found := false
+		for _, txInBlock := range block.Transactions() {
+			if txInBlock.Hash() == vLog.TxHash {
+				tx = txInBlock
+				found = true
+				break
+			}
+		}
+		if !found {
+			return common.Hash{}, fmt.Errorf("transaction not found in the block, tx hash: %v, block number: %v, block hash: %v", vLog.TxHash.Hex(), vLog.BlockNumber, vLog.BlockHash.Hex())
+		}
+	}
+	blobHashes := tx.BlobHashes()
+	if len(blobHashes) == 0 {
+		return common.Hash{}, fmt.Errorf("transaction does not contain any blobs, tx hash: %v", vLog.TxHash.Hex())
+	}
+	return blobHashes[0], nil
+}
+
+// GetHeaderByNumber fetches the block header by number
+func (c *L1Client) GetHeaderByNumber(blockNumber uint64) (*types.Header, error) {
+	header, err := c.client.HeaderByNumber(c.ctx, big.NewInt(0).SetUint64(blockNumber))
+	if err != nil {
+		return nil, err
+	}
+	return header, nil
 }

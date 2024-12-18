@@ -58,47 +58,6 @@ func ReadRollupEventSyncedL1BlockNumber(db ethdb.Reader) *uint64 {
 	return &rollupEventSyncedL1BlockNumber
 }
 
-// WriteBatchChunkRanges writes the block ranges for each chunk within a batch to the database.
-// It serializes the chunk ranges using RLP and stores them under a key derived from the batch index.
-// for backward compatibility, new info is also stored in CommittedBatchMeta.
-func WriteBatchChunkRanges(db ethdb.KeyValueWriter, batchIndex uint64, chunkBlockRanges []*ChunkBlockRange) {
-	value, err := rlp.EncodeToBytes(chunkBlockRanges)
-	if err != nil {
-		log.Crit("failed to RLP encode batch chunk ranges", "batch index", batchIndex, "err", err)
-	}
-	if err := db.Put(batchChunkRangesKey(batchIndex), value); err != nil {
-		log.Crit("failed to store batch chunk ranges", "batch index", batchIndex, "value", value, "err", err)
-	}
-}
-
-// DeleteBatchChunkRanges removes the block ranges of all chunks associated with a specific batch from the database.
-// Note: Only non-finalized batches can be reverted.
-// for backward compatibility, new info is also stored in CommittedBatchMeta.
-func DeleteBatchChunkRanges(db ethdb.KeyValueWriter, batchIndex uint64) {
-	if err := db.Delete(batchChunkRangesKey(batchIndex)); err != nil {
-		log.Crit("failed to delete batch chunk ranges", "batch index", batchIndex, "err", err)
-	}
-}
-
-// ReadBatchChunkRanges retrieves the block ranges of all chunks associated with a specific batch from the database.
-// It returns a list of ChunkBlockRange pointers, or nil if no chunk ranges are found for the given batch index.
-// for backward compatibility, new info is also stored in CommittedBatchMeta.
-func ReadBatchChunkRanges(db ethdb.Reader, batchIndex uint64) []*ChunkBlockRange {
-	data, err := db.Get(batchChunkRangesKey(batchIndex))
-	if err != nil && isNotFoundErr(err) {
-		return nil
-	}
-	if err != nil {
-		log.Crit("failed to read batch chunk ranges from database", "err", err)
-	}
-
-	cr := new([]*ChunkBlockRange)
-	if err := rlp.Decode(bytes.NewReader(data), cr); err != nil {
-		log.Crit("Invalid ChunkBlockRange RLP", "batch index", batchIndex, "data", data, "err", err)
-	}
-	return *cr
-}
-
 // WriteFinalizedBatchMeta stores the metadata of a finalized batch in the database.
 func WriteFinalizedBatchMeta(db ethdb.KeyValueWriter, batchIndex uint64, finalizedBatchMeta *FinalizedBatchMeta) {
 	value, err := rlp.EncodeToBytes(finalizedBatchMeta)

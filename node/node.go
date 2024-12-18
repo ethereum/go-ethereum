@@ -262,10 +262,15 @@ func (n *Node) doClose(errs []error) error {
 // openEndpoints starts all network and RPC endpoints.
 func (n *Node) openEndpoints() error {
 	// start networking endpoints
-	n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
-	if err := n.server.Start(); err != nil {
-		return convertFileLockError(err)
+	if !n.config.DaSyncingEnabled {
+		n.log.Info("Starting peer-to-peer node", "instance", n.server.Name)
+		if err := n.server.Start(); err != nil {
+			return convertFileLockError(err)
+		}
+	} else {
+		n.log.Info("Peer-to-peer node will not start, because DA syncing is enabled")
 	}
+
 	// start RPC endpoints
 	err := n.startRPC()
 	if err != nil {
