@@ -39,6 +39,7 @@ import (
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/libevm/hookstest"
+	"github.com/ava-labs/libevm/libevm/legacy"
 	"github.com/ava-labs/libevm/params"
 )
 
@@ -106,6 +107,7 @@ type statefulPrecompileOutput struct {
 	ChainID                 *big.Int
 	Addresses               *libevm.AddressContext
 	StateValue              common.Hash
+	ValueReceived           *uint256.Int
 	ReadOnly                bool
 	BlockNumber, Difficulty *big.Int
 	BlockTime               uint64
@@ -159,6 +161,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			ChainID:          env.ChainConfig().ChainID,
 			Addresses:        env.Addresses(),
 			StateValue:       env.ReadOnlyState().GetState(precompile, slot),
+			ValueReceived:    env.Value(),
 			ReadOnly:         env.ReadOnly(),
 			BlockNumber:      env.BlockNumber(),
 			BlockTime:        env.BlockTime(),
@@ -170,7 +173,11 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	}
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
-			precompile: vm.NewStatefulPrecompile(run),
+			precompile: vm.NewStatefulPrecompile(
+				// In production, the new function signature should be used, but
+				// this just exercises the converter.
+				legacy.PrecompiledStatefulContract(run).Upgrade(),
+			),
 		},
 	}
 	hooks.Register(t)
@@ -181,7 +188,8 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		Difficulty: rng.BigUint64(),
 	}
 	input := rng.Bytes(8)
-	value := rng.Hash()
+	stateValue := rng.Hash()
+	transferValue := rng.Uint256()
 	chainID := rng.BigUint64()
 
 	caller := common.HexToAddress("CA11E12") // caller of the precompile
@@ -197,13 +205,15 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			&params.ChainConfig{ChainID: chainID},
 		),
 	)
-	state.SetState(precompile, slot, value)
+	state.SetState(precompile, slot, stateValue)
+	state.SetBalance(caller, new(uint256.Int).Not(uint256.NewInt(0)))
 	evm.Origin = eoa
 
 	tests := []struct {
-		name          string
-		call          func() ([]byte, uint64, error)
-		wantAddresses *libevm.AddressContext
+		name              string
+		call              func() ([]byte, uint64, error)
+		wantAddresses     *libevm.AddressContext
+		wantTransferValue *uint256.Int
 		// Note that this only covers evm.readOnly being true because of the
 		// precompile's call. See TestInheritReadOnly for alternate case.
 		wantReadOnly bool
@@ -212,28 +222,30 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		{
 			name: "EVM.Call()",
 			call: func() ([]byte, uint64, error) {
-				return evm.Call(callerContract, precompile, input, gasLimit, uint256.NewInt(0))
+				return evm.Call(callerContract, precompile, input, gasLimit, transferValue)
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin: eoa,
 				Caller: caller,
 				Self:   precompile,
 			},
-			wantReadOnly: false,
-			wantCallType: vm.Call,
+			wantReadOnly:      false,
+			wantTransferValue: transferValue,
+			wantCallType:      vm.Call,
 		},
 		{
 			name: "EVM.CallCode()",
 			call: func() ([]byte, uint64, error) {
-				return evm.CallCode(callerContract, precompile, input, gasLimit, uint256.NewInt(0))
+				return evm.CallCode(callerContract, precompile, input, gasLimit, transferValue)
 			},
 			wantAddresses: &libevm.AddressContext{
 				Origin: eoa,
 				Caller: caller,
 				Self:   caller,
 			},
-			wantReadOnly: false,
-			wantCallType: vm.CallCode,
+			wantReadOnly:      false,
+			wantTransferValue: transferValue,
+			wantCallType:      vm.CallCode,
 		},
 		{
 			name: "EVM.DelegateCall()",
@@ -245,8 +257,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Caller: eoa, // inherited from caller
 				Self:   caller,
 			},
-			wantReadOnly: false,
-			wantCallType: vm.DelegateCall,
+			wantReadOnly:      false,
+			wantTransferValue: uint256.NewInt(0),
+			wantCallType:      vm.DelegateCall,
 		},
 		{
 			name: "EVM.StaticCall()",
@@ -258,8 +271,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Caller: caller,
 				Self:   precompile,
 			},
-			wantReadOnly: true,
-			wantCallType: vm.StaticCall,
+			wantReadOnly:      true,
+			wantTransferValue: uint256.NewInt(0),
+			wantCallType:      vm.StaticCall,
 		},
 	}
 
@@ -268,7 +282,8 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			wantOutput := statefulPrecompileOutput{
 				ChainID:          chainID,
 				Addresses:        tt.wantAddresses,
-				StateValue:       value,
+				StateValue:       stateValue,
+				ValueReceived:    tt.wantTransferValue,
 				ReadOnly:         tt.wantReadOnly,
 				BlockNumber:      header.Number,
 				BlockTime:        header.Time,
@@ -318,11 +333,11 @@ func TestInheritReadOnly(t *testing.T) {
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 			precompile: vm.NewStatefulPrecompile(
-				func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) ([]byte, uint64, error) {
+				func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
 					if env.ReadOnly() {
-						return []byte{ifReadOnly}, suppliedGas, nil
+						return []byte{ifReadOnly}, nil
 					}
-					return []byte{ifNotReadOnly}, suppliedGas, nil
+					return []byte{ifNotReadOnly}, nil
 				},
 			),
 		},
@@ -535,21 +550,21 @@ func TestPrecompileMakeCall(t *testing.T) {
 
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
-			sut: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+			sut: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
 				var opts []vm.CallOption
 				if bytes.Equal(input, unsafeCallerProxyOptSentinel) {
 					opts = append(opts, vm.WithUNSAFECallerAddressProxying())
 				}
 				// We are ultimately testing env.Call(), hence why this is the SUT.
-				return env.Call(dest, precompileCallData, suppliedGas, uint256.NewInt(0), opts...)
+				return env.Call(dest, precompileCallData, env.Gas(), uint256.NewInt(0), opts...)
 			}),
-			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
 				out := &statefulPrecompileOutput{
 					Addresses: env.Addresses(),
 					ReadOnly:  env.ReadOnly(),
 					Input:     input, // expected to be callData
 				}
-				return out.Bytes(), suppliedGas, nil
+				return out.Bytes(), nil
 			}),
 		},
 	}
@@ -696,8 +711,8 @@ func TestPrecompileCallWithTracer(t *testing.T) {
 
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
-			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
-				return env.Call(contract, nil, suppliedGas, uint256.NewInt(0))
+			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte) (ret []byte, err error) {
+				return env.Call(contract, nil, env.Gas(), uint256.NewInt(0))
 			}),
 		},
 	}

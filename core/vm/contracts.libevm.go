@@ -45,11 +45,11 @@ type evmCallArgs struct {
 	callType CallType
 
 	// args:start
-	caller ContractRef
-	addr   common.Address
-	input  []byte
-	gas    uint64
-	value  *uint256.Int
+	caller       ContractRef
+	addr         common.Address
+	input        []byte
+	gasRemaining uint64
+	value        *uint256.Int
 	// args:end
 }
 
@@ -89,20 +89,26 @@ func (t CallType) OpCode() OpCode {
 }
 
 // run runs the [PrecompiledContract], differentiating between stateful and
-// regular types.
-func (args *evmCallArgs) run(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
-	if p, ok := p.(statefulPrecompile); ok {
-		return p(args.env(), input, suppliedGas)
+// regular types, updating `args.gasRemaining` in the stateful case.
+func (args *evmCallArgs) run(p PrecompiledContract, input []byte) (ret []byte, err error) {
+	switch p := p.(type) {
+	default:
+		return p.Run(input)
+	case statefulPrecompile:
+		env := args.env()
+		ret, err := p(env, input)
+		args.gasRemaining = env.Gas()
+		return ret, err
 	}
-	// Gas consumption for regular precompiles was already handled by the native
-	// RunPrecompiledContract(), which called this method.
-	ret, err = p.Run(input)
-	return ret, suppliedGas, err
 }
 
 // PrecompiledStatefulContract is the stateful equivalent of a
 // [PrecompiledContract].
-type PrecompiledStatefulContract func(env PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error)
+//
+// Instead of receiving and returning gas arguments, stateful precompiles use
+// the respective methods on [PrecompileEnvironment]. If a call to UseGas()
+// returns false, a stateful precompile SHOULD return [ErrOutOfGas].
+type PrecompiledStatefulContract func(env PrecompileEnvironment, input []byte) (ret []byte, err error)
 
 // NewStatefulPrecompile constructs a new PrecompiledContract that can be used
 // via an [EVM] instance but MUST NOT be called directly; a direct call to Run()
@@ -135,13 +141,18 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 type PrecompileEnvironment interface {
 	ChainConfig() *params.ChainConfig
 	Rules() params.Rules
-	ReadOnly() bool
 	// StateDB will be non-nil i.f.f !ReadOnly().
 	StateDB() StateDB
 	// ReadOnlyState will always be non-nil.
 	ReadOnlyState() libevm.StateReader
-	Addresses() *libevm.AddressContext
+
 	IncomingCallType() CallType
+	Addresses() *libevm.AddressContext
+	ReadOnly() bool
+	// Equivalent to respective methods on [Contract].
+	Gas() uint64
+	UseGas(uint64) (hasEnoughGas bool)
+	Value() *uint256.Int
 
 	BlockHeader() (types.Header, error)
 	BlockNumber() *big.Int
@@ -150,7 +161,7 @@ type PrecompileEnvironment interface {
 	// Call is equivalent to [EVM.Call] except that the `caller` argument is
 	// removed and automatically determined according to the type of call that
 	// invoked the precompile.
-	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, gasRemaining uint64, _ error)
+	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, _ error)
 }
 
 func (args *evmCallArgs) env() *environment {
@@ -174,7 +185,7 @@ func (args *evmCallArgs) env() *environment {
 
 	// This is equivalent to the `contract` variables created by evm.*Call*()
 	// methods, for non precompiles, to pass to [EVMInterpreter.Run].
-	contract := NewContract(args.caller, AccountRef(self), value, args.gas)
+	contract := NewContract(args.caller, AccountRef(self), value, args.gasRemaining)
 	if args.callType == DelegateCall {
 		contract = contract.AsDelegate()
 	}

@@ -23,6 +23,7 @@ import (
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/options"
@@ -37,12 +38,25 @@ type environment struct {
 	callType CallType
 }
 
+func (e *environment) Gas() uint64            { return e.self.Gas }
+func (e *environment) UseGas(gas uint64) bool { return e.self.UseGas(gas) }
+func (e *environment) Value() *uint256.Int    { return new(uint256.Int).Set(e.self.Value()) }
+
 func (e *environment) ChainConfig() *params.ChainConfig  { return e.evm.chainConfig }
 func (e *environment) Rules() params.Rules               { return e.evm.chainRules }
 func (e *environment) ReadOnlyState() libevm.StateReader { return e.evm.StateDB }
 func (e *environment) IncomingCallType() CallType        { return e.callType }
 func (e *environment) BlockNumber() *big.Int             { return new(big.Int).Set(e.evm.Context.BlockNumber) }
 func (e *environment) BlockTime() uint64                 { return e.evm.Context.Time }
+
+func (e *environment) refundGas(add uint64) error {
+	gas, overflow := math.SafeAdd(e.self.Gas, add)
+	if overflow {
+		return ErrGasUintOverflow
+	}
+	e.self.Gas = gas
+	return nil
+}
 
 func (e *environment) ReadOnly() bool {
 	// A switch statement provides clearer code coverage for difficult-to-test
@@ -87,11 +101,11 @@ func (e *environment) BlockHeader() (types.Header, error) {
 	return *hdr, nil
 }
 
-func (e *environment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, uint64, error) {
+func (e *environment) Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, error) {
 	return e.callContract(Call, addr, input, gas, value, opts...)
 }
 
-func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) (retData []byte, retGas uint64, retErr error) {
+func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) (retData []byte, retErr error) {
 	// Depth and read-only setting are handled by [EVMInterpreter.Run], which
 	// isn't used for precompiles, so we need to do it ourselves to maintain the
 	// expected invariants.
@@ -118,8 +132,12 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 	}
 
 	if in.readOnly && value != nil && !value.IsZero() {
-		return nil, gas, ErrWriteProtection
+		return nil, ErrWriteProtection
 	}
+	if !e.UseGas(gas) {
+		return nil, ErrOutOfGas
+	}
+
 	if t := e.evm.Config.Tracer; t != nil {
 		var bigVal *big.Int
 		if value != nil {
@@ -129,13 +147,17 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 
 		startGas := gas
 		defer func() {
-			t.CaptureEnd(retData, startGas-retGas, retErr)
+			t.CaptureEnd(retData, startGas-e.Gas(), retErr)
 		}()
 	}
 
 	switch typ {
 	case Call:
-		return e.evm.Call(caller, addr, input, gas, value)
+		ret, returnGas, callErr := e.evm.Call(caller, addr, input, gas, value)
+		if err := e.refundGas(returnGas); err != nil {
+			return nil, err
+		}
+		return ret, callErr
 	case CallCode, DelegateCall, StaticCall:
 		// TODO(arr4n): these cases should be very similar to CALL, hence the
 		// early abstraction, to signal to future maintainers. If implementing
@@ -144,6 +166,6 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		// compatibility.
 		fallthrough
 	default:
-		return nil, gas, fmt.Errorf("unimplemented precompile call type %v", typ)
+		return nil, fmt.Errorf("unimplemented precompile call type %v", typ)
 	}
 }
