@@ -18,7 +18,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -121,7 +120,7 @@ func loadConfig(file string, cfg *gethConfig) error {
 	err = tomlSettings.NewDecoder(bufio.NewReader(f)).Decode(cfg)
 	// Add file name to errors that have a line number.
 	if _, ok := err.(*toml.LineError); ok {
-		err = errors.New(file + ", " + err.Error())
+		err = fmt.Errorf("%s, %v", file, err)
 	}
 	return err
 }

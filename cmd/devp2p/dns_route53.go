@@ -208,7 +208,7 @@ func (c *route53Client) findZoneID(name string) (string, error) {
 		req.DNSName = resp.NextDNSName
 		req.HostedZoneId = resp.NextHostedZoneId
 	}
-	return "", errors.New("can't find zone ID for " + name)
+	return "", fmt.Errorf("can't find zone ID for %s", name)
 }
 
 // computeChanges creates DNS changes for the given set of DNS discovery records.
