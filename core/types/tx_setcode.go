@@ -73,7 +73,7 @@ type SetCodeAuthorization struct {
 	ChainID uint64         `json:"chainId" gencodec:"required"`
 	Address common.Address `json:"address" gencodec:"required"`
 	Nonce   uint64         `json:"nonce" gencodec:"required"`
-	V       uint8          `json:"v" gencodec:"required"`
+	V       uint8          `json:"yParity" gencodec:"required"`
 	R       uint256.Int    `json:"r" gencodec:"required"`
 	S       uint256.Int    `json:"s" gencodec:"required"`
 }
