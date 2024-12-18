@@ -11,13 +11,22 @@ import (
 // set of contracts.  It takes an optional override
 // list to specify contracts/libraries that have already been deployed on-chain.
 type DeploymentParams struct {
-	Contracts []*MetaData
+	contracts []*MetaData
 	// map of solidity library pattern to constructor input.
-	Inputs map[string][]byte
+	inputs map[string][]byte
 	// Overrides is an optional map of pattern to deployment address.
 	// Contracts/libraries that refer to dependencies in the override
 	// set are linked to the provided address (an already-deployed contract).
-	Overrides map[string]common.Address
+	overrides map[string]common.Address
+}
+
+// NewDeploymentParams instantiates a DeploymentParams instance.
+func NewDeploymentParams(contracts []*MetaData, inputs map[string][]byte, overrides map[string]common.Address) *DeploymentParams {
+	return &DeploymentParams{
+		contracts,
+		inputs,
+		overrides,
+	}
 }
 
 // DeploymentResult encapsulates information about the result of the deployment
@@ -203,22 +212,22 @@ func newDepTreeDeployer(deploy DeployFn) *depTreeDeployer {
 // LinkAndDeploy deploys a specified set of contracts and their dependent
 // libraries.  If an error occurs, only contracts which were successfully
 // deployed are returned in the result.
-func LinkAndDeploy(deployParams DeploymentParams, deploy DeployFn) (res *DeploymentResult, err error) {
+func LinkAndDeploy(deployParams *DeploymentParams, deploy DeployFn) (res *DeploymentResult, err error) {
 	unlinkedContracts := make(map[string]string)
 	accumRes := &DeploymentResult{
 		Txs:   make(map[string]*types.Transaction),
 		Addrs: make(map[string]common.Address),
 	}
-	for _, meta := range deployParams.Contracts {
+	for _, meta := range deployParams.contracts {
 		unlinkedContracts[meta.Pattern] = meta.Bin[2:]
 	}
-	treeBuilder := newDepTreeBuilder(deployParams.Overrides, unlinkedContracts)
+	treeBuilder := newDepTreeBuilder(deployParams.overrides, unlinkedContracts)
 	deps, _ := treeBuilder.BuildDepTrees()
 
 	for _, tr := range deps {
 		deployer := newDepTreeDeployer(deploy)
-		if deployParams.Inputs != nil {
-			deployer.input = map[string][]byte{tr.pattern: deployParams.Inputs[tr.pattern]}
+		if deployParams.inputs != nil {
+			deployer.input = map[string][]byte{tr.pattern: deployParams.inputs[tr.pattern]}
 		}
 		err := deployer.linkAndDeploy(tr)
 		res := deployer.result()

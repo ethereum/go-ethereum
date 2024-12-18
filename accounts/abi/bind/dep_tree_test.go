@@ -138,25 +138,24 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 		return contractAddr, nil, nil
 	}
 
-	var (
-		deployParams DeploymentParams
-	)
+	var contracts []*MetaData
+	overrides := make(map[string]common.Address)
+
 	for pattern, bin := range tc.contractCodes {
-		deployParams.Contracts = append(deployParams.Contracts, &MetaData{Pattern: pattern, Bin: "0x" + bin})
+		contracts = append(contracts, &MetaData{Pattern: pattern, Bin: "0x" + bin})
 	}
 	for pattern, bin := range tc.libCodes {
-		deployParams.Contracts = append(deployParams.Contracts, &MetaData{
+		contracts = append(contracts, &MetaData{
 			Bin:     "0x" + bin,
 			Pattern: pattern,
 		})
 	}
 
-	overridePatterns := make(map[string]common.Address)
 	for pattern, override := range tc.overrides {
-		overridePatterns[pattern] = override
+		overrides[pattern] = override
 	}
-	deployParams.Overrides = overridePatterns
 
+	deployParams := NewDeploymentParams(contracts, nil, overrides)
 	res, err := LinkAndDeploy(deployParams, mockDeploy)
 	if err != nil {
 		t.Fatalf("got error from LinkAndDeploy: %v\n", err)
