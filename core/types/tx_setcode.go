@@ -87,28 +87,22 @@ type authorizationMarshaling struct {
 	S       hexutil.U256
 }
 
-// SignAuth signs the provided authorization.
-func SignAuth(auth SetCodeAuthorization, prv *ecdsa.PrivateKey) (SetCodeAuthorization, error) {
+// SignAuthorization sets the signature of a code authorization.
+func SignAuthorization(prv *ecdsa.PrivateKey, auth SetCodeAuthorization) (SetCodeAuthorization, error) {
 	sighash := auth.sigHash()
 	sig, err := crypto.Sign(sighash[:], prv)
 	if err != nil {
 		return SetCodeAuthorization{}, err
 	}
-	return auth.withSignature(sig), nil
-}
-
-// withSignature updates the signature of an Authorization to be equal the
-// decoded signature provided in sig.
-func (a *SetCodeAuthorization) withSignature(sig []byte) SetCodeAuthorization {
 	r, s, _ := decodeSignature(sig)
 	return SetCodeAuthorization{
-		ChainID: a.ChainID,
-		Address: a.Address,
-		Nonce:   a.Nonce,
+		ChainID: auth.ChainID,
+		Address: auth.Address,
+		Nonce:   auth.Nonce,
 		V:       sig[64],
 		R:       *uint256.MustFromBig(r),
 		S:       *uint256.MustFromBig(s),
-	}
+	}, nil
 }
 
 func (a *SetCodeAuthorization) sigHash() common.Hash {
