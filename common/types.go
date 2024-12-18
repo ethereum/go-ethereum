@@ -19,6 +19,7 @@ package common
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -404,4 +405,17 @@ func ExtractAddressFromBytes(bytePenalties []byte) []Address {
 		copy(penalties[i][:], bytePenalties[i*AddressLength:])
 	}
 	return penalties
+}
+
+// AddressEIP55 is an alias of Address with a customized json marshaller
+type AddressEIP55 Address
+
+// String returns the hex representation of the address in the manner of EIP55.
+func (addr AddressEIP55) String() string {
+	return Address(addr).Hex()
+}
+
+// MarshalJSON marshals the address in the manner of EIP55.
+func (addr AddressEIP55) MarshalJSON() ([]byte, error) {
+	return json.Marshal(addr.String())
 }
