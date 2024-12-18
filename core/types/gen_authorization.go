@@ -19,7 +19,7 @@ func (s SetCodeAuthorization) MarshalJSON() ([]byte, error) {
 		ChainID hexutil.Uint64 `json:"chainId" gencodec:"required"`
 		Address common.Address `json:"address" gencodec:"required"`
 		Nonce   hexutil.Uint64 `json:"nonce" gencodec:"required"`
-		V       hexutil.Uint64 `json:"v" gencodec:"required"`
+		V       hexutil.Uint64 `json:"yParity" gencodec:"required"`
 		R       hexutil.U256   `json:"r" gencodec:"required"`
 		S       hexutil.U256   `json:"s" gencodec:"required"`
 	}
@@ -39,7 +39,7 @@ func (s *SetCodeAuthorization) UnmarshalJSON(input []byte) error {
 		ChainID *hexutil.Uint64 `json:"chainId" gencodec:"required"`
 		Address *common.Address `json:"address" gencodec:"required"`
 		Nonce   *hexutil.Uint64 `json:"nonce" gencodec:"required"`
-		V       *hexutil.Uint64 `json:"v" gencodec:"required"`
+		V       *hexutil.Uint64 `json:"yParity" gencodec:"required"`
 		R       *hexutil.U256   `json:"r" gencodec:"required"`
 		S       *hexutil.U256   `json:"s" gencodec:"required"`
 	}
@@ -60,7 +60,7 @@ func (s *SetCodeAuthorization) UnmarshalJSON(input []byte) error {
 	}
 	s.Nonce = uint64(*dec.Nonce)
 	if dec.V == nil {
-		return errors.New("missing required field 'v' for SetCodeAuthorization")
+		return errors.New("missing required field 'yParity' for SetCodeAuthorization")
 	}
 	s.V = uint8(*dec.V)
 	if dec.R == nil {
