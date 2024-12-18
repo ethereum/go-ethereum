@@ -41,12 +41,8 @@ type DeploymentResult struct {
 
 // Accumulate merges `other` into `d`
 func (d *DeploymentResult) Accumulate(other *DeploymentResult) {
-	for pattern, tx := range other.Txs {
-		d.Txs[pattern] = tx
-	}
-	for pattern, addr := range other.Addrs {
-		d.Addrs[pattern] = addr
-	}
+	maps.Copy(d.Txs, other.Txs)
+	maps.Copy(d.Addrs, other.Addrs)
 }
 
 // depTreeBuilder turns a set of unlinked contracts libraries into a set of one
