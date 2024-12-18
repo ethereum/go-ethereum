@@ -32,26 +32,26 @@ const (
 
 var Rewound = uint64(0)
 
-var TIP2019Block = big.NewInt(1)
-var TIPSigning = big.NewInt(225000)
-var TIPRandomize = big.NewInt(225000)
+var TIP2019Block = big.NewInt(0)
+var TIPSigning = big.NewInt(0)
+var TIPRandomize = big.NewInt(0)
 
-var TIPV2SwitchBlock = big.NewInt(7074000)
+var TIPV2SwitchBlock = big.NewInt(0)
 
-var TIPIncreaseMasternodes = big.NewInt(225000) // Upgrade MN Count at Block.
-var TIPNoHalvingMNReward = big.NewInt(429987)   // hardfork no halving masternodes reward
-var BlackListHFNumber = uint64(225000)
-var TIPXDCX = big.NewInt(225000)
-var TIPXDCXLending = big.NewInt(225000)
-var TIPXDCXCancellationFee = big.NewInt(225000)
-var TIPXDCXCancellationFeeTestnet = big.NewInt(225000)
-var TIPXDCXMinerDisable = big.NewInt(15894900)
-var TIPXDCXReceiverDisable = big.NewInt(18018000)
-var BerlinBlock = big.NewInt(16832700)
-var LondonBlock = big.NewInt(16832700)
-var MergeBlock = big.NewInt(16832700)
-var ShanghaiBlock = big.NewInt(16832700)
-var Eip1559Block = big.NewInt(23035500)
+var TIPIncreaseMasternodes = big.NewInt(0) // Upgrade MN Count at Block.
+var TIPNoHalvingMNReward = big.NewInt(0)   // hardfork no halving masternodes reward
+var BlackListHFNumber = uint64(0)
+var TIPXDCX = big.NewInt(0)
+var TIPXDCXLending = big.NewInt(0)
+var TIPXDCXCancellationFee = big.NewInt(0)
+var TIPXDCXCancellationFeeTestnet = big.NewInt(0)
+var TIPXDCXMinerDisable = big.NewInt(0)
+var TIPXDCXReceiverDisable = big.NewInt(0)
+var BerlinBlock = big.NewInt(0)
+var LondonBlock = big.NewInt(0)
+var MergeBlock = big.NewInt(0)
+var ShanghaiBlock = big.NewInt(0)
+var Eip1559Block = big.NewInt(0)
 
 var TIPXDCXTestnet = big.NewInt(0)
 var IsTestnet bool = false

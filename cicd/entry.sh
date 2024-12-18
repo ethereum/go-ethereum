@@ -7,7 +7,7 @@ fi
 
 echo "Select to run $NETWORK..."
 ln -s /usr/bin/XDC-$NETWORK /usr/bin/XDC
-cp /work/$NETWORK/* /work
+cp -n /work/$NETWORK/* /work
 
 echo "Start Node..."
 /work/start.sh
