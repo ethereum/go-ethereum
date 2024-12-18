@@ -176,7 +176,7 @@ func (cb *contractBinder) bindEvent(original abi.Event) error {
 	return nil
 }
 
-// bindEvent normalizes an error and registers it to be emitted in the bindings.
+// bindError normalizes an error and registers it to be emitted in the bindings.
 func (cb *contractBinder) bindError(original abi.Error) error {
 	normalizedName, err := cb.RegisterErrorIdentifier(original.Name)
 	if err != nil {
