@@ -17,6 +17,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -27,40 +28,50 @@ import (
 // HeaderHooks are required for all types registered with [RegisterExtras] for
 // [Header] payloads.
 type HeaderHooks interface {
+	MarshalJSON(*Header) ([]byte, error) //nolint:govet // Type-specific override hook
+	UnmarshalJSON(*Header, []byte) error //nolint:govet
 	EncodeRLP(*Header, io.Writer) error
 	DecodeRLP(*Header, *rlp.Stream) error
+}
+
+// hooks returns the Header's registered HeaderHooks, if any, otherwise a
+// [NOOPHeaderHooks] suitable for running default behaviour.
+func (h *Header) hooks() HeaderHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromHeader(h)
+	}
+	return new(NOOPHeaderHooks)
+}
+
+func (e ExtraPayloads[HPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
+	return e.Header.Get(h)
 }
 
 var _ interface {
 	rlp.Encoder
 	rlp.Decoder
+	json.Marshaler
+	json.Unmarshaler
 } = (*Header)(nil)
+
+// MarshalJSON implements the [json.Marshaler] interface.
+func (h *Header) MarshalJSON() ([]byte, error) {
+	return h.hooks().MarshalJSON(h)
+}
+
+// UnmarshalJSON implements the [json.Unmarshaler] interface.
+func (h *Header) UnmarshalJSON(b []byte) error {
+	return h.hooks().UnmarshalJSON(h, b)
+}
 
 // EncodeRLP implements the [rlp.Encoder] interface.
 func (h *Header) EncodeRLP(w io.Writer) error {
-	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.hooksFromHeader(h).EncodeRLP(h, w)
-	}
-	return h.encodeRLP(w)
-}
-
-// decodeHeaderRLPDirectly bypasses the [Header.DecodeRLP] method to avoid
-// infinite recursion.
-func decodeHeaderRLPDirectly(h *Header, s *rlp.Stream) error {
-	type withoutMethods Header
-	return s.Decode((*withoutMethods)(h))
+	return h.hooks().EncodeRLP(h, w)
 }
 
 // DecodeRLP implements the [rlp.Decoder] interface.
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
-	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.hooksFromHeader(h).DecodeRLP(h, s)
-	}
-	return decodeHeaderRLPDirectly(h, s)
-}
-
-func (e ExtraPayloads[HPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
-	return e.Header.Get(h)
+	return h.hooks().DecodeRLP(h, s)
 }
 
 func (h *Header) extraPayload() *pseudo.Type {
@@ -81,10 +92,19 @@ type NOOPHeaderHooks struct{}
 
 var _ HeaderHooks = (*NOOPHeaderHooks)(nil)
 
+func (*NOOPHeaderHooks) MarshalJSON(h *Header) ([]byte, error) { //nolint:govet
+	return h.marshalJSON()
+}
+
+func (*NOOPHeaderHooks) UnmarshalJSON(h *Header, b []byte) error { //nolint:govet
+	return h.unmarshalJSON(b)
+}
+
 func (*NOOPHeaderHooks) EncodeRLP(h *Header, w io.Writer) error {
 	return h.encodeRLP(w)
 }
 
 func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
-	return decodeHeaderRLPDirectly(h, s)
+	type withoutMethods Header
+	return s.Decode((*withoutMethods)(h))
 }

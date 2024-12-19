@@ -60,6 +60,7 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 }
 
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
+//go:generate go run ../../libevm/cmd/internalise -file gen_header_json.go Header.MarshalJSON Header.UnmarshalJSON
 //go:generate go run ../../rlp/rlpgen -type Header -out gen_header_rlp.go
 //go:generate go run ../../libevm/cmd/internalise -file gen_header_rlp.go Header.EncodeRLP
 
