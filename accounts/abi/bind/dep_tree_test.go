@@ -205,124 +205,122 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 	return nil
 }
 
-var linkTestCases = []linkTestCaseInput{
-	// test simple contract without any dependencies or overrides
-	{
-		map[rune][]rune{
-			'a': {}},
-		map[rune]struct{}{},
-		map[rune]struct{}{
-			'a': {}},
-	},
-	// test deployment of a contract that depends on somes libraries.
-	{
-		map[rune][]rune{
-			'a': {'b', 'c', 'd', 'e'}},
-		map[rune]struct{}{},
-		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}},
-	},
-	// test deployment of a contract that depends on some libraries,
-	// one of which has its own library dependencies.
-	{
-		map[rune][]rune{
-			'a': {'b', 'c', 'd', 'e'},
-			'e': {'f', 'g', 'h', 'i'}},
-		map[rune]struct{}{},
-		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}},
-	},
-	// test single contract only without deps
-	{
-		map[rune][]rune{
-			'a': {}},
-		map[rune]struct{}{},
-		map[rune]struct{}{
-			'a': {},
+func TestContractLinking(t *testing.T) {
+	for i, tc := range []linkTestCaseInput{
+		// test simple contract without any dependencies or overrides
+		{
+			map[rune][]rune{
+				'a': {}},
+			map[rune]struct{}{},
+			map[rune]struct{}{
+				'a': {}},
 		},
-	},
-	// test that libraries at different levels of the tree can share deps,
-	// and that these shared deps will only be deployed once.
-	{
-		map[rune][]rune{
-			'a': {'b', 'c', 'd', 'e'},
-			'e': {'f', 'g', 'h', 'i', 'm'},
-			'i': {'j', 'k', 'l', 'm'}},
-		map[rune]struct{}{},
-		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {}, 'k': {}, 'l': {}, 'm': {},
+		// test deployment of a contract that depends on somes libraries.
+		{
+			map[rune][]rune{
+				'a': {'b', 'c', 'd', 'e'}},
+			map[rune]struct{}{},
+			map[rune]struct{}{
+				'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}},
 		},
-	},
-	// test two contracts can be deployed which don't share deps
-	linkTestCaseInput{
-		map[rune][]rune{
-			'a': {'b', 'c', 'd', 'e'},
-			'f': {'g', 'h', 'i', 'j'}},
-		map[rune]struct{}{},
-		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {},
+		// test deployment of a contract that depends on some libraries,
+		// one of which has its own library dependencies.
+		{
+			map[rune][]rune{
+				'a': {'b', 'c', 'd', 'e'},
+				'e': {'f', 'g', 'h', 'i'}},
+			map[rune]struct{}{},
+			map[rune]struct{}{
+				'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}},
 		},
-	},
-	// test two contracts can be deployed which share deps
-	linkTestCaseInput{
-		map[rune][]rune{
+		// test single contract only without deps
+		{
+			map[rune][]rune{
+				'a': {}},
+			map[rune]struct{}{},
+			map[rune]struct{}{
+				'a': {},
+			},
+		},
+		// test that libraries at different levels of the tree can share deps,
+		// and that these shared deps will only be deployed once.
+		{
+			map[rune][]rune{
+				'a': {'b', 'c', 'd', 'e'},
+				'e': {'f', 'g', 'h', 'i', 'm'},
+				'i': {'j', 'k', 'l', 'm'}},
+			map[rune]struct{}{},
+			map[rune]struct{}{
+				'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {}, 'k': {}, 'l': {}, 'm': {},
+			},
+		},
+		// test two contracts can be deployed which don't share deps
+		linkTestCaseInput{
+			map[rune][]rune{
+				'a': {'b', 'c', 'd', 'e'},
+				'f': {'g', 'h', 'i', 'j'}},
+			map[rune]struct{}{},
+			map[rune]struct{}{
+				'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {},
+			},
+		},
+		// test two contracts can be deployed which share deps
+		linkTestCaseInput{
+			map[rune][]rune{
+				'a': {'b', 'c', 'd', 'e'},
+				'f': {'g', 'c', 'd', 'h'}},
+			map[rune]struct{}{},
+			map[rune]struct{}{
+				'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {},
+			},
+		},
+		// test one contract with overrides for all lib deps
+		linkTestCaseInput{
+			map[rune][]rune{
+				'a': {'b', 'c', 'd', 'e'}},
+			map[rune]struct{}{'b': {}, 'c': {}, 'd': {}, 'e': {}},
+			map[rune]struct{}{
+				'a': {}},
+		},
+		// test one contract with overrides for some lib deps
+		linkTestCaseInput{
+			map[rune][]rune{
+				'a': {'b', 'c'}},
+			map[rune]struct{}{'b': {}, 'c': {}},
+			map[rune]struct{}{
+				'a': {}},
+		},
+		// test deployment of a contract with overrides
+		linkTestCaseInput{
+			map[rune][]rune{
+				'a': {}},
+			map[rune]struct{}{'a': {}},
+			map[rune]struct{}{},
+		},
+		// two contracts ('a' and 'f') share some dependencies.  contract 'a' is marked as an override.  expect that any of
+		// its depdencies that aren't shared with 'f' are not deployed.
+		linkTestCaseInput{map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
 			'f': {'g', 'c', 'd', 'h'}},
-		map[rune]struct{}{},
-		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {},
+			map[rune]struct{}{'a': {}},
+			map[rune]struct{}{
+				'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {}},
 		},
-	},
-	// test one contract with overrides for all lib deps
-	linkTestCaseInput{
-		map[rune][]rune{
-			'a': {'b', 'c', 'd', 'e'}},
-		map[rune]struct{}{'b': {}, 'c': {}, 'd': {}, 'e': {}},
-		map[rune]struct{}{
-			'a': {}},
-	},
-	// test one contract with overrides for some lib deps
-	linkTestCaseInput{
-		map[rune][]rune{
-			'a': {'b', 'c'}},
-		map[rune]struct{}{'b': {}, 'c': {}},
-		map[rune]struct{}{
-			'a': {}},
-	},
-	// test deployment of a contract with overrides
-	linkTestCaseInput{
-		map[rune][]rune{
-			'a': {}},
-		map[rune]struct{}{'a': {}},
-		map[rune]struct{}{},
-	},
-	// two contracts ('a' and 'f') share some dependencies.  contract 'a' is marked as an override.  expect that any of
-	// its depdencies that aren't shared with 'f' are not deployed.
-	linkTestCaseInput{map[rune][]rune{
-		'a': {'b', 'c', 'd', 'e'},
-		'f': {'g', 'c', 'd', 'h'}},
-		map[rune]struct{}{'a': {}},
-		map[rune]struct{}{
-			'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {}},
-	},
-	// test nested libraries that share deps at different levels of the tree... with override.
-	// same condition as above test:  no sub-dependencies of
-	{
-		map[rune][]rune{
-			'a': {'b', 'c', 'd', 'e'},
-			'e': {'f', 'g', 'h', 'i', 'm'},
-			'i': {'j', 'k', 'l', 'm'},
-			'l': {'n', 'o', 'p'}},
-		map[rune]struct{}{
-			'i': {},
+		// test nested libraries that share deps at different levels of the tree... with override.
+		// same condition as above test:  no sub-dependencies of
+		{
+			map[rune][]rune{
+				'a': {'b', 'c', 'd', 'e'},
+				'e': {'f', 'g', 'h', 'i', 'm'},
+				'i': {'j', 'k', 'l', 'm'},
+				'l': {'n', 'o', 'p'}},
+			map[rune]struct{}{
+				'i': {},
+			},
+			map[rune]struct{}{
+				'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {}},
 		},
-		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {}},
-	},
-}
-
-func TestContractLinking(t *testing.T) {
-	for i, tc := range linkTestCases {
+	} {
 		if err := testLinkCase(tc); err != nil {
 			t.Fatalf("test case %d failed: %v", i, err)
 		}
