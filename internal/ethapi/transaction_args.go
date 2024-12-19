@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	gomath "math"
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -99,7 +100,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 		if skipGasEstimation { // Skip gas usage estimation if a precise gas limit is not critical, e.g., in non-transaction calls.
 			gas := hexutil.Uint64(b.RPCGasCap())
 			if gas == 0 {
-				gas = hexutil.Uint64(math.MaxUint64 / 2)
+				gas = hexutil.Uint64(gomath.MaxUint64 / 2)
 			}
 			args.Gas = &gas
 		} else { // Estimate the gas usage otherwise.
@@ -245,7 +246,7 @@ func (args *TransactionArgs) ToMessage(b Backend, number *big.Int, globalGasCap 
 		gas = uint64(*args.Gas)
 	}
 	if gas == 0 {
-		gas = math.MaxUint64 / 2
+		gas = gomath.MaxUint64 / 2
 	}
 	if globalGasCap != 0 && globalGasCap < gas {
 		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)

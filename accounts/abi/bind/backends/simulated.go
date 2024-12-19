@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	gomath "math"
 	"math/big"
 	"os"
 	"sync"
@@ -476,7 +477,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call XDPoSChain.Cal
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(evmContext, txContext, statedb, nil, b.config, vm.Config{NoBaseFee: true})
-	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
+	gaspool := new(core.GasPool).AddGas(gomath.MaxUint64)
 	owner := common.Address{}
 	return core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
 }

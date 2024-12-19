@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"strings"
 	"time"
+	gomath "math"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
@@ -415,7 +416,7 @@ func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (commo
 // the given password for duration seconds. If duration is nil it will use a
 // default of 300 seconds. It returns an indication if the account was unlocked.
 func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *uint64) (bool, error) {
-	const max = uint64(time.Duration(math.MaxInt64) / time.Second)
+	const max = uint64(time.Duration(gomath.MaxInt64) / time.Second)
 	var d time.Duration
 	if duration == nil {
 		d = 300 * time.Second
@@ -1389,7 +1390,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	}()
 
 	// Execute the message.
-	gp := new(core.GasPool).AddGas(math.MaxUint64)
+	gp := new(core.GasPool).AddGas(gomath.MaxUint64)
 	owner := common.Address{}
 	result, err := core.ApplyMessage(evm, msg, gp, owner)
 	if err := vmError(); err != nil {

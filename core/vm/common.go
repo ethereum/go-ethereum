@@ -17,8 +17,9 @@
 package vm
 
 import (
+	"math"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/holiman/uint256"
 )
 
