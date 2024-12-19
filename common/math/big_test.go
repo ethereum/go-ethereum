@@ -21,8 +21,6 @@ import (
 	"encoding/hex"
 	"math/big"
 	"testing"
-
-	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
 func TestHexOrDecimal256(t *testing.T) {
@@ -100,23 +98,6 @@ func TestBigMin(t *testing.T) {
 	}
 }
 
-func TestFirstBigSet(t *testing.T) {
-	tests := []struct {
-		num *big.Int
-		ix  int
-	}{
-		{big.NewInt(0), 0},
-		{big.NewInt(1), 0},
-		{big.NewInt(2), 1},
-		{big.NewInt(0x100), 8},
-	}
-	for _, test := range tests {
-		if ix := FirstBitSet(test.num); ix != test.ix {
-			t.Errorf("FirstBitSet(b%b) = %d, want %d", test.num, ix, test.ix)
-		}
-	}
-}
-
 func TestPaddedBigBytes(t *testing.T) {
 	tests := []struct {
 		num    *big.Int
@@ -153,20 +134,6 @@ func BenchmarkPaddedBigBytesSmallOnePadding(b *testing.B) {
 	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
 	for i := 0; i < b.N; i++ {
 		PaddedBigBytes(bigint, 32)
-	}
-}
-
-func BenchmarkByteAtBrandNew(b *testing.B) {
-	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
-	for i := 0; i < b.N; i++ {
-		bigEndianByteAt(bigint, 15)
-	}
-}
-
-func BenchmarkByteAt(b *testing.B) {
-	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
-	for i := 0; i < b.N; i++ {
-		bigEndianByteAt(bigint, 15)
 	}
 }
 
@@ -218,63 +185,5 @@ func TestU256Bytes(t *testing.T) {
 	unsigned := U256Bytes(big.NewInt(1))
 	if !bytes.Equal(unsigned, ubytes) {
 		t.Errorf("expected %x got %x", ubytes, unsigned)
-	}
-}
-
-func TestBigEndianByteAt(t *testing.T) {
-	tests := []struct {
-		x   string
-		y   int
-		exp byte
-	}{
-		{"00", 0, 0x00},
-		{"01", 1, 0x00},
-		{"00", 1, 0x00},
-		{"01", 0, 0x01},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 0, 0x30},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 1, 0x20},
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 31, 0xAB},
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 32, 0x00},
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 500, 0x00},
-	}
-	for _, test := range tests {
-		v := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
-		actual := bigEndianByteAt(v, test.y)
-		if actual != test.exp {
-			t.Fatalf("Expected  [%v] %v:th byte to be %v, was %v.", test.x, test.y, test.exp, actual)
-		}
-	}
-}
-
-func TestLittleEndianByteAt(t *testing.T) {
-	tests := []struct {
-		x   string
-		y   int
-		exp byte
-	}{
-		{"00", 0, 0x00},
-		{"01", 1, 0x00},
-		{"00", 1, 0x00},
-		{"01", 0, 0x00},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 0, 0x00},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 1, 0x00},
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 31, 0x00},
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 32, 0x00},
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 0, 0xAB},
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 1, 0xCD},
-		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", 0, 0x00},
-		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", 1, 0xCD},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 31, 0x30},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 30, 0x20},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 32, 0x0},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 31, 0xFF},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0xFFFF, 0x0},
-	}
-	for _, test := range tests {
-		v := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
-		actual := Byte(v, 32, test.y)
-		if actual != test.exp {
-			t.Fatalf("Expected  [%v] %v:th byte to be %v, was %v.", test.x, test.y, test.exp, actual)
-		}
 	}
 }
