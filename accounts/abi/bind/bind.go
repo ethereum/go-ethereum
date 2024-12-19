@@ -228,17 +228,16 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		}
 
 		contracts[types[i]] = &tmplContract{
-			Type:         capitalise(types[i]),
-			InputABI:     strings.ReplaceAll(strippedABI, "\"", "\\\""),
-			InputBin:     strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
-			Constructor:  evmABI.Constructor,
-			Calls:        calls,
-			Transacts:    transacts,
-			Fallback:     fallback,
-			Receive:      receive,
-			Events:       events,
-			Libraries:    make(map[string]string),
-			AllLibraries: make(map[string]string),
+			Type:        capitalise(types[i]),
+			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
+			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
+			Constructor: evmABI.Constructor,
+			Calls:       calls,
+			Transacts:   transacts,
+			Fallback:    fallback,
+			Receive:     receive,
+			Events:      events,
+			Libraries:   make(map[string]string),
 		}
 
 		// Function 4-byte signatures are stored in the same sequence
