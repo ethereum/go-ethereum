@@ -48,6 +48,7 @@ type XDPoS_v2 struct {
 
 	BroadcastCh  chan interface{}
 	minePeriodCh chan int
+	newRoundCh   chan types.Round
 
 	timeoutWorker *countdown.CountdownTimer // Timer to generate broadcast timeout msg if threashold reached
 	timeoutCount  int                       // number of timeout being sent
@@ -71,7 +72,7 @@ type XDPoS_v2 struct {
 	votePoolCollectionTime time.Time
 }
 
-func New(chainConfig *params.ChainConfig, db ethdb.Database, minePeriodCh chan int) *XDPoS_v2 {
+func New(chainConfig *params.ChainConfig, db ethdb.Database, minePeriodCh chan int, newRoundCh chan types.Round) *XDPoS_v2 {
 	config := chainConfig.XDPoS
 	// Setup timeoutTimer
 	duration := time.Duration(config.V2.CurrentConfig.TimeoutPeriod) * time.Second
@@ -100,6 +101,7 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database, minePeriodCh chan i
 		timeoutWorker:   timeoutTimer,
 		BroadcastCh:     make(chan interface{}),
 		minePeriodCh:    minePeriodCh,
+		newRoundCh:      newRoundCh,
 
 		round2epochBlockInfo: round2epochBlockInfo,
 
@@ -902,6 +904,7 @@ func (x *XDPoS_v2) processQC(blockChainReader consensus.ChainReader, incomingQuo
 1. Set currentRound = QC round + 1 (or TC round +1)
 2. Reset timer
 3. Reset vote and timeout Pools
+4. Send signal to miner
 */
 func (x *XDPoS_v2) setNewRound(blockChainReader consensus.ChainReader, round types.Round) {
 	log.Info("[setNewRound] new round and reset pools and workers", "round", round)
@@ -911,6 +914,12 @@ func (x *XDPoS_v2) setNewRound(blockChainReader consensus.ChainReader, round typ
 	x.timeoutPool.Clear()
 	// don't need to clean vote pool, we have other process to clean and it's not good to clean here, some edge case may break
 	// for example round gets bump during collecting vote, so we have to keep vote.
+
+	// send signal to newRoundCh, but if full don't send
+	select {
+	case x.newRoundCh <- round:
+	default:
+	}
 }
 
 func (x *XDPoS_v2) broadcastToBftChannel(msg interface{}) {

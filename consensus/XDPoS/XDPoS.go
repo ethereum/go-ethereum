@@ -41,6 +41,7 @@ import (
 const (
 	ExtraFieldCheck     = true
 	SkipExtraFieldCheck = false
+	newRoundChanSize    = 1
 )
 
 func (x *XDPoS) SigHash(header *types.Header) (hash common.Hash) {
@@ -63,6 +64,8 @@ type XDPoS struct {
 
 	// Share Channel
 	MinePeriodCh chan int // Miner wait Period Channel
+
+	NewRoundCh chan types.Round // Miner use this channel to trigger worker to commitNewWork
 
 	// Trading and lending service
 	GetXDCXService    func() utils.TradingService
@@ -104,6 +107,7 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS {
 	log.Info("xdc config loading", "v2 config", config.V2)
 
 	minePeriodCh := make(chan int)
+	newRoundCh := make(chan types.Round, newRoundChanSize)
 
 	// Allocate the snapshot caches and create the engine
 	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)
@@ -113,10 +117,11 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS {
 		db:     db,
 
 		MinePeriodCh: minePeriodCh,
+		NewRoundCh:   newRoundCh,
 
 		signingTxsCache: signingTxsCache,
 		EngineV1:        engine_v1.New(chainConfig, db),
-		EngineV2:        engine_v2.New(chainConfig, db, minePeriodCh),
+		EngineV2:        engine_v2.New(chainConfig, db, minePeriodCh, newRoundCh),
 	}
 }
 
@@ -131,6 +136,7 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 	}
 
 	minePeriodCh := make(chan int)
+	newRoundCh := make(chan types.Round, newRoundChanSize)
 
 	// Allocate the snapshot caches and create the engine
 	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)
@@ -140,13 +146,14 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 		db:     db,
 
 		MinePeriodCh: minePeriodCh,
+		NewRoundCh:   newRoundCh,
 
 		GetXDCXService:    func() utils.TradingService { return nil },
 		GetLendingService: func() utils.LendingService { return nil },
 
 		signingTxsCache: signingTxsCache,
 		EngineV1:        engine_v1.NewFaker(db, chainConfig),
-		EngineV2:        engine_v2.New(chainConfig, db, minePeriodCh),
+		EngineV2:        engine_v2.New(chainConfig, db, minePeriodCh, newRoundCh),
 	}
 	return fakeEngine
 }

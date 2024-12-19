@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -116,7 +117,9 @@ type worker struct {
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
-	wg           sync.WaitGroup
+	resetCh      chan time.Duration // Channel to request timer resets
+
+	wg sync.WaitGroup
 
 	agents map[Agent]struct{}
 	recv   chan *Result
@@ -158,6 +161,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		txsCh:          make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
+		resetCh:        make(chan time.Duration, 1),
 		chainDb:        eth.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		chain:          eth.BlockChain(),
@@ -273,16 +277,30 @@ func (w *worker) update() {
 	minePeriod := 2
 	MinePeriodCh := w.engine.(*XDPoS.XDPoS).MinePeriodCh
 	defer close(MinePeriodCh)
+	NewRoundCh := w.engine.(*XDPoS.XDPoS).NewRoundCh
+	defer close(NewRoundCh)
 
 	timeout := time.NewTimer(time.Duration(minePeriod) * time.Second)
-	c := make(chan struct{})
+	defer timeout.Stop()
+	c := make(chan struct{}, 1)
+	defer close(c)
 	finish := make(chan struct{})
 	defer close(finish)
-	defer timeout.Stop()
+
 	go func() {
 		for {
 			// A real event arrived, process interesting content
 			select {
+			case d := <-w.resetCh:
+				// Reset the timer to the new duration.
+				if !timeout.Stop() {
+					// Drain the timer channel if it had already expired.
+					select {
+					case <-timeout.C:
+					default:
+					}
+				}
+				timeout.Reset(d)
 			case <-timeout.C:
 				c <- struct{}{}
 			case <-finish:
@@ -296,18 +314,26 @@ func (w *worker) update() {
 		case v := <-MinePeriodCh:
 			log.Info("[worker] update wait period", "period", v)
 			minePeriod = v
-			timeout.Reset(time.Duration(minePeriod) * time.Second)
+			w.resetCh <- time.Duration(minePeriod) * time.Second
 
 		case <-c:
 			if atomic.LoadInt32(&w.mining) == 1 {
 				w.commitNewWork()
 			}
-			timeout.Reset(time.Duration(minePeriod) * time.Second)
+			resetTime := getResetTime(w.chain, minePeriod)
+			w.resetCh <- resetTime
 
 		// Handle ChainHeadEvent
 		case <-w.chainHeadCh:
 			w.commitNewWork()
-			timeout.Reset(time.Duration(minePeriod) * time.Second)
+			resetTime := getResetTime(w.chain, minePeriod)
+			w.resetCh <- resetTime
+
+		// Handle new round
+		case <-NewRoundCh:
+			w.commitNewWork()
+			resetTime := getResetTime(w.chain, minePeriod)
+			w.resetCh <- resetTime
 
 		// Handle ChainSideEvent
 		case <-w.chainSideCh:
@@ -352,6 +378,19 @@ func (w *worker) update() {
 			return
 		}
 	}
+}
+
+func getResetTime(chain *core.BlockChain, minePeriod int) time.Duration {
+	minePeriodDuration := time.Duration(minePeriod) * time.Second
+	currentBlockTime := chain.CurrentBlock().Time().Int64()
+	nowTime := time.Now().UnixMilli()
+	resetTime := time.Duration(currentBlockTime)*time.Second + minePeriodDuration - time.Duration(nowTime)*time.Millisecond
+	// in case the current block time is not very accurate
+	if resetTime > minePeriodDuration || resetTime <= 0 {
+		resetTime = minePeriodDuration
+	}
+	log.Debug("[update] Miner worker timer reset", "resetMilliseconds", resetTime.Milliseconds(), "minePeriodSec", minePeriod, "currentBlockTimeSec", fmt.Sprintf("%d", currentBlockTime), "currentSystemTimeSec", fmt.Sprintf("%d.%03d", nowTime/1000, nowTime%1000))
+	return resetTime
 }
 
 func (w *worker) wait() {
