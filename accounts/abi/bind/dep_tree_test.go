@@ -193,7 +193,7 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 		t.Fatalf("got error from LinkAndDeploy: %v\n", err)
 	}
 
-	if len(res.Addrs) != len(tcInput.expectDeployed) {
+	if len(res.Txs) != len(tcInput.expectDeployed) {
 		t.Fatalf("got %d deployed contracts.  expected %d.\n", len(res.Addrs), len(tcInput.expectDeployed))
 	}
 	for contract, _ := range tcInput.expectDeployed {
