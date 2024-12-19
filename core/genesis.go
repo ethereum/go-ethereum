@@ -38,13 +38,16 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
 
-var errGenesisNoConfig = errors.New("genesis has no chain configuration")
+var (
+	errGenesisNoConfig = errors.New("genesis has no chain configuration")
+)
 
 // Deprecated: use types.Account instead.
 type GenesisAccount = types.Account
@@ -183,10 +186,8 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.Gene
 		if err := alloc.UnmarshalJSON(blob); err != nil {
 			return nil, err
 		}
-
 		return alloc, nil
 	}
-
 	// Genesis allocation is missing and there are several possibilities:
 	// the node is legacy which doesn't persist the genesis allocation or
 	// the persisted allocation is just lost.
@@ -204,7 +205,6 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.Gene
 	if genesis != nil {
 		return genesis.Alloc, nil
 	}
-
 	return nil, nil
 }
 
@@ -239,6 +239,21 @@ type ChainOverrides struct {
 	OverrideVerkle *uint64
 }
 
+// apply applies the chain overrides on the supplied chain config.
+func (o *ChainOverrides) apply(cfg *params.ChainConfig) *params.ChainConfig {
+	if o == nil || cfg == nil {
+		return cfg
+	}
+	cpy := *cfg
+	if o.OverrideCancun != nil {
+		cpy.CancunTime = o.OverrideCancun
+	}
+	if o.OverrideVerkle != nil {
+		cpy.VerkleTime = o.OverrideVerkle
+	}
+	return &cpy
+}
+
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
@@ -252,23 +267,36 @@ type ChainOverrides struct {
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
-	return SetupGenesisBlockWithOverride(db, triedb, genesis, nil)
+func SetupGenesisBlock(db ethdb.Database, scheme string, recordPreimage bool, genesis *Genesis) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+	return SetupGenesisBlockWithOverride(db, scheme, recordPreimage, genesis, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, error) {
-	if genesis != nil && genesis.Config == nil {
-		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
+// newTrieDBConfig constructs the configuration of trie database for genesis commit.
+func newTrieDBConfig(isVerkle bool, scheme string, recordPreimage bool) (*triedb.Config, error) {
+	if isVerkle && scheme != rawdb.PathScheme {
+		return nil, fmt.Errorf("triedb must be initialized in path mode for verkle, have %s", scheme)
 	}
-	applyOverrides := func(config *params.ChainConfig) {
-		if config != nil {
-			if overrides != nil && overrides.OverrideCancun != nil {
-				config.CancunTime = overrides.OverrideCancun
-			}
-			if overrides != nil && overrides.OverrideVerkle != nil {
-				config.VerkleTime = overrides.OverrideVerkle
-			}
-		}
+	switch scheme {
+	case rawdb.PathScheme:
+		return &triedb.Config{
+			PathDB:    pathdb.Defaults,
+			Preimages: recordPreimage,
+			IsVerkle:  isVerkle,
+		}, nil
+	case rawdb.HashScheme:
+		return &triedb.Config{
+			HashDB:    hashdb.Defaults,
+			Preimages: recordPreimage,
+			IsVerkle:  isVerkle,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown scheme %s", scheme)
+	}
+}
+
+func SetupGenesisBlockWithOverride(db ethdb.Database, scheme string, recordPreimage bool, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+	if genesis != nil && genesis.Config == nil {
+		return nil, common.Hash{}, nil, errGenesisNoConfig
 	}
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
@@ -279,80 +307,103 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		} else {
 			log.Info("Writing custom genesis block")
 		}
-
-		applyOverrides(genesis.Config)
-		block, err := genesis.Commit(db, triedb)
+		triedbConfig, err := newTrieDBConfig(genesis.Config.IsVerkleGenesis(), scheme, recordPreimage)
 		if err != nil {
-			return genesis.Config, common.Hash{}, err
+			return nil, common.Hash{}, nil, err
 		}
-		return genesis.Config, block.Hash(), nil
+		tdb := triedb.NewDatabase(db, triedbConfig)
+		defer tdb.Close()
+
+		genesis.Config = overrides.apply(genesis.Config)
+		block, err := genesis.Commit(db, tdb)
+		if err != nil {
+			return nil, common.Hash{}, nil, err
+		}
+		return genesis.Config, block.Hash(), nil, nil
 	}
 	// The genesis block is present(perhaps in ancient database) while the
 	// state database is not initialized yet. It can happen that the node
 	// is initialized with an external ancient store. Commit genesis state
 	// in this case.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if header.Root != types.EmptyRootHash && !triedb.Initialized(header.Root) {
-		if genesis == nil {
-			genesis = DefaultGenesisBlock()
+	if header.Root != types.EmptyRootHash {
+		var config *params.ChainConfig
+		if genesis != nil {
+			config = genesis.Config
 		}
-		applyOverrides(genesis.Config)
-		// Ensure the stored genesis matches with the given one.
-		hash := genesis.ToBlock().Hash()
-		if hash != stored {
-			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
+		if config == nil {
+			config = rawdb.ReadChainConfig(db, stored)
 		}
-		block, err := genesis.Commit(db, triedb)
+		if config == nil {
+			return nil, common.Hash{}, nil, errors.New("chain config is not specified")
+		}
+		triedbConfig, err := newTrieDBConfig(config.IsVerkleGenesis(), scheme, recordPreimage)
 		if err != nil {
-			return genesis.Config, hash, err
+			return nil, common.Hash{}, nil, err
 		}
-		return genesis.Config, block.Hash(), nil
+		tdb := triedb.NewDatabase(db, triedbConfig)
+		defer tdb.Close()
+
+		if !tdb.Initialized(header.Root) {
+			// TODO the private networks and public testnets won't be supported.
+			if genesis == nil {
+				genesis = DefaultGenesisBlock()
+			}
+			// Ensure the stored genesis matches with the given one.
+			hash := genesis.ToBlock().Hash()
+			if hash != stored {
+				return nil, common.Hash{}, nil, &GenesisMismatchError{stored, hash}
+			}
+			genesis.Config = overrides.apply(genesis.Config)
+			block, err := genesis.Commit(db, tdb)
+			if err != nil {
+				return nil, common.Hash{}, nil, err
+			}
+			return genesis.Config, block.Hash(), nil, nil
+		}
 	}
-	// Check whether the genesis block is already written.
+	// Ensure the genesis content is matched if it's supplied
 	if genesis != nil {
-		applyOverrides(genesis.Config)
-		hash := genesis.ToBlock().Hash()
-		if hash != stored {
-			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
+		if hash := genesis.ToBlock().Hash(); stored != hash {
+			return nil, common.Hash{}, nil, &GenesisMismatchError{stored, hash}
 		}
 	}
-	// Get the existing chain configuration.
+	// Construct the new chain config either from the supplied genesis, or
+	// the stored chain config if nothing specified.
 	newcfg := genesis.configOrDefault(stored)
-	applyOverrides(newcfg)
+	if newcfg == nil {
+		newcfg = rawdb.ReadChainConfig(db, stored)
+	}
+	if newcfg == nil {
+		return nil, common.Hash{}, nil, errors.New("chain config is not specified")
+	}
+	// Apply the overrides on top and check the validity
+	newcfg = overrides.apply(newcfg)
 	if err := newcfg.CheckConfigForkOrder(); err != nil {
-		return newcfg, common.Hash{}, err
+		return nil, common.Hash{}, nil, err
 	}
 	storedcfg := rawdb.ReadChainConfig(db, stored)
 	if storedcfg == nil {
 		log.Warn("Found genesis block without chain config")
 		rawdb.WriteChainConfig(db, stored, newcfg)
-		return newcfg, stored, nil
-	}
-	storedData, _ := json.Marshal(storedcfg)
-	// Special case: if a private network is being used (no genesis and also no
-	// mainnet hash in the database), we must not apply the `configOrDefault`
-	// chain config as that would be AllProtocolChanges (applying any new fork
-	// on top of an existing private network genesis block). In that case, only
-	// apply the overrides.
-	if genesis == nil && stored != params.MainnetGenesisHash {
-		newcfg = storedcfg
-		applyOverrides(newcfg)
+		return newcfg, stored, nil, nil
 	}
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
 	head := rawdb.ReadHeadHeader(db)
 	if head == nil {
-		return newcfg, stored, errors.New("missing head header")
+		return nil, common.Hash{}, nil, errors.New("missing head header")
 	}
 	compatErr := storedcfg.CheckCompatible(newcfg, head.Number.Uint64(), head.Time)
 	if compatErr != nil && ((head.Number.Uint64() != 0 && compatErr.RewindToBlock != 0) || (head.Time != 0 && compatErr.RewindToTime != 0)) {
-		return newcfg, stored, compatErr
+		return newcfg, stored, compatErr, nil
 	}
 	// Don't overwrite if the old is identical to the new
+	storedData, _ := json.Marshal(storedcfg)
 	if newData, _ := json.Marshal(newcfg); !bytes.Equal(storedData, newData) {
 		rawdb.WriteChainConfig(db, stored, newcfg)
 	}
-	return newcfg, stored, nil
+	return newcfg, stored, nil, nil
 }
 
 // LoadChainConfig loads the stored chain config if it is already present in
@@ -399,19 +450,13 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	case ghash == params.SepoliaGenesisHash:
 		return params.SepoliaChainConfig
 	default:
-		return params.AllEthashProtocolChanges
+		return nil
 	}
-}
-
-// IsVerkle indicates whether the state is already stored in a verkle
-// tree at genesis time.
-func (g *Genesis) IsVerkle() bool {
-	return g.Config.IsVerkle(new(big.Int).SetUint64(g.Number), g.Timestamp)
 }
 
 // ToBlock returns the genesis block according to genesis specification.
 func (g *Genesis) ToBlock() *types.Block {
-	root, err := hashAlloc(&g.Alloc, g.IsVerkle())
+	root, err := hashAlloc(&g.Alloc, g.Config.IsVerkleGenesis())
 	if err != nil {
 		panic(err)
 	}
@@ -486,7 +531,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	}
 	config := g.Config
 	if config == nil {
-		config = params.AllEthashProtocolChanges
+		return nil, errors.New("can't commit genesis block with nil config")
 	}
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
@@ -506,16 +551,17 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	if err != nil {
 		return nil, err
 	}
-	rawdb.WriteGenesisStateSpec(db, block.Hash(), blob)
-	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
-	rawdb.WriteBlock(db, block)
-	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
-	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
-	rawdb.WriteHeadBlockHash(db, block.Hash())
-	rawdb.WriteHeadFastBlockHash(db, block.Hash())
-	rawdb.WriteHeadHeaderHash(db, block.Hash())
-	rawdb.WriteChainConfig(db, block.Hash(), config)
-	return block, nil
+	batch := db.NewBatch()
+	rawdb.WriteGenesisStateSpec(batch, block.Hash(), blob)
+	rawdb.WriteTd(batch, block.Hash(), block.NumberU64(), block.Difficulty())
+	rawdb.WriteBlock(batch, block)
+	rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), nil)
+	rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
+	rawdb.WriteHeadBlockHash(batch, block.Hash())
+	rawdb.WriteHeadFastBlockHash(batch, block.Hash())
+	rawdb.WriteHeadHeaderHash(batch, block.Hash())
+	rawdb.WriteChainConfig(batch, block.Hash(), config)
+	return block, batch.Write()
 }
 
 // MustCommit writes the genesis block and state to db, panicking on error.

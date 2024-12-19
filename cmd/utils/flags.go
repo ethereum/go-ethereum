@@ -2224,7 +2224,6 @@ func MakeTrieDatabase(ctx *cli.Context, disk ethdb.Database, preimage bool, read
 		// ignore the parameter silently. TODO(rjl493456442)
 		// please config it if read mode is implemented.
 		config.HashDB = hashdb.Defaults
-		return triedb.NewDatabase(disk, config)
 	}
 	if readOnly {
 		config.PathDB = pathdb.ReadOnly
