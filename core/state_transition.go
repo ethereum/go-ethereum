@@ -131,19 +131,19 @@ func toWordSize(size uint64) uint64 {
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
 type Message struct {
-	To            *common.Address
-	From          common.Address
-	Nonce         uint64
-	Value         *big.Int
-	GasLimit      uint64
-	GasPrice      *big.Int
-	GasFeeCap     *big.Int
-	GasTipCap     *big.Int
-	Data          []byte
-	AccessList    types.AccessList
-	BlobGasFeeCap *big.Int
-	BlobHashes    []common.Hash
-	AuthList      []types.SetCodeAuthorization
+	To                    *common.Address
+	From                  common.Address
+	Nonce                 uint64
+	Value                 *big.Int
+	GasLimit              uint64
+	GasPrice              *big.Int
+	GasFeeCap             *big.Int
+	GasTipCap             *big.Int
+	Data                  []byte
+	AccessList            types.AccessList
+	BlobGasFeeCap         *big.Int
+	BlobHashes            []common.Hash
+	SetCodeAuthorizations []types.SetCodeAuthorization
 
 	// When SkipNonceChecks is true, the message nonce is not checked against the
 	// account nonce in state.
@@ -157,20 +157,20 @@ type Message struct {
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
-		Nonce:            tx.Nonce(),
-		GasLimit:         tx.Gas(),
-		GasPrice:         new(big.Int).Set(tx.GasPrice()),
-		GasFeeCap:        new(big.Int).Set(tx.GasFeeCap()),
-		GasTipCap:        new(big.Int).Set(tx.GasTipCap()),
-		To:               tx.To(),
-		Value:            tx.Value(),
-		Data:             tx.Data(),
-		AccessList:       tx.AccessList(),
-		AuthList:         tx.AuthList(),
-		SkipNonceChecks:  false,
-		SkipFromEOACheck: false,
-		BlobHashes:       tx.BlobHashes(),
-		BlobGasFeeCap:    tx.BlobGasFeeCap(),
+		Nonce:                 tx.Nonce(),
+		GasLimit:              tx.Gas(),
+		GasPrice:              new(big.Int).Set(tx.GasPrice()),
+		GasFeeCap:             new(big.Int).Set(tx.GasFeeCap()),
+		GasTipCap:             new(big.Int).Set(tx.GasTipCap()),
+		To:                    tx.To(),
+		Value:                 tx.Value(),
+		Data:                  tx.Data(),
+		AccessList:            tx.AccessList(),
+		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
+		SkipNonceChecks:       false,
+		SkipFromEOACheck:      false,
+		BlobHashes:            tx.BlobHashes(),
+		BlobGasFeeCap:         tx.BlobGasFeeCap(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -372,11 +372,11 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Check that EIP-7702 authorization list signatures are well formed.
-	if msg.AuthList != nil {
+	if msg.SetCodeAuthorizations != nil {
 		if msg.To == nil {
 			return fmt.Errorf("%w (sender %v)", ErrSetCodeTxCreate, msg.From)
 		}
-		if len(msg.AuthList) == 0 {
+		if len(msg.SetCodeAuthorizations) == 0 {
 			return fmt.Errorf("%w (sender %v)", ErrEmptyAuthList, msg.From)
 		}
 	}
@@ -417,7 +417,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.AuthList, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
@@ -467,8 +467,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1)
 
 		// Apply EIP-7702 authorizations.
-		if msg.AuthList != nil {
-			for _, auth := range msg.AuthList {
+		if msg.SetCodeAuthorizations != nil {
+			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
 				st.applyAuthorization(msg, &auth)
 			}

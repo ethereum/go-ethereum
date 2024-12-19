@@ -454,21 +454,21 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 		accessList = *args.AccessList
 	}
 	return &core.Message{
-		From:             args.from(),
-		To:               args.To,
-		Value:            (*big.Int)(args.Value),
-		Nonce:            uint64(*args.Nonce),
-		GasLimit:         uint64(*args.Gas),
-		GasPrice:         gasPrice,
-		GasFeeCap:        gasFeeCap,
-		GasTipCap:        gasTipCap,
-		Data:             args.data(),
-		AccessList:       accessList,
-		BlobGasFeeCap:    (*big.Int)(args.BlobFeeCap),
-		BlobHashes:       args.BlobHashes,
-		AuthList:         args.AuthorizationList,
-		SkipNonceChecks:  skipNonceCheck,
-		SkipFromEOACheck: skipEoACheck,
+		From:                  args.from(),
+		To:                    args.To,
+		Value:                 (*big.Int)(args.Value),
+		Nonce:                 uint64(*args.Nonce),
+		GasLimit:              uint64(*args.Gas),
+		GasPrice:              gasPrice,
+		GasFeeCap:             gasFeeCap,
+		GasTipCap:             gasTipCap,
+		Data:                  args.data(),
+		AccessList:            accessList,
+		BlobGasFeeCap:         (*big.Int)(args.BlobFeeCap),
+		BlobHashes:            args.BlobHashes,
+		SetCodeAuthorizations: args.AuthorizationList,
+		SkipNonceChecks:       skipNonceCheck,
+		SkipFromEOACheck:      skipEoACheck,
 	}
 }
 
