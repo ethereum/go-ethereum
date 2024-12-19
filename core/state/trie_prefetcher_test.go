@@ -71,7 +71,7 @@ func TestVerklePrefetcher(t *testing.T) {
 	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
 	sdb := NewDatabase(db, nil)
 
-	state, err := New(types.EmptyRootHash, sdb)
+	state, err := New(types.EmptyVerkleHash, sdb)
 	if err != nil {
 		t.Fatalf("failed to initialize state: %v", err)
 	}
