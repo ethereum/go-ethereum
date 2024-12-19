@@ -81,6 +81,9 @@ func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
 type TrieHasher interface {
 	Reset()
 	Update([]byte, []byte) error
+	// UpdateSafe is identical to Update, except that this method will copy the
+	// value slice. The caller is free to modify the value bytes after this method returns.
+	UpdateSafe([]byte, []byte) error
 	Hash() common.Hash
 }
 
@@ -95,10 +98,7 @@ type DerivableList interface {
 func encodeForDerive(list DerivableList, i int, buf *bytes.Buffer) []byte {
 	buf.Reset()
 	list.EncodeIndex(i, buf)
-	// It's really unfortunate that we need to perform this copy.
-	// StackTrie holds onto the values until Hash is called, so the values
-	// written to it must not alias.
-	return common.CopyBytes(buf.Bytes())
+	return buf.Bytes()
 }
 
 // DeriveSha creates the tree hashes of transactions, receipts, and withdrawals in a block header.
@@ -118,17 +118,17 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 	for i := 1; i < list.Len() && i <= 0x7f; i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
 		value := encodeForDerive(list, i, valueBuf)
-		hasher.Update(indexBuf, value)
+		hasher.UpdateSafe(indexBuf, value)
 	}
 	if list.Len() > 0 {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], 0)
 		value := encodeForDerive(list, 0, valueBuf)
-		hasher.Update(indexBuf, value)
+		hasher.UpdateSafe(indexBuf, value)
 	}
 	for i := 0x80; i < list.Len(); i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
 		value := encodeForDerive(list, i, valueBuf)
-		hasher.Update(indexBuf, value)
+		hasher.UpdateSafe(indexBuf, value)
 	}
 	return hasher.Hash()
 }
