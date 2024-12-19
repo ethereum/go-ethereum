@@ -124,7 +124,7 @@ func __linkDeps(metadata MetaData, depMap map[string]*MetaData, roots *map[strin
 	return linked
 }
 
-func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
+func testLinkCase(tcInput linkTestCaseInput) error {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	var testAddrNonce uint64
 	overridesAddrs := make(map[common.Address]struct{})
@@ -159,7 +159,7 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 				var dep common.Address
 				dep.SetBytes(deployer[i : i+20])
 				if _, ok := overridesAddrs[dep]; !ok {
-					t.Fatalf("reference to dependent contract that has not yet been deployed: %x\n", dep)
+					return common.Address{}, nil, fmt.Errorf("reference to dependent contract that has not yet been deployed: %x\n", dep)
 				}
 			}
 		}
@@ -190,55 +190,60 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 	deployParams := NewDeploymentParams(contractsList, nil, overrides)
 	res, err := LinkAndDeploy(deployParams, mockDeploy)
 	if err != nil {
-		t.Fatalf("got error from LinkAndDeploy: %v\n", err)
+		return err
 	}
 
 	if len(res.Txs) != len(tcInput.expectDeployed) {
-		t.Fatalf("got %d deployed contracts.  expected %d.\n", len(res.Addrs), len(tcInput.expectDeployed))
+		return fmt.Errorf("got %d deployed contracts.  expected %d.\n", len(res.Addrs), len(tcInput.expectDeployed))
 	}
 	for contract, _ := range tcInput.expectDeployed {
 		pattern := crypto.Keccak256Hash([]byte(string(contract))).String()[2:36]
 		if _, ok := res.Addrs[pattern]; !ok {
-			t.Fatalf("expected contract %s was not deployed\n", string(contract))
+			return fmt.Errorf("expected contract %s was not deployed\n", string(contract))
 		}
 	}
+	return nil
 }
 
-func TestContractLinking(t *testing.T) {
+var linkTestCases = []linkTestCaseInput{
 	// test simple contract without any dependencies or overrides
-	testLinkCase(t, linkTestCaseInput{
+	{
 		map[rune][]rune{
 			'a': {}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
-			'a': {}}})
+			'a': {}},
+	},
 	// test deployment of a contract that depends on somes libraries.
-	testLinkCase(t, linkTestCaseInput{
+	{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}}})
+			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}},
+	},
 	// test deployment of a contract that depends on some libraries,
 	// one of which has its own library dependencies.
-	testLinkCase(t, linkTestCaseInput{
+	{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
 			'e': {'f', 'g', 'h', 'i'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}}})
+			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}},
+	},
 	// test single contract only without deps
-	testLinkCase(t, linkTestCaseInput{
+	{
 		map[rune][]rune{
 			'a': {}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {},
-		}})
+		},
+	},
 	// test that libraries at different levels of the tree can share deps,
 	// and that these shared deps will only be deployed once.
-	testLinkCase(t, linkTestCaseInput{
+	{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
 			'e': {'f', 'g', 'h', 'i', 'm'},
@@ -246,56 +251,63 @@ func TestContractLinking(t *testing.T) {
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {}, 'k': {}, 'l': {}, 'm': {},
-		}})
+		},
+	},
 	// test two contracts can be deployed which don't share deps
-	testLinkCase(t, linkTestCaseInput{
+	linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
 			'f': {'g', 'h', 'i', 'j'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {},
-		}})
+		},
+	},
 	// test two contracts can be deployed which share deps
-	testLinkCase(t, linkTestCaseInput{
+	linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
 			'f': {'g', 'c', 'd', 'h'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {},
-		}})
+		},
+	},
 	// test one contract with overrides for all lib deps
-	testLinkCase(t, linkTestCaseInput{
+	linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'}},
 		map[rune]struct{}{'b': {}, 'c': {}, 'd': {}, 'e': {}},
 		map[rune]struct{}{
-			'a': {}}})
+			'a': {}},
+	},
 	// test one contract with overrides for some lib deps
-	testLinkCase(t, linkTestCaseInput{
+	linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c'}},
 		map[rune]struct{}{'b': {}, 'c': {}},
 		map[rune]struct{}{
-			'a': {}}})
+			'a': {}},
+	},
 	// test deployment of a contract with overrides
-	testLinkCase(t, linkTestCaseInput{
+	linkTestCaseInput{
 		map[rune][]rune{
 			'a': {}},
 		map[rune]struct{}{'a': {}},
-		map[rune]struct{}{}})
+		map[rune]struct{}{},
+	},
 	// two contracts ('a' and 'f') share some dependencies.  contract 'a' is marked as an override.  expect that any of
 	// its depdencies that aren't shared with 'f' are not deployed.
-	testLinkCase(t, linkTestCaseInput{map[rune][]rune{
+	linkTestCaseInput{map[rune][]rune{
 		'a': {'b', 'c', 'd', 'e'},
 		'f': {'g', 'c', 'd', 'h'}},
 		map[rune]struct{}{'a': {}},
 		map[rune]struct{}{
-			'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {}}})
+			'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {}},
+	},
 	// test nested libraries that share deps at different levels of the tree... with override.
 	// same condition as above test:  no sub-dependencies of
-	testLinkCase(t, linkTestCaseInput{
+	{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
 			'e': {'f', 'g', 'h', 'i', 'm'},
@@ -305,5 +317,14 @@ func TestContractLinking(t *testing.T) {
 			'i': {},
 		},
 		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {}}})
+			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {}},
+	},
+}
+
+func TestContractLinking(t *testing.T) {
+	for i, tc := range linkTestCases {
+		if err := testLinkCase(tc); err != nil {
+			t.Fatalf("test case %d failed: %v", i, err)
+		}
+	}
 }
