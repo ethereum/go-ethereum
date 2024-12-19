@@ -68,36 +68,6 @@ func TestMustParseBig256(t *testing.T) {
 	MustParseBig256("ggg")
 }
 
-func TestBigMax(t *testing.T) {
-	a := big.NewInt(10)
-	b := big.NewInt(5)
-
-	max1 := BigMax(a, b)
-	if max1 != a {
-		t.Errorf("Expected %d got %d", a, max1)
-	}
-
-	max2 := BigMax(b, a)
-	if max2 != a {
-		t.Errorf("Expected %d got %d", a, max2)
-	}
-}
-
-func TestBigMin(t *testing.T) {
-	a := big.NewInt(10)
-	b := big.NewInt(5)
-
-	min1 := BigMin(a, b)
-	if min1 != b {
-		t.Errorf("Expected %d got %d", b, min1)
-	}
-
-	min2 := BigMin(b, a)
-	if min2 != b {
-		t.Errorf("Expected %d got %d", b, min2)
-	}
-}
-
 func TestPaddedBigBytes(t *testing.T) {
 	tests := []struct {
 		num    *big.Int

@@ -23,7 +23,6 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	cmath "github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
@@ -397,7 +396,10 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 	} else {
 		effectiveTip := st.gasPrice
 		if st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber) {
-			effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
+			effectiveTip = new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee)
+			if effectiveTip.Cmp(st.gasTipCap) > 0 {
+				effectiveTip = st.gasTipCap
+			}
 		}
 		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 	}

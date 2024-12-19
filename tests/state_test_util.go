@@ -275,8 +275,10 @@ func (tx *stTransaction) toMessage(ps stPostState, number *big.Int, baseFee *big
 		if tx.MaxPriorityFeePerGas == nil {
 			tx.MaxPriorityFeePerGas = tx.MaxFeePerGas
 		}
-		gasPrice = math.BigMin(new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee),
-			tx.MaxFeePerGas)
+		gasPrice = new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee)
+		if gasPrice.Cmp(tx.MaxFeePerGas) > 0 {
+			gasPrice.Set(tx.MaxFeePerGas)
+		}
 	}
 	if gasPrice == nil {
 		return nil, errors.New("no gas price provided")

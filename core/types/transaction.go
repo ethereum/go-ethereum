@@ -28,7 +28,6 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
-	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
@@ -364,10 +363,16 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	}
 	var err error
 	gasFeeCap := tx.GasFeeCap()
-	if gasFeeCap.Cmp(baseFee) == -1 {
+	if gasFeeCap.Cmp(baseFee) < 0 {
 		err = ErrGasFeeCapTooLow
 	}
-	return math.BigMin(tx.GasTipCap(), gasFeeCap.Sub(gasFeeCap, baseFee)), err
+	gasFeeCap = gasFeeCap.Sub(gasFeeCap, baseFee)
+
+	gasTipCap := tx.GasTipCap()
+	if gasTipCap.Cmp(gasFeeCap) < 0 {
+		return gasTipCap, err
+	}
+	return gasFeeCap, err
 }
 
 // EffectiveGasTipValue is identical to EffectiveGasTip, but does not return an
@@ -453,7 +458,10 @@ func (tx *Transaction) AsMessage(s Signer, balanceFee, blockNumber, baseFee *big
 		}
 	} else if baseFee != nil {
 		// If baseFee provided, set gasPrice to effectiveGasPrice.
-		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
+		msg.gasPrice = msg.gasPrice.Add(msg.gasTipCap, baseFee)
+		if msg.gasPrice.Cmp(msg.gasFeeCap) > 0 {
+			msg.gasPrice.Set(msg.gasFeeCap)
+		}
 	}
 
 	var err error
