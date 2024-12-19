@@ -54,6 +54,9 @@ const (
 )
 
 var (
+	// MaxHash represents the maximum possible hash value.
+	MaxHash = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+
 	BlockSignersBinary                     = Address{19: 0x89} // xdc0000000000000000000000000000000000000089
 	MasternodeVotingSMCBinary              = Address{19: 0x88} // xdc0000000000000000000000000000000000000088
 	RandomizeSMCBinary                     = Address{19: 0x90} // xdc0000000000000000000000000000000000000090
