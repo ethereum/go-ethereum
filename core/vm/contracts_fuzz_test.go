@@ -14,18 +14,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package runtime
+package vm
 
 import (
 	"testing"
 
-	"github.com/XinFinOrg/XDPoSChain/core/vm/runtime"
+	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
-func Fuzz(f *testing.F) {
-	f.Fuzz(func(t *testing.T, code, input []byte) {
-		runtime.Execute(code, input, &runtime.Config{
-			GasLimit: 12000000,
-		})
+func FuzzPrecompiledContracts(f *testing.F) {
+	// Create list of addresses
+	var addrs []common.Address
+	for k := range allPrecompiles {
+		addrs = append(addrs, k)
+	}
+	f.Fuzz(func(t *testing.T, addr uint8, input []byte) {
+		a := addrs[int(addr)%len(addrs)]
+		p := allPrecompiles[a]
+		gas := p.RequiredGas(input)
+		if gas > 10_000_000 {
+			return
+		}
+		inWant := string(input)
+		RunPrecompiledContract(nil, p, input, gas)
+		if inHave := string(input); inWant != inHave {
+			t.Errorf("Precompiled %v modified input data", a)
+		}
 	})
 }

@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rlp
+package runtime
 
-import "testing"
+import (
+	"testing"
+)
 
-func Fuzz(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzz(data)
+func FuzzVmRuntime(f *testing.F) {
+	f.Fuzz(func(t *testing.T, code, input []byte) {
+		Execute(code, input, &Config{
+			GasLimit: 12000000,
+		})
 	})
 }
