@@ -42,12 +42,6 @@ type DeploymentResult struct {
 	Addrs map[string]common.Address
 }
 
-// Accumulate merges `other` into `d`
-func (d *DeploymentResult) Accumulate(other *DeploymentResult) {
-	maps.Copy(d.Txs, other.Txs)
-	maps.Copy(d.Addrs, other.Addrs)
-}
-
 // DeployFn deploys a contract given a deployer and optional input.  It returns
 // the address and a pending transaction, or an error if the deployment failed.
 type DeployFn func(input, deployer []byte) (common.Address, *types.Transaction, error)
@@ -57,51 +51,48 @@ type DeployFn func(input, deployer []byte) (common.Address, *types.Transaction, 
 type depTreeDeployer struct {
 	deployedAddrs map[string]common.Address
 	deployerTxs   map[string]*types.Transaction
-	input         map[string][]byte // map of the root contract pattern to the constructor input (if there is any)
-	deploy        DeployFn
+	inputs        map[string][]byte // map of the root contract pattern to the constructor input (if there is any)
+	deployFn      DeployFn
 }
 
-func newDepTreeDeployer(overrides map[string]common.Address, deploy DeployFn) *depTreeDeployer {
+func newDepTreeDeployer(deployParams *DeploymentParams, deployFn DeployFn) *depTreeDeployer {
 	return &depTreeDeployer{
-		deploy:        deploy,
-		deployedAddrs: maps.Clone(overrides),
-		deployerTxs:   make(map[string]*types.Transaction)}
+		deployFn:      deployFn,
+		deployedAddrs: maps.Clone(deployParams.overrides),
+		deployerTxs:   make(map[string]*types.Transaction),
+		inputs:        maps.Clone(deployParams.inputs),
+	}
 }
 
 // linkAndDeploy recursively deploys a contract and its dependencies:  starting by linking/deploying its dependencies.
 // The deployment result (deploy addresses/txs or an error) is stored in the depTreeDeployer object.
-func (d *depTreeDeployer) linkAndDeploy(metadata *MetaData) error {
+func (d *depTreeDeployer) linkAndDeploy(metadata *MetaData) (common.Address, error) {
 	// Don't deploy already deployed contracts
-	if _, ok := d.deployedAddrs[metadata.Pattern]; ok {
-		return nil
+	if addr, ok := d.deployedAddrs[metadata.Pattern]; ok {
+		return addr, nil
 	}
 	// if this contract/library depends on other libraries deploy them (and their dependencies) first
-	for _, dep := range metadata.Deps {
-		if err := d.linkAndDeploy(dep); err != nil {
-			return err
-		}
-	}
-	// if we just deployed any prerequisite contracts, link their deployed addresses into the bytecode to produce
-	// a deployer bytecode for this contract.
 	deployerCode := metadata.Bin
 	for _, dep := range metadata.Deps {
-		linkAddr, _ := d.deployedAddrs[dep.Pattern]
-		deployerCode = strings.ReplaceAll(deployerCode, "__$"+dep.Pattern+"$__", strings.ToLower(linkAddr.String()[2:]))
+		addr, err := d.linkAndDeploy(dep)
+		if err != nil {
+			return common.Address{}, err
+		}
+		// link their deployed addresses into the bytecode to produce
+		deployerCode = strings.ReplaceAll(deployerCode, "__$"+dep.Pattern+"$__", strings.ToLower(addr.String()[2:]))
 	}
-
 	// Finally, deploy the contract.
-	deployer, err := hex.DecodeString(deployerCode[2:])
+	code, err := hex.DecodeString(deployerCode[2:])
 	if err != nil {
 		panic(fmt.Sprintf("error decoding contract deployer hex %s:\n%v", deployerCode[2:], err))
 	}
-	addr, tx, err := d.deploy(d.input[metadata.Pattern], deployer)
+	addr, tx, err := d.deployFn(d.inputs[metadata.Pattern], code)
 	if err != nil {
-		return err
+		return common.Address{}, err
 	}
-
 	d.deployedAddrs[metadata.Pattern] = addr
 	d.deployerTxs[metadata.Pattern] = tx
-	return nil
+	return addr, nil
 }
 
 // result returns a result for this deployment, or an error if it failed.
@@ -116,12 +107,9 @@ func (d *depTreeDeployer) result() *DeploymentResult {
 // libraries.  If an error occurs, only contracts which were successfully
 // deployed are returned in the result.
 func LinkAndDeploy(deployParams *DeploymentParams, deploy DeployFn) (res *DeploymentResult, err error) {
-	deployer := newDepTreeDeployer(deployParams.overrides, deploy)
+	deployer := newDepTreeDeployer(deployParams, deploy)
 	for _, contract := range deployParams.contracts {
-		if deployParams.inputs != nil {
-			deployer.input = map[string][]byte{contract.Pattern: deployParams.inputs[contract.Pattern]}
-		}
-		if err := deployer.linkAndDeploy(contract); err != nil {
+		if _, err := deployer.linkAndDeploy(contract); err != nil {
 			return deployer.result(), err
 		}
 	}
