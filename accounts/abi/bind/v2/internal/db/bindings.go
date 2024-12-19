@@ -30,8 +30,6 @@ type DBStats struct {
 	Mods    *big.Int
 }
 
-var DBLibraryDeps = []*bind.MetaData{}
-
 // TODO: convert this type to value type after everything works.
 // DBMetaData contains all meta data concerning the DB contract.
 var DBMetaData = &bind.MetaData{

@@ -168,7 +168,7 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 		return contractAddr, nil, nil
 	}
 
-	var contracts map[string]*MetaData
+	contracts := make(map[string]*MetaData)
 	overrides := make(map[string]common.Address)
 
 	for pattern, bin := range tc.contractCodes {
@@ -205,24 +205,29 @@ func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 }
 
 func TestContractLinking(t *testing.T) {
+	// test simple contract without any dependencies or overrides
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {}},
+		map[rune]struct{}{},
+		map[rune]struct{}{
+			'a': {}}})
+	// test deployment of a contract that depends on somes libraries.
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {},
-		},
-	})
-
+			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}}})
+	// test deployment of a contract that depends on some libraries,
+	// one of which has its own library dependencies.
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'},
 			'e': {'f', 'g', 'h', 'i'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {},
-		}})
-
+			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}}})
 	// test single contract only without deps
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
@@ -231,7 +236,6 @@ func TestContractLinking(t *testing.T) {
 		map[rune]struct{}{
 			'a': {},
 		}})
-
 	// test that libraries at different levels of the tree can share deps,
 	// and that these shared deps will only be deployed once.
 	testLinkCase(t, linkTestCaseInput{
@@ -243,7 +247,6 @@ func TestContractLinking(t *testing.T) {
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {}, 'k': {}, 'l': {}, 'm': {},
 		}})
-
 	// test two contracts can be deployed which don't share deps
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
@@ -253,7 +256,6 @@ func TestContractLinking(t *testing.T) {
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {},
 		}})
-
 	// test two contracts can be deployed which share deps
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
@@ -263,32 +265,26 @@ func TestContractLinking(t *testing.T) {
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {},
 		}})
-
 	// test one contract with overrides for all lib deps
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c', 'd', 'e'}},
 		map[rune]struct{}{'b': {}, 'c': {}, 'd': {}, 'e': {}},
 		map[rune]struct{}{
-			'a': {},
-		}})
-
+			'a': {}}})
 	// test one contract with overrides for some lib deps
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
 			'a': {'b', 'c'}},
 		map[rune]struct{}{'b': {}, 'c': {}},
 		map[rune]struct{}{
-			'a': {},
-		}})
-
+			'a': {}}})
 	// test deployment of a contract with overrides
 	testLinkCase(t, linkTestCaseInput{
 		map[rune][]rune{
 			'a': {}},
 		map[rune]struct{}{'a': {}},
 		map[rune]struct{}{}})
-
 	// two contracts ('a' and 'f') share some dependencies.  contract 'a' is marked as an override.  expect that any of
 	// its depdencies that aren't shared with 'f' are not deployed.
 	testLinkCase(t, linkTestCaseInput{map[rune][]rune{
@@ -296,9 +292,7 @@ func TestContractLinking(t *testing.T) {
 		'f': {'g', 'c', 'd', 'h'}},
 		map[rune]struct{}{'a': {}},
 		map[rune]struct{}{
-			'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {},
-		}})
-
+			'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {}}})
 	// test nested libraries that share deps at different levels of the tree... with override.
 	// same condition as above test:  no sub-dependencies of
 	testLinkCase(t, linkTestCaseInput{
@@ -311,6 +305,5 @@ func TestContractLinking(t *testing.T) {
 			'i': {},
 		},
 		map[rune]struct{}{
-			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {},
-		}})
+			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {}}})
 }

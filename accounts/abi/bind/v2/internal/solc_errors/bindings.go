@@ -23,8 +23,6 @@ var (
 	_ = abi.ConvertType
 )
 
-var CLibraryDeps = []*bind.MetaData{}
-
 // TODO: convert this type to value type after everything works.
 // CMetaData contains all meta data concerning the C contract.
 var CMetaData = &bind.MetaData{
@@ -120,8 +118,6 @@ func (_C *C) UnpackBadThing2Error(raw []byte) (*CBadThing2, error) {
 	}
 	return out, nil
 }
-
-var C2LibraryDeps = []*bind.MetaData{}
 
 // TODO: convert this type to value type after everything works.
 // C2MetaData contains all meta data concerning the C2 contract.

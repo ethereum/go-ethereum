@@ -29,8 +29,6 @@ type CPoint struct {
 	Y *big.Int
 }
 
-var CLibraryDeps = []*bind.MetaData{}
-
 // TODO: convert this type to value type after everything works.
 // CMetaData contains all meta data concerning the C contract.
 var CMetaData = &bind.MetaData{

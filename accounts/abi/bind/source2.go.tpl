@@ -40,10 +40,14 @@ var (
 		Pattern: "{{index $.Libraries .Type}}",
 		{{if .InputBin -}}
 		Bin: "0x{{.InputBin}}",
-		{{end}}
-		{{if .Libraries -}}{{range $name, $pattern := .Libraries}}
+		{{end -}}
+		{{if .Libraries -}}
+		Deps: []*bind.MetaData{
+		{{- range $name, $pattern := .Libraries}}
 		    {{$name}}MetaData,
-		{{end}}{{end}}
+		{{- end}}
+		},
+		{{end}}
 	}
 
 	// {{.Type}} is an auto generated Go binding around an Ethereum contract.
