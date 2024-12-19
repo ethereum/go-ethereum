@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -163,8 +164,8 @@ type TraceConfig struct {
 // field to override the state for tracing.
 type TraceCallConfig struct {
 	TraceConfig
-	StateOverrides *ethapi.StateOverride
-	BlockOverrides *ethapi.BlockOverrides
+	StateOverrides *override.StateOverride
+	BlockOverrides *override.BlockOverrides
 	TxIndex        *hexutil.Uint
 }
 
@@ -546,11 +547,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		var (
-			msg, _    = core.TransactionToMessage(tx, signer, block.BaseFee())
-			txContext = core.NewEVMTxContext(msg)
-		)
-		evm.SetTxContext(txContext)
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		statedb.SetTxContext(tx.Hash(), i)
 		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit)); err != nil {
 			log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
@@ -708,7 +705,6 @@ txloop:
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		statedb.SetTxContext(tx.Hash(), i)
-		evm.SetTxContext(core.NewEVMTxContext(msg))
 		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit)); err != nil {
 			failed = err
 			break txloop
@@ -763,7 +759,6 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		logConfig = config.Config
 		txHash = config.TxHash
 	}
-	logConfig.Debug = true
 
 	// Execute transaction, either tracing all or just the requested one
 	var (
@@ -792,12 +787,11 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
 		var (
-			msg, _    = core.TransactionToMessage(tx, signer, block.BaseFee())
-			txContext = core.NewEVMTxContext(msg)
-			vmConf    vm.Config
-			dump      *os.File
-			writer    *bufio.Writer
-			err       error
+			msg, _ = core.TransactionToMessage(tx, signer, block.BaseFee())
+			vmConf vm.Config
+			dump   *os.File
+			writer *bufio.Writer
+			err    error
 		)
 		// If the transaction needs tracing, swap out the configs
 		if tx.Hash() == txHash || txHash == (common.Hash{}) {
@@ -820,7 +814,6 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			}
 		}
 		// Execute the transaction and flush any traces to disk
-		evm.SetTxContext(txContext)
 		statedb.SetTxContext(tx.Hash(), i)
 		if vmConf.Tracer.OnTxStart != nil {
 			vmConf.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
@@ -1014,9 +1007,8 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 			return nil, err
 		}
 	}
-	// The actual TxContext will be created as part of ApplyTransactionWithEVM.
-	evm := vm.NewEVM(vmctx, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
-	evm.SetTxContext(vm.TxContext{GasPrice: message.GasPrice, BlobFeeCap: message.BlobGasFeeCap})
+	tracingStateDB := state.NewHookedState(statedb, tracer.Hooks)
+	evm := vm.NewEVM(vmctx, tracingStateDB, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
 
 	// Define a meaningful timeout of a single transaction trace
 	if config.Timeout != nil {

@@ -93,7 +93,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		}
 
 		// The individual checks for blob validity (version-check + not empty)
-		// happens in StateTransition.
+		// happens in state transition.
 	}
 
 	// Check blob gas usage.

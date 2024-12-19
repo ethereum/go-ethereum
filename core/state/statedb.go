@@ -439,11 +439,12 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	}
 }
 
-func (s *StateDB) SetCode(addr common.Address, code []byte) {
+func (s *StateDB) SetCode(addr common.Address, code []byte) (prev []byte) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetCode(crypto.Keccak256Hash(code), code)
+		return stateObject.SetCode(crypto.Keccak256Hash(code), code)
 	}
+	return nil
 }
 
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) common.Hash {
@@ -650,10 +651,11 @@ func (s *StateDB) CreateContract(addr common.Address) {
 // Snapshots of the copied state cannot be applied to the copy.
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
+	reader, _ := s.db.Reader(s.originalRoot) // impossible to fail
 	state := &StateDB{
 		db:                   s.db,
 		trie:                 mustCopyTrie(s.trie),
-		reader:               s.reader.Copy(),
+		reader:               reader,
 		originalRoot:         s.originalRoot,
 		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
 		stateObjectsDestruct: make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),

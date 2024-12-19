@@ -182,11 +182,16 @@ func (s *hookedStateDB) SetNonce(address common.Address, nonce uint64) {
 	}
 }
 
-func (s *hookedStateDB) SetCode(address common.Address, code []byte) {
-	s.inner.SetCode(address, code)
+func (s *hookedStateDB) SetCode(address common.Address, code []byte) []byte {
+	prev := s.inner.SetCode(address, code)
 	if s.hooks.OnCodeChange != nil {
-		s.hooks.OnCodeChange(address, types.EmptyCodeHash, nil, crypto.Keccak256Hash(code), code)
+		prevHash := types.EmptyCodeHash
+		if len(prev) != 0 {
+			prevHash = crypto.Keccak256Hash(prev)
+		}
+		s.hooks.OnCodeChange(address, prevHash, prev, crypto.Keccak256Hash(code), code)
 	}
+	return prev
 }
 
 func (s *hookedStateDB) SetState(address common.Address, key common.Hash, value common.Hash) common.Hash {

@@ -424,17 +424,17 @@ func (s *Ethereum) Stop() error {
 
 // SyncMode retrieves the current sync mode, either explicitly set, or derived
 // from the chain status.
-func (s *Ethereum) SyncMode() downloader.SyncMode {
+func (s *Ethereum) SyncMode() ethconfig.SyncMode {
 	// If we're in snap sync mode, return that directly
 	if s.handler.snapSync.Load() {
-		return downloader.SnapSync
+		return ethconfig.SnapSync
 	}
 	// We are probably in full sync, but we might have rewound to before the
 	// snap sync pivot, check if we should re-enable snap sync.
 	head := s.blockchain.CurrentBlock()
 	if pivot := rawdb.ReadLastPivotNumber(s.chainDb); pivot != nil {
 		if head.Number.Uint64() < *pivot {
-			return downloader.SnapSync
+			return ethconfig.SnapSync
 		}
 	}
 	// We are in a full sync, but the associated head state is missing. To complete
@@ -442,8 +442,8 @@ func (s *Ethereum) SyncMode() downloader.SyncMode {
 	// persistent state is corrupted, just mismatch with the head block.
 	if !s.blockchain.HasState(head.Root) {
 		log.Info("Reenabled snap sync as chain is stateless")
-		return downloader.SnapSync
+		return ethconfig.SnapSync
 	}
 	// Nope, we're really full syncing
-	return downloader.FullSync
+	return ethconfig.FullSync
 }

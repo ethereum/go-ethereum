@@ -59,7 +59,7 @@ type vmContext struct {
 }
 
 func testCtx() *vmContext {
-	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
+	return &vmContext{blockCtx: vm.BlockContext{BlockNumber: big.NewInt(1), BaseFee: big.NewInt(0)}, txCtx: vm.TxContext{GasPrice: big.NewInt(100000)}}
 }
 
 func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainConfig, contractCode []byte) (json.RawMessage, error) {
@@ -76,7 +76,7 @@ func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCo
 		contract.Code = contractCode
 	}
 
-	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{Gas: gasLimit}), contract.Caller())
+	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{Gas: gasLimit, GasPrice: vmctx.txCtx.GasPrice}), contract.Caller())
 	tracer.OnEnter(0, byte(vm.CALL), contract.Caller(), contract.Address(), []byte{}, startGas, value.ToBig())
 	ret, err := evm.Interpreter().Run(contract, []byte{}, false)
 	tracer.OnExit(0, ret, startGas-contract.Gas, err, true)

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -49,8 +50,8 @@ const (
 
 // simBlock is a batch of calls to be simulated sequentially.
 type simBlock struct {
-	BlockOverrides *BlockOverrides
-	StateOverrides *StateOverride
+	BlockOverrides *override.BlockOverrides
+	StateOverrides *override.StateOverride
 	Calls          []TransactionArgs
 }
 
@@ -207,7 +208,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracer.reset(tx.Hash(), uint(i))
 		// EoA check is always skipped, even in validation mode.
 		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
-		evm.SetTxContext(core.NewEVMTxContext(msg))
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, sim.gp)
 		if err != nil {
 			txErr := txValidationError(err)
@@ -304,7 +304,7 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 	)
 	for _, block := range blocks {
 		if block.BlockOverrides == nil {
-			block.BlockOverrides = new(BlockOverrides)
+			block.BlockOverrides = new(override.BlockOverrides)
 		}
 		if block.BlockOverrides.Number == nil {
 			n := new(big.Int).Add(prevNumber, big.NewInt(1))
@@ -324,7 +324,7 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 			for i := uint64(0); i < gap.Uint64(); i++ {
 				n := new(big.Int).Add(prevNumber, big.NewInt(int64(i+1)))
 				t := prevTimestamp + timestampIncrement
-				b := simBlock{BlockOverrides: &BlockOverrides{Number: (*hexutil.Big)(n), Time: (*hexutil.Uint64)(&t)}}
+				b := simBlock{BlockOverrides: &override.BlockOverrides{Number: (*hexutil.Big)(n), Time: (*hexutil.Uint64)(&t)}}
 				prevTimestamp = t
 				res = append(res, b)
 			}

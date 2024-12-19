@@ -37,6 +37,10 @@ var errMissingPrefix = errors.New("missing 'enr:' prefix for base64-encoded reco
 type Node struct {
 	r  enr.Record
 	id ID
+
+	// hostname tracks the DNS name of the node.
+	hostname string
+
 	// endpoint information
 	ip  netip.Addr
 	udp uint16
@@ -77,6 +81,8 @@ func newNodeWithID(r *enr.Record, id ID) *Node {
 		n.setIP4(ip4)
 	case valid6:
 		n.setIP6(ip6)
+	default:
+		n.setIPv4Ports()
 	}
 	return n
 }
@@ -103,6 +109,10 @@ func localityScore(ip netip.Addr) int {
 
 func (n *Node) setIP4(ip netip.Addr) {
 	n.ip = ip
+	n.setIPv4Ports()
+}
+
+func (n *Node) setIPv4Ports() {
 	n.Load((*enr.UDP)(&n.udp))
 	n.Load((*enr.TCP)(&n.tcp))
 }
@@ -182,6 +192,18 @@ func (n *Node) UDP() int {
 // TCP returns the TCP port of the node.
 func (n *Node) TCP() int {
 	return int(n.tcp)
+}
+
+// WithHostname adds a DNS hostname to the node.
+func (n *Node) WithHostname(hostname string) *Node {
+	cpy := *n
+	cpy.hostname = hostname
+	return &cpy
+}
+
+// Hostname returns the DNS name assigned by WithHostname.
+func (n *Node) Hostname() string {
+	return n.hostname
 }
 
 // UDPEndpoint returns the announced UDP endpoint.

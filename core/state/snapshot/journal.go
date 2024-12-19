@@ -33,9 +33,11 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-// 0: initial version
-// 1: destruct flag in diff layer is removed
-const journalVersion uint64 = 1
+const (
+	journalV0             uint64 = 0 // initial version
+	journalV1             uint64 = 1 // current version, with destruct flag (in diff layers) removed
+	journalCurrentVersion        = journalV1
+)
 
 // journalGenerator is a disk layer entry containing the generator progress marker.
 type journalGenerator struct {
@@ -48,6 +50,11 @@ type journalGenerator struct {
 	Accounts uint64
 	Slots    uint64
 	Storage  uint64
+}
+
+// journalDestruct is an account deletion entry in a diffLayer's disk journal.
+type journalDestruct struct {
+	Hash common.Hash
 }
 
 // journalAccount is an account entry in a diffLayer's disk journal.
@@ -285,8 +292,8 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 		log.Warn("Failed to resolve the journal version", "error", err)
 		return errors.New("failed to resolve journal version")
 	}
-	if version != journalVersion {
-		log.Warn("Discarded the snapshot journal with wrong version", "required", journalVersion, "got", version)
+	if version != journalV0 && version != journalCurrentVersion {
+		log.Warn("Discarded journal with wrong version", "required", journalCurrentVersion, "got", version)
 		return errors.New("wrong journal version")
 	}
 	// Secondly, resolve the disk layer root, ensure it's continuous
@@ -315,6 +322,36 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 				return nil
 			}
 			return fmt.Errorf("load diff root: %v", err)
+		}
+		// If a legacy journal is detected, decode the destruct set from the stream.
+		// The destruct set has been deprecated. If the journal contains non-empty
+		// destruct set, then it is deemed incompatible.
+		//
+		// Since self-destruction has been deprecated following the cancun fork,
+		// the destruct set is expected to be nil for layers above the fork block.
+		// However, an exception occurs during contract deployment: pre-funded accounts
+		// may self-destruct, causing accounts with non-zero balances to be removed
+		// from the state. For example,
+		// https://etherscan.io/tx/0xa087333d83f0cd63b96bdafb686462e1622ce25f40bd499e03efb1051f31fe49).
+		//
+		// For nodes with a fully synced state, the legacy journal is likely compatible
+		// with the updated definition, eliminating the need for regeneration. Unfortunately,
+		// nodes performing a full sync of historical chain segments or encountering
+		// pre-funded account deletions may face incompatibilities, leading to automatic
+		// snapshot regeneration.
+		//
+		// This approach minimizes snapshot regeneration for Geth nodes upgrading from a
+		// legacy version that are already synced. The workaround can be safely removed
+		// after the next hard fork.
+		if version == journalV0 {
+			var destructs []journalDestruct
+			if err := r.Decode(&destructs); err != nil {
+				return fmt.Errorf("load diff destructs: %v", err)
+			}
+			if len(destructs) > 0 {
+				log.Warn("Incompatible legacy journal detected", "version", journalV0)
+				return fmt.Errorf("incompatible legacy journal detected")
+			}
 		}
 		if err := r.Decode(&accounts); err != nil {
 			return fmt.Errorf("load diff accounts: %v", err)

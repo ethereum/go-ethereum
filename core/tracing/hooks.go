@@ -42,6 +42,7 @@ type StateDB interface {
 	GetBalance(common.Address) *uint256.Int
 	GetNonce(common.Address) uint64
 	GetCode(common.Address) []byte
+	GetCodeHash(common.Address) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	GetTransientState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
@@ -54,9 +55,8 @@ type VMContext struct {
 	BlockNumber *big.Int
 	Time        uint64
 	Random      *common.Hash
-	// Effective tx gas price
-	GasPrice *big.Int
-	StateDB  StateDB
+	BaseFee     *big.Int
+	StateDB     StateDB
 }
 
 // BlockEvent is emitted upon tracing an incoming block.
@@ -145,6 +145,10 @@ type (
 	// will not be invoked.
 	OnSystemCallStartHook = func()
 
+	// OnSystemCallStartHookV2 is called when a system call is about to be executed. Refer
+	// to `OnSystemCallStartHook` for more information.
+	OnSystemCallStartHookV2 = func(vm *VMContext)
+
 	// OnSystemCallEndHook is called when a system call has finished executing. Today,
 	// this hook is invoked when the EIP-4788 system call is about to be executed to set the
 	// beacon block root.
@@ -180,14 +184,15 @@ type Hooks struct {
 	OnFault     FaultHook
 	OnGasChange GasChangeHook
 	// Chain events
-	OnBlockchainInit  BlockchainInitHook
-	OnClose           CloseHook
-	OnBlockStart      BlockStartHook
-	OnBlockEnd        BlockEndHook
-	OnSkippedBlock    SkippedBlockHook
-	OnGenesisBlock    GenesisBlockHook
-	OnSystemCallStart OnSystemCallStartHook
-	OnSystemCallEnd   OnSystemCallEndHook
+	OnBlockchainInit    BlockchainInitHook
+	OnClose             CloseHook
+	OnBlockStart        BlockStartHook
+	OnBlockEnd          BlockEndHook
+	OnSkippedBlock      SkippedBlockHook
+	OnGenesisBlock      GenesisBlockHook
+	OnSystemCallStart   OnSystemCallStartHook
+	OnSystemCallStartV2 OnSystemCallStartHookV2
+	OnSystemCallEnd     OnSystemCallEndHook
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook

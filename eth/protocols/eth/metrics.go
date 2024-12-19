@@ -41,23 +41,23 @@ func (h *bidirectionalMeters) get(ingress bool) *hsMeters {
 type hsMeters struct {
 	// peerError measures the number of errors related to incorrect peer
 	// behaviour, such as invalid message code, size, encoding, etc.
-	peerError metrics.Meter
+	peerError *metrics.Meter
 
 	// timeoutError measures the number of timeouts.
-	timeoutError metrics.Meter
+	timeoutError *metrics.Meter
 
 	// networkIDMismatch measures the number of network id mismatch errors.
-	networkIDMismatch metrics.Meter
+	networkIDMismatch *metrics.Meter
 
 	// protocolVersionMismatch measures the number of differing protocol
 	// versions.
-	protocolVersionMismatch metrics.Meter
+	protocolVersionMismatch *metrics.Meter
 
 	// genesisMismatch measures the number of differing genesises.
-	genesisMismatch metrics.Meter
+	genesisMismatch *metrics.Meter
 
 	// forkidRejected measures the number of differing forkids.
-	forkidRejected metrics.Meter
+	forkidRejected *metrics.Meter
 }
 
 // newHandshakeMeters registers and returns handshake meters for the given

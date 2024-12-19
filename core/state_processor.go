@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -106,18 +107,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Read requests if Prague is enabled.
 	var requests [][]byte
 	if p.config.IsPrague(block.Number(), block.Time()) {
-		// EIP-6110 deposits
-		depositRequests, err := ParseDepositLogs(allLogs, p.config)
-		if err != nil {
+		requests = [][]byte{}
+		// EIP-6110
+		if err := ParseDepositLogs(&requests, allLogs, p.config); err != nil {
 			return nil, err
 		}
-		requests = append(requests, depositRequests)
-		// EIP-7002 withdrawals
-		withdrawalRequests := ProcessWithdrawalQueue(evm)
-		requests = append(requests, withdrawalRequests)
-		// EIP-7251 consolidations
-		consolidationRequests := ProcessConsolidationQueue(evm)
-		requests = append(requests, consolidationRequests)
+		// EIP-7002
+		ProcessWithdrawalQueue(&requests, evm)
+		// EIP-7251
+		ProcessConsolidationQueue(&requests, evm)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -143,17 +141,11 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 			defer func() { hooks.OnTxEnd(receipt, err) }()
 		}
 	}
-
-	// Create a new context to be used in the EVM environment.
-	txContext := NewEVMTxContext(msg)
-	evm.SetTxContext(txContext)
-
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return nil, err
 	}
-
 	// Update the state with pending changes.
 	var root []byte
 	if evm.ChainConfig().IsByzantium(blockNumber) {
@@ -221,9 +213,7 @@ func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *
 // contract. This method is exported to be used in tests.
 func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnSystemCallStart != nil {
-			tracer.OnSystemCallStart()
-		}
+		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
 		}
@@ -247,9 +237,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 // as per EIP-2935.
 func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnSystemCallStart != nil {
-			tracer.OnSystemCallStart()
-		}
+		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
 		}
@@ -271,21 +259,19 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessWithdrawalQueue(evm *vm.EVM) []byte {
-	return processRequestsSystemCall(evm, 0x01, params.WithdrawalQueueAddress)
+func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM) {
+	processRequestsSystemCall(requests, evm, 0x01, params.WithdrawalQueueAddress)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessConsolidationQueue(evm *vm.EVM) []byte {
-	return processRequestsSystemCall(evm, 0x02, params.ConsolidationQueueAddress)
+func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM) {
+	processRequestsSystemCall(requests, evm, 0x02, params.ConsolidationQueueAddress)
 }
 
-func processRequestsSystemCall(evm *vm.EVM, requestType byte, addr common.Address) []byte {
+func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address) {
 	if tracer := evm.Config.Tracer; tracer != nil {
-		if tracer.OnSystemCallStart != nil {
-			tracer.OnSystemCallStart()
-		}
+		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
 		}
@@ -302,26 +288,40 @@ func processRequestsSystemCall(evm *vm.EVM, requestType byte, addr common.Addres
 	evm.StateDB.AddAddressToAccessList(addr)
 	ret, _, _ := evm.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	evm.StateDB.Finalise(true)
+	if len(ret) == 0 {
+		return // skip empty output
+	}
 
-	// Create withdrawals requestsData with prefix 0x01
+	// Append prefixed requestsData to the requests list.
 	requestsData := make([]byte, len(ret)+1)
 	requestsData[0] = requestType
 	copy(requestsData[1:], ret)
-	return requestsData
+	*requests = append(*requests, requestsData)
 }
 
 // ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
 // BeaconDepositContract.
-func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) ([]byte, error) {
+func ParseDepositLogs(requests *[][]byte, logs []*types.Log, config *params.ChainConfig) error {
 	deposits := make([]byte, 1) // note: first byte is 0x00 (== deposit request type)
 	for _, log := range logs {
 		if log.Address == config.DepositContractAddress {
 			request, err := types.DepositLogToRequest(log.Data)
 			if err != nil {
-				return nil, fmt.Errorf("unable to parse deposit data: %v", err)
+				return fmt.Errorf("unable to parse deposit data: %v", err)
 			}
 			deposits = append(deposits, request...)
 		}
 	}
-	return deposits, nil
+	if len(deposits) > 1 {
+		*requests = append(*requests, deposits)
+	}
+	return nil
+}
+
+func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
+	if tracer.OnSystemCallStartV2 != nil {
+		tracer.OnSystemCallStartV2(ctx)
+	} else if tracer.OnSystemCallStart != nil {
+		tracer.OnSystemCallStart()
+	}
 }

@@ -486,13 +486,11 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		return false, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
 	// Ensure the received batch is monotonic increasing and contains no deletions
-	for i := 0; i < len(keys)-1; i++ {
-		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
+	for i := 0; i < len(keys); i++ {
+		if i < len(keys)-1 && bytes.Compare(keys[i], keys[i+1]) >= 0 {
 			return false, errors.New("range is not monotonically increasing")
 		}
-	}
-	for _, value := range values {
-		if len(value) == 0 {
+		if len(values[i]) == 0 {
 			return false, errors.New("range contains deletion")
 		}
 	}

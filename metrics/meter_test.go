@@ -28,18 +28,12 @@ func TestGetOrRegisterMeter(t *testing.T) {
 }
 
 func TestMeterDecay(t *testing.T) {
-	ma := meterArbiter{
-		ticker: time.NewTicker(time.Millisecond),
-		meters: make(map[*StandardMeter]struct{}),
-	}
-	defer ma.ticker.Stop()
-	m := newStandardMeter()
-	ma.meters[m] = struct{}{}
+	m := newMeter()
 	m.Mark(1)
-	ma.tickMeters()
+	m.tick()
 	rateMean := m.Snapshot().RateMean()
 	time.Sleep(100 * time.Millisecond)
-	ma.tickMeters()
+	m.tick()
 	if m.Snapshot().RateMean() >= rateMean {
 		t.Error("m.RateMean() didn't decrease")
 	}

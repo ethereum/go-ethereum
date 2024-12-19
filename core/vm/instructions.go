@@ -501,7 +501,6 @@ func opMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 }
 
 func opMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	// pop value of the stack
 	mStart, val := scope.Stack.pop(), scope.Stack.pop()
 	scope.Memory.Set32(mStart.Uint64(), &val)
 	return nil, nil

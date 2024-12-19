@@ -113,10 +113,10 @@ type freezerTable struct {
 	headId uint32              // number of the currently active head file
 	tailId uint32              // number of the earliest file
 
-	headBytes  int64         // Number of bytes written to the head file
-	readMeter  metrics.Meter // Meter for measuring the effective amount of data read
-	writeMeter metrics.Meter // Meter for measuring the effective amount of data written
-	sizeGauge  metrics.Gauge // Gauge for tracking the combined size of all freezer tables
+	headBytes  int64          // Number of bytes written to the head file
+	readMeter  *metrics.Meter // Meter for measuring the effective amount of data read
+	writeMeter *metrics.Meter // Meter for measuring the effective amount of data written
+	sizeGauge  *metrics.Gauge // Gauge for tracking the combined size of all freezer tables
 
 	logger log.Logger   // Logger with database path and table name embedded
 	lock   sync.RWMutex // Mutex protecting the data file descriptors
@@ -124,13 +124,13 @@ type freezerTable struct {
 
 // newFreezerTable opens the given path as a freezer table.
 func newFreezerTable(path, name string, disableSnappy, readonly bool) (*freezerTable, error) {
-	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, freezerTableSize, disableSnappy, readonly)
+	return newTable(path, name, metrics.NewInactiveMeter(), metrics.NewInactiveMeter(), metrics.NewGauge(), freezerTableSize, disableSnappy, readonly)
 }
 
 // newTable opens a freezer table, creating the data and index files if they are
 // non-existent. Both files are truncated to the shortest common length to ensure
 // they don't go out of sync.
-func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, maxFilesize uint32, noCompression, readonly bool) (*freezerTable, error) {
+func newTable(path string, name string, readMeter, writeMeter *metrics.Meter, sizeGauge *metrics.Gauge, maxFilesize uint32, noCompression, readonly bool) (*freezerTable, error) {
 	// Ensure the containing directory exists and open the indexEntry file
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, err

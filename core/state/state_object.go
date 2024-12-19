@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -510,9 +511,12 @@ func (s *stateObject) Code() []byte {
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return nil
 	}
-	code, err := s.db.db.ContractCode(s.address, common.BytesToHash(s.CodeHash()))
+	code, err := s.db.reader.Code(s.address, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.db.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
+	}
+	if len(code) == 0 {
+		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}
 	s.code = code
 	return code
@@ -528,16 +532,21 @@ func (s *stateObject) CodeSize() int {
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return 0
 	}
-	size, err := s.db.db.ContractCodeSize(s.address, common.BytesToHash(s.CodeHash()))
+	size, err := s.db.reader.CodeSize(s.address, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
+	}
+	if size == 0 {
+		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}
 	return size
 }
 
-func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
-	s.db.journal.setCode(s.address)
+func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
+	prev = slices.Clone(s.code)
+	s.db.journal.setCode(s.address, prev)
 	s.setCode(codeHash, code)
+	return prev
 }
 
 func (s *stateObject) setCode(codeHash common.Hash, code []byte) {

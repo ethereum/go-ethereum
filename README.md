@@ -40,7 +40,6 @@ directory.
 |   `clef`   | Stand-alone signing tool, which can be used as a backend signer for `geth`.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 |  `devp2p`  | Utilities to interact with nodes on the networking layer, without running a full blockchain.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 |  `abigen`  | Source code generator to convert Ethereum contract definitions into easy-to-use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://docs.soliditylang.org/en/develop/abi-spec.html) with expanded functionality if the contract bytecode is also available. However, it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://geth.ethereum.org/docs/developers/dapp-developer/native-bindings) page for details.                                  |
-| `bootnode` | Stripped down version of our Ethereum client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks.                                                                                                                                                                                                                                               |
 |   `evm`    | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug run`).                                                                                                                                                                                                                                               |
 | `rlpdump`  | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user-friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`).                                                                                                                                                                                |
 
@@ -270,8 +269,14 @@ start a bootstrap node that others can use to find each other in your network an
 the internet. The clean way is to configure and run a dedicated bootnode:
 
 ```shell
-$ bootnode --genkey=boot.key
-$ bootnode --nodekey=boot.key
+# Use the devp2p tool to create a node file.
+# The devp2p tool is also part of the 'alltools' distribution bundle.
+$ devp2p key generate node1.key
+# file node1.key is created.
+$ devp2p key to-enr -ip 10.2.3.4 -udp 30303 -tcp 30303 node1.key 
+# Prints the ENR for use in --bootnode flag of other nodes.
+# Note this method requires knowing the IP/ports ahead of time.
+$ geth --nodekey=node1.key
 ```
 
 With the bootnode online, it will display an [`enode` URL](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode)
@@ -279,8 +284,7 @@ that other nodes can use to connect to it and exchange peer information. Make su
 replace the displayed IP address information (most probably `[::]`) with your externally
 accessible IP to get the actual `enode` URL.
 
-*Note: You could also use a full-fledged `geth` node as a bootnode, but it's the less
-recommended way.*
+*Note: You could previously use the `bootnode` utility to start a stripped down version of geth. This is not possible anymore.*
 
 #### Starting up your member nodes
 

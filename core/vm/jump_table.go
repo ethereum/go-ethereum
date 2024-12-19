@@ -61,7 +61,8 @@ var (
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
 	verkleInstructionSet           = newVerkleInstructionSet()
-	pragueEOFInstructionSet        = newPragueEOFInstructionSet()
+	pragueInstructionSet           = newPragueInstructionSet()
+	eofInstructionSet              = newEOFInstructionSetForTesting()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -91,13 +92,19 @@ func newVerkleInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
-func NewPragueEOFInstructionSetForTesting() JumpTable {
-	return newPragueEOFInstructionSet()
+func NewEOFInstructionSetForTesting() JumpTable {
+	return newEOFInstructionSetForTesting()
 }
 
-func newPragueEOFInstructionSet() JumpTable {
-	instructionSet := newCancunInstructionSet()
+func newEOFInstructionSetForTesting() JumpTable {
+	instructionSet := newPragueInstructionSet()
 	enableEOF(&instructionSet)
+	return validate(instructionSet)
+}
+
+func newPragueInstructionSet() JumpTable {
+	instructionSet := newCancunInstructionSet()
+	enable7702(&instructionSet) // EIP-7702 Setcode transaction type
 	return validate(instructionSet)
 }
 
