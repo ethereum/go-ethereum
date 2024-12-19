@@ -70,52 +70,59 @@ type SetCodeTx struct {
 
 // SetCodeAuthorization is an authorization from an account to deploy code at its address.
 type SetCodeAuthorization struct {
-	ChainID uint64         `json:"chainId" gencodec:"required"`
-	Address common.Address `json:"address" gencodec:"required"`
-	Nonce   uint64         `json:"nonce" gencodec:"required"`
-	V       uint8          `json:"yParity" gencodec:"required"`
-	R       uint256.Int    `json:"r" gencodec:"required"`
-	S       uint256.Int    `json:"s" gencodec:"required"`
+	Unchained bool           `json:"unchained" gencodec:"required"`
+	Address   common.Address `json:"address" gencodec:"required"`
+	Nonce     uint64         `json:"nonce" gencodec:"required"`
+	V         uint8          `json:"yParity" gencodec:"required"`
+	R         uint256.Int    `json:"r" gencodec:"required"`
+	S         uint256.Int    `json:"s" gencodec:"required"`
 }
 
 // field type overrides for gencodec
 type authorizationMarshaling struct {
-	ChainID hexutil.Uint64
-	Nonce   hexutil.Uint64
-	V       hexutil.Uint64
-	R       hexutil.U256
-	S       hexutil.U256
+	Nonce hexutil.Uint64
+	V     hexutil.Uint64
+	R     hexutil.U256
+	S     hexutil.U256
 }
 
 // SignSetCode creates a signed the SetCode authorization.
-func SignSetCode(prv *ecdsa.PrivateKey, auth SetCodeAuthorization) (SetCodeAuthorization, error) {
-	sighash := auth.sigHash()
+func SignSetCode(prv *ecdsa.PrivateKey, chainID *big.Int, auth SetCodeAuthorization) (SetCodeAuthorization, error) {
+	sighash := auth.sigHash(chainID)
 	sig, err := crypto.Sign(sighash[:], prv)
 	if err != nil {
 		return SetCodeAuthorization{}, err
 	}
 	r, s, _ := decodeSignature(sig)
 	return SetCodeAuthorization{
-		ChainID: auth.ChainID,
-		Address: auth.Address,
-		Nonce:   auth.Nonce,
-		V:       sig[64],
-		R:       *uint256.MustFromBig(r),
-		S:       *uint256.MustFromBig(s),
+		Unchained: auth.Unchained,
+		Address:   auth.Address,
+		Nonce:     auth.Nonce,
+		V:         sig[64],
+		R:         *uint256.MustFromBig(r),
+		S:         *uint256.MustFromBig(s),
 	}, nil
 }
 
-func (a *SetCodeAuthorization) sigHash() common.Hash {
+func (a *SetCodeAuthorization) sigHash(chainID *big.Int) common.Hash {
+	if a.Unchained {
+		chainID = common.Big0
+	}
 	return prefixedRlpHash(0x05, []any{
-		a.ChainID,
+		chainID,
 		a.Address,
 		a.Nonce,
 	})
 }
 
 // Authority recovers the the authorizing account of an authorization.
-func (a *SetCodeAuthorization) Authority() (common.Address, error) {
-	sighash := a.sigHash()
+func (a *SetCodeAuthorization) Authority(chainID *big.Int) (common.Address, error) {
+	if chainID == nil {
+		// This sanity check is important, since a missing chainID would just end up
+		// being encoded into the signature hash, leading to an incorrectly derived address.
+		panic("missing chainID")
+	}
+	sighash := a.sigHash(chainID)
 	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
 		return common.Address{}, ErrInvalidSig
 	}

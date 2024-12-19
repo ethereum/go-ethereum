@@ -529,16 +529,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
 func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorization) (authority common.Address, err error) {
-	// Verify chain ID is 0 or equal to current chain ID.
-	if auth.ChainID != 0 && st.evm.ChainConfig().ChainID.Uint64() != auth.ChainID {
-		return authority, ErrAuthorizationWrongChainID
-	}
 	// Limit nonce to 2^64-1 per EIP-2681.
 	if auth.Nonce+1 < auth.Nonce {
 		return authority, ErrAuthorizationNonceOverflow
 	}
 	// Validate signature values and recover authority.
-	authority, err = auth.Authority()
+	authority, err = auth.Authority(st.evm.ChainConfig().ChainID)
 	if err != nil {
 		return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
 	}
