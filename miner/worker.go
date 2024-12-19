@@ -277,12 +277,15 @@ func (self *worker) update() {
 	MinePeriodCh := self.engine.(*XDPoS.XDPoS).MinePeriodCh
 	defer close(MinePeriodCh)
 	NewRoundCh := self.engine.(*XDPoS.XDPoS).NewRoundCh
+	defer close(NewRoundCh)
 
 	timeout := time.NewTimer(time.Duration(minePeriod) * time.Second)
-	c := make(chan struct{})
+	defer timeout.Stop()
+	c := make(chan struct{}, 1)
+	defer close(c)
 	finish := make(chan struct{})
 	defer close(finish)
-	defer timeout.Stop()
+
 	go func() {
 		for {
 			// A real event arrived, process interesting content
