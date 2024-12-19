@@ -324,6 +324,12 @@ type ChainConfig struct {
 	// the network that triggers the consensus upgrade.
 	TerminalTotalDifficulty *big.Int `json:"terminalTotalDifficulty,omitempty"`
 
+	// EnableVerkleAtGenesis is a flag that specifies whether the network uses
+	// the Verkle tree starting from the genesis block. If set to true, the
+	// genesis state will be committed using the Verkle tree, eliminating the
+	// need for any Verkle transition later.
+	EnableVerkleAtGenesis bool `json:"enableVerkleAtGenesis,omitempty"`
+
 	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
 
 	// Various consensus engines
@@ -523,6 +529,11 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 // IsVerkle returns whether time is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
+}
+
+// IsVerkleGenesis returns whether the verkle fork is activated at genesis block.
+func (c *ChainConfig) IsVerkleGenesis() bool {
+	return c.IsLondon(common.Big0) && c.VerkleTime != nil && c.EnableVerkleAtGenesis
 }
 
 // IsEIP4762 returns whether eip 4762 has been activated at given block.
