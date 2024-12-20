@@ -134,11 +134,9 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 	return nil
 }
 
-// normalizeErrorOrEventFields normalizes errors/events for emitting through bindings:
-// Any anonymous fields are given generated names.
-func (cb *contractBinder) normalizeErrorOrEventFields(originalInputs abi.Arguments) abi.Arguments {
-	normalizedArguments := make([]abi.Argument, len(originalInputs))
-	copy(normalizedArguments, originalInputs)
+func normalizeArgs(inp abi.Arguments) abi.Arguments {
+	normalizedArguments := make([]abi.Argument, len(inp))
+	copy(normalizedArguments, inp)
 	used := make(map[string]bool)
 
 	for i, input := range normalizedArguments {
@@ -152,6 +150,15 @@ func (cb *contractBinder) normalizeErrorOrEventFields(originalInputs abi.Argumen
 			}
 			normalizedArguments[i].Name = fmt.Sprintf("%s%d", normalizedArguments[i].Name, index)
 		}
+	}
+	return normalizedArguments
+}
+
+// normalizeErrorOrEventFields normalizes errors/events for emitting through bindings:
+// Any anonymous fields are given generated names.
+func (cb *contractBinder) normalizeErrorOrEventFields(originalInputs abi.Arguments) abi.Arguments {
+	normalizedArguments := normalizeArgs(originalInputs)
+	for _, input := range normalizedArguments {
 		if hasStruct(input.Type) {
 			cb.binder.BindStructType(input.Type)
 		}
