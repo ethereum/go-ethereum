@@ -53,8 +53,7 @@ func returnHasherToPool(h *hasher) {
 	hasherPool.Put(h)
 }
 
-// hash collapses a node down into a hash node, also returning a copy of the
-// original node initialized with the computed hash to replace the original one.
+// hash collapses a node down into a hash node.
 func (h *hasher) hash(n node, force bool) node {
 	// Return the cached hash if it's available
 	if hash, _ := n.cache(); hash != nil {
@@ -86,8 +85,8 @@ func (h *hasher) hash(n node, force bool) node {
 	}
 }
 
-// hashShortNodeChildren collapses the short node. The returned collapsed node
-// holds a live reference to the Key, and must not be modified.
+// hashShortNodeChildren returns a copy of the supplied shortNode, with its child
+// being replaced by either the hash or an embedded node if the child is small.
 func (h *hasher) hashShortNodeChildren(n *shortNode) *shortNode {
 	var collapsed shortNode
 	collapsed.Key = hexToCompact(n.Key)
@@ -100,6 +99,8 @@ func (h *hasher) hashShortNodeChildren(n *shortNode) *shortNode {
 	return &collapsed
 }
 
+// hashFullNodeChildren returns a copy of the supplied fullNode, with its child
+// being replaced by either the hash or an embedded node if the child is small.
 func (h *hasher) hashFullNodeChildren(n *fullNode) *fullNode {
 	var children [17]node
 	if h.parallel {
@@ -133,10 +134,9 @@ func (h *hasher) hashFullNodeChildren(n *fullNode) *fullNode {
 	return &fullNode{flags: nodeFlag{}, Children: children}
 }
 
-// shortnodeToHash creates a hashNode from a shortNode. The supplied shortnode
-// should have hex-type Key, which will be converted (without modification)
-// into compact form for RLP encoding.
-// If the rlp data is smaller than 32 bytes, `nil` is returned.
+// shortNodeToHash computes the hash of the given shortNode. The shortNode must
+// first be collapsed, with its key converted to compact form. If the RLP-encoded
+// node data is smaller than 32 bytes, the node itself is returned.
 func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 	n.encode(h.encbuf)
 	enc := h.encodedBytes()
@@ -147,8 +147,8 @@ func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 	return h.hashData(enc)
 }
 
-// fullnodeToHash is used to create a hashNode from a fullNode, (which
-// may contain nil values)
+// fullnodeToHash computes the hash of the given fullNode. If the RLP-encoded
+// node data is smaller than 32 bytes, the node itself is returned.
 func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 	n.encode(h.encbuf)
 	enc := h.encodedBytes()
