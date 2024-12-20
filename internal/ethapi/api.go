@@ -362,6 +362,8 @@ func (n *proofList) Delete(key []byte) error {
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
+//
+// TODO (rjl493456442) This function needs to be rewritten for verkle compatibility.
 func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
 	var (
 		keys         = make([]common.Hash, len(storageKeys))

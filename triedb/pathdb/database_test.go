@@ -91,6 +91,7 @@ func newCtx(stateRoot common.Hash) *genctx {
 	}
 }
 
+// TODO(rjl493456442) support verkle for testing
 type tester struct {
 	db        *Database
 	roots     []common.Hash
@@ -453,8 +454,8 @@ func TestDatabaseRecoverable(t *testing.T) {
 		// Initial state should be recoverable
 		{types.EmptyRootHash, true},
 
-		// Initial state should be recoverable
-		{common.Hash{}, true},
+		// Invalid (unknown) state should be rejected
+		{common.Hash{}, false},
 
 		// Layers below current disk layer are recoverable
 		{tester.roots[index-1], true},
