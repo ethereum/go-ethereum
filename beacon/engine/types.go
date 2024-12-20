@@ -129,6 +129,19 @@ type executionPayloadEnvelopeMarshaling struct {
 	Requests   []hexutil.Bytes
 }
 
+// Max size of inclusion list in bytes.
+const (
+	MaxBytesPerInclusionList = uint64(8192)
+)
+
+type InclusionListV1 struct {
+	Transactions [][]byte `json:"transactions"  gencodec:"required"`
+}
+
+type UpdateInclusionListResponse struct {
+	PayloadID *PayloadID `json:"payloadId"`
+}
+
 type PayloadStatusV1 struct {
 	Status          string         `json:"status"`
 	Witness         *hexutil.Bytes `json:"witness"`
@@ -341,6 +354,21 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		BlobsBundle:      &bundle,
 		Requests:         requests,
 		Override:         false,
+	}
+}
+
+func InclusionListToTransactions(inclusionList *InclusionListV1) ([]*types.Transaction, error) {
+	txs, err := decodeTransactions(inclusionList.Transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	return txs, nil
+}
+
+func TransactionsToInclusionList(txs []*types.Transaction) *InclusionListV1 {
+	return &InclusionListV1{
+		Transactions: encodeTransactions(txs),
 	}
 }
 
