@@ -111,7 +111,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		}
 		return tx
 	}
-	var mkSetCodeTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int, authlist []types.Authorization) *types.Transaction {
+	var mkSetCodeTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int, authlist []types.SetCodeAuthorization) *types.Transaction {
 		tx, err := types.SignTx(types.NewTx(&types.SetCodeTx{
 			Nonce:     nonce,
 			GasTipCap: uint256.MustFromBig(gasTipCap),
