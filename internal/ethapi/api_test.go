@@ -870,7 +870,7 @@ func TestCall(t *testing.T) {
 
 	// Initialize test accounts
 	var (
-		accounts = newAccounts(3)
+		accounts = newAccounts(7)
 		dad      = common.HexToAddress("0x0000000000000000000000000000000000000dad")
 		genesis  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
@@ -878,6 +878,7 @@ func TestCall(t *testing.T) {
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[3].addr: {Balance: big.NewInt(params.Ether) ,Code: append(types.DelegationPrefix, accounts[4].addr.Bytes()...)},
 				dad: {
 					Balance: big.NewInt(params.Ether),
 					Nonce:   1,
@@ -898,6 +899,7 @@ func TestCall(t *testing.T) {
 		b.AddTx(tx)
 		b.SetPoS()
 	}))
+
 	randomAccounts := newAccounts(3)
 	var testSuite = []struct {
 		name           string
@@ -1141,6 +1143,42 @@ func TestCall(t *testing.T) {
 			},
 			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		},
+		//EIP - 7702 delegated account
+
+		// pragma solidity ^0.8.0;
+
+		// contract CallerAddress {
+
+		// // Function to return the address of the caller
+		// function getCallerAddress() public view returns (address) {
+		// return msg.sender;
+		// }
+		// }
+		// Single Call should be able to call a contract as a delegated account
+		{name: "eip-7702-delegated-account",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[3].addr,
+				To:                &accounts[2].addr,
+				Data:              hex2Bytes("46b3353b"), // getCallerAddress()
+			},
+			overrides: override.StateOverride{
+				accounts[2].addr: override.OverrideAccount{
+					Code: hex2Bytes("6080604052348015600e575f80fd5b50600436106026575f3560e01c806346b3353b14602a575b5f80fd5b60306044565b604051603b91906086565b60405180910390f35b5f33905090565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f607282604b565b9050919050565b608081606a565b82525050565b5f60208201905060975f8301846079565b9291505056"),
+				},
+			},
+			want: strings.ToLower(strings.ToLower("0x000000000000000000000000" + accounts[3].addr.Hex()[2:])),
+		},
+		//transfer from EIP-7702 delegated account should be able to transfer as an delegated account
+		{name: "eip-7702-delegated-account",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[3].addr,
+				To:    &accounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			want: "0x",	
+		},
 	}
 	for _, tc := range testSuite {
 		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
@@ -1165,6 +1203,7 @@ func TestCall(t *testing.T) {
 			t.Errorf("test %s, result mismatch, have\n%v\n, want\n%v\n", tc.name, result.String(), tc.want)
 		}
 	}
+
 }
 
 func TestSimulateV1(t *testing.T) {
