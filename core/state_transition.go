@@ -67,7 +67,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860, isEIP7623 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool, isEIP7623 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -78,14 +78,6 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	dataLen := uint64(len(data))
 	// Bump the required gas by the amount of transactional data
 	if dataLen > 0 {
-		// Charge for the contract creation
-		if isContractCreation && isEIP3860 {
-			lenWords := toWordSize(dataLen)
-			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
-				return 0, ErrGasUintOverflow
-			}
-			gas += lenWords * params.InitCodeWordGas
-		}
 
 		// Zero and non-zero bytes are priced differently
 		var nz uint64
@@ -94,7 +86,6 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 				nz++
 			}
 		}
-		var gasForData uint64
 		// Make sure we don't exceed uint64 for all data combinations
 		nonZeroGas := params.TxDataNonZeroGasFrontier
 		if isEIP2028 {
@@ -103,24 +94,29 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 		if (math.MaxUint64-gas)/nonZeroGas < nz {
 			return 0, ErrGasUintOverflow
 		}
-		gasForData += nz * nonZeroGas
+		gas += nz * nonZeroGas
 
 		z := dataLen - nz
-		if (math.MaxUint64-gas-gasForData)/params.TxDataZeroGas < z {
+		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
 			return 0, ErrGasUintOverflow
 		}
-		gasForData += z * params.TxDataZeroGas
+		gas += z * params.TxDataZeroGas
 
 		if isEIP7623 {
 			tokens := z + nz*params.TokenPerNonZeroByte7623
-			if (math.MaxUint64-gas-gasForData)/params.CostFloorPerToken7623 < tokens {
+			if math.MaxUint64/params.CostFloorPerToken7623 < tokens {
 				return 0, ErrGasUintOverflow
 			}
-			if floor := params.CostFloorPerToken7623 * tokens; gasForData < floor {
-				gasForData = floor
-			}
+
 		}
-		gas += gasForData
+
+		if isContractCreation && isEIP3860 {
+			lenWords := toWordSize(dataLen)
+			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
+				return 0, ErrGasUintOverflow
+			}
+			gas += lenWords * params.InitCodeWordGas
+		}
 	}
 	if accessList != nil {
 		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
@@ -427,6 +423,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		sender           = vm.AccountRef(msg.From)
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
 		contractCreation = msg.To == nil
+		tokens           = st.dataTokens(msg.Data)
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
@@ -436,6 +433,17 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 	if st.gasRemaining < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
+	}
+	// Gas limit suffices for the floor data cost (EIP-7623)
+	if rules.IsPrague {
+		// Check for overflow
+		if (math.MaxUint64-params.TxGas)/params.CostFloorPerToken7623 < tokens {
+			return nil, ErrGasUintOverflow
+		}
+		floorGas := params.TxGas + tokens*params.CostFloorPerToken7623
+		if st.gasRemaining < floorGas {
+			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, floorGas)
+		}
 	}
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
 		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
@@ -498,6 +506,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 		// Execute the transaction's call.
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
+	}
+	if rules.IsPrague {
+		// After EIP-7623: Data-heavy transactions pay the floor gas.
+		gasUsed := st.gasUsed()
+		floorGas := params.TxGas + tokens*params.CostFloorPerToken7623
+		if gasUsed < floorGas {
+			st.gasRemaining = st.initialGas - floorGas
+		}
 	}
 
 	var gasRefund uint64
@@ -635,4 +651,20 @@ func (st *stateTransition) gasUsed() uint64 {
 // blobGasUsed returns the amount of blob gas used by the message.
 func (st *stateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
+}
+
+// dataTokens returns the number of tokens of data as per EIP-7623.
+func (st *stateTransition) dataTokens(data []byte) uint64 {
+	if len(data) == 0 {
+		return 0
+	}
+	var tokens uint64
+	for _, byt := range st.msg.Data {
+		if byt == 0 {
+			tokens++
+		} else {
+			tokens += params.TokenPerNonZeroByte7623
+		}
+	}
+	return tokens
 }
