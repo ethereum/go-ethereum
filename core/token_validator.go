@@ -117,11 +117,11 @@ func CallContractWithState(call ethereum.CallMsg, chain consensus.ChainContext, 
 	vmenv := vm.NewEVM(evmContext, txContext, statedb, nil, chain.Config(), vm.Config{})
 	gaspool := new(GasPool).AddGas(1000000)
 	owner := common.Address{}
-	rval, _, _, err, _ := NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
+	result, err, _ := NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
 	if err != nil {
 		return nil, err
 	}
-	return rval, err
+	return result.Return(), err
 }
 
 // make sure that balance of token is at slot 0

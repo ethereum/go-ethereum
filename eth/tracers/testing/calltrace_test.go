@@ -120,7 +120,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
 			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-			if _, _, _, err, _ = st.TransitionDb(common.Address{}); err != nil {
+			if _, err, _ = st.TransitionDb(common.Address{}); err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
 			// Retrieve the trace result and compare against the etalon
@@ -231,7 +231,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		evm := vm.NewEVM(context, txContext, statedb, nil, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
 		snap := statedb.Snapshot()
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-		if _, _, _, err, _ = st.TransitionDb(common.Address{}); err != nil {
+		if _, err, _ = st.TransitionDb(common.Address{}); err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
 		}
 		if _, err = tracer.GetResult(); err != nil {

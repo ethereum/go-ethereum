@@ -82,8 +82,6 @@ var (
 	blockReorgDropMeter = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
 
 	CheckpointCh = make(chan int)
-
-	ErrNoGenesis = errors.New("Genesis not found in chain")
 )
 
 const (

@@ -526,7 +526,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 
 		vmenv := vm.NewEVM(blockCtx, txContext, statedb, XDCxState, api.config, vm.Config{})
 		owner := common.Address{}
-		if _, _, _, err, _ := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner); err != nil {
+		if _, err, _ := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner); err != nil {
 			failed = err
 			break
 		}
@@ -750,7 +750,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, t
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
 
 	owner := common.Address{}
-	ret, gas, failed, err, _ := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), owner)
+	result, err, _ := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), owner)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
 	}
@@ -758,9 +758,9 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, t
 	switch tracer := tracer.(type) {
 	case *vm.StructLogger:
 		return &ethapi.ExecutionResult{
-			Gas:         gas,
-			Failed:      failed,
-			ReturnValue: fmt.Sprintf("%x", ret),
+			Gas:         result.UsedGas,
+			Failed:      result.Failed(),
+			ReturnValue: fmt.Sprintf("%x", result.Return()),
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
 

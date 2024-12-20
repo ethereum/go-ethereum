@@ -403,7 +403,7 @@ func applyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	// End Bypass blacklist address
 
 	// Apply the transaction to the current state (included in the env)
-	_, gas, failed, err, _ := ApplyMessage(evm, msg, gp, coinbaseOwner)
+	result, err, _ := ApplyMessage(evm, msg, gp, coinbaseOwner)
 
 	if err != nil {
 		return nil, 0, err, false
@@ -416,18 +416,18 @@ func applyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
 	}
-	*usedGas += gas
+	*usedGas += result.UsedGas
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
 	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
-	if failed {
+	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = gas
+	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
@@ -440,10 +440,10 @@ func applyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-	if balanceFee != nil && failed {
+	if balanceFee != nil && result.Failed() {
 		state.PayFeeWithTRC21TxFail(statedb, msg.From(), *to)
 	}
-	return receipt, gas, err, balanceFee != nil
+	return receipt, result.UsedGas, err, balanceFee != nil
 }
 
 func getCoinbaseOwner(bc *BlockChain, statedb *state.StateDB, header *types.Header, author *common.Address) common.Address {
