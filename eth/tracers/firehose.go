@@ -644,6 +644,13 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 	f.assignOrdinalAndIndexToReceiptLogs()
 
 	if *f.applyBackwardCompatibility {
+		// Known Firehose issue: Failed call logging a log with no topics were not fixed in the old Firehose instrumentation
+		// leading to them to be rendered as `topics: [""]` instead of `topics: nil` like successful calls.
+		// Here we re-apply this bogus behavior.
+		f.noTopicsLogOnFailedCallSetToEmptyHash()
+	}
+
+	if *f.applyBackwardCompatibility {
 		// Known Firehose issue: This field has never been populated in the old Firehose instrumentation
 	} else {
 		f.transaction.ReturnData = rootCall.ReturnData
@@ -754,6 +761,18 @@ func (f *Firehose) assignOrdinalAndIndexToReceiptLogs() {
 
 		receiptsLog.Index = callLog.Index
 		receiptsLog.Ordinal = callLog.Ordinal
+	}
+}
+
+func (f *Firehose) noTopicsLogOnFailedCallSetToEmptyHash() {
+	for _, call := range f.transaction.Calls {
+		if call.StateReverted {
+			for _, log := range call.Logs {
+				if len(log.Topics) == 0 {
+					log.Topics = make([][]byte, 1)
+				}
+			}
+		}
 	}
 }
 
