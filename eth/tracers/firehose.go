@@ -889,13 +889,10 @@ func (f *Firehose) OnOpcodeFault(pc uint64, op byte, gas, cost uint64, scope tra
 }
 
 func (f *Firehose) captureInterpreterStep(activeCall *pbeth.Call, pc uint64, op vm.OpCode, gas, cost uint64, _ tracing.OpContext, rData []byte, depth int, err error) {
-	_, _, _, _, _, _, _ = pc, op, gas, cost, rData, depth, err
-
 	if *f.applyBackwardCompatibility {
 		// for call, we need to process the executed code here
 		// since in old firehose executed code calculation depends if the code exist
 		if activeCall.CallType == pbeth.CallType_CALL && !activeCall.ExecutedCode {
-			firehoseTrace("Intepreter step for callType_CALL")
 			activeCall.ExecutedCode = len(activeCall.Input) > 0
 		}
 	} else {
@@ -1229,6 +1226,8 @@ func (f *Firehose) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev
 }
 
 func (f *Firehose) OnStorageChange(a common.Address, k, prev, new common.Hash) {
+	firehoseTrace("storage changed (key=%s, before=%s after=%s)", k, prev, new)
+
 	f.ensureInBlockAndInTrxAndInCall()
 
 	activeCall := f.callStack.Peek()
