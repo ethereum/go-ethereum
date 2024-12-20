@@ -36,6 +36,17 @@ import (
 
 var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
 
+func Run(cmd *exec.Cmd) {
+	fmt.Println(">>>", printArgs(cmd.Args))
+	if !*DryRunFlag {
+		cmd.Stderr = os.Stderr
+		cmd.Stdout = os.Stdout
+		if err := cmd.Run(); err != nil {
+			fmt.Println("Command error: " + err.Error())
+		}
+	}
+}
+
 // MustRun executes the given command and exits the host process for
 // any error.
 func MustRun(cmd *exec.Cmd) {
@@ -61,6 +72,10 @@ func printArgs(args []string) string {
 		s.WriteString(arg)
 	}
 	return s.String()
+}
+
+func RunCommand(cmd string, args ...string) {
+	Run(exec.Command(cmd, args...))
 }
 
 func MustRunCommand(cmd string, args ...string) {

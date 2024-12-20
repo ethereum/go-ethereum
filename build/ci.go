@@ -59,6 +59,7 @@ import (
 
 	"github.com/cespare/cp"
 	"github.com/ethereum/go-ethereum/crypto/signify"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/internal/version"
 )
@@ -679,7 +680,7 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping archive creation because this is a PR build")
 		os.Exit(0)
 	}
-	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
+	if env.Branch != "master" && !strings.HasPrefix(env.Branch, "firehose") && !strings.HasPrefix(env.Tag, "v1.") && !strings.Contains(env.Tag, "fh") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the inclusion list", env.Branch, env.Tag)
 		os.Exit(0)
 	}
@@ -722,22 +723,27 @@ func doDockerBuildx(cmdline []string) {
 		tags = []string{"latest"}
 	case strings.HasPrefix(env.Tag, "v1."):
 		tags = []string{"stable", fmt.Sprintf("release-%v", version.Family), "v" + version.Semantic}
+
+	case strings.HasPrefix(env.Branch, "firehose"):
+		tags = []string{"edge-fh" + tracers.FirehoseProtocolVersion}
+	case strings.Contains(env.Tag, "fh"):
+		tags = []string{"stable-fh" + tracers.FirehoseProtocolVersion, "v" + version.Semantic + "-fh" + tracers.FirehoseProtocolVersion}
 	}
 	// Need to create a mult-arch builder
-	build.MustRunCommand("docker", "buildx", "create", "--use", "--name", "multi-arch-builder", "--platform", *platform)
+	build.RunCommand("docker", "buildx", "create", "--use", "--name", "multi-arch-builder", "--platform", *platform)
 
 	for _, spec := range []struct {
 		file string
 		base string
 	}{
 		{file: "Dockerfile", base: fmt.Sprintf("%s:", *upload)},
-		{file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *upload)},
+		// {file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *upload)},
 	} {
 		for _, tag := range tags { // latest, stable etc
 			gethImage := fmt.Sprintf("%s%s", spec.base, tag)
 			build.MustRunCommand("docker", "buildx", "build",
 				"--build-arg", "COMMIT="+env.Commit,
-				"--build-arg", "VERSION="+version.WithMeta,
+				"--build-arg", "VERSION="+version.WithMeta+"-fh"+tracers.FirehoseProtocolVersion,
 				"--build-arg", "BUILDNUM="+env.Buildnum,
 				"--tag", gethImage,
 				"--platform", *platform,
