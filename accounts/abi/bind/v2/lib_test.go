@@ -19,6 +19,9 @@ package v2
 import (
 	"context"
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/events"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/nested_libraries"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/solc_errors"
 	"io"
 	"math/big"
 	"os"
@@ -30,9 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/events"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/nested_libraries"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/solc_errors"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -474,3 +474,5 @@ func TestBindingGeneration(t *testing.T) {
 		}
 	}
 }
+
+// contract test ideas (from the v1 bind tests):  error that takes struct argument.  constructor that takes struct arg.
