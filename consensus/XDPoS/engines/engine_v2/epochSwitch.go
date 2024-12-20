@@ -41,7 +41,6 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 		log.Debug("[getEpochSwitchInfo] header doesn't provide, get header by hash", "hash", hash.Hex())
 		h = chain.GetHeaderByHash(hash)
 		if h == nil {
-			log.Warn("[getEpochSwitchInfo] can not find header from db", "hash", hash.Hex())
 			return nil, fmt.Errorf("[getEpochSwitchInfo] can not find header from db hash %v", hash.Hex())
 		}
 	}
