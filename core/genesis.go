@@ -579,15 +579,18 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(0),
 		Alloc: map[common.Address]types.Account{
-			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
-			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
-			common.BytesToAddress([]byte{3}): {Balance: big.NewInt(1)}, // RIPEMD
-			common.BytesToAddress([]byte{4}): {Balance: big.NewInt(1)}, // Identity
-			common.BytesToAddress([]byte{5}): {Balance: big.NewInt(1)}, // ModExp
-			common.BytesToAddress([]byte{6}): {Balance: big.NewInt(1)}, // ECAdd
-			common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
-			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
-			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
+			// [Firehose] We disable the precompiles in our forks as we test some precompile that aren't
+			// created as account yet, and we don't want to have them in the way.
+			// common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
+			// common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
+			// common.BytesToAddress([]byte{3}): {Balance: big.NewInt(1)}, // RIPEMD
+			// common.BytesToAddress([]byte{4}): {Balance: big.NewInt(1)}, // Identity
+			// common.BytesToAddress([]byte{5}): {Balance: big.NewInt(1)}, // ModExp
+			// common.BytesToAddress([]byte{6}): {Balance: big.NewInt(1)}, // ECAdd
+			// common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
+			// common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
+			// common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
+
 			// Pre-deploy system contracts
 			params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
 			params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
