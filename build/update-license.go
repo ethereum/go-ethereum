@@ -70,6 +70,7 @@ var (
 		"crypto/bn256/",
 		"crypto/bls12381/",
 		"crypto/ecies/",
+		"graphql/internal/graphiql/",
 		"graphql/graphiql.go",
 		"internal/jsre/deps",
 		"log/",
