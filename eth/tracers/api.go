@@ -176,8 +176,8 @@ type StdTraceConfig struct {
 	TxHash common.Hash
 }
 
-// txTraceResult is the result of a single transaction trace.
-type txTraceResult struct {
+// TxTraceResult is the result of a single transaction trace.
+type TxTraceResult struct {
 	TxHash common.Hash `json:"txHash"`           // transaction hash
 	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
 	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
@@ -189,7 +189,7 @@ type blockTraceTask struct {
 	statedb vm.StateDB       // Intermediate state prepped for tracing
 	block   *types.Block     // Block to trace the transactions from
 	release StateReleaseFunc // The function to release the held resource for this task
-	results []*txTraceResult // Trace results produced by the task
+	results []*TxTraceResult // Trace results produced by the task
 }
 
 // blockTraceResult represents the results of tracing a single block when an entire
@@ -197,7 +197,7 @@ type blockTraceTask struct {
 type blockTraceResult struct {
 	Block  hexutil.Uint64   `json:"block"`  // Block number corresponding to this trace
 	Hash   common.Hash      `json:"hash"`   // Block hash corresponding to this trace
-	Traces []*txTraceResult `json:"traces"` // Trace results produced by the task
+	Traces []*TxTraceResult `json:"traces"` // Trace results produced by the task
 }
 
 // txTraceTask represents a single transaction trace task when an entire block
@@ -281,11 +281,11 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 					}
 					res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, task.statedb, config)
 					if err != nil {
-						task.results[i] = &txTraceResult{TxHash: tx.Hash(), Error: err.Error()}
+						task.results[i] = &TxTraceResult{TxHash: tx.Hash(), Error: err.Error()}
 						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.NumberU64(), "err", err)
 						break
 					}
-					task.results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
+					task.results[i] = &TxTraceResult{TxHash: tx.Hash(), Result: res}
 				}
 				// Tracing state is used up, queue it for de-referencing. Note the
 				// state is the parent state of trace block, use block.number-1 as
@@ -386,7 +386,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			// Send the block over to the concurrent tracers (if not in the fast-forward phase)
 			txs := next.Transactions()
 			select {
-			case taskCh <- &blockTraceTask{statedb: statedb.Copy().(vm.StateDB), block: next, release: release, results: make([]*txTraceResult, len(txs))}:
+			case taskCh <- &blockTraceTask{statedb: statedb.Copy().(vm.StateDB), block: next, release: release, results: make([]*TxTraceResult, len(txs))}:
 			case <-closed:
 				tracker.releaseState(number, release)
 				return
@@ -431,7 +431,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 
 // TraceBlockByNumber returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
-func (api *API) TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, config *TraceConfig) ([]*txTraceResult, error) {
+func (api *API) TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, config *TraceConfig) ([]*TxTraceResult, error) {
 	block, err := api.blockByNumber(ctx, number)
 	if err != nil {
 		return nil, err
@@ -441,7 +441,7 @@ func (api *API) TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, 
 
 // TraceBlockByHash returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
-func (api *API) TraceBlockByHash(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error) {
+func (api *API) TraceBlockByHash(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*TxTraceResult, error) {
 	block, err := api.blockByHash(ctx, hash)
 	if err != nil {
 		return nil, err
@@ -451,7 +451,7 @@ func (api *API) TraceBlockByHash(ctx context.Context, hash common.Hash, config *
 
 // TraceBlock returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (api *API) TraceBlock(ctx context.Context, blob hexutil.Bytes, config *TraceConfig) ([]*txTraceResult, error) {
+func (api *API) TraceBlock(ctx context.Context, blob hexutil.Bytes, config *TraceConfig) ([]*TxTraceResult, error) {
 	block := new(types.Block)
 	if err := rlp.DecodeBytes(blob, block); err != nil {
 		return nil, fmt.Errorf("could not decode block: %v", err)
@@ -461,7 +461,7 @@ func (api *API) TraceBlock(ctx context.Context, blob hexutil.Bytes, config *Trac
 
 // TraceBlockFromFile returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
-func (api *API) TraceBlockFromFile(ctx context.Context, file string, config *TraceConfig) ([]*txTraceResult, error) {
+func (api *API) TraceBlockFromFile(ctx context.Context, file string, config *TraceConfig) ([]*TxTraceResult, error) {
 	blob, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("could not read file: %v", err)
@@ -472,7 +472,7 @@ func (api *API) TraceBlockFromFile(ctx context.Context, file string, config *Tra
 // TraceBadBlock returns the structured logs created during the execution of
 // EVM against a block pulled from the pool of bad ones and returns them as a JSON
 // object.
-func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error) {
+func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*TxTraceResult, error) {
 	block := rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
 	if block == nil {
 		return nil, fmt.Errorf("bad block %#x not found", hash)
@@ -567,7 +567,7 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
-func (api *API) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error) {
+func (api *API) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*TxTraceResult, error) {
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
@@ -600,7 +600,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		blockHash = block.Hash()
 		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		results   = make([]*txTraceResult, len(txs))
+		results   = make([]*TxTraceResult, len(txs))
 	)
 	for i, tx := range txs {
 		// Generate the next state snapshot fast without tracing
@@ -613,9 +613,9 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		}
 		res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, config)
 		if err != nil {
-			results[i] = &txTraceResult{TxHash: tx.Hash(), Error: err.Error()}
+			results[i] = &TxTraceResult{TxHash: tx.Hash(), Error: err.Error()}
 		} else {
-			results[i] = &txTraceResult{TxHash: tx.Hash(), Result: res}
+			results[i] = &TxTraceResult{TxHash: tx.Hash(), Result: res}
 		}
 	}
 	return results, nil
@@ -624,13 +624,13 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 // traceBlockParallel is for tracers that have a high overhead (read JS tracers). One thread
 // runs along and executes txes without tracing enabled to generate their prestate.
 // Worker threads take the tasks and the prestate and trace them.
-func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, statedb vm.StateDB, config *TraceConfig) ([]*txTraceResult, error) {
+func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, statedb vm.StateDB, config *TraceConfig) ([]*TxTraceResult, error) {
 	// Execute all the transaction contained within the block concurrently
 	var (
 		txs       = block.Transactions()
 		blockHash = block.Hash()
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
-		results   = make([]*txTraceResult, len(txs))
+		results   = make([]*TxTraceResult, len(txs))
 		pend      sync.WaitGroup
 	)
 	threads := runtime.NumCPU()
@@ -658,10 +658,10 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 				blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 				res, err := api.traceTx(ctx, txs[task.index], msg, txctx, blockCtx, task.statedb, config)
 				if err != nil {
-					results[task.index] = &txTraceResult{TxHash: txs[task.index].Hash(), Error: err.Error()}
+					results[task.index] = &TxTraceResult{TxHash: txs[task.index].Hash(), Error: err.Error()}
 					continue
 				}
-				results[task.index] = &txTraceResult{TxHash: txs[task.index].Hash(), Result: res}
+				results[task.index] = &TxTraceResult{TxHash: txs[task.index].Hash(), Result: res}
 			}
 		}()
 	}
