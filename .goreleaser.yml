@@ -1,0 +1,78 @@
+version: 1
+
+project_name: mev-commit-go-ethereum
+dist: /tmp/dist/mev-commit-go-ethereum
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+      - GOWORK=off
+    ldflags:
+      - -checklinkname=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - 7
+    ignore:
+      - goos: windows
+        goarch: arm64
+    dir: ./external/geth-pos
+    main: ./cmd/geth
+    binary: "{{ .ProjectName }}"
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{- .Binary }}_
+      {{- with index .Env "RELEASE_VERSION" -}}
+        {{ . }}
+      {{- else -}}
+        {{- if .IsSnapshot }}{{ .ShortCommit }}
+        {{- else }}{{ .Version }}
+        {{- end }}
+      {{- end -}}
+      {{- with index .Env "DIRTY_SUFFIX" -}}
+      {{ . }}
+      {{- end -}}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}
+      {{- end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - src: ./external/geth-pos/entrypoint.sh
+        dst: ./
+        strip_parent: true
+      - src: ./external/geth-pos/deploy_create2.sh
+        dst: ./
+        strip_parent: true
+
+checksum:
+  name_template: >-
+    {{ .ProjectName }}_
+    {{- with index .Env "RELEASE_VERSION" -}}
+      {{ . }}
+    {{- else -}}
+      {{- if .IsSnapshot }}{{ .ShortCommit }}
+      {{- else }}{{ .Version }}
+      {{- end }}
+    {{- end -}}
+    {{- with index .Env "DIRTY_SUFFIX" -}}
+    {{ . }}
+    {{- end -}}
+    _checksums.txt
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
