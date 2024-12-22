@@ -19,12 +19,6 @@ RPC_ENGINE_PORT="${RPC_ENGINE_PORT:-8551}"
 BLOCK_SIGNER_PRIVATE_KEY=${BLOCK_SIGNER_PRIVATE_KEY:-""}
 JWT_SECRET=${JWT_SECRET:-"13373d9a0257983ad150392d7ddb2f9172c9396b4c450e26af469d123c7aaa5c"}
 
-if [ -n "$GETH_ZERO_FEE_ADDRESSES" ]; then
-    ZERO_FEE_ADDRESSES="--zero-fee-addresses=$GETH_ZERO_FEE_ADDRESSES"
-else
-    ZERO_FEE_ADDRESSES=""
-fi
-
 # Generate signer key if needed
 if [ "$GETH_NODE_TYPE" = "signer" ]; then
 	if [ ! -f "$GETH_DATA_DIR/password" ]; then
