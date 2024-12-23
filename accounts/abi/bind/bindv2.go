@@ -26,7 +26,7 @@ type binder struct {
 // registerIdentifier applies alias renaming, name normalization (conversion to camel case), and registers the normalized
 // name in the specified identifier map.  It returns an error if the normalized name already exists in the map.
 func (b *contractBinder) registerIdentifier(identifiers map[string]bool, original string) (normalized string, err error) {
-	normalized = methodNormalizer(alias(b.binder.aliases, original))
+	normalized = abi.ToCamelCase(alias(b.binder.aliases, original))
 	// Name shouldn't start with a digit. It will make the generated code invalid.
 	if len(normalized) > 0 && unicode.IsDigit(rune(normalized[0])) {
 		normalized = fmt.Sprintf("E%s", normalized)
@@ -41,21 +41,6 @@ func (b *contractBinder) registerIdentifier(identifiers map[string]bool, origina
 	}
 	identifiers[normalized] = true
 	return normalized, nil
-}
-
-// RegisterCallIdentifier applies registerIdentifier for contract methods.
-func (b *contractBinder) RegisterCallIdentifier(id string) (string, error) {
-	return b.registerIdentifier(b.callIdentifiers, id)
-}
-
-// RegisterEventIdentifier applies registerIdentifier for contract events.
-func (b *contractBinder) RegisterEventIdentifier(id string) (string, error) {
-	return b.registerIdentifier(b.eventIdentifiers, id)
-}
-
-// RegisterErrorIdentifier applies registerIdentifier for contract errors.
-func (b *contractBinder) RegisterErrorIdentifier(id string) (string, error) {
-	return b.registerIdentifier(b.errorIdentifiers, id)
 }
 
 // BindStructType register the type to be emitted as a struct in the
@@ -83,7 +68,7 @@ type contractBinder struct {
 // into a struct.
 func (cb *contractBinder) bindMethod(original abi.Method) error {
 	normalized := original
-	normalizedName, err := cb.RegisterCallIdentifier(original.Name)
+	normalizedName, err := cb.registerIdentifier(cb.callIdentifiers, original.Name)
 	if err != nil {
 		return err
 	}
@@ -103,7 +88,7 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 	copy(normalized.Outputs, original.Outputs)
 	for j, output := range normalized.Outputs {
 		if output.Name != "" {
-			normalized.Outputs[j].Name = capitalise(output.Name)
+			normalized.Outputs[j].Name = abi.ToCamelCase(output.Name)
 		}
 		if hasStruct(output.Type) {
 			cb.binder.BindStructType(output.Type)
@@ -124,7 +109,7 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 			if o.Name != "" {
 				continue
 			}
-			o.Name = capitalise(abi.ResolveNameConflict("arg", func(name string) bool { _, ok := keys[name]; return ok }))
+			o.Name = abi.ToCamelCase(abi.ResolveNameConflict("arg", func(name string) bool { _, ok := keys[name]; return ok }))
 			normalized.Outputs[i] = o
 			keys[strings.ToLower(o.Name)] = struct{}{}
 		}
@@ -143,7 +128,7 @@ func normalizeArgs(args abi.Arguments) abi.Arguments {
 		if input.Name == "" || isKeyWord(input.Name) {
 			args[i].Name = fmt.Sprintf("arg%d", i)
 		}
-		args[i].Name = capitalise(args[i].Name)
+		args[i].Name = abi.ToCamelCase(args[i].Name)
 		for index := 0; ; index++ {
 			if !used[args[i].Name] {
 				used[args[i].Name] = true
@@ -173,7 +158,7 @@ func (cb *contractBinder) bindEvent(original abi.Event) error {
 	if original.Anonymous {
 		return nil
 	}
-	normalizedName, err := cb.RegisterEventIdentifier(original.Name)
+	normalizedName, err := cb.registerIdentifier(cb.eventIdentifiers, original.Name)
 	if err != nil {
 		return err
 	}
@@ -187,7 +172,7 @@ func (cb *contractBinder) bindEvent(original abi.Event) error {
 
 // bindError normalizes an error and registers it to be emitted in the bindings.
 func (cb *contractBinder) bindError(original abi.Error) error {
-	normalizedName, err := cb.RegisterErrorIdentifier(original.Name)
+	normalizedName, err := cb.registerIdentifier(cb.errorIdentifiers, original.Name)
 	if err != nil {
 		return err
 	}
@@ -268,7 +253,7 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		}, abis[i])
 		// replace this with a method call to cb (name it BoundContract()?)
 		b.contracts[types[i]] = &tmplContractV2{
-			Type:        capitalise(types[i]),
+			Type:        abi.ToCamelCase(types[i]),
 			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
 			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
 			Constructor: evmABI.Constructor,
@@ -300,7 +285,7 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 	funcs := map[string]interface{}{
 		"bindtype":      bindType,
 		"bindtopictype": bindTopicType,
-		"capitalise":    capitalise,
+		"capitalise":    abi.ToCamelCase,
 		"decapitalise":  decapitalise,
 		"add": func(val1, val2 int) int {
 			return val1 + val2

@@ -125,7 +125,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
-			normalizedName := methodNormalizer(alias(aliases, original.Name))
+			normalizedName := abi.ToCamelCase(alias(aliases, original.Name))
 			// Ensure there is no duplicated identifier
 			var identifiers = callIdentifiers
 			if !original.IsConstant() {
@@ -159,7 +159,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			copy(normalized.Outputs, original.Outputs)
 			for j, output := range normalized.Outputs {
 				if output.Name != "" {
-					normalized.Outputs[j].Name = capitalise(output.Name)
+					normalized.Outputs[j].Name = abi.ToCamelCase(output.Name)
 				}
 				if hasStruct(output.Type) {
 					bindStructType(output.Type, structs)
@@ -181,7 +181,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			normalized := original
 
 			// Ensure there is no duplicated identifier
-			normalizedName := methodNormalizer(alias(aliases, original.Name))
+			normalizedName := abi.ToCamelCase(alias(aliases, original.Name))
 			// Name shouldn't start with a digit. It will make the generated code invalid.
 			if len(normalizedName) > 0 && unicode.IsDigit(rune(normalizedName[0])) {
 				normalizedName = fmt.Sprintf("E%s", normalizedName)
@@ -206,8 +206,8 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				// Event is a bit special, we need to define event struct in binding,
 				// ensure there is no camel-case-style name conflict.
 				for index := 0; ; index++ {
-					if !used[capitalise(normalized.Inputs[j].Name)] {
-						used[capitalise(normalized.Inputs[j].Name)] = true
+					if !used[abi.ToCamelCase(normalized.Inputs[j].Name)] {
+						used[abi.ToCamelCase(normalized.Inputs[j].Name)] = true
 						break
 					}
 					normalized.Inputs[j].Name = fmt.Sprintf("%s%d", normalized.Inputs[j].Name, index)
@@ -228,7 +228,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		}
 
 		contracts[types[i]] = &tmplContract{
-			Type:        capitalise(types[i]),
+			Type:        abi.ToCamelCase(types[i]),
 			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
 			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
 			Constructor: evmABI.Constructor,
@@ -278,7 +278,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 	funcs := map[string]interface{}{
 		"bindtype":      bindType,
 		"bindtopictype": bindTopicType,
-		"capitalise":    capitalise,
+		"capitalise":    abi.ToCamelCase,
 		"decapitalise":  decapitalise,
 	}
 	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource))
@@ -371,7 +371,7 @@ func bindStructType(kind abi.Type, structs map[string]*tmplStruct) string {
 			fields []*tmplField
 		)
 		for i, elem := range kind.TupleElems {
-			name := capitalise(kind.TupleRawNames[i])
+			name := abi.ToCamelCase(kind.TupleRawNames[i])
 			name = abi.ResolveNameConflict(name, func(s string) bool { return names[s] })
 			names[name] = true
 			fields = append(fields, &tmplField{Type: bindStructType(*elem, structs), Name: name, SolKind: *elem})
@@ -380,7 +380,7 @@ func bindStructType(kind abi.Type, structs map[string]*tmplStruct) string {
 		if name == "" {
 			name = fmt.Sprintf("Struct%d", len(structs))
 		}
-		name = capitalise(name)
+		name = abi.ToCamelCase(name)
 
 		structs[id] = &tmplStruct{
 			Name:   name,
@@ -404,13 +404,6 @@ func alias(aliases map[string]string, n string) string {
 	}
 	return n
 }
-
-// methodNormalizer is a name transformer that modifies Solidity method names to
-// conform to Go naming conventions.
-var methodNormalizer = abi.ToCamelCase
-
-// capitalise makes a camel-case string which starts with an upper case character.
-var capitalise = abi.ToCamelCase
 
 // decapitalise makes a camel-case string which starts with a lower case character.
 func decapitalise(input string) string {
@@ -436,7 +429,7 @@ func structured(args abi.Arguments) bool {
 		}
 		// If the field name is empty when normalized or collides (var, Var, _var, _Var),
 		// we can't organize into a struct
-		field := capitalise(out.Name)
+		field := abi.ToCamelCase(out.Name)
 		if field == "" || exists[field] {
 			return false
 		}
