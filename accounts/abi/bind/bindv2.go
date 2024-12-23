@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"go/format"
 	"regexp"
+	"slices"
 	"strings"
 	"text/template"
 	"unicode"
@@ -134,25 +135,24 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 	return nil
 }
 
-func normalizeArgs(inp abi.Arguments) abi.Arguments {
-	normalizedArguments := make([]abi.Argument, len(inp))
-	copy(normalizedArguments, inp)
+func normalizeArgs(args abi.Arguments) abi.Arguments {
+	args = slices.Clone(args)
 	used := make(map[string]bool)
 
-	for i, input := range normalizedArguments {
+	for i, input := range args {
 		if input.Name == "" || isKeyWord(input.Name) {
-			normalizedArguments[i].Name = fmt.Sprintf("arg%d", i)
+			args[i].Name = fmt.Sprintf("arg%d", i)
 		}
-		normalizedArguments[i].Name = capitalise(normalizedArguments[i].Name)
+		args[i].Name = capitalise(args[i].Name)
 		for index := 0; ; index++ {
-			if !used[normalizedArguments[i].Name] {
-				used[normalizedArguments[i].Name] = true
+			if !used[args[i].Name] {
+				used[args[i].Name] = true
 				break
 			}
-			normalizedArguments[i].Name = fmt.Sprintf("%s%d", normalizedArguments[i].Name, index)
+			args[i].Name = fmt.Sprintf("%s%d", args[i].Name, index)
 		}
 	}
-	return normalizedArguments
+	return args
 }
 
 // normalizeErrorOrEventFields normalizes errors/events for emitting through bindings:
