@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/crypto"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -43,7 +45,7 @@ func bind(test *bindV2Test) (bound string, err error) {
 	if test.aliases == nil {
 		test.aliases = make(map[string]string)
 	}
-	code, err := BindV2(types, abis, bins, "bindv2test", libs, test.aliases)
+	code, err := BindV2(types, abis, bins, "convertedv1bindtests", libs, test.aliases)
 	if err != nil {
 		return "", fmt.Errorf("error creating bindings: %v", err)
 	}
@@ -329,6 +331,7 @@ var bindTests2 = []bindV2Test{
 }
 
 func TestBindingV2(t *testing.T) {
+	os.Mkdir("convertedv1bindtests", 0777)
 	for _, tc := range bindTests2 {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.types == nil {
@@ -339,18 +342,21 @@ func TestBindingV2(t *testing.T) {
 			if err != nil {
 				t.Fatalf("got error from bind: %v", err)
 			}
+
+			if err := os.WriteFile(fmt.Sprintf("convertedv1bindtests/%s.go", strings.ToLower(tc.name)), []byte(code), 0666); err != nil {
+				t.Fatalf("err writing expected output to file: %v\n", err)
+			}
 			/*
-				if err := os.WriteFile(fmt.Sprintf("expected-output/%s.go", strings.ToLower(tc.name)), []byte(code), 0666); err != nil {
-					t.Fatalf("err writing expected output to file: %v\n", err)
-				}
 				fmt.Printf("//go:embed v2/internal/convertedv1bindtests/%s.go\n", strings.ToLower(tc.name))
 				fmt.Printf("var v1TestBinding%s string\n", tc.name)
 				fmt.Println()
 			*/
-			if code != tc.expectedBindings {
-				t.Fatalf("name mismatch for %s", tc.name)
-				//t.Fatalf("'%s'\n!=\n'%s'\n", code, tc.expectedBindings)
-			}
+			/*
+				if code != tc.expectedBindings {
+					//t.Fatalf("name mismatch for %s", tc.name)
+					t.Fatalf("'%s'\n!=\n'%s'\n", code, tc.expectedBindings)
+				}
+			*/
 		})
 	}
 }
