@@ -647,19 +647,3 @@ func (st *stateTransition) gasUsed() uint64 {
 func (st *stateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }
-
-// dataTokens returns the number of tokens of data as per EIP-7623.
-func (st *stateTransition) dataTokens(data []byte) uint64 {
-	if len(data) == 0 {
-		return 0
-	}
-	var tokens uint64
-	for _, byt := range st.msg.Data {
-		if byt == 0 {
-			tokens++
-		} else {
-			tokens += params.TokenPerNonZeroByte7623
-		}
-	}
-	return tokens
-}
