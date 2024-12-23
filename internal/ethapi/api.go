@@ -1322,18 +1322,18 @@ func (s *PublicBlockChainAPI) getCandidatesFromSmartContract() ([]utils.Masterno
 	return candidatesWithStakeInfo, nil
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	statedb, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if statedb == nil || err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 	if header == nil {
-		return nil, errors.New("nil header in DoCall"), nil
+		return nil, errors.New("nil header in DoCall")
 	}
 	if err := overrides.Apply(statedb); err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 
 	// Setup context so it may be cancelled the call has completed
@@ -1350,32 +1350,32 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 
 	block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 	if block == nil {
-		return nil, fmt.Errorf("nil block in DoCall: number=%d, hash=%s", header.Number.Uint64(), header.Hash().Hex()), nil
+		return nil, fmt.Errorf("nil block in DoCall: number=%d, hash=%s", header.Number.Uint64(), header.Hash().Hex())
 	}
 	author, err := b.GetEngine().Author(block.Header())
 	if err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 	XDCxState, err := b.XDCxService().GetTradingState(block, author)
 	if err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 
 	// TODO: replace header.BaseFee with blockCtx.BaseFee
 	// reference: https://github.com/ethereum/go-ethereum/pull/29051
 	msg, err := args.ToMessage(b, header.Number, globalGasCap, header.BaseFee)
 	if err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 	msg.SetBalanceTokenFeeForCall()
 
 	// Get a new instance of the EVM.
 	evm, vmError, err := b.GetEVM(ctx, msg, statedb, XDCxState, header, &vm.Config{NoBaseFee: true})
 	if err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
@@ -1387,19 +1387,19 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	owner := common.Address{}
-	result, err, vmErr := core.ApplyMessage(evm, msg, gp, owner)
+	result, err := core.ApplyMessage(evm, msg, gp, owner)
 	if err := vmError(); err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 
 	// If the timer caused an abort, return an appropriate error message
 	if evm.Cancelled() {
-		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout), nil
+		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
 	if err != nil {
-		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas()), nil
+		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
-	return result, err, vmErr
+	return result, err
 }
 
 func newRevertError(res []byte) *revertError {
@@ -1443,7 +1443,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	if args.To != nil && *args.To == common.MasternodeVotingSMCBinary {
 		timeout = 0
 	}
-	result, err, vmErr := DoCall(ctx, s.b, args, *blockNrOrHash, overrides, timeout, s.b.RPCGasCap())
+	result, err := DoCall(ctx, s.b, args, *blockNrOrHash, overrides, timeout, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
@@ -1451,7 +1451,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	if result.Failed() && len(result.Return()) > 0 {
 		return nil, newRevertError(result.Return())
 	}
-	return result.Return(), vmErr
+	return result.Return(), nil
 }
 
 type estimateGasError struct {
@@ -1515,7 +1515,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		result, err, _ := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
+		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
 		if err != nil {
 			if errors.Is(err, vm.ErrOutOfGas) || errors.Is(err, core.ErrIntrinsicGas) {
 				return true, nil, nil // Special case, raise gas limit
@@ -2096,7 +2096,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			return nil, 0, nil, err
 		}
 		// TODO: determine the value of owner
-		res, err, _ := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner)
+		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner)
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}

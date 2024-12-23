@@ -478,8 +478,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call XDPoSChain.Cal
 	vmenv := vm.NewEVM(evmContext, txContext, statedb, nil, b.config, vm.Config{NoBaseFee: true})
 	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
 	owner := common.Address{}
-	res, err, _ := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
-	return res, err
+	return core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
 }
 
 // SendTransaction updates the pending block to include the given transaction.

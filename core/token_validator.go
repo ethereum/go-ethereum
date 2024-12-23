@@ -117,7 +117,7 @@ func CallContractWithState(call ethereum.CallMsg, chain consensus.ChainContext, 
 	vmenv := vm.NewEVM(evmContext, txContext, statedb, nil, chain.Config(), vm.Config{})
 	gaspool := new(GasPool).AddGas(1000000)
 	owner := common.Address{}
-	result, err, _ := NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
+	result, err := NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
 	if err != nil {
 		return nil, err
 	}

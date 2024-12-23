@@ -194,7 +194,7 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool, owner common.Address) (*ExecutionResult, error, error) {
+func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool, owner common.Address) (*ExecutionResult, error) {
 	return NewStateTransition(evm, msg, gp).TransitionDb(owner)
 }
 
@@ -317,7 +317,7 @@ func (st *StateTransition) preCheck() error {
 //
 // However if any consensus issue encountered, return the error directly with
 // nil evm execution result.
-func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult, error, error) {
+func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult, error) {
 	// First check this message satisfies all consensus rules before
 	// applying the message. The rules include these clauses
 	//
@@ -330,7 +330,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 
 	// Check clauses 1-3, buy gas if everything is correct
 	if err := st.preCheck(); err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 
 	var (
@@ -345,16 +345,16 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, rules.IsEIP1559)
 	if err != nil {
-		return nil, err, nil
+		return nil, err
 	}
 	if st.gas < gas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas), nil
+		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
 	}
 	st.gas -= gas
 
 	// Check whether the init code size has been exceeded.
 	if rules.IsEIP1559 && contractCreation && len(st.data) > params.MaxInitCodeSize {
-		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(st.data), params.MaxInitCodeSize), nil
+		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(st.data), params.MaxInitCodeSize)
 	}
 
 	// Execute the preparatory steps for state transition which includes:
@@ -365,10 +365,10 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 	// Check clause 6
 	value, overflow := uint256.FromBig(msg.Value())
 	if overflow {
-		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From().Hex()), nil
+		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From().Hex())
 	}
 	if !value.IsZero() && !st.evm.Context.CanTransfer(st.state, msg.From(), value.ToBig()) {
-		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From().Hex()), nil
+		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From().Hex())
 	}
 
 	var (
@@ -406,7 +406,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (*ExecutionResult,
 		UsedGas:    st.gasUsed(),
 		Err:        vmerr,
 		ReturnData: ret,
-	}, nil, vmerr
+	}, nil
 }
 
 func (st *StateTransition) refundGas(refundQuotient uint64) {

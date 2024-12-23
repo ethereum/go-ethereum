@@ -526,7 +526,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 
 		vmenv := vm.NewEVM(blockCtx, txContext, statedb, XDCxState, api.config, vm.Config{})
 		owner := common.Address{}
-		if _, err, _ := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner); err != nil {
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner); err != nil {
 			failed = err
 			break
 		}
@@ -750,7 +750,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, t
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
 
 	owner := common.Address{}
-	result, err, _ := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), owner)
+	result, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), owner)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
 	}

@@ -166,7 +166,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) (*state.StateD
 	gaspool.AddGas(block.GasLimit())
 
 	coinbase := &t.json.Env.Coinbase
-	if _, err, _ := core.ApplyMessage(evm, msg, gaspool, *coinbase); err != nil {
+	if _, err := core.ApplyMessage(evm, msg, gaspool, *coinbase); err != nil {
 		statedb.RevertToSnapshot(snapshot)
 	}
 	if logs := rlpHash(statedb.Logs()); logs != common.Hash(post.Logs) {

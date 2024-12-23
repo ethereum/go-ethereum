@@ -403,7 +403,7 @@ func applyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	// End Bypass blacklist address
 
 	// Apply the transaction to the current state (included in the env)
-	result, err, _ := ApplyMessage(evm, msg, gp, coinbaseOwner)
+	result, err := ApplyMessage(evm, msg, gp, coinbaseOwner)
 
 	if err != nil {
 		return nil, 0, err, false
