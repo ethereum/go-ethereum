@@ -360,8 +360,10 @@ func TestNormalizeArgs(t *testing.T) {
 		inp      []string
 		expected []string
 	}
-	for _, tc := range []normalizeArgsTc{
-		{[]string{"arg1", "Arg1"}, []string{"Arg1", "Arg1"}}} {
+	for i, tc := range []normalizeArgsTc{
+		{[]string{"arg1", "Arg1"}, []string{"Arg1", "Arg10"}},
+		{[]string{"", ""}, []string{"Arg0", "Arg1"}},
+		{[]string{"var", "const"}, []string{"Arg0", "Arg1"}}} {
 		var inpArgs abi.Arguments
 		for _, inpArgName := range tc.inp {
 			inpArgs = append(inpArgs, abi.Argument{
@@ -369,11 +371,9 @@ func TestNormalizeArgs(t *testing.T) {
 			})
 		}
 		res := normalizeArgs(inpArgs)
-		for i, resArg := range res {
-			if resArg.Name != tc.expected[i] {
-				fmt.Println(resArg.Name)
-				fmt.Println(tc.expected[i])
-				t.Fatalf("mismatch!!!")
+		for j, resArg := range res {
+			if resArg.Name != tc.expected[j] {
+				t.Fatalf("mismatch for test index %d, arg index %d: expected %v. got %v", i, j, resArg.Name, tc.expected[j])
 			}
 		}
 	}
