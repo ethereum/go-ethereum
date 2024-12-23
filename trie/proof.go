@@ -526,9 +526,6 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		if err != nil {
 			return false, err
 		}
-		if !bytes.Equal(firstKey, keys[0]) {
-			return false, errors.New("correct proof but invalid key")
-		}
 		if !bytes.Equal(val, values[0]) {
 			return false, errors.New("correct proof but invalid data")
 		}
