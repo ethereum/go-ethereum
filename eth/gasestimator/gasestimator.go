@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -38,10 +39,11 @@ import (
 // these together, it would be excessively hard to test. Splitting the parts out
 // allows testing without needing a proper live chain.
 type Options struct {
-	Config *params.ChainConfig // Chain configuration for hard fork selection
-	Chain  core.ChainContext   // Chain context to access past block hashes
-	Header *types.Header       // Header defining the block context to execute in
-	State  *state.StateDB      // Pre-state on top of which to estimate the gas
+	Config         *params.ChainConfig      // Chain configuration for hard fork selection
+	Chain          core.ChainContext        // Chain context to access past block hashes
+	Header         *types.Header            // Header defining the block context to execute in
+	State          *state.StateDB           // Pre-state on top of which to estimate the gas
+	BlockOverrides *override.BlockOverrides // Block overrides to apply during the estimation
 
 	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
@@ -217,20 +219,22 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
 	// Assemble the call and the call context
 	var (
-		msgContext = core.NewEVMTxContext(call)
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
-
 		dirtyState = opts.State.Copy()
 	)
+	if opts.BlockOverrides != nil {
+		opts.BlockOverrides.Apply(&evmContext)
+	}
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
-	if msgContext.GasPrice.Sign() == 0 {
+	if call.GasPrice.Sign() == 0 {
 		evmContext.BaseFee = new(big.Int)
 	}
-	if msgContext.BlobFeeCap != nil && msgContext.BlobFeeCap.BitLen() == 0 {
+	if call.BlobGasFeeCap != nil && call.BlobGasFeeCap.BitLen() == 0 {
 		evmContext.BlobBaseFee = new(big.Int)
 	}
-	evm := vm.NewEVM(evmContext, msgContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true})
+	evm := vm.NewEVM(evmContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true})
+
 	// Monitor the outer context and interrupt the EVM upon cancellation. To avoid
 	// a dangling goroutine until the outer estimation finishes, create an internal
 	// context for the lifetime of this method call.

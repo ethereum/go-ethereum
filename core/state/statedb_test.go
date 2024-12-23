@@ -650,11 +650,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		{
 			have := state.transientStorage
 			want := checkstate.transientStorage
-			eq := maps.EqualFunc(have, want,
-				func(a Storage, b Storage) bool {
-					return maps.Equal(a, b)
-				})
-			if !eq {
+			if !maps.EqualFunc(have, want, maps.Equal) {
 				return fmt.Errorf("transient storage differs ,have\n%v\nwant\n%v",
 					have.PrettyPrint(),
 					want.PrettyPrint())
@@ -1034,12 +1030,8 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 
 func TestStateDBAccessList(t *testing.T) {
 	// Some helpers
-	addr := func(a string) common.Address {
-		return common.HexToAddress(a)
-	}
-	slot := func(a string) common.Hash {
-		return common.HexToHash(a)
-	}
+	addr := common.HexToAddress
+	slot := common.HexToHash
 
 	db := NewDatabaseForTesting()
 	state, _ := New(types.EmptyRootHash, db)
@@ -1305,12 +1297,12 @@ func TestDeleteStorage(t *testing.T) {
 	obj := fastState.getOrNewStateObject(addr)
 	storageRoot := obj.data.Root
 
-	_, fastNodes, err := fastState.deleteStorage(addr, crypto.Keccak256Hash(addr[:]), storageRoot)
+	_, _, fastNodes, err := fastState.deleteStorage(addr, crypto.Keccak256Hash(addr[:]), storageRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, slowNodes, err := slowState.deleteStorage(addr, crypto.Keccak256Hash(addr[:]), storageRoot)
+	_, _, slowNodes, err := slowState.deleteStorage(addr, crypto.Keccak256Hash(addr[:]), storageRoot)
 	if err != nil {
 		t.Fatal(err)
 	}

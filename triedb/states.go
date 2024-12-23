@@ -23,7 +23,6 @@ import (
 
 // StateSet represents a collection of mutated states during a state transition.
 type StateSet struct {
-	Destructs      map[common.Hash]struct{}                  // Destructed accounts
 	Accounts       map[common.Hash][]byte                    // Mutated accounts in 'slim RLP' encoding
 	AccountsOrigin map[common.Address][]byte                 // Original values of mutated accounts in 'slim RLP' encoding
 	Storages       map[common.Hash]map[common.Hash][]byte    // Mutated storage slots in 'prefix-zero-trimmed' RLP format
@@ -33,7 +32,6 @@ type StateSet struct {
 // NewStateSet initializes an empty state set.
 func NewStateSet() *StateSet {
 	return &StateSet{
-		Destructs:      make(map[common.Hash]struct{}),
 		Accounts:       make(map[common.Hash][]byte),
 		AccountsOrigin: make(map[common.Address][]byte),
 		Storages:       make(map[common.Hash]map[common.Hash][]byte),
@@ -47,5 +45,5 @@ func (set *StateSet) internal() *pathdb.StateSetWithOrigin {
 	if set == nil {
 		return nil
 	}
-	return pathdb.NewStateSetWithOrigin(set.AccountsOrigin, set.StoragesOrigin)
+	return pathdb.NewStateSetWithOrigin(set.Accounts, set.Storages, set.AccountsOrigin, set.StoragesOrigin)
 }

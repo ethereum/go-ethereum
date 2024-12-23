@@ -31,7 +31,7 @@ func (e ExecutionResult) MarshalJSON() ([]byte, error) {
 		CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
 		CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 		RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
-		Requests             []hexutil.Bytes       `json:"requests,omitempty"`
+		Requests             []hexutil.Bytes       `json:"requests"`
 	}
 	var enc ExecutionResult
 	enc.StateRoot = e.StateRoot
@@ -74,7 +74,7 @@ func (e *ExecutionResult) UnmarshalJSON(input []byte) error {
 		CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
 		CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 		RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
-		Requests             []hexutil.Bytes       `json:"requests,omitempty"`
+		Requests             []hexutil.Bytes       `json:"requests"`
 	}
 	var dec ExecutionResult
 	if err := json.Unmarshal(input, &dec); err != nil {
