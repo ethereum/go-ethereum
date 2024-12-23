@@ -3417,7 +3417,7 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 	if err != nil {
 		t.Fatalf("error reading expected test file: %s output: %v", outputFile, err)
 	}
-	require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", testid, string(want), string(data))
+	require.JSONEqf(t, string(want), string(data), "test %s: json not match, want: %s, have: %s", file, string(want), string(data))
 }
 
 func addressToHash(a common.Address) common.Hash {
