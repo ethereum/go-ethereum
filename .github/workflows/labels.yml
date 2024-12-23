@@ -1,0 +1,24 @@
+name: labels
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/labels.yml
+      - .github/workflows/labels.yml
+  pull_request: # dry run only
+    paths:
+      - .github/labels.yml
+      - .github/workflows/labels.yml
+
+jobs:
+  labeler:
+    permissions:
+      contents: read
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crazy-max/ghaction-github-labeler@v5
+        with:
+          dry-run: ${{ github.event_name == 'pull_request' }}
