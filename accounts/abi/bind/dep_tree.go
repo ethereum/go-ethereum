@@ -56,11 +56,20 @@ type depTreeDeployer struct {
 }
 
 func newDepTreeDeployer(deployParams *DeploymentParams, deployFn DeployFn) *depTreeDeployer {
+	deployedAddrs := maps.Clone(deployParams.overrides)
+	if deployedAddrs == nil {
+		deployedAddrs = make(map[string]common.Address)
+	}
+	inputs := deployParams.inputs
+	if inputs == nil {
+		inputs = make(map[string][]byte)
+	}
+
 	return &depTreeDeployer{
 		deployFn:      deployFn,
-		deployedAddrs: maps.Clone(deployParams.overrides),
+		deployedAddrs: deployedAddrs,
 		deployerTxs:   make(map[string]*types.Transaction),
-		inputs:        maps.Clone(deployParams.inputs),
+		inputs:        inputs,
 	}
 }
 
@@ -97,6 +106,12 @@ func (d *depTreeDeployer) linkAndDeploy(metadata *MetaData) (common.Address, err
 
 // result returns a result for this deployment, or an error if it failed.
 func (d *depTreeDeployer) result() *DeploymentResult {
+	// remove the override addresses from the resulting deployedAddrs
+	for pattern, _ := range d.deployedAddrs {
+		if _, ok := d.deployerTxs[pattern]; !ok {
+			delete(d.deployedAddrs, pattern)
+		}
+	}
 	return &DeploymentResult{
 		Txs:   d.deployerTxs,
 		Addrs: d.deployedAddrs,
@@ -108,6 +123,7 @@ func (d *depTreeDeployer) result() *DeploymentResult {
 // deployed are returned in the result.
 func LinkAndDeploy(deployParams *DeploymentParams, deploy DeployFn) (res *DeploymentResult, err error) {
 	deployer := newDepTreeDeployer(deployParams, deploy)
+	deployParams.inputs = make(map[string][]byte)
 	for _, contract := range deployParams.contracts {
 		if _, err := deployer.linkAndDeploy(contract); err != nil {
 			return deployer.result(), err
