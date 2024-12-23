@@ -56,7 +56,6 @@ type LightChain struct {
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
-	mu      sync.RWMutex
 	chainmu sync.RWMutex
 
 	bodyCache    *lru.Cache[common.Hash, *types.Body]
@@ -159,8 +158,8 @@ func (lc *LightChain) loadLastState() error {
 // SetHead rewinds the local chain to a new head. Everything above the new
 // head will be deleted and the new one set.
 func (lc *LightChain) SetHead(head uint64) {
-	lc.mu.Lock()
-	defer lc.mu.Unlock()
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
 
 	lc.hc.SetHead(head, nil)
 	lc.loadLastState()
@@ -182,8 +181,8 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	// Dump the entire block chain and purge the caches
 	lc.SetHead(0)
 
-	lc.mu.Lock()
-	defer lc.mu.Unlock()
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
 	if err := core.WriteTd(lc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty()); err != nil {
@@ -297,8 +296,8 @@ func (lc *LightChain) Stop() {
 // Rollback is designed to remove a chain of links from the database that aren't
 // certain enough to be valid.
 func (lc *LightChain) Rollback(chain []common.Hash) {
-	lc.mu.Lock()
-	defer lc.mu.Unlock()
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
 
 	for i := len(chain) - 1; i >= 0; i-- {
 		hash := chain[i]
@@ -344,19 +343,13 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 
 	// Make sure only one thread manipulates the chain at once
 	lc.chainmu.Lock()
-	defer func() {
-		lc.chainmu.Unlock()
-		time.Sleep(time.Millisecond * 10) // ugly hack; do not hog chain lock in case syncing is CPU-limited by validation
-	}()
+	defer lc.chainmu.Unlock()
 
 	lc.wg.Add(1)
 	defer lc.wg.Done()
 
 	var events []interface{}
 	whFunc := func(header *types.Header) error {
-		lc.mu.Lock()
-		defer lc.mu.Unlock()
-
 		status, err := lc.hc.WriteHeader(header)
 
 		switch status {
@@ -450,11 +443,12 @@ func (lc *LightChain) SyncCht(ctx context.Context) bool {
 		num := chtCount*CHTFrequencyClient - 1
 		header, err := GetHeaderByNumber(ctx, lc.odr, num)
 		if header != nil && err == nil {
-			lc.mu.Lock()
+			lc.chainmu.Lock()
+			defer lc.chainmu.Unlock()
+
 			if lc.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
 				lc.hc.SetCurrentHeader(header)
 			}
-			lc.mu.Unlock()
 			return true
 		}
 	}
