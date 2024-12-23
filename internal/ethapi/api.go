@@ -1448,7 +1448,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 		return nil, err
 	}
 	// If the result contains a revert reason, try to unpack and return it.
-	if result.Failed() && len(result.Return()) > 0 {
+	if result.Failed() {
 		return nil, newRevertError(result.Return())
 	}
 	return result.Return(), nil
