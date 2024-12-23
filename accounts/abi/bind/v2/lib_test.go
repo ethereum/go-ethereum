@@ -166,7 +166,6 @@ func TestDeploymentLibraries(t *testing.T) {
 	}
 }
 
-/*
 // Same as TestDeployment.  However, stagger the deployments with overrides:
 // first deploy the library deps and then the contract.
 func TestDeploymentWithOverrides(t *testing.T) {
@@ -176,8 +175,8 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 	defer bindBackend.Backend.Close()
 
-	// deploy some library deps
-	deploymentParams := bind.NewDeploymentParams(nested_libraries.C1LibraryDeps, nil, nil)
+	// deploy all the library dependencies of our target contract, but not the target contract itself.
+	deploymentParams := bind.NewDeploymentParams(nested_libraries.C1MetaData.Deps, nil, nil)
 
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
@@ -195,6 +194,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		}
 	}
 
+	// TODO: constructor input packing should not return an error.
 	ctrct, err := nested_libraries.NewC1()
 	if err != nil {
 		panic(err)
@@ -254,7 +254,6 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		t.Fatalf("expected internal call count of 6.  got %d.", internalCallCount.Uint64())
 	}
 }
-*/
 
 func TestEvents(t *testing.T) {
 	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
@@ -412,7 +411,7 @@ func TestErrors(t *testing.T) {
 
 // TestBindingGeneration tests that re-running generation of bindings does not result in mutations to the binding code
 func TestBindingGeneration(t *testing.T) {
-	matches, _ := filepath.Glob("internal/*")
+	matches, _ := filepath.Glob("internal/contracts/*")
 	var dirs []string
 	for _, match := range matches {
 		f, _ := os.Stat(match)
@@ -429,7 +428,7 @@ func TestBindingGeneration(t *testing.T) {
 			sigs  []map[string]string
 			libs  = make(map[string]string)
 		)
-		basePath := filepath.Join("internal", dir)
+		basePath := filepath.Join("internal/contracts", dir)
 		combinedJsonPath := filepath.Join(basePath, "combined-abi.json")
 		abiBytes, err := os.ReadFile(combinedJsonPath)
 		if err != nil {
