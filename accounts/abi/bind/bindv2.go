@@ -143,9 +143,10 @@ func normalizeArgs(inp abi.Arguments) abi.Arguments {
 		if input.Name == "" || isKeyWord(input.Name) {
 			normalizedArguments[i].Name = fmt.Sprintf("arg%d", i)
 		}
+		normalizedArguments[i].Name = capitalise(normalizedArguments[i].Name)
 		for index := 0; ; index++ {
-			if !used[capitalise(normalizedArguments[i].Name)] {
-				used[capitalise(normalizedArguments[i].Name)] = true
+			if !used[normalizedArguments[i].Name] {
+				used[normalizedArguments[i].Name] = true
 				break
 			}
 			normalizedArguments[i].Name = fmt.Sprintf("%s%d", normalizedArguments[i].Name, index)
