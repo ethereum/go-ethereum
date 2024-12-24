@@ -25,6 +25,7 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/cloudflare/circl/sign/bls"
 	"github.com/consensys/gnark-crypto/ecc"
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
@@ -98,6 +99,9 @@ var PrecompiledContractsBerlin = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x7}): &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{0x8}): &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{0x9}): &blake2F{},
+
+	// primev pre-compiles start at 0xf addresses
+	common.BytesToAddress([]byte{0xf0}): &bls12381SignatureVerification{},
 }
 
 // PrecompiledContractsCancun contains the default set of pre-compiled Ethereum
@@ -225,12 +229,9 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uin
 	if suppliedGas < gasCost {
 		return nil, 0, ErrOutOfGas
 	}
-	if logger != nil && logger.OnGasChange != nil {
-		logger.OnGasChange(suppliedGas, suppliedGas-gasCost, tracing.GasChangeCallPrecompiledContract)
-	}
-	suppliedGas -= gasCost
+	gasLeft := suppliedGas - gasCost
 	output, err := p.Run(input)
-	return output, suppliedGas, err
+	return output, gasLeft, err
 }
 
 // ecrecover implemented as a native contract.
@@ -713,6 +714,34 @@ var (
 	errBLS12381G1PointSubgroup             = errors.New("g1 point is not on correct subgroup")
 	errBLS12381G2PointSubgroup             = errors.New("g2 point is not on correct subgroup")
 )
+
+// bls12381SignatureVerification implements BLS signature verification precompile.
+type bls12381SignatureVerification struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *bls12381SignatureVerification) RequiredGas(input []byte) uint64 {
+	return params.BlsSignVerifyGas
+}
+
+func (c *bls12381SignatureVerification) Run(input []byte) ([]byte, error) {
+	// Input format:
+	// - pubkey (48 bytes) - G1 point
+	// - message (32 bytes) - Hash of the message
+	// - signature (96 bytes) - G2 point
+	if len(input) != 176 {
+		return nil, errBLS12381InvalidInputLength
+	}
+
+	var pubKey bls.PublicKey[bls.G1]
+	if err := pubKey.UnmarshalBinary(input[:48]); err != nil {
+		return nil, err
+	}
+
+	if !bls.Verify(&pubKey, input[48:80], input[80:]) {
+		return nil, nil
+	}
+	return input[:48], nil
+}
 
 // bls12381G1Add implements EIP-2537 G1Add precompile.
 type bls12381G1Add struct{}
