@@ -103,6 +103,55 @@ func TestSkipVerifySyncInfoIfBothQcTcNotQualified(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestVerifySyncInfoIfTCRoundIsAtNextEpoch(t *testing.T) {
+	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
+	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
+
+	// Make the Highest QC in syncInfo point to an old block to simulate it's no longer qualified
+	parentBlock := blockchain.GetBlockByNumber(903)
+	var extraField types.ExtraFields_v2
+	err := utils.DecodeBytesExtraFields(parentBlock.Extra(), &extraField)
+	if err != nil {
+		t.Fatal("Fail to decode extra data", err)
+	}
+
+	highestTC := &types.TimeoutCert{
+		Round:      types.Round(899),
+		Signatures: []types.Signature{},
+	}
+
+	timeoutForSign := &types.TimeoutForSign{
+		Round:     types.Round(900),
+		GapNumber: 450,
+	}
+
+	// Sign from acc 1, 2, 3 and voter
+	acc1SignedHash := SignHashByPK(acc1Key, types.TimeoutSigHash(timeoutForSign).Bytes())
+	acc2SignedHash := SignHashByPK(acc2Key, types.TimeoutSigHash(timeoutForSign).Bytes())
+	acc3SignedHash := SignHashByPK(acc3Key, types.TimeoutSigHash(timeoutForSign).Bytes())
+	voterSignedHash := SignHashByPK(voterKey, types.TimeoutSigHash(timeoutForSign).Bytes())
+
+	var signatures []types.Signature
+	signatures = append(signatures, acc1SignedHash, acc2SignedHash, acc3SignedHash, voterSignedHash)
+
+	syncInfoTC := &types.TimeoutCert{
+		Round:      timeoutForSign.Round,
+		Signatures: signatures,
+		GapNumber:  timeoutForSign.GapNumber,
+	}
+
+	syncInfoMsg := &types.SyncInfo{
+		HighestQuorumCert:  extraField.QuorumCert,
+		HighestTimeoutCert: syncInfoTC,
+	}
+
+	engineV2.SetPropertiesFaker(syncInfoMsg.HighestQuorumCert, highestTC)
+
+	verified, err := engineV2.VerifySyncInfoMessage(blockchain, syncInfoMsg)
+	assert.True(t, verified)
+	assert.Nil(t, err)
+}
+
 func TestVerifySyncInfoIfTcUseDifferentEpoch(t *testing.T) {
 	config := params.TestXDPoSMockChainConfig
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 1349, config, nil)

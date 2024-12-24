@@ -109,7 +109,19 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 			log.Warn("[verifyQC] duplicated signature in QC", "duplicate", common.Bytes2Hex(d))
 		}
 	}
+	latestBlockRound, err := x.GetRoundNumber(chain.CurrentHeader())
+	if err != nil {
+		log.Error("[verifyTC] Error when getting current header round", "error", err)
+		return fmt.Errorf("fail on verifyTC due to error when getting current header round, %s", err)
+	}
+
 	tcEpoch := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(timeoutCert.Round)/x.config.Epoch
+
+	//tcEpoch maybe not existed if there is no QC round in this epoch, there is no epoch switch block generated, so it needs to use currentRound to find epochBlockInfo
+	if latestBlockRound < timeoutCert.Round {
+		tcEpoch = x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(latestBlockRound)/x.config.Epoch
+	}
+
 	epochBlockInfo, err := x.GetBlockByEpochNumber(chain, tcEpoch)
 	if err != nil {
 		log.Error("[verifyTC] Error when getting epoch block info by tc round", "error", err)
