@@ -109,24 +109,33 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 			log.Warn("[verifyQC] duplicated signature in QC", "duplicate", common.Bytes2Hex(d))
 		}
 	}
-	latestBlockRound, err := x.GetRoundNumber(chain.CurrentHeader())
+
+	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, (chain.CurrentHeader()), (chain.CurrentHeader()).Hash())
 	if err != nil {
-		log.Error("[verifyTC] Error when getting current header round", "error", err)
-		return fmt.Errorf("fail on verifyTC due to error when getting current header round, %s", err)
+		log.Error("[verifyTC] Error when getting epoch switch info", "error", err)
+		return fmt.Errorf("fail on verifyTC due to failure in getting epoch switch info, %s", err)
 	}
 
-	tcEpoch := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(timeoutCert.Round)/x.config.Epoch
+	epochRound := epochSwitchInfo.EpochSwitchBlockInfo.Round
+	tempTCEpoch := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochRound)/x.config.Epoch
 
-	//tcEpoch maybe not existed if there is no QC round in this epoch, there is no epoch switch block generated, so it needs to use currentRound to find epochBlockInfo
-	if latestBlockRound < timeoutCert.Round {
-		tcEpoch = x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(latestBlockRound)/x.config.Epoch
+	epochBlockInfo := &types.BlockInfo{
+		Hash:   epochSwitchInfo.EpochSwitchBlockInfo.Hash,
+		Round:  epochRound,
+		Number: epochSwitchInfo.EpochSwitchBlockInfo.Number,
 	}
-
-	epochBlockInfo, err := x.GetBlockByEpochNumber(chain, tcEpoch)
-	if err != nil {
-		log.Error("[verifyTC] Error when getting epoch block info by tc round", "error", err)
-		return fmt.Errorf("fail on verifyTC due to failure in getting epoch block info tc round, %s", err)
+	log.Info("[verifyTC] Init epochInfo", "number", epochBlockInfo.Number, "round", epochRound, "tcRound", timeoutCert.Round, "tcEpoch", tempTCEpoch)
+	for epochBlockInfo.Round > timeoutCert.Round {
+		tempTCEpoch--
+		epochBlockInfo, err = x.GetBlockByEpochNumber(chain, tempTCEpoch)
+		if err != nil {
+			log.Error("[verifyTC] Error when getting epoch block info by tc round", "error", err)
+			return fmt.Errorf("fail on verifyTC due to failure in getting epoch block info tc round, %s", err)
+		}
+		log.Debug("[verifyTC] Loop to get right epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutCert.Round, "tcEpoch", tempTCEpoch)
 	}
+	tcEpoch := tempTCEpoch
+	log.Info("[verifyTC] Final TC epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutCert.Round, "tcEpoch", tcEpoch)
 
 	epochInfo, err := x.getEpochSwitchInfo(chain, nil, epochBlockInfo.Hash)
 	if err != nil {
