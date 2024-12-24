@@ -566,6 +566,115 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	return roots, nil
 }
 
+// FindDependentInvalidTxs finds dependent txs that becomes invalid if the given txs were not part of the block at first place
+func (api *API) FindDependentInvalidTxs(ctx context.Context, txs []common.Hash, blockNumber uint64) (int, error) {
+	var (
+		defaultRexec  uint64 = 10000                          // default number of blocks to reexec to generate the state
+		inputTxs             = make(map[common.Hash]bool)     // mapping for the input txs
+		depInvalidTxs        = make(map[common.Hash]struct{}) // mapping of dep txs that become invalid
+	)
+
+	for _, tx := range txs {
+		inputTxs[tx] = true
+	}
+
+	if blockNumber == 0 {
+		return 0, errors.New("genesis block is not applicable")
+	}
+
+	block, err := api.blockByNumber(ctx, rpc.BlockNumber(blockNumber))
+	if err != nil {
+		return 0, err
+	}
+
+	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(blockNumber-1), block.ParentHash())
+	if err != nil {
+		return 0, err
+	}
+	//generate the state at the parent block
+	statedb, release, err := api.backend.StateAtBlock(ctx, parent, defaultRexec, nil, true, false)
+	if err != nil {
+		return 0, err
+	}
+	defer release()
+
+	err = api.findDepTxsInBlock(ctx, inputTxs, depInvalidTxs, statedb, block)
+	if err != nil {
+		return 0, err
+	}
+	log.Info("dependent txs that become invalid", "num", len(depInvalidTxs))
+	return len(depInvalidTxs), nil
+}
+
+// findDepTxsInBlock skips executing given txs and find the dependent txs that become invalid
+func (api *API) findDepTxsInBlock(ctx context.Context, txs map[common.Hash]bool, depInvalid map[common.Hash]struct{}, state *state.StateDB, block *types.Block) error {
+	var (
+		blockCtx = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		evm      = vm.NewEVM(blockCtx, state, api.backend.ChainConfig(), vm.Config{})
+		gp       = new(core.GasPool).AddGas(block.GasLimit())
+	)
+
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+	}
+	// process prague related changes
+	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
+	}
+
+	for i, tx := range block.Transactions() {
+		if _, ok := txs[tx.Hash()]; ok {
+			continue
+		}
+		// takes a snapshot so that if tx exec errors the subsequent txs
+		// are applied on the snapshot state
+		var (
+			snap = state.Snapshot()
+			gas  = gp.Gas()
+		)
+		err := api.executeTx(ctx, i, block, tx, evm, state)
+		if err != nil {
+			state.RevertToSnapshot(snap)
+			gp.SetGas(gas)
+			//adds to the dependent txs as it became invalid
+			depInvalid[tx.Hash()] = struct{}{}
+			log.Info("dependent invalid tx found", "tx", tx.Hash(), "index", i)
+		}
+	}
+	return nil
+}
+
+func (api *API) executeTx(ctx context.Context, index int, block *types.Block, tx *types.Transaction, evm *vm.EVM, state *state.StateDB) error {
+	var (
+		blockNum = block.Number()
+		txctx    = &Context{
+			BlockHash:   block.Hash(),
+			BlockNumber: blockNum,
+			TxIndex:     index,
+			TxHash:      tx.Hash(),
+		}
+		signer  = types.MakeSigner(api.backend.ChainConfig(), blockNum, block.Time())
+		usedGas uint64
+	)
+
+	msg, err := core.TransactionToMessage(tx, signer, block.BaseFee())
+	if err != nil {
+		return err
+	}
+	state.SetTxContext(txctx.TxHash, txctx.TxIndex)
+	_, err = core.ApplyTransactionWithEVM(msg, new(core.GasPool).AddGas(msg.GasLimit), state, txctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm)
+	if err != nil {
+		return err
+	}
+
+	if evm.ChainConfig().IsByzantium(blockNum) {
+		evm.StateDB.Finalise(true)
+	} else {
+		state.IntermediateRoot(evm.ChainConfig().IsEIP158(blockNum)).Bytes()
+	}
+	return nil
+}
+
 // StandardTraceBadBlockToFile dumps the structured logs created during the
 // execution of EVM against a block pulled from the pool of bad ones to the
 // local file system and returns a list of files to the caller.

@@ -387,6 +387,12 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, null]
 		}),
 		new web3._extend.Method({
+			name: 'findDependentInvalidTxs',
+			call: 'debug_findDependentInvalidTxs',
+			params: 2,
+			inputFormatter: [null, null],
+		}),
+		new web3._extend.Method({
 			name: 'traceBlockByHash',
 			call: 'debug_traceBlockByHash',
 			params: 2,
