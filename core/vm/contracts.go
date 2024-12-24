@@ -117,6 +117,9 @@ var PrecompiledContractsCancun = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x8}): &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{0x9}): &blake2F{},
 	common.BytesToAddress([]byte{0xa}): &kzgPointEvaluation{},
+
+	// primev pre-compiles start at 0xf addresses
+	common.BytesToAddress([]byte{0xf0}): &bls12381SignatureVerification{},
 }
 
 // PrecompiledContractsPrague contains the set of pre-compiled Ethereum
@@ -141,6 +144,9 @@ var PrecompiledContractsPrague = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x11}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{0x12}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{0x13}): &bls12381MapG2{},
+
+	// primev pre-compiles start at 0xf addresses
+	common.BytesToAddress([]byte{0xf0}): &bls12381SignatureVerification{},
 }
 
 var PrecompiledContractsBLS = PrecompiledContractsPrague
