@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -170,7 +171,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			return err
 		}
 
-		receipts, _, usedGas, statedb, err := blockchain.ProcessBlock(block, blockchain.GetBlockByHash(block.ParentHash()).Header())
+		receipts, _, usedGas, statedb, _, err := blockchain.ProcessBlock(block, blockchain.GetBlockByHash(block.ParentHash()).Header())
 
 		if err != nil {
 			blockchain.reportBlock(block, receipts, err)
@@ -213,6 +214,75 @@ func testParallelBlockChainImport(t *testing.T, scheme string) {
 
 	if err := testBlockChainImport(blockChainB, blockchain); err == nil {
 		t.Fatalf("expected error for bad tx")
+	}
+}
+
+type AlwaysFailParallelStateProcessor struct {
+}
+
+func (p *AlwaysFailParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config, interruptCtx context.Context) (types.Receipts, []*types.Log, uint64, error) {
+	return nil, nil, 0, errors.New("always fail")
+}
+
+type SlowSerialStateProcessor struct {
+	s Processor
+}
+
+func NewSlowSerialStateProcessor(s Processor) *SlowSerialStateProcessor {
+	return &SlowSerialStateProcessor{s: s}
+}
+
+func (p *SlowSerialStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config, interruptCtx context.Context) (types.Receipts, []*types.Log, uint64, error) {
+	time.Sleep(100 * time.Millisecond)
+	return p.s.Process(block, statedb, cfg, interruptCtx)
+}
+
+func TestSuccessfulBlockImportParallelFailed(t *testing.T) {
+	t.Parallel()
+
+	testSuccessfulBlockImportParallelFailed(t, rawdb.HashScheme)
+	testSuccessfulBlockImportParallelFailed(t, rawdb.PathScheme)
+}
+
+func testSuccessfulBlockImportParallelFailed(t *testing.T, scheme string) {
+	// Create a new blockchain with 10 initial blocks
+	db, _, blockchain, err := newCanonical(ethash.NewFaker(), 10, true, scheme)
+	blockchain.parallelProcessor = &AlwaysFailParallelStateProcessor{}
+	blockchain.processor = NewSlowSerialStateProcessor(blockchain.processor)
+	if err != nil {
+		t.Fatalf("failed to create canonical chain: %v", err)
+	}
+	defer blockchain.Stop()
+
+	// Create valid blocks to import
+	block := blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash())
+	blocks := makeBlockChain(blockchain.chainConfig, block, 5, ethash.NewFaker(), db, canonicalSeed)
+
+	// Import the blocks
+	n, err := blockchain.InsertChain(blocks)
+	if err != nil {
+		t.Fatalf("failed to import valid blocks: %v", err)
+	}
+
+	// Verify all blocks were imported
+	if n != len(blocks) {
+		t.Errorf("imported %d blocks, wanted %d", n, len(blocks))
+	}
+
+	// Verify the last block is properly linked
+	if blockchain.CurrentBlock().Hash() != blocks[len(blocks)-1].Hash() {
+		t.Errorf("current block hash mismatch: got %x, want %x",
+			blockchain.CurrentBlock().Hash(),
+			blocks[len(blocks)-1].Hash())
+	}
+
+	// Verify block numbers are sequential
+	for i, block := range blocks {
+		expectedNumber := uint64(11 + i) // 10 initial blocks + new blocks
+		if block.NumberU64() != expectedNumber {
+			t.Errorf("block %d has wrong number: got %d, want %d",
+				i, block.NumberU64(), expectedNumber)
+		}
 	}
 }
 
