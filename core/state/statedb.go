@@ -994,7 +994,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		var data *types.StateAccount
 		if s.snap != nil {
 			start := time.Now()
-			acc, err := s.snap.Account(crypto.HashData(s.hasher, addr.Bytes()))
+			acc, err := s.snap.Account(crypto.HashData(crypto.NewKeccakState(), addr.Bytes()))
 			s.SnapshotAccountReads += time.Since(start)
 			if err == nil {
 				if acc == nil {
