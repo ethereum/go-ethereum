@@ -735,7 +735,7 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block, writeBlock bool) {
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
 	rawdb.WriteCanonicalHash(batch, blockHash, blockNumberU64)
-	rawdb.WriteTxLookupEntries(batch, block)
+	rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	rawdb.WriteHeadBlockHash(batch, blockHash)
 	if writeBlock {
 		rawdb.WriteBlock(batch, block)

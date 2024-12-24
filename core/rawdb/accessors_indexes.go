@@ -30,9 +30,9 @@ type TxLookupEntry struct {
 	Index      uint64
 }
 
-// WriteTxLookupEntries stores a positional metadata for every transaction from
+// WriteTxLookupEntriesByBlock stores a positional metadata for every transaction from
 // a block, enabling hash based transaction and receipt lookups.
-func WriteTxLookupEntries(db ethdb.KeyValueWriter, block *types.Block) {
+func WriteTxLookupEntriesByBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	// Iterate over each transaction and encode its metadata
 	for i, tx := range block.Transactions() {
 		entry := TxLookupEntry{
