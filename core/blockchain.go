@@ -749,22 +749,15 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block, writeBlock bool) {
 	blockHash := block.Hash()
 	blockNumberU64 := block.NumberU64()
 
-	// If the block is on a side chain or an unknown one, force other heads onto it too
-	updateHeads := rawdb.ReadCanonicalHash(bc.db, blockNumberU64) != blockHash
-
 	// Add the block to the canonical chain number scheme and mark as the head
 	batch := bc.db.NewBatch()
+	rawdb.WriteHeadHeaderHash(batch, blockHash)
+	rawdb.WriteHeadFastBlockHash(batch, blockHash)
 	rawdb.WriteCanonicalHash(batch, blockHash, blockNumberU64)
 	rawdb.WriteTxLookupEntriesByBlock(batch, block)
 	rawdb.WriteHeadBlockHash(batch, blockHash)
 	if writeBlock {
 		rawdb.WriteBlock(batch, block)
-	}
-
-	// If the block is better than our head or is on a different chain, force update heads
-	if updateHeads {
-		rawdb.WriteHeadHeaderHash(batch, blockHash)
-		rawdb.WriteHeadFastBlockHash(batch, blockHash)
 	}
 
 	// Flush the whole batch into the disk, exit the node if failed
@@ -773,11 +766,11 @@ func (bc *BlockChain) writeHeadBlock(block *types.Block, writeBlock bool) {
 	}
 
 	// Update all in-memory chain markers in the last step
-	if updateHeads {
-		bc.hc.SetCurrentHeader(block.Header())
-		bc.currentFastBlock.Store(block)
-		headFastBlockGauge.Update(int64(blockNumberU64))
-	}
+	bc.hc.SetCurrentHeader(block.Header())
+
+	bc.currentFastBlock.Store(block)
+	headFastBlockGauge.Update(int64(blockNumberU64))
+
 	bc.currentBlock.Store(block)
 	headBlockGauge.Update(int64(block.NumberU64()))
 
