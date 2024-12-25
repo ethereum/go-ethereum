@@ -98,6 +98,10 @@ func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*type
 	return b.chain.GetHeaderByHash(hash), nil
 }
 
+func (b *testBackend) BlockChain() *core.BlockChain {
+	return b.chain
+}
+
 func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if number == rpc.PendingBlockNumber || number == rpc.LatestBlockNumber {
 		return b.chain.CurrentHeader(), nil
