@@ -2315,9 +2315,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			}
 		}()
 	}
-	if bc.chainConfig.IsTIPXDCXReceiver(commonBlock.Number()) && bc.chainConfig.XDPoS != nil && commonBlock.NumberU64() > bc.chainConfig.XDPoS.Epoch {
-		bc.reorgTxMatches(deletedTxs, newChain)
-	}
 	return nil
 }
 
@@ -2699,44 +2696,6 @@ func (bc *BlockChain) logExchangeData(block *types.Block) {
 				return
 			}
 		}
-	}
-}
-
-func (bc *BlockChain) reorgTxMatches(deletedTxs types.Transactions, newChain types.Blocks) {
-	engine, ok := bc.Engine().(*XDPoS.XDPoS)
-	if !ok || engine == nil {
-		return
-	}
-	XDCXService := engine.GetXDCXService()
-	lendingService := engine.GetLendingService()
-	if XDCXService == nil || !XDCXService.IsSDKNode() {
-		return
-	}
-	start := time.Now()
-	defer func() {
-		//The deferred call's arguments are evaluated immediately, but the function call is not executed until the surrounding function returns
-		// That's why we should put this log statement in an anonymous function
-		log.Debug("reorgTxMatches takes", "time", common.PrettyDuration(time.Since(start)))
-	}()
-	for _, deletedTx := range deletedTxs {
-		if deletedTx.IsTradingTransaction() {
-			log.Debug("Rollback reorg txMatch", "txhash", deletedTx.Hash())
-			if err := XDCXService.RollbackReorgTxMatch(deletedTx.Hash()); err != nil {
-				log.Crit("Reorg trading failed", "err", err, "hash", deletedTx.Hash())
-			}
-		}
-		if lendingService != nil && (deletedTx.IsLendingTransaction() || deletedTx.IsLendingFinalizedTradeTransaction()) {
-			log.Debug("Rollback reorg lendingItem", "txhash", deletedTx.Hash())
-			if err := lendingService.RollbackLendingData(deletedTx.Hash()); err != nil {
-				log.Crit("Reorg lending failed", "err", err, "hash", deletedTx.Hash())
-			}
-		}
-	}
-
-	// apply new chain
-	for i := len(newChain) - 1; i >= 0; i-- {
-		bc.logExchangeData(newChain[i])
-		bc.logLendingData(newChain[i])
 	}
 }
 
