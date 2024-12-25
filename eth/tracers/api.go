@@ -89,6 +89,7 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, StateReleaseFunc, error)
+	BlockChain() *core.BlockChain
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -564,6 +565,143 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		roots = append(roots, statedb.IntermediateRoot(deleteEmptyObjects))
 	}
 	return roots, nil
+}
+
+type TxStatus int
+
+const (
+	NotFound TxStatus = iota
+	Found
+)
+
+// FindDependentInvalidTxs simulates the execution without the input txs and determines the num of subsequent dependent
+// transactions that become invalid as a result. The execution continues until the tip is reached
+// require: transaction hash is not one of the withdrawals
+func (api *API) FindDependentInvalidTxs(ctx context.Context, txs []common.Hash, startBlock uint64) (int, error) {
+	var (
+		defaultRexec  uint64 = 10000                          // default number of blocks to reexec to generate the state
+		inputTxs             = make(map[common.Hash]TxStatus) // mapping for the input txs
+		depInvalidTxs        = make(map[common.Hash]struct{}) // mapping of dep txs that become invalid
+		current              = startBlock
+	)
+
+	for _, tx := range txs {
+		inputTxs[tx] = NotFound // yet to find
+	}
+
+	if startBlock == 0 {
+		return 0, errors.New("genesis block is not applicable")
+	}
+
+	block, err := api.blockByNumber(ctx, rpc.BlockNumber(current))
+	if err != nil {
+		return 0, err
+	}
+
+	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(current-1), block.ParentHash())
+	if err != nil {
+		return 0, err
+	}
+	//generate the state at the parent block
+	statedb, release, err := api.backend.StateAtBlock(ctx, parent, defaultRexec, nil, true, false)
+	if err != nil {
+		return 0, err
+	}
+	defer release()
+
+	for {
+		err = api.findDepTxsInBlock(ctx, inputTxs, depInvalidTxs, statedb, block)
+		if err != nil {
+			return 0, err
+		}
+		// Finalize the block by applying any consensus specific updates
+		api.backend.Engine().Finalize(api.backend.BlockChain(), block.Header(), statedb, block.Body())
+
+		current++
+		block, err = api.blockByNumber(ctx, rpc.BlockNumber(current))
+		if err != nil {
+			// chain tip is reached
+			break
+		}
+	}
+
+	for k, v := range inputTxs {
+		if v == NotFound {
+			log.Info("input tx was not found", "hash", k)
+		}
+	}
+
+	log.Info("dependent txs that become invalid", "num", len(depInvalidTxs))
+	return len(depInvalidTxs), nil
+}
+
+// findDepTxsInBlock skips executing given txs and find the dependent txs that become invalid
+func (api *API) findDepTxsInBlock(ctx context.Context, txs map[common.Hash]TxStatus, depInvalid map[common.Hash]struct{}, state *state.StateDB, block *types.Block) error {
+	var (
+		blockCtx = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		evm      = vm.NewEVM(blockCtx, state, api.backend.ChainConfig(), vm.Config{})
+		gp       = new(core.GasPool).AddGas(block.GasLimit())
+	)
+
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+	}
+	// process prague related changes
+	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
+	}
+
+	for i, tx := range block.Transactions() {
+		if _, ok := txs[tx.Hash()]; ok {
+			txs[tx.Hash()] = Found
+			continue
+		}
+		// takes a snapshot so that if tx exec errors the subsequent txs
+		// are applied on the snapshot state
+		var (
+			snap = state.Snapshot()
+			gas  = gp.Gas()
+		)
+		err := api.executeTx(ctx, i, block, tx, evm, state)
+		if err != nil {
+			state.RevertToSnapshot(snap)
+			gp.SetGas(gas)
+			//adds to the dependent txs as it became invalid
+			depInvalid[tx.Hash()] = struct{}{}
+		}
+	}
+	return nil
+}
+
+func (api *API) executeTx(ctx context.Context, index int, block *types.Block, tx *types.Transaction, evm *vm.EVM, state *state.StateDB) error {
+	var (
+		blockNum = block.Number()
+		txctx    = &Context{
+			BlockHash:   block.Hash(),
+			BlockNumber: blockNum,
+			TxIndex:     index,
+			TxHash:      tx.Hash(),
+		}
+		signer  = types.MakeSigner(api.backend.ChainConfig(), blockNum, block.Time())
+		usedGas uint64
+	)
+
+	msg, err := core.TransactionToMessage(tx, signer, block.BaseFee())
+	if err != nil {
+		return err
+	}
+	state.SetTxContext(txctx.TxHash, txctx.TxIndex)
+	_, err = core.ApplyTransactionWithEVM(msg, new(core.GasPool).AddGas(msg.GasLimit), state, txctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm)
+	if err != nil {
+		return err
+	}
+
+	if evm.ChainConfig().IsByzantium(blockNum) {
+		evm.StateDB.Finalise(true)
+	} else {
+		state.IntermediateRoot(evm.ChainConfig().IsEIP158(blockNum)).Bytes()
+	}
+	return nil
 }
 
 // StandardTraceBadBlockToFile dumps the structured logs created during the
