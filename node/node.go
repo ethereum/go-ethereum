@@ -478,9 +478,6 @@ func (n *Node) Stop() error {
 		return ErrNodeStopped
 	}
 
-	for _, service := range n.services {
-		service.SaveData()
-	}
 	// Terminate the API, services and the p2p server.
 	n.stopWS()
 	n.stopHTTP()

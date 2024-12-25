@@ -179,8 +179,6 @@ func (s *Service) Start(server *p2p.Server) error {
 	log.Info("Stats daemon started")
 	return nil
 }
-func (s *Service) SaveData() {
-}
 
 // Stop implements node.Service, terminating the monitoring and reporting daemon.
 func (s *Service) Stop() error {

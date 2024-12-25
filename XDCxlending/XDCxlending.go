@@ -54,9 +54,6 @@ func (l *Lending) Start(server *p2p.Server) error {
 	return nil
 }
 
-func (l *Lending) SaveData() {
-}
-
 func (l *Lending) Stop() error {
 	return nil
 }

@@ -71,8 +71,6 @@ func (XDCx *XDCX) Start(server *p2p.Server) error {
 	return nil
 }
 
-func (XDCx *XDCX) SaveData() {
-}
 func (XDCx *XDCX) Stop() error {
 	return nil
 }

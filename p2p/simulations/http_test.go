@@ -117,8 +117,6 @@ func (t *testService) Start(server *p2p.Server) error {
 	return nil
 }
 
-func (t *testService) SaveData() {
-}
 func (t *testService) Stop() error {
 	return nil
 }

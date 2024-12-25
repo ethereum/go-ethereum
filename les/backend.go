@@ -228,10 +228,6 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	return nil
 }
 
-func (s *LightEthereum) SaveData() {
-	s.blockchain.SaveData()
-}
-
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *LightEthereum) Stop() error {
