@@ -89,6 +89,7 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, StateReleaseFunc, error)
+	BlockChain() *core.BlockChain
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -566,28 +567,38 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	return roots, nil
 }
 
-// FindDependentInvalidTxs finds dependent txs that becomes invalid if the given txs were not part of the block at first place
-func (api *API) FindDependentInvalidTxs(ctx context.Context, txs []common.Hash, blockNumber uint64) (int, error) {
+type TxStatus int
+
+const (
+	NotFound TxStatus = iota
+	Found
+)
+
+// FindDependentInvalidTxs simulates the execution without the input txs and determines the num of subsequent dependent
+// transactions that become invalid as a result. The execution continues until the tip is reached
+// require: transaction hash is not one of the withdrawals
+func (api *API) FindDependentInvalidTxs(ctx context.Context, txs []common.Hash, startBlock uint64) (int, error) {
 	var (
 		defaultRexec  uint64 = 10000                          // default number of blocks to reexec to generate the state
-		inputTxs             = make(map[common.Hash]bool)     // mapping for the input txs
+		inputTxs             = make(map[common.Hash]TxStatus) // mapping for the input txs
 		depInvalidTxs        = make(map[common.Hash]struct{}) // mapping of dep txs that become invalid
+		current              = startBlock
 	)
 
 	for _, tx := range txs {
-		inputTxs[tx] = true
+		inputTxs[tx] = NotFound // yet to find
 	}
 
-	if blockNumber == 0 {
+	if startBlock == 0 {
 		return 0, errors.New("genesis block is not applicable")
 	}
 
-	block, err := api.blockByNumber(ctx, rpc.BlockNumber(blockNumber))
+	block, err := api.blockByNumber(ctx, rpc.BlockNumber(current))
 	if err != nil {
 		return 0, err
 	}
 
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(blockNumber-1), block.ParentHash())
+	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(current-1), block.ParentHash())
 	if err != nil {
 		return 0, err
 	}
@@ -598,16 +609,34 @@ func (api *API) FindDependentInvalidTxs(ctx context.Context, txs []common.Hash, 
 	}
 	defer release()
 
-	err = api.findDepTxsInBlock(ctx, inputTxs, depInvalidTxs, statedb, block)
-	if err != nil {
-		return 0, err
+	for {
+		err = api.findDepTxsInBlock(ctx, inputTxs, depInvalidTxs, statedb, block)
+		if err != nil {
+			return 0, err
+		}
+		// Finalize the block by applying any consensus specific updates
+		api.backend.Engine().Finalize(api.backend.BlockChain(), block.Header(), statedb, block.Body())
+
+		current++
+		block, err = api.blockByNumber(ctx, rpc.BlockNumber(current))
+		if err != nil {
+			// chain tip is reached
+			break
+		}
 	}
+
+	for k, v := range inputTxs {
+		if v == NotFound {
+			log.Info("input tx was not found", "hash", k)
+		}
+	}
+
 	log.Info("dependent txs that become invalid", "num", len(depInvalidTxs))
 	return len(depInvalidTxs), nil
 }
 
 // findDepTxsInBlock skips executing given txs and find the dependent txs that become invalid
-func (api *API) findDepTxsInBlock(ctx context.Context, txs map[common.Hash]bool, depInvalid map[common.Hash]struct{}, state *state.StateDB, block *types.Block) error {
+func (api *API) findDepTxsInBlock(ctx context.Context, txs map[common.Hash]TxStatus, depInvalid map[common.Hash]struct{}, state *state.StateDB, block *types.Block) error {
 	var (
 		blockCtx = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		evm      = vm.NewEVM(blockCtx, state, api.backend.ChainConfig(), vm.Config{})
@@ -624,6 +653,7 @@ func (api *API) findDepTxsInBlock(ctx context.Context, txs map[common.Hash]bool,
 
 	for i, tx := range block.Transactions() {
 		if _, ok := txs[tx.Hash()]; ok {
+			txs[tx.Hash()] = Found
 			continue
 		}
 		// takes a snapshot so that if tx exec errors the subsequent txs
@@ -638,7 +668,6 @@ func (api *API) findDepTxsInBlock(ctx context.Context, txs map[common.Hash]bool,
 			gp.SetGas(gas)
 			//adds to the dependent txs as it became invalid
 			depInvalid[tx.Hash()] = struct{}{}
-			log.Info("dependent invalid tx found", "tx", tx.Hash(), "index", i)
 		}
 	}
 	return nil
