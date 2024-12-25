@@ -1,6 +1,6 @@
 ## Go Ethereum
 
-Golang execution layer implementation of the Ethereum protocol.
+Golang execution layer implementation of the Ethereum protocol. Plus, it includes some additional features I developed for fun.
 
 [![API Reference](
 https://pkg.go.dev/badge/github.com/ethereum/go-ethereum
