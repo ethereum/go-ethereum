@@ -22,7 +22,7 @@ The API-method `account_signGnosisSafeTx` was added. This method takes two param
   "params": ["0xfd1c4226bfD1c436672092F4eCbfC270145b7256",
     {
       "safe": "0x25a6c4BBd32B2424A9c99aEB0584Ad12045382B3",
-      "to": "0xB372a646f7F05Cc1785018dBDA7EBc734a2A20E2",
+      "to": "0x97293ceab815896883e8200aef5a4581a70504b2",
       "value": "20000000000000000",
       "data": null,
       "operation": 0,
