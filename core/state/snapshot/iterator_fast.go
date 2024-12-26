@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"cmp"
 	"bytes"
 	"fmt"
 	"slices"
@@ -45,13 +46,7 @@ func (it *weightedIterator) Cmp(other *weightedIterator) int {
 		return 1
 	}
 	// Same account/storage-slot in multiple layers, split by priority
-	if it.priority < other.priority {
-		return -1
-	}
-	if it.priority > other.priority {
-		return 1
-	}
-	return 0
+	return cmp.Compare(it.priority, other.priority)
 }
 
 // fastIterator is a more optimized multi-layer iterator which maintains a
