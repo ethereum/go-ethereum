@@ -153,7 +153,6 @@ type BlockChain struct {
 	chainmu sync.RWMutex // blockchain insertion lock
 	procmu  sync.RWMutex // block processor lock
 
-	checkpoint       int          // checkpoint counts towards the new checkpoint
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
@@ -181,9 +180,8 @@ type BlockChain struct {
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
 
-	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
-	IPCEndpoint    string
-	Client         bind.ContractBackend // Global ipc client instance.
+	IPCEndpoint string
+	Client      bind.ContractBackend // Global ipc client instance.
 
 	// Blocks hash array by block number
 	// cache field for tracking finality purpose, can't use for tracking block vs block relationship
@@ -2315,9 +2313,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			}
 		}()
 	}
-	if bc.chainConfig.IsTIPXDCXReceiver(commonBlock.Number()) && bc.chainConfig.XDPoS != nil && commonBlock.NumberU64() > bc.chainConfig.XDPoS.Epoch {
-		bc.reorgTxMatches(deletedTxs, newChain)
-	}
 	return nil
 }
 
@@ -2443,26 +2438,6 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	}
 
 	return bc.hc.InsertHeaderChain(chain, whFunc, start)
-}
-
-// writeHeader writes a header into the local chain, given that its parent is
-// already known. If the total difficulty of the newly inserted header becomes
-// greater than the current known TD, the canonical chain is re-routed.
-//
-// Note: This method is not concurrent-safe with inserting blocks simultaneously
-// into the chain, as side effects caused by reorganisations cannot be emulated
-// without the real blocks. Hence, writing headers directly should only be done
-// in two scenarios: pure-header mode of operation (light clients), or properly
-// separated header/block phases (non-archive clients).
-func (bc *BlockChain) writeHeader(header *types.Header) error {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
-
-	_, err := bc.hc.WriteHeader(header)
-	return err
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
@@ -2699,44 +2674,6 @@ func (bc *BlockChain) logExchangeData(block *types.Block) {
 				return
 			}
 		}
-	}
-}
-
-func (bc *BlockChain) reorgTxMatches(deletedTxs types.Transactions, newChain types.Blocks) {
-	engine, ok := bc.Engine().(*XDPoS.XDPoS)
-	if !ok || engine == nil {
-		return
-	}
-	XDCXService := engine.GetXDCXService()
-	lendingService := engine.GetLendingService()
-	if XDCXService == nil || !XDCXService.IsSDKNode() {
-		return
-	}
-	start := time.Now()
-	defer func() {
-		//The deferred call's arguments are evaluated immediately, but the function call is not executed until the surrounding function returns
-		// That's why we should put this log statement in an anonymous function
-		log.Debug("reorgTxMatches takes", "time", common.PrettyDuration(time.Since(start)))
-	}()
-	for _, deletedTx := range deletedTxs {
-		if deletedTx.IsTradingTransaction() {
-			log.Debug("Rollback reorg txMatch", "txhash", deletedTx.Hash())
-			if err := XDCXService.RollbackReorgTxMatch(deletedTx.Hash()); err != nil {
-				log.Crit("Reorg trading failed", "err", err, "hash", deletedTx.Hash())
-			}
-		}
-		if lendingService != nil && (deletedTx.IsLendingTransaction() || deletedTx.IsLendingFinalizedTradeTransaction()) {
-			log.Debug("Rollback reorg lendingItem", "txhash", deletedTx.Hash())
-			if err := lendingService.RollbackLendingData(deletedTx.Hash()); err != nil {
-				log.Crit("Reorg lending failed", "err", err, "hash", deletedTx.Hash())
-			}
-		}
-	}
-
-	// apply new chain
-	for i := len(newChain) - 1; i >= 0; i-- {
-		bc.logExchangeData(newChain[i])
-		bc.logLendingData(newChain[i])
 	}
 }
 
