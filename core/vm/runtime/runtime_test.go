@@ -47,24 +47,32 @@ func TestDefaults(t *testing.T) {
 	cfg := new(Config)
 	setDefaults(cfg)
 
+	if cfg.ChainConfig == nil {
+		t.Error("expected chainConfig to be non nil")
+	}
 	if cfg.Difficulty == nil {
 		t.Error("expected difficulty to be non nil")
 	}
-
 	if cfg.GasLimit == 0 {
 		t.Error("didn't expect gaslimit to be zero")
 	}
 	if cfg.GasPrice == nil {
-		t.Error("expected time to be non nil")
+		t.Error("expected gasPrice to be non nil")
 	}
 	if cfg.Value == nil {
-		t.Error("expected time to be non nil")
+		t.Error("expected value to be non nil")
 	}
 	if cfg.GetHashFn == nil {
-		t.Error("expected time to be non nil")
+		t.Error("expected getHashFn to be non nil")
 	}
 	if cfg.BlockNumber == nil {
-		t.Error("expected block number to be non nil")
+		t.Error("expected blockNumber to be non nil")
+	}
+	if cfg.BaseFee == nil {
+		t.Error("expected baseFee to be non nil")
+	}
+	if cfg.BlobBaseFee == nil {
+		t.Error("expected blobBaseFee to be non nil")
 	}
 }
 
