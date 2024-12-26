@@ -17,8 +17,8 @@
 package snapshot
 
 import (
-	"cmp"
 	"bytes"
+	"cmp"
 	"fmt"
 	"slices"
 	"sort"

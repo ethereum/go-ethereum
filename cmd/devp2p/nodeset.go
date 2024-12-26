@@ -17,8 +17,8 @@
 package main
 
 import (
-	"cmp"
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"

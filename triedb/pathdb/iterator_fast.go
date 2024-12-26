@@ -17,8 +17,8 @@
 package pathdb
 
 import (
-	"cmp"
 	"bytes"
+	"cmp"
 	"fmt"
 	"slices"
 	"sort"
