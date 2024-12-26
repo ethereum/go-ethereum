@@ -139,10 +139,7 @@ func (al *accessList) Equal(other *accessList) bool {
 	if !maps.Equal(al.addresses, other.addresses) {
 		return false
 	}
-	return slices.EqualFunc(al.slots, other.slots,
-		func(m map[common.Hash]struct{}, m2 map[common.Hash]struct{}) bool {
-			return maps.Equal(m, m2)
-		})
+	return slices.EqualFunc(al.slots, other.slots, maps.Equal)
 }
 
 // PrettyPrint prints the contents of the access list in a human-readable form

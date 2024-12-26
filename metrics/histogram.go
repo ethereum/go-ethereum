@@ -1,7 +1,16 @@
 package metrics
 
 type HistogramSnapshot interface {
-	SampleSnapshot
+	Count() int64
+	Max() int64
+	Mean() float64
+	Min() int64
+	Percentile(float64) float64
+	Percentiles([]float64) []float64
+	Size() int
+	StdDev() float64
+	Sum() int64
+	Variance() float64
 }
 
 // Histogram calculates distribution statistics from a series of int64 values.
@@ -31,10 +40,7 @@ func GetOrRegisterHistogramLazy(name string, r Registry, s func() Sample) Histog
 
 // NewHistogram constructs a new StandardHistogram from a Sample.
 func NewHistogram(s Sample) Histogram {
-	if !Enabled {
-		return NilHistogram{}
-	}
-	return &StandardHistogram{sample: s}
+	return &StandardHistogram{s}
 }
 
 // NewRegisteredHistogram constructs and registers a new StandardHistogram from
@@ -47,13 +53,6 @@ func NewRegisteredHistogram(name string, r Registry, s Sample) Histogram {
 	r.Register(name, c)
 	return c
 }
-
-// NilHistogram is a no-op Histogram.
-type NilHistogram struct{}
-
-func (NilHistogram) Clear()                      {}
-func (NilHistogram) Snapshot() HistogramSnapshot { return (*emptySnapshot)(nil) }
-func (NilHistogram) Update(v int64)              {}
 
 // StandardHistogram is the standard implementation of a Histogram and uses a
 // Sample to bound its memory use.

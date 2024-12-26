@@ -12,7 +12,7 @@ func BenchmarkEWMA(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		a.Update(1)
-		a.Tick()
+		a.tick()
 	}
 }
 
@@ -23,7 +23,7 @@ func BenchmarkEWMAParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			a.Update(1)
-			a.Tick()
+			a.tick()
 		}
 	})
 }
@@ -31,7 +31,7 @@ func BenchmarkEWMAParallel(b *testing.B) {
 func TestEWMA1(t *testing.T) {
 	a := NewEWMA1()
 	a.Update(3)
-	a.Tick()
+	a.tick()
 	for i, want := range []float64{0.6,
 		0.22072766470286553, 0.08120116994196772, 0.029872241020718428,
 		0.01098938333324054, 0.004042768199451294, 0.0014872513059998212,
@@ -49,7 +49,7 @@ func TestEWMA1(t *testing.T) {
 func TestEWMA5(t *testing.T) {
 	a := NewEWMA5()
 	a.Update(3)
-	a.Tick()
+	a.tick()
 	for i, want := range []float64{
 		0.6, 0.49123845184678905, 0.4021920276213837, 0.32928698165641596,
 		0.269597378470333, 0.2207276647028654, 0.18071652714732128,
@@ -67,7 +67,7 @@ func TestEWMA5(t *testing.T) {
 func TestEWMA15(t *testing.T) {
 	a := NewEWMA15()
 	a.Update(3)
-	a.Tick()
+	a.tick()
 	for i, want := range []float64{
 		0.6, 0.5613041910189706, 0.5251039914257684, 0.4912384518467888184678905,
 		0.459557003018789, 0.4299187863442732, 0.4021920276213831,
@@ -82,8 +82,8 @@ func TestEWMA15(t *testing.T) {
 	}
 }
 
-func elapseMinute(a EWMA) {
+func elapseMinute(a *EWMA) {
 	for i := 0; i < 12; i++ {
-		a.Tick()
+		a.tick()
 	}
 }

@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -48,11 +47,11 @@ func TestDump(t *testing.T) {
 
 	// generate a few entries
 	obj1 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01}))
-	obj1.AddBalance(uint256.NewInt(22), tracing.BalanceChangeUnspecified)
+	obj1.AddBalance(uint256.NewInt(22))
 	obj2 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
 	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
 	obj3 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x02}))
-	obj3.SetBalance(uint256.NewInt(44), tracing.BalanceChangeUnspecified)
+	obj3.SetBalance(uint256.NewInt(44))
 
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
@@ -106,13 +105,13 @@ func TestIterativeDump(t *testing.T) {
 
 	// generate a few entries
 	obj1 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01}))
-	obj1.AddBalance(uint256.NewInt(22), tracing.BalanceChangeUnspecified)
+	obj1.AddBalance(uint256.NewInt(22))
 	obj2 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01, 0x02}))
 	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
 	obj3 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x02}))
-	obj3.SetBalance(uint256.NewInt(44), tracing.BalanceChangeUnspecified)
+	obj3.SetBalance(uint256.NewInt(44))
 	obj4 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x00}))
-	obj4.AddBalance(uint256.NewInt(1337), tracing.BalanceChangeUnspecified)
+	obj4.AddBalance(uint256.NewInt(1337))
 
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
@@ -200,7 +199,7 @@ func TestCreateObjectRevert(t *testing.T) {
 
 	state.CreateAccount(addr)
 	so0 := state.getStateObject(addr)
-	so0.SetBalance(uint256.NewInt(42), tracing.BalanceChangeUnspecified)
+	so0.SetBalance(uint256.NewInt(42))
 	so0.SetNonce(43)
 	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
 	state.setStateObject(so0)

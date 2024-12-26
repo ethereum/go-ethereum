@@ -51,6 +51,7 @@
     {
       "type": "create",
       "action": {
+        "creationMethod": "create",
         "from": "0x877bd459c9b7d8576b44e59e09d076c25946f443",
         "value": "0x0",
         "gas": "0x53e90",
@@ -66,12 +67,12 @@
       "transactionPosition": 23,
       "transactionHash": "0xe267552ce8437a5bc7081385c99f912de5723ad34b958db215dbc41abd5f6c03",
       "blockNumber": 555462,
-      "blockHash": "0x38bba9e3965b57205097ea5ec53fc403cf3941bec2e4c933faae244de5ca4ba1",
-      "time": "1.147715ms"
+      "blockHash": "0x38bba9e3965b57205097ea5ec53fc403cf3941bec2e4c933faae244de5ca4ba1"
     },
     {
       "type": "create",
       "action": {
+        "creationMethod": "create",
         "from": "0x9db7a1baf185a865ffee3824946ccd8958191e5e",
         "value": "0x0",
         "gas": "0x30b34",

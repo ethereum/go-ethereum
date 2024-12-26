@@ -130,7 +130,7 @@ type snapshot interface {
 	// the specified data items.
 	//
 	// Note, the maps are retained by the method to avoid copying everything.
-	Update(blockRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer
+	Update(blockRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer
 
 	// Journal commits an entire diff hierarchy to disk into a single journal entry.
 	// This is meant to be used during shutdown to persist the snapshot without
@@ -145,7 +145,7 @@ type snapshot interface {
 	AccountIterator(seek common.Hash) AccountIterator
 
 	// StorageIterator creates a storage iterator over an arbitrary layer.
-	StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool)
+	StorageIterator(account common.Hash, seek common.Hash) StorageIterator
 }
 
 // Config includes the configurations for snapshots.
@@ -335,7 +335,7 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 
 // Update adds a new snapshot into the tree, if that can be linked to an existing
 // old parent. It is disallowed to insert a disk layer (the origin of all).
-func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
+func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error {
 	// Reject noop updates to avoid self-loops in the snapshot tree. This is a
 	// special case that can only happen for Clique networks where empty blocks
 	// don't modify the state (0 block subsidy).
@@ -350,7 +350,7 @@ func (t *Tree) Update(blockRoot common.Hash, parentRoot common.Hash, destructs m
 	if parent == nil {
 		return fmt.Errorf("parent [%#x] snapshot missing", parentRoot)
 	}
-	snap := parent.(snapshot).Update(blockRoot, destructs, accounts, storage)
+	snap := parent.(snapshot).Update(blockRoot, accounts, storage)
 
 	// Save the new snapshot for later
 	t.lock.Lock()
@@ -539,35 +539,6 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	base.stale = true
 	base.lock.Unlock()
 
-	// Destroy all the destructed accounts from the database
-	for hash := range bottom.destructSet {
-		// Skip any account not covered yet by the snapshot
-		if base.genMarker != nil && bytes.Compare(hash[:], base.genMarker) > 0 {
-			continue
-		}
-		// Remove all storage slots
-		rawdb.DeleteAccountSnapshot(batch, hash)
-		base.cache.Set(hash[:], nil)
-
-		it := rawdb.IterateStorageSnapshots(base.diskdb, hash)
-		for it.Next() {
-			key := it.Key()
-			batch.Delete(key)
-			base.cache.Del(key[1:])
-			snapshotFlushStorageItemMeter.Mark(1)
-
-			// Ensure we don't delete too much data blindly (contract can be
-			// huge). It's ok to flush, the root will go missing in case of a
-			// crash and we'll detect and regenerate the snapshot.
-			if batch.ValueSize() > 64*1024*1024 {
-				if err := batch.Write(); err != nil {
-					log.Crit("Failed to write storage deletions", "err", err)
-				}
-				batch.Reset()
-			}
-		}
-		it.Release()
-	}
 	// Push all updated accounts into the database
 	for hash, data := range bottom.accountData {
 		// Skip any account not covered yet by the snapshot
@@ -575,10 +546,14 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			continue
 		}
 		// Push the account to disk
-		rawdb.WriteAccountSnapshot(batch, hash, data)
-		base.cache.Set(hash[:], data)
-		snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
-
+		if len(data) != 0 {
+			rawdb.WriteAccountSnapshot(batch, hash, data)
+			base.cache.Set(hash[:], data)
+			snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
+		} else {
+			rawdb.DeleteAccountSnapshot(batch, hash)
+			base.cache.Set(hash[:], nil)
+		}
 		snapshotFlushAccountItemMeter.Mark(1)
 		snapshotFlushAccountSizeMeter.Mark(int64(len(data)))
 
@@ -587,7 +562,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		// the snapshot.
 		if batch.ValueSize() > 64*1024*1024 {
 			if err := batch.Write(); err != nil {
-				log.Crit("Failed to write storage deletions", "err", err)
+				log.Crit("Failed to write state changes", "err", err)
 			}
 			batch.Reset()
 		}
@@ -616,6 +591,16 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			}
 			snapshotFlushStorageItemMeter.Mark(1)
 			snapshotFlushStorageSizeMeter.Mark(int64(len(data)))
+
+			// Ensure we don't write too much data blindly. It's ok to flush, the
+			// root will go missing in case of a crash and we'll detect and regen
+			// the snapshot.
+			if batch.ValueSize() > 64*1024*1024 {
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to write state changes", "err", err)
+				}
+				batch.Reset()
+			}
 		}
 	}
 	// Update the snapshot block marker and write any remainder data
@@ -679,7 +664,7 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 
 	// Firstly write out the metadata of journal
 	journal := new(bytes.Buffer)
-	if err := rlp.Encode(journal, journalVersion); err != nil {
+	if err := rlp.Encode(journal, journalCurrentVersion); err != nil {
 		return common.Hash{}, err
 	}
 	diskroot := t.diskRoot()

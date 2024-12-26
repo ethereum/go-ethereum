@@ -40,8 +40,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -65,7 +65,6 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	engine := consensus.Engine(beaconConsensus.New(ethash.NewFaker()))
 	if merged {
 		config.TerminalTotalDifficulty = common.Big0
-		config.TerminalTotalDifficultyPassed = true
 		engine = beaconConsensus.NewFaker()
 	}
 	genesis := &core.Genesis{
@@ -208,7 +207,6 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
 	// give the payload some time to be built
-	time.Sleep(100 * time.Millisecond)
 	payloadID := (&miner.BuildPayloadArgs{
 		Parent:       fcState.HeadBlockHash,
 		Timestamp:    blockParams.Timestamp,
@@ -217,12 +215,12 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 		BeaconRoot:   blockParams.BeaconRoot,
 		Version:      engine.PayloadV1,
 	}).Id()
-	execData, err := api.GetPayloadV1(payloadID)
+	execData, err := api.getPayload(payloadID, true)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
-	if len(execData.Transactions) != blocks[9].Transactions().Len() {
-		t.Fatalf("invalid number of transactions %d != 1", len(execData.Transactions))
+	if len(execData.ExecutionPayload.Transactions) != blocks[9].Transactions().Len() {
+		t.Fatalf("invalid number of transactions %d != 1", len(execData.ExecutionPayload.Transactions))
 	}
 	// Test invalid payloadID
 	var invPayload engine.PayloadID
@@ -453,8 +451,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	}
 
 	mcfg := miner.DefaultConfig
-	mcfg.PendingFeeRecipient = testAddr
-	ethcfg := &ethconfig.Config{Genesis: genesis, SyncMode: downloader.FullSync, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256, Miner: mcfg}
+	ethcfg := &ethconfig.Config{Genesis: genesis, SyncMode: ethconfig.FullSync, TrieTimeout: time.Minute, TrieDirtyCache: 256, TrieCleanCache: 256, Miner: mcfg}
 	ethservice, err := eth.New(n, ethcfg)
 	if err != nil {
 		t.Fatal("can't create eth service:", err)
@@ -628,7 +625,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 				SafeBlockHash:      common.Hash{},
 				FinalizedBlockHash: common.Hash{},
 			}
-			payload *engine.ExecutableData
+			payload *engine.ExecutionPayloadEnvelope
 			resp    engine.ForkChoiceResponse
 			err     error
 		)
@@ -640,11 +637,10 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 				t.Fatalf("error preparing payload, invalid status: %v", resp.PayloadStatus.Status)
 			}
 			// give the payload some time to be built
-			time.Sleep(50 * time.Millisecond)
-			if payload, err = api.GetPayloadV1(*resp.PayloadID); err != nil {
+			if payload, err = api.getPayload(*resp.PayloadID, true); err != nil {
 				t.Fatalf("can't get payload: %v", err)
 			}
-			if len(payload.Transactions) > 0 {
+			if len(payload.ExecutionPayload.Transactions) > 0 {
 				break
 			}
 			// No luck this time we need to update the params and try again.
@@ -653,7 +649,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 				t.Fatalf("payload should not be empty")
 			}
 		}
-		execResp, err := api.NewPayloadV1(*payload)
+		execResp, err := api.NewPayloadV1(*payload.ExecutionPayload)
 		if err != nil {
 			t.Fatalf("can't execute payload: %v", err)
 		}
@@ -661,14 +657,14 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 			t.Fatalf("invalid status: %v", execResp.Status)
 		}
 		fcState = engine.ForkchoiceStateV1{
-			HeadBlockHash:      payload.BlockHash,
-			SafeBlockHash:      payload.ParentHash,
-			FinalizedBlockHash: payload.ParentHash,
+			HeadBlockHash:      payload.ExecutionPayload.BlockHash,
+			SafeBlockHash:      payload.ExecutionPayload.ParentHash,
+			FinalizedBlockHash: payload.ExecutionPayload.ParentHash,
 		}
 		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 			t.Fatalf("Failed to insert block: %v", err)
 		}
-		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != payload.Number {
+		if ethservice.BlockChain().CurrentBlock().Number.Uint64() != payload.ExecutionPayload.Number {
 			t.Fatalf("Chain head should be updated")
 		}
 		parent = ethservice.BlockChain().CurrentBlock()
@@ -1736,9 +1732,6 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}
-	// Give the payload some time to be built
-	time.Sleep(100 * time.Millisecond)
-
 	payloadID := (&miner.BuildPayloadArgs{
 		Parent:       fcState.HeadBlockHash,
 		Timestamp:    blockParams.Timestamp,
@@ -1748,7 +1741,7 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 		BeaconRoot:   blockParams.BeaconRoot,
 		Version:      engine.PayloadV3,
 	}).Id()
-	envelope, err := api.GetPayloadV3(payloadID)
+	envelope, err := api.getPayload(payloadID, true)
 	if err != nil {
 		t.Fatalf("error getting payload, err=%v", err)
 	}
@@ -1823,7 +1816,7 @@ func TestGetClientVersion(t *testing.T) {
 		t.Fatalf("expected only one returned client version, got %d", len(infos))
 	}
 	info = infos[0]
-	if info.Code != engine.ClientCode || info.Name != engine.ClientName || info.Version != params.VersionWithMeta {
+	if info.Code != engine.ClientCode || info.Name != engine.ClientName || info.Version != version.WithMeta {
 		t.Fatalf("client info does match expected, got %s", info.String())
 	}
 }

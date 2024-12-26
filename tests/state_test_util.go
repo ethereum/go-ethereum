@@ -123,6 +123,7 @@ type stTransaction struct {
 	Sender               *common.Address     `json:"sender"`
 	BlobVersionedHashes  []common.Hash       `json:"blobVersionedHashes,omitempty"`
 	BlobGasFeeCap        *big.Int            `json:"maxFeePerBlobGas,omitempty"`
+	AuthorizationList    []*stAuthorization  `json:"authorizationList,omitempty"`
 }
 
 type stTransactionMarshaling struct {
@@ -133,6 +134,27 @@ type stTransactionMarshaling struct {
 	GasLimit             []math.HexOrDecimal64
 	PrivateKey           hexutil.Bytes
 	BlobGasFeeCap        *math.HexOrDecimal256
+}
+
+//go:generate go run github.com/fjl/gencodec -type stAuthorization -field-override stAuthorizationMarshaling -out gen_stauthorization.go
+
+// Authorization is an authorization from an account to deploy code at it's address.
+type stAuthorization struct {
+	ChainID uint64
+	Address common.Address `json:"address" gencodec:"required"`
+	Nonce   uint64         `json:"nonce" gencodec:"required"`
+	V       uint8          `json:"v" gencodec:"required"`
+	R       *big.Int       `json:"r" gencodec:"required"`
+	S       *big.Int       `json:"s" gencodec:"required"`
+}
+
+// field type overrides for gencodec
+type stAuthorizationMarshaling struct {
+	ChainID math.HexOrDecimal64
+	Nonce   math.HexOrDecimal64
+	V       math.HexOrDecimal64
+	R       *math.HexOrDecimal256
+	S       *math.HexOrDecimal256
 }
 
 // GetChainConfig takes a fork definition and returns a chain config.
@@ -196,7 +218,7 @@ func (t *StateTest) checkError(subtest StateSubtest, err error) error {
 
 // Run executes a specific subtest and verifies the post-state and logs
 func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string, postCheck func(err error, st *StateTestState)) (result error) {
-	st, root, err := t.RunNoVerify(subtest, vmconfig, snapshotter, scheme)
+	st, root, _, err := t.RunNoVerify(subtest, vmconfig, snapshotter, scheme)
 	// Invoke the callback at the end of function for further analysis.
 	defer func() {
 		postCheck(result, &st)
@@ -228,10 +250,10 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 
 // RunNoVerify runs a specific subtest and returns the statedb and post-state root.
 // Remember to call state.Close after verifying the test result!
-func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (st StateTestState, root common.Hash, err error) {
+func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (st StateTestState, root common.Hash, gasUsed uint64, err error) {
 	config, eips, err := GetChainConfig(subtest.Fork)
 	if err != nil {
-		return st, common.Hash{}, UnsupportedForkError{subtest.Fork}
+		return st, common.Hash{}, 0, UnsupportedForkError{subtest.Fork}
 	}
 	vmconfig.ExtraEips = eips
 
@@ -250,7 +272,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	msg, err := t.json.Tx.toMessage(post, baseFee)
 	if err != nil {
-		return st, common.Hash{}, err
+		return st, common.Hash{}, 0, err
 	}
 
 	{ // Blob transactions may be present after the Cancun fork.
@@ -260,7 +282,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		// Here, we just do this shortcut smaller fix, since state tests do not
 		// utilize those codepaths
 		if len(msg.BlobHashes)*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
-			return st, common.Hash{}, errors.New("blob gas exceeds maximum")
+			return st, common.Hash{}, 0, errors.New("blob gas exceeds maximum")
 		}
 	}
 
@@ -269,15 +291,14 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		var ttx types.Transaction
 		err := ttx.UnmarshalBinary(post.TxBytes)
 		if err != nil {
-			return st, common.Hash{}, err
+			return st, common.Hash{}, 0, err
 		}
 		if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
-			return st, common.Hash{}, err
+			return st, common.Hash{}, 0, err
 		}
 	}
 
 	// Prepare the EVM.
-	txContext := core.NewEVMTxContext(msg)
 	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
@@ -293,7 +314,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	if config.IsCancun(new(big.Int), block.Time()) && t.json.Env.ExcessBlobGas != nil {
 		context.BlobBaseFee = eip4844.CalcBlobFee(*t.json.Env.ExcessBlobGas)
 	}
-	evm := vm.NewEVM(context, txContext, st.StateDB, config, vmconfig)
+	evm := vm.NewEVM(context, st.StateDB, config, vmconfig)
 
 	if tracer := vmconfig.Tracer; tracer != nil && tracer.OnTxStart != nil {
 		tracer.OnTxStart(evm.GetVMContext(), nil, msg.From)
@@ -308,6 +329,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
 			evm.Config.Tracer.OnTxEnd(nil, err)
 		}
+		return st, common.Hash{}, 0, err
 	}
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where
@@ -322,7 +344,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
 		tracer.OnTxEnd(receipt, nil)
 	}
-	return st, root, err
+	return st, root, vmRet.UsedGas, nil
 }
 
 func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
@@ -411,26 +433,43 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		if tx.MaxPriorityFeePerGas == nil {
 			tx.MaxPriorityFeePerGas = tx.MaxFeePerGas
 		}
-		gasPrice = math.BigMin(new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee),
-			tx.MaxFeePerGas)
+		gasPrice = new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee)
+		if gasPrice.Cmp(tx.MaxFeePerGas) > 0 {
+			gasPrice = tx.MaxFeePerGas
+		}
 	}
 	if gasPrice == nil {
 		return nil, errors.New("no gas price provided")
 	}
+	var authList []types.SetCodeAuthorization
+	if tx.AuthorizationList != nil {
+		authList = make([]types.SetCodeAuthorization, len(tx.AuthorizationList))
+		for i, auth := range tx.AuthorizationList {
+			authList[i] = types.SetCodeAuthorization{
+				ChainID: auth.ChainID,
+				Address: auth.Address,
+				Nonce:   auth.Nonce,
+				V:       auth.V,
+				R:       *uint256.MustFromBig(auth.R),
+				S:       *uint256.MustFromBig(auth.S),
+			}
+		}
+	}
 
 	msg := &core.Message{
-		From:          from,
-		To:            to,
-		Nonce:         tx.Nonce,
-		Value:         value,
-		GasLimit:      gasLimit,
-		GasPrice:      gasPrice,
-		GasFeeCap:     tx.MaxFeePerGas,
-		GasTipCap:     tx.MaxPriorityFeePerGas,
-		Data:          data,
-		AccessList:    accessList,
-		BlobHashes:    tx.BlobVersionedHashes,
-		BlobGasFeeCap: tx.BlobGasFeeCap,
+		From:                  from,
+		To:                    to,
+		Nonce:                 tx.Nonce,
+		Value:                 value,
+		GasLimit:              gasLimit,
+		GasPrice:              gasPrice,
+		GasFeeCap:             tx.MaxFeePerGas,
+		GasTipCap:             tx.MaxPriorityFeePerGas,
+		Data:                  data,
+		AccessList:            accessList,
+		BlobHashes:            tx.BlobVersionedHashes,
+		BlobGasFeeCap:         tx.BlobGasFeeCap,
+		SetCodeAuthorizations: authList,
 	}
 	return msg, nil
 }

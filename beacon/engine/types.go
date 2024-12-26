@@ -109,13 +109,18 @@ type ExecutionPayloadEnvelope struct {
 	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
 	Requests         [][]byte        `json:"executionRequests"`
 	Override         bool            `json:"shouldOverrideBuilder"`
-	Witness          *hexutil.Bytes  `json:"witness"`
+	Witness          *hexutil.Bytes  `json:"witness,omitempty"`
 }
 
 type BlobsBundleV1 struct {
 	Commitments []hexutil.Bytes `json:"commitments"`
 	Proofs      []hexutil.Bytes `json:"proofs"`
 	Blobs       []hexutil.Bytes `json:"blobs"`
+}
+
+type BlobAndProofV1 struct {
+	Blob  hexutil.Bytes `json:"blob"`
+	Proof hexutil.Bytes `json:"proof"`
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.
@@ -260,15 +265,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 
 	var requestsHash *common.Hash
 	if requests != nil {
-		// Put back request type byte.
-		typedRequests := make([][]byte, len(requests))
-		for i, reqdata := range requests {
-			typedReqdata := make([]byte, len(reqdata)+1)
-			typedReqdata[0] = byte(i)
-			copy(typedReqdata[1:], reqdata)
-			typedRequests[i] = typedReqdata
-		}
-		h := types.CalcRequestsHash(typedRequests)
+		h := types.CalcRequestsHash(requests)
 		requestsHash = &h
 	}
 
@@ -338,20 +335,11 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		}
 	}
 
-	// Remove type byte in requests.
-	var plainRequests [][]byte
-	if requests != nil {
-		plainRequests = make([][]byte, len(requests))
-		for i, reqdata := range requests {
-			plainRequests[i] = reqdata[1:]
-		}
-	}
-
 	return &ExecutionPayloadEnvelope{
 		ExecutionPayload: data,
 		BlockValue:       fees,
 		BlobsBundle:      &bundle,
-		Requests:         plainRequests,
+		Requests:         requests,
 		Override:         false,
 	}
 }

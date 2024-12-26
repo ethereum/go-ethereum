@@ -86,7 +86,7 @@ func TestSupplyOmittedFields(t *testing.T) {
 
 	expected := supplyInfo{
 		Number:     0,
-		Hash:       common.HexToHash("0xc02ee8ee5b54a40e43f0fa827d431e1bd4f217e941790dda10b2521d1925a20b"),
+		Hash:       common.HexToHash("0x3055fc27d6b4a08eb07033a0d1ee755a4b2988086f28a6189eac1b507525eeb1"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 	actual := out[expected.Number]
@@ -597,6 +597,7 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 }
 
 func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
+	t.Helper()
 	want, err := json.Marshal(expected)
 	if err != nil {
 		t.Fatalf("failed to marshal expected value to JSON: %v", err)
@@ -608,6 +609,6 @@ func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
 	}
 
 	if !bytes.Equal(want, have) {
-		t.Fatalf("incorrect supply info: expected %s, got %s", string(want), string(have))
+		t.Fatalf("incorrect supply info:\nwant %s\nhave %s", string(want), string(have))
 	}
 }
