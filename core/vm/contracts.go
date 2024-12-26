@@ -426,10 +426,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 			return math.MaxUint64
 		}
 		// 3. Minimum price of 200 gas
-		if gas.Uint64() < 200 {
-			return 200
-		}
-		return gas.Uint64()
+		return max(200, gas.Uint64())
 	}
 	gas = modexpMultComplexity(gas)
 	if adjExpLen.Cmp(big1) > 0 {

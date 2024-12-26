@@ -358,9 +358,7 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 			continue
 		}
 		// Iterate over all the leveldbTable rows, and accumulate the entries
-		for j := 0; j < len(compactions[i%2]); j++ {
-			compactions[i%2][j] = 0
-		}
+		clear(compactions[i%2])
 		compactions[i%2][0] = stats.LevelSizes.Sum()
 		for _, t := range stats.LevelDurations {
 			compactions[i%2][1] += t.Nanoseconds()

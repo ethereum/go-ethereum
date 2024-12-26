@@ -36,10 +36,7 @@ func evictionPriority(basefeeJumps float64, txBasefeeJumps, blobfeeJumps, txBlob
 		basefeePriority = evictionPriority1D(basefeeJumps, txBasefeeJumps)
 		blobfeePriority = evictionPriority1D(blobfeeJumps, txBlobfeeJumps)
 	)
-	if basefeePriority < blobfeePriority {
-		return basefeePriority
-	}
-	return blobfeePriority
+	return min(basefeePriority, blobfeePriority)
 }
 
 // evictionPriority1D calculates the eviction priority based on the algorithm
