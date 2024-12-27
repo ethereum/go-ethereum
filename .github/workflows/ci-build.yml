@@ -1,0 +1,83 @@
+name: CI Build and Push Docker Image
+
+on:
+  pull_request:
+    types: [closed]  # Trigger when the PR is closed (merged or just closed)
+    branches:
+      - master  # Trigger only when code is pushed to the master branch
+
+jobs:
+  build:
+    # Run the jobs only if the PR is merged and the label 'CI:Build' is present
+    if: contains(github.event.pull_request.labels.*.name, 'CI:Build') && github.event.pull_request.merged == true
+    runs-on: ubuntu:latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Get Version and Build number
+        run: |
+          VERSION="latest"  # Simple static version; could be changed if needed
+          BUILDNUM=${GITHUB_RUN_NUMBER}  # Use the GitHub run number as the build number
+
+          # Set environment variables for later steps
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "BUILDNUM=${BUILDNUM}" >> $GITHUB_ENV  
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Docker Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/go-ethereum:${{ env.BUILDNUM }} .
+
+      - name: Tag Docker image with 'latest'
+        run: |
+          docker tag ${{ secrets.DOCKER_USERNAME }}/go-ethereum:${{ env.BUILDNUM }} ${{ secrets.DOCKER_USERNAME }}/go-ethereum:latest
+  
+      - name: Push Docker image to Docker Hub
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/go-ethereum:${{ env.BUILDNUM }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/go-ethereum:latest
+
+  run-devnet:
+    needs: build  # Ensure this runs only after the build-and-push job
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Compose
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker-compose
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Run Devnet with Docker Compose
+        run: |
+          export DOCKER_HUB_USER=${{ secrets.DOCKER_USERNAME }}
+          docker-compose up -d
+
+      - name: Verify Devnet
+        run: |
+          sleep 10  # Allow time for the devnet to start
+          curl -X POST -H "Content-Type: application/json" \
+          --data '{"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}' \
+          http://localhost:8545
+
+      - name: Stop Devnet container
+        run: |
+          docker-compose down  # Stops the containers and removes the network

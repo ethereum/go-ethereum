@@ -1,7 +1,7 @@
 # Support setting various labels on the final image
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
+# ARG COMMIT=""
+# ARG VERSION=""
+# ARG BUILDNUM=""
 
 # Build Geth in a stock Go builder container
 FROM golang:1.23-alpine AS builder
@@ -26,8 +26,8 @@ EXPOSE 8545 8546 30303 30303/udp
 ENTRYPOINT ["geth"]
 
 # Add some metadata labels to help programmatic image consumption
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
+# ARG COMMIT=""
+# ARG VERSION=""
+# ARG BUILDNUM=""
 
-LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM"
+# LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM"

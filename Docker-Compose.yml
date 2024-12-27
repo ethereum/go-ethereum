@@ -1,0 +1,13 @@
+services:
+  devnet:
+    image: $DOCKER_HUB_USER/go-ethereum:latest  # Use the image built and pushed during build phase
+    container_name: devnet
+    ports:
+      - "8545:8545"  # Exposing RPC endpoint for interaction
+    command: ["geth", "--dev", "--http", "--http.api", "web3,eth,net,personal", "--http.addr", "0.0.0.0", "--http.port", "8545"]
+    networks:
+      - devnet_network
+
+networks:
+  devnet_network:
+    driver: bridge
