@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -133,7 +134,13 @@ func Map(m Interface, c <-chan struct{}, protocol string, extport, intport int, 
 // Mapping operations will not return an error but won't actually do anything.
 type ExtIP net.IP
 
-func (n ExtIP) ExternalIP() (net.IP, error) { return net.IP(n), nil }
+func (n ExtIP) ExternalIP() (net.IP, error) {
+	if IsKubernetesEnvironment() {
+		return net.IP(n), nil
+	}
+	return net.IP(n), nil
+}
+
 func (n ExtIP) String() string              { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
 
 // These do nothing.
@@ -239,4 +246,13 @@ func (n *autodisc) wait() error {
 		return fmt.Errorf("no %s router discovered", n.what)
 	}
 	return nil
+}
+
+// IsKubernetesEnvironment detects if the process is running inside Kubernetes cluster
+// by checking for the presence of standard K8s environment variables.
+func IsKubernetesEnvironment() bool {
+	if _, exists := os.LookupEnv("KUBERNETES_SERVICE_HOST"); exists {
+		return true
+	}
+	return false
 }
