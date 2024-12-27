@@ -26,31 +26,31 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/console"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	walletCommand = cli.Command{
+	walletCommand = &cli.Command{
 		Name:      "wallet",
 		Usage:     "Manage XDPoSChain presale wallets",
 		ArgsUsage: "",
-		Category:  "ACCOUNT COMMANDS",
 		Description: `
     XDC wallet import /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
 passwordfile as argument containing the wallet password in plaintext.`,
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 
 				Name:      "import",
 				Usage:     "Import XDPoSChain presale wallet",
 				ArgsUsage: "<keyFile>",
-				Action:    utils.MigrateFlags(importWallet),
+				Action:    importWallet,
 				Category:  "ACCOUNT COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
+					utils.XDCXDataDirFlag,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
 					utils.LightKDFFlag,
@@ -65,10 +65,9 @@ passwordfile as argument containing the wallet password in plaintext.`,
 		},
 	}
 
-	accountCommand = cli.Command{
-		Name:     "account",
-		Usage:    "Manage accounts",
-		Category: "ACCOUNT COMMANDS",
+	accountCommand = &cli.Command{
+		Name:  "account",
+		Usage: "Manage accounts",
 		Description: `
 
 Manage accounts, list all existing accounts, import a private key into a new
@@ -89,13 +88,14 @@ It is safe to transfer the entire directory or the individual keys therein
 between ethereum nodes by simply copying.
 
 Make sure you backup your keys regularly.`,
-		Subcommands: []cli.Command{
+		Subcommands: []*cli.Command{
 			{
 				Name:   "list",
 				Usage:  "Print summary of existing accounts",
-				Action: utils.MigrateFlags(accountList),
+				Action: accountList,
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
+					utils.XDCXDataDirFlag,
 					utils.KeyStoreDirFlag,
 				},
 				Description: `
@@ -104,9 +104,10 @@ Print a short summary of all accounts`,
 			{
 				Name:   "new",
 				Usage:  "Create a new account",
-				Action: utils.MigrateFlags(accountCreate),
+				Action: accountCreate,
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
+					utils.XDCXDataDirFlag,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
 					utils.LightKDFFlag,
@@ -129,10 +130,11 @@ password to file or expose in any other way.
 			{
 				Name:      "update",
 				Usage:     "Update an existing account",
-				Action:    utils.MigrateFlags(accountUpdate),
+				Action:    accountUpdate,
 				ArgsUsage: "<address>",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
+					utils.XDCXDataDirFlag,
 					utils.KeyStoreDirFlag,
 					utils.LightKDFFlag,
 				},
@@ -158,9 +160,10 @@ changing your password is only possible interactively.
 			{
 				Name:   "import",
 				Usage:  "Import a private key into a new account",
-				Action: utils.MigrateFlags(accountImport),
+				Action: accountImport,
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
+					utils.XDCXDataDirFlag,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
 					utils.LightKDFFlag,
@@ -293,7 +296,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 func accountCreate(ctx *cli.Context) error {
 	cfg := XDCConfig{Node: defaultNodeConfig()}
 	// Load config file.
-	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+	if file := ctx.String(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
@@ -319,13 +322,13 @@ func accountCreate(ctx *cli.Context) error {
 // accountUpdate transitions an account from a previous format to the current
 // one, also providing the possibility to change the pass-phrase.
 func accountUpdate(ctx *cli.Context) error {
-	if len(ctx.Args()) == 0 {
+	if ctx.Args().Len() == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
 	stack, _ := makeConfigNode(ctx)
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	for _, addr := range ctx.Args() {
+	for _, addr := range ctx.Args().Slice() {
 		account, oldPassword := unlockAccount(ctx, ks, addr, 0, nil)
 		newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
 		if err := ks.Update(account, oldPassword, newPassword); err != nil {
@@ -336,10 +339,10 @@ func accountUpdate(ctx *cli.Context) error {
 }
 
 func importWallet(ctx *cli.Context) error {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("keyfile must be given as the only argument")
 	}
+	keyfile := ctx.Args().First()
 	keyJson, err := os.ReadFile(keyfile)
 	if err != nil {
 		utils.Fatalf("Could not read wallet file: %v", err)
@@ -358,10 +361,10 @@ func importWallet(ctx *cli.Context) error {
 }
 
 func accountImport(ctx *cli.Context) error {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("keyfile must be given as the only argument")
 	}
+	keyfile := ctx.Args().First()
 	key, err := crypto.LoadECDSA(keyfile)
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)

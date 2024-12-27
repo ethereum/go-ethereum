@@ -10,7 +10,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 // Vote represents a single vote that an authorized signer made to modify the
@@ -32,7 +31,7 @@ import (
 // Snapshot is the state of the authorization voting at a given point in time.
 type SnapshotV1 struct {
 	config   *params.XDPoSConfig // Consensus engine parameters to fine tune behavior
-	sigcache *lru.ARCCache       // Cache of recent block signatures to speed up ecrecover
+	sigcache *utils.SigLRU       // Cache of recent block signatures to speed up ecrecover
 
 	Number  uint64                          `json:"number"`  // Block number where the snapshot was created
 	Hash    common.Hash                     `json:"hash"`    // Block hash where the snapshot was created
@@ -45,7 +44,7 @@ type SnapshotV1 struct {
 // newSnapshot creates a new snapshot with the specified startup parameters. This
 // method does not initialize the set of recent signers, so only ever use if for
 // the genesis block.
-func newSnapshot(config *params.XDPoSConfig, sigcache *lru.ARCCache, number uint64, hash common.Hash, signers []common.Address) *SnapshotV1 {
+func newSnapshot(config *params.XDPoSConfig, sigcache *utils.SigLRU, number uint64, hash common.Hash, signers []common.Address) *SnapshotV1 {
 	snap := &SnapshotV1{
 		config:   config,
 		sigcache: sigcache,
@@ -62,7 +61,7 @@ func newSnapshot(config *params.XDPoSConfig, sigcache *lru.ARCCache, number uint
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.XDPoSConfig, sigcache *lru.ARCCache, db ethdb.Database, hash common.Hash) (*SnapshotV1, error) {
+func loadSnapshot(config *params.XDPoSConfig, sigcache *utils.SigLRU, db ethdb.Database, hash common.Hash) (*SnapshotV1, error) {
 	blob, err := db.Get(append([]byte("XDPoS-"), hash[:]...))
 	if err != nil {
 		return nil, err

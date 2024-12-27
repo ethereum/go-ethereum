@@ -14,18 +14,18 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
-
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
+	"github.com/XinFinOrg/XDPoSChain/consensus/misc/eip1559"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -43,17 +43,17 @@ type XDPoS_v1 struct {
 	config *params.XDPoSConfig // Consensus engine configuration parameters
 	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
-	recents             *lru.ARCCache // Snapshots for recent block to speed up reorgs
-	signatures          *lru.ARCCache // Signatures of recent blocks to speed up mining
-	validatorSignatures *lru.ARCCache // Signatures of recent blocks to speed up mining
-	verifiedHeaders     *lru.ARCCache
+	recents             *lru.Cache[common.Hash, *SnapshotV1] // Snapshots for recent block to speed up reorgs
+	signatures          *utils.SigLRU                        // Signatures of recent blocks to speed up mining
+	validatorSignatures *utils.SigLRU                        // Signatures of recent blocks to speed up mining
+	verifiedHeaders     *lru.Cache[common.Hash, struct{}]
 	proposals           map[common.Address]bool // Current list of proposals we are pushing
 
 	signer common.Address  // Ethereum address of the signing key
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	HookReward            func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{})
+	HookReward            func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (map[string]interface{}, error)
 	HookPenalty           func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookPenaltyTIPSigning func(chain consensus.ChainReader, header *types.Header, candidate []common.Address) ([]common.Address, error)
 	HookValidator         func(header *types.Header, signers []common.Address) ([]byte, error)
@@ -91,20 +91,16 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS_v1 {
 		conf.Epoch = utils.EpochLength
 	}
 
-	recents, _ := lru.NewARC(utils.InmemorySnapshots)
-	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
-	validatorSignatures, _ := lru.NewARC(utils.InmemorySnapshots)
-	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 	return &XDPoS_v1{
 		chainConfig: chainConfig,
 
 		config: &conf,
 		db:     db,
 
-		recents:             recents,
-		signatures:          signatures,
-		verifiedHeaders:     verifiedHeaders,
-		validatorSignatures: validatorSignatures,
+		recents:             lru.NewCache[common.Hash, *SnapshotV1](utils.InmemorySnapshots),
+		signatures:          lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
+		verifiedHeaders:     lru.NewCache[common.Hash, struct{}](utils.InmemorySnapshots),
+		validatorSignatures: lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
 		proposals:           make(map[common.Address]bool),
 	}
 }
@@ -144,7 +140,7 @@ func (x *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *ty
 	}
 	err := x.verifyHeader(chain, header, parents, fullVerify)
 	if err == nil {
-		x.verifiedHeaders.Add(header.Hash(), true)
+		x.verifiedHeaders.Add(header.Hash(), struct{}{})
 	}
 	return err
 }
@@ -240,6 +236,10 @@ func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *ty
 	}
 	if parent.Time.Uint64()+x.config.Period > header.Time.Uint64() {
 		return utils.ErrInvalidTimestamp
+	}
+	// Verify the header's EIP-1559 attributes.
+	if err := eip1559.VerifyEip1559Header(chain.Config(), header); err != nil {
+		return err
 	}
 
 	if number%x.config.Epoch != 0 {
@@ -394,7 +394,7 @@ func (x *XDPoS_v1) GetPeriod() uint64 { return x.config.Period }
 
 func (x *XDPoS_v1) whoIsCreator(snap *SnapshotV1, header *types.Header) (common.Address, error) {
 	if header.Number.Uint64() == 0 {
-		return common.Address{}, errors.New("Don't take block 0")
+		return common.Address{}, errors.New("don't take block 0")
 	}
 	m, err := ecrecover(header, snap.sigcache)
 	if err != nil {
@@ -444,7 +444,7 @@ func (x *XDPoS_v1) yourTurn(chain consensus.ChainReader, parent *types.Header, s
 		return 0, -1, -1, false, err
 	}
 	if len(masternodes) == 0 {
-		return 0, -1, -1, false, errors.New("Masternodes not found")
+		return 0, -1, -1, false, errors.New("masternodes not found")
 	}
 	pre := common.Address{}
 	// masternode[0] has chance to create block 1
@@ -476,10 +476,10 @@ func (x *XDPoS_v1) snapshot(chain consensus.ChainReader, number uint64, hash com
 		headers []*types.Header
 		snap    *SnapshotV1
 	)
-	for snap == nil {
+	for {
 		// If an in-memory SnapshotV1 was found, use that
-		if s, ok := x.recents.Get(hash); ok {
-			snap = s.(*SnapshotV1)
+		if s, ok := x.recents.Get(hash); ok && s != nil {
+			snap = s
 			break
 		}
 		// If an on-disk checkpoint snapshot can be found, use that
@@ -834,7 +834,7 @@ func (x *XDPoS_v1) Finalize(chain consensus.ChainReader, header *types.Header, s
 	// _ = c.CacheData(header, txs, receipts)
 
 	if x.HookReward != nil && number%rCheckpoint == 0 {
-		err, rewards := x.HookReward(chain, state, parentState, header)
+		rewards, err := x.HookReward(chain, state, parentState, header)
 		if err != nil {
 			return nil, err
 		}
@@ -974,7 +974,7 @@ func (x *XDPoS_v1) RecoverValidator(header *types.Header) (common.Address, error
 	// If the signature's already cached, return that
 	hash := header.Hash()
 	if address, known := x.validatorSignatures.Get(hash); known {
-		return address.(common.Address), nil
+		return address, nil
 	}
 	// Retrieve the signature from the header.Validator
 	// len equals 65 bytes
@@ -1029,7 +1029,7 @@ func (x *XDPoS_v1) getSignersFromContract(chain consensus.ChainReader, checkpoin
 	}
 	signers, err := x.HookGetSignersFromContract(startGapBlockHeader.Hash())
 	if err != nil {
-		return []common.Address{}, fmt.Errorf("Can't get signers from Smart Contract . Err: %v", err)
+		return []common.Address{}, fmt.Errorf("can't get signers from Smart Contract . Err: %v", err)
 	}
 	return signers, nil
 }
@@ -1039,20 +1039,15 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS_v1 {
 	// Set any missing consensus parameters to their defaults
 	conf := chainConfig.XDPoS
 
-	// Allocate the snapshot caches and create the engine
-	recents, _ := lru.NewARC(utils.InmemorySnapshots)
-	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
-	validatorSignatures, _ := lru.NewARC(utils.InmemorySnapshots)
-	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
 	fakeEngine = &XDPoS_v1{
 		chainConfig: chainConfig,
 
 		config:              conf,
 		db:                  db,
-		recents:             recents,
-		signatures:          signatures,
-		verifiedHeaders:     verifiedHeaders,
-		validatorSignatures: validatorSignatures,
+		recents:             lru.NewCache[common.Hash, *SnapshotV1](utils.InmemorySnapshots),
+		signatures:          lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
+		verifiedHeaders:     lru.NewCache[common.Hash, struct{}](utils.InmemorySnapshots),
+		validatorSignatures: lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
 		proposals:           make(map[common.Address]bool),
 	}
 	return fakeEngine

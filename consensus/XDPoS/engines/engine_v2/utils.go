@@ -11,16 +11,15 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
-	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/crypto/sha3"
 )
 
 func sigHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewKeccak256()
+	hasher := sha3.NewLegacyKeccak256()
 
-	err := rlp.Encode(hasher, []interface{}{
+	enc := []interface{}{
 		header.ParentHash,
 		header.UncleHash,
 		header.Coinbase,
@@ -38,19 +37,20 @@ func sigHash(header *types.Header) (hash common.Hash) {
 		header.Nonce,
 		header.Validators,
 		header.Penalties,
-	})
-	if err != nil {
-		log.Debug("Fail to encode", err)
 	}
+	if header.BaseFee != nil {
+		enc = append(enc, header.BaseFee)
+	}
+	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
 	return hash
 }
 
-func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
+func ecrecover(header *types.Header, sigcache *utils.SigLRU) (common.Address, error) {
 	// If the signature's already cached, return that
 	hash := header.Hash()
 	if address, known := sigcache.Get(hash); known {
-		return address.(common.Address), nil
+		return address, nil
 	}
 
 	// Recover the public key and the Ethereum address
@@ -99,7 +99,7 @@ func (x *XDPoS_v2) signSignature(signingHash common.Hash) (types.Signature, erro
 
 	signedHash, err := signFn(accounts.Account{Address: signer}, signingHash.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("Error %v while signing hash", err)
+		return nil, fmt.Errorf("error %v while signing hash", err)
 	}
 	return signedHash, nil
 }
@@ -107,12 +107,12 @@ func (x *XDPoS_v2) signSignature(signingHash common.Hash) (types.Signature, erro
 func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signature types.Signature, masternodes []common.Address) (bool, common.Address, error) {
 	var signerAddress common.Address
 	if len(masternodes) == 0 {
-		return false, signerAddress, errors.New("Empty masternode list detected when verifying message signatures")
+		return false, signerAddress, errors.New("empty masternode list detected when verifying message signatures")
 	}
 	// Recover the public key and the Ethereum address
 	pubkey, err := crypto.Ecrecover(signedHashToBeVerified.Bytes(), signature)
 	if err != nil {
-		return false, signerAddress, fmt.Errorf("Error while verifying message: %v", err)
+		return false, signerAddress, fmt.Errorf("error while verifying message: %v", err)
 	}
 
 	copy(signerAddress[:], crypto.Keccak256(pubkey[1:])[12:])
@@ -223,9 +223,8 @@ func (x *XDPoS_v2) CalculateMissingRounds(chain consensus.ChainReader, header *t
 func (x *XDPoS_v2) getBlockByEpochNumberInCache(chain consensus.ChainReader, estRound types.Round) *types.BlockInfo {
 	epochSwitchInCache := make([]*types.BlockInfo, 0)
 	for r := estRound; r < estRound+types.Round(x.config.Epoch); r++ {
-		info, ok := x.round2epochBlockInfo.Get(r)
-		if ok {
-			blockInfo := info.(*types.BlockInfo)
+		blockInfo, ok := x.round2epochBlockInfo.Get(r)
+		if ok && blockInfo != nil {
 			epochSwitchInCache = append(epochSwitchInCache, blockInfo)
 		}
 	}

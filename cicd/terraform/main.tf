@@ -12,8 +12,6 @@ provider "aws" {
   region  = "us-east-1"
 }
 
-# WARNING: APSE-1 will only be used to host rpc node
-# Workaround to avoid conflicts with existing ecs cluster in existing regions
 provider "aws" {
   alias = "ap-southeast-1"
   region  = "ap-southeast-1"
@@ -25,9 +23,9 @@ module "devnet_rpc" {
   vpc_id = local.vpc_id
   aws_subnet_id = local.aws_subnet_id
   ami_id = local.ami_id
-  instance_type = "t3.xlarge"
+  instance_type = "t3.large"
   ssh_key_name = local.ssh_key_name
-  rpc_image = local.rpc_image 
+  rpc_image = local.rpc_image
   volume_size = 1500
 
   providers = {
@@ -43,7 +41,7 @@ module "testnet_rpc" {
   ami_id = local.ami_id
   instance_type = "t3.large"
   ssh_key_name = local.ssh_key_name
-  rpc_image = local.rpc_image 
+  rpc_image = local.rpc_image
   volume_size = 1500
 
   providers = {
@@ -59,7 +57,7 @@ module "mainnet_rpc" {
   ami_id = local.ami_id
   instance_type = "t3.large"
   ssh_key_name = local.ssh_key_name
-  rpc_image = local.rpc_image 
+  rpc_image = local.rpc_image
   volume_size = 3000
 
   providers = {

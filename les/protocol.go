@@ -28,6 +28,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/crypto/secp256k1"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
@@ -161,7 +162,7 @@ func (a *announceData) checkSignature(pubKey *ecdsa.PublicKey) error {
 	if bytes.Equal(pbytes, recPubkey) {
 		return nil
 	} else {
-		return errors.New("Wrong signature")
+		return errors.New("wrong signature")
 	}
 }
 
@@ -223,7 +224,7 @@ type CodeData []struct {
 type proofsData [][]rlp.RawValue
 
 type txStatus struct {
-	Status core.TxStatus
+	Status txpool.TxStatus
 	Lookup *core.TxLookupEntry `rlp:"nil"`
 	Error  string
 }

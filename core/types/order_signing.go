@@ -24,7 +24,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
+	"golang.org/x/crypto/sha3"
 )
 
 // OrderSigner interface for order transaction
@@ -86,7 +86,7 @@ func OrderSignTx(tx *OrderTransaction, s OrderSigner, prv *ecdsa.PrivateKey) (*O
 	return tx.WithSignature(s, sig)
 }
 
-//OrderTxSigner signer
+// OrderTxSigner signer
 type OrderTxSigner struct{}
 
 // Equal compare two signer
@@ -95,9 +95,9 @@ func (ordersign OrderTxSigner) Equal(s2 OrderSigner) bool {
 	return ok
 }
 
-//SignatureValues returns signature values. This signature needs to be in the [R || S || V] format where V is 0 or 1.
+// SignatureValues returns signature values. This signature needs to be in the [R || S || V] format where V is 0 or 1.
 func (ordersign OrderTxSigner) SignatureValues(tx *OrderTransaction, sig []byte) (r, s, v *big.Int, err error) {
-	if len(sig) != 65 {
+	if len(sig) != crypto.SignatureLength {
 		panic(fmt.Sprintf("wrong size for signature: got %d, want 65", len(sig)))
 	}
 	r = new(big.Int).SetBytes(sig[:32])
@@ -108,7 +108,7 @@ func (ordersign OrderTxSigner) SignatureValues(tx *OrderTransaction, sig []byte)
 
 // OrderCreateHash hash of new order
 func (ordersign OrderTxSigner) OrderCreateHash(tx *OrderTransaction) common.Hash {
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	sha.Write(tx.ExchangeAddress().Bytes())
 	sha.Write(tx.UserAddress().Bytes())
 	sha.Write(tx.BaseToken().Bytes())
@@ -128,7 +128,7 @@ func (ordersign OrderTxSigner) OrderCreateHash(tx *OrderTransaction) common.Hash
 
 // OrderCancelHash hash of cancelled order
 func (ordersign OrderTxSigner) OrderCancelHash(tx *OrderTransaction) common.Hash {
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	sha.Write(tx.OrderHash().Bytes())
 	sha.Write(common.BigToHash(big.NewInt(int64(tx.Nonce()))).Bytes())
 	sha.Write(tx.UserAddress().Bytes())
@@ -150,7 +150,7 @@ func (ordersign OrderTxSigner) Hash(tx *OrderTransaction) common.Hash {
 	return ordersign.OrderCreateHash(tx)
 }
 
-//MarshalSignature encode signature
+// MarshalSignature encode signature
 func MarshalSignature(R, S, V *big.Int) ([]byte, error) {
 	sigBytes1 := common.BigToHash(R).Bytes()
 	sigBytes2 := common.BigToHash(S).Bytes()

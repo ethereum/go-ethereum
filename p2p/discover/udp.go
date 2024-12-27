@@ -228,6 +228,9 @@ type Config struct {
 	NetRestrict  *netutil.Netlist  // network whitelist
 	Bootnodes    []*Node           // list of bootstrap nodes
 	Unhandled    chan<- ReadPacket // unhandled packets are sent on this channel
+
+	// The options below are useful in very specific cases, like in unit tests.
+	Log log.Logger // if set, log messages go here
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.

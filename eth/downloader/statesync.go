@@ -18,7 +18,6 @@ package downloader
 
 import (
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 	"hash"
 	"sync"
 	"time"
@@ -26,10 +25,11 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/trie"
+	"golang.org/x/crypto/sha3"
 )
 
 // stateReq represents a batch of state fetch requests groupped together into
@@ -242,7 +242,7 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	return &stateSync{
 		d:       d,
 		sched:   state.NewStateSync(root, d.stateDB, trie.NewSyncBloom(1, memorydb.New())),
-		keccak:  sha3.NewKeccak256(),
+		keccak:  sha3.NewLegacyKeccak256(),
 		tasks:   make(map[common.Hash]*stateTask),
 		deliver: make(chan *stateReq),
 		cancel:  make(chan struct{}),
@@ -327,7 +327,7 @@ func (s *stateSync) commit(force bool) error {
 	b := s.d.stateDB.NewBatch()
 	s.sched.Commit(b)
 	if err := b.Write(); err != nil {
-		return fmt.Errorf("DB write error: %v", err)
+		return fmt.Errorf("write DB error: %v", err)
 	}
 	s.updateStats(s.numUncommitted, 0, 0, time.Since(start))
 	s.numUncommitted = 0
@@ -419,9 +419,7 @@ func (s *stateSync) process(req *stateReq) error {
 		default:
 			return fmt.Errorf("invalid state node %s: %v", hash.TerminalString(), err)
 		}
-		if _, ok := req.tasks[hash]; ok {
-			delete(req.tasks, hash)
-		}
+		delete(req.tasks, hash)
 	}
 	// Put unfulfilled tasks back into the retry queue
 	npeers := s.d.peers.Len()

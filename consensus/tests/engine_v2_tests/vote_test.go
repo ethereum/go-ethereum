@@ -538,7 +538,7 @@ func TestVerifyVoteMsg(t *testing.T) {
 	engineV2.SetNewRoundFaker(blockchain, types.Round(14), false)
 	verified, err = engineV2.VerifyVoteMessage(blockchain, voteMsg)
 	assert.False(t, verified)
-	assert.Equal(t, "Error while verifying message: invalid signature length", err.Error())
+	assert.Equal(t, "error while verifying message: invalid signature length", err.Error())
 
 	// Valid vote message from a master node
 	signHash, _ := signFn(accounts.Account{Address: signer}, types.VoteSigHash(voteForSign).Bytes())

@@ -670,7 +670,7 @@ func (jst *JsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 	jst.ctx["to"] = to
 	jst.ctx["input"] = input
 	jst.ctx["gas"] = gas
-	jst.ctx["gasPrice"] = env.Context.GasPrice
+	jst.ctx["gasPrice"] = env.TxContext.GasPrice
 	jst.ctx["value"] = value
 
 	// Initialize the context
@@ -682,9 +682,10 @@ func (jst *JsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 
 	// Compute intrinsic gas
 	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
+	isEIP1559 := env.ChainConfig().IsEIP1559(env.Context.BlockNumber)
 	// after update core.IntrinsicGas, use isIstanbul in it
 	// isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
-	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE", isHomestead)
+	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE", isHomestead, isEIP1559)
 	if err != nil {
 		return
 	}

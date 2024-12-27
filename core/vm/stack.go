@@ -17,8 +17,16 @@
 package vm
 
 import (
+	"sync"
+
 	"github.com/holiman/uint256"
 )
+
+var stackPool = sync.Pool{
+	New: func() interface{} {
+		return &Stack{data: make([]uint256.Int, 0, 16)}
+	},
+}
 
 // Stack is an object for basic stack operations. Items popped to the stack are
 // expected to be changed and modified. stack does not take care of adding newly
@@ -28,7 +36,12 @@ type Stack struct {
 }
 
 func newstack() *Stack {
-	return &Stack{data: make([]uint256.Int, 0, 16)}
+	return stackPool.Get().(*Stack)
+}
+
+func returnStack(s *Stack) {
+	s.data = s.data[:0]
+	stackPool.Put(s)
 }
 
 // Data returns the underlying uint256.Int array.

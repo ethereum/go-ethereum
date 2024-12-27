@@ -150,29 +150,29 @@ func NewTreePool(hasher BaseHasher, segmentCount, capacity int) *TreePool {
 }
 
 // Drain drains the pool uptil it has no more than n resources
-func (self *TreePool) Drain(n int) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	for len(self.c) > n {
-		<-self.c
-		self.count--
+func (tp *TreePool) Drain(n int) {
+	tp.lock.Lock()
+	defer tp.lock.Unlock()
+	for len(tp.c) > n {
+		<-tp.c
+		tp.count--
 	}
 }
 
 // Reserve is blocking until it returns an available Tree
 // it reuses free Trees or creates a new one if size is not reached
-func (self *TreePool) Reserve() *Tree {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (tp *TreePool) Reserve() *Tree {
+	tp.lock.Lock()
+	defer tp.lock.Unlock()
 	var t *Tree
-	if self.count == self.Capacity {
-		return <-self.c
+	if tp.count == tp.Capacity {
+		return <-tp.c
 	}
 	select {
-	case t = <-self.c:
+	case t = <-tp.c:
 	default:
-		t = NewTree(self.hasher, self.SegmentSize, self.SegmentCount)
-		self.count++
+		t = NewTree(tp.hasher, tp.SegmentSize, tp.SegmentCount)
+		tp.count++
 	}
 	return t
 }
@@ -180,8 +180,8 @@ func (self *TreePool) Reserve() *Tree {
 // Release gives back a Tree to the pool.
 // This Tree is guaranteed to be in reusable state
 // does not need locking
-func (self *TreePool) Release(t *Tree) {
-	self.c <- t // can never fail but...
+func (tp *TreePool) Release(t *Tree) {
+	tp.c <- t // can never fail but...
 }
 
 // Tree is a reusable control structure representing a BMT
@@ -193,17 +193,14 @@ type Tree struct {
 }
 
 // Draw draws the BMT (badly)
-func (self *Tree) Draw(hash []byte, d int) string {
+func (t *Tree) Draw(hash []byte, d int) string {
 	var left, right []string
 	var anc []*Node
-	for i, n := range self.leaves {
+	for _, n := range t.leaves {
 		left = append(left, fmt.Sprintf("%v", hashstr(n.left)))
-		if i%2 == 0 {
-			anc = append(anc, n.parent)
-		}
 		right = append(right, fmt.Sprintf("%v", hashstr(n.right)))
 	}
-	anc = self.leaves
+	anc = t.leaves
 	var hashes [][]string
 	for l := 0; len(anc) > 0; l++ {
 		var nodes []*Node
@@ -277,42 +274,42 @@ func NewTree(hasher BaseHasher, segmentSize, segmentCount int) *Tree {
 // methods needed by hash.Hash
 
 // Size returns the size
-func (self *Hasher) Size() int {
-	return self.size
+func (ha *Hasher) Size() int {
+	return ha.size
 }
 
 // BlockSize returns the block size
-func (self *Hasher) BlockSize() int {
-	return self.blocksize
+func (ha *Hasher) BlockSize() int {
+	return ha.blocksize
 }
 
 // Sum returns the hash of the buffer
 // hash.Hash interface Sum method appends the byte slice to the underlying
 // data before it calculates and returns the hash of the chunk
-func (self *Hasher) Sum(b []byte) (r []byte) {
-	t := self.bmt
-	i := self.cur
+func (ha *Hasher) Sum(b []byte) (r []byte) {
+	t := ha.bmt
+	i := ha.cur
 	n := t.leaves[i]
 	j := i
 	// must run strictly before all nodes calculate
 	// datanodes are guaranteed to have a parent
-	if len(self.segment) > self.size && i > 0 && n.parent != nil {
+	if len(ha.segment) > ha.size && i > 0 && n.parent != nil {
 		n = n.parent
 	} else {
 		i *= 2
 	}
-	d := self.finalise(n, i)
-	self.writeSegment(j, self.segment, d)
-	c := <-self.result
-	self.releaseTree()
+	d := ha.finalise(n, i)
+	ha.writeSegment(j, ha.segment, d)
+	c := <-ha.result
+	ha.releaseTree()
 
 	// sha3(length + BMT(pure_chunk))
-	if self.blockLength == nil {
+	if ha.blockLength == nil {
 		return c
 	}
-	res := self.pool.hasher()
+	res := ha.pool.hasher()
 	res.Reset()
-	res.Write(self.blockLength)
+	res.Write(ha.blockLength)
 	res.Write(c)
 	return res.Sum(nil)
 }
@@ -321,8 +318,8 @@ func (self *Hasher) Sum(b []byte) (r []byte) {
 
 // Hash waits for the hasher result and returns it
 // caller must call this on a BMT Hasher being written to
-func (self *Hasher) Hash() []byte {
-	return <-self.result
+func (ha *Hasher) Hash() []byte {
+	return <-ha.result
 }
 
 // Hasher implements the io.Writer interface
@@ -330,16 +327,16 @@ func (self *Hasher) Hash() []byte {
 // Write fills the buffer to hash
 // with every full segment complete launches a hasher go routine
 // that shoots up the BMT
-func (self *Hasher) Write(b []byte) (int, error) {
+func (ha *Hasher) Write(b []byte) (int, error) {
 	l := len(b)
 	if l <= 0 {
 		return 0, nil
 	}
-	s := self.segment
-	i := self.cur
-	count := (self.count + 1) / 2
-	need := self.count*self.size - self.cur*2*self.size
-	size := self.size
+	s := ha.segment
+	i := ha.cur
+	count := (ha.count + 1) / 2
+	need := ha.count*ha.size - ha.cur*2*ha.size
+	size := ha.size
 	if need > size {
 		size *= 2
 	}
@@ -356,7 +353,7 @@ func (self *Hasher) Write(b []byte) (int, error) {
 	// read full segments and the last possibly partial segment
 	for need > 0 && i < count-1 {
 		// push all finished chunks we read
-		self.writeSegment(i, s, self.depth)
+		ha.writeSegment(i, s, ha.depth)
 		need -= size
 		if need < 0 {
 			size += need
@@ -365,8 +362,8 @@ func (self *Hasher) Write(b []byte) (int, error) {
 		rest += size
 		i++
 	}
-	self.segment = s
-	self.cur = i
+	ha.segment = s
+	ha.cur = i
 	// otherwise, we can assume len(s) == 0, so all buffer is read and chunk is not yet full
 	return l, nil
 }
@@ -376,8 +373,8 @@ func (self *Hasher) Write(b []byte) (int, error) {
 // ReadFrom reads from io.Reader and appends to the data to hash using Write
 // it reads so that chunk to hash is maximum length or reader reaches EOF
 // caller must Reset the hasher prior to call
-func (self *Hasher) ReadFrom(r io.Reader) (m int64, err error) {
-	bufsize := self.size*self.count - self.size*self.cur - len(self.segment)
+func (ha *Hasher) ReadFrom(r io.Reader) (m int64, err error) {
+	bufsize := ha.size*ha.count - ha.size*ha.cur - len(ha.segment)
 	buf := make([]byte, bufsize)
 	var read int
 	for {
@@ -385,7 +382,7 @@ func (self *Hasher) ReadFrom(r io.Reader) (m int64, err error) {
 		n, err = r.Read(buf)
 		read += n
 		if err == io.EOF || read == len(buf) {
-			hash := self.Sum(buf[:n])
+			hash := ha.Sum(buf[:n])
 			if read == len(buf) {
 				err = NewEOC(hash)
 			}
@@ -394,7 +391,7 @@ func (self *Hasher) ReadFrom(r io.Reader) (m int64, err error) {
 		if err != nil {
 			break
 		}
-		n, err = self.Write(buf[:n])
+		_, err = ha.Write(buf[:n])
 		if err != nil {
 			break
 		}
@@ -403,9 +400,9 @@ func (self *Hasher) ReadFrom(r io.Reader) (m int64, err error) {
 }
 
 // Reset needs to be called before writing to the hasher
-func (self *Hasher) Reset() {
-	self.getTree()
-	self.blockLength = nil
+func (ha *Hasher) Reset() {
+	ha.getTree()
+	ha.blockLength = nil
 }
 
 // Hasher implements the SwarmHash interface
@@ -413,53 +410,53 @@ func (self *Hasher) Reset() {
 // ResetWithLength needs to be called before writing to the hasher
 // the argument is supposed to be the byte slice binary representation of
 // the legth of the data subsumed under the hash
-func (self *Hasher) ResetWithLength(l []byte) {
-	self.Reset()
-	self.blockLength = l
+func (ha *Hasher) ResetWithLength(l []byte) {
+	ha.Reset()
+	ha.blockLength = l
 
 }
 
 // Release gives back the Tree to the pool whereby it unlocks
 // it resets tree, segment and index
-func (self *Hasher) releaseTree() {
-	if self.bmt != nil {
-		n := self.bmt.leaves[self.cur]
+func (ha *Hasher) releaseTree() {
+	if ha.bmt != nil {
+		n := ha.bmt.leaves[ha.cur]
 		for ; n != nil; n = n.parent {
 			n.unbalanced = false
 			if n.parent != nil {
 				n.root = false
 			}
 		}
-		self.pool.Release(self.bmt)
-		self.bmt = nil
+		ha.pool.Release(ha.bmt)
+		ha.bmt = nil
 
 	}
-	self.cur = 0
-	self.segment = nil
+	ha.cur = 0
+	ha.segment = nil
 }
 
-func (self *Hasher) writeSegment(i int, s []byte, d int) {
-	h := self.pool.hasher()
-	n := self.bmt.leaves[i]
+func (ha *Hasher) writeSegment(i int, s []byte, d int) {
+	h := ha.pool.hasher()
+	n := ha.bmt.leaves[i]
 
-	if len(s) > self.size && n.parent != nil {
+	if len(s) > ha.size && n.parent != nil {
 		go func() {
 			h.Reset()
 			h.Write(s)
 			s = h.Sum(nil)
 
 			if n.root {
-				self.result <- s
+				ha.result <- s
 				return
 			}
-			self.run(n.parent, h, d, n.index, s)
+			ha.run(n.parent, h, d, n.index, s)
 		}()
 		return
 	}
-	go self.run(n, h, d, i*2, s)
+	go ha.run(n, h, d, i*2, s)
 }
 
-func (self *Hasher) run(n *Node, h hash.Hash, d int, i int, s []byte) {
+func (ha *Hasher) run(n *Node, h hash.Hash, d int, i int, s []byte) {
 	isLeft := i%2 == 0
 	for {
 		if isLeft {
@@ -480,9 +477,9 @@ func (self *Hasher) run(n *Node, h hash.Hash, d int, i int, s []byte) {
 			s = append(n.left, n.right...)
 		}
 
-		self.hash = s
+		ha.hash = s
 		if n.root {
-			self.result <- s
+			ha.result <- s
 			return
 		}
 
@@ -493,20 +490,20 @@ func (self *Hasher) run(n *Node, h hash.Hash, d int, i int, s []byte) {
 }
 
 // getTree obtains a BMT resource by reserving one from the pool
-func (self *Hasher) getTree() *Tree {
-	if self.bmt != nil {
-		return self.bmt
+func (ha *Hasher) getTree() *Tree {
+	if ha.bmt != nil {
+		return ha.bmt
 	}
-	t := self.pool.Reserve()
-	self.bmt = t
+	t := ha.pool.Reserve()
+	ha.bmt = t
 	return t
 }
 
 // atomic bool toggle implementing a concurrent reusable 2-state object
 // atomic addint with %2 implements atomic bool toggle
 // it returns true if the toggler just put it in the active/waiting state
-func (self *Node) toggle() bool {
-	return atomic.AddInt32(&self.state, 1)%2 == 1
+func (n *Node) toggle() bool {
+	return atomic.AddInt32(&n.state, 1)%2 == 1
 }
 
 func hashstr(b []byte) string {
@@ -526,7 +523,7 @@ func depth(n int) (d int) {
 
 // finalise is following the zigzags on the tree belonging
 // to the final datasegment
-func (self *Hasher) finalise(n *Node, i int) (d int) {
+func (ha *Hasher) finalise(n *Node, i int) (d int) {
 	isLeft := i%2 == 0
 	for {
 		// when the final segment's path is going via left segments
@@ -551,8 +548,8 @@ type EOC struct {
 }
 
 // Error returns the error string
-func (self *EOC) Error() string {
-	return fmt.Sprintf("hasher limit reached, chunk hash: %x", self.Hash)
+func (e *EOC) Error() string {
+	return fmt.Sprintf("hasher limit reached, chunk hash: %x", e.Hash)
 }
 
 // NewEOC creates new end of chunk error with the hash

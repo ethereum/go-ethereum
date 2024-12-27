@@ -43,7 +43,7 @@ func airDropTokenToAccountNoXDC() {
 	fmt.Println("wait 10s to airdrop success ", tx.Hash().Hex())
 	time.Sleep(10 * time.Second)
 
-	_, receiptRpc, err := client.GetTransactionReceiptResult(context.Background(), tx.Hash())
+	_, receiptRpc, _ := client.GetTransactionReceiptResult(context.Background(), tx.Hash())
 	receipt := map[string]interface{}{}
 	err = json.Unmarshal(receiptRpc, &receipt)
 	if err != nil {
@@ -80,8 +80,8 @@ func testTransferTRC21TokenWithAccountNoXDC() {
 	trc21IssuerInstance, _ := trc21issuer.NewTRC21Issuer(airDropAccount, common.TRC21IssuerSMC, client)
 
 	remainFee, _ := trc21IssuerInstance.GetTokenCapacity(trc21TokenAddr)
-	airDropBalanceBefore, err := trc21Instance.BalanceOf(simulation.AirdropAddr)
-	receiverBalanceBefore, err := trc21Instance.BalanceOf(simulation.ReceiverAddr)
+	airDropBalanceBefore, _ := trc21Instance.BalanceOf(simulation.AirdropAddr)
+	receiverBalanceBefore, _ := trc21Instance.BalanceOf(simulation.ReceiverAddr)
 	// execute transferAmount trc to other address
 	tx, err := trc21Instance.Transfer(simulation.ReceiverAddr, simulation.TransferAmount)
 	if err != nil {
@@ -105,7 +105,7 @@ func testTransferTRC21TokenWithAccountNoXDC() {
 	if err != nil || balance.Cmp(remainAirDrop) != 0 {
 		log.Fatal("check balance after fail transferAmount in tr21: ", err, "get", balance, "wanted", remainAirDrop)
 	}
-	_, receiptRpc, err := client.GetTransactionReceiptResult(context.Background(), tx.Hash())
+	_, receiptRpc, _ := client.GetTransactionReceiptResult(context.Background(), tx.Hash())
 	receipt := map[string]interface{}{}
 	err = json.Unmarshal(receiptRpc, &receipt)
 	if err != nil {
@@ -140,15 +140,15 @@ func testTransferTrc21Fail() {
 	airDropAccount.GasPrice = big.NewInt(0).Mul(common.TRC21GasPrice, big.NewInt(2))
 	trc21Instance, _ := trc21issuer.NewTRC21(airDropAccount, trc21TokenAddr, client)
 	trc21IssuerInstance, _ := trc21issuer.NewTRC21Issuer(airDropAccount, common.TRC21IssuerSMC, client)
-	balanceIssuerFee, err := trc21IssuerInstance.GetTokenCapacity(trc21TokenAddr)
+	balanceIssuerFee, _ := trc21IssuerInstance.GetTokenCapacity(trc21TokenAddr)
 
 	minFee, err := trc21Instance.MinFee()
 	if err != nil {
 		log.Fatal("can't get minFee of trc21 smart contract:", err)
 	}
-	ownerBalance, err := trc21Instance.BalanceOf(simulation.MainAddr)
-	remainFee, err := trc21IssuerInstance.GetTokenCapacity(trc21TokenAddr)
-	airDropBalanceBefore, err := trc21Instance.BalanceOf(simulation.AirdropAddr)
+	ownerBalance, _ := trc21Instance.BalanceOf(simulation.MainAddr)
+	remainFee, _ := trc21IssuerInstance.GetTokenCapacity(trc21TokenAddr)
+	airDropBalanceBefore, _ := trc21Instance.BalanceOf(simulation.AirdropAddr)
 
 	tx, err := trc21Instance.Transfer(common.Address{}, big.NewInt(1))
 	if err != nil {
@@ -171,7 +171,7 @@ func testTransferTrc21Fail() {
 	if err != nil || balance.Cmp(ownerBalance) != 0 {
 		log.Fatal("can't get balance token fee in  smart contract: ", err, "got", balanceIssuerFee, "wanted", remainFee)
 	}
-	_, receiptRpc, err := client.GetTransactionReceiptResult(context.Background(), tx.Hash())
+	_, receiptRpc, _ := client.GetTransactionReceiptResult(context.Background(), tx.Hash())
 	receipt := map[string]interface{}{}
 	err = json.Unmarshal(receiptRpc, &receipt)
 	if err != nil {

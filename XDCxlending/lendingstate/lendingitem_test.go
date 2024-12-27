@@ -12,8 +12,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestLendingItem_VerifyLendingSide(t *testing.T) {
@@ -515,11 +515,11 @@ func Test_CreateOrder(t *testing.T) {
 
 func sendOrder(nonce uint64) {
 	rpcClient, err := rpc.DialHTTP("http://localhost:8501")
-	defer rpcClient.Close()
 	if err != nil {
 		fmt.Println("rpc.DialHTTP failed", "err", err)
 		os.Exit(1)
 	}
+	defer rpcClient.Close()
 	rand.Seed(time.Now().UTC().UnixNano())
 	item := &LendingOrderMsg{
 		AccountNonce:    nonce,
@@ -568,9 +568,8 @@ func sendOrder(nonce uint64) {
 }
 
 func computeHash(l *LendingOrderMsg) common.Hash {
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	if l.Status == LendingStatusCancelled {
-		sha := sha3.NewKeccak256()
 		sha.Write(l.Hash.Bytes())
 		sha.Write(common.BigToHash(big.NewInt(int64(l.AccountNonce))).Bytes())
 		sha.Write(l.UserAddress.Bytes())
@@ -593,5 +592,4 @@ func computeHash(l *LendingOrderMsg) common.Hash {
 		sha.Write(common.BigToHash(big.NewInt(int64(l.AccountNonce))).Bytes())
 	}
 	return common.BytesToHash(sha.Sum(nil))
-
 }

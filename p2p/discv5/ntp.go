@@ -51,7 +51,7 @@ func checkClockDrift() {
 	}
 	if drift < -driftThreshold || drift > driftThreshold {
 		warning := fmt.Sprintf("System clock seems off by %v, which can prevent network connectivity", drift)
-		howtofix := fmt.Sprintf("Please enable network time synchronisation in system settings")
+		howtofix := "Please enable network time synchronisation in system settings"
 		separator := strings.Repeat("-", len(warning))
 
 		log.Warn(separator)

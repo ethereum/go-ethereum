@@ -10,8 +10,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/globalsign/mgo/bson"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -207,7 +207,7 @@ func (l *LendingItem) VerifyLendingItem(state *state.StateDB) error {
 	if err := l.VerifyLendingStatus(); err != nil {
 		return err
 	}
-	if valid, _ := IsValidPair(state, l.Relayer, l.LendingToken, l.Term); valid == false {
+	if valid, _ := IsValidPair(state, l.Relayer, l.LendingToken, l.Term); !valid {
 		return fmt.Errorf("invalid pair . LendToken %s . Term: %v", l.LendingToken.Hex(), l.Term)
 	}
 	if l.Status == LendingStatusNew {
@@ -308,7 +308,7 @@ func (l *LendingItem) VerifyLendingStatus() error {
 }
 
 func (l *LendingItem) ComputeHash() common.Hash {
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	if l.Status == LendingStatusNew {
 		sha.Write(l.Relayer.Bytes())
 		sha.Write(l.UserAddress.Bytes())
@@ -411,7 +411,7 @@ func VerifyBalance(isXDCXLendingFork bool, statedb *state.StateDB, lendingStateD
 				if lendTokenXDCPrice != nil && lendTokenXDCPrice.Sign() > 0 {
 					defaultFee := new(big.Int).Mul(quantity, new(big.Int).SetUint64(DefaultFeeRate))
 					defaultFee = new(big.Int).Div(defaultFee, common.XDCXBaseFee)
-					defaultFeeInXDC := common.Big0
+					var defaultFeeInXDC *big.Int
 					if lendingToken != common.XDCNativeAddressBinary {
 						defaultFeeInXDC = new(big.Int).Mul(defaultFee, lendTokenXDCPrice)
 						defaultFeeInXDC = new(big.Int).Div(defaultFeeInXDC, lendingTokenDecimal)
@@ -429,8 +429,7 @@ func VerifyBalance(isXDCXLendingFork bool, statedb *state.StateDB, lendingStateD
 				// make sure actualBalance >= cancel fee
 				lendingBook := GetLendingOrderBookHash(lendingToken, term)
 				item := lendingStateDb.GetLendingOrder(lendingBook, common.BigToHash(new(big.Int).SetUint64(lendingId)))
-				cancelFee := big.NewInt(0)
-				cancelFee = new(big.Int).Mul(item.Quantity, borrowingFeeRate)
+				cancelFee := new(big.Int).Mul(item.Quantity, borrowingFeeRate)
 				cancelFee = new(big.Int).Div(cancelFee, common.XDCXBaseCancelFee)
 
 				actualBalance := GetTokenBalance(userAddress, lendingToken, statedb)
@@ -459,9 +458,8 @@ func VerifyBalance(isXDCXLendingFork bool, statedb *state.StateDB, lendingStateD
 			case LendingStatusCancelled:
 				lendingBook := GetLendingOrderBookHash(lendingToken, term)
 				item := lendingStateDb.GetLendingOrder(lendingBook, common.BigToHash(new(big.Int).SetUint64(lendingId)))
-				cancelFee := big.NewInt(0)
 				// Fee ==  quantityToLend/base lend token decimal *price*borrowFee/LendingCancelFee
-				cancelFee = new(big.Int).Div(item.Quantity, collateralPrice)
+				cancelFee := new(big.Int).Div(item.Quantity, collateralPrice)
 				cancelFee = new(big.Int).Mul(cancelFee, borrowingFeeRate)
 				cancelFee = new(big.Int).Div(cancelFee, common.XDCXBaseCancelFee)
 				actualBalance := GetTokenBalance(userAddress, collateralToken, statedb)

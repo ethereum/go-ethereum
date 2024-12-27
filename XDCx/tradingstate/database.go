@@ -23,7 +23,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/trie"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 // Trie cache generation limit after which to evic trie nodes from memory.
@@ -33,9 +32,6 @@ const (
 	// Number of past tries to keep. This value is chosen such that
 	// reasonable chain reorg depths will hit an existing trie.
 	maxPastTries = 12
-
-	// Number of codehash->size associations to keep.
-	codeSizeCacheSize = 100000
 )
 
 // Database wraps access to tries and contract code.
@@ -79,18 +75,15 @@ type Trie interface {
 // intermediate trie-node memory pool between the low level storage layer and the
 // high level trie abstraction.
 func NewDatabase(db ethdb.Database) Database {
-	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
-		db:            trie.NewDatabase(db),
-		codeSizeCache: csc,
+		db: trie.NewDatabase(db),
 	}
 }
 
 type cachingDB struct {
-	db            *trie.Database
-	mu            sync.Mutex
-	pastTries     []*XDCXTrie
-	codeSizeCache *lru.Cache
+	db        *trie.Database
+	mu        sync.Mutex
+	pastTries []*XDCXTrie
 }
 
 // OpenTrie opens the main account trie.

@@ -28,6 +28,8 @@ import (
 )
 
 var (
+	// TODO: remove file core/types/derive_sha.go, then remove emptyRoot and emptyState
+
 	// emptyRoot is the known root hash of an empty trie.
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
@@ -241,7 +243,7 @@ func (t *Trie) tryGetAllLeftKeyAndValue(origNode Node, prefix []byte, limit []by
 			if err != nil {
 				return nil, nil, n, false, err
 			}
-			if err == nil && didResolve {
+			if didResolve {
 				n = n.copy()
 				n.Children[i] = newnode
 			}

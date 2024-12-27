@@ -46,17 +46,17 @@ else
   log_level=$LOG_LEVEL
 fi
 
-netstats="${NODE_NAME}-${wallet}-local:xinfin_xdpos_hybrid_network_stats@devnetstats.apothem.network:2000"
+netstats="${NODE_NAME}-${wallet}-local:xinfin_xdpos_hybrid_network_stats@devnetstats.hashlabs.apothem.network:1999"
 
 echo "Running a node with wallet: ${wallet} at local"
 
 ../../build/bin/XDC --ethstats ${netstats} --gcmode=archive \
 --bootnodes ${bootnodes} --syncmode full \
 --datadir ./tmp/xdcchain --networkid 551 \
--port 30303 --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 \
---rpcport 8545 \
---rpcapi db,eth,debug,miner,net,shh,txpool,personal,web3,XDPoS \
---rpcvhosts "*" --unlock "${wallet}" --password ./tmp/.pwd --mine \
---gasprice "1" --targetgaslimit "420000000" --verbosity ${log_level} \
---ws --wsaddr=0.0.0.0 --wsport 8555 \
---wsorigins "*" 2>&1 >>./tmp/xdc.log
+--port 30303 --http --http-corsdomain "*" --http-addr 0.0.0.0 \
+--http-port 8545 \
+--http-api db,eth,debug,miner,net,shh,txpool,personal,web3,XDPoS \
+--http-vhosts "*" --unlock "${wallet}" --password ./tmp/.pwd --mine \
+--miner-gasprice "1" --miner-gaslimit "420000000" --verbosity ${log_level} \
+--ws --ws-addr=0.0.0.0 --ws-port 8555 \
+--ws-origins "*" 2>&1 >>./tmp/xdc.log

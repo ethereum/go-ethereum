@@ -24,24 +24,20 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
-	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
-
-	"github.com/XinFinOrg/XDPoSChain/XDCx"
-
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-
 	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
-	stateDatabase "github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
@@ -241,7 +237,7 @@ func (b *EthApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*t
 }
 
 func (b *EthApiBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
-	return core.GetBlockReceipts(b.eth.chainDb, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash)), nil
+	return b.eth.blockchain.GetReceiptsByHash(blockHash), nil
 }
 
 func (b *EthApiBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
@@ -258,8 +254,9 @@ func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 		vmConfig = b.eth.blockchain.GetVMConfig()
 	}
 	state.SetBalance(msg.From(), math.MaxBig256)
-	context := core.NewEVMContext(msg, header, b.eth.BlockChain(), nil)
-	return vm.NewEVM(context, state, XDCxState, b.eth.chainConfig, *vmConfig), vmError, nil
+	txContext := core.NewEVMTxContext(msg)
+	context := core.NewEVMBlockContext(header, b.eth.BlockChain(), nil)
+	return vm.NewEVM(context, txContext, state, XDCxState, b.eth.chainConfig, *vmConfig), vmError, nil
 }
 
 func (b *EthApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
@@ -301,10 +298,7 @@ func (b *EthApiBackend) SendLendingTx(ctx context.Context, signedTx *types.Lendi
 }
 
 func (b *EthApiBackend) GetPoolTransactions() (types.Transactions, error) {
-	pending, err := b.eth.txPool.Pending()
-	if err != nil {
-		return nil, err
-	}
+	pending := b.eth.txPool.Pending(false)
 	var txs types.Transactions
 	for _, batch := range pending {
 		txs = append(txs, batch...)
@@ -328,6 +322,10 @@ func (b *EthApiBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.eth.TxPool().Content()
 }
 
+func (b *EthApiBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+	return b.eth.TxPool().ContentFrom(addr)
+}
+
 func (b *EthApiBackend) OrderTxPoolContent() (map[common.Address]types.OrderTransactions, map[common.Address]types.OrderTransactions) {
 	return b.eth.OrderPool().Content()
 }
@@ -347,8 +345,12 @@ func (b *EthApiBackend) ProtocolVersion() int {
 	return b.eth.EthVersion()
 }
 
-func (b *EthApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx)
+func (b *EthApiBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	return b.gpo.SuggestTipCap(ctx)
+}
+
+func (b *EthApiBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (firstBlock *big.Int, reward [][]*big.Int, baseFee []*big.Int, gasUsedRatio []float64, err error) {
+	return b.gpo.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
 }
 
 func (b *EthApiBackend) ChainDb() ethdb.Database {
@@ -394,6 +396,10 @@ func (b *EthApiBackend) GetIPCClient() (bind.ContractBackend, error) {
 
 func (b *EthApiBackend) GetEngine() consensus.Engine {
 	return b.eth.engine
+}
+
+func (b *EthApiBackend) CurrentHeader() *types.Header {
+	return b.eth.blockchain.CurrentHeader()
 }
 
 func (b *EthApiBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
@@ -497,7 +503,7 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 	var voterResults map[common.Address]*big.Int
 	for signer, calcReward := range rewardSigners {
 		if signer == masternodeAddr {
-			err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, state, masternodeAddr, calcReward, number)
+			rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, state, masternodeAddr, calcReward, number)
 			if err != nil {
 				log.Crit("Fail to calculate reward for holders.", "error", err)
 				return nil
@@ -515,20 +521,20 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 func (b *EthApiBackend) GetVotersCap(checkpoint *big.Int, masterAddr common.Address, voters []common.Address) map[common.Address]*big.Int {
 	chain := b.eth.blockchain
 	checkpointBlock := chain.GetBlockByNumber(checkpoint.Uint64())
-	state, err := chain.StateAt(checkpointBlock.Root())
+	statedb, err := chain.StateAt(checkpointBlock.Root())
 
 	if err != nil {
 		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint, "err", err)
 		return nil
 	}
-	if state != nil {
+	if statedb != nil {
 		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint)
 		return nil
 	}
 
 	voterCaps := make(map[common.Address]*big.Int)
 	for _, voteAddr := range voters {
-		voterCap := stateDatabase.GetVoterCap(state, masterAddr, voteAddr)
+		voterCap := state.GetVoterCap(statedb, masterAddr, voteAddr)
 		voterCaps[voteAddr] = voterCap
 	}
 	return voterCaps
@@ -551,21 +557,21 @@ func (b *EthApiBackend) GetEpochDuration() *big.Int {
 // GetMasternodesCap return a cap of all masternode at a checkpoint
 func (b *EthApiBackend) GetMasternodesCap(checkpoint uint64) map[common.Address]*big.Int {
 	checkpointBlock := b.eth.blockchain.GetBlockByNumber(checkpoint)
-	state, err := b.eth.blockchain.StateAt(checkpointBlock.Root())
+	statedb, err := b.eth.blockchain.StateAt(checkpointBlock.Root())
 	if err != nil {
 		log.Error("fail to get state in GetMasternodesCap", "checkpoint", checkpoint, "err", err)
 		return nil
 	}
-	if state == nil {
+	if statedb == nil {
 		log.Error("fail to get state in GetMasternodesCap", "checkpoint", checkpoint)
 		return nil
 	}
 
-	candicates := stateDatabase.GetCandidates(state)
+	candicates := state.GetCandidates(statedb)
 
 	masternodesCap := map[common.Address]*big.Int{}
 	for _, candicate := range candicates {
-		masternodesCap[candicate] = stateDatabase.GetCandidateCap(state, candicate)
+		masternodesCap[candicate] = state.GetCandidateCap(statedb, candicate)
 	}
 
 	return masternodesCap

@@ -111,11 +111,10 @@ func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBloc
 		if err := os.WriteFile(json, []byte(genesis), 0600); err != nil {
 			t.Fatalf("test %d: failed to write genesis file: %v", test, err)
 		}
-		runXDC(t, "--datadir", datadir, "init", json).WaitExit()
+		runXDC(t, "init", "--datadir", datadir, json).WaitExit()
 	} else {
 		// Force chain initialization
-		args := []string{"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir}
-		XDC := runXDC(t, append(args, []string{"--exec", "2+2", "console"}...)...)
+		XDC := runXDC(t, "console", "--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir, "--exec", "2+2")
 		XDC.WaitExit()
 	}
 	// Retrieve the DAO config flag from the database

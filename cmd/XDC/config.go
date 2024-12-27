@@ -27,34 +27,33 @@ import (
 	"strings"
 	"unicode"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
-	"github.com/XinFinOrg/XDPoSChain/internal/debug"
+	"github.com/XinFinOrg/XDPoSChain/internal/flags"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	whisper "github.com/XinFinOrg/XDPoSChain/whisper/whisperv6"
 	"github.com/naoina/toml"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	dumpConfigCommand = cli.Command{
-		Action:      utils.MigrateFlags(dumpConfig),
+	dumpConfigCommand = &cli.Command{
+		Action:      dumpConfig,
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(append(nodeFlags, rpcFlags...), whisperFlags...),
-		Category:    "MISCELLANEOUS COMMANDS",
+		Flags:       utils.GroupFlags(nodeFlags, rpcFlags),
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 
-	configFileFlag = cli.StringFlag{
-		Name:  "config",
-		Usage: "TOML configuration file",
+	configFileFlag = &cli.StringFlag{
+		Name:     "config",
+		Usage:    "TOML configuration file",
+		Category: flags.EthCategory,
 	}
 )
 
@@ -91,9 +90,9 @@ type Bootnodes struct {
 
 type XDCConfig struct {
 	Eth         ethconfig.Config
-	Shh         whisper.Config
 	Node        node.Config
 	Ethstats    ethstatsConfig
+	Metrics     metrics.Config
 	XDCX        XDCx.Config
 	Account     account
 	StakeEnable bool
@@ -120,42 +119,43 @@ func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
 	cfg.Version = params.VersionWithCommit(gitCommit)
-	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
-	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
+	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
+	cfg.WSModules = append(cfg.WSModules, "eth")
 	cfg.IPCPath = "XDC.ipc"
 	return cfg
 }
 
+// makeConfigNode loads geth configuration and creates a blank node instance.
 func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	// Load defaults.
 	cfg := XDCConfig{
 		Eth:         ethconfig.Defaults,
-		Shh:         whisper.DefaultConfig,
 		XDCX:        XDCx.DefaultConfig,
 		Node:        defaultNodeConfig(),
+		Metrics:     metrics.DefaultConfig,
 		StakeEnable: true,
 		Verbosity:   3,
 		NAT:         "",
 	}
 	// Load config file.
-	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+	if file := ctx.String(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
-	if ctx.GlobalIsSet(utils.StakingEnabledFlag.Name) {
-		cfg.StakeEnable = ctx.GlobalBool(utils.StakingEnabledFlag.Name)
+	if ctx.IsSet(utils.MiningEnabledFlag.Name) {
+		cfg.StakeEnable = ctx.Bool(utils.MiningEnabledFlag.Name)
 	}
-	if !ctx.GlobalIsSet(debug.VerbosityFlag.Name) {
-		debug.Glogger.Verbosity(log.Lvl(cfg.Verbosity))
-	}
+	// if !ctx.IsSet(debug.VerbosityFlag.Name) {
+	// 	debug.Verbosity(log.Lvl(cfg.Verbosity))
+	// }
 
-	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {
+	if !ctx.IsSet(utils.NATFlag.Name) && cfg.NAT != "" {
 		ctx.Set(utils.NATFlag.Name, cfg.NAT)
 	}
 
 	// Check testnet is enable.
-	if ctx.GlobalBool(utils.XDCTestnetFlag.Name) {
+	if ctx.Bool(utils.XDCTestnetFlag.Name) {
 		common.IsTestnet = true
 		common.TRC21IssuerSMC = common.TRC21IssuerSMCTestNet
 		cfg.Eth.NetworkId = 51
@@ -164,24 +164,24 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		common.TIPXDCXCancellationFee = common.TIPXDCXCancellationFeeTestnet
 	}
 
-	if ctx.GlobalBool(utils.EnableXDCPrefixFlag.Name) {
+	if ctx.Bool(utils.EnableXDCPrefixFlag.Name) {
 		common.Enable0xPrefix = false
 	}
 
 	// Rewound
-	if rewound := ctx.GlobalInt(utils.RewoundFlag.Name); rewound != 0 {
+	if rewound := ctx.Int(utils.RewoundFlag.Name); rewound != 0 {
 		common.Rewound = uint64(rewound)
 	}
 
 	// Check rollback hash exist.
-	if rollbackHash := ctx.GlobalString(utils.RollbackFlag.Name); rollbackHash != "" {
+	if rollbackHash := ctx.String(utils.RollbackFlag.Name); rollbackHash != "" {
 		common.RollbackHash = common.HexToHash(rollbackHash)
 	}
 
 	// Check GasPrice
 	common.MinGasPrice = big.NewInt(common.DefaultMinGasPrice)
-	if ctx.GlobalIsSet(utils.GasPriceFlag.Name) {
-		if gasPrice := int64(ctx.GlobalInt(utils.GasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
+	if ctx.IsSet(utils.MinerGasPriceFlag.Name) {
+		if gasPrice := int64(ctx.Int(utils.MinerGasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
 			common.MinGasPrice = big.NewInt(gasPrice)
 		}
 	}
@@ -208,12 +208,14 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
-	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
-		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
+	if ctx.IsSet(utils.EthStatsURLFlag.Name) {
+		cfg.Ethstats.URL = ctx.String(utils.EthStatsURLFlag.Name)
 	}
 
-	utils.SetShhConfig(ctx, stack, &cfg.Shh)
 	utils.SetXDCXConfig(ctx, &cfg.XDCX, cfg.Node.DataDir)
+
+	applyMetricConfig(ctx, &cfg)
+
 	return stack, cfg
 }
 
@@ -230,36 +232,16 @@ func applyValues(values []string, params *[]string) {
 
 }
 
-// enableWhisper returns true in case one of the whisper flags is set.
-func enableWhisper(ctx *cli.Context) bool {
-	for _, flag := range whisperFlags {
-		if ctx.GlobalIsSet(flag.GetName()) {
-			return true
-		}
-	}
-	return false
-}
-
 func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	stack, cfg := makeConfigNode(ctx)
+
+	// Start metrics export if enabled
+	utils.SetupMetrics(&cfg.Metrics)
 
 	// Register XDCX's OrderBook service if requested.
 	// enable in default
 	utils.RegisterXDCXService(stack, &cfg.XDCX)
-	utils.RegisterEthService(stack, &cfg.Eth)
-
-	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
-	shhEnabled := enableWhisper(ctx)
-	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DeveloperFlag.Name)
-	if shhEnabled || shhAutoEnabled {
-		if ctx.GlobalIsSet(utils.WhisperMaxMessageSizeFlag.Name) {
-			cfg.Shh.MaxMessageSize = uint32(ctx.Int(utils.WhisperMaxMessageSizeFlag.Name))
-		}
-		if ctx.GlobalIsSet(utils.WhisperMinPOWFlag.Name) {
-			cfg.Shh.MinimumAcceptedPOW = ctx.Float64(utils.WhisperMinPOWFlag.Name)
-		}
-		utils.RegisterShhService(stack, &cfg.Shh)
-	}
+	utils.RegisterEthService(stack, &cfg.Eth, cfg.Node.Version)
 
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
@@ -286,4 +268,70 @@ func dumpConfig(ctx *cli.Context) error {
 	io.WriteString(os.Stdout, comment)
 	os.Stdout.Write(out)
 	return nil
+}
+
+func applyMetricConfig(ctx *cli.Context, cfg *XDCConfig) {
+	if ctx.IsSet(utils.MetricsEnabledFlag.Name) {
+		cfg.Metrics.Enabled = ctx.Bool(utils.MetricsEnabledFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsEnabledExpensiveFlag.Name) {
+		log.Warn("Expensive metrics are collected by default, please remove this flag", "flag", utils.MetricsEnabledExpensiveFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsHTTPFlag.Name) {
+		cfg.Metrics.HTTP = ctx.String(utils.MetricsHTTPFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsPortFlag.Name) {
+		cfg.Metrics.Port = ctx.Int(utils.MetricsPortFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsEnableInfluxDBFlag.Name) {
+		cfg.Metrics.EnableInfluxDB = ctx.Bool(utils.MetricsEnableInfluxDBFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsInfluxDBEndpointFlag.Name) {
+		cfg.Metrics.InfluxDBEndpoint = ctx.String(utils.MetricsInfluxDBEndpointFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsInfluxDBDatabaseFlag.Name) {
+		cfg.Metrics.InfluxDBDatabase = ctx.String(utils.MetricsInfluxDBDatabaseFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsInfluxDBUsernameFlag.Name) {
+		cfg.Metrics.InfluxDBUsername = ctx.String(utils.MetricsInfluxDBUsernameFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsInfluxDBPasswordFlag.Name) {
+		cfg.Metrics.InfluxDBPassword = ctx.String(utils.MetricsInfluxDBPasswordFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsInfluxDBTagsFlag.Name) {
+		cfg.Metrics.InfluxDBTags = ctx.String(utils.MetricsInfluxDBTagsFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsEnableInfluxDBV2Flag.Name) {
+		cfg.Metrics.EnableInfluxDBV2 = ctx.Bool(utils.MetricsEnableInfluxDBV2Flag.Name)
+	}
+	if ctx.IsSet(utils.MetricsInfluxDBTokenFlag.Name) {
+		cfg.Metrics.InfluxDBToken = ctx.String(utils.MetricsInfluxDBTokenFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsInfluxDBBucketFlag.Name) {
+		cfg.Metrics.InfluxDBBucket = ctx.String(utils.MetricsInfluxDBBucketFlag.Name)
+	}
+	if ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) {
+		cfg.Metrics.InfluxDBOrganization = ctx.String(utils.MetricsInfluxDBOrganizationFlag.Name)
+	}
+	// Sanity-check the commandline flags. It is fine if some unused fields is part
+	// of the toml-config, but we expect the commandline to only contain relevant
+	// arguments, otherwise it indicates an error.
+	var (
+		enableExport   = ctx.Bool(utils.MetricsEnableInfluxDBFlag.Name)
+		enableExportV2 = ctx.Bool(utils.MetricsEnableInfluxDBV2Flag.Name)
+	)
+	if enableExport || enableExportV2 {
+		v1FlagIsSet := ctx.IsSet(utils.MetricsInfluxDBUsernameFlag.Name) ||
+			ctx.IsSet(utils.MetricsInfluxDBPasswordFlag.Name)
+
+		v2FlagIsSet := ctx.IsSet(utils.MetricsInfluxDBTokenFlag.Name) ||
+			ctx.IsSet(utils.MetricsInfluxDBOrganizationFlag.Name) ||
+			ctx.IsSet(utils.MetricsInfluxDBBucketFlag.Name)
+
+		if enableExport && v2FlagIsSet {
+			utils.Fatalf("Flags --influxdb-metrics.organization, --influxdb-metrics.token, --influxdb-metrics.bucket are only available for influxdb-v2")
+		} else if enableExportV2 && v1FlagIsSet {
+			utils.Fatalf("Flags --influxdb-metrics.username, --influxdb-metrics.password are only available for influxdb-v1")
+		}
+	}
 }

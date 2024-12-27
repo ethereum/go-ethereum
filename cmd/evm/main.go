@@ -22,93 +22,126 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/XinFinOrg/XDPoSChain/internal/flags"
+	"github.com/urfave/cli/v2"
 )
 
-var gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
+var (
+	gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
+
+	app = flags.NewApp(gitCommit, "the evm command line interface")
+)
 
 var (
-	app = utils.NewApp(gitCommit, "the evm command line interface")
-
-	DebugFlag = cli.BoolFlag{
-		Name:  "debug",
-		Usage: "output full trace logs",
+	DebugFlag = &cli.BoolFlag{
+		Name:     "debug",
+		Usage:    "output full trace logs",
+		Category: flags.VMCategory,
 	}
-	MemProfileFlag = cli.StringFlag{
-		Name:  "memprofile",
-		Usage: "creates a memory profile at the given path",
+	MemProfileFlag = &cli.StringFlag{
+		Name:     "memprofile",
+		Usage:    "creates a memory profile at the given path",
+		Category: flags.VMCategory,
 	}
-	CPUProfileFlag = cli.StringFlag{
-		Name:  "cpuprofile",
-		Usage: "creates a CPU profile at the given path",
+	CPUProfileFlag = &cli.StringFlag{
+		Name:     "cpuprofile",
+		Usage:    "creates a CPU profile at the given path",
+		Category: flags.VMCategory,
 	}
-	StatDumpFlag = cli.BoolFlag{
-		Name:  "statdump",
-		Usage: "displays stack and heap memory information",
+	StatDumpFlag = &cli.BoolFlag{
+		Name:     "statdump",
+		Usage:    "displays stack and heap memory information",
+		Category: flags.VMCategory,
 	}
-	CodeFlag = cli.StringFlag{
-		Name:  "code",
-		Usage: "EVM code",
+	CodeFlag = &cli.StringFlag{
+		Name:     "code",
+		Usage:    "EVM code",
+		Category: flags.VMCategory,
 	}
-	CodeFileFlag = cli.StringFlag{
-		Name:  "codefile",
-		Usage: "File containing EVM code. If '-' is specified, code is read from stdin ",
+	CodeFileFlag = &cli.StringFlag{
+		Name:     "codefile",
+		Usage:    "File containing EVM code. If '-' is specified, code is read from stdin ",
+		Category: flags.VMCategory,
 	}
-	GasFlag = cli.Uint64Flag{
-		Name:  "gas",
-		Usage: "gas limit for the evm",
-		Value: 10000000000,
+	GasFlag = &cli.Uint64Flag{
+		Name:     "gas",
+		Usage:    "gas limit for the evm",
+		Value:    10000000000,
+		Category: flags.VMCategory,
 	}
-	PriceFlag = utils.BigFlag{
-		Name:  "price",
-		Usage: "price set for the evm",
-		Value: new(big.Int),
+	PriceFlag = &flags.BigFlag{
+		Name:     "price",
+		Usage:    "price set for the evm",
+		Value:    new(big.Int),
+		Category: flags.VMCategory,
 	}
-	ValueFlag = utils.BigFlag{
-		Name:  "value",
-		Usage: "value set for the evm",
-		Value: new(big.Int),
+	ValueFlag = &flags.BigFlag{
+		Name:     "value",
+		Usage:    "value set for the evm",
+		Value:    new(big.Int),
+		Category: flags.VMCategory,
 	}
-	DumpFlag = cli.BoolFlag{
-		Name:  "dump",
-		Usage: "dumps the state after the run",
+	DumpFlag = &cli.BoolFlag{
+		Name:     "dump",
+		Usage:    "dumps the state after the run",
+		Category: flags.VMCategory,
 	}
-	InputFlag = cli.StringFlag{
-		Name:  "input",
-		Usage: "input for the EVM",
+	InputFlag = &cli.StringFlag{
+		Name:     "input",
+		Usage:    "input for the EVM",
+		Category: flags.VMCategory,
 	}
-	VerbosityFlag = cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "sets the verbosity level",
+	VerbosityFlag = &cli.IntFlag{
+		Name:     "verbosity",
+		Usage:    "sets the verbosity level",
+		Category: flags.VMCategory,
 	}
-	CreateFlag = cli.BoolFlag{
-		Name:  "create",
-		Usage: "indicates the action should be create rather than call",
+	CreateFlag = &cli.BoolFlag{
+		Name:     "create",
+		Usage:    "indicates the action should be create rather than call",
+		Category: flags.VMCategory,
 	}
-	GenesisFlag = cli.StringFlag{
-		Name:  "prestate",
-		Usage: "JSON file with prestate (genesis) config",
+	GenesisFlag = &cli.StringFlag{
+		Name:     "prestate",
+		Usage:    "JSON file with prestate (genesis) config",
+		Category: flags.VMCategory,
 	}
-	MachineFlag = cli.BoolFlag{
-		Name:  "json",
-		Usage: "output trace logs in machine readable format (json)",
+	MachineFlag = &cli.BoolFlag{
+		Name:     "json",
+		Usage:    "output trace logs in machine readable format (json)",
+		Category: flags.VMCategory,
 	}
-	SenderFlag = cli.StringFlag{
-		Name:  "sender",
-		Usage: "The transaction origin",
+	SenderFlag = &cli.StringFlag{
+		Name:     "sender",
+		Usage:    "The transaction origin",
+		Category: flags.VMCategory,
 	}
-	ReceiverFlag = cli.StringFlag{
-		Name:  "receiver",
-		Usage: "The transaction receiver (execution context)",
+	ReceiverFlag = &cli.StringFlag{
+		Name:     "receiver",
+		Usage:    "The transaction receiver (execution context)",
+		Category: flags.VMCategory,
 	}
-	DisableMemoryFlag = cli.BoolFlag{
-		Name:  "nomemory",
-		Usage: "disable memory output",
+	DisableMemoryFlag = &cli.BoolFlag{
+		Name:     "nomemory",
+		Value:    true,
+		Usage:    "disable memory output",
+		Category: flags.VMCategory,
 	}
-	DisableStackFlag = cli.BoolFlag{
-		Name:  "nostack",
-		Usage: "disable stack output",
+	DisableStackFlag = &cli.BoolFlag{
+		Name:     "nostack",
+		Usage:    "disable stack output",
+		Category: flags.VMCategory,
+	}
+	DisableStorageFlag = &cli.BoolFlag{
+		Name:     "nostorage",
+		Usage:    "disable storage output",
+		Category: flags.VMCategory,
+	}
+	DisableReturnDataFlag = &cli.BoolFlag{
+		Name:     "noreturndata",
+		Value:    true,
+		Usage:    "enable return data output",
+		Category: flags.VMCategory,
 	}
 )
 
@@ -134,7 +167,7 @@ func init() {
 		DisableMemoryFlag,
 		DisableStackFlag,
 	}
-	app.Commands = []cli.Command{
+	app.Commands = []*cli.Command{
 		compileCommand,
 		disasmCommand,
 		runCommand,

@@ -608,8 +608,6 @@ Delta is a helper function that is used in the range proof
 */
 
 func Delta(y []*big.Int, z *big.Int) *big.Int {
-	result := big.NewInt(0)
-
 	// (z-z^2)<1^n, y^n>
 	z2 := new(big.Int).Mod(new(big.Int).Mul(z, z), EC.N)
 	t1 := new(big.Int).Mod(new(big.Int).Sub(z, z2), EC.N)
@@ -620,21 +618,14 @@ func Delta(y []*big.Int, z *big.Int) *big.Int {
 	po2sum := new(big.Int).Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(EC.V)), EC.N), big.NewInt(1))
 	t3 := new(big.Int).Mod(new(big.Int).Mul(z3, po2sum), EC.N)
 
-	result = new(big.Int).Mod(new(big.Int).Sub(t2, t3), EC.N)
-
-	return result
+	return new(big.Int).Mod(new(big.Int).Sub(t2, t3), EC.N)
 }
 
 // Calculates (aL - z*1^n) + sL*x
 func CalculateL(aL, sL []*big.Int, z, x *big.Int) []*big.Int {
-	result := make([]*big.Int, len(aL))
-
 	tmp1 := VectorAddScalar(aL, new(big.Int).Neg(z))
 	tmp2 := ScalarVectorMul(sL, x)
-
-	result = VectorAdd(tmp1, tmp2)
-
-	return result
+	return VectorAdd(tmp1, tmp2)
 }
 
 func CalculateR(aR, sR, y, po2 []*big.Int, z, x *big.Int) []*big.Int {
@@ -642,29 +633,20 @@ func CalculateR(aR, sR, y, po2 []*big.Int, z, x *big.Int) []*big.Int {
 		log.Info("CalculateR: Arrays not of the same length")
 	}
 
-	result := make([]*big.Int, len(aR))
-
 	z2 := new(big.Int).Exp(z, big.NewInt(2), EC.N)
 	tmp11 := VectorAddScalar(aR, z)
 	tmp12 := ScalarVectorMul(sR, x)
 	tmp1 := VectorHadamard(y, VectorAdd(tmp11, tmp12))
 	tmp2 := ScalarVectorMul(po2, z2)
 
-	result = VectorAdd(tmp1, tmp2)
-
-	return result
+	return VectorAdd(tmp1, tmp2)
 }
 
 // Calculates (aL - z*1^n) + sL*x
 func CalculateLMRP(aL, sL []*big.Int, z, x *big.Int) []*big.Int {
-	result := make([]*big.Int, len(aL))
-
 	tmp1 := VectorAddScalar(aL, new(big.Int).Neg(z))
 	tmp2 := ScalarVectorMul(sL, x)
-
-	result = VectorAdd(tmp1, tmp2)
-
-	return result
+	return VectorAdd(tmp1, tmp2)
 }
 
 func CalculateRMRP(aR, sR, y, zTimesTwo []*big.Int, z, x *big.Int) []*big.Int {
@@ -672,15 +654,11 @@ func CalculateRMRP(aR, sR, y, zTimesTwo []*big.Int, z, x *big.Int) []*big.Int {
 		log.Info("CalculateRMRP: Arrays not of the same length")
 	}
 
-	result := make([]*big.Int, len(aR))
-
 	tmp11 := VectorAddScalar(aR, z)
 	tmp12 := ScalarVectorMul(sR, x)
 	tmp1 := VectorHadamard(y, VectorAdd(tmp11, tmp12))
 
-	result = VectorAdd(tmp1, zTimesTwo)
-
-	return result
+	return VectorAdd(tmp1, zTimesTwo)
 }
 
 /*
@@ -689,8 +667,6 @@ DeltaMRP is a helper function that is used in the multi range proof
 */
 
 func DeltaMRP(y []*big.Int, z *big.Int, m int) *big.Int {
-	result := big.NewInt(0)
-
 	// (z-z^2)<1^n, y^n>
 	z2 := new(big.Int).Mod(new(big.Int).Mul(z, z), EC.N)
 	t1 := new(big.Int).Mod(new(big.Int).Sub(z, z2), EC.N)
@@ -709,9 +685,7 @@ func DeltaMRP(y []*big.Int, z *big.Int, m int) *big.Int {
 		t3 = new(big.Int).Mod(new(big.Int).Add(t3, tmp1), EC.N)
 	}
 
-	result = new(big.Int).Mod(new(big.Int).Sub(t2, t3), EC.N)
-
-	return result
+	return new(big.Int).Mod(new(big.Int).Sub(t2, t3), EC.N)
 }
 
 type MultiRangeProof struct {
@@ -985,7 +959,7 @@ func MRPProve(values []*big.Int) (MultiRangeProof, error) {
 	}
 
 	if !acceptedInputNumber {
-		return MultiRangeProof{}, errors.New("Value number is not supported - just 1, 2, 4, 8")
+		return MultiRangeProof{}, errors.New("value number is not supported - just 1, 2, 4, 8")
 	}
 
 	EC = genECPrimeGroupKey(m * bitsPerValue)
@@ -1002,15 +976,15 @@ func MRPProve(values []*big.Int) (MultiRangeProof, error) {
 	for j := range values {
 		v := values[j]
 		if v.Cmp(big.NewInt(0)) == -1 {
-			return MultiRangeProof{}, errors.New("Value is below range! Not proving")
+			return MultiRangeProof{}, errors.New("value is below range! Not proving")
 		}
 
 		if v.Cmp(MAX_64_BITS) == 1 {
-			return MultiRangeProof{}, errors.New("Value is above range! Not proving")
+			return MultiRangeProof{}, errors.New("value is above range! Not proving")
 		}
 
 		if v.Cmp(new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(bitsPerValue)), EC.N)) == 1 {
-			return MultiRangeProof{}, errors.New("Value is above range! Not proving")
+			return MultiRangeProof{}, errors.New("value is above range! Not proving")
 		}
 
 		gamma, err := rand.Int(rand.Reader, EC.N)

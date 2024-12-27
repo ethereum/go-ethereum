@@ -14,40 +14,31 @@ func TestCounterClear(t *testing.T) {
 	c := NewCounter()
 	c.Inc(1)
 	c.Clear()
-	if count := c.Count(); 0 != count {
+	if count := c.Snapshot().Count(); count != 0 {
 		t.Errorf("c.Count(): 0 != %v\n", count)
 	}
 }
 
-func TestCounterDec1(t *testing.T) {
+func TestCounter(t *testing.T) {
 	c := NewCounter()
+	if count := c.Snapshot().Count(); count != 0 {
+		t.Errorf("wrong count: %v", count)
+	}
 	c.Dec(1)
-	if count := c.Count(); -1 != count {
-		t.Errorf("c.Count(): -1 != %v\n", count)
+	if count := c.Snapshot().Count(); count != -1 {
+		t.Errorf("wrong count: %v", count)
 	}
-}
-
-func TestCounterDec2(t *testing.T) {
-	c := NewCounter()
 	c.Dec(2)
-	if count := c.Count(); -2 != count {
-		t.Errorf("c.Count(): -2 != %v\n", count)
+	if count := c.Snapshot().Count(); count != -3 {
+		t.Errorf("wrong count: %v", count)
 	}
-}
-
-func TestCounterInc1(t *testing.T) {
-	c := NewCounter()
 	c.Inc(1)
-	if count := c.Count(); 1 != count {
-		t.Errorf("c.Count(): 1 != %v\n", count)
+	if count := c.Snapshot().Count(); count != -2 {
+		t.Errorf("wrong count: %v", count)
 	}
-}
-
-func TestCounterInc2(t *testing.T) {
-	c := NewCounter()
 	c.Inc(2)
-	if count := c.Count(); 2 != count {
-		t.Errorf("c.Count(): 2 != %v\n", count)
+	if count := c.Snapshot().Count(); count != 0 {
+		t.Errorf("wrong count: %v", count)
 	}
 }
 
@@ -56,22 +47,15 @@ func TestCounterSnapshot(t *testing.T) {
 	c.Inc(1)
 	snapshot := c.Snapshot()
 	c.Inc(1)
-	if count := snapshot.Count(); 1 != count {
+	if count := snapshot.Count(); count != 1 {
 		t.Errorf("c.Count(): 1 != %v\n", count)
-	}
-}
-
-func TestCounterZero(t *testing.T) {
-	c := NewCounter()
-	if count := c.Count(); 0 != count {
-		t.Errorf("c.Count(): 0 != %v\n", count)
 	}
 }
 
 func TestGetOrRegisterCounter(t *testing.T) {
 	r := NewRegistry()
 	NewRegisteredCounter("foo", r).Inc(47)
-	if c := GetOrRegisterCounter("foo", r); 47 != c.Count() {
+	if c := GetOrRegisterCounter("foo", r).Snapshot(); c.Count() != 47 {
 		t.Fatal(c)
 	}
 }

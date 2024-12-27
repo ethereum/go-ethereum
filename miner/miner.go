@@ -21,14 +21,14 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
-
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
@@ -41,11 +41,11 @@ import (
 type Backend interface {
 	AccountManager() *accounts.Manager
 	BlockChain() *core.BlockChain
-	TxPool() *core.TxPool
+	TxPool() *txpool.TxPool
 	ChainDb() ethdb.Database
 	GetXDCX() *XDCx.XDCX
-	OrderPool() *core.OrderPool
-	LendingPool() *core.LendingPool
+	OrderPool() *txpool.OrderPool
+	LendingPool() *txpool.LendingPool
 	GetXDCXLending() *XDCxlending.Lending
 }
 
@@ -82,73 +82,73 @@ func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine con
 // It's entered once and as soon as `Done` or `Failed` has been broadcasted the events are unregistered and
 // the loop is exited. This to prevent a major security vuln where external parties can DOS you with blocks
 // and halt your mining operation for as long as the DOS continues.
-func (self *Miner) update() {
-	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
+func (m *Miner) update() {
+	events := m.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
 	for ev := range events.Chan() {
 		switch ev.Data.(type) {
 		case downloader.StartEvent:
-			atomic.StoreInt32(&self.canStart, 0)
-			if self.Mining() {
-				self.Stop()
-				atomic.StoreInt32(&self.shouldStart, 1)
+			atomic.StoreInt32(&m.canStart, 0)
+			if m.Mining() {
+				m.Stop()
+				atomic.StoreInt32(&m.shouldStart, 1)
 				log.Info("Mining aborted due to sync")
 			}
 		case downloader.DoneEvent, downloader.FailedEvent:
-			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
+			shouldStart := atomic.LoadInt32(&m.shouldStart) == 1
 
-			atomic.StoreInt32(&self.canStart, 1)
-			atomic.StoreInt32(&self.shouldStart, 0)
+			atomic.StoreInt32(&m.canStart, 1)
+			atomic.StoreInt32(&m.shouldStart, 0)
 			if shouldStart {
-				self.Start(self.coinbase)
+				m.Start(m.coinbase)
 			}
 		}
 	}
 }
 
-func (self *Miner) Start(coinbase common.Address) {
-	atomic.StoreInt32(&self.shouldStart, 1)
-	self.SetEtherbase(coinbase)
+func (m *Miner) Start(coinbase common.Address) {
+	atomic.StoreInt32(&m.shouldStart, 1)
+	m.SetEtherbase(coinbase)
 
-	if atomic.LoadInt32(&self.canStart) == 0 {
+	if atomic.LoadInt32(&m.canStart) == 0 {
 		log.Info("Network syncing, will start miner afterwards")
 		return
 	}
-	atomic.StoreInt32(&self.mining, 1)
+	atomic.StoreInt32(&m.mining, 1)
 
 	log.Info("Starting mining operation")
-	self.worker.start()
-	self.worker.commitNewWork()
+	m.worker.start()
+	m.worker.commitNewWork()
 }
 
-func (self *Miner) Stop() {
-	self.worker.stop()
-	atomic.StoreInt32(&self.mining, 0)
-	atomic.StoreInt32(&self.shouldStart, 0)
+func (m *Miner) Stop() {
+	m.worker.stop()
+	atomic.StoreInt32(&m.mining, 0)
+	atomic.StoreInt32(&m.shouldStart, 0)
 }
 
-func (self *Miner) Register(agent Agent) {
-	if self.Mining() {
+func (m *Miner) Register(agent Agent) {
+	if m.Mining() {
 		agent.Start()
 	}
-	self.worker.register(agent)
+	m.worker.register(agent)
 }
 
-func (self *Miner) Unregister(agent Agent) {
-	self.worker.unregister(agent)
+func (m *Miner) Unregister(agent Agent) {
+	m.worker.unregister(agent)
 }
 
-func (self *Miner) Mining() bool {
-	return atomic.LoadInt32(&self.mining) > 0
+func (m *Miner) Mining() bool {
+	return atomic.LoadInt32(&m.mining) > 0
 }
 
-func (self *Miner) HashRate() (tot int64) {
-	if pow, ok := self.engine.(consensus.PoW); ok {
+func (m *Miner) HashRate() (tot int64) {
+	if pow, ok := m.engine.(consensus.PoW); ok {
 		tot += int64(pow.Hashrate())
 	}
 	// do we care this might race? is it worth we're rewriting some
 	// aspects of the worker/locking up agents so we can get an accurate
 	// hashrate?
-	for agent := range self.worker.agents {
+	for agent := range m.worker.agents {
 		if _, ok := agent.(*CpuAgent); !ok {
 			tot += agent.GetHashRate()
 		}
@@ -156,17 +156,17 @@ func (self *Miner) HashRate() (tot int64) {
 	return
 }
 
-func (self *Miner) SetExtra(extra []byte) error {
+func (m *Miner) SetExtra(extra []byte) error {
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
-		return fmt.Errorf("Extra exceeds max length. %d > %v", len(extra), params.MaximumExtraDataSize)
+		return fmt.Errorf("extra exceeds max length: %d > %v", len(extra), params.MaximumExtraDataSize)
 	}
-	self.worker.setExtra(extra)
+	m.worker.setExtra(extra)
 	return nil
 }
 
 // Pending returns the currently pending block and associated state.
-func (self *Miner) Pending() (*types.Block, *state.StateDB) {
-	return self.worker.pending()
+func (m *Miner) Pending() (*types.Block, *state.StateDB) {
+	return m.worker.pending()
 }
 
 // PendingBlock returns the currently pending block.
@@ -174,22 +174,22 @@ func (self *Miner) Pending() (*types.Block, *state.StateDB) {
 // Note, to access both the pending block and the pending state
 // simultaneously, please use Pending(), as the pending state can
 // change between multiple method calls
-func (self *Miner) PendingBlock() *types.Block {
-	return self.worker.pendingBlock()
+func (m *Miner) PendingBlock() *types.Block {
+	return m.worker.pendingBlock()
 }
 
 // PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
-func (miner *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	return miner.worker.pendingBlockAndReceipts()
+func (m *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return m.worker.pendingBlockAndReceipts()
 }
 
-func (self *Miner) SetEtherbase(addr common.Address) {
-	self.coinbase = addr
-	self.worker.setEtherbase(addr)
+func (m *Miner) SetEtherbase(addr common.Address) {
+	m.coinbase = addr
+	m.worker.setEtherbase(addr)
 }
 
 // SubscribePendingLogs starts delivering logs from pending transactions
 // to the given channel.
-func (self *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
-	return self.worker.pendingLogsFeed.Subscribe(ch)
+func (m *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
+	return m.worker.pendingLogsFeed.Subscribe(ch)
 }

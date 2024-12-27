@@ -24,7 +24,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 type outputInspect struct {
@@ -33,7 +33,14 @@ type outputInspect struct {
 	PrivateKey string
 }
 
-var commandInspect = cli.Command{
+var (
+	privateFlag = &cli.BoolFlag{
+		Name:  "private",
+		Usage: "include the private key in the output",
+	}
+)
+
+var commandInspect = &cli.Command{
 	Name:      "inspect",
 	Usage:     "inspect a keyfile",
 	ArgsUsage: "<keyfile>",
@@ -45,10 +52,7 @@ make sure to use this feature with great caution!`,
 	Flags: []cli.Flag{
 		passphraseFlag,
 		jsonFlag,
-		cli.BoolFlag{
-			Name:  "private",
-			Usage: "include the private key in the output",
-		},
+		privateFlag,
 	},
 	Action: func(ctx *cli.Context) error {
 		keyfilepath := ctx.Args().First()

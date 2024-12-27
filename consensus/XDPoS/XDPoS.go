@@ -22,20 +22,19 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/engines/engine_v1"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/engines/engine_v2"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
-	"github.com/XinFinOrg/XDPoSChain/event"
-
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -60,7 +59,7 @@ type XDPoS struct {
 	db     ethdb.Database      // Database to store and retrieve snapshot checkpoints
 
 	// Transaction cache, only make sense for adaptor level
-	signingTxsCache *lru.Cache
+	signingTxsCache *lru.Cache[common.Hash, []*types.Transaction]
 
 	// Share Channel
 	MinePeriodCh chan int // Miner wait Period Channel
@@ -109,17 +108,12 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database) *XDPoS {
 	minePeriodCh := make(chan int)
 	newRoundCh := make(chan types.Round, newRoundChanSize)
 
-	// Allocate the snapshot caches and create the engine
-	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)
-
 	return &XDPoS{
-		config: config,
-		db:     db,
-
-		MinePeriodCh: minePeriodCh,
-		NewRoundCh:   newRoundCh,
-
-		signingTxsCache: signingTxsCache,
+		config:          config,
+		db:              db,
+		MinePeriodCh:    minePeriodCh,
+		NewRoundCh:      newRoundCh,
+		signingTxsCache: lru.NewCache[common.Hash, []*types.Transaction](utils.BlockSignersCacheLimit),
 		EngineV1:        engine_v1.New(chainConfig, db),
 		EngineV2:        engine_v2.New(chainConfig, db, minePeriodCh, newRoundCh),
 	}
@@ -138,22 +132,16 @@ func NewFaker(db ethdb.Database, chainConfig *params.ChainConfig) *XDPoS {
 	minePeriodCh := make(chan int)
 	newRoundCh := make(chan types.Round, newRoundChanSize)
 
-	// Allocate the snapshot caches and create the engine
-	signingTxsCache, _ := lru.New(utils.BlockSignersCacheLimit)
-
 	fakeEngine = &XDPoS{
-		config: conf,
-		db:     db,
-
-		MinePeriodCh: minePeriodCh,
-		NewRoundCh:   newRoundCh,
-
+		config:            conf,
+		db:                db,
+		MinePeriodCh:      minePeriodCh,
+		NewRoundCh:        newRoundCh,
 		GetXDCXService:    func() utils.TradingService { return nil },
 		GetLendingService: func() utils.LendingService { return nil },
-
-		signingTxsCache: signingTxsCache,
-		EngineV1:        engine_v1.NewFaker(db, chainConfig),
-		EngineV2:        engine_v2.New(chainConfig, db, minePeriodCh, newRoundCh),
+		signingTxsCache:   lru.NewCache[common.Hash, []*types.Transaction](utils.BlockSignersCacheLimit),
+		EngineV1:          engine_v1.NewFaker(db, chainConfig),
+		EngineV2:          engine_v2.New(chainConfig, db, minePeriodCh, newRoundCh),
 	}
 	return fakeEngine
 }
@@ -446,7 +434,7 @@ func (x *XDPoS) CalculateMissingRounds(chain consensus.ChainReader, header *type
 	case params.ConsensusEngineVersion2:
 		return x.EngineV2.CalculateMissingRounds(chain, header)
 	default: // Default "v1"
-		return nil, errors.New("Not supported in the v1 consensus")
+		return nil, errors.New("not supported in the v1 consensus")
 	}
 }
 
@@ -554,7 +542,7 @@ func (x *XDPoS) CacheSigningTxs(hash common.Hash, txs []*types.Transaction) []*t
 	return signTxs
 }
 
-func (x *XDPoS) GetCachedSigningTxs(hash common.Hash) (interface{}, bool) {
+func (x *XDPoS) GetCachedSigningTxs(hash common.Hash) ([]*types.Transaction, bool) {
 	return x.signingTxsCache.Get(hash)
 }
 

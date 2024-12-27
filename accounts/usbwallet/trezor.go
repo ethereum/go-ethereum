@@ -32,6 +32,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/golang/protobuf/proto"
 )
@@ -222,7 +223,7 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 	} else {
 		// Trezor backend does not support typed transactions yet.
 		signer = types.NewEIP155Signer(chainID)
-		signature[64] = signature[64] - byte(chainID.Uint64()*2+35)
+		signature[crypto.RecoveryIDOffset] = signature[crypto.RecoveryIDOffset] - byte(chainID.Uint64()*2+35)
 	}
 
 	// Inject the final signature into the transaction and sanity check the sender

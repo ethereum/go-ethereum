@@ -7,6 +7,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/common/prque"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
@@ -79,3 +80,5 @@ type EpochNumInfo struct {
 	EpochFirstBlockNumber *big.Int    `json:"firstBlock"`
 	EpochLastBlockNumber  *big.Int    `json:"lastBlock"`
 }
+
+type SigLRU = lru.Cache[common.Hash, common.Address]

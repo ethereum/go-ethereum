@@ -17,9 +17,11 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -60,14 +62,16 @@ type Node struct {
 	ipcListener net.Listener // IPC RPC listener socket to serve API requests
 	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
 
-	httpEndpoint  string       // HTTP endpoint (interface + port) to listen at (empty = HTTP disabled)
-	httpWhitelist []string     // HTTP RPC modules to allow through this endpoint
-	httpListener  net.Listener // HTTP RPC listener socket to server API requests
-	httpHandler   *rpc.Server  // HTTP RPC request handler to process the API requests
+	httpEndpoint     string       // HTTP endpoint (interface + port) to listen at (empty = HTTP disabled)
+	httpWhitelist    []string     // HTTP RPC modules to allow through this endpoint
+	httpListenerAddr net.Addr     // Address of HTTP RPC listener socket serving API requests
+	httpServer       *http.Server // HTTP RPC HTTP server
+	httpHandler      *rpc.Server  // HTTP RPC request handler to process the API requests
 
-	wsEndpoint string       // Websocket endpoint (interface + port) to listen at (empty = websocket disabled)
-	wsListener net.Listener // Websocket RPC listener socket to server API requests
-	wsHandler  *rpc.Server  // Websocket RPC request handler to process the API requests
+	wsEndpoint     string       // WebSocket endpoint (interface + port) to listen at (empty = WebSocket disabled)
+	wsListenerAddr net.Addr     // Address of WebSocket RPC listener socket serving API requests
+	wsHTTPServer   *http.Server // WebSocket RPC HTTP server
+	wsHandler      *rpc.Server  // WebSocket RPC request handler to process the API requests
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -127,6 +131,29 @@ func New(conf *Config) (*Node, error) {
 	}, nil
 }
 
+// Close stops the Node and releases resources acquired in
+// Node constructor New.
+func (n *Node) Close() error {
+	var errs []error
+
+	// Terminate all subsystems and collect any errors
+	if err := n.Stop(); err != nil && err != ErrNodeStopped {
+		errs = append(errs, err)
+	}
+	if err := n.accman.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	// Report any errors that might have occurred
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		return fmt.Errorf("%v", errs)
+	}
+}
+
 // Register injects a new service into the node's stack. The service created by
 // the passed constructor must be unique in its type with regard to sibling ones.
 func (n *Node) Register(constructor ServiceConstructor) error {
@@ -140,7 +167,7 @@ func (n *Node) Register(constructor ServiceConstructor) error {
 	return nil
 }
 
-// Start create a live P2P node and starts running it.
+// Start creates a live P2P node and starts running it.
 func (n *Node) Start() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -203,7 +230,7 @@ func (n *Node) Start() error {
 		return convertFileLockError(err)
 	}
 	// Start each of the services
-	started := []reflect.Type{}
+	var started []reflect.Type
 	for kind, service := range services {
 		// Start the next service, stopping all previous upon failure
 		if err := service.Start(running); err != nil {
@@ -217,7 +244,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		started = append(started, kind)
 	}
-	// Lastly start the configured RPC interfaces
+	// Lastly, start the configured RPC interfaces
 	if err := n.startRPC(services); err != nil {
 		for _, service := range services {
 			service.Stop()
@@ -252,7 +279,7 @@ func (n *Node) openDataDir() error {
 	return nil
 }
 
-// startRPC is a helper method to start all the various RPC endpoint during node
+// startRPC is a helper method to start all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC(services map[reflect.Type]Service) error {
@@ -269,17 +296,21 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts); err != nil {
+	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors, n.config.HTTPVirtualHosts, n.config.HTTPTimeouts, n.config.WSOrigins); err != nil {
 		n.stopIPC()
 		n.stopInProc()
 		return err
 	}
-	if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
-		n.stopHTTP()
-		n.stopIPC()
-		n.stopInProc()
-		return err
+	// if endpoints are not the same, start separate servers
+	if n.httpEndpoint != n.wsEndpoint {
+		if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
+			n.stopHTTP()
+			n.stopIPC()
+			n.stopInProc()
+			return err
+		}
 	}
+
 	// All API endpoints started successfully
 	n.rpcAPIs = apis
 	return nil
@@ -293,7 +324,7 @@ func (n *Node) startInProc(apis []rpc.API) error {
 		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
-		n.log.Debug("InProc registered", "service", api.Service, "namespace", api.Namespace)
+		n.log.Debug("InProc registered", "namespace", api.Namespace)
 	}
 	n.inprocHandler = handler
 	return nil
@@ -320,51 +351,16 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 
 // startIPC initializes and starts the IPC RPC endpoint.
 func (n *Node) startIPC(apis []rpc.API) error {
-	// Short circuit if the IPC endpoint isn't being exposed
 	if n.ipcEndpoint == "" {
-		return nil
+		return nil // IPC disabled.
 	}
-	// Register all the APIs exposed by the services
-	handler := rpc.NewServer()
-	for _, api := range apis {
-		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
-			return err
-		}
-		n.log.Debug("IPC registered", "service", api.Service, "namespace", api.Namespace)
-	}
-	// All APIs registered, start the IPC listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = rpc.CreateIPCListener(n.ipcEndpoint); err != nil {
+	listener, handler, err := rpc.StartIPCEndpoint(n.ipcEndpoint, apis)
+	if err != nil {
 		return err
 	}
-	go func() {
-		n.log.Info("IPC endpoint opened", "url", n.ipcEndpoint)
-
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				// Terminate if the listener was closed
-				n.lock.RLock()
-				closed := n.ipcListener == nil
-				n.lock.RUnlock()
-				if closed {
-					return
-				}
-				// Not closed, just some error; report and continue
-				n.log.Error("IPC accept failed", "err", err)
-				continue
-			}
-			log.Trace("Accepted RPC connection", "conn", conn.RemoteAddr())
-			go handler.ServeCodec(rpc.NewCodec(conn), 0)
-		}
-	}()
-	// All listeners booted successfully
 	n.ipcListener = listener
 	n.ipcHandler = handler
-
+	log.Info("IPC endpoint opened", "url", n.ipcEndpoint)
 	return nil
 }
 
@@ -374,7 +370,7 @@ func (n *Node) stopIPC() {
 		n.ipcListener.Close()
 		n.ipcListener = nil
 
-		n.log.Info("IPC endpoint closed", "endpoint", n.ipcEndpoint)
+		n.log.Info("IPC endpoint closed", "url", n.ipcEndpoint)
 	}
 	if n.ipcHandler != nil {
 		n.ipcHandler.Stop()
@@ -383,51 +379,47 @@ func (n *Node) stopIPC() {
 }
 
 // startHTTP initializes and starts the HTTP RPC endpoint.
-func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors []string, vhosts []string) error {
+func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts, wsOrigins []string) error {
 	// Short circuit if the HTTP endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
 	}
-	// Generate the whitelist based on the allowed modules
-	whitelist := make(map[string]bool)
-	for _, module := range modules {
-		whitelist[module] = true
-	}
-	// Register all the APIs exposed by the services
-	handler := rpc.NewServer()
-	for _, api := range apis {
-		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
-			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
-				return err
-			}
-			n.log.Debug("HTTP registered", "service", api.Service, "namespace", api.Namespace)
-		}
-	}
-	// All APIs registered, start the HTTP listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
+	// register apis and create handler stack
+	srv := rpc.NewServer()
+	err := RegisterApisFromWhitelist(apis, modules, srv, false)
+	if err != nil {
 		return err
 	}
-	go rpc.NewHTTPServer(cors, vhosts, handler, n.config.HTTPWriteTimeout).Serve(listener)
-	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%s", endpoint), "cors", strings.Join(cors, ","), "vhosts", strings.Join(vhosts, ","))
+	handler := NewHTTPHandlerStack(srv, cors, vhosts, &timeouts)
+	// wrap handler in WebSocket handler only if WebSocket port is the same as http rpc
+	if n.httpEndpoint == n.wsEndpoint {
+		handler = NewWebsocketUpgradeHandler(handler, srv.WebsocketHandler(wsOrigins))
+	}
+	httpServer, addr, err := StartHTTPEndpoint(endpoint, timeouts, handler)
+	if err != nil {
+		return err
+	}
+	n.log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%v/", addr),
+		"cors", strings.Join(cors, ","),
+		"vhosts", strings.Join(vhosts, ","))
+	if n.httpEndpoint == n.wsEndpoint {
+		n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", addr))
+	}
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
-	n.httpListener = listener
-	n.httpHandler = handler
+	n.httpListenerAddr = addr
+	n.httpServer = httpServer
+	n.httpHandler = srv
 
 	return nil
 }
 
 // stopHTTP terminates the HTTP RPC endpoint.
 func (n *Node) stopHTTP() {
-	if n.httpListener != nil {
-		n.httpListener.Close()
-		n.httpListener = nil
-
-		n.log.Info("HTTP endpoint closed", "url", fmt.Sprintf("http://%s", n.httpEndpoint))
+	if n.httpServer != nil {
+		// Don't bother imposing a timeout here.
+		n.httpServer.Shutdown(context.Background())
+		n.log.Info("HTTP endpoint closed", "url", fmt.Sprintf("http://%v/", n.httpListenerAddr))
 	}
 	if n.httpHandler != nil {
 		n.httpHandler.Stop()
@@ -435,53 +427,39 @@ func (n *Node) stopHTTP() {
 	}
 }
 
-// startWS initializes and starts the websocket RPC endpoint.
+// startWS initializes and starts the WebSocket RPC endpoint.
 func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins []string, exposeAll bool) error {
 	// Short circuit if the WS endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
 	}
-	// Generate the whitelist based on the allowed modules
-	whitelist := make(map[string]bool)
-	for _, module := range modules {
-		whitelist[module] = true
-	}
-	// Register all the APIs exposed by the services
-	handler := rpc.NewServer()
-	for _, api := range apis {
-		if exposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
-			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
-				return err
-			}
-			n.log.Debug("WebSocket registered", "service", api.Service, "namespace", api.Namespace)
-		}
-	}
-	// All APIs registered, start the HTTP listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = net.Listen("tcp", endpoint); err != nil {
+
+	srv := rpc.NewServer()
+	handler := srv.WebsocketHandler(wsOrigins)
+	err := RegisterApisFromWhitelist(apis, modules, srv, exposeAll)
+	if err != nil {
 		return err
 	}
-	go rpc.NewWSServer(wsOrigins, handler).Serve(listener)
-	n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", listener.Addr()))
-
+	httpServer, addr, err := startWSEndpoint(endpoint, handler)
+	if err != nil {
+		return err
+	}
+	n.log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%v", addr))
 	// All listeners booted successfully
 	n.wsEndpoint = endpoint
-	n.wsListener = listener
-	n.wsHandler = handler
+	n.wsListenerAddr = addr
+	n.wsHTTPServer = httpServer
+	n.wsHandler = srv
 
 	return nil
 }
 
-// stopWS terminates the websocket RPC endpoint.
+// stopWS terminates the WebSocket RPC endpoint.
 func (n *Node) stopWS() {
-	if n.wsListener != nil {
-		n.wsListener.Close()
-		n.wsListener = nil
-
-		n.log.Info("WebSocket endpoint closed", "url", fmt.Sprintf("ws://%s", n.wsEndpoint))
+	if n.wsHTTPServer != nil {
+		// Don't bother imposing a timeout here.
+		n.wsHTTPServer.Shutdown(context.Background())
+		n.log.Info("WebSocket endpoint closed", "url", fmt.Sprintf("ws://%v", n.wsListenerAddr))
 	}
 	if n.wsHandler != nil {
 		n.wsHandler.Stop()
@@ -645,11 +623,23 @@ func (n *Node) IPCEndpoint() string {
 
 // HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
 func (n *Node) HTTPEndpoint() string {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.httpListenerAddr != nil {
+		return n.httpListenerAddr.String()
+	}
 	return n.httpEndpoint
 }
 
 // WSEndpoint retrieves the current WS endpoint used by the protocol stack.
 func (n *Node) WSEndpoint() string {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.wsListenerAddr != nil {
+		return n.wsListenerAddr.String()
+	}
 	return n.wsEndpoint
 }
 
@@ -691,15 +681,32 @@ func (n *Node) apis() []rpc.API {
 			Version:   "1.0",
 			Service:   debug.Handler,
 		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   NewPublicDebugAPI(n),
-			Public:    true,
-		}, {
 			Namespace: "web3",
 			Version:   "1.0",
 			Service:   NewPublicWeb3API(n),
 			Public:    true,
 		},
 	}
+}
+
+// RegisterApisFromWhitelist checks the given modules' availability, generates a whitelist based on the allowed modules,
+// and then registers all of the APIs exposed by the services.
+func RegisterApisFromWhitelist(apis []rpc.API, modules []string, srv *rpc.Server, exposeAll bool) error {
+	if bad, available := checkModuleAvailability(modules, apis); len(bad) > 0 {
+		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
+	}
+	// Generate the whitelist based on the allowed modules
+	whitelist := make(map[string]bool)
+	for _, module := range modules {
+		whitelist[module] = true
+	}
+	// Register all the APIs exposed by the services
+	for _, api := range apis {
+		if exposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+			if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

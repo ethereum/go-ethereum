@@ -100,24 +100,24 @@ func NewProtocolTester(t *testing.T, id discover.NodeID, n int, run func(*p2p.Pe
 }
 
 // Stop stops the p2p server
-func (self *ProtocolTester) Stop() error {
-	self.Server.Stop()
+func (pt *ProtocolTester) Stop() error {
+	pt.Server.Stop()
 	return nil
 }
 
 // Connect brings up the remote peer node and connects it using the
 // p2p/simulations network connection with the in memory network adapter
-func (self *ProtocolTester) Connect(selfID discover.NodeID, peers ...*adapters.NodeConfig) {
+func (pt *ProtocolTester) Connect(selfID discover.NodeID, peers ...*adapters.NodeConfig) {
 	for _, peer := range peers {
 		log.Trace(fmt.Sprintf("start node %v", peer.ID))
-		if _, err := self.network.NewNodeWithConfig(peer); err != nil {
+		if _, err := pt.network.NewNodeWithConfig(peer); err != nil {
 			panic(fmt.Sprintf("error starting peer %v: %v", peer.ID, err))
 		}
-		if err := self.network.Start(peer.ID); err != nil {
+		if err := pt.network.Start(peer.ID); err != nil {
 			panic(fmt.Sprintf("error starting peer %v: %v", peer.ID, err))
 		}
 		log.Trace(fmt.Sprintf("connect to %v", peer.ID))
-		if err := self.network.Connect(selfID, peer.ID); err != nil {
+		if err := pt.network.Connect(selfID, peer.ID); err != nil {
 			panic(fmt.Sprintf("error connecting to peer %v: %v", peer.ID, err))
 		}
 	}
@@ -130,25 +130,25 @@ type testNode struct {
 	run func(*p2p.Peer, p2p.MsgReadWriter) error
 }
 
-func (t *testNode) Protocols() []p2p.Protocol {
+func (tn *testNode) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{{
 		Length: 100,
-		Run:    t.run,
+		Run:    tn.run,
 	}}
 }
 
-func (t *testNode) APIs() []rpc.API {
+func (tn *testNode) APIs() []rpc.API {
 	return nil
 }
 
-func (t *testNode) Start(server *p2p.Server) error {
+func (tn *testNode) Start(server *p2p.Server) error {
 	return nil
 }
 
-func (t *testNode) SaveData() {
+func (tn *testNode) SaveData() {
 }
 
-func (t *testNode) Stop() error {
+func (tn *testNode) Stop() error {
 	return nil
 }
 
@@ -178,34 +178,34 @@ func newMockNode() *mockNode {
 
 // Run is a protocol run function which just loops waiting for tests to
 // instruct it to either trigger or expect a message from the peer
-func (m *mockNode) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (mn *mockNode) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	for {
 		select {
-		case trig := <-m.trigger:
-			m.err <- p2p.Send(rw, trig.Code, trig.Msg)
-		case exps := <-m.expect:
-			m.err <- expectMsgs(rw, exps)
-		case <-m.stop:
+		case trig := <-mn.trigger:
+			mn.err <- p2p.Send(rw, trig.Code, trig.Msg)
+		case exps := <-mn.expect:
+			mn.err <- expectMsgs(rw, exps)
+		case <-mn.stop:
 			return nil
 		}
 	}
 }
 
-func (m *mockNode) Trigger(trig *Trigger) error {
-	m.trigger <- trig
-	return <-m.err
+func (mn *mockNode) Trigger(trig *Trigger) error {
+	mn.trigger <- trig
+	return <-mn.err
 }
 
-func (m *mockNode) Expect(exp ...Expect) error {
-	m.expect <- exp
-	return <-m.err
+func (mn *mockNode) Expect(exp ...Expect) error {
+	mn.expect <- exp
+	return <-mn.err
 }
 
-func (m *mockNode) SaveData() {
+func (mn *mockNode) SaveData() {
 }
 
-func (m *mockNode) Stop() error {
-	m.stopOnce.Do(func() { close(m.stop) })
+func (mn *mockNode) Stop() error {
+	mn.stopOnce.Do(func() { close(mn.stop) })
 	return nil
 }
 

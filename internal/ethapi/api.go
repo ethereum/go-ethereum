@@ -39,6 +39,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
+	"github.com/XinFinOrg/XDPoSChain/consensus/misc/eip1559"
 	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -80,10 +81,60 @@ func NewPublicEthereumAPI(b Backend) *PublicEthereumAPI {
 	return &PublicEthereumAPI{b}
 }
 
-// GasPrice returns a suggestion for a gas price.
+// GasPrice returns a suggestion for a gas price for legacy transactions.
 func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	price, err := s.b.SuggestPrice(ctx)
-	return (*hexutil.Big)(price), err
+	tipcap, err := s.b.SuggestGasTipCap(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if head := s.b.CurrentHeader(); head.BaseFee != nil {
+		tipcap.Add(tipcap, head.BaseFee)
+	}
+	return (*hexutil.Big)(tipcap), err
+}
+
+// MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic transactions.
+func (s *PublicEthereumAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
+	tipcap, err := s.b.SuggestGasTipCap(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return (*hexutil.Big)(tipcap), err
+}
+
+type feeHistoryResult struct {
+	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
+	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
+	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
+	GasUsedRatio []float64        `json:"gasUsedRatio"`
+}
+
+// FeeHistory returns the fee market history.
+func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount hexutil.Uint, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
+	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, uint64(blockCount), lastBlock, rewardPercentiles)
+	if err != nil {
+		return nil, err
+	}
+	results := &feeHistoryResult{
+		OldestBlock:  (*hexutil.Big)(oldest),
+		GasUsedRatio: gasUsed,
+	}
+	if reward != nil {
+		results.Reward = make([][]*hexutil.Big, len(reward))
+		for i, w := range reward {
+			results.Reward[i] = make([]*hexutil.Big, len(w))
+			for j, v := range w {
+				results.Reward[i][j] = (*hexutil.Big)(v)
+			}
+		}
+	}
+	if baseFee != nil {
+		results.BaseFee = make([]*hexutil.Big, len(baseFee))
+		for i, v := range baseFee {
+			results.BaseFee[i] = (*hexutil.Big)(v)
+		}
+	}
+	return results, nil
 }
 
 // ProtocolVersion returns the current Ethereum protocol version this node supports
@@ -132,12 +183,12 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 		"queued":  make(map[string]map[string]*RPCTransaction),
 	}
 	pending, queue := s.b.TxPoolContent()
-
+	curHeader := s.b.CurrentHeader()
 	// Flatten the pending transactions
 	for account, txs := range pending {
 		dump := make(map[string]*RPCTransaction)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
 		}
 		content["pending"][account.Hex()] = dump
 	}
@@ -145,10 +196,33 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	for account, txs := range queue {
 		dump := make(map[string]*RPCTransaction)
 		for _, tx := range txs {
-			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx)
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
 		}
 		content["queued"][account.Hex()] = dump
 	}
+	return content
+}
+
+// ContentFrom returns the transactions contained within the transaction pool.
+func (s *PublicTxPoolAPI) ContentFrom(addr common.Address) map[string]map[string]*RPCTransaction {
+	content := make(map[string]map[string]*RPCTransaction, 2)
+	pending, queue := s.b.TxPoolContentFrom(addr)
+	curHeader := s.b.CurrentHeader()
+
+	// Build the pending transactions
+	dump := make(map[string]*RPCTransaction, len(pending))
+	for _, tx := range pending {
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+	}
+	content["pending"] = dump
+
+	// Build the queued transactions
+	dump = make(map[string]*RPCTransaction, len(queue))
+	for _, tx := range queue {
+		dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig())
+	}
+	content["queued"] = dump
+
 	return content
 }
 
@@ -366,7 +440,7 @@ func (s *PrivateAccountAPI) signTransaction(ctx context.Context, args *Transacti
 		return nil, err
 	}
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, false); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -410,14 +484,15 @@ func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args Transactio
 	if args.Gas == nil {
 		return nil, errors.New("gas not specified")
 	}
-	if args.GasPrice == nil {
-		return nil, errors.New("gasPrice not specified")
+	if args.GasPrice == nil && (args.MaxFeePerGas == nil || args.MaxPriorityFeePerGas == nil) {
+		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
-	if err := checkTxFee(args.GasPrice.ToInt(), uint64(*args.Gas), s.b.RPCTxFeeCap()); err != nil {
+	tx := args.toTransaction()
+	if err := checkTxFee(tx.GasPrice(), tx.Gas(), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
 	signed, err := s.signTransaction(ctx, &args, passwd)
@@ -467,7 +542,7 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 	if err != nil {
 		return nil, err
 	}
-	signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+	signature[crypto.RecoveryIDOffset] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	return signature, nil
 }
 
@@ -1247,22 +1322,19 @@ func (s *PublicBlockChainAPI) getCandidatesFromSmartContract() ([]utils.Masterno
 	return candidatesWithStakeInfo, nil
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, vmCfg vm.Config, timeout time.Duration, globalGasCap uint64) ([]byte, uint64, bool, error, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	statedb, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if statedb == nil || err != nil {
-		return nil, 0, false, err, nil
+		return nil, err, nil
 	}
 	if header == nil {
-		return nil, 0, false, errors.New("nil header in DoCall"), nil
+		return nil, errors.New("nil header in DoCall"), nil
 	}
 	if err := overrides.Apply(statedb); err != nil {
-		return nil, 0, false, err, nil
+		return nil, err, nil
 	}
-
-	msg := args.ToMessage(b, header.Number, globalGasCap)
-	msg.SetBalanceTokenFeeForCall()
 
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
@@ -1278,24 +1350,32 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 
 	block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
-		return nil, 0, false, err, nil
+		return nil, err, nil
 	}
 	if block == nil {
-		return nil, 0, false, fmt.Errorf("nil block in DoCall: number=%d, hash=%s", header.Number.Uint64(), header.Hash().Hex()), nil
+		return nil, fmt.Errorf("nil block in DoCall: number=%d, hash=%s", header.Number.Uint64(), header.Hash().Hex()), nil
 	}
 	author, err := b.GetEngine().Author(block.Header())
 	if err != nil {
-		return nil, 0, false, err, nil
+		return nil, err, nil
 	}
 	XDCxState, err := b.XDCxService().GetTradingState(block, author)
 	if err != nil {
-		return nil, 0, false, err, nil
+		return nil, err, nil
 	}
 
-	// Get a new instance of the EVM.
-	evm, vmError, err := b.GetEVM(ctx, msg, statedb, XDCxState, header, &vmCfg)
+	// TODO: replace header.BaseFee with blockCtx.BaseFee
+	// reference: https://github.com/ethereum/go-ethereum/pull/29051
+	msg, err := args.ToMessage(b, header.Number, globalGasCap, header.BaseFee)
 	if err != nil {
-		return nil, 0, false, err, nil
+		return nil, err, nil
+	}
+	msg.SetBalanceTokenFeeForCall()
+
+	// Get a new instance of the EVM.
+	evm, vmError, err := b.GetEVM(ctx, msg, statedb, XDCxState, header, &vm.Config{NoBaseFee: true})
+	if err != nil {
+		return nil, err, nil
 	}
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
@@ -1307,19 +1387,19 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
 	owner := common.Address{}
-	res, gas, failed, err, vmErr := core.ApplyMessage(evm, msg, gp, owner)
+	result, err, vmErr := core.ApplyMessage(evm, msg, gp, owner)
 	if err := vmError(); err != nil {
-		return nil, 0, false, err, nil
+		return nil, err, nil
 	}
 
 	// If the timer caused an abort, return an appropriate error message
 	if evm.Cancelled() {
-		return nil, 0, false, fmt.Errorf("execution aborted (timeout = %v)", timeout), nil
+		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout), nil
 	}
 	if err != nil {
-		return res, 0, false, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas()), nil
+		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas()), nil
 	}
-	return res, gas, failed, err, vmErr
+	return result, err, vmErr
 }
 
 func newRevertError(res []byte) *revertError {
@@ -1363,16 +1443,32 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 	if args.To != nil && *args.To == common.MasternodeVotingSMCBinary {
 		timeout = 0
 	}
-	result, _, failed, err, vmErr := DoCall(ctx, s.b, args, *blockNrOrHash, overrides, vm.Config{}, timeout, s.b.RPCGasCap())
+	result, err, vmErr := DoCall(ctx, s.b, args, *blockNrOrHash, overrides, timeout, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
 	// If the result contains a revert reason, try to unpack and return it.
-	if failed && len(result) > 0 {
-		return nil, newRevertError(result)
+	if result.Failed() && len(result.Return()) > 0 {
+		return nil, newRevertError(result.Return())
 	}
+	return result.Return(), vmErr
+}
 
-	return (hexutil.Bytes)(result), vmErr
+type estimateGasError struct {
+	error  string // Concrete error type if it's failed to estimate gas usage
+	vmerr  error  // Additional field, it's non-nil if the given transaction is invalid
+	revert string // Additional field, it's non-empty if the transaction is reverted and reason is provided
+}
+
+func (e estimateGasError) Error() string {
+	errMsg := e.error
+	if e.vmerr != nil {
+		errMsg += fmt.Sprintf(" (%v)", e.vmerr)
+	}
+	if e.revert != "" {
+		errMsg += fmt.Sprintf(" (%s)", e.revert)
+	}
+	return errMsg
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, gasCap uint64) (hexutil.Uint64, error) {
@@ -1416,21 +1512,17 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	cap = hi
 
 	// Create a helper to check if a gas allowance results in an executable transaction
-	executable := func(gas uint64) (bool, []byte, error, error) {
+	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		res, _, failed, err, vmErr := DoCall(ctx, b, args, blockNrOrHash, nil, vm.Config{}, 0, gasCap)
+		result, err, _ := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
 		if err != nil {
 			if errors.Is(err, vm.ErrOutOfGas) || errors.Is(err, core.ErrIntrinsicGas) {
-				return false, nil, nil, nil // Special case, raise gas limit
+				return true, nil, nil // Special case, raise gas limit
 			}
-			return false, nil, err, nil // Bail out
+			return true, nil, err // Bail out
 		}
-		if failed {
-			return false, res, nil, vmErr
-		}
-
-		return true, nil, nil, nil
+		return result.Failed(), result, nil
 	}
 
 	// If the transaction is a plain value transfer, short circuit estimation and
@@ -1439,7 +1531,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// unused access list items). Ever so slightly wasteful, but safer overall.
 	if args.Data == nil || len(*args.Data) == 0 {
 		if args.To != nil && state.GetCodeSize(*args.To) == 0 {
-			ok, _, err, _ := executable(params.TxGas)
+			ok, _, err := executable(params.TxGas)
 			if ok && err == nil {
 				return hexutil.Uint64(params.TxGas), nil
 			}
@@ -1449,7 +1541,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
-		ok, _, err, _ := executable(mid)
+		failed, _, err := executable(mid)
 
 		// If the error is not nil(consensus error), it means the provided message
 		// call or transaction will never be accepted no matter how much gas it is
@@ -1458,7 +1550,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			return 0, err
 		}
 
-		if !ok {
+		if failed {
 			lo = mid
 		} else {
 			hi = mid
@@ -1467,21 +1559,30 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
-		ok, res, err, vmErr := executable(hi)
+		failed, result, err := executable(hi)
 		if err != nil {
 			return 0, err
 		}
 
-		if !ok {
-			if vmErr != vm.ErrOutOfGas {
-				if len(res) > 0 {
-					return 0, newRevertError(res)
+		if failed {
+			if result != nil && result.Err != vm.ErrOutOfGas {
+				var revert string
+				if len(result.Revert()) > 0 {
+					ret, err := abi.UnpackRevert(result.Revert())
+					if err != nil {
+						revert = hexutil.Encode(result.Revert())
+					} else {
+						revert = ret
+					}
 				}
-				return 0, vmErr
+				return 0, estimateGasError{
+					error:  "always failing transaction",
+					vmerr:  result.Err,
+					revert: revert,
+				}
 			}
-
 			// Otherwise, the specified gas cap is too low
-			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
+			return 0, estimateGasError{error: fmt.Sprintf("gas required exceeds allowance (%d)", cap)}
 		}
 	}
 	return hexutil.Uint64(hi), nil
@@ -1558,14 +1659,11 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 	return formatted
 }
 
-// rpcOutputBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
-// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
-// transaction hashes.
-func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx bool, ctx context.Context) (map[string]interface{}, error) {
-	head := b.Header() // copies the header once
-	fields := map[string]interface{}{
+// RPCMarshalHeader converts the given header to the RPC output .
+func RPCMarshalHeader(head *types.Header) map[string]interface{} {
+	result := map[string]interface{}{
 		"number":           (*hexutil.Big)(head.Number),
-		"hash":             b.Hash(),
+		"hash":             head.Hash(),
 		"parentHash":       head.ParentHash,
 		"nonce":            head.Nonce,
 		"mixHash":          head.MixDigest,
@@ -1574,9 +1672,8 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		"stateRoot":        head.Root,
 		"miner":            head.Coinbase,
 		"difficulty":       (*hexutil.Big)(head.Difficulty),
-		"totalDifficulty":  (*hexutil.Big)(s.b.GetTd(b.Hash())),
 		"extraData":        hexutil.Bytes(head.Extra),
-		"size":             hexutil.Uint64(b.Size()),
+		"size":             hexutil.Uint64(head.Size()),
 		"gasLimit":         hexutil.Uint64(head.GasLimit),
 		"gasUsed":          hexutil.Uint64(head.GasUsed),
 		"timestamp":        (*hexutil.Big)(head.Time),
@@ -1586,6 +1683,21 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		"validator":        hexutil.Bytes(head.Validator),
 		"penalties":        hexutil.Bytes(head.Penalties),
 	}
+
+	if head.BaseFee != nil {
+		result["baseFeePerGas"] = (*hexutil.Big)(head.BaseFee)
+	}
+
+	return result
+}
+
+// rpcOutputBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
+// returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
+// transaction hashes.
+func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx bool, ctx context.Context) (map[string]interface{}, error) {
+	fields := RPCMarshalHeader(b.Header())
+	fields["size"] = hexutil.Uint64(b.Size())
+	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(b.Hash()))
 
 	if inclTx {
 		formatTx := func(tx *types.Transaction) (interface{}, error) {
@@ -1773,6 +1885,8 @@ type RPCTransaction struct {
 	From             common.Address    `json:"from"`
 	Gas              hexutil.Uint64    `json:"gas"`
 	GasPrice         *hexutil.Big      `json:"gasPrice"`
+	GasFeeCap        *hexutil.Big      `json:"maxFeePerGas,omitempty"`
+	GasTipCap        *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
 	Hash             common.Hash       `json:"hash"`
 	Input            hexutil.Bytes     `json:"input"`
 	Nonce            hexutil.Uint64    `json:"nonce"`
@@ -1789,7 +1903,7 @@ type RPCTransaction struct {
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
 // representation, with the given location metadata set (if available).
-func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64) *RPCTransaction {
+func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64, baseFee *big.Int) *RPCTransaction {
 	// Determine the signer. For replay-protected transactions, use the most permissive
 	// signer, because we assume that signers are backwards-compatible with old
 	// transactions. For non-protected transactions, the homestead signer signer is used
@@ -1800,7 +1914,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	} else {
 		signer = types.HomesteadSigner{}
 	}
-
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
@@ -1822,17 +1935,36 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
-	if tx.Type() == types.AccessListTxType {
+	switch tx.Type() {
+	case types.AccessListTxType:
 		al := tx.AccessList()
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
+	case types.DynamicFeeTxType:
+		al := tx.AccessList()
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// if the transaction has been mined, compute the effective gas price
+		if baseFee != nil && blockHash != (common.Hash{}) {
+			// price = min(tip, gasFeeCap - baseFee) + baseFee
+			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			result.GasPrice = (*hexutil.Big)(price)
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
 	}
 	return result
 }
 
 // newRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
-func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
-	return newRPCTransaction(tx, common.Hash{}, 0, 0)
+func newRPCPendingTransaction(tx *types.Transaction, current *types.Header, config *params.ChainConfig) *RPCTransaction {
+	var baseFee *big.Int
+	if current != nil {
+		baseFee = eip1559.CalcBaseFee(config, current)
+	}
+	return newRPCTransaction(tx, common.Hash{}, 0, 0, baseFee)
 }
 
 // newRPCTransactionFromBlockIndex returns a transaction that will serialize to the RPC representation.
@@ -1841,7 +1973,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64) *RPCTransacti
 	if index >= uint64(len(txs)) {
 		return nil
 	}
-	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index)
+	return newRPCTransaction(txs[index], b.Hash(), b.NumberU64(), index, b.BaseFee())
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
@@ -1917,12 +2049,8 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 	owner := common.Address{}
 
-	// If the gas amount is not set, extract this as it will depend on access
-	// lists and we'll need to reestimate every time
-	nogas := args.Gas == nil
-
 	// Ensure any missing fields are filled, extract the recipient and input data
-	if err := args.setDefaults(ctx, b); err != nil {
+	if err := args.setDefaults(ctx, b, true); err != nil {
 		return nil, 0, nil, err
 	}
 	var to common.Address
@@ -1944,38 +2072,36 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		accessList := prevTracer.AccessList()
 		log.Trace("Creating access list", "input", accessList)
 
-		// If no gas amount was specified, each unique access list needs it's own
-		// gas calculation. This is quite expensive, but we need to be accurate
-		// and it's convered by the sender only anyway.
-		if nogas {
-			args.Gas = nil
-			if err := args.setDefaults(ctx, b); err != nil {
-				return nil, 0, nil, err // shouldn't happen, just in case
-			}
-		}
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
+		// Set the accesslist to the last al
+		args.AccessList = &accessList
+		msg, err := args.ToMessage(b, block.Number(), b.RPCGasCap(), header.BaseFee)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+
 		feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
 		var balanceTokenFee *big.Int
 		if value, ok := feeCapacity[to]; ok {
 			balanceTokenFee = value
 		}
-		msg := types.NewMessage(args.from(), args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), args.data(), accessList, false, balanceTokenFee, header.Number)
+		msg.SetBalanceTokenFee(balanceTokenFee)
 
 		// Apply the transaction with the access list tracer
 		tracer := vm.NewAccessListTracer(accessList, args.from(), to, precompiles)
-		config := vm.Config{Tracer: tracer, Debug: true}
+		config := vm.Config{Tracer: tracer, Debug: true, NoBaseFee: true}
 		vmenv, _, err := b.GetEVM(ctx, msg, statedb, XDCxState, header, &config)
 		if err != nil {
 			return nil, 0, nil, err
 		}
 		// TODO: determine the value of owner
-		_, UsedGas, _, err, vmErr := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner)
+		res, err, _ := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), owner)
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
 		if tracer.Equal(prevTracer) {
-			return accessList, UsedGas, vmErr, nil
+			return accessList, res.UsedGas, res.Err, nil
 		}
 		prevTracer = tracer
 	}
@@ -2077,17 +2203,23 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 }
 
 // GetTransactionByHash returns the transaction for the given hash
-func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) *RPCTransaction {
+func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
 	// Try to return an already finalized transaction
-	if tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash); tx != nil {
-		return newRPCTransaction(tx, blockHash, blockNumber, index)
+	tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash)
+	if tx != nil {
+		header, err := s.b.HeaderByHash(ctx, blockHash)
+		if err != nil {
+			return nil, err
+		}
+		return newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee), nil
 	}
 	// No finalized transaction, try to retrieve it from the pool
 	if tx := s.b.GetPoolTransaction(hash); tx != nil {
-		return newRPCPendingTransaction(tx)
+		return newRPCPendingTransaction(tx, s.b.CurrentHeader(), s.b.ChainConfig()), nil
 	}
+
 	// Transaction unknown, return as such
-	return nil
+	return nil, nil
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
@@ -2108,13 +2240,15 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash)
 	if tx == nil {
+		// When the transaction doesn't exist, the RPC method should return JSON null
+		// as per specification.
 		return nil, nil
 	}
 	receipts, err := s.b.GetReceipts(ctx, blockHash)
 	if err != nil {
 		return nil, err
 	}
-	if len(receipts) <= int(index) {
+	if uint64(len(receipts)) <= index {
 		return nil, nil
 	}
 	receipt := receipts[index]
@@ -2122,37 +2256,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	// Derive the sender.
 	bigblock := new(big.Int).SetUint64(blockNumber)
 	signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
-	from, _ := types.Sender(signer, tx)
-
-	fields := map[string]interface{}{
-		"blockHash":         blockHash,
-		"blockNumber":       hexutil.Uint64(blockNumber),
-		"transactionHash":   hash,
-		"transactionIndex":  hexutil.Uint64(index),
-		"from":              from,
-		"to":                tx.To(),
-		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
-		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
-		"contractAddress":   nil,
-		"logs":              receipt.Logs,
-		"logsBloom":         receipt.Bloom,
-		"type":              hexutil.Uint(tx.Type()),
-	}
-
-	// Assign receipt status or post state.
-	if len(receipt.PostState) > 0 {
-		fields["root"] = hexutil.Bytes(receipt.PostState)
-	} else {
-		fields["status"] = hexutil.Uint(receipt.Status)
-	}
-	if receipt.Logs == nil {
-		fields["logs"] = [][]*types.Log{}
-	}
-	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
-	if receipt.ContractAddress != (common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress
-	}
-	return fields, nil
+	return marshalReceipt(receipt, blockHash, blockNumber, signer, tx, int(index)), nil
 }
 
 // marshalReceipt marshals a transaction receipt into a JSON object.
@@ -2172,8 +2276,7 @@ func marshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber u
 		"logs":              receipt.Logs,
 		"logsBloom":         receipt.Bloom,
 		"type":              hexutil.Uint(tx.Type()),
-		// uncomment below line after EIP-1559
-		// TODO: "effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
 
 	// Assign receipt status or post state.
@@ -2213,7 +2316,7 @@ func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transacti
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
 	if tx.To() != nil && tx.IsSpecialTransaction() {
-		return common.Hash{}, errors.New("Dont allow transaction sent to BlockSigners & RandomizeSMC smart contract via API")
+		return common.Hash{}, errors.New("don't allow transaction sent to BlockSigners & RandomizeSMC smart contract via API")
 	}
 
 	// If the transaction fee cap is already specified, ensure the
@@ -2279,7 +2382,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 	}
 
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, false); err != nil {
 		return common.Hash{}, err
 	}
 	// Assemble the transaction and sign with the wallet
@@ -2296,11 +2399,12 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 	return SubmitTransaction(ctx, s.b, signed)
 }
 
-// FillTransaction fills the defaults (nonce, gas, gasPrice) on a given unsigned transaction,
-// and returns it to the caller for further processing (signing + broadcast)
+// FillTransaction fills the defaults (nonce, gas, gasPrice or 1559 fields)
+// on a given unsigned transaction, and returns it to the caller for further
+// processing (signing + broadcast).
 func (s *PublicTransactionPoolAPI) FillTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	// Set some sanity defaults and terminate on failure
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, false); err != nil {
 		return nil, err
 	}
 	// Assemble the transaction and obtain rlp
@@ -2530,11 +2634,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBid(ctx context.Context, baseToken
 	result := PriceVolume{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return result, errors.New("Current block not found")
+		return result, errors.New("current block not found")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return result, errors.New("XDCX service not found")
+		return result, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2546,7 +2650,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBid(ctx context.Context, baseToken
 	}
 	result.Price, result.Volume = XDCxState.GetBestBidPrice(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if result.Price.Sign() == 0 {
-		return result, errors.New("Bid tree not found")
+		return result, errors.New("not found bid tree")
 	}
 	return result, nil
 }
@@ -2555,11 +2659,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestAsk(ctx context.Context, baseToken
 	result := PriceVolume{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return result, errors.New("Current block not found")
+		return result, errors.New("not found current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return result, errors.New("XDCX service not found")
+		return result, errors.New("not found XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2571,7 +2675,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestAsk(ctx context.Context, baseToken
 	}
 	result.Price, result.Volume = XDCxState.GetBestAskPrice(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if result.Price.Sign() == 0 {
-		return result, errors.New("Ask tree not found")
+		return result, errors.New("not find ask tree")
 	}
 	return result, nil
 }
@@ -2579,11 +2683,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestAsk(ctx context.Context, baseToken
 func (s *PublicXDCXTransactionPoolAPI) GetBidTree(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]tradingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2603,11 +2707,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBidTree(ctx context.Context, baseToken
 func (s *PublicXDCXTransactionPoolAPI) GetPrice(ctx context.Context, baseToken, quoteToken common.Address) (*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2619,7 +2723,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetPrice(ctx context.Context, baseToken, 
 	}
 	price := XDCxState.GetLastPrice(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if price == nil || price.Sign() == 0 {
-		return common.Big0, errors.New("Order book's price not found")
+		return common.Big0, errors.New("not find order book's price")
 	}
 	return price, nil
 }
@@ -2627,11 +2731,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetPrice(ctx context.Context, baseToken, 
 func (s *PublicXDCXTransactionPoolAPI) GetLastEpochPrice(ctx context.Context, baseToken, quoteToken common.Address) (*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2643,7 +2747,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLastEpochPrice(ctx context.Context, ba
 	}
 	price := XDCxState.GetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if price == nil || price.Sign() == 0 {
-		return common.Big0, errors.New("Order book's price not found")
+		return common.Big0, errors.New("not find order book's price")
 	}
 	return price, nil
 }
@@ -2651,11 +2755,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLastEpochPrice(ctx context.Context, ba
 func (s *PublicXDCXTransactionPoolAPI) GetCurrentEpochPrice(ctx context.Context, baseToken, quoteToken common.Address) (*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2667,7 +2771,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetCurrentEpochPrice(ctx context.Context,
 	}
 	price, _ := XDCxState.GetMediumPriceAndTotalAmount(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if price == nil || price.Sign() == 0 {
-		return common.Big0, errors.New("Order book's price not found")
+		return common.Big0, errors.New("not find order book's price")
 	}
 	return price, nil
 }
@@ -2675,11 +2779,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetCurrentEpochPrice(ctx context.Context,
 func (s *PublicXDCXTransactionPoolAPI) GetAskTree(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]tradingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2699,11 +2803,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetAskTree(ctx context.Context, baseToken
 func (s *PublicXDCXTransactionPoolAPI) GetOrderById(ctx context.Context, baseToken, quoteToken common.Address, orderId uint64) (interface{}, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2716,7 +2820,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetOrderById(ctx context.Context, baseTok
 	orderIdHash := common.BigToHash(new(big.Int).SetUint64(orderId))
 	orderitem := XDCxState.GetOrder(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken), orderIdHash)
 	if orderitem.Quantity == nil || orderitem.Quantity.Sign() == 0 {
-		return nil, errors.New("Order not found")
+		return nil, errors.New("not found order")
 	}
 	return orderitem, nil
 }
@@ -2724,11 +2828,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetOrderById(ctx context.Context, baseTok
 func (s *PublicXDCXTransactionPoolAPI) GetTradingOrderBookInfo(ctx context.Context, baseToken, quoteToken common.Address) (*tradingstate.DumpOrderBookInfo, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2748,11 +2852,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetTradingOrderBookInfo(ctx context.Conte
 func (s *PublicXDCXTransactionPoolAPI) GetLiquidationPriceTree(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]tradingstate.DumpLendingBook, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2772,7 +2876,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLiquidationPriceTree(ctx context.Conte
 func (s *PublicXDCXTransactionPoolAPI) GetInvestingTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -2796,7 +2900,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetInvestingTree(ctx context.Context, len
 func (s *PublicXDCXTransactionPoolAPI) GetBorrowingTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -2820,7 +2924,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBorrowingTree(ctx context.Context, len
 func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderBookInfo(tx context.Context, lendingToken common.Address, term uint64) (*lendingstate.DumpOrderBookInfo, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -2844,11 +2948,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderBookInfo(tx context.Contex
 func (s *PublicXDCXTransactionPoolAPI) getLendingOrderTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.LendingItem, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return nil, errors.New("XDCX Lending service not found")
+		return nil, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2868,11 +2972,11 @@ func (s *PublicXDCXTransactionPoolAPI) getLendingOrderTree(ctx context.Context, 
 func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.LendingTrade, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return nil, errors.New("XDCX Lending service not found")
+		return nil, errors.New("not find XDCX lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2892,11 +2996,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeTree(ctx context.Context, 
 func (s *PublicXDCXTransactionPoolAPI) GetLiquidationTimeTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return nil, errors.New("XDCX Lending service not found")
+		return nil, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2916,11 +3020,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLiquidationTimeTree(ctx context.Contex
 func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderCount(ctx context.Context, addr common.Address) (*hexutil.Uint64, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return nil, errors.New("XDCX Lending service not found")
+		return nil, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2938,11 +3042,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestInvesting(ctx context.Context, len
 	result := InterestVolume{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return result, errors.New("Current block not found")
+		return result, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return result, errors.New("XDCX Lending service not found")
+		return result, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2960,11 +3064,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBorrowing(ctx context.Context, len
 	result := InterestVolume{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return result, errors.New("Current block not found")
+		return result, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return result, errors.New("XDCX Lending service not found")
+		return result, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2981,11 +3085,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBorrowing(ctx context.Context, len
 func (s *PublicXDCXTransactionPoolAPI) GetBids(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -3005,11 +3109,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBids(ctx context.Context, baseToken, q
 func (s *PublicXDCXTransactionPoolAPI) GetAsks(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -3029,7 +3133,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetAsks(ctx context.Context, baseToken, q
 func (s *PublicXDCXTransactionPoolAPI) GetInvests(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -3053,7 +3157,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetInvests(ctx context.Context, lendingTo
 func (s *PublicXDCXTransactionPoolAPI) GetBorrows(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -3111,11 +3215,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderById(ctx context.Context, 
 	lendingItem := lendingstate.LendingItem{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return lendingItem, errors.New("Current block not found")
+		return lendingItem, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return lendingItem, errors.New("XDCX Lending service not found")
+		return lendingItem, errors.New("not find XDCX lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -3129,7 +3233,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderById(ctx context.Context, 
 	orderIdHash := common.BigToHash(new(big.Int).SetUint64(orderId))
 	lendingItem = lendingState.GetLendingOrder(lendingOrderBook, orderIdHash)
 	if lendingItem.LendingId != orderId {
-		return lendingItem, errors.New("Lending Item not found")
+		return lendingItem, errors.New("not find lending item")
 	}
 	return lendingItem, nil
 }
@@ -3138,11 +3242,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeById(ctx context.Context, 
 	lendingItem := lendingstate.LendingTrade{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return lendingItem, errors.New("Current block not found")
+		return lendingItem, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return lendingItem, errors.New("XDCX Lending service not found")
+		return lendingItem, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -3156,7 +3260,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeById(ctx context.Context, 
 	tradeIdHash := common.BigToHash(new(big.Int).SetUint64(tradeId))
 	lendingItem = lendingState.GetLendingTrade(lendingOrderBook, tradeIdHash)
 	if lendingItem.TradeId != tradeId {
-		return lendingItem, errors.New("Lending Item not found")
+		return lendingItem, errors.New("not find lending item")
 	}
 	return lendingItem, nil
 }
@@ -3181,7 +3285,7 @@ func (s *PublicTransactionPoolAPI) Sign(addr common.Address, data hexutil.Bytes)
 	// Sign the requested hash with the wallet
 	signature, err := wallet.SignHash(account, signHash(data))
 	if err == nil {
-		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
+		signature[crypto.RecoveryIDOffset] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	}
 	return signature, err
 }
@@ -3197,26 +3301,27 @@ type SignTransactionResult struct {
 // the given from address and it needs to be unlocked.
 func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	if args.Gas == nil {
-		return nil, errors.New("gas not specified")
+		return nil, errors.New("not specify Gas")
 	}
-	if args.GasPrice == nil {
-		return nil, errors.New("gasPrice not specified")
+	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
+		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
 	}
 	if args.Nonce == nil {
-		return nil, errors.New("nonce not specified")
+		return nil, errors.New("not specify Nonce")
 	}
-	if err := args.setDefaults(ctx, s.b); err != nil {
+	if err := args.setDefaults(ctx, s.b, false); err != nil {
 		return nil, err
 	}
 	// Before actually sign the transaction, ensure the transaction fee is reasonable.
-	if err := checkTxFee(args.GasPrice.ToInt(), uint64(*args.Gas), s.b.RPCTxFeeCap()); err != nil {
+	tx := args.toTransaction()
+	if err := checkTxFee(tx.GasPrice(), tx.Gas(), s.b.RPCTxFeeCap()); err != nil {
 		return nil, err
 	}
-	tx, err := s.sign(args.from(), args.toTransaction())
+	signed, err := s.sign(args.from(), tx)
 	if err != nil {
 		return nil, err
 	}
-	data, err := tx.MarshalBinary()
+	data, err := signed.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -3236,11 +3341,12 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 			accounts[account.Address] = struct{}{}
 		}
 	}
+	curHeader := s.b.CurrentHeader()
 	transactions := make([]*RPCTransaction, 0, len(pending))
 	for _, tx := range pending {
 		from, _ := types.Sender(s.signer, tx)
 		if _, exists := accounts[from]; exists {
-			transactions = append(transactions, newRPCPendingTransaction(tx))
+			transactions = append(transactions, newRPCPendingTransaction(tx, curHeader, s.b.ChainConfig()))
 		}
 	}
 	return transactions, nil
@@ -3252,7 +3358,7 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs Transact
 	if sendArgs.Nonce == nil {
 		return common.Hash{}, errors.New("missing transaction nonce in transaction spec")
 	}
-	if err := sendArgs.setDefaults(ctx, s.b); err != nil {
+	if err := sendArgs.setDefaults(ctx, s.b, false); err != nil {
 		return common.Hash{}, err
 	}
 	matchTx := sendArgs.toTransaction()
@@ -3339,7 +3445,7 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
 	}
-	return fmt.Sprintf("0x%x", ethash.SeedHash(number)), nil
+	return fmt.Sprintf("%#x", ethash.SeedHash(number)), nil
 }
 
 // PrivateDebugAPI is the collection of Ethereum APIs exposed over the private
@@ -3448,14 +3554,14 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 			limitNumber = currentNumber
 		}
 		for i := blockNumber + 1; i <= limitNumber; i++ {
-			header, err := b.HeaderByNumber(nil, rpc.BlockNumber(i))
+			header, err := b.HeaderByNumber(context.TODO(), rpc.BlockNumber(i))
 			if err != nil {
 				return addrs, err
 			}
 			if header == nil {
 				return addrs, errors.New("nil header in GetSignersFromBlocks")
 			}
-			blockData, err := b.BlockByNumber(nil, rpc.BlockNumber(i))
+			blockData, err := b.BlockByNumber(context.TODO(), rpc.BlockNumber(i))
 			if err != nil {
 				return addrs, err
 			}

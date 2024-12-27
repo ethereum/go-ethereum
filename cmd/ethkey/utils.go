@@ -25,7 +25,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/console"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 // getPassPhrase obtains a passphrase given by the user.  It first checks the

@@ -356,7 +356,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 		}
 		header := GetHeader(c.chainDb, hash, number)
 		if header == nil {
-			return common.Hash{}, fmt.Errorf("block #%d [%x…] not found", number, hash[:4])
+			return common.Hash{}, fmt.Errorf("block #%d [%x..] not found", number, hash[:4])
 		} else if header.ParentHash != lastHead {
 			return common.Hash{}, errors.New("chain reorged during section processing")
 		}

@@ -8,29 +8,29 @@ import (
 var (
 	debugMetrics struct {
 		GCStats struct {
-			LastGC Gauge
-			NumGC  Gauge
+			LastGC *Gauge
+			NumGC  *Gauge
 			Pause  Histogram
 			//PauseQuantiles Histogram
-			PauseTotal Gauge
+			PauseTotal *Gauge
 		}
-		ReadGCStats Timer
+		ReadGCStats *Timer
 	}
 	gcStats debug.GCStats
 )
 
-// Capture new values for the Go garbage collector statistics exported in
-// debug.GCStats.  This is designed to be called as a goroutine.
+// CaptureDebugGCStats captures new values for the Go garbage collector statistics
+// exported in debug.GCStats. This is designed to be called as a goroutine.
 func CaptureDebugGCStats(r Registry, d time.Duration) {
 	for range time.Tick(d) {
 		CaptureDebugGCStatsOnce(r)
 	}
 }
 
-// Capture new values for the Go garbage collector statistics exported in
-// debug.GCStats.  This is designed to be called in a background goroutine.
-// Giving a registry which has not been given to RegisterDebugGCStats will
-// panic.
+// CaptureDebugGCStatsOnce captures new values for the Go garbage collector
+// statistics exported in debug.GCStats. This is designed to be called in
+// a background goroutine. Giving a registry which has not been given to
+// RegisterDebugGCStats will panic.
 //
 // Be careful (but much less so) with this because debug.ReadGCStats calls
 // the C function runtime·lock(runtime·mheap) which, while not a stop-the-world
@@ -50,9 +50,9 @@ func CaptureDebugGCStatsOnce(r Registry) {
 	debugMetrics.GCStats.PauseTotal.Update(int64(gcStats.PauseTotal))
 }
 
-// Register metrics for the Go garbage collector statistics exported in
-// debug.GCStats.  The metrics are named by their fully-qualified Go symbols,
-// i.e. debug.GCStats.PauseTotal.
+// RegisterDebugGCStats registers metrics for the Go garbage collector statistics
+// exported in debug.GCStats. The metrics are named by their fully-qualified Go
+// symbols, i.e. debug.GCStats.PauseTotal.
 func RegisterDebugGCStats(r Registry) {
 	debugMetrics.GCStats.LastGC = NewGauge()
 	debugMetrics.GCStats.NumGC = NewGauge()

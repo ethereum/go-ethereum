@@ -182,7 +182,7 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 	epochInfo, err := x.getEpochSwitchInfo(chain, nil, currentVoteMsg.(*types.Vote).ProposedBlockInfo.Hash)
 	if err != nil {
 		log.Error("[voteHandler] Error when getting epoch switch Info", "error", err)
-		return errors.New("Fail on voteHandler due to failure in getting epoch switch info")
+		return errors.New("fail on voteHandler due to failure in getting epoch switch info")
 	}
 
 	// Skip and wait for the next vote to process again if valid votes is less than what we required
@@ -253,7 +253,7 @@ func (x *XDPoS_v2) isExtendingFromAncestor(blockChainReader consensus.ChainReade
 	for i := 0; i < blockNumDiff; i++ {
 		parentBlock := blockChainReader.GetHeaderByHash(nextBlockHash)
 		if parentBlock == nil {
-			return false, fmt.Errorf("Could not find its parent block when checking whether currentBlock %v with hash %v is extending from the ancestorBlock %v", currentBlock.Number, currentBlock.Hash, ancestorBlock.Number)
+			return false, fmt.Errorf("could not find its parent block when checking whether currentBlock %v with hash %v is extending from the ancestorBlock %v", currentBlock.Number, currentBlock.Hash, ancestorBlock.Number)
 		} else {
 			nextBlockHash = parentBlock.ParentHash
 		}

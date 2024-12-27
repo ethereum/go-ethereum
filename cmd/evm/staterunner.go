@@ -24,13 +24,11 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
-	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/tests"
-
-	cli "gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
-var stateTestCommand = cli.Command{
+var stateTestCommand = &cli.Command{
 	Action:    stateTestCmd,
 	Name:      "statetest",
 	Usage:     "executes the given state tests",
@@ -49,25 +47,24 @@ func stateTestCmd(ctx *cli.Context) error {
 	if len(ctx.Args().First()) == 0 {
 		return errors.New("path-to-test argument required")
 	}
-	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
 
 	// Configure the EVM logger
 	config := &vm.LogConfig{
-		EnableMemory: !ctx.GlobalBool(DisableMemoryFlag.Name),
-		DisableStack: ctx.GlobalBool(DisableStackFlag.Name),
+		EnableMemory:     !ctx.Bool(DisableMemoryFlag.Name),
+		DisableStack:     ctx.Bool(DisableStackFlag.Name),
+		DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
+		EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
 	}
+
 	var (
 		tracer   vm.EVMLogger
 		debugger *vm.StructLogger
 	)
 	switch {
-	case ctx.GlobalBool(MachineFlag.Name):
+	case ctx.Bool(MachineFlag.Name):
 		tracer = vm.NewJSONLogger(config, os.Stderr)
 
-	case ctx.GlobalBool(DebugFlag.Name):
+	case ctx.Bool(DebugFlag.Name):
 		debugger = vm.NewStructLogger(config)
 		tracer = debugger
 
@@ -86,7 +83,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	// Iterate over all the tests, run them and aggregate the results
 	cfg := vm.Config{
 		Tracer: tracer,
-		Debug:  ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
+		Debug:  ctx.Bool(DebugFlag.Name) || ctx.Bool(MachineFlag.Name),
 	}
 	results := make([]StatetestResult, 0, len(tests))
 	for key, test := range tests {
@@ -97,20 +94,20 @@ func stateTestCmd(ctx *cli.Context) error {
 			if err != nil {
 				// Test failed, mark as so and dump any state to aid debugging
 				result.Pass, result.Error = false, err.Error()
-				if ctx.GlobalBool(DumpFlag.Name) && state != nil {
+				if ctx.Bool(DumpFlag.Name) && state != nil {
 					dump := state.RawDump()
 					result.State = &dump
 				}
 			}
 			// print state root for evmlab tracing (already committed above, so no need to delete objects again
-			if ctx.GlobalBool(MachineFlag.Name) && state != nil {
+			if ctx.Bool(MachineFlag.Name) && state != nil {
 				fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%x\"}\n", state.IntermediateRoot(false))
 			}
 
 			results = append(results, *result)
 
 			// Print any structured logs collected
-			if ctx.GlobalBool(DebugFlag.Name) {
+			if ctx.Bool(DebugFlag.Name) {
 				if debugger != nil {
 					fmt.Fprintln(os.Stderr, "#### TRACE ####")
 					vm.WriteTrace(os.Stderr, debugger.StructLogs())

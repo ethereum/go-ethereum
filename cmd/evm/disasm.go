@@ -23,10 +23,10 @@ import (
 	"strings"
 
 	"github.com/XinFinOrg/XDPoSChain/core/asm"
-	cli "gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
-var disasmCommand = cli.Command{
+var disasmCommand = &cli.Command{
 	Action:    disasmCmd,
 	Name:      "disasm",
 	Usage:     "disassembles evm binary",
@@ -34,17 +34,22 @@ var disasmCommand = cli.Command{
 }
 
 func disasmCmd(ctx *cli.Context) error {
-	if len(ctx.Args().First()) == 0 {
-		return errors.New("filename required")
+	var in string
+	switch {
+	case len(ctx.Args().First()) > 0:
+		fn := ctx.Args().First()
+		input, err := os.ReadFile(fn)
+		if err != nil {
+			return err
+		}
+		in = string(input)
+	case ctx.IsSet(InputFlag.Name):
+		in = ctx.String(InputFlag.Name)
+	default:
+		return errors.New("missing filename or --input value")
 	}
 
-	fn := ctx.Args().First()
-	in, err := os.ReadFile(fn)
-	if err != nil {
-		return err
-	}
-
-	code := strings.TrimSpace(string(in[:]))
+	code := strings.TrimSpace(in)
 	fmt.Printf("%v\n", code)
 	return asm.PrintDisassembled(code)
 }

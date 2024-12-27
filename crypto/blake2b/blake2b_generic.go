@@ -25,6 +25,7 @@ var precomputed = [10][16]byte{
 	{10, 8, 7, 1, 2, 4, 6, 5, 15, 9, 3, 13, 11, 14, 12, 0},
 }
 
+// nolint:unused,deadcode
 func hashBlocksGeneric(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte) {
 	var m [16]uint64
 	c0, c1 := c[0], c[1]

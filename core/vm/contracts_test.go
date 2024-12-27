@@ -18,14 +18,12 @@ package vm
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
-
-	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-	"github.com/XinFinOrg/XDPoSChain/params"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 )
@@ -50,6 +48,25 @@ type precompiledFailureTest struct {
 	input         string
 	expectedError error
 	name          string
+}
+
+// allPrecompiles does not map to the actual set of precompiles, as it also contains
+// repriced versions of precompiles at certain slots
+var allPrecompiles = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}):    &ecrecover{},
+	common.BytesToAddress([]byte{2}):    &sha256hash{},
+	common.BytesToAddress([]byte{3}):    &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):    &dataCopy{},
+	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: false},
+	common.BytesToAddress([]byte{0xf5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):    &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):    &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):    &blake2F{},
+	common.BytesToAddress([]byte{30}):   &ringSignatureVerifier{},
+	common.BytesToAddress([]byte{40}):   &bulletproofVerifier{},
+	common.BytesToAddress([]byte{41}):   &XDCxLastPrice{},
+	common.BytesToAddress([]byte{42}):   &XDCxEpochPrice{},
 }
 
 // modexpTests are the test and benchmark data for the modexp precompiled contract.
@@ -494,12 +511,11 @@ var blake2FTests = []precompiledTest{
 }
 
 func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
-	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in))
-	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		if res, err := RunPrecompiledContract(p, in, contract); err != nil {
+	gas := p.RequiredGas(in)
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, gas), func(t *testing.T) {
+		if res, _, err := RunPrecompiledContract(nil, p, in, gas); err != nil {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.expected {
 			t.Errorf("Expected %v, got %v", test.expected, common.Bytes2Hex(res))
@@ -513,21 +529,12 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 }
 
 func testXDCxPrecompiled(addr string, test precompiledTest, t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	stateCache := tradingstate.NewDatabase(db)
-	tradingStateDB, _ := tradingstate.New(common.Hash{}, stateCache)
-	tradingStateDB.SetLastPrice(tradingstate.GetTradingOrderBookHash(common.HexToAddress(BTCAddress), common.HexToAddress(USDTAddress)), BTCUSDTLastPrice)
-	tradingStateDB.SetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(common.HexToAddress(BTCAddress), common.HexToAddress(USDTAddress)), BTCUSDTEpochPrice)
-
-	evm := NewEVM(Context{BlockNumber: common.Big1}, nil, tradingStateDB, &params.ChainConfig{ByzantiumBlock: common.Big0}, Config{})
 	contractAddr := common.HexToAddress(addr)
-	p := PrecompiledContractsByzantium[contractAddr]
+	p := allPrecompiles[contractAddr]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in))
-	contract.SetCallCode(&contractAddr, common.Hash{}, []byte{})
-	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		if res, err := run(evm, contract, in, false); err != nil {
+	gas := p.RequiredGas(in)
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, gas), func(t *testing.T) {
+		if res, _, err := RunPrecompiledContract(nil, p, in, gas); err != nil {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.expected {
 			t.Errorf("Expected %v, got %v", test.expected, common.Bytes2Hex(res))
@@ -536,16 +543,12 @@ func testXDCxPrecompiled(addr string, test precompiledTest, t *testing.T) {
 }
 
 func testPrecompiledWithEmptyTradingState(addr string, test precompiledTest, t *testing.T) {
-	evm := NewEVM(Context{BlockNumber: common.Big1}, nil, nil, &params.ChainConfig{ByzantiumBlock: common.Big0}, Config{})
-
 	contractAddr := common.HexToAddress(addr)
-	p := PrecompiledContractsByzantium[contractAddr]
+	p := allPrecompiles[contractAddr]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in))
-	contract.SetCallCode(&contractAddr, common.Hash{}, []byte{})
-	t.Run(fmt.Sprintf("testPrecompiledWithEmptyTradingState-%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		if res, err := run(evm, contract, in, false); err != nil {
+	gas := p.RequiredGas(in)
+	t.Run(fmt.Sprintf("testPrecompiledWithEmptyTradingState-%s-Gas=%d", test.name, gas), func(t *testing.T) {
+		if res, _, err := RunPrecompiledContract(nil, p, in, gas); err != nil {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.expected {
 			t.Errorf("Expected %v, got %v", test.expected, common.Bytes2Hex(res))
@@ -554,12 +557,12 @@ func testPrecompiledWithEmptyTradingState(addr string, test precompiledTest, t *
 }
 
 func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
-	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in)-1)
-	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		_, err := RunPrecompiledContract(p, in, contract)
+	gas := p.RequiredGas(in) - 1
+
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, gas), func(t *testing.T) {
+		_, _, err := RunPrecompiledContract(nil, p, in, gas)
 		if err.Error() != "out of gas" {
 			t.Errorf("Expected error [out of gas], got [%v]", err)
 		}
@@ -572,13 +575,11 @@ func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
 }
 
 func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing.T) {
-	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("31337")),
-		nil, new(big.Int), p.RequiredGas(in))
-
+	gas := p.RequiredGas(in)
 	t.Run(test.name, func(t *testing.T) {
-		_, err := RunPrecompiledContract(p, in, contract)
+		_, _, err := RunPrecompiledContract(nil, p, in, gas)
 		if !reflect.DeepEqual(err, test.expectedError) {
 			t.Errorf("Expected error [%v], got [%v]", test.expectedError, err)
 		}
@@ -594,11 +595,9 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	if test.noBenchmark {
 		return
 	}
-	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	reqGas := p.RequiredGas(in)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), reqGas)
 
 	var (
 		res  []byte
@@ -606,12 +605,11 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 		data = make([]byte, len(in))
 	)
 
-	bench.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(bench *testing.B) {
+	bench.Run(fmt.Sprintf("%s-Gas=%d", test.name, reqGas), func(bench *testing.B) {
 		bench.ResetTimer()
 		for i := 0; i < bench.N; i++ {
-			contract.Gas = reqGas
 			copy(data, in)
-			res, err = RunPrecompiledContract(p, data, contract)
+			res, _, err = RunPrecompiledContract(nil, p, data, reqGas)
 		}
 		bench.StopTimer()
 		//Check if it is correct
@@ -620,7 +618,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 			return
 		}
 		if common.Bytes2Hex(res) != test.expected {
-			bench.Error(fmt.Sprintf("Expected %v, got %v", test.expected, common.Bytes2Hex(res)))
+			bench.Errorf("Expected %v, got %v", test.expected, common.Bytes2Hex(res))
 			return
 		}
 	})
@@ -679,6 +677,9 @@ func BenchmarkPrecompiledModExp(bench *testing.B) {
 		benchmarkPrecompiled("05", test, bench)
 	}
 }
+
+func TestPrecompiledModExpEip2565(t *testing.T)      { testJson("modexp_eip2565", "f5", t) }
+func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJson("modexp_eip2565", "f5", b) }
 
 // Tests the sample inputs from the elliptic curve addition EIP 213.
 func TestPrecompiledBn256Add(t *testing.T) {
@@ -823,5 +824,34 @@ func TestPrecompiledEcrecover(t *testing.T) {
 	for _, test := range ecRecoverTests {
 		testPrecompiled("01", test, t)
 	}
+}
 
+func testJson(name, addr string, t *testing.T) {
+	tests, err := loadJson(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range tests {
+		testPrecompiled(addr, test, t)
+	}
+}
+
+func benchJson(name, addr string, b *testing.B) {
+	tests, err := loadJson(name)
+	if err != nil {
+		b.Fatal(err)
+	}
+	for _, test := range tests {
+		benchmarkPrecompiled(addr, test, b)
+	}
+}
+
+func loadJson(name string) ([]precompiledTest, error) {
+	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
+	if err != nil {
+		return nil, err
+	}
+	var testcases []precompiledTest
+	err = json.Unmarshal(data, &testcases)
+	return testcases, err
 }

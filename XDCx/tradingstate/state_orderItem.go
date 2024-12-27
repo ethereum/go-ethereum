@@ -53,23 +53,23 @@ func newStateOrderItem(orderBook common.Hash, orderId common.Hash, data OrderIte
 }
 
 // EncodeRLP implements rlp.Encoder.
-func (c *stateOrderItem) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, c.data)
+func (s *stateOrderItem) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, s.data)
 }
 
-func (self *stateOrderItem) deepCopy(onDirty func(orderId common.Hash)) *stateOrderItem {
-	stateOrderList := newStateOrderItem(self.orderBook, self.orderId, self.data, onDirty)
+func (s *stateOrderItem) deepCopy(onDirty func(orderId common.Hash)) *stateOrderItem {
+	stateOrderList := newStateOrderItem(s.orderBook, s.orderId, s.data, onDirty)
 	return stateOrderList
 }
 
-func (self *stateOrderItem) setVolume(volume *big.Int) {
-	self.data.Quantity = volume
-	if self.onDirty != nil {
-		self.onDirty(self.orderId)
-		self.onDirty = nil
+func (s *stateOrderItem) setVolume(volume *big.Int) {
+	s.data.Quantity = volume
+	if s.onDirty != nil {
+		s.onDirty(s.orderId)
+		s.onDirty = nil
 	}
 }
 
-func (self *stateOrderItem) Quantity() *big.Int {
-	return self.data.Quantity
+func (s *stateOrderItem) Quantity() *big.Int {
+	return s.data.Quantity
 }

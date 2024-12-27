@@ -45,9 +45,11 @@ type callMsg struct {
 
 func (m callMsg) From() common.Address         { return m.CallMsg.From }
 func (m callMsg) Nonce() uint64                { return 0 }
-func (m callMsg) CheckNonce() bool             { return false }
+func (m callMsg) IsFake() bool                 { return true }
 func (m callMsg) To() *common.Address          { return m.CallMsg.To }
 func (m callMsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
+func (m callMsg) GasFeeCap() *big.Int          { return m.CallMsg.GasFeeCap }
+func (m callMsg) GasTipCap() *big.Int          { return m.CallMsg.GasTipCap }
 func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
 func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
 func (m callMsg) Data() []byte                 { return m.CallMsg.Data }
@@ -108,17 +110,18 @@ func CallContractWithState(call ethereum.CallMsg, chain consensus.ChainContext, 
 			msg.CallMsg.BalanceTokenFee = value
 		}
 	}
-	evmContext := NewEVMContext(msg, chain.CurrentHeader(), chain, nil)
+	txContext := NewEVMTxContext(msg)
+	evmContext := NewEVMBlockContext(chain.CurrentHeader(), chain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(evmContext, statedb, nil, chain.Config(), vm.Config{})
+	vmenv := vm.NewEVM(evmContext, txContext, statedb, nil, chain.Config(), vm.Config{})
 	gaspool := new(GasPool).AddGas(1000000)
 	owner := common.Address{}
-	rval, _, _, err, _ := NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
+	result, err, _ := NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
 	if err != nil {
 		return nil, err
 	}
-	return rval, err
+	return result.Return(), err
 }
 
 // make sure that balance of token is at slot 0

@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 // main is just a boring entry point to set up the CLI app.
@@ -33,11 +33,11 @@ func main() {
 	app.Name = "puppeth"
 	app.Usage = "assemble and maintain private Ethereum networks"
 	app.Flags = []cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "network",
 			Usage: "name of the network to administer (no spaces or hyphens, please)",
 		},
-		cli.IntFlag{
+		&cli.IntFlag{
 			Name:  "loglevel",
 			Value: 3,
 			Usage: "log level to emit to the screen",
@@ -45,7 +45,7 @@ func main() {
 	}
 	app.Action = func(c *cli.Context) error {
 		// Set up the logger to print everything and the random generator
-		log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(c.Int("loglevel")), log.StreamHandler(os.Stdout, log.TerminalFormat(true))))
+		log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.FromLegacyLevel(c.Int("loglevel")), true)))
 		rand.Seed(time.Now().UnixNano())
 
 		network := c.String("network")

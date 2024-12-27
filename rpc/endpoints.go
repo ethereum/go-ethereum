@@ -36,6 +36,7 @@ func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, er
 			log.Info("IPC registration failed", "namespace", api.Namespace, "error", err)
 			return nil, nil, err
 		}
+		log.Debug("IPC registered", "namespace", api.Namespace)
 		if _, ok := regMap[api.Namespace]; !ok {
 			registered = append(registered, api.Namespace)
 			regMap[api.Namespace] = struct{}{}

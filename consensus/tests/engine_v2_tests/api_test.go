@@ -20,7 +20,7 @@ func TestGetMissedRoundsInEpochByBlockNumOnlyForV2Consensus(t *testing.T) {
 
 	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissedRoundsInEpochByBlockNum(&blockNum)
 
-	assert.EqualError(t, err, "Not supported in the v1 consensus")
+	assert.EqualError(t, err, "not supported in the v1 consensus")
 	assert.Nil(t, data)
 }
 
@@ -204,20 +204,14 @@ func TestGetBlockByEpochNumber(t *testing.T) {
 	assert.Nil(t, info)
 
 	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(1)
-	assert.Equal(t, info.EpochFirstBlockNumber.Int64(), int64(901))
-	assert.Equal(t, info.EpochLastBlockNumber.Int64(), int64(1799))
 	assert.Equal(t, info.EpochRound, types.Round(1))
 	assert.Nil(t, err)
 
 	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(2)
-	assert.Equal(t, info.EpochFirstBlockNumber.Int64(), int64(1800))
-	assert.Equal(t, info.EpochLastBlockNumber.Int64(), int64(1802))
 	assert.Equal(t, info.EpochRound, types.Round(900))
 	assert.Nil(t, err)
 
 	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(3)
-	assert.Equal(t, info.EpochFirstBlockNumber.Int64(), int64(1803))
-	assert.Nil(t, info.EpochLastBlockNumber)
 	assert.Equal(t, info.EpochRound, types.Round(largeRound))
 	assert.Nil(t, err)
 
@@ -227,8 +221,6 @@ func TestGetBlockByEpochNumber(t *testing.T) {
 
 	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(5)
 	assert.Equal(t, info.EpochRound, types.Round(largeRound2))
-	assert.Equal(t, info.EpochFirstBlockNumber.Int64(), int64(1804))
-	assert.Nil(t, info.EpochLastBlockNumber)
 	assert.Nil(t, err)
 
 	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(6)

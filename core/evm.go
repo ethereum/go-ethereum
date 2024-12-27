@@ -26,11 +26,12 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 )
 
-// NewEVMContext creates a new context for use in the EVM.
-func NewEVMContext(msg Message, header *types.Header, chain consensus.ChainContext, author *common.Address) vm.Context {
+// NewEVMBlockContext creates a new context for use in the EVM.
+func NewEVMBlockContext(header *types.Header, chain consensus.ChainContext, author *common.Address) vm.BlockContext {
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	var (
 		beneficiary common.Address
+		baseFee     *big.Int
 		random      common.Hash
 	)
 	if author == nil {
@@ -38,20 +39,30 @@ func NewEVMContext(msg Message, header *types.Header, chain consensus.ChainConte
 	} else {
 		beneficiary = *author
 	}
+	if header.BaseFee != nil {
+		baseFee = new(big.Int).Set(header.BaseFee)
+	}
 	// since xdpos chain do not use difficulty and mixdigest, we use hash of the block number as random
 	random = crypto.Keccak256Hash(header.Number.Bytes())
-	return vm.Context{
+	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
-		Origin:      msg.From(),
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        new(big.Int).Set(header.Time),
 		Difficulty:  new(big.Int).Set(header.Difficulty),
+		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
-		GasPrice:    new(big.Int).Set(msg.GasPrice()),
 		Random:      &random,
+	}
+}
+
+// NewEVMTxContext creates a new transaction context for a single transaction.
+func NewEVMTxContext(msg Message) vm.TxContext {
+	return vm.TxContext{
+		Origin:   msg.From(),
+		GasPrice: new(big.Int).Set(msg.GasPrice()),
 	}
 }
 

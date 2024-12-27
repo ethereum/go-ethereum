@@ -51,19 +51,20 @@ func (*dummyStatedb) GetRefund() uint64                       { return 1337 }
 func (*dummyStatedb) GetBalance(addr common.Address) *big.Int { return new(big.Int) }
 
 type vmContext struct {
-	ctx vm.Context // future pr should distinguish blockContext and txContext
+	ctx       vm.BlockContext
+	txContext vm.TxContext
 }
 
-func testCtx() *vmContext {
-	return &vmContext{ctx: vm.Context{BlockNumber: big.NewInt(1), GasPrice: big.NewInt(100000)}}
-}
-
-func runTrace(tracer Tracer, vmctx *vmContext, chaincfg *params.ChainConfig) (json.RawMessage, error) {
-	env := vm.NewEVM(vmctx.ctx, &dummyStatedb{}, nil, chaincfg, vm.Config{Debug: true, Tracer: tracer})
+func runTrace(tracer Tracer, blockNumber *big.Int, chaincfg *params.ChainConfig) (json.RawMessage, error) {
 	var (
-		startGas uint64 = 10000
-		value           = big.NewInt(0)
+		startGas  uint64 = 10000
+		value            = big.NewInt(0)
+		ctx              = vm.BlockContext{BlockNumber: blockNumber}
+		txContext        = vm.TxContext{GasPrice: big.NewInt(100000)}
 	)
+
+	env := vm.NewEVM(ctx, txContext, &dummyStatedb{}, nil, chaincfg, vm.Config{Debug: true, Tracer: tracer})
+
 	contract := vm.NewContract(account{}, account{}, value, startGas)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
@@ -83,7 +84,7 @@ func TestTracer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ret, err := runTrace(tracer, testCtx(), params.TestChainConfig)
+		ret, err := runTrace(tracer, big.NewInt(1), params.TestChainConfig)
 		if err != nil {
 			return nil, err.Error() // Stringify to allow comparison without nil checks
 		}
@@ -138,7 +139,7 @@ func TestHalt(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		tracer.Stop(timeout)
 	}()
-	if _, err = runTrace(tracer, testCtx(), params.TestChainConfig); err.Error() != "stahp    in server-side tracer function 'step'" {
+	if _, err = runTrace(tracer, big.NewInt(1), params.TestChainConfig); err.Error() != "stahp    in server-side tracer function 'step'" {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
 }
@@ -148,7 +149,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := vm.NewEVM(vm.Context{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{}, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
@@ -165,8 +166,10 @@ func TestHaltBetweenSteps(t *testing.T) {
 // TestNoStepExec tests a regular value transfer (no exec), and accessing the statedb
 // in 'result'
 func TestNoStepExec(t *testing.T) {
-	runEmptyTrace := func(tracer Tracer, vmctx *vmContext) (json.RawMessage, error) {
-		env := vm.NewEVM(vmctx.ctx, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	runEmptyTrace := func(tracer Tracer) (json.RawMessage, error) {
+		ctx := vm.BlockContext{BlockNumber: big.NewInt(1)}
+		txContext := vm.TxContext{GasPrice: big.NewInt(100000)}
+		env := vm.NewEVM(ctx, txContext, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 		startGas := uint64(10000)
 		contract := vm.NewContract(account{}, account{}, big.NewInt(0), startGas)
 		tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, big.NewInt(0))
@@ -179,7 +182,7 @@ func TestNoStepExec(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		ret, err := runEmptyTrace(tracer, testCtx())
+		ret, err := runEmptyTrace(tracer)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -205,12 +208,11 @@ func TestIsPrecompile(t *testing.T) {
 	chaincfg.ByzantiumBlock = big.NewInt(100)
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)
-	ctx := vm.Context{BlockNumber: big.NewInt(150), GasPrice: big.NewInt(100000)}
 	tracer, err := New("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", new(Context))
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := runTrace(tracer, &vmContext{ctx}, chaincfg)
+	res, err := runTrace(tracer, big.NewInt(150), chaincfg)
 	if err != nil {
 		t.Error(err)
 	}
@@ -219,8 +221,7 @@ func TestIsPrecompile(t *testing.T) {
 	}
 
 	tracer, _ = New("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", new(Context))
-	ctx = vm.Context{BlockNumber: big.NewInt(250), GasPrice: big.NewInt(100000)}
-	res, err = runTrace(tracer, &vmContext{ctx}, chaincfg)
+	res, err = runTrace(tracer, big.NewInt(250), chaincfg)
 	if err != nil {
 		t.Error(err)
 	}
@@ -267,7 +268,7 @@ func TestRegressionPanicSlice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = runTrace(tracer, testCtx(), params.TestChainConfig); err != nil {
+	if _, err = runTrace(tracer, big.NewInt(1), params.TestChainConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -278,7 +279,7 @@ func TestRegressionPanicPeek(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = runTrace(tracer, testCtx(), params.TestChainConfig); err != nil {
+	if _, err = runTrace(tracer, big.NewInt(1), params.TestChainConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -289,7 +290,7 @@ func TestRegressionPanicGetUint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = runTrace(tracer, testCtx(), params.TestChainConfig); err != nil {
+	if _, err = runTrace(tracer, big.NewInt(1), params.TestChainConfig); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -300,7 +301,7 @@ func TestTracing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ret, err := runTrace(tracer, testCtx(), params.TestChainConfig)
+	ret, err := runTrace(tracer, big.NewInt(1), params.TestChainConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +316,7 @@ func TestStack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ret, err := runTrace(tracer, testCtx(), params.TestChainConfig)
+	ret, err := runTrace(tracer, big.NewInt(1), params.TestChainConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +331,7 @@ func TestOpcodes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ret, err := runTrace(tracer, testCtx(), params.TestChainConfig)
+	ret, err := runTrace(tracer, big.NewInt(1), params.TestChainConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

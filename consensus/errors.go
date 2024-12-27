@@ -43,7 +43,7 @@ var (
 
 	ErrNotReadyToPropose = errors.New("not ready to propose, QC is not ready")
 
-	ErrNotReadyToMine = errors.New("Not ready to mine, it's not your turn")
+	ErrNotReadyToMine = errors.New("not ready to mine, it's not your turn")
 
-	ErrCoinbaseMismatch = errors.New("Block Coinbase address does not match its wallte address")
+	ErrCoinbaseMismatch = errors.New("block Coinbase address does not match its wallte address")
 )

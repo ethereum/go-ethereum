@@ -19,13 +19,13 @@ package light
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/bitutil"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -81,9 +81,9 @@ var trustedCheckpoints = map[common.Hash]trustedCheckpoint{
 }
 
 var (
-	ErrNoTrustedCht       = errors.New("No trusted canonical hash trie")
-	ErrNoTrustedBloomTrie = errors.New("No trusted bloom trie")
-	ErrNoHeader           = errors.New("Header not found")
+	ErrNoTrustedCht       = errors.New("no trusted canonical hash trie")
+	ErrNoTrustedBloomTrie = errors.New("no trusted bloom trie")
+	errNoHeader           = errors.New("header not found")
 	chtPrefix             = []byte("chtRoot-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
 	ChtTablePrefix        = "cht-"
 )
@@ -164,7 +164,7 @@ func (c *ChtIndexerBackend) Process(header *types.Header) {
 
 	td := core.GetTd(c.diskdb, hash, num)
 	if td == nil {
-		panic(nil)
+		panic("ChtIndexerBackend Process: td == nil")
 	}
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], num)

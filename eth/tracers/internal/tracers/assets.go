@@ -20,7 +20,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -303,15 +302,15 @@ func unigram_tracerJs() (*asset, error) {
 // It returns an error if the asset could not be found or
 // could not be loaded.
 func Asset(name string) ([]byte, error) {
-	canonicalName := strings.Replace(name, "\\", "/", -1)
+	canonicalName := strings.ReplaceAll(name, "\\", "/")
 	if f, ok := _bindata[canonicalName]; ok {
 		a, err := f()
 		if err != nil {
-			return nil, fmt.Errorf("Asset %s can't read by error: %v", name, err)
+			return nil, fmt.Errorf("can't read Asset %s by error: %v", name, err)
 		}
 		return a.bytes, nil
 	}
-	return nil, fmt.Errorf("Asset %s not found", name)
+	return nil, fmt.Errorf("not found Asset %s", name)
 }
 
 // AssetString returns the asset contents as a string (instead of a []byte).
@@ -341,29 +340,29 @@ func MustAssetString(name string) string {
 // It returns an error if the asset could not be found or
 // could not be loaded.
 func AssetInfo(name string) (os.FileInfo, error) {
-	canonicalName := strings.Replace(name, "\\", "/", -1)
+	canonicalName := strings.ReplaceAll(name, "\\", "/")
 	if f, ok := _bindata[canonicalName]; ok {
 		a, err := f()
 		if err != nil {
-			return nil, fmt.Errorf("AssetInfo %s can't read by error: %v", name, err)
+			return nil, fmt.Errorf("can't read AssetInfo %s by error: %v", name, err)
 		}
 		return a.info, nil
 	}
-	return nil, fmt.Errorf("AssetInfo %s not found", name)
+	return nil, fmt.Errorf("not found AssetInfo %s", name)
 }
 
 // AssetDigest returns the digest of the file with the given name. It returns an
 // error if the asset could not be found or the digest could not be loaded.
 func AssetDigest(name string) ([sha256.Size]byte, error) {
-	canonicalName := strings.Replace(name, "\\", "/", -1)
+	canonicalName := strings.ReplaceAll(name, "\\", "/")
 	if f, ok := _bindata[canonicalName]; ok {
 		a, err := f()
 		if err != nil {
-			return [sha256.Size]byte{}, fmt.Errorf("AssetDigest %s can't read by error: %v", name, err)
+			return [sha256.Size]byte{}, fmt.Errorf("can't read AssetDigest %s by error: %v", name, err)
 		}
 		return a.digest, nil
 	}
-	return [sha256.Size]byte{}, fmt.Errorf("AssetDigest %s not found", name)
+	return [sha256.Size]byte{}, fmt.Errorf("not found AssetDigest %s", name)
 }
 
 // Digests returns a map of all known files and their checksums.
@@ -422,17 +421,17 @@ const AssetDebug = false
 func AssetDir(name string) ([]string, error) {
 	node := _bintree
 	if len(name) != 0 {
-		canonicalName := strings.Replace(name, "\\", "/", -1)
+		canonicalName := strings.ReplaceAll(name, "\\", "/")
 		pathList := strings.Split(canonicalName, "/")
 		for _, p := range pathList {
 			node = node.Children[p]
 			if node == nil {
-				return nil, fmt.Errorf("Asset %s not found", name)
+				return nil, fmt.Errorf("not found Asset %s", name)
 			}
 		}
 	}
 	if node.Func != nil {
-		return nil, fmt.Errorf("Asset %s not found", name)
+		return nil, fmt.Errorf("not found Asset %s", name)
 	}
 	rv := make([]string, 0, len(node.Children))
 	for childName := range node.Children {
@@ -474,7 +473,7 @@ func RestoreAsset(dir, name string) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(_filePath(dir, name), data, info.Mode())
+	err = os.WriteFile(_filePath(dir, name), data, info.Mode())
 	if err != nil {
 		return err
 	}
@@ -499,6 +498,6 @@ func RestoreAssets(dir, name string) error {
 }
 
 func _filePath(dir, name string) string {
-	canonicalName := strings.Replace(name, "\\", "/", -1)
+	canonicalName := strings.ReplaceAll(name, "\\", "/")
 	return filepath.Join(append([]string{dir}, strings.Split(canonicalName, "/")...)...)
 }

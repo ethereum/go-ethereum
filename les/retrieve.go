@@ -119,7 +119,7 @@ func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *dist
 	case <-ctx.Done():
 		sentReq.stop(ctx.Err())
 	case <-shutdown:
-		sentReq.stop(errors.New("Client is shutting down"))
+		sentReq.stop(errors.New("client is shutting down"))
 	}
 	return sentReq.getError()
 }
@@ -306,7 +306,7 @@ func (r *sentReq) tryRequest() {
 	s, ok := r.sentTo[p]
 	r.lock.RUnlock()
 	if !ok {
-		panic(nil)
+		panic("sentReq tryRequest: !ok")
 	}
 
 	defer func() {

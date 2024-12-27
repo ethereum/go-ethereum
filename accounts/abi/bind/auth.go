@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"io"
-	"io/ioutil"
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
@@ -80,7 +79,7 @@ func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 // NewTransactorWithChainID is a utility method to easily create a transaction signer from
 // an encrypted json key stream and the associated passphrase.
 func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.Int) (*TransactOpts, error) {
-	json, err := ioutil.ReadAll(keyin)
+	json, err := io.ReadAll(keyin)
 	if err != nil {
 		return nil, err
 	}

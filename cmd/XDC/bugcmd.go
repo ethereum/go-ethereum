@@ -28,17 +28,14 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/cmd/internal/browser"
 	"github.com/XinFinOrg/XDPoSChain/params"
-
-	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
-	cli "gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
-var bugCommand = cli.Command{
-	Action:    utils.MigrateFlags(reportBug),
+var bugCommand = &cli.Command{
+	Action:    reportBug,
 	Name:      "bug",
 	Usage:     "opens a window to report a bug on the XDC repo",
 	ArgsUsage: " ",
-	Category:  "MISCELLANEOUS COMMANDS",
 }
 
 const issueUrl = "https://github.com/XinFinOrg/XDPoSChain/issues/new"

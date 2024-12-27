@@ -35,14 +35,13 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
-
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/contracts/blocksigner/contract"
 	randomizeContract "github.com/XinFinOrg/XDPoSChain/contracts/randomize/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
-	stateDatabase "github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -62,7 +61,7 @@ type RewardLog struct {
 var TxSignMu sync.RWMutex
 
 // Send tx sign for block number to smart contract blockSigner.
-func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database, eb common.Address) error {
+func CreateTransactionSign(chainConfig *params.ChainConfig, pool *txpool.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database, eb common.Address) error {
 	TxSignMu.Lock()
 	defer TxSignMu.Unlock()
 	if chainConfig.XDPoS != nil {
@@ -210,8 +209,8 @@ func BuildTxOpeningRandomize(nonce uint64, randomizeAddr common.Address, randomi
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(state *stateDatabase.StateDB, block *types.Block) ([]common.Address, error) {
-	return stateDatabase.GetSigners(state, block), nil
+func GetSignersFromContract(statedb *state.StateDB, block *types.Block) ([]common.Address, error) {
+	return state.GetSigners(statedb, block), nil
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
@@ -332,20 +331,19 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 	for i := prevCheckpoint + (rCheckpoint * 2) - 1; i >= startBlockNumber; i-- {
 		header = chain.GetHeader(header.ParentHash, i)
 		mapBlkHash[i] = header.Hash()
-		signData, ok := c.GetCachedSigningTxs(header.Hash())
+		signingTxs, ok := c.GetCachedSigningTxs(header.Hash())
 		if !ok {
 			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
 			block := chain.GetBlock(header.Hash(), i)
 			txs := block.Transactions()
 			if !chain.Config().IsTIPSigning(header.Number) {
 				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
-				signData = c.CacheNoneTIPSigningTxs(header, txs, receipts)
+				signingTxs = c.CacheNoneTIPSigningTxs(header, txs, receipts)
 			} else {
-				signData = c.CacheSigningTxs(header.Hash(), txs)
+				signingTxs = c.CacheSigningTxs(header.Hash(), txs)
 			}
 		}
-		txs := signData.([]*types.Transaction)
-		for _, tx := range txs {
+		for _, tx := range signingTxs {
 			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
 			from := *tx.From()
 			data[blkHash] = append(data[blkHash], from)
@@ -414,27 +412,27 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 }
 
 // Get candidate owner by address.
-func GetCandidatesOwnerBySigner(state *state.StateDB, signerAddr common.Address) common.Address {
-	owner := stateDatabase.GetCandidateOwner(state, signerAddr)
+func GetCandidatesOwnerBySigner(statedb *state.StateDB, signerAddr common.Address) common.Address {
+	owner := state.GetCandidateOwner(statedb, signerAddr)
 	return owner
 }
 
-func CalculateRewardForHolders(foundationWalletAddr common.Address, state *state.StateDB, signer common.Address, calcReward *big.Int, blockNumber uint64) (error, map[common.Address]*big.Int) {
+func CalculateRewardForHolders(foundationWalletAddr common.Address, state *state.StateDB, signer common.Address, calcReward *big.Int, blockNumber uint64) (map[common.Address]*big.Int, error) {
 	rewards, err := GetRewardBalancesRate(foundationWalletAddr, state, signer, calcReward, blockNumber)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, rewards
+	return rewards, nil
 }
 
-func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.StateDB, masterAddr common.Address, totalReward *big.Int, blockNumber uint64) (map[common.Address]*big.Int, error) {
-	owner := GetCandidatesOwnerBySigner(state, masterAddr)
+func GetRewardBalancesRate(foundationWalletAddr common.Address, statedb *state.StateDB, masterAddr common.Address, totalReward *big.Int, blockNumber uint64) (map[common.Address]*big.Int, error) {
+	owner := GetCandidatesOwnerBySigner(statedb, masterAddr)
 	balances := make(map[common.Address]*big.Int)
 	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardMasterPercent))
 	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
 	balances[owner] = rewardMaster
 	// Get voters for masternode.
-	voters := stateDatabase.GetVoters(state, masterAddr)
+	voters := state.GetVoters(statedb, masterAddr)
 
 	if len(voters) > 0 {
 		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(common.RewardVoterPercent))
@@ -446,7 +444,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 			if _, ok := voterCaps[voteAddr]; ok && common.TIP2019Block.Uint64() <= blockNumber {
 				continue
 			}
-			voterCap := stateDatabase.GetVoterCap(state, masterAddr, voteAddr)
+			voterCap := state.GetVoterCap(statedb, masterAddr, voteAddr)
 			totalCap.Add(totalCap, voterCap)
 			voterCaps[voteAddr] = voterCap
 		}
@@ -558,7 +556,7 @@ func Decrypt(key []byte, cryptoText string) string {
 	// XORKeyStream can work in-place if the two arguments are the same.
 	stream.XORKeyStream(ciphertext, ciphertext)
 
-	return fmt.Sprintf("%s", ciphertext)
+	return string(ciphertext[:])
 }
 
 // Generate random string.

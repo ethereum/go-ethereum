@@ -27,23 +27,25 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 var (
-	ErrInvalidSig               = errors.New("invalid transaction v, r, s values")
-	ErrUnexpectedProtection     = errors.New("transaction type does not supported EIP-155 protected signatures")
-	ErrInvalidTxType            = errors.New("transaction type not valid in this context")
-	ErrTxTypeNotSupported       = errors.New("transaction type not supported")
-	ErrGasFeeCapTooLow          = errors.New("fee cap less than base fee")
-	errShortTypedTx             = errors.New("typed transaction too short")
-	errInvalidYParity           = errors.New("'yParity' field must be 0 or 1")
-	errVYParityMismatch         = errors.New("'v' and 'yParity' fields do not match")
-	errVYParityMissing          = errors.New("missing 'yParity' or 'v' field in transaction")
-	errEmptyTypedTx             = errors.New("empty typed transaction bytes")
-	errNoSigner                 = errors.New("missing signing methods")
+	ErrInvalidSig           = errors.New("invalid transaction v, r, s values")
+	ErrUnexpectedProtection = errors.New("transaction type does not supported EIP-155 protected signatures")
+	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
+	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
+	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
+	errShortTypedTx         = errors.New("typed transaction too short")
+	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
+	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
+	errVYParityMissing      = errors.New("missing 'yParity' or 'v' field in transaction")
+	errNoSigner             = errors.New("missing signing methods")
+	ErrFeeCapTooLow         = errors.New("fee cap less than base fee")
+
 	skipNonceDestinationAddress = map[common.Address]bool{
 		common.XDCXAddrBinary:                         true,
 		common.TradingStateAddrBinary:                 true,
@@ -56,6 +58,7 @@ var (
 const (
 	LegacyTxType = iota
 	AccessListTxType
+	DynamicFeeTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -88,12 +91,22 @@ type TxData interface {
 	data() []byte
 	gas() uint64
 	gasPrice() *big.Int
+	gasTipCap() *big.Int
+	gasFeeCap() *big.Int
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
+
+	// effectiveGasPrice computes the gas price paid by the transaction, given
+	// the inclusion block baseFee.
+	//
+	// Unlike other TxData methods, the returned *big.Int should be an independent
+	// copy of the computed value, i.e. callers are allowed to mutate the result.
+	// Method implementations can use 'dst' to store the result.
+	effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -143,7 +156,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(&inner, int(rlp.ListSize(size)))
 		}
 		return err
-	case kind == rlp.String:
+	default:
 		// It's an EIP-2718 typed TX envelope.
 		var b []byte
 		if b, err = s.Bytes(); err != nil {
@@ -154,8 +167,6 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 			tx.setDecoded(inner, len(b))
 		}
 		return err
-	default:
-		return rlp.ErrExpectedList
 	}
 }
 
@@ -183,12 +194,16 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 
 // decodeTyped decodes a typed transaction from the canonical format.
 func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
-	if len(b) == 0 {
-		return nil, errEmptyTypedTx
+	if len(b) <= 1 {
+		return nil, errShortTypedTx
 	}
 	switch b[0] {
 	case AccessListTxType:
 		var inner AccessListTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case DynamicFeeTxType:
+		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:
@@ -274,6 +289,12 @@ func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 // GasPrice returns the gas price of the transaction.
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
+// GasTipCap returns the gasTipCap per gas of the transaction.
+func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
+
+// GasFeeCap returns the fee cap per gas of the transaction.
+func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
+
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
 
@@ -283,13 +304,7 @@ func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
-	// Copy the pointed-to address.
-	ito := tx.inner.to()
-	if ito == nil {
-		return nil
-	}
-	cpy := *ito
-	return &cpy
+	return copyAddressPtr(tx.inner.to())
 }
 
 func (tx *Transaction) From() *common.Address {
@@ -306,20 +321,75 @@ func (tx *Transaction) From() *common.Address {
 	return &from
 }
 
+// Cost returns gas * gasPrice + value.
+func (tx *Transaction) Cost() *big.Int {
+	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+	total.Add(total, tx.Value())
+	return total
+}
+
 // RawSignatureValues returns the V, R, S signature values of the transaction.
 // The return values should not be modified by the caller.
 func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.inner.rawSignatureValues()
 }
 
-// GasPriceCmp compares the gas prices of two transactions.
-func (tx *Transaction) GasPriceCmp(other *Transaction) int {
-	return tx.inner.gasPrice().Cmp(other.inner.gasPrice())
+// GasFeeCapCmp compares the fee cap of two transactions.
+func (tx *Transaction) GasFeeCapCmp(other *Transaction) int {
+	return tx.inner.gasFeeCap().Cmp(other.inner.gasFeeCap())
 }
 
-// GasPriceIntCmp compares the gas price of the transaction against the given price.
-func (tx *Transaction) GasPriceIntCmp(other *big.Int) int {
-	return tx.inner.gasPrice().Cmp(other)
+// GasFeeCapIntCmp compares the fee cap of the transaction against the given fee cap.
+func (tx *Transaction) GasFeeCapIntCmp(other *big.Int) int {
+	return tx.inner.gasFeeCap().Cmp(other)
+}
+
+// GasTipCapCmp compares the gasTipCap of two transactions.
+func (tx *Transaction) GasTipCapCmp(other *Transaction) int {
+	return tx.inner.gasTipCap().Cmp(other.inner.gasTipCap())
+}
+
+// GasTipCapIntCmp compares the gasTipCap of the transaction against the given gasTipCap.
+func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
+	return tx.inner.gasTipCap().Cmp(other)
+}
+
+// EffectiveGasTip returns the effective miner gasTipCap for the given base fee.
+// Note: if the effective gasTipCap is negative, this method returns both error
+// the actual negative value, _and_ ErrGasFeeCapTooLow
+func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
+	if baseFee == nil {
+		return tx.GasTipCap(), nil
+	}
+	var err error
+	gasFeeCap := tx.GasFeeCap()
+	if gasFeeCap.Cmp(baseFee) == -1 {
+		err = ErrGasFeeCapTooLow
+	}
+	return math.BigMin(tx.GasTipCap(), gasFeeCap.Sub(gasFeeCap, baseFee)), err
+}
+
+// EffectiveGasTipValue is identical to EffectiveGasTip, but does not return an
+// error in case the effective gasTipCap is negative
+func (tx *Transaction) EffectiveGasTipValue(baseFee *big.Int) *big.Int {
+	effectiveTip, _ := tx.EffectiveGasTip(baseFee)
+	return effectiveTip
+}
+
+// EffectiveGasTipCmp compares the effective gasTipCap of two transactions assuming the given base fee.
+func (tx *Transaction) EffectiveGasTipCmp(other *Transaction, baseFee *big.Int) int {
+	if baseFee == nil {
+		return tx.GasTipCapCmp(other)
+	}
+	return tx.EffectiveGasTipValue(baseFee).Cmp(other.EffectiveGasTipValue(baseFee))
+}
+
+// EffectiveGasTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.
+func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) int {
+	if baseFee == nil {
+		return tx.GasTipCapIntCmp(other)
+	}
+	return tx.EffectiveGasTipValue(baseFee).Cmp(other)
 }
 
 // Hash returns the transaction hash.
@@ -350,31 +420,43 @@ func (tx *Transaction) Size() common.StorageSize {
 	return common.StorageSize(c)
 }
 
+func (tx *Transaction) EffectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	return tx.inner.effectiveGasPrice(dst, baseFee)
+}
+
 // AsMessage returns the transaction as a core.Message.
-func (tx *Transaction) AsMessage(s Signer, balanceFee *big.Int, number *big.Int) (Message, error) {
+func (tx *Transaction) AsMessage(s Signer, balanceFee, blockNumber, baseFee *big.Int) (Message, error) {
 	msg := Message{
 		nonce:           tx.Nonce(),
 		gasLimit:        tx.Gas(),
 		gasPrice:        new(big.Int).Set(tx.GasPrice()),
+		gasFeeCap:       new(big.Int).Set(tx.GasFeeCap()),
+		gasTipCap:       new(big.Int).Set(tx.GasTipCap()),
 		to:              tx.To(),
 		amount:          tx.Value(),
 		data:            tx.Data(),
 		accessList:      tx.AccessList(),
-		checkNonce:      true,
+		isFake:          false,
 		balanceTokenFee: balanceFee,
+	}
+
+	if balanceFee != nil {
+		if blockNumber != nil {
+			if blockNumber.Cmp(common.BlockNumberGas50x) >= 0 {
+				msg.gasPrice = common.GasPrice50x
+			} else if blockNumber.Cmp(common.TIPTRC21Fee) > 0 {
+				msg.gasPrice = common.TRC21GasPrice
+			} else {
+				msg.gasPrice = common.TRC21GasPriceBefore
+			}
+		}
+	} else if baseFee != nil {
+		// If baseFee provided, set gasPrice to effectiveGasPrice.
+		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.gasTipCap, baseFee), msg.gasFeeCap)
 	}
 
 	var err error
 	msg.from, err = Sender(s, tx)
-	if balanceFee != nil {
-		if number.Cmp(common.BlockNumberGas50x) >= 0 {
-			msg.gasPrice = common.GasPrice50x
-		} else if number.Cmp(common.TIPTRC21Fee) > 0 {
-			msg.gasPrice = common.TRC21GasPrice
-		} else {
-			msg.gasPrice = common.TRC21GasPriceBefore
-		}
-	}
 	return msg, err
 }
 
@@ -390,13 +472,6 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
-// Cost returns gas * gasPrice + value.
-func (tx *Transaction) Cost() *big.Int {
-	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
-	total.Add(total, tx.Value())
-	return total
-}
-
 // TxCost returns gas * gasPrice + value.
 func (tx *Transaction) TxCost(number *big.Int) *big.Int {
 	total := new(big.Int).Mul(common.GetGasPrice(number), new(big.Int).SetUint64(tx.Gas()))
@@ -406,7 +481,7 @@ func (tx *Transaction) TxCost(number *big.Int) *big.Int {
 
 func (tx *Transaction) IsSpecialTransaction() bool {
 	to := tx.To()
-	return to != nil && (*to == common.RandomizeSMCBinary || *to == common.BlockSignersBinary)
+	return to != nil && (*to == common.BlockSignersBinary || *to == common.RandomizeSMCBinary)
 }
 
 func (tx *Transaction) IsTradingTransaction() bool {
@@ -539,7 +614,7 @@ func (tx *Transaction) String() string {
 	GasPrice: %#x
 	GasLimit  %#x
 	Value:    %#x
-	Data:     0x%x
+	Data:     %#x
 	V:        %#x
 	R:        %#x
 	S:        %#x
@@ -742,13 +817,15 @@ type Message struct {
 	amount          *big.Int
 	gasLimit        uint64
 	gasPrice        *big.Int
+	gasFeeCap       *big.Int
+	gasTipCap       *big.Int
 	data            []byte
 	accessList      AccessList
-	checkNonce      bool
+	isFake          bool
 	balanceTokenFee *big.Int
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList AccessList, checkNonce bool, balanceTokenFee *big.Int, number *big.Int) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool, balanceTokenFee *big.Int, number *big.Int) Message {
 	if balanceTokenFee != nil {
 		gasPrice = common.GetGasPrice(number)
 	}
@@ -759,9 +836,11 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		amount:          amount,
 		gasLimit:        gasLimit,
 		gasPrice:        gasPrice,
+		gasFeeCap:       gasFeeCap,
+		gasTipCap:       gasTipCap,
 		data:            data,
 		accessList:      accessList,
-		checkNonce:      checkNonce,
+		isFake:          isFake,
 		balanceTokenFee: balanceTokenFee,
 	}
 }
@@ -770,11 +849,13 @@ func (m Message) From() common.Address      { return m.from }
 func (m Message) BalanceTokenFee() *big.Int { return m.balanceTokenFee }
 func (m Message) To() *common.Address       { return m.to }
 func (m Message) GasPrice() *big.Int        { return m.gasPrice }
+func (m Message) GasFeeCap() *big.Int       { return m.gasFeeCap }
+func (m Message) GasTipCap() *big.Int       { return m.gasTipCap }
 func (m Message) Value() *big.Int           { return m.amount }
 func (m Message) Gas() uint64               { return m.gasLimit }
 func (m Message) Nonce() uint64             { return m.nonce }
 func (m Message) Data() []byte              { return m.data }
-func (m Message) CheckNonce() bool          { return m.checkNonce }
+func (m Message) IsFake() bool              { return m.isFake }
 func (m Message) AccessList() AccessList    { return m.accessList }
 
 func (m *Message) SetNonce(nonce uint64) { m.nonce = nonce }
@@ -782,4 +863,17 @@ func (m *Message) SetNonce(nonce uint64) { m.nonce = nonce }
 func (m *Message) SetBalanceTokenFeeForCall() {
 	m.balanceTokenFee = new(big.Int).SetUint64(m.gasLimit)
 	m.balanceTokenFee.Mul(m.balanceTokenFee, m.gasPrice)
+}
+
+func (m *Message) SetBalanceTokenFee(balanceTokenFee *big.Int) {
+	m.balanceTokenFee = balanceTokenFee
+}
+
+// copyAddressPtr copies an address.
+func copyAddressPtr(a *common.Address) *common.Address {
+	if a == nil {
+		return nil
+	}
+	cpy := *a
+	return &cpy
 }

@@ -17,9 +17,10 @@
 package eth
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"reflect"
 	"testing"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -84,7 +85,7 @@ func TestStorageRangeAt(t *testing.T) {
 			t.Error(err)
 		}
 		if !reflect.DeepEqual(result, test.want) {
-			t.Fatalf("wrong result for range 0x%x.., limit %d:\ngot %s\nwant %s",
+			t.Fatalf("wrong result for range %#x.., limit %d:\ngot %s\nwant %s",
 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
 		}
 	}

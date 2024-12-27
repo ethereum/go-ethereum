@@ -26,8 +26,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 )
 
-// NotFound is returned by API methods if the requested item does not exist.
-var NotFound = errors.New("not found")
+// ErrNotFound is returned by API methods if the requested item does not exist.
+var ErrNotFound = errors.New("not found")
 
 // TODO: move subscription to package event
 
@@ -117,10 +117,13 @@ type CallMsg struct {
 	To              *common.Address // the destination contract (nil for contract creation)
 	Gas             uint64          // if 0, the call executes with near-infinite gas
 	GasPrice        *big.Int        // wei <-> gas exchange ratio
+	GasFeeCap       *big.Int        // EIP-1559 fee cap per gas.
+	GasTipCap       *big.Int        // EIP-1559 tip per gas.
 	Value           *big.Int        // amount of wei sent along with the call
 	Data            []byte          // input data, usually an ABI-encoded contract method invocation
 	BalanceTokenFee *big.Int
-	AccessList      types.AccessList // EIP-2930 access list.
+
+	AccessList types.AccessList // EIP-2930 access list.
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by
@@ -178,6 +181,15 @@ type TransactionSender interface {
 // optimal gas price given current fee market conditions.
 type GasPricer interface {
 	SuggestGasPrice(ctx context.Context) (*big.Int, error)
+}
+
+// FeeHistory provides recent fee market data that consumers can use to determine
+// a reasonable maxPriorityFeePerGas value.
+type FeeHistory struct {
+	OldestBlock  *big.Int     // block coresponding to first response value
+	Reward       [][]*big.Int // list every txs priority fee per block
+	BaseFee      []*big.Int   // list of each block's base fee
+	GasUsedRatio []float64    // ratio of gas used out of the total available limit
 }
 
 // A PendingStateReader provides access to the pending state, which is the result of all

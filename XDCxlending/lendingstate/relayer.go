@@ -41,10 +41,7 @@ func IsResignedRelayer(relayer common.Address, statedb *state.StateDB) bool {
 	slot := RelayerMappingSlot["RESIGN_REQUESTS"]
 	locBig := GetLocMappingAtKey(relayer.Hash(), slot)
 	locHash := common.BigToHash(locBig)
-	if statedb.GetState(common.HexToAddress(common.RelayerRegistrationSMC), locHash) != (common.Hash{}) {
-		return true
-	}
-	return false
+	return statedb.GetState(common.HexToAddress(common.RelayerRegistrationSMC), locHash) != (common.Hash{})
 }
 
 func GetBaseTokenLength(relayer common.Address, statedb *state.StateDB) uint64 {
@@ -235,7 +232,7 @@ func CheckAddTokenBalance(addr common.Address, value *big.Int, token common.Addr
 		newBalance := new(big.Int).Add(balance, value)
 		log.Debug("CheckAddTokenBalance settle balance: ADD TOKEN BALANCE ", "token", token.String(), "address", addr.String(), "balance", balance, "value", value, "newBalance", newBalance)
 		if common.BigToHash(newBalance).Big().Cmp(newBalance) != 0 {
-			return nil, fmt.Errorf("Overflow when try add token balance , max is 2^256 , balance : %v , value:%v ", balance, value)
+			return nil, fmt.Errorf("overflow when try add token balance , max is 2^256 , balance : %v , value : %v", balance, value)
 		} else {
 			return newBalance, nil
 		}

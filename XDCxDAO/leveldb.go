@@ -8,10 +8,8 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 type BatchItem struct {
@@ -21,7 +19,6 @@ type BatchItem struct {
 type BatchDatabase struct {
 	db         ethdb.Database
 	emptyKey   []byte
-	cacheItems *lru.Cache // Cache for reading
 	lock       sync.RWMutex
 	cacheLimit int
 	Debug      bool
@@ -44,11 +41,8 @@ func NewBatchDatabaseWithEncode(datadir string, cacheLimit int) *BatchDatabase {
 		itemCacheLimit = cacheLimit
 	}
 
-	cacheItems, _ := lru.New(itemCacheLimit)
-
 	batchDB := &BatchDatabase{
 		db:         db,
-		cacheItems: cacheItems,
 		emptyKey:   EmptyKey(), // pre alloc for comparison
 		cacheLimit: itemCacheLimit,
 	}

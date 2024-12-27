@@ -23,8 +23,8 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"golang.org/x/crypto/sha3"
 )
 
 // LendingSigner interface for lending signer transaction
@@ -86,7 +86,7 @@ func LendingSignTx(tx *LendingTransaction, s LendingSigner, prv *ecdsa.PrivateKe
 	return tx.WithSignature(s, sig)
 }
 
-//LendingTxSigner signer
+// LendingTxSigner signer
 type LendingTxSigner struct{}
 
 // Equal compare two signer
@@ -95,9 +95,9 @@ func (lendingsign LendingTxSigner) Equal(s2 LendingSigner) bool {
 	return ok
 }
 
-//SignatureValues returns signature values. This signature needs to be in the [R || S || V] format where V is 0 or 1.
+// SignatureValues returns signature values. This signature needs to be in the [R || S || V] format where V is 0 or 1.
 func (lendingsign LendingTxSigner) SignatureValues(tx *LendingTransaction, sig []byte) (r, s, v *big.Int, err error) {
-	if len(sig) != 65 {
+	if len(sig) != crypto.SignatureLength {
 		panic(fmt.Sprintf("wrong size for signature: got %d, want 65", len(sig)))
 	}
 	r = new(big.Int).SetBytes(sig[:32])
@@ -112,7 +112,7 @@ func (lendingsign LendingTxSigner) LendingCreateHash(tx *LendingTransaction) com
 		"collateral", tx.CollateralToken().Hex(), "lending", tx.LendingToken().Hex(), "quantity", tx.Quantity(), "term", tx.Term(),
 		"interest", tx.Interest(), "side", tx.Side, "status", tx.Status(), "type", tx.Type(), "nonce", tx.Nonce())
 	borrowing := tx.Side() == LendingSideBorrow
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	sha.Write(tx.RelayerAddress().Bytes())
 	sha.Write(tx.UserAddress().Bytes())
 	if borrowing {
@@ -140,7 +140,7 @@ func (lendingsign LendingTxSigner) LendingCreateHash(tx *LendingTransaction) com
 
 // LendingCancelHash hash of cancelled lending transaction
 func (lendingsign LendingTxSigner) LendingCancelHash(tx *LendingTransaction) common.Hash {
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	sha.Write(common.BigToHash(big.NewInt(int64(tx.Nonce()))).Bytes())
 	sha.Write([]byte(tx.Status()))
 	sha.Write(tx.RelayerAddress().Bytes())
@@ -153,7 +153,7 @@ func (lendingsign LendingTxSigner) LendingCancelHash(tx *LendingTransaction) com
 
 // LendingRepayHash hash of cancelled lending transaction
 func (lendingsign LendingTxSigner) LendingRepayHash(tx *LendingTransaction) common.Hash {
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	sha.Write(common.BigToHash(big.NewInt(int64(tx.Nonce()))).Bytes())
 	sha.Write([]byte(tx.Status()))
 	sha.Write(tx.RelayerAddress().Bytes())
@@ -167,7 +167,7 @@ func (lendingsign LendingTxSigner) LendingRepayHash(tx *LendingTransaction) comm
 
 // LendingTopUpHash hash of cancelled lending transaction
 func (lendingsign LendingTxSigner) LendingTopUpHash(tx *LendingTransaction) common.Hash {
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	sha.Write(common.BigToHash(big.NewInt(int64(tx.Nonce()))).Bytes())
 	sha.Write([]byte(tx.Status()))
 	sha.Write(tx.RelayerAddress().Bytes())

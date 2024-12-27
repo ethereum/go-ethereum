@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
-
-var emptyCodeHash = crypto.Keccak256(nil)
 
 type Code []byte
 
@@ -93,7 +93,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
+	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
 }
 
 // Account is the Ethereum consensus representation of accounts.
@@ -111,7 +111,7 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 		data.Balance = new(big.Int)
 	}
 	if data.CodeHash == nil {
-		data.CodeHash = emptyCodeHash
+		data.CodeHash = types.EmptyCodeHash.Bytes()
 	}
 	return &stateObject{
 		db:            db,
@@ -174,6 +174,8 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
 	}
+	// Track the amount of time wasted on reading the storge trie
+	defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
 	value := common.Hash{}
 	// Load from DB in case it is missing.
 	enc, err := s.getTrie(db).TryGet(key[:])
@@ -270,6 +272,8 @@ func (s *stateObject) setState(key, value common.Hash) {
 
 // updateTrie writes cached storage modifications into the object's storage trie.
 func (s *stateObject) updateTrie(db Database) Trie {
+	// Track the amount of time wasted on updating the storge trie
+	defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
 	tr := s.getTrie(db)
 	for key, value := range s.dirtyStorage {
 		delete(s.dirtyStorage, key)
@@ -287,6 +291,10 @@ func (s *stateObject) updateTrie(db Database) Trie {
 // UpdateRoot sets the trie root to the current root hash of
 func (s *stateObject) updateRoot(db Database) {
 	s.updateTrie(db)
+
+	// Track the amount of time wasted on hashing the storge trie
+	defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
+
 	s.data.Root = s.trie.Hash()
 }
 
@@ -297,6 +305,9 @@ func (s *stateObject) CommitTrie(db Database) error {
 	if s.dbErr != nil {
 		return s.dbErr
 	}
+	// Track the amount of time wasted on committing the storge trie
+	defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
+
 	root, err := s.trie.Commit(nil)
 	if err == nil {
 		s.data.Root = root
@@ -372,7 +383,7 @@ func (s *stateObject) Code(db Database) []byte {
 	if s.code != nil {
 		return s.code
 	}
-	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
+	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return nil
 	}
 	code, err := db.ContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))

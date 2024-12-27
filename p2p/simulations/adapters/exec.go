@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -155,8 +156,7 @@ func (n *ExecNode) Client() (*rpc.Client, error) {
 var wsAddrPattern = regexp.MustCompile(`ws://[\d.:]+`)
 
 // Start exec's the node passing the ID and service as command line arguments
-// and the node config encoded as JSON in the _P2P_NODE_CONFIG environment
-// variable
+// and the node config encoded as JSON in an environment variable.
 func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	if n.Cmd != nil {
 		return errors.New("already started")
@@ -189,7 +189,7 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	cmd := n.newCmd()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = stderr
-	cmd.Env = append(os.Environ(), fmt.Sprintf("_P2P_NODE_CONFIG=%s", confData))
+	cmd.Env = append(os.Environ(), envNodeConfig+"="+string(confData))
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting node: %s", err)
 	}
@@ -344,25 +344,58 @@ type execNodeConfig struct {
 	PeerAddrs map[string]string `json:"peer_addrs,omitempty"`
 }
 
-// execP2PNode starts a devp2p node when the current binary is executed with
+func initLogging() {
+	// Initialize the logging by default first.
+	var innerHandler slog.Handler
+	innerHandler = slog.NewTextHandler(os.Stderr, nil)
+	glogger := log.NewGlogHandler(innerHandler)
+	glogger.Verbosity(log.LevelInfo)
+	log.SetDefault(log.NewLogger(glogger))
+
+	confEnv := os.Getenv(envNodeConfig)
+	if confEnv == "" {
+		return
+	}
+	var conf execNodeConfig
+	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
+		return
+	}
+	var writer = os.Stderr
+	if conf.Node.LogFile != "" {
+		logWriter, err := os.Create(conf.Node.LogFile)
+		if err != nil {
+			return
+		}
+		writer = logWriter
+	}
+	var verbosity = log.LevelInfo
+	if conf.Node.LogVerbosity <= log.LevelTrace && conf.Node.LogVerbosity >= log.LevelCrit {
+		verbosity = log.FromLegacyLevel(int(conf.Node.LogVerbosity))
+	}
+	// Reinitialize the logger
+	innerHandler = log.NewTerminalHandler(writer, true)
+	glogger = log.NewGlogHandler(innerHandler)
+	glogger.Verbosity(verbosity)
+	log.SetDefault(log.NewLogger(glogger))
+}
+
+// execP2PNode starts a simulation node when the current binary is executed with
 // argv[0] being "p2p-node", reading the service / ID from argv[1] / argv[2]
-// and the node config from the _P2P_NODE_CONFIG environment variable
+// and the node config from an environment variable.
 func execP2PNode() {
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
-	glogger.Verbosity(log.LvlInfo)
-	log.Root().SetHandler(glogger)
+	initLogging()
 
 	// read the services from argv
 	serviceNames := strings.Split(os.Args[1], ",")
 
 	// decode the config
-	confEnv := os.Getenv("_P2P_NODE_CONFIG")
+	confEnv := os.Getenv(envNodeConfig)
 	if confEnv == "" {
-		log.Crit("missing _P2P_NODE_CONFIG")
+		log.Crit("missing " + envNodeConfig)
 	}
 	var conf execNodeConfig
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
-		log.Crit("error decoding _P2P_NODE_CONFIG", "err", err)
+		log.Crit("error decoding "+envNodeConfig, "err", err)
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
@@ -476,6 +509,10 @@ func (s *snapshotService) SaveData() {
 func (s *snapshotService) Stop() error {
 	return nil
 }
+
+const (
+	envNodeConfig = "_P2P_NODE_CONFIG"
+)
 
 // SnapshotAPI provides an RPC method to create snapshots of services
 type SnapshotAPI struct {

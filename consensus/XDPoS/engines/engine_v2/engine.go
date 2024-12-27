@@ -13,6 +13,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/countdown"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
@@ -21,7 +22,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 type XDPoS_v2 struct {
@@ -32,14 +32,14 @@ type XDPoS_v2 struct {
 	isInitilised bool                // status of v2 variables
 	whosTurn     common.Address      // Record waiting for who to mine
 
-	snapshots       *lru.ARCCache // Snapshots for gap block
-	signatures      *lru.ARCCache // Signatures of recent blocks to speed up mining
-	epochSwitches   *lru.ARCCache // infos of epoch: master nodes, epoch switch block info, parent of that info
-	verifiedHeaders *lru.ARCCache
+	snapshots       *lru.Cache[common.Hash, *SnapshotV2]            // Snapshots for gap block
+	signatures      *utils.SigLRU                                   // Signatures of recent blocks to speed up mining
+	epochSwitches   *lru.Cache[common.Hash, *types.EpochSwitchInfo] // infos of epoch: master nodes, epoch switch block info, parent of that info
+	verifiedHeaders *lru.Cache[common.Hash, struct{}]
 
 	// only contains epoch switch block info
 	// input: round, output: infos of epoch switch block and next epoch switch block info
-	round2epochBlockInfo *lru.ARCCache
+	round2epochBlockInfo *lru.Cache[types.Round, *types.BlockInfo]
 
 	signer   common.Address  // Ethereum address of the signing key
 	signFn   clique.SignerFn // Signer function to authorize hashes with
@@ -78,12 +78,6 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database, minePeriodCh chan i
 	duration := time.Duration(config.V2.CurrentConfig.TimeoutPeriod) * time.Second
 	timeoutTimer := countdown.NewCountDown(duration)
 
-	snapshots, _ := lru.NewARC(utils.InmemorySnapshots)
-	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
-	epochSwitches, _ := lru.NewARC(int(utils.InmemoryEpochs))
-	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
-	round2epochBlockInfo, _ := lru.NewARC(utils.InmemoryRound2Epochs)
-
 	timeoutPool := utils.NewPool()
 	votePool := utils.NewPool()
 	engine := &XDPoS_v2{
@@ -93,17 +87,17 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database, minePeriodCh chan i
 		db:           db,
 		isInitilised: false,
 
-		signatures: signatures,
+		signatures: lru.NewCache[common.Hash, common.Address](utils.InmemorySnapshots),
 
-		verifiedHeaders: verifiedHeaders,
-		snapshots:       snapshots,
-		epochSwitches:   epochSwitches,
+		verifiedHeaders: lru.NewCache[common.Hash, struct{}](utils.InmemorySnapshots),
+		snapshots:       lru.NewCache[common.Hash, *SnapshotV2](utils.InmemorySnapshots),
+		epochSwitches:   lru.NewCache[common.Hash, *types.EpochSwitchInfo](int(utils.InmemoryEpochs)),
 		timeoutWorker:   timeoutTimer,
 		BroadcastCh:     make(chan interface{}),
 		minePeriodCh:    minePeriodCh,
 		newRoundCh:      newRoundCh,
 
-		round2epochBlockInfo: round2epochBlockInfo,
+		round2epochBlockInfo: lru.NewCache[types.Round, *types.BlockInfo](utils.InmemoryRound2Epochs),
 
 		timeoutPool: timeoutPool,
 		votePool:    votePool,
@@ -674,7 +668,7 @@ func (x *XDPoS_v2) VerifyTimeoutMessage(chain consensus.ChainReader, timeoutMsg 
 	}
 	if len(snap.NextEpochCandidates) == 0 {
 		log.Error("[VerifyTimeoutMessage] cannot find NextEpochCandidates from snapshot", "messageGapNumber", timeoutMsg.GapNumber)
-		return false, errors.New("Empty master node lists from snapshot")
+		return false, errors.New("empty master node lists from snapshot")
 	}
 
 	verified, signer, err := x.verifyMsgSignature(types.TimeoutSigHash(&types.TimeoutForSign{
@@ -802,7 +796,7 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	epochInfo, err := x.getEpochSwitchInfo(blockChainReader, parentHeader, quorumCert.ProposedBlockInfo.Hash)
 	if err != nil {
 		log.Error("[verifyQC] Error when getting epoch switch Info to verify QC", "Error", err)
-		return errors.New("Fail to verify QC due to failure in getting epoch switch info")
+		return errors.New("fail to verify QC due to failure in getting epoch switch info")
 	}
 
 	signatures, duplicates := UniqueSignatures(quorumCert.Signatures)
@@ -834,12 +828,12 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 			}), sig, epochInfo.Masternodes)
 			if err != nil {
 				log.Error("[verifyQC] Error while verfying QC message signatures", "Error", err)
-				haveError = errors.New("Error while verfying QC message signatures")
+				haveError = errors.New("error while verfying QC message signatures")
 				return
 			}
 			if !verified {
 				log.Warn("[verifyQC] Signature not verified doing QC verification", "QC", quorumCert)
-				haveError = errors.New("Fail to verify QC due to signature mis-match")
+				haveError = errors.New("fail to verify QC due to signature mis-match")
 				return
 			}
 		}(signature)

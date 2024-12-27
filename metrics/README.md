@@ -5,7 +5,7 @@ go-metrics
 
 Go port of Coda Hale's Metrics library: <https://github.com/dropwizard/metrics>.
 
-Documentation: <http://godoc.org/github.com/rcrowley/go-metrics>.
+Documentation: <https://godoc.org/github.com/rcrowley/go-metrics>.
 
 Usage
 -----
@@ -100,24 +100,6 @@ go influxdb.InfluxDB(metrics.DefaultRegistry,
 )
 ```
 
-Periodically upload every metric to Librato using the [Librato client](https://github.com/mihasya/go-metrics-librato):
-
-**Note**: the client included with this repository under the `librato` package
-has been deprecated and moved to the repository linked above.
-
-```go
-import "github.com/mihasya/go-metrics-librato"
-
-go librato.Librato(metrics.DefaultRegistry,
-    10e9,                  // interval
-    "example@example.com", // account owner email address
-    "token",               // Librato API token
-    "hostname",            // source
-    []float64{0.95},       // percentiles to send
-    time.Millisecond,      // time unit
-)
-```
-
 Periodically emit every metric to StatHat:
 
 ```go
@@ -128,7 +110,7 @@ go stathat.Stathat(metrics.DefaultRegistry, 10e9, "example@example.com")
 
 Maintain all metrics along with expvars at `/debug/metrics`:
 
-This uses the same mechanism as [the official expvar](http://golang.org/pkg/expvar/)
+This uses the same mechanism as [the official expvar](https://golang.org/pkg/expvar/)
 but exposed under `/debug/metrics`, which shows a json representation of all your usual expvars
 as well as all your go-metrics.
 
@@ -157,7 +139,6 @@ Publishing Metrics
 
 Clients are available for the following destinations:
 
-* Librato - https://github.com/mihasya/go-metrics-librato
 * Graphite - https://github.com/cyberdelia/go-metrics-graphite
 * InfluxDB - https://github.com/vrischmann/go-metrics-influxdb
 * Ganglia - https://github.com/appscode/metlia

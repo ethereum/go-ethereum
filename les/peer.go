@@ -279,7 +279,7 @@ func (p *peer) RequestProofs(reqID, cost uint64, reqs []ProofReq) error {
 	case lpv2:
 		return sendRequest(p.rw, GetProofsV2Msg, reqID, cost, reqs)
 	default:
-		panic(nil)
+		panic("peer RequestProofs")
 	}
 }
 
@@ -301,7 +301,7 @@ func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []HelperTrieReq)
 	case lpv2:
 		return sendRequest(p.rw, GetHelperTrieProofsMsg, reqID, cost, reqs)
 	default:
-		panic(nil)
+		panic("peer RequestHelperTrieProofs")
 	}
 }
 
@@ -320,7 +320,7 @@ func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
 	case lpv2:
 		return sendRequest(p.rw, SendTxV2Msg, reqID, cost, txs)
 	default:
-		panic(nil)
+		panic("peer SendTxs")
 	}
 }
 

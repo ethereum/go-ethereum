@@ -39,13 +39,14 @@ const (
 // then terminated by closing the input stream.
 func TestConsoleWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	datadir := tmpdir(t)
+	defer os.RemoveAll(datadir)
 
 	// Start a XDC console, make sure it's cleaned up and terminate the console
 	XDC := runXDC(t,
-		"--XDCx.datadir", tmpdir(t)+"XDCx/"+time.Now().String(),
+		"console", "--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx/"+time.Now().String(),
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase,
-		"console")
+		"--miner-etherbase", coinbase)
 
 	// Gather all the infos the welcome message needs to contain
 	XDC.SetTemplateFunc("goos", func() string { return runtime.GOOS })
@@ -76,18 +77,18 @@ at block: 0 ({{niltime}})
 func TestIPCAttachWelcome(t *testing.T) {
 	// Configure the instance for IPC attachement
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	datadir := tmpdir(t)
+	defer os.RemoveAll(datadir)
 	var ipc string
 	if runtime.GOOS == "windows" {
 		ipc = `\\.\pipe\XDC` + strconv.Itoa(trulyRandInt(100000, 999999))
 	} else {
-		ws := tmpdir(t)
-		defer os.RemoveAll(ws)
-		ipc = filepath.Join(ws, "XDC.ipc")
+		ipc = filepath.Join(datadir, "XDC.ipc")
 	}
 	XDC := runXDC(t,
-		"--XDCx.datadir", tmpdir(t)+"XDCx/"+time.Now().String(),
+		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx/"+time.Now().String(),
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase, "--ipcpath", ipc)
+		"--miner-etherbase", coinbase, "--ipcpath", ipc)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, XDC, "ipc:"+ipc, ipcAPIs)
@@ -99,10 +100,12 @@ func TestIPCAttachWelcome(t *testing.T) {
 func TestHTTPAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
+	datadir := tmpdir(t)
+	defer os.RemoveAll(datadir)
 	XDC := runXDC(t,
-		"--XDCx.datadir", tmpdir(t)+"XDCx/"+time.Now().String(),
+		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx/"+time.Now().String(),
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase, "--rpc", "--rpcport", port)
+		"--miner-etherbase", coinbase, "--http", "--http-port", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, XDC, "http://localhost:"+port, httpAPIs)
@@ -114,11 +117,12 @@ func TestHTTPAttachWelcome(t *testing.T) {
 func TestWSAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
-
+	datadir := tmpdir(t)
+	defer os.RemoveAll(datadir)
 	XDC := runXDC(t,
-		"--XDCx.datadir", tmpdir(t)+"XDCx/"+time.Now().String(),
+		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx/"+time.Now().String(),
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--etherbase", coinbase, "--ws", "--wsport", port)
+		"--miner-etherbase", coinbase, "--ws", "--ws-port", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, XDC, "ws://localhost:"+port, httpAPIs)

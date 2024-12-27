@@ -42,7 +42,7 @@ ADD genesis.json /genesis.json
 RUN \
   echo 'XDC --cache 512 init /genesis.json' > XDC.sh && \{{if .Unlock}}
 	echo 'mkdir -p /root/.ethereum/keystore/ && cp /signer.json /root/.ethereum/keystore/' >> XDC.sh && \{{end}}
-	echo $'XDC --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .Bootnodes}}--bootnodes {{.Bootnodes}}{{end}} {{if .Etherbase}}--etherbase {{.Etherbase}} --mine --minerthreads 1{{end}} {{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --targetgaslimit {{.GasTarget}} --gasprice {{.GasPrice}}' >> XDC.sh
+	echo $'XDC --networkid {{.NetworkID}} --cache 512 --port {{.Port}} --maxpeers {{.Peers}} {{.LightFlag}} --ethstats \'{{.Ethstats}}\' {{if .Bootnodes}}--bootnodes {{.Bootnodes}}{{end}} {{if .Etherbase}}--miner-etherbase {{.Etherbase}} --mine --miner-threads 1{{end}} {{if .Unlock}}--unlock 0 --password /signer.pass --mine{{end}} --miner-gaslimit {{.GasTarget}} --miner-gasprice {{.GasPrice}}' >> XDC.sh
 
 ENTRYPOINT ["/bin/sh", "XDC.sh"]
 `
@@ -92,7 +92,7 @@ func deployNode(client *sshClient, network string, bootnodes []string, config *n
 
 	lightFlag := ""
 	if config.peersLight > 0 {
-		lightFlag = fmt.Sprintf("--lightpeers=%d --lightserv=50", config.peersLight)
+		lightFlag = fmt.Sprintf("--light-peers=%d --light-serv=50", config.peersLight)
 	}
 	dockerfile := new(bytes.Buffer)
 	template.Must(template.New("").Parse(nodeDockerfile)).Execute(dockerfile, map[string]interface{}{

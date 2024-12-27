@@ -33,6 +33,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
+	"github.com/XinFinOrg/XDPoSChain/consensus/misc/eip1559"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -186,16 +187,16 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 	return worker
 }
 
-func (self *worker) setEtherbase(addr common.Address) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.coinbase = addr
+func (w *worker) setEtherbase(addr common.Address) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.coinbase = addr
 }
 
-func (self *worker) setExtra(extra []byte) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.extra = extra
+func (w *worker) setExtra(extra []byte) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.extra = extra
 }
 
 // pending returns the pending state and corresponding block. The returned
@@ -225,58 +226,58 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return w.snapshotBlock, w.snapshotReceipts
 }
 
-func (self *worker) start() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+func (w *worker) start() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-	atomic.StoreInt32(&self.mining, 1)
+	atomic.StoreInt32(&w.mining, 1)
 
 	// spin up agents
-	for agent := range self.agents {
+	for agent := range w.agents {
 		agent.Start()
 	}
 }
 
-func (self *worker) stop() {
-	self.wg.Wait()
+func (w *worker) stop() {
+	w.wg.Wait()
 
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	if atomic.LoadInt32(&self.mining) == 1 {
-		for agent := range self.agents {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if atomic.LoadInt32(&w.mining) == 1 {
+		for agent := range w.agents {
 			agent.Stop()
 		}
 	}
-	atomic.StoreInt32(&self.mining, 0)
-	atomic.StoreInt32(&self.atWork, 0)
+	atomic.StoreInt32(&w.mining, 0)
+	atomic.StoreInt32(&w.atWork, 0)
 }
 
-func (self *worker) register(agent Agent) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.agents[agent] = struct{}{}
-	agent.SetReturnCh(self.recv)
+func (w *worker) register(agent Agent) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.agents[agent] = struct{}{}
+	agent.SetReturnCh(w.recv)
 }
 
-func (self *worker) unregister(agent Agent) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	delete(self.agents, agent)
+func (w *worker) unregister(agent Agent) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.agents, agent)
 	agent.Stop()
 }
 
-func (self *worker) update() {
-	if self.announceTxs {
-		defer self.txsSub.Unsubscribe()
+func (w *worker) update() {
+	if w.announceTxs {
+		defer w.txsSub.Unsubscribe()
 	}
-	defer self.chainHeadSub.Unsubscribe()
-	defer self.chainSideSub.Unsubscribe()
+	defer w.chainHeadSub.Unsubscribe()
+	defer w.chainSideSub.Unsubscribe()
 
 	// timeout waiting for v1 inital value
 	minePeriod := 2
-	MinePeriodCh := self.engine.(*XDPoS.XDPoS).MinePeriodCh
+	MinePeriodCh := w.engine.(*XDPoS.XDPoS).MinePeriodCh
 	defer close(MinePeriodCh)
-	NewRoundCh := self.engine.(*XDPoS.XDPoS).NewRoundCh
+	NewRoundCh := w.engine.(*XDPoS.XDPoS).NewRoundCh
 	defer close(NewRoundCh)
 
 	timeout := time.NewTimer(time.Duration(minePeriod) * time.Second)
@@ -290,7 +291,7 @@ func (self *worker) update() {
 		for {
 			// A real event arrived, process interesting content
 			select {
-			case d := <-self.resetCh:
+			case d := <-w.resetCh:
 				// Reset the timer to the new duration.
 				if !timeout.Stop() {
 					// Drain the timer channel if it had already expired.
@@ -313,67 +314,67 @@ func (self *worker) update() {
 		case v := <-MinePeriodCh:
 			log.Info("[worker] update wait period", "period", v)
 			minePeriod = v
-			self.resetCh <- time.Duration(minePeriod) * time.Second
+			w.resetCh <- time.Duration(minePeriod) * time.Second
 
 		case <-c:
-			if atomic.LoadInt32(&self.mining) == 1 {
-				self.commitNewWork()
+			if atomic.LoadInt32(&w.mining) == 1 {
+				w.commitNewWork()
 			}
-			resetTime := getResetTime(self.chain, minePeriod)
-			self.resetCh <- resetTime
+			resetTime := getResetTime(w.chain, minePeriod)
+			w.resetCh <- resetTime
 
 		// Handle ChainHeadEvent
-		case <-self.chainHeadCh:
-			self.commitNewWork()
-			resetTime := getResetTime(self.chain, minePeriod)
-			self.resetCh <- resetTime
+		case <-w.chainHeadCh:
+			w.commitNewWork()
+			resetTime := getResetTime(w.chain, minePeriod)
+			w.resetCh <- resetTime
 
 		// Handle new round
 		case <-NewRoundCh:
-			self.commitNewWork()
-			resetTime := getResetTime(self.chain, minePeriod)
-			self.resetCh <- resetTime
+			w.commitNewWork()
+			resetTime := getResetTime(w.chain, minePeriod)
+			w.resetCh <- resetTime
 
 		// Handle ChainSideEvent
-		case <-self.chainSideCh:
+		case <-w.chainSideCh:
 
 		// Handle NewTxsEvent
-		case ev := <-self.txsCh:
+		case ev := <-w.txsCh:
 			// Apply transactions to the pending state if we're not mining.
 			//
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if atomic.LoadInt32(&self.mining) == 0 {
-				self.currentMu.Lock()
+			if atomic.LoadInt32(&w.mining) == 0 {
+				w.currentMu.Lock()
 				txs := make(map[common.Address]types.Transactions)
 				for _, tx := range ev.Txs {
-					acc, _ := types.Sender(self.current.signer, tx)
+					acc, _ := types.Sender(w.current.signer, tx)
 					txs[acc] = append(txs[acc], tx)
 				}
-				feeCapacity := state.GetTRC21FeeCapacityFromState(self.current.state)
-				txset, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, txs, nil, feeCapacity)
+				feeCapacity := state.GetTRC21FeeCapacityFromState(w.current.state)
+				txset, specialTxs := types.NewTransactionsByPriceAndNonce(w.current.signer, txs, nil, feeCapacity)
 
-				tcount := self.current.tcount
-				self.current.commitTransactions(self.mux, feeCapacity, txset, specialTxs, self.chain, self.coinbase, &self.pendingLogsFeed)
+				tcount := w.current.tcount
+				w.current.commitTransactions(w.mux, feeCapacity, txset, specialTxs, w.chain, w.coinbase, &w.pendingLogsFeed)
 
 				// Only update the snapshot if any new transactions were added
 				// to the pending block
-				if tcount != self.current.tcount {
-					self.updateSnapshot()
+				if tcount != w.current.tcount {
+					w.updateSnapshot()
 				}
-				self.currentMu.Unlock()
+				w.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
-				if self.config.XDPoS != nil && self.config.XDPoS.Period == 0 {
-					self.commitNewWork()
+				if w.config.XDPoS != nil && w.config.XDPoS.Period == 0 {
+					w.commitNewWork()
 				}
 			}
 
-		case <-self.chainHeadSub.Err():
+		case <-w.chainHeadSub.Err():
 			return
 
-		case <-self.chainSideSub.Err():
+		case <-w.chainSideSub.Err():
 			return
 		}
 	}
@@ -392,18 +393,18 @@ func getResetTime(chain *core.BlockChain, minePeriod int) time.Duration {
 	return resetTime
 }
 
-func (self *worker) wait() {
+func (w *worker) wait() {
 	for {
 		mustCommitNewWork := true
-		for result := range self.recv {
-			atomic.AddInt32(&self.atWork, -1)
+		for result := range w.recv {
+			atomic.AddInt32(&w.atWork, -1)
 
 			if result == nil {
 				continue
 			}
 			block := result.Block
-			if self.config.XDPoS != nil && block.NumberU64() >= self.config.XDPoS.Epoch && len(block.Validator()) == 0 {
-				self.mux.Post(core.NewMinedBlockEvent{Block: block})
+			if w.config.XDPoS != nil && block.NumberU64() >= w.config.XDPoS.Epoch && len(block.Validator()) == 0 {
+				w.mux.Post(core.NewMinedBlockEvent{Block: block})
 				continue
 			}
 			work := result.Work
@@ -426,9 +427,9 @@ func (self *worker) wait() {
 				log.BlockHash = hash
 			}
 			// Commit block and state to database.
-			self.currentMu.Lock()
-			stat, err := self.chain.WriteBlockWithState(block, receipts, work.state, work.tradingState, work.lendingState)
-			self.currentMu.Unlock()
+			w.currentMu.Lock()
+			stat, err := w.chain.WriteBlockWithState(block, receipts, work.state, work.tradingState, work.lendingState)
+			w.currentMu.Unlock()
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
@@ -439,7 +440,7 @@ func (self *worker) wait() {
 				mustCommitNewWork = false
 			}
 			// Broadcast the block and announce chain insertion event
-			self.mux.Post(core.NewMinedBlockEvent{Block: block})
+			w.mux.Post(core.NewMinedBlockEvent{Block: block})
 			var (
 				events []interface{}
 				logs   = work.state.Logs()
@@ -450,7 +451,7 @@ func (self *worker) wait() {
 			}
 			if work.config.XDPoS != nil {
 				// epoch block
-				isEpochSwitchBlock, _, err := self.engine.(*XDPoS.XDPoS).IsEpochSwitch(block.Header())
+				isEpochSwitchBlock, _, err := w.engine.(*XDPoS.XDPoS).IsEpochSwitch(block.Header())
 				if err != nil {
 					log.Error("[wait] fail to check if block is epoch switch block when worker waiting", "BlockNum", block.Number(), "Hash", block.Hash())
 				}
@@ -458,29 +459,29 @@ func (self *worker) wait() {
 					core.CheckpointCh <- 1
 				}
 			}
-			self.chain.UpdateBlocksHashCache(block)
-			self.chain.PostChainEvents(events, logs)
+			w.chain.UpdateBlocksHashCache(block)
+			w.chain.PostChainEvents(events, logs)
 
 			// Insert the block into the set of pending ones to wait for confirmations
-			self.unconfirmed.Insert(block.NumberU64(), block.Hash())
+			w.unconfirmed.Insert(block.NumberU64(), block.Hash())
 
 			if mustCommitNewWork {
-				self.commitNewWork()
+				w.commitNewWork()
 			}
 
-			if self.config.XDPoS != nil {
-				c := self.engine.(*XDPoS.XDPoS)
-				err = c.HandleProposedBlock(self.chain, block.Header())
+			if w.config.XDPoS != nil {
+				c := w.engine.(*XDPoS.XDPoS)
+				err = c.HandleProposedBlock(w.chain, block.Header())
 				if err != nil {
 					log.Warn("[wait] Unable to handle new proposed block", "err", err, "number", block.Number(), "hash", block.Hash())
 				}
 
-				authorized := c.IsAuthorisedAddress(self.chain, block.Header(), self.coinbase)
+				authorized := c.IsAuthorisedAddress(w.chain, block.Header(), w.coinbase)
 				if !authorized {
 					valid := false
-					masternodes := c.GetMasternodes(self.chain, block.Header())
+					masternodes := c.GetMasternodes(w.chain, block.Header())
 					for _, m := range masternodes {
-						if m == self.coinbase {
+						if m == w.coinbase {
 							valid = true
 							break
 						}
@@ -491,8 +492,8 @@ func (self *worker) wait() {
 					}
 				}
 				// Send tx sign to smart contract blockSigners.
-				if block.NumberU64()%common.MergeSignRange == 0 || !self.config.IsTIP2019(block.Number()) {
-					if err := contracts.CreateTransactionSign(self.config, self.eth.TxPool(), self.eth.AccountManager(), block, self.chainDb, self.coinbase); err != nil {
+				if block.NumberU64()%common.MergeSignRange == 0 || !w.config.IsTIP2019(block.Number()) {
+					if err := contracts.CreateTransactionSign(w.config, w.eth.TxPool(), w.eth.AccountManager(), block, w.chainDb, w.coinbase); err != nil {
 						log.Error("Fail to create tx sign for signer", "error", err)
 					}
 				}
@@ -502,12 +503,12 @@ func (self *worker) wait() {
 }
 
 // push sends a new work task to currently live miner agents.
-func (self *worker) push(work *Work) {
-	if atomic.LoadInt32(&self.mining) != 1 {
+func (w *worker) push(work *Work) {
+	if atomic.LoadInt32(&w.mining) != 1 {
 		return
 	}
-	for agent := range self.agents {
-		atomic.AddInt32(&self.atWork, 1)
+	for agent := range w.agents {
+		atomic.AddInt32(&w.atWork, 1)
 		if ch := agent.Work(); ch != nil {
 			ch <- work
 		}
@@ -541,25 +542,25 @@ func (w *worker) updateSnapshot() {
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error {
+func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
-	state, err := self.chain.StateAt(parent.Root())
+	state, err := w.chain.StateAt(parent.Root())
 	if err != nil {
 		return err
 	}
 
-	author, _ := self.chain.Engine().Author(parent.Header())
+	author, _ := w.chain.Engine().Author(parent.Header())
 	var XDCxState *tradingstate.TradingStateDB
 	var lendingState *lendingstate.LendingStateDB
-	if self.config.XDPoS != nil {
-		XDCX := self.eth.GetXDCX()
+	if w.config.XDPoS != nil {
+		XDCX := w.eth.GetXDCX()
 		XDCxState, err = XDCX.GetTradingState(parent, author)
 		if err != nil {
 			log.Error("Failed to get XDCx state ", "number", parent.Number(), "err", err)
 			return err
 		}
-		lending := self.eth.GetXDCXLending()
+		lending := w.eth.GetXDCXLending()
 		lendingState, err = lending.GetLendingState(parent, author)
 		if err != nil {
 			log.Error("Failed to get lending state ", "number", parent.Number(), "err", err)
@@ -568,8 +569,8 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 	}
 
 	work := &Work{
-		config:       self.config,
-		signer:       types.MakeSigner(self.config, header.Number),
+		config:       w.config,
+		signer:       types.MakeSigner(w.config, header.Number),
 		state:        state,
 		parentState:  state.Copy(),
 		tradingState: XDCxState,
@@ -583,7 +584,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 
 	// Keep track of transactions which return errors so they can be removed
 	work.tcount = 0
-	self.current = work
+	w.current = work
 	return nil
 }
 
@@ -594,37 +595,37 @@ func abs(x int64) int64 {
 	return x
 }
 
-func (self *worker) commitNewWork() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.uncleMu.Lock()
-	defer self.uncleMu.Unlock()
-	self.currentMu.Lock()
-	defer self.currentMu.Unlock()
+func (w *worker) commitNewWork() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.uncleMu.Lock()
+	defer w.uncleMu.Unlock()
+	w.currentMu.Lock()
+	defer w.currentMu.Unlock()
 
 	tstart := time.Now()
 
-	c := self.engine.(*XDPoS.XDPoS)
+	c := w.engine.(*XDPoS.XDPoS)
 	var parent *types.Block
 	if c != nil {
-		parent = c.FindParentBlockToAssign(self.chain, self.chain.CurrentBlock())
+		parent = c.FindParentBlockToAssign(w.chain, w.chain.CurrentBlock())
 	} else {
-		parent = self.chain.CurrentBlock()
+		parent = w.chain.CurrentBlock()
 	}
 
 	var signers map[common.Address]struct{}
-	if parent.Hash().Hex() == self.lastParentBlockCommit {
+	if parent.Hash().Hex() == w.lastParentBlockCommit {
 		return
 	}
-	if !self.announceTxs && atomic.LoadInt32(&self.mining) == 0 {
+	if !w.announceTxs && atomic.LoadInt32(&w.mining) == 0 {
 		return
 	}
 
 	// Only try to commit new work if we are mining
-	if atomic.LoadInt32(&self.mining) == 1 {
+	if atomic.LoadInt32(&w.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
-		if self.config.XDPoS != nil {
-			ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
+		if w.config.XDPoS != nil {
+			ok, err := c.YourTurn(w.chain, parent.Header(), w.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)
 				return
@@ -651,15 +652,18 @@ func (self *worker) commitNewWork() {
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
 		GasLimit:   params.TargetGasLimit,
-		Extra:      self.extra,
+		Extra:      w.extra,
 		Time:       big.NewInt(tstamp),
 	}
+	// Set baseFee if we are on an EIP-1559 chain
+	header.BaseFee = eip1559.CalcBaseFee(w.config, header)
+
 	// Only set the coinbase if we are mining (avoid spurious block rewards)
-	if atomic.LoadInt32(&self.mining) == 1 {
-		header.Coinbase = self.coinbase
+	if atomic.LoadInt32(&w.mining) == 1 {
+		header.Coinbase = w.coinbase
 	}
 
-	if err := self.engine.Prepare(self.chain, header); err != nil {
+	if err := w.engine.Prepare(w.chain, header); err != nil {
 		if err == consensus.ErrNotReadyToPropose {
 			log.Info("Waiting...", "err", err)
 			return
@@ -668,12 +672,12 @@ func (self *worker) commitNewWork() {
 		return
 	}
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
-	if daoBlock := self.config.DAOForkBlock; daoBlock != nil {
+	if daoBlock := w.config.DAOForkBlock; daoBlock != nil {
 		// Check whether the block is among the fork extra-override range
 		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
 		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
 			// Depending whether we support or oppose the fork, override differently
-			if self.config.DAOForkSupport {
+			if w.config.DAOForkSupport {
 				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
 			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
 				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
@@ -681,14 +685,14 @@ func (self *worker) commitNewWork() {
 		}
 	}
 	// Could potentially happen if starting to mine in an odd state.
-	err := self.makeCurrent(parent, header)
+	err := w.makeCurrent(parent, header)
 	if err != nil {
 		log.Error("Failed to create mining context", "err", err)
 		return
 	}
 	// Create the current work task and check any fork transitions needed
-	work := self.current
-	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
+	work := w.current
+	if w.config.DAOForkSupport && w.config.DAOForkBlock != nil && w.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(work.state)
 	}
 	if common.TIPSigning.Cmp(header.Number) == 0 {
@@ -709,31 +713,27 @@ func (self *worker) commitNewWork() {
 		lendingFinalizedTradeTransaction                                     *types.Transaction
 	)
 	feeCapacity := state.GetTRC21FeeCapacityFromStateWithCache(parent.Root(), work.state)
-	if self.config.XDPoS != nil {
-		isEpochSwitchBlock, _, err := self.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
+	if w.config.XDPoS != nil {
+		isEpochSwitchBlock, _, err := w.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
 		if err != nil {
 			log.Error("[commitNewWork] fail to check if block is epoch switch block when fetching pending transactions", "BlockNum", header.Number, "Hash", header.Hash())
 		}
 		if !isEpochSwitchBlock {
-			pending, err := self.eth.TxPool().Pending()
-			if err != nil {
-				log.Error("Failed to fetch pending transactions", "err", err)
-				return
-			}
-			txs, specialTxs = types.NewTransactionsByPriceAndNonce(self.current.signer, pending, signers, feeCapacity)
+			pending := w.eth.TxPool().Pending(true)
+			txs, specialTxs = types.NewTransactionsByPriceAndNonce(w.current.signer, pending, signers, feeCapacity)
 		}
 	}
-	if atomic.LoadInt32(&self.mining) == 1 {
-		wallet, err := self.eth.AccountManager().Find(accounts.Account{Address: self.coinbase})
+	if atomic.LoadInt32(&w.mining) == 1 {
+		wallet, err := w.eth.AccountManager().Find(accounts.Account{Address: w.coinbase})
 		if err != nil {
-			log.Warn("Can't find coinbase account wallet", "coinbase", self.coinbase, "err", err)
+			log.Warn("Can't find coinbase account wallet", "coinbase", w.coinbase, "err", err)
 			return
 		}
-		if self.config.XDPoS != nil && self.chain.Config().IsTIPXDCXMiner(header.Number) {
-			XDCX := self.eth.GetXDCX()
-			XDCXLending := self.eth.GetXDCXLending()
-			if XDCX != nil && header.Number.Uint64() > self.config.XDPoS.Epoch {
-				isEpochSwitchBlock, epochNumber, err := self.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
+		if w.config.XDPoS != nil && w.chain.Config().IsTIPXDCXMiner(header.Number) {
+			XDCX := w.eth.GetXDCX()
+			XDCXLending := w.eth.GetXDCXLending()
+			if XDCX != nil && header.Number.Uint64() > w.config.XDPoS.Epoch {
+				isEpochSwitchBlock, epochNumber, err := w.engine.(*XDPoS.XDPoS).IsEpochSwitch(header)
 				if err != nil {
 					log.Error("[commitNewWork] fail to check if block is epoch switch block when performing XDCX and XDCXLending operations", "BlockNum", header.Number, "Hash", header.Hash())
 				}
@@ -748,16 +748,16 @@ func (self *worker) commitNewWork() {
 					// won't grasp tx at checkpoint
 					//https://github.com/XinFinOrg/XDPoSChain-v1/pull/416
 					log.Debug("Start processing order pending")
-					tradingOrderPending, _ := self.eth.OrderPool().Pending()
+					tradingOrderPending, _ := w.eth.OrderPool().Pending()
 					log.Debug("Start processing order pending", "len", len(tradingOrderPending))
-					tradingTxMatches, tradingMatchingResults = XDCX.ProcessOrderPending(header, self.coinbase, self.chain, tradingOrderPending, work.state, work.tradingState)
+					tradingTxMatches, tradingMatchingResults = XDCX.ProcessOrderPending(header, w.coinbase, w.chain, tradingOrderPending, work.state, work.tradingState)
 					log.Debug("trading transaction matches found", "tradingTxMatches", len(tradingTxMatches))
 
-					lendingOrderPending, _ := self.eth.LendingPool().Pending()
-					lendingInput, lendingMatchingResults = XDCXLending.ProcessOrderPending(header, self.coinbase, self.chain, lendingOrderPending, work.state, work.lendingState, work.tradingState)
+					lendingOrderPending, _ := w.eth.LendingPool().Pending()
+					lendingInput, lendingMatchingResults = XDCXLending.ProcessOrderPending(header, w.coinbase, w.chain, lendingOrderPending, work.state, work.lendingState, work.tradingState)
 					log.Debug("lending transaction matches found", "lendingInput", len(lendingInput), "lendingMatchingResults", len(lendingMatchingResults))
-					if header.Number.Uint64()%self.config.XDPoS.Epoch == common.LiquidateLendingTradeBlock {
-						updatedTrades, liquidatedTrades, autoRepayTrades, autoTopUpTrades, autoRecallTrades, err = XDCXLending.ProcessLiquidationData(header, self.chain, work.state, work.tradingState, work.lendingState)
+					if header.Number.Uint64()%w.config.XDPoS.Epoch == common.LiquidateLendingTradeBlock {
+						updatedTrades, liquidatedTrades, autoRepayTrades, autoTopUpTrades, autoRecallTrades, err = XDCXLending.ProcessLiquidationData(header, w.chain, work.state, work.tradingState, work.lendingState)
 						if err != nil {
 							log.Error("Fail when process lending liquidation data ", "error", err)
 							return
@@ -776,16 +776,16 @@ func (self *worker) commitNewWork() {
 						log.Error("Fail to marshal txMatch", "error", err)
 						return
 					}
-					nonce := work.state.GetNonce(self.coinbase)
+					nonce := work.state.GetNonce(w.coinbase)
 					tx := types.NewTransaction(nonce, common.XDCXAddrBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), txMatchBytes)
-					txM, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, tx, self.config.ChainId)
+					txM, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, tx, w.config.ChainId)
 					if err != nil {
 						log.Error("Fail to create tx matches", "error", err)
 						return
 					} else {
 						tradingTransaction = txM
 						if XDCX.IsSDKNode() {
-							self.chain.AddMatchingResult(tradingTransaction.Hash(), tradingMatchingResults)
+							w.chain.AddMatchingResult(tradingTransaction.Hash(), tradingMatchingResults)
 						}
 						// force adding trading, lending transaction to this block
 						if tradingTransaction != nil {
@@ -806,16 +806,16 @@ func (self *worker) commitNewWork() {
 						log.Error("Fail to marshal lendingData", "error", err)
 						return
 					}
-					nonce := work.state.GetNonce(self.coinbase)
+					nonce := work.state.GetNonce(w.coinbase)
 					lendingTx := types.NewTransaction(nonce, common.XDCXLendingAddressBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), lendingDataBytes)
-					signedLendingTx, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, lendingTx, self.config.ChainId)
+					signedLendingTx, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, lendingTx, w.config.ChainId)
 					if err != nil {
 						log.Error("Fail to create lending tx", "error", err)
 						return
 					} else {
 						lendingTransaction = signedLendingTx
 						if XDCX.IsSDKNode() {
-							self.chain.AddLendingResult(lendingTransaction.Hash(), lendingMatchingResults)
+							w.chain.AddLendingResult(lendingTransaction.Hash(), lendingMatchingResults)
 						}
 						if lendingTransaction != nil {
 							specialTxs = append(specialTxs, lendingTransaction)
@@ -830,16 +830,16 @@ func (self *worker) commitNewWork() {
 						log.Error("Fail to marshal lendingData", "error", err)
 						return
 					}
-					nonce := work.state.GetNonce(self.coinbase)
+					nonce := work.state.GetNonce(w.coinbase)
 					finalizedTx := types.NewTransaction(nonce, common.XDCXLendingFinalizedTradeAddressBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), finalizedTradeData)
-					signedFinalizedTx, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, finalizedTx, self.config.ChainId)
+					signedFinalizedTx, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, finalizedTx, w.config.ChainId)
 					if err != nil {
 						log.Error("Fail to create lending tx", "error", err)
 						return
 					} else {
 						lendingFinalizedTradeTransaction = signedFinalizedTx
 						if XDCX.IsSDKNode() {
-							self.chain.AddFinalizedTrades(lendingFinalizedTradeTransaction.Hash(), updatedTrades)
+							w.chain.AddFinalizedTrades(lendingFinalizedTradeTransaction.Hash(), updatedTrades)
 						}
 						if lendingFinalizedTradeTransaction != nil {
 							specialTxs = append(specialTxs, lendingFinalizedTradeTransaction)
@@ -850,8 +850,8 @@ func (self *worker) commitNewWork() {
 			XDCxStateRoot := work.tradingState.IntermediateRoot()
 			LendingStateRoot := work.lendingState.IntermediateRoot()
 			txData := append(XDCxStateRoot.Bytes(), LendingStateRoot.Bytes()...)
-			tx := types.NewTransaction(work.state.GetNonce(self.coinbase), common.TradingStateAddrBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), txData)
-			txStateRoot, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, tx, self.config.ChainId)
+			tx := types.NewTransaction(work.state.GetNonce(w.coinbase), common.TradingStateAddrBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), txData)
+			txStateRoot, err := wallet.SignTx(accounts.Account{Address: w.coinbase}, tx, w.config.ChainId)
 			if err != nil {
 				log.Error("Fail to create tx state root", "error", err)
 				return
@@ -859,29 +859,29 @@ func (self *worker) commitNewWork() {
 			specialTxs = append(specialTxs, txStateRoot)
 		}
 	}
-	work.commitTransactions(self.mux, feeCapacity, txs, specialTxs, self.chain, self.coinbase, &self.pendingLogsFeed)
+	work.commitTransactions(w.mux, feeCapacity, txs, specialTxs, w.chain, w.coinbase, &w.pendingLogsFeed)
 	// compute uncles for the new block.
 	var (
 		uncles []*types.Header
 	)
 
 	// Create the new block to seal with the consensus engine
-	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.parentState, work.txs, uncles, work.receipts); err != nil {
+	if work.Block, err = w.engine.Finalize(w.chain, header, work.state, work.parentState, work.txs, uncles, work.receipts); err != nil {
 		log.Error("Failed to finalize block for sealing", "err", err)
 		return
 	}
 
-	if atomic.LoadInt32(&self.mining) == 1 {
+	if atomic.LoadInt32(&w.mining) == 1 {
 		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special-txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
-		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
-		self.lastParentBlockCommit = parent.Hash().Hex()
+		w.unconfirmed.Shift(work.Block.NumberU64() - 1)
+		w.lastParentBlockCommit = parent.Hash().Hex()
 	}
-	self.push(work)
-	self.updateSnapshot()
+	w.push(work)
+	w.updateSnapshot()
 }
 
-func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Address]*big.Int, txs *types.TransactionsByPriceAndNonce, specialTxs types.Transactions, bc *core.BlockChain, coinbase common.Address, pendingLogsFeed *event.Feed) {
-	gp := new(core.GasPool).AddGas(env.header.GasLimit)
+func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Address]*big.Int, txs *types.TransactionsByPriceAndNonce, specialTxs types.Transactions, bc *core.BlockChain, coinbase common.Address, pendingLogsFeed *event.Feed) {
+	gp := new(core.GasPool).AddGas(w.header.GasLimit)
 	balanceUpdated := map[common.Address]*big.Int{}
 	totalFeeUsed := big.NewInt(0)
 	var coalescedLogs []*types.Log
@@ -889,7 +889,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 	for _, tx := range specialTxs {
 		to := tx.To()
 		//HF number for black-list
-		if (env.header.Number.Uint64() >= common.BlackListHFNumber) && !common.IsTestnet {
+		if (w.header.Number.Uint64() >= common.BlackListHFNumber) && !common.IsTestnet {
 			from := tx.From()
 			// check if sender is in black list
 			if from != nil && common.Blacklist[*from] {
@@ -930,12 +930,12 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		// during transaction acceptance is the transaction pool.
 		//
 		// We use the eip155 signer regardless of the current hf.
-		from, _ := types.Sender(env.signer, tx)
+		from, _ := types.Sender(w.signer, tx)
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		hash := tx.Hash()
-		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring reply protected special transaction", "hash", hash, "eip155", env.config.EIP155Block)
+		if tx.Protected() && !w.config.IsEIP155(w.header.Number) {
+			log.Trace("Ignoring reply protected special transaction", "hash", hash, "eip155", w.config.EIP155Block)
 			continue
 		}
 		if *to == common.BlockSignersBinary {
@@ -944,20 +944,20 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 				continue
 			}
 			blkNumber := binary.BigEndian.Uint64(data[8:40])
-			if blkNumber >= env.header.Number.Uint64() || blkNumber <= env.header.Number.Uint64()-env.config.XDPoS.Epoch*2 {
-				log.Trace("Data special transaction invalid number", "hash", hash, "blkNumber", blkNumber, "miner", env.header.Number)
+			if blkNumber >= w.header.Number.Uint64() || blkNumber <= w.header.Number.Uint64()-w.config.XDPoS.Epoch*2 {
+				log.Trace("Data special transaction invalid number", "hash", hash, "blkNumber", blkNumber, "miner", w.header.Number)
 				continue
 			}
 		}
 		// Start executing the transaction
-		env.state.Prepare(hash, common.Hash{}, env.tcount)
+		w.state.SetTxContext(hash, w.tcount)
 
-		nonce := env.state.GetNonce(from)
+		nonce := w.state.GetNonce(from)
 		if nonce != tx.Nonce() && !tx.IsSkipNonceTransaction() {
 			log.Trace("Skipping account with special transaction invalid nonce", "sender", from, "nonce", nonce, "tx nonce ", tx.Nonce(), "to", to)
 			continue
 		}
-		err, logs, tokenFeeUsed, gas := env.commitTransaction(balanceFee, tx, bc, coinbase, gp)
+		logs, tokenFeeUsed, gas, err := w.commitTransaction(balanceFee, tx, bc, coinbase, gp)
 		switch err {
 		case core.ErrNonceTooLow:
 			// New head notification data race between the transaction pool and miner, shift
@@ -969,7 +969,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
-			env.tcount++
+			w.tcount++
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
@@ -977,7 +977,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 			log.Debug("Add Special Transaction failed, account skipped", "hash", hash, "sender", from, "nonce", tx.Nonce(), "to", to, "err", err)
 		}
 		if tokenFeeUsed {
-			fee := common.GetGasFee(env.header.Number.Uint64(), gas)
+			fee := common.GetGasFee(w.header.Number.Uint64(), gas)
 			balanceFee[*to] = new(big.Int).Sub(balanceFee[*to], fee)
 			balanceUpdated[*to] = balanceFee[*to]
 			totalFeeUsed = totalFeeUsed.Add(totalFeeUsed, fee)
@@ -1002,7 +1002,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 
 		//HF number for black-list
 		to := tx.To()
-		if (env.header.Number.Uint64() >= common.BlackListHFNumber) && !common.IsTestnet {
+		if (w.header.Number.Uint64() >= common.BlackListHFNumber) && !common.IsTestnet {
 			from := tx.From()
 			// check if sender is in black list
 			if from != nil && common.Blacklist[*from] {
@@ -1041,18 +1041,18 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		// during transaction acceptance is the transaction pool.
 		//
 		// We use the eip155 signer regardless of the current hf.
-		from, _ := types.Sender(env.signer, tx)
+		from, _ := types.Sender(w.signer, tx)
 		hash := tx.Hash()
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring reply protected transaction", "hash", hash, "eip155", env.config.EIP155Block)
+		if tx.Protected() && !w.config.IsEIP155(w.header.Number) {
+			log.Trace("Ignoring reply protected transaction", "hash", hash, "eip155", w.config.EIP155Block)
 			txs.Pop()
 			continue
 		}
 		// Start executing the transaction
-		env.state.Prepare(hash, common.Hash{}, env.tcount)
-		nonce := env.state.GetNonce(from)
+		w.state.SetTxContext(hash, w.tcount)
+		nonce := w.state.GetNonce(from)
 		if nonce > tx.Nonce() {
 			// New head notification data race between the transaction pool and miner, shift
 			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
@@ -1065,7 +1065,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 			txs.Pop()
 			continue
 		}
-		err, logs, tokenFeeUsed, gas := env.commitTransaction(balanceFee, tx, bc, coinbase, gp)
+		logs, tokenFeeUsed, gas, err := w.commitTransaction(balanceFee, tx, bc, coinbase, gp)
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -1085,10 +1085,10 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
-			env.tcount++
+			w.tcount++
 			txs.Shift()
 
-		case errors.Is(err, core.ErrTxTypeNotSupported):
+		case errors.Is(err, types.ErrTxTypeNotSupported):
 			// Pop the unsupported transaction without shifting in the next from the account
 			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 			txs.Pop()
@@ -1100,13 +1100,13 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 			txs.Shift()
 		}
 		if tokenFeeUsed {
-			fee := common.GetGasFee(env.header.Number.Uint64(), gas)
+			fee := common.GetGasFee(w.header.Number.Uint64(), gas)
 			balanceFee[*to] = new(big.Int).Sub(balanceFee[*to], fee)
 			balanceUpdated[*to] = balanceFee[*to]
 			totalFeeUsed = totalFeeUsed.Add(totalFeeUsed, fee)
 		}
 	}
-	state.UpdateTRC21Fee(env.state, balanceUpdated, totalFeeUsed)
+	state.UpdateTRC21Fee(w.state, balanceUpdated, totalFeeUsed)
 	// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
 	// logs by filling in the block hash when the block was mined by the local miner. This can
 	// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
@@ -1118,27 +1118,27 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		}
 		pendingLogsFeed.Send(cpy)
 	}
-	if env.tcount > 0 {
+	if w.tcount > 0 {
 		go func(tcount int) {
 			err := mux.Post(core.PendingStateEvent{})
 			if err != nil {
 				log.Warn("[commitTransactions] Error when sending PendingStateEvent", "tcount", tcount)
 			}
-		}(env.tcount)
+		}(w.tcount)
 
 	}
 }
 
-func (env *Work) commitTransaction(balanceFee map[common.Address]*big.Int, tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool) (error, []*types.Log, bool, uint64) {
-	snap := env.state.Snapshot()
+func (w *Work) commitTransaction(balanceFee map[common.Address]*big.Int, tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool) ([]*types.Log, bool, uint64, error) {
+	snap := w.state.Snapshot()
 
-	receipt, gas, err, tokenFeeUsed := core.ApplyTransaction(env.config, balanceFee, bc, &coinbase, gp, env.state, env.tradingState, env.header, tx, &env.header.GasUsed, vm.Config{})
+	receipt, gas, err, tokenFeeUsed := core.ApplyTransaction(w.config, balanceFee, bc, &coinbase, gp, w.state, w.tradingState, w.header, tx, &w.header.GasUsed, vm.Config{})
 	if err != nil {
-		env.state.RevertToSnapshot(snap)
-		return err, nil, false, 0
+		w.state.RevertToSnapshot(snap)
+		return nil, false, 0, err
 	}
-	env.txs = append(env.txs, tx)
-	env.receipts = append(env.receipts, receipt)
+	w.txs = append(w.txs, tx)
+	w.receipts = append(w.receipts, receipt)
 
-	return nil, receipt.Logs, tokenFeeUsed, gas
+	return receipt.Logs, tokenFeeUsed, gas, nil
 }

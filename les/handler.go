@@ -27,12 +27,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
@@ -92,7 +92,7 @@ type BlockChain interface {
 type txPool interface {
 	AddRemotes(txs []*types.Transaction) []error
 	AddRemotesSync(txs []*types.Transaction) []error
-	Status(hashes []common.Hash) []core.TxStatus
+	Status(hashes []common.Hash) []txpool.TxStatus
 }
 
 type ProtocolManager struct {
@@ -1044,7 +1044,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		stats := pm.txStatus(hashes)
 		for i, stat := range stats {
-			if stat.Status == core.TxStatusUnknown {
+			if stat.Status == txpool.TxStatusUnknown {
 				if errs := pm.txpool.AddRemotes([]*types.Transaction{req.Txs[i]}); errs[0] != nil {
 					stats[i].Error = errs[0].Error()
 					continue
@@ -1160,9 +1160,9 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 		stats[i].Status = stat
 
 		// If the transaction is unknown to the pool, try looking it up locally
-		if stat == core.TxStatusUnknown {
+		if stat == txpool.TxStatusUnknown {
 			if block, number, index := core.GetTxLookupEntry(pm.chainDb, hashes[i]); block != (common.Hash{}) {
-				stats[i].Status = core.TxStatusIncluded
+				stats[i].Status = txpool.TxStatusIncluded
 				stats[i].Lookup = &core.TxLookupEntry{BlockHash: block, BlockIndex: number, Index: index}
 			}
 		}
@@ -1181,15 +1181,15 @@ type NodeInfo struct {
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.
-func (self *ProtocolManager) NodeInfo() *NodeInfo {
-	head := self.blockchain.CurrentHeader()
+func (pm *ProtocolManager) NodeInfo() *NodeInfo {
+	head := pm.blockchain.CurrentHeader()
 	hash := head.Hash()
 
 	return &NodeInfo{
-		Network:    self.networkId,
-		Difficulty: self.blockchain.GetTd(hash, head.Number.Uint64()),
-		Genesis:    self.blockchain.Genesis().Hash(),
-		Config:     self.blockchain.Config(),
+		Network:    pm.networkId,
+		Difficulty: pm.blockchain.GetTd(hash, head.Number.Uint64()),
+		Genesis:    pm.blockchain.Genesis().Hash(),
+		Config:     pm.blockchain.Config(),
 		Head:       hash,
 	}
 }

@@ -19,9 +19,10 @@ var (
 )
 
 func TestPriceFeed(t *testing.T) {
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.LvlTrace)
-	log.Root().SetHandler(glogger)
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
+	glogger.Verbosity(log.LevelTrace)
+	log.SetDefault(log.NewLogger(glogger))
+
 	common.TIPXDCXCancellationFee = big.NewInt(0)
 	// init genesis
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{

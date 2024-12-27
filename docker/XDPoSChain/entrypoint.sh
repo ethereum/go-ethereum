@@ -56,7 +56,7 @@ if [[ ! -z $NETWORK_ID ]]; then
       ;;
     89 )
       genesisPath="testnet.json"
-      params="$params --apothem --gcmode archive --rpcapi db,eth,net,web3,debug,XDPoS"
+      params="$params --apothem --gcmode archive --http-api db,eth,net,web3,debug,XDPoS"
       ;;
     90 )
       genesisPath="devnet.json"
@@ -158,7 +158,7 @@ fi
 
 # debug mode
 if [[ ! -z $DEBUG_MODE ]]; then
-  params="$params --gcmode archive --rpcapi db,eth,net,web3,debug,XDPoS"
+  params="$params --gcmode archive --http-api db,eth,net,web3,debug,XDPoS"
 fi
 
 # maxpeers
@@ -179,18 +179,18 @@ exec XDC $params \
   --maxpeers $MAXPEERS \
   --password ./password \
   --port 30303 \
-  --txpool.globalqueue 5000 \
-  --txpool.globalslots 5000 \
-  --rpc \
-  --rpccorsdomain "*" \
-  --rpcaddr 0.0.0.0 \
-  --rpcport 8545 \
-  --rpcvhosts "*" \
+  --txpool-globalqueue 5000 \
+  --txpool-globalslots 5000 \
+  --http \
+  --http-corsdomain "*" \
+  --http-addr 0.0.0.0 \
+  --http-port 8545 \
+  --http-vhosts "*" \
   --ws \
-  --wsaddr 0.0.0.0 \
-  --wsport 8546 \
-  --wsorigins "*" \
+  --ws-addr 0.0.0.0 \
+  --ws-port 8546 \
+  --ws-origins "*" \
   --mine \
   --gasprice "250000000" \
-  --targetgaslimit "84000000" \
+  --miner-gaslimit "84000000" \
   "$@"
