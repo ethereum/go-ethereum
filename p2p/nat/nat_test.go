@@ -18,11 +18,12 @@ package nat
 
 import (
 	"net"
+	"os"
 	"testing"
 	"time"
 )
 
-// This test checks that autodisc doesn't hang and returns
+// This test ensures that autodisc doesn't hang and returns
 // consistent results when multiple goroutines call its methods
 // concurrently.
 func TestAutoDiscRace(t *testing.T) {
@@ -59,5 +60,23 @@ func TestAutoDiscRace(t *testing.T) {
 				t.Errorf("result %d: got IP %v, want %v", i, rval.ip, wantIP)
 			}
 		}
+	}
+}
+
+func TestExtIPInKubernetes(t *testing.T) {
+	// Setting up the test environment
+	os.Setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
+	defer os.Unsetenv("KUBERNETES_SERVICE_HOST")
+	
+	testIP := net.ParseIP("192.0.2.1")
+	extIP := ExtIP(testIP)
+	
+	// Verify that the IP is returned unchanged in Kubernetes
+	ip, err := extIP.ExternalIP()
+	if err != nil {
+		t.Fatalf("ExternalIP failed: %v", err)
+	}
+	if !ip.Equal(testIP) {
+		t.Errorf("wrong IP: got %v, want %v", ip, testIP)
 	}
 }
