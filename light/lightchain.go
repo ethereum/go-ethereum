@@ -56,7 +56,6 @@ type LightChain struct {
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
 
-	mu      sync.RWMutex
 	chainmu sync.RWMutex
 
 	bodyCache    *lru.Cache[common.Hash, *types.Body]
@@ -147,7 +146,6 @@ func (lc *LightChain) loadLastState() error {
 			lc.hc.SetCurrentHeader(header)
 		}
 	}
-
 	// Issue a status log and return
 	header := lc.hc.CurrentHeader()
 	headerTd := lc.GetTd(header.Hash(), header.Number.Uint64())
@@ -159,10 +157,10 @@ func (lc *LightChain) loadLastState() error {
 // SetHead rewinds the local chain to a new head. Everything above the new
 // head will be deleted and the new one set.
 func (lc *LightChain) SetHead(head uint64) {
-	lc.mu.Lock()
-	defer lc.mu.Unlock()
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
 
-	lc.hc.SetHead(head, nil)
+	lc.hc.SetHead(head, nil, nil)
 	lc.loadLastState()
 }
 
@@ -182,14 +180,17 @@ func (lc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	// Dump the entire block chain and purge the caches
 	lc.SetHead(0)
 
-	lc.mu.Lock()
-	defer lc.mu.Unlock()
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
-	if err := core.WriteTd(lc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty()); err != nil {
-		log.Crit("Failed to write genesis block TD", "err", err)
+	batch := lc.chainDb.NewBatch()
+	rawdb.WriteTd(batch, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty())
+	rawdb.WriteBlock(batch, genesis)
+	rawdb.WriteHeadHeaderHash(batch, genesis.Hash())
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to reset genesis block", "err", err)
 	}
-	rawdb.WriteBlock(lc.chainDb, genesis)
 	lc.genesisBlock = genesis
 	lc.hc.SetGenesis(lc.genesisBlock.Header())
 	lc.hc.SetCurrentHeader(lc.genesisBlock.Header())
@@ -297,15 +298,24 @@ func (lc *LightChain) Stop() {
 // Rollback is designed to remove a chain of links from the database that aren't
 // certain enough to be valid.
 func (lc *LightChain) Rollback(chain []common.Hash) {
-	lc.mu.Lock()
-	defer lc.mu.Unlock()
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
 
+	batch := lc.chainDb.NewBatch()
 	for i := len(chain) - 1; i >= 0; i-- {
 		hash := chain[i]
 
+		// Degrade the chain markers if they are explicitly reverted.
+		// In theory we should update all in-memory markers in the
+		// last step, however the direction of rollback is from high
+		// to low, so it's safe the update in-memory markers directly.
 		if head := lc.hc.CurrentHeader(); head.Hash() == hash {
+			rawdb.WriteHeadHeaderHash(batch, head.ParentHash)
 			lc.hc.SetCurrentHeader(lc.GetHeader(head.ParentHash, head.Number.Uint64()-1))
 		}
+	}
+	if err := batch.Write(); err != nil {
+		log.Crit("Failed to rollback light chain", "error", err)
 	}
 }
 
@@ -344,19 +354,13 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 
 	// Make sure only one thread manipulates the chain at once
 	lc.chainmu.Lock()
-	defer func() {
-		lc.chainmu.Unlock()
-		time.Sleep(time.Millisecond * 10) // ugly hack; do not hog chain lock in case syncing is CPU-limited by validation
-	}()
+	defer lc.chainmu.Unlock()
 
 	lc.wg.Add(1)
 	defer lc.wg.Done()
 
 	var events []interface{}
 	whFunc := func(header *types.Header) error {
-		lc.mu.Lock()
-		defer lc.mu.Unlock()
-
 		status, err := lc.hc.WriteHeader(header)
 
 		switch status {
@@ -448,13 +452,17 @@ func (lc *LightChain) SyncCht(ctx context.Context) bool {
 	chtCount, _, _ := lc.odr.ChtIndexer().Sections()
 	if headNum+1 < chtCount*CHTFrequencyClient {
 		num := chtCount*CHTFrequencyClient - 1
-		header, err := GetHeaderByNumber(ctx, lc.odr, num)
-		if header != nil && err == nil {
-			lc.mu.Lock()
+		// Retrieve the latest useful header and update to it
+		if header, err := GetHeaderByNumber(ctx, lc.odr, num); header != nil && err == nil {
+			lc.chainmu.Lock()
+			defer lc.chainmu.Unlock()
+
+			// Ensure the chain didn't move past the latest block while retrieving it
 			if lc.hc.CurrentHeader().Number.Uint64() < header.Number.Uint64() {
+				log.Info("Updated latest header based on CHT", "number", header.Number, "hash", header.Hash())
+				rawdb.WriteHeadHeaderHash(lc.chainDb, header.Hash())
 				lc.hc.SetCurrentHeader(header)
 			}
-			lc.mu.Unlock()
 			return true
 		}
 	}

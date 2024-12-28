@@ -25,6 +25,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -205,15 +206,17 @@ func (p *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number uin
 // rollbackTxs marks the transactions contained in recently rolled back blocks
 // as rolled back. It also removes any positional lookup entries.
 func (p *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
+	batch := p.chainDb.NewBatch()
 	if list, ok := p.mined[hash]; ok {
 		for _, tx := range list {
 			txHash := tx.Hash()
-			core.DeleteTxLookupEntry(p.chainDb, txHash)
+			rawdb.DeleteTxLookupEntry(batch, txHash)
 			p.pending[txHash] = tx
 			txc.setState(txHash, false)
 		}
 		delete(p.mined, hash)
 	}
+	batch.Write()
 }
 
 // reorgOnNewHead sets a new head header, processing (and rolling back if necessary)

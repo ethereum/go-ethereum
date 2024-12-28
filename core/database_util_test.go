@@ -24,8 +24,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"golang.org/x/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 // Tests block header storage and retrieval operations.
@@ -304,7 +304,7 @@ func TestLookupStorage(t *testing.T) {
 	}
 	// Delete the transactions and check purge
 	for i, tx := range txs {
-		DeleteTxLookupEntry(db, tx.Hash())
+		rawdb.DeleteTxLookupEntry(db, tx.Hash())
 		if txn, _, _, _ := GetTransaction(db, tx.Hash()); txn != nil {
 			t.Fatalf("tx #%d [%x]: deleted transaction returned: %v", i, tx.Hash(), txn)
 		}
