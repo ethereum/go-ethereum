@@ -470,6 +470,11 @@ web3._extend({
 			params: 2,
 			inputFormatter:[null, null],
 		}),
+		new web3._extend.Method({
+			name: 'dbGet',
+			call: 'debug_dbGet',
+			params: 1
+		}),
 	],
 	properties: []
 });

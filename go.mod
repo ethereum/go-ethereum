@@ -4,7 +4,6 @@ go 1.22
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
-	github.com/aristanetworks/goarista v0.0.0-20231019142648-8c6f0862ab98
 	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6
 	github.com/cespare/cp v1.1.1
 	github.com/davecgh/go-spew v1.1.1
@@ -48,10 +47,12 @@ require (
 	github.com/deckarep/golang-set v1.8.0
 	github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498
 	github.com/ethereum/c-kzg-4844 v0.4.0
+	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/influxdata/influxdb-client-go/v2 v2.4.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mattn/go-isatty v0.0.17
+	github.com/protolambda/bls12-381-util v0.0.0-20220416220906-d8552aa452c7
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/urfave/cli/v2 v2.27.5
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -70,6 +71,7 @@ require (
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/influxdata/line-protocol v0.0.0-20200327222509-2487e7298839 // indirect
+	github.com/kilic/bls12-381 v0.1.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.13 // indirect

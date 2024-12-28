@@ -18,11 +18,12 @@ package tradingstate
 
 import (
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/common/math"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
+	"math"
 	"math/big"
 	"testing"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 )
 
 func TestEchangeStates(t *testing.T) {

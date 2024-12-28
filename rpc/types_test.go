@@ -18,10 +18,10 @@ package rpc
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/common/math"
 )
 
 func TestBlockNumberJSONUnmarshal(t *testing.T) {

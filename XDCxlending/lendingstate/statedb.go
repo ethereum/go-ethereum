@@ -343,7 +343,7 @@ func (ls *LendingStateDB) GetBestInvestingRate(orderBook common.Hash) (*big.Int,
 	stateObject := ls.getLendingExchange(orderBook)
 	if stateObject != nil {
 		investingHash := stateObject.getBestInvestingInterest(ls.db)
-		if common.EmptyHash(investingHash) {
+		if investingHash.IsZero() {
 			return Zero, Zero
 		}
 		orderList := stateObject.getInvestingOrderList(ls.db, investingHash)
@@ -360,7 +360,7 @@ func (ls *LendingStateDB) GetBestBorrowRate(orderBook common.Hash) (*big.Int, *b
 	stateObject := ls.getLendingExchange(orderBook)
 	if stateObject != nil {
 		priceHash := stateObject.getBestBorrowingInterest(ls.db)
-		if common.EmptyHash(priceHash) {
+		if priceHash.IsZero() {
 			return Zero, Zero
 		}
 		orderList := stateObject.getBorrowingOrderList(ls.db, priceHash)

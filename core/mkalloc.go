@@ -14,15 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build none
 // +build none
 
 /*
+The mkalloc tool creates the genesis allocation constants in genesis_alloc.go
+It outputs a const declaration that contains an RLP-encoded list of (address, balance) tuples.
 
-   The mkalloc tool creates the genesis allocation constants in genesis_alloc.go
-   It outputs a const declaration that contains an RLP-encoded list of (address, balance) tuples.
-
-       go run mkalloc.go genesis.json
-
+	go run mkalloc.go genesis.json
 */
 package main
 
@@ -52,7 +51,8 @@ func makelist(g *core.Genesis) allocList {
 		if len(account.Storage) > 0 || len(account.Code) > 0 || account.Nonce != 0 {
 			panic(fmt.Sprintf("can't encode account %x", addr))
 		}
-		a = append(a, allocItem{addr.Big(), account.Balance})
+		bigAddr := new(big.Int).SetBytes(addr.Bytes())
+		a = append(a, allocItem{bigAddr, account.Balance})
 	}
 	sort.Sort(a)
 	return a

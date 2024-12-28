@@ -20,10 +20,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"math"
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/core/vm/privacy"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/crypto/blake2b"
@@ -346,7 +346,12 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	}
 	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
 	// Calculate the gas cost of the operation
-	gas := new(big.Int).Set(math.BigMax(modLen, baseLen))
+	gas := new(big.Int)
+	if modLen.Cmp(baseLen) < 0 {
+		gas.Set(baseLen)
+	} else {
+		gas.Set(modLen)
+	}
 	if c.eip2565 {
 		// EIP-2565 has three changes
 		// 1. Different multComplexity (inlined here)
@@ -360,7 +365,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		gas = gas.Div(gas, big8)
 		gas.Mul(gas, gas)
 
-		gas.Mul(gas, math.BigMax(adjExpLen, big1))
+		if adjExpLen.Cmp(big1) > 0 {
+			gas.Mul(gas, adjExpLen)
+		}
 		// 2. Different divisor (`GQUADDIVISOR`) (3)
 		gas.Div(gas, big3)
 		if gas.BitLen() > 64 {
@@ -373,7 +380,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		return gas.Uint64()
 	}
 	gas = modexpMultComplexity(gas)
-	gas.Mul(gas, math.BigMax(adjExpLen, big1))
+	if adjExpLen.Cmp(big1) > 0 {
+		gas.Mul(gas, adjExpLen)
+	}
 	gas.Div(gas, big20)
 
 	if gas.BitLen() > 64 {

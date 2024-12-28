@@ -21,7 +21,6 @@ import (
 	"reflect"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/common/math"
 )
 
 var (
@@ -43,11 +42,6 @@ var (
 	int32_ts   = reflect.TypeOf([]int32(nil))
 	int64_ts   = reflect.TypeOf([]int64(nil))
 )
-
-// U256 converts a big Int into a 256bit EVM number.
-func U256(n *big.Int) []byte {
-	return math.PaddedBigBytes(math.U256(n), 32)
-}
 
 // checks whether the given reflect value is signed. This also works for slices with a number type
 func isSigned(v reflect.Value) bool {

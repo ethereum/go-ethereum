@@ -19,6 +19,7 @@ package les
 import (
 	"bytes"
 	"context"
+	gomath "math"
 	"math/big"
 	"testing"
 	"time"
@@ -140,7 +141,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				vmenv := vm.NewEVM(context, txContext, statedb, nil, config, vm.Config{NoBaseFee: true})
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
-				gp := new(core.GasPool).AddGas(math.MaxUint64)
+				gp := new(core.GasPool).AddGas(gomath.MaxUint64)
 				owner := common.Address{}
 				result, _ := core.ApplyMessage(vmenv, msg, gp, owner)
 				res = append(res, result.Return()...)
@@ -158,7 +159,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			context := core.NewEVMBlockContext(header, lc, nil)
 			txContext := core.NewEVMTxContext(msg)
 			vmenv := vm.NewEVM(context, txContext, statedb, nil, config, vm.Config{NoBaseFee: true})
-			gp := new(core.GasPool).AddGas(math.MaxUint64)
+			gp := new(core.GasPool).AddGas(gomath.MaxUint64)
 			owner := common.Address{}
 			result, _ := core.ApplyMessage(vmenv, msg, gp, owner)
 			if statedb.Error() == nil {

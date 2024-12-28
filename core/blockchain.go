@@ -137,8 +137,8 @@ type BlockChain struct {
 
 	db     ethdb.Database // Low level persistent database to store final content in
 	XDCxDb ethdb.XDCxDatabase
-	triegc *prque.Prque  // Priority queue mapping block numbers to tries to gc
-	gcproc time.Duration // Accumulates canonical block processing for trie dumping
+	triegc *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
+	gcproc time.Duration                    // Accumulates canonical block processing for trie dumping
 
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
@@ -209,7 +209,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig:         chainConfig,
 		cacheConfig:         cacheConfig,
 		db:                  db,
-		triegc:              prque.New(nil),
+		triegc:              prque.New[int64, common.Hash](nil),
 		stateCache:          state.NewDatabase(db),
 		quit:                make(chan struct{}),
 		bodyCache:           lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
@@ -957,7 +957,7 @@ func (bc *BlockChain) saveData() {
 					author, _ := bc.Engine().Author(recent.Header())
 					if tradingService != nil {
 						tradingRoot, _ := tradingService.GetTradingStateRoot(recent, author)
-						if !common.EmptyHash(tradingRoot) && tradingTriedb != nil {
+						if !tradingRoot.IsZero() && tradingTriedb != nil {
 							if err := tradingTriedb.Commit(tradingRoot, true); err != nil {
 								log.Error("Failed to commit trading state recent state trie", "err", err)
 							}
@@ -965,7 +965,7 @@ func (bc *BlockChain) saveData() {
 					}
 					if lendingService != nil {
 						lendingRoot, _ := lendingService.GetLendingStateRoot(recent, author)
-						if !common.EmptyHash(lendingRoot) && lendingTriedb != nil {
+						if !lendingRoot.IsZero() && lendingTriedb != nil {
 							if err := lendingTriedb.Commit(lendingRoot, true); err != nil {
 								log.Error("Failed to commit lending state recent state trie", "err", err)
 							}
@@ -975,17 +975,17 @@ func (bc *BlockChain) saveData() {
 			}
 		}
 		for !bc.triegc.Empty() {
-			triedb.Dereference(bc.triegc.PopItem().(common.Hash))
+			triedb.Dereference(bc.triegc.PopItem())
 		}
 		if tradingTriedb != nil && lendingTriedb != nil {
 			if tradingService.GetTriegc() != nil {
 				for !tradingService.GetTriegc().Empty() {
-					tradingTriedb.Dereference(tradingService.GetTriegc().PopItem().(common.Hash))
+					tradingTriedb.Dereference(tradingService.GetTriegc().PopItem())
 				}
 			}
 			if lendingService.GetTriegc() != nil {
 				for !lendingService.GetTriegc().Empty() {
-					lendingTriedb.Dereference(lendingService.GetTriegc().PopItem().(common.Hash))
+					lendingTriedb.Dereference(lendingService.GetTriegc().PopItem())
 				}
 			}
 		}
@@ -1328,7 +1328,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 					bc.triegc.Push(root, number)
 					break
 				}
-				triedb.Dereference(root.(common.Hash))
+				triedb.Dereference(root)
 			}
 			if tradingService != nil {
 				for !tradingService.GetTriegc().Empty() {
@@ -1337,7 +1337,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 						tradingService.GetTriegc().Push(tradingRoot, number)
 						break
 					}
-					tradingTrieDb.Dereference(tradingRoot.(common.Hash))
+					tradingTrieDb.Dereference(tradingRoot)
 				}
 			}
 			if lendingService != nil {
@@ -1347,7 +1347,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 						lendingService.GetTriegc().Push(lendingRoot, number)
 						break
 					}
-					lendingTrieDb.Dereference(lendingRoot.(common.Hash))
+					lendingTrieDb.Dereference(lendingRoot)
 				}
 			}
 		}
@@ -2123,7 +2123,7 @@ const statsReportLimit = 8 * time.Second
 
 // report prints statistics if some number of blocks have been processed
 // or more than a few seconds have passed since the last message.
-func (st *insertStats) report(chain []*types.Block, index int, cache common.StorageSize) {
+func (st *insertStats) report(chain []*types.Block, index int, dirty common.StorageSize) {
 	// Fetch the timings for the batch
 	var (
 		now     = mclock.Now()
@@ -2138,7 +2138,7 @@ func (st *insertStats) report(chain []*types.Block, index int, cache common.Stor
 		context := []interface{}{
 			"blocks", st.processed, "txs", txs, "mgas", float64(st.usedGas) / 1000000,
 			"elapsed", common.PrettyDuration(elapsed), "mgasps", float64(st.usedGas) * 1000 / float64(elapsed),
-			"number", end.Number(), "hash", end.Hash(), "cache", cache,
+			"number", end.Number(), "hash", end.Hash(), "dirty", dirty,
 		}
 		if st.queued > 0 {
 			context = append(context, []interface{}{"queued", st.queued}...)

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	gomath "math"
 	"math/big"
 	"os"
 	"sync"
@@ -448,7 +449,10 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call XDPoSChain.Cal
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			call.GasPrice = new(big.Int)
 			if call.GasFeeCap.BitLen() > 0 || call.GasTipCap.BitLen() > 0 {
-				call.GasPrice = math.BigMin(new(big.Int).Add(call.GasTipCap, head.BaseFee), call.GasFeeCap)
+				call.GasPrice = new(big.Int).Add(call.GasTipCap, head.BaseFee)
+				if call.GasPrice.Cmp(call.GasFeeCap) > 0 {
+					call.GasPrice.Set(call.GasFeeCap)
+				}
 			}
 		}
 	}
@@ -476,7 +480,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call XDPoSChain.Cal
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(evmContext, txContext, statedb, nil, b.config, vm.Config{NoBaseFee: true})
-	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
+	gaspool := new(core.GasPool).AddGas(gomath.MaxUint64)
 	owner := common.Address{}
 	return core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)
 }

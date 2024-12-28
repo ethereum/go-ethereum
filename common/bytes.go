@@ -17,25 +17,20 @@
 // Package common contains various helper functions.
 package common
 
-import "encoding/hex"
+import (
+	"encoding/hex"
+	"errors"
 
-func ToHex(b []byte) string {
-	hex := Bytes2Hex(b)
-	// Prefer output of "0x0" instead of "0x"
-	if len(hex) == 0 {
-		hex = "0"
-	}
-	return "0x" + hex
-}
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+)
 
+// FromHex returns the bytes represented by the hexadecimal string s.
+// s may be prefixed with "0x".
 func FromHex(s string) []byte {
-	if len(s) > 1 {
-		if s[0:2] == "0x" || s[0:2] == "0X" {
-			s = s[2:]
-		}
-		if (s[0] == 'x' || s[0] == 'X') && (s[1] == 'd' || s[1] == 'D') && (s[2] == 'c' || s[2] == 'C') {
-			s = s[3:]
-		}
+	if has0xPrefix(s) {
+		s = s[2:]
+	} else if hasXdcPrefix(s) {
+		s = s[3:]
 	}
 	if len(s)%2 == 1 {
 		s = "0" + s
@@ -43,9 +38,7 @@ func FromHex(s string) []byte {
 	return Hex2Bytes(s)
 }
 
-// Copy bytes
-//
-// Returns an exact copy of the provided bytes
+// CopyBytes returns an exact copy of the provided bytes.
 func CopyBytes(b []byte) (copiedBytes []byte) {
 	if b == nil {
 		return nil
@@ -55,17 +48,23 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 
 	return
 }
-func hasXDCPrefix(str string) bool {
-	return len(str) >= 3 && (str[0] == 'x' || str[0] == 'X') && (str[1] == 'd' || str[1] == 'D') && (str[2] == 'c' || str[2] == 'C')
-}
-func hasHexPrefix(str string) bool {
+
+// has0xPrefix validates str begins with '0x' or '0X'.
+func has0xPrefix(str string) bool {
 	return len(str) >= 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X')
 }
 
+// hasXdcPrefix validates s begins with 'xdc' or 'XDC'.
+func hasXdcPrefix(s string) bool {
+	return len(s) >= 3 && (s[0] == 'x' || s[0] == 'X') && (s[1] == 'd' || s[1] == 'D') && (s[2] == 'c' || s[2] == 'C')
+}
+
+// isHexCharacter returns bool of c being a valid hexadecimal.
 func isHexCharacter(c byte) bool {
 	return ('0' <= c && c <= '9') || ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')
 }
 
+// isHex validates whether each byte is valid hexadecimal string.
 func isHex(str string) bool {
 	if len(str)%2 != 0 {
 		return false
@@ -78,31 +77,41 @@ func isHex(str string) bool {
 	return true
 }
 
+// Bytes2Hex returns the hexadecimal encoding of d.
 func Bytes2Hex(d []byte) string {
 	return hex.EncodeToString(d)
 }
 
+// Hex2Bytes returns the bytes represented by the hexadecimal string str.
 func Hex2Bytes(str string) []byte {
 	h, _ := hex.DecodeString(str)
-
 	return h
 }
 
+// Hex2BytesFixed returns bytes of a specified fixed length flen.
 func Hex2BytesFixed(str string, flen int) []byte {
 	h, _ := hex.DecodeString(str)
 	if len(h) == flen {
 		return h
-	} else {
-		if len(h) > flen {
-			return h[len(h)-flen:]
-		} else {
-			hh := make([]byte, flen)
-			copy(hh[flen-len(h):flen], h[:])
-			return hh
-		}
 	}
+	if len(h) > flen {
+		return h[len(h)-flen:]
+	}
+	hh := make([]byte, flen)
+	copy(hh[flen-len(h):flen], h[:])
+	return hh
 }
 
+// ParseHexOrString tries to hexdecode b, but if the prefix is missing, it instead just returns the raw bytes
+func ParseHexOrString(str string) ([]byte, error) {
+	b, err := hexutil.Decode(str)
+	if errors.Is(err, hexutil.ErrMissingPrefix) {
+		return []byte(str), nil
+	}
+	return b, err
+}
+
+// RightPadBytes zero-pads slice to the right up to length l.
 func RightPadBytes(slice []byte, l int) []byte {
 	if l <= len(slice) {
 		return slice
@@ -114,6 +123,7 @@ func RightPadBytes(slice []byte, l int) []byte {
 	return padded
 }
 
+// LeftPadBytes zero-pads slice to the left up to length l.
 func LeftPadBytes(slice []byte, l int) []byte {
 	if l <= len(slice) {
 		return slice
@@ -123,4 +133,15 @@ func LeftPadBytes(slice []byte, l int) []byte {
 	copy(padded[l-len(slice):], slice)
 
 	return padded
+}
+
+// TrimLeftZeroes returns a subslice of s without leading zeroes
+func TrimLeftZeroes(s []byte) []byte {
+	idx := 0
+	for ; idx < len(s); idx++ {
+		if s[idx] != 0 {
+			break
+		}
+	}
+	return s[idx:]
 }

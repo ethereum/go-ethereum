@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package common
+package runtime
 
 import (
 	"testing"
-
-	checker "gopkg.in/check.v1"
 )
 
-func Test(t *testing.T) { checker.TestingT(t) }
+func FuzzVmRuntime(f *testing.F) {
+	f.Fuzz(func(t *testing.T, code, input []byte) {
+		Execute(code, input, &Config{
+			GasLimit: 12000000,
+		})
+	})
+}

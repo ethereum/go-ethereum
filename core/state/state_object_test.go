@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,12 +14,35 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rlp
+package state
 
-import "testing"
+import (
+	"bytes"
+	"testing"
 
-func Fuzz(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzz(data)
-	})
+	"github.com/XinFinOrg/XDPoSChain/common"
+)
+
+func BenchmarkCutOriginal(b *testing.B) {
+	value := common.HexToHash("0x01")
+	for i := 0; i < b.N; i++ {
+		bytes.TrimLeft(value[:], "\x00")
+	}
+}
+
+func BenchmarkCutsetterFn(b *testing.B) {
+	value := common.HexToHash("0x01")
+	cutSetFn := func(r rune) bool {
+		return int32(r) == int32(0)
+	}
+	for i := 0; i < b.N; i++ {
+		bytes.TrimLeftFunc(value[:], cutSetFn)
+	}
+}
+
+func BenchmarkCutCustomTrim(b *testing.B) {
+	value := common.HexToHash("0x01")
+	for i := 0; i < b.N; i++ {
+		common.TrimLeftZeroes(value[:])
+	}
 }

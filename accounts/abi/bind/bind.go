@@ -23,13 +23,14 @@ package bind
 import (
 	"bytes"
 	"fmt"
+	"go/format"
 	"regexp"
 	"strings"
 	"text/template"
 	"unicode"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi"
-	"golang.org/x/tools/imports"
+	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
 // Lang is a target programming language selector to generate bindings for.
@@ -43,9 +44,12 @@ const (
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
 // manually maintain hard coded strings that break on runtime.
-func Bind(types []string, abis []string, bytecodes []string, pkg string, lang Lang) (string, error) {
+func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string) (string, error) {
 	// Process each individual contract requested binding
 	contracts := make(map[string]*tmplContract)
+
+	// Map used to flag each encountered library as such
+	isLib := make(map[string]struct{})
 
 	for i := 0; i < len(types); i++ {
 		// Parse the actual ABI to generate the binding for
@@ -115,20 +119,47 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 			// Append the event to the accumulator list
 			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
 		}
+
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
 			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
-			InputBin:    strings.TrimSpace(bytecodes[i]),
+			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,
 			Events:      events,
+			Libraries:   make(map[string]string),
 		}
+		// Function 4-byte signatures are stored in the same sequence
+		// as types, if available.
+		if len(fsigs) > i {
+			contracts[types[i]].FuncSigs = fsigs[i]
+		}
+		// Parse library references.
+		for pattern, name := range libs {
+			matched, err := regexp.Match("__\\$"+pattern+"\\$__", []byte(contracts[types[i]].InputBin))
+			if err != nil {
+				log.Error("Could not search for pattern", "pattern", pattern, "contract", contracts[types[i]], "err", err)
+			}
+			if matched {
+				contracts[types[i]].Libraries[pattern] = name
+				// keep track that this type is a library
+				if _, ok := isLib[name]; !ok {
+					isLib[name] = struct{}{}
+				}
+			}
+		}
+	}
+	// Check if that type has already been identified as a library
+	for i := 0; i < len(types); i++ {
+		_, ok := isLib[types[i]]
+		contracts[types[i]].Library = ok
 	}
 	// Generate the contract template data content and render it
 	data := &tmplData{
 		Package:   pkg,
 		Contracts: contracts,
+		Libraries: libs,
 	}
 	buffer := new(bytes.Buffer)
 
@@ -143,9 +174,9 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 	if err := tmpl.Execute(buffer, data); err != nil {
 		return "", err
 	}
-	// For Go bindings pass the code through goimports to clean it up and double check
+	// For Go bindings pass the code through gofmt to clean it up
 	if lang == LangGo {
-		code, err := imports.Process(".", buffer.Bytes(), nil)
+		code, err := format.Source(buffer.Bytes())
 		if err != nil {
 			return "", fmt.Errorf("%v\n%s", err, buffer)
 		}
@@ -161,139 +192,42 @@ var bindType = map[Lang]func(kind abi.Type) string{
 	LangGo: bindTypeGo,
 }
 
-// Helper function for the binding generators.
-// It reads the unmatched characters after the inner type-match,
-//
-//	(since the inner type is a prefix of the total type declaration),
-//	looks for valid arrays (possibly a dynamic one) wrapping the inner type,
-//	and returns the sizes of these arrays.
-//
-// Returned array sizes are in the same order as solidity signatures; inner array size first.
-// Array sizes may also be "", indicating a dynamic array.
-func wrapArray(stringKind string, innerLen int, innerMapping string) (string, []string) {
-	remainder := stringKind[innerLen:]
-	//find all the sizes
-	matches := regexp.MustCompile(`\[(\d*)\]`).FindAllStringSubmatch(remainder, -1)
-	parts := make([]string, 0, len(matches))
-	for _, match := range matches {
-		//get group 1 from the regex match
-		parts = append(parts, match[1])
-	}
-	return innerMapping, parts
-}
-
-// Translates the array sizes to a Go-lang declaration of a (nested) array of the inner type.
-// Simply returns the inner type if arraySizes is empty.
-func arrayBindingGo(inner string, arraySizes []string) string {
-	out := ""
-	//prepend all array sizes, from outer (end arraySizes) to inner (start arraySizes)
-	for i := len(arraySizes) - 1; i >= 0; i-- {
-		out += "[" + arraySizes[i] + "]"
-	}
-	out += inner
-	return out
-}
-
-// bindTypeGo converts a Solidity type to a Go one. Since there is no clear mapping
-// from all Solidity types to Go ones (e.g. uint17), those that cannot be exactly
-// mapped will use an upscaled type (e.g. *big.Int).
-func bindTypeGo(kind abi.Type) string {
-	stringKind := kind.String()
-	innerLen, innerMapping := bindUnnestedTypeGo(stringKind)
-	return arrayBindingGo(wrapArray(stringKind, innerLen, innerMapping))
-}
-
-// The inner function of bindTypeGo, this finds the inner type of stringKind.
-// (Or just the type itself if it is not an array or slice)
-// The length of the matched part is returned, with the the translated type.
-func bindUnnestedTypeGo(stringKind string) (int, string) {
-
-	switch {
-	case strings.HasPrefix(stringKind, "address"):
-		return len("address"), "common.Address"
-
-	case strings.HasPrefix(stringKind, "bytes"):
-		parts := regexp.MustCompile(`bytes([0-9]*)`).FindStringSubmatch(stringKind)
-		return len(parts[0]), fmt.Sprintf("[%s]byte", parts[1])
-
-	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
-		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(stringKind)
+// bindBasicTypeGo converts basic solidity types(except array, slice and tuple) to Go one.
+func bindBasicTypeGo(kind abi.Type) string {
+	switch kind.T {
+	case abi.AddressTy:
+		return "common.Address"
+	case abi.IntTy, abi.UintTy:
+		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(kind.String())
 		switch parts[2] {
 		case "8", "16", "32", "64":
-			return len(parts[0]), fmt.Sprintf("%sint%s", parts[1], parts[2])
+			return fmt.Sprintf("%sint%s", parts[1], parts[2])
 		}
-		return len(parts[0]), "*big.Int"
-
-	case strings.HasPrefix(stringKind, "bool"):
-		return len("bool"), "bool"
-
-	case strings.HasPrefix(stringKind, "string"):
-		return len("string"), "string"
-
+		return "*big.Int"
+	case abi.FixedBytesTy:
+		return fmt.Sprintf("[%d]byte", kind.Size)
+	case abi.BytesTy:
+		return "[]byte"
+	case abi.FunctionTy:
+		return "[24]byte"
 	default:
-		return len(stringKind), stringKind
+		// string, bool types
+		return kind.String()
 	}
 }
 
-// Translates the array sizes to a Java declaration of a (nested) array of the inner type.
-// Simply returns the inner type if arraySizes is empty.
-func arrayBindingJava(inner string, arraySizes []string) string {
-	// Java array type declarations do not include the length.
-	return inner + strings.Repeat("[]", len(arraySizes))
-}
-
-// The inner function of bindTypeJava, this finds the inner type of stringKind.
-// (Or just the type itself if it is not an array or slice)
-// The length of the matched part is returned, with the the translated type.
-func bindUnnestedTypeJava(stringKind string) (int, string) {
-
-	switch {
-	case strings.HasPrefix(stringKind, "address"):
-		parts := regexp.MustCompile(`address(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
-		if len(parts) != 2 {
-			return len(stringKind), stringKind
-		}
-		if parts[1] == "" {
-			return len("address"), "Address"
-		}
-		return len(parts[0]), "Addresses"
-
-	case strings.HasPrefix(stringKind, "bytes"):
-		parts := regexp.MustCompile(`bytes([0-9]*)`).FindStringSubmatch(stringKind)
-		if len(parts) != 2 {
-			return len(stringKind), stringKind
-		}
-		return len(parts[0]), "byte[]"
-
-	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
-		//Note that uint and int (without digits) are also matched,
-		// these are size 256, and will translate to BigInt (the default).
-		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(stringKind)
-		if len(parts) != 3 {
-			return len(stringKind), stringKind
-		}
-
-		namedSize := map[string]string{
-			"8":  "byte",
-			"16": "short",
-			"32": "int",
-			"64": "long",
-		}[parts[2]]
-
-		//default to BigInt
-		if namedSize == "" {
-			namedSize = "BigInt"
-		}
-		return len(parts[0]), namedSize
-
-	case strings.HasPrefix(stringKind, "bool"):
-		return len("bool"), "boolean"
-
-	case strings.HasPrefix(stringKind, "string"):
-		return len("string"), "String"
-
+// bindTypeGo converts solidity types to Go ones. Since there is no clear mapping
+// from all Solidity types to Go ones (e.g. uint17), those that cannot be exactly
+// mapped will use an upscaled type (e.g. BigDecimal).
+func bindTypeGo(kind abi.Type) string {
+	// todo(rjl493456442) tuple
+	switch kind.T {
+	case abi.ArrayTy:
+		return fmt.Sprintf("[%d]", kind.Size) + bindTypeGo(*kind.Elem)
+	case abi.SliceTy:
+		return "[]" + bindTypeGo(*kind.Elem)
 	default:
-		return len(stringKind), stringKind
+		return bindBasicTypeGo(kind)
 	}
 }
 
@@ -322,53 +256,22 @@ var namedType = map[Lang]func(string, abi.Type) string{
 // methodNormalizer is a name transformer that modifies Solidity method names to
 // conform to target language naming concentions.
 var methodNormalizer = map[Lang]func(string) string{
-	LangGo: capitalise,
+	LangGo: abi.ToCamelCase,
 }
 
 // capitalise makes a camel-case string which starts with an upper case character.
 func capitalise(input string) string {
-	for len(input) > 0 && input[0] == '_' {
-		input = input[1:]
-	}
-	if len(input) == 0 {
-		return ""
-	}
-	return toCamelCase(strings.ToUpper(input[:1]) + input[1:])
+	return abi.ToCamelCase(input)
 }
 
 // decapitalise makes a camel-case string which starts with a lower case character.
 func decapitalise(input string) string {
-	for len(input) > 0 && input[0] == '_' {
-		input = input[1:]
-	}
 	if len(input) == 0 {
-		return ""
+		return input
 	}
-	return toCamelCase(strings.ToLower(input[:1]) + input[1:])
-}
 
-// toCamelCase converts an under-score string to a camel-case string
-func toCamelCase(input string) string {
-	toupper := false
-
-	result := ""
-	for k, v := range input {
-		switch {
-		case k == 0:
-			result = strings.ToUpper(string(input[0]))
-
-		case toupper:
-			result += strings.ToUpper(string(v))
-			toupper = false
-
-		case v == '_':
-			toupper = true
-
-		default:
-			result += string(v)
-		}
-	}
-	return result
+	goForm := abi.ToCamelCase(input)
+	return strings.ToLower(goForm[:1]) + goForm[1:]
 }
 
 // structured checks whether a list of ABI data types has enough information to

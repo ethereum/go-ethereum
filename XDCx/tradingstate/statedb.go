@@ -358,7 +358,7 @@ func (t *TradingStateDB) GetBestAskPrice(orderBook common.Hash) (*big.Int, *big.
 	stateObject := t.getStateExchangeObject(orderBook)
 	if stateObject != nil {
 		priceHash := stateObject.getBestPriceAsksTrie(t.db)
-		if common.EmptyHash(priceHash) {
+		if priceHash.IsZero() {
 			return Zero, Zero
 		}
 		orderList := stateObject.getStateOrderListAskObject(t.db, priceHash)
@@ -375,7 +375,7 @@ func (t *TradingStateDB) GetBestBidPrice(orderBook common.Hash) (*big.Int, *big.
 	stateObject := t.getStateExchangeObject(orderBook)
 	if stateObject != nil {
 		priceHash := stateObject.getBestBidsTrie(t.db)
-		if common.EmptyHash(priceHash) {
+		if priceHash.IsZero() {
 			return Zero, Zero
 		}
 		orderList := stateObject.getStateBidOrderListObject(t.db, priceHash)

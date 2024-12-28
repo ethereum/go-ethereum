@@ -107,7 +107,7 @@ func pongToTicket(localTime mclock.AbsTime, topics []Topic, node *Node, p *ingre
 	}
 	// Convert wait periods to local absolute time.
 	for i, wp := range wps {
-		t.regTime[i] = localTime + mclock.AbsTime(time.Second*time.Duration(wp))
+		t.regTime[i] = localTime.Add(time.Second * time.Duration(wp))
 	}
 	return t, nil
 }
@@ -349,7 +349,7 @@ func (s *ticketStore) nextFilteredTicket() (*ticketRef, time.Duration) {
 		}
 		log.Trace("Found discovery ticket to register", "node", ticket.t.node, "serial", ticket.t.serial, "wait", wait)
 
-		regTime := now + mclock.AbsTime(wait)
+		regTime := now.Add(wait)
 		topic := ticket.t.topics[ticket.idx]
 		if s.tickets[topic] != nil && regTime >= s.tickets[topic].nextReg {
 			return ticket, wait
@@ -614,7 +614,7 @@ func (s *ticketStore) cleanupTopicQueries(now mclock.AbsTime) {
 			delete(s.queriesSent, n)
 		}
 	}
-	s.nextTopicQueryCleanup = now + mclock.AbsTime(topicQueryTimeout)
+	s.nextTopicQueryCleanup = now.Add(topicQueryTimeout)
 }
 
 func (s *ticketStore) gotTopicNodes(from *Node, hash common.Hash, nodes []rpcNode) (timeout bool) {
@@ -625,7 +625,7 @@ func (s *ticketStore) gotTopicNodes(from *Node, hash common.Hash, nodes []rpcNod
 		return true
 	}
 	q, ok := qq[hash]
-	if !ok || now > q.sent+mclock.AbsTime(topicQueryTimeout) {
+	if !ok || now > q.sent.Add(topicQueryTimeout) {
 		return true
 	}
 	inside := float64(0)

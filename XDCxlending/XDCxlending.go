@@ -36,8 +36,8 @@ var (
 )
 
 type Lending struct {
-	Triegc     *prque.Prque          // Priority queue mapping block numbers to tries to gc
-	StateCache lendingstate.Database // State database to reuse between imports (contains state cache)    *lendingstate.TradingStateDB
+	Triegc     *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
+	StateCache lendingstate.Database            // State database to reuse between imports (contains state cache)    *lendingstate.TradingStateDB
 
 	orderNonce map[common.Address]*big.Int
 
@@ -61,7 +61,7 @@ func (l *Lending) Stop() error {
 func New(XDCx *XDCx.XDCX) *Lending {
 	lending := &Lending{
 		orderNonce:          make(map[common.Address]*big.Int),
-		Triegc:              prque.New(nil),
+		Triegc:              prque.New[int64, common.Hash](nil),
 		lendingItemHistory:  lru.NewCache[common.Hash, map[common.Hash]lendingstate.LendingItemHistoryItem](defaultCacheLimit),
 		lendingTradeHistory: lru.NewCache[common.Hash, map[common.Hash]lendingstate.LendingTradeHistoryItem](defaultCacheLimit),
 	}
@@ -682,7 +682,7 @@ func (l *Lending) HasLendingState(block *types.Block, author common.Address) boo
 	return err == nil
 }
 
-func (l *Lending) GetTriegc() *prque.Prque {
+func (l *Lending) GetTriegc() *prque.Prque[int64, common.Hash] {
 	return l.Triegc
 }
 

@@ -458,7 +458,9 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 		expDiff := periodCount.Sub(periodCount, big2)
 		expDiff.Exp(big2, expDiff, nil)
 		diff.Add(diff, expDiff)
-		diff = math.BigMax(diff, params.MinimumDifficulty)
+		if diff.Cmp(params.MinimumDifficulty) < 0 {
+			diff = params.MinimumDifficulty
+		}
 	}
 	return diff
 }

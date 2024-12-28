@@ -131,11 +131,10 @@ type Fetcher struct {
 	completing map[common.Hash]*announce   // Blocks with headers, currently body-completing
 
 	// Block cache
-	queue  *prque.Prque            // Queue containing the import operations (block number sorted)
-	queues map[string]int          // Per peer block counts to prevent memory exhaustion
-	queued map[common.Hash]*inject // Set of already queued blocks (to dedup imports)
+	queue  *prque.Prque[int64, *inject] // Queue containing the import operations (block number sorted)
+	queues map[string]int               // Per peer block counts to prevent memory exhaustion
+	queued map[common.Hash]*inject      // Set of already queued blocks (to dedup imports)
 	knowns *lru.Cache[common.Hash, struct{}]
-
 	// Callbacks
 	getBlock            blockRetrievalFn      // Retrieves a block from the local chain
 	verifyHeader        headerVerifierFn      // Checks if a block's headers have a valid proof of work
@@ -170,7 +169,7 @@ func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, handlePropose
 		fetching:            make(map[common.Hash]*announce),
 		fetched:             make(map[common.Hash][]*announce),
 		completing:          make(map[common.Hash]*announce),
-		queue:               prque.New(nil),
+		queue:               prque.New[int64, *inject](nil),
 		queues:              make(map[string]int),
 		queued:              make(map[common.Hash]*inject),
 		knowns:              lru.NewCache[common.Hash, struct{}](blockLimit),
@@ -304,7 +303,7 @@ func (f *Fetcher) loop() {
 		// Import any queued blocks that could potentially fit
 		height := f.chainHeight()
 		for !f.queue.Empty() {
-			op := f.queue.PopItem().(*inject)
+			op := f.queue.PopItem()
 			if f.queueChangeHook != nil {
 				f.queueChangeHook(op.block.Hash(), false)
 			}

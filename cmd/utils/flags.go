@@ -298,7 +298,7 @@ var (
 	CacheGCFlag = &cli.IntFlag{
 		Name:     "cache-gc",
 		Aliases:  []string{"cache.gc"},
-		Usage:    "Percentage of cache memory allowance to use for trie pruning",
+		Usage:    "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)",
 		Value:    25,
 		Category: flags.PerfCategory,
 	}
@@ -1024,7 +1024,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 // setIPC creates an IPC path configuration from the set command line flags,
 // returning an empty string if IPC was explicitly disabled, or the set path.
 func setIPC(ctx *cli.Context, cfg *node.Config) {
-	checkExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
+	CheckExclusive(ctx, IPCDisabledFlag, IPCPathFlag)
 	switch {
 	case ctx.Bool(IPCDisabledFlag.Name):
 		cfg.IPCPath = ""
@@ -1034,7 +1034,7 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 }
 
 func setPrefix(ctx *cli.Context, cfg *node.Config) {
-	checkExclusive(ctx, Enable0xPrefixFlag, EnableXDCPrefixFlag)
+	CheckExclusive(ctx, Enable0xPrefixFlag, EnableXDCPrefixFlag)
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
@@ -1301,10 +1301,10 @@ func setEthash(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
-// checkExclusive verifies that only a single isntance of the provided flags was
+// CheckExclusive verifies that only a single isntance of the provided flags was
 // set by the user. Each flag might optionally be followed by a string type to
 // specialize it further.
-func checkExclusive(ctx *cli.Context, args ...interface{}) {
+func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 	set := make([]string, 0, 1)
 	for i := 0; i < len(args); i++ {
 		// Make sure the next argument is a flag and skip if not set
@@ -1318,11 +1318,14 @@ func checkExclusive(ctx *cli.Context, args ...interface{}) {
 		if i+1 < len(args) {
 			switch option := args[i+1].(type) {
 			case string:
-				// Extended flag, expand the name and shift the arguments
+				// Extended flag check, make sure value set doesn't conflict with passed in option
 				if ctx.String(flag.Names()[0]) == option {
 					name += "=" + option
+					set = append(set, "--"+name)
 				}
+				// shift arguments and continue
 				i++
+				continue
 
 			case cli.Flag:
 			default:
@@ -1378,10 +1381,10 @@ func SetXDCXConfig(ctx *cli.Context, cfg *XDCx.Config, XDCDataDir string) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	checkExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag)
-	checkExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
-	checkExclusive(ctx, LightServFlag, LightModeFlag)
-	checkExclusive(ctx, LightServFlag, SyncModeFlag, "light")
+	CheckExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag)
+	CheckExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
+	CheckExclusive(ctx, LightServFlag, LightModeFlag)
+	CheckExclusive(ctx, LightServFlag, SyncModeFlag, "light")
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)

@@ -18,35 +18,31 @@ package math
 
 import (
 	"fmt"
+	"math/bits"
 	"strconv"
-)
-
-const (
-	// Integer limit values.
-	MaxInt8   = 1<<7 - 1
-	MinInt8   = -1 << 7
-	MaxInt16  = 1<<15 - 1
-	MinInt16  = -1 << 15
-	MaxInt32  = 1<<31 - 1
-	MinInt32  = -1 << 31
-	MaxInt64  = 1<<63 - 1
-	MinInt64  = -1 << 63
-	MaxUint8  = 1<<8 - 1
-	MaxUint16 = 1<<16 - 1
-	MaxUint32 = 1<<32 - 1
-	MaxUint64 = 1<<64 - 1
 )
 
 // HexOrDecimal64 marshals uint64 as hex or decimal.
 type HexOrDecimal64 uint64
 
+// UnmarshalJSON implements json.Unmarshaler.
+//
+// It is similar to UnmarshalText, but allows parsing real decimals too, not just
+// quoted decimal strings.
+func (i *HexOrDecimal64) UnmarshalJSON(input []byte) error {
+	if len(input) > 1 && input[0] == '"' {
+		input = input[1 : len(input)-1]
+	}
+	return i.UnmarshalText(input)
+}
+
 // UnmarshalText implements encoding.TextUnmarshaler.
 func (i *HexOrDecimal64) UnmarshalText(input []byte) error {
-	int, ok := ParseUint64(string(input))
+	n, ok := ParseUint64(string(input))
 	if !ok {
 		return fmt.Errorf("invalid hex or decimal integer %q", input)
 	}
-	*i = HexOrDecimal64(int)
+	*i = HexOrDecimal64(n)
 	return nil
 }
 
@@ -78,22 +74,20 @@ func MustParseUint64(s string) uint64 {
 	return v
 }
 
-// NOTE: The following methods need to be optimised using either bit checking or asm
-
-// SafeSub returns subtraction result and whether overflow occurred.
+// SafeSub returns x-y and checks for overflow.
 func SafeSub(x, y uint64) (uint64, bool) {
-	return x - y, x < y
+	diff, borrowOut := bits.Sub64(x, y, 0)
+	return diff, borrowOut != 0
 }
 
-// SafeAdd returns the result and whether overflow occurred.
+// SafeAdd returns x+y and checks for overflow.
 func SafeAdd(x, y uint64) (uint64, bool) {
-	return x + y, y > MaxUint64-x
+	sum, carryOut := bits.Add64(x, y, 0)
+	return sum, carryOut != 0
 }
 
-// SafeMul returns multiplication result and whether overflow occurred.
+// SafeMul returns x*y and checks for overflow.
 func SafeMul(x, y uint64) (uint64, bool) {
-	if x == 0 || y == 0 {
-		return 0, false
-	}
-	return x * y, y > MaxUint64/x
+	hi, lo := bits.Mul64(x, y)
+	return lo, hi != 0
 }

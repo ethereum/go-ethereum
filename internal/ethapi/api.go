@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -33,7 +34,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
-	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/common/sort"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
@@ -383,12 +383,16 @@ func (s *PrivateAccountAPI) DeriveAccount(url string, path string, pin *bool) (a
 }
 
 // NewAccount will create a new account and returns the address for the new account.
-func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) {
+func (s *PrivateAccountAPI) NewAccount(password string) (common.AddressEIP55, error) {
 	acc, err := fetchKeystore(s.am).NewAccount(password)
 	if err == nil {
-		return acc.Address, nil
+		addrEIP55 := common.AddressEIP55(acc.Address)
+		log.Info("Your new key was generated", "address", addrEIP55.String())
+		log.Warn("Please backup your key file!", "path", acc.URL.Path)
+		log.Warn("Please remember your password!")
+		return addrEIP55, nil
 	}
-	return common.Address{}, err
+	return common.AddressEIP55{}, err
 }
 
 // fetchKeystore retrives the encrypted keystore from the account manager.
@@ -1949,7 +1953,11 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		// if the transaction has been mined, compute the effective gas price
 		if baseFee != nil && blockHash != (common.Hash{}) {
 			// price = min(tip, gasFeeCap - baseFee) + baseFee
-			price := math.BigMin(new(big.Int).Add(tx.GasTipCap(), baseFee), tx.GasFeeCap())
+			price := new(big.Int).Add(tx.GasTipCap(), baseFee)
+			txGasFeeCap := tx.GasFeeCap()
+			if price.Cmp(txGasFeeCap) > 0 {
+				price = txGasFeeCap
+			}
 			result.GasPrice = (*hexutil.Big)(price)
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
@@ -3497,6 +3505,15 @@ func (api *PrivateDebugAPI) ChaindbCompact() error {
 // SetHead rewinds the head of the blockchain to a previous block.
 func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 	api.b.SetHead(uint64(number))
+}
+
+// DbGet returns the raw value of a key stored in the database.
+func (api *PrivateDebugAPI) DbGet(key string) (hexutil.Bytes, error) {
+	blob, err := common.ParseHexOrString(key)
+	if err != nil {
+		return nil, err
+	}
+	return api.b.ChainDb().Get(blob)
 }
 
 // PublicNetAPI offers network related RPC methods

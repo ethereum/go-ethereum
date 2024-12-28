@@ -527,7 +527,7 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	if err != nil {
 		return err
 	}
-	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", common.ToHex(data))
+	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
 }
 
 func toBlockNumArg(number *big.Int) string {
@@ -550,7 +550,7 @@ func (ec *Client) SendOrderTransaction(ctx context.Context, tx *types.OrderTrans
 	if err != nil {
 		return err
 	}
-	return ec.c.CallContext(ctx, nil, "XDCx_sendOrderRawTransaction", common.ToHex(data))
+	return ec.c.CallContext(ctx, nil, "XDCx_sendOrderRawTransaction", hexutil.Encode(data))
 }
 
 // SendLendingTransaction send lending to pool
@@ -559,7 +559,7 @@ func (ec *Client) SendLendingTransaction(ctx context.Context, tx *types.LendingT
 	if err != nil {
 		return err
 	}
-	return ec.c.CallContext(ctx, nil, "XDCx_sendLendingRawTransaction", common.ToHex(data))
+	return ec.c.CallContext(ctx, nil, "XDCx_sendLendingRawTransaction", hexutil.Encode(data))
 }
 
 func toCallArg(msg ethereum.CallMsg) interface{} {

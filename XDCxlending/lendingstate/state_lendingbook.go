@@ -70,19 +70,19 @@ func (s *lendingExchangeState) empty() bool {
 	if s.data.TradeNonce != 0 {
 		return false
 	}
-	if !common.EmptyHash(s.data.InvestingRoot) {
+	if !s.data.InvestingRoot.IsZero() {
 		return false
 	}
-	if !common.EmptyHash(s.data.BorrowingRoot) {
+	if !s.data.BorrowingRoot.IsZero() {
 		return false
 	}
-	if !common.EmptyHash(s.data.LendingItemRoot) {
+	if !s.data.LendingItemRoot.IsZero() {
 		return false
 	}
-	if !common.EmptyHash(s.data.LendingTradeRoot) {
+	if !s.data.LendingTradeRoot.IsZero() {
 		return false
 	}
-	if !common.EmptyHash(s.data.LiquidationTimeRoot) {
+	if !s.data.LiquidationTimeRoot.IsZero() {
 		return false
 	}
 	return true

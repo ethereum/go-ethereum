@@ -85,16 +85,16 @@ func (te *tradingExchanges) empty() bool {
 	if te.data.TotalQuantity != nil && te.data.TotalQuantity.Sign() > 0 {
 		return false
 	}
-	if !common.EmptyHash(te.data.AskRoot) {
+	if !te.data.AskRoot.IsZero() {
 		return false
 	}
-	if !common.EmptyHash(te.data.BidRoot) {
+	if !te.data.BidRoot.IsZero() {
 		return false
 	}
-	if !common.EmptyHash(te.data.OrderRoot) {
+	if !te.data.OrderRoot.IsZero() {
 		return false
 	}
-	if !common.EmptyHash(te.data.LiquidationPriceRoot) {
+	if !te.data.LiquidationPriceRoot.IsZero() {
 		return false
 	}
 	return true
