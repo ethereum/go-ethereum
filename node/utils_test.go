@@ -32,7 +32,6 @@ type NoopService struct{}
 func (s *NoopService) Protocols() []p2p.Protocol { return nil }
 func (s *NoopService) APIs() []rpc.API           { return nil }
 func (s *NoopService) Start(*p2p.Server) error   { return nil }
-func (s *NoopService) SaveData()                 {}
 func (s *NoopService) Stop() error               { return nil }
 
 func NewNoopService(*ServiceContext) (Service, error) { return new(NoopService), nil }
@@ -79,8 +78,7 @@ func (s *InstrumentedService) Start(server *p2p.Server) error {
 	}
 	return s.start
 }
-func (s *InstrumentedService) SaveData() {
-}
+
 func (s *InstrumentedService) Stop() error {
 	if s.stopHook != nil {
 		s.stopHook()

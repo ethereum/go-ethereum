@@ -922,12 +922,7 @@ func (bc *BlockChain) TrieNode(hash common.Hash) ([]byte, error) {
 	return bc.stateCache.TrieDB().Node(hash)
 }
 
-func (bc *BlockChain) SaveData() {
-	bc.wg.Add(1)
-	defer bc.wg.Done()
-	// Make sure no inconsistent state is leaked during insertion
-	bc.mu.Lock()
-	defer bc.mu.Unlock()
+func (bc *BlockChain) saveData() {
 	// Ensure the state of a recent block is also stored to disk before exiting.
 	// We're writing three different states to catch different restart scenarios:
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
@@ -1011,7 +1006,7 @@ func (bc *BlockChain) Stop() {
 	close(bc.quit)
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 	bc.wg.Wait()
-	bc.SaveData()
+	bc.saveData()
 	log.Info("Blockchain manager stopped")
 }
 

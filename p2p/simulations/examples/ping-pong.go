@@ -127,9 +127,6 @@ func (p *pingPongService) Start(server *p2p.Server) error {
 	return nil
 }
 
-func (p *pingPongService) SaveData() {
-}
-
 func (p *pingPongService) Stop() error {
 	p.log.Info("ping-pong service stopping")
 	return nil

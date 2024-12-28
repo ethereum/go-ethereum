@@ -281,9 +281,6 @@ func (lc *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*typ
 	return lc.GetBlock(ctx, hash, number)
 }
 
-func (bc *LightChain) SaveData() {
-}
-
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (lc *LightChain) Stop() {
