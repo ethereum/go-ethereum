@@ -21,7 +21,7 @@ type BlockInfo struct {
 
 // Vote message in XDPoS 2.0
 type Vote struct {
-	signer            common.Address	//field not exported 
+	signer            common.Address //field not exported
 	ProposedBlockInfo *BlockInfo     `json:"proposedBlockInfo"`
 	Signature         Signature      `json:"signature"`
 	GapNumber         uint64         `json:"gapNumber"`
@@ -81,9 +81,9 @@ func (s *SyncInfo) Hash() common.Hash {
 
 // Quorum Certificate struct in XDPoS 2.0
 type QuorumCert struct {
-	ProposedBlockInfo *BlockInfo `json:"proposedBlockInfo"`
+	ProposedBlockInfo *BlockInfo  `json:"proposedBlockInfo"`
 	Signatures        []Signature `json:"signatures"`
-	GapNumber         uint64 `json:"gapNumber"`
+	GapNumber         uint64      `json:"gapNumber"`
 }
 
 // Timeout Certificate struct in XDPoS 2.0

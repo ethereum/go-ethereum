@@ -95,7 +95,7 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 
 	snap, err := x.getSnapshot(chain, timeoutCert.GapNumber, true)
 	if err != nil {
-		log.Error("[verifyTC] Fail to get snapshot when verifying TC!", "TCGapNumber", timeoutCert.GapNumber)
+		log.Error("[verifyTC] Fail to get snapshot when verifying TC!", "tcGapNumber", timeoutCert.GapNumber)
 		return fmt.Errorf("[verifyTC] Unable to get snapshot, %s", err)
 	}
 	if snap == nil || len(snap.NextEpochCandidates) == 0 {
@@ -110,15 +110,42 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 		}
 	}
 
-	epochInfo, err := x.getEpochSwitchInfo(chain, chain.CurrentHeader(), chain.CurrentHeader().Hash())
+	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, (chain.CurrentHeader()), (chain.CurrentHeader()).Hash())
 	if err != nil {
-		log.Error("[verifyTC] Error when getting epoch switch Info", "error", err)
+		log.Error("[verifyTC] Error when getting epoch switch info", "error", err)
+		return fmt.Errorf("fail on verifyTC due to failure in getting epoch switch info, %s", err)
+	}
+
+	epochRound := epochSwitchInfo.EpochSwitchBlockInfo.Round
+	tempTCEpoch := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochRound)/x.config.Epoch
+
+	epochBlockInfo := &types.BlockInfo{
+		Hash:   epochSwitchInfo.EpochSwitchBlockInfo.Hash,
+		Round:  epochRound,
+		Number: epochSwitchInfo.EpochSwitchBlockInfo.Number,
+	}
+	log.Info("[verifyTC] Init epochInfo", "number", epochBlockInfo.Number, "round", epochRound, "tcRound", timeoutCert.Round, "tcEpoch", tempTCEpoch)
+	for epochBlockInfo.Round > timeoutCert.Round {
+		tempTCEpoch--
+		epochBlockInfo, err = x.GetBlockByEpochNumber(chain, tempTCEpoch)
+		if err != nil {
+			log.Error("[verifyTC] Error when getting epoch block info by tc round", "error", err)
+			return fmt.Errorf("fail on verifyTC due to failure in getting epoch block info tc round, %s", err)
+		}
+		log.Debug("[verifyTC] Loop to get right epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutCert.Round, "tcEpoch", tempTCEpoch)
+	}
+	tcEpoch := tempTCEpoch
+	log.Info("[verifyTC] Final TC epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutCert.Round, "tcEpoch", tcEpoch)
+
+	epochInfo, err := x.getEpochSwitchInfo(chain, nil, epochBlockInfo.Hash)
+	if err != nil {
+		log.Error("[verifyTC] Error when getting epoch switch info", "error", err)
 		return fmt.Errorf("fail on verifyTC due to failure in getting epoch switch info, %s", err)
 	}
 
 	certThreshold := x.config.V2.Config(uint64(timeoutCert.Round)).CertThreshold
 	if float64(len(signatures)) < float64(epochInfo.MasternodesLen)*certThreshold {
-		log.Warn("[verifyTC] Invalid TC Signature is nil or empty", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(timeoutCert.Signatures), "CertThreshold", float64(epochInfo.MasternodesLen)*certThreshold)
+		log.Warn("[verifyTC] Invalid TC Signature is less or empty", "tcRound", timeoutCert.Round, "tcGapNumber", timeoutCert.GapNumber, "tcSignLen", len(timeoutCert.Signatures), "certThreshold", float64(epochInfo.MasternodesLen)*certThreshold)
 		return utils.ErrInvalidTCSignatures
 	}
 
@@ -138,14 +165,14 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 			defer wg.Done()
 			verified, _, err := x.verifyMsgSignature(signedTimeoutObj, sig, snap.NextEpochCandidates)
 			if err != nil || !verified {
-				log.Error("[verifyTC] Error or verification failure", "Signature", sig, "Error", err)
+				log.Error("[verifyTC] Error or verification failure", "signature", sig, "error", err)
 				mutex.Lock() // Lock before accessing haveError
 				if haveError == nil {
 					if err != nil {
-						log.Error("[verifyTC] Error while verfying TC message signatures", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(signatures), "Error", err)
+						log.Error("[verifyTC] Error while verfying TC message signatures", "tcRound", timeoutCert.Round, "tcGapNumber", timeoutCert.GapNumber, "tcSignLen", len(signatures), "error", err)
 						haveError = fmt.Errorf("error while verifying TC message signatures, %s", err)
 					} else {
-						log.Warn("[verifyTC] Signature not verified doing TC verification", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(signatures))
+						log.Warn("[verifyTC] Signature not verified doing TC verification", "tcRound", timeoutCert.Round, "tcGapNumber", timeoutCert.GapNumber, "tcSignLen", len(signatures))
 						haveError = errors.New("fail to verify TC due to signature mis-match")
 					}
 				}
@@ -219,6 +246,8 @@ func (x *XDPoS_v2) sendTimeout(chain consensus.ChainReader) error {
 		Signature: signedHash,
 		GapNumber: gapNumber,
 	}
+
+	timeoutMsg.SetSigner(x.signer)
 	log.Warn("[sendTimeout] Timeout message generated, ready to send!", "timeoutMsgRound", timeoutMsg.Round, "timeoutMsgGapNumber", timeoutMsg.GapNumber, "whosTurn", x.whosTurn)
 	err = x.timeoutHandler(chain, timeoutMsg)
 	if err != nil {
