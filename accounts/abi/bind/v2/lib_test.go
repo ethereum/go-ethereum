@@ -117,7 +117,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		panic(err)
 	}
 
-	constructorInput, err := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
+	constructorInput := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
 	if err != nil {
 		t.Fatalf("failed to pack constructor: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	constructorInput, err := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
+	constructorInput := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
 	if err != nil {
 		t.Fatalf("failed to pack constructor: %v", err)
 	}
