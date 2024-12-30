@@ -1,0 +1,41 @@
+name: Bug
+description: Report a bug
+title: "Bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+
+        ⚠️ Your issue will be closed as "not planned" if:
+        - you do not fill out **the title of the issue** ☝️
+        - you do not provide the **libevm version** as requested below
+  - type: input
+    id: host-os
+    attributes:
+      label: Host platform
+      description: What is your host platform?
+      placeholder: "Debian Buster amd64"
+  - type: input
+    id: version
+    attributes:
+      label: What is the version of libevm
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: "What's the problem 🤔"
+      placeholder: "That feature does not work..."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Share your logs if needed
+      render: plain text
+  - type: textarea
+    id: config
+    attributes:
+      label: Share your configuration(s) if needed
+      render: plain text

@@ -1,0 +1,15 @@
+name: Feature request
+description: Suggest a feature to add to libevm
+title: "Feature request: "
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: "What's the feature 🧐"
+      placeholder: "Describe the feature you want and why it should be added"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: "How would you recommend implementing it?"
