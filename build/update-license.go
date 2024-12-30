@@ -70,7 +70,6 @@ var (
 		"crypto/bn256/",
 		"crypto/bls12381/",
 		"crypto/ecies/",
-		"graphql/internal/graphiql/",
 		"graphql/graphiql.go",
 		"internal/jsre/deps",
 		"log/",
@@ -385,18 +384,20 @@ func writeLicense(info *info) {
 	if err != nil {
 		log.Fatalf("error reading %s: %v\n", info.file, err)
 	}
-
-	// check if license header exists
-	if m := licenseCommentRE.FindIndex(content); m != nil && m[0] == 0 {
-		fmt.Println("skipping (license exists)", info.file)
-		return
-	}
-
-	// only generate new license header if it doesn't exist
+	// Construct new file content.
 	buf := new(bytes.Buffer)
 	licenseT.Execute(buf, info)
-	buf.Write(content)
-
+	if m := licenseCommentRE.FindIndex(content); m != nil && m[0] == 0 {
+		buf.Write(content[:m[0]])
+		buf.Write(content[m[1]:])
+	} else {
+		buf.Write(content)
+	}
+	// Write it to the file.
+	if bytes.Equal(content, buf.Bytes()) {
+		fmt.Println("skipping (no changes)", info.file)
+		return
+	}
 	fmt.Println("writing", info.ShortLicense(), info.file)
 	if err := os.WriteFile(info.file, buf.Bytes(), fi.Mode()); err != nil {
 		log.Fatalf("error writing %s: %v", info.file, err)
