@@ -36,7 +36,7 @@ var TIP2019Block = big.NewInt(0)
 var TIPSigning = big.NewInt(0)
 var TIPRandomize = big.NewInt(0)
 
-var TIPV2SwitchBlock = big.NewInt(0)
+var TIPV2SwitchBlock = big.NewInt(1800)
 
 var TIPIncreaseMasternodes = big.NewInt(0) // Upgrade MN Count at Block.
 var TIPNoHalvingMNReward = big.NewInt(0)   // hardfork no halving masternodes reward

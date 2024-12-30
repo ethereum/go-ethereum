@@ -100,6 +100,61 @@ jobs:
           echo "image_name=$image_name"
           echo "image_name=$image_name" >> "$GITHUB_OUTPUT"
 
+  devnet_k8_apply:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: devnet_build_push
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.19.11'
+      - name: Decode and configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 --decode > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          git_hash=$(git rev-parse --short "$GITHUB_SHA")
+          kubectl set image deployment/devnet1 devnet1=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet2 devnet2=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet3 devnet3=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet4 devnet4=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet5 devnet5=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet6 devnet6=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet7 devnet7=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet8 devnet8=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet9 devnet9=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet10 devnet10=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet11 devnet11=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet12 devnet12=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet13 devnet13=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet14 devnet14=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet15 devnet15=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet16 devnet16=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet17 devnet17=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet18 devnet18=xinfinorg/devnet:dev-upgrade-${git_hash}
+
+  rpc_k8_apply:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+    needs: devnet_build_push
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.19.11'
+      - name: Decode and configure kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 --decode > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          git_hash=$(git rev-parse --short "$GITHUB_SHA")
+          kubectl set image deployment/devnetrpc devnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/testnetrpc testnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/mainnetrpc mainnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash}
+  
   rpcnode_terraform_apply:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
