@@ -98,7 +98,7 @@ func (x *XDPoS_v2) getEpochSwitchInfo(chain consensus.ChainReader, header *types
 
 // IsEpochSwitchAtRound() is used by miner to check whether it mines a block in the same epoch with parent
 func (x *XDPoS_v2) isEpochSwitchAtRound(round types.Round, parentHeader *types.Header) (bool, uint64, error) {
-	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
+	epochNum := x.config.V2.SwitchEpoch + uint64(round)/x.config.Epoch
 	// if parent is last v1 block and this is first v2 block, this is treated as epoch switch
 	if parentHeader.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 		return true, epochNum, nil
@@ -127,7 +127,7 @@ func (x *XDPoS_v2) GetCurrentEpochSwitchBlock(chain consensus.ChainReader, block
 	}
 
 	currentCheckpointNumber := epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64()
-	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
+	epochNum := x.config.V2.SwitchEpoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
 	return currentCheckpointNumber, epochNum, nil
 }
 
@@ -145,7 +145,7 @@ func (x *XDPoS_v2) IsEpochSwitch(header *types.Header) (bool, uint64, error) {
 	}
 	parentRound := quorumCert.ProposedBlockInfo.Round
 	epochStartRound := round - round%types.Round(x.config.Epoch)
-	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(round)/x.config.Epoch
+	epochNum := x.config.V2.SwitchEpoch + uint64(round)/x.config.Epoch
 	// if parent is last v1 block and this is first v2 block, this is treated as epoch switch
 	if quorumCert.ProposedBlockInfo.Number.Cmp(x.config.V2.SwitchBlock) == 0 {
 		log.Info("[IsEpochSwitch] true, parent equals V2.SwitchBlock", "round", round, "number", header.Number.Uint64(), "hash", header.Hash())

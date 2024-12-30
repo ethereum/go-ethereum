@@ -296,7 +296,7 @@ func (x *XDPoS_v2) GetBlockByEpochNumber(chain consensus.ChainReader, targetEpoc
 	if err != nil {
 		return nil, err
 	}
-	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
+	epochNum := x.config.V2.SwitchEpoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
 	// if current epoch is this epoch, we early return the result
 	if targetEpochNum == epochNum {
 		return epochSwitchInfo.EpochSwitchBlockInfo, nil
@@ -304,11 +304,11 @@ func (x *XDPoS_v2) GetBlockByEpochNumber(chain consensus.ChainReader, targetEpoc
 	if targetEpochNum > epochNum {
 		return nil, errors.New("input epoch number > current epoch number")
 	}
-	if targetEpochNum < x.config.V2.SwitchBlock.Uint64()/x.config.Epoch {
+	if targetEpochNum < x.config.V2.SwitchEpoch {
 		return nil, errors.New("input epoch number < v2 begin epoch number")
 	}
 	// the block's round should be in [estRound,estRound+Epoch-1]
-	estRound := types.Round((targetEpochNum - x.config.V2.SwitchBlock.Uint64()/x.config.Epoch) * x.config.Epoch)
+	estRound := types.Round((targetEpochNum - x.config.V2.SwitchEpoch) * x.config.Epoch)
 	// check the round2epochBlockInfo cache
 	blockInfo := x.getBlockByEpochNumberInCache(chain, estRound)
 	if blockInfo != nil {
@@ -330,7 +330,7 @@ func (x *XDPoS_v2) GetBlockByEpochNumber(chain consensus.ChainReader, targetEpoc
 			return nil, err
 		}
 		for _, info := range epochSwitchInfos {
-			epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(info.EpochSwitchBlockInfo.Round)/x.config.Epoch
+			epochNum := x.config.V2.SwitchEpoch + uint64(info.EpochSwitchBlockInfo.Round)/x.config.Epoch
 			if epochNum == targetEpochNum {
 				return info.EpochSwitchBlockInfo, nil
 			}

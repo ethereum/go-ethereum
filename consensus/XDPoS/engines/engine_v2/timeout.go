@@ -79,6 +79,43 @@ func (x *XDPoS_v2) onTimeoutPoolThresholdReached(blockChainReader consensus.Chai
 	return nil
 }
 
+func (x *XDPoS_v2) getTCEpochInfo(chain consensus.ChainReader, timeoutCert *types.TimeoutCert) (*types.EpochSwitchInfo, error) {
+
+	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, (chain.CurrentHeader()), (chain.CurrentHeader()).Hash())
+	if err != nil {
+		log.Error("[getTCEpochInfo] Error when getting epoch switch info", "error", err)
+		return nil, fmt.Errorf("fail on getTCEpochInfo due to failure in getting epoch switch info, %s", err)
+	}
+
+	epochRound := epochSwitchInfo.EpochSwitchBlockInfo.Round
+	tempTCEpoch := x.config.V2.SwitchEpoch + uint64(epochRound)/x.config.Epoch
+
+	epochBlockInfo := &types.BlockInfo{
+		Hash:   epochSwitchInfo.EpochSwitchBlockInfo.Hash,
+		Round:  epochRound,
+		Number: epochSwitchInfo.EpochSwitchBlockInfo.Number,
+	}
+	log.Info("[getTCEpochInfo] Init epochInfo", "number", epochBlockInfo.Number, "round", epochRound, "tcRound", timeoutCert.Round, "tcEpoch", tempTCEpoch)
+	for epochBlockInfo.Round > timeoutCert.Round {
+		tempTCEpoch--
+		epochBlockInfo, err = x.GetBlockByEpochNumber(chain, tempTCEpoch)
+		if err != nil {
+			log.Error("[getTCEpochInfo] Error when getting epoch block info by tc round", "error", err)
+			return nil, fmt.Errorf("fail on getTCEpochInfo due to failure in getting epoch block info tc round, %s", err)
+		}
+		log.Debug("[getTCEpochInfo] Loop to get right epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutCert.Round, "tcEpoch", tempTCEpoch)
+	}
+	tcEpoch := tempTCEpoch
+	log.Info("[getTCEpochInfo] Final TC epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutCert.Round, "tcEpoch", tcEpoch)
+
+	epochInfo, err := x.getEpochSwitchInfo(chain, nil, epochBlockInfo.Hash)
+	if err != nil {
+		log.Error("[getTCEpochInfo] Error when getting epoch switch info", "error", err)
+		return nil, fmt.Errorf("fail on getTCEpochInfo due to failure in getting epoch switch info, %s", err)
+	}
+	return epochInfo, nil
+}
+
 func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.TimeoutCert) error {
 	/*
 		1. Get epoch master node list by gapNumber
@@ -110,37 +147,9 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 		}
 	}
 
-	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, (chain.CurrentHeader()), (chain.CurrentHeader()).Hash())
+	epochInfo, err := x.getTCEpochInfo(chain, timeoutCert)
 	if err != nil {
-		log.Error("[verifyTC] Error when getting epoch switch info", "error", err)
-		return fmt.Errorf("fail on verifyTC due to failure in getting epoch switch info, %s", err)
-	}
-
-	epochRound := epochSwitchInfo.EpochSwitchBlockInfo.Round
-	tempTCEpoch := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochRound)/x.config.Epoch
-
-	epochBlockInfo := &types.BlockInfo{
-		Hash:   epochSwitchInfo.EpochSwitchBlockInfo.Hash,
-		Round:  epochRound,
-		Number: epochSwitchInfo.EpochSwitchBlockInfo.Number,
-	}
-	log.Info("[verifyTC] Init epochInfo", "number", epochBlockInfo.Number, "round", epochRound, "tcRound", timeoutCert.Round, "tcEpoch", tempTCEpoch)
-	for epochBlockInfo.Round > timeoutCert.Round {
-		tempTCEpoch--
-		epochBlockInfo, err = x.GetBlockByEpochNumber(chain, tempTCEpoch)
-		if err != nil {
-			log.Error("[verifyTC] Error when getting epoch block info by tc round", "error", err)
-			return fmt.Errorf("fail on verifyTC due to failure in getting epoch block info tc round, %s", err)
-		}
-		log.Debug("[verifyTC] Loop to get right epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutCert.Round, "tcEpoch", tempTCEpoch)
-	}
-	tcEpoch := tempTCEpoch
-	log.Info("[verifyTC] Final TC epochInfo", "number", epochBlockInfo.Number, "round", epochBlockInfo.Round, "tcRound", timeoutCert.Round, "tcEpoch", tcEpoch)
-
-	epochInfo, err := x.getEpochSwitchInfo(chain, nil, epochBlockInfo.Hash)
-	if err != nil {
-		log.Error("[verifyTC] Error when getting epoch switch info", "error", err)
-		return fmt.Errorf("fail on verifyTC due to failure in getting epoch switch info, %s", err)
+		return err
 	}
 
 	certThreshold := x.config.V2.Config(uint64(timeoutCert.Round)).CertThreshold

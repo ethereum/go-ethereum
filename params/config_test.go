@@ -117,3 +117,22 @@ func TestBuildConfigIndex(t *testing.T) {
 	expected := []uint64{900, 10, 0}
 	assert.Equal(t, expected, index)
 }
+
+// Test switch epoch is switchblock divide into epoch per block
+func TestSwitchEpoch(t *testing.T) {
+	config := XDCMainnetChainConfig.XDPoS
+	epoch := config.Epoch
+	assert.Equal(t, config.V2.SwitchEpoch, config.V2.SwitchBlock.Uint64()/epoch)
+
+	config = TestnetChainConfig.XDPoS
+	epoch = config.Epoch
+	assert.Equal(t, config.V2.SwitchEpoch, config.V2.SwitchBlock.Uint64()/epoch)
+
+	config = DevnetChainConfig.XDPoS
+	epoch = config.Epoch
+	assert.Equal(t, config.V2.SwitchEpoch, config.V2.SwitchBlock.Uint64()/epoch)
+
+	config = TestXDPoSMockChainConfig.XDPoS
+	epoch = config.Epoch
+	assert.Equal(t, config.V2.SwitchEpoch, config.V2.SwitchBlock.Uint64()/epoch)
+}

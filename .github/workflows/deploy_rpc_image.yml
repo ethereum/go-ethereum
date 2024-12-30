@@ -6,19 +6,19 @@ on:
       network:
         type: choice
         description: 'devnet, testnet, or mainnet'
-        options: 
+        options:
           - devnet
           - testnet
           - mainnet
       rpc_image:
         description: 'full image name'
-      
+
 jobs:
   ansible:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Update RPC nodes image
         uses: dawidd6/action-ansible-playbook@v2
         with:
@@ -38,4 +38,3 @@ jobs:
       - name: Send deployment notification
         run: |
           curl --location --request POST "66.94.98.186:8080/deploy?environment=${{inputs.network}}&service=xdc_rpc&version=${{inputs.rpc_image}}"
-  
