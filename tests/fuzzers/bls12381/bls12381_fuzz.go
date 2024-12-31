@@ -225,56 +225,6 @@ func fuzzCrossG1MultiExp(data []byte) int {
 	return 1
 }
 
-func fuzzCrossG1Mul(data []byte) int {
-	input := bytes.NewReader(data)
-	gp, blpAffine, err := getG1Points(input)
-	if err != nil {
-		return 0
-	}
-	scalar, err := randomScalar(input, fp.Modulus())
-	if err != nil {
-		return 0
-	}
-
-	blScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(scalar.Bytes(), 32))
-
-	blp := new(blst.P1)
-	blp.FromAffine(blpAffine)
-
-	resBl := blp.Mult(blScalar)
-	resGeth := (new(gnark.G1Affine)).ScalarMultiplication(gp, scalar)
-
-	if !bytes.Equal(resGeth.Marshal(), resBl.Serialize()) {
-		panic("bytes(blst.G1) != bytes(geth.G1)")
-	}
-	return 1
-}
-
-func fuzzCrossG2Mul(data []byte) int {
-	input := bytes.NewReader(data)
-	gp, blpAffine, err := getG2Points(input)
-	if err != nil {
-		return 0
-	}
-	scalar, err := randomScalar(input, fp.Modulus())
-	if err != nil {
-		return 0
-	}
-
-	blScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(scalar.Bytes(), 32))
-
-	blp := new(blst.P2)
-	blp.FromAffine(blpAffine)
-
-	resBl := blp.Mult(blScalar)
-	resGeth := (new(gnark.G2Affine)).ScalarMultiplication(gp, scalar)
-
-	if !bytes.Equal(resGeth.Marshal(), resBl.Serialize()) {
-		panic("bytes(blst.G1) != bytes(geth.G1)")
-	}
-	return 1
-}
-
 func fuzzCrossG2MultiExp(data []byte) int {
 	var (
 		input        = bytes.NewReader(data)
