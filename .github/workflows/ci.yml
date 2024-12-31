@@ -100,23 +100,6 @@ jobs:
           echo "image_name=$image_name"
           echo "image_name=$image_name" >> "$GITHUB_OUTPUT"
 
-  devnet_terraform_apply:
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
-    needs: devnet_build_push
-    environment: devnet
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Terraform Apply
-        run: |
-          git_hash=$(git rev-parse --short "$GITHUB_SHA")
-          cd cicd/devnet/terraform
-          terraform init ${{ env.tf_init_cli_options }}
-          terraform apply -var "docker_tag=dev-upgrade-${git_hash}" ${{ env.tf_apply_cli_options }}
-
   rpcnode_terraform_apply:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
@@ -143,54 +126,13 @@ jobs:
             --extra-vars network=ec2_rpcs
             --extra-vars rpc_image=${{ needs.devnet_build_push.outputs.output1 }}
 
-  devnet_dev-upgrade_node:
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
-    needs: rpcnode_terraform_apply
-    environment: devnet
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: ECS Update
-        run: |
-          aws ecs update-service --region ap-southeast-1 --cluster devnet-xdcnode-cluster --service ecs-service-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
-
-  testnet_dev-upgrade_node:
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
-    needs: rpcnode_terraform_apply
-    environment: testnet
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: ECS Update
-        run: |
-          aws ecs update-service --region ap-southeast-1 --cluster testnet-xdcnode-cluster --service ecs-service-testnet-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
-
-  mainnet_dev-upgrade_node:
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
-    needs: rpcnode_terraform_apply
-    environment: mainnet
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: ECS Update
-        run: |
-          aws ecs update-service --region ap-southeast-1 --cluster mainnet-xdcnode-cluster --service ecs-service-mainnet-rpc1 --force-new-deployment --no-cli-pager | head -n 10;
-
-  devnet_send_notification:
-    runs-on: ubuntu-latest
-    needs: devnet_terraform_apply
-    if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
-    steps:
-      - uses: actions/checkout@v4
-      - name: Send deployment notification
-        run: |
-          curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=${GITHUB_SHA}"
+  # TODO Uncomment until new devnet
+  # devnet_send_notification:
+  #   runs-on: ubuntu-latest
+  #   needs: devnet_terraform_apply
+  #   if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Send deployment notification
+  #       run: |
+  #         curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=${GITHUB_SHA}"
