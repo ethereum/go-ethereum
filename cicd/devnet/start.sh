@@ -86,7 +86,7 @@ XDC --ethstats ${netstats} --gcmode archive \
 --http-port $rpc_port \
 --http-api db,eth,debug,net,shh,txpool,personal,web3,XDPoS \
 --http-vhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
---miner-gasprice "1" --miner-gaslimit "420000000" --verbosity ${log_level} \
+--miner-gasprice "1" --miner-gaslimit "50000000" --verbosity ${log_level} \
 --debugdatadir /work/xdcchain \
 --store-reward \
 --ws --ws-addr=0.0.0.0 --ws-port $ws_port \
