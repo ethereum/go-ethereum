@@ -118,7 +118,6 @@ func (e *gfP12) Mul(a, b *gfP12) *gfP12 {
 func (e *gfP12) MulScalar(a *gfP12, b *gfP6) *gfP12 {
 	e.x.Mul(&a.x, b)
 	e.y.Mul(&a.y, b)
-
 	return e
 }
 
