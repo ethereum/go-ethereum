@@ -70,7 +70,7 @@ type SetCodeTx struct {
 
 // SetCodeAuthorization is an authorization from an account to deploy code at its address.
 type SetCodeAuthorization struct {
-	ChainID uint256.Int    `json:"chainId" gencoded:"required"`
+	ChainID uint256.Int    `json:"chainId" gencodec:"required"`
 	Address common.Address `json:"address" gencodec:"required"`
 	Nonce   uint64         `json:"nonce" gencodec:"required"`
 	V       uint8          `json:"yParity" gencodec:"required"`
