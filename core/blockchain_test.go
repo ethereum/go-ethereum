@@ -4274,12 +4274,11 @@ func TestEIP7702(t *testing.T) {
 	// 2. addr1:0xaaaa calls into addr2:0xbbbb
 	// 3. addr2:0xbbbb  writes to storage
 	auth1, _ := types.SignSetCode(key1, types.SetCodeAuthorization{
-		ChainID: gspec.Config.ChainID.Uint64(),
+		ChainID: *uint256.MustFromBig(gspec.Config.ChainID),
 		Address: aa,
 		Nonce:   1,
 	})
 	auth2, _ := types.SignSetCode(key2, types.SetCodeAuthorization{
-		ChainID: 0,
 		Address: bb,
 		Nonce:   0,
 	})
@@ -4287,7 +4286,7 @@ func TestEIP7702(t *testing.T) {
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		b.SetCoinbase(aa)
 		txdata := &types.SetCodeTx{
-			ChainID:   gspec.Config.ChainID.Uint64(),
+			ChainID:   uint256.MustFromBig(gspec.Config.ChainID),
 			Nonce:     0,
 			To:        addr1,
 			Gas:       500000,
