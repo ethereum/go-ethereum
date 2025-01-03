@@ -503,7 +503,7 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 		}
 		data = &types.SetCodeTx{
 			To:         *args.To,
-			ChainID:    args.ChainID.ToInt().Uint64(),
+			ChainID:    uint256.MustFromBig(args.ChainID.ToInt()),
 			Nonce:      uint64(*args.Nonce),
 			Gas:        uint64(*args.Gas),
 			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
