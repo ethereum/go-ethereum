@@ -36,10 +36,14 @@ type StateAccount struct {
 }
 
 // NewEmptyStateAccount constructs an empty state account.
-func NewEmptyStateAccount() *StateAccount {
+func NewEmptyStateAccount(isVerkle bool) *StateAccount {
+	emptyRoot := EmptyRootHash
+	if isVerkle {
+		emptyRoot = EmptyVerkleHash
+	}
 	return &StateAccount{
 		Balance:  new(uint256.Int),
-		Root:     EmptyRootHash,
+		Root:     emptyRoot,
 		CodeHash: EmptyCodeHash.Bytes(),
 	}
 }
@@ -74,7 +78,11 @@ func SlimAccountRLP(account StateAccount) []byte {
 		Nonce:   account.Nonce,
 		Balance: account.Balance,
 	}
-	if account.Root != EmptyRootHash {
+	// It is highly unlikely for a valid hash (value = [32]byte{}) to appear
+	// in a Merkle tree, or for a valid hash (value = EmptyRootHash) to appear
+	// in a Verkle tree. Therefore, in both cases, any other value is considered
+	// a non-empty root hash.
+	if account.Root != EmptyRootHash && account.Root != EmptyVerkleHash {
 		slim.Root = account.Root[:]
 	}
 	if !bytes.Equal(account.CodeHash, EmptyCodeHash[:]) {

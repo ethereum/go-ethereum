@@ -2422,7 +2422,9 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		if !task.needHeal[i] {
 			// If the storage task is complete, drop it into the stack trie
 			// to generate account trie nodes for it
-			full, err := types.FullAccountRLP(slim) // TODO(karalabe): Slim parsing can be omitted
+			// TODO(karalabe): Slim parsing can be omitted
+			// TODO(rjl493456442): annotate storage root in verkle
+			full, err := types.FullAccountRLP(slim)
 			if err != nil {
 				panic(err) // Really shouldn't ever happen
 			}

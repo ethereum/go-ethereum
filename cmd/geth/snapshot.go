@@ -265,6 +265,8 @@ func checkDanglingStorage(ctx *cli.Context) error {
 // traverseState is a helper function used for pruning verification.
 // Basically it just iterates the trie, ensure all nodes and associated
 // contract codes are present.
+//
+// TODO(rjl493456442) this command is not compatible with verkle.
 func traverseState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -374,6 +376,8 @@ func traverseState(ctx *cli.Context) error {
 // Basically it just iterates the trie, ensure all nodes and associated
 // contract codes are present. It's basically identical to traverseState
 // but it will check each trie node.
+//
+// TODO(rjl493456442) this command is not compatible with verkle.
 func traverseRawState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -537,6 +541,7 @@ func parseRoot(input string) (common.Hash, error) {
 	return h, nil
 }
 
+// dumpState is not compatible with verkle mode.
 func dumpState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()

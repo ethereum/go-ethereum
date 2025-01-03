@@ -567,6 +567,8 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 
 // ExportSnapshotPreimages exports the preimages corresponding to the enumeration of
 // the snapshot for a given root.
+//
+// TODO(rjl493456442) this command is not compatible with verkle.
 func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn string, root common.Hash) error {
 	log.Info("Exporting preimages", "file", fn)
 
