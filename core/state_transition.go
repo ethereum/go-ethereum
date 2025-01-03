@@ -431,13 +431,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague {
-		// Check for overflow
-		if (math.MaxUint64-params.TxGas)/params.CostFloorPerToken7623 < dataTokens {
-			return nil, ErrGasUintOverflow
+		floorGas, err := FloorDataGas(dataTokens)
+		if err != nil {
+			return nil, err
 		}
-		floorGas := params.TxGas + dataTokens*params.CostFloorPerToken7623
 		if st.gasRemaining < floorGas {
-			return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, floorGas)
+			return nil, fmt.Errorf("%w: have %d, want %d", ErrDataFloorGas, st.gasRemaining, floorGas)
 		}
 	}
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
@@ -504,9 +503,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 	if rules.IsPrague {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
-		gasUsed := st.gasUsed()
-		floorGas := params.TxGas + dataTokens*params.CostFloorPerToken7623
-		if gasUsed < floorGas {
+		// Overflow error has already been checked and can be ignored here.
+		floorGas, _ := FloorDataGas(dataTokens)
+		if st.gasUsed() < floorGas {
 			st.gasRemaining = st.initialGas - floorGas
 		}
 	}
@@ -646,4 +645,14 @@ func (st *stateTransition) gasUsed() uint64 {
 // blobGasUsed returns the amount of blob gas used by the message.
 func (st *stateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
+}
+
+// FloorDataGas calculates the minimum gas required for a transaction
+// based on its data tokens (EIP-7623).
+func FloorDataGas(tokens uint64) (uint64, error) {
+	// Check for overflow
+	if (math.MaxUint64-params.TxGas)/params.CostFloorPerToken7623 < tokens {
+		return 0, ErrGasUintOverflow
+	}
+	return params.TxGas + tokens*params.CostFloorPerToken7623, nil
 }
