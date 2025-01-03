@@ -176,6 +176,26 @@ func (c *twistPoint) Mul(a *twistPoint, scalar *big.Int) {
 	c.Set(sum)
 }
 
+func (c *twistPoint) MakeAffineVariableTime() {
+	if c.z.IsOne() {
+		return
+	} else if c.z.IsZero() {
+		c.x.SetZero()
+		c.y.SetOne()
+		c.t.SetZero()
+		return
+	}
+
+	zInv := (&gfP2{}).InvertVariableTime(&c.z)
+	t := (&gfP2{}).Mul(&c.y, zInv)
+	zInv2 := (&gfP2{}).Square(zInv)
+	c.y.Mul(t, zInv2)
+	t.Mul(&c.x, zInv2)
+	c.x.Set(t)
+	c.z.SetOne()
+	c.t.SetOne()
+}
+
 func (c *twistPoint) MakeAffine() {
 	if c.z.IsOne() {
 		return
