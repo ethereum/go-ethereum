@@ -66,7 +66,8 @@ func (result *ExecutionResult) Revert() []byte {
 	return common.CopyBytes(result.ReturnData)
 }
 
-// IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
+// IntrinsicGas computes the 'intrinsic gas' and the number of tokens for EIP-7623
+// for a message with the given data.
 func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, uint64, error) {
 	// Set the starting gas for the raw transaction
 	var (
