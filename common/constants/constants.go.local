@@ -36,7 +36,7 @@ var TIP2019Block = big.NewInt(0)
 var TIPSigning = big.NewInt(0)
 var TIPRandomize = big.NewInt(0)
 
-var TIPV2SwitchBlock = big.NewInt(1800)
+var TIPV2SwitchBlock = big.NewInt(0)
 
 var TIPIncreaseMasternodes = big.NewInt(0) // Upgrade MN Count at Block.
 var TIPNoHalvingMNReward = big.NewInt(0)   // hardfork no halving masternodes reward
@@ -51,7 +51,7 @@ var BerlinBlock = big.NewInt(0)
 var LondonBlock = big.NewInt(0)
 var MergeBlock = big.NewInt(0)
 var ShanghaiBlock = big.NewInt(0)
-var Eip1559Block = big.NewInt(0)
+var Eip1559Block = big.NewInt(9999999999)
 
 var TIPXDCXTestnet = big.NewInt(0)
 var IsTestnet bool = false
