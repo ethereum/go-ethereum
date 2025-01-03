@@ -17,9 +17,7 @@
 package eth
 
 import (
-	"math/big"
 	"math/rand"
-	"sync"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -50,9 +48,6 @@ type Peer struct {
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
 
-	head common.Hash // Latest advertised head block hash
-	td   *big.Int    // Latest advertised head block total difficulty
-
 	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
 	knownTxs    *knownCache        // Set of transaction hashes known to be known by this peer
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
@@ -63,7 +58,6 @@ type Peer struct {
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
 	term chan struct{} // Termination channel to stop the broadcasters
-	lock sync.RWMutex  // Mutex protecting the internal fields
 }
 
 // NewPeer creates a wrapper for a network connection and negotiated  protocol
@@ -106,24 +100,6 @@ func (p *Peer) ID() string {
 // Version retrieves the peer's negotiated `eth` protocol version.
 func (p *Peer) Version() uint {
 	return p.version
-}
-
-// Head retrieves the current head hash and total difficulty of the peer.
-func (p *Peer) Head() (hash common.Hash, td *big.Int) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	copy(hash[:], p.head[:])
-	return hash, new(big.Int).Set(p.td)
-}
-
-// SetHead updates the head hash and total difficulty of the peer.
-func (p *Peer) SetHead(hash common.Hash, td *big.Int) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	copy(p.head[:], hash[:])
-	p.td.Set(td)
 }
 
 // KnownTransaction returns whether peer is known to already have a transaction.
