@@ -4274,7 +4274,7 @@ func TestEIP7702(t *testing.T) {
 	// 2. addr1:0xaaaa calls into addr2:0xbbbb
 	// 3. addr2:0xbbbb  writes to storage
 	auth1, _ := types.SignSetCode(key1, types.SetCodeAuthorization{
-		ChainID: uint256.MustFromBig(gspec.Config.ChainID),
+		ChainID: *uint256.MustFromBig(gspec.Config.ChainID),
 		Address: aa,
 		Nonce:   1,
 	})
