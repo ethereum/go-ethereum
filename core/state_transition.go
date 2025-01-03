@@ -66,10 +66,14 @@ func (result *ExecutionResult) Revert() []byte {
 	return common.CopyBytes(result.ReturnData)
 }
 
-// IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
+// IntrinsicGas computes the 'intrinsic gas' and the number of tokens for EIP-7623
+// for a message with the given data.
+func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, uint64, error) {
 	// Set the starting gas for the raw transaction
-	var gas uint64
+	var (
+		gas    uint64
+		tokens uint64
+	)
 	if isContractCreation && isHomestead {
 		gas = params.TxGasContractCreation
 	} else {
@@ -85,26 +89,28 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 				nz++
 			}
 		}
+		z := dataLen - nz
+		tokens = nz*params.TokenPerNonZeroByte7623 + z
+
 		// Make sure we don't exceed uint64 for all data combinations
 		nonZeroGas := params.TxDataNonZeroGasFrontier
 		if isEIP2028 {
 			nonZeroGas = params.TxDataNonZeroGasEIP2028
 		}
 		if (math.MaxUint64-gas)/nonZeroGas < nz {
-			return 0, ErrGasUintOverflow
+			return 0, tokens, ErrGasUintOverflow
 		}
 		gas += nz * nonZeroGas
 
-		z := dataLen - nz
 		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
-			return 0, ErrGasUintOverflow
+			return 0, tokens, ErrGasUintOverflow
 		}
 		gas += z * params.TxDataZeroGas
 
 		if isContractCreation && isEIP3860 {
 			lenWords := toWordSize(dataLen)
 			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
-				return 0, ErrGasUintOverflow
+				return 0, tokens, ErrGasUintOverflow
 			}
 			gas += lenWords * params.InitCodeWordGas
 		}
@@ -116,7 +122,7 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 	if authList != nil {
 		gas += uint64(len(authList)) * params.CallNewAccountGas
 	}
-	return gas, nil
+	return gas, tokens, nil
 }
 
 // toWordSize returns the ceiled word size required for init code payment calculation.
@@ -417,12 +423,22 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	gas, dataTokens, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
 	if st.gasRemaining < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
+	}
+	// Gas limit suffices for the floor data cost (EIP-7623)
+	if rules.IsPrague {
+		floorGas, err := FloorDataGas(dataTokens)
+		if err != nil {
+			return nil, err
+		}
+		if st.gasRemaining < floorGas {
+			return nil, fmt.Errorf("%w: have %d, want %d", ErrDataFloorGas, st.gasRemaining, floorGas)
+		}
 	}
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
 		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
@@ -485,6 +501,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 		// Execute the transaction's call.
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
+	}
+	if rules.IsPrague {
+		// After EIP-7623: Data-heavy transactions pay the floor gas.
+		// Overflow error has already been checked and can be ignored here.
+		floorGas, _ := FloorDataGas(dataTokens)
+		if st.gasUsed() < floorGas {
+			st.gasRemaining = st.initialGas - floorGas
+		}
 	}
 
 	var gasRefund uint64
@@ -622,4 +646,14 @@ func (st *stateTransition) gasUsed() uint64 {
 // blobGasUsed returns the amount of blob gas used by the message.
 func (st *stateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
+}
+
+// FloorDataGas calculates the minimum gas required for a transaction
+// based on its data tokens (EIP-7623).
+func FloorDataGas(tokens uint64) (uint64, error) {
+	// Check for overflow
+	if (math.MaxUint64-params.TxGas)/params.CostFloorPerToken7623 < tokens {
+		return 0, ErrGasUintOverflow
+	}
+	return params.TxGas + tokens*params.CostFloorPerToken7623, nil
 }
