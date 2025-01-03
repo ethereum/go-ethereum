@@ -446,7 +446,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		authList = make([]types.SetCodeAuthorization, len(tx.AuthorizationList))
 		for i, auth := range tx.AuthorizationList {
 			authList[i] = types.SetCodeAuthorization{
-				ChainID: uint256.MustFromBig(auth.ChainID),
+				ChainID: *uint256.MustFromBig(auth.ChainID),
 				Address: auth.Address,
 				Nonce:   auth.Nonce,
 				V:       auth.V,
