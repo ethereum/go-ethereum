@@ -190,9 +190,7 @@ func (p *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, number uin
 		if _, err := GetBlockReceipts(ctx, p.odr, hash, number); err != nil { // ODR caches, ignore results
 			return err
 		}
-		if err := core.WriteTxLookupEntries(p.chainDb, block); err != nil {
-			return err
-		}
+		rawdb.WriteTxLookupEntriesByBlock(p.chainDb, block)
 		// Update the transaction pool's state
 		for _, tx := range list {
 			delete(p.pending, tx.Hash())
@@ -267,7 +265,7 @@ func (p *TxPool) reorgOnNewHead(ctx context.Context, newHeader *types.Header) (t
 		idx2 := idx - txPermanent
 		if len(p.mined) > 0 {
 			for i := p.clearIdx; i < idx2; i++ {
-				hash := core.GetCanonicalHash(p.chainDb, i)
+				hash := rawdb.ReadCanonicalHash(p.chainDb, i)
 				if list, ok := p.mined[hash]; ok {
 					hashes := make([]common.Hash, len(list))
 					for i, tx := range list {

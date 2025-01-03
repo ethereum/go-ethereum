@@ -13,7 +13,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/lru"
-	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
@@ -54,15 +53,15 @@ func main() {
 	flag.Parse()
 	db, _ := leveldb.New(*dir, ethconfig.Defaults.DatabaseCache, utils.MakeDatabaseHandles(0), "")
 	lddb := rawdb.NewDatabase(db)
-	head := core.GetHeadBlockHash(lddb)
-	currentHeader := core.GetHeader(lddb, head, core.GetBlockNumber(lddb, head))
+	head := rawdb.ReadHeadBlockHash(lddb)
+	currentHeader := rawdb.ReadHeader(lddb, head, *rawdb.ReadHeaderNumber(lddb, head))
 	tridb := trie.NewDatabase(lddb)
 	catchEventInterupt(db)
 	cache = lru.NewCache[common.Hash, struct{}](*cacheSize)
 	go func() {
 		for i := uint64(1); i <= currentHeader.Number.Uint64(); i++ {
-			hash := core.GetCanonicalHash(lddb, i)
-			root := core.GetHeader(lddb, hash, i).Root
+			hash := rawdb.ReadCanonicalHash(lddb, i)
+			root := rawdb.ReadHeader(lddb, hash, i).Root
 			trieRoot, err := trie.NewSecure(root, tridb)
 			if err != nil {
 				continue

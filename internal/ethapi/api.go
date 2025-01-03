@@ -42,6 +42,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc/eip1559"
 	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
@@ -621,7 +622,7 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 
 // GetTransactionAndReceiptProof returns the Trie transaction and receipt proof of the given transaction hash.
 func (s *PublicBlockChainAPI) GetTransactionAndReceiptProof(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-	tx, blockHash, _, index := core.GetTransaction(s.b.ChainDb(), hash)
+	tx, blockHash, _, index := rawdb.ReadTransaction(s.b.ChainDb(), hash)
 	if tx == nil {
 		return nil, nil
 	}
@@ -2213,7 +2214,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 // GetTransactionByHash returns the transaction for the given hash
 func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
 	// Try to return an already finalized transaction
-	tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash)
+	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(s.b.ChainDb(), hash)
 	if tx != nil {
 		header, err := s.b.HeaderByHash(ctx, blockHash)
 		if err != nil {
@@ -2233,7 +2234,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
 func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	// Retrieve a finalized transaction, or a pooled otherwise
-	tx, _, _, _ := core.GetTransaction(s.b.ChainDb(), hash)
+	tx, _, _, _ := rawdb.ReadTransaction(s.b.ChainDb(), hash)
 	if tx == nil {
 		if tx = s.b.GetPoolTransaction(hash); tx == nil {
 			// Transaction not found anywhere, abort
@@ -2246,7 +2247,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-	tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash)
+	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(s.b.ChainDb(), hash)
 	if tx == nil {
 		// When the transaction doesn't exist, the RPC method should return JSON null
 		// as per specification.
@@ -2458,7 +2459,7 @@ func (s *PublicXDCXTransactionPoolAPI) SendLendingRawTransaction(ctx context.Con
 func (s *PublicXDCXTransactionPoolAPI) GetOrderTxMatchByHash(ctx context.Context, hash common.Hash) ([]*tradingstate.OrderItem, error) {
 	var tx *types.Transaction
 	orders := []*tradingstate.OrderItem{}
-	if tx, _, _, _ = core.GetTransaction(s.b.ChainDb(), hash); tx == nil {
+	if tx, _, _, _ = rawdb.ReadTransaction(s.b.ChainDb(), hash); tx == nil {
 		if tx = s.b.GetPoolTransaction(hash); tx == nil {
 			return []*tradingstate.OrderItem{}, nil
 		}
@@ -3189,7 +3190,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBorrows(ctx context.Context, lendingTo
 // GetLendingTxMatchByHash returns lendingItems which have been processed at tx of the given txhash
 func (s *PublicXDCXTransactionPoolAPI) GetLendingTxMatchByHash(ctx context.Context, hash common.Hash) ([]*lendingstate.LendingItem, error) {
 	var tx *types.Transaction
-	if tx, _, _, _ = core.GetTransaction(s.b.ChainDb(), hash); tx == nil {
+	if tx, _, _, _ = rawdb.ReadTransaction(s.b.ChainDb(), hash); tx == nil {
 		if tx = s.b.GetPoolTransaction(hash); tx == nil {
 			return []*lendingstate.LendingItem{}, nil
 		}
@@ -3205,7 +3206,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingTxMatchByHash(ctx context.Conte
 // GetLiquidatedTradesByTxHash returns trades which closed by XDCX protocol at the tx of the give hash
 func (s *PublicXDCXTransactionPoolAPI) GetLiquidatedTradesByTxHash(ctx context.Context, hash common.Hash) (lendingstate.FinalizedResult, error) {
 	var tx *types.Transaction
-	if tx, _, _, _ = core.GetTransaction(s.b.ChainDb(), hash); tx == nil {
+	if tx, _, _, _ = rawdb.ReadTransaction(s.b.ChainDb(), hash); tx == nil {
 		if tx = s.b.GetPoolTransaction(hash); tx == nil {
 			return lendingstate.FinalizedResult{}, nil
 		}

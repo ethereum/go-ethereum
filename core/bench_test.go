@@ -238,12 +238,12 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, hash, n)
-		WriteTd(db, hash, n, big.NewInt(int64(n+1)))
+		rawdb.WriteTd(db, hash, n, big.NewInt(int64(n+1)))
 
 		if full || n == 0 {
 			block := types.NewBlockWithHeader(header)
 			rawdb.WriteBody(db, hash, n, block.Body())
-			WriteBlockReceipts(db, hash, n, nil)
+			rawdb.WriteReceipts(db, hash, n, nil)
 		}
 	}
 }
@@ -295,8 +295,8 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 			header := chain.GetHeaderByNumber(n)
 			if full {
 				hash := header.Hash()
-				GetBody(db, hash, n)
-				GetBlockReceipts(db, hash, n)
+				rawdb.ReadBody(db, hash, n)
+				rawdb.ReadReceipts(db, hash, n, chain.Config())
 			}
 		}
 

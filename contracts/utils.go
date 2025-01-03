@@ -39,7 +39,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/contracts/blocksigner/contract"
 	randomizeContract "github.com/XinFinOrg/XDPoSChain/contracts/randomize/contract"
-	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -337,7 +337,7 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 			block := chain.GetBlock(header.Hash(), i)
 			txs := block.Transactions()
 			if !chain.Config().IsTIPSigning(header.Number) {
-				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
+				receipts := rawdb.ReadRawReceipts(c.GetDb(), header.Hash(), i)
 				signingTxs = c.CacheNoneTIPSigningTxs(header, txs, receipts)
 			} else {
 				signingTxs = c.CacheSigningTxs(header.Hash(), txs)

@@ -100,7 +100,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	}
 
 	hc.currentHeader.Store(hc.genesisHeader)
-	if head := GetHeadBlockHash(chainDb); head != (common.Hash{}) {
+	if head := rawdb.ReadHeadBlockHash(chainDb); head != (common.Hash{}) {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
 		}
@@ -113,13 +113,14 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 
 // GetBlockNumber retrieves the block number belonging to the given hash
 // from the cache or database
-func (hc *HeaderChain) GetBlockNumber(hash common.Hash) uint64 {
+func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 	if cached, ok := hc.numberCache.Get(hash); ok {
-		return cached
+		number := cached
+		return &number
 	}
-	number := GetBlockNumber(hc.chainDb, hash)
-	if number != missingNumber {
-		hc.numberCache.Add(hash, number)
+	number := rawdb.ReadHeaderNumber(hc.chainDb, hash)
+	if number != nil {
+		hc.numberCache.Add(hash, *number)
 	}
 	return number
 }
@@ -330,7 +331,7 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 	if cached, ok := hc.tdCache.Get(hash); ok {
 		return cached
 	}
-	td := GetTd(hc.chainDb, hash, number)
+	td := rawdb.ReadTd(hc.chainDb, hash, number)
 	if td == nil {
 		return nil
 	}
@@ -342,7 +343,11 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 // GetTdByHash retrieves a block's total difficulty in the canonical chain from the
 // database by hash, caching it if found.
 func (hc *HeaderChain) GetTdByHash(hash common.Hash) *big.Int {
-	return hc.GetTd(hash, hc.GetBlockNumber(hash))
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	return hc.GetTd(hash, *number)
 }
 
 // GetHeader retrieves a block header from the database by hash and number,
@@ -352,7 +357,7 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 	if header, ok := hc.headerCache.Get(hash); ok {
 		return header
 	}
-	header := GetHeader(hc.chainDb, hash, number)
+	header := rawdb.ReadHeader(hc.chainDb, hash, number)
 	if header == nil {
 		return nil
 	}
@@ -364,7 +369,11 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 // GetHeaderByHash retrieves a block header from the database by hash, caching it if
 // found.
 func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
-	return hc.GetHeader(hash, hc.GetBlockNumber(hash))
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	return hc.GetHeader(hash, *number)
 }
 
 // HasHeader checks if a block header is present in the database or not.
@@ -380,7 +389,7 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 // GetHeaderByNumber retrieves a block header from the database by number,
 // caching it (associated with its hash) if found.
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
-	hash := GetCanonicalHash(hc.chainDb, number)
+	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
 	if hash == (common.Hash{}) {
 		return nil
 	}
@@ -388,8 +397,7 @@ func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 }
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
-	// TODO: return rawdb.ReadCanonicalHash(hc.chainDb, number)
-	return GetCanonicalHash(hc.chainDb, number)
+	return rawdb.ReadCanonicalHash(hc.chainDb, number)
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The

@@ -138,7 +138,7 @@ func (lc *LightChain) Odr() OdrBackend {
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (lc *LightChain) loadLastState() error {
-	if head := core.GetHeadHeaderHash(lc.chainDb); head == (common.Hash{}) {
+	if head := rawdb.ReadHeadHeaderHash(lc.chainDb); head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
 		lc.Reset()
 	} else {
@@ -218,7 +218,7 @@ func (lc *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Bod
 	if cached, ok := lc.bodyCache.Get(hash); ok && cached != nil {
 		return cached, nil
 	}
-	body, err := GetBody(ctx, lc.odr, hash, lc.hc.GetBlockNumber(hash))
+	body, err := GetBody(ctx, lc.odr, hash, *lc.hc.GetBlockNumber(hash))
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +234,11 @@ func (lc *LightChain) GetBodyRLP(ctx context.Context, hash common.Hash) (rlp.Raw
 	if cached, ok := lc.bodyRLPCache.Get(hash); ok {
 		return cached, nil
 	}
-	body, err := GetBodyRLP(ctx, lc.odr, hash, lc.hc.GetBlockNumber(hash))
+	number := lc.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil, errors.New("unknown block")
+	}
+	body, err := GetBodyRLP(ctx, lc.odr, hash, *number)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +273,11 @@ func (lc *LightChain) GetBlock(ctx context.Context, hash common.Hash, number uin
 // GetBlockByHash retrieves a block from the database or ODR service by hash,
 // caching it if found.
 func (lc *LightChain) GetBlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return lc.GetBlock(ctx, hash, lc.hc.GetBlockNumber(hash))
+	number := lc.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil, errors.New("unknown block")
+	}
+	return lc.GetBlock(ctx, hash, *number)
 }
 
 // GetBlockByNumber retrieves a block from the database or ODR service by
