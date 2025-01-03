@@ -66,10 +66,10 @@ func (s *Suite) dialAs(key *ecdsa.PrivateKey) (*Conn, error) {
 		return nil, err
 	}
 	conn.caps = []p2p.Cap{
-		{Name: "eth", Version: 67},
 		{Name: "eth", Version: 68},
+		{Name: "eth", Version: 69},
 	}
-	conn.ourHighestProtoVersion = 68
+	conn.ourHighestProtoVersion = 69
 	return &conn, nil
 }
 
@@ -316,8 +316,10 @@ loop:
 				return fmt.Errorf("wrong head block in status, want:  %#x (block %d) have %#x",
 					want, chain.blocks[chain.Len()-1].NumberU64(), have)
 			}
-			if have, want := msg.TD.Cmp(chain.TD()), 0; have != want {
-				return fmt.Errorf("wrong TD in status: have %v want %v", have, want)
+			if c.negotiatedProtoVersion < 69 {
+				if have, want := msg.TD.Cmp(chain.TD()), 0; have != want {
+					return fmt.Errorf("wrong TD in status: have %v want %v", have, want)
+				}
 			}
 			if have, want := msg.ForkID, chain.ForkID(); !reflect.DeepEqual(have, want) {
 				return fmt.Errorf("wrong fork ID in status: have %v, want %v", have, want)
