@@ -50,8 +50,10 @@ func (loc *nodeLoc) string() string {
 // reader implements the database.NodeReader interface, providing the functionalities to
 // retrieve trie nodes by wrapping the internal state layer.
 type reader struct {
-	layer       layer
+	db          *Database
+	state       common.Hash
 	noHashCheck bool
+	layer       layer
 }
 
 // Node implements database.NodeReader interface, retrieving the node with specified
@@ -94,7 +96,11 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 // - the returned account data is not a copy, please don't modify it
 // - no error will be returned if the requested account is not found in database
 func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
-	return r.layer.account(hash, 0)
+	l, err := r.db.tree.lookupAccount(hash, r.state)
+	if err != nil {
+		return nil, err
+	}
+	return l.account(hash, 0)
 }
 
 // Account directly retrieves the account associated with a particular hash in
@@ -105,7 +111,7 @@ func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 // - the returned account object is safe to modify
 // - no error will be returned if the requested account is not found in database
 func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
-	blob, err := r.layer.account(hash, 0)
+	blob, err := r.AccountRLP(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +133,11 @@ func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 // - the returned storage data is not a copy, please don't modify it
 // - no error will be returned if the requested slot is not found in database
 func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
-	return r.layer.storage(accountHash, storageHash, 0)
+	l, err := r.db.tree.lookupStorage(accountHash, storageHash, r.state)
+	if err != nil {
+		return nil, err
+	}
+	return l.storage(accountHash, storageHash, 0)
 }
 
 // NodeReader retrieves a layer belonging to the given state root.
@@ -136,7 +146,12 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	if layer == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)
 	}
-	return &reader{layer: layer, noHashCheck: db.isVerkle}, nil
+	return &reader{
+		db:          db,
+		state:       root,
+		noHashCheck: db.isVerkle,
+		layer:       layer,
+	}, nil
 }
 
 // StateReader returns a reader that allows access to the state data associated
@@ -146,5 +161,9 @@ func (db *Database) StateReader(root common.Hash) (database.StateReader, error) 
 	if layer == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)
 	}
-	return &reader{layer: layer}, nil
+	return &reader{
+		db:    db,
+		state: root,
+		layer: layer,
+	}, nil
 }
