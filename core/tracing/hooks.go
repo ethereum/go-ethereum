@@ -18,6 +18,7 @@ package tracing
 
 import (
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -172,6 +173,9 @@ type (
 
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
+
+	// BlockHashReadHook is called when EVM reads the blockhash of a block.
+	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
 )
 
 type Hooks struct {
@@ -199,6 +203,25 @@ type Hooks struct {
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+	// Block hash read
+	OnBlockHashRead BlockHashReadHook
+}
+
+// copy creates a new Hooks instance with all implemented hooks copied from the original.
+// Note: it is not a deep copy. If a hook has been implemented as a closure and acts on
+// a mutable state, the copied hook will still act on the same state.
+func (h *Hooks) copy() *Hooks {
+	copied := &Hooks{}
+	srcValue := reflect.ValueOf(h).Elem()
+	dstValue := reflect.ValueOf(copied).Elem()
+
+	for i := 0; i < srcValue.NumField(); i++ {
+		field := srcValue.Field(i)
+		if !field.IsNil() {
+			dstValue.Field(i).Set(field)
+		}
+	}
+	return copied
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
@@ -250,6 +273,10 @@ const (
 	// account within the same tx (captured at end of tx).
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
+
+	// BalanceChangeRevert is emitted when the balance is reverted back to a previous value due to call failure.
+	// It is only emitted when the tracer has opted in to use the journaling wrapper.
+	BalanceChangeRevert BalanceChangeReason = 15
 )
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
