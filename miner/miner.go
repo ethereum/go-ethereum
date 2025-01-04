@@ -72,7 +72,6 @@ type Miner struct {
 	txpool      *txpool.TxPool
 	chain       *core.BlockChain
 	pending     *pending
-	pendingMu   sync.Mutex // Lock protects the pending block
 }
 
 // New creates a new miner with provided config.
@@ -134,8 +133,6 @@ func (miner *Miner) BuildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 // The result might be nil if pending generation is failed.
 func (miner *Miner) getPending() *newPayloadResult {
 	header := miner.chain.CurrentHeader()
-	miner.pendingMu.Lock()
-	defer miner.pendingMu.Unlock()
 	if cached := miner.pending.resolve(header.Hash()); cached != nil {
 		return cached
 	}
