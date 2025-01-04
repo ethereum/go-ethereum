@@ -94,6 +94,13 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Bl
 	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
 }
 
+// BlockByNumber returns a block from the current canonical chain. If tag is nil, the
+// latest known block is returned.
+// you can use the special tag earliest, latest, finalized, safe, or finalized.
+func (ec *Client) BlockBySpecialTag(ctx context.Context, tag string) (*types.Block, error) {
+	return ec.getBlock(ctx, "eth_getBlockByNumber", tag, true)
+}
+
 // BlockNumber returns the most recent block number
 func (ec *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	var result hexutil.Uint64
