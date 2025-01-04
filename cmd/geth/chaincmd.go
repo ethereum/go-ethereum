@@ -227,16 +227,18 @@ func initGenesis(ctx *cli.Context) error {
 	}
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
-	defer triedb.Close()
-
-	_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
+	scheme, err := rawdb.ParseStateScheme(ctx.String(utils.StateSchemeFlag.Name), chaindb)
+	if err != nil {
+		utils.Fatalf("%v", err)
+	}
+	_, hash, compactErr, err := core.SetupGenesisBlockWithOverride(chaindb, scheme, ctx.Bool(utils.CachePreimagesFlag.Name), genesis, &overrides)
 	if err != nil {
 		utils.Fatalf("Failed to write genesis block: %v", err)
 	}
-
+	if compactErr != nil {
+		utils.Fatalf("The supplied genesis is not compatible: %v", compactErr)
+	}
 	log.Info("Successfully wrote genesis state", "database", "chaindata", "hash", hash)
-
 	return nil
 }
 
