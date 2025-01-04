@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -37,6 +38,9 @@ type buffer struct {
 	limit  uint64    // The maximum memory allowance in bytes
 	nodes  *nodeSet  // Aggregated trie node set
 	states *stateSet // Aggregated state set
+
+	done     chan struct{} // notifier whether the content in buffer has been flushed or not
+	flushErr error         // error if any exception occurs during flushing
 }
 
 // newBuffer initializes the buffer with the provided states and trie nodes.
@@ -124,36 +128,61 @@ func (b *buffer) size() uint64 {
 
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
-func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, nodesCache *fastcache.Cache, id uint64) error {
-	// Ensure the target state id is aligned with the internal counter.
-	head := rawdb.ReadPersistentStateID(db)
-	if head+b.layers != id {
-		return fmt.Errorf("buffer layers (%d) cannot be applied on top of persisted state id (%d) to reach requested state id (%d)", b.layers, head, id)
+func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, nodesCache *fastcache.Cache, id uint64) {
+	if b.done != nil {
+		panic("duplicated flush operation")
 	}
-	// Terminate the state snapshot generation if it's active
-	var (
-		start = time.Now()
-		batch = db.NewBatchWithSize(b.nodes.dbsize() * 11 / 10) // extra 10% for potential pebble internal stuff
-	)
-	// Explicitly sync the state freezer, ensuring that all written
-	// data is transferred to disk before updating the key-value store.
-	if freezer != nil {
-		if err := freezer.Sync(); err != nil {
-			return err
-		}
-	}
-	nodes := b.nodes.write(batch, nodesCache)
-	rawdb.WritePersistentStateID(batch, id)
+	b.done = make(chan struct{})
 
-	// Flush all mutations in a single batch
-	size := batch.ValueSize()
-	if err := batch.Write(); err != nil {
-		return err
+	go func() {
+		defer func() {
+			close(b.done)
+		}()
+
+		// Ensure the target state id is aligned with the internal counter.
+		head := rawdb.ReadPersistentStateID(db)
+		if head+b.layers != id {
+			b.flushErr = fmt.Errorf("buffer layers (%d) cannot be applied on top of persisted state id (%d) to reach requested state id (%d)", b.layers, head, id)
+			return
+		}
+		// Terminate the state snapshot generation if it's active
+		var (
+			start = time.Now()
+			batch = db.NewBatchWithSize(b.nodes.dbsize() * 11 / 10) // extra 10% for potential pebble internal stuff
+		)
+		// Explicitly sync the state freezer, ensuring that all written
+		// data is transferred to disk before updating the key-value store.
+		if freezer != nil {
+			if err := freezer.Sync(); err != nil {
+				b.flushErr = err
+				return
+			}
+		}
+		nodes := b.nodes.write(batch, nodesCache)
+		rawdb.WritePersistentStateID(batch, id)
+
+		// Flush all mutations in a single batch
+		size := batch.ValueSize()
+		if err := batch.Write(); err != nil {
+			b.flushErr = err
+			return
+		}
+		// The content in the frozen buffer is kept for consequent state access,
+		// TODO (rjl493456442) measure the gc overhead for holding this struct.
+
+		commitBytesMeter.Mark(int64(size))
+		commitNodesMeter.Mark(int64(nodes))
+		commitTimeTimer.UpdateSince(start)
+		log.Debug("Persisted buffer content", "nodes", nodes, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
+	}()
+}
+
+// waitFlush blocks until the buffer has been fully flushed and returns any
+// stored errors that occurred during the process.
+func (b *buffer) waitFlush() error {
+	if b.done == nil {
+		return errors.New("the buffer is not frozen")
 	}
-	commitBytesMeter.Mark(int64(size))
-	commitNodesMeter.Mark(int64(nodes))
-	commitTimeTimer.UpdateSince(start)
-	b.reset()
-	log.Debug("Persisted buffer content", "nodes", nodes, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
-	return nil
+	<-b.done
+	return b.flushErr
 }
