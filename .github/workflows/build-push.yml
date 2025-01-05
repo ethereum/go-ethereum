@@ -1,7 +1,5 @@
 name: Build and Push Docker Image
 
-# Adding a comment to trigger the workflow
-
 on:
   pull_request:
     types: [closed]
