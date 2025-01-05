@@ -393,6 +393,12 @@ web3._extend({
 			inputFormatter: [null, null],
 		}),
 		new web3._extend.Method({
+			name: 'getBlockAccessLists',
+			call: 'debug_getBlockAccessLists',
+			params: 1,
+			inputFormatter: [null],
+		}),
+		new web3._extend.Method({
 			name: 'traceBlockByHash',
 			call: 'debug_traceBlockByHash',
 			params: 2,

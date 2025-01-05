@@ -704,6 +704,81 @@ func (api *API) executeTx(ctx context.Context, index int, block *types.Block, tx
 	return nil
 }
 
+type txAccessList struct {
+	Accesslist *types.AccessList `json:"accessList"`
+	Error      string            `json:"error,omitempty"`
+	Hash       common.Hash       `json:"hash"`
+}
+
+func (api *API) GetBlockAccessLists(ctx context.Context, blockNum uint64) ([]txAccessList, error) {
+
+	if blockNum == 0 {
+		return []txAccessList{}, errors.New("genesis block is not applicable")
+	}
+	block, err := api.blockByNumber(ctx, rpc.BlockNumber(blockNum))
+	if err != nil {
+		return []txAccessList{}, err
+	}
+
+	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(blockNum-1), block.ParentHash())
+	if err != nil {
+		return []txAccessList{}, fmt.Errorf("failed to get parent block: parent: %s, err %v", block.ParentHash().Hex(), err)
+	}
+	//generate the state at the parent block
+	statedb, release, err := api.backend.StateAtBlock(ctx, parent, defaultTraceReexec, nil, true, false)
+	if err != nil {
+		return []txAccessList{}, fmt.Errorf("failed to generate state at the parent block: err %v", err)
+	}
+	defer release()
+
+	return api.blockAccessLists(ctx, block, statedb)
+}
+
+func (api *API) blockAccessLists(ctx context.Context, block *types.Block, statedb *state.StateDB) ([]txAccessList, error) {
+
+	var (
+		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
+		postMerge   = block.Difficulty().Sign() == 0
+		chainConfig = api.backend.ChainConfig()
+		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		precompiles = vm.ActivePrecompiles(api.backend.ChainConfig().Rules(block.Number(), postMerge, block.Time()))
+		evm         = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+		acls        []txAccessList
+	)
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+	}
+	if chainConfig.IsPrague(block.Number(), block.Time()) {
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
+	}
+
+	var to common.Address
+	for ind, tx := range block.Transactions() {
+		from, _ := types.Sender(signer, tx)
+		// create an access list tracer
+		if tx.To() != nil {
+			to = *tx.To()
+		}
+		tracer := logger.NewAccessListTracer(nil, from, to, precompiles)
+		evm = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true})
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+		statedb.SetTxContext(tx.Hash(), ind)
+		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
+		if err != nil {
+			return acls, fmt.Errorf("failed to apply tx: err %v", err)
+		}
+		acl := tracer.AccessList()
+		// tracer.PrintAccessList()
+		txAcl := txAccessList{Accesslist: &acl, Hash: tx.Hash()}
+		if res.Err != nil {
+			txAcl.Error = res.Err.Error()
+		}
+		acls = append(acls, txAcl)
+	}
+
+	return acls, nil
+}
+
 // StandardTraceBadBlockToFile dumps the structured logs created during the
 // execution of EVM against a block pulled from the pool of bad ones to the
 // local file system and returns a list of files to the caller.
