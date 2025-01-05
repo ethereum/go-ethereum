@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestIsPrimitive(t *testing.T) {
@@ -231,5 +232,29 @@ func TestType_TypeName(t *testing.T) {
 		if tc.Input.typeName() != tc.Expected {
 			t.Errorf("test %d: expected typeName value of '%v' but got '%v'", i, tc.Expected, tc.Input)
 		}
+	}
+}
+
+func TestEncodeNestedBytesArray(t *testing.T) {
+	typedData := TypedData{
+		Types: Types{
+			"EIP712Domain": []Type{},
+			"Test": []Type{
+				{Name: "data", Type: "bytes[]"},
+			},
+		},
+		PrimaryType: "Test",
+		Domain:     TypedDataDomain{},
+		Message: map[string]interface{}{
+			"data": []interface{}{
+				hexutil.MustDecode("0x1234"),
+				hexutil.MustDecode("0x5678"),
+			},
+		},
+	}
+
+	_, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
+	if err != nil {
+		t.Errorf("Failed to hash struct with nested bytes array: %v", err)
 	}
 }
