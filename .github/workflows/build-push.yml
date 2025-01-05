@@ -28,6 +28,6 @@ jobs:
 
     - name: Build and Push Docker Image
       run: |
-        docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/go-ethereum:latest .
-        docker push ${{ secrets.DOCKER_HUB_USERNAME }}/go-ethereum:latest
+        docker build -t nikolaivanovj/go-ethereum:latest .
+        docker push nikolaivanovj/go-ethereum:latest
 
