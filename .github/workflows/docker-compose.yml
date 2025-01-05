@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  geth:
+    image: "${{ secrets.DOCKER_HUB_USERNAME }}/go-ethereum:latest"
+    ports:
+      - "8545:8545"
+      - "30303:30303"
+
