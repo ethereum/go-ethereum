@@ -3,7 +3,7 @@ name: Build and Push Docker Image
 on:
   pull_request:
     branches:
-      - initialtest
+      - main
     labels:
       - CI:Build
 
