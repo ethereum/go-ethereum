@@ -2,7 +2,6 @@ name: Build and Push Docker Image
 
 on:
   pull_request:
-    types: [closed]
     branches:
       - initialtest
     labels:
@@ -24,9 +23,6 @@ jobs:
       with:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_PAT }}
-
-    - name: Set ENV Variable for Docker Compose
-      run: echo "DOCKER_HUB_USERNAME=${{ secrets.DOCKER_HUB_USERNAME }}" >> $GITHUB_ENV
 
     - name: Build and Push Docker Image
       run: |
