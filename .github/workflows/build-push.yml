@@ -1,9 +1,12 @@
 name: Build and Push Docker Image
 
+# Adding a comment to trigger the workflow
+
 on:
   pull_request:
+    types: [closed]
     branches:
-      - main
+      - master
     labels:
       - CI:Build
 
@@ -24,8 +27,11 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_PAT }}
 
+    - name: Set ENV Variable for Docker Compose
+      run: echo "DOCKER_HUB_USERNAME=${{ secrets.DOCKER_HUB_USERNAME }}" >> $GITHUB_ENV
+
     - name: Build and Push Docker Image
       run: |
-        docker build -t nikolaivanovj/go-ethereum:latest .
-        docker push nikolaivanovj/go-ethereum:latest
+        docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/go-ethereum:latest .
+        docker push ${{ secrets.DOCKER_HUB_USERNAME }}/go-ethereum:latest
 
