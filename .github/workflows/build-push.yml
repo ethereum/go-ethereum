@@ -5,7 +5,7 @@ name: Build and Push Docker Image
 on:
   pull_request:
     branches:
-      - main
+      - master
     labels:
       - CI:Build
 
