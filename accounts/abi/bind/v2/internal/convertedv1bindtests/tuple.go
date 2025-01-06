@@ -78,16 +78,16 @@ func (_Tuple *Tuple) PackConstructor() []byte {
 // Func1 is a free data retrieval call binding the contract method 0x443c79b4.
 //
 // Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])
-func (_Tuple *Tuple) PackFunc1(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*big.Int) ([]byte, error) {
-	return _Tuple.abi.Pack("func1", a, b, c, d, e)
+func (_Tuple *Tuple) PackFunc1(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) ([]byte, error) {
+	return _Tuple.abi.Pack("func1", A, B, C, D, E)
 }
 
 type Func1Output struct {
-	Arg  TupleS
-	Arg0 [][2]TupleT
-	Arg1 [2][]TupleT
-	Arg2 []TupleS
-	Arg3 []*big.Int
+	Arg0 TupleS
+	Arg1 [][2]TupleT
+	Arg2 [2][]TupleT
+	Arg3 []TupleS
+	Arg4 []*big.Int
 }
 
 func (_Tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
@@ -98,11 +98,11 @@ func (_Tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 		return *outstruct, err
 	}
 
-	outstruct.Arg = *abi.ConvertType(out[0], new(TupleS)).(*TupleS)
-	outstruct.Arg0 = *abi.ConvertType(out[1], new([][2]TupleT)).(*[][2]TupleT)
-	outstruct.Arg1 = *abi.ConvertType(out[2], new([2][]TupleT)).(*[2][]TupleT)
-	outstruct.Arg2 = *abi.ConvertType(out[3], new([]TupleS)).(*[]TupleS)
-	outstruct.Arg3 = *abi.ConvertType(out[4], new([]*big.Int)).(*[]*big.Int)
+	outstruct.Arg0 = *abi.ConvertType(out[0], new(TupleS)).(*TupleS)
+	outstruct.Arg1 = *abi.ConvertType(out[1], new([][2]TupleT)).(*[][2]TupleT)
+	outstruct.Arg2 = *abi.ConvertType(out[2], new([2][]TupleT)).(*[2][]TupleT)
+	outstruct.Arg3 = *abi.ConvertType(out[3], new([]TupleS)).(*[]TupleS)
+	outstruct.Arg4 = *abi.ConvertType(out[4], new([]*big.Int)).(*[]*big.Int)
 
 	return *outstruct, err
 
@@ -111,15 +111,15 @@ func (_Tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 // Func2 is a free data retrieval call binding the contract method 0xd0062cdd.
 //
 // Solidity: function func2((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) returns()
-func (_Tuple *Tuple) PackFunc2(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*big.Int) ([]byte, error) {
-	return _Tuple.abi.Pack("func2", a, b, c, d, e)
+func (_Tuple *Tuple) PackFunc2(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) ([]byte, error) {
+	return _Tuple.abi.Pack("func2", A, B, C, D, E)
 }
 
 // Func3 is a free data retrieval call binding the contract method 0xe4d9a43b.
 //
 // Solidity: function func3((uint16,uint16)[] ) pure returns()
-func (_Tuple *Tuple) PackFunc3(arg0 []TupleQ) ([]byte, error) {
-	return _Tuple.abi.Pack("func3", arg0)
+func (_Tuple *Tuple) PackFunc3(Arg0 []TupleQ) ([]byte, error) {
+	return _Tuple.abi.Pack("func3", Arg0)
 }
 
 // TupleTupleEvent represents a TupleEvent event raised by the Tuple contract.

@@ -53,8 +53,8 @@ func (_Token *Token) PackConstructor(initialSupply *big.Int, tokenName string, d
 // Allowance is a free data retrieval call binding the contract method 0xdd62ed3e.
 //
 // Solidity: function allowance(address , address ) returns(uint256)
-func (_Token *Token) PackAllowance(arg0 common.Address, arg1 common.Address) ([]byte, error) {
-	return _Token.abi.Pack("allowance", arg0, arg1)
+func (_Token *Token) PackAllowance(Arg0 common.Address, Arg1 common.Address) ([]byte, error) {
+	return _Token.abi.Pack("allowance", Arg0, Arg1)
 }
 
 func (_Token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
@@ -73,8 +73,8 @@ func (_Token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
 // ApproveAndCall is a free data retrieval call binding the contract method 0xcae9ca51.
 //
 // Solidity: function approveAndCall(address _spender, uint256 _value, bytes _extraData) returns(bool success)
-func (_Token *Token) PackApproveAndCall(_spender common.Address, _value *big.Int, _extraData []byte) ([]byte, error) {
-	return _Token.abi.Pack("approveAndCall", _spender, _value, _extraData)
+func (_Token *Token) PackApproveAndCall(Spender common.Address, Value *big.Int, ExtraData []byte) ([]byte, error) {
+	return _Token.abi.Pack("approveAndCall", Spender, Value, ExtraData)
 }
 
 func (_Token *Token) UnpackApproveAndCall(data []byte) (bool, error) {
@@ -93,8 +93,8 @@ func (_Token *Token) UnpackApproveAndCall(data []byte) (bool, error) {
 // BalanceOf is a free data retrieval call binding the contract method 0x70a08231.
 //
 // Solidity: function balanceOf(address ) returns(uint256)
-func (_Token *Token) PackBalanceOf(arg0 common.Address) ([]byte, error) {
-	return _Token.abi.Pack("balanceOf", arg0)
+func (_Token *Token) PackBalanceOf(Arg0 common.Address) ([]byte, error) {
+	return _Token.abi.Pack("balanceOf", Arg0)
 }
 
 func (_Token *Token) UnpackBalanceOf(data []byte) (*big.Int, error) {
@@ -153,8 +153,8 @@ func (_Token *Token) UnpackName(data []byte) (string, error) {
 // SpentAllowance is a free data retrieval call binding the contract method 0xdc3080f2.
 //
 // Solidity: function spentAllowance(address , address ) returns(uint256)
-func (_Token *Token) PackSpentAllowance(arg0 common.Address, arg1 common.Address) ([]byte, error) {
-	return _Token.abi.Pack("spentAllowance", arg0, arg1)
+func (_Token *Token) PackSpentAllowance(Arg0 common.Address, Arg1 common.Address) ([]byte, error) {
+	return _Token.abi.Pack("spentAllowance", Arg0, Arg1)
 }
 
 func (_Token *Token) UnpackSpentAllowance(data []byte) (*big.Int, error) {
@@ -193,15 +193,15 @@ func (_Token *Token) UnpackSymbol(data []byte) (string, error) {
 // Transfer is a free data retrieval call binding the contract method 0xa9059cbb.
 //
 // Solidity: function transfer(address _to, uint256 _value) returns()
-func (_Token *Token) PackTransfer(_to common.Address, _value *big.Int) ([]byte, error) {
-	return _Token.abi.Pack("transfer", _to, _value)
+func (_Token *Token) PackTransfer(To common.Address, Value *big.Int) ([]byte, error) {
+	return _Token.abi.Pack("transfer", To, Value)
 }
 
 // TransferFrom is a free data retrieval call binding the contract method 0x23b872dd.
 //
 // Solidity: function transferFrom(address _from, address _to, uint256 _value) returns(bool success)
-func (_Token *Token) PackTransferFrom(_from common.Address, _to common.Address, _value *big.Int) ([]byte, error) {
-	return _Token.abi.Pack("transferFrom", _from, _to, _value)
+func (_Token *Token) PackTransferFrom(From common.Address, To common.Address, Value *big.Int) ([]byte, error) {
+	return _Token.abi.Pack("transferFrom", From, To, Value)
 }
 
 func (_Token *Token) UnpackTransferFrom(data []byte) (bool, error) {

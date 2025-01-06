@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/crypto"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -343,20 +342,21 @@ func TestBindingV2(t *testing.T) {
 				t.Fatalf("got error from bind: %v", err)
 			}
 
-			if err := os.WriteFile(fmt.Sprintf("convertedv1bindtests/%s.go", strings.ToLower(tc.name)), []byte(code), 0666); err != nil {
-				t.Fatalf("err writing expected output to file: %v\n", err)
-			}
+			// TODO: remove these before merging abigen2 PR.  these are for convenience if I need to regenerate the converted bindings or add a new one.
+			/*
+				if err := os.WriteFile(fmt.Sprintf("convertedv1bindtests/%s.go", strings.ToLower(tc.name)), []byte(code), 0666); err != nil {
+					t.Fatalf("err writing expected output to file: %v\n", err)
+				}
+			*/
 			/*
 				fmt.Printf("//go:embed v2/internal/convertedv1bindtests/%s.go\n", strings.ToLower(tc.name))
 				fmt.Printf("var v1TestBinding%s string\n", tc.name)
 				fmt.Println()
 			*/
-			/*
-				if code != tc.expectedBindings {
-					//t.Fatalf("name mismatch for %s", tc.name)
-					t.Fatalf("'%s'\n!=\n'%s'\n", code, tc.expectedBindings)
-				}
-			*/
+			if code != tc.expectedBindings {
+				//t.Fatalf("name mismatch for %s", tc.name)
+				t.Fatalf("'%s'\n!=\n'%s'\n", code, tc.expectedBindings)
+			}
 		})
 	}
 }
@@ -369,7 +369,9 @@ func TestNormalizeArgs(t *testing.T) {
 	for i, tc := range []normalizeArgsTc{
 		{[]string{"arg1", "Arg1"}, []string{"Arg1", "Arg10"}},
 		{[]string{"", ""}, []string{"Arg0", "Arg1"}},
-		{[]string{"var", "const"}, []string{"Arg0", "Arg1"}}} {
+		{[]string{"var", "const"}, []string{"Arg0", "Arg1"}},
+		{[]string{"_res", "Res"}, []string{"Res", "Res0"}},
+		{[]string{"_", "__"}, []string{"Arg0", "Arg1"}}} {
 		var inpArgs abi.Arguments
 		for _, inpArgName := range tc.inp {
 			inpArgs = append(inpArgs, abi.Argument{
@@ -379,7 +381,7 @@ func TestNormalizeArgs(t *testing.T) {
 		res := normalizeArgs(inpArgs)
 		for j, resArg := range res {
 			if resArg.Name != tc.expected[j] {
-				t.Fatalf("mismatch for test index %d, arg index %d: expected %v. got %v", i, j, resArg.Name, tc.expected[j])
+				t.Fatalf("mismatch for test index %d, arg index %d: expected %v. got %v", i, j, tc.expected[j], resArg.Name)
 			}
 		}
 	}

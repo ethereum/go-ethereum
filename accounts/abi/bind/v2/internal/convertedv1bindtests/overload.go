@@ -53,15 +53,15 @@ func (_Overload *Overload) PackConstructor() []byte {
 // Foo is a free data retrieval call binding the contract method 0x04bc52f8.
 //
 // Solidity: function foo(uint256 i, uint256 j) returns()
-func (_Overload *Overload) PackFoo(i *big.Int, j *big.Int) ([]byte, error) {
-	return _Overload.abi.Pack("foo", i, j)
+func (_Overload *Overload) PackFoo(I *big.Int, J *big.Int) ([]byte, error) {
+	return _Overload.abi.Pack("foo", I, J)
 }
 
 // Foo0 is a free data retrieval call binding the contract method 0x2fbebd38.
 //
 // Solidity: function foo(uint256 i) returns()
-func (_Overload *Overload) PackFoo0(i *big.Int) ([]byte, error) {
-	return _Overload.abi.Pack("foo0", i)
+func (_Overload *Overload) PackFoo0(I *big.Int) ([]byte, error) {
+	return _Overload.abi.Pack("foo0", I)
 }
 
 // OverloadBar represents a Bar event raised by the Overload contract.

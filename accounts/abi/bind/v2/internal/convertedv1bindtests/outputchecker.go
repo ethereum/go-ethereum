@@ -77,8 +77,8 @@ func (_OutputChecker *OutputChecker) PackAnonOutputs() ([]byte, error) {
 }
 
 type AnonOutputsOutput struct {
-	Arg  string
 	Arg0 string
+	Arg1 string
 }
 
 func (_OutputChecker *OutputChecker) UnpackAnonOutputs(data []byte) (AnonOutputsOutput, error) {
@@ -89,8 +89,8 @@ func (_OutputChecker *OutputChecker) UnpackAnonOutputs(data []byte) (AnonOutputs
 		return *outstruct, err
 	}
 
-	outstruct.Arg = *abi.ConvertType(out[0], new(string)).(*string)
-	outstruct.Arg0 = *abi.ConvertType(out[1], new(string)).(*string)
+	outstruct.Arg0 = *abi.ConvertType(out[0], new(string)).(*string)
+	outstruct.Arg1 = *abi.ConvertType(out[1], new(string)).(*string)
 
 	return *outstruct, err
 
@@ -104,8 +104,8 @@ func (_OutputChecker *OutputChecker) PackCollidingOutputs() ([]byte, error) {
 }
 
 type CollidingOutputsOutput struct {
-	Str string
-	Str string
+	Str  string
+	Str0 string
 }
 
 func (_OutputChecker *OutputChecker) UnpackCollidingOutputs(data []byte) (CollidingOutputsOutput, error) {
@@ -117,7 +117,7 @@ func (_OutputChecker *OutputChecker) UnpackCollidingOutputs(data []byte) (Collid
 	}
 
 	outstruct.Str = *abi.ConvertType(out[0], new(string)).(*string)
-	outstruct.Str = *abi.ConvertType(out[1], new(string)).(*string)
+	outstruct.Str0 = *abi.ConvertType(out[1], new(string)).(*string)
 
 	return *outstruct, err
 
@@ -131,8 +131,8 @@ func (_OutputChecker *OutputChecker) PackMixedOutputs() ([]byte, error) {
 }
 
 type MixedOutputsOutput struct {
-	Arg string
-	Str string
+	Arg0 string
+	Str  string
 }
 
 func (_OutputChecker *OutputChecker) UnpackMixedOutputs(data []byte) (MixedOutputsOutput, error) {
@@ -143,7 +143,7 @@ func (_OutputChecker *OutputChecker) UnpackMixedOutputs(data []byte) (MixedOutpu
 		return *outstruct, err
 	}
 
-	outstruct.Arg = *abi.ConvertType(out[0], new(string)).(*string)
+	outstruct.Arg0 = *abi.ConvertType(out[0], new(string)).(*string)
 	outstruct.Str = *abi.ConvertType(out[1], new(string)).(*string)
 
 	return *outstruct, err

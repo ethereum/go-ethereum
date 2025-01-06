@@ -59,8 +59,8 @@ func (_NameConflict *NameConflict) PackConstructor() []byte {
 // AddRequest is a free data retrieval call binding the contract method 0xcce7b048.
 //
 // Solidity: function addRequest((bytes,bytes) req) pure returns()
-func (_NameConflict *NameConflict) PackAddRequest(req Oraclerequest) ([]byte, error) {
-	return _NameConflict.abi.Pack("addRequest", req)
+func (_NameConflict *NameConflict) PackAddRequest(Req Oraclerequest) ([]byte, error) {
+	return _NameConflict.abi.Pack("addRequest", Req)
 }
 
 // GetRequest is a free data retrieval call binding the contract method 0xc2bb515f.

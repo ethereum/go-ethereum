@@ -120,8 +120,8 @@ func (_Crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
 // Funders is a free data retrieval call binding the contract method 0xdc0d3dff.
 //
 // Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
-func (_Crowdsale *Crowdsale) PackFunders(arg0 *big.Int) ([]byte, error) {
-	return _Crowdsale.abi.Pack("funders", arg0)
+func (_Crowdsale *Crowdsale) PackFunders(Arg0 *big.Int) ([]byte, error) {
+	return _Crowdsale.abi.Pack("funders", Arg0)
 }
 
 type FundersOutput struct {

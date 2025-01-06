@@ -53,8 +53,8 @@ func (_Slicer *Slicer) PackConstructor() []byte {
 // EchoAddresses is a free data retrieval call binding the contract method 0xbe1127a3.
 //
 // Solidity: function echoAddresses(address[] input) returns(address[] output)
-func (_Slicer *Slicer) PackEchoAddresses(input []common.Address) ([]byte, error) {
-	return _Slicer.abi.Pack("echoAddresses", input)
+func (_Slicer *Slicer) PackEchoAddresses(Input []common.Address) ([]byte, error) {
+	return _Slicer.abi.Pack("echoAddresses", Input)
 }
 
 func (_Slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error) {
@@ -73,8 +73,8 @@ func (_Slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error
 // EchoBools is a free data retrieval call binding the contract method 0xf637e589.
 //
 // Solidity: function echoBools(bool[] input) returns(bool[] output)
-func (_Slicer *Slicer) PackEchoBools(input []bool) ([]byte, error) {
-	return _Slicer.abi.Pack("echoBools", input)
+func (_Slicer *Slicer) PackEchoBools(Input []bool) ([]byte, error) {
+	return _Slicer.abi.Pack("echoBools", Input)
 }
 
 func (_Slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
@@ -93,8 +93,8 @@ func (_Slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
 // EchoFancyInts is a free data retrieval call binding the contract method 0xd88becc0.
 //
 // Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
-func (_Slicer *Slicer) PackEchoFancyInts(input [23]*big.Int) ([]byte, error) {
-	return _Slicer.abi.Pack("echoFancyInts", input)
+func (_Slicer *Slicer) PackEchoFancyInts(Input [23]*big.Int) ([]byte, error) {
+	return _Slicer.abi.Pack("echoFancyInts", Input)
 }
 
 func (_Slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
@@ -113,8 +113,8 @@ func (_Slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
 // EchoInts is a free data retrieval call binding the contract method 0xe15a3db7.
 //
 // Solidity: function echoInts(int256[] input) returns(int256[] output)
-func (_Slicer *Slicer) PackEchoInts(input []*big.Int) ([]byte, error) {
-	return _Slicer.abi.Pack("echoInts", input)
+func (_Slicer *Slicer) PackEchoInts(Input []*big.Int) ([]byte, error) {
+	return _Slicer.abi.Pack("echoInts", Input)
 }
 
 func (_Slicer *Slicer) UnpackEchoInts(data []byte) ([]*big.Int, error) {
