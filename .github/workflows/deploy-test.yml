@@ -1,17 +1,15 @@
 name: Deploy and Test Hardhat Project
 
-#check
-
 on:
   pull_request:
-    types: [closed]
     branches:
       - master
-    labels:
-      - CI:Deploy
+    types:
+      - labeled
 
 jobs:
   deploy:
+    if: github.event.label.name == 'CI:Deploy'
     runs-on: ubuntu-latest
 
     steps:
