@@ -57,8 +57,8 @@ func (_C1 *C1) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
-func (_C1 *C1) PackDo(val *big.Int) ([]byte, error) {
-	return _C1.abi.Pack("Do", val)
+func (_C1 *C1) PackDo(Val *big.Int) ([]byte, error) {
+	return _C1.abi.Pack("Do", Val)
 }
 
 func (_C1 *C1) UnpackDo(data []byte) (*big.Int, error) {
@@ -108,8 +108,8 @@ func (_C2 *C2) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
-func (_C2 *C2) PackDo(val *big.Int) ([]byte, error) {
-	return _C2.abi.Pack("Do", val)
+func (_C2 *C2) PackDo(Val *big.Int) ([]byte, error) {
+	return _C2.abi.Pack("Do", Val)
 }
 
 func (_C2 *C2) UnpackDo(data []byte) (*big.Int, error) {
@@ -155,8 +155,8 @@ func (_L1 *L1) PackConstructor() []byte {
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (_L1 *L1) PackDo(val *big.Int) ([]byte, error) {
-	return _L1.abi.Pack("Do", val)
+func (_L1 *L1) PackDo(Val *big.Int) ([]byte, error) {
+	return _L1.abi.Pack("Do", Val)
 }
 
 func (_L1 *L1) UnpackDo(data []byte) (*big.Int, error) {
@@ -205,8 +205,8 @@ func (_L2 *L2) PackConstructor() []byte {
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (_L2 *L2) PackDo(val *big.Int) ([]byte, error) {
-	return _L2.abi.Pack("Do", val)
+func (_L2 *L2) PackDo(Val *big.Int) ([]byte, error) {
+	return _L2.abi.Pack("Do", Val)
 }
 
 func (_L2 *L2) UnpackDo(data []byte) (*big.Int, error) {
@@ -255,8 +255,8 @@ func (_L2b *L2b) PackConstructor() []byte {
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (_L2b *L2b) PackDo(val *big.Int) ([]byte, error) {
-	return _L2b.abi.Pack("Do", val)
+func (_L2b *L2b) PackDo(Val *big.Int) ([]byte, error) {
+	return _L2b.abi.Pack("Do", Val)
 }
 
 func (_L2b *L2b) UnpackDo(data []byte) (*big.Int, error) {
@@ -302,8 +302,8 @@ func (_L3 *L3) PackConstructor() []byte {
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (_L3 *L3) PackDo(val *big.Int) ([]byte, error) {
-	return _L3.abi.Pack("Do", val)
+func (_L3 *L3) PackDo(Val *big.Int) ([]byte, error) {
+	return _L3.abi.Pack("Do", Val)
 }
 
 func (_L3 *L3) UnpackDo(data []byte) (*big.Int, error) {
@@ -353,8 +353,8 @@ func (_L4 *L4) PackConstructor() []byte {
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (_L4 *L4) PackDo(val *big.Int) ([]byte, error) {
-	return _L4.abi.Pack("Do", val)
+func (_L4 *L4) PackDo(Val *big.Int) ([]byte, error) {
+	return _L4.abi.Pack("Do", Val)
 }
 
 func (_L4 *L4) UnpackDo(data []byte) (*big.Int, error) {
@@ -403,8 +403,8 @@ func (_L4b *L4b) PackConstructor() []byte {
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (_L4b *L4b) PackDo(val *big.Int) ([]byte, error) {
-	return _L4b.abi.Pack("Do", val)
+func (_L4b *L4b) PackDo(Val *big.Int) ([]byte, error) {
+	return _L4b.abi.Pack("Do", Val)
 }
 
 func (_L4b *L4b) UnpackDo(data []byte) (*big.Int, error) {

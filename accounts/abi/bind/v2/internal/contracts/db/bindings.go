@@ -60,8 +60,8 @@ func (_DB *DB) PackConstructor() []byte {
 // Get is a free data retrieval call binding the contract method 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
-func (_DB *DB) PackGet(k *big.Int) ([]byte, error) {
-	return _DB.abi.Pack("get", k)
+func (_DB *DB) PackGet(K *big.Int) ([]byte, error) {
+	return _DB.abi.Pack("get", K)
 }
 
 func (_DB *DB) UnpackGet(data []byte) (*big.Int, error) {
@@ -114,9 +114,9 @@ func (_DB *DB) PackGetStatParams() ([]byte, error) {
 }
 
 type GetStatParamsOutput struct {
-	Arg  *big.Int
 	Arg0 *big.Int
 	Arg1 *big.Int
+	Arg2 *big.Int
 }
 
 func (_DB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
@@ -127,9 +127,9 @@ func (_DB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
 		return *outstruct, err
 	}
 
-	outstruct.Arg = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Arg0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
-	outstruct.Arg1 = *abi.ConvertType(out[2], new(*big.Int)).(**big.Int)
+	outstruct.Arg0 = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	outstruct.Arg1 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Arg2 = *abi.ConvertType(out[2], new(*big.Int)).(**big.Int)
 
 	return *outstruct, err
 
@@ -158,8 +158,8 @@ func (_DB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
 // Insert is a free data retrieval call binding the contract method 0x1d834a1b.
 //
 // Solidity: function insert(uint256 k, uint256 v) returns(uint256)
-func (_DB *DB) PackInsert(k *big.Int, v *big.Int) ([]byte, error) {
-	return _DB.abi.Pack("insert", k, v)
+func (_DB *DB) PackInsert(K *big.Int, V *big.Int) ([]byte, error) {
+	return _DB.abi.Pack("insert", K, V)
 }
 
 func (_DB *DB) UnpackInsert(data []byte) (*big.Int, error) {
