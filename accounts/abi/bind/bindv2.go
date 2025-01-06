@@ -76,6 +76,18 @@ type contractBinder struct {
 	errorIdentifiers map[string]bool
 }
 
+func newContractBinder(binder *binder) *contractBinder {
+	return &contractBinder{
+		binder,
+		make(map[string]*tmplMethod),
+		make(map[string]*tmplEvent),
+		make(map[string]*tmplError),
+		make(map[string]bool),
+		make(map[string]bool),
+		make(map[string]bool),
+	}
+}
+
 // bindMethod registers a method to be emitted in the bindings.
 // The name, inputs and outputs are normalized.  If any inputs are
 // struct-type their structs are registered to be emitted in the bindings.
@@ -218,16 +230,7 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 			}
 		}
 
-		cb := contractBinder{
-			binder: &b,
-			calls:  make(map[string]*tmplMethod),
-			events: make(map[string]*tmplEvent),
-			errors: make(map[string]*tmplError),
-
-			callIdentifiers:  make(map[string]bool),
-			errorIdentifiers: make(map[string]bool),
-			eventIdentifiers: make(map[string]bool),
-		}
+		cb := newContractBinder(&b)
 		for _, original := range evmABI.Methods {
 			if err := cb.bindMethod(original); err != nil {
 				return "", err
@@ -244,24 +247,8 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 				return "", err
 			}
 		}
-		// Strip any whitespace from the JSON ABI
-		strippedABI := strings.Map(func(r rune) rune {
-			if unicode.IsSpace(r) {
-				return -1
-			}
-			return r
-		}, abis[i])
-		// replace this with a method call to cb (name it BoundContract()?)
-		b.contracts[types[i]] = &tmplContractV2{
-			Type:        abi.ToCamelCase(types[i]),
-			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
-			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
-			Constructor: evmABI.Constructor,
-			Calls:       cb.calls,
-			Events:      cb.events,
-			Errors:      cb.errors,
-			Libraries:   make(map[string]string),
-		}
+
+		b.contracts[types[i]] = newTmplContractV2(types[i], abis[i], bytecodes[i], evmABI.Constructor, cb)
 	}
 
 	invertedLibs := make(map[string]string)

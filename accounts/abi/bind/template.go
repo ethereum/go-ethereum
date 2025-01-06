@@ -18,6 +18,8 @@ package bind
 
 import (
 	_ "embed"
+	"strings"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
@@ -55,6 +57,26 @@ type tmplContractV2 struct {
 	Events      map[string]*tmplEvent  // Contract events accessors
 	Libraries   map[string]string      // all direct library dependencies
 	Errors      map[string]*tmplError  // all errors defined
+}
+
+func newTmplContractV2(typ string, abiStr string, bytecode string, constructor abi.Method, cb *contractBinder) *tmplContractV2 {
+	// Strip any whitespace from the JSON ABI
+	strippedABI := strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, abiStr)
+	return &tmplContractV2{
+		abi.ToCamelCase(typ),
+		strings.ReplaceAll(strippedABI, "\"", "\\\""),
+		strings.TrimPrefix(strings.TrimSpace(bytecode), "0x"),
+		constructor,
+		cb.calls,
+		cb.events,
+		make(map[string]string),
+		cb.errors,
+	}
 }
 
 type tmplDataV2 struct {
