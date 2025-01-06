@@ -30,6 +30,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y docker-compose
 
+    - name: Export Environment Variable
+      run: echo "DOCKER_HUB_USERNAME=${{ secrets.DOCKER_HUB_USERNAME }}" >> $GITHUB_ENV
+
     - name: Set up Docker Compose
       run: |
         docker-compose up --build -d
