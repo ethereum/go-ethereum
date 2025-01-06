@@ -95,10 +95,10 @@ func (_DAO *DAO) UnpackDebatingPeriodInMinutes(data []byte) (*big.Int, error) {
 	out, err := _DAO.abi.Unpack("debatingPeriodInMinutes", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -115,10 +115,10 @@ func (_DAO *DAO) UnpackExecuteProposal(data []byte) (*big.Int, error) {
 	out, err := _DAO.abi.Unpack("executeProposal", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -135,10 +135,10 @@ func (_DAO *DAO) UnpackMajorityMargin(data []byte) (*big.Int, error) {
 	out, err := _DAO.abi.Unpack("majorityMargin", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -155,10 +155,10 @@ func (_DAO *DAO) UnpackMemberId(data []byte) (*big.Int, error) {
 	out, err := _DAO.abi.Unpack("memberId", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -187,9 +187,12 @@ func (_DAO *DAO) UnpackMembers(data []byte) (MembersOutput, error) {
 	}
 
 	outstruct.Member = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+
 	outstruct.CanVote = *abi.ConvertType(out[1], new(bool)).(*bool)
+
 	outstruct.Name = *abi.ConvertType(out[2], new(string)).(*string)
-	outstruct.MemberSince = *abi.ConvertType(out[3], new(*big.Int)).(**big.Int)
+
+	outstruct.MemberSince = abi.ConvertType(out[3], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -206,10 +209,10 @@ func (_DAO *DAO) UnpackMinimumQuorum(data []byte) (*big.Int, error) {
 	out, err := _DAO.abi.Unpack("minimumQuorum", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -226,10 +229,10 @@ func (_DAO *DAO) UnpackNewProposal(data []byte) (*big.Int, error) {
 	out, err := _DAO.abi.Unpack("newProposal", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -246,10 +249,10 @@ func (_DAO *DAO) UnpackNumProposals(data []byte) (*big.Int, error) {
 	out, err := _DAO.abi.Unpack("numProposals", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -303,13 +306,21 @@ func (_DAO *DAO) UnpackProposals(data []byte) (ProposalsOutput, error) {
 	}
 
 	outstruct.Recipient = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
-	outstruct.Amount = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+
+	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(big.Int)
+
 	outstruct.Description = *abi.ConvertType(out[2], new(string)).(*string)
-	outstruct.VotingDeadline = *abi.ConvertType(out[3], new(*big.Int)).(**big.Int)
+
+	outstruct.VotingDeadline = abi.ConvertType(out[3], new(big.Int)).(big.Int)
+
 	outstruct.Executed = *abi.ConvertType(out[4], new(bool)).(*bool)
+
 	outstruct.ProposalPassed = *abi.ConvertType(out[5], new(bool)).(*bool)
-	outstruct.NumberOfVotes = *abi.ConvertType(out[6], new(*big.Int)).(**big.Int)
-	outstruct.CurrentResult = *abi.ConvertType(out[7], new(*big.Int)).(**big.Int)
+
+	outstruct.NumberOfVotes = abi.ConvertType(out[6], new(big.Int)).(big.Int)
+
+	outstruct.CurrentResult = abi.ConvertType(out[7], new(big.Int)).(big.Int)
+
 	outstruct.ProposalHash = *abi.ConvertType(out[8], new([32]byte)).(*[32]byte)
 
 	return *outstruct, err
@@ -334,10 +345,10 @@ func (_DAO *DAO) UnpackVote(data []byte) (*big.Int, error) {
 	out, err := _DAO.abi.Unpack("vote", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 

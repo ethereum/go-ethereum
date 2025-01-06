@@ -99,9 +99,13 @@ func (_Tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 	}
 
 	outstruct.Arg0 = *abi.ConvertType(out[0], new(TupleS)).(*TupleS)
+
 	outstruct.Arg1 = *abi.ConvertType(out[1], new([][2]TupleT)).(*[][2]TupleT)
+
 	outstruct.Arg2 = *abi.ConvertType(out[2], new([2][]TupleT)).(*[2][]TupleT)
+
 	outstruct.Arg3 = *abi.ConvertType(out[3], new([]TupleS)).(*[]TupleS)
+
 	outstruct.Arg4 = *abi.ConvertType(out[4], new([]*big.Int)).(*[]*big.Int)
 
 	return *outstruct, err

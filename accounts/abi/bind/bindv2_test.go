@@ -329,7 +329,7 @@ var bindTests2 = []bindV2Test{
 	},
 }
 
-func TestBindingV2(t *testing.T) {
+func TestBindingV2ConvertedV1Tests(t *testing.T) {
 	os.Mkdir("convertedv1bindtests", 0777)
 	for _, tc := range bindTests2 {
 		t.Run(tc.name, func(t *testing.T) {

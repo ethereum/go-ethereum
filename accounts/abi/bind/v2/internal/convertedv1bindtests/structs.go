@@ -77,7 +77,9 @@ func (_Structs *Structs) UnpackF(data []byte) (FOutput, error) {
 	}
 
 	outstruct.A = *abi.ConvertType(out[0], new([]Struct0)).(*[]Struct0)
+
 	outstruct.C = *abi.ConvertType(out[1], new([]*big.Int)).(*[]*big.Int)
+
 	outstruct.D = *abi.ConvertType(out[2], new([]bool)).(*[]bool)
 
 	return *outstruct, err
