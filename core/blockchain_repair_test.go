@@ -1999,14 +1999,16 @@ func testIssue23496(t *testing.T, scheme string) {
 	}
 	expHead := uint64(1)
 	if scheme == rawdb.PathScheme {
+		// The pathdb database makes sure that snapshot and trie are consistent,
+		// so only the last block is reverted in case of a crash.
 		expHead = uint64(3)
 	}
 	if head := chain.CurrentBlock(); head.Number.Uint64() != expHead {
 		t.Errorf("Head block mismatch: have %d, want %d", head.Number, expHead)
 	}
 	if scheme == rawdb.PathScheme {
-		// Reinsert B3-B4
-		if _, err := chain.InsertChain(blocks[2:]); err != nil {
+		// Reinsert B4
+		if _, err := chain.InsertChain(blocks[3:]); err != nil {
 			t.Fatalf("Failed to import canonical chain tail: %v", err)
 		}
 	} else {

@@ -224,9 +224,9 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 	return nil
 }
 
-// removeStorageLeft deletes all storage entries which are located after
+// removeRemainingStorage deletes all storage entries which are located after
 // the current iterator position.
-func (ctx *generatorContext) removeStorageLeft() uint64 {
+func (ctx *generatorContext) removeRemainingStorage() uint64 {
 	var (
 		count uint64
 		start = time.Now()

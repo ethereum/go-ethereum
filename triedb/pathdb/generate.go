@@ -171,7 +171,7 @@ func (g *generator) progressMarker() []byte {
 // into two parts.
 func splitMarker(marker []byte) ([]byte, []byte) {
 	var accMarker []byte
-	if len(marker) > 0 { // []byte{} is the start, use nil for that
+	if len(marker) > 0 {
 		accMarker = marker[:common.HashLength]
 	}
 	return accMarker, marker
@@ -180,16 +180,19 @@ func splitMarker(marker []byte) ([]byte, []byte) {
 // generateSnapshot regenerates a brand-new snapshot based on an existing state
 // database and head block asynchronously. The snapshot is returned immediately
 // and generation is continued in the background until done.
-func generateSnapshot(triedb *Database, root common.Hash) *diskLayer {
+func generateSnapshot(triedb *Database, root common.Hash, noBuild bool) *diskLayer {
 	// Create a new disk layer with an initialized state marker at zero
 	var (
 		stats     = &generatorStats{start: time.Now()}
 		genMarker = []byte{} // Initialized but empty!
 	)
 	dl := newDiskLayer(root, 0, triedb, nil, nil, newBuffer(triedb.config.WriteBufferSize, nil, nil, 0))
-	dl.setGenerator(newGenerator(triedb.diskdb, false, genMarker, stats))
-	dl.generator.run(root)
-	log.Info("Started snapshot generation", "root", root)
+	dl.setGenerator(newGenerator(triedb.diskdb, noBuild, genMarker, stats))
+
+	if !noBuild {
+		dl.generator.run(root)
+		log.Info("Started snapshot generation", "root", root)
+	}
 	return dl
 }
 
@@ -751,7 +754,7 @@ func (g *generator) generateAccounts(ctx *generatorContext, accMarker []byte) er
 		// Last step, cleanup the storages after the last account.
 		// All the left storages should be treated as dangling.
 		if origin == nil || exhausted {
-			g.stats.dangling += ctx.removeStorageLeft()
+			g.stats.dangling += ctx.removeRemainingStorage()
 			break
 		}
 	}
