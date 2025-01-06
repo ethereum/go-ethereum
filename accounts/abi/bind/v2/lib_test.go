@@ -98,7 +98,7 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 
 func makeTestDeployer(auth *bind.TransactOpts, backend bind.ContractBackend) func(input, deployer []byte) (common.Address, *types.Transaction, error) {
 	return func(input, deployer []byte) (common.Address, *types.Transaction, error) {
-		addr, tx, _, err := bind.DeployContractRaw(auth, deployer, backend, input)
+		addr, tx, _, err := DeployContractRaw(auth, deployer, backend, input)
 		return addr, tx, err
 	}
 }
