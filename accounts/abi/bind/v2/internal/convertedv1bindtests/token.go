@@ -45,20 +45,20 @@ func NewToken() (*Token, error) {
 	return &Token{abi: *parsed}, nil
 }
 
-func (_Token *Token) PackConstructor(initialSupply *big.Int, tokenName string, decimalUnits uint8, tokenSymbol string) []byte {
-	res, _ := _Token.abi.Pack("", initialSupply, tokenName, decimalUnits, tokenSymbol)
+func (token *Token) PackConstructor(initialSupply *big.Int, tokenName string, decimalUnits uint8, tokenSymbol string) []byte {
+	res, _ := token.abi.Pack("", initialSupply, tokenName, decimalUnits, tokenSymbol)
 	return res
 }
 
 // Allowance is a free data retrieval call binding the contract method 0xdd62ed3e.
 //
 // Solidity: function allowance(address , address ) returns(uint256)
-func (_Token *Token) PackAllowance(Arg0 common.Address, Arg1 common.Address) ([]byte, error) {
-	return _Token.abi.Pack("allowance", Arg0, Arg1)
+func (token *Token) PackAllowance(Arg0 common.Address, Arg1 common.Address) ([]byte, error) {
+	return token.abi.Pack("allowance", Arg0, Arg1)
 }
 
-func (_Token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
-	out, err := _Token.abi.Unpack("allowance", data)
+func (token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
+	out, err := token.abi.Unpack("allowance", data)
 
 	if err != nil {
 		return new(big.Int), err
@@ -73,12 +73,12 @@ func (_Token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
 // ApproveAndCall is a free data retrieval call binding the contract method 0xcae9ca51.
 //
 // Solidity: function approveAndCall(address _spender, uint256 _value, bytes _extraData) returns(bool success)
-func (_Token *Token) PackApproveAndCall(Spender common.Address, Value *big.Int, ExtraData []byte) ([]byte, error) {
-	return _Token.abi.Pack("approveAndCall", Spender, Value, ExtraData)
+func (token *Token) PackApproveAndCall(Spender common.Address, Value *big.Int, ExtraData []byte) ([]byte, error) {
+	return token.abi.Pack("approveAndCall", Spender, Value, ExtraData)
 }
 
-func (_Token *Token) UnpackApproveAndCall(data []byte) (bool, error) {
-	out, err := _Token.abi.Unpack("approveAndCall", data)
+func (token *Token) UnpackApproveAndCall(data []byte) (bool, error) {
+	out, err := token.abi.Unpack("approveAndCall", data)
 
 	if err != nil {
 		return *new(bool), err
@@ -93,12 +93,12 @@ func (_Token *Token) UnpackApproveAndCall(data []byte) (bool, error) {
 // BalanceOf is a free data retrieval call binding the contract method 0x70a08231.
 //
 // Solidity: function balanceOf(address ) returns(uint256)
-func (_Token *Token) PackBalanceOf(Arg0 common.Address) ([]byte, error) {
-	return _Token.abi.Pack("balanceOf", Arg0)
+func (token *Token) PackBalanceOf(Arg0 common.Address) ([]byte, error) {
+	return token.abi.Pack("balanceOf", Arg0)
 }
 
-func (_Token *Token) UnpackBalanceOf(data []byte) (*big.Int, error) {
-	out, err := _Token.abi.Unpack("balanceOf", data)
+func (token *Token) UnpackBalanceOf(data []byte) (*big.Int, error) {
+	out, err := token.abi.Unpack("balanceOf", data)
 
 	if err != nil {
 		return new(big.Int), err
@@ -113,12 +113,12 @@ func (_Token *Token) UnpackBalanceOf(data []byte) (*big.Int, error) {
 // Decimals is a free data retrieval call binding the contract method 0x313ce567.
 //
 // Solidity: function decimals() returns(uint8)
-func (_Token *Token) PackDecimals() ([]byte, error) {
-	return _Token.abi.Pack("decimals")
+func (token *Token) PackDecimals() ([]byte, error) {
+	return token.abi.Pack("decimals")
 }
 
-func (_Token *Token) UnpackDecimals(data []byte) (uint8, error) {
-	out, err := _Token.abi.Unpack("decimals", data)
+func (token *Token) UnpackDecimals(data []byte) (uint8, error) {
+	out, err := token.abi.Unpack("decimals", data)
 
 	if err != nil {
 		return *new(uint8), err
@@ -133,12 +133,12 @@ func (_Token *Token) UnpackDecimals(data []byte) (uint8, error) {
 // Name is a free data retrieval call binding the contract method 0x06fdde03.
 //
 // Solidity: function name() returns(string)
-func (_Token *Token) PackName() ([]byte, error) {
-	return _Token.abi.Pack("name")
+func (token *Token) PackName() ([]byte, error) {
+	return token.abi.Pack("name")
 }
 
-func (_Token *Token) UnpackName(data []byte) (string, error) {
-	out, err := _Token.abi.Unpack("name", data)
+func (token *Token) UnpackName(data []byte) (string, error) {
+	out, err := token.abi.Unpack("name", data)
 
 	if err != nil {
 		return *new(string), err
@@ -153,12 +153,12 @@ func (_Token *Token) UnpackName(data []byte) (string, error) {
 // SpentAllowance is a free data retrieval call binding the contract method 0xdc3080f2.
 //
 // Solidity: function spentAllowance(address , address ) returns(uint256)
-func (_Token *Token) PackSpentAllowance(Arg0 common.Address, Arg1 common.Address) ([]byte, error) {
-	return _Token.abi.Pack("spentAllowance", Arg0, Arg1)
+func (token *Token) PackSpentAllowance(Arg0 common.Address, Arg1 common.Address) ([]byte, error) {
+	return token.abi.Pack("spentAllowance", Arg0, Arg1)
 }
 
-func (_Token *Token) UnpackSpentAllowance(data []byte) (*big.Int, error) {
-	out, err := _Token.abi.Unpack("spentAllowance", data)
+func (token *Token) UnpackSpentAllowance(data []byte) (*big.Int, error) {
+	out, err := token.abi.Unpack("spentAllowance", data)
 
 	if err != nil {
 		return new(big.Int), err
@@ -173,12 +173,12 @@ func (_Token *Token) UnpackSpentAllowance(data []byte) (*big.Int, error) {
 // Symbol is a free data retrieval call binding the contract method 0x95d89b41.
 //
 // Solidity: function symbol() returns(string)
-func (_Token *Token) PackSymbol() ([]byte, error) {
-	return _Token.abi.Pack("symbol")
+func (token *Token) PackSymbol() ([]byte, error) {
+	return token.abi.Pack("symbol")
 }
 
-func (_Token *Token) UnpackSymbol(data []byte) (string, error) {
-	out, err := _Token.abi.Unpack("symbol", data)
+func (token *Token) UnpackSymbol(data []byte) (string, error) {
+	out, err := token.abi.Unpack("symbol", data)
 
 	if err != nil {
 		return *new(string), err
@@ -193,19 +193,19 @@ func (_Token *Token) UnpackSymbol(data []byte) (string, error) {
 // Transfer is a free data retrieval call binding the contract method 0xa9059cbb.
 //
 // Solidity: function transfer(address _to, uint256 _value) returns()
-func (_Token *Token) PackTransfer(To common.Address, Value *big.Int) ([]byte, error) {
-	return _Token.abi.Pack("transfer", To, Value)
+func (token *Token) PackTransfer(To common.Address, Value *big.Int) ([]byte, error) {
+	return token.abi.Pack("transfer", To, Value)
 }
 
 // TransferFrom is a free data retrieval call binding the contract method 0x23b872dd.
 //
 // Solidity: function transferFrom(address _from, address _to, uint256 _value) returns(bool success)
-func (_Token *Token) PackTransferFrom(From common.Address, To common.Address, Value *big.Int) ([]byte, error) {
-	return _Token.abi.Pack("transferFrom", From, To, Value)
+func (token *Token) PackTransferFrom(From common.Address, To common.Address, Value *big.Int) ([]byte, error) {
+	return token.abi.Pack("transferFrom", From, To, Value)
 }
 
-func (_Token *Token) UnpackTransferFrom(data []byte) (bool, error) {
-	out, err := _Token.abi.Unpack("transferFrom", data)
+func (token *Token) UnpackTransferFrom(data []byte) (bool, error) {
+	out, err := token.abi.Unpack("transferFrom", data)
 
 	if err != nil {
 		return *new(bool), err
@@ -227,19 +227,19 @@ type TokenTransfer struct {
 
 const TokenTransferEventName = "Transfer"
 
-func (_Token *Token) UnpackTransferEvent(log *types.Log) (*TokenTransfer, error) {
+func (token *Token) UnpackTransferEvent(log *types.Log) (*TokenTransfer, error) {
 	event := "Transfer"
-	if log.Topics[0] != _Token.abi.Events[event].ID {
+	if log.Topics[0] != token.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(TokenTransfer)
 	if len(log.Data) > 0 {
-		if err := _Token.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := token.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _Token.abi.Events[event].Inputs {
+	for _, arg := range token.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}

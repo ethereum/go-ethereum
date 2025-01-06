@@ -45,23 +45,23 @@ func NewOverload() (*Overload, error) {
 	return &Overload{abi: *parsed}, nil
 }
 
-func (_Overload *Overload) PackConstructor() []byte {
-	res, _ := _Overload.abi.Pack("")
+func (overload *Overload) PackConstructor() []byte {
+	res, _ := overload.abi.Pack("")
 	return res
 }
 
 // Foo is a free data retrieval call binding the contract method 0x04bc52f8.
 //
 // Solidity: function foo(uint256 i, uint256 j) returns()
-func (_Overload *Overload) PackFoo(I *big.Int, J *big.Int) ([]byte, error) {
-	return _Overload.abi.Pack("foo", I, J)
+func (overload *Overload) PackFoo(I *big.Int, J *big.Int) ([]byte, error) {
+	return overload.abi.Pack("foo", I, J)
 }
 
 // Foo0 is a free data retrieval call binding the contract method 0x2fbebd38.
 //
 // Solidity: function foo(uint256 i) returns()
-func (_Overload *Overload) PackFoo0(I *big.Int) ([]byte, error) {
-	return _Overload.abi.Pack("foo0", I)
+func (overload *Overload) PackFoo0(I *big.Int) ([]byte, error) {
+	return overload.abi.Pack("foo0", I)
 }
 
 // OverloadBar represents a Bar event raised by the Overload contract.
@@ -72,19 +72,19 @@ type OverloadBar struct {
 
 const OverloadBarEventName = "bar"
 
-func (_Overload *Overload) UnpackBarEvent(log *types.Log) (*OverloadBar, error) {
+func (overload *Overload) UnpackBarEvent(log *types.Log) (*OverloadBar, error) {
 	event := "bar"
-	if log.Topics[0] != _Overload.abi.Events[event].ID {
+	if log.Topics[0] != overload.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(OverloadBar)
 	if len(log.Data) > 0 {
-		if err := _Overload.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := overload.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _Overload.abi.Events[event].Inputs {
+	for _, arg := range overload.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
@@ -105,19 +105,19 @@ type OverloadBar0 struct {
 
 const OverloadBar0EventName = "bar0"
 
-func (_Overload *Overload) UnpackBar0Event(log *types.Log) (*OverloadBar0, error) {
+func (overload *Overload) UnpackBar0Event(log *types.Log) (*OverloadBar0, error) {
 	event := "bar0"
-	if log.Topics[0] != _Overload.abi.Events[event].ID {
+	if log.Topics[0] != overload.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(OverloadBar0)
 	if len(log.Data) > 0 {
-		if err := _Overload.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := overload.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _Overload.abi.Events[event].Inputs {
+	for _, arg := range overload.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}

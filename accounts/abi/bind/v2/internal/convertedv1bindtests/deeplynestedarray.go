@@ -45,20 +45,20 @@ func NewDeeplyNestedArray() (*DeeplyNestedArray, error) {
 	return &DeeplyNestedArray{abi: *parsed}, nil
 }
 
-func (_DeeplyNestedArray *DeeplyNestedArray) PackConstructor() []byte {
-	res, _ := _DeeplyNestedArray.abi.Pack("")
+func (deeplyNestedArray *DeeplyNestedArray) PackConstructor() []byte {
+	res, _ := deeplyNestedArray.abi.Pack("")
 	return res
 }
 
 // DeepUint64Array is a free data retrieval call binding the contract method 0x98ed1856.
 //
 // Solidity: function deepUint64Array(uint256 , uint256 , uint256 ) view returns(uint64)
-func (_DeeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(Arg0 *big.Int, Arg1 *big.Int, Arg2 *big.Int) ([]byte, error) {
-	return _DeeplyNestedArray.abi.Pack("deepUint64Array", Arg0, Arg1, Arg2)
+func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(Arg0 *big.Int, Arg1 *big.Int, Arg2 *big.Int) ([]byte, error) {
+	return deeplyNestedArray.abi.Pack("deepUint64Array", Arg0, Arg1, Arg2)
 }
 
-func (_DeeplyNestedArray *DeeplyNestedArray) UnpackDeepUint64Array(data []byte) (uint64, error) {
-	out, err := _DeeplyNestedArray.abi.Unpack("deepUint64Array", data)
+func (deeplyNestedArray *DeeplyNestedArray) UnpackDeepUint64Array(data []byte) (uint64, error) {
+	out, err := deeplyNestedArray.abi.Unpack("deepUint64Array", data)
 
 	if err != nil {
 		return *new(uint64), err
@@ -73,12 +73,12 @@ func (_DeeplyNestedArray *DeeplyNestedArray) UnpackDeepUint64Array(data []byte) 
 // RetrieveDeepArray is a free data retrieval call binding the contract method 0x8ed4573a.
 //
 // Solidity: function retrieveDeepArray() view returns(uint64[3][4][5])
-func (_DeeplyNestedArray *DeeplyNestedArray) PackRetrieveDeepArray() ([]byte, error) {
-	return _DeeplyNestedArray.abi.Pack("retrieveDeepArray")
+func (deeplyNestedArray *DeeplyNestedArray) PackRetrieveDeepArray() ([]byte, error) {
+	return deeplyNestedArray.abi.Pack("retrieveDeepArray")
 }
 
-func (_DeeplyNestedArray *DeeplyNestedArray) UnpackRetrieveDeepArray(data []byte) ([5][4][3]uint64, error) {
-	out, err := _DeeplyNestedArray.abi.Unpack("retrieveDeepArray", data)
+func (deeplyNestedArray *DeeplyNestedArray) UnpackRetrieveDeepArray(data []byte) ([5][4][3]uint64, error) {
+	out, err := deeplyNestedArray.abi.Unpack("retrieveDeepArray", data)
 
 	if err != nil {
 		return *new([5][4][3]uint64), err
@@ -93,6 +93,6 @@ func (_DeeplyNestedArray *DeeplyNestedArray) UnpackRetrieveDeepArray(data []byte
 // StoreDeepUintArray is a free data retrieval call binding the contract method 0x34424855.
 //
 // Solidity: function storeDeepUintArray(uint64[3][4][5] arr) returns()
-func (_DeeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(Arr [5][4][3]uint64) ([]byte, error) {
-	return _DeeplyNestedArray.abi.Pack("storeDeepUintArray", Arr)
+func (deeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(Arr [5][4][3]uint64) ([]byte, error) {
+	return deeplyNestedArray.abi.Pack("storeDeepUintArray", Arr)
 }

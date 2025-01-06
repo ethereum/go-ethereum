@@ -44,8 +44,8 @@ func NewEventChecker() (*EventChecker, error) {
 	return &EventChecker{abi: *parsed}, nil
 }
 
-func (_EventChecker *EventChecker) PackConstructor() []byte {
-	res, _ := _EventChecker.abi.Pack("")
+func (eventChecker *EventChecker) PackConstructor() []byte {
+	res, _ := eventChecker.abi.Pack("")
 	return res
 }
 
@@ -60,19 +60,19 @@ type EventCheckerDynamic struct {
 
 const EventCheckerDynamicEventName = "dynamic"
 
-func (_EventChecker *EventChecker) UnpackDynamicEvent(log *types.Log) (*EventCheckerDynamic, error) {
+func (eventChecker *EventChecker) UnpackDynamicEvent(log *types.Log) (*EventCheckerDynamic, error) {
 	event := "dynamic"
-	if log.Topics[0] != _EventChecker.abi.Events[event].ID {
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(EventCheckerDynamic)
 	if len(log.Data) > 0 {
-		if err := _EventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _EventChecker.abi.Events[event].Inputs {
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
@@ -91,19 +91,19 @@ type EventCheckerEmpty struct {
 
 const EventCheckerEmptyEventName = "empty"
 
-func (_EventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventCheckerEmpty, error) {
+func (eventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventCheckerEmpty, error) {
 	event := "empty"
-	if log.Topics[0] != _EventChecker.abi.Events[event].ID {
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(EventCheckerEmpty)
 	if len(log.Data) > 0 {
-		if err := _EventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _EventChecker.abi.Events[event].Inputs {
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
@@ -124,19 +124,19 @@ type EventCheckerIndexed struct {
 
 const EventCheckerIndexedEventName = "indexed"
 
-func (_EventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventCheckerIndexed, error) {
+func (eventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventCheckerIndexed, error) {
 	event := "indexed"
-	if log.Topics[0] != _EventChecker.abi.Events[event].ID {
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(EventCheckerIndexed)
 	if len(log.Data) > 0 {
-		if err := _EventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _EventChecker.abi.Events[event].Inputs {
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
@@ -157,19 +157,19 @@ type EventCheckerMixed struct {
 
 const EventCheckerMixedEventName = "mixed"
 
-func (_EventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventCheckerMixed, error) {
+func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventCheckerMixed, error) {
 	event := "mixed"
-	if log.Topics[0] != _EventChecker.abi.Events[event].ID {
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(EventCheckerMixed)
 	if len(log.Data) > 0 {
-		if err := _EventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _EventChecker.abi.Events[event].Inputs {
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
@@ -190,19 +190,19 @@ type EventCheckerUnnamed struct {
 
 const EventCheckerUnnamedEventName = "unnamed"
 
-func (_EventChecker *EventChecker) UnpackUnnamedEvent(log *types.Log) (*EventCheckerUnnamed, error) {
+func (eventChecker *EventChecker) UnpackUnnamedEvent(log *types.Log) (*EventCheckerUnnamed, error) {
 	event := "unnamed"
-	if log.Topics[0] != _EventChecker.abi.Events[event].ID {
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(EventCheckerUnnamed)
 	if len(log.Data) > 0 {
-		if err := _EventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _EventChecker.abi.Events[event].Inputs {
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}

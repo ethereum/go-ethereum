@@ -51,16 +51,16 @@ func NewC() (*C, error) {
 	return &C{abi: *parsed}, nil
 }
 
-func (_C *C) PackConstructor() []byte {
-	res, _ := _C.abi.Pack("")
+func (c *C) PackConstructor() []byte {
+	res, _ := c.abi.Pack("")
 	return res
 }
 
 // DoSomethingWithManyArgs is a free data retrieval call binding the contract method 0x6fd8b968.
 //
 // Solidity: function DoSomethingWithManyArgs() pure returns(uint256, uint256, uint256, bool)
-func (_C *C) PackDoSomethingWithManyArgs() ([]byte, error) {
-	return _C.abi.Pack("DoSomethingWithManyArgs")
+func (c *C) PackDoSomethingWithManyArgs() ([]byte, error) {
+	return c.abi.Pack("DoSomethingWithManyArgs")
 }
 
 type DoSomethingWithManyArgsOutput struct {
@@ -70,8 +70,8 @@ type DoSomethingWithManyArgsOutput struct {
 	Arg3 bool
 }
 
-func (_C *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgsOutput, error) {
-	out, err := _C.abi.Unpack("DoSomethingWithManyArgs", data)
+func (c *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgsOutput, error) {
+	out, err := c.abi.Unpack("DoSomethingWithManyArgs", data)
 
 	outstruct := new(DoSomethingWithManyArgsOutput)
 	if err != nil {
@@ -93,12 +93,12 @@ func (_C *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgs
 // DoSomethingWithPoint is a free data retrieval call binding the contract method 0xedcdc894.
 //
 // Solidity: function DoSomethingWithPoint((uint256,uint256) p) pure returns((uint256,uint256))
-func (_C *C) PackDoSomethingWithPoint(P CPoint) ([]byte, error) {
-	return _C.abi.Pack("DoSomethingWithPoint", P)
+func (c *C) PackDoSomethingWithPoint(P CPoint) ([]byte, error) {
+	return c.abi.Pack("DoSomethingWithPoint", P)
 }
 
-func (_C *C) UnpackDoSomethingWithPoint(data []byte) (CPoint, error) {
-	out, err := _C.abi.Unpack("DoSomethingWithPoint", data)
+func (c *C) UnpackDoSomethingWithPoint(data []byte) (CPoint, error) {
+	out, err := c.abi.Unpack("DoSomethingWithPoint", data)
 
 	if err != nil {
 		return *new(CPoint), err
@@ -113,15 +113,15 @@ func (_C *C) UnpackDoSomethingWithPoint(data []byte) (CPoint, error) {
 // EmitMulti is a free data retrieval call binding the contract method 0xcb493749.
 //
 // Solidity: function EmitMulti() returns()
-func (_C *C) PackEmitMulti() ([]byte, error) {
-	return _C.abi.Pack("EmitMulti")
+func (c *C) PackEmitMulti() ([]byte, error) {
+	return c.abi.Pack("EmitMulti")
 }
 
 // EmitOne is a free data retrieval call binding the contract method 0xe8e49a71.
 //
 // Solidity: function EmitOne() returns()
-func (_C *C) PackEmitOne() ([]byte, error) {
-	return _C.abi.Pack("EmitOne")
+func (c *C) PackEmitOne() ([]byte, error) {
+	return c.abi.Pack("EmitOne")
 }
 
 // CBasic1 represents a Basic1 event raised by the C contract.
@@ -133,19 +133,19 @@ type CBasic1 struct {
 
 const CBasic1EventName = "basic1"
 
-func (_C *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
+func (c *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
 	event := "basic1"
-	if log.Topics[0] != _C.abi.Events[event].ID {
+	if log.Topics[0] != c.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(CBasic1)
 	if len(log.Data) > 0 {
-		if err := _C.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _C.abi.Events[event].Inputs {
+	for _, arg := range c.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
@@ -166,19 +166,19 @@ type CBasic2 struct {
 
 const CBasic2EventName = "basic2"
 
-func (_C *C) UnpackBasic2Event(log *types.Log) (*CBasic2, error) {
+func (c *C) UnpackBasic2Event(log *types.Log) (*CBasic2, error) {
 	event := "basic2"
-	if log.Topics[0] != _C.abi.Events[event].ID {
+	if log.Topics[0] != c.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(CBasic2)
 	if len(log.Data) > 0 {
-		if err := _C.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := c.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _C.abi.Events[event].Inputs {
+	for _, arg := range c.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}

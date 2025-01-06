@@ -45,20 +45,20 @@ func NewSlicer() (*Slicer, error) {
 	return &Slicer{abi: *parsed}, nil
 }
 
-func (_Slicer *Slicer) PackConstructor() []byte {
-	res, _ := _Slicer.abi.Pack("")
+func (slicer *Slicer) PackConstructor() []byte {
+	res, _ := slicer.abi.Pack("")
 	return res
 }
 
 // EchoAddresses is a free data retrieval call binding the contract method 0xbe1127a3.
 //
 // Solidity: function echoAddresses(address[] input) returns(address[] output)
-func (_Slicer *Slicer) PackEchoAddresses(Input []common.Address) ([]byte, error) {
-	return _Slicer.abi.Pack("echoAddresses", Input)
+func (slicer *Slicer) PackEchoAddresses(Input []common.Address) ([]byte, error) {
+	return slicer.abi.Pack("echoAddresses", Input)
 }
 
-func (_Slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error) {
-	out, err := _Slicer.abi.Unpack("echoAddresses", data)
+func (slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error) {
+	out, err := slicer.abi.Unpack("echoAddresses", data)
 
 	if err != nil {
 		return *new([]common.Address), err
@@ -73,12 +73,12 @@ func (_Slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error
 // EchoBools is a free data retrieval call binding the contract method 0xf637e589.
 //
 // Solidity: function echoBools(bool[] input) returns(bool[] output)
-func (_Slicer *Slicer) PackEchoBools(Input []bool) ([]byte, error) {
-	return _Slicer.abi.Pack("echoBools", Input)
+func (slicer *Slicer) PackEchoBools(Input []bool) ([]byte, error) {
+	return slicer.abi.Pack("echoBools", Input)
 }
 
-func (_Slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
-	out, err := _Slicer.abi.Unpack("echoBools", data)
+func (slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
+	out, err := slicer.abi.Unpack("echoBools", data)
 
 	if err != nil {
 		return *new([]bool), err
@@ -93,12 +93,12 @@ func (_Slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
 // EchoFancyInts is a free data retrieval call binding the contract method 0xd88becc0.
 //
 // Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
-func (_Slicer *Slicer) PackEchoFancyInts(Input [23]*big.Int) ([]byte, error) {
-	return _Slicer.abi.Pack("echoFancyInts", Input)
+func (slicer *Slicer) PackEchoFancyInts(Input [23]*big.Int) ([]byte, error) {
+	return slicer.abi.Pack("echoFancyInts", Input)
 }
 
-func (_Slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
-	out, err := _Slicer.abi.Unpack("echoFancyInts", data)
+func (slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
+	out, err := slicer.abi.Unpack("echoFancyInts", data)
 
 	if err != nil {
 		return *new([23]*big.Int), err
@@ -113,12 +113,12 @@ func (_Slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
 // EchoInts is a free data retrieval call binding the contract method 0xe15a3db7.
 //
 // Solidity: function echoInts(int256[] input) returns(int256[] output)
-func (_Slicer *Slicer) PackEchoInts(Input []*big.Int) ([]byte, error) {
-	return _Slicer.abi.Pack("echoInts", Input)
+func (slicer *Slicer) PackEchoInts(Input []*big.Int) ([]byte, error) {
+	return slicer.abi.Pack("echoInts", Input)
 }
 
-func (_Slicer *Slicer) UnpackEchoInts(data []byte) ([]*big.Int, error) {
-	out, err := _Slicer.abi.Unpack("echoInts", data)
+func (slicer *Slicer) UnpackEchoInts(data []byte) ([]*big.Int, error) {
+	out, err := slicer.abi.Unpack("echoInts", data)
 
 	if err != nil {
 		return *new([]*big.Int), err

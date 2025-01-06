@@ -45,14 +45,14 @@ func NewCallbackParam() (*CallbackParam, error) {
 	return &CallbackParam{abi: *parsed}, nil
 }
 
-func (_CallbackParam *CallbackParam) PackConstructor() []byte {
-	res, _ := _CallbackParam.abi.Pack("")
+func (callbackParam *CallbackParam) PackConstructor() []byte {
+	res, _ := callbackParam.abi.Pack("")
 	return res
 }
 
 // Test is a free data retrieval call binding the contract method 0xd7a5aba2.
 //
 // Solidity: function test(function callback) returns()
-func (_CallbackParam *CallbackParam) PackTest(Callback [24]byte) ([]byte, error) {
-	return _CallbackParam.abi.Pack("test", Callback)
+func (callbackParam *CallbackParam) PackTest(Callback [24]byte) ([]byte, error) {
+	return callbackParam.abi.Pack("test", Callback)
 }

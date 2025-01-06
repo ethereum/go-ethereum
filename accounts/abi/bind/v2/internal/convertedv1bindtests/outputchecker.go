@@ -44,20 +44,20 @@ func NewOutputChecker() (*OutputChecker, error) {
 	return &OutputChecker{abi: *parsed}, nil
 }
 
-func (_OutputChecker *OutputChecker) PackConstructor() []byte {
-	res, _ := _OutputChecker.abi.Pack("")
+func (outputChecker *OutputChecker) PackConstructor() []byte {
+	res, _ := outputChecker.abi.Pack("")
 	return res
 }
 
 // AnonOutput is a free data retrieval call binding the contract method 0x008bda05.
 //
 // Solidity: function anonOutput() returns(string)
-func (_OutputChecker *OutputChecker) PackAnonOutput() ([]byte, error) {
-	return _OutputChecker.abi.Pack("anonOutput")
+func (outputChecker *OutputChecker) PackAnonOutput() ([]byte, error) {
+	return outputChecker.abi.Pack("anonOutput")
 }
 
-func (_OutputChecker *OutputChecker) UnpackAnonOutput(data []byte) (string, error) {
-	out, err := _OutputChecker.abi.Unpack("anonOutput", data)
+func (outputChecker *OutputChecker) UnpackAnonOutput(data []byte) (string, error) {
+	out, err := outputChecker.abi.Unpack("anonOutput", data)
 
 	if err != nil {
 		return *new(string), err
@@ -72,8 +72,8 @@ func (_OutputChecker *OutputChecker) UnpackAnonOutput(data []byte) (string, erro
 // AnonOutputs is a free data retrieval call binding the contract method 0x3c401115.
 //
 // Solidity: function anonOutputs() returns(string, string)
-func (_OutputChecker *OutputChecker) PackAnonOutputs() ([]byte, error) {
-	return _OutputChecker.abi.Pack("anonOutputs")
+func (outputChecker *OutputChecker) PackAnonOutputs() ([]byte, error) {
+	return outputChecker.abi.Pack("anonOutputs")
 }
 
 type AnonOutputsOutput struct {
@@ -81,8 +81,8 @@ type AnonOutputsOutput struct {
 	Arg1 string
 }
 
-func (_OutputChecker *OutputChecker) UnpackAnonOutputs(data []byte) (AnonOutputsOutput, error) {
-	out, err := _OutputChecker.abi.Unpack("anonOutputs", data)
+func (outputChecker *OutputChecker) UnpackAnonOutputs(data []byte) (AnonOutputsOutput, error) {
+	out, err := outputChecker.abi.Unpack("anonOutputs", data)
 
 	outstruct := new(AnonOutputsOutput)
 	if err != nil {
@@ -100,8 +100,8 @@ func (_OutputChecker *OutputChecker) UnpackAnonOutputs(data []byte) (AnonOutputs
 // CollidingOutputs is a free data retrieval call binding the contract method 0xeccbc1ee.
 //
 // Solidity: function collidingOutputs() returns(string str, string Str)
-func (_OutputChecker *OutputChecker) PackCollidingOutputs() ([]byte, error) {
-	return _OutputChecker.abi.Pack("collidingOutputs")
+func (outputChecker *OutputChecker) PackCollidingOutputs() ([]byte, error) {
+	return outputChecker.abi.Pack("collidingOutputs")
 }
 
 type CollidingOutputsOutput struct {
@@ -109,8 +109,8 @@ type CollidingOutputsOutput struct {
 	Str0 string
 }
 
-func (_OutputChecker *OutputChecker) UnpackCollidingOutputs(data []byte) (CollidingOutputsOutput, error) {
-	out, err := _OutputChecker.abi.Unpack("collidingOutputs", data)
+func (outputChecker *OutputChecker) UnpackCollidingOutputs(data []byte) (CollidingOutputsOutput, error) {
+	out, err := outputChecker.abi.Unpack("collidingOutputs", data)
 
 	outstruct := new(CollidingOutputsOutput)
 	if err != nil {
@@ -128,8 +128,8 @@ func (_OutputChecker *OutputChecker) UnpackCollidingOutputs(data []byte) (Collid
 // MixedOutputs is a free data retrieval call binding the contract method 0x21b77b44.
 //
 // Solidity: function mixedOutputs() returns(string, string str)
-func (_OutputChecker *OutputChecker) PackMixedOutputs() ([]byte, error) {
-	return _OutputChecker.abi.Pack("mixedOutputs")
+func (outputChecker *OutputChecker) PackMixedOutputs() ([]byte, error) {
+	return outputChecker.abi.Pack("mixedOutputs")
 }
 
 type MixedOutputsOutput struct {
@@ -137,8 +137,8 @@ type MixedOutputsOutput struct {
 	Str  string
 }
 
-func (_OutputChecker *OutputChecker) UnpackMixedOutputs(data []byte) (MixedOutputsOutput, error) {
-	out, err := _OutputChecker.abi.Unpack("mixedOutputs", data)
+func (outputChecker *OutputChecker) UnpackMixedOutputs(data []byte) (MixedOutputsOutput, error) {
+	out, err := outputChecker.abi.Unpack("mixedOutputs", data)
 
 	outstruct := new(MixedOutputsOutput)
 	if err != nil {
@@ -156,12 +156,12 @@ func (_OutputChecker *OutputChecker) UnpackMixedOutputs(data []byte) (MixedOutpu
 // NamedOutput is a free data retrieval call binding the contract method 0x5e632bd5.
 //
 // Solidity: function namedOutput() returns(string str)
-func (_OutputChecker *OutputChecker) PackNamedOutput() ([]byte, error) {
-	return _OutputChecker.abi.Pack("namedOutput")
+func (outputChecker *OutputChecker) PackNamedOutput() ([]byte, error) {
+	return outputChecker.abi.Pack("namedOutput")
 }
 
-func (_OutputChecker *OutputChecker) UnpackNamedOutput(data []byte) (string, error) {
-	out, err := _OutputChecker.abi.Unpack("namedOutput", data)
+func (outputChecker *OutputChecker) UnpackNamedOutput(data []byte) (string, error) {
+	out, err := outputChecker.abi.Unpack("namedOutput", data)
 
 	if err != nil {
 		return *new(string), err
@@ -176,8 +176,8 @@ func (_OutputChecker *OutputChecker) UnpackNamedOutput(data []byte) (string, err
 // NamedOutputs is a free data retrieval call binding the contract method 0x7970a189.
 //
 // Solidity: function namedOutputs() returns(string str1, string str2)
-func (_OutputChecker *OutputChecker) PackNamedOutputs() ([]byte, error) {
-	return _OutputChecker.abi.Pack("namedOutputs")
+func (outputChecker *OutputChecker) PackNamedOutputs() ([]byte, error) {
+	return outputChecker.abi.Pack("namedOutputs")
 }
 
 type NamedOutputsOutput struct {
@@ -185,8 +185,8 @@ type NamedOutputsOutput struct {
 	Str2 string
 }
 
-func (_OutputChecker *OutputChecker) UnpackNamedOutputs(data []byte) (NamedOutputsOutput, error) {
-	out, err := _OutputChecker.abi.Unpack("namedOutputs", data)
+func (outputChecker *OutputChecker) UnpackNamedOutputs(data []byte) (NamedOutputsOutput, error) {
+	out, err := outputChecker.abi.Unpack("namedOutputs", data)
 
 	outstruct := new(NamedOutputsOutput)
 	if err != nil {
@@ -204,6 +204,6 @@ func (_OutputChecker *OutputChecker) UnpackNamedOutputs(data []byte) (NamedOutpu
 // NoOutput is a free data retrieval call binding the contract method 0x625f0306.
 //
 // Solidity: function noOutput() returns()
-func (_OutputChecker *OutputChecker) PackNoOutput() ([]byte, error) {
-	return _OutputChecker.abi.Pack("noOutput")
+func (outputChecker *OutputChecker) PackNoOutput() ([]byte, error) {
+	return outputChecker.abi.Pack("noOutput")
 }

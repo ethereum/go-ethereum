@@ -70,16 +70,16 @@ func NewTuple() (*Tuple, error) {
 	return &Tuple{abi: *parsed}, nil
 }
 
-func (_Tuple *Tuple) PackConstructor() []byte {
-	res, _ := _Tuple.abi.Pack("")
+func (tuple *Tuple) PackConstructor() []byte {
+	res, _ := tuple.abi.Pack("")
 	return res
 }
 
 // Func1 is a free data retrieval call binding the contract method 0x443c79b4.
 //
 // Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])
-func (_Tuple *Tuple) PackFunc1(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) ([]byte, error) {
-	return _Tuple.abi.Pack("func1", A, B, C, D, E)
+func (tuple *Tuple) PackFunc1(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) ([]byte, error) {
+	return tuple.abi.Pack("func1", A, B, C, D, E)
 }
 
 type Func1Output struct {
@@ -90,8 +90,8 @@ type Func1Output struct {
 	Arg4 []*big.Int
 }
 
-func (_Tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
-	out, err := _Tuple.abi.Unpack("func1", data)
+func (tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
+	out, err := tuple.abi.Unpack("func1", data)
 
 	outstruct := new(Func1Output)
 	if err != nil {
@@ -115,15 +115,15 @@ func (_Tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 // Func2 is a free data retrieval call binding the contract method 0xd0062cdd.
 //
 // Solidity: function func2((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) returns()
-func (_Tuple *Tuple) PackFunc2(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) ([]byte, error) {
-	return _Tuple.abi.Pack("func2", A, B, C, D, E)
+func (tuple *Tuple) PackFunc2(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) ([]byte, error) {
+	return tuple.abi.Pack("func2", A, B, C, D, E)
 }
 
 // Func3 is a free data retrieval call binding the contract method 0xe4d9a43b.
 //
 // Solidity: function func3((uint16,uint16)[] ) pure returns()
-func (_Tuple *Tuple) PackFunc3(Arg0 []TupleQ) ([]byte, error) {
-	return _Tuple.abi.Pack("func3", Arg0)
+func (tuple *Tuple) PackFunc3(Arg0 []TupleQ) ([]byte, error) {
+	return tuple.abi.Pack("func3", Arg0)
 }
 
 // TupleTupleEvent represents a TupleEvent event raised by the Tuple contract.
@@ -138,19 +138,19 @@ type TupleTupleEvent struct {
 
 const TupleTupleEventEventName = "TupleEvent"
 
-func (_Tuple *Tuple) UnpackTupleEventEvent(log *types.Log) (*TupleTupleEvent, error) {
+func (tuple *Tuple) UnpackTupleEventEvent(log *types.Log) (*TupleTupleEvent, error) {
 	event := "TupleEvent"
-	if log.Topics[0] != _Tuple.abi.Events[event].ID {
+	if log.Topics[0] != tuple.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(TupleTupleEvent)
 	if len(log.Data) > 0 {
-		if err := _Tuple.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := tuple.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _Tuple.abi.Events[event].Inputs {
+	for _, arg := range tuple.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
@@ -170,19 +170,19 @@ type TupleTupleEvent2 struct {
 
 const TupleTupleEvent2EventName = "TupleEvent2"
 
-func (_Tuple *Tuple) UnpackTupleEvent2Event(log *types.Log) (*TupleTupleEvent2, error) {
+func (tuple *Tuple) UnpackTupleEvent2Event(log *types.Log) (*TupleTupleEvent2, error) {
 	event := "TupleEvent2"
-	if log.Topics[0] != _Tuple.abi.Events[event].ID {
+	if log.Topics[0] != tuple.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(TupleTupleEvent2)
 	if len(log.Data) > 0 {
-		if err := _Tuple.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := tuple.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _Tuple.abi.Events[event].Inputs {
+	for _, arg := range tuple.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}

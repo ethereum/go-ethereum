@@ -45,31 +45,31 @@ func NewC() (*C, error) {
 	return &C{abi: *parsed}, nil
 }
 
-func (_C *C) PackConstructor() []byte {
-	res, _ := _C.abi.Pack("")
+func (c *C) PackConstructor() []byte {
+	res, _ := c.abi.Pack("")
 	return res
 }
 
 // Bar is a free data retrieval call binding the contract method 0xb0a378b0.
 //
 // Solidity: function Bar() pure returns()
-func (_C *C) PackBar() ([]byte, error) {
-	return _C.abi.Pack("Bar")
+func (c *C) PackBar() ([]byte, error) {
+	return c.abi.Pack("Bar")
 }
 
 // Foo is a free data retrieval call binding the contract method 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
-func (_C *C) PackFoo() ([]byte, error) {
-	return _C.abi.Pack("Foo")
+func (c *C) PackFoo() ([]byte, error) {
+	return c.abi.Pack("Foo")
 }
 
-func (_C *C) UnpackError(raw []byte) any {
+func (c *C) UnpackError(raw []byte) any {
 
-	if val, err := _C.UnpackBadThingError(raw); err == nil {
+	if val, err := c.UnpackBadThingError(raw); err == nil {
 		return val
 
-	} else if val, err := _C.UnpackBadThing2Error(raw); err == nil {
+	} else if val, err := c.UnpackBadThing2Error(raw); err == nil {
 		return val
 
 	}
@@ -88,11 +88,10 @@ func CBadThingErrorID() common.Hash {
 	return common.HexToHash("0xbb6a82f123854747ef4381e30e497f934a3854753fec99a69c35c30d4b46714d")
 }
 
-func (_C *C) UnpackBadThingError(raw []byte) (*CBadThing, error) {
+func (c *C) UnpackBadThingError(raw []byte) (*CBadThing, error) {
 	errName := "BadThing"
 	out := new(CBadThing)
 	if err := _C.abi.UnpackIntoInterface(out, errName, raw); err != nil {
-		// TODO: output can be non-pointer type.
 		return nil, err
 	}
 	return out, nil
@@ -110,11 +109,10 @@ func CBadThing2ErrorID() common.Hash {
 	return common.HexToHash("0xd233a24f02271fe7c9470e060d0fda6447a142bf12ab31fed7ab65affd546175")
 }
 
-func (_C *C) UnpackBadThing2Error(raw []byte) (*CBadThing2, error) {
+func (c *C) UnpackBadThing2Error(raw []byte) (*CBadThing2, error) {
 	errName := "BadThing2"
 	out := new(CBadThing2)
 	if err := _C.abi.UnpackIntoInterface(out, errName, raw); err != nil {
-		// TODO: output can be non-pointer type.
 		return nil, err
 	}
 	return out, nil
@@ -142,21 +140,21 @@ func NewC2() (*C2, error) {
 	return &C2{abi: *parsed}, nil
 }
 
-func (_C2 *C2) PackConstructor() []byte {
-	res, _ := _C2.abi.Pack("")
+func (c2 *C2) PackConstructor() []byte {
+	res, _ := c2.abi.Pack("")
 	return res
 }
 
 // Foo is a free data retrieval call binding the contract method 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
-func (_C2 *C2) PackFoo() ([]byte, error) {
-	return _C2.abi.Pack("Foo")
+func (c2 *C2) PackFoo() ([]byte, error) {
+	return c2.abi.Pack("Foo")
 }
 
-func (_C2 *C2) UnpackError(raw []byte) any {
+func (c2 *C2) UnpackError(raw []byte) any {
 
-	if val, err := _C2.UnpackBadThingError(raw); err == nil {
+	if val, err := c2.UnpackBadThingError(raw); err == nil {
 		return val
 
 	}
@@ -175,11 +173,10 @@ func C2BadThingErrorID() common.Hash {
 	return common.HexToHash("0xbb6a82f123854747ef4381e30e497f934a3854753fec99a69c35c30d4b46714d")
 }
 
-func (_C2 *C2) UnpackBadThingError(raw []byte) (*C2BadThing, error) {
+func (c2 *C2) UnpackBadThingError(raw []byte) (*C2BadThing, error) {
 	errName := "BadThing"
 	out := new(C2BadThing)
 	if err := _C2.abi.UnpackIntoInterface(out, errName, raw); err != nil {
-		// TODO: output can be non-pointer type.
 		return nil, err
 	}
 	return out, nil
