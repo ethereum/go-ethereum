@@ -831,7 +831,38 @@ running:
 	}
 }
 
+// checkConnectionQuality performs a latency check on the connection
+func (srv *Server) checkConnectionQuality(c *conn) error {
+	start := time.Now()
+	
+	// Send ping and wait for pong
+	select {
+	case c.cont <- nil: // Simulate ping
+		select {
+		case err := <-c.cont: // Wait for pong
+			if err != nil {
+				return err
+			}
+			// Check if latency is acceptable (less than 1 second)
+			if time.Since(start) > time.Second {
+				return fmt.Errorf("connection latency too high: %v", time.Since(start))
+			}
+		case <-time.After(time.Second):
+			return fmt.Errorf("connection quality check timeout")
+		}
+	case <-time.After(time.Second):
+		return fmt.Errorf("connection quality check failed")
+	}
+	
+	return nil
+}
+
 func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+	// First check connection quality
+	if err := srv.checkConnectionQuality(c); err != nil {
+		return fmt.Errorf("connection quality check failed: %v", err)
+	}
+
 	switch {
 	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
