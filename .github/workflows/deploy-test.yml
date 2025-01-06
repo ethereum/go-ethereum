@@ -46,6 +46,7 @@ jobs:
 
     - name: Run Hardhat Tests
       run: |
+        cd hardhat
         npx hardhat test
 
     - name: Shutdown Docker Compose
