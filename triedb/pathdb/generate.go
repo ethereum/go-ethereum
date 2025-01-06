@@ -171,7 +171,7 @@ func (g *generator) progressMarker() []byte {
 // into two parts.
 func splitMarker(marker []byte) ([]byte, []byte) {
 	var accMarker []byte
-	if len(marker) > 0 { // []byte{} is the start, use nil for that
+	if len(marker) > 0 {
 		accMarker = marker[:common.HashLength]
 	}
 	return accMarker, marker
@@ -751,7 +751,7 @@ func (g *generator) generateAccounts(ctx *generatorContext, accMarker []byte) er
 		// Last step, cleanup the storages after the last account.
 		// All the left storages should be treated as dangling.
 		if origin == nil || exhausted {
-			g.stats.dangling += ctx.removeStorageLeft()
+			g.stats.dangling += ctx.removeRemainingStorage()
 			break
 		}
 	}
