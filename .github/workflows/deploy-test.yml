@@ -42,6 +42,7 @@ jobs:
       run: |
         cd hardhat
         npm install
+        npx hardhat compile   # Added the compile step
         npx hardhat run scripts/deploy.js
 
     - name: Run Hardhat Tests
