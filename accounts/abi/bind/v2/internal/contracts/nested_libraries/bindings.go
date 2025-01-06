@@ -65,10 +65,10 @@ func (_C1 *C1) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := _C1.abi.Unpack("Do", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -116,10 +116,10 @@ func (_C2 *C2) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := _C2.abi.Unpack("Do", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -163,10 +163,10 @@ func (_L1 *L1) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := _L1.abi.Unpack("Do", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -213,10 +213,10 @@ func (_L2 *L2) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := _L2.abi.Unpack("Do", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -263,10 +263,10 @@ func (_L2b *L2b) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := _L2b.abi.Unpack("Do", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -310,10 +310,10 @@ func (_L3 *L3) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := _L3.abi.Unpack("Do", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -361,10 +361,10 @@ func (_L4 *L4) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := _L4.abi.Unpack("Do", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -411,10 +411,10 @@ func (_L4b *L4b) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := _L4b.abi.Unpack("Do", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 

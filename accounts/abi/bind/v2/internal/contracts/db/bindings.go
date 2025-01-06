@@ -68,10 +68,10 @@ func (_DB *DB) UnpackGet(data []byte) (*big.Int, error) {
 	out, err := _DB.abi.Unpack("get", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -98,9 +98,11 @@ func (_DB *DB) UnpackGetNamedStatParams(data []byte) (GetNamedStatParamsOutput, 
 		return *outstruct, err
 	}
 
-	outstruct.Gets = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Inserts = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
-	outstruct.Mods = *abi.ConvertType(out[2], new(*big.Int)).(**big.Int)
+	outstruct.Gets = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
+	outstruct.Inserts = abi.ConvertType(out[1], new(big.Int)).(big.Int)
+
+	outstruct.Mods = abi.ConvertType(out[2], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -127,9 +129,11 @@ func (_DB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
 		return *outstruct, err
 	}
 
-	outstruct.Arg0 = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Arg1 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
-	outstruct.Arg2 = *abi.ConvertType(out[2], new(*big.Int)).(**big.Int)
+	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
+	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(big.Int)
+
+	outstruct.Arg2 = abi.ConvertType(out[2], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -166,10 +170,10 @@ func (_DB *DB) UnpackInsert(data []byte) (*big.Int, error) {
 	out, err := _DB.abi.Unpack("insert", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 

@@ -5,12 +5,27 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"go/format"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
 	"text/template"
 	"unicode"
 )
+
+// underlyingBindType returns the underlying Go type represented by the given type, panicking if it is not a pointer type.
+func underlyingBindType(typ abi.Type) string {
+	goType := typ.GetType()
+	if goType.Kind() != reflect.Pointer {
+		panic("trying to retrieve underlying bind type of non-pointer type.")
+	}
+	return goType.Elem().String()
+}
+
+// isPointerType returns true if the
+func isPointerType(typ abi.Type) bool {
+	return typ.GetType().Kind() == reflect.Pointer
+}
 
 type binder struct {
 	// contracts is the map of each individual contract requested binding
@@ -275,6 +290,8 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		"add": func(val1, val2 int) int {
 			return val1 + val2
 		},
+		"ispointertype":      isPointerType,
+		"underlyingbindtype": underlyingBindType,
 	}
 	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSourceV2))
 	if err := tmpl.Execute(buffer, data); err != nil {

@@ -78,9 +78,12 @@ func (_C *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgs
 		return *outstruct, err
 	}
 
-	outstruct.Arg0 = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Arg1 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
-	outstruct.Arg2 = *abi.ConvertType(out[2], new(*big.Int)).(**big.Int)
+	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
+	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(big.Int)
+
+	outstruct.Arg2 = abi.ConvertType(out[2], new(big.Int)).(big.Int)
+
 	outstruct.Arg3 = *abi.ConvertType(out[3], new(bool)).(*bool)
 
 	return *outstruct, err

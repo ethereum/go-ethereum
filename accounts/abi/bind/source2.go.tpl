@@ -93,15 +93,24 @@ var (
 					return *outstruct, err
 				}
 				{{range $i, $t := .Normalized.Outputs}}
-				outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
+				{{if ispointertype .Type}}
+				    outstruct.{{.Name}} = abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type }})).({{underlyingbindtype .Type }})
+				{{ else }}
+				    outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
+				{{ end }}{{end}}
 
 				return *outstruct, err
 				{{else}}
 				if err != nil {
-					return {{range $i, $_ := .Normalized.Outputs}}*new({{bindtype .Type $structs}}), {{end}} err
+					return {{range $i, $_ := .Normalized.Outputs}}{{if ispointertype .Type}}new({{underlyingbindtype .Type }}), {{else}}*new({{bindtype .Type $structs}}), {{end}}{{end}} err
 				}
 				{{range $i, $t := .Normalized.Outputs}}
-				out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
+				{{ if ispointertype .Type }}
+				out{{$i}} := abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type}})).({{bindtype .Type $structs}})
+				{{ else }}
+				out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
+				{{ end }}
+				{{end}}
 
 				return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} err
 				{{end}}
