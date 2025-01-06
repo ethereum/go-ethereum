@@ -840,6 +840,38 @@ func TestEstimateGas(t *testing.T) {
 			},
 			want: 21000,
 		},
+		// Should be able to send to an EIP-7702 delegated account with authorization list
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[2].addr,
+				Value: (*hexutil.Big)(big.NewInt(1)),
+				AuthorizationList: []types.SetCodeAuthorization{
+					{
+						Address: accounts[0].addr,
+					},
+				},
+			},
+			want: 46000, //21000 + (PER_EMPTY_ACCOUNT_COST * authorization list length(1).)
+		},
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[2].addr,
+				Value: (*hexutil.Big)(big.NewInt(1)),
+				AuthorizationList: []types.SetCodeAuthorization{
+					{
+						Address: accounts[0].addr,
+					},
+					{
+						Address: accounts[1].addr,
+					},
+				},
+			},
+			want: 71000, //21000 + (PER_EMPTY_ACCOUNT_COST * authorization list length(2).)
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
@@ -1226,7 +1258,7 @@ func TestCall(t *testing.T) {
 			name:        "eip-7702-eth-transfer-with-authorisation-list",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
-				From:  &accounts[1].addr,
+				From:  &accounts[3].addr,
 				To:    &accounts[2].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 				AuthorizationList: []types.SetCodeAuthorization{
@@ -1242,7 +1274,7 @@ func TestCall(t *testing.T) {
 			name:        "eip-7702-eth-transfer-when-multiple-authorisation-lists",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
-				From:  &accounts[1].addr,
+				From:  &accounts[3].addr,
 				To:    &accounts[2].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 				AuthorizationList: []types.SetCodeAuthorization{
@@ -1261,7 +1293,7 @@ func TestCall(t *testing.T) {
 			name:        "eip-7702-error-when-empty-auth-list",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
-				From:              &accounts[1].addr,
+				From:              &accounts[3].addr,
 				To:                &accounts[2].addr,
 				Value:             (*hexutil.Big)(big.NewInt(1000)),
 				AuthorizationList: []types.SetCodeAuthorization{}, // Empty list
@@ -1273,7 +1305,7 @@ func TestCall(t *testing.T) {
 			name:        "eip-7702-error-when-deploy-contract",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
-				From:  &accounts[1].addr,
+				From:  &accounts[3].addr,
 				To:    nil, // No recipient for contract creation
 				Value: (*hexutil.Big)(big.NewInt(0)),
 				Data:  &hexutil.Bytes{0x60, 0x0},
