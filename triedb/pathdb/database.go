@@ -348,12 +348,11 @@ func (db *Database) setStateGenerator() {
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
 	// regardless of whether background state snapshot generation is allowed.
-	noBuild := db.readOnly || db.config.SnapshotNoBuild
+	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isVerkle
 	dl.setGenerator(newGenerator(db.diskdb, noBuild, generator.Marker, stats))
 
-	// Short circuit if the background generation is not permitted. Notably,
-	// snapshot generation is not functional in the verkle design.
-	if noBuild || db.isVerkle || db.waitSync {
+	// Short circuit if the background generation is not permitted
+	if noBuild || db.waitSync {
 		return
 	}
 	stats.log("Starting snapshot generation", root, generator.Marker)
@@ -478,7 +477,7 @@ func (db *Database) Enable(root common.Hash) error {
 
 	// Re-construct a new disk layer backed by persistent state
 	// and schedule the state snapshot generation if it's permitted.
-	db.tree.reset(generateSnapshot(db, root))
+	db.tree.reset(generateSnapshot(db, root, db.isVerkle || db.config.SnapshotNoBuild))
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
 }

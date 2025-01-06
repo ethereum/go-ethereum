@@ -129,7 +129,7 @@ func (t *genTester) Commit() common.Hash {
 
 func (t *genTester) CommitAndGenerate() (common.Hash, *diskLayer) {
 	root := t.Commit()
-	dl := generateSnapshot(t.db, root)
+	dl := generateSnapshot(t.db, root, false)
 	return root, dl
 }
 
@@ -338,7 +338,7 @@ func TestGenerateCorruptAccountTrie(t *testing.T) {
 	rawdb.DeleteAccountTrieNode(helper.diskdb, path)
 	helper.db.tree.bottom().resetCache()
 
-	dl := generateSnapshot(helper.db, root)
+	dl := generateSnapshot(helper.db, root, false)
 	select {
 	case <-dl.generator.done:
 		// Snapshot generation succeeded
@@ -370,7 +370,7 @@ func TestGenerateMissingStorageTrie(t *testing.T) {
 	rawdb.DeleteStorageTrieNode(helper.diskdb, acc3, nil)
 	helper.db.tree.bottom().resetCache()
 
-	dl := generateSnapshot(helper.db, root)
+	dl := generateSnapshot(helper.db, root, false)
 	select {
 	case <-dl.generator.done:
 		// Snapshot generation succeeded
@@ -408,7 +408,7 @@ func TestGenerateCorruptStorageTrie(t *testing.T) {
 
 	helper.db.tree.bottom().resetCache()
 
-	dl := generateSnapshot(helper.db, root)
+	dl := generateSnapshot(helper.db, root, false)
 	select {
 	case <-dl.generator.done:
 		// Snapshot generation succeeded
@@ -463,7 +463,7 @@ func TestGenerateWithExtraAccounts(t *testing.T) {
 	if data := rawdb.ReadStorageSnapshot(helper.diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data == nil {
 		t.Fatalf("expected snap storage to exist")
 	}
-	dl := generateSnapshot(helper.db, root)
+	dl := generateSnapshot(helper.db, root, false)
 	select {
 	case <-dl.generator.done:
 		// Snapshot generation succeeded
