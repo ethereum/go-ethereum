@@ -184,7 +184,6 @@ var (
 			errName := "{{.Normalized.Name}}"
 			out := new({{$contract.Type}}{{.Normalized.Name}})
             if err := _{{$contract.Type}}.abi.UnpackIntoInterface(out, errName, raw); err != nil {
-                // TODO: output can be non-pointer type.
                 return nil, err
             }
 			return out, nil
