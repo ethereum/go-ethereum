@@ -58,9 +58,9 @@ func (_Getter *Getter) PackGetter() ([]byte, error) {
 }
 
 type GetterOutput struct {
-	Arg  string
-	Arg0 *big.Int
-	Arg1 [32]byte
+	Arg0 string
+	Arg1 *big.Int
+	Arg2 [32]byte
 }
 
 func (_Getter *Getter) UnpackGetter(data []byte) (GetterOutput, error) {
@@ -71,9 +71,9 @@ func (_Getter *Getter) UnpackGetter(data []byte) (GetterOutput, error) {
 		return *outstruct, err
 	}
 
-	outstruct.Arg = *abi.ConvertType(out[0], new(string)).(*string)
-	outstruct.Arg0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
-	outstruct.Arg1 = *abi.ConvertType(out[2], new([32]byte)).(*[32]byte)
+	outstruct.Arg0 = *abi.ConvertType(out[0], new(string)).(*string)
+	outstruct.Arg1 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Arg2 = *abi.ConvertType(out[2], new([32]byte)).(*[32]byte)
 
 	return *outstruct, err
 

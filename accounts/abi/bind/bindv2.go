@@ -74,18 +74,13 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 	}
 
 	normalized.Name = normalizedName
-	normalized.Inputs = make([]abi.Argument, len(original.Inputs))
-	copy(normalized.Inputs, original.Inputs)
-	for j, input := range normalized.Inputs {
-		if input.Name == "" || isKeyWord(input.Name) {
-			normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
-		}
+	normalized.Inputs = normalizeArgs(original.Inputs)
+	for _, input := range normalized.Inputs {
 		if hasStruct(input.Type) {
 			cb.binder.BindStructType(input.Type)
 		}
 	}
-	normalized.Outputs = make([]abi.Argument, len(original.Outputs))
-	copy(normalized.Outputs, original.Outputs)
+	normalized.Outputs = normalizeArgs(original.Outputs)
 	for j, output := range normalized.Outputs {
 		if output.Name != "" {
 			normalized.Outputs[j].Name = abi.ToCamelCase(output.Name)
@@ -97,22 +92,6 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 	isStructured := structured(original.Outputs)
 	// if the call returns multiple values, coallesce them into a struct
 	if len(normalized.Outputs) > 1 {
-		// Build up dictionary of existing arg names.
-		keys := make(map[string]struct{})
-		for _, o := range normalized.Outputs {
-			if o.Name != "" {
-				keys[strings.ToLower(o.Name)] = struct{}{}
-			}
-		}
-		// Assign names to anonymous fields.
-		for i, o := range normalized.Outputs {
-			if o.Name != "" {
-				continue
-			}
-			o.Name = abi.ToCamelCase(abi.ResolveNameConflict("arg", func(name string) bool { _, ok := keys[name]; return ok }))
-			normalized.Outputs[i] = o
-			keys[strings.ToLower(o.Name)] = struct{}{}
-		}
 		isStructured = true
 	}
 
@@ -120,15 +99,20 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 	return nil
 }
 
+// normalize a set of arguments by stripping underscores, giving a generic name in the case where
+// the arg name collides with a reserved Go keyword, and finally converting to camel-case.
 func normalizeArgs(args abi.Arguments) abi.Arguments {
 	args = slices.Clone(args)
 	used := make(map[string]bool)
 
 	for i, input := range args {
-		if input.Name == "" || isKeyWord(input.Name) {
-			args[i].Name = fmt.Sprintf("arg%d", i)
+		if isKeyWord(input.Name) {
+			args[i].Name = fmt.Sprintf("Arg%d", i)
 		}
 		args[i].Name = abi.ToCamelCase(args[i].Name)
+		if args[i].Name == "" {
+			args[i].Name = fmt.Sprintf("Arg%d", i)
+		}
 		for index := 0; ; index++ {
 			if !used[args[i].Name] {
 				used[args[i].Name] = true
@@ -212,6 +196,7 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 			return "", err
 		}
 
+		// TODO: normalize these args, add unit tests that fail in the current commit.
 		for _, input := range evmABI.Constructor.Inputs {
 			if hasStruct(input.Type) {
 				bindStructType(input.Type, b.structs)

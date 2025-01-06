@@ -58,8 +58,8 @@ func (_Underscorer *Underscorer) PackAllPurelyUnderscoredOutput() ([]byte, error
 }
 
 type AllPurelyUnderscoredOutputOutput struct {
-	Arg  *big.Int
 	Arg0 *big.Int
+	Arg1 *big.Int
 }
 
 func (_Underscorer *Underscorer) UnpackAllPurelyUnderscoredOutput(data []byte) (AllPurelyUnderscoredOutputOutput, error) {
@@ -70,8 +70,8 @@ func (_Underscorer *Underscorer) UnpackAllPurelyUnderscoredOutput(data []byte) (
 		return *outstruct, err
 	}
 
-	outstruct.Arg = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Arg0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Arg0 = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	outstruct.Arg1 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
 
 	return *outstruct, err
 
@@ -85,8 +85,8 @@ func (_Underscorer *Underscorer) PackLowerLowerCollision() ([]byte, error) {
 }
 
 type LowerLowerCollisionOutput struct {
-	Res *big.Int
-	Res *big.Int
+	Res  *big.Int
+	Res0 *big.Int
 }
 
 func (_Underscorer *Underscorer) UnpackLowerLowerCollision(data []byte) (LowerLowerCollisionOutput, error) {
@@ -98,7 +98,7 @@ func (_Underscorer *Underscorer) UnpackLowerLowerCollision(data []byte) (LowerLo
 	}
 
 	outstruct.Res = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Res = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Res0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
 
 	return *outstruct, err
 
@@ -112,8 +112,8 @@ func (_Underscorer *Underscorer) PackLowerUpperCollision() ([]byte, error) {
 }
 
 type LowerUpperCollisionOutput struct {
-	Res *big.Int
-	Res *big.Int
+	Res  *big.Int
+	Res0 *big.Int
 }
 
 func (_Underscorer *Underscorer) UnpackLowerUpperCollision(data []byte) (LowerUpperCollisionOutput, error) {
@@ -125,7 +125,7 @@ func (_Underscorer *Underscorer) UnpackLowerUpperCollision(data []byte) (LowerUp
 	}
 
 	outstruct.Res = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Res = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Res0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
 
 	return *outstruct, err
 
@@ -139,8 +139,8 @@ func (_Underscorer *Underscorer) PackPurelyUnderscoredOutput() ([]byte, error) {
 }
 
 type PurelyUnderscoredOutputOutput struct {
-	Arg *big.Int
-	Res *big.Int
+	Arg0 *big.Int
+	Res  *big.Int
 }
 
 func (_Underscorer *Underscorer) UnpackPurelyUnderscoredOutput(data []byte) (PurelyUnderscoredOutputOutput, error) {
@@ -151,7 +151,7 @@ func (_Underscorer *Underscorer) UnpackPurelyUnderscoredOutput(data []byte) (Pur
 		return *outstruct, err
 	}
 
-	outstruct.Arg = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	outstruct.Arg0 = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
 	outstruct.Res = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
 
 	return *outstruct, err
@@ -193,8 +193,8 @@ func (_Underscorer *Underscorer) PackUpperLowerCollision() ([]byte, error) {
 }
 
 type UpperLowerCollisionOutput struct {
-	Res *big.Int
-	Res *big.Int
+	Res  *big.Int
+	Res0 *big.Int
 }
 
 func (_Underscorer *Underscorer) UnpackUpperLowerCollision(data []byte) (UpperLowerCollisionOutput, error) {
@@ -206,7 +206,7 @@ func (_Underscorer *Underscorer) UnpackUpperLowerCollision(data []byte) (UpperLo
 	}
 
 	outstruct.Res = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Res = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Res0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
 
 	return *outstruct, err
 
@@ -220,8 +220,8 @@ func (_Underscorer *Underscorer) PackUpperUpperCollision() ([]byte, error) {
 }
 
 type UpperUpperCollisionOutput struct {
-	Res *big.Int
-	Res *big.Int
+	Res  *big.Int
+	Res0 *big.Int
 }
 
 func (_Underscorer *Underscorer) UnpackUpperUpperCollision(data []byte) (UpperUpperCollisionOutput, error) {
@@ -233,7 +233,7 @@ func (_Underscorer *Underscorer) UnpackUpperUpperCollision(data []byte) (UpperUp
 	}
 
 	outstruct.Res = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Res = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Res0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
 
 	return *outstruct, err
 

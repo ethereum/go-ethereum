@@ -53,6 +53,6 @@ func (_CallbackParam *CallbackParam) PackConstructor() []byte {
 // Test is a free data retrieval call binding the contract method 0xd7a5aba2.
 //
 // Solidity: function test(function callback) returns()
-func (_CallbackParam *CallbackParam) PackTest(callback [24]byte) ([]byte, error) {
-	return _CallbackParam.abi.Pack("test", callback)
+func (_CallbackParam *CallbackParam) PackTest(Callback [24]byte) ([]byte, error) {
+	return _CallbackParam.abi.Pack("test", Callback)
 }

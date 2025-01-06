@@ -73,8 +73,8 @@ func (_Interactor *Interactor) UnpackDeployString(data []byte) (string, error) {
 // Transact is a free data retrieval call binding the contract method 0xd736c513.
 //
 // Solidity: function transact(string str) returns()
-func (_Interactor *Interactor) PackTransact(str string) ([]byte, error) {
-	return _Interactor.abi.Pack("transact", str)
+func (_Interactor *Interactor) PackTransact(Str string) ([]byte, error) {
+	return _Interactor.abi.Pack("transact", Str)
 }
 
 // TransactString is a free data retrieval call binding the contract method 0x0d86a0e1.
