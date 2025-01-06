@@ -44,49 +44,49 @@ func NewInputChecker() (*InputChecker, error) {
 	return &InputChecker{abi: *parsed}, nil
 }
 
-func (_InputChecker *InputChecker) PackConstructor() []byte {
-	res, _ := _InputChecker.abi.Pack("")
+func (inputChecker *InputChecker) PackConstructor() []byte {
+	res, _ := inputChecker.abi.Pack("")
 	return res
 }
 
 // AnonInput is a free data retrieval call binding the contract method 0x3e708e82.
 //
 // Solidity: function anonInput(string ) returns()
-func (_InputChecker *InputChecker) PackAnonInput(Arg0 string) ([]byte, error) {
-	return _InputChecker.abi.Pack("anonInput", Arg0)
+func (inputChecker *InputChecker) PackAnonInput(Arg0 string) ([]byte, error) {
+	return inputChecker.abi.Pack("anonInput", Arg0)
 }
 
 // AnonInputs is a free data retrieval call binding the contract method 0x28160527.
 //
 // Solidity: function anonInputs(string , string ) returns()
-func (_InputChecker *InputChecker) PackAnonInputs(Arg0 string, Arg1 string) ([]byte, error) {
-	return _InputChecker.abi.Pack("anonInputs", Arg0, Arg1)
+func (inputChecker *InputChecker) PackAnonInputs(Arg0 string, Arg1 string) ([]byte, error) {
+	return inputChecker.abi.Pack("anonInputs", Arg0, Arg1)
 }
 
 // MixedInputs is a free data retrieval call binding the contract method 0xc689ebdc.
 //
 // Solidity: function mixedInputs(string , string str) returns()
-func (_InputChecker *InputChecker) PackMixedInputs(Arg0 string, Str string) ([]byte, error) {
-	return _InputChecker.abi.Pack("mixedInputs", Arg0, Str)
+func (inputChecker *InputChecker) PackMixedInputs(Arg0 string, Str string) ([]byte, error) {
+	return inputChecker.abi.Pack("mixedInputs", Arg0, Str)
 }
 
 // NamedInput is a free data retrieval call binding the contract method 0x0d402005.
 //
 // Solidity: function namedInput(string str) returns()
-func (_InputChecker *InputChecker) PackNamedInput(Str string) ([]byte, error) {
-	return _InputChecker.abi.Pack("namedInput", Str)
+func (inputChecker *InputChecker) PackNamedInput(Str string) ([]byte, error) {
+	return inputChecker.abi.Pack("namedInput", Str)
 }
 
 // NamedInputs is a free data retrieval call binding the contract method 0x63c796ed.
 //
 // Solidity: function namedInputs(string str1, string str2) returns()
-func (_InputChecker *InputChecker) PackNamedInputs(Str1 string, Str2 string) ([]byte, error) {
-	return _InputChecker.abi.Pack("namedInputs", Str1, Str2)
+func (inputChecker *InputChecker) PackNamedInputs(Str1 string, Str2 string) ([]byte, error) {
+	return inputChecker.abi.Pack("namedInputs", Str1, Str2)
 }
 
 // NoInput is a free data retrieval call binding the contract method 0x53539029.
 //
 // Solidity: function noInput() returns()
-func (_InputChecker *InputChecker) PackNoInput() ([]byte, error) {
-	return _InputChecker.abi.Pack("noInput")
+func (inputChecker *InputChecker) PackNoInput() ([]byte, error) {
+	return inputChecker.abi.Pack("noInput")
 }

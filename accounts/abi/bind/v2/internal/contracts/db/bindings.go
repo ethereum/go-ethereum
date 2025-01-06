@@ -52,20 +52,20 @@ func NewDB() (*DB, error) {
 	return &DB{abi: *parsed}, nil
 }
 
-func (_DB *DB) PackConstructor() []byte {
-	res, _ := _DB.abi.Pack("")
+func (dB *DB) PackConstructor() []byte {
+	res, _ := dB.abi.Pack("")
 	return res
 }
 
 // Get is a free data retrieval call binding the contract method 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
-func (_DB *DB) PackGet(K *big.Int) ([]byte, error) {
-	return _DB.abi.Pack("get", K)
+func (dB *DB) PackGet(K *big.Int) ([]byte, error) {
+	return dB.abi.Pack("get", K)
 }
 
-func (_DB *DB) UnpackGet(data []byte) (*big.Int, error) {
-	out, err := _DB.abi.Unpack("get", data)
+func (dB *DB) UnpackGet(data []byte) (*big.Int, error) {
+	out, err := dB.abi.Unpack("get", data)
 
 	if err != nil {
 		return new(big.Int), err
@@ -80,8 +80,8 @@ func (_DB *DB) UnpackGet(data []byte) (*big.Int, error) {
 // GetNamedStatParams is a free data retrieval call binding the contract method 0xe369ba3b.
 //
 // Solidity: function getNamedStatParams() view returns(uint256 gets, uint256 inserts, uint256 mods)
-func (_DB *DB) PackGetNamedStatParams() ([]byte, error) {
-	return _DB.abi.Pack("getNamedStatParams")
+func (dB *DB) PackGetNamedStatParams() ([]byte, error) {
+	return dB.abi.Pack("getNamedStatParams")
 }
 
 type GetNamedStatParamsOutput struct {
@@ -90,8 +90,8 @@ type GetNamedStatParamsOutput struct {
 	Mods    *big.Int
 }
 
-func (_DB *DB) UnpackGetNamedStatParams(data []byte) (GetNamedStatParamsOutput, error) {
-	out, err := _DB.abi.Unpack("getNamedStatParams", data)
+func (dB *DB) UnpackGetNamedStatParams(data []byte) (GetNamedStatParamsOutput, error) {
+	out, err := dB.abi.Unpack("getNamedStatParams", data)
 
 	outstruct := new(GetNamedStatParamsOutput)
 	if err != nil {
@@ -111,8 +111,8 @@ func (_DB *DB) UnpackGetNamedStatParams(data []byte) (GetNamedStatParamsOutput, 
 // GetStatParams is a free data retrieval call binding the contract method 0x6fcb9c70.
 //
 // Solidity: function getStatParams() view returns(uint256, uint256, uint256)
-func (_DB *DB) PackGetStatParams() ([]byte, error) {
-	return _DB.abi.Pack("getStatParams")
+func (dB *DB) PackGetStatParams() ([]byte, error) {
+	return dB.abi.Pack("getStatParams")
 }
 
 type GetStatParamsOutput struct {
@@ -121,8 +121,8 @@ type GetStatParamsOutput struct {
 	Arg2 *big.Int
 }
 
-func (_DB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
-	out, err := _DB.abi.Unpack("getStatParams", data)
+func (dB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
+	out, err := dB.abi.Unpack("getStatParams", data)
 
 	outstruct := new(GetStatParamsOutput)
 	if err != nil {
@@ -142,12 +142,12 @@ func (_DB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
 // GetStatsStruct is a free data retrieval call binding the contract method 0xee8161e0.
 //
 // Solidity: function getStatsStruct() view returns((uint256,uint256,uint256))
-func (_DB *DB) PackGetStatsStruct() ([]byte, error) {
-	return _DB.abi.Pack("getStatsStruct")
+func (dB *DB) PackGetStatsStruct() ([]byte, error) {
+	return dB.abi.Pack("getStatsStruct")
 }
 
-func (_DB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
-	out, err := _DB.abi.Unpack("getStatsStruct", data)
+func (dB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
+	out, err := dB.abi.Unpack("getStatsStruct", data)
 
 	if err != nil {
 		return *new(DBStats), err
@@ -162,12 +162,12 @@ func (_DB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
 // Insert is a free data retrieval call binding the contract method 0x1d834a1b.
 //
 // Solidity: function insert(uint256 k, uint256 v) returns(uint256)
-func (_DB *DB) PackInsert(K *big.Int, V *big.Int) ([]byte, error) {
-	return _DB.abi.Pack("insert", K, V)
+func (dB *DB) PackInsert(K *big.Int, V *big.Int) ([]byte, error) {
+	return dB.abi.Pack("insert", K, V)
 }
 
-func (_DB *DB) UnpackInsert(data []byte) (*big.Int, error) {
-	out, err := _DB.abi.Unpack("insert", data)
+func (dB *DB) UnpackInsert(data []byte) (*big.Int, error) {
+	out, err := dB.abi.Unpack("insert", data)
 
 	if err != nil {
 		return new(big.Int), err
@@ -189,19 +189,19 @@ type DBInsert struct {
 
 const DBInsertEventName = "Insert"
 
-func (_DB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
+func (dB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
 	event := "Insert"
-	if log.Topics[0] != _DB.abi.Events[event].ID {
+	if log.Topics[0] != dB.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(DBInsert)
 	if len(log.Data) > 0 {
-		if err := _DB.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := dB.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _DB.abi.Events[event].Inputs {
+	for _, arg := range dB.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}
@@ -222,19 +222,19 @@ type DBKeyedInsert struct {
 
 const DBKeyedInsertEventName = "KeyedInsert"
 
-func (_DB *DB) UnpackKeyedInsertEvent(log *types.Log) (*DBKeyedInsert, error) {
+func (dB *DB) UnpackKeyedInsertEvent(log *types.Log) (*DBKeyedInsert, error) {
 	event := "KeyedInsert"
-	if log.Topics[0] != _DB.abi.Events[event].ID {
+	if log.Topics[0] != dB.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(DBKeyedInsert)
 	if len(log.Data) > 0 {
-		if err := _DB.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := dB.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _DB.abi.Events[event].Inputs {
+	for _, arg := range dB.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}

@@ -45,16 +45,16 @@ func NewGetter() (*Getter, error) {
 	return &Getter{abi: *parsed}, nil
 }
 
-func (_Getter *Getter) PackConstructor() []byte {
-	res, _ := _Getter.abi.Pack("")
+func (getter *Getter) PackConstructor() []byte {
+	res, _ := getter.abi.Pack("")
 	return res
 }
 
 // Getter is a free data retrieval call binding the contract method 0x993a04b7.
 //
 // Solidity: function getter() returns(string, int256, bytes32)
-func (_Getter *Getter) PackGetter() ([]byte, error) {
-	return _Getter.abi.Pack("getter")
+func (getter *Getter) PackGetter() ([]byte, error) {
+	return getter.abi.Pack("getter")
 }
 
 type GetterOutput struct {
@@ -63,8 +63,8 @@ type GetterOutput struct {
 	Arg2 [32]byte
 }
 
-func (_Getter *Getter) UnpackGetter(data []byte) (GetterOutput, error) {
-	out, err := _Getter.abi.Unpack("getter", data)
+func (getter *Getter) UnpackGetter(data []byte) (GetterOutput, error) {
+	out, err := getter.abi.Unpack("getter", data)
 
 	outstruct := new(GetterOutput)
 	if err != nil {

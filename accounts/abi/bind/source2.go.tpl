@@ -64,8 +64,8 @@ var (
 		return &{{.Type}}{abi: *parsed}, nil
 	}
 
-	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
-		res, _ := _{{$contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
+	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
+		res, _ := {{ decapitalise $contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
 		return res
 	}
 
@@ -73,8 +73,8 @@ var (
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}) Pack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) ([]byte, error) {
-			return _{{$contract.Type}}.abi.Pack("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
+		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Pack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) ([]byte, error) {
+			return {{ decapitalise $contract.Type}}.abi.Pack("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 
 		{{/* Unpack method is needed only when there are return args */}}
@@ -85,8 +85,8 @@ var (
 		      {{.Name}} {{bindtype .Type $structs}}{{end}}
 		    }
 		    {{ end }}
-			func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) ({{if .Structured}} {{.Normalized.Name}}Output,{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
-				out, err := _{{$contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
+			func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) ({{if .Structured}} {{.Normalized.Name}}Output,{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
+				out, err := {{ decapitalise $contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
 				{{if .Structured}}
 				outstruct := new({{.Normalized.Name}}Output)
 				if err != nil {
@@ -127,19 +127,19 @@ var (
 
         const {{$contract.Type}}{{.Normalized.Name}}EventName = "{{.Original.Name}}"
 
-		func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
+		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := "{{.Original.Name}}"
-			if log.Topics[0] != _{{$contract.Type}}.abi.Events[event].ID {
+			if log.Topics[0] != {{ decapitalise $contract.Type}}.abi.Events[event].ID {
 				return nil, errors.New("event signature mismatch")
 			}
 			out := new({{$contract.Type}}{{.Normalized.Name}})
 			if len(log.Data) > 0 {
-				if err := _{{$contract.Type}}.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+				if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 					return nil, err
 				}
 			}
 			var indexed abi.Arguments
-			for _, arg := range _{{$contract.Type}}.abi.Events[event].Inputs {
+			for _, arg := range {{ decapitalise $contract.Type}}.abi.Events[event].Inputs {
 				if arg.Indexed {
 					indexed = append(indexed, arg)
 				}
@@ -153,14 +153,14 @@ var (
 	{{end}}
 
     {{ if .Errors }}
-    func (_{{$contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) any {
+    func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) any {
         {{$i := 0}}
         {{range $k, $v := .Errors}}
             {{ if eq $i 0 }}
-                if val, err := _{{$contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
+                if val, err := {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
                     return val
             {{ else }}
-                } else if val, err := _{{$contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
+                } else if val, err := {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
                     return val
             {{ end -}}
             {{$i = add $i 1}}
@@ -180,7 +180,7 @@ var (
 			return common.HexToHash("{{.Original.ID}}")
 		}
 
-		func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Error(raw []byte) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
+		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Error(raw []byte) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			errName := "{{.Normalized.Name}}"
 			out := new({{$contract.Type}}{{.Normalized.Name}})
             if err := _{{$contract.Type}}.abi.UnpackIntoInterface(out, errName, raw); err != nil {

@@ -45,16 +45,16 @@ func NewTupler() (*Tupler, error) {
 	return &Tupler{abi: *parsed}, nil
 }
 
-func (_Tupler *Tupler) PackConstructor() []byte {
-	res, _ := _Tupler.abi.Pack("")
+func (tupler *Tupler) PackConstructor() []byte {
+	res, _ := tupler.abi.Pack("")
 	return res
 }
 
 // Tuple is a free data retrieval call binding the contract method 0x3175aae2.
 //
 // Solidity: function tuple() returns(string a, int256 b, bytes32 c)
-func (_Tupler *Tupler) PackTuple() ([]byte, error) {
-	return _Tupler.abi.Pack("tuple")
+func (tupler *Tupler) PackTuple() ([]byte, error) {
+	return tupler.abi.Pack("tuple")
 }
 
 type TupleOutput struct {
@@ -63,8 +63,8 @@ type TupleOutput struct {
 	C [32]byte
 }
 
-func (_Tupler *Tupler) UnpackTuple(data []byte) (TupleOutput, error) {
-	out, err := _Tupler.abi.Unpack("tuple", data)
+func (tupler *Tupler) UnpackTuple(data []byte) (TupleOutput, error) {
+	out, err := tupler.abi.Unpack("tuple", data)
 
 	outstruct := new(TupleOutput)
 	if err != nil {

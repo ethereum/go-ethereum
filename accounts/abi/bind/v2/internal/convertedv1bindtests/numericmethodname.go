@@ -45,30 +45,30 @@ func NewNumericMethodName() (*NumericMethodName, error) {
 	return &NumericMethodName{abi: *parsed}, nil
 }
 
-func (_NumericMethodName *NumericMethodName) PackConstructor() []byte {
-	res, _ := _NumericMethodName.abi.Pack("")
+func (numericMethodName *NumericMethodName) PackConstructor() []byte {
+	res, _ := numericMethodName.abi.Pack("")
 	return res
 }
 
 // E1test is a free data retrieval call binding the contract method 0xffa02795.
 //
 // Solidity: function _1test() pure returns()
-func (_NumericMethodName *NumericMethodName) PackE1test() ([]byte, error) {
-	return _NumericMethodName.abi.Pack("_1test")
+func (numericMethodName *NumericMethodName) PackE1test() ([]byte, error) {
+	return numericMethodName.abi.Pack("_1test")
 }
 
 // E1test0 is a free data retrieval call binding the contract method 0xd02767c7.
 //
 // Solidity: function __1test() pure returns()
-func (_NumericMethodName *NumericMethodName) PackE1test0() ([]byte, error) {
-	return _NumericMethodName.abi.Pack("__1test")
+func (numericMethodName *NumericMethodName) PackE1test0() ([]byte, error) {
+	return numericMethodName.abi.Pack("__1test")
 }
 
 // E2test is a free data retrieval call binding the contract method 0x9d993132.
 //
 // Solidity: function __2test() pure returns()
-func (_NumericMethodName *NumericMethodName) PackE2test() ([]byte, error) {
-	return _NumericMethodName.abi.Pack("__2test")
+func (numericMethodName *NumericMethodName) PackE2test() ([]byte, error) {
+	return numericMethodName.abi.Pack("__2test")
 }
 
 // NumericMethodNameE1TestEvent represents a E1TestEvent event raised by the NumericMethodName contract.
@@ -79,19 +79,19 @@ type NumericMethodNameE1TestEvent struct {
 
 const NumericMethodNameE1TestEventEventName = "_1TestEvent"
 
-func (_NumericMethodName *NumericMethodName) UnpackE1TestEventEvent(log *types.Log) (*NumericMethodNameE1TestEvent, error) {
+func (numericMethodName *NumericMethodName) UnpackE1TestEventEvent(log *types.Log) (*NumericMethodNameE1TestEvent, error) {
 	event := "_1TestEvent"
-	if log.Topics[0] != _NumericMethodName.abi.Events[event].ID {
+	if log.Topics[0] != numericMethodName.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(NumericMethodNameE1TestEvent)
 	if len(log.Data) > 0 {
-		if err := _NumericMethodName.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := numericMethodName.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _NumericMethodName.abi.Events[event].Inputs {
+	for _, arg := range numericMethodName.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}

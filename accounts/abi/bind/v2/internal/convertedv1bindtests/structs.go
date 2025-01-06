@@ -50,16 +50,16 @@ func NewStructs() (*Structs, error) {
 	return &Structs{abi: *parsed}, nil
 }
 
-func (_Structs *Structs) PackConstructor() []byte {
-	res, _ := _Structs.abi.Pack("")
+func (structs *Structs) PackConstructor() []byte {
+	res, _ := structs.abi.Pack("")
 	return res
 }
 
 // F is a free data retrieval call binding the contract method 0x28811f59.
 //
 // Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
-func (_Structs *Structs) PackF() ([]byte, error) {
-	return _Structs.abi.Pack("F")
+func (structs *Structs) PackF() ([]byte, error) {
+	return structs.abi.Pack("F")
 }
 
 type FOutput struct {
@@ -68,8 +68,8 @@ type FOutput struct {
 	D []bool
 }
 
-func (_Structs *Structs) UnpackF(data []byte) (FOutput, error) {
-	out, err := _Structs.abi.Unpack("F", data)
+func (structs *Structs) UnpackF(data []byte) (FOutput, error) {
+	out, err := structs.abi.Unpack("F", data)
 
 	outstruct := new(FOutput)
 	if err != nil {
@@ -89,12 +89,12 @@ func (_Structs *Structs) UnpackF(data []byte) (FOutput, error) {
 // G is a free data retrieval call binding the contract method 0x6fecb623.
 //
 // Solidity: function G() view returns((bytes32)[] a)
-func (_Structs *Structs) PackG() ([]byte, error) {
-	return _Structs.abi.Pack("G")
+func (structs *Structs) PackG() ([]byte, error) {
+	return structs.abi.Pack("G")
 }
 
-func (_Structs *Structs) UnpackG(data []byte) ([]Struct0, error) {
-	out, err := _Structs.abi.Unpack("G", data)
+func (structs *Structs) UnpackG(data []byte) ([]Struct0, error) {
+	out, err := structs.abi.Unpack("G", data)
 
 	if err != nil {
 		return *new([]Struct0), err

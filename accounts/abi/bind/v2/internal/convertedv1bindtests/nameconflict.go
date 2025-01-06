@@ -51,27 +51,27 @@ func NewNameConflict() (*NameConflict, error) {
 	return &NameConflict{abi: *parsed}, nil
 }
 
-func (_NameConflict *NameConflict) PackConstructor() []byte {
-	res, _ := _NameConflict.abi.Pack("")
+func (nameConflict *NameConflict) PackConstructor() []byte {
+	res, _ := nameConflict.abi.Pack("")
 	return res
 }
 
 // AddRequest is a free data retrieval call binding the contract method 0xcce7b048.
 //
 // Solidity: function addRequest((bytes,bytes) req) pure returns()
-func (_NameConflict *NameConflict) PackAddRequest(Req Oraclerequest) ([]byte, error) {
-	return _NameConflict.abi.Pack("addRequest", Req)
+func (nameConflict *NameConflict) PackAddRequest(Req Oraclerequest) ([]byte, error) {
+	return nameConflict.abi.Pack("addRequest", Req)
 }
 
 // GetRequest is a free data retrieval call binding the contract method 0xc2bb515f.
 //
 // Solidity: function getRequest() pure returns((bytes,bytes))
-func (_NameConflict *NameConflict) PackGetRequest() ([]byte, error) {
-	return _NameConflict.abi.Pack("getRequest")
+func (nameConflict *NameConflict) PackGetRequest() ([]byte, error) {
+	return nameConflict.abi.Pack("getRequest")
 }
 
-func (_NameConflict *NameConflict) UnpackGetRequest(data []byte) (Oraclerequest, error) {
-	out, err := _NameConflict.abi.Unpack("getRequest", data)
+func (nameConflict *NameConflict) UnpackGetRequest(data []byte) (Oraclerequest, error) {
+	out, err := nameConflict.abi.Unpack("getRequest", data)
 
 	if err != nil {
 		return *new(Oraclerequest), err
@@ -92,19 +92,19 @@ type NameConflictLog struct {
 
 const NameConflictLogEventName = "log"
 
-func (_NameConflict *NameConflict) UnpackLogEvent(log *types.Log) (*NameConflictLog, error) {
+func (nameConflict *NameConflict) UnpackLogEvent(log *types.Log) (*NameConflictLog, error) {
 	event := "log"
-	if log.Topics[0] != _NameConflict.abi.Events[event].ID {
+	if log.Topics[0] != nameConflict.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
 	out := new(NameConflictLog)
 	if len(log.Data) > 0 {
-		if err := _NameConflict.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		if err := nameConflict.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
 			return nil, err
 		}
 	}
 	var indexed abi.Arguments
-	for _, arg := range _NameConflict.abi.Events[event].Inputs {
+	for _, arg := range nameConflict.abi.Events[event].Inputs {
 		if arg.Indexed {
 			indexed = append(indexed, arg)
 		}

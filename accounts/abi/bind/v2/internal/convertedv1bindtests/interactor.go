@@ -45,20 +45,20 @@ func NewInteractor() (*Interactor, error) {
 	return &Interactor{abi: *parsed}, nil
 }
 
-func (_Interactor *Interactor) PackConstructor(str string) []byte {
-	res, _ := _Interactor.abi.Pack("", str)
+func (interactor *Interactor) PackConstructor(str string) []byte {
+	res, _ := interactor.abi.Pack("", str)
 	return res
 }
 
 // DeployString is a free data retrieval call binding the contract method 0x6874e809.
 //
 // Solidity: function deployString() returns(string)
-func (_Interactor *Interactor) PackDeployString() ([]byte, error) {
-	return _Interactor.abi.Pack("deployString")
+func (interactor *Interactor) PackDeployString() ([]byte, error) {
+	return interactor.abi.Pack("deployString")
 }
 
-func (_Interactor *Interactor) UnpackDeployString(data []byte) (string, error) {
-	out, err := _Interactor.abi.Unpack("deployString", data)
+func (interactor *Interactor) UnpackDeployString(data []byte) (string, error) {
+	out, err := interactor.abi.Unpack("deployString", data)
 
 	if err != nil {
 		return *new(string), err
@@ -73,19 +73,19 @@ func (_Interactor *Interactor) UnpackDeployString(data []byte) (string, error) {
 // Transact is a free data retrieval call binding the contract method 0xd736c513.
 //
 // Solidity: function transact(string str) returns()
-func (_Interactor *Interactor) PackTransact(Str string) ([]byte, error) {
-	return _Interactor.abi.Pack("transact", Str)
+func (interactor *Interactor) PackTransact(Str string) ([]byte, error) {
+	return interactor.abi.Pack("transact", Str)
 }
 
 // TransactString is a free data retrieval call binding the contract method 0x0d86a0e1.
 //
 // Solidity: function transactString() returns(string)
-func (_Interactor *Interactor) PackTransactString() ([]byte, error) {
-	return _Interactor.abi.Pack("transactString")
+func (interactor *Interactor) PackTransactString() ([]byte, error) {
+	return interactor.abi.Pack("transactString")
 }
 
-func (_Interactor *Interactor) UnpackTransactString(data []byte) (string, error) {
-	out, err := _Interactor.abi.Unpack("transactString", data)
+func (interactor *Interactor) UnpackTransactString(data []byte) (string, error) {
+	out, err := interactor.abi.Unpack("transactString", data)
 
 	if err != nil {
 		return *new(string), err
