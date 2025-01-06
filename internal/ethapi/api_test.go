@@ -1342,7 +1342,6 @@ func TestCall(t *testing.T) {
 			t.Errorf("test %s, result mismatch, have\n%v\n, want\n%v\n", tc.name, result.String(), tc.want)
 		}
 	}
-
 }
 func TestSimulateV1(t *testing.T) {
 	t.Parallel()
