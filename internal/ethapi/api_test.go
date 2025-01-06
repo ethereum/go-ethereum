@@ -870,7 +870,7 @@ func TestCall(t *testing.T) {
 
 	// Initialize test accounts
 	var (
-		accounts = newAccounts(7)
+		accounts = newAccounts(5)
 		dad      = common.HexToAddress("0x0000000000000000000000000000000000000dad")
 		genesis  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
@@ -878,7 +878,7 @@ func TestCall(t *testing.T) {
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[2].addr: {Balance: big.NewInt(params.Ether)},
-				accounts[3].addr: {Balance: big.NewInt(params.Ether) ,Code: append(types.DelegationPrefix, accounts[4].addr.Bytes()...)},
+				accounts[3].addr: {Balance: big.NewInt(params.Ether), Code: append(types.DelegationPrefix, accounts[4].addr.Bytes()...)},
 				dad: {
 					Balance: big.NewInt(params.Ether),
 					Nonce:   1,
@@ -1158,9 +1158,9 @@ func TestCall(t *testing.T) {
 		{name: "eip-7702-delegated-account",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
-				From:              &accounts[3].addr,
-				To:                &accounts[2].addr,
-				Data:              hex2Bytes("46b3353b"), // getCallerAddress()
+				From: &accounts[3].addr,
+				To:   &accounts[2].addr,
+				Data: hex2Bytes("46b3353b"), // getCallerAddress()
 			},
 			overrides: override.StateOverride{
 				accounts[2].addr: override.OverrideAccount{
@@ -1177,7 +1177,114 @@ func TestCall(t *testing.T) {
 				To:    &accounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
-			want: "0x",	
+			want: "0x",
+		},
+		{
+			name:        "eip-7702-delegator-authorization",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From: &accounts[1].addr,
+				To:   &accounts[2].addr,
+				Data: hex2Bytes("46b3353b"), // getCallerAddress()
+				AuthorizationList: []types.SetCodeAuthorization{
+					{
+						Address: accounts[4].addr,
+					},
+				},
+			},
+			overrides: override.StateOverride{
+				accounts[2].addr: override.OverrideAccount{
+					Code: hex2Bytes("6080604052348015600e575f80fd5b50600436106026575f3560e01c806346b3353b14602a575b5f80fd5b60306044565b604051603b91906086565b60405180910390f35b5f33905090565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f607282604b565b9050919050565b608081606a565b82525050565b5f60208201905060975f8301846079565b9291505056"),
+				},
+			},
+			expectErr: nil,
+			want:      strings.ToLower("0x000000000000000000000000" + accounts[1].addr.Hex()[2:]),
+		},
+		{
+			name:        "eip-7702-EOA-value-transfer-to-delegated-account",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[2].addr,
+				To:    &accounts[3].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			expectErr: nil,
+			want:      "0x",
+		},
+		{
+			name:        "eip-7702-other-EOAs-call-delegated-account",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[2].addr,
+				To:    &accounts[3].addr,
+				Value: (*hexutil.Big)(big.NewInt(0)),
+			},
+			expectErr: nil,
+			want:      "0x",
+		},
+		{
+			name:        "eip-7702-eth-transfer-with-authorisation-list",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[1].addr,
+				To:    &accounts[2].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+				AuthorizationList: []types.SetCodeAuthorization{
+					{
+						Address: accounts[4].addr,
+					},
+				},
+			},
+			expectErr: nil,
+			want:      "0x",
+		},
+		{
+			name:        "eip-7702-eth-transfer-when-multiple-authorisation-lists",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[1].addr,
+				To:    &accounts[2].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+				AuthorizationList: []types.SetCodeAuthorization{
+					{
+						Address: accounts[4].addr,
+					},
+					{
+						Address: accounts[3].addr,
+					},
+				},
+			},
+			expectErr: nil,
+			want:      "0x",
+		},
+		{
+			name:        "eip-7702-error-when-empty-auth-list",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[1].addr,
+				To:                &accounts[2].addr,
+				Value:             (*hexutil.Big)(big.NewInt(1000)),
+				AuthorizationList: []types.SetCodeAuthorization{}, // Empty list
+			},
+			expectErr: core.ErrEmptyAuthList,
+			want:      "0x",
+		},
+		{
+			name:        "eip-7702-error-when-deploy-contract",
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:  &accounts[1].addr,
+				To:    nil, // No recipient for contract creation
+				Value: (*hexutil.Big)(big.NewInt(0)),
+				Data:  &hexutil.Bytes{0x60, 0x0},
+				AuthorizationList: []types.SetCodeAuthorization{
+					{
+						Address: accounts[4].addr,
+					},
+				},
+			},
+			expectErr: core.ErrSetCodeTxCreate,
+			want:      "0x",
 		},
 	}
 	for _, tc := range testSuite {
@@ -1205,7 +1312,6 @@ func TestCall(t *testing.T) {
 	}
 
 }
-
 func TestSimulateV1(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
