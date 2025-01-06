@@ -64,10 +64,10 @@ func (_C *C) PackDoSomethingWithManyArgs() ([]byte, error) {
 }
 
 type DoSomethingWithManyArgsOutput struct {
-	Arg  *big.Int
 	Arg0 *big.Int
 	Arg1 *big.Int
-	Arg2 bool
+	Arg2 *big.Int
+	Arg3 bool
 }
 
 func (_C *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgsOutput, error) {
@@ -78,10 +78,10 @@ func (_C *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgs
 		return *outstruct, err
 	}
 
-	outstruct.Arg = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Arg0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
-	outstruct.Arg1 = *abi.ConvertType(out[2], new(*big.Int)).(**big.Int)
-	outstruct.Arg2 = *abi.ConvertType(out[3], new(bool)).(*bool)
+	outstruct.Arg0 = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	outstruct.Arg1 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Arg2 = *abi.ConvertType(out[2], new(*big.Int)).(**big.Int)
+	outstruct.Arg3 = *abi.ConvertType(out[3], new(bool)).(*bool)
 
 	return *outstruct, err
 
@@ -90,8 +90,8 @@ func (_C *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgs
 // DoSomethingWithPoint is a free data retrieval call binding the contract method 0xedcdc894.
 //
 // Solidity: function DoSomethingWithPoint((uint256,uint256) p) pure returns((uint256,uint256))
-func (_C *C) PackDoSomethingWithPoint(p CPoint) ([]byte, error) {
-	return _C.abi.Pack("DoSomethingWithPoint", p)
+func (_C *C) PackDoSomethingWithPoint(P CPoint) ([]byte, error) {
+	return _C.abi.Pack("DoSomethingWithPoint", P)
 }
 
 func (_C *C) UnpackDoSomethingWithPoint(data []byte) (CPoint, error) {
