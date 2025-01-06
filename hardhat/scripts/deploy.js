@@ -5,9 +5,10 @@ async function main() {
   const Token = await ethers.getContractFactory("Token");
   const token = await Token.deploy();
 
-  await token.deployTransaction.wait();  // Wait for the transaction to be mined
+  console.log("Deploy transaction hash:", token.deployTransaction.hash);
+  await token.deployed();
 
-  console.log("Token deployed to:", token.address);  // This should print the correct address
+  console.log("Token deployed to:", token.address);
 }
 
 main()
