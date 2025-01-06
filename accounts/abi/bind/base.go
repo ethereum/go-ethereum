@@ -153,20 +153,6 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return c.address, tx, c, nil
 }
 
-// DeployContractRaw deploys a contract onto the Ethereum blockchain and binds the
-// deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
-// bytes.
-func DeployContractRaw(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *BoundContract, error) {
-	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
-
-	tx, err := c.transact(opts, nil, append(bytecode, packedParams...))
-	if err != nil {
-		return common.Address{}, nil, nil, err
-	}
-	c.address = crypto.CreateAddress(opts.From, tx.Nonce())
-	return c.address, tx, c, nil
-}
-
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named

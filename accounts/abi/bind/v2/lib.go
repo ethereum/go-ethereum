@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -174,4 +175,18 @@ func Call[T any](instance *ContractInstance, opts *bind.CallOpts, packedInput []
 		return nil, err
 	}
 	return unpack(packedOutput)
+}
+
+// DeployContractRaw deploys a contract onto the Ethereum blockchain and binds the
+// deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
+// bytes.
+func DeployContractRaw(opts *bind.TransactOpts, bytecode []byte, backend bind.ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *bind.BoundContract, error) {
+	c := bind.NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
+
+	tx, err := c.RawTransact(opts, append(bytecode, packedParams...))
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	address := crypto.CreateAddress(opts.From, tx.Nonce())
+	return address, tx, c, nil
 }
