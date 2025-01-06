@@ -70,8 +70,9 @@ func (_Underscorer *Underscorer) UnpackAllPurelyUnderscoredOutput(data []byte) (
 		return *outstruct, err
 	}
 
-	outstruct.Arg0 = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Arg1 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
+	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -97,8 +98,9 @@ func (_Underscorer *Underscorer) UnpackLowerLowerCollision(data []byte) (LowerLo
 		return *outstruct, err
 	}
 
-	outstruct.Res = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Res0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
+	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -124,8 +126,9 @@ func (_Underscorer *Underscorer) UnpackLowerUpperCollision(data []byte) (LowerUp
 		return *outstruct, err
 	}
 
-	outstruct.Res = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Res0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
+	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -151,8 +154,9 @@ func (_Underscorer *Underscorer) UnpackPurelyUnderscoredOutput(data []byte) (Pur
 		return *outstruct, err
 	}
 
-	outstruct.Arg0 = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Res = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
+	outstruct.Res = abi.ConvertType(out[1], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -178,7 +182,8 @@ func (_Underscorer *Underscorer) UnpackUnderscoredOutput(data []byte) (Underscor
 		return *outstruct, err
 	}
 
-	outstruct.Int = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	outstruct.Int = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
 	outstruct.String = *abi.ConvertType(out[1], new(string)).(*string)
 
 	return *outstruct, err
@@ -205,8 +210,9 @@ func (_Underscorer *Underscorer) UnpackUpperLowerCollision(data []byte) (UpperLo
 		return *outstruct, err
 	}
 
-	outstruct.Res = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Res0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
+	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -232,8 +238,9 @@ func (_Underscorer *Underscorer) UnpackUpperUpperCollision(data []byte) (UpperUp
 		return *outstruct, err
 	}
 
-	outstruct.Res = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-	outstruct.Res0 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(big.Int)
+
+	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -250,10 +257,10 @@ func (_Underscorer *Underscorer) UnpackUnderScoredFunc(data []byte) (*big.Int, e
 	out, err := _Underscorer.abi.Unpack("_under_scored_func", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 

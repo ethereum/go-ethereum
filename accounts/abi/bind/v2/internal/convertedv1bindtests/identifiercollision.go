@@ -61,10 +61,10 @@ func (_IdentifierCollision *IdentifierCollision) UnpackMyVar(data []byte) (*big.
 	out, err := _IdentifierCollision.abi.Unpack("MyVar", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -81,10 +81,10 @@ func (_IdentifierCollision *IdentifierCollision) UnpackPubVar(data []byte) (*big
 	out, err := _IdentifierCollision.abi.Unpack("_myVar", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 

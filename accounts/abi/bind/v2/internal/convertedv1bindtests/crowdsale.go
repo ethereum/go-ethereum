@@ -61,10 +61,10 @@ func (_Crowdsale *Crowdsale) UnpackAmountRaised(data []byte) (*big.Int, error) {
 	out, err := _Crowdsale.abi.Unpack("amountRaised", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -108,10 +108,10 @@ func (_Crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
 	out, err := _Crowdsale.abi.Unpack("deadline", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -138,7 +138,8 @@ func (_Crowdsale *Crowdsale) UnpackFunders(data []byte) (FundersOutput, error) {
 	}
 
 	outstruct.Addr = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
-	outstruct.Amount = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+
+	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(big.Int)
 
 	return *outstruct, err
 
@@ -155,10 +156,10 @@ func (_Crowdsale *Crowdsale) UnpackFundingGoal(data []byte) (*big.Int, error) {
 	out, err := _Crowdsale.abi.Unpack("fundingGoal", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -175,10 +176,10 @@ func (_Crowdsale *Crowdsale) UnpackPrice(data []byte) (*big.Int, error) {
 	out, err := _Crowdsale.abi.Unpack("price", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 

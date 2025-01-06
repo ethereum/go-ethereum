@@ -61,10 +61,10 @@ func (_Token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
 	out, err := _Token.abi.Unpack("allowance", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -101,10 +101,10 @@ func (_Token *Token) UnpackBalanceOf(data []byte) (*big.Int, error) {
 	out, err := _Token.abi.Unpack("balanceOf", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 
@@ -161,10 +161,10 @@ func (_Token *Token) UnpackSpentAllowance(data []byte) (*big.Int, error) {
 	out, err := _Token.abi.Unpack("spentAllowance", data)
 
 	if err != nil {
-		return *new(*big.Int), err
+		return new(big.Int), err
 	}
 
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 
 	return out0, err
 

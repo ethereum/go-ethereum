@@ -72,7 +72,9 @@ func (_Getter *Getter) UnpackGetter(data []byte) (GetterOutput, error) {
 	}
 
 	outstruct.Arg0 = *abi.ConvertType(out[0], new(string)).(*string)
-	outstruct.Arg1 = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+
+	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(big.Int)
+
 	outstruct.Arg2 = *abi.ConvertType(out[2], new([32]byte)).(*[32]byte)
 
 	return *outstruct, err
