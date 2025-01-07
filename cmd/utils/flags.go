@@ -1103,11 +1103,10 @@ func SplitAndTrim(input string) (ret []string) {
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.Bool(HTTPEnabledFlag.Name) {
-		if cfg.HTTPHost == "" {
-			cfg.HTTPHost = "127.0.0.1"
-		}
 		if ctx.IsSet(HTTPListenAddrFlag.Name) {
 			cfg.HTTPHost = ctx.String(HTTPListenAddrFlag.Name)
+		} else if cfg.HTTPHost == "" {
+			cfg.HTTPHost = "127.0.0.1"
 		}
 	}
 
