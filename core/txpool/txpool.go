@@ -352,7 +352,6 @@ func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 	// back the errors into the original sort order.
 	errsets := make([][]error, len(p.subpools))
 	for i := 0; i < len(p.subpools); i++ {
-		// Note: local is explicitly set to false here.
 		errsets[i] = p.subpools[i].Add(txsets[i], sync)
 	}
 	errs := make([]error, len(txs))
