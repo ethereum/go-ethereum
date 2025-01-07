@@ -139,7 +139,7 @@ func (crowdsale *Crowdsale) UnpackFunders(data []byte) (FundersOutput, error) {
 
 	outstruct.Addr = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
 
-	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(big.Int)
+	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
 
 	return *outstruct, err
 

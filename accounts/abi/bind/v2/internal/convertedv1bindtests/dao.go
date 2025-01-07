@@ -192,7 +192,7 @@ func (dAO *DAO) UnpackMembers(data []byte) (MembersOutput, error) {
 
 	outstruct.Name = *abi.ConvertType(out[2], new(string)).(*string)
 
-	outstruct.MemberSince = abi.ConvertType(out[3], new(big.Int)).(big.Int)
+	outstruct.MemberSince = abi.ConvertType(out[3], new(big.Int)).(*big.Int)
 
 	return *outstruct, err
 
@@ -307,19 +307,19 @@ func (dAO *DAO) UnpackProposals(data []byte) (ProposalsOutput, error) {
 
 	outstruct.Recipient = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
 
-	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(big.Int)
+	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
 
 	outstruct.Description = *abi.ConvertType(out[2], new(string)).(*string)
 
-	outstruct.VotingDeadline = abi.ConvertType(out[3], new(big.Int)).(big.Int)
+	outstruct.VotingDeadline = abi.ConvertType(out[3], new(big.Int)).(*big.Int)
 
 	outstruct.Executed = *abi.ConvertType(out[4], new(bool)).(*bool)
 
 	outstruct.ProposalPassed = *abi.ConvertType(out[5], new(bool)).(*bool)
 
-	outstruct.NumberOfVotes = abi.ConvertType(out[6], new(big.Int)).(big.Int)
+	outstruct.NumberOfVotes = abi.ConvertType(out[6], new(big.Int)).(*big.Int)
 
-	outstruct.CurrentResult = abi.ConvertType(out[7], new(big.Int)).(big.Int)
+	outstruct.CurrentResult = abi.ConvertType(out[7], new(big.Int)).(*big.Int)
 
 	outstruct.ProposalHash = *abi.ConvertType(out[8], new([32]byte)).(*[32]byte)
 
