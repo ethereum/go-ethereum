@@ -182,8 +182,7 @@ func Call[T any](instance *ContractInstance, opts *bind.CallOpts, packedInput []
 // bytes.
 func DeployContractRaw(opts *bind.TransactOpts, bytecode []byte, backend bind.ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *bind.BoundContract, error) {
 	c := bind.NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
-
-	tx, err := c.RawTransact(opts, append(bytecode, packedParams...))
+	tx, err := c.RawCreationTransact(opts, append(bytecode, packedParams...))
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}

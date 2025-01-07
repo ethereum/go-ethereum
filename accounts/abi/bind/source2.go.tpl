@@ -94,7 +94,7 @@ var (
 				}
 				{{range $i, $t := .Normalized.Outputs}}
 				{{if ispointertype .Type}}
-				    outstruct.{{.Name}} = abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type }})).({{underlyingbindtype .Type }})
+				    outstruct.{{.Name}} = abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type }})).({{bindtype .Type $structs}})
 				{{ else }}
 				    outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
 				{{ end }}{{end}}
@@ -183,7 +183,7 @@ var (
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Error(raw []byte) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			errName := "{{.Normalized.Name}}"
 			out := new({{$contract.Type}}{{.Normalized.Name}})
-            if err := _{{$contract.Type}}.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+            if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, errName, raw); err != nil {
                 return nil, err
             }
 			return out, nil

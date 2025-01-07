@@ -122,8 +122,8 @@ func (d *depTreeDeployer) result() *DeploymentResult {
 // libraries.  If an error occurs, only contracts which were successfully
 // deployed are returned in the result.
 func LinkAndDeploy(deployParams *DeploymentParams, deploy DeployFn) (res *DeploymentResult, err error) {
+	//deployParams.inputs = make(map[string][]byte)
 	deployer := newDepTreeDeployer(deployParams, deploy)
-	deployParams.inputs = make(map[string][]byte)
 	for _, contract := range deployParams.contracts {
 		if _, err := deployer.linkAndDeploy(contract); err != nil {
 			return deployer.result(), err

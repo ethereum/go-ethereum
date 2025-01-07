@@ -91,7 +91,7 @@ func CBadThingErrorID() common.Hash {
 func (c *C) UnpackBadThingError(raw []byte) (*CBadThing, error) {
 	errName := "BadThing"
 	out := new(CBadThing)
-	if err := _C.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+	if err := c.abi.UnpackIntoInterface(out, errName, raw); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -112,7 +112,7 @@ func CBadThing2ErrorID() common.Hash {
 func (c *C) UnpackBadThing2Error(raw []byte) (*CBadThing2, error) {
 	errName := "BadThing2"
 	out := new(CBadThing2)
-	if err := _C.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+	if err := c.abi.UnpackIntoInterface(out, errName, raw); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -176,7 +176,7 @@ func C2BadThingErrorID() common.Hash {
 func (c2 *C2) UnpackBadThingError(raw []byte) (*C2BadThing, error) {
 	errName := "BadThing"
 	out := new(C2BadThing)
-	if err := _C2.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+	if err := c2.abi.UnpackIntoInterface(out, errName, raw); err != nil {
 		return nil, err
 	}
 	return out, nil
