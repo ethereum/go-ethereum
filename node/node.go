@@ -395,7 +395,8 @@ func (n *Node) startRPC() error {
 		batchResponseSizeLimit: n.config.BatchResponseMaxSize,
 	}
 
-	initHttp := func(server *httpServer, port int) error {
+	initHttp := func(server *httpServer) error {
+		port := n.config.HTTPPort
 		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
 			return err
 		}
@@ -412,7 +413,8 @@ func (n *Node) startRPC() error {
 		return nil
 	}
 
-	initWS := func(port int) error {
+	initWS := func() error {
+		port := n.config.WSPort
 		server := n.wsServerForPort(port, false)
 		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
 			return err
@@ -429,7 +431,8 @@ func (n *Node) startRPC() error {
 		return nil
 	}
 
-	initAuth := func(port int, secret []byte) error {
+	initAuth := func(secret []byte) error {
+		port := n.config.AuthPort
 		// Enable auth via HTTP
 		server := n.httpAuth
 		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
@@ -473,14 +476,14 @@ func (n *Node) startRPC() error {
 	// Set up HTTP.
 	if n.config.HTTPHost != "" {
 		// Configure legacy unauthenticated HTTP.
-		if err := initHttp(n.http, n.config.HTTPPort); err != nil {
+		if err := initHttp(n.http); err != nil {
 			return err
 		}
 	}
 	// Configure WebSocket.
 	if n.config.WSHost != "" {
 		// legacy unauthenticated
-		if err := initWS(n.config.WSPort); err != nil {
+		if err := initWS(); err != nil {
 			return err
 		}
 	}
@@ -490,7 +493,7 @@ func (n *Node) startRPC() error {
 		if err != nil {
 			return err
 		}
-		if err := initAuth(n.config.AuthPort, jwtSecret); err != nil {
+		if err := initAuth(jwtSecret); err != nil {
 			return err
 		}
 	}
