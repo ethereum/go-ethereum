@@ -32,7 +32,7 @@ import (
 
 var (
 	errInvalidKeyHeader = errors.New("incorrect key header")
-	errInvalidKeyLength = errors.New("invalid, key length != 104")
+	errInvalidKeyLength = errors.New("invalid key length != 104")
 )
 
 func parsePrivateKey(key string) (k ed25519.PrivateKey, header []byte, keyNum []byte, err error) {
