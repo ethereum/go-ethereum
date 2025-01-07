@@ -1,0 +1,18 @@
+Contribuyendo
+¡Gracias por considerar ayudar con el código fuente! Aceptamos las contribuciones de cualquier persona en Internet y agradecemos incluso las correcciones más pequeñas.
+
+Si quieres contribuir a go-ethereum, bifurca, arregla, confirma y envía una solicitud de incorporación de cambios para que los encargados de mantenimiento la revisen y la fusionen con la base de código principal. Sin embargo, si deseas enviar cambios más complejos, primero consulta con los desarrolladores principales en nuestro canal de Gitter para asegurarte de que esos cambios estén en línea con la filosofía general del proyecto o para obtener comentarios anticipados que puedan hacer que tus esfuerzos sean mucho más livianos y que nuestros procedimientos de revisión y fusión sean rápidos y simples.
+
+Pautas de codificación
+Asegúrese de que sus contribuciones cumplan con nuestras pautas de codificación:
+
+El código debe cumplir con las pautas oficiales de formato de Go (es decir, utilizar gofmt ).
+El código debe documentarse siguiendo las pautas oficiales de comentarios de Go .
+Las solicitudes de extracción deben basarse en lamaster rama y abrirse contra ella.
+Los mensajes de confirmación deben tener como prefijo el nombre del paquete o paquetes que modifican.
+Por ejemplo, "eth, rpc: hacer que las configuraciones de seguimiento sean opcionales"
+¿Puedo tener la característica X?
+Antes de enviar una solicitud de función, verifique y asegúrese de que no sea posible por otros medios. La consola con JavaScript habilitado es una función poderosa en las manos adecuadas. Consulte nuestra página de documentación de Geth para obtener más información y ayuda.
+
+Configuración, dependencias y pruebas
+Consulte la Guía para desarrolladores para obtener más detalles sobre cómo configurar su entorno, administrar las dependencias del proyecto y los procedimientos de prueba.
