@@ -69,6 +69,10 @@ func TestHeadL1Origin(t *testing.T) {
 		L2BlockHash:   headerHash,
 		L1BlockHeight: randomBigInt(),
 		L1BlockHash:   randomHash(),
+		BatchID:       nil,
+		EndOfBlock:    false,
+		EndOfPreconf:  false,
+		Preconfer:     common.Address{},
 	}
 
 	rawdb.WriteL1Origin(db, testL1Origin.BlockID, testL1Origin)
@@ -78,6 +82,7 @@ func TestHeadL1Origin(t *testing.T) {
 
 	require.Nil(t, err)
 	require.Equal(t, testL1Origin, l1OriginFound)
+	require.False(t, l1OriginFound.IsSoftBlock())
 }
 
 func TestL1OriginByID(t *testing.T) {
@@ -89,6 +94,10 @@ func TestL1OriginByID(t *testing.T) {
 		L2BlockHash:   headerHash,
 		L1BlockHeight: randomBigInt(),
 		L1BlockHash:   randomHash(),
+		BatchID:       common.Big1,
+		EndOfBlock:    false,
+		EndOfPreconf:  false,
+		Preconfer:     testAddr,
 	}
 
 	l1OriginFound, err := ec.L1OriginByID(context.Background(), testL1Origin.BlockID)
@@ -102,6 +111,7 @@ func TestL1OriginByID(t *testing.T) {
 
 	require.Nil(t, err)
 	require.Equal(t, testL1Origin, l1OriginFound)
+	require.True(t, l1OriginFound.IsSoftBlock())
 }
 
 // randomHash generates a random blob of data and returns it as a hash.

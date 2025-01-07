@@ -10,7 +10,8 @@ import (
 )
 
 var (
-	InternalDevnetOntakeBlock = new(big.Int).SetUint64(0)
+	InternalDevnetOntakeBlock = common.Big0
+	PreconfDevnetOntakeBlock  = common.Big0
 	HeklaOntakeBlock          = new(big.Int).SetUint64(840_512)
 	MainnetOntakeBlock        = new(big.Int).SetUint64(538_304)
 )
@@ -54,6 +55,10 @@ func TaikoGenesisBlock(networkID uint64) *Genesis {
 		chainConfig.ChainID = params.HeklaNetworkID
 		chainConfig.OntakeBlock = HeklaOntakeBlock
 		allocJSON = taikoGenesis.HeklaGenesisAllocJSON
+	case params.PreconfDevnetNetworkID.Uint64():
+		chainConfig.ChainID = params.PreconfDevnetNetworkID
+		chainConfig.OntakeBlock = PreconfDevnetOntakeBlock
+		allocJSON = taikoGenesis.PreconfDevnetGenesisAllocJSON
 	default:
 		chainConfig.ChainID = params.TaikoInternalL2ANetworkID
 		chainConfig.OntakeBlock = InternalDevnetOntakeBlock

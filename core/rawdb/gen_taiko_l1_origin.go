@@ -18,14 +18,22 @@ func (l L1Origin) MarshalJSON() ([]byte, error) {
 	type L1Origin struct {
 		BlockID       *math.HexOrDecimal256 `json:"blockID" gencodec:"required"`
 		L2BlockHash   common.Hash           `json:"l2BlockHash"`
-		L1BlockHeight *math.HexOrDecimal256 `json:"l1BlockHeight" gencodec:"required"`
-		L1BlockHash   common.Hash           `json:"l1BlockHash" gencodec:"required"`
+		L1BlockHeight *math.HexOrDecimal256 `json:"l1BlockHeight"`
+		L1BlockHash   common.Hash           `json:"l1BlockHash"`
+		BatchID       *big.Int              `json:"batchID"`
+		EndOfBlock    bool                  `json:"endOfBlock"`
+		EndOfPreconf  bool                  `json:"endOfPreconf"`
+		Preconfer     common.Address        `json:"preconfer"`
 	}
 	var enc L1Origin
 	enc.BlockID = (*math.HexOrDecimal256)(l.BlockID)
 	enc.L2BlockHash = l.L2BlockHash
 	enc.L1BlockHeight = (*math.HexOrDecimal256)(l.L1BlockHeight)
 	enc.L1BlockHash = l.L1BlockHash
+	enc.BatchID = l.BatchID
+	enc.EndOfBlock = l.EndOfBlock
+	enc.EndOfPreconf = l.EndOfPreconf
+	enc.Preconfer = l.Preconfer
 	return json.Marshal(&enc)
 }
 
@@ -34,8 +42,12 @@ func (l *L1Origin) UnmarshalJSON(input []byte) error {
 	type L1Origin struct {
 		BlockID       *math.HexOrDecimal256 `json:"blockID" gencodec:"required"`
 		L2BlockHash   *common.Hash          `json:"l2BlockHash"`
-		L1BlockHeight *math.HexOrDecimal256 `json:"l1BlockHeight" gencodec:"required"`
-		L1BlockHash   *common.Hash          `json:"l1BlockHash" gencodec:"required"`
+		L1BlockHeight *math.HexOrDecimal256 `json:"l1BlockHeight"`
+		L1BlockHash   *common.Hash          `json:"l1BlockHash"`
+		BatchID       *big.Int              `json:"batchID"`
+		EndOfBlock    *bool                 `json:"endOfBlock"`
+		EndOfPreconf  *bool                 `json:"endOfPreconf"`
+		Preconfer     *common.Address       `json:"preconfer"`
 	}
 	var dec L1Origin
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -48,13 +60,23 @@ func (l *L1Origin) UnmarshalJSON(input []byte) error {
 	if dec.L2BlockHash != nil {
 		l.L2BlockHash = *dec.L2BlockHash
 	}
-	if dec.L1BlockHeight == nil {
-		return errors.New("missing required field 'l1BlockHeight' for L1Origin")
+	if dec.L1BlockHeight != nil {
+		l.L1BlockHeight = (*big.Int)(dec.L1BlockHeight)
 	}
-	l.L1BlockHeight = (*big.Int)(dec.L1BlockHeight)
-	if dec.L1BlockHash == nil {
-		return errors.New("missing required field 'l1BlockHash' for L1Origin")
+	if dec.L1BlockHash != nil {
+		l.L1BlockHash = *dec.L1BlockHash
 	}
-	l.L1BlockHash = *dec.L1BlockHash
+	if dec.BatchID != nil {
+		l.BatchID = dec.BatchID
+	}
+	if dec.EndOfBlock != nil {
+		l.EndOfBlock = *dec.EndOfBlock
+	}
+	if dec.EndOfPreconf != nil {
+		l.EndOfPreconf = *dec.EndOfPreconf
+	}
+	if dec.Preconfer != nil {
+		l.Preconfer = *dec.Preconfer
+	}
 	return nil
 }

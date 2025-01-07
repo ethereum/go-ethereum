@@ -42,6 +42,7 @@ func TestL1Origin(t *testing.T) {
 	l1Origin, err := ReadL1Origin(db, testL1Origin.BlockID)
 	require.Nil(t, err)
 	require.NotNil(t, l1Origin)
+	assert.Equal(t, testL1Origin.BatchID, l1Origin.BatchID)
 	assert.Equal(t, testL1Origin.BlockID, l1Origin.BlockID)
 	assert.Equal(t, testL1Origin.L2BlockHash, l1Origin.L2BlockHash)
 	assert.Equal(t, testL1Origin.L1BlockHeight, l1Origin.L1BlockHeight)

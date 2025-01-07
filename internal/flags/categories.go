@@ -37,6 +37,8 @@ const (
 	MiscCategory       = "MISC"
 	TestingCategory    = "TESTING"
 	DeprecatedCategory = "ALIASED (deprecated)"
+	// CHANGE(taiko): Add a new flag category for Taiko network
+	TaikoCategory = "TAIKO"
 )
 
 func init() {

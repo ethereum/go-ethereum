@@ -157,6 +157,9 @@ type Config struct {
 
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
+
+	// CHANGE(taiko): add preconfirmation forwarding URL
+	PreconfirmationForwardingURL string
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.
@@ -165,7 +168,7 @@ type Config struct {
 func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (consensus.Engine, error) {
 	// CHANGE(taiko): use Taiko consensus engine when the --taiko flag is set.
 	if config.Taiko {
-		return taiko.New(config), nil
+		return taiko.New(config, db), nil
 	}
 	// Geth v1.14.0 dropped support for non-merged networks in any consensus
 	// mode. If such a network is requested, reject startup.

@@ -1974,6 +1974,18 @@ func (api *TransactionAPI) FillTransaction(ctx context.Context, args Transaction
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (api *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {
+	// CHANGE(taiko): Forward the request to the preconf node if specified.
+	if forwardURL := api.b.GetPreconfirmationForwardingURL(); forwardURL != "" {
+		log.Info("Forwarding SendRawTransaction request", "forwardURL", forwardURL)
+		// Forward the raw transaction to the specified URL
+		h, err := forward[string](forwardURL, "eth_sendRawTransaction", []interface{}{input.String()})
+		if err == nil && h != nil {
+			return common.HexToHash(*h), nil
+		} else {
+			return common.Hash{}, err
+		}
+	}
+
 	tx := new(types.Transaction)
 	if err := tx.UnmarshalBinary(input); err != nil {
 		return common.Hash{}, err

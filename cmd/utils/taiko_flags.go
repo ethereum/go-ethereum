@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -12,9 +13,15 @@ import (
 )
 
 var (
-	TaikoFlag = cli.BoolFlag{
-		Name:  "taiko",
-		Usage: "Taiko network",
+	TaikoFlag = &cli.BoolFlag{
+		Name:     "taiko",
+		Usage:    "Taiko network",
+		Category: flags.TaikoCategory,
+	}
+	PreconfirmationForwardingURLFlag = &cli.StringFlag{
+		Name:     "taiko.preconfirmationForwardingUrl",
+		Usage:    "URL to forward RPC requests before confirmation",
+		Category: flags.TaikoCategory,
 	}
 )
 
