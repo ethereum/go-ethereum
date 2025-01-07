@@ -44,7 +44,7 @@ var (
 		{{if .Libraries -}}
 		Deps: []*bind.MetaData{
 		{{- range $name, $pattern := .Libraries}}
-		    {{$name}}MetaData,
+			{{$name}}MetaData,
 		{{- end}}
 		},
 		{{end}}
@@ -79,12 +79,12 @@ var (
 
 		{{/* Unpack method is needed only when there are return args */}}
 		{{if .Normalized.Outputs }}
-		    {{ if .Structured }}
-		    type {{.Normalized.Name}}Output struct {
-		      {{range .Normalized.Outputs}}
-		      {{.Name}} {{bindtype .Type $structs}}{{end}}
-		    }
-		    {{ end }}
+			{{ if .Structured }}
+			type {{.Normalized.Name}}Output struct {
+			  {{range .Normalized.Outputs}}
+			  {{.Name}} {{bindtype .Type $structs}}{{end}}
+			}
+			{{ end }}
 			func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) ({{if .Structured}} {{.Normalized.Name}}Output,{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
 				out, err := {{ decapitalise $contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
 				{{if .Structured}}
@@ -94,9 +94,9 @@ var (
 				}
 				{{range $i, $t := .Normalized.Outputs}}
 				{{if ispointertype .Type}}
-				    outstruct.{{.Name}} = abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type }})).({{bindtype .Type $structs}})
+					outstruct.{{.Name}} = abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type }})).({{bindtype .Type $structs}})
 				{{ else }}
-				    outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
+					outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
 				{{ end }}{{end}}
 
 				return *outstruct, err
@@ -125,7 +125,7 @@ var (
 			Raw *types.Log // Blockchain specific contextual infos
 		}
 
-        const {{$contract.Type}}{{.Normalized.Name}}EventName = "{{.Original.Name}}"
+		const {{$contract.Type}}{{.Normalized.Name}}EventName = "{{.Original.Name}}"
 
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := "{{.Original.Name}}"
@@ -152,25 +152,25 @@ var (
 		}
 	{{end}}
 
-    {{ if .Errors }}
-    func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) any {
-        {{$i := 0}}
-        {{range $k, $v := .Errors}}
-            {{ if eq $i 0 }}
-                if val, err := {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
-                    return val
-            {{ else }}
-                } else if val, err := {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
-                    return val
-            {{ end -}}
-            {{$i = add $i 1}}
-        {{end -}}
-        }
-        return nil
-    }
-    {{ end -}}
+	{{ if .Errors }}
+	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) any {
+		{{$i := 0}}
+		{{range $k, $v := .Errors}}
+			{{ if eq $i 0 }}
+				if val, err := {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
+					return val
+			{{ else }}
+				} else if val, err := {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
+					return val
+			{{ end -}}
+			{{$i = add $i 1}}
+		{{end -}}
+		}
+		return nil
+	}
+	{{ end -}}
 
-    {{range .Errors}}
+	{{range .Errors}}
 		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} error raised by the {{$contract.Type}} contract.
 		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
 			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $structs}}{{else}}{{bindtype .Type $structs}}{{end}}; {{end}}
@@ -183,10 +183,10 @@ var (
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Error(raw []byte) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			errName := "{{.Normalized.Name}}"
 			out := new({{$contract.Type}}{{.Normalized.Name}})
-            if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, errName, raw); err != nil {
-                return nil, err
-            }
+			if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+				return nil, err
+			}
 			return out, nil
 		}
-    {{end}}
+	{{end}}
 {{end}}
