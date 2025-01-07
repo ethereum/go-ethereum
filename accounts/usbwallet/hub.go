@@ -82,17 +82,11 @@ func NewLedgerHub() (*Hub, error) {
 		0x0005, /* Ledger Nano S Plus */
 		0x0006, /* Ledger Nano FTS */
 
-		0x0015, /* HID + U2F + WebUSB Ledger Blue */
-		0x1015, /* HID + U2F + WebUSB Ledger Nano S */
-		0x4015, /* HID + U2F + WebUSB Ledger Nano X */
-		0x5015, /* HID + U2F + WebUSB Ledger Nano S Plus */
-		0x6015, /* HID + U2F + WebUSB Ledger Nano FTS */
-
-		0x0011, /* HID + WebUSB Ledger Blue */
-		0x1011, /* HID + WebUSB Ledger Nano S */
-		0x4011, /* HID + WebUSB Ledger Nano X */
-		0x5011, /* HID + WebUSB Ledger Nano S Plus */
-		0x6011, /* HID + WebUSB Ledger Nano FTS */
+		0x0000, /* WebUSB Ledger Blue */
+		0x1000, /* WebUSB Ledger Nano S */
+		0x4000, /* WebUSB Ledger Nano X */
+		0x5000, /* WebUSB Ledger Nano S Plus */
+		0x6000, /* WebUSB Ledger Nano FTS */
 	}, 0xffa0, 0, newLedgerDriver)
 }
 
@@ -186,7 +180,8 @@ func (hub *Hub) refreshWallets() {
 	for _, info := range infos {
 		for _, id := range hub.productIDs {
 			// Windows and Macos use UsageID matching, Linux uses Interface matching
-			if info.ProductID == id && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
+			upperId := info.ProductID & 0xff00
+			if (info.ProductID == id || upperId == id) && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
 				devices = append(devices, info)
 				break
 			}
