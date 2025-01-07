@@ -87,6 +87,10 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 	)
 	// Ensure the datadir is not a symbolic link if it exists.
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
+		if err != nil {
+			log.Warn("error Lstat the database:", err)
+			return nil, errors.New("lstat failed")
+		}
 		if info == nil {
 			log.Warn("Could not Lstat the database", "path", datadir)
 			return nil, errors.New("lstat failed")
