@@ -22,10 +22,10 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestIsPrimitive(t *testing.T) {
@@ -238,13 +238,19 @@ func TestType_TypeName(t *testing.T) {
 func TestEncodeNestedBytesArray(t *testing.T) {
 	typedData := TypedData{
 		Types: Types{
-			"EIP712Domain": []Type{},
+			"EIP712Domain": []Type{
+				{Name: "name", Type: "string"},
+				{Name: "version", Type: "string"},
+			},
 			"Test": []Type{
 				{Name: "data", Type: "bytes[]"},
 			},
 		},
 		PrimaryType: "Test",
-		Domain:     TypedDataDomain{},
+		Domain: TypedDataDomain{
+			Name:    "TestDomain",
+			Version: "1",
+		},
 		Message: map[string]interface{}{
 			"data": []interface{}{
 				hexutil.MustDecode("0x1234"),
@@ -253,8 +259,11 @@ func TestEncodeNestedBytesArray(t *testing.T) {
 		},
 	}
 
-	_, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
+	hash, _, err := TypedDataAndHash(typedData)
 	if err != nil {
-		t.Errorf("Failed to hash struct with nested bytes array: %v", err)
+		t.Fatalf("Failed to hash struct with nested bytes array: %v", err)
+	}
+	if hash == nil {
+		t.Error("Hash is nil")
 	}
 }
