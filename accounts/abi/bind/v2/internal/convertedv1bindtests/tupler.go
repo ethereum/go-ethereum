@@ -73,7 +73,7 @@ func (tupler *Tupler) UnpackTuple(data []byte) (TupleOutput, error) {
 
 	outstruct.A = *abi.ConvertType(out[0], new(string)).(*string)
 
-	outstruct.B = abi.ConvertType(out[1], new(big.Int)).(big.Int)
+	outstruct.B = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
 
 	outstruct.C = *abi.ConvertType(out[2], new([32]byte)).(*[32]byte)
 
