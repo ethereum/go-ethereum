@@ -584,12 +584,14 @@ func opJump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		return nil, errStopToken
 	}
 	pos := scope.Stack.pop()
-	if !scope.Contract.validJumpdest(&pos) {
+	if interpreter.evm.chainRules.IsEIP4762 && !scope.Contract.IsDeployment {
 		statelessGas, wanted := interpreter.evm.TxContext.Accesses.TouchCodeChunksRangeAndChargeGas(scope.Contract.CodeAddr[:], pos.Uint64(), 1, uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
 		scope.Contract.UseGas(statelessGas)
 		if statelessGas < wanted {
 			return nil, ErrOutOfGas
 		}
+	}
+	if !scope.Contract.validJumpdest(&pos) {
 		return nil, ErrInvalidJump
 	}
 	*pc = pos.Uint64() - 1 // pc will be increased by the interpreter loop
@@ -602,12 +604,14 @@ func opJumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	}
 	pos, cond := scope.Stack.pop(), scope.Stack.pop()
 	if !cond.IsZero() {
-		if !scope.Contract.validJumpdest(&pos) {
+		if interpreter.evm.chainRules.IsEIP4762 && !scope.Contract.IsDeployment {
 			statelessGas, wanted := interpreter.evm.TxContext.Accesses.TouchCodeChunksRangeAndChargeGas(scope.Contract.CodeAddr[:], pos.Uint64(), 1, uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
 			scope.Contract.UseGas(statelessGas)
 			if statelessGas < wanted {
 				return nil, ErrOutOfGas
 			}
+		}
+		if !scope.Contract.validJumpdest(&pos) {
 			return nil, ErrInvalidJump
 		}
 		*pc = pos.Uint64() - 1 // pc will be increased by the interpreter loop
