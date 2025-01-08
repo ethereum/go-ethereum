@@ -3400,8 +3400,3 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 func addressToHash(a common.Address) common.Hash {
 	return common.BytesToHash(a.Bytes())
 }
-
-// CHANGE(taiko): add preconfirmation forwarding URL
-func (b testBackend) GetPreconfirmationForwardingURL() string {
-	return ""
-}

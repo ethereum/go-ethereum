@@ -405,8 +405,3 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 }
 
 func (b *backendMock) Engine() consensus.Engine { return nil }
-
-// CHANGE(taiko): add preconfirmation forwarding URL
-func (b *backendMock) GetPreconfirmationForwardingURL() string {
-	return ""
-}
