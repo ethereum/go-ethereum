@@ -786,13 +786,29 @@ func (f *Firehose) OnCallEnter(depth int, typ byte, from common.Address, to comm
 	if isRootCall := depth == 0; isRootCall {
 		callType = rootCallType(opCode == vm.CREATE)
 	} else {
-		// The invokation for vm.SELFDESTRUCT is called while already in another call and is recorded specially
+		// The invocation for vm.SELFDESTRUCT is called while already in another call and is recorded specially
 		// in the Geth tracer and generates `OnEnter/OnExit` callbacks. However in Firehose, self destruction
 		// simply sets the call as having called suicided so there is no extra call.
 		//
 		// So we ignore `OnEnter/OnExit` callbacks for `SELFDESTRUCT` opcode, we ignore it here and set
 		// a special sentinel variable that will tell `OnExit` to ignore itself.
 		if opCode == vm.SELFDESTRUCT {
+			// Firehose tracer 2.3 is recording the self destruct balance changes in a specific order which is
+			// the self destruct increase followed by the self destruct decrease. However Geth tracing API
+			// we now leverages to implement Firehose tracer does record the balance change in reversed order
+			// which is the self destruct decrease followed by the self destruct increase.
+			//
+			// To improve complexity, this is only true for Cancun rules, before Cancun, the order is actually
+			// still correct. This is because in the older Selfdestruct opcode, the balance was set to 0
+			// after the opcode ran so the decreased happened there before the increased.
+			//
+			// So if we are in compatibility mode and the block is Cancun, we must reorder the balance changes
+			// to match the Firehose 2.3 behavior.
+			if *f.applyBackwardCompatibility && f.blockRules.IsCancun {
+				f.maybeReorderSelfDestructBalanceChanges()
+			}
+
+			firehoseDebug("ignoring OnCallEnter for SELFDESTRUCT opcode, not recorded as a call")
 
 			// The next OnCallExit must be ignored, this variable will make the next OnCallExit to be ignored
 			f.latestCallEnterSuicided = true
@@ -806,6 +822,59 @@ func (f *Firehose) OnCallEnter(depth int, typ byte, from common.Address, to comm
 	}
 
 	f.callStart(computeCallSource(depth), callType, from, to, input, gas, value)
+}
+
+func (f *Firehose) maybeReorderSelfDestructBalanceChanges() {
+	type indexedBalanceChange struct {
+		index   int
+		ordinal uint64
+		change  *pbeth.BalanceChange
+	}
+
+	f.ensureInCall()
+	activeCall := f.callStack.Peek()
+
+	var increaseBalanceChange indexedBalanceChange
+	var decreaseBalanceChange indexedBalanceChange
+
+	for index, change := range activeCall.BalanceChanges {
+		switch change.Reason {
+		case pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW:
+			if decreaseBalanceChange.change != nil {
+				f.panicInvalidState(fmt.Sprintf("more than one balance change with reason REASON_SUICIDE_WITHDRAW found in call #%d, this is not expected", activeCall.Index), 0)
+			}
+
+			decreaseBalanceChange.index = index
+			decreaseBalanceChange.ordinal = change.Ordinal
+			decreaseBalanceChange.change = change
+
+		case pbeth.BalanceChange_REASON_SUICIDE_REFUND:
+			if increaseBalanceChange.change != nil {
+				f.panicInvalidState(fmt.Sprintf("more than one balance change with reason REASON_SUICIDE_REFUND found in call #%d, this is not expected", activeCall.Index), 0)
+			}
+
+			increaseBalanceChange.index = index
+			increaseBalanceChange.ordinal = change.Ordinal
+			increaseBalanceChange.change = change
+		}
+	}
+
+	// Nothing to do if there is only one side
+	if decreaseBalanceChange.change == nil || increaseBalanceChange.change == nil {
+		return
+	}
+
+	// Nothing to do if they are already ordered according to Firehose 2.3 rules
+	if decreaseBalanceChange.index > increaseBalanceChange.index {
+		return
+	}
+
+	// Otherwise, invert them and their ordinal
+	decreaseBalanceChange.change.Ordinal = increaseBalanceChange.ordinal
+	increaseBalanceChange.change.Ordinal = decreaseBalanceChange.ordinal
+
+	activeCall.BalanceChanges[decreaseBalanceChange.index] = increaseBalanceChange.change
+	activeCall.BalanceChanges[increaseBalanceChange.index] = decreaseBalanceChange.change
 }
 
 // OnCallExit is called after the call finishes to finalize the tracing.
