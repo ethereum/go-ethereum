@@ -16,7 +16,6 @@ linters:
     - gci
     - gocheckcompilerdirectives
     - gofmt
-    - goheader
     - goimports
     - gomodguard
     - gosec

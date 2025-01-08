@@ -8,7 +8,10 @@ on:
   workflow_dispatch:
 
 permissions:
+  # Required: allow read access to the content for analysis.
   contents: read
+  # Optional: allow read access to pull request. Use with `only-new-issues` option.
+  pull-requests: read
 
 jobs:
   golangci:
@@ -23,3 +26,5 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.60
+          only-new-issues: true
+          args: --enable goheader

@@ -1,4 +1,4 @@
-Copyright {{ MOD-YEAR }} the libevm authors.
+Copyright {{ MOD-YEAR-RANGE }} the libevm authors.
 
 The libevm additions to go-ethereum are free software: you can redistribute
 them and/or modify them under the terms of the GNU Lesser General Public License
