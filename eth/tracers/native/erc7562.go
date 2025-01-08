@@ -327,6 +327,9 @@ func (t *erc7562Tracer) GetResult() (json.RawMessage, error) {
 	}
 
 	callFrameJSON, err := json.Marshal(t.callstackWithOpcodes[0])
+	if err != nil {
+		return nil, err
+	}
 
 	// Unmarshal the generated JSON into a map
 	var resultMap map[string]interface{}
