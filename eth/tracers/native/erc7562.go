@@ -19,6 +19,11 @@ package native
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
+	"runtime"
+	"runtime/debug"
+	"sync/atomic"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -29,10 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
-	"math/big"
-	"runtime"
-	"runtime/debug"
-	"sync/atomic"
 )
 
 //go:generate go run github.com/fjl/gencodec -type callFrameWithOpcodes -field-override callFrameWithOpcodesMarshaling -out gen_callframewithopcodes_json.go
@@ -179,15 +180,6 @@ type erc7562TracerConfig struct {
 	StackTopItemsSize int                    `json:"stackTopItemsSize"`
 	IgnoredOpcodes    map[vm.OpCode]struct{} `json:"ignoredOpcodes"` // Opcodes to ignore during OnOpcode hook execution
 	WithLog           bool                   `json:"withLog"`        // If true, erc7562 tracer will collect event logs
-}
-
-// Function to convert byte array to map[vm.OpCode]struct{}
-func ConvertBytesToOpCodes(byteArray []byte) map[vm.OpCode]struct{} {
-	var opCodes map[vm.OpCode]struct{}
-	for _, b := range byteArray {
-		opCodes[vm.OpCode(b)] = struct{}{}
-	}
-	return opCodes
 }
 
 func getFullConfiguration(partial erc7562TracerConfig) erc7562TracerConfig {
