@@ -152,18 +152,18 @@ type Firehose struct {
 	blockOrdinal                *Ordinal
 	blockFinality               *FinalityStatus
 	blockRules                  params.Rules
+	blockIsPrecompiledAddr      func(addr common.Address) bool
 	blockReorderOrdinal         bool
 	blockReorderOrdinalSnapshot uint64
 	blockReorderOrdinalOnce     sync.Once
 
 	// Transaction state
-	evm                    *tracing.VMContext
-	transaction            *pbeth.TransactionTrace
-	transactionLogIndex    uint32
-	inSystemCall           bool
-	blockIsPrecompiledAddr func(addr common.Address) bool
-	transactionIsolated    bool
-	transactionTransient   *pbeth.TransactionTrace
+	evm                  *tracing.VMContext
+	transaction          *pbeth.TransactionTrace
+	transactionLogIndex  uint32
+	inSystemCall         bool
+	transactionIsolated  bool
+	transactionTransient *pbeth.TransactionTrace
 
 	// Call state
 	callStack               *CallStack
