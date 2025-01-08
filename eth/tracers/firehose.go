@@ -41,10 +41,12 @@ import (
 // - Info == block start/end + trx start/end
 // - Debug == Info + call start/end + error
 // - Trace == Debug + state db changes, log, balance, nonce, code, storage, gas
+// - TraceFull == Trace + opcode
 var firehoseTracerLogLevel = strings.ToLower(os.Getenv("FIREHOSE_ETHEREUM_TRACER_LOG_LEVEL"))
-var isFirehoseInfoEnabled = firehoseTracerLogLevel == "info" || firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
-var isFirehoseDebugEnabled = firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
-var isFirehoseTracerEnabled = firehoseTracerLogLevel == "trace"
+var isFirehoseInfoEnabled = firehoseTracerLogLevel == "info" || firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace" || firehoseTracerLogLevel == "trace_full"
+var isFirehoseDebugEnabled = firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace" || firehoseTracerLogLevel == "trace_full"
+var isFirehoseTraceEnabled = firehoseTracerLogLevel == "trace" || firehoseTracerLogLevel == "trace_full"
+var isFirehoseTraceFullEnabled = firehoseTracerLogLevel == "trace_full"
 
 var emptyCommonAddress = common.Address{}
 var emptyCommonHash = common.Hash{}
@@ -815,7 +817,7 @@ func (f *Firehose) OnCallExit(depth int, output []byte, gasUsed uint64, err erro
 
 // OnOpcode implements the EVMLogger interface to trace a single step of VM execution.
 func (f *Firehose) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-	firehoseTrace("on opcode (op=%s gas=%d cost=%d, err=%s)", vm.OpCode(op), gas, cost, errorView(err))
+	firehoseTraceFull("on opcode (op=%s gas=%d cost=%d, err=%s)", vm.OpCode(op), gas, cost, errorView(err))
 
 	if activeCall := f.callStack.Peek(); activeCall != nil {
 		opCode := vm.OpCode(op)
@@ -902,6 +904,8 @@ var opCodeToGasChangeReasonMap = map[vm.OpCode]pbeth.GasChange_Reason{
 
 // OnOpcodeFault implements the EVMLogger interface to trace an execution fault.
 func (f *Firehose) OnOpcodeFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+	firehoseTraceFull("on opcode fault (op=%s gas=%d cost=%d, err=%s)", vm.OpCode(op), gas, cost, errorView(err))
+
 	if activeCall := f.callStack.Peek(); activeCall != nil {
 		f.captureInterpreterStep(activeCall, pc, vm.OpCode(op), gas, cost, scope, nil, depth, err)
 	}
@@ -1872,7 +1876,13 @@ func firehoseDebug(msg string, args ...interface{}) {
 }
 
 func firehoseTrace(msg string, args ...interface{}) {
-	if isFirehoseTracerEnabled {
+	if isFirehoseTraceEnabled {
+		fmt.Fprintf(os.Stderr, "[Firehose] "+msg+"\n", args...)
+	}
+}
+
+func firehoseTraceFull(msg string, args ...interface{}) {
+	if isFirehoseTraceFullEnabled {
 		fmt.Fprintf(os.Stderr, "[Firehose] "+msg+"\n", args...)
 	}
 }
