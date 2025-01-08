@@ -793,8 +793,6 @@ func (f *Firehose) OnCallEnter(depth int, typ byte, from common.Address, to comm
 		// So we ignore `OnEnter/OnExit` callbacks for `SELFDESTRUCT` opcode, we ignore it here and set
 		// a special sentinel variable that will tell `OnExit` to ignore itself.
 		if opCode == vm.SELFDESTRUCT {
-			f.ensureInCall()
-			f.callStack.Peek().Suicide = true
 
 			// The next OnCallExit must be ignored, this variable will make the next OnCallExit to be ignored
 			f.latestCallEnterSuicided = true
@@ -842,8 +840,13 @@ func (f *Firehose) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 			}
 		}
 
-		if opCode == vm.KECCAK256 {
+		switch opCode {
+		case vm.KECCAK256:
 			f.onOpcodeKeccak256(activeCall, scope.StackData(), Memory(scope.MemoryData()))
+
+		case vm.SELFDESTRUCT:
+			f.ensureInCall()
+			f.callStack.Peek().Suicide = true
 		}
 	}
 }
@@ -1225,16 +1228,9 @@ func (f *Firehose) OnNonceChange(a common.Address, prev, new uint64) {
 }
 
 func (f *Firehose) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
-	f.ensureInBlockOrTrx()
+	firehoseDebug("code changed (address=%s prev_hash=%s new_hash=%s)", a, prevCodeHash, codeHash)
 
-	change := &pbeth.CodeChange{
-		Address: a.Bytes(),
-		OldHash: prevCodeHash.Bytes(),
-		OldCode: prev,
-		NewHash: codeHash.Bytes(),
-		NewCode: code,
-		Ordinal: f.blockOrdinal.Next(),
-	}
+	f.ensureInBlockOrTrx()
 
 	if f.transaction != nil {
 		activeCall := f.callStack.Peek()
@@ -1242,9 +1238,30 @@ func (f *Firehose) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev
 			f.panicInvalidState("caller expected to be in call state but we were not, this is a bug", 0)
 		}
 
-		activeCall.CodeChanges = append(activeCall.CodeChanges, change)
+		// Geth 1.14.12 introduced a new behavior where a code change is emitted when a contract
+		// suicides. This was not the case before and we must ignore those changes to keep backward
+		// compatibility with the Firehose 2.3 and 3.0 model.
+		if activeCall.Suicide && len(code) == 0 {
+			return
+		}
+
+		activeCall.CodeChanges = append(activeCall.CodeChanges, &pbeth.CodeChange{
+			Address: a.Bytes(),
+			OldHash: prevCodeHash.Bytes(),
+			OldCode: prev,
+			NewHash: codeHash.Bytes(),
+			NewCode: code,
+			Ordinal: f.blockOrdinal.Next(),
+		})
 	} else {
-		f.block.CodeChanges = append(f.block.CodeChanges, change)
+		f.block.CodeChanges = append(f.block.CodeChanges, &pbeth.CodeChange{
+			Address: a.Bytes(),
+			OldHash: prevCodeHash.Bytes(),
+			OldCode: prev,
+			NewHash: codeHash.Bytes(),
+			NewCode: code,
+			Ordinal: f.blockOrdinal.Next(),
+		})
 	}
 }
 
