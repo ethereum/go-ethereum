@@ -165,16 +165,22 @@ func Transact(instance *ContractInstance, opts *bind.TransactOpts, input []byte)
 	return c.RawTransact(opts, input)
 }
 
+// TODO: test coverage for Call where the unpack method returns a pointer object.
 // Call performs an eth_call on the given bound contract instance, using the
 // provided abi-encoded input (or nil).
-func Call[T any](instance *ContractInstance, opts *bind.CallOpts, packedInput []byte, unpack func([]byte) (*T, error)) (*T, error) {
+func Call[T any](instance *ContractInstance, opts *bind.CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
+	var defaultResult T
 	backend := instance.Backend
 	c := bind.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
 	packedOutput, err := c.CallRaw(opts, packedInput)
 	if err != nil {
-		return nil, err
+		return defaultResult, err
 	}
-	return unpack(packedOutput)
+	res, err := unpack(packedOutput)
+	if err != nil {
+		return defaultResult, err
+	}
+	return res, err
 }
 
 // DeployContractRaw deploys a contract onto the Ethereum blockchain and binds the
