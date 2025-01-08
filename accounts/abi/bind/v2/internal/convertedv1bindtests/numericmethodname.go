@@ -23,9 +23,8 @@ var (
 	_ = abi.ConvertType
 )
 
-// TODO: convert this type to value type after everything works.
 // NumericMethodNameMetaData contains all meta data concerning the NumericMethodName contract.
-var NumericMethodNameMetaData = &bind.MetaData{
+var NumericMethodNameMetaData = bind.MetaData{
 	ABI:     "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"_param\",\"type\":\"address\"}],\"name\":\"_1TestEvent\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"_1test\",\"outputs\":[],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"__1test\",\"outputs\":[],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"__2test\",\"outputs\":[],\"stateMutability\":\"pure\",\"type\":\"function\"}]",
 	Pattern: "a691b347afbc44b90dd9a1dfbc65661904",
 	Bin:     "0x6080604052348015600f57600080fd5b5060958061001e6000396000f3fe6080604052348015600f57600080fd5b5060043610603c5760003560e01c80639d993132146041578063d02767c7146049578063ffa02795146051575b600080fd5b60476059565b005b604f605b565b005b6057605d565b005b565b565b56fea26469706673582212200382ca602dff96a7e2ba54657985e2b4ac423a56abe4a1f0667bc635c4d4371f64736f6c63430008110033",

@@ -23,9 +23,8 @@ var (
 	_ = abi.ConvertType
 )
 
-// TODO: convert this type to value type after everything works.
 // EmptyMetaData contains all meta data concerning the Empty contract.
-var EmptyMetaData = &bind.MetaData{
+var EmptyMetaData = bind.MetaData{
 	ABI:     "[]",
 	Pattern: "c4ce3210982aa6fc94dabe46dc1dbf454d",
 	Bin:     "0x606060405260068060106000396000f3606060405200",

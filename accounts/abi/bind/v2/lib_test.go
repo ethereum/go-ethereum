@@ -19,9 +19,6 @@ package v2
 import (
 	"context"
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/events"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/nested_libraries"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/solc_errors"
 	"io"
 	"math/big"
 	"os"
@@ -29,6 +26,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/events"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/nested_libraries"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/solc_errors"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -121,7 +122,7 @@ func TestDeploymentLibraries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to pack constructor: %v", err)
 	}
-	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, nil)
+	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, nil)
 
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
@@ -205,7 +206,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 	overrides := res.Addrs
 	// deploy the contract
-	deploymentParams = bind.NewDeploymentParams([]*bind.MetaData{nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, overrides)
+	deploymentParams = bind.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, overrides)
 	res, err = bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
@@ -262,7 +263,7 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{events.CMetaData}, nil, nil)
+	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&events.CMetaData}, nil, nil)
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
@@ -373,7 +374,7 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{solc_errors.CMetaData}, nil, nil)
+	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&solc_errors.CMetaData}, nil, nil)
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
@@ -425,7 +426,6 @@ func TestBindingGeneration(t *testing.T) {
 			abis  []string
 			bins  []string
 			types []string
-			sigs  []map[string]string
 			libs  = make(map[string]string)
 		)
 		basePath := filepath.Join("internal/contracts", dir)
@@ -449,7 +449,6 @@ func TestBindingGeneration(t *testing.T) {
 			}
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
-			sigs = append(sigs, contract.Hashes)
 			types = append(types, typeName)
 
 			// Derive the library placeholder which is a 34 character prefix of the

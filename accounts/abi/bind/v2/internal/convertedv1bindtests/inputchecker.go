@@ -23,9 +23,8 @@ var (
 	_ = abi.ConvertType
 )
 
-// TODO: convert this type to value type after everything works.
 // InputCheckerMetaData contains all meta data concerning the InputChecker contract.
-var InputCheckerMetaData = &bind.MetaData{
+var InputCheckerMetaData = bind.MetaData{
 	ABI:     "[{\"type\":\"function\",\"name\":\"noInput\",\"constant\":true,\"inputs\":[],\"outputs\":[]},{\"type\":\"function\",\"name\":\"namedInput\",\"constant\":true,\"inputs\":[{\"name\":\"str\",\"type\":\"string\"}],\"outputs\":[]},{\"type\":\"function\",\"name\":\"anonInput\",\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"string\"}],\"outputs\":[]},{\"type\":\"function\",\"name\":\"namedInputs\",\"constant\":true,\"inputs\":[{\"name\":\"str1\",\"type\":\"string\"},{\"name\":\"str2\",\"type\":\"string\"}],\"outputs\":[]},{\"type\":\"function\",\"name\":\"anonInputs\",\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"string\"},{\"name\":\"\",\"type\":\"string\"}],\"outputs\":[]},{\"type\":\"function\",\"name\":\"mixedInputs\",\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"string\"},{\"name\":\"str\",\"type\":\"string\"}],\"outputs\":[]}]",
 	Pattern: "e551ce092312e54f54f45ffdf06caa4cdc",
 }

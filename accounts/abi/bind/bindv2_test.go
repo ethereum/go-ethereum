@@ -3,10 +3,11 @@ package bind
 import (
 	_ "embed"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/crypto"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type bindV2Test struct {
@@ -343,7 +344,6 @@ func TestBindingV2ConvertedV1Tests(t *testing.T) {
 			}
 
 			// TODO: remove these before merging abigen2 PR.  these are for convenience if I need to regenerate the converted bindings or add a new one.
-
 			/*
 				if err := os.WriteFile(fmt.Sprintf("convertedv1bindtests/%s.go", strings.ToLower(tc.name)), []byte(code), 0666); err != nil {
 					t.Fatalf("err writing expected output to file: %v\n", err)

@@ -23,9 +23,8 @@ var (
 	_ = abi.ConvertType
 )
 
-// TODO: convert this type to value type after everything works.
 // RangeKeywordMetaData contains all meta data concerning the RangeKeyword contract.
-var RangeKeywordMetaData = &bind.MetaData{
+var RangeKeywordMetaData = bind.MetaData{
 	ABI:     "[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"range\",\"type\":\"uint256\"}],\"name\":\"functionWithKeywordParameter\",\"outputs\":[],\"stateMutability\":\"pure\",\"type\":\"function\"}]",
 	Pattern: "cec8c872ba06feb1b8f0a00e7b237eb226",
 	Bin:     "0x608060405234801561001057600080fd5b5060dc8061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063527a119f14602d575b600080fd5b60436004803603810190603f9190605b565b6045565b005b50565b6000813590506055816092565b92915050565b600060208284031215606e57606d608d565b5b6000607a848285016048565b91505092915050565b6000819050919050565b600080fd5b6099816083565b811460a357600080fd5b5056fea2646970667358221220d4f4525e2615516394055d369fb17df41c359e5e962734f27fd683ea81fd9db164736f6c63430008070033",

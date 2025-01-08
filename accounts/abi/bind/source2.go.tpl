@@ -33,9 +33,8 @@ var (
 {{end}}
 
 {{range $contract := .Contracts}}
-	// TODO: convert this type to value type after everything works.
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
-	var {{.Type}}MetaData = &bind.MetaData{
+	var {{.Type}}MetaData = bind.MetaData{
 		ABI: "{{.InputABI}}",
 		Pattern: "{{index $.Libraries .Type}}",
 		{{if .InputBin -}}
@@ -44,7 +43,7 @@ var (
 		{{if .Libraries -}}
 		Deps: []*bind.MetaData{
 		{{- range $name, $pattern := .Libraries}}
-			{{$name}}MetaData,
+			&{{$name}}MetaData,
 		{{- end}}
 		},
 		{{end}}

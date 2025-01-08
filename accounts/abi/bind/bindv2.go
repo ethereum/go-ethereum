@@ -47,10 +47,13 @@ type binder struct {
 	// It is keyed by the contract name provided in the ABI definition.
 	contracts map[string]*tmplContractV2
 
-	// structs is the map of all redeclared structs shared by passed contracts.
+	// structs is the map of all emitted structs from contracts being bound.
+	// it is keyed by a unique identifier generated from the name of the owning contract
+	// and the solidity type signature of the struct
 	structs map[string]*tmplStruct
 
-	// aliases is a map for renaming instances of named events/functions/errors to specified values
+	// aliases is a map for renaming instances of named events/functions/errors to specified values.
+	// it is keyed by source symbol name, and values are what the replacement name should be.
 	aliases map[string]string
 }
 
@@ -65,10 +68,12 @@ func (b *binder) BindStructType(typ abi.Type) {
 // It also sanitizes/converts information contained in the ABI definition into a data-format that is amenable for rendering the templates.
 type contractBinder struct {
 	binder *binder
-	calls  map[string]*tmplMethod
-	events map[string]*tmplEvent
-	errors map[string]*tmplError
 
+	// all maps are keyed by the original (non-normalized) name of the symbol in question
+	// from the provided ABI definition.
+	calls            map[string]*tmplMethod
+	events           map[string]*tmplEvent
+	errors           map[string]*tmplError
 	callIdentifiers  map[string]bool
 	eventIdentifiers map[string]bool
 	errorIdentifiers map[string]bool
@@ -88,8 +93,8 @@ func newContractBinder(binder *binder) *contractBinder {
 
 // registerIdentifier applies alias renaming, name normalization (conversion to camel case), and registers the normalized
 // name in the specified identifier map.  It returns an error if the normalized name already exists in the map.
-func (b *contractBinder) registerIdentifier(identifiers map[string]bool, original string) (normalized string, err error) {
-	normalized = abi.ToCamelCase(alias(b.binder.aliases, original))
+func (cb *contractBinder) registerIdentifier(identifiers map[string]bool, original string) (normalized string, err error) {
+	normalized = abi.ToCamelCase(alias(cb.binder.aliases, original))
 	// Name shouldn't start with a digit. It will make the generated code invalid.
 	if len(normalized) > 0 && unicode.IsDigit(rune(normalized[0])) {
 		normalized = fmt.Sprintf("E%s", normalized)
@@ -241,7 +246,6 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 			return "", err
 		}
 
-		// TODO: normalize these args, add unit tests that fail in the current commit.
 		for _, input := range evmABI.Constructor.Inputs {
 			if hasStruct(input.Type) {
 				bindStructType(input.Type, b.structs)
