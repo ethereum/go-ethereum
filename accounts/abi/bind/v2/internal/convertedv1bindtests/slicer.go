@@ -23,9 +23,8 @@ var (
 	_ = abi.ConvertType
 )
 
-// TODO: convert this type to value type after everything works.
 // SlicerMetaData contains all meta data concerning the Slicer contract.
-var SlicerMetaData = &bind.MetaData{
+var SlicerMetaData = bind.MetaData{
 	ABI:     "[{\"constant\":true,\"inputs\":[{\"name\":\"input\",\"type\":\"address[]\"}],\"name\":\"echoAddresses\",\"outputs\":[{\"name\":\"output\",\"type\":\"address[]\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"input\",\"type\":\"uint24[23]\"}],\"name\":\"echoFancyInts\",\"outputs\":[{\"name\":\"output\",\"type\":\"uint24[23]\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"input\",\"type\":\"int256[]\"}],\"name\":\"echoInts\",\"outputs\":[{\"name\":\"output\",\"type\":\"int256[]\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"input\",\"type\":\"bool[]\"}],\"name\":\"echoBools\",\"outputs\":[{\"name\":\"output\",\"type\":\"bool[]\"}],\"type\":\"function\"}]",
 	Pattern: "082c0740ab6537c7169cb573d097c52112",
 	Bin:     "0x606060405261015c806100126000396000f3606060405260e060020a6000350463be1127a3811461003c578063d88becc014610092578063e15a3db71461003c578063f637e5891461003c575b005b604080516020600480358082013583810285810185019096528085526100ee959294602494909392850192829185019084908082843750949650505050505050604080516020810190915260009052805b919050565b604080516102e0818101909252610138916004916102e491839060179083908390808284375090955050505050506102e0604051908101604052806017905b60008152602001906001900390816100d15790505081905061008d565b60405180806020018281038252838181518152602001915080519060200190602002808383829060006004602084601f0104600f02600301f1509050019250505060405180910390f35b60405180826102e0808381846000600461015cf15090500191505060405180910390f3",

@@ -23,9 +23,8 @@ var (
 	_ = abi.ConvertType
 )
 
-// TODO: convert this type to value type after everything works.
 // EventCheckerMetaData contains all meta data concerning the EventChecker contract.
-var EventCheckerMetaData = &bind.MetaData{
+var EventCheckerMetaData = bind.MetaData{
 	ABI:     "[{\"type\":\"event\",\"name\":\"empty\",\"inputs\":[]},{\"type\":\"event\",\"name\":\"indexed\",\"inputs\":[{\"name\":\"addr\",\"type\":\"address\",\"indexed\":true},{\"name\":\"num\",\"type\":\"int256\",\"indexed\":true}]},{\"type\":\"event\",\"name\":\"mixed\",\"inputs\":[{\"name\":\"addr\",\"type\":\"address\",\"indexed\":true},{\"name\":\"num\",\"type\":\"int256\"}]},{\"type\":\"event\",\"name\":\"anonymous\",\"anonymous\":true,\"inputs\":[]},{\"type\":\"event\",\"name\":\"dynamic\",\"inputs\":[{\"name\":\"idxStr\",\"type\":\"string\",\"indexed\":true},{\"name\":\"idxDat\",\"type\":\"bytes\",\"indexed\":true},{\"name\":\"str\",\"type\":\"string\"},{\"name\":\"dat\",\"type\":\"bytes\"}]},{\"type\":\"event\",\"name\":\"unnamed\",\"inputs\":[{\"name\":\"\",\"type\":\"uint256\",\"indexed\":true},{\"name\":\"\",\"type\":\"uint256\",\"indexed\":true}]}]",
 	Pattern: "253d421f98e29b25315bde79c1251ab27c",
 }

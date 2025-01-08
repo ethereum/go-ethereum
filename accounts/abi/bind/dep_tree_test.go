@@ -103,25 +103,29 @@ func linkDeps(deps map[string]*MetaData) []*MetaData {
 
 	connectedDeps := make(map[string]MetaData)
 	for pattern, dep := range deps {
-		connectedDeps[pattern] = __linkDeps(*dep, deps, &roots)
+		connectedDeps[pattern] = internalLinkDeps(*dep, deps, &roots) //nolint:all
 	}
 	rootMetadatas := []*MetaData{}
 	for pattern, _ := range roots {
-		dep := connectedDeps[pattern]
+		dep := connectedDeps[pattern] //nolint:all
 		rootMetadatas = append(rootMetadatas, &dep)
 	}
 	return rootMetadatas
 }
 
-func __linkDeps(metadata MetaData, depMap map[string]*MetaData, roots *map[string]struct{}) MetaData {
-	linked := metadata
+// internalLinkDeps is the internal recursing logic of linkDeps:  It links the contract referred to by MetaData
+// given the depMap (map of solidity link pattern to contract metadata object), deleting contract entries from the roots
+// map if they were referenced as dependencies.  It returns a new MetaData object which is the linked version of metadata
+// parameter.
+func internalLinkDeps(metadata MetaData, depMap map[string]*MetaData, roots *map[string]struct{}) MetaData { //nolint:all
+	linked := metadata //nolint:all
 	depPatterns := parseLibraryDeps(metadata.Bin)
 	for _, pattern := range depPatterns {
 		delete(*roots, pattern)
-		connectedDep := __linkDeps(*depMap[pattern], depMap, roots)
+		connectedDep := internalLinkDeps(*depMap[pattern], depMap, roots) //nolint:all
 		linked.Deps = append(linked.Deps, &connectedDep)
 	}
-	return linked
+	return linked //nolint:all
 }
 
 func testLinkCase(tcInput linkTestCaseInput) error {

@@ -23,9 +23,8 @@ var (
 	_ = abi.ConvertType
 )
 
-// TODO: convert this type to value type after everything works.
 // OutputCheckerMetaData contains all meta data concerning the OutputChecker contract.
-var OutputCheckerMetaData = &bind.MetaData{
+var OutputCheckerMetaData = bind.MetaData{
 	ABI:     "[{\"type\":\"function\",\"name\":\"noOutput\",\"constant\":true,\"inputs\":[],\"outputs\":[]},{\"type\":\"function\",\"name\":\"namedOutput\",\"constant\":true,\"inputs\":[],\"outputs\":[{\"name\":\"str\",\"type\":\"string\"}]},{\"type\":\"function\",\"name\":\"anonOutput\",\"constant\":true,\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"string\"}]},{\"type\":\"function\",\"name\":\"namedOutputs\",\"constant\":true,\"inputs\":[],\"outputs\":[{\"name\":\"str1\",\"type\":\"string\"},{\"name\":\"str2\",\"type\":\"string\"}]},{\"type\":\"function\",\"name\":\"collidingOutputs\",\"constant\":true,\"inputs\":[],\"outputs\":[{\"name\":\"str\",\"type\":\"string\"},{\"name\":\"Str\",\"type\":\"string\"}]},{\"type\":\"function\",\"name\":\"anonOutputs\",\"constant\":true,\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"string\"},{\"name\":\"\",\"type\":\"string\"}]},{\"type\":\"function\",\"name\":\"mixedOutputs\",\"constant\":true,\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"string\"},{\"name\":\"str\",\"type\":\"string\"}]}]",
 	Pattern: "cc1d4e235801a590b506d5130b0cca90a1",
 }

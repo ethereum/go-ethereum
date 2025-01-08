@@ -23,9 +23,8 @@ var (
 	_ = abi.ConvertType
 )
 
-// TODO: convert this type to value type after everything works.
 // TuplerMetaData contains all meta data concerning the Tupler contract.
-var TuplerMetaData = &bind.MetaData{
+var TuplerMetaData = bind.MetaData{
 	ABI:     "[{\"constant\":true,\"inputs\":[],\"name\":\"tuple\",\"outputs\":[{\"name\":\"a\",\"type\":\"string\"},{\"name\":\"b\",\"type\":\"int256\"},{\"name\":\"c\",\"type\":\"bytes32\"}],\"type\":\"function\"}]",
 	Pattern: "a8f4d2061f55c712cfae266c426a1cd568",
 	Bin:     "0x606060405260dc8060106000396000f3606060405260e060020a60003504633175aae28114601a575b005b600060605260c0604052600260809081527f486900000000000000000000000000000000000000000000000000000000000060a05260017fc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a47060e0829052610100819052606060c0908152600261012081905281906101409060a09080838184600060046012f1505081517fffff000000000000000000000000000000000000000000000000000000000000169091525050604051610160819003945092505050f3",
