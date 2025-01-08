@@ -43,11 +43,6 @@ func NewInputChecker() (*InputChecker, error) {
 	return &InputChecker{abi: *parsed}, nil
 }
 
-func (inputChecker *InputChecker) PackConstructor() []byte {
-	res, _ := inputChecker.abi.Pack("")
-	return res
-}
-
 // AnonInput is a free data retrieval call binding the contract method 0x3e708e82.
 //
 // Solidity: function anonInput(string ) returns()

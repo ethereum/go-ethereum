@@ -43,11 +43,6 @@ func NewEventChecker() (*EventChecker, error) {
 	return &EventChecker{abi: *parsed}, nil
 }
 
-func (eventChecker *EventChecker) PackConstructor() []byte {
-	res, _ := eventChecker.abi.Pack("")
-	return res
-}
-
 // EventCheckerDynamic represents a Dynamic event raised by the EventChecker contract.
 type EventCheckerDynamic struct {
 	IdxStr common.Hash

@@ -44,11 +44,6 @@ func NewRangeKeyword() (*RangeKeyword, error) {
 	return &RangeKeyword{abi: *parsed}, nil
 }
 
-func (rangeKeyword *RangeKeyword) PackConstructor() []byte {
-	res, _ := rangeKeyword.abi.Pack("")
-	return res
-}
-
 // FunctionWithKeywordParameter is a free data retrieval call binding the contract method 0x527a119f.
 //
 // Solidity: function functionWithKeywordParameter(uint256 range) pure returns()

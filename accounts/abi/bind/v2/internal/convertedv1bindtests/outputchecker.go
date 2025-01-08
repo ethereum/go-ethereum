@@ -43,11 +43,6 @@ func NewOutputChecker() (*OutputChecker, error) {
 	return &OutputChecker{abi: *parsed}, nil
 }
 
-func (outputChecker *OutputChecker) PackConstructor() []byte {
-	res, _ := outputChecker.abi.Pack("")
-	return res
-}
-
 // AnonOutput is a free data retrieval call binding the contract method 0x008bda05.
 //
 // Solidity: function anonOutput() returns(string)

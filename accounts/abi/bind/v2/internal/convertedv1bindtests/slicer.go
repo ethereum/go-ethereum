@@ -44,11 +44,6 @@ func NewSlicer() (*Slicer, error) {
 	return &Slicer{abi: *parsed}, nil
 }
 
-func (slicer *Slicer) PackConstructor() []byte {
-	res, _ := slicer.abi.Pack("")
-	return res
-}
-
 // EchoAddresses is a free data retrieval call binding the contract method 0xbe1127a3.
 //
 // Solidity: function echoAddresses(address[] input) returns(address[] output)

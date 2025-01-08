@@ -44,11 +44,6 @@ func NewGetter() (*Getter, error) {
 	return &Getter{abi: *parsed}, nil
 }
 
-func (getter *Getter) PackConstructor() []byte {
-	res, _ := getter.abi.Pack("")
-	return res
-}
-
 // Getter is a free data retrieval call binding the contract method 0x993a04b7.
 //
 // Solidity: function getter() returns(string, int256, bytes32)

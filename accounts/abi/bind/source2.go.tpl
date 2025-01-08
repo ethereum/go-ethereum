@@ -63,10 +63,12 @@ var (
 		return &{{.Type}}{abi: *parsed}, nil
 	}
 
+    {{ if .Constructor.Inputs }}
 	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
 		res, _ := {{ decapitalise $contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
 		return res
 	}
+	{{ end -}}
 
 	{{range .Calls}}
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.

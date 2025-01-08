@@ -44,11 +44,6 @@ func NewTupler() (*Tupler, error) {
 	return &Tupler{abi: *parsed}, nil
 }
 
-func (tupler *Tupler) PackConstructor() []byte {
-	res, _ := tupler.abi.Pack("")
-	return res
-}
-
 // Tuple is a free data retrieval call binding the contract method 0x3175aae2.
 //
 // Solidity: function tuple() returns(string a, int256 b, bytes32 c)

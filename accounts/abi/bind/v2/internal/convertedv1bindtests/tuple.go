@@ -69,11 +69,6 @@ func NewTuple() (*Tuple, error) {
 	return &Tuple{abi: *parsed}, nil
 }
 
-func (tuple *Tuple) PackConstructor() []byte {
-	res, _ := tuple.abi.Pack("")
-	return res
-}
-
 // Func1 is a free data retrieval call binding the contract method 0x443c79b4.
 //
 // Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])

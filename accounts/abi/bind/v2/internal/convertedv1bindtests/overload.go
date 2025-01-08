@@ -44,11 +44,6 @@ func NewOverload() (*Overload, error) {
 	return &Overload{abi: *parsed}, nil
 }
 
-func (overload *Overload) PackConstructor() []byte {
-	res, _ := overload.abi.Pack("")
-	return res
-}
-
 // Foo is a free data retrieval call binding the contract method 0x04bc52f8.
 //
 // Solidity: function foo(uint256 i, uint256 j) returns()

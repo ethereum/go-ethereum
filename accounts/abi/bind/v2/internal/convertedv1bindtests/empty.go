@@ -43,8 +43,3 @@ func NewEmpty() (*Empty, error) {
 	}
 	return &Empty{abi: *parsed}, nil
 }
-
-func (empty *Empty) PackConstructor() []byte {
-	res, _ := empty.abi.Pack("")
-	return res
-}

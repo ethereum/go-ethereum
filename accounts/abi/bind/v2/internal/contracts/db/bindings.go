@@ -51,11 +51,6 @@ func NewDB() (*DB, error) {
 	return &DB{abi: *parsed}, nil
 }
 
-func (dB *DB) PackConstructor() []byte {
-	res, _ := dB.abi.Pack("")
-	return res
-}
-
 // Get is a free data retrieval call binding the contract method 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
