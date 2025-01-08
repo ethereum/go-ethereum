@@ -144,11 +144,6 @@ func NewL1() (*L1, error) {
 	return &L1{abi: *parsed}, nil
 }
 
-func (l1 *L1) PackConstructor() []byte {
-	res, _ := l1.abi.Pack("")
-	return res
-}
-
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
@@ -191,11 +186,6 @@ func NewL2() (*L2, error) {
 		return nil, err
 	}
 	return &L2{abi: *parsed}, nil
-}
-
-func (l2 *L2) PackConstructor() []byte {
-	res, _ := l2.abi.Pack("")
-	return res
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -242,11 +232,6 @@ func NewL2b() (*L2b, error) {
 	return &L2b{abi: *parsed}, nil
 }
 
-func (l2b *L2b) PackConstructor() []byte {
-	res, _ := l2b.abi.Pack("")
-	return res
-}
-
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
@@ -286,11 +271,6 @@ func NewL3() (*L3, error) {
 		return nil, err
 	}
 	return &L3{abi: *parsed}, nil
-}
-
-func (l3 *L3) PackConstructor() []byte {
-	res, _ := l3.abi.Pack("")
-	return res
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -338,11 +318,6 @@ func NewL4() (*L4, error) {
 	return &L4{abi: *parsed}, nil
 }
 
-func (l4 *L4) PackConstructor() []byte {
-	res, _ := l4.abi.Pack("")
-	return res
-}
-
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
@@ -385,11 +360,6 @@ func NewL4b() (*L4b, error) {
 		return nil, err
 	}
 	return &L4b{abi: *parsed}, nil
-}
-
-func (l4b *L4b) PackConstructor() []byte {
-	res, _ := l4b.abi.Pack("")
-	return res
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.

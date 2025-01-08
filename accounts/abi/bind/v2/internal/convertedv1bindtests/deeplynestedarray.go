@@ -44,11 +44,6 @@ func NewDeeplyNestedArray() (*DeeplyNestedArray, error) {
 	return &DeeplyNestedArray{abi: *parsed}, nil
 }
 
-func (deeplyNestedArray *DeeplyNestedArray) PackConstructor() []byte {
-	res, _ := deeplyNestedArray.abi.Pack("")
-	return res
-}
-
 // DeepUint64Array is a free data retrieval call binding the contract method 0x98ed1856.
 //
 // Solidity: function deepUint64Array(uint256 , uint256 , uint256 ) view returns(uint64)

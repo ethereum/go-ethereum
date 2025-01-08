@@ -50,11 +50,6 @@ func NewNameConflict() (*NameConflict, error) {
 	return &NameConflict{abi: *parsed}, nil
 }
 
-func (nameConflict *NameConflict) PackConstructor() []byte {
-	res, _ := nameConflict.abi.Pack("")
-	return res
-}
-
 // AddRequest is a free data retrieval call binding the contract method 0xcce7b048.
 //
 // Solidity: function addRequest((bytes,bytes) req) pure returns()

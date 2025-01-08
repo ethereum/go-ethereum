@@ -49,11 +49,6 @@ func NewStructs() (*Structs, error) {
 	return &Structs{abi: *parsed}, nil
 }
 
-func (structs *Structs) PackConstructor() []byte {
-	res, _ := structs.abi.Pack("")
-	return res
-}
-
 // F is a free data retrieval call binding the contract method 0x28811f59.
 //
 // Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)

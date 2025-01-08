@@ -44,11 +44,6 @@ func NewNumericMethodName() (*NumericMethodName, error) {
 	return &NumericMethodName{abi: *parsed}, nil
 }
 
-func (numericMethodName *NumericMethodName) PackConstructor() []byte {
-	res, _ := numericMethodName.abi.Pack("")
-	return res
-}
-
 // E1test is a free data retrieval call binding the contract method 0xffa02795.
 //
 // Solidity: function _1test() pure returns()

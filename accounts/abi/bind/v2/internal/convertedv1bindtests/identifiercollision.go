@@ -44,11 +44,6 @@ func NewIdentifierCollision() (*IdentifierCollision, error) {
 	return &IdentifierCollision{abi: *parsed}, nil
 }
 
-func (identifierCollision *IdentifierCollision) PackConstructor() []byte {
-	res, _ := identifierCollision.abi.Pack("")
-	return res
-}
-
 // MyVar is a free data retrieval call binding the contract method 0x4ef1f0ad.
 //
 // Solidity: function MyVar() view returns(uint256)

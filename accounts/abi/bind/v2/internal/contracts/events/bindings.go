@@ -50,11 +50,6 @@ func NewC() (*C, error) {
 	return &C{abi: *parsed}, nil
 }
 
-func (c *C) PackConstructor() []byte {
-	res, _ := c.abi.Pack("")
-	return res
-}
-
 // DoSomethingWithManyArgs is a free data retrieval call binding the contract method 0x6fd8b968.
 //
 // Solidity: function DoSomethingWithManyArgs() pure returns(uint256, uint256, uint256, bool)

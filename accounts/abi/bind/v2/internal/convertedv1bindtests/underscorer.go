@@ -44,11 +44,6 @@ func NewUnderscorer() (*Underscorer, error) {
 	return &Underscorer{abi: *parsed}, nil
 }
 
-func (underscorer *Underscorer) PackConstructor() []byte {
-	res, _ := underscorer.abi.Pack("")
-	return res
-}
-
 // AllPurelyUnderscoredOutput is a free data retrieval call binding the contract method 0xb564b34d.
 //
 // Solidity: function AllPurelyUnderscoredOutput() view returns(int256 _, int256 __)
