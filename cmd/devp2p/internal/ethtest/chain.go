@@ -28,7 +28,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -166,11 +165,13 @@ func (c *Chain) RootAt(height int) common.Hash {
 // GetSender returns the address associated with account at the index in the
 // pre-funded accounts list.
 func (c *Chain) GetSender(idx int) (common.Address, uint64) {
-	var accounts Addresses
+	accounts := make([]common.Address, 0, len(c.senders))
 	for addr := range c.senders {
 		accounts = append(accounts, addr)
 	}
-	sort.Sort(accounts)
+	slices.SortFunc(accounts, func(a, b common.Address) int {
+		return bytes.Compare(a[:], b[:])
+	})
 	addr := accounts[idx]
 	return addr, c.senders[addr].Nonce
 }
@@ -258,22 +259,6 @@ func loadGenesis(genesisFile string) (core.Genesis, error) {
 		return core.Genesis{}, err
 	}
 	return gen, nil
-}
-
-type Addresses []common.Address
-
-func (a Addresses) Len() int {
-	return len(a)
-}
-
-func (a Addresses) Less(i, j int) bool {
-	return bytes.Compare(a[i][:], a[j][:]) < 0
-}
-
-func (a Addresses) Swap(i, j int) {
-	tmp := a[i]
-	a[i] = a[j]
-	a[j] = tmp
 }
 
 func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, error) {
