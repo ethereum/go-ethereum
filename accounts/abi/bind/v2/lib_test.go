@@ -158,7 +158,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		Address: contractAddr,
 		Backend: bindBackend,
 	}
-	internalCallCount, err := Call[big.Int](ctrctInstance, callOpts, doInput, ctrct.UnpackDo)
+	internalCallCount, err := Call[*big.Int](ctrctInstance, callOpts, doInput, ctrct.UnpackDo)
 	if err != nil {
 		t.Fatalf("err unpacking result: %v", err)
 	}
