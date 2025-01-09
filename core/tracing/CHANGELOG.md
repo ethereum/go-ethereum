@@ -15,7 +15,7 @@ This release contains a change in behavior for `OnCodeChange` hook.
 
 ### `OnCodeChange` change
 
-The `OnCodeChange` is now called when `StateDB#SelfDestruct` or `StateDB#SelfDestruct6780` is invoked, which happens when a contract self destruct itself. Previously, no code change was emitted on such occasions.
+The `OnCodeChange` hook is now called when `StateDB#SelfDestruct` is called or when `StateDB#SelfDestruct6780` is called and the contract is actually destroyed. Previously, no code change was emitted on such occasions.
 
 ## [v1.14.4]
 
