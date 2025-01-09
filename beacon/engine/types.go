@@ -275,7 +275,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 			if req[0] < last {
 				return nil, fmt.Errorf("invalid request order: %v", req)
 			}
-last = req[0]
+			last = req[0]
 		}
 		h := types.CalcRequestsHash(requests)
 		requestsHash = &h
