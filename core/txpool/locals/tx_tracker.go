@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package legacypool implements the normal EVM execution transaction pool.
-package tracker
+// Package locals implements tracking for "local" transactions
+package locals
 
 import (
 	"sync"
@@ -26,11 +26,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/exp/slices"
 )
 
-var recheckInterval = time.Minute
+var (
+	recheckInterval = time.Minute
+	localGauge      = metrics.GetOrRegisterGauge("txpool/local", nil)
+)
 
 // TxTracker is a struct used to track priority transactions; it will check from
 // time to time if the main pool has forgotten about any of the transaction
@@ -88,11 +92,11 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 		if _, ok := tracker.all[tx.Hash()]; ok {
 			continue
 		}
-		tracker.all[tx.Hash()] = tx
 		addr, err := types.Sender(tracker.signer, tx)
 		if err != nil { // Ignore this tx
 			continue
 		}
+		tracker.all[tx.Hash()] = tx
 		if tracker.byAddr[addr] == nil {
 			tracker.byAddr[addr] = legacypool.NewSortedMap()
 		}
@@ -101,6 +105,7 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 			_ = tracker.journal.insert(tx)
 		}
 	}
+	localGauge.Update(int64(len(tracker.all)))
 }
 
 // recheck checks and returns any transactions that needs to be resubmitted.
@@ -142,6 +147,7 @@ func (tracker *TxTracker) recheck(journalCheck bool) (resubmits []*types.Transac
 			})
 		}
 	}
+	localGauge.Update(int64(len(tracker.all)))
 	log.Debug("Tx tracker status", "need-resubmit", len(resubmits), "stale", numStales, "ok", numOk)
 	return resubmits, rejournal
 }

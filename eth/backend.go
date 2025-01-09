@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
-	"github.com/ethereum/go-ethereum/core/txpool/tracker"
+	"github.com/ethereum/go-ethereum/core/txpool/locals"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -71,7 +71,7 @@ type Ethereum struct {
 	// core protocol objects
 	config         *ethconfig.Config
 	txPool         *txpool.TxPool
-	localTxTracker *tracker.TxTracker
+	localTxTracker *locals.TxTracker
 	blockchain     *core.BlockChain
 
 	handler *handler
@@ -244,7 +244,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			log.Warn("Sanitizing invalid txpool journal time", "provided", rejournal, "updated", time.Second)
 			rejournal = time.Second
 		}
-		eth.localTxTracker = tracker.New(config.TxPool.Journal, rejournal, eth.blockchain.Config(), eth.txPool)
+		eth.localTxTracker = locals.New(config.TxPool.Journal, rejournal, eth.blockchain.Config(), eth.txPool)
 		stack.RegisterLifecycle(eth.localTxTracker)
 	}
 
