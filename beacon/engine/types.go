@@ -265,10 +265,17 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 
 	var requestsHash *common.Hash
 	if requests != nil {
+		var last byte
 		for _, req := range requests {
+			// No empty requests.
 			if len(req) < 2 {
 				return nil, fmt.Errorf("empty request: %v", req)
 			}
+			// Check that requests are ordered by their type.
+			if req[0] < last {
+				return nil, fmt.Errorf("invalid request order: %v", req)
+			}
+
 		}
 		h := types.CalcRequestsHash(requests)
 		requestsHash = &h
