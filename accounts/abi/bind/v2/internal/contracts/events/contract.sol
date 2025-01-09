@@ -11,7 +11,6 @@ contract C {
         uint256 data
     );
 
-    // TODO: consider log test where data is hashed?  maybe not necessary for v2 coverage
     function EmitOne() public {
         emit basic1(
             uint256(1),
