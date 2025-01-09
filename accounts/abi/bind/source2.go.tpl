@@ -86,7 +86,6 @@ var (
 			  {{.Name}} {{bindtype .Type $structs}}{{end}}
 			}
 			{{ end }}
-			// TODO: if return count > 1, we return a struct.  no need to iterate .Normalized.Outputs here (but double-check this and remove this TODO once confirmed).
 			func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) ({{if .Structured}} {{.Normalized.Name}}Output,{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
 				out, err := {{ decapitalise $contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
 				{{if .Structured}}
