@@ -16,6 +16,9 @@ linters:
     - gci
     - gocheckcompilerdirectives
     - gofmt
+    # goheader is disabled but it is enabled in the CI with a flag.
+    # Please see .github/workflows/golangci-lint.yml which explains why.
+    # - goheader
     - goimports
     - gomodguard
     - gosec
@@ -72,8 +75,8 @@ linters-settings:
         disabled: true
 
 issues:
-   exclude-dirs-use-default: false
-   exclude-rules:
+  exclude-dirs-use-default: false
+  exclude-rules:
     - path-except: libevm
       linters:
         # If any issue is flagged in a non-libevm file, add the linter here
@@ -104,19 +107,19 @@ issues:
         - varnamelen
         - wastedassign
         - whitespace
-   include:
-   # Many of the default exclusions are because, verbatim "Annoying issue",
-   # which defeats the point of a linter.
-        - EXC0002
-        - EXC0004
-        - EXC0005
-        - EXC0006
-        - EXC0007
-        - EXC0008
-        - EXC0009
-        - EXC0010
-        - EXC0011
-        - EXC0012
-        - EXC0013
-        - EXC0014
-        - EXC0015
+  include:
+    # Many of the default exclusions are because, verbatim "Annoying issue",
+    # which defeats the point of a linter.
+    - EXC0002
+    - EXC0004
+    - EXC0005
+    - EXC0006
+    - EXC0007
+    - EXC0008
+    - EXC0009
+    - EXC0010
+    - EXC0011
+    - EXC0012
+    - EXC0013
+    - EXC0014
+    - EXC0015

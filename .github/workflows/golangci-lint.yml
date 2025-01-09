@@ -27,4 +27,8 @@ jobs:
         with:
           version: v1.60
           only-new-issues: true
+          # The goheader linter is enabled so that it runs only on modified or new files
+          # (see only-new-issues: true). Note it is disabled in .golangci.yml because
+          # golangci-lint is not aware of new/modified files compared to the last git commit,
+          # and we want to avoid reporting invalid goheader errors when running the linter locally.
           args: --enable goheader
