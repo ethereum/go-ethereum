@@ -155,6 +155,9 @@ var (
 
 	{{ if .Errors }}
 	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) any {
+		// TODO: we should be able to discern the error type from the selector, instead of trying each possible type
+		// strip off the error type selector
+		raw = raw[4:]
 		{{$i := 0}}
 		{{range $k, $v := .Errors}}
 			{{ if eq $i 0 }}

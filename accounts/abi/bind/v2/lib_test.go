@@ -471,5 +471,3 @@ func TestBindingGeneration(t *testing.T) {
 		}
 	}
 }
-
-// contract test ideas (from the v1 bind tests):  error that takes struct argument.  constructor that takes struct arg.

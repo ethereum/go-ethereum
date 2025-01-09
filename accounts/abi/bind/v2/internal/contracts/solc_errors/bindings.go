@@ -44,11 +44,6 @@ func NewC() (*C, error) {
 	return &C{abi: *parsed}, nil
 }
 
-func (c *C) PackConstructor() []byte {
-	res, _ := c.abi.Pack("")
-	return res
-}
-
 // Bar is a free data retrieval call binding the contract method 0xb0a378b0.
 //
 // Solidity: function Bar() pure returns()
@@ -64,6 +59,9 @@ func (c *C) PackFoo() ([]byte, error) {
 }
 
 func (c *C) UnpackError(raw []byte) any {
+	// TODO: we should be able to discern the error type from the selector, instead of trying each possible type
+	// strip off the error type selector
+	raw = raw[4:]
 
 	if val, err := c.UnpackBadThingError(raw); err == nil {
 		return val
@@ -138,11 +136,6 @@ func NewC2() (*C2, error) {
 	return &C2{abi: *parsed}, nil
 }
 
-func (c2 *C2) PackConstructor() []byte {
-	res, _ := c2.abi.Pack("")
-	return res
-}
-
 // Foo is a free data retrieval call binding the contract method 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
@@ -151,6 +144,9 @@ func (c2 *C2) PackFoo() ([]byte, error) {
 }
 
 func (c2 *C2) UnpackError(raw []byte) any {
+	// TODO: we should be able to discern the error type from the selector, instead of trying each possible type
+	// strip off the error type selector
+	raw = raw[4:]
 
 	if val, err := c2.UnpackBadThingError(raw); err == nil {
 		return val
