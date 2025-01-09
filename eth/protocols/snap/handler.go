@@ -277,10 +277,12 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 	// Retrieve the requested state and bail out if non existent
 	tr, err := trie.New(trie.StateTrieID(req.Root), chain.TrieDB())
 	if err != nil {
+		log.Warn("Failed to open account trie", "root", req.Root, "err", err)
 		return nil, nil
 	}
 	it, err := chain.Snapshots().AccountIterator(req.Root, req.Origin)
 	if err != nil {
+		log.Warn("Failed to open account iterator", "root", req.Root, "origin", req.Origin, "err", err)
 		return nil, nil
 	}
 	// Iterate over the requested range and pile accounts up
