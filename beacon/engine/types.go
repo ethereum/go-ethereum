@@ -265,6 +265,11 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 
 	var requestsHash *common.Hash
 	if requests != nil {
+		for _, req := range requests {
+			if len(req) < 2 {
+				return nil, fmt.Errorf("empty request: %v", req)
+			}
+		}
 		h := types.CalcRequestsHash(requests)
 		requestsHash = &h
 	}
