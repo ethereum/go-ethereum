@@ -195,7 +195,6 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		}
 	}
 
-	// TODO: constructor input packing should not return an error.
 	ctrct, err := nested_libraries.NewC1()
 	if err != nil {
 		panic(err)
@@ -395,7 +394,7 @@ func TestErrors(t *testing.T) {
 
 	ctrctABI, _ := solc_errors.CMetaData.GetAbi()
 	instance := ContractInstance{res.Addrs[solc_errors.CMetaData.Pattern], backend, *ctrctABI}
-	_, err = Call[struct{}](&instance, opts, packedInput, func(packed []byte) (*struct{}, error) { return nil, nil })
+	_, err = Call[struct{}](&instance, opts, packedInput, func(packed []byte) (struct{}, error) { return struct{}{}, nil })
 	if err == nil {
 		t.Fatalf("expected call to fail")
 	}
