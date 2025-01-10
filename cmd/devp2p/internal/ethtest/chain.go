@@ -167,7 +167,7 @@ func (c *Chain) RootAt(height int) common.Hash {
 // pre-funded accounts list.
 func (c *Chain) GetSender(idx int) (common.Address, uint64) {
 	accounts := maps.Keys(c.senders)
-	slices.SortFunc(accounts, commmon.Address.Cmp)
+	slices.SortFunc(accounts, common.Address.Cmp)
 	addr := accounts[idx]
 	return addr, c.senders[addr].Nonce
 }
