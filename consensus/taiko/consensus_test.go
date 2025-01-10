@@ -39,7 +39,7 @@ func init() {
 	config.ArrowGlacierBlock = nil
 	config.Ethash = nil
 	config.Taiko = true
-	testEngine = taiko.New(config, rawdb.NewMemoryDatabase())
+	testEngine = taiko.New(config)
 
 	taikoL2AddressPrefix := strings.TrimPrefix(config.ChainID.String(), "0")
 
@@ -93,7 +93,44 @@ func init() {
 	}
 }
 
-func generateTestChain(t *testing.T) ([]*types.Block, *eth.Ethereum) {
+func newTestBackend(t *testing.T) (*eth.Ethereum, []*types.Block) {
+	// Generate test chain.
+	blocks := generateTestChain()
+
+	// Create node
+	n, err := node.New(&node.Config{})
+	if err != nil {
+		t.Fatalf("can't create new node: %v", err)
+	}
+
+	// Create Ethereum Service
+	config := &ethconfig.Config{
+		Genesis: genesis,
+	}
+
+	ethservice, err := eth.New(n, config)
+	if err != nil {
+		t.Fatalf("can't create new ethereum service: %v", err)
+	}
+
+	// Import the test chain.
+	if err := n.Start(); err != nil {
+		t.Fatalf("can't start test node: %v", err)
+	}
+
+	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
+		t.Fatalf("can't import test blocks: %v", err)
+	}
+
+	if _, ok := ethservice.Engine().(*taiko.Taiko); !ok {
+		t.Fatalf("not use taiko engine")
+	}
+
+	return ethservice, blocks
+}
+
+func generateTestChain() []*types.Block {
+	db := rawdb.NewMemoryDatabase()
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 
@@ -110,56 +147,16 @@ func generateTestChain(t *testing.T) ([]*types.Block, *eth.Ethereum) {
 		}
 	}
 
-	// Create node
-	n, err := node.New(&node.Config{
-		DataDir: t.TempDir(),
-	})
-	if err != nil {
-		t.Fatalf("can't create new node: %v", err)
-	}
-
-	// Create Ethereum Service
-	ethService, err := eth.New(n, &ethconfig.Config{
-		Genesis: genesis,
-	})
-	if err != nil {
-		t.Fatalf("can't create new ethereum service: %v", err)
-	}
-
-	db := ethService.ChainDb()
-
 	gblock := genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
+
 	blocks, _ := core.GenerateChain(genesis.Config, gblock, testEngine, db, 1, generate)
+
 	blocks = append([]*types.Block{gblock}, blocks...)
-
-	// Insert L1Origins.
-	for _, block := range blocks {
-		rawdb.WriteL1Origin(db, block.Number(), &rawdb.L1Origin{
-			BlockID:       block.Number(),
-			L1BlockHeight: block.Number(),
-			L1BlockHash:   block.Hash(),
-		})
-	}
-
-	// Import the test chain.
-	if err := n.Start(); err != nil {
-		t.Fatalf("can't start test node: %v", err)
-	}
-
-	if _, err := ethService.BlockChain().InsertChain(blocks[1:]); err != nil {
-		t.Fatalf("can't import test blocks: %v", err)
-	}
-
-	if _, ok := ethService.Engine().(*taiko.Taiko); !ok {
-		t.Fatalf("not use taiko engine")
-	}
-
-	return blocks, ethService
+	return blocks
 }
 
 func TestVerifyHeader(t *testing.T) {
-	// Generate test chain.
-	blocks, ethService := generateTestChain(t)
+	ethService, blocks := newTestBackend(t)
 
 	for _, b := range blocks {
 		err := testEngine.VerifyHeader(ethService.BlockChain(), b.Header())

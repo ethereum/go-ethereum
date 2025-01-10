@@ -400,11 +400,6 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
 	} else if isTaiko { // CHANGE(taiko): reorg is allowed in L2.
-		// After inserting a new canonical head, we delete all L1Origin data of the pending soft blocks.
-		head := api.eth.BlockChain().CurrentBlock()
-		for number := head.Number.Uint64(); number > block.NumberU64(); number-- {
-			rawdb.DeleteL1Origin(api.eth.ChainDb(), new(big.Int).SetUint64(number))
-		}
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
 			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
 		}
@@ -451,17 +446,6 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	if payloadAttributes != nil {
 		// CHANGE(taiko): create a L2 block by Taiko protocol.
 		if isTaiko {
-			// L1Origin is a required field in PayloadAttributesV1.
-			if payloadAttributes.L1Origin == nil {
-				return valid(nil), engine.InvalidPayloadAttributes.With(errors.New("L1Origin is nil"))
-			}
-			// If it's not a softblock creation request, then `L1BlockHash` and `L1BlockHeight` are required.
-			if payloadAttributes.L1Origin.BatchID == nil &&
-				(payloadAttributes.L1Origin.L1BlockHash == (common.Hash{}) ||
-					payloadAttributes.L1Origin.L1BlockHeight == nil) {
-				return valid(nil), engine.InvalidPayloadAttributes.With(errors.New("L1BlockHash or L1BlockHeight is nil"))
-			}
-
 			// No need to check payloadAttribute here, because all its fields are
 			// marked as required.
 			block, err := api.eth.Miner().SealBlockWith(
@@ -504,10 +488,8 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 
 			// Write L1Origin.
 			rawdb.WriteL1Origin(api.eth.ChainDb(), l1Origin.BlockID, l1Origin)
-			// Write the head L1Origin, only when it's not a soft block.
-			if l1Origin.BatchID == nil {
-				rawdb.WriteHeadL1Origin(api.eth.ChainDb(), l1Origin.BlockID)
-			}
+			// Write the head L1Origin.
+			rawdb.WriteHeadL1Origin(api.eth.ChainDb(), l1Origin.BlockID)
 
 			return valid(&id), nil
 		}

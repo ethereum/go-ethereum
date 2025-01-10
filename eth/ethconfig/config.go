@@ -165,7 +165,7 @@ type Config struct {
 func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (consensus.Engine, error) {
 	// CHANGE(taiko): use Taiko consensus engine when the --taiko flag is set.
 	if config.Taiko {
-		return taiko.New(config, db), nil
+		return taiko.New(config), nil
 	}
 	// Geth v1.14.0 dropped support for non-merged networks in any consensus
 	// mode. If such a network is requested, reject startup.

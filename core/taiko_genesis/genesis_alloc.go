@@ -33,6 +33,3 @@ var HeklaGenesisAllocJSON []byte
 
 //go:embed mainnet.json
 var MainnetGenesisAllocJSON []byte
-
-//go:embed preconf_devnet.json
-var PreconfDevnetGenesisAllocJSON []byte
