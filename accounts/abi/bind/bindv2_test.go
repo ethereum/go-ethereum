@@ -3,8 +3,6 @@ package bind
 import (
 	_ "embed"
 	"fmt"
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -331,8 +329,9 @@ var bindTests2 = []bindV2Test{
 	},
 }
 
+// TestBindingV2ConvertedV1Tests regenerates contracts from the v1 binding test cases (using v2 binding mode) and ensures
+// that no mutations occurred compared to the expected output included under internal/convertedv1bindtests.
 func TestBindingV2ConvertedV1Tests(t *testing.T) {
-	os.Mkdir("convertedv1bindtests", 0777)
 	for _, tc := range bindTests2 {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.types == nil {
@@ -344,21 +343,9 @@ func TestBindingV2ConvertedV1Tests(t *testing.T) {
 				t.Fatalf("got error from bind: %v", err)
 			}
 
-			// TODO: remove these before merging abigen2 PR.  these are for convenience if I need to regenerate the converted bindings or add a new one.
-			if err := os.WriteFile(fmt.Sprintf("convertedv1bindtests/%s.go", strings.ToLower(tc.name)), []byte(code), 0666); err != nil {
-				t.Fatalf("err writing expected output to file: %v\n", err)
+			if code != tc.expectedBindings {
+				t.Fatalf("regenerating binding %s resulted in a mutation.", tc.name)
 			}
-			/*
-				fmt.Printf("//go:embed v2/internal/convertedv1bindtests/%s.go\n", strings.ToLower(tc.name))
-				fmt.Printf("var v1TestBinding%s string\n", tc.name)
-				fmt.Println()
-			*/
-			/*
-				if code != tc.expectedBindings {
-					//t.Fatalf("name mismatch for %s", tc.name)
-					t.Fatalf("'%s'\n!=\n'%s'\n", code, tc.expectedBindings)
-				}
-			*/
 		})
 	}
 }
