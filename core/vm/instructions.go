@@ -752,7 +752,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
-	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
+	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value, false)
 
 	if err != nil {
 		temp.Clear()
