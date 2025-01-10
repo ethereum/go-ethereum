@@ -116,24 +116,25 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 --decode > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
           git_hash=$(git rev-parse --short "$GITHUB_SHA")
-          kubectl set image deployment/devnet1 devnet1=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet2 devnet2=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet3 devnet3=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet4 devnet4=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet5 devnet5=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet6 devnet6=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet7 devnet7=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet8 devnet8=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet9 devnet9=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet10 devnet10=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet11 devnet11=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet12 devnet12=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet13 devnet13=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet14 devnet14=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet15 devnet15=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet16 devnet16=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet17 devnet17=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/devnet18 devnet18=xinfinorg/devnet:dev-upgrade-${git_hash}
+          kubectl set image deployment/devnet1 devnet1=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet2 devnet2=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet3 devnet3=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet4 devnet4=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet5 devnet5=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet6 devnet6=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet7 devnet7=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet8 devnet8=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet9 devnet9=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet10 devnet10=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet11 devnet11=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet12 devnet12=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet13 devnet13=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet14 devnet14=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet15 devnet15=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet16 devnet16=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet17 devnet17=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/devnet18 devnet18=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          echo done
 
   rpc_k8_apply:
     runs-on: ubuntu-latest
@@ -151,43 +152,17 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" | base64 --decode > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
           git_hash=$(git rev-parse --short "$GITHUB_SHA")
-          kubectl set image deployment/devnetrpc devnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/testnetrpc testnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash}
-          kubectl set image deployment/mainnetrpc mainnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash}
-  
-  rpcnode_terraform_apply:
+          kubectl set image deployment/devnetrpc devnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/testnetrpc testnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          kubectl set image deployment/mainnetrpc mainnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash} ||
+          echo done
+
+  devnet_send_notification:
     runs-on: ubuntu-latest
+    needs: devnet_k8_apply
     if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
-    needs: devnet_build_push
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - name: Terraform Apply
+      - name: Send deployment notification
         run: |
-          cd cicd/terraform
-          terraform init ${{ env.tf_init_cli_options }}
-          terraform apply ${{ env.tf_apply_cli_options }}
-
-      - name: Update RPC nodes image
-        uses: dawidd6/action-ansible-playbook@v2
-        with:
-          playbook: playbooks/update-image.yaml
-          directory: ./cicd/ansible
-          key: ${{secrets.SSH_PRIVATE_KEY_DEVNET}}
-          options: |
-            --inventory inventory.yaml
-            --extra-vars network=ec2_rpcs
-            --extra-vars rpc_image=${{ needs.devnet_build_push.outputs.output1 }}
-
-  # TODO Uncomment until new devnet
-  # devnet_send_notification:
-  #   runs-on: ubuntu-latest
-  #   needs: devnet_terraform_apply
-  #   if: github.ref == 'refs/heads/dev-upgrade' && !startsWith(github.ref, 'refs/tags/')
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Send deployment notification
-  #       run: |
-  #         curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=${GITHUB_SHA}"
+          curl --location --request POST "66.94.98.186:8080/deploy?environment=devnet&service=xdc&version=${GITHUB_SHA}"
