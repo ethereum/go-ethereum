@@ -165,13 +165,8 @@ func (c *Chain) RootAt(height int) common.Hash {
 // GetSender returns the address associated with account at the index in the
 // pre-funded accounts list.
 func (c *Chain) GetSender(idx int) (common.Address, uint64) {
-	accounts := make([]common.Address, 0, len(c.senders))
-	for addr := range c.senders {
-		accounts = append(accounts, addr)
-	}
-	slices.SortFunc(accounts, func(a, b common.Address) int {
-		return bytes.Compare(a[:], b[:])
-	})
+	accounts := slices.Clone(c.senders)
+	slices.SortFunc(accounts, commmon.Address.Cmp)
 	addr := accounts[idx]
 	return addr, c.senders[addr].Nonce
 }
