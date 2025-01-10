@@ -171,6 +171,11 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return fmt.Errorf("failed to sync txpool: %w", err)
 	}
 
+	payloadVersion := engine.PayloadV3
+	if header := c.eth.BlockChain().CurrentBlock(); !c.eth.BlockChain().Config().IsCancun(header.Number, timestamp) {
+		payloadVersion = engine.PayloadV2
+	}
+
 	var random [32]byte
 	rand.Read(random[:])
 	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
@@ -179,7 +184,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
-	}, engine.PayloadV3, false)
+	}, payloadVersion, false)
 	if err != nil {
 		return err
 	}
@@ -217,8 +222,18 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 			blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
 		}
 	}
+
+	beaconRoot := &common.Hash{}
+	requests := envelope.Requests
+
+	if payloadVersion == engine.PayloadV2 {
+		blobHashes = nil
+		beaconRoot = nil
+		requests = nil
+	}
+
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, &common.Hash{}, envelope.Requests, false)
+	_, err = c.engineAPI.newPayload(*payload, blobHashes, beaconRoot, requests, false)
 	if err != nil {
 		return err
 	}
