@@ -402,11 +402,27 @@ func TestErrors(t *testing.T) {
 	if !hasRevertErrorData {
 		t.Fatalf("expected call error to contain revert error data.")
 	}
-	unpackedErr := ctrct.UnpackError(raw)
-	if unpackedErr == nil {
+	rawUnpackedErr := ctrct.UnpackError(raw)
+	if rawUnpackedErr == nil {
 		t.Fatalf("expected to unpack error")
 	}
-	// TODO: check anything about the error?
+
+	unpackedErr, ok := rawUnpackedErr.(*solc_errors.CBadThing)
+	if !ok {
+		t.Fatalf("unexpected type for error")
+	}
+	if unpackedErr.Arg1.Cmp(big.NewInt(0)) != 0 {
+		t.Fatalf("bad unpacked error result: expected Arg1 field to be 0.  got %s", unpackedErr.Arg1.String())
+	}
+	if unpackedErr.Arg2.Cmp(big.NewInt(1)) != 0 {
+		t.Fatalf("bad unpacked error result: expected Arg2 field to be 1.  got %s", unpackedErr.Arg2.String())
+	}
+	if unpackedErr.Arg3.Cmp(big.NewInt(2)) != 0 {
+		t.Fatalf("bad unpacked error result: expected Arg3 to be 2.  got %s", unpackedErr.Arg3.String())
+	}
+	if unpackedErr.Arg4 != false {
+		t.Fatalf("bad unpacked error result: expected Arg4 to be false.  got true")
+	}
 }
 
 // TestBindingGeneration tests that re-running generation of bindings does not result in mutations to the binding code
