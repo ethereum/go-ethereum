@@ -346,9 +346,8 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	}
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
 	if !contract.IsSystemCall {
-		statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
-		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-			scope.Contract.Gas = 0
+		scope.Contract.UseGas(consumed, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified)
+		if consumed < wanted {
 			return nil, ErrOutOfGas
 		}
 	}
@@ -373,9 +372,9 @@ func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
-			statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false)
-			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-				scope.Contract.Gas = 0
+			consumed, wanted := interpreter.evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
+			scope.Contract.UseGas(wanted, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified)
+			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
 		}
@@ -401,9 +400,9 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 
 		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall {
 			contractAddr := scope.Contract.Address()
-			statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false)
-			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-				scope.Contract.Gas = 0
+			consumed, wanted := interpreter.evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas)
+			scope.Contract.UseGas(consumed, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified)
+			if consumed < wanted {
 				return nil, ErrOutOfGas
 			}
 		}

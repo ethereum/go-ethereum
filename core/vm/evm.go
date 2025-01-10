@@ -194,8 +194,14 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP4762 && !isSystemCall(caller) {
-			// add proof of absence to witness
-			wgas := evm.AccessEvents.AddAccount(addr, false)
+			// Add proof of absence to witness
+			// At this point, the read costs have already been charged, either because this
+			// is a direct tx call, in which case it's covered by the intrinsic gas, or because
+			// of a CALL instruction, in which case BASIC_DATA has been added to the access
+			// list in write mode. If there is enough gas paying for the addition of the code
+			// hash leaf to the access list, then account creation will proceed unimpaired.
+			// Thus, only pay for the creation of the code hash leaf here.
+			wgas := evm.AccessEvents.CodeHashGas(addr, true, gas, false)
 			if gas < wgas {
 				evm.StateDB.RevertToSnapshot(snapshot)
 				return nil, 0, ErrOutOfGas
@@ -443,7 +449,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
-		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address)
+		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas)
 		if statelessGas > gas {
 			return nil, common.Address{}, 0, ErrOutOfGas
 		}
@@ -491,14 +497,14 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
-		statelessGas := evm.AccessEvents.ContractCreateInitGas(address)
-		if statelessGas > gas {
+		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas)
+		if consumed < wanted {
 			return nil, common.Address{}, 0, ErrOutOfGas
 		}
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
-			evm.Config.Tracer.OnGasChange(gas, gas-statelessGas, tracing.GasChangeWitnessContractInit)
+			evm.Config.Tracer.OnGasChange(gas, gas-consumed, tracing.GasChangeWitnessContractInit)
 		}
-		gas = gas - statelessGas
+		gas = gas - consumed
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
 
@@ -542,7 +548,9 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address, valu
 			return ret, ErrCodeStoreOutOfGas
 		}
 	} else {
-		if len(ret) > 0 && !contract.UseGas(evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk) {
+		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas)
+		contract.UseGas(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+		if len(ret) > 0 && (consumed < wanted) {
 			return ret, ErrCodeStoreOutOfGas
 		}
 	}
