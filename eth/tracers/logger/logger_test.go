@@ -108,3 +108,18 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 		})
 	}
 }
+
+func TestErrorCompare(t *testing.T) {
+	err := vm.ErrExecutionReverted
+	if err != vm.ErrExecutionReverted {
+		t.Fatal("error compare")
+	}
+	// wrap err and test again
+	err = vm.VMErrorFromErr(err)
+	if err == vm.ErrExecutionReverted { // equality comparison fails
+		t.Fatal("error compare should fail")
+	}
+	if !errors.Is(err, vm.ErrExecutionReverted) { // check all wrapped errors
+		t.Fatal("error compare: err is not a vm.ErrExecutionReverted")
+	}
+}
