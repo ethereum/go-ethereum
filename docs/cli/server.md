@@ -290,13 +290,13 @@ The ```bor server``` command runs the Bor client.
 
 ### Transaction Pool Options
 
-- ```txpool.accountqueue```: Maximum number of non-executable transaction slots permitted per account (default: 16)
+- ```txpool.accountqueue```: Maximum number of non-executable transaction slots permitted per account (default: 64)
 
 - ```txpool.accountslots```: Minimum number of executable transaction slots guaranteed per account (default: 16)
 
-- ```txpool.globalqueue```: Maximum number of non-executable transaction slots for all accounts (default: 32768)
+- ```txpool.globalqueue```: Maximum number of non-executable transaction slots for all accounts (default: 131072)
 
-- ```txpool.globalslots```: Maximum number of executable transaction slots for all accounts (default: 32768)
+- ```txpool.globalslots```: Maximum number of executable transaction slots for all accounts (default: 131072)
 
 - ```txpool.journal```: Disk journal for local transaction to survive node restarts (default: transactions.rlp)
 

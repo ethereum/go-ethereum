@@ -49,6 +49,10 @@ func (s *Server) HeaderByNumber(ctx context.Context, req *protobor.GetHeaderByNu
 		return nil, err
 	}
 
+	if header == nil {
+		return nil, errors.New("header not found")
+	}
+
 	return &protobor.GetHeaderByNumberResponse{Header: headerToProtoborHeader(header)}, nil
 }
 
@@ -60,6 +64,10 @@ func (s *Server) BlockByNumber(ctx context.Context, req *protobor.GetBlockByNumb
 	block, err := s.backend.APIBackend.BlockByNumber(ctx, bN)
 	if err != nil {
 		return nil, err
+	}
+
+	if block == nil {
+		return nil, errors.New("block not found")
 	}
 
 	return &protobor.GetBlockByNumberResponse{Block: blockToProtoBlock(block)}, nil

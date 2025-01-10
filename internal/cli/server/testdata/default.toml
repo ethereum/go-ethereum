@@ -61,9 +61,9 @@ devfakeauthor = false
   pricelimit = 25000000000
   pricebump = 10
   accountslots = 16
-  globalslots = 32768
-  accountqueue = 16
-  globalqueue = 32768
+  globalslots = 131072
+  accountqueue = 64
+  globalqueue = 131072
   lifetime = "3h0m0s"
 
 [miner]

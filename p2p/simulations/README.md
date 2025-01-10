@@ -116,7 +116,7 @@ the expectation and what network events were emitted during the step run.
 
 ## HTTP API
 
-The simulation framework includes a HTTP API that can be used to control the
+The simulation framework includes an HTTP API that can be used to control the
 simulation.
 
 The API is initialised with a particular node adapter and has the following
