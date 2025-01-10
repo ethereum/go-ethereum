@@ -217,7 +217,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 	// block 1 parent hash is 0x0100....
 	// block 2 parent hash is 0x0200....
 	// etc
-	checkBlockHashes := func(statedb *state.StateDB) {
+	checkBlockHashes := func(statedb *state.StateDB, isVerkle bool) {
 		statedb.SetNonce(params.HistoryStorageAddress, 1)
 		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
 		// Process n blocks, from 1 .. num
@@ -226,19 +226,19 @@ func TestProcessParentBlockHash(t *testing.T) {
 			header := &types.Header{ParentHash: common.Hash{byte(i)}, Number: big.NewInt(int64(i)), Difficulty: new(big.Int)}
 			vmContext := NewEVMBlockContext(header, nil, new(common.Address))
 			evm := vm.NewEVM(vmContext, statedb, params.MergedTestChainConfig, vm.Config{})
-			ProcessParentBlockHash(header.ParentHash, evm)
+			ProcessParentBlockHash(header.ParentHash, evm, isVerkle)
 		}
 		// Read block hashes for block 0 .. num-1
 		for i := 0; i < num; i++ {
-			have, want := getContractStoredBlockHash(statedb, uint64(i)), common.Hash{byte(i + 1)}
+			have, want := getContractStoredBlockHash(statedb, uint64(i), isVerkle), common.Hash{byte(i + 1)}
 			if have != want {
-				t.Errorf("block %d, have parent hash %v, want %v", i, have, want)
+				t.Errorf("block %d, verkle=%v, have parent hash %v, want %v", i, isVerkle, have, want)
 			}
 		}
 	}
 	t.Run("MPT", func(t *testing.T) {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-		checkBlockHashes(statedb)
+		checkBlockHashes(statedb, false)
 	})
 	t.Run("Verkle", func(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
@@ -246,15 +246,18 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
 		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))
-		checkBlockHashes(statedb)
+		checkBlockHashes(statedb, true)
 	})
 }
 
 // getContractStoredBlockHash is a utility method which reads the stored parent blockhash for block 'number'
-func getContractStoredBlockHash(statedb *state.StateDB, number uint64) common.Hash {
+func getContractStoredBlockHash(statedb *state.StateDB, number uint64, isVerkle bool) common.Hash {
 	ringIndex := number % params.HistoryServeWindow
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
+	if isVerkle {
+		return statedb.GetState(params.SystemAddress, key)
+	}
 	return statedb.GetState(params.HistoryStorageAddress, key)
 }
 
