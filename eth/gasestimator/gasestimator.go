@@ -219,7 +219,7 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
 	// Assemble the call and the call context
 	var (
-		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
+		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, opts.Config, nil)
 		dirtyState = opts.State.Copy()
 	)
 	if opts.BlockOverrides != nil {

@@ -70,6 +70,8 @@ func TestCalcExcessBlobGas(t *testing.T) {
 }
 
 func TestCalcBlobFee(t *testing.T) {
+	zero := uint64(0)
+
 	tests := []struct {
 		excessBlobGas uint64
 		blobfee       int64
@@ -80,7 +82,9 @@ func TestCalcBlobFee(t *testing.T) {
 		{10 * 1024 * 1024, 23},
 	}
 	for i, tt := range tests {
-		have := CalcBlobFee(tt.excessBlobGas)
+		config := &params.ChainConfig{LondonBlock: big.NewInt(0), CancunTime: &zero, BlobScheduleConfig: params.DefaultBlobSchedule}
+		header := &types.Header{ExcessBlobGas: &tt.excessBlobGas}
+		have := CalcBlobFee(config, header)
 		if have.Int64() != tt.blobfee {
 			t.Errorf("test %d: blobfee mismatch: have %v want %v", i, have, tt.blobfee)
 		}

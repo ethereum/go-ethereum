@@ -23,11 +23,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 var (
-	minBlobGasPrice            = big.NewInt(params.BlobTxMinBlobGasprice)
-	blobGaspriceUpdateFraction = big.NewInt(params.BlobTxBlobGaspriceUpdateFraction)
+	minBlobGasPrice                  = big.NewInt(params.BlobTxMinBlobGasprice)
+	blobGaspriceUpdateFractionCancun = big.NewInt(params.BlobTxBlobGaspriceUpdateFractionCancun)
+	blobGaspriceUpdateFractionPrague = big.NewInt(params.BlobTxBlobGaspriceUpdateFractionPrague)
 )
 
 // VerifyEIP4844Header verifies the presence of the excessBlobGas field and that
@@ -76,8 +78,15 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header) uint64 
 }
 
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
-func CalcBlobFee(excessBlobGas uint64) *big.Int {
-	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(excessBlobGas), blobGaspriceUpdateFraction)
+func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
+	switch config.LatestFork(header.Time) {
+	case forks.Prague:
+		return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), blobGaspriceUpdateFractionPrague)
+	case forks.Cancun:
+		return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), blobGaspriceUpdateFractionCancun)
+	default:
+		panic("calculating blob fee on unsupported fork")
+	}
 }
 
 // fakeExponential approximates factor * e ** (numerator / denominator) using
