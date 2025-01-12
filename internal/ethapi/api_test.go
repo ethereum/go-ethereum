@@ -2085,8 +2085,6 @@ func mockStateSyncTxOnCurrentBlock(t *testing.T, backend *testBackend) common.Ha
 }
 
 func TestRPCGetTransactionReceipt(t *testing.T) {
-	t.Parallel()
-
 	var (
 		api, _, testSuite = setupTransactionsToApiTest(t)
 	)
@@ -2105,8 +2103,6 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 	}
 }
 func TestRPCGetTransactionByHash(t *testing.T) {
-	t.Parallel()
-
 	var (
 		api, _, testSuite = setupTransactionsToApiTest(t)
 	)
@@ -2126,8 +2122,6 @@ func TestRPCGetTransactionByHash(t *testing.T) {
 }
 
 func TestRPCGetBlockTransactionCountByHash(t *testing.T) {
-	t.Parallel()
-
 	var (
 		api, _, _ = setupTransactionsToApiTest(t)
 	)
@@ -2137,6 +2131,18 @@ func TestRPCGetBlockTransactionCountByHash(t *testing.T) {
 	// 2 txs: blob tx + state sync tx
 	expected := hexutil.Uint(2)
 	require.Equal(t, expected, *cnt)
+}
+
+func TestRPCGetTransactionByBlockHashAndIndex(t *testing.T) {
+	var (
+		api, _, _ = setupTransactionsToApiTest(t)
+	)
+
+	blobTx := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 0)
+	stateSyncTx := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 1)
+
+	testRPCResponseWithFile(t, 0, blobTx, "eth_getTransactionByBlockHashAndIndex", "blob-tx")
+	testRPCResponseWithFile(t, 1, stateSyncTx, "eth_getTransactionByBlockHashAndIndex", "state-sync-tx")
 }
 
 func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc string, file string) {
@@ -2157,8 +2163,6 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 }
 
 func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
-	t.Parallel()
-
 	api, blockNrOrHash, testSuite := setupBlocksToApiTest(t)
 
 	receipts, err := api.GetTransactionReceiptsByBlock(context.Background(), blockNrOrHash)
@@ -2178,8 +2182,6 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 }
 
 func TestRPCGetBlockReceipts(t *testing.T) {
-	t.Parallel()
-
 	api, blockNrOrHash, testSuite := setupBlocksToApiTest(t)
 
 	receipts, err := api.GetBlockReceipts(context.Background(), blockNrOrHash)
