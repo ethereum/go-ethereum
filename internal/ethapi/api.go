@@ -704,7 +704,10 @@ func (api *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, blo
 
 	var txHash common.Hash
 
-	borReceipt := rawdb.ReadBorReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64(), api.b.ChainConfig())
+	borReceipt, err := api.b.GetBorBlockReceipt(ctx, block.Hash())
+	if err != nil {
+		return nil, err
+	}
 	if borReceipt != nil {
 		receipts = append(receipts, borReceipt)
 
@@ -1115,7 +1118,10 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 		result[i] = marshalReceipt(receipt, block.Hash(), block.NumberU64(), signer, txs[i], i, false)
 	}
 
-	stateSyncReceipt := rawdb.ReadBorReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64(), api.b.ChainConfig())
+	stateSyncReceipt, err := api.b.GetBorBlockReceipt(ctx, block.Hash())
+	if err != nil {
+		return nil, err
+	}
 	if stateSyncReceipt != nil {
 		tx, _, _, _ := rawdb.ReadBorTransaction(api.b.ChainDb(), stateSyncReceipt.TxHash)
 		result = append(result, marshalReceipt(stateSyncReceipt, block.Hash(), block.NumberU64(), signer, tx, len(result), true))
@@ -1901,7 +1907,7 @@ func (api *TransactionAPI) getAllBlockTransactions(ctx context.Context, block *t
 
 	stateSyncPresent := false
 
-	borReceipt := rawdb.ReadBorReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64(), api.b.ChainConfig())
+	borReceipt, _ := api.b.GetBorBlockReceipt(ctx, block.Hash())
 	if borReceipt != nil {
 		txHash := types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
 		if txHash != (common.Hash{}) {

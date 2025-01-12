@@ -593,8 +593,10 @@ func (b testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bo
 	}
 	return found, tx, blockHash, blockNumber, index, nil
 }
-func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { panic("implement me") }
-func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction { panic("implement me") }
+func (b testBackend) GetPoolTransactions() (types.Transactions, error) { panic("implement me") }
+func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
+	return nil
+}
 func (b testBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return 0, nil
 }
@@ -1907,7 +1909,10 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 	}
 }
 
-func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
+func setupBackendWithTxs(t *testing.T, genBlocks int) (*testBackend, []common.Hash, []struct {
+	txHash common.Hash
+	file   string
+}) {
 	config := *params.TestChainConfig
 
 	config.ShanghaiBlock = big.NewInt(0)
@@ -2005,38 +2010,6 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 
 	txHashes[genBlocks] = mockStateSyncTxOnCurrentBlock(t, backend)
 
-	return backend, txHashes
-}
-
-func mockStateSyncTxOnCurrentBlock(t *testing.T, backend *testBackend) common.Hash {
-	// State Sync Tx Setup
-	var stateSyncLogs []*types.Log
-	block, err := backend.BlockByHash(context.Background(), backend.CurrentBlock().Hash())
-	if err != nil {
-		t.Errorf("failed to get current block: %v", err)
-	}
-
-	types.DeriveFieldsForBorLogs(stateSyncLogs, block.Hash(), block.NumberU64(), 0, 0)
-
-	// Write bor receipt
-	rawdb.WriteBorReceipt(backend.ChainDb(), block.Hash(), block.NumberU64(), &types.ReceiptForStorage{
-		Status: types.ReceiptStatusSuccessful, // make receipt status successful
-		Logs:   stateSyncLogs,
-	})
-
-	// Write bor tx reverse lookup
-	rawdb.WriteBorTxLookupEntry(backend.ChainDb(), block.Hash(), block.NumberU64())
-	return types.GetDerivedBorTxHash(types.BorReceiptKey(block.NumberU64(), block.Hash()))
-}
-
-func TestRPCGetTransactionReceipt(t *testing.T) {
-	t.Parallel()
-
-	var (
-		backend, txHashes = setupReceiptBackend(t, 6)
-		api               = NewTransactionAPI(backend, new(AddrLocker))
-	)
-
 	var testSuite = []struct {
 		txHash common.Hash
 		file   string
@@ -2087,6 +2060,38 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 			file:   "state-sync-tx",
 		},
 	}
+
+	return backend, txHashes, testSuite
+}
+
+func mockStateSyncTxOnCurrentBlock(t *testing.T, backend *testBackend) common.Hash {
+	// State Sync Tx Setup
+	var stateSyncLogs []*types.Log
+	block, err := backend.BlockByHash(context.Background(), backend.CurrentBlock().Hash())
+	if err != nil {
+		t.Errorf("failed to get current block: %v", err)
+	}
+
+	types.DeriveFieldsForBorLogs(stateSyncLogs, block.Hash(), block.NumberU64(), 0, 0)
+
+	// Write bor receipt
+	rawdb.WriteBorReceipt(backend.ChainDb(), block.Hash(), block.NumberU64(), &types.ReceiptForStorage{
+		Status: types.ReceiptStatusSuccessful, // make receipt status successful
+		Logs:   stateSyncLogs,
+	})
+
+	// Write bor tx reverse lookup
+	rawdb.WriteBorTxLookupEntry(backend.ChainDb(), block.Hash(), block.NumberU64())
+	return types.GetDerivedBorTxHash(types.BorReceiptKey(block.NumberU64(), block.Hash()))
+}
+
+func TestRPCGetTransactionReceipt(t *testing.T) {
+	t.Parallel()
+
+	var (
+		backend, _, testSuite = setupBackendWithTxs(t, 6)
+		api                   = NewTransactionAPI(backend, new(AddrLocker))
+	)
 
 	for i, tt := range testSuite {
 		var (
@@ -2389,5 +2394,27 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 		}
 		want, have := tt.want, string(data)
 		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+	}
+}
+
+func TestRPCGetTransactionByHash(t *testing.T) {
+	t.Parallel()
+
+	var (
+		backend, _, testSuite = setupBackendWithTxs(t, 6)
+		api                   = NewTransactionAPI(backend, new(AddrLocker))
+	)
+
+	for i, tt := range testSuite {
+		var (
+			result interface{}
+			err    error
+		)
+		result, err = api.GetTransactionByHash(context.Background(), tt.txHash)
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		testRPCResponseWithFile(t, i, result, "eth_getTransactionByHash", tt.file)
 	}
 }
