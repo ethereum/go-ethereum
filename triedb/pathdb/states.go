@@ -333,6 +333,9 @@ func (s *stateSet) updateSize(delta int) {
 // encode serializes the content of state set into the provided writer.
 func (s *stateSet) encode(w io.Writer) error {
 	// Encode accounts
+	if err := rlp.Encode(w, s.rawStorageKey); err != nil {
+		return err
+	}
 	type accounts struct {
 		AddrHashes []common.Hash
 		Accounts   [][]byte
@@ -370,6 +373,9 @@ func (s *stateSet) encode(w io.Writer) error {
 
 // decode deserializes the content from the rlp stream into the state set.
 func (s *stateSet) decode(r *rlp.Stream) error {
+	if err := r.Decode(&s.rawStorageKey); err != nil {
+		return fmt.Errorf("load diff raw storage key flag: %v", err)
+	}
 	type accounts struct {
 		AddrHashes []common.Hash
 		Accounts   [][]byte
