@@ -2074,7 +2074,10 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	}
 
 	if !found {
-		tx, blockHash, blockNumber, index = rawdb.ReadBorTransaction(api.b.ChainDb(), hash)
+		tx, blockHash, blockNumber, index, err = api.b.GetBorBlockTransaction(ctx, hash)
+		if err != nil {
+			return nil, err
+		}
 		borTx = true
 	}
 
@@ -2086,7 +2089,10 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 
 	if borTx {
 		// Fetch bor block receipt
-		receipt = rawdb.ReadBorReceipt(api.b.ChainDb(), blockHash, blockNumber, api.b.ChainConfig())
+		receipt, err = api.b.GetBorBlockReceipt(ctx, blockHash)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		receipts, err := api.b.GetReceipts(ctx, blockHash)
 		if err != nil {
