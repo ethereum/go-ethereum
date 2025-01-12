@@ -1,3 +1,7 @@
+# This Makefile is meant to be used by people that do not usually work
+# with Go source code. If you know what GOPATH is then you probably
+# don't need to bother with make.
+
 .PHONY: XDC XDC-cross evm all test clean
 .PHONY: XDC-linux XDC-linux-386 XDC-linux-amd64 XDC-linux-mips64 XDC-linux-mips64le
 .PHONY: XDC-darwin XDC-darwin-386 XDC-darwin-amd64
@@ -5,11 +9,12 @@
 GOBIN = $(shell pwd)/build/bin
 GOFMT = gofmt
 GO ?= 1.22.10
+GORUN = go run
 GO_PACKAGES = .
 GO_FILES := $(shell find $(shell go list -f '{{.Dir}}' $(GO_PACKAGES)) -name \*.go)
-
 GIT = git
 
+#? XDC: Build XDC.
 XDC:
 	go run build/ci.go install ./cmd/XDC
 	@echo "Done building."
@@ -41,14 +46,25 @@ puppeth:
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/puppeth\" to launch puppeth."
 
+#? all: Build all packages and executables.
 all:
 	go run build/ci.go install
 
+#? test: Run the tests.
 test: all
 	go run build/ci.go test
 
+#? lint: Run certain pre-selected linters.
+lint: ## Run linters.
+	$(GORUN) build/ci.go lint
+
+#? clean: Clean go cache, built executables, and the auto generated folder.
 clean:
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
+
+#? fmt: Ensure consistent code formatting.
+fmt:
+	gofmt -s -w $(shell find . -name "*.go")
 
 # Cross Compilation Targets (xgo)
 

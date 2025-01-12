@@ -246,37 +246,52 @@ func doTest(cmdline []string) {
 	build.MustRun(gotest)
 }
 
+// doLint runs golangci-lint on requested packages.
 func doLint(cmdline []string) {
+	var (
+		cachedir = flag.String("cachedir", "./build/cache", "directory for caching golangci-lint binary.")
+	)
 	flag.CommandLine.Parse(cmdline)
-
 	packages := []string{"./..."}
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
-	// Get golangci-lint and install all supported linters
-	build.MustRun(goTool("get", "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.18.0"))
 
-	// Run fast linters batched together
-	configs := []string{
-		"run",
-		"--disable-all",
-		"--enable=vet",
-		"--enable=gofmt",
-		"--enable=misspell",
-		"--enable=goconst",
-		"--min-occurrences=6", // for goconst
-	}
-	build.MustRunCommand(filepath.Join(GOBIN, "golangci-lint"), append(configs, packages...)...)
+	linter := downloadLinter(*cachedir)
+	lflags := []string{"run", "--config", ".golangci.yml"}
+	build.MustRunCommandWithOutput(linter, append(lflags, packages...)...)
+	fmt.Println("You have achieved perfection.")
+}
 
-	// Run slow linters one by one
-	for _, linter := range []string{"unconvert", "gosimple"} {
-		configs = []string{"--vendor", "--deadline=10m", "--disable-all", "--enable=" + linter}
-		build.MustRunCommand(filepath.Join(GOBIN, "golangci-lint"), append(configs, packages...)...)
+// downloadLinter downloads and unpacks golangci-lint.
+func downloadLinter(cachedir string) string {
+	csdb := build.MustLoadChecksums("build/checksums.txt")
+	version, err := build.Version(csdb, "golangci")
+	if err != nil {
+		log.Fatal(err)
 	}
+	arch := runtime.GOARCH
+	ext := ".tar.gz"
+
+	if runtime.GOOS == "windows" {
+		ext = ".zip"
+	}
+	if arch == "arm" {
+		arch += "v" + os.Getenv("GOARM")
+	}
+	base := fmt.Sprintf("golangci-lint-%s-%s-%s", version, runtime.GOOS, arch)
+	url := fmt.Sprintf("https://github.com/golangci/golangci-lint/releases/download/v%s/%s%s", version, base, ext)
+	archivePath := filepath.Join(cachedir, base+ext)
+	if err := csdb.DownloadFile(url, archivePath); err != nil {
+		log.Fatal(err)
+	}
+	if err := build.ExtractArchive(archivePath, cachedir); err != nil {
+		log.Fatal(err)
+	}
+	return filepath.Join(cachedir, base, "golangci-lint")
 }
 
 // Cross compilation
-
 func doXgo(cmdline []string) {
 	var (
 		alltools = flag.Bool("alltools", false, `Flag whether we're building all known tools, or only on in particular`)
