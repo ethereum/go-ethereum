@@ -1,0 +1,18 @@
+name: YAML check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/*.yml"
+      - "**/*.yaml"
+      - ".github/workflows/yml.yml"
+      - ".github/yamllint.yml"
+
+jobs:
+  yaml-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate YAML files
+        run: yamllint -c .yamllint.yml .

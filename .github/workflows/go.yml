@@ -2,15 +2,15 @@ name: Go
 
 on:
   push:
-    branches: [ main, 'release/**' ]
+    branches: [main, "release/**"]
   pull_request:
-    branches: [ main, 'release/**' ]
+    branches: [main, "release/**"]
   workflow_dispatch:
 
 jobs:
   go_test_short:
     env:
-      FLAKY_REGEX: 'ava-labs/libevm/(triedb/pathdb|eth|eth/tracers/js|eth/tracers/logger|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$'
+      FLAKY_REGEX: "ava-labs/libevm/(triedb/pathdb|eth|eth/tracers/js|eth/tracers/logger|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,15 +19,16 @@ jobs:
         with:
           go-version: 1.21.4
       - name: Run flaky tests sequentially
-        run: | # Upstream flakes are race conditions exacerbated by concurrent tests
+        run:
+          | # Upstream flakes are race conditions exacerbated by concurrent tests
           go list ./... | grep -P "${FLAKY_REGEX}" | xargs -n 1 go test -short;
       - name: Run non-flaky tests concurrently
         run: |
           go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
-          
+
   go_generate:
     env:
-      EXCLUDE_REGEX: 'ava-labs/libevm/(accounts/usbwallet/trezor)$'
+      EXCLUDE_REGEX: "ava-labs/libevm/(accounts/usbwallet/trezor)$"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

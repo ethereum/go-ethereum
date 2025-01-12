@@ -2,9 +2,9 @@ name: libevm delta
 
 on:
   push:
-    branches: [ main, 'release/**' ]
+    branches: [main, "release/**"]
   pull_request:
-    branches: [ main, 'release/**' ]
+    branches: [main, "release/**"]
   workflow_dispatch:
 
 jobs:
@@ -18,9 +18,10 @@ jobs:
         with:
           fetch-depth: 0 # everything
           fetch-tags: true
-      
+
       - name: Color-blindness a11y
-        run: | # https://davidmathlogic.com/colorblind/#%23D81B60-%231E88E5-%23FFC107-%23004D40:~:text=8%20pairs%20of%20contrasting%20colors
+        run:
+          | # https://davidmathlogic.com/colorblind/#%23D81B60-%231E88E5-%23FFC107-%23004D40:~:text=8%20pairs%20of%20contrasting%20colors
           git config color.diff.old "#DC3220";
           git config color.diff.new "#005AB5";
 
@@ -31,7 +32,7 @@ jobs:
             ':(exclude).golangci.yml' \
             ':(exclude).github/**' \
             ':(exclude)README.md';
-      
+
       - name: git diff {LIBEVM_BASE}..main
         run: |
           git checkout main --;

@@ -57,16 +57,19 @@ linters-settings:
       - dot
       - blank
   goheader:
-    values:
     template-path: .libevm-header
 
   gomodguard:
     blocked:
       modules:
         - github.com/ethereum/go-ethereum:
+            reason: "Original, forked repo"
         - github.com/ava-labs/avalanchego:
+            reason: "Avoid dependency loop"
         - github.com/ava-labs/coreth:
+            reason: "Avoid dependency loop"
         - github.com/ava-labs/subnet-evm:
+            reason: "Avoid dependency loop"
   revive:
     rules:
       - name: unused-parameter

@@ -2,9 +2,9 @@ name: golangci-lint
 
 on:
   push:
-    branches: [ main, 'release/**' ]
+    branches: [main, "release/**"]
   pull_request:
-    branches: [ main, 'release/**' ]
+    branches: [main, "release/**"]
   workflow_dispatch:
 
 permissions:

@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       source_commit:
-        description: 'Upstream commit on which to base module renaming'
+        description: "Upstream commit on which to base module renaming"
         required: true
         type: string
-        default: '2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1'
+        default: "2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1"
 
 jobs:
   rename-module:
@@ -42,7 +42,7 @@ jobs:
           find . -type f | \
             xargs grep -In github.com/ethereum/go-ethereum | \
             grep -v "https://github.com/ethereum/go-ethereum"
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
