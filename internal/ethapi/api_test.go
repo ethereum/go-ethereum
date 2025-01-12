@@ -690,14 +690,9 @@ func (b testBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*
 }
 
 func (b testBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
-	if number == nil {
-		return nil, nil
-	}
-
-	receipt := rawdb.ReadRawBorReceipt(b.db, hash, *number)
+	receipt := b.chain.GetBorReceiptByHash(hash)
 	if receipt == nil {
-		return nil, nil
+		return nil, ethereum.NotFound
 	}
 
 	return receipt, nil
@@ -1909,12 +1904,12 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 	}
 }
 
-func setupBackendWithTxs(t *testing.T, genBlocks int) (*testBackend, []common.Hash, []struct {
+func setupTransactionsToApiTest(t *testing.T) (*TransactionAPI, []common.Hash, []struct {
 	txHash common.Hash
 	file   string
 }) {
 	config := *params.TestChainConfig
-
+	genBlocks := 6
 	config.ShanghaiBlock = big.NewInt(0)
 	config.CancunBlock = big.NewInt(0)
 
@@ -2060,8 +2055,9 @@ func setupBackendWithTxs(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			file:   "state-sync-tx",
 		},
 	}
+	api := NewTransactionAPI(backend, new(AddrLocker))
 
-	return backend, txHashes, testSuite
+	return api, txHashes, testSuite
 }
 
 func mockStateSyncTxOnCurrentBlock(t *testing.T, backend *testBackend) common.Hash {
@@ -2089,8 +2085,7 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 	t.Parallel()
 
 	var (
-		backend, _, testSuite = setupBackendWithTxs(t, 6)
-		api                   = NewTransactionAPI(backend, new(AddrLocker))
+		api, _, testSuite = setupTransactionsToApiTest(t)
 	)
 
 	for i, tt := range testSuite {
@@ -2127,6 +2122,49 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 	t.Parallel()
 
+	api, blockNrOrHash, testSuite := setupBlocksToApiTest(t)
+
+	receipts, err := api.GetTransactionReceiptsByBlock(context.Background(), blockNrOrHash)
+	if err != nil {
+		t.Fatal("api error")
+	}
+
+	for i, tt := range testSuite {
+		data, err := json.Marshal(receipts[i])
+		if err != nil {
+			t.Errorf("test %d: json marshal error", i)
+			continue
+		}
+		want, have := tt.want, string(data)
+		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+	}
+}
+
+func TestRPCGetBlockReceipts(t *testing.T) {
+	t.Parallel()
+
+	api, blockNrOrHash, testSuite := setupBlocksToApiTest(t)
+
+	receipts, err := api.GetBlockReceipts(context.Background(), blockNrOrHash)
+	if err != nil {
+		t.Fatal("api error")
+	}
+
+	for i, tt := range testSuite {
+		data, err := json.Marshal(receipts[i])
+		if err != nil {
+			t.Errorf("test %d: json marshal error", i)
+			continue
+		}
+		want, have := tt.want, string(data)
+		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+	}
+}
+
+func setupBlocksToApiTest(t *testing.T) (*BlockChainAPI, rpc.BlockNumberOrHash, []struct {
+	txHash common.Hash
+	want   string
+}) {
 	// Initialize test accounts
 	var (
 		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -2194,9 +2232,9 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 	backend.ChainConfig().Bor.Sprint["0"] = 1
 
 	api := NewBlockChainAPI(backend)
-	blockHashes := make([]common.Hash, genBlocks+1)
+	blockHashes := make([]common.Hash, 2)
 	ctx := context.Background()
-	for i := 0; i <= genBlocks; i++ {
+	for i := 0; i < 2; i++ {
 		header, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
 		if err != nil {
 			t.Errorf("failed to get block: %d err: %v", i, err)
@@ -2381,28 +2419,14 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 		},
 	}
 
-	receipts, err := api.GetTransactionReceiptsByBlock(context.Background(), blockNrOrHash)
-	if err != nil {
-		t.Fatal("api error")
-	}
-
-	for i, tt := range testSuite {
-		data, err := json.Marshal(receipts[i])
-		if err != nil {
-			t.Errorf("test %d: json marshal error", i)
-			continue
-		}
-		want, have := tt.want, string(data)
-		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
-	}
+	return api, blockNrOrHash, testSuite
 }
 
 func TestRPCGetTransactionByHash(t *testing.T) {
 	t.Parallel()
 
 	var (
-		backend, _, testSuite = setupBackendWithTxs(t, 6)
-		api                   = NewTransactionAPI(backend, new(AddrLocker))
+		api, _, testSuite = setupTransactionsToApiTest(t)
 	)
 
 	for i, tt := range testSuite {
