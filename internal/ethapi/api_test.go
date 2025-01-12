@@ -2055,6 +2055,9 @@ func setupTransactionsToApiTest(t *testing.T) (*TransactionAPI, []common.Hash, [
 			file:   "state-sync-tx",
 		},
 	}
+	// map sprint 0 to block 6
+	backend.ChainConfig().Bor.Sprint["0"] = 6
+
 	api := NewTransactionAPI(backend, new(AddrLocker))
 
 	return api, txHashes, testSuite
@@ -2100,6 +2103,40 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 		}
 		testRPCResponseWithFile(t, i, result, "eth_getTransactionReceipt", tt.file)
 	}
+}
+func TestRPCGetTransactionByHash(t *testing.T) {
+	t.Parallel()
+
+	var (
+		api, _, testSuite = setupTransactionsToApiTest(t)
+	)
+
+	for i, tt := range testSuite {
+		var (
+			result interface{}
+			err    error
+		)
+		result, err = api.GetTransactionByHash(context.Background(), tt.txHash)
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		testRPCResponseWithFile(t, i, result, "eth_getTransactionByHash", tt.file)
+	}
+}
+
+func TestRPCGetBlockTransactionCountByHash(t *testing.T) {
+	t.Parallel()
+
+	var (
+		api, _, _ = setupTransactionsToApiTest(t)
+	)
+
+	cnt := api.GetBlockTransactionCountByHash(context.Background(), api.b.CurrentBlock().Hash())
+
+	// 2 txs: blob tx + state sync tx
+	expected := hexutil.Uint(2)
+	require.Equal(t, expected, *cnt)
 }
 
 func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc string, file string) {
@@ -2420,25 +2457,4 @@ func setupBlocksToApiTest(t *testing.T) (*BlockChainAPI, rpc.BlockNumberOrHash, 
 	}
 
 	return api, blockNrOrHash, testSuite
-}
-
-func TestRPCGetTransactionByHash(t *testing.T) {
-	t.Parallel()
-
-	var (
-		api, _, testSuite = setupTransactionsToApiTest(t)
-	)
-
-	for i, tt := range testSuite {
-		var (
-			result interface{}
-			err    error
-		)
-		result, err = api.GetTransactionByHash(context.Background(), tt.txHash)
-		if err != nil {
-			t.Errorf("test %d: want no error, have %v", i, err)
-			continue
-		}
-		testRPCResponseWithFile(t, i, result, "eth_getTransactionByHash", tt.file)
-	}
 }
