@@ -29,6 +29,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/tyler-smith/go-bip39"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
@@ -705,7 +706,7 @@ func (api *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, blo
 	var txHash common.Hash
 
 	borReceipt, err := api.b.GetBorBlockReceipt(ctx, block.Hash())
-	if err != nil {
+	if err != nil && err != ethereum.NotFound {
 		return nil, err
 	}
 	if borReceipt != nil {
@@ -1119,7 +1120,7 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	}
 
 	stateSyncReceipt, err := api.b.GetBorBlockReceipt(ctx, block.Hash())
-	if err != nil {
+	if err != nil && err != ethereum.NotFound {
 		return nil, err
 	}
 	if stateSyncReceipt != nil {
@@ -2096,7 +2097,7 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	if borTx {
 		// Fetch bor block receipt
 		receipt, err = api.b.GetBorBlockReceipt(ctx, blockHash)
-		if err != nil {
+		if err != nil && err != ethereum.NotFound {
 			return nil, err
 		}
 	} else {
