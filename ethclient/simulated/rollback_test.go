@@ -2,39 +2,50 @@ package simulated
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// TestTransactionRollbackBehavior verifies the behavior of transactions
-// in the simulated backend after rollback operations.
-//
-// The test demonstrates that after a rollback:
-//  1. The first test shows normal transaction processing without rollback
-//  2. The second test shows that transactions immediately after rollback fail
-//  3. The third test shows a workaround: committing an empty block after rollback
-//     makes subsequent transactions succeed
+// TestTransactionRollbackBehavior tests that calling Rollback on the simulated backend doesn't prevent subsequent
+// addition of new transactions
 func TestTransactionRollbackBehavior(t *testing.T) {
-	sim := simTestBackend(testAddr)
+	sim := NewBackend(
+		types.GenesisAlloc{
+			testAddr:  {Balance: big.NewInt(10000000000000000)},
+			testAddr2: {Balance: big.NewInt(10000000000000000)},
+		},
+	)
 	defer sim.Close()
 	client := sim.Client()
 
-	// First transaction gets rolled back
-	_ = testSendSignedTx(t, sim, true)
+	btx0 := testSendSignedTx(t, testKey, sim, true)
+	tx0 := testSendSignedTx(t, testKey2, sim, false)
+	tx1 := testSendSignedTx(t, testKey2, sim, false)
+
 	sim.Rollback()
 
-	// Attempting to process a new transaction immediately after rollback
-	// Currently, this case fails to get a valid receipt
-	tx := testSendSignedTx(t, sim, true)
+	if pendingStateHasTx(client, btx0) || pendingStateHasTx(client, tx0) || pendingStateHasTx(client, tx1) {
+		t.Fatalf("all transactions were not rolled back")
+	}
+
+	btx2 := testSendSignedTx(t, testKey, sim, true)
+	tx2 := testSendSignedTx(t, testKey2, sim, false)
+	tx3 := testSendSignedTx(t, testKey2, sim, false)
+
 	sim.Commit()
-	assertSuccessfulReceipt(t, client, tx)
+
+	if !pendingStateHasTx(client, btx2) || !pendingStateHasTx(client, tx2) || !pendingStateHasTx(client, tx3) {
+		t.Fatalf("all post-rollback transactions were not included")
+	}
 }
 
 // testSendSignedTx sends a signed transaction to the simulated backend.
 // It does not commit the block.
-func testSendSignedTx(t *testing.T, sim *Backend, isBlobTx bool) *types.Transaction {
+func testSendSignedTx(t *testing.T, key *ecdsa.PrivateKey, sim *Backend, isBlobTx bool) *types.Transaction {
 	t.Helper()
 	client := sim.Client()
 	ctx := context.Background()
@@ -44,9 +55,9 @@ func testSendSignedTx(t *testing.T, sim *Backend, isBlobTx bool) *types.Transact
 		signedTx *types.Transaction
 	)
 	if isBlobTx {
-		signedTx, err = newBlobTx(sim, testKey)
+		signedTx, err = newBlobTx(sim, key)
 	} else {
-		signedTx, err = newTx(sim, testKey)
+		signedTx, err = newTx(sim, key)
 	}
 	if err != nil {
 		t.Fatalf("failed to create transaction: %v", err)
@@ -61,8 +72,7 @@ func testSendSignedTx(t *testing.T, sim *Backend, isBlobTx bool) *types.Transact
 
 // assertSuccessfulReceipt verifies that a transaction was successfully included as of the pending state
 // by checking its receipt status.
-func assertSuccessfulReceipt(t *testing.T, client Client, tx *types.Transaction) {
-	t.Helper()
+func pendingStateHasTx(client Client, tx *types.Transaction) bool {
 	ctx := context.Background()
 
 	var (
@@ -81,12 +91,13 @@ func assertSuccessfulReceipt(t *testing.T, client Client, tx *types.Transaction)
 	}
 
 	if err != nil {
-		t.Fatalf("failed to get transaction receipt: %v", err)
+		return false
 	}
 	if receipt == nil {
-		t.Fatal("transaction receipt is nil")
+		return false
 	}
 	if receipt.Status != types.ReceiptStatusSuccessful {
-		t.Fatalf("transaction failed with status: %v", receipt.Status)
+		return false
 	}
+	return true
 }

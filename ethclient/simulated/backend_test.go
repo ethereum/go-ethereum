@@ -37,8 +37,10 @@ import (
 var _ bind.ContractBackend = (Client)(nil)
 
 var (
-	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddr   = crypto.PubkeyToAddress(testKey.PublicKey)
+	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
+	testKey2, _ = crypto.HexToECDSA("7ee346e3f7efc685250053bfbafbfc880d58dc6145247053d4fb3cb0f66dfcb2")
+	testAddr2   = crypto.PubkeyToAddress(testKey2.PublicKey)
 )
 
 func simTestBackend(testAddr common.Address) *Backend {
