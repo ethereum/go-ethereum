@@ -21,48 +21,33 @@ func TestTransactionRollbackBehavior(t *testing.T) {
 	defer sim.Close()
 	client := sim.Client()
 
-	t.Run("Case 1: Basic Transaction (Control Case)", func(t *testing.T) {
-		// Demonstrates normal transaction processing works as expected
-		tx := testSendSignedTx(t, sim)
-		sim.Commit()
-		assertSuccessfulReceipt(t, client, tx)
-	})
+	// First transaction gets rolled back
+	_ = testSendSignedTx(t, sim, true)
+	sim.Rollback()
 
-	t.Run("Case 2: Transaction After Rollback (Shows Issue)", func(t *testing.T) {
-		// First transaction gets rolled back
-		_ = testSendSignedTx(t, sim)
-		sim.Rollback()
-
-		// Attempting to process a new transaction immediately after rollback
-		// Currently, this case fails to get a valid receipt
-		tx := testSendSignedTx(t, sim)
-		sim.Commit()
-		assertSuccessfulReceipt(t, client, tx)
-	})
-
-	t.Run("Case 3: Transaction After Rollback with Empty Block (Workaround)", func(t *testing.T) {
-		// First transaction gets rolled back
-		_ = testSendSignedTx(t, sim)
-		sim.Rollback()
-
-		// Workaround: Commit an empty block after rollback
-		sim.Commit()
-
-		// Now the new transaction succeeds
-		tx := testSendSignedTx(t, sim)
-		sim.Commit()
-		assertSuccessfulReceipt(t, client, tx)
-	})
+	// Attempting to process a new transaction immediately after rollback
+	// Currently, this case fails to get a valid receipt
+	tx := testSendSignedTx(t, sim, true)
+	sim.Commit()
+	assertSuccessfulReceipt(t, client, tx)
 }
 
 // testSendSignedTx sends a signed transaction to the simulated backend.
 // It does not commit the block.
-func testSendSignedTx(t *testing.T, sim *Backend) *types.Transaction {
+func testSendSignedTx(t *testing.T, sim *Backend, isBlobTx bool) *types.Transaction {
 	t.Helper()
 	client := sim.Client()
 	ctx := context.Background()
 
-	signedTx, err := newTx(sim, testKey)
+	var (
+		err      error
+		signedTx *types.Transaction
+	)
+	if isBlobTx {
+		signedTx, err = newBlobTx(sim, testKey)
+	} else {
+		signedTx, err = newTx(sim, testKey)
+	}
 	if err != nil {
 		t.Fatalf("failed to create transaction: %v", err)
 	}
@@ -74,7 +59,7 @@ func testSendSignedTx(t *testing.T, sim *Backend) *types.Transaction {
 	return signedTx
 }
 
-// assertSuccessfulReceipt verifies that a transaction was successfully processed
+// assertSuccessfulReceipt verifies that a transaction was successfully included as of the pending state
 // by checking its receipt status.
 func assertSuccessfulReceipt(t *testing.T, client Client, tx *types.Transaction) {
 	t.Helper()

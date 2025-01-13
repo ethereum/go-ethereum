@@ -19,6 +19,9 @@ package simulated
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/holiman/uint256"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -46,6 +49,46 @@ func simTestBackend(testAddr common.Address) *Backend {
 	)
 }
 
+func newBlobTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
+	client := sim.Client()
+
+	testBlob := &kzg4844.Blob{0x00}
+	testBlobCommit, _ := kzg4844.BlobToCommitment(testBlob)
+	testBlobProof, _ := kzg4844.ComputeBlobProof(testBlob, testBlobCommit)
+	testBlobVHash := kzg4844.CalcBlobHashV1(sha256.New(), &testBlobCommit)
+
+	head, _ := client.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei))
+	gasPriceU256, _ := uint256.FromBig(gasPrice)
+	gasTipCapU256, _ := uint256.FromBig(big.NewInt(params.GWei))
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	chainid, _ := client.ChainID(context.Background())
+	nonce, err := client.PendingNonceAt(context.Background(), addr)
+	if err != nil {
+		return nil, err
+	}
+
+	chainidU256, _ := uint256.FromBig(chainid)
+	tx := types.NewTx(&types.BlobTx{
+		ChainID:    chainidU256,
+		GasTipCap:  gasTipCapU256,
+		GasFeeCap:  gasPriceU256,
+		BlobFeeCap: uint256.NewInt(1),
+		Gas:        21000,
+		Nonce:      nonce,
+		To:         addr,
+		AccessList: nil,
+		BlobHashes: []common.Hash{testBlobVHash},
+		Sidecar: &types.BlobTxSidecar{
+			Blobs:       []kzg4844.Blob{*testBlob},
+			Commitments: []kzg4844.Commitment{testBlobCommit},
+			Proofs:      []kzg4844.Proof{testBlobProof},
+		},
+	})
+	return types.SignTx(tx, types.LatestSignerForChainID(chainid), key)
+}
+
 func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 	client := sim.Client()
 
@@ -66,6 +109,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 		Gas:       21000,
 		To:        &addr,
 	})
+
 	return types.SignTx(tx, types.LatestSignerForChainID(chainid), key)
 }
 
