@@ -9,9 +9,6 @@ on:
 
 jobs:
   diffs:
-    env:
-      # Last commit from rename-module workflow job to be included in `main`
-      LIBEVM_BASE: 0b56af5a01b8a0c6fc9d60247bb79ffd03d1bcfd
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,25 +16,29 @@ jobs:
           fetch-depth: 0 # everything
           fetch-tags: true
 
+      - name: Find base commit hash
+        id: base-commit
+        run: echo "LIBEVM_BASE=$(git rev-list --author "github-actions\[bot\]" --grep "rename Go module" -n 1 origin/main)" >> "$GITHUB_OUTPUT"
+
       - name: Color-blindness a11y
         run:
           | # https://davidmathlogic.com/colorblind/#%23D81B60-%231E88E5-%23FFC107-%23004D40:~:text=8%20pairs%20of%20contrasting%20colors
           git config color.diff.old "#DC3220";
           git config color.diff.new "#005AB5";
 
-      - name: git diff {LIBEVM_BASE}
+      - name: git diff ${{ steps.base-commit.outputs.LIBEVM_BASE }}
         run: |
           git diff --diff-filter=a --word-diff --unified=0 --color=always \
-            "${LIBEVM_BASE}" \
+            ${{ steps.base-commit.outputs.LIBEVM_BASE }} \
             ':(exclude).golangci.yml' \
             ':(exclude).github/**' \
             ':(exclude)README.md';
 
-      - name: git diff {LIBEVM_BASE}..main
+      - name: git diff ${{ steps.base-commit.outputs.LIBEVM_BASE }}..main
         run: |
           git checkout main --;
           git diff --diff-filter=a --word-diff --unified=0 --color=always \
-            "${LIBEVM_BASE}" \
+            "${{ steps.base-commit.outputs.LIBEVM_BASE }}" \
             ':(exclude).golangci.yml' \
             ':(exclude).github/**' \
             ':(exclude)README.md';

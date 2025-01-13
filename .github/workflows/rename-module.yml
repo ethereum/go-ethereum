@@ -71,6 +71,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         with:
+          # WARNING: mirror any change to the commit_message value below in libevm-delta.yml
           commit_message: "[AUTO] rename Go module + update internal import paths\n\nWorkflow: ${{ steps.vars.outputs.WORKFLOW_HASH }} on branch ${{ github.ref_name }}"
           repo: ${{ github.repository }}
           branch: ${{ steps.vars.outputs.DEST_BRANCH }}
