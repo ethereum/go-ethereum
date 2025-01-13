@@ -70,8 +70,7 @@ func testSendSignedTx(t *testing.T, key *ecdsa.PrivateKey, sim *Backend, isBlobT
 	return signedTx
 }
 
-// assertSuccessfulReceipt verifies that a transaction was successfully included as of the pending state
-// by checking its receipt status.
+// pendingStateHasTx returns true if a given transaction was successfully included as of the latest pending state.
 func pendingStateHasTx(client Client, tx *types.Transaction) bool {
 	ctx := context.Background()
 
