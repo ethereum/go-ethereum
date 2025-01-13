@@ -20,12 +20,13 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/holiman/uint256"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
