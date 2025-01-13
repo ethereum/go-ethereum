@@ -1986,7 +1986,7 @@ func (pool *LegacyPool) Clear() {
 		senderAddr, _ := types.Sender(pool.signer, tx)
 		pool.reserve(senderAddr, false)
 	}
-	for localSender, _ := range pool.locals.accounts {
+	for localSender := range pool.locals.accounts {
 		pool.reserve(localSender, false)
 	}
 
