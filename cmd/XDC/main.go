@@ -63,6 +63,7 @@ var (
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
 		//utils.NoUSBFlag,
+		utils.SmartCardDaemonPathFlag,
 		//utils.EthashCacheDirFlag,
 		//utils.EthashCachesInMemoryFlag,
 		//utils.EthashCachesOnDiskFlag,
