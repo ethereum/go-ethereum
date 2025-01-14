@@ -1909,7 +1909,7 @@ func setupTransactionsToApiTest(t *testing.T) (*TransactionAPI, []common.Hash, [
 	file   string
 }) {
 	config := *params.TestChainConfig
-	genBlocks := 6
+	genBlocks := 5
 	config.ShanghaiBlock = big.NewInt(0)
 	config.CancunBlock = big.NewInt(0)
 
@@ -1979,20 +1979,6 @@ func setupTransactionsToApiTest(t *testing.T) (*TransactionAPI, []common.Hash, [
 				StorageKeys: []common.Hash{{0}},
 			}}
 			tx, err = types.SignTx(types.NewTx(&types.AccessListTx{Nonce: uint64(i), To: nil, Gas: 58100, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040"), AccessList: accessList}), signer, acc1Key)
-		case 5:
-			// blob tx
-			fee := big.NewInt(500)
-			fee.Add(fee, b.BaseFee())
-			tx, err = types.SignTx(types.NewTx(&types.BlobTx{
-				Nonce:      uint64(i),
-				GasTipCap:  uint256.NewInt(1),
-				GasFeeCap:  uint256.MustFromBig(fee),
-				Gas:        params.TxGas,
-				To:         acc2Addr,
-				BlobFeeCap: uint256.NewInt(1),
-				BlobHashes: []common.Hash{{1}},
-				Value:      new(uint256.Int),
-			}), signer, acc1Key)
 		}
 		if err != nil {
 			t.Errorf("failed to sign tx: %v", err)
@@ -2044,19 +2030,14 @@ func setupTransactionsToApiTest(t *testing.T) (*TransactionAPI, []common.Hash, [
 			txHash: common.HexToHash("deadbeef"),
 			file:   "txhash-notfound",
 		},
-		// 7. blob tx
+		// 7. state sync tx found
 		{
 			txHash: txHashes[5],
-			file:   "blob-tx",
-		},
-		// 8. state sync tx found
-		{
-			txHash: txHashes[6],
 			file:   "state-sync-tx",
 		},
 	}
 	// map sprint 0 to block 6
-	backend.ChainConfig().Bor.Sprint["0"] = 6
+	backend.ChainConfig().Bor.Sprint["0"] = uint64(genBlocks)
 
 	api := NewTransactionAPI(backend, new(AddrLocker))
 
@@ -2128,7 +2109,7 @@ func TestRPCGetBlockTransactionCountByHash(t *testing.T) {
 
 	cnt := api.GetBlockTransactionCountByHash(context.Background(), api.b.CurrentBlock().Hash())
 
-	// 2 txs: blob tx + state sync tx
+	// 2 txs: create-contract-with-access-list + state sync tx
 	expected := hexutil.Uint(2)
 	require.Equal(t, expected, *cnt)
 }
@@ -2138,10 +2119,10 @@ func TestRPCGetTransactionByBlockHashAndIndex(t *testing.T) {
 		api, _, _ = setupTransactionsToApiTest(t)
 	)
 
-	blobTx := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 0)
+	createContractWithAccessList := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 0)
 	stateSyncTx := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 1)
 
-	testRPCResponseWithFile(t, 0, blobTx, "eth_getTransactionByBlockHashAndIndex", "blob-tx")
+	testRPCResponseWithFile(t, 0, createContractWithAccessList, "eth_getTransactionByBlockHashAndIndex", "create-contract-with-access-list")
 	testRPCResponseWithFile(t, 1, stateSyncTx, "eth_getTransactionByBlockHashAndIndex", "state-sync-tx")
 }
 
@@ -2271,9 +2252,9 @@ func setupBlocksToApiTest(t *testing.T) (*BlockChainAPI, rpc.BlockNumberOrHash, 
 	backend.ChainConfig().Bor.Sprint["0"] = 1
 
 	api := NewBlockChainAPI(backend)
-	blockHashes := make([]common.Hash, 2)
+	blockHashes := make([]common.Hash, genBlocks+1)
 	ctx := context.Background()
-	for i := 0; i < 2; i++ {
+	for i := 0; i <= genBlocks; i++ {
 		header, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
 		if err != nil {
 			t.Errorf("failed to get block: %d err: %v", i, err)
