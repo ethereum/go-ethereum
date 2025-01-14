@@ -39,7 +39,7 @@ type fileCache struct {
 func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, error) {
 	t0 := time.Now()
 
-	// List all the failes from the keystore folder
+	// List all the files from the keystore folder
 	files, err := os.ReadDir(keyDir)
 	if err != nil {
 		return nil, nil, nil, err
@@ -61,7 +61,7 @@ func (fc *fileCache) scan(keyDir string) (mapset.Set, mapset.Set, mapset.Set, er
 			log.Trace("Ignoring file on account scan", "path", path)
 			continue
 		}
-		// Gather the set of all and fresly modified files
+		// Gather the set of all and freshly modified files
 		all.Add(path)
 
 		info, err := fi.Info()
