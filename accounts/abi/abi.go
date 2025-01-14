@@ -164,7 +164,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "constructor":
 			abi.Constructor = NewMethod("", "", Constructor, field.StateMutability, field.Constant, field.Payable, field.Inputs, nil)
 		case "function":
-			name := overloadedName(field.Name, func(s string) bool { _, ok := abi.Methods[s]; return ok })
+			name := ResolveNameConflict(field.Name, func(s string) bool { _, ok := abi.Methods[s]; return ok })
 			abi.Methods[name] = NewMethod(name, field.Name, Function, field.StateMutability, field.Constant, field.Payable, field.Inputs, field.Outputs)
 		case "fallback":
 			// New introduced function type in v0.6.0, check more detail
@@ -184,9 +184,11 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 			abi.Receive = NewMethod("", "", Receive, field.StateMutability, field.Constant, field.Payable, nil, nil)
 		case "event":
-			name := overloadedName(field.Name, func(s string) bool { _, ok := abi.Events[s]; return ok })
+			name := ResolveNameConflict(field.Name, func(s string) bool { _, ok := abi.Events[s]; return ok })
 			abi.Events[name] = NewEvent(name, field.Name, field.Anonymous, field.Inputs)
 		case "error":
+			// Errors cannot be overloaded or overridden but are inherited,
+			// no need to resolve the name conflict here.
 			abi.Errors[field.Name] = NewError(field.Name, field.Inputs)
 		default:
 			return fmt.Errorf("abi: could not recognize type %v of field %v", field.Type, field.Name)
@@ -250,21 +252,4 @@ func UnpackRevert(data []byte) (string, error) {
 		return "", err
 	}
 	return unpacked[0].(string), nil
-}
-
-// overloadedName returns the next available name for a given thing.
-// Needed since solidity allows for overloading.
-//
-// e.g. if the abi contains Methods send, send1
-// overloadedName would return send2 for input send.
-//
-// overloadedName works for methods, events and errors.
-func overloadedName(rawName string, isAvail func(string) bool) string {
-	name := rawName
-	ok := isAvail(name)
-	for idx := 0; ok; idx++ {
-		name = fmt.Sprintf("%s%d", rawName, idx)
-		ok = isAvail(name)
-	}
-	return name
 }
