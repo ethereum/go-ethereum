@@ -314,7 +314,7 @@ func (b *bridge) SleepBlocks(call jsre.Call) (goja.Value, error) {
 }
 
 type jsonrpcCall struct {
-	Id     int64
+	ID     int64
 	Method string
 	Params []interface{}
 }
@@ -348,7 +348,7 @@ func (b *bridge) Send(call jsre.Call) (goja.Value, error) {
 	for _, req := range reqs {
 		resp := call.VM.NewObject()
 		resp.Set("jsonrpc", "2.0")
-		resp.Set("id", req.Id)
+		resp.Set("id", req.ID)
 
 		var result json.RawMessage
 		err = b.client.Call(&result, req.Method, req.Params...)
