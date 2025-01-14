@@ -10,39 +10,71 @@
 
   **WARNING: FOILLOWING THESE INSTRUCTIONS WILL DESTROY THE MASTER KEY ON YOUR CARD. ONLY PROCEED IF NO FUNDS ARE ASSOCIATED WITH THESE ACCOUNTS**
 
-  You can use status' [keycard-cli](https://github.com/status-im/keycard-cli) and you should get version 2.1.1 of their [smartcard application](https://github.com/status-im/status-keycard/releases/download/2.1.1/keycard_v2.1.1.cap)
+  You can use status' [keycard-cli](https://github.com/status-im/keycard-cli) and you should get _at least_ version 2.1.1 of their [smartcard application](https://github.com/status-im/status-keycard/releases/download/2.2.1/keycard_v2.2.1.cap)
 
   You also need to make sure that the PCSC daemon is running on your system.
 
   Then, you can install the application to the card by typing:
 
   ```
-  keycard install -a keycard_v2.1.cap
+  keycard install -a keycard_v2.2.1.cap && keycard init
   ```
 
-  Then you can initialize the application by typing:
+  At the end of this process, you will be provided with a PIN, a PUK and a pairing password. Write them down, you'll need them shortly.
+
+  Start `geth` with the `console` command. You will notice the following warning:
 
   ```
-  keycard init
+  WARN [04-09|16:58:38.898] Failed to open wallet                    url=pcsc://044def09                          err="smartcard: pairing password needed"
   ```
 
-  Then the card needs to be paired:
+  Write down the URL (`pcsc://044def09` in this example). Then ask `geth` to open the wallet:
 
   ```
-  keycard pair
+  > personal.openWallet("pcsc://044def09")
+  Please enter the pairing password:
   ```
 
-  Finally, you need to have the card generate a new master key:
+  Enter the pairing password that you have received during card initialization. Same with the PIN that you will subsequently be
+  asked for.
+  
+  If everything goes well, you should see your new account when typing `personal` on the console:
 
   ```
-  keycard shell <<END
-  keycard-select
-  keycard-set-pairing PAIRING_KEY PAIRING_INDEX
-  keycard-open-secure-channel
-  keycard-verify-pin CARD_PIN
-  keycard-generate-key
-  END
+  > personal
+  WARN [04-09|17:02:07.330] Smartcard wallet account derivation failed url=pcsc://044def09 err="Unexpected response status Cla=0x80, Ins=0xd1, Sw=0x6985"
+  {
+    listAccounts: [],
+    listWallets: [{
+        status: "Empty, waiting for initialization",
+        url: "pcsc://044def09"
+    }],
+    ...
+  }
   ```
+
+  So the communication with the card is working, but there is no key associated with this wallet. Let's create it:
+
+  ```
+  > personal.initializeWallet("pcsc://044def09")
+  "tilt ... impact"
+  ```
+
+  You should get a list of words, this is your seed so write them down. Your wallet should now be initialized:
+
+  ```
+  > personal.listWallets
+  [{
+    accounts: [{
+        address: "0x678b7cd55c61917defb23546a41803c5bfefbc7a",
+        url: "pcsc://044d/m/44'/60'/0'/0/0"
+    }],
+    status: "Online",
+    url: "pcsc://044def09"
+  }]
+  ```
+
+  You're all set!
 
 ## Usage
 
@@ -67,3 +99,4 @@ personal.openWallet("pcsc://a4d73015")
 ## Known issues
 
   * Starting geth with a valid card seems to make firefox crash.
+  * PCSC version 4.4 should work, but is currently untested
