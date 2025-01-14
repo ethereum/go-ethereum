@@ -114,6 +114,16 @@ func (arguments Arguments) Unpack2(data []byte) ([]interface{}, error) {
 	return arguments.UnpackValues(data)
 }
 
+// UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
+func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
+	marshalledValues, err := arguments.UnpackValues(data)
+	if err != nil {
+		return err
+	}
+
+	return arguments.unpackIntoMap(v, marshalledValues)
+}
+
 // unpack sets the unmarshalled value to go format.
 // Note the dst here must be settable.
 func unpack(t *Type, dst interface{}, src interface{}) error {
@@ -168,6 +178,19 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 			}
 		}
 		dstVal.Set(array)
+	}
+	return nil
+}
+
+// unpackIntoMap unpacks marshalledValues into the provided map[string]interface{}
+func (arguments Arguments) unpackIntoMap(v map[string]interface{}, marshalledValues []interface{}) error {
+	// Make sure map is not nil
+	if v == nil {
+		return fmt.Errorf("abi: cannot unpack into a nil map")
+	}
+
+	for i, arg := range arguments.NonIndexed() {
+		v[arg.Name] = marshalledValues[i]
 	}
 	return nil
 }
