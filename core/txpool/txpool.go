@@ -224,7 +224,12 @@ func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 					for _, subpool := range p.subpools {
 						subpool.Reset(oldHead, newHead)
 					}
-					resetDone <- newHead
+					select {
+					case resetDone <- newHead:
+						break
+					case <-p.term:
+						return
+					}
 				}(oldHead, newHead)
 
 				// If the reset operation was explicitly requested, consider it
