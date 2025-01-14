@@ -1376,29 +1376,38 @@ func TestForkResendTx(t *testing.T) {
 	defer sim.Close()
 	// 1.
 	parent := sim.blockchain.CurrentBlock()
+
 	// 2.
 	head, _ := sim.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
-
 	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
-	sim.SendTransaction(context.Background(), tx)
+	tx, err := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
+	if err != nil {
+		t.Fatalf("could not sign transaction: %v", err)
+	}
+	if err = sim.SendTransaction(context.Background(), tx);  err != nil {
+		t.Fatalf("sending transaction: %v", err)
+	}
 	sim.Commit()
+
 	// 3.
 	receipt, _ := sim.TransactionReceipt(context.Background(), tx.Hash())
 	if h := receipt.BlockNumber.Uint64(); h != 1 {
 		t.Errorf("TX included in wrong block: %d", h)
 	}
+
 	// 4.
 	if err := sim.Fork(context.Background(), parent.Hash()); err != nil {
 		t.Errorf("forking: %v", err)
 	}
+
 	// 5.
 	sim.Commit()
 	if err := sim.SendTransaction(context.Background(), tx); err != nil {
 		t.Errorf("sending transaction: %v", err)
 	}
 	sim.Commit()
+
 	// 6.
 	receipt, _ = sim.TransactionReceipt(context.Background(), tx.Hash())
 	if h := receipt.BlockNumber.Uint64(); h != 2 {
@@ -1425,7 +1434,10 @@ func TestCommitReturnValue(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
-	sim.SendTransaction(context.Background(), tx)
+	if err := sim.SendTransaction(context.Background(), tx); err != nil {
+		t.Errorf("sending transaction: %v", err)
+	}
+
 	h2 := sim.Commit()
 
 	// Create another block in the original chain
