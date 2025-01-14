@@ -18,6 +18,7 @@ package abi
 
 import (
 	"fmt"
+	"math/big"
 	"reflect"
 	"strings"
 )
@@ -25,7 +26,7 @@ import (
 // indirect recursively dereferences the value until it either gets the value
 // or finds a big.Int
 func indirect(v reflect.Value) reflect.Value {
-	if v.Kind() == reflect.Ptr && v.Elem().Type() != derefbigT {
+	if v.Kind() == reflect.Ptr && v.Elem().Type() != reflect.TypeOf(big.Int{}) {
 		return indirect(v.Elem())
 	}
 	return v
@@ -45,26 +46,26 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 	if unsigned {
 		switch size {
 		case 8:
-			return uint8T
+			return reflect.TypeOf(uint8(0))
 		case 16:
-			return uint16T
+			return reflect.TypeOf(uint16(0))
 		case 32:
-			return uint32T
+			return reflect.TypeOf(uint32(0))
 		case 64:
-			return uint64T
+			return reflect.TypeOf(uint64(0))
 		}
 	}
 	switch size {
 	case 8:
-		return int8T
+		return reflect.TypeOf(int8(0))
 	case 16:
-		return int16T
+		return reflect.TypeOf(int16(0))
 	case 32:
-		return int32T
+		return reflect.TypeOf(int32(0))
 	case 64:
-		return int64T
+		return reflect.TypeOf(int64(0))
 	}
-	return bigT
+	return reflect.TypeOf(&big.Int{})
 }
 
 // mustArrayToBytesSlice creates a new byte slice with the exact same size as value
@@ -84,7 +85,7 @@ func set(dst, src reflect.Value) error {
 	switch {
 	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid():
 		return set(dst.Elem(), src)
-	case dstType.Kind() == reflect.Ptr && dstType.Elem() != derefbigT:
+	case dstType.Kind() == reflect.Ptr && dstType.Elem() != reflect.TypeOf(big.Int{}):
 		return set(dst.Elem(), src)
 	case srcType.AssignableTo(dstType) && dst.CanSet():
 		dst.Set(src)
