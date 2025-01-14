@@ -28,7 +28,7 @@ var (
 	// It leverages sync.Once to provide thread-safe lazy initialization.
 	senderCacherOnce sync.Once
 	// senderCacherInstance is a concurrent transaction sender recoverer and cacher.
-	senderCacherInstance = newTxSenderCacher(runtime.NumCPU())
+	senderCacherInstance *txSenderCacher
 )
 
 // SenderCacher returns the singleton instance of SenderCacher.
