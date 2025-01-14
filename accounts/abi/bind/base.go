@@ -376,7 +376,7 @@ func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]int
 		opts = new(FilterOpts)
 	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{c.abi.Events[name].ID()}}, query...)
+	query = append([][]interface{}{{c.abi.Events[name].ID}}, query...)
 
 	topics, err := makeTopics(query...)
 	if err != nil {
@@ -422,7 +422,7 @@ func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]inter
 		opts = new(WatchOpts)
 	}
 	// Append the event selector to the query parameters and construct the topic set
-	query = append([][]interface{}{{c.abi.Events[name].ID()}}, query...)
+	query = append([][]interface{}{{c.abi.Events[name].ID}}, query...)
 
 	topics, err := makeTopics(query...)
 	if err != nil {
@@ -451,7 +451,7 @@ func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) 
 	if len(log.Topics) == 0 {
 		return errNoEventSignature
 	}
-	if log.Topics[0] != c.abi.Events[event].ID() {
+	if log.Topics[0] != c.abi.Events[event].ID {
 		return errors.New("event signature mismatch")
 	}
 	if len(log.Data) > 0 {

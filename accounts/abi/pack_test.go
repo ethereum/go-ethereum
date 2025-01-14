@@ -633,7 +633,7 @@ func TestMethodPack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sig := abi.Methods["slice"].ID()
+	sig := abi.Methods["slice"].ID
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 
@@ -647,7 +647,7 @@ func TestMethodPack(t *testing.T) {
 	}
 
 	var addrA, addrB = common.Address{1}, common.Address{2}
-	sig = abi.Methods["sliceAddress"].ID()
+	sig = abi.Methods["sliceAddress"].ID
 	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 	sig = append(sig, common.LeftPadBytes(addrA[:], 32)...)
@@ -662,7 +662,7 @@ func TestMethodPack(t *testing.T) {
 	}
 
 	var addrC, addrD = common.Address{3}, common.Address{4}
-	sig = abi.Methods["sliceMultiAddress"].ID()
+	sig = abi.Methods["sliceMultiAddress"].ID
 	sig = append(sig, common.LeftPadBytes([]byte{64}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{160}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
@@ -680,7 +680,7 @@ func TestMethodPack(t *testing.T) {
 		t.Errorf("expected %x got %x", sig, packed)
 	}
 
-	sig = abi.Methods["slice256"].ID()
+	sig = abi.Methods["slice256"].ID
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 
@@ -694,7 +694,7 @@ func TestMethodPack(t *testing.T) {
 	}
 
 	a := [2][2]*big.Int{{big.NewInt(1), big.NewInt(1)}, {big.NewInt(2), big.NewInt(0)}}
-	sig = abi.Methods["nestedArray"].ID()
+	sig = abi.Methods["nestedArray"].ID
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
@@ -711,7 +711,7 @@ func TestMethodPack(t *testing.T) {
 		t.Errorf("expected %x got %x", sig, packed)
 	}
 
-	sig = abi.Methods["nestedArray2"].ID()
+	sig = abi.Methods["nestedArray2"].ID
 	sig = append(sig, common.LeftPadBytes([]byte{0x20}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{0x40}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{0x80}, 32)...)
@@ -727,7 +727,7 @@ func TestMethodPack(t *testing.T) {
 		t.Errorf("expected %x got %x", sig, packed)
 	}
 
-	sig = abi.Methods["nestedSlice"].ID()
+	sig = abi.Methods["nestedSlice"].ID
 	sig = append(sig, common.LeftPadBytes([]byte{0x20}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{0x02}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{0x40}, 32)...)

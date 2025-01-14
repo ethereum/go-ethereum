@@ -42,36 +42,59 @@ type Event struct {
 	RawName   string
 	Anonymous bool
 	Inputs    Arguments
+	str       string
+	// Sig contains the string signature according to the ABI spec.
+	// e.g.	 event foo(uint32 a, int b) = "foo(uint32,int256)"
+	// Please note that "int" is substitute for its canonical representation "int256"
+	Sig string
+	// ID returns the canonical representation of the event's signature used by the
+	// abi definition to identify event names and types.
+	ID common.Hash
+}
+
+// NewEvent creates a new Event.
+// It sanitizes the input arguments to remove unnamed arguments.
+// It also precomputes the id, signature and string representation
+// of the event.
+func NewEvent(name, rawName string, anonymous bool, inputs Arguments) Event {
+	// sanitize inputs to remove inputs without names
+	// and precompute string and sig representation.
+	names := make([]string, len(inputs))
+	types := make([]string, len(inputs))
+	for i, input := range inputs {
+		if input.Name == "" {
+			inputs[i] = Argument{
+				Name:    fmt.Sprintf("arg%d", i),
+				Indexed: input.Indexed,
+				Type:    input.Type,
+			}
+		} else {
+			inputs[i] = input
+		}
+		// string representation
+		names[i] = fmt.Sprintf("%v %v", input.Type, inputs[i].Name)
+		if input.Indexed {
+			names[i] = fmt.Sprintf("%v indexed %v", input.Type, inputs[i].Name)
+		}
+		// sig representation
+		types[i] = input.Type.String()
+	}
+
+	str := fmt.Sprintf("event %v(%v)", rawName, strings.Join(names, ", "))
+	sig := fmt.Sprintf("%v(%v)", rawName, strings.Join(types, ","))
+	id := common.BytesToHash(crypto.Keccak256([]byte(sig)))
+
+	return Event{
+		Name:      name,
+		RawName:   rawName,
+		Anonymous: anonymous,
+		Inputs:    inputs,
+		str:       str,
+		Sig:       sig,
+		ID:        id,
+	}
 }
 
 func (e Event) String() string {
-	inputs := make([]string, len(e.Inputs))
-	for i, input := range e.Inputs {
-		inputs[i] = fmt.Sprintf("%v %v", input.Type, input.Name)
-		if input.Indexed {
-			inputs[i] = fmt.Sprintf("%v indexed %v", input.Type, input.Name)
-		}
-	}
-	return fmt.Sprintf("event %v(%v)", e.RawName, strings.Join(inputs, ", "))
-}
-
-// Sig returns the event string signature according to the ABI spec.
-//
-// Example
-//
-//     event foo(uint32 a, int b) = "foo(uint32,int256)"
-//
-// Please note that "int" is substitute for its canonical representation "int256"
-func (e Event) Sig() string {
-	types := make([]string, len(e.Inputs))
-	for i, input := range e.Inputs {
-		types[i] = input.Type.String()
-	}
-	return fmt.Sprintf("%v(%v)", e.RawName, strings.Join(types, ","))
-}
-
-// ID returns the canonical representation of the event's signature used by the
-// abi definition to identify event names and types.
-func (e Event) ID() common.Hash {
-	return common.BytesToHash(crypto.Keccak256([]byte(e.Sig())))
+	return e.str
 }
