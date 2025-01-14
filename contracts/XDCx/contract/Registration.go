@@ -142,7 +142,7 @@ func bindAbstractXDCXListing(address common.Address, caller bind.ContractCaller,
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_AbstractXDCXListing *AbstractXDCXListingRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_AbstractXDCXListing *AbstractXDCXListingRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _AbstractXDCXListing.Contract.AbstractXDCXListingCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -161,7 +161,7 @@ func (_AbstractXDCXListing *AbstractXDCXListingRaw) Transact(opts *bind.Transact
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_AbstractXDCXListing *AbstractXDCXListingCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_AbstractXDCXListing *AbstractXDCXListingCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _AbstractXDCXListing.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -183,7 +183,9 @@ func (_AbstractXDCXListing *AbstractXDCXListingCaller) GetTokenStatus(opts *bind
 	var (
 		ret0 = new(bool)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _AbstractXDCXListing.contract.Call(opts, out, "getTokenStatus", arg0)
 	return *ret0, err
 }
@@ -329,7 +331,7 @@ func bindRelayerRegistration(address common.Address, caller bind.ContractCaller,
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_RelayerRegistration *RelayerRegistrationRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_RelayerRegistration *RelayerRegistrationRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _RelayerRegistration.Contract.RelayerRegistrationCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -348,7 +350,7 @@ func (_RelayerRegistration *RelayerRegistrationRaw) Transact(opts *bind.Transact
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_RelayerRegistration *RelayerRegistrationCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_RelayerRegistration *RelayerRegistrationCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _RelayerRegistration.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -370,7 +372,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) ActiveRelayerCount(opts *
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "ActiveRelayerCount")
 	return *ret0, err
 }
@@ -396,7 +400,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) CONTRACTOWNER(opts *bind.
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "CONTRACT_OWNER")
 	return *ret0, err
 }
@@ -422,7 +428,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) MaximumRelayers(opts *bin
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "MaximumRelayers")
 	return *ret0, err
 }
@@ -448,7 +456,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) MaximumTokenList(opts *bi
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "MaximumTokenList")
 	return *ret0, err
 }
@@ -474,7 +484,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) MinimumDeposit(opts *bind
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "MinimumDeposit")
 	return *ret0, err
 }
@@ -500,7 +512,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) RELAYERCOINBASES(opts *bi
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "RELAYER_COINBASES", arg0)
 	return *ret0, err
 }
@@ -534,7 +548,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) RELAYERLIST(opts *bind.Ca
 		Index    *big.Int
 		Owner    common.Address
 	})
-	out := ret
+	out := &[]interface{}{
+		ret,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "RELAYER_LIST", arg0)
 	return *ret, err
 }
@@ -570,7 +586,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) RELAYERONSALELIST(opts *b
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "RELAYER_ON_SALE_LIST", arg0)
 	return *ret0, err
 }
@@ -596,7 +614,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) RESIGNREQUESTS(opts *bind
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "RESIGN_REQUESTS", arg0)
 	return *ret0, err
 }
@@ -622,7 +642,9 @@ func (_RelayerRegistration *RelayerRegistrationCaller) RelayerCount(opts *bind.C
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _RelayerRegistration.contract.Call(opts, out, "RelayerCount")
 	return *ret0, err
 }
@@ -2218,7 +2240,7 @@ func bindSafeMath(address common.Address, caller bind.ContractCaller, transactor
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SafeMath *SafeMathRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_SafeMath *SafeMathRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _SafeMath.Contract.SafeMathCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -2237,7 +2259,7 @@ func (_SafeMath *SafeMathRaw) Transact(opts *bind.TransactOpts, method string, p
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SafeMath *SafeMathCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_SafeMath *SafeMathCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _SafeMath.Contract.contract.Call(opts, result, method, params...)
 }
 

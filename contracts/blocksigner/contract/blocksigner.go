@@ -142,7 +142,7 @@ func bindBlockSigner(address common.Address, caller bind.ContractCaller, transac
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_BlockSigner *BlockSignerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_BlockSigner *BlockSignerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _BlockSigner.Contract.BlockSignerCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -161,7 +161,7 @@ func (_BlockSigner *BlockSignerRaw) Transact(opts *bind.TransactOpts, method str
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_BlockSigner *BlockSignerCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_BlockSigner *BlockSignerCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _BlockSigner.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -183,7 +183,9 @@ func (_BlockSigner *BlockSignerCaller) EpochNumber(opts *bind.CallOpts) (*big.In
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _BlockSigner.contract.Call(opts, out, "epochNumber")
 	return *ret0, err
 }
@@ -209,7 +211,9 @@ func (_BlockSigner *BlockSignerCaller) GetSigners(opts *bind.CallOpts, _blockHas
 	var (
 		ret0 = new([]common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _BlockSigner.contract.Call(opts, out, "getSigners", _blockHash)
 	return *ret0, err
 }
@@ -500,7 +504,7 @@ func bindSafeMath(address common.Address, caller bind.ContractCaller, transactor
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SafeMath *SafeMathRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_SafeMath *SafeMathRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _SafeMath.Contract.SafeMathCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -519,7 +523,7 @@ func (_SafeMath *SafeMathRaw) Transact(opts *bind.TransactOpts, method string, p
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SafeMath *SafeMathCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_SafeMath *SafeMathCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _SafeMath.Contract.contract.Call(opts, result, method, params...)
 }
 

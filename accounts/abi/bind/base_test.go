@@ -116,24 +116,22 @@ func TestPassingBlockNumber(t *testing.T) {
 
 	bc.Call(&bind.CallOpts{}, nil, "something")
 
-	bc.Call(&bind.CallOpts{}, nil, "something")
-
 	if mc.callContractBlockNumber != nil {
-		t.Fatalf("CallContract() was passed a block number when it should not have been")
+		t.Fatal("CallContract() was passed a block number when it should not have been")
 	}
 
 	if mc.codeAtBlockNumber != nil {
-		t.Fatalf("CodeAt() was passed a block number when it should not have been")
+		t.Fatal("CodeAt() was passed a block number when it should not have been")
 	}
 
 	bc.Call(&bind.CallOpts{Pending: true}, nil, "something")
 
 	if !mc.pendingCallContractCalled {
-		t.Fatalf("CallContract() was not passed the block number")
+		t.Fatal("CallContract() was not passed the block number")
 	}
 
 	if !mc.pendingCodeAtCalled {
-		t.Fatalf("CodeAt() was not passed the block number")
+		t.Fatal("CodeAt() was not passed the block number")
 	}
 }
 

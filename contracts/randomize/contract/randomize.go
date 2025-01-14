@@ -139,7 +139,7 @@ func bindSafeMath(address common.Address, caller bind.ContractCaller, transactor
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SafeMath *SafeMathRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_SafeMath *SafeMathRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _SafeMath.Contract.SafeMathCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -158,7 +158,7 @@ func (_SafeMath *SafeMathRaw) Transact(opts *bind.TransactOpts, method string, p
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SafeMath *SafeMathCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_SafeMath *SafeMathCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _SafeMath.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -300,7 +300,7 @@ func bindXDCRandomize(address common.Address, caller bind.ContractCaller, transa
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_XDCRandomize *XDCRandomizeRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_XDCRandomize *XDCRandomizeRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _XDCRandomize.Contract.XDCRandomizeCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -319,7 +319,7 @@ func (_XDCRandomize *XDCRandomizeRaw) Transact(opts *bind.TransactOpts, method s
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_XDCRandomize *XDCRandomizeCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_XDCRandomize *XDCRandomizeCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _XDCRandomize.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -341,7 +341,9 @@ func (_XDCRandomize *XDCRandomizeCaller) GetOpening(opts *bind.CallOpts, _valida
 	var (
 		ret0 = new([32]byte)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCRandomize.contract.Call(opts, out, "getOpening", _validator)
 	return *ret0, err
 }
@@ -367,7 +369,9 @@ func (_XDCRandomize *XDCRandomizeCaller) GetSecret(opts *bind.CallOpts, _validat
 	var (
 		ret0 = new([][32]byte)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCRandomize.contract.Call(opts, out, "getSecret", _validator)
 	return *ret0, err
 }

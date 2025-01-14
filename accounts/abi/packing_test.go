@@ -620,7 +620,7 @@ var packUnpackTests = []packUnpackTest{
 
 	{
 		def:      `[{"type": "bytes32[]"}]`,
-		unpacked: []common.Hash{{1}, {2}},
+		unpacked: [][32]byte{{1}, {2}},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" +
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0100000000000000000000000000000000000000000000000000000000000000" +
@@ -722,7 +722,7 @@ var packUnpackTests = []packUnpackTest{
 	},
 	// struct outputs
 	{
-		def: `[{"name":"int1","type":"int256"},{"name":"int2","type":"int256"}]`,
+		def: `[{"components": [{"name":"int1","type":"int256"},{"name":"int2","type":"int256"}], "type":"tuple"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002",
 		unpacked: struct {
@@ -731,28 +731,28 @@ var packUnpackTests = []packUnpackTest{
 		}{big.NewInt(1), big.NewInt(2)},
 	},
 	{
-		def:    `[{"name":"int_one","type":"int256"}]`,
+		def:    `[{"components": [{"name":"int_one","type":"int256"}], "type":"tuple"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001",
 		unpacked: struct {
 			IntOne *big.Int
 		}{big.NewInt(1)},
 	},
 	{
-		def:    `[{"name":"int__one","type":"int256"}]`,
+		def:    `[{"components": [{"name":"int__one","type":"int256"}], "type":"tuple"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001",
 		unpacked: struct {
 			IntOne *big.Int
 		}{big.NewInt(1)},
 	},
 	{
-		def:    `[{"name":"int_one_","type":"int256"}]`,
+		def:    `[{"components": [{"name":"int_one_","type":"int256"}], "type":"tuple"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001",
 		unpacked: struct {
 			IntOne *big.Int
 		}{big.NewInt(1)},
 	},
 	{
-		def: `[{"name":"int_one","type":"int256"}, {"name":"intone","type":"int256"}]`,
+		def: `[{"components": [{"name":"int_one","type":"int256"}, {"name":"intone","type":"int256"}], "type":"tuple"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002",
 		unpacked: struct {
@@ -831,11 +831,11 @@ var packUnpackTests = []packUnpackTest{
 	},
 	{
 		// static tuple
-		def: `[{"name":"a","type":"int64"}, 
+		def: `[{"components": [{"name":"a","type":"int64"}, 
 		{"name":"b","type":"int256"}, 
 		{"name":"c","type":"int256"}, 
 		{"name":"d","type":"bool"},
-		{"name":"e","type":"bytes32[3][2]"}]`,
+		{"name":"e","type":"bytes32[3][2]"}], "type":"tuple"}]`,
 		unpacked: struct {
 			A int64
 			B *big.Int
@@ -855,21 +855,22 @@ var packUnpackTests = []packUnpackTest{
 			"0500000000000000000000000000000000000000000000000000000000000000", // struct[e] array[1][2]
 	},
 	{
-		def: `[{"name":"a","type":"string"}, 
+		def: `[{"components": [{"name":"a","type":"string"}, 
 		{"name":"b","type":"int64"}, 
 		{"name":"c","type":"bytes"}, 
 		{"name":"d","type":"string[]"},
 		{"name":"e","type":"int256[]"},
-		{"name":"f","type":"address[]"}]`,
+		{"name":"f","type":"address[]"}], "type":"tuple"}]`,
 		unpacked: struct {
-			FieldA string `abi:"a"` // Test whether abi tag works
-			FieldB int64  `abi:"b"`
-			C      []byte
-			D      []string
-			E      []*big.Int
-			F      []common.Address
+			A string
+			B int64
+			C []byte
+			D []string
+			E []*big.Int
+			F []common.Address
 		}{"foobar", 1, []byte{1}, []string{"foo", "bar"}, []*big.Int{big.NewInt(1), big.NewInt(-1)}, []common.Address{{1}, {2}}},
-		packed: "00000000000000000000000000000000000000000000000000000000000000c0" + // struct[a] offset
+		packed: "0000000000000000000000000000000000000000000000000000000000000020" + // struct a
+			"00000000000000000000000000000000000000000000000000000000000000c0" + // struct[a] offset
 			"0000000000000000000000000000000000000000000000000000000000000001" + // struct[b]
 			"0000000000000000000000000000000000000000000000000000000000000100" + // struct[c] offset
 			"0000000000000000000000000000000000000000000000000000000000000140" + // struct[d] offset
@@ -894,23 +895,24 @@ var packUnpackTests = []packUnpackTest{
 			"0000000000000000000000000200000000000000000000000000000000000000", // common.Address{2}
 	},
 	{
-		def: `[{"components": [{"name": "a","type": "uint256"},	
+		def: `[{"components": [{ "type": "tuple","components": [{"name": "a","type": "uint256"},	
 							{"name": "b","type": "uint256[]"}],	
 							"name": "a","type": "tuple"},
-							{"name": "b","type": "uint256[]"}]`,
+							{"name": "b","type": "uint256[]"}],  "type": "tuple"}]`,
 		unpacked: struct {
 			A struct {
-				FieldA *big.Int `abi:"a"`
-				B      []*big.Int
+				A *big.Int
+				B []*big.Int
 			}
 			B []*big.Int
 		}{
 			A: struct {
-				FieldA *big.Int `abi:"a"` // Test whether abi tag works for nested tuple
-				B      []*big.Int
+				A *big.Int
+				B []*big.Int
 			}{big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(2)}},
 			B: []*big.Int{big.NewInt(1), big.NewInt(2)}},
-		packed: "0000000000000000000000000000000000000000000000000000000000000040" + // a offset
+		packed: "0000000000000000000000000000000000000000000000000000000000000020" + // struct a
+			"0000000000000000000000000000000000000000000000000000000000000040" + // a offset
 			"00000000000000000000000000000000000000000000000000000000000000e0" + // b offset
 			"0000000000000000000000000000000000000000000000000000000000000001" + // a.a value
 			"0000000000000000000000000000000000000000000000000000000000000040" + // a.b offset

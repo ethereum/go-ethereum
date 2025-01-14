@@ -140,7 +140,7 @@ func bindLAbstractRegistration(address common.Address, caller bind.ContractCalle
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_LAbstractRegistration *LAbstractRegistrationRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_LAbstractRegistration *LAbstractRegistrationRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _LAbstractRegistration.Contract.LAbstractRegistrationCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -159,7 +159,7 @@ func (_LAbstractRegistration *LAbstractRegistrationRaw) Transact(opts *bind.Tran
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_LAbstractRegistration *LAbstractRegistrationCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_LAbstractRegistration *LAbstractRegistrationCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _LAbstractRegistration.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -181,7 +181,9 @@ func (_LAbstractRegistration *LAbstractRegistrationCaller) RESIGNREQUESTS(opts *
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _LAbstractRegistration.contract.Call(opts, out, "RESIGN_REQUESTS", arg0)
 	return *ret0, err
 }
@@ -365,7 +367,7 @@ func bindLAbstractXDCXListing(address common.Address, caller bind.ContractCaller
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_LAbstractXDCXListing *LAbstractXDCXListingRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_LAbstractXDCXListing *LAbstractXDCXListingRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _LAbstractXDCXListing.Contract.LAbstractXDCXListingCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -384,7 +386,7 @@ func (_LAbstractXDCXListing *LAbstractXDCXListingRaw) Transact(opts *bind.Transa
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_LAbstractXDCXListing *LAbstractXDCXListingCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_LAbstractXDCXListing *LAbstractXDCXListingCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _LAbstractXDCXListing.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -406,7 +408,9 @@ func (_LAbstractXDCXListing *LAbstractXDCXListingCaller) GetTokenStatus(opts *bi
 	var (
 		ret0 = new(bool)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _LAbstractXDCXListing.contract.Call(opts, out, "getTokenStatus", arg0)
 	return *ret0, err
 }
@@ -552,7 +556,7 @@ func bindLAbstractTokenTRC21(address common.Address, caller bind.ContractCaller,
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_LAbstractTokenTRC21 *LAbstractTokenTRC21Raw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_LAbstractTokenTRC21 *LAbstractTokenTRC21Raw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _LAbstractTokenTRC21.Contract.LAbstractTokenTRC21Caller.contract.Call(opts, result, method, params...)
 }
 
@@ -571,7 +575,7 @@ func (_LAbstractTokenTRC21 *LAbstractTokenTRC21Raw) Transact(opts *bind.Transact
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_LAbstractTokenTRC21 *LAbstractTokenTRC21CallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_LAbstractTokenTRC21 *LAbstractTokenTRC21CallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _LAbstractTokenTRC21.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -593,7 +597,9 @@ func (_LAbstractTokenTRC21 *LAbstractTokenTRC21Caller) Issuer(opts *bind.CallOpt
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _LAbstractTokenTRC21.contract.Call(opts, out, "issuer")
 	return *ret0, err
 }
@@ -739,7 +745,7 @@ func bindLending(address common.Address, caller bind.ContractCaller, transactor 
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Lending *LendingRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Lending *LendingRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Lending.Contract.LendingCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -758,7 +764,7 @@ func (_Lending *LendingRaw) Transact(opts *bind.TransactOpts, method string, par
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Lending *LendingCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Lending *LendingCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Lending.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -780,7 +786,9 @@ func (_Lending *LendingCaller) BASES(opts *bind.CallOpts, arg0 *big.Int) (common
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _Lending.contract.Call(opts, out, "BASES", arg0)
 	return *ret0, err
 }
@@ -806,7 +814,9 @@ func (_Lending *LendingCaller) COLLATERALS(opts *bind.CallOpts, arg0 *big.Int) (
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _Lending.contract.Call(opts, out, "COLLATERALS", arg0)
 	return *ret0, err
 }
@@ -838,7 +848,9 @@ func (_Lending *LendingCaller) COLLATERALLIST(opts *bind.CallOpts, arg0 common.A
 		LiquidationRate *big.Int
 		RecallRate      *big.Int
 	})
-	out := ret
+	out := &[]interface{}{
+		ret,
+	}
 	err := _Lending.contract.Call(opts, out, "COLLATERAL_LIST", arg0)
 	return *ret, err
 }
@@ -872,7 +884,9 @@ func (_Lending *LendingCaller) ILOCOLLATERALS(opts *bind.CallOpts, arg0 *big.Int
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _Lending.contract.Call(opts, out, "ILO_COLLATERALS", arg0)
 	return *ret0, err
 }
@@ -898,7 +912,9 @@ func (_Lending *LendingCaller) LENDINGRELAYERLIST(opts *bind.CallOpts, arg0 comm
 	var (
 		ret0 = new(uint16)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _Lending.contract.Call(opts, out, "LENDINGRELAYER_LIST", arg0)
 	return *ret0, err
 }
@@ -924,7 +940,9 @@ func (_Lending *LendingCaller) MODERATOR(opts *bind.CallOpts) (common.Address, e
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _Lending.contract.Call(opts, out, "MODERATOR")
 	return *ret0, err
 }
@@ -950,7 +968,9 @@ func (_Lending *LendingCaller) ORACLEPRICEFEEDER(opts *bind.CallOpts) (common.Ad
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _Lending.contract.Call(opts, out, "ORACLE_PRICE_FEEDER")
 	return *ret0, err
 }
@@ -976,7 +996,9 @@ func (_Lending *LendingCaller) Relayer(opts *bind.CallOpts) (common.Address, err
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _Lending.contract.Call(opts, out, "Relayer")
 	return *ret0, err
 }
@@ -1002,7 +1024,9 @@ func (_Lending *LendingCaller) TERMS(opts *bind.CallOpts, arg0 *big.Int) (*big.I
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _Lending.contract.Call(opts, out, "TERMS", arg0)
 	return *ret0, err
 }
@@ -1028,7 +1052,9 @@ func (_Lending *LendingCaller) XDCXListing(opts *bind.CallOpts) (common.Address,
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _Lending.contract.Call(opts, out, "XDCXListing")
 	return *ret0, err
 }

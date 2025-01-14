@@ -36,7 +36,7 @@ func RunContract(chain consensus.ChainContext, statedb *state.StateDB, contractA
 		return nil, err
 	}
 	var unpackResult interface{}
-	err = abi.Unpack(&unpackResult, method, result)
+	err = abi.UnpackIntoInterface(&unpackResult, method, result)
 	if err != nil {
 		return nil, err
 	}

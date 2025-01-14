@@ -142,7 +142,7 @@ func bindSafeMath(address common.Address, caller bind.ContractCaller, transactor
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SafeMath *SafeMathRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_SafeMath *SafeMathRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _SafeMath.Contract.SafeMathCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -161,7 +161,7 @@ func (_SafeMath *SafeMathRaw) Transact(opts *bind.TransactOpts, method string, p
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_SafeMath *SafeMathCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_SafeMath *SafeMathCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _SafeMath.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -303,7 +303,7 @@ func bindXDCValidator(address common.Address, caller bind.ContractCaller, transa
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_XDCValidator *XDCValidatorRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_XDCValidator *XDCValidatorRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _XDCValidator.Contract.XDCValidatorCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -322,7 +322,7 @@ func (_XDCValidator *XDCValidatorRaw) Transact(opts *bind.TransactOpts, method s
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_XDCValidator *XDCValidatorCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_XDCValidator *XDCValidatorCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _XDCValidator.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -344,7 +344,9 @@ func (_XDCValidator *XDCValidatorCaller) KYCString(opts *bind.CallOpts, arg0 com
 	var (
 		ret0 = new(string)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "KYCString", arg0, arg1)
 	return *ret0, err
 }
@@ -370,7 +372,9 @@ func (_XDCValidator *XDCValidatorCaller) CandidateCount(opts *bind.CallOpts) (*b
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "candidateCount")
 	return *ret0, err
 }
@@ -396,7 +400,9 @@ func (_XDCValidator *XDCValidatorCaller) CandidateWithdrawDelay(opts *bind.CallO
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "candidateWithdrawDelay")
 	return *ret0, err
 }
@@ -422,7 +428,9 @@ func (_XDCValidator *XDCValidatorCaller) Candidates(opts *bind.CallOpts, arg0 *b
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "candidates", arg0)
 	return *ret0, err
 }
@@ -448,7 +456,9 @@ func (_XDCValidator *XDCValidatorCaller) GetCandidateCap(opts *bind.CallOpts, _c
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getCandidateCap", _candidate)
 	return *ret0, err
 }
@@ -474,7 +484,9 @@ func (_XDCValidator *XDCValidatorCaller) GetCandidateOwner(opts *bind.CallOpts, 
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getCandidateOwner", _candidate)
 	return *ret0, err
 }
@@ -500,7 +512,9 @@ func (_XDCValidator *XDCValidatorCaller) GetCandidates(opts *bind.CallOpts) ([]c
 	var (
 		ret0 = new([]common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getCandidates")
 	return *ret0, err
 }
@@ -526,7 +540,9 @@ func (_XDCValidator *XDCValidatorCaller) GetHashCount(opts *bind.CallOpts, _addr
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getHashCount", _address)
 	return *ret0, err
 }
@@ -552,7 +568,9 @@ func (_XDCValidator *XDCValidatorCaller) GetLatestKYC(opts *bind.CallOpts, _addr
 	var (
 		ret0 = new(string)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getLatestKYC", _address)
 	return *ret0, err
 }
@@ -578,7 +596,9 @@ func (_XDCValidator *XDCValidatorCaller) GetOwnerCount(opts *bind.CallOpts) (*bi
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getOwnerCount")
 	return *ret0, err
 }
@@ -604,7 +624,9 @@ func (_XDCValidator *XDCValidatorCaller) GetVoterCap(opts *bind.CallOpts, _candi
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getVoterCap", _candidate, _voter)
 	return *ret0, err
 }
@@ -630,7 +652,9 @@ func (_XDCValidator *XDCValidatorCaller) GetVoters(opts *bind.CallOpts, _candida
 	var (
 		ret0 = new([]common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getVoters", _candidate)
 	return *ret0, err
 }
@@ -656,7 +680,9 @@ func (_XDCValidator *XDCValidatorCaller) GetWithdrawBlockNumbers(opts *bind.Call
 	var (
 		ret0 = new([]*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getWithdrawBlockNumbers")
 	return *ret0, err
 }
@@ -682,7 +708,9 @@ func (_XDCValidator *XDCValidatorCaller) GetWithdrawCap(opts *bind.CallOpts, _bl
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "getWithdrawCap", _blockNumber)
 	return *ret0, err
 }
@@ -708,7 +736,9 @@ func (_XDCValidator *XDCValidatorCaller) HasVotedInvalid(opts *bind.CallOpts, ar
 	var (
 		ret0 = new(bool)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "hasVotedInvalid", arg0, arg1)
 	return *ret0, err
 }
@@ -734,7 +764,9 @@ func (_XDCValidator *XDCValidatorCaller) InvalidKYCCount(opts *bind.CallOpts, ar
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "invalidKYCCount", arg0)
 	return *ret0, err
 }
@@ -760,7 +792,9 @@ func (_XDCValidator *XDCValidatorCaller) InvalidPercent(opts *bind.CallOpts, _in
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "invalidPercent", _invalidCandidate)
 	return *ret0, err
 }
@@ -786,7 +820,9 @@ func (_XDCValidator *XDCValidatorCaller) IsCandidate(opts *bind.CallOpts, _candi
 	var (
 		ret0 = new(bool)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "isCandidate", _candidate)
 	return *ret0, err
 }
@@ -812,7 +848,9 @@ func (_XDCValidator *XDCValidatorCaller) MaxValidatorNumber(opts *bind.CallOpts)
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "maxValidatorNumber")
 	return *ret0, err
 }
@@ -838,7 +876,9 @@ func (_XDCValidator *XDCValidatorCaller) MinCandidateCap(opts *bind.CallOpts) (*
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "minCandidateCap")
 	return *ret0, err
 }
@@ -864,7 +904,9 @@ func (_XDCValidator *XDCValidatorCaller) MinVoterCap(opts *bind.CallOpts) (*big.
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "minVoterCap")
 	return *ret0, err
 }
@@ -890,7 +932,9 @@ func (_XDCValidator *XDCValidatorCaller) OwnerCount(opts *bind.CallOpts) (*big.I
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "ownerCount")
 	return *ret0, err
 }
@@ -916,7 +960,9 @@ func (_XDCValidator *XDCValidatorCaller) OwnerToCandidate(opts *bind.CallOpts, a
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "ownerToCandidate", arg0, arg1)
 	return *ret0, err
 }
@@ -942,7 +988,9 @@ func (_XDCValidator *XDCValidatorCaller) Owners(opts *bind.CallOpts, arg0 *big.I
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "owners", arg0)
 	return *ret0, err
 }
@@ -968,7 +1016,9 @@ func (_XDCValidator *XDCValidatorCaller) VoterWithdrawDelay(opts *bind.CallOpts)
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCValidator.contract.Call(opts, out, "voterWithdrawDelay")
 	return *ret0, err
 }
