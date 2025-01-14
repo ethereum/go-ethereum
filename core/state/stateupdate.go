@@ -20,7 +20,6 @@ import (
 	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -133,8 +132,8 @@ func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common
 		}
 	}
 	return &stateUpdate{
-		originRoot:     types.TrieRootHash(originRoot),
-		root:           types.TrieRootHash(root),
+		originRoot:     originRoot,
+		root:           root,
 		accounts:       accounts,
 		accountsOrigin: accountsOrigin,
 		storages:       storages,

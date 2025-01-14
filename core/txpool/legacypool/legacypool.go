@@ -1754,7 +1754,6 @@ func (pool *LegacyPool) Clear() {
 		senderAddr, _ := types.Sender(pool.signer, tx)
 		pool.reserve(senderAddr, false)
 	}
-
 	pool.all = newLookup()
 	pool.priced = newPricedList(pool.all)
 	pool.pending = make(map[common.Address]*list)
