@@ -73,7 +73,7 @@ func packNum(value reflect.Value) []byte {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return math.U256Bytes(big.NewInt(value.Int()))
 	case reflect.Ptr:
-		return math.U256Bytes(value.Interface().(*big.Int))
+		return math.U256Bytes(new(big.Int).Set(value.Interface().(*big.Int)))
 	default:
 		panic("abi: fatal error")
 	}
