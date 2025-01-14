@@ -120,8 +120,7 @@ var unpackTests = []unpackTest{
 	{
 		def:  `[{"type": "bytes"}]`,
 		enc:  "000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200100000000000000000000000000000000000000000000000000000000000000",
-		want: [32]byte{},
-		err:  "abi: cannot unmarshal []uint8 in to [32]uint8",
+		want: [32]byte{1},
 	},
 	{
 		def:  `[{"type": "bytes32"}]`,
@@ -135,8 +134,7 @@ var unpackTests = []unpackTest{
 		want: struct {
 			IntOne *big.Int
 			Intone *big.Int
-		}{},
-		err: "abi: purely underscored output cannot unpack to struct",
+		}{IntOne: big.NewInt(1)},
 	},
 	{
 		def: `[{"name":"int_one","type":"int256"},{"name":"IntOne","type":"int256"}]`,
@@ -362,7 +360,7 @@ func TestMethodMultiReturn(t *testing.T) {
 	}, {
 		&[]interface{}{new(int)},
 		&[]interface{}{},
-		"abi: insufficient number of elements in the list/array for unpack, want 2, got 1",
+		"abi: insufficient number of arguments for unpack, want 2, got 1",
 		"Can not unpack into a slice with wrong types",
 	}}
 	for _, tc := range testCases {
