@@ -320,7 +320,7 @@ func TestStatedbUtils(t *testing.T) {
 	if err != nil {
 		t.Fatalf("can't get validator object: %v", err)
 	}
-	statedb, err := contractBackendForValidator.GetBlockChain().State()
+	statedb, err := contractBackendForValidator.BlockChain().State()
 	if err != nil {
 		t.Fatalf("can't get statedb: %v", err)
 	}

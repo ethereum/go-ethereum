@@ -520,11 +520,12 @@ var bindTests = []struct {
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 			"github.com/XinFinOrg/XDPoSChain/common"
+			"github.com/XinFinOrg/XDPoSChain/core"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
 		`
 			// Create a simulator and wrap a non-deployed contract
-			sim := backends.NewXDCSimulatedBackend(nil, uint64(10000000000), params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{}, uint64(10000000000), params.TestXDPoSMockChainConfig)
 
 			nonexistent, err := NewNonExistent(common.Address{}, sim)
 			if err != nil {

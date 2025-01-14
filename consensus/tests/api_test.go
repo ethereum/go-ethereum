@@ -22,9 +22,9 @@ func TestConfigApi(t *testing.T) {
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
 	}, 10000000, params.TestXDPoSMockChainConfig)
 
-	engine := bc.GetBlockChain().Engine().(*XDPoS.XDPoS)
+	engine := bc.BlockChain().Engine().(*XDPoS.XDPoS)
 
-	info := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).NetworkInformation()
+	info := engine.APIs(bc.BlockChain())[0].Service.(*XDPoS.API).NetworkInformation()
 
 	assert.Equal(t, info.NetworkId, big.NewInt(1337))
 	assert.Equal(t, info.ConsensusConfigs.V2.CurrentConfig.MaxMasternodes, 18)

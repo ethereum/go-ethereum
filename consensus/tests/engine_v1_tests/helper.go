@@ -244,7 +244,7 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
 
 	backend := getCommonBackend(t, chainConfig)
-	blockchain := backend.GetBlockChain()
+	blockchain := backend.BlockChain()
 	blockchain.Client = backend
 
 	if err != nil {

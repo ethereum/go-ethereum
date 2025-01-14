@@ -55,7 +55,9 @@ import (
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
 
-var errBlockNumberUnsupported = errors.New("SimulatedBackend cannot access blocks other than the latest block")
+var (
+	errBlockNumberUnsupported = errors.New("SimulatedBackend cannot access blocks other than the latest block")
+)
 
 // SimulatedBackend implements bind.ContractBackend, simulating a blockchain in
 // the background. Its main purpose is to allow easily testing contract bindings.
@@ -96,7 +98,7 @@ func SimulateWalletAddressAndSignFn() (common.Address, func(account accounts.Acc
 	return a1.Address, ks.SignHash, nil
 }
 
-// XDC simulated backend for testing purpose.
+// NewXDCSimulatedBackend creates a new backend for testing purpose.
 func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfig *params.ChainConfig) *SimulatedBackend {
 	database := rawdb.NewMemoryDatabase()
 	genesis := core.Genesis{
@@ -139,9 +141,8 @@ func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfi
 	return backend
 }
 
-// NewSimulatedBackend creates a new binding backend using a simulated blockchain
-// for testing purposes.
-//
+// NewSimulatedBackend creates a new binding backend based on the given database
+// and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {
 	database := rawdb.NewMemoryDatabase()
@@ -625,7 +626,8 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	return nil
 }
 
-func (b *SimulatedBackend) GetBlockChain() *core.BlockChain {
+// Blockchain returns the underlying blockchain.
+func (b *SimulatedBackend) BlockChain() *core.BlockChain {
 	return b.blockchain
 }
 

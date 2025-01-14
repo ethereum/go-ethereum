@@ -373,7 +373,7 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 		panic(fmt.Errorf("error while creating simulated wallet for generating singer address and signer fn: %v", err))
 	}
 	backend := getCommonBackend(t, chainConfig)
-	blockchain := backend.GetBlockChain()
+	blockchain := backend.BlockChain()
 	blockchain.Client = backend
 
 	engine := blockchain.Engine().(*XDPoS.XDPoS)
@@ -463,7 +463,7 @@ func PrepareXDCTestBlockChainWithPenaltyForV2Engine(t *testing.T, numOfBlocks in
 		t.Fatal("Error while creating simulated wallet for generating singer address and signer fn: ", err)
 	}
 	backend := getCommonBackend(t, chainConfig)
-	blockchain := backend.GetBlockChain()
+	blockchain := backend.BlockChain()
 	blockchain.Client = backend
 
 	// Authorise
@@ -514,7 +514,7 @@ func PrepareXDCTestBlockChainWith128Candidates(t *testing.T, numOfBlocks int, ch
 		t.Fatal("Error while creating simulated wallet for generating singer address and signer fn: ", err)
 	}
 	backend := getMultiCandidatesBackend(t, chainConfig, 128)
-	blockchain := backend.GetBlockChain()
+	blockchain := backend.BlockChain()
 	blockchain.Client = backend
 
 	engine := blockchain.Engine().(*XDPoS.XDPoS)
