@@ -895,11 +895,32 @@ type filterBackend struct {
 func (fb *filterBackend) ChainDb() ethdb.Database  { return fb.db }
 func (fb *filterBackend) EventMux() *event.TypeMux { panic("not supported") }
 
-func (fb *filterBackend) HeaderByNumber(ctx context.Context, block rpc.BlockNumber) (*types.Header, error) {
-	if block == rpc.LatestBlockNumber {
+func (fb *filterBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	switch number {
+	case rpc.PendingBlockNumber:
+		if block := fb.backend.pendingBlock; block != nil {
+			return block.Header(), nil
+		}
+		return nil, nil
+	case rpc.LatestBlockNumber:
 		return fb.bc.CurrentHeader(), nil
+	case rpc.CommittedBlockNumber:
+		if fb.bc.Config().XDPoS == nil {
+			return nil, errors.New("only XDPoS v2 supports committed block lookup")
+		}
+		current := fb.bc.CurrentBlock().Header()
+		if fb.bc.Config().XDPoS.BlockConsensusVersion(
+			current.Number,
+			current.Extra,
+			XDPoS.ExtraFieldCheck,
+		) == params.ConsensusEngineVersion2 {
+			confirmedHash := fb.bc.Engine().(*XDPoS.XDPoS).EngineV2.GetLatestCommittedBlockInfo().Hash
+			return fb.bc.GetHeaderByHash(confirmedHash), nil
+		}
+		return nil, errors.New("only XDPoS v2 can lookup committed block")
+	default:
+		return fb.bc.GetHeaderByNumber(uint64(number.Int64())), nil
 	}
-	return fb.bc.GetHeaderByNumber(uint64(block.Int64())), nil
 }
 
 func (fb *filterBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {

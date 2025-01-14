@@ -57,16 +57,21 @@ func (b *testBackend) ChainDb() ethdb.Database {
 }
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
-	var hash common.Hash
-	var num uint64
-	if blockNr == rpc.LatestBlockNumber {
+	var (
+		hash common.Hash
+		num  uint64
+	)
+	switch blockNr {
+	case rpc.LatestBlockNumber:
 		hash = rawdb.ReadHeadBlockHash(b.db)
 		number := rawdb.ReadHeaderNumber(b.db, hash)
 		if number == nil {
 			return nil, nil
 		}
 		num = *number
-	} else {
+	case rpc.CommittedBlockNumber:
+		return nil, nil
+	default:
 		num = uint64(blockNr)
 		hash = rawdb.ReadCanonicalHash(b.db, num)
 	}
