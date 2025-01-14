@@ -124,7 +124,7 @@ func (m *Meter) tick() {
 	m.a15.tick()
 }
 
-var arbiter = meterTicker{meters: make(map[*Meter]struct{})}
+var arbiter = meterTicker{meters: make(map[*Meter]struct{}), stopCh: make(chan struct{})}
 
 // meterTicker ticks meters every 5s from a single goroutine.
 // meters are references in a set for future stopping.
@@ -133,6 +133,7 @@ type meterTicker struct {
 
 	started bool
 	meters  map[*Meter]struct{}
+	stopCh  chan struct{}
 }
 
 // add adds another *Meter ot the arbiter, and starts the arbiter ticker.
@@ -149,6 +150,7 @@ func (ma *meterTicker) add(m *Meter) {
 // remove removes a meter from the set of ticked meters.
 func (ma *meterTicker) remove(m *Meter) {
 	ma.mu.Lock()
+	close(ma.stopCh)
 	delete(ma.meters, m)
 	ma.mu.Unlock()
 }
@@ -156,14 +158,20 @@ func (ma *meterTicker) remove(m *Meter) {
 // loop ticks meters on a 5 second interval.
 func (ma *meterTicker) loop() {
 	ticker := time.NewTicker(5 * time.Second)
-	for range ticker.C {
-		if !metricsEnabled {
-			continue
+
+	for {
+		select {
+		case <-ticker.C:
+			if !metricsEnabled {
+				continue
+			}
+			ma.mu.RLock()
+			for meter := range ma.meters {
+				meter.tick()
+			}
+			ma.mu.RUnlock()
+		case <-ma.stopCh:
+			return
 		}
-		ma.mu.RLock()
-		for meter := range ma.meters {
-			meter.tick()
-		}
-		ma.mu.RUnlock()
 	}
 }
