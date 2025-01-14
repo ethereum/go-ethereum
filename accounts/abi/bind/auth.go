@@ -17,6 +17,7 @@
 package bind
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"io"
@@ -72,6 +73,7 @@ func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account
 			}
 			return tx.WithSignature(signer, signature)
 		},
+		Context: context.Background(),
 	}, nil
 }
 
@@ -95,6 +97,7 @@ func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 			}
 			return tx.WithSignature(signer, signature)
 		},
+		Context: context.Background(),
 	}
 }
 
@@ -131,6 +134,7 @@ func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accou
 			}
 			return tx.WithSignature(signer, signature)
 		},
+		Context: context.Background(),
 	}, nil
 }
 
@@ -154,5 +158,6 @@ func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) (*Tr
 			}
 			return tx.WithSignature(signer, signature)
 		},
+		Context: context.Background(),
 	}, nil
 }
