@@ -98,6 +98,9 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 
 // Close terminates the account manager's internal notification processes.
 func (am *Manager) Close() error {
+	for _, w := range am.wallets {
+		w.Close()
+	}
 	errc := make(chan error)
 	am.quit <- errc
 	return <-errc
