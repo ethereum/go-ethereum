@@ -637,7 +637,7 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // to discover non zero accounts and automatically add them to list of tracked
 // accounts.
 //
-// Note, self derivaton will increment the last component of the specified path
+// Note, self derivation will increment the last component of the specified path
 // opposed to decending into a child path to allow discovering accounts starting
 // from non zero components.
 //

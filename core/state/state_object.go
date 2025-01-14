@@ -174,7 +174,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
 	}
-	// Track the amount of time wasted on reading the storge trie
+	// Track the amount of time wasted on reading the storage trie
 	defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
 	value := common.Hash{}
 	// Load from DB in case it is missing.
@@ -272,7 +272,7 @@ func (s *stateObject) setState(key, value common.Hash) {
 
 // updateTrie writes cached storage modifications into the object's storage trie.
 func (s *stateObject) updateTrie(db Database) Trie {
-	// Track the amount of time wasted on updating the storge trie
+	// Track the amount of time wasted on updating the storage trie
 	defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
 	tr := s.getTrie(db)
 	for key, value := range s.dirtyStorage {
@@ -292,7 +292,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 func (s *stateObject) updateRoot(db Database) {
 	s.updateTrie(db)
 
-	// Track the amount of time wasted on hashing the storge trie
+	// Track the amount of time wasted on hashing the storage trie
 	defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
 
 	s.data.Root = s.trie.Hash()
@@ -305,7 +305,7 @@ func (s *stateObject) CommitTrie(db Database) error {
 	if s.dbErr != nil {
 		return s.dbErr
 	}
-	// Track the amount of time wasted on committing the storge trie
+	// Track the amount of time wasted on committing the storage trie
 	defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 
 	root, err := s.trie.Commit(nil)
