@@ -58,6 +58,10 @@ test: all
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint
 
+#? check_tidy: Verify go.mod and go.sum by 'go mod tidy'
+check_tidy: ## Run 'go mod tidy'.
+	$(GORUN) build/ci.go check_tidy
+
 #? clean: Clean go cache, built executables, and the auto generated folder.
 clean:
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
