@@ -129,8 +129,8 @@ func TestNewSimulatedBackend(t *testing.T) {
 		t.Errorf("expected sim blockchain config to equal params.AllEthashProtocolChanges, got %v", sim.config)
 	}
 
-	statedb, _ := sim.blockchain.State()
-	bal := statedb.GetBalance(testAddr)
+	stateDB, _ := sim.blockchain.State()
+	bal := stateDB.GetBalance(testAddr)
 	if bal.Cmp(expectedBal) != 0 {
 		t.Errorf("expected balance for test address not received. expected: %v actual: %v", expectedBal, bal)
 	}
