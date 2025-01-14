@@ -27,8 +27,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
-//go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
-
 var (
 	// ErrInvalidOrderSig invalidate signer
 	ErrInvalidOrderSig = errors.New("invalid transaction v, r, s values")

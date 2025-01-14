@@ -32,7 +32,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
-//go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 var (
 	ErrInvalidSig           = errors.New("invalid transaction v, r, s values")
 	ErrUnexpectedProtection = errors.New("transaction type does not supported EIP-155 protected signatures")
