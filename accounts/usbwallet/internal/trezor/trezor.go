@@ -36,7 +36,7 @@ func Type(msg proto.Message) uint16 {
 }
 
 // Name returns the friendly message type name of a specific protocol buffer
-// type numbers.
+// type number.
 func Name(kind uint16) string {
 	name := MessageType_name[int32(kind)]
 	if len(name) < 12 {
