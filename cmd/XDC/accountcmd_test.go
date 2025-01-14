@@ -95,6 +95,27 @@ Path of the secret key file: .*UTC--.+--xdc[0-9a-fA-F]{40}
 `)
 }
 
+func TestAccountImport(t *testing.T) {
+	tests := []struct{ name, key, output string }{
+		{
+			name:   "correct account",
+			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			output: "Address: {xdcfcad0b19bb29d4674531d6f115237e16afce377c}\n",
+		},
+		{
+			name:   "invalid character",
+			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1",
+			output: "Fatal: Failed to load the private key: invalid character '1' at end of key file\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			importAccountWithExpect(t, test.key, test.output)
+		})
+	}
+}
+
 func TestAccountNewBadRepeat(t *testing.T) {
 	XDC := runXDC(t, "account", "new", "--lightkdf")
 	defer XDC.ExpectExit()
