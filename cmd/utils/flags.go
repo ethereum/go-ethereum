@@ -88,6 +88,11 @@ var (
 		Usage:    "Directory for the keystore (default = inside the datadir)",
 		Category: flags.AccountCategory,
 	}
+	USBFlag = &cli.BoolFlag{
+		Name:     "usb",
+		Usage:    "Enable monitoring and management of USB hardware wallets",
+		Category: flags.AccountCategory,
+	}
 	SmartCardDaemonPathFlag = &cli.StringFlag{
 		Name:     "pcscdpath",
 		Usage:    "Path to the smartcard daemon (pcscd) socket file",
@@ -1220,8 +1225,11 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(LightKDFFlag.Name) {
 		cfg.UseLightweightKDF = ctx.Bool(LightKDFFlag.Name)
 	}
-	if ctx.IsSet(NoUSBFlag.Name) {
-		cfg.NoUSB = ctx.Bool(NoUSBFlag.Name)
+	if ctx.IsSet(NoUSBFlag.Name) || cfg.NoUSB {
+		log.Warn("Option nousb is deprecated and USB is deactivated by default. Use --usb to enable")
+	}
+	if ctx.IsSet(USBFlag.Name) {
+		cfg.USB = ctx.Bool(USBFlag.Name)
 	}
 	if ctx.IsSet(AnnounceTxsFlag.Name) {
 		cfg.AnnounceTxs = ctx.Bool(AnnounceTxsFlag.Name)

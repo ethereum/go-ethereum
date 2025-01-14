@@ -87,7 +87,11 @@ type Config struct {
 	InsecureUnlockAllowed bool `toml:",omitempty"`
 
 	// NoUSB disables hardware wallet monitoring and connectivity.
+	// Deprecated: USB monitoring is disabled by default and must be enabled explicitly.
 	NoUSB bool `toml:",omitempty"`
+
+	// USB enables hardware wallet monitoring and connectivity.
+	USB bool `toml:",omitempty"`
 
 	// SmartCardDaemonPath is the path to the smartcard daemon's socket.
 	SmartCardDaemonPath string `toml:",omitempty"`

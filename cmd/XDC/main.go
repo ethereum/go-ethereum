@@ -62,7 +62,8 @@ var (
 		utils.BootnodesV5Flag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		//utils.NoUSBFlag,
+		utils.NoUSBFlag, // deprecated
+		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
 		//utils.EthashCacheDirFlag,
 		//utils.EthashCachesInMemoryFlag,
