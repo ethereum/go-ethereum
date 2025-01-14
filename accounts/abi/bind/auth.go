@@ -53,6 +53,25 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 	return NewKeyedTransactor(key.PrivateKey), nil
 }
 
+// NewTransactor is a utility method to easily create a transaction signer from
+// an decrypted key from a keystore
+func NewTransactorFromKeyStore(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
+	signer := types.HomesteadSigner{}
+	return &TransactOpts{
+		From: account.Address,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != account.Address {
+				return nil, errors.New("not authorized to sign this account")
+			}
+			signature, err := keystore.SignHash(account, signer.Hash(tx).Bytes())
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+	}, nil
+}
+
 // NewKeyedTransactor is a utility method to easily create a transaction signer
 // from a single private key.
 //
