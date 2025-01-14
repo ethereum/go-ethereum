@@ -63,6 +63,7 @@ func TestWaitDeployed(t *testing.T) {
 			10000000,
 			&config,
 		)
+		defer backend.Close()
 
 		// Create the transaction
 		head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
