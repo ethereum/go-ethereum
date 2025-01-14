@@ -89,7 +89,7 @@ func (t *TradingStateDB) Error() error {
 }
 
 // Exist reports whether the given orderId address exists in the state.
-// Notably this also returns true for suicided exchanges.
+// Notably this also returns true for self-destructed exchanges.
 func (t *TradingStateDB) Exist(addr common.Hash) bool {
 	return t.getStateExchangeObject(addr) != nil
 }
