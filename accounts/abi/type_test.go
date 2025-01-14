@@ -106,7 +106,7 @@ func TestTypeRegexp(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		typ, err := NewType(tt.blob, tt.components)
+		typ, err := NewType(tt.blob, "", tt.components)
 		if err != nil {
 			t.Errorf("type %q: failed to parse type string: %v", tt.blob, err)
 		}
@@ -281,7 +281,7 @@ func TestTypeCheck(t *testing.T) {
 			B *big.Int
 		}{{big.NewInt(0), big.NewInt(0)}, {big.NewInt(0), big.NewInt(0)}}, ""},
 	} {
-		typ, err := NewType(test.typ, test.components)
+		typ, err := NewType(test.typ, "", test.components)
 		if err != nil && len(test.err) == 0 {
 			t.Fatal("unexpected parse error:", err)
 		} else if err != nil && len(test.err) != 0 {

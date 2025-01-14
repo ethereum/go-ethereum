@@ -80,15 +80,19 @@ func makeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 				copy(topic[:], hash[:])
 
 			default:
+				// todo(rjl493456442) according solidity documentation, indexed event
+				// parameters that are not value types i.e. arrays and structs are not
+				// stored directly but instead a keccak256-hash of an encoding is stored.
+				//
+				// We only convert stringS and bytes to hash, still need to deal with
+				// array(both fixed-size and dynamic-size) and struct.
+
 				// Attempt to generate the topic from funky types
 				val := reflect.ValueOf(rule)
-
 				switch {
-
 				// static byte array
 				case val.Kind() == reflect.Array && reflect.TypeOf(rule).Elem().Kind() == reflect.Uint8:
 					reflect.Copy(reflect.ValueOf(topic[:val.Len()]), val)
-
 				default:
 					return nil, fmt.Errorf("unsupported indexed type: %T", rule)
 				}
@@ -162,6 +166,7 @@ func parseTopics(out interface{}, fields abi.Arguments, topics []common.Hash) er
 
 		default:
 			// Ran out of plain primitive types, try custom types
+
 			switch field.Type() {
 			case reflectHash: // Also covers all dynamic types
 				field.Set(reflect.ValueOf(topics[0]))
@@ -178,11 +183,9 @@ func parseTopics(out interface{}, fields abi.Arguments, topics []common.Hash) er
 			default:
 				// Ran out of custom types, try the crazies
 				switch {
-
 				// static byte array
 				case arg.Type.T == abi.FixedBytesTy:
 					reflect.Copy(field, reflect.ValueOf(topics[0][:arg.Type.Size]))
-
 				default:
 					return fmt.Errorf("unsupported indexed type: %v", arg.Type)
 				}

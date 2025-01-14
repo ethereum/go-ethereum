@@ -77,9 +77,6 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 
 // Unpack output in v according to the abi specification
 func (abi ABI) Unpack(v interface{}, name string, data []byte) (err error) {
-	if len(data) == 0 {
-		return errors.New("abi: unmarshalling empty output")
-	}
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
 	if method, ok := abi.Methods[name]; ok {
@@ -96,9 +93,6 @@ func (abi ABI) Unpack(v interface{}, name string, data []byte) (err error) {
 
 // UnpackIntoMap unpacks a log into the provided map[string]interface{}
 func (abi ABI) UnpackIntoMap(v map[string]interface{}, name string, data []byte) (err error) {
-	if len(data) == 0 {
-		return fmt.Errorf("abi: unmarshalling empty output")
-	}
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
 	if method, ok := abi.Methods[name]; ok {
@@ -207,7 +201,7 @@ func UnpackRevert(data []byte) (string, error) {
 	if !bytes.Equal(data[:4], revertSelector) {
 		return "", errors.New("invalid data for unpacking")
 	}
-	typ, _ := NewType("string", nil)
+	typ, _ := NewType("string", "", nil)
 	unpacked, err := (Arguments{{Type: typ}}).Unpack2(data[4:])
 	if err != nil {
 		return "", err
