@@ -117,7 +117,7 @@ type Wallet interface {
 	// a password to decrypt the account, or a PIN code o verify the transaction),
 	// an AuthNeededError instance will be returned, containing infos for the user
 	// about which fields or actions are needed. The user may retry by providing
-	// the needed details via SignHashWithPassphrase, or by other means (e.g. unlock
+	// the needed details via SignDataWithPassphrase, or by other means (e.g. unlock
 	// the account in a keystore).
 	SignData(account Account, mimeType string, data []byte) ([]byte, error)
 
@@ -127,13 +127,13 @@ type Wallet interface {
 	// should never echo the mimetype or return the mimetype in the error-response
 	SignDataWithPassphrase(account Account, passphrase, mimeType string, data []byte) ([]byte, error)
 
-	// SignText requests the wallet to sign the given hash.
-	//
+	// SignText requests the wallet to sign the hash of a given piece of data, prefixed
+	// by the Ethereum prefix scheme
 	// It looks up the account specified either solely via its address contained within,
 	// or optionally with the aid of any location metadata from the embedded URL field.
 	//
 	// If the wallet requires additional authentication to sign the request (e.g.
-	// a password to decrypt the account, or a PIN code to verify the transaction),
+	// a password to decrypt the account, or a PIN code o verify the transaction),
 	// an AuthNeededError instance will be returned, containing infos for the user
 	// about which fields or actions are needed. The user may retry by providing
 	// the needed details via SignHashWithPassphrase, or by other means (e.g. unlock
