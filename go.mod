@@ -42,7 +42,7 @@ require (
 require (
 	github.com/consensys/gnark-crypto v0.10.0
 	github.com/crate-crypto/go-kzg-4844 v0.7.0
-	github.com/deckarep/golang-set v1.8.0
+	github.com/deckarep/golang-set/v2 v2.7.0
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498
 	github.com/ethereum/c-kzg-4844 v0.4.0

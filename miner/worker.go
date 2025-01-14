@@ -43,7 +43,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 )
 
 const (
@@ -80,16 +80,16 @@ type Work struct {
 	parentState  *state.StateDB
 	tradingState *tradingstate.TradingStateDB
 	lendingState *lendingstate.LendingStateDB
-	ancestors    mapset.Set // ancestor set (used for checking uncle parent validity)
-	family       mapset.Set // family set (used for checking uncle invalidity)
-	uncles       mapset.Set // uncle set
-	tcount       int        // tx count in cycle
+	ancestors    mapset.Set[common.Hash] // ancestor set (used for checking uncle parent validity)
+	family       mapset.Set[common.Hash] // family set (used for checking uncle invalidity)
+	tcount       int                     // tx count in cycle
 
 	Block *types.Block // the new block
 
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
+	uncles   map[common.Hash]*types.Header
 
 	createdAt time.Time
 }
@@ -575,10 +575,10 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		parentState:  state.Copy(),
 		tradingState: XDCxState,
 		lendingState: lendingState,
-		ancestors:    mapset.NewSet(),
-		family:       mapset.NewSet(),
-		uncles:       mapset.NewSet(),
+		ancestors:    mapset.NewSet[common.Hash](),
+		family:       mapset.NewSet[common.Hash](),
 		header:       header,
+		uncles:       make(map[common.Hash]*types.Header),
 		createdAt:    time.Now(),
 	}
 
