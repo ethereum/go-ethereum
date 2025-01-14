@@ -29,7 +29,7 @@ import (
 )
 
 // The ABI holds information about a contract's context and available
-// invokable methods. It will allow you to type check function calls and
+// invocable methods. It will allow you to type check function calls and
 // packs data accordingly.
 type ABI struct {
 	Constructor Method
