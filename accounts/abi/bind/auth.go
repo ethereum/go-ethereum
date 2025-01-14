@@ -54,14 +54,17 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 }
 
 // NewKeyStoreTransactor is a utility method to easily create a transaction signer from
-// a decrypted key from a keystore.
+// an decrypted key from a keystore.
+//
+// Deprecated: Use NewKeyStoreTransactorWithChainID instead.
 func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
+	log.Warn("WARNING: NewKeyStoreTransactor has been deprecated in favour of NewTransactorWithChainID")
 	signer := types.HomesteadSigner{}
 	return &TransactOpts{
 		From: account.Address,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != account.Address {
-				return nil, errors.New("not authorized to sign this account")
+				return nil, ErrNotAuthorized
 			}
 			signature, err := keystore.SignHash(account, signer.Hash(tx).Bytes())
 			if err != nil {
