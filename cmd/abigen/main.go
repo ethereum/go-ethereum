@@ -34,13 +34,6 @@ import (
 )
 
 var (
-	// Git SHA1 commit hash of the release (set via linker flags)
-	gitCommit = ""
-
-	app *cli.App
-)
-
-var (
 	// Flags needed by abigen
 	abiFlag = &cli.StringFlag{
 		Name:  "abi",
@@ -81,8 +74,9 @@ var (
 	}
 )
 
+var app = flags.NewApp("", "XDC ABI wrapper code generator")
+
 func init() {
-	app = flags.NewApp(gitCommit, "ethereum checkpoint helper tool")
 	app.Name = "abigen"
 	app.Flags = []cli.Flag{
 		abiFlag,
