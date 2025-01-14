@@ -844,8 +844,13 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 	if len(b.pendingBlock.Transactions()) != 0 {
 		return errors.New("could not adjust time on non-empty block")
 	}
+	// Get the last block
+	block := b.blockchain.GetBlockByHash(b.pendingBlock.ParentHash())
+	if block == nil {
+		return fmt.Errorf("could not find parent")
+	}
 
-	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, block, b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
 		block.OffsetTime(int64(adjustment.Seconds()))
 	})
 	stateDB, _ := b.blockchain.State()
