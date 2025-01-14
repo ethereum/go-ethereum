@@ -31,10 +31,10 @@ var (
 	senderCacherInstance = newTxSenderCacher(runtime.NumCPU())
 )
 
-// GetSenderCacher returns the singleton instance of SenderCacher.
+// SenderCacher returns the singleton instance of SenderCacher.
 // If the instance has not been initialized yet, it will be created using newTxSenderCacher.
 // This function is thread-safe and ensures that initialization happens only once.
-func GetSenderCacher() *txSenderCacher {
+func SenderCacher() *txSenderCacher {
 	senderCacherOnce.Do(func() {
 		senderCacherInstance = newTxSenderCacher(runtime.NumCPU())
 	})
