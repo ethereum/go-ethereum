@@ -122,6 +122,7 @@ func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) er
 				"Please file a ticket at:\n\n" +
 				"https://github.com/ethereum/go-ethereum/issues." +
 				"The error was : %s"
+			//lint:ignore ST1005 This is a message for the user
 			return fmt.Errorf(msg, tmpName, err)
 		}
 	}
@@ -235,7 +236,7 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 
 func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 	if cryptoJson.Cipher != "aes-128-ctr" {
-		return nil, fmt.Errorf("Cipher not supported: %v", cryptoJson.Cipher)
+		return nil, fmt.Errorf("cipher not supported: %v", cryptoJson.Cipher)
 	}
 	mac, err := hex.DecodeString(cryptoJson.MAC)
 	if err != nil {
@@ -271,7 +272,7 @@ func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 
 func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
 	if keyProtected.Version != version {
-		return nil, nil, fmt.Errorf("Version not supported: %v", keyProtected.Version)
+		return nil, nil, fmt.Errorf("version not supported: %v", keyProtected.Version)
 	}
 	keyId = uuid.Parse(keyProtected.Id)
 	plainText, err := DecryptDataV3(keyProtected.Crypto, auth)
