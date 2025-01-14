@@ -17,6 +17,7 @@
 package accounts
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -45,7 +46,7 @@ var DefaultLedgerBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000
 // The BIP-32 spec https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 // defines derivation paths to be of the form:
 //
-//   m / purpose' / coin_type' / account' / change / address_index
+//	m / purpose' / coin_type' / account' / change / address_index
 //
 // The BIP-44 spec https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
 // defines that the `purpose` be 44' (or 0x8000002C) for crypto currencies, and
@@ -132,4 +133,20 @@ func (path DerivationPath) String() string {
 		}
 	}
 	return result
+}
+
+// MarshalJSON turns a derivation path into its json-serialized string
+func (path DerivationPath) MarshalJSON() ([]byte, error) {
+	return json.Marshal(path.String())
+}
+
+// UnmarshalJSON a json-serialized string back into a derivation path
+func (path *DerivationPath) UnmarshalJSON(b []byte) error {
+	var dp string
+	var err error
+	if err = json.Unmarshal(b, &dp); err != nil {
+		return err
+	}
+	*path, err = ParseDerivationPath(dp)
+	return err
 }
