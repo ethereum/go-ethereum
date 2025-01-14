@@ -54,6 +54,7 @@ var waitDeployedTests = map[string]struct {
 }
 
 func TestWaitDeployed(t *testing.T) {
+	t.Parallel()
 	config := *params.TestXDPoSMockChainConfig
 	config.Eip1559Block = big.NewInt(0)
 	for name, test := range waitDeployedTests {
@@ -104,6 +105,7 @@ func TestWaitDeployed(t *testing.T) {
 }
 
 func TestWaitDeployedCornerCases(t *testing.T) {
+	t.Parallel()
 	config := *params.TestXDPoSMockChainConfig
 	config.Eip1559Block = big.NewInt(0)
 	backend := backends.NewXDCSimulatedBackend(
