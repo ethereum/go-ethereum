@@ -108,9 +108,8 @@ func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) er
 func (ks keyStorePassphrase) JoinPath(filename string) string {
 	if filepath.IsAbs(filename) {
 		return filename
-	} else {
-		return filepath.Join(ks.keysDirPath, filename)
 	}
+	return filepath.Join(ks.keysDirPath, filename)
 }
 
 // EncryptKey encrypts a key using the specified scrypt parameters into a json
