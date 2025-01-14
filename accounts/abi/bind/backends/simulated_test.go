@@ -23,14 +23,66 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/XinFinOrg/XDPoSChain"
+	ethereum "github.com/XinFinOrg/XDPoSChain"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
+
+func TestSimulatedBackend(t *testing.T) {
+	var gasLimit uint64 = 8000029
+	key, _ := crypto.GenerateKey() // nolint: gosec
+	auth := bind.NewKeyedTransactor(key)
+	genAlloc := make(core.GenesisAlloc)
+	genAlloc[auth.From] = core.GenesisAccount{Balance: big.NewInt(9223372036854775807)}
+
+	sim := NewSimulatedBackend(genAlloc, gasLimit)
+
+	// should return an error if the tx is not found
+	txHash := common.HexToHash("2")
+	_, isPending, err := sim.TransactionByHash(context.Background(), txHash)
+
+	if isPending {
+		t.Fatal("transaction should not be pending")
+	}
+	if err != ethereum.ErrNotFound {
+		t.Fatalf("err should be `ethereum.ErrNotFound` but received %v", err)
+	}
+
+	// generate a transaction and confirm you can retrieve it
+	code := `6060604052600a8060106000396000f360606040526008565b00`
+	var gas uint64 = 3000000
+	tx := types.NewContractCreation(0, big.NewInt(0), gas, big.NewInt(1), common.FromHex(code))
+	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, key)
+
+	err = sim.SendTransaction(context.Background(), tx)
+	if err != nil {
+		t.Fatal("error sending transaction")
+	}
+
+	txHash = tx.Hash()
+	_, isPending, err = sim.TransactionByHash(context.Background(), txHash)
+	if err != nil {
+		t.Fatalf("error getting transaction with hash: %v", txHash.String())
+	}
+	if !isPending {
+		t.Fatal("transaction should have pending status")
+	}
+
+	sim.Commit()
+	tx, isPending, err = sim.TransactionByHash(context.Background(), txHash)
+	if err != nil {
+		t.Fatalf("error getting transaction with hash: %v", txHash.String())
+	}
+	if isPending {
+		t.Fatal("transaction should not have pending status")
+	}
+
+}
 
 func TestSimulatedBackend_EstimateGas(t *testing.T) {
 	/*
@@ -69,11 +121,11 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 
 	var cases = []struct {
 		name        string
-		message     XDPoSChain.CallMsg
+		message     ethereum.CallMsg
 		expect      uint64
 		expectError error
 	}{
-		{"plain transfer(valid)", XDPoSChain.CallMsg{
+		{"plain transfer(valid)", ethereum.CallMsg{
 			From:     addr,
 			To:       &addr,
 			Gas:      0,
@@ -82,7 +134,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			Data:     nil,
 		}, params.TxGas, nil},
 
-		{"plain transfer(invalid)", XDPoSChain.CallMsg{
+		{"plain transfer(invalid)", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
@@ -91,7 +143,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			Data:     nil,
 		}, 0, errors.New("always failing transaction (execution reverted)")},
 
-		{"Revert", XDPoSChain.CallMsg{
+		{"Revert", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
@@ -100,7 +152,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("d8b98391"),
 		}, 0, errors.New("always failing transaction (execution reverted) (revert reason)")},
 
-		{"PureRevert", XDPoSChain.CallMsg{
+		{"PureRevert", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
@@ -109,7 +161,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("aa8b1d30"),
 		}, 0, errors.New("always failing transaction (execution reverted)")},
 
-		{"OOG", XDPoSChain.CallMsg{
+		{"OOG", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
@@ -118,7 +170,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("50f6fe34"),
 		}, 0, errors.New("gas required exceeds allowance (100000)")},
 
-		{"Assert", XDPoSChain.CallMsg{
+		{"Assert", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
@@ -127,7 +179,7 @@ func TestSimulatedBackend_EstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("b9b046f9"),
 		}, 0, errors.New("always failing transaction (invalid opcode: INVALID)")},
 
-		{"Valid", XDPoSChain.CallMsg{
+		{"Valid", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
