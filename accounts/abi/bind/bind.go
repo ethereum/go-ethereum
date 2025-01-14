@@ -65,11 +65,12 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			return r
 		}, abis[i])
 
-		// Extract the call and transact methods; events; and sort them alphabetically
+		// Extract the call and transact methods; events, struct definitions; and sort them alphabetically
 		var (
 			calls     = make(map[string]*tmplMethod)
 			transacts = make(map[string]*tmplMethod)
 			events    = make(map[string]*tmplEvent)
+			structs   = make(map[string]*tmplStruct)
 		)
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
@@ -82,12 +83,18 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				if input.Name == "" {
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
 				}
+				if _, exist := structs[input.Type.String()]; input.Type.T == abi.TupleTy && !exist {
+					bindStructType[lang](input.Type, structs)
+				}
 			}
 			normalized.Outputs = make([]abi.Argument, len(original.Outputs))
 			copy(normalized.Outputs, original.Outputs)
 			for j, output := range normalized.Outputs {
 				if output.Name != "" {
 					normalized.Outputs[j].Name = capitalise(output.Name)
+				}
+				if _, exist := structs[output.Type.String()]; output.Type.T == abi.TupleTy && !exist {
+					bindStructType[lang](output.Type, structs)
 				}
 			}
 			// Append the methods to the call or transact lists
@@ -114,6 +121,9 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 					if input.Name == "" {
 						normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
 					}
+					if _, exist := structs[input.Type.String()]; input.Type.T == abi.TupleTy && !exist {
+						bindStructType[lang](input.Type, structs)
+					}
 				}
 			}
 			// Append the event to the accumulator list
@@ -129,6 +139,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			Transacts:   transacts,
 			Events:      events,
 			Libraries:   make(map[string]string),
+			Structs:     structs,
 		}
 		// Function 4-byte signatures are stored in the same sequence
 		// as types, if available.
@@ -167,6 +178,8 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		"bindtype":      bindType[lang],
 		"bindtopictype": bindTopicType[lang],
 		"namedtype":     namedType[lang],
+		"formatmethod":  formatMethod,
+		"formatevent":   formatEvent,
 		"capitalise":    capitalise,
 		"decapitalise":  decapitalise,
 	}
@@ -188,7 +201,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 // bindType is a set of type binders that convert Solidity types to some supported
 // programming language types.
-var bindType = map[Lang]func(kind abi.Type) string{
+var bindType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct) string{
 	LangGo: bindTypeGo,
 }
 
@@ -219,13 +232,14 @@ func bindBasicTypeGo(kind abi.Type) string {
 // bindTypeGo converts solidity types to Go ones. Since there is no clear mapping
 // from all Solidity types to Go ones (e.g. uint17), those that cannot be exactly
 // mapped will use an upscaled type (e.g. BigDecimal).
-func bindTypeGo(kind abi.Type) string {
-	// todo(rjl493456442) tuple
+func bindTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 	switch kind.T {
+	case abi.TupleTy:
+		return structs[kind.String()].Name
 	case abi.ArrayTy:
-		return fmt.Sprintf("[%d]", kind.Size) + bindTypeGo(*kind.Elem)
+		return fmt.Sprintf("[%d]", kind.Size) + bindTypeGo(*kind.Elem, structs)
 	case abi.SliceTy:
-		return "[]" + bindTypeGo(*kind.Elem)
+		return "[]" + bindTypeGo(*kind.Elem, structs)
 	default:
 		return bindBasicTypeGo(kind)
 	}
@@ -233,18 +247,53 @@ func bindTypeGo(kind abi.Type) string {
 
 // bindTopicType is a set of type binders that convert Solidity types to some
 // supported programming language topic types.
-var bindTopicType = map[Lang]func(kind abi.Type) string{
+var bindTopicType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct) string{
 	LangGo: bindTopicTypeGo,
 }
 
 // bindTypeGo converts a Solidity topic type to a Go one. It is almost the same
 // funcionality as for simple types, but dynamic types get converted to hashes.
-func bindTopicTypeGo(kind abi.Type) string {
-	bound := bindTypeGo(kind)
+func bindTopicTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
+	bound := bindTypeGo(kind, structs)
 	if bound == "string" || bound == "[]byte" {
 		bound = "common.Hash"
 	}
 	return bound
+}
+
+// bindStructType is a set of type binders that convert Solidity tuple types to some supported
+// programming language struct definition.
+var bindStructType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct) string{
+	LangGo: bindStructTypeGo,
+}
+
+// bindStructTypeGo converts a Solidity tuple type to a Go one and records the mapping
+// in the given map.
+// Notably, this function will resolve and record nested struct recursively.
+func bindStructTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
+	switch kind.T {
+	case abi.TupleTy:
+		if s, exist := structs[kind.String()]; exist {
+			return s.Name
+		}
+		var fields []*tmplField
+		for i, elem := range kind.TupleElems {
+			field := bindStructTypeGo(*elem, structs)
+			fields = append(fields, &tmplField{Type: field, Name: capitalise(kind.TupleRawNames[i]), SolKind: *elem})
+		}
+		name := fmt.Sprintf("Struct%d", len(structs))
+		structs[kind.String()] = &tmplStruct{
+			Name:   name,
+			Fields: fields,
+		}
+		return name
+	case abi.ArrayTy:
+		return fmt.Sprintf("[%d]", kind.Size) + bindStructTypeGo(*kind.Elem, structs)
+	case abi.SliceTy:
+		return "[]" + bindStructTypeGo(*kind.Elem, structs)
+	default:
+		return bindBasicTypeGo(kind)
+	}
 }
 
 // namedType is a set of functions that transform language specific types to
@@ -295,4 +344,64 @@ func structured(args abi.Arguments) bool {
 		exists[field] = true
 	}
 	return true
+}
+
+// resolveArgName converts a raw argument representation into a user friendly format.
+func resolveArgName(arg abi.Argument, structs map[string]*tmplStruct) string {
+	var (
+		prefix   string
+		embedded string
+		typ      = &arg.Type
+	)
+loop:
+	for {
+		switch typ.T {
+		case abi.SliceTy:
+			prefix += "[]"
+		case abi.ArrayTy:
+			prefix += fmt.Sprintf("[%d]", typ.Size)
+		default:
+			embedded = typ.String()
+			break loop
+		}
+		typ = typ.Elem
+	}
+	if s, exist := structs[embedded]; exist {
+		return prefix + s.Name
+	} else {
+		return arg.Type.String()
+	}
+}
+
+// formatMethod transforms raw method representation into a user friendly one.
+func formatMethod(method abi.Method, structs map[string]*tmplStruct) string {
+	inputs := make([]string, len(method.Inputs))
+	for i, input := range method.Inputs {
+		inputs[i] = fmt.Sprintf("%v %v", resolveArgName(input, structs), input.Name)
+	}
+	outputs := make([]string, len(method.Outputs))
+	for i, output := range method.Outputs {
+		outputs[i] = resolveArgName(output, structs)
+		if len(output.Name) > 0 {
+			outputs[i] += fmt.Sprintf(" %v", output.Name)
+		}
+	}
+	constant := ""
+	if method.Const {
+		constant = "constant "
+	}
+	return fmt.Sprintf("function %v(%v) %sreturns(%v)", method.Name, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
+}
+
+// formatEvent transforms raw event representation into a user friendly one.
+func formatEvent(event abi.Event, structs map[string]*tmplStruct) string {
+	inputs := make([]string, len(event.Inputs))
+	for i, input := range event.Inputs {
+		if input.Indexed {
+			inputs[i] = fmt.Sprintf("%v indexed %v", resolveArgName(input, structs), input.Name)
+		} else {
+			inputs[i] = fmt.Sprintf("%v %v", resolveArgName(input, structs), input.Name)
+		}
+	}
+	return fmt.Sprintf("event %v(%v)", event.Name, strings.Join(inputs, ", "))
 }
