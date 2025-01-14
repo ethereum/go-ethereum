@@ -41,7 +41,7 @@ var DefaultBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60,
 var LegacyLedgerBaseDerivationPath = DerivationPath{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0}
 
 // DerivationPath represents the computer friendly version of a hierarchical
-// deterministic wallet account derivaion path.
+// deterministic wallet account derivation path.
 //
 // The BIP-32 spec https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 // defines derivation paths to be of the form:
