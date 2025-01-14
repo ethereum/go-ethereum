@@ -178,7 +178,7 @@ func (s *SecureChannelSession) mutuallyAuthenticate() error {
 		return err
 	}
 	if response.Sw1 != 0x90 || response.Sw2 != 0x00 {
-		return fmt.Errorf("got unexpected response from MUTUALLY_AUTHENTICATE: 0x%x%x", response.Sw1, response.Sw2)
+		return fmt.Errorf("got unexpected response from MUTUALLY_AUTHENTICATE: %#x%x", response.Sw1, response.Sw2)
 	}
 
 	if len(response.Data) != scSecretLength {
@@ -261,7 +261,7 @@ func (s *SecureChannelSession) transmitEncrypted(cla, ins, p1, p2 byte, data []b
 	rapdu.deserialize(plainData)
 
 	if rapdu.Sw1 != sw1Ok {
-		return nil, fmt.Errorf("unexpected response status Cla=0x%x, Ins=0x%x, Sw=0x%x%x", cla, ins, rapdu.Sw1, rapdu.Sw2)
+		return nil, fmt.Errorf("unexpected response status Cla=%#x, Ins=%#x, Sw=%#x%x", cla, ins, rapdu.Sw1, rapdu.Sw2)
 	}
 
 	return rapdu, nil
