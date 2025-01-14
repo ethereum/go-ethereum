@@ -330,3 +330,39 @@ func TestInternalType(t *testing.T) {
 		t.Errorf("type %q: parsed type mismatch:\nGOT %s\nWANT %s ", blob, spew.Sdump(typeWithoutStringer(typ)), spew.Sdump(typeWithoutStringer(kind)))
 	}
 }
+
+func TestGetTypeSize(t *testing.T) {
+	var testCases = []struct {
+		typ        string
+		components []ArgumentMarshaling
+		typSize    int
+	}{
+		// simple array
+		{"uint256[2]", nil, 32 * 2},
+		{"address[3]", nil, 32 * 3},
+		{"bytes32[4]", nil, 32 * 4},
+		// array array
+		{"uint256[2][3][4]", nil, 32 * (2 * 3 * 4)},
+		// array tuple
+		{"tuple[2]", []ArgumentMarshaling{{Name: "x", Type: "bytes32"}, {Name: "y", Type: "bytes32"}}, (32 * 2) * 2},
+		// simple tuple
+		{"tuple", []ArgumentMarshaling{{Name: "x", Type: "uint256"}, {Name: "y", Type: "uint256"}}, 32 * 2},
+		// tuple array
+		{"tuple", []ArgumentMarshaling{{Name: "x", Type: "bytes32[2]"}}, 32 * 2},
+		// tuple tuple
+		{"tuple", []ArgumentMarshaling{{Name: "x", Type: "tuple", Components: []ArgumentMarshaling{{Name: "x", Type: "bytes32"}}}}, 32},
+		{"tuple", []ArgumentMarshaling{{Name: "x", Type: "tuple", Components: []ArgumentMarshaling{{Name: "x", Type: "bytes32[2]"}, {Name: "y", Type: "uint256"}}}}, 32 * (2 + 1)},
+	}
+
+	for i, data := range testCases {
+		typ, err := NewType(data.typ, "", data.components)
+		if err != nil {
+			t.Errorf("type %q: failed to parse type string: %v", data.typ, err)
+		}
+
+		result := getTypeSize(typ)
+		if result != data.typSize {
+			t.Errorf("case %d type %q: get type size error: actual: %d expected: %d", i, data.typ, result, data.typSize)
+		}
+	}
+}
