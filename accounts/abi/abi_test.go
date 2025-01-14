@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 )
@@ -934,7 +933,7 @@ func TestABI_MethodById(t *testing.T) {
 		}
 		b := fmt.Sprintf("%v", m2)
 		if a != b {
-			t.Errorf("Method %v (id %v) not 'findable' by id in ABI", name, hexutil.Encode(m.ID()))
+			t.Errorf("Method %v (id %x) not 'findable' by id in ABI", name, m.ID())
 		}
 	}
 	// Also test empty
