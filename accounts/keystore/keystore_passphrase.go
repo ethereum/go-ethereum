@@ -134,29 +134,25 @@ func (ks keyStorePassphrase) JoinPath(filename string) string {
 	return filepath.Join(ks.keysDirPath, filename)
 }
 
-// EncryptKey encrypts a key using the specified scrypt parameters into a json
-// blob that can be decrypted later on.
-func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
-	authArray := []byte(auth)
-
+// Encryptdata encrypts the data given as 'data' with the password 'auth'.
+func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) {
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		panic("reading from crypto/rand failed: " + err.Error())
 	}
-	derivedKey, err := scrypt.Key(authArray, salt, scryptN, scryptR, scryptP, scryptDKLen)
+	derivedKey, err := scrypt.Key(auth, salt, scryptN, scryptR, scryptP, scryptDKLen)
 	if err != nil {
-		return nil, err
+		return CryptoJSON{}, err
 	}
 	encryptKey := derivedKey[:16]
-	keyBytes := math.PaddedBigBytes(key.PrivateKey.D, 32)
 
 	iv := make([]byte, aes.BlockSize) // 16
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		panic("reading from crypto/rand failed: " + err.Error())
 	}
-	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
+	cipherText, err := aesCTRXOR(encryptKey, data, iv)
 	if err != nil {
-		return nil, err
+		return CryptoJSON{}, err
 	}
 	mac := crypto.Keccak256(derivedKey[16:32], cipherText)
 
@@ -166,12 +162,11 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 	scryptParamsJSON["p"] = scryptP
 	scryptParamsJSON["dklen"] = scryptDKLen
 	scryptParamsJSON["salt"] = hex.EncodeToString(salt)
-
 	cipherParamsJSON := cipherparamsJSON{
 		IV: hex.EncodeToString(iv),
 	}
 
-	cryptoStruct := cryptoJSON{
+	cryptoStruct := CryptoJSON{
 		Cipher:       "aes-128-ctr",
 		CipherText:   hex.EncodeToString(cipherText),
 		CipherParams: cipherParamsJSON,
@@ -179,9 +174,19 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 		KDFParams:    scryptParamsJSON,
 		MAC:          hex.EncodeToString(mac),
 	}
+	return cryptoStruct, nil
+}
+
+// EncryptKey encrypts a key using the specified scrypt parameters into a json
+// blob that can be decrypted later on.
+func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
+	keyBytes := math.PaddedBigBytes(key.PrivateKey.D, 32)
+	cryptoStruct, err := EncryptDataV3(keyBytes, []byte(auth), scryptN, scryptP)
+	if err != nil {
+		return nil, err
+	}
 	encryptedKeyJSONV3 := encryptedKeyJSONV3{
-		// hex.EncodeToString(key.Address[:]),
-		key.Address.String(),
+		hex.EncodeToString(key.Address[:]),
 		cryptoStruct,
 		key.Id.String(),
 		version,
@@ -227,42 +232,48 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	}, nil
 }
 
-func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
-	if keyProtected.Version != version {
-		return nil, nil, fmt.Errorf("not supported Version: %v", keyProtected.Version)
+func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
+	if cryptoJson.Cipher != "aes-128-ctr" {
+		return nil, fmt.Errorf("Cipher not supported: %v", cryptoJson.Cipher)
 	}
-
-	if keyProtected.Crypto.Cipher != "aes-128-ctr" {
-		return nil, nil, fmt.Errorf("not supported Cipher: %v", keyProtected.Crypto.Cipher)
-	}
-
-	keyId = uuid.Parse(keyProtected.Id)
-	mac, err := hex.DecodeString(keyProtected.Crypto.MAC)
+	mac, err := hex.DecodeString(cryptoJson.MAC)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	iv, err := hex.DecodeString(keyProtected.Crypto.CipherParams.IV)
+	iv, err := hex.DecodeString(cryptoJson.CipherParams.IV)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	cipherText, err := hex.DecodeString(keyProtected.Crypto.CipherText)
+	cipherText, err := hex.DecodeString(cryptoJson.CipherText)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	derivedKey, err := getKDFKey(keyProtected.Crypto, auth)
+	derivedKey, err := getKDFKey(cryptoJson, auth)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	calculatedMAC := crypto.Keccak256(derivedKey[16:32], cipherText)
 	if !bytes.Equal(calculatedMAC, mac) {
-		return nil, nil, ErrDecrypt
+		return nil, ErrDecrypt
 	}
 
 	plainText, err := aesCTRXOR(derivedKey[:16], cipherText, iv)
+	if err != nil {
+		return nil, err
+	}
+	return plainText, err
+}
+
+func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
+	if keyProtected.Version != version {
+		return nil, nil, fmt.Errorf("Version not supported: %v", keyProtected.Version)
+	}
+	keyId = uuid.Parse(keyProtected.Id)
+	plainText, err := DecryptDataV3(keyProtected.Crypto, auth)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -303,7 +314,7 @@ func decryptKeyV1(keyProtected *encryptedKeyJSONV1, auth string) (keyBytes []byt
 	return plainText, keyId, err
 }
 
-func getKDFKey(cryptoJSON cryptoJSON, auth string) ([]byte, error) {
+func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {
 	authArray := []byte(auth)
 	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
 	if err != nil {
