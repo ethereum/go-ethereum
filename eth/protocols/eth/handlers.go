@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -319,7 +318,7 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 			if header.ReceiptHash != types.EmptyReceiptsHash {
 				body := new(types.Body)
 				if err := rlp.DecodeBytes(chain.GetBodyRLP(hash), &body); err == nil {
-					results = transformReceipts(results, body.Transactions)
+					results = blockReceiptsToNetwork(results, body.Transactions)
 				}
 			}
 		}
@@ -327,33 +326,6 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 		bytes += len(results)
 	}
 	return receipts
-}
-
-// transformReceipts takes a slice of rlp-encoded receipts, and transactions,
-// and applies the type-encoding on the receipts (for non-legacy receipts).
-// e.g. for non-legacy receipts: receipt-data -> {tx-type || receipt-data}
-func transformReceipts(blockReceipts []byte, txs []*types.Transaction) []byte {
-	var (
-		out   bytes.Buffer
-		enc   = rlp.NewEncoderBuffer(&out)
-		it, _ = rlp.NewListIterator(blockReceipts)
-	)
-	outer := enc.List()
-	for i := 0; it.Next(); i++ {
-		if txs[i].Type() == types.LegacyTxType {
-			enc.Write(it.Value())
-			continue
-		}
-		content, _, _ := rlp.SplitList(it.Value())
-		receiptList := enc.List()
-		enc.Write([]byte{txs[i].Type()})
-		enc.Write(content)
-		enc.ListEnd(receiptList)
-	}
-	enc.ListEnd(outer)
-	enc.Flush()
-
-	return out.Bytes()
 }
 
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
@@ -440,32 +412,23 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	var response ReceiptsResponse
-	// calculate the bloom filter before dispatching
-	for _, receipts := range res.ReceiptsResponse69 {
-		var rec []*types.Receipt
-		for _, receipt := range receipts {
-			receipt.Bloom = types.CreateBloom((*types.Receipt)(receipt))
-			rec = append(rec, (*types.Receipt)(receipt))
-		}
-		response = append(response, rec)
+	buffers := new(receiptListBuffers)
+	for _, rl := range res.List {
+		rl.buf = buffers
+		// WIP
 	}
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
-		hashes := make([]common.Hash, len(response))
-		for i, receipts := range response {
-			var r []*types.Receipt
-			for _, receipt := range receipts {
-				r = append(r, (*types.Receipt)(receipt))
-			}
-			hashes[i] = types.DeriveSha(types.Receipts(r), hasher)
+		hashes := make([]common.Hash, len(res.List))
+		for i, rl := range res.List {
+			hashes[i] = types.DeriveSha(&rl, hasher)
 		}
 		return hashes
 	}
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
 		code: ReceiptsMsg,
-		Res:  &response,
+		Res:  &res,
 	}, metadata)
 }
 
