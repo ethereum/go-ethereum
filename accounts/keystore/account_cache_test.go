@@ -326,6 +326,11 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 
 	// Create a temporary keystore to test with
 	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-updatedkeyfilecontents-test-%d-%d", os.Getpid(), rand.Int()))
+
+	// Create the directory
+	os.MkdirAll(dir, 0700)
+	defer os.RemoveAll(dir)
+
 	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
 
 	list := ks.Accounts()
@@ -335,9 +340,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	if !waitWatcherStart(ks) {
 		t.Fatal("keystore watcher didn't start in time")
 	}
-	// Create the directory and copy a key file into it.
-	os.MkdirAll(dir, 0700)
-	defer os.RemoveAll(dir)
+	// Copy a key file into it
 	file := filepath.Join(dir, "aaa")
 
 	// Place one of our testfiles in there
