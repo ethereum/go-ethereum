@@ -115,7 +115,7 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.SimulatedBackend {
 
 	// initial helper backend
-	contractBackendForSC := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	contractBackendForSC := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
 	}, 10000000, chainConfig)
 
@@ -184,7 +184,7 @@ func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.S
 	}
 
 	// create test backend with smart contract in it
-	contractBackend2 := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	contractBackend2 := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		acc1Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
 		acc2Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
 		acc3Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
@@ -198,7 +198,7 @@ func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.S
 func getMultiCandidatesBackend(t *testing.T, chainConfig *params.ChainConfig, n int) *backends.SimulatedBackend {
 	assert.GreaterOrEqual(t, n, 4)
 	// initial helper backend, give a very large gas limit
-	contractBackendForSC := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	contractBackendForSC := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
 	}, 1000000000, chainConfig)
 
@@ -268,7 +268,7 @@ func getMultiCandidatesBackend(t *testing.T, chainConfig *params.ChainConfig, n 
 	}
 
 	// create test backend with smart contract in it
-	contractBackend2 := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	contractBackend2 := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		acc1Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
 		acc2Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
 		acc3Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},

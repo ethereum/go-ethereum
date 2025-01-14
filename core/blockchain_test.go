@@ -557,7 +557,7 @@ func TestFastVsFullChains(t *testing.T) {
 		funds   = big.NewInt(1000000000000000)
 		gspec   = &Genesis{
 			Config:  params.TestChainConfig,
-			Alloc:   GenesisAlloc{address: {Balance: funds}},
+			Alloc:   types.GenesisAlloc{address: {Balance: funds}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		genesis = gspec.MustCommit(gendb)
@@ -646,7 +646,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		funds   = big.NewInt(1000000000000000)
 		gspec   = &Genesis{
 			Config:  params.TestChainConfig,
-			Alloc:   GenesisAlloc{address: {Balance: funds}},
+			Alloc:   types.GenesisAlloc{address: {Balance: funds}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		genesis = gspec.MustCommit(gendb)
@@ -733,7 +733,7 @@ func TestChainTxReorgs(t *testing.T) {
 		gspec   = &Genesis{
 			Config:   params.TestChainConfig,
 			GasLimit: 3141592,
-			Alloc: GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: big.NewInt(1000000000000000)},
 				addr2: {Balance: big.NewInt(1000000000000000)},
 				addr3: {Balance: big.NewInt(1000000000000000)},
@@ -844,7 +844,7 @@ func TestLogReorgs(t *testing.T) {
 		db      = rawdb.NewMemoryDatabase()
 		// this code generates a log
 		code    = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
-		gspec   = &Genesis{Config: params.TestChainConfig, Alloc: GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000000)}}}
+		gspec   = &Genesis{Config: params.TestChainConfig, Alloc: types.GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000000)}}}
 		genesis = gspec.MustCommit(db)
 		signer  = types.LatestSigner(gspec.Config)
 	)
@@ -1023,7 +1023,7 @@ func TestEIP155Transition(t *testing.T) {
 		deleteAddr = common.Address{1}
 		gspec      = &Genesis{
 			Config: &params.ChainConfig{ChainId: big.NewInt(1), EIP150Block: big.NewInt(0), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)},
-			Alloc:  GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
+			Alloc:  types.GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
 		}
 		genesis = gspec.MustCommit(db)
 	)
@@ -1131,7 +1131,7 @@ func TestEIP161AccountRemoval(t *testing.T) {
 				EIP155Block:    new(big.Int),
 				EIP158Block:    big.NewInt(2),
 			},
-			Alloc: GenesisAlloc{address: {Balance: funds}},
+			Alloc: types.GenesisAlloc{address: {Balance: funds}},
 		}
 		genesis = gspec.MustCommit(db)
 	)
@@ -1452,7 +1452,7 @@ func TestEIP2718Transition(t *testing.T) {
 				IstanbulBlock:       big.NewInt(0),
 				Eip1559Block:        big.NewInt(0),
 			},
-			Alloc: GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				address: {Balance: funds},
 				// The address 0xAAAA sloads 0x00 and 0x01
 				aa: {
@@ -1553,7 +1553,7 @@ func TestTransientStorageReset(t *testing.T) {
 	}...)
 	gspec := &Genesis{
 		Config: params.TestChainConfig,
-		Alloc: GenesisAlloc{
+		Alloc: types.GenesisAlloc{
 			address: {Balance: funds},
 		},
 	}
@@ -1624,7 +1624,7 @@ func TestEIP3651(t *testing.T) {
 		funds   = big.NewInt(8000000000000000)
 		gspec   = &Genesis{
 			Config: params.TestChainConfig,
-			Alloc: GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: funds},
 				addr2: {Balance: funds},
 				// The address 0xAAAA sloads 0x00 and 0x01

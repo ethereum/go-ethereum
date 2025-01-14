@@ -31,7 +31,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -42,8 +41,8 @@ func TestSimulatedBackend(t *testing.T) {
 	var gasLimit uint64 = 8000029
 	key, _ := crypto.GenerateKey() // nolint: gosec
 	auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-	genAlloc := make(core.GenesisAlloc)
-	genAlloc[auth.From] = core.GenesisAccount{Balance: big.NewInt(9223372036854775807)}
+	genAlloc := make(types.GenesisAlloc)
+	genAlloc[auth.From] = types.Account{Balance: big.NewInt(9223372036854775807)}
 
 	config := *params.TestXDPoSMockChainConfig
 	config.Eip1559Block = big.NewInt(0)
@@ -119,7 +118,7 @@ func simTestBackend(testAddr common.Address) *SimulatedBackend {
 	config := *params.TestXDPoSMockChainConfig
 	config.Eip1559Block = big.NewInt(0)
 	return NewXDCSimulatedBackend(
-		core.GenesisAlloc{
+		types.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(100000000000000000)},
 		},
 		10000000,
@@ -144,7 +143,7 @@ func TestNewSimulatedBackend(t *testing.T) {
 func TestAdjustTime(t *testing.T) {
 	t.Parallel()
 	sim := NewXDCSimulatedBackend(
-		core.GenesisAlloc{},
+		types.GenesisAlloc{},
 		10000000,
 		params.TestXDPoSMockChainConfig,
 	)
@@ -226,7 +225,7 @@ func TestBalanceAt(t *testing.T) {
 func TestBlockByHash(t *testing.T) {
 	t.Parallel()
 	sim := NewXDCSimulatedBackend(
-		core.GenesisAlloc{},
+		types.GenesisAlloc{},
 		10000000,
 		params.TestXDPoSMockChainConfig,
 	)
@@ -250,7 +249,7 @@ func TestBlockByHash(t *testing.T) {
 func TestBlockByNumber(t *testing.T) {
 	t.Parallel()
 	sim := NewXDCSimulatedBackend(
-		core.GenesisAlloc{},
+		types.GenesisAlloc{},
 		10000000,
 		params.TestXDPoSMockChainConfig,
 	)
@@ -446,7 +445,7 @@ func TestEstimateGas(t *testing.T) {
 	opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
 	sim := NewXDCSimulatedBackend(
-		core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}},
+		types.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}},
 		10000000,
 		params.TestXDPoSMockChainConfig,
 	)
@@ -557,10 +556,10 @@ func TestEstimateGasWithPrice(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	sim := NewXDCSimulatedBackend(
-		core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}},
+		types.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}},
 		10000000,
 		params.TestXDPoSMockChainConfig,
-)
+	)
 	defer sim.Close()
 
 	recipient := common.HexToAddress("deadbeef")
@@ -908,7 +907,7 @@ func TestTransactionReceipt(t *testing.T) {
 func TestSuggestGasPrice(t *testing.T) {
 	t.Parallel()
 	sim := NewXDCSimulatedBackend(
-		core.GenesisAlloc{},
+		types.GenesisAlloc{},
 		10000000,
 		params.TestXDPoSMockChainConfig,
 	)

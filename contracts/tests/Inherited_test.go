@@ -9,7 +9,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -28,7 +28,7 @@ func TestPriceFeed(t *testing.T) {
 	common.TIPXDCXCancellationFee = big.NewInt(0)
 	// init genesis
 	contractBackend := backends.NewXDCSimulatedBackend(
-		core.GenesisAlloc{
+		types.GenesisAlloc{
 			mainAddr: {Balance: big.NewInt(0).Mul(big.NewInt(10000000000000), big.NewInt(10000000000000))},
 		},
 		42000000,

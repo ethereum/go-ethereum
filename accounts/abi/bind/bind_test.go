@@ -290,7 +290,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -299,7 +299,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy an interaction tester contract and call a transaction on it
@@ -346,7 +346,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -355,7 +355,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy a tuple tester contract and execute a structured call on it
@@ -393,7 +393,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -402,7 +402,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy a tuple tester contract and execute a structured call on it
@@ -452,7 +452,7 @@ var bindTests = []struct {
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 			"github.com/XinFinOrg/XDPoSChain/common"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -461,7 +461,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy a slice tester contract and execute a n array call on it
@@ -501,7 +501,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -510,7 +510,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy a default method invoker contract and execute its default method
@@ -568,7 +568,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -577,7 +577,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 		
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 		
 			// Deploy a structs method invoker contract and execute its default method
@@ -615,12 +615,12 @@ var bindTests = []struct {
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 			"github.com/XinFinOrg/XDPoSChain/common"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
 		`
 			// Create a simulator and wrap a non-deployed contract
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{}, uint64(10000000000), params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{}, uint64(10000000000), params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			nonexistent, err := NewNonExistent(common.Address{}, sim)
@@ -654,12 +654,12 @@ var bindTests = []struct {
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 			"github.com/XinFinOrg/XDPoSChain/common"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
 		`
 			// Create a simulator and wrap a non-deployed contract
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			nonexistent, err := NewNonExistentStruct(common.Address{}, sim)
@@ -701,7 +701,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -710,7 +710,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy a funky gas pattern contract
@@ -753,7 +753,7 @@ var bindTests = []struct {
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 			"github.com/XinFinOrg/XDPoSChain/common"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -762,7 +762,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy a sender tester contract and execute a structured call on it
@@ -830,7 +830,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -838,7 +838,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy a underscorer tester contract and execute a structured call on it
@@ -924,7 +924,7 @@ var bindTests = []struct {
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 			"github.com/XinFinOrg/XDPoSChain/common"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -933,7 +933,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy an eventer contract
@@ -1115,7 +1115,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -1124,7 +1124,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			//deploy the test contract
@@ -1253,7 +1253,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -1262,7 +1262,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			_, _, contract, err := DeployTuple(auth, sim)
@@ -1393,7 +1393,7 @@ var bindTests = []struct {
 
 		"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 		"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-		"github.com/XinFinOrg/XDPoSChain/core"
+		"github.com/XinFinOrg/XDPoSChain/core/types"
 		"github.com/XinFinOrg/XDPoSChain/crypto"
 		"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -1402,7 +1402,7 @@ var bindTests = []struct {
 		key, _ := crypto.GenerateKey()
 		auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-		sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+		sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 		defer sim.Close()
 
 		// deploy the test contract
@@ -1484,7 +1484,7 @@ var bindTests = []struct {
 		"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 		"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 		"github.com/XinFinOrg/XDPoSChain/crypto"
-		"github.com/XinFinOrg/XDPoSChain/core"
+		"github.com/XinFinOrg/XDPoSChain/core/types"
 		"github.com/XinFinOrg/XDPoSChain/params"
 		`,
 		`
@@ -1493,7 +1493,7 @@ var bindTests = []struct {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 
 		// Deploy registrar contract
-		sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+		sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{addr: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 		defer sim.Close()
 
 		transactOpts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
@@ -1548,7 +1548,7 @@ var bindTests = []struct {
 		"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 		"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 		"github.com/XinFinOrg/XDPoSChain/crypto"
-		"github.com/XinFinOrg/XDPoSChain/core"
+		"github.com/XinFinOrg/XDPoSChain/core/types"
 		"github.com/XinFinOrg/XDPoSChain/params"
         `,
 		`
@@ -1556,7 +1556,7 @@ var bindTests = []struct {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 
 		// Deploy registrar contract
-		sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+		sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{addr: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 		defer sim.Close()
 
 		transactOpts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
@@ -1610,7 +1610,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -1619,7 +1619,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 
 			// Deploy a tester contract and execute a structured call on it
@@ -1672,7 +1672,7 @@ var bindTests = []struct {
 	
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 	   `,
@@ -1680,7 +1680,7 @@ var bindTests = []struct {
 			key, _ := crypto.GenerateKey()
 			addr := crypto.PubkeyToAddress(key.PublicKey)
 	
-			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+			sim := backends.NewXDCSimulatedBackend(types.GenesisAlloc{addr: {Balance: big.NewInt(10000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			defer sim.Close()
 	
 			opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
@@ -1761,7 +1761,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 	   `,
@@ -1769,7 +1769,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewXDCSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+				sim     = backends.NewXDCSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			)
 			defer sim.Close()
 
@@ -1831,7 +1831,7 @@ var bindTests = []struct {
 	
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 	   `,
@@ -1839,7 +1839,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewXDCSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+				sim     = backends.NewXDCSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			)
 			defer sim.Close()
 	
@@ -1883,7 +1883,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -1891,7 +1891,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewXDCSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+				sim     = backends.NewXDCSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			)
 			defer sim.Close()
 
@@ -1931,7 +1931,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -1939,7 +1939,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewXDCSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+				sim     = backends.NewXDCSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			)
 			defer sim.Close()
 
@@ -1971,7 +1971,7 @@ var bindTests = []struct {
 
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 			"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-			"github.com/XinFinOrg/XDPoSChain/core"
+			"github.com/XinFinOrg/XDPoSChain/core/types"
 			"github.com/XinFinOrg/XDPoSChain/crypto"
 			"github.com/XinFinOrg/XDPoSChain/params"
 		`,
@@ -1979,7 +1979,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewXDCSimulatedBackend(core.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+				sim     = backends.NewXDCSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 			)
 			_, tx, _, err := DeployRangeKeyword(user, sim)
 			if err != nil {

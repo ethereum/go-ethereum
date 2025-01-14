@@ -26,7 +26,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -59,7 +58,7 @@ func TestWaitDeployed(t *testing.T) {
 	config.Eip1559Block = big.NewInt(0)
 	for name, test := range waitDeployedTests {
 		backend := backends.NewXDCSimulatedBackend(
-			core.GenesisAlloc{
+			types.GenesisAlloc{
 				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(100000000000000000)},
 			},
 			10000000,
@@ -109,7 +108,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 	config := *params.TestXDPoSMockChainConfig
 	config.Eip1559Block = big.NewInt(0)
 	backend := backends.NewXDCSimulatedBackend(
-		core.GenesisAlloc{
+		types.GenesisAlloc{
 			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(100000000000000000)},
 		},
 		10000000,

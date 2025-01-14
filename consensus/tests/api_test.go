@@ -6,7 +6,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/stretchr/testify/assert"
@@ -18,7 +18,7 @@ var (
 )
 
 func TestConfigApi(t *testing.T) {
-	bc := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	bc := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
 	}, 10000000, params.TestXDPoSMockChainConfig)
 

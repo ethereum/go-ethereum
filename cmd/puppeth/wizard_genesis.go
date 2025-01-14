@@ -26,6 +26,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 
@@ -49,7 +50,7 @@ func (w *wizard) makeGenesis() {
 		Timestamp:  uint64(time.Now().Unix()),
 		GasLimit:   4700000,
 		Difficulty: big.NewInt(524288),
-		Alloc:      make(core.GenesisAlloc),
+		Alloc:      make(types.GenesisAlloc),
 		Config: &params.ChainConfig{
 			HomesteadBlock: big.NewInt(0),
 			EIP150Block:    big.NewInt(0),
@@ -202,7 +203,7 @@ func (w *wizard) makeGenesis() {
 		// Validator Smart Contract Code
 		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr := crypto.PubkeyToAddress(pKey.PublicKey)
-		contractBackend := backends.NewXDCSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+		contractBackend := backends.NewXDCSimulatedBackend(types.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 		transactOpts := bind.NewKeyedTransactor(pKey)
 
 		validatorAddress, _, err := validatorContract.DeployValidator(transactOpts, contractBackend, signers, validatorCaps, owner)
@@ -225,7 +226,7 @@ func (w *wizard) makeGenesis() {
 			return true
 		}
 		contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)
-		genesis.Alloc[common.MasternodeVotingSMCBinary] = core.GenesisAccount{
+		genesis.Alloc[common.MasternodeVotingSMCBinary] = types.Account{
 			Balance: validatorCap.Mul(validatorCap, big.NewInt(int64(len(validatorCaps)))),
 			Code:    code,
 			Storage: storage,
@@ -259,7 +260,7 @@ func (w *wizard) makeGenesis() {
 		fBalance := big.NewInt(0) // 16m
 		fBalance.Add(fBalance, big.NewInt(16*1000*1000))
 		fBalance.Mul(fBalance, big.NewInt(1000000000000000000))
-		genesis.Alloc[common.FoudationAddrBinary] = core.GenesisAccount{
+		genesis.Alloc[common.FoudationAddrBinary] = types.Account{
 			Balance: fBalance,
 			Code:    code,
 			Storage: storage,
@@ -275,7 +276,7 @@ func (w *wizard) makeGenesis() {
 		code, _ = contractBackend.CodeAt(ctx, blockSignerAddress, nil)
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
-		genesis.Alloc[common.BlockSignersBinary] = core.GenesisAccount{
+		genesis.Alloc[common.BlockSignersBinary] = types.Account{
 			Balance: big.NewInt(0),
 			Code:    code,
 			Storage: storage,
@@ -291,7 +292,7 @@ func (w *wizard) makeGenesis() {
 		code, _ = contractBackend.CodeAt(ctx, randomizeAddress, nil)
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, randomizeAddress, nil, f)
-		genesis.Alloc[common.RandomizeSMCBinary] = core.GenesisAccount{
+		genesis.Alloc[common.RandomizeSMCBinary] = types.Account{
 			Balance: big.NewInt(0),
 			Code:    code,
 			Storage: storage,
@@ -330,7 +331,7 @@ func (w *wizard) makeGenesis() {
 		subBalance.Add(subBalance, big.NewInt(int64(len(signers))*50*1000))
 		subBalance.Mul(subBalance, big.NewInt(1000000000000000000))
 		balance.Sub(balance, subBalance) // 12m - i * 50k
-		genesis.Alloc[common.TeamAddrBinary] = core.GenesisAccount{
+		genesis.Alloc[common.TeamAddrBinary] = types.Account{
 			Balance: balance,
 			Code:    code,
 			Storage: storage,
@@ -342,7 +343,7 @@ func (w *wizard) makeGenesis() {
 		baseBalance := big.NewInt(0) // 55m
 		baseBalance.Add(baseBalance, big.NewInt(55*1000*1000))
 		baseBalance.Mul(baseBalance, big.NewInt(1000000000000000000))
-		genesis.Alloc[swapAddr] = core.GenesisAccount{
+		genesis.Alloc[swapAddr] = types.Account{
 			Balance: baseBalance,
 		}
 
@@ -355,7 +356,7 @@ func (w *wizard) makeGenesis() {
 	for {
 		// Read the address of the account to fund
 		if address := w.readAddress(); address != nil {
-			genesis.Alloc[*address] = core.GenesisAccount{
+			genesis.Alloc[*address] = types.Account{
 				Balance: new(big.Int).Lsh(big.NewInt(1), 256-7), // 2^256 / 128 (allow many pre-funds without balance overflows)
 			}
 			continue
@@ -364,7 +365,7 @@ func (w *wizard) makeGenesis() {
 	}
 	// Add a batch of precompile balances to avoid them getting deleted
 	for i := int64(0); i < 2; i++ {
-		genesis.Alloc[common.BigToAddress(big.NewInt(i))] = core.GenesisAccount{Balance: big.NewInt(0)}
+		genesis.Alloc[common.BigToAddress(big.NewInt(i))] = types.Account{Balance: big.NewInt(0)}
 	}
 	// Query the user for some custom extras
 	fmt.Println()
