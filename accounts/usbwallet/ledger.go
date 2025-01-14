@@ -392,30 +392,28 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 //
 // The signing protocol is defined as follows:
 //
-//   CLA | INS | P1 | P2                          | Lc  | Le
-//   ----+-----+----+-----------------------------+-----+---
-//    E0 | 0C  | 00 | implementation version : 00 | variable | variable
+//	CLA | INS | P1 | P2                          | Lc  | Le
+//	----+-----+----+-----------------------------+-----+---
+//	 E0 | 0C  | 00 | implementation version : 00 | variable | variable
 //
 // Where the input is:
 //
-//   Description                                      | Length
-//   -------------------------------------------------+----------
-//   Number of BIP 32 derivations to perform (max 10) | 1 byte
-//   First derivation index (big endian)              | 4 bytes
-//   ...                                              | 4 bytes
-//   Last derivation index (big endian)               | 4 bytes
-//   domain hash                                      | 32 bytes
-//   message hash                                     | 32 bytes
-//
-//
+//	Description                                      | Length
+//	-------------------------------------------------+----------
+//	Number of BIP 32 derivations to perform (max 10) | 1 byte
+//	First derivation index (big endian)              | 4 bytes
+//	...                                              | 4 bytes
+//	Last derivation index (big endian)               | 4 bytes
+//	domain hash                                      | 32 bytes
+//	message hash                                     | 32 bytes
 //
 // And the output data is:
 //
-//   Description | Length
-//   ------------+---------
-//   signature V | 1 byte
-//   signature R | 32 bytes
-//   signature S | 32 bytes
+//	Description | Length
+//	------------+---------
+//	signature V | 1 byte
+//	signature R | 32 bytes
+//	signature S | 32 bytes
 func (w *ledgerDriver) ledgerSignTypedMessage(derivationPath []uint32, domainHash []byte, messageHash []byte) ([]byte, error) {
 	// Flatten the derivation path into the Ledger request
 	path := make([]byte, 1+4*len(derivationPath))

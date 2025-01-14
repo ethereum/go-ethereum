@@ -165,8 +165,9 @@ func TestInvalidABI(t *testing.T) {
 
 // TestConstructor tests a constructor function.
 // The test is based on the following contract:
-// 	contract TestConstructor {
-// 		constructor(uint256 a, uint256 b) public{}
+//
+//	contract TestConstructor {
+//		constructor(uint256 a, uint256 b) public{}
 //	}
 func TestConstructor(t *testing.T) {
 	json := `[{	"inputs": [{"internalType": "uint256","name": "a","type": "uint256"	},{	"internalType": "uint256","name": "b","type": "uint256"}],"stateMutability": "nonpayable","type": "constructor"}]`
@@ -727,12 +728,12 @@ func TestBareEvents(t *testing.T) {
 // TestUnpackEvent is based on this contract:
 //
 //	contract T {
-//	  event received(address sender, uint amount, bytes memo);
-//	  event receivedAddr(address sender);
-//	  function receive(bytes memo) external payable {
-//	    received(msg.sender, msg.value, memo);
-//	    receivedAddr(msg.sender);
-//	  }
+//		event received(address sender, uint amount, bytes memo);
+//		event receivedAddr(address sender);
+//		function receive(bytes memo) external payable {
+//			received(msg.sender, msg.value, memo);
+//			receivedAddr(msg.sender);
+//		}
 //	}
 //
 // When receive("X") is called with sender 0x00... and value 1, it produces this tx receipt:
@@ -1113,8 +1114,9 @@ func TestDoubleDuplicateMethodNames(t *testing.T) {
 // TestDoubleDuplicateEventNames checks that if send0 already exists, there won't be a name
 // conflict and that the second send event will be renamed send1.
 // The test runs the abi of the following contract.
-// 	contract DuplicateEvent {
-// 		event send(uint256 a);
+//
+//	contract DuplicateEvent {
+//		event send(uint256 a);
 //		event send0();
 //		event send();
 //	}
@@ -1141,7 +1143,8 @@ func TestDoubleDuplicateEventNames(t *testing.T) {
 // TestUnnamedEventParam checks that an event with unnamed parameters is
 // correctly handled.
 // The test runs the abi of the following contract.
-// 	contract TestEvent {
+//
+//	contract TestEvent {
 //		event send(uint256, uint256);
 //	}
 func TestUnnamedEventParam(t *testing.T) {
