@@ -26,7 +26,6 @@ require (
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/prometheus v1.7.2-0.20170814170113-3101606756c5
-	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/steakknife/bloomfilter v0.0.0-20180922174646-6819c0d2a570
 	github.com/stretchr/testify v1.8.4
@@ -48,6 +47,7 @@ require (
 	github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498
 	github.com/ethereum/c-kzg-4844 v0.4.0
 	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
+	github.com/fsnotify/fsnotify v1.8.0
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08
 	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/google/gofuzz v1.2.0
