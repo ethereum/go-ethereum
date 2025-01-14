@@ -443,7 +443,7 @@ var unpackTests = []unpackTest{
 func TestUnpack(t *testing.T) {
 	for i, test := range unpackTests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			def := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
+			def := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
 			abi, err := JSON(strings.NewReader(def))
 			if err != nil {
 				t.Fatalf("invalid ABI definition %s: %v", def, err)
@@ -522,7 +522,7 @@ type methodMultiOutput struct {
 
 func methodMultiReturn(require *require.Assertions) (ABI, []byte, methodMultiOutput) {
 	const definition = `[
-	{ "name" : "multi", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
+	{ "name" : "multi", "type": "function", "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
 	var expected = methodMultiOutput{big.NewInt(1), "hello"}
 
 	abi, err := JSON(strings.NewReader(definition))
@@ -611,7 +611,7 @@ func TestMethodMultiReturn(t *testing.T) {
 }
 
 func TestMultiReturnWithArray(t *testing.T) {
-	const definition = `[{"name" : "multi", "outputs": [{"type": "uint64[3]"}, {"type": "uint64"}]}]`
+	const definition = `[{"name" : "multi", "type": "function", "outputs": [{"type": "uint64[3]"}, {"type": "uint64"}]}]`
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
 		t.Fatal(err)
@@ -634,7 +634,7 @@ func TestMultiReturnWithArray(t *testing.T) {
 }
 
 func TestMultiReturnWithStringArray(t *testing.T) {
-	const definition = `[{"name" : "multi", "outputs": [{"name": "","type": "uint256[3]"},{"name": "","type": "address"},{"name": "","type": "string[2]"},{"name": "","type": "bool"}]}]`
+	const definition = `[{"name" : "multi", "type": "function", "outputs": [{"name": "","type": "uint256[3]"},{"name": "","type": "address"},{"name": "","type": "string[2]"},{"name": "","type": "bool"}]}]`
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
 		t.Fatal(err)
@@ -664,7 +664,7 @@ func TestMultiReturnWithStringArray(t *testing.T) {
 }
 
 func TestMultiReturnWithStringSlice(t *testing.T) {
-	const definition = `[{"name" : "multi", "outputs": [{"name": "","type": "string[]"},{"name": "","type": "uint256[]"}]}]`
+	const definition = `[{"name" : "multi", "type": "function", "outputs": [{"name": "","type": "string[]"},{"name": "","type": "uint256[]"}]}]`
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
 		t.Fatal(err)
@@ -700,7 +700,7 @@ func TestMultiReturnWithDeeplyNestedArray(t *testing.T) {
 	//  values of nested static arrays count towards the size as well, and any element following
 	//  after such nested array argument should be read with the correct offset,
 	//  so that it does not read content from the previous array argument.
-	const definition = `[{"name" : "multi", "outputs": [{"type": "uint64[3][2][4]"}, {"type": "uint64"}]}]`
+	const definition = `[{"name" : "multi", "type": "function", "outputs": [{"type": "uint64[3][2][4]"}, {"type": "uint64"}]}]`
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
 		t.Fatal(err)
@@ -737,15 +737,15 @@ func TestMultiReturnWithDeeplyNestedArray(t *testing.T) {
 
 func TestUnmarshal(t *testing.T) {
 	const definition = `[
-	{ "name" : "int", "constant" : false, "outputs": [ { "type": "uint256" } ] },
-	{ "name" : "bool", "constant" : false, "outputs": [ { "type": "bool" } ] },
-	{ "name" : "bytes", "constant" : false, "outputs": [ { "type": "bytes" } ] },
-	{ "name" : "fixed", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
-	{ "name" : "multi", "constant" : false, "outputs": [ { "type": "bytes" }, { "type": "bytes" } ] },
-	{ "name" : "intArraySingle", "constant" : false, "outputs": [ { "type": "uint256[3]" } ] },
-	{ "name" : "addressSliceSingle", "constant" : false, "outputs": [ { "type": "address[]" } ] },
-	{ "name" : "addressSliceDouble", "constant" : false, "outputs": [ { "name": "a", "type": "address[]" }, { "name": "b", "type": "address[]" } ] },
-	{ "name" : "mixedBytes", "constant" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
+	{ "name" : "int", "type": "function", "outputs": [ { "type": "uint256" } ] },
+	{ "name" : "bool", "type": "function", "outputs": [ { "type": "bool" } ] },
+	{ "name" : "bytes", "type": "function", "outputs": [ { "type": "bytes" } ] },
+	{ "name" : "fixed", "type": "function", "outputs": [ { "type": "bytes32" } ] },
+	{ "name" : "multi", "type": "function", "outputs": [ { "type": "bytes" }, { "type": "bytes" } ] },
+	{ "name" : "intArraySingle", "type": "function", "outputs": [ { "type": "uint256[3]" } ] },
+	{ "name" : "addressSliceSingle", "type": "function", "outputs": [ { "type": "address[]" } ] },
+	{ "name" : "addressSliceDouble", "type": "function", "outputs": [ { "name": "a", "type": "address[]" }, { "name": "b", "type": "address[]" } ] },
+	{ "name" : "mixedBytes", "type": "function", "stateMutability" : "view", "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
@@ -985,7 +985,7 @@ func TestUnmarshal(t *testing.T) {
 }
 
 func TestUnpackTuple(t *testing.T) {
-	const simpleTuple = `[{"name":"tuple","constant":false,"outputs":[{"type":"tuple","name":"ret","components":[{"type":"int256","name":"a"},{"type":"int256","name":"b"}]}]}]`
+	const simpleTuple = `[{"name":"tuple","type":"function","outputs":[{"type":"tuple","name":"ret","components":[{"type":"int256","name":"a"},{"type":"int256","name":"b"}]}]}]`
 	abi, err := JSON(strings.NewReader(simpleTuple))
 	if err != nil {
 		t.Fatal(err)
@@ -1014,7 +1014,7 @@ func TestUnpackTuple(t *testing.T) {
 	}
 
 	// Test nested tuple
-	const nestedTuple = `[{"name":"tuple","constant":false,"outputs":[
+	const nestedTuple = `[{"name":"tuple","type":"function","outputs":[
 		{"type":"tuple","name":"s","components":[{"type":"uint256","name":"a"},{"type":"uint256[]","name":"b"},{"type":"tuple[]","name":"c","components":[{"name":"x", "type":"uint256"},{"name":"y","type":"uint256"}]}]},
 		{"type":"tuple","name":"t","components":[{"name":"x", "type":"uint256"},{"name":"y","type":"uint256"}]},
 		{"type":"uint256","name":"a"}
@@ -1136,7 +1136,7 @@ func TestOOMMaliciousInput(t *testing.T) {
 		},
 	}
 	for i, test := range oomTests {
-		def := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
+		def := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
 		abi, err := JSON(strings.NewReader(def))
 		if err != nil {
 			t.Fatalf("invalid ABI definition %s: %v", def, err)
