@@ -83,8 +83,10 @@ func makeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 				val := reflect.ValueOf(rule)
 
 				switch {
+
+				// static byte array
 				case val.Kind() == reflect.Array && reflect.TypeOf(rule).Elem().Kind() == reflect.Uint8:
-					reflect.Copy(reflect.ValueOf(topic[common.HashLength-val.Len():]), val)
+					reflect.Copy(reflect.ValueOf(topic[:val.Len()]), val)
 
 				default:
 					return nil, fmt.Errorf("unsupported indexed type: %T", rule)
@@ -175,8 +177,10 @@ func parseTopics(out interface{}, fields abi.Arguments, topics []common.Hash) er
 			default:
 				// Ran out of custom types, try the crazies
 				switch {
+
+				// static byte array
 				case arg.Type.T == abi.FixedBytesTy:
-					reflect.Copy(field, reflect.ValueOf(topics[0][common.HashLength-arg.Type.Size:]))
+					reflect.Copy(field, reflect.ValueOf(topics[0][:arg.Type.Size]))
 
 				default:
 					return fmt.Errorf("unsupported indexed type: %v", arg.Type)
