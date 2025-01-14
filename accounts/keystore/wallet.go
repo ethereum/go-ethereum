@@ -79,11 +79,11 @@ func (w *keystoreWallet) Derive(path accounts.DerivationPath, pin bool) (account
 // there is no notion of hierarchical account derivation for plain keystore accounts.
 func (w *keystoreWallet) SelfDerive(base accounts.DerivationPath, chain ethereum.ChainStateReader) {}
 
-// signHash attempts to sign the given hash with
+// SignHash attempts to sign the given hash with
 // the given account. If the wallet does not wrap this particular account, an
 // error is returned to avoid account leakage (even though in theory we may be
 // able to sign via our shared keystore backend).
-func (w *keystoreWallet) signHash(account accounts.Account, hash []byte) ([]byte, error) {
+func (w *keystoreWallet) SignHash(account accounts.Account, hash []byte) ([]byte, error) {
 	// Make sure the requested account is contained within
 	if !w.Contains(account) {
 		return nil, accounts.ErrUnknownAccount
@@ -94,11 +94,11 @@ func (w *keystoreWallet) signHash(account accounts.Account, hash []byte) ([]byte
 
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed
 func (w *keystoreWallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
-	return w.signHash(account, crypto.Keccak256(data))
+	return w.SignHash(account, crypto.Keccak256(data))
 }
 
 func (w *keystoreWallet) SignText(account accounts.Account, text []byte) ([]byte, error) {
-	return w.signHash(account, accounts.TextHash(text))
+	return w.SignHash(account, accounts.TextHash(text))
 }
 
 // SignTx implements accounts.Wallet, attempting to sign the given transaction
