@@ -75,14 +75,13 @@ func TestSimulatedBackend(t *testing.T) {
 	}
 
 	sim.Commit()
-	tx, isPending, err = sim.TransactionByHash(context.Background(), txHash)
+	_, isPending, err = sim.TransactionByHash(context.Background(), txHash)
 	if err != nil {
 		t.Fatalf("error getting transaction with hash: %v", txHash.String())
 	}
 	if isPending {
 		t.Fatal("transaction should not have pending status")
 	}
-
 }
 
 func TestSimulatedBackend_EstimateGas(t *testing.T) {
