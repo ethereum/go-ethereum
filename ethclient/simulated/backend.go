@@ -18,6 +18,7 @@ package simulated
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/log"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -62,9 +63,10 @@ type simClient struct {
 // Backend is a simulated blockchain. You can use it to test your contracts or
 // other code that interacts with the Ethereum chain.
 type Backend struct {
-	node   *node.Node
-	beacon *catalyst.SimulatedBeacon
-	client simClient
+	node       *node.Node
+	beacon     *catalyst.SimulatedBeacon
+	ethBackend *eth.Ethereum
+	client     simClient
 }
 
 // NewBackend creates a new simulated blockchain that can be used as a backend for
@@ -129,9 +131,10 @@ func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backe
 		return nil, err
 	}
 	return &Backend{
-		node:   stack,
-		beacon: beacon,
-		client: simClient{ethclient.NewClient(stack.Attach())},
+		node:       stack,
+		beacon:     beacon,
+		ethBackend: backend,
+		client:     simClient{ethclient.NewClient(stack.Attach())},
 	}, nil
 }
 
@@ -146,6 +149,9 @@ func (n *Backend) Close() error {
 	if n.beacon != nil {
 		err = n.beacon.Stop()
 		n.beacon = nil
+	}
+	if err := n.ethBackend.Stop(); err != nil {
+		log.Error("error stopping eth backend", "err", err)
 	}
 	if n.node != nil {
 		err = errors.Join(err, n.node.Close())
