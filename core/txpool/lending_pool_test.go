@@ -177,8 +177,7 @@ func TestSendLending(t *testing.T) {
 	}
 	nonce, err := getLendingNonce(crypto.PubkeyToAddress(privateKey.PublicKey))
 	if err != nil {
-		t.Error("fail to get nonce")
-		t.FailNow()
+		t.Fatal("fail to get nonce")
 	}
 
 	for {
@@ -249,8 +248,7 @@ func TestCancelLending(t *testing.T) {
 	}
 	nonce, err := getLendingNonce(crypto.PubkeyToAddress(privateKey.PublicKey))
 	if err != nil {
-		t.Error("fail to get nonce")
-		t.FailNow()
+		t.Fatal("fail to get nonce")
 	}
 
 	// 10%
@@ -272,16 +270,14 @@ func TestRecallLending(t *testing.T) {
 	}
 	nonce, err := getLendingNonce(crypto.PubkeyToAddress(privateKey.PublicKey))
 	if err != nil {
-		t.Error("fail to get nonce")
-		t.FailNow()
+		t.Fatal("fail to get nonce")
 	}
 	interestRate := 10 * common.BaseLendingInterest.Uint64()
 	testSendLending(key, nonce, USDAddress, common.Address{}, new(big.Int).Mul(_1E8, big.NewInt(1000)), interestRate, lendingstate.Investing, lendingstate.LendingStatusNew, true, 0, 0, common.Hash{}, "")
 	time.Sleep(2 * time.Second)
 	nonce, err = getLendingNonce(crypto.PubkeyToAddress(privateKey.PublicKey))
 	if err != nil {
-		t.Error("fail to get nonce")
-		t.FailNow()
+		t.Fatal("fail to get nonce")
 	}
 	testSendLending(key, nonce, USDAddress, common.XDCNativeAddressBinary, new(big.Int).Mul(_1E8, big.NewInt(1000)), interestRate, lendingstate.Borrowing, lendingstate.LendingStatusNew, true, 0, 0, common.Hash{}, "")
 	time.Sleep(2 * time.Second)

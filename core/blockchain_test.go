@@ -157,8 +157,7 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 func insertChain(done chan bool, blockchain *BlockChain, chain types.Blocks, t *testing.T) {
 	_, err := blockchain.InsertChain(chain)
 	if err != nil {
-		fmt.Println(err)
-		t.FailNow()
+		t.Fatal(err)
 	}
 	done <- true
 }
