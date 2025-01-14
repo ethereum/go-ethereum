@@ -19,8 +19,11 @@ package simulated
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"math/big"
 	"math/rand"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -301,5 +304,77 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 	head, _ := client.HeaderByNumber(ctx, nil)
 	if head.Number.Uint64() == 2 && head.ParentHash != h1.Hash() {
 		t.Errorf("failed to build block on fork")
+	}
+}
+
+func testInternal(t *testing.T) {
+	genesisData := types.GenesisAlloc{}
+	simulatedBackend := NewBackend(genesisData)
+	defer simulatedBackend.Close()
+}
+
+// Collects and returns the stack traces of all goroutines as an array of strings,
+// with the first line of each stack trace removed.
+func collectGoroutineStacks() map[string]int {
+	// Allocate a buffer large enough to hold all the stack frames
+	buf := make([]byte, 1<<20) // 1MB buffer, adjust size if needed
+
+	// Capture stack traces for all goroutines
+	stackLen := runtime.Stack(buf, true)
+
+	// Convert the stack trace buffer to a string and split it into separate goroutine stacks
+	stacks := strings.Split(string(buf[:stackLen]), "\n\n")
+
+	res := make(map[string]int)
+
+	// Remove the first line of each stack trace
+	for i := range stacks {
+		// Split the stack trace into lines
+		lines := strings.Split(stacks[i], "\n")
+		combinedLines := strings.Join(lines[1:], "\n")
+
+		// filter out the callstack for this goroutine
+		if strings.Contains(combinedLines, "collectGoroutineStacks") {
+			continue
+		}
+
+		// If the stack trace has more than one line, strip the first line
+		if len(lines) > 1 {
+			res[combinedLines] = res[combinedLines] + 1
+		} else {
+			// If the stack trace only has one line, just leave it empty or blank
+			res[""] = res[""] + 1
+		}
+	}
+
+	// Return the modified stack traces as an array of strings
+	return res
+}
+
+func leaks(firstGR map[string]int, secondGR map[string]int) []string {
+	var res []string
+	for key, _ := range secondGR {
+		if _, ok := firstGR[key]; !ok {
+			res = append(res, key)
+		} else if secondGR[key] > firstGR[key] {
+			res = append(res, key)
+		}
+	}
+	return res
+}
+
+func TestCheckGoroutineLeak(t *testing.T) {
+	testInternal(t)
+	stacks1 := collectGoroutineStacks()
+	testInternal(t)
+	stacks2 := collectGoroutineStacks()
+
+	l := leaks(stacks1, stacks2)
+	if len(l) > 0 {
+		fmt.Println(len(l))
+		for _, leak := range l {
+			fmt.Printf("leak is:\n%s\n\n", leak)
+		}
+		t.Fatalf("mismatched num goroutines (leak)")
 	}
 }
