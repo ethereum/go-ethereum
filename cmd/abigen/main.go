@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
@@ -74,6 +75,10 @@ var (
 		Usage: "Destination language for the bindings (go)",
 		Value: "go",
 	}
+	aliasFlag = &cli.StringFlag{
+		Name:  "alias",
+		Usage: "Comma separated aliases for function and event renaming, e.g. foo=bar",
+	}
 )
 
 func init() {
@@ -88,6 +93,7 @@ func init() {
 		pkgFlag,
 		outFlag,
 		langFlag,
+		aliasFlag,
 	}
 	app.Action = abigen
 }
@@ -110,11 +116,12 @@ func abigen(c *cli.Context) error {
 	}
 	// If the entire solidity code was specified, build and bind based on that
 	var (
-		abis  []string
-		bins  []string
-		types []string
-		sigs  []map[string]string
-		libs  = make(map[string]string)
+		abis    []string
+		bins    []string
+		types   []string
+		sigs    []map[string]string
+		libs    = make(map[string]string)
+		aliases = make(map[string]string)
 	)
 	if c.String(abiFlag.Name) != "" {
 		// Load up the ABI, optional bytecode and type name from the parameters
@@ -186,8 +193,20 @@ func abigen(c *cli.Context) error {
 			libs[libPattern] = nameParts[len(nameParts)-1]
 		}
 	}
+	// Extract all aliases from the flags
+	if c.IsSet(aliasFlag.Name) {
+		// We support multi-versions for aliasing
+		// e.g.
+		//      foo=bar,foo2=bar2
+		//      foo:bar,foo2:bar2
+		re := regexp.MustCompile(`(?:(\w+)[:=](\w+))`)
+		submatches := re.FindAllStringSubmatch(c.String(aliasFlag.Name), -1)
+		for _, match := range submatches {
+			aliases[match[1]] = match[2]
+		}
+	}
 	// Generate the contract binding
-	code, err := bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), lang, libs)
+	code, err := bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), lang, libs, aliases)
 	if err != nil {
 		utils.Fatalf("Failed to generate ABI binding: %v", err)
 	}
