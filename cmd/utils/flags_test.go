@@ -73,13 +73,10 @@ func TestWalkMatch(t *testing.T) {
 		root    string
 		pattern string
 	}
-	dir, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
-	test1Dir, _ := os.MkdirTemp(dir, "test1")
-	test2Dir, _ := os.MkdirTemp(dir, "test2")
-	err = os.WriteFile(filepath.Join(test1Dir, "test1.ldb"), []byte("hello"), os.ModePerm)
+	test1Dir := t.TempDir()
+	test2Dir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(test1Dir, "test1.ldb"), []byte("hello"), os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -87,10 +84,6 @@ func TestWalkMatch(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() {
-		os.RemoveAll(test1Dir)
-		os.RemoveAll(test2Dir)
-	}()
 
 	tests := []struct {
 		name    string

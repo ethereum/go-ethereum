@@ -86,13 +86,9 @@ func SimulateWalletAddressAndSignFn() (common.Address, func(account accounts.Acc
 	veryLightScryptN := 2
 	veryLightScryptP := 1
 	dir, _ := os.MkdirTemp("", "eth-SimulateWalletAddressAndSignFn-test")
-
-	new := func(kd string) *keystore.KeyStore {
-		return keystore.NewKeyStore(kd, veryLightScryptN, veryLightScryptP)
-	}
-
 	defer os.RemoveAll(dir)
-	ks := new(dir)
+
+	ks := keystore.NewKeyStore(dir, veryLightScryptN, veryLightScryptP)
 	pass := "" // not used but required by API
 	a1, err := ks.NewAccount(pass)
 	if err != nil {

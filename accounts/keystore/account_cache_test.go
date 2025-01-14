@@ -55,7 +55,6 @@ func TestWatchNewFile(t *testing.T) {
 	t.Parallel()
 
 	dir, ks := tmpKeyStore(t, false)
-	defer os.RemoveAll(dir)
 
 	// Ensure the watcher is started before adding any files.
 	ks.Accounts()

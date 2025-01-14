@@ -148,14 +148,11 @@ func genUncles(i int, gen *BlockGen) {
 func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Create the database in memory or in a temporary directory.
 	var db ethdb.Database
+	var err error
 	if !disk {
 		db = rawdb.NewMemoryDatabase()
 	} else {
-		dir, err := os.MkdirTemp("", "eth-core-bench")
-		if err != nil {
-			b.Fatalf("cannot create temporary directory: %v", err)
-		}
-		defer os.RemoveAll(dir)
+		dir := b.TempDir()
 		db, err = rawdb.NewLevelDBDatabase(dir, 128, 128, "", false)
 		if err != nil {
 			b.Fatalf("cannot create temporary database: %v", err)
@@ -250,10 +247,7 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 
 func benchWriteChain(b *testing.B, full bool, count uint64) {
 	for i := 0; i < b.N; i++ {
-		dir, err := os.MkdirTemp("", "eth-chain-bench")
-		if err != nil {
-			b.Fatalf("cannot create temporary directory: %v", err)
-		}
+		dir := b.TempDir()
 		db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
@@ -265,11 +259,7 @@ func benchWriteChain(b *testing.B, full bool, count uint64) {
 }
 
 func benchReadChain(b *testing.B, full bool, count uint64) {
-	dir, err := os.MkdirTemp("", "eth-chain-bench")
-	if err != nil {
-		b.Fatalf("cannot create temporary directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := b.TempDir()
 
 	db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
 	if err != nil {

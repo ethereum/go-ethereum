@@ -33,7 +33,7 @@ import (
 // are copied into a temporary keystore directory.
 
 func tmpDatadirWithKeystore(t *testing.T) string {
-	datadir := tmpdir(t)
+	datadir := t.TempDir()
 	keystore := filepath.Join(datadir, "keystore")
 	source := filepath.Join("..", "..", "accounts", "keystore", "testdata", "keystore")
 	if err := cp.CopyAll(keystore, source); err != nil {
@@ -43,8 +43,7 @@ func tmpDatadirWithKeystore(t *testing.T) string {
 }
 
 func TestAccountListEmpty(t *testing.T) {
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
+	datadir := t.TempDir()
 	XDC := runXDC(t, "account", "list", "--datadir", datadir)
 	XDC.ExpectExit()
 }
@@ -144,8 +143,7 @@ Repeat passphrase: {{.InputLine "foobar2"}}
 }
 
 func TestWalletImport(t *testing.T) {
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
+	datadir := t.TempDir()
 	XDC := runXDC(t, "wallet", "import", "--datadir", datadir, "--lightkdf", "testdata/guswallet.json")
 	defer XDC.ExpectExit()
 	XDC.Expect(`

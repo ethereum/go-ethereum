@@ -31,11 +31,7 @@ import (
 // ones or automatically generated temporary ones.
 func TestDatadirCreation(t *testing.T) {
 	// Create a temporary data dir and check that it can be used by a node
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatalf("failed to create manual data dir: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	node, err := New(&Config{DataDir: dir})
 	if err != nil {
@@ -61,7 +57,10 @@ func TestDatadirCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temporary file: %v", err)
 	}
-	defer os.Remove(file.Name())
+	defer func() {
+		file.Close()
+		os.Remove(file.Name())
+	}()
 
 	dir = filepath.Join(file.Name(), "invalid/path")
 	node, err = New(&Config{DataDir: dir})
@@ -108,11 +107,7 @@ func TestIPCPathResolution(t *testing.T) {
 // ephemeral.
 func TestNodeKeyPersistency(t *testing.T) {
 	// Create a temporary folder and make sure no key is present
-	dir, err := os.MkdirTemp("", "node-test")
-	if err != nil {
-		t.Fatalf("failed to create temporary data directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	keyfile := filepath.Join(dir, "unit-test", datadirPrivateKey)
 
