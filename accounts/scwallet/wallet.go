@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -310,8 +311,10 @@ func (w *Wallet) Status() (string, error) {
 		return fmt.Sprintf("Failed: %v", err), err
 	}
 	switch {
+	case !w.session.verified && status.PinRetryCount == 0 && status.PukRetryCount == 0:
+		return fmt.Sprintf("Bricked, waiting for full wipe"), nil
 	case !w.session.verified && status.PinRetryCount == 0:
-		return fmt.Sprintf("Blocked, waiting for PUK and new PIN"), nil
+		return fmt.Sprintf("Blocked, waiting for PUK (%d attempts left) and new PIN", status.PukRetryCount), nil
 	case !w.session.verified:
 		return fmt.Sprintf("Locked, waiting for PIN (%d attempts left)", status.PinRetryCount), nil
 	case !status.Initialized:
@@ -377,10 +380,18 @@ func (w *Wallet) Open(passphrase string) error {
 	case passphrase == "":
 		return ErrPINUnblockNeeded
 	case status.PinRetryCount > 0:
+		if !regexp.MustCompile(`^[0-9]{6,}$`).MatchString(passphrase) {
+			w.log.Error("PIN needs to be at least 6 digits")
+			return ErrPINNeeded
+		}
 		if err := w.session.verifyPin([]byte(passphrase)); err != nil {
 			return err
 		}
 	default:
+		if !regexp.MustCompile(`^[0-9]{12,}$`).MatchString(passphrase) {
+			w.log.Error("PUK needs to be at least 12 digits")
+			return ErrPINUnblockNeeded
+		}
 		if err := w.session.unblockPin([]byte(passphrase)); err != nil {
 			return err
 		}
@@ -971,12 +982,10 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 	copy(sig[32-len(rbytes):32], rbytes)
 	copy(sig[64-len(sbytes):64], sbytes)
 
-	pubkey, err := determinePublicKey(sig, sigdata.PublicKey)
-	if err != nil {
+	if err := confirmPublicKey(sig, sigdata.PublicKey); err != nil {
 		return accounts.Account{}, err
 	}
-
-	pub, err := crypto.UnmarshalPubkey(pubkey)
+	pub, err := crypto.UnmarshalPubkey(sigdata.PublicKey)
 	if err != nil {
 		return accounts.Account{}, err
 	}
@@ -1046,10 +1055,10 @@ func (s *Session) sign(path accounts.DerivationPath, hash []byte) ([]byte, error
 	return sig, nil
 }
 
-// determinePublicKey uses a signature and the X component of a public key to
-// recover the entire public key.
-func determinePublicKey(sig, pubkeyX []byte) ([]byte, error) {
-	return makeRecoverableSignature(DerivationSignatureHash[:], sig, pubkeyX)
+// confirmPublicKey confirms that the given signature belongs to the specified key.
+func confirmPublicKey(sig, pubkey []byte) error {
+	_, err := makeRecoverableSignature(DerivationSignatureHash[:], sig, pubkey)
+	return err
 }
 
 // makeRecoverableSignature uses a signature and an expected public key to
