@@ -18,12 +18,28 @@ package core
 
 import (
 	"runtime"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// SenderCacher is a concurrent transaction sender recoverer and cacher.
-var SenderCacher = newTxSenderCacher(runtime.NumCPU())
+var (
+	// senderCacherOnce is used to ensure that the SenderCacher is initialized only once.
+	// It leverages sync.Once to provide thread-safe lazy initialization.
+	senderCacherOnce sync.Once
+	// senderCacherInstance is a concurrent transaction sender recoverer and cacher.
+	senderCacherInstance = newTxSenderCacher(runtime.NumCPU())
+)
+
+// GetSenderCacher returns the singleton instance of SenderCacher.
+// If the instance has not been initialized yet, it will be created using newTxSenderCacher.
+// This function is thread-safe and ensures that initialization happens only once.
+func GetSenderCacher() *txSenderCacher {
+	senderCacherOnce.Do(func() {
+		senderCacherInstance = newTxSenderCacher(runtime.NumCPU())
+	})
+	return senderCacherInstance
+}
 
 // txSenderCacherRequest is a request for recovering transaction senders with a
 // specific signature scheme and caching it into the transactions themselves.
