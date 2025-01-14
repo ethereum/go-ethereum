@@ -378,7 +378,6 @@ func TestImportExport(t *testing.T) {
 	if _, err = ks2.Import(json, "new", "new"); err == nil {
 		t.Errorf("importing a key twice succeeded")
 	}
-
 }
 
 // TestImportRace tests the keystore on races.
@@ -403,7 +402,6 @@ func TestImportRace(t *testing.T) {
 			if _, err := ks2.Import(json, "new", "new"); err != nil {
 				atomic.AddUint32(&atom, 1)
 			}
-
 		}()
 	}
 	wg.Wait()
