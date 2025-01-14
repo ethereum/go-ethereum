@@ -312,15 +312,15 @@ func (w *Wallet) Status() (string, error) {
 	}
 	switch {
 	case !w.session.verified && status.PinRetryCount == 0 && status.PukRetryCount == 0:
-		return fmt.Sprintf("Bricked, waiting for full wipe"), nil
+		return "Bricked, waiting for full wipe", nil
 	case !w.session.verified && status.PinRetryCount == 0:
 		return fmt.Sprintf("Blocked, waiting for PUK (%d attempts left) and new PIN", status.PukRetryCount), nil
 	case !w.session.verified:
 		return fmt.Sprintf("Locked, waiting for PIN (%d attempts left)", status.PinRetryCount), nil
 	case !status.Initialized:
-		return fmt.Sprintf("Empty, waiting for initialization"), nil
+		return "Empty, waiting for initialization", nil
 	default:
-		return fmt.Sprintf("Online"), nil
+		return "Online", nil
 	}
 }
 
@@ -879,6 +879,7 @@ func (s *Session) walletStatus() (*walletStatus, error) {
 }
 
 // derivationPath fetches the wallet's current derivation path from the card.
+//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) derivationPath() (accounts.DerivationPath, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insStatus, statusP1Path, 0, nil)
@@ -994,6 +995,7 @@ func (s *Session) derive(path accounts.DerivationPath) (accounts.Account, error)
 }
 
 // keyExport contains information on an exported keypair.
+//
 //lint:ignore U1000 needs to be added to the console interface
 type keyExport struct {
 	PublicKey  []byte `asn1:"tag:0"`
@@ -1001,6 +1003,7 @@ type keyExport struct {
 }
 
 // publicKey returns the public key for the current derivation path.
+//
 //lint:ignore U1000 needs to be added to the console interface
 func (s *Session) publicKey() ([]byte, error) {
 	response, err := s.Channel.transmitEncrypted(claSCWallet, insExportKey, exportP1Any, exportP2Pubkey, nil)
