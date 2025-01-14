@@ -28,7 +28,7 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
-	"github.com/XinFinOrg/XDPoSChain/accounts/usbwallet/internal/trezor"
+	"github.com/XinFinOrg/XDPoSChain/accounts/usbwallet/trezor"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -85,15 +85,15 @@ func (w *trezorDriver) Status() (string, error) {
 
 // Open implements usbwallet.driver, attempting to initialize the connection to
 // the Trezor hardware wallet. Initializing the Trezor is a two or three phase operation:
-//  * The first phase is to initialize the connection and read the wallet's
-//    features. This phase is invoked is the provided passphrase is empty. The
-//    device will display the pinpad as a result and will return an appropriate
-//    error to notify the user that a second open phase is needed.
-//  * The second phase is to unlock access to the Trezor, which is done by the
-//    user actually providing a passphrase mapping a keyboard keypad to the pin
-//    number of the user (shuffled according to the pinpad displayed).
-//  * If needed the device will ask for passphrase which will require calling
-//    open again with the actual passphrase (3rd phase)
+//   - The first phase is to initialize the connection and read the wallet's
+//     features. This phase is invoked is the provided passphrase is empty. The
+//     device will display the pinpad as a result and will return an appropriate
+//     error to notify the user that a second open phase is needed.
+//   - The second phase is to unlock access to the Trezor, which is done by the
+//     user actually providing a passphrase mapping a keyboard keypad to the pin
+//     number of the user (shuffled according to the pinpad displayed).
+//   - If needed the device will ask for passphrase which will require calling
+//     open again with the actual passphrase (3rd phase)
 func (w *trezorDriver) Open(device io.ReadWriter, passphrase string) error {
 	w.device, w.failure = device, nil
 
@@ -249,7 +249,7 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 	} else {
 		// Trezor backend does not support typed transactions yet.
 		signer = types.NewEIP155Signer(chainID)
-		signature[crypto.RecoveryIDOffset] -= byte(chainID.Uint64()*2+35)
+		signature[crypto.RecoveryIDOffset] -= byte(chainID.Uint64()*2 + 35)
 	}
 
 	// Inject the final signature into the transaction and sanity check the sender
