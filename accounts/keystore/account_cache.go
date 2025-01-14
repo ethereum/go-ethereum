@@ -146,6 +146,14 @@ func (ac *accountCache) deleteByFile(path string) {
 	}
 }
 
+// watcherStarted returns true if the watcher loop started running (even if it
+// has since also ended).
+func (ac *accountCache) watcherStarted() bool {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+	return ac.watcher.running || ac.watcher.runEnded
+}
+
 func removeAccount(slice []accounts.Account, elem accounts.Account) []accounts.Account {
 	for i := range slice {
 		if slice[i] == elem {
