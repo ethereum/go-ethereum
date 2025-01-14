@@ -33,7 +33,7 @@ func TestFeeTxWithTRC21Token(t *testing.T) {
 	// init genesis
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
 		mainAddr: {Balance: big.NewInt(0).Mul(big.NewInt(10000000000000), big.NewInt(10000000000000))},
-	})
+	}, 42000000)
 	transactOpts := bind.NewKeyedTransactor(mainKey)
 	// deploy payer swap SMC
 	trc21IssuerAddr, trc21Issuer, err := DeployTRC21Issuer(transactOpts, contractBackend, minApply)

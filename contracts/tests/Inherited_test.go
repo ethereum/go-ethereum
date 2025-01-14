@@ -2,15 +2,16 @@ package tests
 
 import (
 	"fmt"
+	"math/big"
+	"os"
+	"testing"
+
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"math/big"
-	"os"
-	"testing"
 )
 
 var (
@@ -27,7 +28,7 @@ func TestPriceFeed(t *testing.T) {
 	// init genesis
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
 		mainAddr: {Balance: big.NewInt(0).Mul(big.NewInt(10000000000000), big.NewInt(10000000000000))},
-	})
+	}, 42000000)
 	transactOpts := bind.NewKeyedTransactor(mainKey)
 	// deploy payer swap SMC
 	addr, contract, err := DeployMyInherited(transactOpts, contractBackend)
