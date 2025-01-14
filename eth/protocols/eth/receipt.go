@@ -17,64 +17,206 @@
 package eth
 
 import (
-	"errors"
+	"bytes"
+	"fmt"
 	"io"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type receiptForNetwork types.Receipt
+// Receipt is the eth/69 network encoding of a receipt.
+type Receipt struct {
+	TxType            byte
+	PostStateOrStatus []byte
+	GasUsed           uint64
+	Logs              rlp.RawValue
+}
 
-func (r *receiptForNetwork) DecodeRLP(s *rlp.Stream) error {
-	kind, size, err := s.Kind()
-	if err != nil {
+func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
+	if _, err := s.List(); err != nil {
 		return err
 	}
-	if kind != rlp.List {
-		return errors.New("invalid receipt")
+	txtype, err := s.Uint8()
+	if err != nil {
+		return fmt.Errorf("invalid txType: %w", err)
 	}
-	if size == 4 {
-		var rec = new(struct {
-			Type    byte
-			Status  uint64
-			GasUsed uint64
-			Logs    []*types.Log
-		})
-		if err := s.Decode(rec); err != nil {
-			return err
-		}
-		r.Type = rec.Type
-		r.Status = rec.Status
-		r.GasUsed = rec.GasUsed
-		r.Logs = rec.Logs
-	} else {
-		s.Decode(&r)
+	postStateOrStatus, err := s.Bytes()
+	if err != nil {
+		return fmt.Errorf("invalid postStateOrStatus: %w", err)
+	}
+	gasUsed, err := s.Uint64()
+	if err != nil {
+		return fmt.Errorf("invalid gasUsed: %w", err)
+	}
+	logs, err := s.Raw()
+	if err != nil {
+		return fmt.Errorf("invalid logs: %w", err)
+	}
+	*r = Receipt{
+		TxType:            txtype,
+		PostStateOrStatus: postStateOrStatus,
+		GasUsed:           gasUsed,
+		Logs:              logs,
 	}
 	return nil
 }
 
-func (r *receiptForNetwork) EncodeRLP(_w io.Writer) error {
-	data := &types.ReceiptForStorage{Status: r.Status, CumulativeGasUsed: r.GasUsed, Logs: r.Logs}
-	if r.Type == types.LegacyTxType {
-		return rlp.Encode(_w, data)
-	}
+func (r *Receipt) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
-	outerList := w.List()
-	w.Write([]byte{r.Type})
-	if r.Status == types.ReceiptStatusSuccessful {
-		w.Write([]byte{0x01})
-	} else {
-		w.Write([]byte{0x00})
-	}
+	list := w.List()
+	w.WriteUint64(uint64(r.TxType))
+	w.WriteBytes(r.PostStateOrStatus)
 	w.WriteUint64(r.GasUsed)
-	logList := w.List()
-	for _, log := range r.Logs {
-		if err := log.EncodeRLP(w); err != nil {
-			return err
+	w.Write(r.Logs)
+	w.ListEnd(list)
+	return w.Flush()
+}
+
+// bloom computes the bloom filter of the receipt.
+// Note this doesn't check the validity of encoding, and will produce an invalid filter
+// for invalid input. This is acceptable for the purpose of this function, which is
+// recomputing the receipt hash.
+func (r *Receipt) bloom(buffer *[6]byte) types.Bloom {
+	var b types.Bloom
+	logsIter, err := rlp.NewListIterator(r.Logs)
+	if err != nil {
+		return b
+	}
+	for logsIter.Next() {
+		log := logsIter.Value()
+		address, log, _ := rlp.SplitString(log)
+		b.AddWithBuffer(address, buffer)
+		topicsIter, err := rlp.NewListIterator(log)
+		if err != nil {
+			return b
+		}
+		for topicsIter.Next() {
+			b.AddWithBuffer(topicsIter.Value(), buffer)
 		}
 	}
-	w.ListEnd(logList)
-	w.ListEnd(outerList)
-	return w.Flush()
+	return b
+}
+
+// ReceiptList69 is the block receipt list as downloaded by eth/69.
+// This implements types.DerivableList for validation purposes.
+type ReceiptList69 struct {
+	buf   *receiptListBuffers
+	items []Receipt
+}
+
+type receiptListBuffers struct {
+	enc   rlp.EncoderBuffer
+	bloom [6]byte
+}
+
+// Len returns the length of the list.
+func (rl *ReceiptList69) Len() int {
+	return len(rl.items)
+}
+
+// EncodeIndex implements types.DerivableList.
+func (rl *ReceiptList69) EncodeIndex(i int, b *bytes.Buffer) {
+	if rl.buf == nil {
+		rl.buf = new(receiptListBuffers)
+	}
+
+	var (
+		r     = &rl.items[i]
+		bloom = r.bloom(&rl.buf.bloom)
+		w     = &rl.buf.enc
+	)
+	// encode receipt list: [postStateOrStatus, gasUsed, bloom, logs]
+	w.Reset(b)
+	l := w.List()
+	w.WriteBytes(r.PostStateOrStatus)
+	w.WriteUint64(r.GasUsed)
+	w.WriteBytes(bloom[:])
+	w.Write(r.Logs)
+	w.ListEnd(l)
+	if err := w.Flush(); err != nil {
+		return
+	}
+	// if this is a legacy transaction receipt, we are done.
+	if r.TxType == 0 {
+		return
+	}
+	// Otherwise it's a typed transaction receipt, which has the type prefix and
+	// the inner list as a byte-array: tx-type || rlp(list).
+	// Since b contains the correct inner list, we can reuse its content.
+	w.Reset(b)
+	w.WriteUint64(uint64(r.TxType))
+	w.WriteBytes(b.Bytes())
+	w.Flush()
+}
+
+// EncodeForDatabase
+func (rl *ReceiptList69) EncodeForDatabase() []byte {
+	if rl.buf == nil {
+		rl.buf = new(receiptListBuffers)
+	}
+
+	var (
+		r     = &rl.items[i]
+		bloom = r.bloom(&rl.buf.bloom)
+		w     = &rl.buf.enc
+	)
+	// encode receipt list: [postStateOrStatus, gasUsed, bloom, logs]
+	w.Reset(b)
+	l := w.List()
+	w.WriteBytes(r.PostStateOrStatus)
+	w.WriteUint64(r.GasUsed)
+	w.WriteBytes(bloom[:])
+	w.Write(r.Logs)
+	w.ListEnd(l)
+	if err := w.Flush(); err != nil {
+		return
+	}
+	// if this is a legacy transaction receipt, we are done.
+	if r.TxType == 0 {
+		return
+	}
+	// Otherwise it's a typed transaction receipt, which has the type prefix and
+	// the inner list as a byte-array: tx-type || rlp(list).
+	// Since b contains the correct inner list, we can reuse its content.
+	w.Reset(b)
+	w.WriteUint64(uint64(r.TxType))
+	w.WriteBytes(b.Bytes())
+	w.Flush()
+
+}
+
+func (rl *ReceiptList69) toReceipts() []*types.Receipt {
+	list := make([]*types.Receipt, len(rl.items))
+	for i, r := range rl.items {
+		list[i] = &types.Receipt{
+			Type:              r.TxType,
+			PostState:         r.PostStateOrStatus,
+			CumulativeGasUsed: r.GasUsed,
+		}
+		rlp.DecodeBytes(r.Logs, &list[i].Logs)
+	}
+	return list
+}
+
+// blockReceiptsToNetwork takes a slice of rlp-encoded receipts, and transactions,
+// and applies the type-encoding on the receipts (for non-legacy receipts).
+// e.g. for non-legacy receipts: receipt-data -> {tx-type || receipt-data}
+func blockReceiptsToNetwork(blockReceipts []byte, txs []*types.Transaction) []byte {
+	var (
+		out   bytes.Buffer
+		enc   = rlp.NewEncoderBuffer(&out)
+		it, _ = rlp.NewListIterator(blockReceipts)
+	)
+	outer := enc.List()
+	for i := 0; it.Next(); i++ {
+		content, _, _ := rlp.SplitList(it.Value())
+		receiptList := enc.List()
+		enc.Write([]byte{txs[i].Type()})
+		enc.Write(content)
+		enc.ListEnd(receiptList)
+	}
+	enc.ListEnd(outer)
+	enc.Flush()
+	return out.Bytes()
 }
