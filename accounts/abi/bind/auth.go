@@ -54,7 +54,7 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 }
 
 // NewKeyStoreTransactor is a utility method to easily create a transaction signer from
-// an decrypted key from a keystore
+// a decrypted key from a keystore.
 func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
 	signer := types.HomesteadSigner{}
 	return &TransactOpts{

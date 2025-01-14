@@ -371,7 +371,7 @@ func TestEventUnpackIndexed(t *testing.T) {
 	require.Equal(t, uint8(8), rst.Value2)
 }
 
-// TestEventIndexedWithArrayUnpack verifies that decoder will not overlow when static array is indexed input.
+// TestEventIndexedWithArrayUnpack verifies that decoder will not overflow when static array is indexed input.
 func TestEventIndexedWithArrayUnpack(t *testing.T) {
 	definition := `[{"name": "test", "type": "event", "inputs": [{"indexed": true, "name":"value1", "type":"uint8[2]"},{"indexed": false, "name":"value2", "type":"string"}]}]`
 	type testStruct struct {

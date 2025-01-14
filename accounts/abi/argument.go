@@ -41,7 +41,7 @@ type ArgumentMarshaling struct {
 	Indexed      bool
 }
 
-// UnmarshalJSON implements json.Unmarshaler interface
+// UnmarshalJSON implements json.Unmarshaler interface.
 func (argument *Argument) UnmarshalJSON(data []byte) error {
 	var arg ArgumentMarshaling
 	err := json.Unmarshal(data, &arg)
@@ -59,7 +59,7 @@ func (argument *Argument) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// NonIndexed returns the arguments with indexed arguments filtered out
+// NonIndexed returns the arguments with indexed arguments filtered out.
 func (arguments Arguments) NonIndexed() Arguments {
 	var ret []Argument
 	for _, arg := range arguments {
@@ -70,12 +70,12 @@ func (arguments Arguments) NonIndexed() Arguments {
 	return ret
 }
 
-// isTuple returns true for non-atomic constructs, like (uint,uint) or uint[]
+// isTuple returns true for non-atomic constructs, like (uint,uint) or uint[].
 func (arguments Arguments) isTuple() bool {
 	return len(arguments) > 1
 }
 
-// Unpack performs the operation hexdata -> Go format
+// Unpack performs the operation hexdata -> Go format.
 func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	if len(data) == 0 {
 		if len(arguments) != 0 {
@@ -100,7 +100,7 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	return arguments.unpackAtomic(v, marshalledValues[0])
 }
 
-// UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
+// UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value.
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
 	// Make sure map is not nil
 	if v == nil {
@@ -122,7 +122,7 @@ func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) 
 	return nil
 }
 
-// unpackAtomic unpacks ( hexdata -> go ) a single value
+// unpackAtomic unpacks ( hexdata -> go ) a single value.
 func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interface{}) error {
 	dst := reflect.ValueOf(v).Elem()
 	src := reflect.ValueOf(marshalledValues)
@@ -207,13 +207,13 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 	return retval, nil
 }
 
-// PackValues performs the operation Go format -> Hexdata
-// It is the semantic opposite of UnpackValues
+// PackValues performs the operation Go format -> Hexdata.
+// It is the semantic opposite of UnpackValues.
 func (arguments Arguments) PackValues(args []interface{}) ([]byte, error) {
 	return arguments.Pack(args...)
 }
 
-// Pack performs the operation Go format -> Hexdata
+// Pack performs the operation Go format -> Hexdata.
 func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	// Make sure arguments match up and pack them
 	abiArgs := arguments
