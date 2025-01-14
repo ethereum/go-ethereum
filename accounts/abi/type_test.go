@@ -366,3 +366,10 @@ func TestGetTypeSize(t *testing.T) {
 		}
 	}
 }
+
+func TestNewFixedBytesOver32(t *testing.T) {
+	_, err := NewType("bytes4096", "", nil)
+	if err == nil {
+		t.Errorf("fixed bytes with size over 32 is not spec'd")
+	}
+}
