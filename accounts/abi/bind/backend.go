@@ -75,7 +75,7 @@ type BlockHashContractCaller interface {
 	// CodeAtHash returns the code of the given account in the state at the specified block hash.
 	CodeAtHash(ctx context.Context, contract common.Address, blockHash common.Hash) ([]byte, error)
 
-	// CallContractAtHash executes an Ethereum contract all against the state at the specified block hash.
+	// CallContractAtHash executes an Ethereum contract call against the state at the specified block hash.
 	CallContractAtHash(ctx context.Context, call ethereum.CallMsg, blockHash common.Hash) ([]byte, error)
 }
 
