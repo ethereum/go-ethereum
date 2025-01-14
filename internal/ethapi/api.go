@@ -1382,19 +1382,19 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	return result, err
 }
 
-func newRevertError(res []byte) *revertError {
-	reason, errUnpack := abi.UnpackRevert(res)
+func newRevertError(result *core.ExecutionResult) *revertError {
+	reason, errUnpack := abi.UnpackRevert(result.Revert())
 	err := errors.New("execution reverted")
 	if errUnpack == nil {
 		err = fmt.Errorf("execution reverted: %v", reason)
 	}
 	return &revertError{
 		error:  err,
-		reason: hexutil.Encode(res),
+		reason: hexutil.Encode(result.Revert()),
 	}
 }
 
-// revertError is an API error that encompasses an EVM revertal with JSON error
+// revertError is an API error that encompassas an EVM revertal with JSON error
 // code and a binary data blob.
 type revertError struct {
 	error
@@ -1428,10 +1428,10 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, bl
 		return nil, err
 	}
 	// If the result contains a revert reason, try to unpack and return it.
-	if result.Failed() {
-		return nil, newRevertError(result.Return())
+	if len(result.Revert()) > 0 {
+		return nil, newRevertError(result)
 	}
-	return result.Return(), nil
+	return result.Return(), result.Err
 }
 
 type estimateGasError struct {
@@ -1546,23 +1546,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 		if failed {
 			if result != nil && result.Err != vm.ErrOutOfGas {
-				var revert string
 				if len(result.Revert()) > 0 {
-					ret, err := abi.UnpackRevert(result.Revert())
-					if err != nil {
-						revert = hexutil.Encode(result.Revert())
-					} else {
-						revert = ret
-					}
+					return 0, newRevertError(result)
 				}
-				return 0, estimateGasError{
-					error:  "always failing transaction",
-					vmerr:  result.Err,
-					revert: revert,
-				}
+				return 0, result.Err
 			}
 			// Otherwise, the specified gas cap is too low
-			return 0, estimateGasError{error: fmt.Sprintf("gas required exceeds allowance (%d)", cap)}
+			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
 	}
 	return hexutil.Uint64(hi), nil
