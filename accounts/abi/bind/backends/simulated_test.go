@@ -268,6 +268,16 @@ func TestSimulatedBackend_NonceAt(t *testing.T) {
 	if newNonce != nonce+uint64(1) {
 		t.Errorf("received incorrect nonce. expected 1, got %v", nonce)
 	}
+	// create some more blocks
+	sim.Commit()
+	// Check that we can get data for an older block/state
+	newNonce, err = sim.NonceAt(bgCtx, testAddr, big.NewInt(1))
+	if err != nil {
+		t.Fatalf("could not get nonce for test addr: %v", err)
+	}
+	if newNonce != nonce+uint64(1) {
+		t.Fatalf("received incorrect nonce. expected 1, got %v", nonce)
+	}
 }
 
 func TestSimulatedBackend_SendTransaction(t *testing.T) {
