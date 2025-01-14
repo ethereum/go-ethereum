@@ -39,11 +39,11 @@ func formatSliceString(kind reflect.Kind, sliceSize int) string {
 // type in t.
 func sliceTypeCheck(t Type, val reflect.Value) error {
 	if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
-		return typeErr(formatSliceString(t.getType().Kind(), t.Size), val.Type())
+		return typeErr(formatSliceString(t.GetType().Kind(), t.Size), val.Type())
 	}
 
 	if t.T == ArrayTy && val.Len() != t.Size {
-		return typeErr(formatSliceString(t.Elem.getType().Kind(), t.Size), formatSliceString(val.Type().Elem().Kind(), val.Len()))
+		return typeErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), formatSliceString(val.Type().Elem().Kind(), val.Len()))
 	}
 
 	if t.Elem.T == SliceTy || t.Elem.T == ArrayTy {
@@ -52,8 +52,8 @@ func sliceTypeCheck(t Type, val reflect.Value) error {
 		}
 	}
 
-	if elemKind := val.Type().Elem().Kind(); elemKind != t.Elem.getType().Kind() {
-		return typeErr(formatSliceString(t.Elem.getType().Kind(), t.Size), val.Type())
+	if elemKind := val.Type().Elem().Kind(); elemKind != t.Elem.GetType().Kind() {
+		return typeErr(formatSliceString(t.Elem.GetType().Kind(), t.Size), val.Type())
 	}
 	return nil
 }
@@ -66,10 +66,10 @@ func typeCheck(t Type, value reflect.Value) error {
 	}
 
 	// Check base type validity. Element types will be checked later on.
-	if t.getType().Kind() != value.Kind() {
-		return typeErr(t.getType().Kind(), value.Kind())
+	if t.GetType().Kind() != value.Kind() {
+		return typeErr(t.GetType().Kind(), value.Kind())
 	} else if t.T == FixedBytesTy && t.Size != value.Len() {
-		return typeErr(t.getType(), value.Type())
+		return typeErr(t.GetType(), value.Type())
 	} else {
 		return nil
 	}
