@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 )
 
@@ -167,6 +168,17 @@ func (abi *ABI) MethodById(sigdata []byte) (*Method, error) {
 		}
 	}
 	return nil, fmt.Errorf("no method with id: %#x", sigdata[:4])
+}
+
+// EventByID looks an event up by its topic hash in the
+// ABI and returns nil if none found.
+func (abi *ABI) EventByID(topic common.Hash) (*Event, error) {
+	for _, event := range abi.Events {
+		if bytes.Equal(event.Id().Bytes(), topic.Bytes()) {
+			return &event, nil
+		}
+	}
+	return nil, fmt.Errorf("no event with id: %#x", topic.Hex())
 }
 
 // revertSelector is a special function selector for revert reason unpacking.
