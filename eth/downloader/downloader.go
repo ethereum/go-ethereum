@@ -145,7 +145,7 @@ type Downloader struct {
 	cancelLock sync.RWMutex  // Lock to protect the cancel channel and peer in delivers
 
 	quitCh   chan struct{} // Quit channel to signal termination
-	quitLock sync.RWMutex  // Lock to prevent double closes
+	quitLock sync.Mutex    // Lock to prevent double closes
 
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run

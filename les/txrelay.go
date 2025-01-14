@@ -34,7 +34,7 @@ type LesTxRelay struct {
 	ps           *peerSet
 	peerList     []*peer
 	peerStartPos int
-	lock         sync.RWMutex
+	lock         sync.Mutex
 
 	reqDist *requestDistributor
 }
