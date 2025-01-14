@@ -51,6 +51,7 @@ require (
 	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08
 	github.com/go-yaml/yaml v2.1.0+incompatible
+	github.com/google/gofuzz v1.2.0
 	github.com/influxdata/influxdb-client-go/v2 v2.4.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/karalabe/usb v0.0.2

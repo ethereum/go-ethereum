@@ -33,7 +33,7 @@ import (
 
 const jsondata = `
 [
-	{ "type" : "function", "name" : "", "stateMutability" : "view" },
+	{ "type" : "function", "name" : ""},
 	{ "type" : "function", "name" : "balance", "stateMutability" : "view" },
 	{ "type" : "function", "name" : "send", "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
 	{ "type" : "function", "name" : "test", "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
@@ -88,7 +88,7 @@ var (
 )
 
 var methods = map[string]Method{
-	"":                    NewMethod("", "", Function, "view", false, false, nil, nil),
+	"":                    NewMethod("", "", Function, "", false, false, nil, nil),
 	"balance":             NewMethod("balance", "balance", Function, "view", false, false, nil, nil),
 	"send":                NewMethod("send", "send", Function, "", false, false, []Argument{{"amount", Uint256, false}}, nil),
 	"test":                NewMethod("test", "test", Function, "", false, false, []Argument{{"number", Uint32, false}}, nil),
