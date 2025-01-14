@@ -49,7 +49,7 @@ import (
 )
 
 // Scheme is the URI prefix for smartcard wallets.
-const Scheme = "pcsc"
+const Scheme = "keycard"
 
 // refreshCycle is the maximum time between wallet refreshes (if USB hotplug
 // notifications don't work).

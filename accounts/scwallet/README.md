@@ -25,13 +25,13 @@
   Start `geth` with the `console` command. You will notice the following warning:
 
   ```
-  WARN [04-09|16:58:38.898] Failed to open wallet                    url=pcsc://044def09                          err="smartcard: pairing password needed"
+  WARN [04-09|16:58:38.898] Failed to open wallet                    url=keycard://044def09                          err="smartcard: pairing password needed"
   ```
 
-  Write down the URL (`pcsc://044def09` in this example). Then ask `geth` to open the wallet:
+  Write down the URL (`keycard://044def09` in this example). Then ask `geth` to open the wallet:
 
   ```
-  > personal.openWallet("pcsc://044def09")
+  > personal.openWallet("keycard://044def09")
   Please enter the pairing password:
   ```
 
@@ -42,12 +42,12 @@
 
   ```
   > personal
-  WARN [04-09|17:02:07.330] Smartcard wallet account derivation failed url=pcsc://044def09 err="Unexpected response status Cla=0x80, Ins=0xd1, Sw=0x6985"
+  WARN [04-09|17:02:07.330] Smartcard wallet account derivation failed url=keycard://044def09 err="Unexpected response status Cla=0x80, Ins=0xd1, Sw=0x6985"
   {
     listAccounts: [],
     listWallets: [{
         status: "Empty, waiting for initialization",
-        url: "pcsc://044def09"
+        url: "keycard://044def09"
     }],
     ...
   }
@@ -56,7 +56,7 @@
   So the communication with the card is working, but there is no key associated with this wallet. Let's create it:
 
   ```
-  > personal.initializeWallet("pcsc://044def09")
+  > personal.initializeWallet("keycard://044def09")
   "tilt ... impact"
   ```
 
@@ -67,10 +67,10 @@
   [{
     accounts: [{
         address: "0x678b7cd55c61917defb23546a41803c5bfefbc7a",
-        url: "pcsc://044d/m/44'/60'/0'/0/0"
+        url: "keycard://044d/m/44'/60'/0'/0/0"
     }],
     status: "Online",
-    url: "pcsc://044def09"
+    url: "keycard://044def09"
   }]
   ```
 
@@ -84,14 +84,14 @@
 ```
   listWallets: [{
       status: "Online, can derive public keys",
-      url: "pcsc://a4d73015"
+      url: "keycard://a4d73015"
   }]
 ```
 
   3. Open the wallet, you will be prompted for your pairing password, then PIN:
 
 ```
-personal.openWallet("pcsc://a4d73015")
+personal.openWallet("keycard://a4d73015")
 ```
 
   4. Check that creation was successful by typing e.g. `personal`. Then use it like a regular wallet.
