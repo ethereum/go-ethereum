@@ -21,21 +21,19 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
-	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
-
-	"github.com/XinFinOrg/XDPoSChain/XDCx"
-
 	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
-	"github.com/XinFinOrg/XDPoSChain/eth/filters"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -92,7 +90,6 @@ type Backend interface {
 	OrderTxPoolContent() (map[common.Address]types.OrderTransactions, map[common.Address]types.OrderTransactions)
 	OrderStats() (pending int, queued int)
 	SendLendingTx(ctx context.Context, signedTx *types.LendingTransaction) error
-	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
@@ -108,10 +105,16 @@ type Backend interface {
 	AreTwoBlockSamePath(newBlock common.Hash, oldBlock common.Hash) bool
 	GetOrderNonce(address common.Hash) (uint64, error)
 
+	// This is copied from filters.Backend
 	// eth/filters needs to be initialized from this backend type, so methods needed by
 	// it must also be included here.
 	GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error)
-	filters.Backend
+	GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
+	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
+	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
+	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
+	BloomStatus() (uint64, uint64)
+	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 }
 
 func GetAPIs(apiBackend Backend, chainReader consensus.ChainReader) []rpc.API {
