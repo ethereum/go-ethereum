@@ -68,7 +68,7 @@ func waitWatcherStart(ks *KeyStore) bool {
 
 func waitForAccounts(wantAccounts []accounts.Account, ks *KeyStore) error {
 	var list []accounts.Account
-	for t0 := time.Now(); time.Since(t0) < 5*time.Second; time.Sleep(200 * time.Millisecond) {
+	for t0 := time.Now(); time.Since(t0) < 5*time.Second; time.Sleep(100 * time.Millisecond) {
 		list = ks.Accounts()
 		if reflect.DeepEqual(list, wantAccounts) {
 			// ks should have also received change notifications
@@ -350,7 +350,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 		return
 	}
 	// needed so that modTime of `file` is different to its current value after forceCopyFile
-	time.Sleep(time.Second)
+	os.Chtimes(file, time.Now().Add(-time.Second), time.Now().Add(-time.Second))
 
 	// Now replace file contents
 	if err := forceCopyFile(file, cachetestAccounts[1].URL.Path); err != nil {
@@ -366,7 +366,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	}
 
 	// needed so that modTime of `file` is different to its current value after forceCopyFile
-	time.Sleep(time.Second)
+	os.Chtimes(file, time.Now().Add(-time.Second), time.Now().Add(-time.Second))
 
 	// Now replace file contents again
 	if err := forceCopyFile(file, cachetestAccounts[2].URL.Path); err != nil {
@@ -382,7 +382,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	}
 
 	// needed so that modTime of `file` is different to its current value after os.WriteFile
-	time.Sleep(time.Second)
+	os.Chtimes(file, time.Now().Add(-time.Second), time.Now().Add(-time.Second))
 
 	// Now replace file contents with crap
 	if err := os.WriteFile(file, []byte("foo"), 0600); err != nil {
