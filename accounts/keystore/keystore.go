@@ -511,7 +511,5 @@ func (ks *KeyStore) isUpdating() bool {
 // zeroKey zeroes a private key in memory.
 func zeroKey(k *ecdsa.PrivateKey) {
 	b := k.D.Bits()
-	for i := range b {
-		b[i] = 0
-	}
+	clear(b)
 }
