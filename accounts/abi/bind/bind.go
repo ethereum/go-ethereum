@@ -79,7 +79,7 @@ func isKeyWord(arg string) bool {
 
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
-// enforces compile time type safety and naming convention opposed to having to
+// enforces compile time type safety and naming convention as opposed to having to
 // manually maintain hard coded strings that break on runtime.
 func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string, aliases map[string]string) (string, error) {
 	var (
