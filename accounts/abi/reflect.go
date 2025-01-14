@@ -28,11 +28,13 @@ import (
 // given type
 // e.g. turn
 // var fields []reflect.StructField
-// fields = append(fields, reflect.StructField{
-// 		Name: "X",
-//		Type: reflect.TypeOf(new(big.Int)),
-//		Tag:  reflect.StructTag("json:\"" + "x" + "\""),
-// }
+//
+//	fields = append(fields, reflect.StructField{
+//			Name: "X",
+//			Type: reflect.TypeOf(new(big.Int)),
+//			Tag:  reflect.StructTag("json:\"" + "x" + "\""),
+//	}
+//
 // into
 // type TupleT struct { X *big.Int }
 func ConvertType(in interface{}, proto interface{}) interface{} {
@@ -123,22 +125,15 @@ func set(dst, src reflect.Value) error {
 func setSlice(dst, src reflect.Value) error {
 	slice := reflect.MakeSlice(dst.Type(), src.Len(), src.Len())
 	for i := 0; i < src.Len(); i++ {
-		if src.Index(i).Kind() == reflect.Struct {
-			if err := set(slice.Index(i), src.Index(i)); err != nil {
-				return err
-			}
-		} else {
-			// e.g. [][32]uint8 to []common.Hash
-			if err := set(slice.Index(i), src.Index(i)); err != nil {
-				return err
-			}
+		if err := set(slice.Index(i), src.Index(i)); err != nil {
+			return err
 		}
 	}
 	if dst.CanSet() {
 		dst.Set(slice)
 		return nil
 	}
-	return errors.New("Cannot set slice, destination not settable")
+	return errors.New("cannot set slice, destination not settable")
 }
 
 func setArray(dst, src reflect.Value) error {
