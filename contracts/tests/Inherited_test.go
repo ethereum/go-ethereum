@@ -12,6 +12,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
 var (
@@ -26,9 +27,13 @@ func TestPriceFeed(t *testing.T) {
 
 	common.TIPXDCXCancellationFee = big.NewInt(0)
 	// init genesis
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{
-		mainAddr: {Balance: big.NewInt(0).Mul(big.NewInt(10000000000000), big.NewInt(10000000000000))},
-	}, 42000000)
+	contractBackend := backends.NewXDCSimulatedBackend(
+		core.GenesisAlloc{
+			mainAddr: {Balance: big.NewInt(0).Mul(big.NewInt(10000000000000), big.NewInt(10000000000000))},
+		},
+		42000000,
+		params.TestXDPoSMockChainConfig,
+	)
 	transactOpts := bind.NewKeyedTransactor(mainKey)
 	// deploy payer swap SMC
 	addr, contract, err := DeployMyInherited(transactOpts, contractBackend)

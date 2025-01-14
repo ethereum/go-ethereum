@@ -144,7 +144,7 @@ func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfi
 	return backend
 }
 
-// NewSimulatedBackend creates a new binding backend based on the given database
+// SimulOldNewSimulatedBackendatedBackend creates a new binding backend based on the given database
 // and uses a simulated blockchain for testing purposes.
 // A simulated backend always uses chainID 1337.
 func NewSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64) *SimulatedBackend {

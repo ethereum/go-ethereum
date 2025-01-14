@@ -143,8 +143,10 @@ func TestNewSimulatedBackend(t *testing.T) {
 
 func TestAdjustTime(t *testing.T) {
 	t.Parallel()
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{}, 10000000,
+	sim := NewXDCSimulatedBackend(
+		core.GenesisAlloc{},
+		10000000,
+		params.TestXDPoSMockChainConfig,
 	)
 	defer sim.Close()
 
@@ -223,8 +225,10 @@ func TestBalanceAt(t *testing.T) {
 
 func TestBlockByHash(t *testing.T) {
 	t.Parallel()
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{}, 10000000,
+	sim := NewXDCSimulatedBackend(
+		core.GenesisAlloc{},
+		10000000,
+		params.TestXDPoSMockChainConfig,
 	)
 	defer sim.Close()
 	bgCtx := context.Background()
@@ -245,8 +249,10 @@ func TestBlockByHash(t *testing.T) {
 
 func TestBlockByNumber(t *testing.T) {
 	t.Parallel()
-	sim := NewSimulatedBackend(
-		core.GenesisAlloc{}, 10000000,
+	sim := NewXDCSimulatedBackend(
+		core.GenesisAlloc{},
+		10000000,
+		params.TestXDPoSMockChainConfig,
 	)
 	defer sim.Close()
 	bgCtx := context.Background()
@@ -439,7 +445,11 @@ func TestEstimateGas(t *testing.T) {
 	// opts := bind.NewKeyedTransactor(key)
 	opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-	sim := NewXDCSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}}, 10000000, params.TestXDPoSMockChainConfig)
+	sim := NewXDCSimulatedBackend(
+		core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}},
+		10000000,
+		params.TestXDPoSMockChainConfig,
+	)
 	defer sim.Close()
 
 	parsed, _ := abi.JSON(strings.NewReader(contractAbi))
@@ -546,7 +556,11 @@ func TestEstimateGasWithPrice(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
-	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}}, 10000000)
+	sim := NewXDCSimulatedBackend(
+		core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}},
+		10000000,
+		params.TestXDPoSMockChainConfig,
+)
 	defer sim.Close()
 
 	recipient := common.HexToAddress("deadbeef")
@@ -893,9 +907,10 @@ func TestTransactionReceipt(t *testing.T) {
 
 func TestSuggestGasPrice(t *testing.T) {
 	t.Parallel()
-	sim := NewSimulatedBackend(
+	sim := NewXDCSimulatedBackend(
 		core.GenesisAlloc{},
 		10000000,
+		params.TestXDPoSMockChainConfig,
 	)
 	defer sim.Close()
 	bgCtx := context.Background()
