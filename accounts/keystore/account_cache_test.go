@@ -325,11 +325,7 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	t.Parallel()
 
 	// Create a temporary keystore to test with
-	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-updatedkeyfilecontents-test-%d-%d", os.Getpid(), rand.Int()))
-
-	// Create the directory
-	os.MkdirAll(dir, 0700)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
 
