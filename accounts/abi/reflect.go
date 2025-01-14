@@ -77,6 +77,8 @@ func set(dst, src reflect.Value, output Argument) error {
 	switch {
 	case dstType.AssignableTo(srcType):
 		dst.Set(src)
+	case dstType.Kind() == reflect.Slice && srcType.Kind() == reflect.Slice:
+		return setSlice(dst, src, output)
 	case dstType.Kind() == reflect.Interface:
 		dst.Set(src)
 	case dstType.Kind() == reflect.Ptr:
@@ -84,6 +86,19 @@ func set(dst, src reflect.Value, output Argument) error {
 	default:
 		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
 	}
+	return nil
+}
+
+// setSlice attempts to assign src to dst when slices are not assignable by default
+// e.g. src: [][]byte -> dst: [][15]byte
+func setSlice(dst, src reflect.Value, output Argument) error {
+	slice := reflect.MakeSlice(dst.Type(), src.Len(), src.Len())
+	for i := 0; i < src.Len(); i++ {
+		v := src.Index(i)
+		reflect.Copy(slice.Index(i), v)
+	}
+
+	dst.Set(slice)
 	return nil
 }
 
