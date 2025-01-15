@@ -325,8 +325,8 @@ func sanitizeStackTrace(input string) string {
 }
 
 // collectGoroutineStacks collects the stack traces of all currently-running go-routines, stripping information specific
-// to the current invocation (the parameter values in each function call, the specific goroutine number), and returning the stack traces as a map of
-// stack trace value to the number of occurances of that stack-trace.
+// to the current invocation (the parameter values in each function call, the specific go-routine id), and returning
+// the stack traces as a map of stack trace text to the number of occurances of that stack-trace.
 func collectGoroutineStacks() map[string]int {
 	buf := make([]byte, 1<<20)
 	stackLen := runtime.Stack(buf, true)
