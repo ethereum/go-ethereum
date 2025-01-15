@@ -308,7 +308,7 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 	}
 }
 
-func testInternal(t *testing.T) {
+func createAndCloseBackend() {
 	genesisData := types.GenesisAlloc{}
 	simulatedBackend := NewBackend(genesisData)
 	defer simulatedBackend.Close()
@@ -354,22 +354,26 @@ func collectGoroutineStacks() map[string]int {
 	return res
 }
 
-func leaks(firstGR map[string]int, secondGR map[string]int) []string {
+// leaks takes two sets of stack traces (returned as output from collectGoroutineStacks).  If any stack traces exist in
+// the second invocation which are not present in the first, they are considered "leaked" and returned in the output.
+func leaks(firstGRs map[string]int, secondGRs map[string]int) []string {
 	var res []string
-	for key, _ := range secondGR {
-		if _, ok := firstGR[key]; !ok {
+	for key, _ := range secondGRs {
+		if _, ok := firstGRs[key]; !ok {
 			res = append(res, key)
-		} else if secondGR[key] > firstGR[key] {
+		} else if secondGRs[key] > firstGRs[key] {
 			res = append(res, key)
 		}
 	}
 	return res
 }
 
+// TestCheckGoroutineLeak checks whether creation of a simulated backend leaks go-routines.  Any long-lived go-routines
+// spawned by global variables are not considered leaked.
 func TestCheckGoroutineLeak(t *testing.T) {
-	testInternal(t)
+	createAndCloseBackend()
 	stacks1 := collectGoroutineStacks()
-	testInternal(t)
+	createAndCloseBackend()
 	stacks2 := collectGoroutineStacks()
 
 	l := leaks(stacks1, stacks2)
