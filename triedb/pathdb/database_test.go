@@ -222,7 +222,12 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 		dirties = make(map[common.Hash]struct{})
 	)
 	for i := 0; i < 20; i++ {
-		switch rand.Intn(opLen) {
+		// Start with account creation always
+		op := createAccountOp
+		if i > 0 {
+			op = rand.Intn(opLen)
+		}
+		switch op {
 		case createAccountOp:
 			// account creation
 			addr := testrand.Address()
@@ -453,8 +458,8 @@ func TestDatabaseRecoverable(t *testing.T) {
 		// Initial state should be recoverable
 		{types.EmptyRootHash, true},
 
-		// Initial state should be recoverable
-		{common.Hash{}, true},
+		// common.Hash{} is not a valid state root for revert
+		{common.Hash{}, false},
 
 		// Layers below current disk layer are recoverable
 		{tester.roots[index-1], true},

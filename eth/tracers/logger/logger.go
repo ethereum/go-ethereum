@@ -19,6 +19,7 @@ package logger
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -350,7 +351,7 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	returnData := common.CopyBytes(l.output)
 	// Return data when successful and revert reason when reverted, otherwise empty.
 	returnVal := fmt.Sprintf("%x", returnData)
-	if failed && l.err != vm.ErrExecutionReverted {
+	if failed && !errors.Is(l.err, vm.ErrExecutionReverted) {
 		returnVal = ""
 	}
 	return json.Marshal(&ExecutionResult{
