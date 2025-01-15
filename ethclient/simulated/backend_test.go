@@ -314,31 +314,29 @@ func testInternal(t *testing.T) {
 	defer simulatedBackend.Close()
 }
 
-// removeParenthesesContent removes any content inside parentheses from the input string.
-func removeParenthesesContent(input string) string {
-	// Regular expression to match any content inside parentheses (including the parentheses)
+// sanitizeStackTrace removes any content inside parentheses (including the parentheses) from the input. it also
+// removes occurances of the specific go-routine id.
+func sanitizeStackTrace(input string) string {
 	re := regexp.MustCompile(`\([^)]*\)`)
-	// Replace all matches with an empty string
-	return re.ReplaceAllString(input, "")
+	sanitized := re.ReplaceAllString(input, "")
+	re2 := regexp.MustCompile(`goroutine [0-9*]*`)
+	sanitized = re2.ReplaceAllString(sanitized, "goroutine xxx")
+	return sanitized
 }
 
-// Collects and returns the stack traces of all goroutines as an array of strings,
-// with the first line of each stack trace removed.
+// collectGoroutineStacks collects the stack traces of all currently-running go-routines, stripping information specific
+// to the current invocation (the parameter values in each function call, the specific goroutine number), and returning the stack traces as a map of
+// stack trace value to the number of occurances of that stack-trace.
 func collectGoroutineStacks() map[string]int {
-	// Allocate a buffer large enough to hold all the stack frames
-	buf := make([]byte, 1<<20) // 1MB buffer, adjust size if needed
-
-	// Capture stack traces for all goroutines
+	buf := make([]byte, 1<<20)
 	stackLen := runtime.Stack(buf, true)
 
-	// Convert the stack trace buffer to a string and split it into separate goroutine stacks
+	// split all stack-traces by go-routine
 	stacks := strings.Split(string(buf[:stackLen]), "\n\n")
 
 	res := make(map[string]int)
 
-	// Remove the first line of each stack trace
 	for i := range stacks {
-		// Split the stack trace into lines
 		lines := strings.Split(stacks[i], "\n")
 		combinedLines := strings.Join(lines[1:], "\n")
 
@@ -347,18 +345,12 @@ func collectGoroutineStacks() map[string]int {
 			continue
 		}
 
-		combinedLines = removeParenthesesContent(combinedLines)
+		// remove func call offset and variable values.
+		combinedLines = sanitizeStackTrace(combinedLines)
 
-		// If the stack trace has more than one line, strip the first line
-		if len(lines) > 1 {
-			res[combinedLines] = res[combinedLines] + 1
-		} else {
-			// If the stack trace only has one line, just leave it empty or blank
-			res[""] = res[""] + 1
-		}
+		res[combinedLines] = res[combinedLines] + 1
 	}
 
-	// Return the modified stack traces as an array of strings
 	return res
 }
 
