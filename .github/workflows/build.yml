@@ -10,6 +10,7 @@ on:
         type: boolean
         default: false
   pull_request:
+    branches: [master]
     types:
       - closed
 
