@@ -382,11 +382,12 @@ func TestCheckGoroutineLeak(t *testing.T) {
 
 	l := leaks(stacks1, stacks2)
 	if len(l) > 0 {
+		var leakedGRs string
 		fmt.Println(len(l))
 		for _, leak := range l {
-			fmt.Printf("leak is:\n%s\n\n", leak)
+			leakedGRs = leakedGRs + fmt.Sprintf("%s\n\n", leak)
 		}
 
-		t.Fatalf("mismatched num goroutines (leak)")
+		t.Fatalf("leaked goroutines:\n%s", leakedGRs)
 	}
 }
