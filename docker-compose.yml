@@ -1,0 +1,50 @@
+name: limechain-devops-task
+
+services:
+  go-ethereum:
+    container_name: "go-ethereum"
+    image: "861276097334.dkr.ecr.eu-central-1.amazonaws.com/limechain-devops-task/go-ethereum:1"
+    ### keep if testing build locally
+    # build:
+    #   dockerfile: Dockerfile
+    #   context: .
+
+    ### override default 'geth' entrypoint to use a local devnet
+    ### with persistent blockchain and account data (--datadir flag)
+    entrypoint: "geth --dev --datadir /root/.ethereum --http --http.api eth,web3,net --http.addr 0.0.0.0 --http.corsdomain 'https://remix.ethereum.org'"
+    volumes:
+      - "./geth-data:/root/.ethereum"
+
+    ### keep to pass any env vars if necessary
+    # env_file:
+    #   - ".env"
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "30303:30303"
+      - "30303:30303/udp"
+    networks:
+      go-ethereum:
+        ipv4_address: 172.25.0.2
+    healthcheck:
+      ### test whether a tcp connection on the RPC port is successful
+      test: ["CMD-SHELL", "nc -w 1 -v localhost 8545 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        reservations:
+          cpus: "1"
+          memory: "1G"
+        limits:
+          cpus: "2"
+          memory: "2G"
+    restart: "on-failure:3"
+
+networks:
+  go-ethereum:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/24

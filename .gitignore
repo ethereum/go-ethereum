@@ -47,3 +47,6 @@ tests/spec-tests/
 .terraform
 terraform.tfstate*
 .terraform.tfstate.lock.info
+
+.env
+geth-data/
