@@ -24,9 +24,11 @@ Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
+	lint           -- runs certain pre-selected linters
+	check_tidy     -- verifies that everything is 'go mod tidy'-ed
+
 	install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
 	test       [ -coverage ] [ packages... ]                                                    -- runs the tests
-	lint                                                                                        -- runs certain pre-selected linters
 	importkeys                                                                                  -- imports signing keys from env
 	xgo        [ -alltools ] [ options ]                                                        -- cross builds according to options
 
@@ -89,6 +91,8 @@ func main() {
 		doTest(os.Args[2:])
 	case "lint":
 		doLint(os.Args[2:])
+	case "check_tidy":
+		doCheckTidy()
 	case "xgo":
 		doXgo(os.Args[2:])
 	default:
@@ -244,6 +248,26 @@ func doTest(cmdline []string) {
 
 	gotest.Args = append(gotest.Args, packages...)
 	build.MustRun(gotest)
+}
+
+// doCheckTidy assets that the Go modules files are tidied already.
+func doCheckTidy() {
+	targets := []string{"go.mod", "go.sum"}
+
+	hashes, err := build.HashFiles(targets)
+	if err != nil {
+		log.Fatalf("failed to hash go.mod/go.sum: %v", err)
+	}
+	build.MustRun(new(build.GoToolchain).Go("mod", "tidy"))
+
+	tidied, err := build.HashFiles(targets)
+	if err != nil {
+		log.Fatalf("failed to rehash go.mod/go.sum: %v", err)
+	}
+	if updates := build.DiffHashes(hashes, tidied); len(updates) > 0 {
+		log.Fatalf("files changed on running 'go mod tidy': %v", updates)
+	}
+	fmt.Println("No untidy module files detected.")
 }
 
 // doLint runs golangci-lint on requested packages.
