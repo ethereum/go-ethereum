@@ -1,0 +1,96 @@
+name: Build and Push go-ethereum Docker image to ECR
+
+on:
+  # keep for manual trigger if needed
+  workflow_dispatch:
+    inputs:
+      create_tag:
+        description: "Create and push a new tag?"
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+    types:
+      - closed
+
+env:
+  AWS_ACCOUNT_ID: "861276097334"
+  AWS_REGION: "eu-central-1"
+  ECR_REPO_NAME: "limechain-devops-task/go-ethereum"
+  IAM_OIDC_ROLE_NAME: "go-ethereum-github-actions-role"
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  build-and-push:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu:22.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.IAM_OIDC_ROLE_NAME }}
+          role-session-name: go-ethereum-github-actions
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        run: |
+          FULL_ECR_URL=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${FULL_ECR_URL}
+
+      - name: Get latest image tag
+        id: get-latest-tag
+        run: |
+          LATEST_TAG=$(aws ecr describe-images \
+            --repository-name ${{ env.ECR_REPO_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'sort_by(imageDetails,&imagePushedAt)[-1].imageTags[0]' \
+            --output text)
+          if [[ "$LATEST_TAG" == "None" ]]; then
+            NEW_TAG=1
+          else
+            NEW_TAG=$((LATEST_TAG + 1))
+          fi
+          echo "new-tag=${NEW_TAG}" >> $GITHUB_OUTPUT
+
+      # - name: Build and push Docker Image
+      #   run: |
+      #     FULL_ECR_URL="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}"
+      #     NEW_TAG="${{ steps.get-latest-tag.outputs.new-tag }}"
+
+      #     docker build \
+      #       --build-arg VAR="VALUE" \
+      #       -t "${FULL_ECR_URL}:${NEW_TAG}" \
+      #       -f Dockerfile .
+
+      #     docker push "${FULL_ECR_URL}:${NEW_TAG}"
+
+      - name: Notify PR of New Tag
+        if: ${{ inputs.create_tag }} == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          NEW_TAG=v${{ steps.get-latest-tag.outputs.new-tag }}
+          git tag -a $NEW_TAG -m "New tag: $NEW_TAG"
+          git push origin $NEW_TAG
+
+          PR_NUMBER=$(gh pr list --head ${{ github.ref_name }} --state open --json number --jq '.[0].number')
+          if [[ -n "$PR_NUMBER" ]]; then
+            echo ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
+            gh pr comment $PR_NUMBER -b ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
+          else
+            echo ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
+            echo "No open PR found for branch ${{ inputs.branch }}."
+          fi
