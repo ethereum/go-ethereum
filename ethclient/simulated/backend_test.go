@@ -317,7 +317,7 @@ func createAndCloseSimBackend() {
 // sanitizeStackTrace removes any content inside parentheses (including the parentheses) from the input. it also
 // removes occurances of the specific go-routine id.
 func sanitizeStackTrace(input string) string {
-	re := regexp.MustCompile(`\([^)]*\)`)
+	re := regexp.MustCompile(`\(.*\)`)
 	sanitized := re.ReplaceAllString(input, "")
 	re2 := regexp.MustCompile(`goroutine [0-9*]*`)
 	sanitized = re2.ReplaceAllString(sanitized, "goroutine xxx")
