@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -313,6 +314,14 @@ func testInternal(t *testing.T) {
 	defer simulatedBackend.Close()
 }
 
+// removeParenthesesContent removes any content inside parentheses from the input string.
+func removeParenthesesContent(input string) string {
+	// Regular expression to match any content inside parentheses (including the parentheses)
+	re := regexp.MustCompile(`\([^)]*\)`)
+	// Replace all matches with an empty string
+	return re.ReplaceAllString(input, "")
+}
+
 // Collects and returns the stack traces of all goroutines as an array of strings,
 // with the first line of each stack trace removed.
 func collectGoroutineStacks() map[string]int {
@@ -337,6 +346,8 @@ func collectGoroutineStacks() map[string]int {
 		if strings.Contains(combinedLines, "collectGoroutineStacks") {
 			continue
 		}
+
+		combinedLines = removeParenthesesContent(combinedLines)
 
 		// If the stack trace has more than one line, strip the first line
 		if len(lines) > 1 {
@@ -375,6 +386,7 @@ func TestCheckGoroutineLeak(t *testing.T) {
 		for _, leak := range l {
 			fmt.Printf("leak is:\n%s\n\n", leak)
 		}
+
 		t.Fatalf("mismatched num goroutines (leak)")
 	}
 }
