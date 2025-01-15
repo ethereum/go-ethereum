@@ -1,11 +1,11 @@
 terraform {
-  # backend "s3" {
-  #   bucket         = "limechain-devops-task-tf-state"
-  #   key            = "backend/terraform.tfstate"
-  #   region         = "eu-central-1"
-  #   dynamodb_table = "terraform-lock-table"
-  #   encrypt        = true
-  # }
+  backend "s3" {
+    bucket         = "limechain-devops-task-tf-state"
+    key            = "backend/terraform.tfstate"
+    region         = "eu-central-1"
+    dynamodb_table = "terraform-lock-table"
+    encrypt        = true
+  }
 
   required_providers {
     aws = {
