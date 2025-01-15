@@ -19,6 +19,7 @@ env:
   AWS_REGION: "eu-central-1"
   ECR_REPO_NAME: "limechain-devops-task/go-ethereum"
   IAM_OIDC_ROLE_NAME: "go-ethereum-github-actions-role"
+  GH_TOKEN: ${{ github.token }}
 
 permissions:
   id-token: write
