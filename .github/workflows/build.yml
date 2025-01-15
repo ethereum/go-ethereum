@@ -8,7 +8,6 @@ on:
         description: "Create and push a new tag?"
         required: false
         type: boolean
-        default: false
   pull_request:
     branches: [master]
     types:
@@ -19,6 +18,7 @@ env:
   AWS_REGION: "eu-central-1"
   ECR_REPO_NAME: "limechain-devops-task/go-ethereum"
   IAM_OIDC_ROLE_NAME: "go-ethereum-github-actions-role"
+  GH_TOKEN: ${{ github.token }}
 
 permissions:
   id-token: write
@@ -27,8 +27,8 @@ permissions:
 
 jobs:
   build-and-push:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
-    runs-on: ubuntu:22.04
+    # if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout Code
@@ -36,6 +36,12 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
+
+      ### NOT using dependency caches, since using GitHub-hosted runners. More info at the URL below:
+      ### https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/caching-dependencies-to-speed-up-workflows#about-caching-workflow-dependencies
+      # - uses: actions/setup-go@v5
+      #   with:
+      #     go-version-file: "go.mod"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -65,20 +71,29 @@ jobs:
           fi
           echo "new-tag=${NEW_TAG}" >> $GITHUB_OUTPUT
 
-      # - name: Build and push Docker Image
-      #   run: |
-      #     FULL_ECR_URL="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}"
-      #     NEW_TAG="${{ steps.get-latest-tag.outputs.new-tag }}"
+      - name: Build and push Docker Image
+        env:
+          COMMIT: ${{ github.sha }}
+        run: |
+          FULL_ECR_URL="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}"
+          NEW_TAG="${{ steps.get-latest-tag.outputs.new-tag }}"
 
-      #     docker build \
-      #       --build-arg VAR="VALUE" \
-      #       -t "${FULL_ECR_URL}:${NEW_TAG}" \
-      #       -f Dockerfile .
+          # define build args for the image
+          COMMIT=${COMMIT:0:7}
+          VERSION=$NEW_TAG
+          BUILDNUM=$(git rev-list --count HEAD)
 
-      #     docker push "${FULL_ECR_URL}:${NEW_TAG}"
+          docker build \
+            --build-arg COMMIT="${COMMIT}" \
+            --build-arg VERSION="${VERSION}" \
+            --build-arg BUILDNUM="${BUILDNUM}" \
+            -t "${FULL_ECR_URL}:${NEW_TAG}" \
+            -f Dockerfile .
 
-      - name: Notify PR of New Tag
-        if: ${{ inputs.create_tag }} == 'true'
+          docker push "${FULL_ECR_URL}:${NEW_TAG}"
+
+      - name: Create new tag and notify PR
+        if: ${{ inputs.create_tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

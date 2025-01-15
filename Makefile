@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth all test lint fmt clean devtools help
+.PHONY: geth all test lint fmt clean devtools docker-login help
 
 GOBIN = ./build/bin
 GO ?= latest
@@ -46,6 +46,10 @@ devtools:
 	env GOBIN= go install ./cmd/abigen
 	@type "solc" 2> /dev/null || echo 'Please install solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
+
+#? docker-login: Login to the ECR repo containing the go-ethereum image.
+docker-login:
+	aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 861276097334.dkr.ecr.eu-central-1.amazonaws.com
 
 #? help: Get more info on make commands.
 help: Makefile
