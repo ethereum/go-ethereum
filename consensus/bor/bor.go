@@ -832,6 +832,7 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 	}
 
 	if IsSprintStart(headerNumber, c.config.CalculateSprint(headerNumber)) {
+		start := time.Now()
 		ctx := context.Background()
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
 		// check and commit span
@@ -848,6 +849,8 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 				return
 			}
 		}
+
+		state.BorConsensusTime = time.Since(start)
 	}
 
 	if err = c.changeContractCodeIfNeeded(headerNumber, state); err != nil {
