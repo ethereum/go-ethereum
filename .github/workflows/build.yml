@@ -67,12 +67,14 @@ jobs:
           echo "new-tag=${NEW_TAG}" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker Image
+        env:
+          COMMIT: ${{ github.sha }}
         run: |
           FULL_ECR_URL="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}"
           NEW_TAG="${{ steps.get-latest-tag.outputs.new-tag }}"
 
           # define build args for the image
-          COMMIT=${{ github.sha }}
+          COMMIT=${COMMIT:0:7}
           VERSION=$NEW_TAG
           BUILDNUM=$(git rev-list --count HEAD)
 
