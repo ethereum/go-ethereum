@@ -66,17 +66,24 @@ jobs:
           fi
           echo "new-tag=${NEW_TAG}" >> $GITHUB_OUTPUT
 
-      # - name: Build and push Docker Image
-      #   run: |
-      #     FULL_ECR_URL="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}"
-      #     NEW_TAG="${{ steps.get-latest-tag.outputs.new-tag }}"
+      - name: Build and push Docker Image
+        run: |
+          FULL_ECR_URL="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}"
+          NEW_TAG="${{ steps.get-latest-tag.outputs.new-tag }}"
 
-      #     docker build \
-      #       --build-arg VAR="VALUE" \
-      #       -t "${FULL_ECR_URL}:${NEW_TAG}" \
-      #       -f Dockerfile .
+          # define build args for the image
+          COMMIT=${{ github.sha }}
+          VERSION=$NEW_TAG
+          BUILDNUM=$(git rev-list --count HEAD)
 
-      #     docker push "${FULL_ECR_URL}:${NEW_TAG}"
+          docker build \
+            --build-arg COMMIT="${COMMIT}" \
+            --build-arg VERSION="${VERSION}" \
+            --build-arg BUILDNUM="${BUILDNUM}" \
+            -t "${FULL_ECR_URL}:${NEW_TAG}" \
+            -f Dockerfile .
+
+          docker push "${FULL_ECR_URL}:${NEW_TAG}"
 
       - name: Notify PR of New Tag
         if: ${{ inputs.create_tag }} == 'true'
