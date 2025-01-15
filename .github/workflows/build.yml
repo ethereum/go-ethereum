@@ -8,7 +8,6 @@ on:
         description: "Create and push a new tag?"
         required: false
         type: boolean
-        default: false
   pull_request:
     branches: [master]
     types:
@@ -37,6 +36,12 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
+
+      ### NOT using dependency caches, since using GitHub-hosted runners. More info at the URL below:
+      ### https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/caching-dependencies-to-speed-up-workflows#about-caching-workflow-dependencies
+      # - uses: actions/setup-go@v5
+      #   with:
+      #     go-version-file: "go.mod"
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -87,8 +92,8 @@ jobs:
 
           docker push "${FULL_ECR_URL}:${NEW_TAG}"
 
-      - name: Notify PR of New Tag
-        if: ${{ inputs.create_tag }} == 'true'
+      - name: Create new tag and notify PR
+        if: ${{ inputs.create_tag }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
