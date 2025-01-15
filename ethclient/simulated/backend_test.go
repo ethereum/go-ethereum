@@ -380,7 +380,6 @@ func TestCheckGoroutineLeak(t *testing.T) {
 	l := leaks(stacks1, stacks2)
 	if len(l) > 0 {
 		var leakedGRs string
-		fmt.Println(len(l))
 		for _, leak := range l {
 			leakedGRs = leakedGRs + fmt.Sprintf("%s\n\n", leak)
 		}
