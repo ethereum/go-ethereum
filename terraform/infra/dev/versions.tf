@@ -12,11 +12,15 @@ terraform {
       source  = "hashicorp/aws"
       version = "5.83.1"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "4.0.6"
+    }
   }
 
   required_version = ">= 1.9.8"
 }
 
 provider "aws" {
-  region = "eu-central-1"
+  region = var.region
 }
