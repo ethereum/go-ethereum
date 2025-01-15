@@ -8,10 +8,10 @@ services:
     # build:
     #   dockerfile: Dockerfile
     #   context: .
-    ### override default 'geth' entrypoint
-    entrypoint: "geth --dev --http --http.api eth,web3,net --http.corsdomain 'https://remix.ethereum.org'"
+    ### override default 'geth' entrypoint to use a local devnet
+    entrypoint: "geth --dev --datadir /root/.ethereum --http --http.api eth,web3,net --http.addr 0.0.0.0 --http.corsdomain 'https://remix.ethereum.org'"
     volumes:
-      - "go-ethereum_data:/go-ethereum"
+      - "./geth-data:/root/.ethereum"
     ### keep to pass any env vars if necessary
     # env_file:
     #   - ".env"
@@ -31,6 +31,3 @@ networks:
     ipam:
       config:
         - subnet: 172.25.0.0/24
-
-volumes:
-  go-ethereum_data:

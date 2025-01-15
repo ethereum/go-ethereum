@@ -49,3 +49,4 @@ terraform.tfstate*
 .terraform.tfstate.lock.info
 
 .env
+geth-data/
