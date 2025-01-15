@@ -43,3 +43,5 @@ profile.cov
 .vscode
 
 tests/spec-tests/
+.terraform
+terraform.tfstate*
