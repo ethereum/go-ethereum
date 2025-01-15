@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   build-and-push:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    # if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
     runs-on: ubuntu:22.04
 
     steps:
