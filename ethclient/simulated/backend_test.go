@@ -354,8 +354,9 @@ func collectGoroutineStacks() map[string]int {
 	return res
 }
 
-// leaks takes two sets of stack traces (returned as output from collectGoroutineStacks).  If any stack traces exist in
-// the second invocation which are not present in the first, they are considered "leaked" and returned in the output.
+// leaks takes two sets of stack traces (returned as output from collectGoroutineStacks).  If any stack traces exist
+// after the second invocation which are not present in the first, they are considered "leaked" and returned in the
+// output.
 func leaks(firstGRs map[string]int, secondGRs map[string]int) []string {
 	var res []string
 	for key, _ := range secondGRs {
