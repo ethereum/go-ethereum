@@ -43,3 +43,7 @@ profile.cov
 .vscode
 
 tests/spec-tests/
+
+.terraform
+terraform.tfstate*
+.terraform.tfstate.lock.info
