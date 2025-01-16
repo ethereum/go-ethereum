@@ -113,7 +113,7 @@ jobs:
         id: my-script
         with:
           script: |
-            github.rest.issues.get({
+            github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
