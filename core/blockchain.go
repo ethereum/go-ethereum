@@ -82,6 +82,8 @@ var (
 	snapshotStorageReadTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
 
+	borConsensusTime = metrics.NewRegisteredTimer("chain/bor/consensus", nil)
+
 	blockImportTimer  = metrics.NewRegisteredMeter("chain/imports", nil)
 	triedbCommitTimer = metrics.NewRegisteredTimer("chain/triedb/commits", nil)
 
@@ -2355,7 +2357,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
 		}
 		// BOR
-		ptime := time.Since(pstart) - vtime
+		ptime := time.Since(pstart) - vtime - statedb.BorConsensusTime
 
 		proctime := time.Since(start) // processing + validation
 
@@ -2374,7 +2376,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
 		blockExecutionTimer.Update(ptime - trieRead)                    // The time spent on EVM processing
 		blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
-
+		borConsensusTime.Update(statedb.BorConsensusTime)               // The time spent on bor consensus (span + state sync)
 		// Write the block to the chain and get the status.
 		var (
 			wstart = time.Now()
