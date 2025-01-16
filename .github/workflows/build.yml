@@ -27,9 +27,10 @@ permissions:
 
 jobs:
   build-and-push:
-    # if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build'))
     runs-on: ubuntu-22.04
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -93,7 +94,9 @@ jobs:
           docker push "${FULL_ECR_URL}:${NEW_TAG}"
 
       - name: Create new tag and notify PR
-        if: ${{ inputs.create_tag }}
+        if: >
+          inputs.create_tag == true ||
+          (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build'))
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
