@@ -27,17 +27,16 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/goleak"
-
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/leak"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
+	"go.uber.org/goleak"
 )
 
 func TestSimulatedBackend(t *testing.T) {
@@ -46,8 +45,8 @@ func TestSimulatedBackend(t *testing.T) {
 
 	key, _ := crypto.GenerateKey() // nolint: gosec
 	auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-	genAlloc := make(core.GenesisAlloc)
-	genAlloc[auth.From] = core.GenesisAccount{Balance: big.NewInt(9223372036854775807)}
+	genAlloc := make(types.GenesisAlloc)
+	genAlloc[auth.From] = types.Account{Balance: big.NewInt(9223372036854775807)}
 
 	sim := NewSimulatedBackend(genAlloc, gasLimit)
 	defer sim.Close()
@@ -125,7 +124,7 @@ var expectedReturn = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
 func simTestBackend(testAddr common.Address) *SimulatedBackend {
 	return NewSimulatedBackend(
-		core.GenesisAlloc{
+		types.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
 		}, 10000000,
 	)
@@ -150,7 +149,7 @@ func TestNewSimulatedBackend(t *testing.T) {
 	stateDB, _ := sim.blockchain.State()
 
 	bal := stateDB.GetBalance(testAddr)
-	if bal.Cmp(expectedBal) != 0 {
+	if bal.Cmp(uint256.NewInt(expectedBal.Uint64())) != 0 {
 		t.Errorf("expected balance for test address not received. expected: %v actual: %v", expectedBal, bal)
 	}
 }
@@ -158,7 +157,7 @@ func TestNewSimulatedBackend(t *testing.T) {
 func TestAdjustTime(t *testing.T) {
 	t.Parallel()
 	sim := NewSimulatedBackend(
-		core.GenesisAlloc{}, 10000000,
+		types.GenesisAlloc{}, 10000000,
 	)
 	defer sim.Close()
 
@@ -230,7 +229,7 @@ func TestNewAdjustTimeFail(t *testing.T) {
 func TestBalanceAt(t *testing.T) {
 	t.Parallel()
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	expectedBal := big.NewInt(10000000000000000)
+	expectedBal := uint256.NewInt(10000000000000000)
 
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
@@ -250,7 +249,7 @@ func TestBalanceAt(t *testing.T) {
 func TestBlockByHash(t *testing.T) {
 	t.Parallel()
 	sim := NewSimulatedBackend(
-		core.GenesisAlloc{}, 10000000,
+		types.GenesisAlloc{}, 10000000,
 	)
 	defer sim.Close()
 
@@ -274,7 +273,7 @@ func TestBlockByHash(t *testing.T) {
 func TestBlockByNumber(t *testing.T) {
 	t.Parallel()
 	sim := NewSimulatedBackend(
-		core.GenesisAlloc{}, 10000000,
+		types.GenesisAlloc{}, 10000000,
 	)
 	defer sim.Close()
 
@@ -412,7 +411,7 @@ func TestTransactionByHash(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 
 	sim := NewSimulatedBackend(
-		core.GenesisAlloc{
+		types.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
 		}, 10000000,
 	)
@@ -488,7 +487,7 @@ func TestEstimateGas(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}}, 10000000)
+	sim := NewSimulatedBackend(types.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}}, 10000000)
 	defer sim.Close()
 
 	parsed, _ := abi.JSON(strings.NewReader(contractAbi))
@@ -599,7 +598,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
-	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}}, 10000000)
+	sim := NewSimulatedBackend(types.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}}, 10000000)
 	defer sim.Close()
 
 	recipient := common.HexToAddress("deadbeef")
@@ -1002,7 +1001,7 @@ func TestTransactionReceipt(t *testing.T) {
 func TestSuggestGasPrice(t *testing.T) {
 	t.Parallel()
 	sim := NewSimulatedBackend(
-		core.GenesisAlloc{},
+		types.GenesisAlloc{},
 		10000000,
 	)
 	defer sim.Close()

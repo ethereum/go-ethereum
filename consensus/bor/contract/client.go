@@ -119,13 +119,13 @@ func (gc *GenesisContractsClient) LastStateId(state *state.StateDB, number uint6
 	toAddress := common.HexToAddress(gc.StateReceiverContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
 
-	// Do a call with state so that we can fetch the last state ID from a given (incoming)
-	// state instead of local(canonical) chain.
-	result, err := gc.ethAPI.Call(context.Background(), ethapi.TransactionArgs{
+	// BOR: Do a 'CallWithState' so that we can fetch the last state ID from a given (incoming)
+	// state instead of local(canonical) chain's state.
+	result, err := gc.ethAPI.CallWithState(context.Background(), ethapi.TransactionArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, &rpc.BlockNumberOrHash{BlockNumber: &blockNr, BlockHash: &hash}, nil, nil)
+	}, &rpc.BlockNumberOrHash{BlockNumber: &blockNr, BlockHash: &hash}, state, nil, nil)
 	if err != nil {
 		return nil, err
 	}

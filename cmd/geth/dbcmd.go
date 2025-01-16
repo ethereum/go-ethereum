@@ -33,22 +33,35 @@ import (
 	"github.com/ethereum/go-ethereum/console/prompt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 )
 
 var (
+	removeStateDataFlag = &cli.BoolFlag{
+		Name:  "remove.state",
+		Usage: "If set, selects the state data for removal",
+	}
+	removeChainDataFlag = &cli.BoolFlag{
+		Name:  "remove.chain",
+		Usage: "If set, selects the state data for removal",
+	}
+
 	removedbCommand = &cli.Command{
 		Action:    removeDB,
 		Name:      "removedb",
 		Usage:     "Remove blockchain and state databases",
 		ArgsUsage: "",
-		Flags:     utils.DatabaseFlags,
+		Flags: flags.Merge(utils.DatabaseFlags,
+			[]cli.Flag{removeStateDataFlag, removeChainDataFlag}),
 		Description: `
 Remove blockchain and state databases`,
 	}
@@ -69,6 +82,7 @@ Remove blockchain and state databases`,
 			dbExportCmd,
 			dbMetadataCmd,
 			dbCheckStateContentCmd,
+			dbInspectHistoryCmd,
 		},
 	}
 	dbInspectCmd = &cli.Command{
@@ -193,71 +207,118 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "Shows metadata about the chain status.",
 	}
+	dbInspectHistoryCmd = &cli.Command{
+		Action:    inspectHistory,
+		Name:      "inspect-history",
+		Usage:     "Inspect the state history within block range",
+		ArgsUsage: "<address> [OPTIONAL <storage-slot>]",
+		Flags: flags.Merge([]cli.Flag{
+			utils.SyncModeFlag,
+			&cli.Uint64Flag{
+				Name:  "start",
+				Usage: "block number of the range start, zero means earliest history",
+			},
+			&cli.Uint64Flag{
+				Name:  "end",
+				Usage: "block number of the range end(included), zero means latest history",
+			},
+			&cli.BoolFlag{
+				Name:  "raw",
+				Usage: "display the decoded raw state value (otherwise shows rlp-encoded value)",
+			},
+		}, utils.NetworkFlags, utils.DatabaseFlags),
+		Description: "This command queries the history of the account or storage slot within the specified block range",
+	}
 )
 
 func removeDB(ctx *cli.Context) error {
 	stack, config := makeConfigNode(ctx)
 
-	// Remove the full node state database
-	path := stack.ResolvePath("chaindata")
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "full node state database")
-	} else {
-		log.Info("Full node state database missing", "path", path)
-	}
-	// Remove the full node ancient database
-	path = config.Eth.DatabaseFreezer
-
+	// Resolve folder paths.
+	var (
+		rootDir    = stack.ResolvePath("chaindata")
+		ancientDir = config.Eth.DatabaseFreezer
+	)
 	switch {
-	case path == "":
-		path = filepath.Join(stack.ResolvePath("chaindata"), "ancient")
-	case !filepath.IsAbs(path):
-		path = config.Node.ResolvePath(path)
+	case ancientDir == "":
+		ancientDir = filepath.Join(stack.ResolvePath("chaindata"), "ancient")
+	case !filepath.IsAbs(ancientDir):
+		ancientDir = config.Node.ResolvePath(ancientDir)
 	}
+	// Delete state data
+	statePaths := []string{
+		rootDir,
+		filepath.Join(ancientDir, rawdb.StateFreezerName),
+	}
+	confirmAndRemoveDB(statePaths, "state data", ctx, removeStateDataFlag.Name)
 
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "full node ancient database")
-	} else {
-		log.Info("Full node ancient database missing", "path", path)
-	}
-	// Remove the light node database
-	path = stack.ResolvePath("lightchaindata")
-	if common.FileExist(path) {
-		confirmAndRemoveDB(path, "light node database")
-	} else {
-		log.Info("Light node database missing", "path", path)
-	}
-
+	// Delete ancient chain
+	chainPaths := []string{filepath.Join(
+		ancientDir,
+		rawdb.ChainFreezerName,
+	)}
+	confirmAndRemoveDB(chainPaths, "ancient chain", ctx, removeChainDataFlag.Name)
 	return nil
 }
 
-// confirmAndRemoveDB prompts the user for a last confirmation and removes the
-// folder if accepted.
-func confirmAndRemoveDB(database string, kind string) {
-	confirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove %s (%s)?", kind, database))
+// removeFolder deletes all files (not folders) inside the directory 'dir' (but
+// not files in subfolders).
+func removeFolder(dir string) {
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		// If we're at the top level folder, recurse into
+		if path == dir {
+			return nil
+		}
+		// Delete all the files, but not subfolders
+		if !info.IsDir() {
+			os.Remove(path)
+			return nil
+		}
+		return filepath.SkipDir
+	})
+}
 
+// confirmAndRemoveDB prompts the user for a last confirmation and removes the
+// list of folders if accepted.
+func confirmAndRemoveDB(paths []string, kind string, ctx *cli.Context, removeFlagName string) {
+	var (
+		confirm bool
+		err     error
+	)
+	msg := fmt.Sprintf("Location(s) of '%s': \n", kind)
+	for _, path := range paths {
+		msg += fmt.Sprintf("\t- %s\n", path)
+	}
+	fmt.Println(msg)
+	if ctx.IsSet(removeFlagName) {
+		confirm = ctx.Bool(removeFlagName)
+		if confirm {
+			fmt.Printf("Remove '%s'? [y/n] y\n", kind)
+		} else {
+			fmt.Printf("Remove '%s'? [y/n] n\n", kind)
+		}
+	} else {
+		confirm, err = prompt.Stdin.PromptConfirm(fmt.Sprintf("Remove '%s'?", kind))
+	}
 	switch {
 	case err != nil:
 		utils.Fatalf("%v", err)
 	case !confirm:
-		log.Info("Database deletion skipped", "path", database)
+		log.Info("Database deletion skipped", "kind", kind, "paths", paths)
 	default:
-		start := time.Now()
-
-		filepath.Walk(database, func(path string, info os.FileInfo, err error) error {
-			// If we're at the top level folder, recurse into
-			if path == database {
-				return nil
+		var (
+			deleted []string
+			start   = time.Now()
+		)
+		for _, path := range paths {
+			if common.FileExist(path) {
+				removeFolder(path)
+				deleted = append(deleted, path)
+			} else {
+				log.Info("Folder is not existent", "path", path)
 			}
-			// Delete all the files, but not subfolders
-			if !info.IsDir() {
-				os.Remove(path)
-				return nil
-			}
-
-			return filepath.SkipDir
-		})
-		log.Info("Database successfully deleted", "path", database, "elapsed", common.PrettyDuration(time.Since(start)))
+		}
+		log.Info("Database successfully deleted", "kind", kind, "paths", deleted, "elapsed", common.PrettyDuration(time.Since(start)))
 	}
 }
 
@@ -363,18 +424,13 @@ func checkStateContent(ctx *cli.Context) error {
 	return nil
 }
 
-func showLeveldbStats(db ethdb.KeyValueStater) {
-	if stats, err := db.Stat("leveldb.stats"); err != nil {
+func showDBStats(db ethdb.KeyValueStater) {
+	stats, err := db.Stat()
+	if err != nil {
 		log.Warn("Failed to read database stats", "error", err)
-	} else {
-		fmt.Println(stats)
+		return
 	}
-
-	if ioStats, err := db.Stat("leveldb.iostats"); err != nil {
-		log.Warn("Failed to read database iostats", "error", err)
-	} else {
-		fmt.Println(ioStats)
-	}
+	fmt.Println(stats)
 }
 
 func dbStats(ctx *cli.Context) error {
@@ -384,8 +440,7 @@ func dbStats(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer db.Close()
 
-	showLeveldbStats(db)
-
+	showDBStats(db)
 	return nil
 }
 
@@ -397,7 +452,7 @@ func dbCompact(ctx *cli.Context) error {
 	defer db.Close()
 
 	log.Info("Stats before compaction")
-	showLeveldbStats(db)
+	showDBStats(db)
 
 	log.Info("Triggering compaction")
 
@@ -407,8 +462,7 @@ func dbCompact(ctx *cli.Context) error {
 	}
 
 	log.Info("Stats after compaction")
-	showLeveldbStats(db)
-
+	showDBStats(db)
 	return nil
 }
 
@@ -802,4 +856,146 @@ func showMetaData(ctx *cli.Context) error {
 	table.AppendBulk(data)
 	table.Render()
 	return nil
+}
+
+func inspectAccount(db *triedb.Database, start uint64, end uint64, address common.Address, raw bool) error {
+	stats, err := db.AccountHistory(address, start, end)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Account history:\n\taddress: %s\n\tblockrange: [#%d-#%d]\n", address.Hex(), stats.Start, stats.End)
+
+	from := stats.Start
+	for i := 0; i < len(stats.Blocks); i++ {
+		var content string
+		if len(stats.Origins[i]) == 0 {
+			content = "<empty>"
+		} else {
+			if !raw {
+				content = fmt.Sprintf("%#x", stats.Origins[i])
+			} else {
+				account := new(types.SlimAccount)
+				if err := rlp.DecodeBytes(stats.Origins[i], account); err != nil {
+					panic(err)
+				}
+				code := "<nil>"
+				if len(account.CodeHash) > 0 {
+					code = fmt.Sprintf("%#x", account.CodeHash)
+				}
+				root := "<nil>"
+				if len(account.Root) > 0 {
+					root = fmt.Sprintf("%#x", account.Root)
+				}
+				content = fmt.Sprintf("nonce: %d, balance: %d, codeHash: %s, root: %s", account.Nonce, account.Balance, code, root)
+			}
+		}
+		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i], content)
+		from = stats.Blocks[i]
+	}
+	return nil
+}
+
+func inspectStorage(db *triedb.Database, start uint64, end uint64, address common.Address, slot common.Hash, raw bool) error {
+	// The hash of storage slot key is utilized in the history
+	// rather than the raw slot key, make the conversion.
+	slotHash := crypto.Keccak256Hash(slot.Bytes())
+	stats, err := db.StorageHistory(address, slotHash, start, end)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Storage history:\n\taddress: %s\n\tslot: %s\n\tblockrange: [#%d-#%d]\n", address.Hex(), slot.Hex(), stats.Start, stats.End)
+
+	from := stats.Start
+	for i := 0; i < len(stats.Blocks); i++ {
+		var content string
+		if len(stats.Origins[i]) == 0 {
+			content = "<empty>"
+		} else {
+			if !raw {
+				content = fmt.Sprintf("%#x", stats.Origins[i])
+			} else {
+				_, data, _, err := rlp.Split(stats.Origins[i])
+				if err != nil {
+					fmt.Printf("Failed to decode storage slot, %v", err)
+					return err
+				}
+				content = fmt.Sprintf("%#x", data)
+			}
+		}
+		fmt.Printf("#%d - #%d: %s\n", from, stats.Blocks[i], content)
+		from = stats.Blocks[i]
+	}
+	return nil
+}
+
+func inspectHistory(ctx *cli.Context) error {
+	if ctx.NArg() == 0 || ctx.NArg() > 2 {
+		return fmt.Errorf("required arguments: %v", ctx.Command.ArgsUsage)
+	}
+	var (
+		address common.Address
+		slot    common.Hash
+	)
+	if err := address.UnmarshalText([]byte(ctx.Args().Get(0))); err != nil {
+		return err
+	}
+	if ctx.NArg() > 1 {
+		if err := slot.UnmarshalText([]byte(ctx.Args().Get(1))); err != nil {
+			return err
+		}
+	}
+	// Load the databases.
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, true, false)
+	defer db.Close()
+
+	triedb := utils.MakeTrieDatabase(ctx, db, false, false, false)
+	defer triedb.Close()
+
+	var (
+		err   error
+		start uint64 // the id of first history object to query
+		end   uint64 // the id (included) of last history object to query
+	)
+	// State histories are identified by state ID rather than block number.
+	// To address this, load the corresponding block header and perform the
+	// conversion by this function.
+	blockToID := func(blockNumber uint64) (uint64, error) {
+		header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, blockNumber), blockNumber)
+		if header == nil {
+			return 0, fmt.Errorf("block #%d is not existent", blockNumber)
+		}
+		id := rawdb.ReadStateID(db, header.Root)
+		if id == nil {
+			first, last, err := triedb.HistoryRange()
+			if err == nil {
+				return 0, fmt.Errorf("history of block #%d is not existent, available history range: [#%d-#%d]", blockNumber, first, last)
+			}
+			return 0, fmt.Errorf("history of block #%d is not existent", blockNumber)
+		}
+		return *id, nil
+	}
+	// Parse the starting block number for inspection.
+	startNumber := ctx.Uint64("start")
+	if startNumber != 0 {
+		start, err = blockToID(startNumber)
+		if err != nil {
+			return err
+		}
+	}
+	// Parse the ending block number for inspection.
+	endBlock := ctx.Uint64("end")
+	if endBlock != 0 {
+		end, err = blockToID(endBlock)
+		if err != nil {
+			return err
+		}
+	}
+	// Inspect the state history.
+	if slot == (common.Hash{}) {
+		return inspectAccount(triedb, start, end, address, ctx.Bool("raw"))
+	}
+	return inspectStorage(triedb, start, end, address, slot, ctx.Bool("raw"))
 }

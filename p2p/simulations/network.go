@@ -588,7 +588,7 @@ func (net *Network) GetRandomUpNode(excludeIDs ...enode.ID) *Node {
 	return net.getRandomUpNode(excludeIDs...)
 }
 
-// GetRandomUpNode returns a random node on the network, which is running.
+// getRandomUpNode returns a random node on the network, which is running.
 func (net *Network) getRandomUpNode(excludeIDs ...enode.ID) *Node {
 	return net.getRandomNode(net.getUpNodeIDs(), excludeIDs)
 }
@@ -1135,11 +1135,14 @@ func (net *Network) Load(snap *Snapshot) error {
 		}
 	}
 
+	timeout := time.NewTimer(snapshotLoadTimeout)
+	defer timeout.Stop()
+
 	select {
 	// Wait until all connections from the snapshot are established.
 	case <-allConnected:
 	// Make sure that we do not wait forever.
-	case <-time.After(snapshotLoadTimeout):
+	case <-timeout.C:
 		return errors.New("snapshot connections not established")
 	}
 

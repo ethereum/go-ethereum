@@ -68,7 +68,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 
 	n.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, false, config.BorLogs),
+		Service:   filters.NewFilterAPI(filterSystem, config.BorLogs),
 	}})
 
 	// Import the test chain.
@@ -87,7 +87,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 func generateTestChain() (*core.Genesis, []*types.Block) {
 	genesis := &core.Genesis{
 		Config: params.AllEthashProtocolChanges,
-		Alloc: core.GenesisAlloc{
+		Alloc: types.GenesisAlloc{
 			testAddr:     {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
 			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}},
 			testEmpty:    {Balance: big.NewInt(1)},
@@ -161,7 +161,7 @@ func TestGethClient(t *testing.T) {
 			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
-		// one block. The `testAcessList` fails if the miner has not yet created a
+		// one block. The `testAccessList` fails if the miner has not yet created a
 		// new pending-block after the import event.
 		// Hence: this test should be last, execute the tests serially.
 		{
@@ -191,7 +191,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		From:     testAddr,
 		To:       &common.Address{},
 		Gas:      21000,
-		GasPrice: big.NewInt(765625000),
+		GasPrice: big.NewInt(875000000),
 		Value:    big.NewInt(1),
 	}
 
@@ -331,7 +331,7 @@ func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
 		t.Fatalf("invalid nonce, want: %v got: %v", 0, result.Nonce)
 	}
 	// test balance
-	if result.Balance.Cmp(big.NewInt(0)) != 0 {
+	if result.Balance.Sign() != 0 {
 		t.Fatalf("invalid balance, want: %v got: %v", 0, result.Balance)
 	}
 	// test storage

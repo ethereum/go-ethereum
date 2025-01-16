@@ -1,0 +1,180 @@
+# NOTE: Update and uncomment: `keystore`, `password`, and `unlock` fields.
+
+chain = "mainnet"
+# identity = "node_name"
+# verbosity = 3
+# vmdebug = false
+datadir = "/var/lib/bor/data"
+# ancient = ""
+"db.engine" = "pebble"
+"state.scheme" = "path"
+# keystore = "$BOR_DIR/keystore"
+# "rpc.batchlimit" = 100
+# "rpc.returndatalimit" = 100000
+syncmode = "full"
+# PBSS does not support archive
+# gcmode = "full"
+# snapshot = true
+# ethstats = ""
+# devfakeauthor = false
+
+# ["eth.requiredblocks"]
+
+# [log]
+    # vmodule = ""
+    # json = false
+    # backtrace = ""
+    # debug = true
+    # enable-block-tracking = false
+
+[p2p]
+    maxpeers = 200
+    port = 30303
+    nodiscover = true
+    # maxpendpeers = 50
+    # bind = "0.0.0.0"
+    # nat = "any"
+    # netrestrict = ""
+    # nodekey = ""
+    # nodekeyhex = ""
+    # txarrivalwait = "500ms"
+    # [p2p.discovery]
+        # v4disc = true
+        # v5disc = false
+        bootnodes = ["enode://b8f1cc9c5d4403703fbf377116469667d2b1823c0daf16b7250aa576bacf399e42c3930ccfcb02c5df6879565a2b8931335565f0e8d3f8e72385ecf4a4bf160a@3.36.224.80:30303", "enode://8729e0c825f3d9cad382555f3e46dcff21af323e89025a0e6312df541f4a9e73abfa562d64906f5e59c51fe6f0501b3e61b07979606c56329c020ed739910759@54.194.245.5:30303"]
+        # bootnodesv4 = []
+        # bootnodesv5 = []
+        static-nodes = [ "enode://ad9180a1468702c7c6a7210544593b4bd444768ca754382d1da92fe9abaf408e58160dc72505936df63ca6afc3052e993cade199fe3ff067a5f11b0ee3c6e378@13.209.168.182:30303", "enode://7cf051238a3f92bbee811472a84592ab547ab2692ec09bd2104182551ca6de55f5a7cea48a3d36b411deccb4df976f27076d32019d9ccc4486a916c0e30f3a74@43.201.242.62:30303", "enode://40b4ad081f835ac974472cee8553a455be720263d45d091d395d747c6fa9b615c76e74afe8b9646cddde79ce5fa1dfbfda4d563ab58199681d100c5bbaf7be82@43.202.78.165:30303", "enode://a0da3a49d43404c12a1f350211f4a448cf6715eaa5667813e14e7af88a90820e6b2fb6fcc1a75b0207c19c98c4f6320b4c5c1bdeda408e1fa72710942d4ad6f6@3.38.254.221:30303", "enode://46feaae067017d18cc5c0dee365c970d5004d34e2cf65a82c051b16040b31b1a6714cc14aadc14d95b7c98cc5da3db1d3b8611e19f4ca4e8bee2b0498978c160@15.165.197.16:30303", "enode://fbf7edc7386abc991097687c699e80034518bd3ecc333b0718a49afdf34e93d4ddde377f7210dae4c8e7580e4901d6cbb82a043debe119b71a267c323c6c1ad6@52.78.154.236:30303", "enode://60572bb4659e41d9b2f0a06b2b7c4cf2a7517f2e5e4e49664974bf4c0f52630846f16f190818497d642dcc046698850b689d36d6a9dcd42e388a20e4a46a0de8@52.209.21.164:30303", "enode://71467975c9fbea1d1087693d7af1c8d12bc43029d52c9470b328f7cfe5252475f1886013ddc85ff880b0e7d26b4ce3e33566895ea95d67730e9d91daafbbab2d@99.81.158.129:30303", "enode://4bf816ccbdcd379e4623f65b42b91c18545c1721b58217cbd7258911418f5a112f1f1e01a6580d485844ac2635b3fa1cb6d6c0022319ee5c3a00388aad0b5279@34.254.124.45:30303", "enode://88a7d837d229ec20d9c5805ccb121e2580f2b8b92c3e8b669418addd34f36784ca20d68a672e24ae1daa8862480deed9d73c095b65baa0ce94a6290a1504fd27@34.252.116.193:30303", "enode://a1c1e190a397e351deda6c31faebbd45b459b11cb4ffe63fe894ca4b7860c3c2404ee888f8166c98906f4174c55a64d4f6a2955f6edf3de86d49a5c58e8e955f@54.76.109.39:30303", "enode://0e07395fb40ab63f4f13b0c5630eb94f72f5d4c4b04e5d2c91a1a950a9bfb504889ea9eb811cffb0df55b72883e20e6fde9aba14c9c5d1a48fae18ab3212a7ba@34.246.232.184:30303" ] # Recommended setting with sentry <> validator architecture
+        # trusted-nodes = []
+        dns = [ "enrtree://AKUEZKN7PSKVNR65FZDHECMKOJQSGPARGTPPBI7WS2VUL4EGR6XPC@pos.polygon-peers.io" ]
+
+# [heimdall]
+    # url = "http://localhost:1317"
+    # "bor.without" = false
+    # grpc-address = ""
+
+[txpool]
+    nolocals = true
+    pricelimit = 25000000000
+    accountslots = 16
+    globalslots = 32768
+    accountqueue = 16
+    globalqueue = 32768
+    lifetime = "1h30m0s"
+    # locals = []
+    # journal = ""
+    # rejournal = "1h0m0s"
+    # pricebump = 10
+
+[miner]
+    mine = true
+    gaslimit = 30000000
+    gasprice = "25000000000"
+    # etherbase = ""
+    # extradata = ""
+    # recommit = "2m5s"
+    # commitinterrupt = true
+
+[jsonrpc]
+    ipcpath = "/var/lib/bor/bor.ipc"
+    # ipcdisable = false
+    # gascap = 50000000
+    # evmtimeout = "5s"
+    # txfeecap = 5.0
+    # allow-unprotected-txs = false
+    # enabledeprecatedpersonal = false
+    [jsonrpc.http]
+        enabled = true
+        port = 8545
+        host = "127.0.0.1"
+        api = ["eth", "net", "web3", "txpool", "bor"]
+        vhosts = ["*"]
+        corsdomain = ["*"]
+        # prefix = ""
+        # ep-size = 40
+        # ep-requesttimeout = "0s"
+    # [jsonrpc.ws]
+        # enabled = false
+        # port = 8546
+        # prefix = ""
+        # host = "localhost"
+        # api = ["web3", "net"]
+        # origins = ["*"]
+        # ep-size = 40
+        # ep-requesttimeout = "0s"
+    # [jsonrpc.graphql]
+        # enabled = false
+        # port = 0
+        # prefix = ""
+        # host = ""
+        # vhosts = ["*"]
+        # corsdomain = ["*"]
+    # [jsonrpc.auth]
+        # jwtsecret = ""
+        # addr = "localhost"
+        # port = 8551
+        # vhosts = ["localhost"]
+    # [jsonrpc.timeouts]
+        # read = "10s"
+        # write = "30s"
+        # idle = "2m0s"
+
+[gpo]
+    # blocks = 20
+    # percentile = 60
+    # maxheaderhistory = 1024
+    # maxblockhistory = 1024
+    # maxprice = "5000000000000"
+    ignoreprice = "25000000000"
+
+[telemetry]
+    metrics = true
+    # expensive = false
+    # prometheus-addr = ""
+    # opencollector-endpoint = ""
+    # [telemetry.influx]
+        # influxdb = false
+        # endpoint = ""
+        # database = ""
+        # username = ""
+        # password = ""
+        # influxdbv2 = false
+        # token = ""
+        # bucket = ""
+        # organization = ""
+    # [telemetry.influx.tags]
+
+[cache]
+    cache = 4096
+    # gc = 25
+    # snapshot = 10
+    # database = 50
+    # trie = 15
+    # noprefetch = false
+    # preimages = false
+    # txlookuplimit = 2350000
+    # blocklogs = 32
+    # timeout = "1h0m0s"
+    # fdlimit = 0
+
+[accounts]
+    allow-insecure-unlock = true
+    # password = "$BOR_DIR/password.txt"
+    # unlock = ["$ADDRESS"]
+    # lightkdf = false
+    # disable-bor-wallet = false
+
+# [grpc]
+    # addr = ":3131"
+
+# [developer]
+    # dev = false
+    # period = 0
+    # gaslimit = 11500000
+
+# [pprof]
+#   pprof = false
+#   port = 6060
+#   addr = "127.0.0.1"
+#   memprofilerate = 524288
+#   blockprofilerate = 0

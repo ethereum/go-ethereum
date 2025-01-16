@@ -17,6 +17,7 @@
 package ethapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -26,11 +27,16 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -48,9 +54,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 )
 
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
@@ -403,10 +406,30 @@ func allBlobTxs(addr common.Address, config *params.ChainConfig) []txData {
 	}
 }
 
+func newTestAccountManager(t *testing.T) (*accounts.Manager, accounts.Account) {
+	var (
+		dir        = t.TempDir()
+		am         = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: true})
+		b          = keystore.NewKeyStore(dir, 2, 1)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	)
+	acc, err := b.ImportECDSA(testKey, "")
+	if err != nil {
+		t.Fatalf("failed to create test account: %v", err)
+	}
+	if err := b.Unlock(acc, ""); err != nil {
+		t.Fatalf("failed to unlock account: %v\n", err)
+	}
+	am.AddBackend(b)
+	return am, acc
+}
+
 type testBackend struct {
 	db      ethdb.Database
 	chain   *core.BlockChain
 	pending *types.Block
+	accman  *accounts.Manager
+	acc     accounts.Account
 }
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
@@ -419,6 +442,8 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 			TrieDirtyDisabled: true, // Archive mode
 		}
 	)
+	accman, acc := newTestAccountManager(t)
+	// gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 	txlookupLimit := uint64(0)
@@ -430,7 +455,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 
-	backend := &testBackend{db: db, chain: chain}
+	backend := &testBackend{db: db, chain: chain, accman: accman, acc: acc}
 	return backend
 }
 
@@ -442,17 +467,18 @@ func (b testBackend) SyncProgress() ethereum.SyncProgress { return ethereum.Sync
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil
 }
-func (b testBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-	return nil, nil, nil, nil, nil
+func (b testBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
+	return nil, nil, nil, nil, nil, nil, nil
 }
-func (b testBackend) ChainDb() ethdb.Database           { return b.db }
-func (b testBackend) AccountManager() *accounts.Manager { return nil }
-func (b testBackend) ExtRPCEnabled() bool               { return false }
-func (b testBackend) RPCGasCap() uint64                 { return 10000000 }
-func (b testBackend) RPCEVMTimeout() time.Duration      { return time.Second }
-func (b testBackend) RPCTxFeeCap() float64              { return 0 }
-func (b testBackend) UnprotectedAllowed() bool          { return false }
-func (b testBackend) SetHead(number uint64)             {}
+func (b testBackend) BlobBaseFee(ctx context.Context) *big.Int { return new(big.Int) }
+func (b testBackend) ChainDb() ethdb.Database                  { return b.db }
+func (b testBackend) AccountManager() *accounts.Manager        { return b.accman }
+func (b testBackend) ExtRPCEnabled() bool                      { return false }
+func (b testBackend) RPCGasCap() uint64                        { return 10000000 }
+func (b testBackend) RPCEVMTimeout() time.Duration             { return time.Second }
+func (b testBackend) RPCTxFeeCap() float64                     { return 0 }
+func (b testBackend) UnprotectedAllowed() bool                 { return false }
+func (b testBackend) SetHead(number uint64)                    {}
 func (b testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	if number == rpc.LatestBlockNumber {
 		return b.chain.CurrentBlock(), nil
@@ -521,7 +547,7 @@ func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 	}
 	panic("only implemented for number")
 }
-func (b testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) { panic("implement me") }
+func (b testBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) { panic("implement me") }
 func (b testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	header, err := b.HeaderByHash(ctx, hash)
 	if header == nil || err != nil {
@@ -559,14 +585,20 @@ func (b testBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) even
 func (b testBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	panic("implement me")
 }
-func (b testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+func (b testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.db, txHash)
-	return tx, blockHash, blockNumber, index, nil
+	found := true
+	if tx == nil {
+		found = false
+	}
+	return found, tx, blockHash, blockNumber, index, nil
 }
-func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { panic("implement me") }
-func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction { panic("implement me") }
+func (b testBackend) GetPoolTransactions() (types.Transactions, error) { panic("implement me") }
+func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
+	return nil
+}
 func (b testBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	panic("implement me")
+	return 0, nil
 }
 func (b testBackend) Stats() (pending int, queued int) { panic("implement me") }
 func (b testBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
@@ -599,7 +631,8 @@ func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.Match
 
 // GetBorBlockTransaction returns bor block tx
 func (b testBackend) GetBorBlockTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	panic("implement me")
+	tx, blockHash, blockNumber, index := rawdb.ReadBorTransaction(b.ChainDb(), hash)
+	return tx, blockHash, blockNumber, index, nil
 }
 
 func (b testBackend) GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
@@ -657,14 +690,9 @@ func (b testBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*
 }
 
 func (b testBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
-	if number == nil {
-		return nil, nil
-	}
-
-	receipt := rawdb.ReadRawBorReceipt(b.db, hash, *number)
+	receipt := b.chain.GetBorReceiptByHash(hash)
 	if receipt == nil {
-		return nil, nil
+		return nil, ethereum.NotFound
 	}
 
 	return receipt, nil
@@ -676,8 +704,8 @@ func TestEstimateGas(t *testing.T) {
 	var (
 		accounts = newAccounts(2)
 		genesis  = &core.Genesis{
-			Config: params.TestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 			},
@@ -686,12 +714,13 @@ func TestEstimateGas(t *testing.T) {
 		signer         = types.HomesteadSigner{}
 		randomAccounts = newAccounts(2)
 	)
-	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
+		b.SetPoS()
 	}))
 	var testSuite = []struct {
 		blockNumber rpc.BlockNumber
@@ -791,6 +820,18 @@ func TestEstimateGas(t *testing.T) {
 			expectErr: nil,
 			want:      67595,
 		},
+		// Blobs should have no effect on gas estimate
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:       &accounts[0].addr,
+				To:         &accounts[1].addr,
+				Value:      (*hexutil.Big)(big.NewInt(1)),
+				BlobHashes: []common.Hash{{0x01, 0x22}},
+				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
+			},
+			want: 21000,
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides)
@@ -816,26 +857,36 @@ func TestEstimateGas(t *testing.T) {
 
 func TestCall(t *testing.T) {
 	t.Parallel()
+
 	// Initialize test accounts
 	var (
 		accounts = newAccounts(3)
+		dad      = common.HexToAddress("0x0000000000000000000000000000000000000dad")
 		genesis  = &core.Genesis{
-			Config: params.TestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+				dad: {
+					Balance: big.NewInt(params.Ether),
+					Nonce:   1,
+					Storage: map[common.Hash]common.Hash{
+						common.Hash{}: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
+					},
+				},
 			},
 		}
 		genBlocks = 10
 		signer    = types.HomesteadSigner{}
 	)
-	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(i), To: &accounts[1].addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), signer, accounts[0].key)
 		b.AddTx(tx)
+		b.SetPoS()
 	}))
 	randomAccounts := newAccounts(3)
 	var testSuite = []struct {
@@ -957,6 +1008,59 @@ func TestCall(t *testing.T) {
 			blockOverrides: BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
 			want:           "0x000000000000000000000000000000000000000000000000000000000000000b",
 		},
+		// Invalid blob tx
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:       &accounts[1].addr,
+				Input:      &hexutil.Bytes{0x00},
+				BlobHashes: []common.Hash{},
+			},
+			expectErr: core.ErrBlobTxCreate,
+		},
+		// BOR Doens't support blob tx
+		// BLOBHASH opcode
+		// {
+		// 	blockNumber: rpc.LatestBlockNumber,
+		// 	call: TransactionArgs{
+		// 		From:       &accounts[1].addr,
+		// 		To:         &randomAccounts[2].addr,
+		// 		BlobHashes: []common.Hash{{0x01, 0x22}},
+		// 		BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
+		// 	},
+		// 	overrides: StateOverride{
+		// 		randomAccounts[2].addr: {
+		// 			Code: hex2Bytes("60004960005260206000f3"),
+		// 		},
+		// 	},
+		// 	want: "0x0122000000000000000000000000000000000000000000000000000000000000",
+		// },
+		// Clear the entire storage set
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From: &accounts[1].addr,
+				// Yul:
+				// object "Test" {
+				//    code {
+				//        let dad := 0x0000000000000000000000000000000000000dad
+				//        if eq(balance(dad), 0) {
+				//            revert(0, 0)
+				//        }
+				//        let slot := sload(0)
+				//        mstore(0, slot)
+				//        return(0, 32)
+				//    }
+				// }
+				Input: hex2Bytes("610dad6000813103600f57600080fd5b6000548060005260206000f3"),
+			},
+			overrides: StateOverride{
+				dad: OverrideAccount{
+					State: &map[common.Hash]common.Hash{},
+				},
+			},
+			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
@@ -980,6 +1084,326 @@ func TestCall(t *testing.T) {
 		if !reflect.DeepEqual(result.String(), tc.want) {
 			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, result.String(), tc.want)
 		}
+	}
+}
+
+func TestSignTransaction(t *testing.T) {
+	t.Parallel()
+	// Initialize test accounts
+	var (
+		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		to      = crypto.PubkeyToAddress(key.PublicKey)
+		genesis = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc:  types.GenesisAlloc{},
+		}
+	)
+	_, acc := newTestAccountManager(t)
+	genesis.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
+	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewTransactionAPI(b, nil)
+	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+		From:  &b.acc.Address,
+		To:    &to,
+		Value: (*hexutil.Big)(big.NewInt(1)),
+	})
+	if err != nil {
+		t.Fatalf("failed to fill tx defaults: %v\n", err)
+	}
+
+	res, err = api.SignTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
+	if err != nil {
+		t.Fatalf("failed to sign tx: %v\n", err)
+	}
+	tx, err := json.Marshal(res.Tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expect := `{"type":"0x2","chainId":"0x1","nonce":"0x0","to":"0x703c4b2bd70c169f5717101caee543299fc946c7","gas":"0x5208","gasPrice":null,"maxPriorityFeePerGas":"0x0","maxFeePerGas":"0x684ee180","value":"0x1","input":"0x","accessList":[],"v":"0x0","r":"0x8fabeb142d585dd9247f459f7e6fe77e2520c88d50ba5d220da1533cea8b34e1","s":"0x582dd68b21aef36ba23f34e49607329c20d981d30404daf749077f5606785ce7","yParity":"0x0","hash":"0x93927839207cfbec395da84b8a2bc38b7b65d2cb2819e9fef1f091f5b1d4cc8f"}`
+	if !bytes.Equal(tx, []byte(expect)) {
+		t.Errorf("result mismatch. Have:\n%s\nWant:\n%s\n", tx, expect)
+	}
+}
+
+// func TestSignBlobTransaction(t *testing.T) {
+// 	t.Parallel()
+// 	// Initialize test accounts
+// 	var (
+// 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+// 		to      = crypto.PubkeyToAddress(key.PublicKey)
+// 		genesis = &core.Genesis{
+// 			Config: params.MergedTestChainConfig,
+// 			Alloc:  types.GenesisAlloc{},
+// 		}
+// 	)
+// 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+// 		b.SetPoS()
+// 	})
+// 	api := NewTransactionAPI(b, nil)
+// 	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+// 		From:       &b.acc.Address,
+// 		To:         &to,
+// 		Value:      (*hexutil.Big)(big.NewInt(1)),
+// 		BlobHashes: []common.Hash{{0x01, 0x22}},
+// 	})
+// 	if err != nil {
+// 		t.Fatalf("failed to fill tx defaults: %v\n", err)
+// 	}
+
+// 	_, err = api.SignTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
+// 	if err != nil {
+// 		t.Fatalf("should not fail on blob transaction")
+// 	}
+// }
+
+// func TestSendBlobTransaction(t *testing.T) {
+// 	t.Parallel()
+// 	// Initialize test accounts
+// 	var (
+// 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+// 		to      = crypto.PubkeyToAddress(key.PublicKey)
+// 		genesis = &core.Genesis{
+// 			Config: params.MergedTestChainConfig,
+// 			Alloc:  types.GenesisAlloc{},
+// 		}
+// 	)
+// 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+// 		b.SetPoS()
+// 	})
+// 	api := NewTransactionAPI(b, nil)
+// 	res, err := api.FillTransaction(context.Background(), TransactionArgs{
+// 		From:       &b.acc.Address,
+// 		To:         &to,
+// 		Value:      (*hexutil.Big)(big.NewInt(1)),
+// 		BlobHashes: []common.Hash{{0x01, 0x22}},
+// 	})
+// 	if err != nil {
+// 		t.Fatalf("failed to fill tx defaults: %v\n", err)
+// 	}
+
+// 	_, err = api.SendTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
+// 	if err == nil {
+// 		t.Errorf("sending tx should have failed")
+// 	} else if !errors.Is(err, errBlobTxNotSupported) {
+// 		t.Errorf("unexpected error. Have %v, want %v\n", err, errBlobTxNotSupported)
+// 	}
+// }
+
+// func TestFillBlobTransaction(t *testing.T) {
+// 	t.Parallel()
+// 	// Initialize test accounts
+// 	var (
+// 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+// 		to      = crypto.PubkeyToAddress(key.PublicKey)
+// 		genesis = &core.Genesis{
+// 			Config: params.MergedTestChainConfig,
+// 			Alloc:  types.GenesisAlloc{},
+// 		}
+// 		emptyBlob                      = new(kzg4844.Blob)
+// 		emptyBlobs                     = []kzg4844.Blob{*emptyBlob}
+// 		emptyBlobCommit, _             = kzg4844.BlobToCommitment(emptyBlob)
+// 		emptyBlobProof, _              = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+// 		emptyBlobHash      common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
+// 	)
+// 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+// 		b.SetPoS()
+// 	})
+// 	api := NewTransactionAPI(b, nil)
+// 	type result struct {
+// 		Hashes  []common.Hash
+// 		Sidecar *types.BlobTxSidecar
+// 	}
+// 	suite := []struct {
+// 		name string
+// 		args TransactionArgs
+// 		err  string
+// 		want *result
+// 	}{
+// 		{
+// 			name: "TestInvalidParamsCombination1",
+// 			args: TransactionArgs{
+// 				From:   &b.acc.Address,
+// 				To:     &to,
+// 				Value:  (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:  []kzg4844.Blob{{}},
+// 				Proofs: []kzg4844.Proof{{}},
+// 			},
+// 			err: `blob proofs provided while commitments were not`,
+// 		},
+// 		{
+// 			name: "TestInvalidParamsCombination2",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       []kzg4844.Blob{{}},
+// 				Commitments: []kzg4844.Commitment{{}},
+// 			},
+// 			err: `blob commitments provided while proofs were not`,
+// 		},
+// 		{
+// 			name: "TestInvalidParamsCount1",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       []kzg4844.Blob{{}},
+// 				Commitments: []kzg4844.Commitment{{}, {}},
+// 				Proofs:      []kzg4844.Proof{{}, {}},
+// 			},
+// 			err: `number of blobs and commitments mismatch (have=2, want=1)`,
+// 		},
+// 		{
+// 			name: "TestInvalidParamsCount2",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       []kzg4844.Blob{{}, {}},
+// 				Commitments: []kzg4844.Commitment{{}, {}},
+// 				Proofs:      []kzg4844.Proof{{}},
+// 			},
+// 			err: `number of blobs and proofs mismatch (have=1, want=2)`,
+// 		},
+// 		{
+// 			name: "TestInvalidProofVerification",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       []kzg4844.Blob{{}, {}},
+// 				Commitments: []kzg4844.Commitment{{}, {}},
+// 				Proofs:      []kzg4844.Proof{{}, {}},
+// 			},
+// 			err: `failed to verify blob proof: short buffer`,
+// 		},
+// 		{
+// 			name: "TestGenerateBlobHashes",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       emptyBlobs,
+// 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 				Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 			},
+// 			want: &result{
+// 				Hashes: []common.Hash{emptyBlobHash},
+// 				Sidecar: &types.BlobTxSidecar{
+// 					Blobs:       emptyBlobs,
+// 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 					Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 				},
+// 			},
+// 		},
+// 		{
+// 			name: "TestValidBlobHashes",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				BlobHashes:  []common.Hash{emptyBlobHash},
+// 				Blobs:       emptyBlobs,
+// 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 				Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 			},
+// 			want: &result{
+// 				Hashes: []common.Hash{emptyBlobHash},
+// 				Sidecar: &types.BlobTxSidecar{
+// 					Blobs:       emptyBlobs,
+// 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 					Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 				},
+// 			},
+// 		},
+// 		{
+// 			name: "TestInvalidBlobHashes",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				BlobHashes:  []common.Hash{{0x01, 0x22}},
+// 				Blobs:       emptyBlobs,
+// 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 				Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 			},
+// 			err: fmt.Sprintf("blob hash verification failed (have=%s, want=%s)", common.Hash{0x01, 0x22}, emptyBlobHash),
+// 		},
+// 		{
+// 			name: "TestGenerateBlobProofs",
+// 			args: TransactionArgs{
+// 				From:  &b.acc.Address,
+// 				To:    &to,
+// 				Value: (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs: emptyBlobs,
+// 			},
+// 			want: &result{
+// 				Hashes: []common.Hash{emptyBlobHash},
+// 				Sidecar: &types.BlobTxSidecar{
+// 					Blobs:       emptyBlobs,
+// 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 					Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 				},
+// 			},
+// 		},
+// 	}
+// 	for _, tc := range suite {
+// 		t.Run(tc.name, func(t *testing.T) {
+// 			res, err := api.FillTransaction(context.Background(), tc.args)
+// 			if len(tc.err) > 0 {
+// 				if err == nil {
+// 					t.Fatalf("missing error. want: %s", tc.err)
+// 				} else if err.Error() != tc.err {
+// 					t.Fatalf("error mismatch. want: %s, have: %s", tc.err, err.Error())
+// 				}
+// 				return
+// 			}
+// 			if err != nil && len(tc.err) == 0 {
+// 				t.Fatalf("expected no error. have: %s", err)
+// 			}
+// 			if res == nil {
+// 				t.Fatal("result missing")
+// 			}
+// 			want, err := json.Marshal(tc.want)
+// 			if err != nil {
+// 				t.Fatalf("failed to encode expected: %v", err)
+// 			}
+// 			have, err := json.Marshal(result{Hashes: res.Tx.BlobHashes(), Sidecar: res.Tx.BlobTxSidecar()})
+// 			if err != nil {
+// 				t.Fatalf("failed to encode computed sidecar: %v", err)
+// 			}
+// 			if !bytes.Equal(have, want) {
+// 				t.Errorf("blob sidecar mismatch. Have: %s, want: %s", have, want)
+// 			}
+// 		})
+// 	}
+// }
+
+func argsFromTransaction(tx *types.Transaction, from common.Address) TransactionArgs {
+	var (
+		gas        = tx.Gas()
+		nonce      = tx.Nonce()
+		input      = tx.Data()
+		accessList *types.AccessList
+	)
+	if acl := tx.AccessList(); acl != nil {
+		accessList = &acl
+	}
+	return TransactionArgs{
+		From:                 &from,
+		To:                   tx.To(),
+		Gas:                  (*hexutil.Uint64)(&gas),
+		MaxFeePerGas:         (*hexutil.Big)(tx.GasFeeCap()),
+		MaxPriorityFeePerGas: (*hexutil.Big)(tx.GasTipCap()),
+		Value:                (*hexutil.Big)(tx.Value()),
+		Nonce:                (*hexutil.Uint64)(&nonce),
+		Input:                (*hexutil.Bytes)(&input),
+		ChainID:              (*hexutil.Big)(tx.ChainId()),
+		AccessList:           accessList,
+		BlobFeeCap:           (*hexutil.Big)(tx.BlobGasFeeCap()),
+		BlobHashes:           tx.BlobHashes(),
 	}
 }
 
@@ -1038,7 +1462,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 		}
 		txs = append(txs, tx)
 	}
-	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, txs, nil, nil, blocktest.NewHasher())
+	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, &types.Body{Transactions: txs}, nil, blocktest.NewHasher())
 
 	var testSuite = []struct {
 		inclTx bool
@@ -1218,6 +1642,10 @@ func TestRPCMarshalBlock(t *testing.T) {
 }
 
 func TestRPCGetBlockOrHeader(t *testing.T) {
+	// Note: Upstream (geth) tests have a different genesis hash as it has a different
+	// state root hash due to allocating balance separately in test backend. Because
+	// that is commented out in bor, we use the old genesis hash in the test files.
+
 	t.Parallel()
 
 	// Initialize test accounts
@@ -1228,7 +1656,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 		acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
 		genesis    = &core.Genesis{
 			Config: params.TestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				acc1Addr: {Balance: big.NewInt(params.Ether)},
 				acc2Addr: {Balance: big.NewInt(params.Ether)},
 			},
@@ -1249,7 +1677,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 			Address:   common.Address{0x12, 0x34},
 			Amount:    10,
 		}
-		pending = types.NewBlockWithWithdrawals(&types.Header{Number: big.NewInt(11), Time: 42}, []*types.Transaction{tx}, nil, nil, []*types.Withdrawal{withdrawal}, blocktest.NewHasher())
+		pending = types.NewBlock(&types.Header{Number: big.NewInt(11), Time: 42}, &types.Body{Transactions: types.Transactions{tx}, Withdrawals: types.Withdrawals{withdrawal}}, nil, blocktest.NewHasher())
 	)
 	backend := newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
@@ -1427,6 +1855,11 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 			fullTx:    true,
 			file:      "hash-pending-fullTx",
 		},
+		// 26. safe block
+		{
+			blockNumber: rpc.SafeBlockNumber,
+			file:        "tag-safe",
+		},
 	}
 
 	for i, tt := range testSuite {
@@ -1471,8 +1904,12 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 	}
 }
 
-func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
+func setupTransactionsToApiTest(t *testing.T) (*TransactionAPI, []common.Hash, []struct {
+	txHash common.Hash
+	file   string
+}) {
 	config := *params.TestChainConfig
+	genBlocks := 5
 	config.ShanghaiBlock = big.NewInt(0)
 	config.CancunBlock = big.NewInt(0)
 
@@ -1486,7 +1923,7 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			Config:        &config,
 			ExcessBlobGas: new(uint64),
 			BlobGasUsed:   new(uint64),
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				acc1Addr: {Balance: big.NewInt(params.Ether)},
 				acc2Addr: {Balance: big.NewInt(params.Ether)},
 				// // SPDX-License-Identifier: GPL-3.0
@@ -1503,17 +1940,19 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			},
 		}
 		signer   = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
-		txHashes = make([]common.Hash, genBlocks)
+		txHashes = make([]common.Hash, genBlocks+1)
 	)
 
 	// Set the terminal total difficulty in the config
 	genesis.Config.TerminalTotalDifficulty = big.NewInt(0)
 	genesis.Config.TerminalTotalDifficultyPassed = true
+
 	backend := newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		var (
 			tx  *types.Transaction
 			err error
 		)
+		b.SetPoS()
 		switch i {
 		case 0:
 			// transfer 1000wei
@@ -1540,20 +1979,6 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 				StorageKeys: []common.Hash{{0}},
 			}}
 			tx, err = types.SignTx(types.NewTx(&types.AccessListTx{Nonce: uint64(i), To: nil, Gas: 58100, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040"), AccessList: accessList}), signer, acc1Key)
-		case 5:
-			// blob tx
-			fee := big.NewInt(500)
-			fee.Add(fee, b.BaseFee())
-			tx, err = types.SignTx(types.NewTx(&types.BlobTx{
-				Nonce:      uint64(i),
-				GasTipCap:  uint256.NewInt(1),
-				GasFeeCap:  uint256.MustFromBig(fee),
-				Gas:        params.TxGas,
-				To:         acc2Addr,
-				BlobFeeCap: uint256.NewInt(1),
-				BlobHashes: []common.Hash{{1}},
-				Value:      new(uint256.Int),
-			}), signer, acc1Key)
 		}
 		if err != nil {
 			t.Errorf("failed to sign tx: %v", err)
@@ -1562,18 +1987,9 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 			b.AddTx(tx)
 			txHashes[i] = tx.Hash()
 		}
-		b.SetPoS()
 	})
-	return backend, txHashes
-}
 
-func TestRPCGetTransactionReceipt(t *testing.T) {
-	t.Parallel()
-
-	var (
-		backend, txHashes = setupReceiptBackend(t, 6)
-		api               = NewTransactionAPI(backend, new(AddrLocker))
-	)
+	txHashes[genBlocks] = mockStateSyncTxOnCurrentBlock(t, backend)
 
 	var testSuite = []struct {
 		txHash common.Hash
@@ -1614,12 +2030,45 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 			txHash: common.HexToHash("deadbeef"),
 			file:   "txhash-notfound",
 		},
-		// 7. blob tx
+		// 7. state sync tx found
 		{
 			txHash: txHashes[5],
-			file:   "blob-tx",
+			file:   "state-sync-tx",
 		},
 	}
+	// map sprint 0 to block 6
+	backend.ChainConfig().Bor.Sprint["0"] = uint64(genBlocks)
+
+	api := NewTransactionAPI(backend, new(AddrLocker))
+
+	return api, txHashes, testSuite
+}
+
+func mockStateSyncTxOnCurrentBlock(t *testing.T, backend *testBackend) common.Hash {
+	// State Sync Tx Setup
+	var stateSyncLogs []*types.Log
+	block, err := backend.BlockByHash(context.Background(), backend.CurrentBlock().Hash())
+	if err != nil {
+		t.Errorf("failed to get current block: %v", err)
+	}
+
+	types.DeriveFieldsForBorLogs(stateSyncLogs, block.Hash(), block.NumberU64(), 0, 0)
+
+	// Write bor receipt
+	rawdb.WriteBorReceipt(backend.ChainDb(), block.Hash(), block.NumberU64(), &types.ReceiptForStorage{
+		Status: types.ReceiptStatusSuccessful, // make receipt status successful
+		Logs:   stateSyncLogs,
+	})
+
+	// Write bor tx reverse lookup
+	rawdb.WriteBorTxLookupEntry(backend.ChainDb(), block.Hash(), block.NumberU64())
+	return types.GetDerivedBorTxHash(types.BorReceiptKey(block.NumberU64(), block.Hash()))
+}
+
+func TestRPCGetTransactionReceipt(t *testing.T) {
+	var (
+		api, _, testSuite = setupTransactionsToApiTest(t)
+	)
 
 	for i, tt := range testSuite {
 		var (
@@ -1633,6 +2082,48 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 		}
 		testRPCResponseWithFile(t, i, result, "eth_getTransactionReceipt", tt.file)
 	}
+}
+func TestRPCGetTransactionByHash(t *testing.T) {
+	var (
+		api, _, testSuite = setupTransactionsToApiTest(t)
+	)
+
+	for i, tt := range testSuite {
+		var (
+			result interface{}
+			err    error
+		)
+		result, err = api.GetTransactionByHash(context.Background(), tt.txHash)
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		testRPCResponseWithFile(t, i, result, "eth_getTransactionByHash", tt.file)
+	}
+}
+
+func TestRPCGetBlockTransactionCountByHash(t *testing.T) {
+	var (
+		api, _, _ = setupTransactionsToApiTest(t)
+	)
+
+	cnt := api.GetBlockTransactionCountByHash(context.Background(), api.b.CurrentBlock().Hash())
+
+	// 2 txs: create-contract-with-access-list + state sync tx
+	expected := hexutil.Uint(2)
+	require.Equal(t, expected, *cnt)
+}
+
+func TestRPCGetTransactionByBlockHashAndIndex(t *testing.T) {
+	var (
+		api, _, _ = setupTransactionsToApiTest(t)
+	)
+
+	createContractWithAccessList := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 0)
+	stateSyncTx := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 1)
+
+	testRPCResponseWithFile(t, 0, createContractWithAccessList, "eth_getTransactionByBlockHashAndIndex", "create-contract-with-access-list")
+	testRPCResponseWithFile(t, 1, stateSyncTx, "eth_getTransactionByBlockHashAndIndex", "state-sync-tx")
 }
 
 func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc string, file string) {
@@ -1653,8 +2144,47 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 }
 
 func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
-	t.Parallel()
+	api, blockNrOrHash, testSuite := setupBlocksToApiTest(t)
 
+	receipts, err := api.GetTransactionReceiptsByBlock(context.Background(), blockNrOrHash)
+	if err != nil {
+		t.Fatal("api error")
+	}
+
+	for i, tt := range testSuite {
+		data, err := json.Marshal(receipts[i])
+		if err != nil {
+			t.Errorf("test %d: json marshal error", i)
+			continue
+		}
+		want, have := tt.want, string(data)
+		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+	}
+}
+
+func TestRPCGetBlockReceipts(t *testing.T) {
+	api, blockNrOrHash, testSuite := setupBlocksToApiTest(t)
+
+	receipts, err := api.GetBlockReceipts(context.Background(), blockNrOrHash)
+	if err != nil {
+		t.Fatal("api error")
+	}
+
+	for i, tt := range testSuite {
+		data, err := json.Marshal(receipts[i])
+		if err != nil {
+			t.Errorf("test %d: json marshal error", i)
+			continue
+		}
+		want, have := tt.want, string(data)
+		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+	}
+}
+
+func setupBlocksToApiTest(t *testing.T) (*BlockChainAPI, rpc.BlockNumberOrHash, []struct {
+	txHash common.Hash
+	want   string
+}) {
 	// Initialize test accounts
 	var (
 		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -1664,13 +2194,13 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 		contract   = common.HexToAddress("0000000000000000000000000000000000031ec7")
 		genesis    = &core.Genesis{
 			Config: params.TestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				acc1Addr: {Balance: big.NewInt(params.Ether)},
 				acc2Addr: {Balance: big.NewInt(params.Ether)},
 				contract: {Balance: big.NewInt(params.Ether), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033")},
 			},
 		}
-		genTxs    = 5
+		genTxs    = 6
 		genBlocks = 1
 		signer    = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
 		txHashes  = make([]common.Hash, 0, genTxs)
@@ -1715,6 +2245,11 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 			txHashes = append(txHashes, tx5.Hash())
 		}
 	})
+
+	txHashes = append(txHashes, mockStateSyncTxOnCurrentBlock(t, backend))
+
+	// map sprint 0 to block 1
+	backend.ChainConfig().Bor.Sprint["0"] = 1
 
 	api := NewBlockChainAPI(backend)
 	blockHashes := make([]common.Hash, genBlocks+1)
@@ -1882,20 +2417,27 @@ func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
 				"type": "0x1"
 			  }`,
 		},
+		// 5. state sync tx
+		{
+			txHash: txHashes[5],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": null,
+				"cumulativeGasUsed": "0x0",
+				"effectiveGasPrice": "0x0",
+				"from": "0x0000000000000000000000000000000000000000",
+				"gasUsed": "0x0",
+				"logs": [],
+				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				"status": "0x1",
+				"to": "0x0000000000000000000000000000000000000000",
+				"transactionHash": "0xba46f68d5c3729ac3fb672fec579fc2cad543bc9edf5b2d47d7c6636ac2fbec9",
+				"transactionIndex": "0x5",
+				"type": "0x0"
+			  }`,
+		},
 	}
 
-	receipts, err := api.GetTransactionReceiptsByBlock(context.Background(), blockNrOrHash)
-	if err != nil {
-		t.Fatal("api error")
-	}
-
-	for i, tt := range testSuite {
-		data, err := json.Marshal(receipts[i])
-		if err != nil {
-			t.Errorf("test %d: json marshal error", i)
-			continue
-		}
-		want, have := tt.want, string(data)
-		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
-	}
+	return api, blockNrOrHash, testSuite
 }

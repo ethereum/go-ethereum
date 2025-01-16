@@ -19,7 +19,7 @@ jobs:
           fail-on-vuln: true
 
       - name: Upload govulncheck report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4.4.0
         with:
           name: raw-report
           path: raw-report.json

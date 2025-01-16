@@ -49,20 +49,6 @@ func (mr *MockDatabaseMockRecorder) Ancient(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ancient", reflect.TypeOf((*MockDatabase)(nil).Ancient), arg0, arg1)
 }
 
-// AncientOffSet mocks base method.
-func (m *MockDatabase) AncientOffSet() uint64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AncientOffSet")
-	ret0, _ := ret[0].(uint64)
-	return ret0
-}
-
-// AncientOffSet indicates an expected call of AncientOffSet.
-func (mr *MockDatabaseMockRecorder) AncientOffSet() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AncientOffSet", reflect.TypeOf((*MockDatabase)(nil).AncientOffSet))
-}
-
 // AncientDatadir mocks base method.
 func (m *MockDatabase) AncientDatadir() (string, error) {
 	m.ctrl.T.Helper()
@@ -76,6 +62,20 @@ func (m *MockDatabase) AncientDatadir() (string, error) {
 func (mr *MockDatabaseMockRecorder) AncientDatadir() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AncientDatadir", reflect.TypeOf((*MockDatabase)(nil).AncientDatadir))
+}
+
+// AncientOffSet mocks base method.
+func (m *MockDatabase) AncientOffSet() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AncientOffSet")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// AncientOffSet indicates an expected call of AncientOffSet.
+func (mr *MockDatabaseMockRecorder) AncientOffSet() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AncientOffSet", reflect.TypeOf((*MockDatabase)(nil).AncientOffSet))
 }
 
 // AncientRange mocks base method.
@@ -340,18 +340,18 @@ func (mr *MockDatabaseMockRecorder) ReadAncients(arg0 interface{}) *gomock.Call 
 }
 
 // Stat mocks base method.
-func (m *MockDatabase) Stat(arg0 string) (string, error) {
+func (m *MockDatabase) Stat() (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stat", arg0)
+	ret := m.ctrl.Call(m, "Stat")
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Stat indicates an expected call of Stat.
-func (mr *MockDatabaseMockRecorder) Stat(arg0 interface{}) *gomock.Call {
+func (mr *MockDatabaseMockRecorder) Stat() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stat", reflect.TypeOf((*MockDatabase)(nil).Stat), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stat", reflect.TypeOf((*MockDatabase)(nil).Stat))
 }
 
 // Sync mocks base method.

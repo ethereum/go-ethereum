@@ -18,7 +18,7 @@ package jsre
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -44,7 +44,7 @@ func newWithTestJS(t *testing.T, testjs string) *JSRE {
 
 	dir := t.TempDir()
 	if testjs != "" {
-		if err := os.WriteFile(path.Join(dir, "test.js"), []byte(testjs), os.ModePerm); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "test.js"), []byte(testjs), os.ModePerm); err != nil {
 			t.Fatal("cannot create test.js:", err)
 		}
 	}

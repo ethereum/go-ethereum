@@ -103,7 +103,7 @@ func fetchCheckpointTest(t *testing.T, heimdall *mockHeimdall, bor *bor.Bor, han
 	ctx := context.Background()
 
 	_, _, err := handler.fetchWhitelistCheckpoint(ctx, bor, nil, verifier)
-	require.Equal(t, err, errCheckpoint)
+	require.ErrorIs(t, err, errCheckpoint)
 
 	// create 4 mock checkpoints
 	checkpoints = createMockCheckpoints(4)
@@ -133,7 +133,7 @@ func fetchMilestoneTest(t *testing.T, heimdall *mockHeimdall, bor *bor.Bor, hand
 	ctx := context.Background()
 
 	_, _, err := handler.fetchWhitelistMilestone(ctx, bor, nil, verifier)
-	require.Equal(t, err, errMilestone)
+	require.ErrorIs(t, err, errMilestone)
 
 	// create 4 mock checkpoints
 	milestones = createMockMilestones(4)

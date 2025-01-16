@@ -31,9 +31,10 @@ var (
 )
 
 const (
-	stateFetchLimit    = 50
-	apiHeimdallTimeout = 5 * time.Second
-	retryCall          = 5 * time.Second
+	heimdallAPIBodyLimit = 128 * 1024 * 1024 // 128 MB
+	stateFetchLimit      = 50
+	apiHeimdallTimeout   = 5 * time.Second
+	retryCall            = 5 * time.Second
 )
 
 type StateSyncEventsResponse struct {
@@ -340,7 +341,7 @@ func Fetch[T any](ctx context.Context, request *Request) (*T, error) {
 	isSuccessful := false
 
 	defer func() {
-		if metrics.EnabledExpensive {
+		if metrics.Enabled {
 			sendMetrics(ctx, request.start, isSuccessful)
 		}
 	}()
@@ -455,8 +456,11 @@ func internalFetch(ctx context.Context, client http.Client, u *url.URL) ([]byte,
 		return nil, nil
 	}
 
+	// Limit the number of bytes read from the response body
+	limitedBody := http.MaxBytesReader(nil, res.Body, heimdallAPIBodyLimit)
+
 	// get response
-	body, err := io.ReadAll(res.Body)
+	body, err := io.ReadAll(limitedBody)
 	if err != nil {
 		return nil, err
 	}

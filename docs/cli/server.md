@@ -40,13 +40,13 @@ The ```bor server``` command runs the Bor client.
 
 - ```eth.requiredblocks```: Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
 
-- ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
+- ```ethstats```: Reporting URL of an ethstats service (nodename:secret@host:port)
 
 - ```gcmode```: Blockchain garbage collection mode ("full", "archive") (default: full)
 
 - ```gpo.blocks```: Number of recent blocks to check for gas prices (default: 20)
 
-- ```gpo.ignoreprice```: Gas price below which gpo will ignore transactions (default: 30000000000). It's set to 30gwei in bor
+- ```gpo.ignoreprice```: Gas price below which gpo will ignore transactions (default: 25000000000)
 
 - ```gpo.maxblockhistory```: Maximum block history of gasprice oracle (default: 1024)
 
@@ -148,7 +148,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```graphql```: Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well. (default: false)
 
-- ```graphql.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced) (default: localhost)
+- ```graphql.corsdomain```: Comma separated list of domains from which to accept cross-origin requests (browser enforced) (default: localhost)
 
 - ```graphql.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: localhost)
 
@@ -158,7 +158,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```http.api```: API's offered over the HTTP-RPC interface (default: eth,net,web3,txpool,bor)
 
-- ```http.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced) (default: localhost)
+- ```http.corsdomain```: Comma separated list of domains from which to accept cross-origin requests (browser enforced) (default: localhost)
 
 - ```http.ep-requesttimeout```: Request Timeout for rpc execution pool for HTTP requests (default: 0s)
 
@@ -218,6 +218,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```bootnodes```: Comma separated enode URLs for P2P discovery bootstrap
 
+- ```discovery.dns```: Comma separated list of enrtree:// URLs which will be queried for nodes to connect to
+
 - ```maxpeers```: Maximum number of network peers (network disabled if set to 0) (default: 50)
 
 - ```maxpendpeers```: Maximum number of pending connection attempts (default: 50)
@@ -250,7 +252,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```miner.gaslimit```: Target gas ceiling (gas limit) for mined blocks (default: 30000000)
 
-- ```miner.gasprice```: Minimum gas price for mining a transaction (default: 30000000000). It's set to 30gwei in bor
+- ```miner.gasprice```: Minimum gas price for mining a transaction (default: 25000000000)
 
 - ```miner.interruptcommit```: Interrupt block commit when block creation time is passed (default: true)
 
@@ -306,6 +308,6 @@ The ```bor server``` command runs the Bor client.
 
 - ```txpool.pricebump```: Price bump percentage to replace an already existing transaction (default: 10)
 
-- ```txpool.pricelimit```: Minimum gas price limit to enforce the acceptance of txs into the pool (default: 30000000000). It's set to 30gwei in bor
+- ```txpool.pricelimit```: Minimum gas price limit to enforce for acceptance into the pool (default: 25000000000)
 
 - ```txpool.rejournal```: Time interval to regenerate the local transaction journal (default: 1h0m0s)

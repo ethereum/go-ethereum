@@ -15,7 +15,7 @@ type DumpconfigCommand struct {
 }
 
 // MarkDown implements cli.MarkDown interface
-func (p *DumpconfigCommand) MarkDown() string {
+func (c *DumpconfigCommand) MarkDown() string {
 	items := []string{
 		"# Dumpconfig",
 		"The ```bor dumpconfig <your-favourite-flags>``` command will export the user provided flags into a configuration file",

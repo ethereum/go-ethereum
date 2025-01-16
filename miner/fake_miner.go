@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 type DefaultBorMiner struct {
@@ -93,7 +93,7 @@ func createBorMiner(t *testing.T, ethAPIMock api.Caller, spanner bor.Spanner, he
 	blockchain := &testBlockChainBor{chainConfig, statedb, 10000000, new(event.Feed)}
 
 	pool := legacypool.New(testTxPoolConfigBor, blockchain)
-	txpool, _ := txpool.New(new(big.Int).SetUint64(testTxPoolConfigBor.PriceLimit), blockchain, []txpool.SubPool{pool})
+	txpool, _ := txpool.New(testTxPoolConfigBor.PriceLimit, blockchain, []txpool.SubPool{pool})
 
 	backend := NewMockBackendBor(bc, txpool)
 
@@ -132,7 +132,7 @@ func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.Chai
 	addr := common.HexToAddress("12345")
 	genesis := core.DeveloperGenesisBlock(11_500_000, &addr)
 
-	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB, trie.HashDefaults), genesis)
+	chainConfig, _, err := core.SetupGenesisBlock(chainDB, triedb.NewDatabase(chainDB, triedb.HashDefaults), genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
 	}
@@ -212,7 +212,7 @@ func (bc *testBlockChainBor) CurrentBlock() *types.Header {
 }
 
 func (bc *testBlockChainBor) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil, trie.NewStackTrie(nil))
+	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil)
 }
 
 func (bc *testBlockChainBor) StateAt(common.Hash) (*state.StateDB, error) {

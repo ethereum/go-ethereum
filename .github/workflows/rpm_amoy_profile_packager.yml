@@ -1,0 +1,325 @@
+name: rpm_amoy_profile
+
+on:
+  push:
+    branches:
+      - 'master'
+    paths:
+      - '**'
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+
+jobs:
+  build:
+    permissions:
+      id-token: write
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Adding TAG to ENV
+        run: echo "GIT_TAG=`echo $(git describe --tags --abbrev=0)`" >> $GITHUB_ENV
+
+      - name: Adding a TAG1 to the env
+        run: echo "GIT_TAG1=`echo $(git describe --tags --abbrev=0)`" | sed 's/-/./g' >> $GITHUB_ENV
+
+      - name: Installing some dependencies
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Setup rpm package directories
+        run: |
+          mkdir -p packaging/rpm/SPECS
+          mkdir -p packaging/rpm/BUILD
+          mkdir -p packaging/rpm/RPMS
+          mkdir -p packaging/rpm/SRPMS
+
+      - name: Start tasks needed for Amoy Sentry node
+        run: echo "#########################################################################"
+
+      - name: Setting up Amoy Sentry Node Spec files
+        run: |
+          touch packaging/rpm/bor-amoy-sentry.spec 
+          echo "Name: bor-amoy-sentry-config" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "Summary: bor amoy sentry config rpm package" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "Bor Amoy Sentry rpm package" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+
+      - name: Build Amoy Sentry Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-amoy-sentry.spec 
+
+      - name: Start tasks needed for Amoy Sentry PBSS node
+        run: echo "#########################################################################"
+
+      - name: Setting up Amoy Sentry PBSS Node Spec files
+        run: |
+          touch packaging/rpm/bor-pbss-amoy-sentry.spec 
+          echo "Name: bor-pbss-amoy-sentry-config" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "Summary: bor amoy sentry config rpm package" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "Bor Amoy Sentry rpm package" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/sentry/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec
+
+      - name: Build Amoy Sentry PBSS Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-pbss-amoy-sentry.spec 
+
+      - name: Setting up Amoy Validator Node node
+        run: echo "#########################################################################"
+
+      - name: Setting up Amoy Validator Node Spec files
+        run: |
+          touch packaging/rpm/bor-amoy-validator.spec 
+          echo "Name: bor-amoy-validator-config" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "Summary: bor amoy validator config rpm package" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "Bor Amoy Validator rpm package" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/validator/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+
+
+      - name: Build Amoy Validator Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-amoy-validator.spec   
+
+      - name: Setting up Amoy Validator PBSS Node node
+        run: echo "#########################################################################"
+
+      - name: Setting up Amoy Validator PBSS Node Spec files
+        run: |
+          touch packaging/rpm/bor-pbss-amoy-validator.spec 
+          echo "Name: bor-pbss-amoy-validator-config" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "Summary: bor amoy validator config rpm package" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "Bor Amoy Validator rpm package" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/validator/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-pbss-amoy-validator.spec
+
+
+      - name: Build Amoy Validator PBSS Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-pbss-amoy-validator.spec   
+
+
+      - name: Setting up Amoy Boot node
+        run: echo "#########################################################################"
+
+      - name: Setting up Amoy Boot Node Spec files
+        run: |
+          touch packaging/rpm/bor-amoy-bootnode.spec 
+          echo "Name: bor-amoy-bootnode-config" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "Summary: bor amoy bootnode config rpm package" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "Bor Amoy Bootnode rpm package" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor_bootnode.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+
+      - name: Build Amoy Boot Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-amoy-bootnode.spec   
+
+      - name: Setting up Amoy Archive node
+        run: echo "#########################################################################"
+
+      - name: Setting up Amoy Archive Node spec file
+        run: |
+          touch packaging/rpm/bor-amoy-archive.spec 
+          echo "Name: bor-amoy-archive-config" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "Summary: bor amoy archive config rpm package" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          
+          echo "%description" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "Bor Amoy Archive rpm package" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/archive/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+
+      - name: Build Amoy Archive Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-amoy-archive.spec 
+
+      - name: renaming file for rpm release appendage archive amoy
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-archive-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage bootnode amoy
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage sentry amoy
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage sentry pbss amoy
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-sentry-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage validator amoy
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage validator pbss amoy
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-validator-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm
+
+      - name: adding shasum for the rpm build amoy archive
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build amoy bootnode
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build amoy sentry
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build amoy sentry pbss
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-pbss-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build amoy validator
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build amoy validator pbss
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-pbss-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+
+
+      - name: Release bor Packages
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.GIT_TAG }}
+          prerelease: true
+          files: |
+            packaging/rpm_build/RPMS/noarch/bor-amoy-**.rpm
+            packaging/rpm_build/RPMS/noarch/bor-amoy-**.rpm.checksum
+            packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-**.rpm
+            packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-**.rpm.checksum

@@ -73,6 +73,7 @@ func testConsoleLogging(t *testing.T, format string, tStart, tEnd int) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer readFile.Close()
 	wantLines := split(readFile)
 	haveLines := split(bytes.NewBuffer(haveB))
 	for i, want := range wantLines {
@@ -109,6 +110,7 @@ func TestJsonLogging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer readFile.Close()
 	wantLines := split(readFile)
 	haveLines := split(bytes.NewBuffer(haveB))
 	for i, wantLine := range wantLines {

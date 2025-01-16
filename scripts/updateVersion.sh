@@ -51,22 +51,6 @@ fi
 echo ""
 echo "New version is: $version"
 
-# update version in all the 6 templates
-replace="Version: "$version
-fileArray=(
-    "${DIR}/../packaging/templates/package_scripts/control"
-    "${DIR}/../packaging/templates/package_scripts/control.arm64"
-    "${DIR}/../packaging/templates/package_scripts/control.profile.amd64"
-    "${DIR}/../packaging/templates/package_scripts/control.profile.arm64"
-    "${DIR}/../packaging/templates/package_scripts/control.validator"
-    "${DIR}/../packaging/templates/package_scripts/control.validator.arm64"
-)
-for file in ${fileArray[@]}; do
-    # get the line starting with `Version` in the control file and store it in the $temp variable
-    temp=$(grep "^Version.*" $file)
-    sed -i '' "s%$temp%$replace%" $file
-done
-
 # update version in  ../params/version.go
 versionFile="${DIR}/../params/version.go"
 sed -i '' "s% = .*// Major% = $VersionMajor // Major%g" $versionFile

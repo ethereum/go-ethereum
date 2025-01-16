@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/log"
@@ -36,7 +37,7 @@ const (
 // syncTransactions starts sending all currently pending transactions to the given peer.
 func (h *handler) syncTransactions(p *eth.Peer) {
 	var hashes []common.Hash
-	for _, batch := range h.txpool.Pending(false) {
+	for _, batch := range h.txpool.Pending(txpool.PendingFilter{OnlyPlainTxs: true}) {
 		for _, tx := range batch {
 			hashes = append(hashes, tx.Hash)
 		}
@@ -153,7 +154,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	// An alternative would be to check the local chain for exceeding the TTD and
 	// avoid triggering a sync in that case, but that could also miss sibling or
 	// other family TTD block being accepted.
-	if cs.handler.chain.Config().TerminalTotalDifficultyPassed || cs.handler.merger.TDDReached() {
+	if cs.handler.chain.Config().TerminalTotalDifficultyPassed {
 		return nil
 	}
 	// Ensure we're at minimum peer count.

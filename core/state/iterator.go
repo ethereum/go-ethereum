@@ -46,7 +46,7 @@ type nodeIterator struct {
 	Error error // Failure set in case of an internal error in the iterator
 }
 
-// newNodeIterator creates an post-order state node iterator.
+// newNodeIterator creates a post-order state node iterator.
 func newNodeIterator(state *StateDB) *nodeIterator {
 	return &nodeIterator{
 		state: state,

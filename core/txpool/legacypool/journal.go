@@ -181,7 +181,11 @@ func (journal *journal) rotate(all map[common.Address]types.Transactions) error 
 
 	journal.writer = sink
 
-	log.Info("Regenerated local transaction journal", "transactions", journaled, "accounts", len(all))
+	logger := log.Info
+	if len(all) == 0 {
+		logger = log.Debug
+	}
+	logger("Regenerated local transaction journal", "transactions", journaled, "accounts", len(all))
 
 	return nil
 }

@@ -19,6 +19,7 @@ package debug
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -30,15 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
-	"github.com/fjl/memsize/memsizeui"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/exp/slog"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
-
-var Memsize memsizeui.Handler
 
 var (
 	verbosityFlag = &cli.IntFlag{
@@ -168,22 +165,12 @@ var Flags = []cli.Flag{
 }
 
 var (
-	glogger                *log.GlogHandler
-	logOutputFile          io.WriteCloser
-	defaultTerminalHandler *log.TerminalHandler
+	glogger       *log.GlogHandler
+	logOutputFile io.WriteCloser
 )
 
 func init() {
-	defaultTerminalHandler = log.NewTerminalHandler(os.Stderr, false)
-	glogger = log.NewGlogHandler(defaultTerminalHandler)
-	glogger.Verbosity(log.LvlInfo)
-	log.SetDefault(log.NewLogger(glogger))
-}
-
-func ResetLogging() {
-	if defaultTerminalHandler != nil {
-		defaultTerminalHandler.ResetFieldPadding()
-	}
+	glogger = log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
@@ -323,7 +310,6 @@ func StartPProf(address string, withMetrics bool) {
 	if withMetrics {
 		exp.Exp(metrics.DefaultRegistry)
 	}
-	http.Handle("/memsize/", http.StripPrefix("/memsize", &Memsize))
 	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
 	go func() {
 		if err := http.ListenAndServe(address, nil); err != nil {

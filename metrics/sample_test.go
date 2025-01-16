@@ -91,13 +91,6 @@ func BenchmarkUniformSample1028(b *testing.B) {
 	benchmarkSample(b, NewUniformSample(1028))
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func TestExpDecaySample(t *testing.T) {
 	for _, tc := range []struct {
 		reservoirSize int
@@ -114,18 +107,18 @@ func TestExpDecaySample(t *testing.T) {
 		}
 		snap := sample.Snapshot()
 		if have, want := int(snap.Count()), tc.updates; have != want {
-			t.Errorf("have %d want %d", have, want)
+			t.Errorf("unexpected count: have %d want %d", have, want)
 		}
 		if have, want := snap.Size(), min(tc.updates, tc.reservoirSize); have != want {
-			t.Errorf("have %d want %d", have, want)
+			t.Errorf("unexpected size: have %d want %d", have, want)
 		}
 		values := snap.(*sampleSnapshot).values
 		if have, want := len(values), min(tc.updates, tc.reservoirSize); have != want {
-			t.Errorf("have %d want %d", have, want)
+			t.Errorf("unexpected values length: have %d want %d", have, want)
 		}
 		for _, v := range values {
 			if v > int64(tc.updates) || v < 0 {
-				t.Errorf("out of range [0, %d): %v", tc.updates, v)
+				t.Errorf("out of range [0, %d]: %v", tc.updates, v)
 			}
 		}
 	}
@@ -214,7 +207,7 @@ func TestUniformSample(t *testing.T) {
 	}
 	for _, v := range values {
 		if v > 1000 || v < 0 {
-			t.Errorf("out of range [0, 100): %v\n", v)
+			t.Errorf("out of range [0, 1000]: %v\n", v)
 		}
 	}
 }
@@ -277,6 +270,9 @@ func benchmarkSample(b *testing.B, s Sample) {
 }
 
 func testExpDecaySampleStatistics(t *testing.T, s SampleSnapshot) {
+	if sum := s.Sum(); sum != 496598 {
+		t.Errorf("s.Sum(): 496598 != %v\n", sum)
+	}
 	if count := s.Count(); count != 10000 {
 		t.Errorf("s.Count(): 10000 != %v\n", count)
 	}
