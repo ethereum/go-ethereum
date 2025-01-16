@@ -1,0 +1,73 @@
+name: Builds and pushes go-ethereum:hardhat Docker image to ECR
+
+on:
+  # keep for manual trigger if needed
+  workflow_dispatch:
+    inputs:
+      create_tag:
+        description: "Create and push a new tag?"
+        required: false
+        type: boolean
+  pull_request:
+    branches: [master]
+    types:
+      - closed
+
+env:
+  AWS_ACCOUNT_ID: "861276097334"
+  AWS_REGION: "eu-central-1"
+  ECR_REPO_NAME: "limechain-devops-task/go-ethereum"
+  IAM_OIDC_ROLE_NAME: "go-ethereum-github-actions-role"
+  GH_TOKEN: ${{ github.token }}
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  build-and-push:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy'))
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.IAM_OIDC_ROLE_NAME }}
+          role-session-name: go-ethereum-github-actions
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        run: |
+          FULL_ECR_URL=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${FULL_ECR_URL}
+
+      - name: Get latest image tag
+        id: get-latest-tag
+        run: |
+          LATEST_TAG=$(aws ecr describe-images \
+            --repository-name ${{ env.ECR_REPO_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query "sort_by(imageDetails[?contains(imageTags[0], 'hardhat')], &imagePushedAt)[-1].imageTags[0]" \
+            --output text)
+          if [[ "$LATEST_TAG" == "None" ]]; then
+            NEW_TAG=hardhat-1
+          else
+            # Get only the number part from the latest hardhat tag
+            LAST_NUMBER=$(echo "$LATEST_TAG" | grep -oE '[0-9]+$')
+
+            # Increment the number and build the new tag
+            NEW_NUMBER=$((LAST_NUMBER + 1))
+            NEW_TAG="hardhat-${NEW_NUMBER}"
+            fi
+          fi
+          echo "new-tag=${NEW_TAG}" >> $GITHUB_OUTPUT
