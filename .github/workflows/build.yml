@@ -105,7 +105,7 @@ jobs:
           git tag -a $NEW_TAG -m "New tag: $NEW_TAG"
           git push origin $NEW_TAG
 
-          PR_NUMBER=$(gh pr list --head ${{ github.ref_name }} --state open --json number --jq '.[0].number')
+          PR_NUMBER=$(gh pr list --head ${{ github.ref_name }} --state merged --json number --jq '.[0].number')
           if [[ -n "$PR_NUMBER" ]]; then
             echo ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
             gh pr comment $PR_NUMBER -b ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
