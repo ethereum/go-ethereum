@@ -248,8 +248,27 @@ func TestKeyForDirectICAP(t *testing.T) {
 	t.Skip("NewKeyForDirectICAP in this test is invalid, will fall into a infinite loop ")
 	t.Parallel()
 	key := NewKeyForDirectICAP(rand.Reader)
-	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
-		t.Errorf("Expected first address byte to be zero, have: %s", key.Address.Hex())
+	if key.Address[0] != 0 {
+		t.Errorf("Expected first address byte to be zero, have: %x", key.Address[0])
+	}
+}
+
+func TestNewKeyForDirectICAP(t *testing.T) {
+	addr0 := common.HexToAddress("0x00ffffffffffffffffffffffffffffffffffffff")
+	addr1 := common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
+	tests := []struct {
+		name   string
+		result bool
+	}{
+		{"addr0 start with 0", addr0[0] == 0},
+		{"addr1 not start with 0", addr1[0] != 0},
+		{"addr0 start with 0x00 or xdc00", strings.HasPrefix(addr0.Hex(), "0x00") || strings.HasPrefix(addr0.Hex(), "xdc00")},
+		{"addr1 not start with 0x00 nor xdc00", !strings.HasPrefix(addr1.Hex(), "0x00") && !strings.HasPrefix(addr1.Hex(), "xdc00")},
+	}
+	for _, tt := range tests {
+		if !tt.result {
+			t.Errorf("test %q failed\n", tt.name)
+		}
 	}
 }
 
