@@ -219,7 +219,7 @@ func (s pragueSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 	}
 	// Check that chain ID of tx matches the signer. We also accept ID zero here,
 	// because it indicates that the chain ID was not specified in the tx.
-	if txdata.ChainID != 0 && new(big.Int).SetUint64(txdata.ChainID).Cmp(s.chainId) != 0 {
+	if txdata.ChainID != nil && txdata.ChainID.CmpBig(s.chainId) != 0 {
 		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
 	}
 	R, S, _ = decodeSignature(sig)

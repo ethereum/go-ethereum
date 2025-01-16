@@ -57,6 +57,7 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
+		EnableVerkleAtGenesis:   true,
 		// TODO uncomment when proof generation is merged
 		// ProofInBlocks:                 true,
 	}
@@ -77,6 +78,7 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
+		EnableVerkleAtGenesis:   true,
 	}
 )
 

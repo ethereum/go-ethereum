@@ -470,7 +470,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		if msg.SetCodeAuthorizations != nil {
 			for _, auth := range msg.SetCodeAuthorizations {
 				// Note errors are ignored, we simply skip invalid authorizations here.
-				st.applyAuthorization(msg, &auth)
+				st.applyAuthorization(&auth)
 			}
 		}
 
@@ -529,8 +529,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
 func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorization) (authority common.Address, err error) {
-	// Verify chain ID is 0 or equal to current chain ID.
-	if auth.ChainID != 0 && st.evm.ChainConfig().ChainID.Uint64() != auth.ChainID {
+	// Verify chain ID is null or equal to current chain ID.
+	if !auth.ChainID.IsZero() && auth.ChainID.CmpBig(st.evm.ChainConfig().ChainID) != 0 {
 		return authority, ErrAuthorizationWrongChainID
 	}
 	// Limit nonce to 2^64-1 per EIP-2681.
@@ -559,7 +559,7 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 }
 
 // applyAuthorization applies an EIP-7702 code delegation to the state.
-func (st *stateTransition) applyAuthorization(msg *Message, auth *types.SetCodeAuthorization) error {
+func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) error {
 	authority, err := st.validateAuthorization(auth)
 	if err != nil {
 		return err

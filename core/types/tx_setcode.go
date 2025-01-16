@@ -49,7 +49,7 @@ func AddressToDelegation(addr common.Address) []byte {
 // SetCodeTx implements the EIP-7702 transaction type which temporarily installs
 // the code at the signer's address.
 type SetCodeTx struct {
-	ChainID    uint64
+	ChainID    *uint256.Int
 	Nonce      uint64
 	GasTipCap  *uint256.Int // a.k.a. maxPriorityFeePerGas
 	GasFeeCap  *uint256.Int // a.k.a. maxFeePerGas
@@ -61,16 +61,16 @@ type SetCodeTx struct {
 	AuthList   []SetCodeAuthorization
 
 	// Signature values
-	V *uint256.Int `json:"v" gencodec:"required"`
-	R *uint256.Int `json:"r" gencodec:"required"`
-	S *uint256.Int `json:"s" gencodec:"required"`
+	V *uint256.Int
+	R *uint256.Int
+	S *uint256.Int
 }
 
 //go:generate go run github.com/fjl/gencodec -type SetCodeAuthorization -field-override authorizationMarshaling -out gen_authorization.go
 
 // SetCodeAuthorization is an authorization from an account to deploy code at its address.
 type SetCodeAuthorization struct {
-	ChainID uint64         `json:"chainId" gencodec:"required"`
+	ChainID uint256.Int    `json:"chainId" gencodec:"required"`
 	Address common.Address `json:"address" gencodec:"required"`
 	Nonce   uint64         `json:"nonce" gencodec:"required"`
 	V       uint8          `json:"yParity" gencodec:"required"`
@@ -80,7 +80,7 @@ type SetCodeAuthorization struct {
 
 // field type overrides for gencodec
 type authorizationMarshaling struct {
-	ChainID hexutil.Uint64
+	ChainID hexutil.U256
 	Nonce   hexutil.Uint64
 	V       hexutil.Uint64
 	R       hexutil.U256
@@ -180,7 +180,7 @@ func (tx *SetCodeTx) copy() TxData {
 
 // accessors for innerTx.
 func (tx *SetCodeTx) txType() byte           { return SetCodeTxType }
-func (tx *SetCodeTx) chainID() *big.Int      { return big.NewInt(int64(tx.ChainID)) }
+func (tx *SetCodeTx) chainID() *big.Int      { return tx.ChainID.ToBig() }
 func (tx *SetCodeTx) accessList() AccessList { return tx.AccessList }
 func (tx *SetCodeTx) data() []byte           { return tx.Data }
 func (tx *SetCodeTx) gas() uint64            { return tx.Gas }
@@ -207,7 +207,7 @@ func (tx *SetCodeTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 
 func (tx *SetCodeTx) setSignatureValues(chainID, v, r, s *big.Int) {
-	tx.ChainID = chainID.Uint64()
+	tx.ChainID = uint256.MustFromBig(chainID)
 	tx.V.SetFromBig(v)
 	tx.R.SetFromBig(r)
 	tx.S.SetFromBig(s)

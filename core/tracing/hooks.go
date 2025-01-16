@@ -293,7 +293,7 @@ const (
 	GasChangeCallLeftOverRefunded GasChangeReason = 7
 	// GasChangeCallContractCreation is the amount of gas that will be burned for a CREATE.
 	GasChangeCallContractCreation GasChangeReason = 8
-	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE2.
+	// GasChangeCallContractCreation2 is the amount of gas that will be burned for a CREATE2.
 	GasChangeCallContractCreation2 GasChangeReason = 9
 	// GasChangeCallCodeStorage is the amount of gas that will be charged for code storage.
 	GasChangeCallCodeStorage GasChangeReason = 10

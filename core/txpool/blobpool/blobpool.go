@@ -1751,7 +1751,7 @@ func (p *BlobPool) Clear() {
 	// The transaction addition may attempt to reserve the sender addr which
 	// can't happen until Clear releases the reservation lock.  Clear cannot
 	// acquire the subpool lock until the transaction addition is completed.
-	for acct, _ := range p.index {
+	for acct := range p.index {
 		p.reserve(acct, false)
 	}
 	p.lookup = newLookup()
