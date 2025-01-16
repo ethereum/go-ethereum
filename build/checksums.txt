@@ -5,7 +5,7 @@
 # https://github.com/ethereum/execution-spec-tests/releases/download/v2.1.0/
 ca89c76851b0900bfcc3cbb9a26cbece1f3d7c64a3bed38723e914713290df6c  fixtures_develop.tar.gz
 
-# version:golang go1.23.5
+# version:golang 1.23.5
 # https://go.dev/dl/
 a6f3f4bbd3e6bdd626f79b668f212fbb5649daf75084fb79b678a0ae4d97423b  go1.23.5.src.tar.gz
 8d8bc7d1b362dd91426da9352741db298ff73e3e0a3ccbe6f607f80ba17647a4  go1.23.5.aix-ppc64.tar.gz
