@@ -529,21 +529,6 @@ func (db *Database) Size() (diffs common.StorageSize, nodes common.StorageSize) 
 	return diffs, nodes
 }
 
-// Initialized returns an indicator if the state data is already
-// initialized in path-based scheme.
-func (db *Database) Initialized(genesisRoot common.Hash) bool {
-	var inited bool
-	db.tree.forEach(func(layer layer) {
-		if layer.rootHash() != types.EmptyRootHash {
-			inited = true
-		}
-	})
-	if !inited {
-		inited = rawdb.ReadSnapSyncStatusFlag(db.diskdb) != rawdb.StateSyncUnknown
-	}
-	return inited
-}
-
 // modifyAllowed returns the indicator if mutation is allowed. This function
 // assumes the db.lock is already held.
 func (db *Database) modifyAllowed() error {

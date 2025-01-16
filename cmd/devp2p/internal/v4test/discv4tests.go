@@ -194,7 +194,7 @@ func PingExtraData(t *utesting.T) {
 	}
 }
 
-// This test sends a PING packet with additional data and wrong 'from' field
+// PingExtraDataWrongFrom sends a PING packet with additional data and wrong 'from' field
 // and expects a PONG response.
 func PingExtraDataWrongFrom(t *utesting.T) {
 	te := newTestEnv(Remote, Listen1, Listen2)
@@ -215,7 +215,7 @@ func PingExtraDataWrongFrom(t *utesting.T) {
 	}
 }
 
-// This test sends a PING packet with an expiration in the past.
+// PingPastExpiration sends a PING packet with an expiration in the past.
 // The remote node should not respond.
 func PingPastExpiration(t *utesting.T) {
 	te := newTestEnv(Remote, Listen1, Listen2)
@@ -234,7 +234,7 @@ func PingPastExpiration(t *utesting.T) {
 	}
 }
 
-// This test sends an invalid packet. The remote node should not respond.
+// WrongPacketType sends an invalid packet. The remote node should not respond.
 func WrongPacketType(t *utesting.T) {
 	te := newTestEnv(Remote, Listen1, Listen2)
 	defer te.close()
@@ -252,7 +252,7 @@ func WrongPacketType(t *utesting.T) {
 	}
 }
 
-// This test verifies that the default behaviour of ignoring 'from' fields is unaffected by
+// BondThenPingWithWrongFrom verifies that the default behaviour of ignoring 'from' fields is unaffected by
 // the bonding process. After bonding, it pings the target with a different from endpoint.
 func BondThenPingWithWrongFrom(t *utesting.T) {
 	te := newTestEnv(Remote, Listen1, Listen2)
@@ -289,7 +289,7 @@ waitForPong:
 	}
 }
 
-// This test just sends FINDNODE. The remote node should not reply
+// FindnodeWithoutEndpointProof sends FINDNODE. The remote node should not reply
 // because the endpoint proof has not completed.
 func FindnodeWithoutEndpointProof(t *utesting.T) {
 	te := newTestEnv(Remote, Listen1, Listen2)
@@ -332,7 +332,7 @@ func BasicFindnode(t *utesting.T) {
 	}
 }
 
-// This test sends an unsolicited NEIGHBORS packet after the endpoint proof, then sends
+// UnsolicitedNeighbors sends an unsolicited NEIGHBORS packet after the endpoint proof, then sends
 // FINDNODE to read the remote table. The remote node should not return the node contained
 // in the unsolicited NEIGHBORS packet.
 func UnsolicitedNeighbors(t *utesting.T) {
@@ -373,7 +373,7 @@ func UnsolicitedNeighbors(t *utesting.T) {
 	}
 }
 
-// This test sends FINDNODE with an expiration timestamp in the past.
+// FindnodePastExpiration sends FINDNODE with an expiration timestamp in the past.
 // The remote node should not respond.
 func FindnodePastExpiration(t *utesting.T) {
 	te := newTestEnv(Remote, Listen1, Listen2)
@@ -426,7 +426,7 @@ func bond(t *utesting.T, te *testenv) {
 	}
 }
 
-// This test attempts to perform a traffic amplification attack against a
+// FindnodeAmplificationInvalidPongHash attempts to perform a traffic amplification attack against a
 // 'victim' endpoint using FINDNODE. In this attack scenario, the attacker
 // attempts to complete the endpoint proof non-interactively by sending a PONG
 // with mismatching reply token from the 'victim' endpoint. The attack works if
@@ -478,7 +478,7 @@ func FindnodeAmplificationInvalidPongHash(t *utesting.T) {
 	}
 }
 
-// This test attempts to perform a traffic amplification attack using FINDNODE.
+// FindnodeAmplificationWrongIP attempts to perform a traffic amplification attack using FINDNODE.
 // The attack works if the remote node does not verify the IP address of FINDNODE
 // against the endpoint verification proof done by PING/PONG.
 func FindnodeAmplificationWrongIP(t *utesting.T) {
