@@ -93,7 +93,7 @@ jobs:
 
           docker push "${FULL_ECR_URL}:${NEW_TAG}"
 
-      - name: Create new tag and notify PR
+      - name: Create a new tag
         if: >
           inputs.create_tag == true ||
           (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build'))
@@ -105,11 +105,27 @@ jobs:
           git tag -a $NEW_TAG -m "New tag: $NEW_TAG"
           git push origin $NEW_TAG
 
-          PR_NUMBER=$(gh pr list --head ${{ github.ref_name }} --state merged --json number --jq '.[0].number')
-          if [[ -n "$PR_NUMBER" ]]; then
-            echo ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
-            gh pr comment $PR_NUMBER -b ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
-          else
-            echo ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
-            echo "No open PR found for branch ${{ inputs.branch }}."
-          fi
+      - name: Add a release comment in PR
+        if: >
+          inputs.create_tag == true ||
+          (github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build'))
+        uses: actions/github-script@v7
+        id: my-script
+        with:
+          script: |
+            github.rest.issues.get({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: ':rocket: A new tag v(${{ steps.get-latest-tag.outputs.new-tag }}) has been created and pushed!'
+            })
+
+        # run: |
+        #   PR_NUMBER=$(gh pr list --head ${{ github.ref_name }} --state merged --json number --jq '.[0].number')
+        #   if [[ -n "$PR_NUMBER" ]]; then
+        #     echo ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
+        #     gh pr comment $PR_NUMBER -b ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
+        #   else
+        #     echo ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
+        #     echo "No open PR found for branch ${{ inputs.branch }}."
+        #   fi
