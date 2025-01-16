@@ -117,15 +117,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: ':rocket: A new tag v(${{ steps.get-latest-tag.outputs.new-tag }}) has been created and pushed!'
+              body: ':rocket: A new tag v${{ steps.get-latest-tag.outputs.new-tag }} has been created and pushed!'
             })
-
-        # run: |
-        #   PR_NUMBER=$(gh pr list --head ${{ github.ref_name }} --state merged --json number --jq '.[0].number')
-        #   if [[ -n "$PR_NUMBER" ]]; then
-        #     echo ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
-        #     gh pr comment $PR_NUMBER -b ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
-        #   else
-        #     echo ":rocket: A new tag ${NEW_TAG} has been created and pushed!"
-        #     echo "No open PR found for branch ${{ inputs.branch }}."
-        #   fi
