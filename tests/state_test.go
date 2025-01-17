@@ -54,6 +54,9 @@ func initMatcher(st *testMatcher) {
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
+	// Out-of-date EIP-2537 tests
+	st.skipLoad(`^stEIP2537/`)
+
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
