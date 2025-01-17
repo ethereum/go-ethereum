@@ -1313,7 +1313,7 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
-	core.SenderCacher.Recover(pool.signer, reinject)
+	core.SenderCacher().Recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject)
 }
 
@@ -1758,4 +1758,5 @@ func (pool *LegacyPool) Clear() {
 	pool.priced = newPricedList(pool.all)
 	pool.pending = make(map[common.Address]*list)
 	pool.queue = make(map[common.Address]*list)
+	pool.pendingNonces = newNoncer(pool.currentState)
 }

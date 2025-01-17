@@ -140,7 +140,7 @@ type stTransactionMarshaling struct {
 
 // Authorization is an authorization from an account to deploy code at it's address.
 type stAuthorization struct {
-	ChainID uint64
+	ChainID *big.Int       `json:"chainId" gencodec:"required"`
 	Address common.Address `json:"address" gencodec:"required"`
 	Nonce   uint64         `json:"nonce" gencodec:"required"`
 	V       uint8          `json:"v" gencodec:"required"`
@@ -150,7 +150,7 @@ type stAuthorization struct {
 
 // field type overrides for gencodec
 type stAuthorizationMarshaling struct {
-	ChainID math.HexOrDecimal64
+	ChainID *math.HexOrDecimal256
 	Nonce   math.HexOrDecimal64
 	V       math.HexOrDecimal64
 	R       *math.HexOrDecimal256
@@ -339,7 +339,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	st.StateDB.AddBalance(block.Coinbase(), new(uint256.Int), tracing.BalanceChangeUnspecified)
 
 	// Commit state mutations into database.
-	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()))
+	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()), config.IsCancun(block.Number(), block.Time()))
 	if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
 		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
 		tracer.OnTxEnd(receipt, nil)
@@ -446,7 +446,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		authList = make([]types.SetCodeAuthorization, len(tx.AuthorizationList))
 		for i, auth := range tx.AuthorizationList {
 			authList[i] = types.SetCodeAuthorization{
-				ChainID: auth.ChainID,
+				ChainID: *uint256.MustFromBig(auth.ChainID),
 				Address: auth.Address,
 				Nonce:   auth.Nonce,
 				V:       auth.V,
@@ -512,7 +512,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false)
+	root, _ := statedb.Commit(0, false, false)
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
