@@ -49,9 +49,9 @@ func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[co
 	return accounts, storages
 }
 
-func makeHistory() *history {
+func makeHistory(rawStorageKey bool) *history {
 	accounts, storages := randomStateSet(3)
-	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages, false)
+	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages, rawStorageKey)
 }
 
 func makeHistories(n int) []*history {
@@ -70,10 +70,15 @@ func makeHistories(n int) []*history {
 }
 
 func TestEncodeDecodeHistory(t *testing.T) {
+	testEncodeDecodeHistory(t, false)
+	testEncodeDecodeHistory(t, true)
+}
+
+func testEncodeDecodeHistory(t *testing.T, rawStorageKey bool) {
 	var (
 		m   meta
 		dec history
-		obj = makeHistory()
+		obj = makeHistory(rawStorageKey)
 	)
 	// check if meta data can be correctly encode/decode
 	blob := obj.meta.encode()

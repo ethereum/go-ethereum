@@ -290,6 +290,11 @@ func TestStateRevertStorageNullMarker(t *testing.T) {
 }
 
 func TestStatesEncode(t *testing.T) {
+	testStatesEncode(t, false)
+	testStatesEncode(t, true)
+}
+
+func testStatesEncode(t *testing.T, rawStorageKey bool) {
 	s := newStates(
 		map[common.Hash][]byte{
 			{0x1}: {0x1},
@@ -299,7 +304,7 @@ func TestStatesEncode(t *testing.T) {
 				common.Hash{0x1}: {0x1},
 			},
 		},
-		false,
+		rawStorageKey,
 	)
 	buf := bytes.NewBuffer(nil)
 	if err := s.encode(buf); err != nil {
@@ -315,9 +320,17 @@ func TestStatesEncode(t *testing.T) {
 	if !reflect.DeepEqual(s.storageData, dec.storageData) {
 		t.Fatal("Unexpected storage data")
 	}
+	if s.rawStorageKey != dec.rawStorageKey {
+		t.Fatal("Unexpected rawStorageKey flag")
+	}
 }
 
 func TestStateWithOriginEncode(t *testing.T) {
+	testStateWithOriginEncode(t, false)
+	testStateWithOriginEncode(t, true)
+}
+
+func testStateWithOriginEncode(t *testing.T, rawStorageKey bool) {
 	s := NewStateSetWithOrigin(
 		map[common.Hash][]byte{
 			{0x1}: {0x1},
@@ -335,7 +348,7 @@ func TestStateWithOriginEncode(t *testing.T) {
 				common.Hash{0x1}: {0x1},
 			},
 		},
-		false,
+		rawStorageKey,
 	)
 	buf := bytes.NewBuffer(nil)
 	if err := s.encode(buf); err != nil {
@@ -356,6 +369,9 @@ func TestStateWithOriginEncode(t *testing.T) {
 	}
 	if !reflect.DeepEqual(s.storageOrigin, dec.storageOrigin) {
 		t.Fatal("Unexpected storage origin data")
+	}
+	if s.rawStorageKey != dec.rawStorageKey {
+		t.Fatal("Unexpected rawStorageKey flag")
 	}
 }
 
