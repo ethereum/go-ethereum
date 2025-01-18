@@ -231,7 +231,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, env.evm)
 	}
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
-		core.ProcessParentBlockHash(header.ParentHash, env.evm)
+		core.ProcessParentBlockHash(header.ParentHash, env.evm, false)
 	}
 	return env, nil
 }

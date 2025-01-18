@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -86,7 +87,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	if p.config.IsPrague(block.Number(), block.Time()) {
-		ProcessParentBlockHash(block.ParentHash(), evm)
+		ProcessParentBlockHash(block.ParentHash(), evm, p.config.IsVerkle(block.Number(), block.Time()))
 	}
 
 	// Iterate over and process the individual transactions
@@ -234,13 +235,23 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM) {
 }
 
 // ProcessParentBlockHash stores the parent block hash in the history storage contract
-// as per EIP-2935.
-func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
+// as per EIP-2935/7709.
+func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, is7709 bool) {
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
 		}
+	}
+	if is7709 {
+		// currently 8192 for kautinen7, to be changed to 8 (and made a constant) for kaustinen8
+		ringIndex := (evm.Context.BlockNumber.Uint64() - 1) % params.HistoryServeWindow
+		var key common.Hash
+		binary.BigEndian.PutUint64(key[24:], ringIndex)
+		evm.StateDB.SetState(params.SystemAddress, key, prevHash)
+		evm.StateDB.AccessEvents().SlotGas(params.SystemAddress, key, true)
+		evm.StateDB.Finalise(false)
+		return
 	}
 	msg := &Message{
 		From:      params.SystemAddress,
