@@ -73,7 +73,7 @@ func NewLedgerHub() (*Hub, error) {
 	return newHub(LedgerScheme, 0x2c97, []uint16{
 
 		// Device definitions taken from
-		// https://github.com/LedgerHQ/ledger-live/blob/38012bc8899e0f07149ea9cfe7e64b2c146bc92b/libs/ledgerjs/packages/devices/src/index.ts
+		// https://github.com/LedgerHQ/ledger-live/blob/595cb73b7e6622dbbcfc11867082ddc886f1bf01/libs/ledgerjs/packages/devices/src/index.ts
 
 		// Original product IDs
 		0x0000, /* Ledger Blue */
@@ -81,18 +81,14 @@ func NewLedgerHub() (*Hub, error) {
 		0x0004, /* Ledger Nano X */
 		0x0005, /* Ledger Nano S Plus */
 		0x0006, /* Ledger Nano FTS */
+		0x0007, /* Ledger Flex */
 
-		0x0015, /* HID + U2F + WebUSB Ledger Blue */
-		0x1015, /* HID + U2F + WebUSB Ledger Nano S */
-		0x4015, /* HID + U2F + WebUSB Ledger Nano X */
-		0x5015, /* HID + U2F + WebUSB Ledger Nano S Plus */
-		0x6015, /* HID + U2F + WebUSB Ledger Nano FTS */
-
-		0x0011, /* HID + WebUSB Ledger Blue */
-		0x1011, /* HID + WebUSB Ledger Nano S */
-		0x4011, /* HID + WebUSB Ledger Nano X */
-		0x5011, /* HID + WebUSB Ledger Nano S Plus */
-		0x6011, /* HID + WebUSB Ledger Nano FTS */
+		0x0000, /* WebUSB Ledger Blue */
+		0x1000, /* WebUSB Ledger Nano S */
+		0x4000, /* WebUSB Ledger Nano X */
+		0x5000, /* WebUSB Ledger Nano S Plus */
+		0x6000, /* WebUSB Ledger Nano FTS */
+		0x7000, /* WebUSB Ledger Flex */
 	}, 0xffa0, 0, newLedgerDriver)
 }
 
@@ -185,8 +181,11 @@ func (hub *Hub) refreshWallets() {
 
 	for _, info := range infos {
 		for _, id := range hub.productIDs {
+			// We check both the raw ProductID (legacy) and just the upper byte, as Ledger
+			// uses `MMII`, encoding a model (MM) and an interface bitfield (II)
+			mmOnly := info.ProductID & 0xff00
 			// Windows and Macos use UsageID matching, Linux uses Interface matching
-			if info.ProductID == id && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
+			if (info.ProductID == id || mmOnly == id) && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
 				devices = append(devices, info)
 				break
 			}
