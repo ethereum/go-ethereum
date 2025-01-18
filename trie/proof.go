@@ -518,7 +518,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 		}
 		return false, nil
 	}
-	var lastKey = keys[len(keys)-1]
+	lastKey := keys[len(keys)-1]
 	// Special case, there is only one element and two edge keys are same.
 	// In this case, we can't construct two edge paths. So handle it here.
 	if len(keys) == 1 && bytes.Equal(firstKey, lastKey) {
@@ -592,15 +592,9 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 			}
 			tn = n.Val
 			key = key[len(n.Key):]
-			if !skipResolved {
-				return key, tn
-			}
 		case *fullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
-			if !skipResolved {
-				return key, tn
-			}
 		case hashNode:
 			return key, n
 		case nil:
@@ -609,6 +603,10 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 			return nil, n
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
+		}
+
+		if !skipResolved {
+			return key, tn
 		}
 	}
 }
