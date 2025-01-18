@@ -160,8 +160,13 @@ func (c *CacheConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	}
 	if c.StateScheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
-			StateHistory:    c.StateHistory,
-			CleanCacheSize:  c.TrieCleanLimit * 1024 * 1024,
+			StateHistory:   c.StateHistory,
+			TrieCleanSize:  c.TrieCleanLimit * 1024 * 1024,
+			StateCleanSize: c.SnapshotLimit * 1024 * 1024,
+
+			// TODO(rjl493456442): The write buffer represents the memory limit used
+			// for flushing both trie data and state data to disk. The config name
+			// should be updated to eliminate the confusion.
 			WriteBufferSize: c.TrieDirtyLimit * 1024 * 1024,
 		}
 	}
@@ -353,11 +358,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			// Do nothing here until the state syncer picks it up.
 			log.Info("Genesis state is missing, wait state sync")
 		} else {
-			// Head state is missing, before the state recovery, find out the
-			// disk layer point of snapshot(if it's enabled). Make sure the
-			// rewound point is lower than disk layer.
+			// Head state is missing, before the state recovery, find out the disk
+			// layer point of snapshot(if it's enabled). Make sure the rewound point
+			// is lower than disk layer.
+			//
+			// Note it's unnecessary in path mode which always keep trie data and
+			// state data consistent.
 			var diskRoot common.Hash
-			if bc.cacheConfig.SnapshotLimit > 0 {
+			if bc.cacheConfig.SnapshotLimit > 0 && bc.cacheConfig.StateScheme == rawdb.HashScheme {
 				diskRoot = rawdb.ReadSnapshotRoot(bc.db)
 			}
 			if diskRoot != (common.Hash{}) {
@@ -430,31 +438,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			bc.logger.OnGenesisBlock(bc.genesisBlock, alloc)
 		}
 	}
-
-	// Load any existing snapshot, regenerating it if loading failed
-	if bc.cacheConfig.SnapshotLimit > 0 {
-		// If the chain was rewound past the snapshot persistent layer (causing
-		// a recovery block number to be persisted to disk), check if we're still
-		// in recovery mode and in that case, don't invalidate the snapshot on a
-		// head mismatch.
-		var recover bool
-
-		head := bc.CurrentBlock()
-		if layer := rawdb.ReadSnapshotRecoveryNumber(bc.db); layer != nil && *layer >= head.Number.Uint64() {
-			log.Warn("Enabling snapshot recovery", "chainhead", head.Number, "diskbase", *layer)
-			recover = true
-		}
-		snapconfig := snapshot.Config{
-			CacheSize:  bc.cacheConfig.SnapshotLimit,
-			Recovery:   recover,
-			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
-			AsyncBuild: !bc.cacheConfig.SnapshotWait,
-		}
-		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
-
-		// Re-initialize the state database with snapshot
-		bc.statedb = state.NewDatabase(bc.triedb, bc.snaps)
-	}
+	bc.setupSnapshot()
 
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compatErr != nil {
@@ -471,6 +455,37 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
 	}
 	return bc, nil
+}
+
+func (bc *BlockChain) setupSnapshot() {
+	// Short circuit if the chain is established with path scheme, as the
+	// state snapshot has been integrated into path database natively.
+	if bc.cacheConfig.StateScheme == rawdb.PathScheme {
+		return
+	}
+	// Load any existing snapshot, regenerating it if loading failed
+	if bc.cacheConfig.SnapshotLimit > 0 {
+		// If the chain was rewound past the snapshot persistent layer (causing
+		// a recovery block number to be persisted to disk), check if we're still
+		// in recovery mode and in that case, don't invalidate the snapshot on a
+		// head mismatch.
+		var recover bool
+		head := bc.CurrentBlock()
+		if layer := rawdb.ReadSnapshotRecoveryNumber(bc.db); layer != nil && *layer >= head.Number.Uint64() {
+			log.Warn("Enabling snapshot recovery", "chainhead", head.Number, "diskbase", *layer)
+			recover = true
+		}
+		snapconfig := snapshot.Config{
+			CacheSize:  bc.cacheConfig.SnapshotLimit,
+			Recovery:   recover,
+			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
+			AsyncBuild: !bc.cacheConfig.SnapshotWait,
+		}
+		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
+
+		// Re-initialize the state database with snapshot
+		bc.statedb = state.NewDatabase(bc.triedb, bc.snaps)
+	}
 }
 
 // empty returns an indicator whether the blockchain is empty.
