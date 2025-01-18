@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -83,6 +84,7 @@ type supplyTracer struct {
 	delta       supplyInfo
 	txCallstack []supplyTxCallstack // Callstack for current transaction
 	logger      *lumberjack.Logger
+	chainConfig *params.ChainConfig
 }
 
 type supplyTracerConfig struct {
@@ -112,14 +114,15 @@ func newSupplyTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		logger: logger,
 	}
 	return &tracing.Hooks{
-		OnBlockStart:    t.onBlockStart,
-		OnBlockEnd:      t.onBlockEnd,
-		OnGenesisBlock:  t.onGenesisBlock,
-		OnTxStart:       t.onTxStart,
-		OnBalanceChange: t.onBalanceChange,
-		OnEnter:         t.onEnter,
-		OnExit:          t.onExit,
-		OnClose:         t.onClose,
+		OnBlockchainInit: t.onBlockchainInit,
+		OnBlockStart:     t.onBlockStart,
+		OnBlockEnd:       t.onBlockEnd,
+		OnGenesisBlock:   t.onGenesisBlock,
+		OnTxStart:        t.onTxStart,
+		OnBalanceChange:  t.onBalanceChange,
+		OnEnter:          t.onEnter,
+		OnExit:           t.onExit,
+		OnClose:          t.onClose,
 	}, nil
 }
 
@@ -146,6 +149,10 @@ func (s *supplyTracer) resetDelta() {
 	s.delta = newSupplyInfo()
 }
 
+func (s *supplyTracer) onBlockchainInit(chainConfig *params.ChainConfig) {
+	s.chainConfig = chainConfig
+}
+
 func (s *supplyTracer) onBlockStart(ev tracing.BlockEvent) {
 	s.resetDelta()
 
@@ -161,8 +168,7 @@ func (s *supplyTracer) onBlockStart(ev tracing.BlockEvent) {
 	// Blob burnt gas
 	if blobGas := ev.Block.BlobGasUsed(); blobGas != nil && *blobGas > 0 && ev.Block.ExcessBlobGas() != nil {
 		var (
-			excess  = *ev.Block.ExcessBlobGas()
-			baseFee = eip4844.CalcBlobFee(excess)
+			baseFee = eip4844.CalcBlobFee(s.chainConfig, ev.Block.Header())
 			burn    = new(big.Int).Mul(new(big.Int).SetUint64(*blobGas), baseFee)
 		)
 		s.delta.Burn.Blob = burn

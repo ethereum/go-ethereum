@@ -21,7 +21,7 @@ import "testing"
 // Tests that the slotter creates the expected database shelves.
 func TestNewSlotter(t *testing.T) {
 	// Generate the database shelve sizes
-	slotter := newSlotter()
+	slotter := newSlotter(6)
 
 	var shelves []uint32
 	for {

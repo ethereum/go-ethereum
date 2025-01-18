@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 
 	// Force-load native and js packages, to trigger registration
@@ -53,8 +54,9 @@ func (c *callContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 	}
 
 	if genesis.ExcessBlobGas != nil && genesis.BlobGasUsed != nil {
-		excessBlobGas := eip4844.CalcExcessBlobGas(*genesis.ExcessBlobGas, *genesis.BlobGasUsed)
-		context.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+		excess := eip4844.CalcExcessBlobGas(genesis.Config, genesis.ToBlock().Header())
+		header := &types.Header{ExcessBlobGas: &excess, Number: genesis.Config.LondonBlock, Time: *genesis.Config.CancunTime}
+		context.BlobBaseFee = eip4844.CalcBlobFee(genesis.Config, header)
 	}
 	return context
 }
