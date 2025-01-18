@@ -405,7 +405,7 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Re-construct a new disk layer backed by persistent state
 	// with **empty clean cache and node buffer**.
-	db.tree.reset(newDiskLayer(root, 0, db, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0)))
+	db.tree.reset(newDiskLayer(root, 0, db, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0), nil))
 
 	// Re-enable the database as the final step.
 	db.waitSync = false
@@ -506,7 +506,13 @@ func (db *Database) Close() error {
 	db.readOnly = true
 
 	// Release the memory held by clean cache.
-	db.tree.bottom().resetCache()
+	disk := db.tree.bottom()
+	if disk.frozen != nil {
+		if err := disk.frozen.waitFlush(); err != nil {
+			return err
+		}
+	}
+	disk.resetCache()
 
 	// Close the attached state history freezer.
 	if db.freezer == nil {
