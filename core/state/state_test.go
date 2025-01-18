@@ -56,7 +56,7 @@ func TestDump(t *testing.T) {
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
 	s.state.updateStateObject(obj2)
-	root, _ := s.state.Commit(0, false)
+	root, _ := s.state.Commit(0, false, false)
 
 	// check that DumpToCollector contains the state objects that are in trie
 	s.state, _ = New(root, tdb)
@@ -116,7 +116,7 @@ func TestIterativeDump(t *testing.T) {
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
 	s.state.updateStateObject(obj2)
-	root, _ := s.state.Commit(0, false)
+	root, _ := s.state.Commit(0, false, false)
 	s.state, _ = New(root, tdb)
 
 	b := &bytes.Buffer{}
@@ -142,7 +142,7 @@ func TestNull(t *testing.T) {
 	var value common.Hash
 
 	s.state.SetState(address, common.Hash{}, value)
-	s.state.Commit(0, false)
+	s.state.Commit(0, false, false)
 
 	if value := s.state.GetState(address, common.Hash{}); value != (common.Hash{}) {
 		t.Errorf("expected empty current value, got %x", value)
