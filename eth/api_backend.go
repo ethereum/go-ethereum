@@ -236,7 +236,10 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	}
 	stateDb, err := b.eth.BlockChain().StateAt(header.Root)
 	if err != nil {
-		return nil, nil, err
+		stateDb, err = b.eth.BlockChain().HistoricState(header.Root)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	return stateDb, header, nil
 }
@@ -258,7 +261,10 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		}
 		stateDb, err := b.eth.BlockChain().StateAt(header.Root)
 		if err != nil {
-			return nil, nil, err
+			stateDb, err = b.eth.BlockChain().HistoricState(header.Root)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		return stateDb, header, nil
 	}

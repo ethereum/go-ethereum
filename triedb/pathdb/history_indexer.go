@@ -498,7 +498,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 				)
 				// Override the ETA if larger than the largest until now
 				eta := time.Duration(left/speed) * time.Millisecond
-				log.Info("Indexing state history", "processed", done, "left", left, "eta", common.PrettyDuration(eta))
+				log.Info("Indexing state history", "processed", done, "left", left, "elapsed", common.PrettyDuration(time.Since(start)), "eta", common.PrettyDuration(eta))
 			}
 		}
 		// Check interruption signal and abort process if it's fired
