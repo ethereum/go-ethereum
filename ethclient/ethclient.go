@@ -90,8 +90,21 @@ func (ec *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Blo
 //
 // Note that loading full blocks requires two requests. Use HeaderByNumber
 // if you don't need all transactions or uncle headers.
+// if you want to use tag like earliest, latest, finalized, safe, or finalized, you can use the
+// UnmarshalJSON fuction to get the corresponding number
+// eg:
+// var bn rpc.BlockNumber
+// err := json.Unmarshal([]byte(`"finalized"`), &bn)
+// you will get -3  and you can use for the number param
 func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
 	return ec.getBlock(ctx, "eth_getBlockByNumber", toBlockNumArg(number), true)
+}
+
+// BlockByNumber returns a block from the current canonical chain. If tag is nil, the
+// latest known block is returned.
+// you can use the special tag earliest, latest, finalized, safe, or finalized.
+func (ec *Client) BlockBySpecialTag(ctx context.Context, tag string) (*types.Block, error) {
+	return ec.getBlock(ctx, "eth_getBlockByNumber", tag, true)
 }
 
 // BlockNumber returns the most recent block number
