@@ -35,7 +35,8 @@ type accountDelete struct {
 	address common.Address // address is the unique account identifier
 	origin  []byte         // origin is the original value of account data in slim-RLP encoding.
 
-	// storages stores mutated slots, the value should be nil.
+	// storages stores mutated slots, the value should be nil. The map key
+	// refers to the **HASH** of the raw storage slot key.
 	storages map[common.Hash][]byte
 
 	// storagesOrigin stores the original values of mutated slots in
@@ -46,11 +47,14 @@ type accountDelete struct {
 
 // accountUpdate represents an operation for updating an Ethereum account.
 type accountUpdate struct {
-	address  common.Address         // address is the unique account identifier
-	data     []byte                 // data is the slim-RLP encoded account data.
-	origin   []byte                 // origin is the original value of account data in slim-RLP encoding.
-	code     *contractCode          // code represents mutated contract code; nil means it's not modified.
-	storages map[common.Hash][]byte // storages stores mutated slots in prefix-zero-trimmed RLP format.
+	address common.Address // address is the unique account identifier
+	data    []byte         // data is the slim-RLP encoded account data.
+	origin  []byte         // origin is the original value of account data in slim-RLP encoding.
+	code    *contractCode  // code represents mutated contract code; nil means it's not modified.
+
+	// storages stores mutated slots in prefix-zero-trimmed RLP format. The map key
+	// refers to the **HASH** of the raw storage slot key.
+	storages map[common.Hash][]byte
 
 	// storagesOriginByKey and storagesOriginByHash both store the original values
 	// of mutated slots in prefix-zero-trimmed RLP format. The difference is that
@@ -75,10 +79,10 @@ type stateUpdate struct {
 
 	// storagesOrigin stores the original values of mutated slots in
 	// 'prefix-zero-trimmed' RLP format.
-	// (a) the value is keyed by account hash and **storage slot key** if rawStorageKey is true;
-	// (b) the value is keyed by account hash and **storage slot key hash** if rawStorageKey is false;
+	// (a) the value is keyed by account address and **storage slot key** if rawStorageKey is true;
+	// (b) the value is keyed by account address and **storage slot key hash** if rawStorageKey is false;
 	storagesOrigin map[common.Address]map[common.Hash][]byte
-	rawStorageKey  bool
+	rawStorageKey  bool // flag if the raw storage key has been used for map identifier
 
 	codes map[common.Address]contractCode // codes contains the set of dirty codes
 	nodes *trienode.MergedNodeSet         // Aggregated dirty nodes caused by state changes
@@ -95,13 +99,14 @@ func (sc *stateUpdate) empty() bool {
 //
 // rawStorageKey is a flag indicating whether to use the raw storage slot key or
 // the hash of the slot key for constructing state update object.
-func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet) *stateUpdate {
+func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet) *stateUpdate {
 	var (
 		accounts       = make(map[common.Hash][]byte)
 		accountsOrigin = make(map[common.Address][]byte)
 		storages       = make(map[common.Hash]map[common.Hash][]byte)
 		storagesOrigin = make(map[common.Address]map[common.Hash][]byte)
 		codes          = make(map[common.Address]contractCode)
+		hasStorageWipe bool
 	)
 	// Since some accounts might be destroyed and recreated within the same
 	// block, deletions must be aggregated first.
@@ -110,12 +115,15 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		accounts[addrHash] = nil
 		accountsOrigin[addr] = op.origin
 
-		// If storage wiping exists, the hash of the storage slot key must be used
+		// If the account to be deleted has non-empty storage, set `hasStorageWipe`
+		// to true. All storage slots to be wiped are identified by their storage
+		// key hashes, as the raw keys (preimages) are considered unavailable.
 		if len(op.storages) > 0 {
 			storages[addrHash] = op.storages
 		}
 		if len(op.storagesOrigin) > 0 {
 			storagesOrigin[addr] = op.storagesOrigin
+			hasStorageWipe = true
 		}
 	}
 	// Aggregate account updates then.
@@ -144,9 +152,12 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		}
 		// Aggregate the storage original values. If the slot is already present
 		// in aggregated storagesOrigin set, skip it.
-		storageOriginSet := op.storagesOriginByHash
-		if rawStorageKey {
-			storageOriginSet = op.storagesOriginByKey
+		//
+		// If storage wiping exists, use the set identified by the storage key hash,
+		// otherwise, storage set can be aggregated.
+		storageOriginSet := op.storagesOriginByKey
+		if hasStorageWipe {
+			storageOriginSet = op.storagesOriginByHash
 		}
 		if len(storageOriginSet) > 0 {
 			origin, exist := storagesOrigin[addr]
@@ -168,7 +179,7 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		accountsOrigin: accountsOrigin,
 		storages:       storages,
 		storagesOrigin: storagesOrigin,
-		rawStorageKey:  rawStorageKey,
+		rawStorageKey:  !hasStorageWipe,
 		codes:          codes,
 		nodes:          nodes,
 	}
