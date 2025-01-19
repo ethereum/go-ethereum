@@ -76,7 +76,10 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database, minePeriodCh chan i
 	config := chainConfig.XDPoS
 	// Setup timeoutTimer
 	duration := time.Duration(config.V2.CurrentConfig.TimeoutPeriod) * time.Second
-	timeoutTimer := countdown.NewCountDown(duration)
+	timeoutTimer, err := countdown.NewExpCountDown(duration, config.V2.CurrentConfig.ExpTimeoutConfig.Base, config.V2.CurrentConfig.ExpTimeoutConfig.MaxExponent)
+	if err != nil {
+		log.Crit("create exp countdown", "err", err)
+	}
 
 	timeoutPool := utils.NewPool()
 	votePool := utils.NewPool()
@@ -139,8 +142,10 @@ func (x *XDPoS_v2) UpdateParams(header *types.Header) {
 
 	// Setup timeoutTimer
 	duration := time.Duration(x.config.V2.CurrentConfig.TimeoutPeriod) * time.Second
-	x.timeoutWorker.SetTimeoutDuration(duration)
-
+	err = x.timeoutWorker.SetParams(duration, x.config.V2.CurrentConfig.ExpTimeoutConfig.Base, x.config.V2.CurrentConfig.ExpTimeoutConfig.MaxExponent)
+	if err != nil {
+		log.Error("[UpdateParams] set params failed", "err", err)
+	}
 	// avoid deadlock
 	go func() {
 		x.minePeriodCh <- x.config.V2.CurrentConfig.MinePeriod
@@ -253,7 +258,7 @@ func (x *XDPoS_v2) initial(chain consensus.ChainReader, header *types.Header) er
 	}()
 
 	// Kick-off the countdown timer
-	x.timeoutWorker.Reset(chain)
+	x.timeoutWorker.Reset(chain, 0, 0)
 	x.isInitilised = true
 
 	log.Warn("[initial] finish initialisation")
@@ -915,7 +920,7 @@ func (x *XDPoS_v2) setNewRound(blockChainReader consensus.ChainReader, round typ
 	log.Info("[setNewRound] new round and reset pools and workers", "round", round)
 	x.currentRound = round
 	x.timeoutCount = 0
-	x.timeoutWorker.Reset(blockChainReader)
+	x.timeoutWorker.Reset(blockChainReader, x.currentRound, x.highestQuorumCert.ProposedBlockInfo.Round)
 	x.timeoutPool.Clear()
 	// don't need to clean vote pool, we have other process to clean and it's not good to clean here, some edge case may break
 	// for example round gets bump during collecting vote, so we have to keep vote.

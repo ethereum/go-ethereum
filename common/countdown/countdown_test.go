@@ -16,9 +16,10 @@ func TestCountdownWillCallback(t *testing.T) {
 		return nil
 	}
 
-	countdown := NewCountDown(1000 * time.Millisecond)
+	countdown, err := NewExpCountDown(1000*time.Millisecond, 0, 0)
+	assert.Nil(t, err)
 	countdown.OnTimeoutFn = OnTimeoutFn
-	countdown.Reset(fakeI)
+	countdown.Reset(fakeI, 0, 0)
 	<-called
 	t.Log("Times up, successfully called OnTimeoutFn")
 }
@@ -31,11 +32,12 @@ func TestCountdownShouldReset(t *testing.T) {
 		return nil
 	}
 
-	countdown := NewCountDown(5000 * time.Millisecond)
+	countdown, err := NewExpCountDown(5000*time.Millisecond, 0, 0)
+	assert.Nil(t, err)
 	countdown.OnTimeoutFn = OnTimeoutFn
 	// Check countdown did not start
 	assert.False(t, countdown.isInitilised())
-	countdown.Reset(fakeI)
+	countdown.Reset(fakeI, 0, 0)
 	// Now the countdown should already started
 	assert.True(t, countdown.isInitilised())
 	expectedCalledTime := time.Now().Add(9000 * time.Millisecond)
@@ -54,7 +56,7 @@ firstReset:
 			}
 			break firstReset
 		case <-resetTimer.C:
-			countdown.Reset(fakeI)
+			countdown.Reset(fakeI, 0, 0)
 		}
 	}
 
@@ -79,11 +81,12 @@ func TestCountdownShouldResetEvenIfErrored(t *testing.T) {
 		return errors.New("ERROR!")
 	}
 
-	countdown := NewCountDown(5000 * time.Millisecond)
+	countdown, err := NewExpCountDown(5000*time.Millisecond, 0, 0)
+	assert.Nil(t, err)
 	countdown.OnTimeoutFn = OnTimeoutFn
 	// Check countdown did not start
 	assert.False(t, countdown.isInitilised())
-	countdown.Reset(fakeI)
+	countdown.Reset(fakeI, 0, 0)
 	// Now the countdown should already started
 	assert.True(t, countdown.isInitilised())
 	expectedCalledTime := time.Now().Add(9000 * time.Millisecond)
@@ -102,7 +105,7 @@ firstReset:
 			}
 			break firstReset
 		case <-resetTimer.C:
-			countdown.Reset(fakeI)
+			countdown.Reset(fakeI, 0, 0)
 		}
 	}
 
@@ -127,11 +130,12 @@ func TestCountdownShouldBeAbleToStop(t *testing.T) {
 		return nil
 	}
 
-	countdown := NewCountDown(5000 * time.Millisecond)
+	countdown, err := NewExpCountDown(5000*time.Millisecond, 0, 0)
+	assert.Nil(t, err)
 	countdown.OnTimeoutFn = OnTimeoutFn
 	// Check countdown did not start
 	assert.False(t, countdown.isInitilised())
-	countdown.Reset(fakeI)
+	countdown.Reset(fakeI, 0, 0)
 	// Now the countdown should already started
 	assert.True(t, countdown.isInitilised())
 	// Try manually stop the timer before it triggers the callback
@@ -144,14 +148,15 @@ func TestCountdownShouldBeAbleToStop(t *testing.T) {
 func TestCountdownShouldAvoidDeadlock(t *testing.T) {
 	var fakeI interface{}
 	called := make(chan int)
-	countdown := NewCountDown(5000 * time.Millisecond)
+	countdown, err := NewExpCountDown(5000*time.Millisecond, 0, 0)
+	assert.Nil(t, err)
 	OnTimeoutFn := func(time.Time, interface{}) error {
-		countdown.Reset(fakeI)
+		countdown.Reset(fakeI, 0, 0)
 		called <- 1
 		return nil
 	}
 
 	countdown.OnTimeoutFn = OnTimeoutFn
-	countdown.Reset(fakeI)
+	countdown.Reset(fakeI, 0, 0)
 	<-called
 }
