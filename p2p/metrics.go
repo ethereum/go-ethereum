@@ -19,17 +19,60 @@
 package p2p
 
 import (
+	"errors"
 	"net"
 
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 )
 
 var (
-	ingressConnectMeter = metrics.NewRegisteredMeter("p2p/InboundConnects", nil)
 	ingressTrafficMeter = metrics.NewRegisteredMeter("p2p/InboundTraffic", nil)
-	egressConnectMeter  = metrics.NewRegisteredMeter("p2p/OutboundConnects", nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/OutboundTraffic", nil)
 )
+
+var (
+	activePeerGauge = metrics.NewRegisteredGauge("p2p/peers", nil)
+
+	serveMeter          = metrics.NewRegisteredMeter("p2p/serves", nil)
+	serveSuccessMeter   = metrics.NewRegisteredMeter("p2p/serves/success", nil)
+	dialMeter           = metrics.NewRegisteredMeter("p2p/dials", nil)
+	dialSuccessMeter    = metrics.NewRegisteredMeter("p2p/dials/success", nil)
+	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil)
+
+	// handshake error meters
+	dialTooManyPeers        = metrics.NewRegisteredMeter("p2p/dials/error/saturated", nil)
+	dialAlreadyConnected    = metrics.NewRegisteredMeter("p2p/dials/error/known", nil)
+	dialSelf                = metrics.NewRegisteredMeter("p2p/dials/error/self", nil)
+	dialUselessPeer         = metrics.NewRegisteredMeter("p2p/dials/error/useless", nil)
+	dialUnexpectedIdentity  = metrics.NewRegisteredMeter("p2p/dials/error/id/unexpected", nil)
+	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)
+	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil)
+)
+
+func markDialError(err error) {
+	if !metrics.Enabled() {
+		return
+	}
+	if err2 := errors.Unwrap(err); err2 != nil {
+		err = err2
+	}
+	switch err {
+	case DiscTooManyPeers:
+		dialTooManyPeers.Mark(1)
+	case DiscAlreadyConnected:
+		dialAlreadyConnected.Mark(1)
+	case DiscSelf:
+		dialSelf.Mark(1)
+	case DiscUselessPeer:
+		dialUselessPeer.Mark(1)
+	case DiscUnexpectedIdentity:
+		dialUnexpectedIdentity.Mark(1)
+	case errEncHandshakeError:
+		dialEncHandshakeError.Mark(1)
+	case errProtoHandshakeError:
+		dialProtoHandshakeError.Mark(1)
+	}
+}
 
 // meteredConn is a wrapper around a network TCP connection that meters both the
 // inbound and outbound network traffic.
@@ -40,16 +83,10 @@ type meteredConn struct {
 // newMeteredConn creates a new metered connection, also bumping the ingress or
 // egress connection meter. If the metrics system is disabled, this function
 // returns the original object.
-func newMeteredConn(conn net.Conn, ingress bool) net.Conn {
+func newMeteredConn(conn net.Conn) net.Conn {
 	// Short circuit if metrics are disabled
 	if !metrics.Enabled() {
 		return conn
-	}
-	// Otherwise bump the connection counters and wrap the connection
-	if ingress {
-		ingressConnectMeter.Mark(1)
-	} else {
-		egressConnectMeter.Mark(1)
 	}
 	return &meteredConn{conn.(*net.TCPConn)}
 }

@@ -641,15 +641,6 @@ func sortedByDistanceTo(distbase common.Hash, slice []*Node) bool {
 	return true
 }
 
-func contains(ns []*Node, id NodeID) bool {
-	for _, n := range ns {
-		if n.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
 // gen wraps quick.Value so it's easier to use.
 // it generates a random value of the given value's type.
 func gen(typ interface{}, rand *rand.Rand) interface{} {

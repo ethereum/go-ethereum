@@ -18,7 +18,6 @@ package p2p
 
 import (
 	"crypto/ecdsa"
-	"errors"
 	"math/rand"
 	"net"
 	"reflect"
@@ -506,10 +505,10 @@ func TestServerSetupConn(t *testing.T) {
 			wantCloseErr: errServerStopped,
 		},
 		{
-			tt:           &setupTransport{id: id, encHandshakeErr: errors.New("read error")},
+			tt:           &setupTransport{id: id, encHandshakeErr: errEncHandshakeError},
 			flags:        inboundConn,
 			wantCalls:    "doEncHandshake,close,",
-			wantCloseErr: errors.New("read error"),
+			wantCloseErr: errEncHandshakeError,
 		},
 		{
 			tt:           &setupTransport{id: id},
@@ -526,11 +525,11 @@ func TestServerSetupConn(t *testing.T) {
 			wantCloseErr: DiscUnexpectedIdentity,
 		},
 		{
-			tt:           &setupTransport{id: id, protoHandshakeErr: errors.New("foo")},
+			tt:           &setupTransport{id: id, protoHandshakeErr: errProtoHandshakeError},
 			dialDest:     &discover.Node{ID: id},
 			flags:        dynDialedConn,
 			wantCalls:    "doEncHandshake,doProtoHandshake,close,",
-			wantCloseErr: errors.New("foo"),
+			wantCloseErr: errProtoHandshakeError,
 		},
 		{
 			tt:           &setupTransport{id: srvid, phs: &protoHandshake{ID: srvid}},

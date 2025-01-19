@@ -51,7 +51,11 @@ const (
 	frameWriteTimeout = 20 * time.Second
 )
 
-var errServerStopped = errors.New("server stopped")
+var (
+	errServerStopped       = errors.New("server stopped")
+	errEncHandshakeError   = errors.New("rlpx enc error")
+	errProtoHandshakeError = errors.New("rlpx proto error")
+)
 
 // Config holds Server options.
 type Config struct {
@@ -702,7 +706,11 @@ running:
 				}
 				if p.Inbound() {
 					inboundCount++
+					serveSuccessMeter.Mark(1)
+				} else {
+					dialSuccessMeter.Mark(1)
 				}
+				activePeerGauge.Inc(1)
 			}
 			// The dialer logic relies on the assumption that
 			// dial tasks complete after the peer has been added or
@@ -720,6 +728,7 @@ running:
 			if pd.Inbound() {
 				inboundCount--
 			}
+			activePeerGauge.Dec(1)
 		}
 	}
 
@@ -839,7 +848,8 @@ func (srv *Server) listenLoop() {
 			}
 		}
 
-		fd = newMeteredConn(fd, true)
+		fd = newMeteredConn(fd)
+		serveMeter.Mark(1)
 		srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
 		go func() {
 			srv.SetupConn(fd, inboundConn, nil)
@@ -859,6 +869,9 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *discover.Nod
 	c := &conn{fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
 	err := srv.setupConn(c, flags, dialDest)
 	if err != nil {
+		if !c.is(inboundConn) {
+			markDialError(err)
+		}
 		c.close(err)
 		srv.log.Trace("Setting up connection failed", "id", c.id, "err", err)
 	}

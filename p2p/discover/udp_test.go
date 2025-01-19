@@ -325,7 +325,7 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 func TestUDP_successfulPing(t *testing.T) {
 	test := newUDPTest(t)
 	added := make(chan *Node, 1)
-	test.table.nodeAddedHook = func(n *Node) { added <- n }
+	test.table.nodeAddedHook = func(b *bucket, n *Node) { added <- n }
 	defer test.table.Close()
 
 	// The remote side sends a ping packet to initiate the exchange.
