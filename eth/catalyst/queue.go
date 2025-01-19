@@ -181,7 +181,7 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 // or evicted.
 type inclusionListQueueItem struct {
 	parentHash    common.Hash
-	inclusionList *engine.InclusionListV1
+	inclusionList [][]byte
 }
 
 // inclusionListQueue tracks the latest handful of constructed inclusion lists to be retrieved
@@ -201,7 +201,7 @@ func newInclusionListQueue() *inclusionListQueue {
 
 // put inserts a new inclusion list into the queue at the given parent hash that
 // the inclusion list is built upon.
-func (q *inclusionListQueue) put(parentHash common.Hash, inclusionList *engine.InclusionListV1) {
+func (q *inclusionListQueue) put(parentHash common.Hash, inclusionList [][]byte) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -213,7 +213,7 @@ func (q *inclusionListQueue) put(parentHash common.Hash, inclusionList *engine.I
 }
 
 // get retrieves a previously stored inclusion list item or nil if it does not exist.
-func (q *inclusionListQueue) get(parentHash common.Hash) *engine.InclusionListV1 {
+func (q *inclusionListQueue) get(parentHash common.Hash) [][]byte {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 

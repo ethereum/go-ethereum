@@ -13,7 +13,7 @@ type BuildInclusionListArgs struct {
 	Parent common.Hash // The parent block to build inclusion list on top
 }
 
-func (miner *Miner) BuildInclusionList(args *BuildInclusionListArgs) (*engine.InclusionListV1, error) {
+func (miner *Miner) BuildInclusionList(args *BuildInclusionListArgs) ([][]byte, error) {
 	params := &generateParams{
 		timestamp:   uint64(time.Now().Unix()),
 		forceTime:   false,

@@ -1869,7 +1869,7 @@ func TestInclusionList(t *testing.T) {
 
 	for i, tt := range []*struct {
 		name                 string
-		inclusionList        *engine.InclusionListV1
+		inclusionList        [][]byte
 		updateInclusionList  bool
 		expectedTransactions int
 		expectedStatus       string
@@ -1934,7 +1934,7 @@ func TestInclusionList(t *testing.T) {
 
 			if tt.updateInclusionList {
 				// Update the payload with the inclusion list.
-				api.UpdatePayloadWithInclusionListV1(*resp.PayloadID, *tt.inclusionList)
+				api.UpdatePayloadWithInclusionListV1(*resp.PayloadID, tt.inclusionList)
 			}
 
 			// Get the payload.

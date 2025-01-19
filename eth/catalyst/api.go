@@ -562,7 +562,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	return res, nil
 }
 
-func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) (*engine.InclusionListV1, error) {
+func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) ([][]byte, error) {
 	if inclusionList := api.localInclusionLists.get(parentHash); inclusionList != nil {
 		return inclusionList, nil
 	}
@@ -581,26 +581,20 @@ func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) (*engine.Inc
 	return inclusionList, nil
 }
 
-func (api *ConsensusAPI) UpdatePayloadWithInclusionListV1(payloadID engine.PayloadID, inclusionList engine.InclusionListV1) (engine.UpdateInclusionListResponse, error) {
-	response := func(id *engine.PayloadID) engine.UpdateInclusionListResponse {
-		return engine.UpdateInclusionListResponse{
-			PayloadID: id,
-		}
-	}
-
+func (api *ConsensusAPI) UpdatePayloadWithInclusionListV1(payloadID engine.PayloadID, inclusionList [][]byte) (*engine.PayloadID, error) {
 	payload := api.localBlocks.peak(payloadID)
 	if payload == nil {
-		return engine.UpdateInclusionListResponse{PayloadID: nil}, nil
+		return nil, nil
 	}
 
-	inclusionListTxs, err := engine.InclusionListToTransactions(&inclusionList)
+	inclusionListTxs, err := engine.InclusionListToTransactions(inclusionList)
 	if err != nil {
-		return engine.UpdateInclusionListResponse{PayloadID: nil}, err
+		return nil, err
 	}
 
 	payload.UpdateWithInclusionList(inclusionListTxs)
 
-	return response(&payloadID), nil
+	return &payloadID, nil
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -692,7 +686,7 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 }
 
 // NewPayloadV5 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
-func (api *ConsensusAPI) NewPayloadV5(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes, inclusionList *engine.InclusionListV1) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) NewPayloadV5(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes, inclusionList [][]byte) (engine.PayloadStatusV1, error) {
 	if params.Withdrawals == nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
 	}
@@ -814,7 +808,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV4(params engine.ExecutableData, v
 
 // NewPayloadWithWitnessV5 is analogous to NewPayloadV5, only it also generates
 // and returns a stateless witness after running the payload.
-func (api *ConsensusAPI) NewPayloadWithWitnessV5(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes, inclusionList *engine.InclusionListV1) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) NewPayloadWithWitnessV5(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes, inclusionList [][]byte) (engine.PayloadStatusV1, error) {
 	if params.Withdrawals == nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
 	}
@@ -934,7 +928,7 @@ func (api *ConsensusAPI) ExecuteStatelessPayloadV4(params engine.ExecutableData,
 	return api.executeStatelessPayload(params, versionedHashes, beaconRoot, requests, opaqueWitness)
 }
 
-func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, inclusionList *engine.InclusionListV1, witness bool) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, inclusionList [][]byte, witness bool) (engine.PayloadStatusV1, error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
 	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to

@@ -114,7 +114,7 @@ func TestBuildInclusionList(t *testing.T) {
 
 	// Verify inclusion list size.
 	inclusionListSize := uint64(0)
-	for _, tx := range inclusionList.Transactions {
+	for _, tx := range inclusionList {
 		inclusionListSize += uint64(len(tx))
 	}
 	require.LessOrEqual(t, inclusionListSize, engine.MaxBytesPerInclusionList)
