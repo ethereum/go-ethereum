@@ -148,7 +148,8 @@ func (c *Console) init(preload []string) error {
 	for _, path := range preload {
 		if err := c.jsre.Exec(path); err != nil {
 			failure := err.Error()
-			if gojaErr, ok := err.(*goja.Exception); ok {
+			gojaErr := new(goja.Exception)
+			if ok := errors.As(err, &gojaErr); ok {
 				failure = gojaErr.String()
 			}
 			return fmt.Errorf("%s: %v", path, failure)
@@ -205,7 +206,8 @@ func (c *Console) initExtensions() error {
 	const methodNotFound = -32601
 	apis, err := c.client.SupportedModules()
 	if err != nil {
-		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == methodNotFound {
+		var rpcErr rpc.Error
+		if ok := errors.As(err, &rpcErr); ok && rpcErr.ErrorCode() == methodNotFound {
 			log.Warn("Server does not support method rpc_modules, using default API list.")
 			apis = defaultAPIs
 		} else {
@@ -423,7 +425,7 @@ func (c *Console) Interactive() {
 			return
 
 		case err := <-inputErr:
-			if err == liner.ErrPromptAborted {
+			if errors.Is(err, liner.ErrPromptAborted) {
 				// When prompting for multi-line input, the first Ctrl-C resets
 				// the multi-line state.
 				prompt, indents, input = c.prompt, 0, ""

@@ -17,6 +17,7 @@
 package sync
 
 import (
+	"errors"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/beacon/light"
@@ -380,12 +381,12 @@ func (s *ForwardUpdateSync) Process(requester request.Requester, events []reques
 func (s *ForwardUpdateSync) processResponse(requester request.Requester, u updateResponse) (success bool) {
 	for i, update := range u.response.Updates {
 		if err := s.chain.InsertUpdate(update, u.response.Committees[i]); err != nil {
-			if err == light.ErrInvalidPeriod {
+			if errors.Is(err, light.ErrInvalidPeriod) {
 				// there is a gap in the update periods; stop processing without
 				// failing and try again next time
 				return
 			}
-			if err == light.ErrInvalidUpdate || err == light.ErrWrongCommitteeRoot || err == light.ErrCannotReorg {
+			if errors.Is(err, light.ErrInvalidUpdate) || errors.Is(err, light.ErrWrongCommitteeRoot) || errors.Is(err, light.ErrCannotReorg) {
 				requester.Fail(u.sid.Server, "invalid update received")
 			} else {
 				log.Error("Unexpected InsertUpdate error", "error", err)

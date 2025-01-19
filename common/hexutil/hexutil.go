@@ -32,6 +32,7 @@ package hexutil
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -223,18 +224,21 @@ func decodeNibble(in byte) uint64 {
 }
 
 func mapError(err error) error {
-	if err, ok := err.(*strconv.NumError); ok {
-		switch err.Err {
-		case strconv.ErrRange:
+	numErr := new(strconv.NumError)
+	if ok := errors.As(err, &numErr); ok {
+		switch {
+		case errors.Is(numErr.Err, strconv.ErrRange):
 			return ErrUint64Range
-		case strconv.ErrSyntax:
+		case errors.Is(numErr.Err, strconv.ErrSyntax):
 			return ErrSyntax
 		}
 	}
-	if _, ok := err.(hex.InvalidByteError); ok {
+
+	var invalidByteErr hex.InvalidByteError
+	if ok := errors.As(err, &invalidByteErr); ok {
 		return ErrSyntax
 	}
-	if err == hex.ErrLength {
+	if errors.Is(err, hex.ErrLength) {
 		return ErrOddLength
 	}
 	return err

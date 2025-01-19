@@ -138,7 +138,7 @@ func TestPeerProtoReadMsg(t *testing.T) {
 
 	select {
 	case err := <-errc:
-		if err != errProtocolReturned {
+		if !errors.Is(err, errProtocolReturned) {
 			t.Errorf("peer returned error: %v", err)
 		}
 	case <-time.After(2 * time.Second):
@@ -190,7 +190,7 @@ func TestPeerDisconnect(t *testing.T) {
 	}
 	select {
 	case reason := <-disc:
-		if reason != DiscQuitting {
+		if !errors.Is(reason, DiscQuitting) {
 			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscQuitting)
 		}
 	case <-time.After(500 * time.Millisecond):

@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -164,7 +165,8 @@ func TestHTTPErrorResponse(t *testing.T) {
 		t.Fatal("error was expected")
 	}
 
-	httpErr, ok := err.(HTTPError)
+	var httpErr HTTPError
+	ok := errors.As(err, &httpErr)
 	if !ok {
 		t.Fatalf("unexpected error type %T", err)
 	}
@@ -254,12 +256,12 @@ func TestNewContextWithHeaders(t *testing.T) {
 	ctx3 := NewContextWithHeaders(ctx2, newHdr("key-2", "val-2"))
 
 	expectedHeaders = 3
-	if err := client.CallContext(ctx3, nil, "test"); err != ErrNoResult {
+	if err := client.CallContext(ctx3, nil, "test"); !errors.Is(err, ErrNoResult) {
 		t.Error("call failed", err)
 	}
 
 	expectedHeaders = 2
-	if err := client.CallContext(ctx2, nil, "test"); err != ErrNoResult {
+	if err := client.CallContext(ctx2, nil, "test"); !errors.Is(err, ErrNoResult) {
 		t.Error("call failed:", err)
 	}
 }

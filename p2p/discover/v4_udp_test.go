@@ -101,7 +101,7 @@ func (test *udpTest) packetInFrom(wantError error, key *ecdsa.PrivateKey, addr n
 		test.t.Errorf("%s encode error: %v", data.Name(), err)
 	}
 	test.sent = append(test.sent, enc)
-	if err = test.udp.handlePacket(addr, enc); err != wantError {
+	if err = test.udp.handlePacket(addr, enc); !errors.Is(err, wantError) {
 		test.t.Errorf("error mismatch: got %q, want %q", err, wantError)
 	}
 }
@@ -112,7 +112,7 @@ func (test *udpTest) waitPacketOut(validate interface{}) (closed bool) {
 	test.t.Helper()
 
 	dgram, err := test.pipe.receive()
-	if err == errClosed {
+	if errors.Is(err, errClosed) {
 		return true
 	} else if err != nil {
 		test.t.Error("packet receive error:", err)
@@ -151,7 +151,7 @@ func TestUDPv4_pingTimeout(t *testing.T) {
 	key := newkey()
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
 	node := enode.NewV4(&key.PublicKey, toaddr.IP, 0, toaddr.Port)
-	if _, err := test.udp.ping(node); err != errTimeout {
+	if _, err := test.udp.ping(node); !errors.Is(err, errTimeout) {
 		t.Error("expected timeout error, got", err)
 	}
 }
@@ -211,7 +211,7 @@ func TestUDPv4_responseTimeouts(t *testing.T) {
 	for i := 0; i < nReqs; i++ {
 		select {
 		case err := <-timeoutErr:
-			if err != errTimeout {
+			if !errors.Is(err, errTimeout) {
 				t.Fatalf("got non-timeout error on timeoutErr %d: %v", i, err)
 			}
 			nTimeoutsRecv++
@@ -241,7 +241,7 @@ func TestUDPv4_findnodeTimeout(t *testing.T) {
 	toid := enode.ID{1, 2, 3, 4}
 	target := v4wire.Pubkey{4, 5, 6, 7}
 	result, err := test.udp.findnode(toid, toaddr, target)
-	if err != errTimeout {
+	if !errors.Is(err, errTimeout) {
 		t.Error("expected timeout error, got", err)
 	}
 	if len(result) > 0 {

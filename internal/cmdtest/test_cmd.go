@@ -19,6 +19,7 @@ package cmdtest
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -206,11 +207,10 @@ func (tt *TestCmd) Interrupt() {
 // It will only return a valid value after the process has finished.
 func (tt *TestCmd) ExitStatus() int {
 	if tt.Err != nil {
-		exitErr := tt.Err.(*exec.ExitError)
-		if exitErr != nil {
-			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-				return status.ExitStatus()
-			}
+		exitErr := new(exec.ExitError)
+		_ = errors.As(tt.Err, &exitErr)
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			return status.ExitStatus()
 		}
 	}
 	return 0

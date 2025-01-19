@@ -278,25 +278,25 @@ func (s *skeleton) startup() {
 				// signalling as the sync loop should never terminate (TM).
 				newhead, err := s.sync(head)
 				switch {
-				case err == errSyncLinked:
+				case errors.Is(err, errSyncLinked):
 					// Sync cycle linked up to the genesis block, or the existent chain
 					// segment. Tear down the loop and restart it so, it can properly
 					// notify the backfiller. Don't account a new head.
 					head = nil
 
-				case err == errSyncMerged:
+				case errors.Is(err, errSyncMerged):
 					// Subchains were merged, we just need to reinit the internal
 					// start to continue on the tail of the merged chain. Don't
 					// announce a new head,
 					head = nil
 
-				case err == errSyncReorged:
+				case errors.Is(err, errSyncReorged):
 					// The subchain being synced got modified at the head in a
 					// way that requires resyncing it. Restart sync with the new
 					// head to force a cleanup.
 					head = newhead
 
-				case err == errTerminated:
+				case errors.Is(err, errTerminated):
 					// Sync was requested to be terminated from within, stop and
 					// return (no need to pass a message, was already done internally)
 					return

@@ -17,6 +17,7 @@
 package jsre
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -60,7 +61,8 @@ func prettyPrint(vm *goja.Runtime, value goja.Value, w io.Writer) {
 // prettyError writes err to standard output.
 func prettyError(vm *goja.Runtime, err error, w io.Writer) {
 	failure := err.Error()
-	if gojaErr, ok := err.(*goja.Exception); ok {
+	gojaErr := new(goja.Exception)
+	if ok := errors.As(err, &gojaErr); ok {
 		failure = gojaErr.String()
 	}
 	fmt.Fprint(w, ErrorColor("%s", failure))

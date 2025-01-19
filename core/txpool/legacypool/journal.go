@@ -96,7 +96,7 @@ func (journal *journal) load(add func([]*types.Transaction) []error) error {
 		// Parse the next transaction and terminate on error
 		tx := new(types.Transaction)
 		if err = stream.Decode(tx); err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				failure = err
 			}
 			if batch.Len() > 0 {

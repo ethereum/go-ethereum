@@ -125,12 +125,12 @@ func errorMessage(err error) *jsonrpcMessage {
 		Code:    errcodeDefault,
 		Message: err.Error(),
 	}}
-	ec, ok := err.(Error)
-	if ok {
+	var ec Error
+	if errors.As(err, &ec) {
 		msg.Error.Code = ec.ErrorCode()
 	}
-	de, ok := err.(DataError)
-	if ok {
+	var de DataError
+	if errors.As(err, &de) {
 		msg.Error.Data = de.ErrorData()
 	}
 	return msg
@@ -311,7 +311,7 @@ func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]
 	var args []reflect.Value
 	tok, err := dec.Token()
 	switch {
-	case err == io.EOF || tok == nil && err == nil:
+	case errors.Is(err, io.EOF) || tok == nil && err == nil:
 		// "params" is optional and may be empty. Also allow "params":null even though it's
 		// not in the spec because our own client used to send it.
 	case err != nil:

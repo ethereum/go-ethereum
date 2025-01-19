@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	stderrors "errors"
 	"fmt"
 	"net/netip"
 	"os"
@@ -99,7 +100,8 @@ func newMemoryDB() (*DB, error) {
 func newPersistentDB(path string) (*DB, error) {
 	opts := &opt.Options{OpenFilesCacheCapacity: 5}
 	db, err := leveldb.OpenFile(path, opts)
-	if _, iscorrupted := err.(*errors.ErrCorrupted); iscorrupted {
+	errCorrupted := new(*errors.ErrCorrupted)
+	if iscorrupted := stderrors.As(err, errCorrupted); iscorrupted {
 		db, err = leveldb.RecoverFile(path, nil)
 	}
 	if err != nil {
@@ -111,15 +113,15 @@ func newPersistentDB(path string) (*DB, error) {
 	currentVer = currentVer[:binary.PutVarint(currentVer, int64(dbVersion))]
 
 	blob, err := db.Get([]byte(dbVersionKey), nil)
-	switch err {
-	case leveldb.ErrNotFound:
+	switch {
+	case stderrors.Is(err, leveldb.ErrNotFound):
 		// Version not found (i.e. empty cache), insert it
 		if err := db.Put([]byte(dbVersionKey), currentVer, nil); err != nil {
 			db.Close()
 			return nil, err
 		}
 
-	case nil:
+	case err == nil:
 		// Version present, flush if different
 		if !bytes.Equal(blob, currentVer) {
 			db.Close()

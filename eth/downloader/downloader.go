@@ -566,7 +566,7 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 		}
 		if got := <-errc; got != nil {
 			err = got
-			if got != errCanceled {
+			if !errors.Is(got, errCanceled) {
 				break // receive a meaningful error, bubble it up
 			}
 		}
@@ -817,7 +817,7 @@ func (d *Downloader) processSnapSyncContent() error {
 	}()
 
 	closeOnErr := func(s *stateSync) {
-		if err := s.Wait(); err != nil && err != errCancelStateFetch && err != errCanceled && err != snap.ErrCancelled {
+		if err := s.Wait(); err != nil && !errors.Is(err, errCancelStateFetch) && !errors.Is(err, errCanceled) && !errors.Is(err, snap.ErrCancelled) {
 			d.queue.Close() // wake up Results
 		}
 	}

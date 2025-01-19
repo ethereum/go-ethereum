@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"math"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -679,9 +680,9 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
 	// ignore this error and pretend the operation was successful.
-	if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
+	if interpreter.evm.chainRules.IsHomestead && errors.Is(suberr, ErrCodeStoreOutOfGas) {
 		stackvalue.Clear()
-	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
+	} else if suberr != nil && !errors.Is(suberr, ErrCodeStoreOutOfGas) {
 		stackvalue.Clear()
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
@@ -690,7 +691,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 
 	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
-	if suberr == ErrExecutionReverted {
+	if errors.Is(suberr, ErrExecutionReverted) {
 		interpreter.returnData = res // set REVERT data to return data buffer
 		return res, nil
 	}
@@ -726,7 +727,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	scope.Stack.push(&stackvalue)
 	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
-	if suberr == ErrExecutionReverted {
+	if errors.Is(suberr, ErrExecutionReverted) {
 		interpreter.returnData = res // set REVERT data to return data buffer
 		return res, nil
 	}
@@ -760,7 +761,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		temp.SetOne()
 	}
 	stack.push(&temp)
-	if err == nil || err == ErrExecutionReverted {
+	if err == nil || errors.Is(err, ErrExecutionReverted) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
@@ -793,7 +794,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		temp.SetOne()
 	}
 	stack.push(&temp)
-	if err == nil || err == ErrExecutionReverted {
+	if err == nil || errors.Is(err, ErrExecutionReverted) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
@@ -822,7 +823,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 		temp.SetOne()
 	}
 	stack.push(&temp)
-	if err == nil || err == ErrExecutionReverted {
+	if err == nil || errors.Is(err, ErrExecutionReverted) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 
@@ -851,7 +852,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 		temp.SetOne()
 	}
 	stack.push(&temp)
-	if err == nil || err == ErrExecutionReverted {
+	if err == nil || errors.Is(err, ErrExecutionReverted) {
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 

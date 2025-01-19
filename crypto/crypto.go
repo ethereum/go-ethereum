@@ -191,7 +191,8 @@ func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 // HexToECDSA parses a secp256k1 private key.
 func HexToECDSA(hexkey string) (*ecdsa.PrivateKey, error) {
 	b, err := hex.DecodeString(hexkey)
-	if byteErr, ok := err.(hex.InvalidByteError); ok {
+	var byteErr hex.InvalidByteError
+	if ok := errors.As(err, &byteErr); ok {
 		return nil, fmt.Errorf("invalid hex character %q in private key", byte(byteErr))
 	} else if err != nil {
 		return nil, errors.New("invalid hex data for private key")
@@ -228,7 +229,7 @@ func readASCII(buf []byte, r *bufio.Reader) (n int, err error) {
 	for ; n < len(buf); n++ {
 		buf[n], err = r.ReadByte()
 		switch {
-		case err == io.EOF || buf[n] < '!':
+		case errors.Is(err, io.EOF) || buf[n] < '!':
 			return n, nil
 		case err != nil:
 			return n, err
@@ -242,7 +243,7 @@ func checkKeyFileEnd(r *bufio.Reader) error {
 	for i := 0; ; i++ {
 		b, err := r.ReadByte()
 		switch {
-		case err == io.EOF:
+		case errors.Is(err, io.EOF):
 			return nil
 		case err != nil:
 			return err

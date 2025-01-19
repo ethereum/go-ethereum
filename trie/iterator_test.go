@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -438,7 +439,8 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool, scheme string) {
 		seen := make(map[string]bool)
 		it := tr.MustNodeIterator(nil)
 		checkIteratorNoDups(t, it, seen)
-		missing, ok := it.Error().(*MissingNodeError)
+		missing := new(MissingNodeError)
+		ok := errors.As(it.Error(), &missing)
 		if !ok || missing.NodeHash != rhash {
 			t.Fatal("didn't hit missing node, got", it.Error())
 		}
@@ -505,7 +507,8 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool, scheme strin
 	// Create a new iterator that seeks to "bars". Seeking can't proceed because
 	// the node is missing.
 	it := tr.MustNodeIterator([]byte("bars"))
-	missing, ok := it.Error().(*MissingNodeError)
+	missing := new(MissingNodeError)
+	ok := errors.As(it.Error(), &missing)
 	if !ok {
 		t.Fatal("want MissingNodeError, got", it.Error())
 	} else if missing.NodeHash != barNodeHash {

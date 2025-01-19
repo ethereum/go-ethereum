@@ -330,7 +330,7 @@ func (api *SignerAPI) startUSBListener() {
 	for _, wallet := range am.Wallets() {
 		if err := wallet.Open(""); err != nil {
 			log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
-			if err == usbwallet.ErrTrezorPINNeeded {
+			if errors.Is(err, usbwallet.ErrTrezorPINNeeded) {
 				go api.openTrezor(wallet.URL())
 			}
 		}
@@ -346,7 +346,7 @@ func (api *SignerAPI) derivationLoop(events chan accounts.WalletEvent) {
 		case accounts.WalletArrived:
 			if err := event.Wallet.Open(""); err != nil {
 				log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
-				if err == usbwallet.ErrTrezorPINNeeded {
+				if errors.Is(err, usbwallet.ErrTrezorPINNeeded) {
 					go api.openTrezor(event.Wallet.URL())
 				}
 			}

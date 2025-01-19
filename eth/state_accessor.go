@@ -118,12 +118,12 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			}
 		}
 		if err != nil {
-			switch err.(type) {
-			case *trie.MissingNodeError:
+			missingNodeErr := new(*trie.MissingNodeError)
+			ok := errors.As(err, missingNodeErr)
+			if ok {
 				return nil, nil, fmt.Errorf("required historical state unavailable (reexec=%d)", reexec)
-			default:
-				return nil, nil, err
 			}
+			return nil, nil, err
 		}
 	}
 	// State is available at historical point, re-execute the blocks on top for

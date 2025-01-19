@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -166,7 +167,7 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 				if haveGasUsed != gasUsed {
 					panic(fmt.Sprintf("gas differs, have %v want %v", haveGasUsed, gasUsed))
 				}
-				if haveErr != err {
+				if !errors.Is(haveErr, err) {
 					panic(fmt.Sprintf("err differs, have %v want %v", haveErr, err))
 				}
 			}

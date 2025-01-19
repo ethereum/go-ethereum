@@ -195,7 +195,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		i := 0
 		for ; i < importBatchSize; i++ {
 			var b types.Block
-			if err := stream.Decode(&b); err == io.EOF {
+			if err := stream.Decode(&b); errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
 				return fmt.Errorf("at block %d: %v", n, err)
@@ -515,7 +515,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 		var blob []byte
 
 		if err := stream.Decode(&blob); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return err
@@ -725,7 +725,7 @@ func ImportLDBData(db ethdb.Database, f string, startIndex int64, interrupt chan
 			key, val []byte
 		)
 		if err := stream.Decode(&op); err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			return err

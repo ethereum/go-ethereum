@@ -22,6 +22,7 @@ package leveldb
 
 import (
 	"bytes"
+	stderrors "errors"
 	"fmt"
 	"sync"
 	"time"
@@ -120,7 +121,8 @@ func NewCustom(file string, namespace string, customize func(options *opt.Option
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, options)
-	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
+	corruptedErr := new(errors.ErrCorrupted)
+	if corrupted := stderrors.As(err, &corruptedErr); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
 	}
 	if err != nil {
