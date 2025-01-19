@@ -98,6 +98,9 @@ func abigen(c *cli.Context) error {
 	if c.String(pkgFlag.Name) == "" {
 		utils.Fatalf("No destination package specified (--pkg)")
 	}
+	if c.String(abiFlag.Name) == "" {
+		utils.Fatalf("No contract ABI source specified (--abi)")
+	}
 	var lang bind.Lang
 	switch c.String(langFlag.Name) {
 	case "go":
