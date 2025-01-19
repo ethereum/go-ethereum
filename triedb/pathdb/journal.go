@@ -45,8 +45,7 @@ var (
 // - Version 0: initial version
 // - Version 1: storage.Incomplete field is removed
 // - Version 2: add post-modification state values
-// - Version 3: a flag has been added to indicate whether the storage slot key is the raw key or a hash
-const journalVersion uint64 = 3
+const journalVersion uint64 = 2
 
 // loadJournal tries to parse the layer journal from the disk.
 func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {

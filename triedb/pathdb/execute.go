@@ -30,12 +30,11 @@ import (
 
 // context wraps all fields for executing state diffs.
 type context struct {
-	prevRoot      common.Hash
-	postRoot      common.Hash
-	accounts      map[common.Address][]byte
-	storages      map[common.Address]map[common.Hash][]byte
-	nodes         *trienode.MergedNodeSet
-	rawStorageKey bool
+	prevRoot common.Hash
+	postRoot common.Hash
+	accounts map[common.Address][]byte
+	storages map[common.Address]map[common.Hash][]byte
+	nodes    *trienode.MergedNodeSet
 
 	// TODO (rjl493456442) abstract out the state hasher
 	// for supporting verkle tree.
@@ -44,19 +43,18 @@ type context struct {
 
 // apply processes the given state diffs, updates the corresponding post-state
 // and returns the trie nodes that have been modified.
-func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash, rawStorageKey bool, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) (map[common.Hash]map[string]*trienode.Node, error) {
+func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) (map[common.Hash]map[string]*trienode.Node, error) {
 	tr, err := trie.New(trie.TrieID(postRoot), db)
 	if err != nil {
 		return nil, err
 	}
 	ctx := &context{
-		prevRoot:      prevRoot,
-		postRoot:      postRoot,
-		accounts:      accounts,
-		storages:      storages,
-		accountTrie:   tr,
-		rawStorageKey: rawStorageKey,
-		nodes:         trienode.NewMergedNodeSet(),
+		prevRoot:    prevRoot,
+		postRoot:    postRoot,
+		accounts:    accounts,
+		storages:    storages,
+		accountTrie: tr,
+		nodes:       trienode.NewMergedNodeSet(),
 	}
 	for addr, account := range accounts {
 		var err error
@@ -111,15 +109,11 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 		return err
 	}
 	for key, val := range ctx.storages[addr] {
-		tkey := key
-		if ctx.rawStorageKey {
-			tkey = h.hash(key.Bytes())
-		}
 		var err error
 		if len(val) == 0 {
-			err = st.Delete(tkey.Bytes())
+			err = st.Delete(key.Bytes())
 		} else {
-			err = st.Update(tkey.Bytes(), val)
+			err = st.Update(key.Bytes(), val)
 		}
 		if err != nil {
 			return err
@@ -172,11 +166,7 @@ func deleteAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 		if len(val) != 0 {
 			return errors.New("expect storage deletion")
 		}
-		tkey := key
-		if ctx.rawStorageKey {
-			tkey = h.hash(key.Bytes())
-		}
-		if err := st.Delete(tkey.Bytes()); err != nil {
+		if err := st.Delete(key.Bytes()); err != nil {
 			return err
 		}
 	}

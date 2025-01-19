@@ -316,7 +316,7 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
 	// layer.
-	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.meta.version != stateHistoryV0, h.accounts, h.storages)
+	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.accounts, h.storages)
 	if err != nil {
 		return nil, err
 	}
