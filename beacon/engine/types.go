@@ -129,6 +129,9 @@ type executionPayloadEnvelopeMarshaling struct {
 	Requests   []hexutil.Bytes
 }
 
+// Max size of inclusion list in bytes.
+const MaxBytesPerInclusionList = uint64(8192)
+
 type PayloadStatusV1 struct {
 	Status          string         `json:"status"`
 	Witness         *hexutil.Bytes `json:"witness"`
@@ -342,6 +345,19 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Requests:         requests,
 		Override:         false,
 	}
+}
+
+func InclusionListToTransactions(inclusionList [][]byte) ([]*types.Transaction, error) {
+	txs, err := decodeTransactions(inclusionList)
+	if err != nil {
+		return nil, err
+	}
+
+	return txs, nil
+}
+
+func TransactionsToInclusionList(txs []*types.Transaction) [][]byte {
+	return encodeTransactions(txs)
 }
 
 // ExecutionPayloadBody is used in the response to GetPayloadBodiesByHash and GetPayloadBodiesByRange
