@@ -119,7 +119,7 @@ func (w *ledgerDriver) Open(device io.ReadWriter, passphrase string) error {
 	_, err := w.ledgerDerive(accounts.DefaultBaseDerivationPath)
 	if err != nil {
 		// Ethereum app is not running or in browser mode, nothing more to do, return
-		if err == errLedgerReplyInvalidHeader {
+		if errors.Is(err, errLedgerReplyInvalidHeader) {
 			w.browser = true
 		}
 		return nil
@@ -141,7 +141,7 @@ func (w *ledgerDriver) Close() error {
 // Heartbeat implements usbwallet.driver, performing a sanity check against the
 // Ledger to see if it's still online.
 func (w *ledgerDriver) Heartbeat() error {
-	if _, err := w.ledgerVersion(); err != nil && err != errLedgerInvalidVersionReply {
+	if _, err := w.ledgerVersion(); err != nil && !errors.Is(err, errLedgerInvalidVersionReply) {
 		w.failure = err
 		return err
 	}

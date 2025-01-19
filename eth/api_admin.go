@@ -113,7 +113,7 @@ func (api *AdminAPI) ImportChain(file string) (bool, error) {
 		// Load a batch of blocks from the input file
 		for len(blocks) < cap(blocks) {
 			block := new(types.Block)
-			if err := stream.Decode(block); err == io.EOF {
+			if err := stream.Decode(block); errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
 				return false, fmt.Errorf("block %d: failed to parse: %v", index, err)

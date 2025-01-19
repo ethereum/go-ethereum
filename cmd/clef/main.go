@@ -923,13 +923,13 @@ func testExternalUI(api *core.SignerAPI) {
 		}
 	}
 	expectApprove := func(testcase string, err error) {
-		if err == nil || err == accounts.ErrUnknownAccount {
+		if err == nil || errors.Is(err, accounts.ErrUnknownAccount) {
 			return
 		}
 		addErr(fmt.Sprintf("%v: expected no error, got %v", testcase, err.Error()))
 	}
 	expectDeny := func(testcase string, err error) {
-		if err == nil || err != core.ErrRequestDenied {
+		if err == nil || !errors.Is(err, core.ErrRequestDenied) {
 			addErr(fmt.Sprintf("%v: expected ErrRequestDenied, got %v", testcase, err))
 		}
 	}

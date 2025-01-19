@@ -33,7 +33,8 @@ var (
 )
 
 func convertFileLockError(err error) error {
-	if errno, ok := err.(syscall.Errno); ok && datadirInUseErrnos[uint(errno)] {
+	var errno syscall.Errno
+	if ok := errors.As(err, &errno); ok && datadirInUseErrnos[uint(errno)] {
 		return ErrDatadirUsed
 	}
 	return err
