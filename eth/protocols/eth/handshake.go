@@ -116,16 +116,16 @@ func markError(p *Peer, err error) {
 		return
 	}
 	m := meters.get(p.Inbound())
-	switch errors.Unwrap(err) {
-	case errNetworkIDMismatch:
+	switch {
+	case errors.Is(err, errNetworkIDMismatch):
 		m.networkIDMismatch.Mark(1)
-	case errProtocolVersionMismatch:
+	case errors.Is(err, errProtocolVersionMismatch):
 		m.protocolVersionMismatch.Mark(1)
-	case errGenesisMismatch:
+	case errors.Is(err, errGenesisMismatch):
 		m.genesisMismatch.Mark(1)
-	case errForkIDRejected:
+	case errors.Is(err, errForkIDRejected):
 		m.forkidRejected.Mark(1)
-	case p2p.DiscReadTimeout:
+	case errors.Is(err, p2p.DiscReadTimeout):
 		m.timeoutError.Mark(1)
 	default:
 		m.peerError.Mark(1)

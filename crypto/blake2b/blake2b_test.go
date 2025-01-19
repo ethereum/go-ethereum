@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -166,7 +167,7 @@ func testHashes2X(t *testing.T) {
 		if _, err := h.Read(sum); err != nil {
 			t.Fatalf("#%d (single write): error from Read: %v", i, err)
 		}
-		if n, err := h.Read(sum); n != 0 || err != io.EOF {
+		if n, err := h.Read(sum); n != 0 || !errors.Is(err, io.EOF) {
 			t.Fatalf("#%d (single write): Read did not return (0, io.EOF) after exhaustion, got (%v, %v)", i, n, err)
 		}
 		if gotHex := fmt.Sprintf("%x", sum); gotHex != expectedHex {

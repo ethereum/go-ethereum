@@ -17,6 +17,7 @@
 package rlp
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
@@ -140,7 +141,8 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	// Filter/validate fields.
 	structFields, structTags, err := rlpstruct.ProcessFields(allStructFields)
 	if err != nil {
-		if tagErr, ok := err.(rlpstruct.TagError); ok {
+		tagErr := new(rlpstruct.TagError)
+		if ok := errors.As(err, &tagErr); ok {
 			tagErr.StructType = typ.String()
 			return nil, tagErr
 		}

@@ -150,7 +150,7 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 	var root common.Hash
 	if err := r.Decode(&root); err != nil {
 		// The first read may fail with EOF, marking the end of the journal
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return parent, nil
 		}
 		return nil, fmt.Errorf("load diff root: %v", err)

@@ -114,17 +114,19 @@ func TestClientErrorData(t *testing.T) {
 	// The method handler returns an error value which implements the rpc.Error
 	// interface, i.e. it has a custom error code. The server returns this error code.
 	expectedCode := testError{}.ErrorCode()
-	if e, ok := err.(Error); !ok {
+	var e Error
+	if ok := errors.As(err, &e); !ok {
 		t.Fatalf("client did not return rpc.Error, got %#v", e)
 	} else if e.ErrorCode() != expectedCode {
 		t.Fatalf("wrong error code %d, want %d", e.ErrorCode(), expectedCode)
 	}
 
 	// Check data.
-	if e, ok := err.(DataError); !ok {
-		t.Fatalf("client did not return rpc.DataError, got %#v", e)
-	} else if e.ErrorData() != (testError{}.ErrorData()) {
-		t.Fatalf("wrong error data %#v, want %#v", e.ErrorData(), testError{}.ErrorData())
+	var dataErr DataError
+	if ok := errors.As(err, &dataErr); !ok {
+		t.Fatalf("client did not return rpc.DataError, got %#v", dataErr)
+	} else if dataErr.ErrorData() != (testError{}.ErrorData()) {
+		t.Fatalf("wrong error data %#v, want %#v", dataErr.ErrorData(), testError{}.ErrorData())
 	}
 }
 
@@ -225,7 +227,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 			}
 		}
 		for i, elem := range batch[2:] {
-			if elem.Error != ErrMissingBatchResponse {
+			if !errors.Is(elem.Error, ErrMissingBatchResponse) {
 				t.Errorf("wrong error %q for batch element %d", elem.Error, i+2)
 			}
 		}
@@ -255,7 +257,7 @@ func TestClientBatchRequest_len(t *testing.T) {
 			}
 		}
 		for i, elem := range batch[1:] {
-			if elem.Error != ErrMissingBatchResponse {
+			if !errors.Is(elem.Error, ErrMissingBatchResponse) {
 				t.Errorf("wrong error %q for batch element %d", elem.Error, i+2)
 			}
 		}
@@ -296,7 +298,7 @@ func TestClientBatchRequestLimit(t *testing.T) {
 
 	// Check that remaining response batch elements are reported as absent.
 	for i, elem := range batch[1:] {
-		if elem.Error != ErrMissingBatchResponse {
+		if !errors.Is(elem.Error, ErrMissingBatchResponse) {
 			t.Fatalf("batch elem %d has unexpected error: %v", i+1, elem.Error)
 		}
 	}
@@ -732,7 +734,7 @@ func TestClientNotificationStorm(t *testing.T) {
 					t.Fatalf("(%d/%d) unexpected value %d", i, count, val)
 				}
 			case err := <-sub.Err():
-				if wantError && err != ErrSubscriptionQueueOverflow {
+				if wantError && !errors.Is(err, ErrSubscriptionQueueOverflow) {
 					t.Fatalf("(%d/%d) got error %q, want %q", i, count, err, ErrSubscriptionQueueOverflow)
 				} else if !wantError {
 					t.Fatalf("(%d/%d) got unexpected error %q", i, count, err)

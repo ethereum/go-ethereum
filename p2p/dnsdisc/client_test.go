@@ -95,7 +95,7 @@ func TestClientSyncTreeBadNode(t *testing.T) {
 	c := NewClient(Config{Resolver: r, Logger: testlog.Logger(t, log.LvlTrace)})
 	_, err := c.SyncTree("enrtree://AKPYQIUQIL7PSIACI32J7FGZW56E5FKHEFCCOFHILBIMW3M6LWXS2@n")
 	wantErr := nameError{name: "INDMVBZEEQ4ESVYAKGIYU74EAA.n", err: entryError{typ: "enr", err: errInvalidENR}}
-	if err != wantErr {
+	if !errors.Is(err, wantErr) {
 		t.Fatalf("expected sync error %q, got %q", wantErr, err)
 	}
 }

@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -60,7 +61,7 @@ func (result *ExecutionResult) Return() []byte {
 // Revert returns the concrete revert reason if the execution is aborted by `REVERT`
 // opcode. Note the reason can be nil if no data supplied with revert opcode.
 func (result *ExecutionResult) Revert() []byte {
-	if result.Err != vm.ErrExecutionReverted {
+	if !errors.Is(result.Err, vm.ErrExecutionReverted) {
 		return nil
 	}
 	return common.CopyBytes(result.ReturnData)

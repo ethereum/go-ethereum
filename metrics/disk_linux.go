@@ -20,6 +20,7 @@ package metrics
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -42,7 +43,7 @@ func ReadDiskStats(stats *DiskStats) error {
 		// Read the next line and split to key and value
 		line, err := in.ReadString('\n')
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return err

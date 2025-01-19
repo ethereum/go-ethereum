@@ -120,7 +120,8 @@ func loadConfig(file string, cfg *gethConfig) error {
 
 	err = tomlSettings.NewDecoder(bufio.NewReader(f)).Decode(cfg)
 	// Add file name to errors that have a line number.
-	if _, ok := err.(*toml.LineError); ok {
+	lineErr := new(toml.LineError)
+	if ok := errors.As(err, &lineErr); ok {
 		err = errors.New(file + ", " + err.Error())
 	}
 	return err

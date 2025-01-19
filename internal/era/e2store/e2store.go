@@ -110,7 +110,7 @@ func (r *Reader) ReadAt(entry *Entry, off int64) (int, error) {
 		n += headerSize
 		// An entry with a non-zero length should not return EOF when
 		// reading the value.
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return n, io.ErrUnexpectedEOF
 		}
 		return n, err
@@ -151,7 +151,7 @@ func (r *Reader) LengthAt(off int64) (int64, error) {
 func (r *Reader) ReadMetadataAt(off int64) (typ uint16, length uint32, err error) {
 	b := make([]byte, headerSize)
 	if n, err := r.r.ReadAt(b, off); err != nil {
-		if err == io.EOF && n > 0 {
+		if errors.Is(err, io.EOF) && n > 0 {
 			return 0, 0, io.ErrUnexpectedEOF
 		}
 		return 0, 0, err
@@ -177,7 +177,7 @@ func (r *Reader) Find(want uint16) (*Entry, error) {
 	)
 	for {
 		typ, length, err = r.ReadMetadataAt(off)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return nil, io.EOF
 		} else if err != nil {
 			return nil, err
@@ -204,7 +204,7 @@ func (r *Reader) FindAll(want uint16) ([]*Entry, error) {
 	)
 	for {
 		typ, length, err = r.ReadMetadataAt(off)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return entries, nil
 		} else if err != nil {
 			return entries, err

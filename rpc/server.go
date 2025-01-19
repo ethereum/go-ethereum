@@ -174,7 +174,7 @@ func messageForReadError(err error) string {
 		} else {
 			return "read error"
 		}
-	} else if err != io.EOF {
+	} else if !errors.Is(err, io.EOF) {
 		return "parse error"
 	}
 	return ""

@@ -275,7 +275,7 @@ func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, erro
 	blocks[0] = gblock
 	for i := 0; ; i++ {
 		var b types.Block
-		if err := stream.Decode(&b); err == io.EOF {
+		if err := stream.Decode(&b); errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
 			return nil, fmt.Errorf("at block index %d: %v", i, err)

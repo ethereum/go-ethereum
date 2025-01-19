@@ -2290,11 +2290,11 @@ func (s *Syncer) processTrienodeHealResponse(res *trienodeHealResponse) {
 		s.trienodeHealBytes += common.StorageSize(len(node))
 
 		err := s.healer.scheduler.ProcessNode(trie.NodeSyncResult{Path: res.paths[i], Data: node})
-		switch err {
-		case nil:
-		case trie.ErrAlreadyProcessed:
+		switch {
+		case err == nil:
+		case errors.Is(err, trie.ErrAlreadyProcessed):
 			s.trienodeHealDups++
-		case trie.ErrNotRequested:
+		case errors.Is(err, trie.ErrNotRequested):
 			s.trienodeHealNops++
 		default:
 			log.Error("Invalid trienode processed", "hash", hash, "err", err)
@@ -2377,11 +2377,11 @@ func (s *Syncer) processBytecodeHealResponse(res *bytecodeHealResponse) {
 		s.bytecodeHealBytes += common.StorageSize(len(node))
 
 		err := s.healer.scheduler.ProcessCode(trie.CodeSyncResult{Hash: hash, Data: node})
-		switch err {
-		case nil:
-		case trie.ErrAlreadyProcessed:
+		switch {
+		case err == nil:
+		case errors.Is(err, trie.ErrAlreadyProcessed):
 			s.bytecodeHealDups++
-		case trie.ErrNotRequested:
+		case errors.Is(err, trie.ErrNotRequested):
 			s.bytecodeHealNops++
 		default:
 			log.Error("Invalid bytecode processed", "hash", hash, "err", err)

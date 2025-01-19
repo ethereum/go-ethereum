@@ -7,6 +7,7 @@ run:
 linters:
   disable-all: true
   enable:
+    - errorlint
     - goimports
     - gosimple
     - govet
@@ -32,12 +33,13 @@ linters:
     # - errcheck #lot of false positives
     # - contextcheck
     # - errchkjson # lots of false positives
-    # - errorlint # this check crashes
     # - exhaustive # silly check
     # - makezero # false positives
     # - nilerr # several intentional
 
 linters-settings:
+  errorlint:
+    errorf: false
   gofmt:
     simplify: true
   revive:

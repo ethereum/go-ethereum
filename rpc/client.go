@@ -713,7 +713,8 @@ func (c *Client) drainRead() {
 func (c *Client) read(codec ServerCodec) {
 	for {
 		msgs, batch, err := codec.readBatch()
-		if _, ok := err.(*json.SyntaxError); ok {
+		jsonErr := new(json.SyntaxError)
+		if ok := errors.As(err, &jsonErr); ok {
 			msg := errorMessage(&parseError{err.Error()})
 			codec.writeJSON(context.Background(), msg, true)
 		}

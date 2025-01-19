@@ -268,10 +268,11 @@ func (it *nodeIterator) NodeBlob() []byte {
 }
 
 func (it *nodeIterator) Error() error {
-	if it.err == errIteratorEnd {
+	if errors.Is(it.err, errIteratorEnd) {
 		return nil
 	}
-	if seek, ok := it.err.(seekError); ok {
+	var seek seekError
+	if ok := errors.As(it.err, &seek); ok {
 		return seek.err
 	}
 	return it.err
@@ -282,10 +283,11 @@ func (it *nodeIterator) Error() error {
 // sets the Error field to the encountered failure. If `descend` is false,
 // skips iterating over any subnodes of the current node.
 func (it *nodeIterator) Next(descend bool) bool {
-	if it.err == errIteratorEnd {
+	if errors.Is(it.err, errIteratorEnd) {
 		return false
 	}
-	if seek, ok := it.err.(seekError); ok {
+	var seek seekError
+	if ok := errors.As(it.err, &seek); ok {
 		if it.err = it.seek(seek.key); it.err != nil {
 			return false
 		}
@@ -308,7 +310,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 	// Move forward until we're just before the closest match to key.
 	for {
 		state, parentIndex, path, err := it.peekSeek(key)
-		if err == errIteratorEnd {
+		if errors.Is(err, errIteratorEnd) {
 			return errIteratorEnd
 		} else if err != nil {
 			return seekError{prefix, err}

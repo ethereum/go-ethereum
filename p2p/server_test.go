@@ -280,7 +280,7 @@ func TestServerAtCap(t *testing.T) {
 	// Try inserting a non-trusted connection.
 	anotherID := randomID()
 	c := newconn(anotherID)
-	if err := srv.checkpoint(c, srv.checkpointPostHandshake); err != DiscTooManyPeers {
+	if err := srv.checkpoint(c, srv.checkpointPostHandshake); !errors.Is(err, DiscTooManyPeers) {
 		t.Error("wrong error for insert:", err)
 	}
 	// Try inserting a trusted connection.
@@ -295,7 +295,7 @@ func TestServerAtCap(t *testing.T) {
 	// Remove from trusted set and try again
 	srv.RemoveTrustedPeer(newNode(trustedID, ""))
 	c = newconn(trustedID)
-	if err := srv.checkpoint(c, srv.checkpointPostHandshake); err != DiscTooManyPeers {
+	if err := srv.checkpoint(c, srv.checkpointPostHandshake); !errors.Is(err, DiscTooManyPeers) {
 		t.Error("wrong error for insert:", err)
 	}
 
@@ -345,7 +345,7 @@ func TestServerPeerLimits(t *testing.T) {
 	dialDest := clientnode
 	conn, _ := net.Pipe()
 	srv.SetupConn(conn, flags, dialDest)
-	if tp.closeErr != DiscTooManyPeers {
+	if !errors.Is(tp.closeErr, DiscTooManyPeers) {
 		t.Errorf("unexpected close error: %q", tp.closeErr)
 	}
 	conn.Close()
@@ -355,11 +355,11 @@ func TestServerPeerLimits(t *testing.T) {
 	// Check that server allows a trusted peer despite being full.
 	conn, _ = net.Pipe()
 	srv.SetupConn(conn, flags, dialDest)
-	if tp.closeErr == DiscTooManyPeers {
+	if errors.Is(tp.closeErr, DiscTooManyPeers) {
 		t.Errorf("failed to bypass MaxPeers with trusted node: %q", tp.closeErr)
 	}
 
-	if tp.closeErr != DiscUselessPeer {
+	if !errors.Is(tp.closeErr, DiscUselessPeer) {
 		t.Errorf("unexpected close error: %q", tp.closeErr)
 	}
 	conn.Close()
@@ -369,7 +369,7 @@ func TestServerPeerLimits(t *testing.T) {
 	// Check that server is full again.
 	conn, _ = net.Pipe()
 	srv.SetupConn(conn, flags, dialDest)
-	if tp.closeErr != DiscTooManyPeers {
+	if !errors.Is(tp.closeErr, DiscTooManyPeers) {
 		t.Errorf("unexpected close error: %q", tp.closeErr)
 	}
 	conn.Close()
@@ -564,7 +564,7 @@ func TestServerInboundThrottle(t *testing.T) {
 	go func() {
 		conn.SetDeadline(time.Now().Add(timeout))
 		buf := make([]byte, 10)
-		if n, err := conn.Read(buf); err != io.EOF || n != 0 {
+		if n, err := conn.Read(buf); !errors.Is(err, io.EOF) || n != 0 {
 			t.Errorf("expected io.EOF and n == 0, got error %q and n == %d", err, n)
 		}
 		connClosed <- struct{}{}

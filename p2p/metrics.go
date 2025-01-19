@@ -70,20 +70,20 @@ func markDialError(err error) {
 	if err2 := errors.Unwrap(err); err2 != nil {
 		err = err2
 	}
-	switch err {
-	case DiscTooManyPeers:
+	switch {
+	case errors.Is(err, DiscTooManyPeers):
 		dialTooManyPeers.Mark(1)
-	case DiscAlreadyConnected:
+	case errors.Is(err, DiscAlreadyConnected):
 		dialAlreadyConnected.Mark(1)
-	case DiscSelf:
+	case errors.Is(err, DiscSelf):
 		dialSelf.Mark(1)
-	case DiscUselessPeer:
+	case errors.Is(err, DiscUselessPeer):
 		dialUselessPeer.Mark(1)
-	case DiscUnexpectedIdentity:
+	case errors.Is(err, DiscUnexpectedIdentity):
 		dialUnexpectedIdentity.Mark(1)
-	case errEncHandshakeError:
+	case errors.Is(err, errEncHandshakeError):
 		dialEncHandshakeError.Mark(1)
-	case errProtoHandshakeError:
+	case errors.Is(err, errProtoHandshakeError):
 		dialProtoHandshakeError.Mark(1)
 	}
 }
