@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -665,6 +666,61 @@ func TestEvmRun(t *testing.T) {
 			}
 			if have != string(want) {
 				t.Fatalf("test %d, output wrong\nhave %q\nwant %q\n", i, have, string(want))
+			}
+		}
+	}
+}
+
+func TestEvmRunRegEx(t *testing.T) {
+	t.Parallel()
+	tt := cmdtest.NewTestCmd(t, nil)
+	for i, tc := range []struct {
+		input      []string
+		wantStdout string
+		wantStderr string
+	}{
+		{ // json tracing
+			input:      []string{"run", "--bench", "6040"},
+			wantStdout: "./testdata/evmrun/9.out.1.txt",
+			wantStderr: "./testdata/evmrun/9.out.2.txt",
+		},
+		{ // statetest subcommand
+			input:      []string{"statetest", "--bench", "./testdata/statetest.json"},
+			wantStdout: "./testdata/evmrun/10.out.1.txt",
+			wantStderr: "./testdata/evmrun/10.out.2.txt",
+		},
+	} {
+		tt.Logf("args: go run ./cmd/evm %v\n", strings.Join(tc.input, " "))
+		tt.Run("evm-test", tc.input...)
+
+		haveStdOut := tt.Output()
+		tt.WaitExit()
+		haveStdErr := tt.StderrText()
+
+		if have, wantFile := haveStdOut, tc.wantStdout; wantFile != "" {
+			want, err := os.ReadFile(wantFile)
+			if err != nil {
+				t.Fatalf("test %d: could not read expected output: %v", i, err)
+			}
+			re, err := regexp.Compile(string(want))
+			if err != nil {
+				t.Fatalf("test %d: could not compile regular expression: %v", i, err)
+			}
+			if !re.MatchString(string(have)) {
+				t.Fatalf("test %d, output wrong, have \n%v\nwant\n%v\n", i, string(have), re)
+			}
+		}
+		if have, wantFile := haveStdErr, tc.wantStderr; wantFile != "" {
+			want, err := os.ReadFile(wantFile)
+			if err != nil {
+				t.Fatalf("test %d: could not read expected output: %v", i, err)
+			}
+			re, err := regexp.Compile(string(want))
+			if err != nil {
+				t.Fatalf("test %d: could not compile regular expression: %v", i, err)
+			}
+			if !re.MatchString(have) {
+				t.Fatalf("test %d, output wrong, have \n%v\nwant\n%v\n", i, string(have), re)
 			}
 		}
 	}
