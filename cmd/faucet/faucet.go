@@ -17,7 +17,7 @@
 // faucet is a Ether faucet backed by a light client.
 package main
 
-//go:generate go-bindata -nometadata -o website.go faucet.html
+//go:generate go run github.com/kevinburke/go-bindata/go-bindata -nometadata -o website.go faucet.html
 //go:generate gofmt -w -s website.go
 
 import (

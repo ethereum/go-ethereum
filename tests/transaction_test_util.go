@@ -42,7 +42,7 @@ type ttJSON struct {
 	Transaction *ttTransaction      `json:"transaction"`
 }
 
-//go:generate gencodec -type ttTransaction -field-override ttTransactionMarshaling -out gen_tttransaction.go
+//go:generate go run github.com/fjl/gencodec -type ttTransaction -field-override ttTransactionMarshaling -out gen_tttransaction.go
 
 type ttTransaction struct {
 	Data     []byte         `gencodec:"required"`
