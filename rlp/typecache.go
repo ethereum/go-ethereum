@@ -141,7 +141,7 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	// Filter/validate fields.
 	structFields, structTags, err := rlpstruct.ProcessFields(allStructFields)
 	if err != nil {
-		tagErr := new(rlpstruct.TagError)
+		var tagErr rlpstruct.TagError
 		if errors.As(err, &tagErr) {
 			tagErr.StructType = typ.String()
 			return nil, tagErr
