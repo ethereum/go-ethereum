@@ -426,11 +426,21 @@ func TestCheckSimBackendGoroutineLeak(t *testing.T) {
 
 	l := leaks(stacks1, stacks2)
 	if len(l) > 0 {
+		// ignore this "leak" from leveldb:  After closing the db, LevelDB takes about a second to close a go-routine
+		// that it instantiates.
+		re, err := regexp.Compile("github\\.com/syndtr/goleveldb/leveldb\\.\n.*/leveldb/db_state\\.go:110 \\+0xe4\ncreated by github\\.com/syndtr/goleveldb/leveldb\\.openDB in goroutine xxx\n.*/leveldb/db\\.go:149 \\+0x3d0")
+		if err != nil {
+			panic(err)
+		}
 		var leakedGRs string
 		for _, leak := range l {
+			if re.MatchString(leak) {
+				continue
+			}
 			leakedGRs = leakedGRs + fmt.Sprintf("%s\n\n", leak)
 		}
-
-		t.Fatalf("leaked goroutines:\n%s", leakedGRs)
+		if leakedGRs != "" {
+			t.Fatalf("leaked goroutines:\n%s", leakedGRs)
+		}
 	}
 }
