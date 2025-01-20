@@ -272,7 +272,7 @@ func (it *nodeIterator) Error() error {
 		return nil
 	}
 	var seek seekError
-	if ok := errors.As(it.err, &seek); ok {
+	if errors.As(it.err, &seek) {
 		return seek.err
 	}
 	return it.err
@@ -287,7 +287,7 @@ func (it *nodeIterator) Next(descend bool) bool {
 		return false
 	}
 	var seek seekError
-	if ok := errors.As(it.err, &seek); ok {
+	if errors.As(it.err, &seek) {
 		if it.err = it.seek(seek.key); it.err != nil {
 			return false
 		}

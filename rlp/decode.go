@@ -142,7 +142,7 @@ func wrapStreamError(err error, typ reflect.Type) error {
 
 func addErrorContext(err error, ctx string) error {
 	decErr := new(decodeError)
-	if ok := errors.As(err, &decErr); ok {
+	if errors.As(err, &decErr) {
 		decErr.ctx = append(decErr.ctx, ctx)
 	}
 	return err
@@ -950,7 +950,7 @@ func (s *Stream) Decode(val interface{}) error {
 
 	err = decoder(s, rval.Elem())
 	decErr := new(decodeError)
-	if ok := errors.As(err, &decErr); ok && len(decErr.ctx) > 0 {
+	if errors.As(err, &decErr) && len(decErr.ctx) > 0 {
 		// Add decode target type to error so context has more meaning.
 		decErr.ctx = append(decErr.ctx, fmt.Sprint("(", rtyp.Elem(), ")"))
 	}

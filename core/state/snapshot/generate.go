@@ -671,7 +671,7 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	if err := generateAccounts(ctx, dl, accMarker); err != nil {
 		// Extract the received interruption signal if exists
 		aerr := new(abortErr)
-		if ok := errors.As(err, &aerr); ok {
+		if errors.As(err, &aerr) {
 			abort = aerr.abort
 		}
 		// Aborted by internal error, wait the signal

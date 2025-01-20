@@ -104,7 +104,7 @@ func (d DiscReason) Error() string {
 
 func discReasonForError(err error) DiscReason {
 	var reason DiscReason
-	if ok := errors.As(err, &reason); ok {
+	if errors.As(err, &reason) {
 		return reason
 	}
 	if errors.Is(err, errProtocolReturned) {

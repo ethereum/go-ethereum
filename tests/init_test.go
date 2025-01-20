@@ -53,7 +53,7 @@ func readJSON(reader io.Reader, value interface{}) error {
 	}
 	if err = json.Unmarshal(data, &value); err != nil {
 		syntaxerr := new(json.SyntaxError)
-		if ok := errors.As(err, &syntaxerr); ok {
+		if errors.As(err, &syntaxerr) {
 			line := findLine(data, syntaxerr.Offset)
 			return fmt.Errorf("JSON syntax error at line %v: %v", line, err)
 		}

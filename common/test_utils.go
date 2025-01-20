@@ -31,7 +31,7 @@ func LoadJSON(file string, val interface{}) error {
 	}
 	if err := json.Unmarshal(content, val); err != nil {
 		syntaxerr := new(json.SyntaxError)
-		if ok := errors.As(err, &syntaxerr); ok {
+		if errors.As(err, &syntaxerr) {
 			line := findLine(content, syntaxerr.Offset)
 			return fmt.Errorf("JSON syntax error at %v:%v: %v", file, line, err)
 		}

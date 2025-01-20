@@ -714,7 +714,7 @@ func (c *Client) read(codec ServerCodec) {
 	for {
 		msgs, batch, err := codec.readBatch()
 		jsonErr := new(json.SyntaxError)
-		if ok := errors.As(err, &jsonErr); ok {
+		if errors.As(err, &jsonErr) {
 			msg := errorMessage(&parseError{err.Error()})
 			codec.writeJSON(context.Background(), msg, true)
 		}

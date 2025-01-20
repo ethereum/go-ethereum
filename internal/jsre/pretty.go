@@ -62,7 +62,7 @@ func prettyPrint(vm *goja.Runtime, value goja.Value, w io.Writer) {
 func prettyError(vm *goja.Runtime, err error, w io.Writer) {
 	failure := err.Error()
 	gojaErr := new(goja.Exception)
-	if ok := errors.As(err, &gojaErr); ok {
+	if errors.As(err, &gojaErr) {
 		failure = gojaErr.String()
 	}
 	fmt.Fprint(w, ErrorColor("%s", failure))

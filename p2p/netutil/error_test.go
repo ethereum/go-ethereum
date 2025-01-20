@@ -54,7 +54,7 @@ func TestIsPacketTooBig(t *testing.T) {
 		n, _, err := listener.ReadFrom(buf)
 		if err != nil {
 			var nerr net.Error
-			if ok := errors.As(err, &nerr); ok && nerr.Timeout() {
+			if errors.As(err, &nerr) && nerr.Timeout() {
 				continue
 			}
 			if !isPacketTooBig(err) {

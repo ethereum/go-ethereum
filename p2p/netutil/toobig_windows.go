@@ -33,9 +33,9 @@ const _WSAEMSGSIZE = syscall.Errno(10040)
 // code WSAEMSGSIZE and no data if this happens.
 func isPacketTooBig(err error) bool {
 	opErr := new(net.OpError)
-	if ok := errors.As(err, &opErr); ok {
+	if errors.As(err, &opErr) {
 		scErr := new(os.SyscallError)
-		if ok := errors.As(opErr.Err, &scErr); ok {
+		if errors.As(opErr.Err, &scErr) {
 			return scErr.Err == _WSAEMSGSIZE
 		}
 		return opErr.Err == _WSAEMSGSIZE

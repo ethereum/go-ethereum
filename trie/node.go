@@ -244,7 +244,7 @@ func wrapError(err error, ctx string) error {
 		return nil
 	}
 	decErr := new(decodeError)
-	if ok := errors.As(err, &decErr); ok {
+	if errors.As(err, &decErr) {
 		decErr.stack = append(decErr.stack, ctx)
 		return decErr
 	}

@@ -61,7 +61,7 @@ func TestDecodeFullNodeWrongSizeChild(t *testing.T) {
 
 	_, err := decodeNode([]byte("testdecode"), buf.Bytes())
 	decodeErr := new(decodeError)
-	if ok := errors.As(err, &decodeErr); !ok {
+	if !errors.As(err, &decodeErr) {
 		t.Fatalf("decodeNode returned wrong err: %v", err)
 	}
 }
@@ -81,7 +81,7 @@ func TestDecodeFullNodeWrongNestedFullNode(t *testing.T) {
 
 	_, err := decodeNode([]byte("testdecode"), buf.Bytes())
 	decodeErr := new(decodeError)
-	if ok := errors.As(err, &decodeErr); !ok {
+	if !errors.As(err, &decodeErr) {
 		t.Fatalf("decodeNode returned wrong err: %v", err)
 	}
 }

@@ -115,7 +115,7 @@ func TestClientErrorData(t *testing.T) {
 	// interface, i.e. it has a custom error code. The server returns this error code.
 	expectedCode := testError{}.ErrorCode()
 	var e Error
-	if ok := errors.As(err, &e); !ok {
+	if !errors.As(err, &e) {
 		t.Fatalf("client did not return rpc.Error, got %#v", e)
 	} else if e.ErrorCode() != expectedCode {
 		t.Fatalf("wrong error code %d, want %d", e.ErrorCode(), expectedCode)
@@ -123,7 +123,7 @@ func TestClientErrorData(t *testing.T) {
 
 	// Check data.
 	var dataErr DataError
-	if ok := errors.As(err, &dataErr); !ok {
+	if !errors.As(err, &dataErr) {
 		t.Fatalf("client did not return rpc.DataError, got %#v", dataErr)
 	} else if dataErr.ErrorData() != (testError{}.ErrorData()) {
 		t.Fatalf("wrong error data %#v, want %#v", dataErr.ErrorData(), testError{}.ErrorData())

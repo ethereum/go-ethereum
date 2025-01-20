@@ -1363,7 +1363,7 @@ func runRandTest(rt randTest) bool {
 func TestRandom(t *testing.T) {
 	if err := quick.Check(runRandTest, nil); err != nil {
 		cerr := new(quick.CheckError)
-		if ok := errors.As(err, &cerr); ok {
+		if errors.As(err, &cerr) {
 			t.Fatalf("random test iteration %d failed: %s", cerr.Count, spew.Sdump(cerr.In))
 		}
 		t.Fatal(err)

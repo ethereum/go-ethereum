@@ -412,7 +412,7 @@ func checkNumberText(input []byte) (raw []byte, err error) {
 
 func wrapTypeError(err error, typ reflect.Type) error {
 	decErr := new(decError)
-	if ok := errors.As(err, &decErr); ok {
+	if errors.As(err, &decErr) {
 		return &json.UnmarshalTypeError{Value: err.Error(), Type: typ}
 	}
 	return err

@@ -79,7 +79,7 @@ func testMissingRoot(t *testing.T, scheme string) {
 		t.Error("New returned non-nil trie for invalid root")
 	}
 	missingNodeErr := new(MissingNodeError)
-	if ok := errors.As(err, &missingNodeErr); !ok {
+	if !errors.As(err, &missingNodeErr) {
 		t.Errorf("New returned wrong error: %v", err)
 	}
 }
@@ -150,11 +150,11 @@ func testMissingNode(t *testing.T, memonly bool, scheme string) {
 
 	_, err = trie.Get([]byte("120000"))
 	missingNodeErr := new(MissingNodeError)
-	if ok := errors.As(err, &missingNodeErr); !ok {
+	if !errors.As(err, &missingNodeErr) {
 		t.Errorf("Wrong error: %v", err)
 	}
 	_, err = trie.Get([]byte("120099"))
-	if ok := errors.As(err, &missingNodeErr); !ok {
+	if !errors.As(err, &missingNodeErr) {
 		t.Errorf("Wrong error: %v", err)
 	}
 	_, err = trie.Get([]byte("123456"))
@@ -162,11 +162,11 @@ func testMissingNode(t *testing.T, memonly bool, scheme string) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	err = trie.Update([]byte("120099"), []byte("zxcv"))
-	if ok := errors.As(err, &missingNodeErr); !ok {
+	if !errors.As(err, &missingNodeErr) {
 		t.Errorf("Wrong error: %v", err)
 	}
 	err = trie.Delete([]byte("123456"))
-	if ok := errors.As(err, &missingNodeErr); !ok {
+	if !errors.As(err, &missingNodeErr) {
 		t.Errorf("Wrong error: %v", err)
 	}
 }
@@ -625,7 +625,7 @@ func runRandTest(rt randTest) error {
 func TestRandom(t *testing.T) {
 	if err := quick.Check(runRandTestBool, nil); err != nil {
 		cerr := new(quick.CheckError)
-		if ok := errors.As(err, &cerr); ok {
+		if errors.As(err, &cerr) {
 			t.Fatalf("random test iteration %d failed: %s", cerr.Count, spew.Sdump(cerr.In))
 		}
 		t.Fatal(err)

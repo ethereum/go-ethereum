@@ -142,7 +142,7 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 	structFields, structTags, err := rlpstruct.ProcessFields(allStructFields)
 	if err != nil {
 		tagErr := new(rlpstruct.TagError)
-		if ok := errors.As(err, &tagErr); ok {
+		if errors.As(err, &tagErr) {
 			tagErr.StructType = typ.String()
 			return nil, tagErr
 		}

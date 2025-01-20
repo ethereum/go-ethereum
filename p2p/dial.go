@@ -627,7 +627,7 @@ func (t *dialTask) String() string {
 
 func cleanupDialErr(err error) error {
 	netErr := new(net.OpError)
-	if ok := errors.As(err, &netErr); ok && netErr.Op == "dial" {
+	if errors.As(err, &netErr) && netErr.Op == "dial" {
 		return netErr.Err
 	}
 	return err

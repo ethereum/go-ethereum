@@ -149,7 +149,7 @@ func (c *Console) init(preload []string) error {
 		if err := c.jsre.Exec(path); err != nil {
 			failure := err.Error()
 			gojaErr := new(goja.Exception)
-			if ok := errors.As(err, &gojaErr); ok {
+			if errors.As(err, &gojaErr) {
 				failure = gojaErr.String()
 			}
 			return fmt.Errorf("%s: %v", path, failure)
@@ -207,7 +207,7 @@ func (c *Console) initExtensions() error {
 	apis, err := c.client.SupportedModules()
 	if err != nil {
 		var rpcErr rpc.Error
-		if ok := errors.As(err, &rpcErr); ok && rpcErr.ErrorCode() == methodNotFound {
+		if errors.As(err, &rpcErr) && rpcErr.ErrorCode() == methodNotFound {
 			log.Warn("Server does not support method rpc_modules, using default API list.")
 			apis = defaultAPIs
 		} else {

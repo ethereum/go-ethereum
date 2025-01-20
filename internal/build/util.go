@@ -99,7 +99,7 @@ func RunGit(args ...string) string {
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		e := new(exec.Error)
-		if ok := errors.As(err, &e); ok && errors.Is(e.Err, exec.ErrNotFound) {
+		if errors.As(err, &e) && errors.Is(e.Err, exec.ErrNotFound) {
 			if !warnedAboutGit {
 				log.Println("Warning: can't find 'git' in PATH")
 				warnedAboutGit = true
