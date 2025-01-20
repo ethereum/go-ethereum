@@ -133,8 +133,9 @@ func Map(m Interface, c <-chan struct{}, protocol string, extport, intport int, 
 // Mapping operations will not return an error but won't actually do anything.
 type ExtIP net.IP
 
-func (n ExtIP) ExternalIP() (net.IP, error) { return net.IP(n), nil }
-func (n ExtIP) String() string              { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
+func (n ExtIP) ExternalIP() (net.IP, error)  { return net.IP(n), nil }
+func (n ExtIP) String() string               { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
+func (n ExtIP) MarshalText() ([]byte, error) { return []byte(fmt.Sprintf("extip:%v", net.IP(n))), nil }
 
 // These do nothing.
 
@@ -148,7 +149,7 @@ func (ExtIP) DeleteMapping(string, int, int) error { return nil }
 func Any() Interface {
 	// TODO: attempt to discover whether the local machine has an
 	// Internet-class address. Return ExtIP in this case.
-	return startautodisc("UPnP or NAT-PMP", func() Interface {
+	return startautodisc("any", func() Interface {
 		found := make(chan Interface, 2)
 		go func() { found <- discoverUPnP() }()
 		go func() { found <- discoverPMP() }()
@@ -164,7 +165,7 @@ func Any() Interface {
 // UPnP returns a port mapper that uses UPnP. It will attempt to
 // discover the address of your router using UDP broadcasts.
 func UPnP() Interface {
-	return startautodisc("UPnP", discoverUPnP)
+	return startautodisc("upnp", discoverUPnP)
 }
 
 // PMP returns a port mapper that uses NAT-PMP. The provided gateway
@@ -174,7 +175,7 @@ func PMP(gateway net.IP) Interface {
 	if gateway != nil {
 		return &pmp{gw: gateway, c: natpmp.NewClient(gateway)}
 	}
-	return startautodisc("NAT-PMP", discoverPMP)
+	return startautodisc("natpmp", discoverPMP)
 }
 
 // autodisc represents a port mapping mechanism that is still being
@@ -226,6 +227,10 @@ func (n *autodisc) String() string {
 		return n.what
 	}
 	return n.found.String()
+}
+
+func (n *autodisc) MarshalText() ([]byte, error) {
+	return []byte(n.what), nil
 }
 
 // wait blocks until auto-discovery has been performed.
