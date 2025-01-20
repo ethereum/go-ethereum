@@ -226,9 +226,7 @@ func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 					}
 					select {
 					case resetDone <- newHead:
-						break
 					case <-p.term:
-						return
 					}
 				}(oldHead, newHead)
 
