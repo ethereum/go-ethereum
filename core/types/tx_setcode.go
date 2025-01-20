@@ -179,8 +179,13 @@ func (tx *SetCodeTx) copy() TxData {
 }
 
 // accessors for innerTx.
-func (tx *SetCodeTx) txType() byte           { return SetCodeTxType }
-func (tx *SetCodeTx) chainID() *big.Int      { return tx.ChainID.ToBig() }
+func (tx *SetCodeTx) txType() byte { return SetCodeTxType }
+func (tx *SetCodeTx) chainID() *big.Int {
+	if tx.ChainID == nil {
+		return new(big.Int)
+	}
+	return tx.ChainID.ToBig()
+}
 func (tx *SetCodeTx) accessList() AccessList { return tx.AccessList }
 func (tx *SetCodeTx) data() []byte           { return tx.Data }
 func (tx *SetCodeTx) gas() uint64            { return tx.Gas }
