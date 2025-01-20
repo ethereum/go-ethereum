@@ -498,7 +498,6 @@ func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType strin
 
 	arrayBuffer := new(bytes.Buffer)
 	parsedType := strings.Split(encType, "[")[0]
-
 	for _, item := range arrayValue {
 		if reflect.TypeOf(item).Kind() == reflect.Slice ||
 			reflect.TypeOf(item).Kind() == reflect.Array {
