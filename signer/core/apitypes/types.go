@@ -498,10 +498,19 @@ func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType strin
 
 	arrayBuffer := new(bytes.Buffer)
 	parsedType := strings.Split(encType, "[")[0]
+
 	for _, item := range arrayValue {
 		if reflect.TypeOf(item).Kind() == reflect.Slice ||
 			reflect.TypeOf(item).Kind() == reflect.Array {
-			encodedData, err := typedData.encodeArrayValue(item, parsedType, depth+1)
+			var (
+				encodedData hexutil.Bytes
+				err         error
+			)
+			if reflect.TypeOf(item).Elem().Kind() == reflect.Uint8 {
+				encodedData, err = typedData.EncodePrimitiveValue(parsedType, item, depth+1)
+			} else {
+				encodedData, err = typedData.encodeArrayValue(item, parsedType, depth+1)
+			}
 			if err != nil {
 				return nil, err
 			}
