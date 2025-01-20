@@ -55,6 +55,7 @@ func initMatcher(st *testMatcher) {
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
 	// Out-of-date EIP-2537 tests
+	// TODO (@s1na) reenable in the future
 	st.skipLoad(`^stEIP2537/`)
 
 	// Broken tests:
