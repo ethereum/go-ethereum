@@ -38,7 +38,7 @@ var messageStandard = map[string]interface{}{
 }
 
 var domainStandard = apitypes.TypedDataDomain{
-	Name:              "Ether Mail",
+	Name:              "Recursive Bytes",
 	Version:           "1",
 	ChainId:           math.NewHexOrDecimal256(1),
 	VerifyingContract: "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
