@@ -55,7 +55,7 @@ type vmJSON struct {
 	PostStateRoot common.Hash           `json:"postStateRoot"`
 }
 
-//go:generate gencodec -type vmExec -field-override vmExecMarshaling -out gen_vmexec.go
+//go:generate go run github.com/fjl/gencodec -type vmExec -field-override vmExecMarshaling -out gen_vmexec.go
 
 type vmExec struct {
 	Address  common.Address `json:"address"  gencodec:"required"`

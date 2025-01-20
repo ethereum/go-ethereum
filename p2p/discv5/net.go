@@ -824,7 +824,7 @@ func (q *findnodeQuery) start(net *Network) bool {
 
 type nodeEvent uint
 
-//go:generate stringer -type=nodeEvent
+//go:generate go run golang.org/x/tools/cmd/stringer -type=nodeEvent
 
 const (
 	invalidEvent nodeEvent = iota // zero is reserved

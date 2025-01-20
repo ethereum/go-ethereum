@@ -27,7 +27,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
-//go:generate gencodec -type DifficultyTest -field-override difficultyTestMarshaling -out gen_difficultytest.go
+//go:generate go run github.com/fjl/gencodec -type DifficultyTest -field-override difficultyTestMarshaling -out gen_difficultytest.go
 
 type DifficultyTest struct {
 	ParentTimestamp    *big.Int    `json:"parentTimestamp"`
