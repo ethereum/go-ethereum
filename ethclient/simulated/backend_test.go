@@ -20,14 +20,12 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
-	"fmt"
 	"math/big"
 	"math/rand"
-	"regexp"
-	"runtime"
-	"strings"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
@@ -361,86 +359,11 @@ func createAndCloseSimBackend() {
 	defer simulatedBackend.Close()
 }
 
-// sanitizeStackTrace removes any content inside parentheses (including the parentheses) from the input. it also
-// removes occurances of the specific go-routine id.
-func sanitizeStackTrace(input string) string {
-	re := regexp.MustCompile(`\(.*\)`)
-	sanitized := re.ReplaceAllString(input, "")
-	re2 := regexp.MustCompile(`goroutine [0-9*]*`)
-	sanitized = re2.ReplaceAllString(sanitized, "goroutine xxx")
-	return sanitized
-}
-
-// collectGoroutineStacks collects the stack traces of all currently-running go-routines, stripping information specific
-// to the current invocation (the parameter values in each function call, the specific go-routine id), and returning
-// the stack traces as a map of stack trace text to the number of occurances of that stack-trace.
-func collectGoroutineStacks() map[string]int {
-	buf := make([]byte, 1<<20)
-	stackLen := runtime.Stack(buf, true)
-
-	// split all stack-traces by go-routine
-	stacks := strings.Split(string(buf[:stackLen]), "\n\n")
-	stacks[len(stacks)-1] = strings.TrimRight(stacks[len(stacks)-1], "\n")
-	res := make(map[string]int)
-
-	for i := range stacks {
-		lines := strings.Split(stacks[i], "\n")
-		combinedLines := strings.Join(lines[1:], "\n")
-
-		// filter out the callstack for this goroutine
-		if strings.Contains(combinedLines, "collectGoroutineStacks") {
-			continue
-		}
-
-		// remove func call offset and variable values.
-		combinedLines = sanitizeStackTrace(combinedLines)
-
-		res[combinedLines] = res[combinedLines] + 1
-	}
-
-	return res
-}
-
-// leaks takes two sets of stack traces (returned as output from collectGoroutineStacks).  If any stack traces exist
-// after the second invocation which are not present in the first, they are considered "leaked" and returned in the
-// output.
-func leaks(firstGRs map[string]int, secondGRs map[string]int) []string {
-	var res []string
-	for key, _ := range secondGRs {
-		if _, ok := firstGRs[key]; !ok {
-			res = append(res, key)
-		} else if secondGRs[key] > firstGRs[key] {
-			res = append(res, key)
-		}
-	}
-	return res
-}
-
 // TestCheckSimBackendGoroutineLeak checks whether creation of a simulated backend leaks go-routines.  Any long-lived go-routines
 // spawned by global variables are not considered leaked.
 func TestCheckSimBackendGoroutineLeak(t *testing.T) {
 	createAndCloseSimBackend()
-	stacks1 := collectGoroutineStacks()
+	goleak.IgnoreCurrent()
 	createAndCloseSimBackend()
-	stacks2 := collectGoroutineStacks()
-
-	l := leaks(stacks1, stacks2)
-	if len(l) > 0 {
-		// ignore this "leak" from leveldb:  After closing the db, LevelDB takes about a second to close a go-routine
-		// that it instantiates.
-		re, err := regexp.Compile("github\\.com/syndtr/goleveldb/leveldb\\.\n.*/leveldb/db_state\\.go:110 \\+.*\ncreated by github\\.com/syndtr/goleveldb/leveldb\\.openDB in goroutine xxx\n.*/leveldb/db\\.go:149 \\+.*")
-		if err != nil {
-			panic(err)
-		}
-		var leakedGRs string
-		for _, leak := range l {
-			if re.MatchString(leak) {
-				continue
-			}
-			leakedGRs = leakedGRs + fmt.Sprintf("%s\n\n", leak)
-		}
-		if leakedGRs != "" {
-			t.Fatalf("leaked goroutines:\n%s", leakedGRs)
-		}
-	}
+	goleak.VerifyNone(t)
 }
