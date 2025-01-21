@@ -650,7 +650,7 @@ func TestOpenDrops(t *testing.T) {
 	statedb.AddBalance(crypto.PubkeyToAddress(overcapper.PublicKey), uint256.NewInt(10000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(duplicater.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(repeater.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true)
+	statedb.Commit(0, true, false)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -769,7 +769,7 @@ func TestOpenIndex(t *testing.T) {
 	// Create a blob pool out of the pre-seeded data
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true)
+	statedb.Commit(0, true, false)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -871,7 +871,7 @@ func TestOpenHeap(t *testing.T) {
 	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-	statedb.Commit(0, true)
+	statedb.Commit(0, true, false)
 
 	chain := &testBlockChain{
 		config:  params.MainnetChainConfig,
@@ -951,7 +951,7 @@ func TestOpenCap(t *testing.T) {
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
-		statedb.Commit(0, true)
+		statedb.Commit(0, true, false)
 
 		chain := &testBlockChain{
 			config:  params.MainnetChainConfig,
@@ -1393,7 +1393,7 @@ func TestAdd(t *testing.T) {
 				store.Put(blob)
 			}
 		}
-		statedb.Commit(0, true)
+		statedb.Commit(0, true, false)
 		store.Close()
 
 		// Create a blob pool out of the pre-seeded dats
@@ -1519,7 +1519,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		pool.add(tx)
 	}
-	statedb.Commit(0, true)
+	statedb.Commit(0, true, false)
 	defer pool.Close()
 
 	// Benchmark assembling the pending

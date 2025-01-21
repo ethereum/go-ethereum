@@ -152,7 +152,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(current.NumberU64(), eth.blockchain.Config().IsEIP158(current.Number()))
+		root, err := statedb.Commit(current.NumberU64(), eth.blockchain.Config().IsEIP158(current.Number()), eth.blockchain.Config().IsCancun(current.Number(), current.Time()))
 		if err != nil {
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
