@@ -17,7 +17,7 @@ const (
 )
 
 type BlobClient interface {
-	GetBlobByVersionedHashAndBlockNumber(ctx context.Context, versionedHash common.Hash, blockNumber uint64) (*kzg4844.Blob, error)
+	GetBlobByVersionedHashAndBlockTime(ctx context.Context, versionedHash common.Hash, blockTime uint64) (*kzg4844.Blob, error)
 }
 
 type BlobClients struct {
@@ -32,13 +32,13 @@ func NewBlobClients(blobClients ...BlobClient) *BlobClients {
 	}
 }
 
-func (c *BlobClients) GetBlobByVersionedHashAndBlockNumber(ctx context.Context, versionedHash common.Hash, blockNumber uint64) (*kzg4844.Blob, error) {
+func (c *BlobClients) GetBlobByVersionedHashAndBlockTime(ctx context.Context, versionedHash common.Hash, blockTime uint64) (*kzg4844.Blob, error) {
 	if len(c.list) == 0 {
 		return nil, fmt.Errorf("BlobClients.GetBlobByVersionedHash: list of BlobClients is empty")
 	}
 
 	for i := 0; i < len(c.list); i++ {
-		blob, err := c.list[c.curPos].GetBlobByVersionedHashAndBlockNumber(ctx, versionedHash, blockNumber)
+		blob, err := c.list[c.curPos].GetBlobByVersionedHashAndBlockTime(ctx, versionedHash, blockTime)
 		if err == nil {
 			return blob, nil
 		}

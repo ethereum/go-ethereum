@@ -26,7 +26,7 @@ func NewBlobScanClient(apiEndpoint string) *BlobScanClient {
 	}
 }
 
-func (c *BlobScanClient) GetBlobByVersionedHashAndBlockNumber(ctx context.Context, versionedHash common.Hash, blockNumber uint64) (*kzg4844.Blob, error) {
+func (c *BlobScanClient) GetBlobByVersionedHashAndBlockTime(ctx context.Context, versionedHash common.Hash, blockTime uint64) (*kzg4844.Blob, error) {
 	// blobscan api docs https://api.blobscan.com/#/blobs/blob-getByBlobId
 	path, err := url.JoinPath(c.apiEndpoint, versionedHash.String())
 	if err != nil {

@@ -24,7 +24,7 @@ func NewBlockNativeClient(apiEndpoint string) *BlockNativeClient {
 	}
 }
 
-func (c *BlockNativeClient) GetBlobByVersionedHashAndBlockNumber(ctx context.Context, versionedHash common.Hash, blockNumber uint64) (*kzg4844.Blob, error) {
+func (c *BlockNativeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Context, versionedHash common.Hash, blockTime uint64) (*kzg4844.Blob, error) {
 	// blocknative api docs https://docs.blocknative.com/blocknative-data-archive/blob-archive
 	path, err := url.JoinPath(c.apiEndpoint, versionedHash.String())
 	if err != nil {

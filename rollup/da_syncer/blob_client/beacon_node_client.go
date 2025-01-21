@@ -12,12 +12,10 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/crypto/kzg4844"
-	"github.com/scroll-tech/go-ethereum/rollup/rollup_sync_service"
 )
 
 type BeaconNodeClient struct {
 	apiEndpoint    string
-	l1Client       *rollup_sync_service.L1Client
 	genesisTime    uint64
 	secondsPerSlot uint64
 }
@@ -28,7 +26,7 @@ var (
 	beaconNodeBlobEndpoint    = "/eth/v1/beacon/blob_sidecars"
 )
 
-func NewBeaconNodeClient(apiEndpoint string, l1Client *rollup_sync_service.L1Client) (*BeaconNodeClient, error) {
+func NewBeaconNodeClient(apiEndpoint string) (*BeaconNodeClient, error) {
 	// get genesis time
 	genesisPath, err := url.JoinPath(apiEndpoint, beaconNodeGenesisEndpoint)
 	if err != nil {
@@ -94,19 +92,13 @@ func NewBeaconNodeClient(apiEndpoint string, l1Client *rollup_sync_service.L1Cli
 
 	return &BeaconNodeClient{
 		apiEndpoint:    apiEndpoint,
-		l1Client:       l1Client,
 		genesisTime:    genesisTime,
 		secondsPerSlot: secondsPerSlot,
 	}, nil
 }
 
-func (c *BeaconNodeClient) GetBlobByVersionedHashAndBlockNumber(ctx context.Context, versionedHash common.Hash, blockNumber uint64) (*kzg4844.Blob, error) {
-	// get block timestamp to calculate slot
-	header, err := c.l1Client.GetHeaderByNumber(blockNumber)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get header by number, err: %w", err)
-	}
-	slot := (header.Time - c.genesisTime) / c.secondsPerSlot
+func (c *BeaconNodeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Context, versionedHash common.Hash, blockTime uint64) (*kzg4844.Blob, error) {
+	slot := (blockTime - c.genesisTime) / c.secondsPerSlot
 
 	// get blob sidecar for slot
 	blobSidecarPath, err := url.JoinPath(c.apiEndpoint, beaconNodeBlobEndpoint, fmt.Sprintf("%d", slot))
@@ -156,7 +148,7 @@ func (c *BeaconNodeClient) GetBlobByVersionedHashAndBlockNumber(ctx context.Cont
 		}
 	}
 
-	return nil, fmt.Errorf("missing blob %v in slot %d, block number %d", versionedHash, slot, blockNumber)
+	return nil, fmt.Errorf("missing blob %v in slot %d", versionedHash, slot)
 }
 
 type GenesisResp struct {

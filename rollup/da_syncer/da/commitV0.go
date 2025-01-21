@@ -10,6 +10,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/serrors"
+	"github.com/scroll-tech/go-ethereum/rollup/l1"
 )
 
 type CommitBatchDAV0 struct {
@@ -25,19 +26,17 @@ type CommitBatchDAV0 struct {
 
 func NewCommitBatchDAV0(db ethdb.Database,
 	codec encoding.Codec,
-	version uint8,
-	batchIndex uint64,
+	commitEvent *l1.CommitBatchEvent,
 	parentBatchHeader []byte,
 	chunks [][]byte,
 	skippedL1MessageBitmap []byte,
-	l1BlockNumber uint64,
 ) (*CommitBatchDAV0, error) {
 	decodedChunks, err := codec.DecodeDAChunksRawTx(chunks)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unpack chunks: %d, err: %w", batchIndex, err)
+		return nil, fmt.Errorf("failed to unpack chunks: %d, err: %w", commitEvent.BatchIndex().Uint64(), err)
 	}
 
-	return NewCommitBatchDAV0WithChunks(db, version, batchIndex, parentBatchHeader, decodedChunks, skippedL1MessageBitmap, l1BlockNumber)
+	return NewCommitBatchDAV0WithChunks(db, uint8(codec.Version()), commitEvent.BatchIndex().Uint64(), parentBatchHeader, decodedChunks, skippedL1MessageBitmap, commitEvent.BlockNumber())
 }
 
 func NewCommitBatchDAV0WithChunks(db ethdb.Database,
@@ -141,6 +140,7 @@ func getTotalMessagesPoppedFromChunks(decodedChunks []*encoding.DAChunkRawTx) in
 
 func getL1Messages(db ethdb.Database, parentTotalL1MessagePopped uint64, skippedBitmap []byte, totalL1MessagePopped int) ([]*types.L1MessageTx, error) {
 	var txs []*types.L1MessageTx
+
 	decodedSkippedBitmap, err := encoding.DecodeBitmap(skippedBitmap, totalL1MessagePopped)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode skipped message bitmap: err: %w", err)
