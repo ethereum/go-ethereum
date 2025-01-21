@@ -363,7 +363,9 @@ func createAndCloseSimBackend() {
 // spawned by global variables are not considered leaked.
 func TestCheckSimBackendGoroutineLeak(t *testing.T) {
 	createAndCloseSimBackend()
-	goleak.IgnoreCurrent()
+	ignoreCur := goleak.IgnoreCurrent()
+	// ignore this leveldb function:  this go-routine is guaranteed to be terminated 1 second after closing db handle
+	ignoreLdb := goleak.IgnoreAnyFunction("github.com/syndtr/goleveldb/leveldb.(*DB).mpoolDrain")
 	createAndCloseSimBackend()
-	goleak.VerifyNone(t)
+	goleak.VerifyNone(t, ignoreCur, ignoreLdb)
 }
