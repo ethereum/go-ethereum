@@ -706,7 +706,7 @@ func TestEvmRunRegEx(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %d: could not compile regular expression: %v", i, err)
 			}
-			if !re.MatchString(string(have)) {
+			if !re.Match(have) {
 				t.Fatalf("test %d, output wrong, have \n%v\nwant\n%v\n", i, string(have), re)
 			}
 		}
