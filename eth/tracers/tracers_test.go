@@ -92,11 +92,11 @@ func BenchmarkTransactionTraceV2(b *testing.B) {
 		tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		evm.Config.Tracer = tracer
 
-		snap := state.StateDB.Snapshot()
+		state.StateDB.Snapshot()
 		_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			b.Fatal(err)
 		}
-		state.StateDB.RevertToSnapshot(snap)
+		state.StateDB.RevertSnapshot()
 	}
 }

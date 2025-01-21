@@ -160,25 +160,26 @@ func TestSnapshot(t *testing.T) {
 	s := newStateEnv()
 
 	// snapshot the genesis state
-	genesis := s.state.Snapshot()
+	s.state.Snapshot()
+	{
+		// set initial state object value
+		s.state.SetState(stateobjaddr, storageaddr, data1)
+		s.state.Snapshot()
+		{
+			// set a new state object value, revert it and ensure correct content
+			s.state.SetState(stateobjaddr, storageaddr, data2)
+		}
+		s.state.RevertSnapshot()
 
-	// set initial state object value
-	s.state.SetState(stateobjaddr, storageaddr, data1)
-	snapshot := s.state.Snapshot()
-
-	// set a new state object value, revert it and ensure correct content
-	s.state.SetState(stateobjaddr, storageaddr, data2)
-	s.state.RevertToSnapshot(snapshot)
-
-	if v := s.state.GetState(stateobjaddr, storageaddr); v != data1 {
-		t.Errorf("wrong storage value %v, want %v", v, data1)
+		if v := s.state.GetState(stateobjaddr, storageaddr); v != data1 {
+			t.Errorf("wrong storage value %v, want %v", v, data1)
+		}
+		if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
+			t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
+		}
 	}
-	if v := s.state.GetCommittedState(stateobjaddr, storageaddr); v != (common.Hash{}) {
-		t.Errorf("wrong committed storage value %v, want %v", v, common.Hash{})
-	}
-
 	// revert up to the genesis state and ensure correct content
-	s.state.RevertToSnapshot(genesis)
+	s.state.RevertSnapshot()
 	if v := s.state.GetState(stateobjaddr, storageaddr); v != (common.Hash{}) {
 		t.Errorf("wrong storage value %v, want %v", v, common.Hash{})
 	}
@@ -189,22 +190,23 @@ func TestSnapshot(t *testing.T) {
 
 func TestSnapshotEmpty(t *testing.T) {
 	s := newStateEnv()
-	s.state.RevertToSnapshot(s.state.Snapshot())
+	s.state.Snapshot()
+	s.state.RevertSnapshot()
 }
 
 func TestCreateObjectRevert(t *testing.T) {
 	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 	addr := common.BytesToAddress([]byte("so0"))
-	snap := state.Snapshot()
-
-	state.CreateAccount(addr)
-	so0 := state.getStateObject(addr)
-	so0.SetBalance(uint256.NewInt(42))
-	so0.SetNonce(43)
-	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
-	state.setStateObject(so0)
-
-	state.RevertToSnapshot(snap)
+	state.Snapshot()
+	{
+		state.CreateAccount(addr)
+		so0 := state.getStateObject(addr)
+		so0.SetBalance(uint256.NewInt(42))
+		so0.SetNonce(43)
+		so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
+		state.setStateObject(so0)
+	}
+	state.RevertSnapshot()
 	if state.Exist(addr) {
 		t.Error("Unexpected account after revert")
 	}
