@@ -380,7 +380,7 @@ func collectGoroutineStacks() map[string]int {
 
 	// split all stack-traces by go-routine
 	stacks := strings.Split(string(buf[:stackLen]), "\n\n")
-
+	stacks[len(stacks)-1] = strings.TrimRight(stacks[len(stacks)-1], "\n")
 	res := make(map[string]int)
 
 	for i := range stacks {
