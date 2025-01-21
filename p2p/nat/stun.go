@@ -101,7 +101,7 @@ func (s *stun) randomServers(n int) []string {
 func (s *stun) externalIP(server string) (net.IP, error) {
 	_, _, err := net.SplitHostPort(server)
 	if err != nil {
-		server += ":3478"
+		server += fmt.Sprintf(":%d", stunV2.DefaultPort)
 	}
 
 	log.Trace("Attempting STUN binding request", "server", server)
