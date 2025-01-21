@@ -46,17 +46,23 @@ type (
 	hashNode  []byte
 	valueNode []byte
 
-	//fullnodeEncoder is a type used exclusively for encoding. Briefly instantiating
-	// a fullnodeEncoder and initializing with existing slices is less memory
-	// intense than using the fullNode type.
+	// fullnodeEncoder is a type used exclusively for encoding fullNode.
+	// Briefly instantiating a fullnodeEncoder and initializing with
+	// existing slices is less memory intense than using the fullNode type.
 	fullnodeEncoder struct {
 		Children [17][]byte
 	}
 
-	//shortNodeEncoder is a type used exclusively for encoding. Briefly instantiating
-	// a shortNodeEncoder and initializing with existing slices is less memory
-	// intense than using the shortNode type.
-	shortNodeEncoder struct {
+	// extNodeEncoder is a type used exclusively for encoding extension node.
+	// Briefly instantiating a extNodeEncoder and initializing with existing
+	// slices is less memory intense than using the shortNode type.
+	extNodeEncoder struct {
+		Key []byte
+		Val []byte
+	}
+
+	// leafNodeEncoder is a type used exclusively for encoding leaf node.
+	leafNodeEncoder struct {
 		Key []byte
 		Val []byte
 	}

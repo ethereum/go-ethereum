@@ -16,7 +16,7 @@
 
 package trie
 
-// bytesPool is a pool for byteslices. It is safe for concurrent use.
+// bytesPool is a pool for byte slices. It is safe for concurrent use.
 type bytesPool struct {
 	c chan []byte
 	w int
@@ -40,6 +40,15 @@ func (bp *bytesPool) Get() []byte {
 	default:
 		return make([]byte, 0, bp.w)
 	}
+}
+
+// GetWithSize returns a slice with specified byte slice size.
+func (bp *bytesPool) GetWithSize(s int) []byte {
+	b := bp.Get()
+	if cap(b) < s {
+		return make([]byte, s)
+	}
+	return b[:s]
 }
 
 // Put returns a slice to the pool. Safe for concurrent use. This method

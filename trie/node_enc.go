@@ -65,7 +65,7 @@ func (n *shortNode) encode(w rlp.EncoderBuffer) {
 	w.ListEnd(offset)
 }
 
-func (n *shortNodeEncoder) encode(w rlp.EncoderBuffer) {
+func (n *extNodeEncoder) encode(w rlp.EncoderBuffer) {
 	offset := w.List()
 	w.WriteBytes(n.Key)
 
@@ -76,6 +76,19 @@ func (n *shortNodeEncoder) encode(w rlp.EncoderBuffer) {
 	} else {
 		w.WriteBytes(n.Val) // hashNode
 	}
+	w.ListEnd(offset)
+}
+
+func (n *leafNodeEncoder) encode(w rlp.EncoderBuffer) {
+	offset := w.List()
+
+	// Encode the key to Compact format. The assumption is held
+	// that it's safe to modify the key in place.
+	n.Key = append(n.Key, 16) // termination flag
+	n.Key = hexToCompactInPlace(n.Key)
+
+	w.WriteBytes(n.Key) // Compact format key
+	w.WriteBytes(n.Val) // Value node, must be non-nil
 	w.ListEnd(offset)
 }
 

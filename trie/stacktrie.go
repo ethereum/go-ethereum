@@ -59,8 +59,17 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 		root:       stPool.Get().(*stNode),
 		h:          newHasher(false),
 		onTrieNode: onTrieNode,
-		kBuf:       make([]byte, 0, 64),
-		pBuf:       make([]byte, 0, 32),
+		kBuf:       make([]byte, 64),
+		pBuf:       make([]byte, 64),
+	}
+}
+
+func (t *StackTrie) grow(key []byte) {
+	if cap(t.kBuf) < 2*len(key) {
+		t.kBuf = make([]byte, 2*len(key))
+	}
+	if cap(t.pBuf) < len(key) {
+		t.pBuf = make([]byte, 2*len(key))
 	}
 }
 
@@ -69,16 +78,8 @@ func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
 	}
-	var k []byte
-	{ // Need to expand the 'key' into hex-form. We use the dedicated buf for that.
-		if cap(t.kBuf) < 2*len(key) { // realloc to ensure sufficient cap
-			t.kBuf = make([]byte, 2*len(key))
-		}
-		// resize to ensure correct size
-		t.kBuf = t.kBuf[:2*len(key)]
-		writeHexKey(t.kBuf, key)
-		k = t.kBuf
-	}
+	t.grow(key)
+	k := writeHexKey(t.kBuf, key)
 	if bytes.Compare(t.last, k) >= 0 {
 		return errors.New("non-ascending key order")
 	}
@@ -171,6 +172,7 @@ func (n *stNode) getDiffIndex(key []byte) int {
 }
 
 // Helper function to that inserts a (key, value) pair into the trie.
+//
 //   - The key is not retained by this method, but always copied if needed.
 //   - The value is retained by this method, as long as the leaf that it represents
 //     remains unhashed. However: it is never modified.
@@ -306,7 +308,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 
 	case emptyNode: /* Empty */
 		st.typ = leafNode
-		st.key = append(st.key, key...)
+		st.key = append(st.key, key...) // deep-copy the key as it's volatile
 		st.val = value
 
 	case hashedNode:
@@ -364,7 +366,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		t.hash(st.children[0], append(path, st.key...))
 
 		// encode the extension node
-		n := shortNodeEncoder{
+		n := extNodeEncoder{
 			Key: hexToCompactInPlace(st.key),
 			Val: st.children[0].val,
 		}
@@ -375,14 +377,11 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		st.children[0] = nil
 
 	case leafNode:
-		st.key = append(st.key, byte(16))
-		{
-			w := t.h.encbuf
-			offset := w.List()
-			w.WriteBytes(hexToCompactInPlace(st.key))
-			w.WriteBytes(st.val)
-			w.ListEnd(offset)
+		n := leafNodeEncoder{
+			Key: st.key,
+			Val: st.val,
 		}
+		n.encode(t.h.encbuf)
 		blob = t.h.encodedBytes()
 
 	default:
@@ -397,18 +396,14 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	// Skip committing the non-root node if the size is smaller than 32 bytes
 	// as tiny nodes are always embedded in their parent except root node.
 	if len(blob) < 32 && len(path) > 0 {
-		val := bPool.Get()
-		val = val[:len(blob)]
-		copy(val, blob)
-		st.val = val
+		st.val = bPool.GetWithSize(len(blob))
+		copy(st.val, blob)
 		return
 	}
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values.
-	val := bPool.Get()
-	val = val[:32]
-	t.h.hashDataTo(val, blob)
-	st.val = val
+	st.val = bPool.GetWithSize(32)
+	t.h.hashDataTo(st.val, blob)
 
 	// Invoke the callback it's provided. Notably, the path and blob slices are
 	// volatile, please deep-copy the slices in callback if the contents need
