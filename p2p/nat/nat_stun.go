@@ -17,38 +17,20 @@
 package nat
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	stunV2 "github.com/pion/stun/v2"
 )
 
-var stunDefaultServerList = []string{
-	"159.223.0.83:3478",
-	"stun.l.google.com:19302",
-	"stun1.l.google.com:19302",
-	"stun2.l.google.com:19302",
-	"stun3.l.google.com:19302",
-	"stun4.l.google.com:19302",
-	"stun01.sipphone.com",
-	"stun.ekiga.net",
-	"stun.fwdnet.net",
-	"stun.ideasip.com",
-	"stun.iptel.org",
-	"stun.rixtelecom.se",
-	"stun.schlund.de",
-	"stunserver.org",
-	"stun.softjoys.com",
-	"stun.voiparound.com",
-	"stun.voipbuster.com",
-	"stun.voipstunt.com",
-	"stun.voxgratia.org",
-	"stun.xten.com",
-}
+//go:embed stun-list.txt
+var stunDefaultServers string
 
 const requestLimit = 3
 
@@ -59,7 +41,7 @@ type stun struct {
 func newSTUN(serverAddr string) (Interface, error) {
 	s := new(stun)
 	if serverAddr == "default" || serverAddr == "" {
-		s.serverList = stunDefaultServerList
+		s.serverList = strings.Split(stunDefaultServers, "\n")
 	} else {
 		_, err := net.ResolveUDPAddr("udp4", serverAddr)
 		if err != nil {
