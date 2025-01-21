@@ -17,10 +17,13 @@
 package nat
 
 import (
+	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	stunV2 "github.com/pion/stun/v2"
 )
 
@@ -50,32 +53,28 @@ var stunDefaultServerList = []string{
 const requestLimit = 3
 
 type stun struct {
-	serverList      []string
-	activeIndex     int // the server index which return the IP
-	pendingRequests int // request in flight
-	askedIndex      map[int]struct{}
-	replyCh         chan stunResponse
+	serverList []string
 }
 
 func newSTUN(serverAddr string) (Interface, error) {
-	serverList := make([]string, 0)
-	if serverAddr == "default" {
-		serverList = stunDefaultServerList
+	s := new(stun)
+	if serverAddr == "default" || serverAddr == "" {
+		s.serverList = stunDefaultServerList
 	} else {
 		_, err := net.ResolveUDPAddr("udp4", serverAddr)
 		if err != nil {
 			return nil, err
 		}
-		serverList = append(serverList, serverAddr)
+		s.serverList = []string{serverAddr}
 	}
-
-	return &stun{
-		serverList: serverList,
-	}, nil
+	return s, nil
 }
 
 func (s stun) String() string {
-	return fmt.Sprintf("STUN(%s)", s.serverList[s.activeIndex])
+	if len(s.serverList) == 1 {
+		return fmt.Sprintf("STUN(%s)", s.serverList[0])
+	}
+	return "STUN"
 }
 
 func (stun) SupportsMapping() bool {
@@ -90,50 +89,40 @@ func (stun) DeleteMapping(string, int, int) error {
 	return nil
 }
 
-type stunResponse struct {
-	ip    net.IP
-	err   error
-	index int
-}
-
 func (s *stun) ExternalIP() (net.IP, error) {
-	var err error
-	s.replyCh = make(chan stunResponse, requestLimit)
-	s.askedIndex = make(map[int]struct{})
-	for s.startQueries() {
-		response := <-s.replyCh
-		s.pendingRequests--
-		if response.err != nil {
-			err = response.err
+	for _, server := range s.randomServers(requestLimit) {
+		ip, err := s.externalIP(server)
+		if err != nil {
+			log.Debug("STUN request failed", "server", server, "err", err)
 			continue
 		}
-		s.activeIndex = response.index
-		return response.ip, nil
+		return ip, nil
 	}
-	return nil, err
+	return nil, errors.New("STUN requests failed")
 }
 
-func (s *stun) startQueries() bool {
-	for i := 0; s.pendingRequests < requestLimit && i < len(s.serverList); i++ {
-		_, exist := s.askedIndex[i]
-		if exist {
+func (s *stun) randomServers(n int) []string {
+	n = min(n, len(s.serverList))
+	m := make(map[int]struct{}, n)
+	list := make([]string, 0, n)
+	for i := 0; i < len(s.serverList)*2 && len(list) < n; i++ {
+		index := rand.Intn(len(s.serverList))
+		if _, alreadyHit := m[index]; alreadyHit {
 			continue
 		}
-		s.pendingRequests++
-		s.askedIndex[i] = struct{}{}
-		go func(index int, server string) {
-			ip, err := externalIP(server)
-			s.replyCh <- stunResponse{
-				ip:    ip,
-				index: index,
-				err:   err,
-			}
-		}(i, s.serverList[i])
+		list = append(list, s.serverList[index])
+		m[index] = struct{}{}
 	}
-	return s.pendingRequests > 0
+	return list
 }
 
-func externalIP(server string) (net.IP, error) {
+func (s *stun) externalIP(server string) (net.IP, error) {
+	_, _, err := net.SplitHostPort(server)
+	if err != nil {
+		server += ":3478"
+	}
+
+	log.Trace("Attempting STUN binding request", "server", server)
 	conn, err := stunV2.Dial("udp4", server)
 	if err != nil {
 		return nil, err
@@ -162,6 +151,6 @@ func externalIP(server string) (net.IP, error) {
 	if responseError != nil {
 		return nil, responseError
 	}
-
+	log.Trace("STUN returned IP", "server", server, "ip", mappedAddr.IP)
 	return mappedAddr.IP, nil
 }
