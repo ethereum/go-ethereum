@@ -94,10 +94,20 @@ func init() {
 
 func abigen(c *cli.Context) error {
 	utils.CheckExclusive(c, abiFlag, jsonFlag) // Only one source can be selected.
+
 	if c.String(pkgFlag.Name) == "" {
 		utils.Fatalf("No destination package specified (--pkg)")
 	}
-	lang := bind.LangGo
+	if c.String(abiFlag.Name) == "" && c.String(jsonFlag.Name) == "" {
+		utils.Fatalf("Either contract ABI source (--abi) or combined-json (--combined-json) are required")
+	}
+	var lang bind.Lang
+	switch c.String(langFlag.Name) {
+	case "go":
+		lang = bind.LangGo
+	default:
+		utils.Fatalf("Unsupported destination language \"%s\" (--lang)", c.String(langFlag.Name))
+	}
 	// If the entire solidity code was specified, build and bind based on that
 	var (
 		abis  []string
