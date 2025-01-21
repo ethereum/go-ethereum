@@ -82,16 +82,16 @@ func newResultWriter(baseDir string, tracer *tracers.Tracer) *tracing.Hooks {
 // OnTxStart creates a new output-file specific for this transaction, and invokes
 // the inner OnTxStart handler.
 func (l *fileWritingTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
-	// Open a new file,
+	// Open a new file, or print a warning log if it's failed
 	fname := filepath.Join(l.baseDir, fmt.Sprintf("trace-%d-%v.%v", l.txIndex, tx.Hash().String(), l.suffix))
 	traceFile, err := os.Create(fname)
 	if err != nil {
 		log.Warn("Failed creating trace-file", "err", err)
+	} else {
+		log.Info("Created tracing-file", "path", fname)
+		l.destination = traceFile
 	}
-	log.Info("Created tracing-file", "path", fname)
-	l.destination = traceFile
-
-	if l.inner.OnTxStart != nil {
+	if l.inner != nil && l.inner.OnTxStart != nil {
 		l.inner.OnTxStart(env, tx, from)
 	}
 }
@@ -99,7 +99,7 @@ func (l *fileWritingTracer) OnTxStart(env *tracing.VMContext, tx *types.Transact
 // OnTxEnd writes result (if getResult exist), closes any currently open output-file,
 // and invokes the inner OnTxEnd handler.
 func (l *fileWritingTracer) OnTxEnd(receipt *types.Receipt, err error) {
-	if l.inner.OnTxEnd != nil {
+	if l.inner != nil && l.inner.OnTxEnd != nil {
 		l.inner.OnTxEnd(receipt, err)
 	}
 	if l.getResult != nil && l.destination != nil {
@@ -129,7 +129,7 @@ func (l *fileWritingTracer) hooks() *tracing.Hooks {
 			}
 		},
 		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-			if l.inner.OnOpcode != nil {
+			if l.inner != nil && l.inner.OnOpcode != nil {
 				l.inner.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
 			}
 		},
