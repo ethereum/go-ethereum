@@ -127,7 +127,6 @@ func (r *Receipt) EncodeRLP(w io.Writer) error {
 	buf := encodeBufferPool.Get().(*bytes.Buffer)
 	defer encodeBufferPool.Put(buf)
 	buf.Reset()
-	buf.WriteByte(r.Type)
 	if err := r.encodeTyped(data, buf); err != nil {
 		return err
 	}
