@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"os"
 	"testing"
@@ -339,20 +340,46 @@ func TestBlockReceiptStorage(t *testing.T) {
 	if rs := ReadReceipts(db, hash, 0, params.TestChainConfig); len(rs) == 0 {
 		t.Fatalf("no receipts returned")
 	} else {
-		for i := 0; i < len(receipts); i++ {
-			rlpHave, _ := rlp.EncodeToBytes(rs[i])
-			rlpWant, _ := rlp.EncodeToBytes(receipts[i])
-
-			if !bytes.Equal(rlpHave, rlpWant) {
-				t.Fatalf("receipt #%d: receipt mismatch: have %v, want %v", i, rs[i], receipts[i])
-			}
+		if err := checkReceiptsRLP(rs, receipts); err != nil {
+			t.Fatalf("fail to checkReceiptsRLP %v", err)
 		}
 	}
-	// Delete the receipt slice and check purge
+	// Delete the body and ensure that the receipts are no longer returned (metadata can't be recomputed)
+	DeleteBody(db, hash, 0)
+	if rs := ReadReceipts(db, hash, 0, params.TestChainConfig); rs != nil {
+		t.Fatalf("receipts returned when body was deleted: %v", rs)
+	}
+	// Ensure that receipts without metadata can be returned without the block body too
+	if err := checkReceiptsRLP(ReadRawReceipts(db, hash, 0), receipts); err != nil {
+		t.Fatalf("fail to checkReceiptsRLP %v", err)
+	}
+	// Sanity check that body alone without the receipt is a full purge
+	WriteBody(db, hash, 0, body)
+
 	DeleteReceipts(db, hash, 0)
 	if rs := ReadReceipts(db, hash, 0, params.TestChainConfig); len(rs) != 0 {
 		t.Fatalf("deleted receipts returned: %v", rs)
 	}
+}
+
+func checkReceiptsRLP(have, want types.Receipts) error {
+	if len(have) != len(want) {
+		return fmt.Errorf("receipts sizes mismatch: have %d, want %d", len(have), len(want))
+	}
+	for i := 0; i < len(want); i++ {
+		rlpHave, err := rlp.EncodeToBytes(have[i])
+		if err != nil {
+			return err
+		}
+		rlpWant, err := rlp.EncodeToBytes(want[i])
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(rlpHave, rlpWant) {
+			return fmt.Errorf("receipt #%d: receipt mismatch: have %s, want %s", i, hex.EncodeToString(rlpHave), hex.EncodeToString(rlpWant))
+		}
+	}
+	return nil
 }
 
 // Tests that logs associated with a single block can be retrieved.
