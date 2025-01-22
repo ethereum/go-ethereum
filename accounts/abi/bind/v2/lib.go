@@ -34,12 +34,12 @@ type ContractInstance struct {
 	abi     abi.ABI
 }
 
-func NewContractInstance(addr common.Address, backend ContractBackend, abi abi.ABI) *ContractInstance {
-	return &ContractInstance{addr, backend, abi}
+func NewContractInstance(addr common.Address, backend ContractBackend, abi abi.ABI) ContractInstance {
+	return ContractInstance{addr, backend, abi}
 }
 
 // FilterEvents returns an EventIterator instance for filtering historical events based on the event id and a block range.
-func FilterEvents[T any](instance *ContractInstance, opts *FilterOpts, eventName string, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
+func FilterEvents[T any](instance ContractInstance, opts *FilterOpts, eventName string, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
 	backend := instance.Backend
 	c := bind1.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
 	logs, sub, err := c.FilterLogs(opts, eventName, topics...)
@@ -53,7 +53,7 @@ func FilterEvents[T any](instance *ContractInstance, opts *FilterOpts, eventName
 // contract to be intercepted, unpacked, and forwarded to sink.  If
 // unpack returns an error, the returned subscription is closed with the
 // error.
-func WatchEvents[T any](instance *ContractInstance, opts *WatchOpts, eventName string, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
+func WatchEvents[T any](instance ContractInstance, opts *WatchOpts, eventName string, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
 	backend := instance.Backend
 	c := bind1.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
 	logs, sub, err := c.WatchLogs(opts, eventName, topics...)
@@ -160,7 +160,7 @@ func (it *EventIterator[T]) Close() error {
 
 // Transact creates and submits a transaction to the bound contract instance
 // using the provided abi-encoded input (or nil).
-func Transact(instance *ContractInstance, opts *TransactOpts, input []byte) (*types.Transaction, error) {
+func Transact(instance ContractInstance, opts *TransactOpts, input []byte) (*types.Transaction, error) {
 	var (
 		addr    = instance.Address
 		backend = instance.Backend
@@ -171,7 +171,7 @@ func Transact(instance *ContractInstance, opts *TransactOpts, input []byte) (*ty
 
 // Call performs an eth_call on the given bound contract instance, using the
 // provided abi-encoded input (or nil).
-func Call[T any](instance *ContractInstance, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
+func Call[T any](instance ContractInstance, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
 	backend := instance.Backend
 	c := bind1.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)

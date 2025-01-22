@@ -151,7 +151,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		Context: context.Background(),
 	}
 
-	ctrctInstance := &ContractInstance{
+	ctrctInstance := ContractInstance{
 		Address: contractAddr,
 		Backend: bindBackend,
 	}
@@ -273,7 +273,7 @@ func TestEvents(t *testing.T) {
 	}
 
 	ctrctABI, _ := events.CMetaData.GetAbi()
-	ctrctInstance := ContractInstance{
+	instance := ContractInstance{
 		res.Addrs[events.CMetaData.Pattern],
 		backend,
 		*ctrctABI,
@@ -285,11 +285,11 @@ func TestEvents(t *testing.T) {
 		Start:   nil,
 		Context: context.Background(),
 	}
-	sub1, err := WatchEvents(&ctrctInstance, watchOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event, newCBasic1Ch)
+	sub1, err := WatchEvents(instance, watchOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event, newCBasic1Ch)
 	if err != nil {
 		t.Fatalf("WatchEvents returned error: %v", err)
 	}
-	sub2, err := WatchEvents(&ctrctInstance, watchOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event, newCBasic2Ch)
+	sub2, err := WatchEvents(instance, watchOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event, newCBasic2Ch)
 	if err != nil {
 		t.Fatalf("WatchEvents returned error: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestEvents(t *testing.T) {
 	defer sub2.Unsubscribe()
 
 	packedInput, _ := ctrct.PackEmitMulti()
-	tx, err := Transact(&ctrctInstance, txAuth, packedInput)
+	tx, err := Transact(instance, txAuth, packedInput)
 	if err != nil {
 		t.Fatalf("failed to send transaction: %v", err)
 	}
@@ -336,11 +336,11 @@ done:
 		Start:   0,
 		Context: context.Background(),
 	}
-	it, err := FilterEvents(&ctrctInstance, filterOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event)
+	it, err := FilterEvents(instance, filterOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
-	it2, err := FilterEvents(&ctrctInstance, filterOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event)
+	it2, err := FilterEvents(instance, filterOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
@@ -388,7 +388,7 @@ func TestErrors(t *testing.T) {
 
 	ctrctABI, _ := solc_errors.CMetaData.GetAbi()
 	instance := ContractInstance{res.Addrs[solc_errors.CMetaData.Pattern], backend, *ctrctABI}
-	_, err = Call(&instance, opts, packedInput, func(packed []byte) (struct{}, error) { return struct{}{}, nil })
+	_, err = Call(instance, opts, packedInput, func(packed []byte) (struct{}, error) { return struct{}{}, nil })
 	if err == nil {
 		t.Fatalf("expected call to fail")
 	}
