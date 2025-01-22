@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package v2
+package bind
 
 import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	bind1 "github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -30,14 +30,14 @@ import (
 // for new logs, call, transact).
 type ContractInstance struct {
 	Address common.Address
-	Backend bind.ContractBackend
+	Backend ContractBackend
 	abi     abi.ABI
 }
 
 // FilterEvents returns an EventIterator instance for filtering historical events based on the event id and a block range.
-func FilterEvents[T any](instance *ContractInstance, opts *bind.FilterOpts, eventName string, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
+func FilterEvents[T any](instance *ContractInstance, opts *FilterOpts, eventName string, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
 	backend := instance.Backend
-	c := bind.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
+	c := bind1.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
 	logs, sub, err := c.FilterLogs(opts, eventName, topics...)
 	if err != nil {
 		return nil, err
@@ -49,9 +49,9 @@ func FilterEvents[T any](instance *ContractInstance, opts *bind.FilterOpts, even
 // contract to be intercepted, unpacked, and forwarded to sink.  If
 // unpack returns an error, the returned subscription is closed with the
 // error.
-func WatchEvents[T any](instance *ContractInstance, opts *bind.WatchOpts, eventName string, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
+func WatchEvents[T any](instance *ContractInstance, opts *WatchOpts, eventName string, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
 	backend := instance.Backend
-	c := bind.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
+	c := bind1.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
 	logs, sub, err := c.WatchLogs(opts, eventName, topics...)
 	if err != nil {
 		return nil, err
@@ -156,21 +156,21 @@ func (it *EventIterator[T]) Close() error {
 
 // Transact creates and submits a transaction to the bound contract instance
 // using the provided abi-encoded input (or nil).
-func Transact(instance *ContractInstance, opts *bind.TransactOpts, input []byte) (*types.Transaction, error) {
+func Transact(instance *ContractInstance, opts *TransactOpts, input []byte) (*types.Transaction, error) {
 	var (
 		addr    = instance.Address
 		backend = instance.Backend
 	)
-	c := bind.NewBoundContract(addr, instance.abi, backend, backend, backend)
+	c := bind1.NewBoundContract(addr, instance.abi, backend, backend, backend)
 	return c.RawTransact(opts, input)
 }
 
 // Call performs an eth_call on the given bound contract instance, using the
 // provided abi-encoded input (or nil).
-func Call[T any](instance *ContractInstance, opts *bind.CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
+func Call[T any](instance *ContractInstance, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
 	backend := instance.Backend
-	c := bind.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
+	c := bind1.NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
 	packedOutput, err := c.CallRaw(opts, packedInput)
 	if err != nil {
 		return defaultResult, err
@@ -185,8 +185,8 @@ func Call[T any](instance *ContractInstance, opts *bind.CallOpts, packedInput []
 // DeployContractRaw deploys a contract onto the Ethereum blockchain and binds the
 // deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
 // bytes.
-func DeployContractRaw(opts *bind.TransactOpts, bytecode []byte, backend bind.ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *bind.BoundContract, error) {
-	c := bind.NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
+func DeployContractRaw(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *bind1.BoundContract, error) {
+	c := bind1.NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
 	tx, err := c.RawCreationTransact(opts, append(bytecode, packedParams...))
 	if err != nil {
 		return common.Address{}, nil, nil, err
