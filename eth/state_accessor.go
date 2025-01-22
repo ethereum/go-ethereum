@@ -259,6 +259,12 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		}
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+
+		// CHANGE(taiko): decode the basefeeSharingPctg config from the extradata, and
+		// add it to the Message, if its an ontake block.
+		if eth.blockchain.Config().IsOntake(block.Number()) {
+			msg.BasefeeSharingPctg = core.DecodeOntakeExtraData(block.Header().Extra)
+		}
 		txContext := core.NewEVMTxContext(msg)
 		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 		if idx == txIndex {

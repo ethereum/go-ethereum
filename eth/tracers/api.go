@@ -279,6 +279,11 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 						}
 					}
 					msg, _ := core.TransactionToMessage(tx, signer, task.block.BaseFee())
+					// CHANGE(taiko): decode the basefeeSharingPctg config from the extradata, and
+					// add it to the Message, if its an ontake block.
+					if api.backend.ChainConfig().IsOntake(task.block.Number()) {
+						msg.BasefeeSharingPctg = core.DecodeOntakeExtraData(task.block.Header().Extra)
+					}
 					txctx := &Context{
 						BlockHash:   task.block.Hash(),
 						BlockNumber: task.block.Number(),
@@ -565,6 +570,11 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			txContext = core.NewEVMTxContext(msg)
 			vmenv     = vm.NewEVM(vmctx, txContext, statedb, chainConfig, vm.Config{})
 		)
+		// CHANGE(taiko): decode the basefeeSharingPctg config from the extradata, and
+		// add it to the Message, if its an ontake block.
+		if api.backend.ChainConfig().IsOntake(block.Number()) {
+			msg.BasefeeSharingPctg = core.DecodeOntakeExtraData(block.Header().Extra)
+		}
 		statedb.SetTxContext(tx.Hash(), i)
 		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit)); err != nil {
 			log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
@@ -647,6 +657,11 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		}
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+		// CHANGE(taiko): decode the basefeeSharingPctg config from the extradata, and
+		// add it to the Message, if its an ontake block.
+		if api.backend.ChainConfig().IsOntake(block.Number()) {
+			msg.BasefeeSharingPctg = core.DecodeOntakeExtraData(block.Header().Extra)
+		}
 		txctx := &Context{
 			BlockHash:   blockHash,
 			BlockNumber: block.Number(),
@@ -694,6 +709,11 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 			// Fetch and execute the next transaction trace tasks
 			for task := range jobs {
 				msg, _ := core.TransactionToMessage(txs[task.index], signer, block.BaseFee())
+				// CHANGE(taiko): decode the basefeeSharingPctg config from the extradata, and
+				// add it to the Message, if its an ontake block.
+				if api.backend.ChainConfig().IsOntake(block.Number()) {
+					msg.BasefeeSharingPctg = core.DecodeOntakeExtraData(block.Header().Extra)
+				}
 				txctx := &Context{
 					BlockHash:   blockHash,
 					BlockNumber: block.Number(),
@@ -829,6 +849,11 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			writer    *bufio.Writer
 			err       error
 		)
+		// CHANGE(taiko): decode the basefeeSharingPctg config from the extradata, and
+		// add it to the Message, if its an ontake block.
+		if api.backend.ChainConfig().IsOntake(block.Number()) {
+			msg.BasefeeSharingPctg = core.DecodeOntakeExtraData(block.Header().Extra)
+		}
 		// If the transaction needs tracing, swap out the configs
 		if tx.Hash() == txHash || txHash == (common.Hash{}) {
 			// Generate a unique temporary file to dump it into
