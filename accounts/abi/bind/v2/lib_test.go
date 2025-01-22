@@ -14,29 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package bind
+package bind_test
 
 import (
 	"context"
 	"encoding/json"
 	"io"
 	"math/big"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	bind1 "github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/events"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/nested_libraries"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/solc_errors"
-
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -59,7 +54,7 @@ func JSON(reader io.Reader) (abi.ABI, error) {
 	return instance, nil
 }
 
-func testSetup() (*TransactOpts, *backends.SimulatedBackend, error) {
+func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	backend := simulated.NewBackend(
 		types.GenesisAlloc{
@@ -71,7 +66,7 @@ func testSetup() (*TransactOpts, *backends.SimulatedBackend, error) {
 	)
 
 	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
-	opts := &TransactOpts{
+	opts := &bind.TransactOpts{
 		From:  testAddr,
 		Nonce: nil,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -97,9 +92,9 @@ func testSetup() (*TransactOpts, *backends.SimulatedBackend, error) {
 	return opts, &bindBackend, nil
 }
 
-func makeTestDeployer(auth *TransactOpts, backend ContractBackend) func(input, deployer []byte) (common.Address, *types.Transaction, error) {
+func makeTestDeployer(auth *bind.TransactOpts, backend bind.ContractBackend) func(input, deployer []byte) (common.Address, *types.Transaction, error) {
 	return func(input, deployer []byte) (common.Address, *types.Transaction, error) {
-		addr, tx, _, err := DeployContractRaw(auth, deployer, backend, input)
+		addr, tx, _, err := bind.DeployContractRaw(auth, deployer, backend, input)
 		return addr, tx, err
 	}
 }
@@ -113,13 +108,9 @@ func TestDeploymentLibraries(t *testing.T) {
 	}
 	defer bindBackend.Backend.Close()
 
-	ctrct, err := nested_libraries.NewC1()
-	if err != nil {
-		panic(err)
-	}
-
-	constructorInput := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
-	deploymentParams := bind1.NewDeploymentParams([]*MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, nil)
+	c := nested_libraries.NewC1()
+	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
+	deploymentParams := bind1.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, nil)
 
 	res, err := bind1.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
@@ -136,26 +127,15 @@ func TestDeploymentLibraries(t *testing.T) {
 			t.Fatalf("error deploying library: %+v", err)
 		}
 	}
-	c, err := nested_libraries.NewC1()
-	if err != nil {
-		t.Fatalf("err is %v", err)
-	}
+
 	doInput, err := c.PackDo(big.NewInt(1))
 	if err != nil {
 		t.Fatalf("pack function input err: %v\n", doInput)
 	}
-
 	contractAddr := res.Addrs[nested_libraries.C1MetaData.Pattern]
-	callOpts := &CallOpts{
-		From:    common.Address{},
-		Context: context.Background(),
-	}
-
-	ctrctInstance := ContractInstance{
-		Address: contractAddr,
-		Backend: bindBackend,
-	}
-	internalCallCount, err := Call(ctrctInstance, callOpts, doInput, ctrct.UnpackDo)
+	callOpts := &bind.CallOpts{From: common.Address{}, Context: context.Background()}
+	instance := c.Instance(bindBackend, contractAddr)
+	internalCallCount, err := bind.Call(instance, callOpts, doInput, c.UnpackDo)
 	if err != nil {
 		t.Fatalf("err unpacking result: %v", err)
 	}
@@ -192,14 +172,11 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		}
 	}
 
-	ctrct, err := nested_libraries.NewC1()
-	if err != nil {
-		panic(err)
-	}
-	constructorInput := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
+	c := nested_libraries.NewC1()
+	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
 	overrides := res.Addrs
 	// deploy the contract
-	deploymentParams = bind1.NewDeploymentParams([]*MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, overrides)
+	deploymentParams = bind1.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, overrides)
 	res, err = bind1.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
@@ -217,32 +194,16 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 
 	// call the deployed contract and make sure it returns the correct result
-	c, err := nested_libraries.NewC1()
-	if err != nil {
-		t.Fatalf("err is %v", err)
-	}
 	doInput, err := c.PackDo(big.NewInt(1))
 	if err != nil {
 		t.Fatalf("pack function input err: %v\n", doInput)
 	}
 
-	cABI, err := nested_libraries.C1MetaData.GetAbi()
+	instance := c.Instance(bindBackend, res.Addrs[nested_libraries.C1MetaData.Pattern])
+	callOpts := new(bind.CallOpts)
+	internalCallCount, err := bind.Call(instance, callOpts, doInput, c.UnpackDo)
 	if err != nil {
-		t.Fatalf("error getting abi object: %v", err)
-	}
-	contractAddr := res.Addrs[nested_libraries.C1MetaData.Pattern]
-	boundContract := bind1.NewBoundContract(contractAddr, *cABI, bindBackend, bindBackend, bindBackend)
-	callOpts := &CallOpts{
-		From:    common.Address{},
-		Context: context.Background(),
-	}
-	callRes, err := boundContract.CallRaw(callOpts, doInput)
-	if err != nil {
-		t.Fatalf("err calling contract: %v", err)
-	}
-	internalCallCount, err := c.UnpackDo(callRes)
-	if err != nil {
-		t.Fatalf("err unpacking result: %v", err)
+		t.Fatalf("error calling contract: %v", err)
 	}
 	if internalCallCount.Uint64() != 6 {
 		t.Fatalf("expected internal call count of 6.  got %d.", internalCallCount.Uint64())
@@ -256,7 +217,7 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := bind1.NewDeploymentParams([]*MetaData{&events.CMetaData}, nil, nil)
+	deploymentParams := bind1.NewDeploymentParams([]*bind.MetaData{&events.CMetaData}, nil, nil)
 	res, err := bind1.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
@@ -267,37 +228,25 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("WaitDeployed failed %v", err)
 	}
 
-	ctrct, err := events.NewC()
-	if err != nil {
-		t.Fatalf("error instantiating contract instance: %v", err)
-	}
-
-	ctrctABI, _ := events.CMetaData.GetAbi()
-	instance := ContractInstance{
-		res.Addrs[events.CMetaData.Pattern],
-		backend,
-		*ctrctABI,
-	}
+	c := events.NewC()
+	instance := c.Instance(backend, res.Addrs[events.CMetaData.Pattern])
 
 	newCBasic1Ch := make(chan *events.CBasic1)
 	newCBasic2Ch := make(chan *events.CBasic2)
-	watchOpts := &bind1.WatchOpts{
-		Start:   nil,
-		Context: context.Background(),
-	}
-	sub1, err := WatchEvents(instance, watchOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event, newCBasic1Ch)
+	watchOpts := &bind1.WatchOpts{}
+	sub1, err := bind.WatchEvents(instance, watchOpts, events.CBasic1EventName, c.UnpackBasic1Event, newCBasic1Ch)
 	if err != nil {
 		t.Fatalf("WatchEvents returned error: %v", err)
 	}
-	sub2, err := WatchEvents(instance, watchOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event, newCBasic2Ch)
+	sub2, err := bind.WatchEvents(instance, watchOpts, events.CBasic2EventName, c.UnpackBasic2Event, newCBasic2Ch)
 	if err != nil {
 		t.Fatalf("WatchEvents returned error: %v", err)
 	}
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
 
-	packedInput, _ := ctrct.PackEmitMulti()
-	tx, err := Transact(instance, txAuth, packedInput)
+	packedInput, _ := c.PackEmitMulti()
+	tx, err := bind.Transact(instance, txAuth, packedInput)
 	if err != nil {
 		t.Fatalf("failed to send transaction: %v", err)
 	}
@@ -332,15 +281,15 @@ done:
 
 	// now, test that we can filter those same logs after they were included in the chain
 
-	filterOpts := &FilterOpts{
+	filterOpts := &bind.FilterOpts{
 		Start:   0,
 		Context: context.Background(),
 	}
-	it, err := FilterEvents(instance, filterOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event)
+	it, err := bind.FilterEvents(instance, filterOpts, events.CBasic1EventName, c.UnpackBasic1Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
-	it2, err := FilterEvents(instance, filterOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event)
+	it2, err := bind.FilterEvents(instance, filterOpts, events.CBasic2EventName, c.UnpackBasic2Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
@@ -367,7 +316,7 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := bind1.NewDeploymentParams([]*MetaData{&solc_errors.CMetaData}, nil, nil)
+	deploymentParams := bind1.NewDeploymentParams([]*bind.MetaData{&solc_errors.CMetaData}, nil, nil)
 	res, err := bind1.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
@@ -378,17 +327,11 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("WaitDeployed failed %v", err)
 	}
 
-	ctrct, _ := solc_errors.NewC()
-
-	var packedInput []byte
-	opts := &CallOpts{
-		From: res.Addrs[solc_errors.CMetaData.Pattern],
-	}
-	packedInput, _ = ctrct.PackFoo()
-
-	ctrctABI, _ := solc_errors.CMetaData.GetAbi()
-	instance := ContractInstance{res.Addrs[solc_errors.CMetaData.Pattern], backend, *ctrctABI}
-	_, err = Call(instance, opts, packedInput, func(packed []byte) (struct{}, error) { return struct{}{}, nil })
+	c := solc_errors.NewC()
+	instance := c.Instance(backend, res.Addrs[solc_errors.CMetaData.Pattern])
+	packedInput, _ := c.PackFoo()
+	opts := &bind.CallOpts{From: res.Addrs[solc_errors.CMetaData.Pattern]}
+	_, err = bind.Call[struct{}](instance, opts, packedInput, nil)
 	if err == nil {
 		t.Fatalf("expected call to fail")
 	}
@@ -396,7 +339,7 @@ func TestErrors(t *testing.T) {
 	if !hasRevertErrorData {
 		t.Fatalf("expected call error to contain revert error data.")
 	}
-	rawUnpackedErr := ctrct.UnpackError(raw)
+	rawUnpackedErr := c.UnpackError(raw)
 	if rawUnpackedErr == nil {
 		t.Fatalf("expected to unpack error")
 	}
@@ -416,68 +359,5 @@ func TestErrors(t *testing.T) {
 	}
 	if unpackedErr.Arg4 != false {
 		t.Fatalf("bad unpacked error result: expected Arg4 to be false.  got true")
-	}
-}
-
-// TestBindingGeneration tests that re-running generation of bindings does not result in mutations to the binding code
-func TestBindingGeneration(t *testing.T) {
-	matches, _ := filepath.Glob("internal/contracts/*")
-	var dirs []string
-	for _, match := range matches {
-		f, _ := os.Stat(match)
-		if f.IsDir() {
-			dirs = append(dirs, f.Name())
-		}
-	}
-
-	for _, dir := range dirs {
-		var (
-			abis  []string
-			bins  []string
-			types []string
-			libs  = make(map[string]string)
-		)
-		basePath := filepath.Join("internal/contracts", dir)
-		combinedJsonPath := filepath.Join(basePath, "combined-abi.json")
-		abiBytes, err := os.ReadFile(combinedJsonPath)
-		if err != nil {
-			t.Fatalf("error trying to read file %s: %v", combinedJsonPath, err)
-		}
-		contracts, err := compiler.ParseCombinedJSON(abiBytes, "", "", "", "")
-		if err != nil {
-			t.Fatalf("Failed to read contract information from json output: %v", err)
-		}
-
-		for name, contract := range contracts {
-			// fully qualified name is of the form <solFilePath>:<type>
-			nameParts := strings.Split(name, ":")
-			typeName := nameParts[len(nameParts)-1]
-			abi, err := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
-			if err != nil {
-				utils.Fatalf("Failed to parse ABIs from compiler output: %v", err)
-			}
-			abis = append(abis, string(abi))
-			bins = append(bins, contract.Code)
-			types = append(types, typeName)
-
-			// Derive the library placeholder which is a 34 character prefix of the
-			// hex encoding of the keccak256 hash of the fully qualified library name.
-			// Note that the fully qualified library name is the path of its source
-			// file and the library name separated by ":".
-			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36] // the first 2 chars are 0x
-			libs[libPattern] = typeName
-		}
-		code, err := bind1.BindV2(types, abis, bins, dir, libs, make(map[string]string))
-		if err != nil {
-			t.Fatalf("error creating bindings for package %s: %v", dir, err)
-		}
-
-		existingBindings, err := os.ReadFile(filepath.Join(basePath, "bindings.go"))
-		if err != nil {
-			t.Fatalf("ReadFile returned error: %v", err)
-		}
-		if code != string(existingBindings) {
-			t.Fatalf("code mismatch for %s", dir)
-		}
 	}
 }
