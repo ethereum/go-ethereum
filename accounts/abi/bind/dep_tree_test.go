@@ -136,7 +136,7 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 	// generate deterministic addresses for the override set.
 	rand.Seed(42)
 	overrideAddrs := make(map[rune]common.Address)
-	for contract, _ := range tcInput.overrides {
+	for contract := range tcInput.overrides {
 		var addr common.Address
 		rand.Read(addr[:])
 		overrideAddrs[contract] = addr
@@ -200,7 +200,7 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 	if len(res.Txs) != len(tcInput.expectDeployed) {
 		return fmt.Errorf("got %d deployed contracts.  expected %d.\n", len(res.Addrs), len(tcInput.expectDeployed))
 	}
-	for contract, _ := range tcInput.expectDeployed {
+	for contract := range tcInput.expectDeployed {
 		pattern := crypto.Keccak256Hash([]byte(string(contract))).String()[2:36]
 		if _, ok := res.Addrs[pattern]; !ok {
 			return fmt.Errorf("expected contract %s was not deployed\n", string(contract))
