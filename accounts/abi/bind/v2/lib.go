@@ -34,6 +34,10 @@ type ContractInstance struct {
 	abi     abi.ABI
 }
 
+func NewContractInstance(addr common.Address, backend ContractBackend, abi abi.ABI) *ContractInstance {
+	return &ContractInstance{addr, backend, abi}
+}
+
 // FilterEvents returns an EventIterator instance for filtering historical events based on the event id and a block range.
 func FilterEvents[T any](instance *ContractInstance, opts *FilterOpts, eventName string, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
 	backend := instance.Backend
