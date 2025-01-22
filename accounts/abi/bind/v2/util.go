@@ -22,17 +22,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi/abigen"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
-
-// Bind generates a v1 contract binding.
-// Deprecated: binding generation has moved to github.com/ethereum/go-ethereum/accounts/abi/abigen
-func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, libs map[string]string, aliases map[string]string) (string, error) {
-	return abigen.Bind(types, abis, bytecodes, fsigs, pkg, libs, aliases)
-}
 
 // WaitMined waits for tx to be mined on the blockchain.
 // It stops waiting when the context is canceled.

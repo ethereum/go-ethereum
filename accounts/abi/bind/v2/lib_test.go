@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	bind1 "github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/events"
@@ -109,9 +108,9 @@ func TestDeploymentLibraries(t *testing.T) {
 
 	c := nested_libraries.NewC1()
 	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
-	deploymentParams := bind1.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, nil)
+	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, nil)
 
-	res, err := bind1.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -121,7 +120,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		t.Fatalf("deployment should have generated 5 addresses.  got %d", len(res.Addrs))
 	}
 	for _, tx := range res.Txs {
-		_, err = bind1.WaitDeployed(context.Background(), bindBackend, tx)
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
 		if err != nil {
 			t.Fatalf("error deploying library: %+v", err)
 		}
@@ -153,9 +152,9 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	defer bindBackend.Backend.Close()
 
 	// deploy all the library dependencies of our target contract, but not the target contract itself.
-	deploymentParams := bind1.NewDeploymentParams(nested_libraries.C1MetaData.Deps, nil, nil)
+	deploymentParams := bind.NewDeploymentParams(nested_libraries.C1MetaData.Deps, nil, nil)
 
-	res, err := bind1.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -165,7 +164,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		t.Fatalf("deployment should have generated 4 addresses.  got %d", len(res.Addrs))
 	}
 	for _, tx := range res.Txs {
-		_, err = bind1.WaitDeployed(context.Background(), bindBackend, tx)
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
 		if err != nil {
 			t.Fatalf("error deploying library: %+v", err)
 		}
@@ -175,8 +174,8 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
 	overrides := res.Addrs
 	// deploy the contract
-	deploymentParams = bind1.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, overrides)
-	res, err = bind1.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
+	deploymentParams = bind.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, overrides)
+	res, err = bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -186,7 +185,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		t.Fatalf("deployment should have generated 1 address.  got %d", len(res.Addrs))
 	}
 	for _, tx := range res.Txs {
-		_, err = bind1.WaitDeployed(context.Background(), bindBackend, tx)
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
 		if err != nil {
 			t.Fatalf("error deploying library: %+v", err)
 		}
@@ -216,14 +215,14 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := bind1.NewDeploymentParams([]*bind.MetaData{&events.CMetaData}, nil, nil)
-	res, err := bind1.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
+	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&events.CMetaData}, nil, nil)
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
 	}
 
 	backend.Commit()
-	if _, err := bind1.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.Pattern]); err != nil {
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.Pattern]); err != nil {
 		t.Fatalf("WaitDeployed failed %v", err)
 	}
 
@@ -232,7 +231,7 @@ func TestEvents(t *testing.T) {
 
 	newCBasic1Ch := make(chan *events.CBasic1)
 	newCBasic2Ch := make(chan *events.CBasic2)
-	watchOpts := &bind1.WatchOpts{}
+	watchOpts := &bind.WatchOpts{}
 	sub1, err := bind.WatchEvents(instance, watchOpts, events.CBasic1EventName, c.UnpackBasic1Event, newCBasic1Ch)
 	if err != nil {
 		t.Fatalf("WatchEvents returned error: %v", err)
@@ -250,7 +249,7 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("failed to send transaction: %v", err)
 	}
 	backend.Commit()
-	if _, err := bind1.WaitMined(context.Background(), backend, tx); err != nil {
+	if _, err := bind.WaitMined(context.Background(), backend, tx); err != nil {
 		t.Fatalf("error waiting for tx to be mined: %v", err)
 	}
 
@@ -315,14 +314,14 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := bind1.NewDeploymentParams([]*bind.MetaData{&solc_errors.CMetaData}, nil, nil)
-	res, err := bind1.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
+	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&solc_errors.CMetaData}, nil, nil)
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
 	}
 
 	backend.Commit()
-	if _, err := bind1.WaitDeployed(context.Background(), backend, res.Txs[solc_errors.CMetaData.Pattern]); err != nil {
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[solc_errors.CMetaData.Pattern]); err != nil {
 		t.Fatalf("WaitDeployed failed %v", err)
 	}
 
