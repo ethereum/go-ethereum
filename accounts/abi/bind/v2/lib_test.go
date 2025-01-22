@@ -119,9 +119,6 @@ func TestDeploymentLibraries(t *testing.T) {
 	}
 
 	constructorInput := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
-	if err != nil {
-		t.Fatalf("failed to pack constructor: %v", err)
-	}
 	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, nil)
 
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
@@ -158,7 +155,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		Address: contractAddr,
 		Backend: bindBackend,
 	}
-	internalCallCount, err := Call[*big.Int](ctrctInstance, callOpts, doInput, ctrct.UnpackDo)
+	internalCallCount, err := Call(ctrctInstance, callOpts, doInput, ctrct.UnpackDo)
 	if err != nil {
 		t.Fatalf("err unpacking result: %v", err)
 	}
@@ -200,9 +197,6 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		panic(err)
 	}
 	constructorInput := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
-	if err != nil {
-		t.Fatalf("failed to pack constructor: %v", err)
-	}
 	overrides := res.Addrs
 	// deploy the contract
 	deploymentParams = bind.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, overrides)
@@ -342,11 +336,11 @@ done:
 		Start:   0,
 		Context: context.Background(),
 	}
-	it, err := FilterEvents[events.CBasic1](&ctrctInstance, filterOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event)
+	it, err := FilterEvents(&ctrctInstance, filterOpts, events.CBasic1EventName, ctrct.UnpackBasic1Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
-	it2, err := FilterEvents[events.CBasic2](&ctrctInstance, filterOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event)
+	it2, err := FilterEvents(&ctrctInstance, filterOpts, events.CBasic2EventName, ctrct.UnpackBasic2Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
@@ -394,7 +388,7 @@ func TestErrors(t *testing.T) {
 
 	ctrctABI, _ := solc_errors.CMetaData.GetAbi()
 	instance := ContractInstance{res.Addrs[solc_errors.CMetaData.Pattern], backend, *ctrctABI}
-	_, err = Call[struct{}](&instance, opts, packedInput, func(packed []byte) (struct{}, error) { return struct{}{}, nil })
+	_, err = Call(&instance, opts, packedInput, func(packed []byte) (struct{}, error) { return struct{}{}, nil })
 	if err == nil {
 		t.Fatalf("expected call to fail")
 	}
