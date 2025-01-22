@@ -69,7 +69,8 @@ type rlpLog struct {
 	Data    []byte
 }
 
-type rlpStorageLog struct {
+// legacyRlpStorageLog is the previous storage encoding of a log including some redundant fields.
+type legacyRlpStorageLog struct {
 	Address     common.Address
 	Topics      []common.Hash
 	Data        []byte
@@ -82,7 +83,8 @@ type rlpStorageLog struct {
 
 // EncodeRLP implements rlp.Encoder.
 func (l *Log) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, rlpLog{Address: l.Address, Topics: l.Topics, Data: l.Data})
+	rl := rlpLog{Address: l.Address, Topics: l.Topics, Data: l.Data}
+	return rlp.Encode(w, &rl)
 }
 
 // DecodeRLP implements rlp.Decoder.
@@ -105,32 +107,36 @@ type LogForStorage Log
 
 // EncodeRLP implements rlp.Encoder.
 func (l *LogForStorage) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, rlpStorageLog{
-		Address:     l.Address,
-		Topics:      l.Topics,
-		Data:        l.Data,
-		BlockNumber: l.BlockNumber,
-		TxHash:      l.TxHash,
-		TxIndex:     l.TxIndex,
-		BlockHash:   l.BlockHash,
-		Index:       l.Index,
-	})
+	rl := rlpLog{Address: l.Address, Topics: l.Topics, Data: l.Data}
+	return rlp.Encode(w, &rl)
 }
 
 // DecodeRLP implements rlp.Decoder.
+//
+// Note some redundant fields(e.g. block number, tx hash etc) will be assembled later.
 func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
-	var dec rlpStorageLog
-	err := s.Decode(&dec)
+	blob, err := s.Raw()
+	if err != nil {
+		return err
+	}
+	var dec rlpLog
+	err = rlp.DecodeBytes(blob, &dec)
 	if err == nil {
 		*l = LogForStorage{
-			Address:     dec.Address,
-			Topics:      dec.Topics,
-			Data:        dec.Data,
-			BlockNumber: dec.BlockNumber,
-			TxHash:      dec.TxHash,
-			TxIndex:     dec.TxIndex,
-			BlockHash:   dec.BlockHash,
-			Index:       dec.Index,
+			Address: dec.Address,
+			Topics:  dec.Topics,
+			Data:    dec.Data,
+		}
+	} else {
+		// Try to decode log with previous definition.
+		var dec legacyRlpStorageLog
+		err = rlp.DecodeBytes(blob, &dec)
+		if err == nil {
+			*l = LogForStorage{
+				Address: dec.Address,
+				Topics:  dec.Topics,
+				Data:    dec.Data,
+			}
 		}
 	}
 	return err

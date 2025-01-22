@@ -1172,9 +1172,9 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 
 		// If the transaction is unknown to the pool, try looking it up locally
 		if stat == txpool.TxStatusUnknown {
-			if block, number, index := rawdb.ReadTxLookupEntry(pm.chainDb, hashes[i]); block != (common.Hash{}) {
+			if tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(pm.chainDb, hashes[i]); tx != nil {
 				stats[i].Status = txpool.TxStatusIncluded
-				stats[i].Lookup = &rawdb.TxLookupEntry{BlockHash: block, BlockIndex: number, Index: index}
+				stats[i].Lookup = &rawdb.LegacyTxLookupEntry{BlockHash: blockHash, BlockIndex: blockNumber, Index: txIndex}
 			}
 		}
 	}

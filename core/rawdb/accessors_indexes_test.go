@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 // Tests that positional lookup metadata can be stored and retrieved.
@@ -52,7 +53,7 @@ func TestLookupStorage(t *testing.T) {
 			if hash != block.Hash() || number != block.NumberU64() || index != uint64(i) {
 				t.Fatalf("tx #%d [%x]: positional metadata mismatch: have %x/%d/%d, want %x/%v/%v", i, tx.Hash(), hash, number, index, block.Hash(), block.NumberU64(), i)
 			}
-			if tx.String() != txn.String() {
+			if tx.Hash() != txn.Hash() {
 				t.Fatalf("tx #%d [%x]: transaction mismatch: have %v, want %v", i, tx.Hash(), txn, tx)
 			}
 		}
@@ -62,6 +63,28 @@ func TestLookupStorage(t *testing.T) {
 		DeleteTxLookupEntry(db, tx.Hash())
 		if txn, _, _, _ := ReadTransaction(db, tx.Hash()); txn != nil {
 			t.Fatalf("tx #%d [%x]: deleted transaction returned: %v", i, tx.Hash(), txn)
+		}
+	}
+	// Insert legacy txlookup and verify the data retrieval
+	for index, tx := range block.Transactions() {
+		entry := LegacyTxLookupEntry{
+			BlockHash:  block.Hash(),
+			BlockIndex: block.NumberU64(),
+			Index:      uint64(index),
+		}
+		data, _ := rlp.EncodeToBytes(entry)
+		db.Put(txLookupKey(tx.Hash()), data)
+	}
+	for i, tx := range txs {
+		if txn, hash, number, index := ReadTransaction(db, tx.Hash()); txn == nil {
+			t.Fatalf("tx #%d [%x]: transaction not found", i, tx.Hash())
+		} else {
+			if hash != block.Hash() || number != block.NumberU64() || index != uint64(i) {
+				t.Fatalf("tx #%d [%x]: positional metadata mismatch: have %x/%d/%d, want %x/%v/%v", i, tx.Hash(), hash, number, index, block.Hash(), block.NumberU64(), i)
+			}
+			if tx.Hash() != txn.Hash() {
+				t.Fatalf("tx #%d [%x]: transaction mismatch: have %v, want %v", i, tx.Hash(), txn, tx)
+			}
 		}
 	}
 }

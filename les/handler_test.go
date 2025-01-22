@@ -557,8 +557,8 @@ func TestTransactionStatusLes2(t *testing.T) {
 
 	// check if their status is included now
 	block1hash := rawdb.ReadCanonicalHash(db, 1)
-	test(tx1, false, txStatus{Status: txpool.TxStatusIncluded, Lookup: &rawdb.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
-	test(tx2, false, txStatus{Status: txpool.TxStatusIncluded, Lookup: &rawdb.TxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})
+	test(tx1, false, txStatus{Status: txpool.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 0}})
+	test(tx2, false, txStatus{Status: txpool.TxStatusIncluded, Lookup: &rawdb.LegacyTxLookupEntry{BlockHash: block1hash, BlockIndex: 1, Index: 1}})
 
 	// create a reorg that rolls them back
 	gchain, _ = core.GenerateChain(params.TestChainConfig, chain.GetBlockByNumber(0), ethash.NewFaker(), db, 2, func(i int, block *core.BlockGen) {})

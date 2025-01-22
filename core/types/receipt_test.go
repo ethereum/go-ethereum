@@ -357,7 +357,7 @@ func TestLegacyReceiptDecoding(t *testing.T) {
 }
 
 func encodeAsV3StoredReceiptRLP(want *Receipt) ([]byte, error) {
-	stored := &receiptStorageRLP{
+	stored := &v3StoredReceiptRLP{
 		PostStateOrStatus: want.statusEncoding(),
 		CumulativeGasUsed: want.CumulativeGasUsed,
 		Bloom:             want.Bloom,
