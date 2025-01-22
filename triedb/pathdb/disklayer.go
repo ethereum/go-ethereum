@@ -302,6 +302,10 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Derive the state modification set from the history, keyed by the hash
+	// of the account address and the storage key.
+	accounts, storages := h.stateSet()
+
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
@@ -314,7 +318,6 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	// needs to be reverted is not yet flushed and cached in node
 	// buffer, otherwise, manipulate persistent state directly.
 	if !dl.buffer.empty() {
-		accounts, storages := h.stateSet()
 		err := dl.buffer.revertTo(dl.db.diskdb, nodes, accounts, storages)
 		if err != nil {
 			return nil, err
