@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -17,7 +17,6 @@ import (
 var (
 	_ = errors.New
 	_ = big.NewInt
-	_ = bind.Bind
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
@@ -35,12 +34,18 @@ type EventChecker struct {
 }
 
 // NewEventChecker creates a new instance of EventChecker.
-func NewEventChecker() (*EventChecker, error) {
+func NewEventChecker() *EventChecker {
 	parsed, err := EventCheckerMetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &EventChecker{abi: *parsed}, nil
+	return &EventChecker{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *EventChecker) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // EventCheckerDynamic represents a Dynamic event raised by the EventChecker contract.

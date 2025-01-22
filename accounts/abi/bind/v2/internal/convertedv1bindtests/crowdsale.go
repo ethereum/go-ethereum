@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -17,7 +17,6 @@ import (
 var (
 	_ = errors.New
 	_ = big.NewInt
-	_ = bind.Bind
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
@@ -36,12 +35,18 @@ type Crowdsale struct {
 }
 
 // NewCrowdsale creates a new instance of Crowdsale.
-func NewCrowdsale() (*Crowdsale, error) {
+func NewCrowdsale() *Crowdsale {
 	parsed, err := CrowdsaleMetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &Crowdsale{abi: *parsed}, nil
+	return &Crowdsale{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *Crowdsale) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, fundingGoalInEthers *big.Int, durationInMinutes *big.Int, etherCostOfEachToken *big.Int, addressOfTokenUsedAsReward common.Address) []byte {

@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -17,7 +17,6 @@ import (
 var (
 	_ = errors.New
 	_ = big.NewInt
-	_ = bind.Bind
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
@@ -35,12 +34,18 @@ type InputChecker struct {
 }
 
 // NewInputChecker creates a new instance of InputChecker.
-func NewInputChecker() (*InputChecker, error) {
+func NewInputChecker() *InputChecker {
 	parsed, err := InputCheckerMetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &InputChecker{abi: *parsed}, nil
+	return &InputChecker{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *InputChecker) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // AnonInput is a free data retrieval call binding the contract method 0x3e708e82.
