@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -17,7 +17,6 @@ import (
 var (
 	_ = errors.New
 	_ = big.NewInt
-	_ = bind.Bind
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
@@ -36,12 +35,18 @@ type C struct {
 }
 
 // NewC creates a new instance of C.
-func NewC() (*C, error) {
+func NewC() *C {
 	parsed, err := CMetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &C{abi: *parsed}, nil
+	return &C{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *C) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // Bar is a free data retrieval call binding the contract method 0xb0a378b0.
@@ -128,12 +133,18 @@ type C2 struct {
 }
 
 // NewC2 creates a new instance of C2.
-func NewC2() (*C2, error) {
+func NewC2() *C2 {
 	parsed, err := C2MetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &C2{abi: *parsed}, nil
+	return &C2{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // Foo is a free data retrieval call binding the contract method 0xbfb4ebcf.

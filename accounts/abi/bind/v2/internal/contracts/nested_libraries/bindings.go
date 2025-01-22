@@ -8,7 +8,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -17,7 +17,6 @@ import (
 var (
 	_ = errors.New
 	_ = big.NewInt
-	_ = bind.Bind
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
@@ -40,12 +39,18 @@ type C1 struct {
 }
 
 // NewC1 creates a new instance of C1.
-func NewC1() (*C1, error) {
+func NewC1() *C1 {
 	parsed, err := C1MetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &C1{abi: *parsed}, nil
+	return &C1{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *C1) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 func (c1 *C1) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
@@ -90,12 +95,18 @@ type C2 struct {
 }
 
 // NewC2 creates a new instance of C2.
-func NewC2() (*C2, error) {
+func NewC2() *C2 {
 	parsed, err := C2MetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &C2{abi: *parsed}, nil
+	return &C2{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 func (c2 *C2) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
@@ -136,12 +147,18 @@ type L1 struct {
 }
 
 // NewL1 creates a new instance of L1.
-func NewL1() (*L1, error) {
+func NewL1() *L1 {
 	parsed, err := L1MetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &L1{abi: *parsed}, nil
+	return &L1{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *L1) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -180,12 +197,18 @@ type L2 struct {
 }
 
 // NewL2 creates a new instance of L2.
-func NewL2() (*L2, error) {
+func NewL2() *L2 {
 	parsed, err := L2MetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &L2{abi: *parsed}, nil
+	return &L2{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *L2) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -224,12 +247,18 @@ type L2b struct {
 }
 
 // NewL2b creates a new instance of L2b.
-func NewL2b() (*L2b, error) {
+func NewL2b() *L2b {
 	parsed, err := L2bMetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &L2b{abi: *parsed}, nil
+	return &L2b{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *L2b) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -265,12 +294,18 @@ type L3 struct {
 }
 
 // NewL3 creates a new instance of L3.
-func NewL3() (*L3, error) {
+func NewL3() *L3 {
 	parsed, err := L3MetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &L3{abi: *parsed}, nil
+	return &L3{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *L3) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -310,12 +345,18 @@ type L4 struct {
 }
 
 // NewL4 creates a new instance of L4.
-func NewL4() (*L4, error) {
+func NewL4() *L4 {
 	parsed, err := L4MetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &L4{abi: *parsed}, nil
+	return &L4{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *L4) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -354,12 +395,18 @@ type L4b struct {
 }
 
 // NewL4b creates a new instance of L4b.
-func NewL4b() (*L4b, error) {
+func NewL4b() *L4b {
 	parsed, err := L4bMetaData.GetAbi()
 	if err != nil {
-		return nil, err
+		panic(errors.New("invalid ABI: " + err.Error()))
 	}
-	return &L4b{abi: *parsed}, nil
+	return &L4b{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *L4b) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
