@@ -17,6 +17,7 @@ package bind
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -329,4 +330,15 @@ func TestContractLinking(t *testing.T) {
 			t.Fatalf("test case %d failed: %v", i, err)
 		}
 	}
+}
+
+func parseLibraryDeps(unlinkedCode string) (res []string) {
+	reMatchSpecificPattern, err := regexp.Compile(`__\$([a-f0-9]+)\$__`)
+	if err != nil {
+		panic(err)
+	}
+	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(unlinkedCode, -1) {
+		res = append(res, match[1])
+	}
+	return res
 }
