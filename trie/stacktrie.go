@@ -68,7 +68,7 @@ func (t *StackTrie) grow(key []byte) {
 	if cap(t.kBuf) < 2*len(key) {
 		t.kBuf = make([]byte, 2*len(key))
 	}
-	if cap(t.pBuf) < len(key) {
+	if cap(t.pBuf) < 2*len(key) {
 		t.pBuf = make([]byte, 2*len(key))
 	}
 }
@@ -353,6 +353,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		}
 		nodes.encode(t.h.encbuf)
 		blob = t.h.encodedBytes()
+
 		for i, child := range st.children {
 			if child == nil {
 				continue
@@ -377,8 +378,9 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		st.children[0] = nil
 
 	case leafNode:
+		st.key = append(st.key, byte(16))
 		n := leafNodeEncoder{
-			Key: st.key,
+			Key: hexToCompactInPlace(st.key),
 			Val: st.val,
 		}
 		n.encode(t.h.encbuf)
