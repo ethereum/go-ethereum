@@ -7,12 +7,15 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
 )
+
+var _ = (*configMarshaling)(nil)
 
 // MarshalTOML marshals as TOML.
 func (c Config) MarshalTOML() (interface{}, error) {
@@ -28,11 +31,11 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		DatabaseCache           int
 		TrieCache               int
 		TrieTimeout             time.Duration
+		FilterLogCacheSize      int
 		Etherbase               common.Address `toml:",omitempty"`
 		MinerThreads            int            `toml:",omitempty"`
-		ExtraData               []byte         `toml:",omitempty"`
+		ExtraData               hexutil.Bytes  `toml:",omitempty"`
 		GasPrice                *big.Int
-		FilterLogCacheSize      int
 		Ethash                  ethash.Config
 		TxPool                  txpool.Config
 		GPO                     gasprice.Config
@@ -53,11 +56,11 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.DatabaseCache = c.DatabaseCache
 	enc.TrieCache = c.TrieCache
 	enc.TrieTimeout = c.TrieTimeout
+	enc.FilterLogCacheSize = c.FilterLogCacheSize
 	enc.Etherbase = c.Etherbase
 	enc.MinerThreads = c.MinerThreads
 	enc.ExtraData = c.ExtraData
 	enc.GasPrice = c.GasPrice
-	enc.FilterLogCacheSize = c.FilterLogCacheSize
 	enc.Ethash = c.Ethash
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
@@ -82,11 +85,11 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DatabaseCache           *int
 		TrieCache               *int
 		TrieTimeout             *time.Duration
+		FilterLogCacheSize      *int
 		Etherbase               *common.Address `toml:",omitempty"`
 		MinerThreads            *int            `toml:",omitempty"`
-		ExtraData               []byte          `toml:",omitempty"`
+		ExtraData               *hexutil.Bytes  `toml:",omitempty"`
 		GasPrice                *big.Int
-		FilterLogCacheSize      *int
 		Ethash                  *ethash.Config
 		TxPool                  *txpool.Config
 		GPO                     *gasprice.Config
@@ -132,6 +135,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.TrieTimeout != nil {
 		c.TrieTimeout = *dec.TrieTimeout
 	}
+	if dec.FilterLogCacheSize != nil {
+		c.FilterLogCacheSize = *dec.FilterLogCacheSize
+	}
 	if dec.Etherbase != nil {
 		c.Etherbase = *dec.Etherbase
 	}
@@ -139,13 +145,10 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		c.MinerThreads = *dec.MinerThreads
 	}
 	if dec.ExtraData != nil {
-		c.ExtraData = dec.ExtraData
+		c.ExtraData = *dec.ExtraData
 	}
 	if dec.GasPrice != nil {
 		c.GasPrice = dec.GasPrice
-	}
-	if dec.FilterLogCacheSize != nil {
-		c.FilterLogCacheSize = *dec.FilterLogCacheSize
 	}
 	if dec.Ethash != nil {
 		c.Ethash = *dec.Ethash

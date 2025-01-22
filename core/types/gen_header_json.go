@@ -31,6 +31,9 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		Extra       hexutil.Bytes  `json:"extraData"        gencodec:"required"`
 		MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
 		Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
+		Validators  []byte         `json:"validators"       gencodec:"required"`
+		Validator   []byte         `json:"validator"        gencodec:"required"`
+		Penalties   []byte         `json:"penalties"        gencodec:"required"`
 		BaseFee     *hexutil.Big   `json:"baseFeePerGas" rlp:"optional"`
 		Hash        common.Hash    `json:"hash"`
 	}
@@ -50,6 +53,9 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.Extra = h.Extra
 	enc.MixDigest = h.MixDigest
 	enc.Nonce = h.Nonce
+	enc.Validators = h.Validators
+	enc.Validator = h.Validator
+	enc.Penalties = h.Penalties
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee)
 	enc.Hash = h.Hash()
 	return json.Marshal(&enc)
@@ -73,6 +79,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		Extra       *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
 		MixDigest   *common.Hash    `json:"mixHash"          gencodec:"required"`
 		Nonce       *BlockNonce     `json:"nonce"            gencodec:"required"`
+		Validators  []byte          `json:"validators"       gencodec:"required"`
+		Validator   []byte          `json:"validator"        gencodec:"required"`
+		Penalties   []byte          `json:"penalties"        gencodec:"required"`
 		BaseFee     *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
 	}
 	var dec Header
@@ -139,6 +148,18 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'nonce' for Header")
 	}
 	h.Nonce = *dec.Nonce
+	if dec.Validators == nil {
+		return errors.New("missing required field 'validators' for Header")
+	}
+	h.Validators = dec.Validators
+	if dec.Validator == nil {
+		return errors.New("missing required field 'validator' for Header")
+	}
+	h.Validator = dec.Validator
+	if dec.Penalties == nil {
+		return errors.New("missing required field 'penalties' for Header")
+	}
+	h.Penalties = dec.Penalties
 	if dec.BaseFee != nil {
 		h.BaseFee = (*big.Int)(dec.BaseFee)
 	}

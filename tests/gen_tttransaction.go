@@ -14,6 +14,7 @@ import (
 
 var _ = (*ttTransactionMarshaling)(nil)
 
+// MarshalJSON marshals as JSON.
 func (t ttTransaction) MarshalJSON() ([]byte, error) {
 	type ttTransaction struct {
 		Data     hexutil.Bytes         `gencodec:"required"`
@@ -39,6 +40,7 @@ func (t ttTransaction) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&enc)
 }
 
+// UnmarshalJSON unmarshals from JSON.
 func (t *ttTransaction) UnmarshalJSON(input []byte) error {
 	type ttTransaction struct {
 		Data     *hexutil.Bytes        `gencodec:"required"`

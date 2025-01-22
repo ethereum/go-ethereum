@@ -4,6 +4,24 @@ package discv5
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[invalidEvent-0]
+	_ = x[pingPacket-1]
+	_ = x[pongPacket-2]
+	_ = x[findnodePacket-3]
+	_ = x[neighborsPacket-4]
+	_ = x[findnodeHashPacket-5]
+	_ = x[topicRegisterPacket-6]
+	_ = x[topicQueryPacket-7]
+	_ = x[topicNodesPacket-8]
+	_ = x[pongTimeout-265]
+	_ = x[pingTimeout-266]
+	_ = x[neighboursTimeout-267]
+}
+
 const (
 	_nodeEvent_name_0 = "invalidEventpingPacketpongPacketfindnodePacketneighborsPacketfindnodeHashPackettopicRegisterPackettopicQueryPackettopicNodesPacket"
 	_nodeEvent_name_1 = "pongTimeoutpingTimeoutneighboursTimeout"
