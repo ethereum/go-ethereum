@@ -17,9 +17,7 @@
 package t8ntool
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -130,9 +127,7 @@ type rejectedTx struct {
 }
 
 // Apply applies a set of transactions to a pre-state
-func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
-	txIt txIterator, miningReward int64,
-	getTracerFn func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error)) (*state.StateDB, *ExecutionResult, []byte, error) {
+func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, txIt txIterator, miningReward int64) (*state.StateDB, *ExecutionResult, []byte, error) {
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
@@ -241,23 +236,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 				continue
 			}
 		}
-		tracer, traceOutput, err := getTracerFn(txIndex, tx.Hash(), chainConfig)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		// TODO (rjl493456442) it's a bit weird to reset the tracer in the
-		// middle of block execution, please improve it somehow.
-		if tracer != nil {
-			evm.SetTracer(tracer.Hooks)
-		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
-
 		var (
 			snapshot = statedb.Snapshot()
 			prevGas  = gaspool.Gas()
 		)
-		if tracer != nil && tracer.OnTxStart != nil {
-			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
+			evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		// (ret []byte, usedGas uint64, failed bool, err error)
 		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
@@ -266,13 +251,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
-			if tracer != nil {
-				if tracer.OnTxEnd != nil {
-					tracer.OnTxEnd(nil, err)
-				}
-				if err := writeTraceResult(tracer, traceOutput); err != nil {
-					log.Warn("Error writing tracer output", "err", err)
-				}
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxEnd != nil {
+				evm.Config.Tracer.OnTxEnd(nil, err)
 			}
 			continue
 		}
@@ -316,13 +296,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			//receipt.BlockNumber
 			receipt.TransactionIndex = uint(txIndex)
 			receipts = append(receipts, receipt)
-			if tracer != nil {
-				if tracer.Hooks.OnTxEnd != nil {
-					tracer.Hooks.OnTxEnd(receipt, nil)
-				}
-				if err = writeTraceResult(tracer, traceOutput); err != nil {
-					log.Warn("Error writing tracer output", "err", err)
-				}
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxEnd != nil {
+				evm.Config.Tracer.OnTxEnd(receipt, nil)
 			}
 		}
 
@@ -467,17 +442,4 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 		Time:       parentTime,
 	}
 	return ethash.CalcDifficulty(config, currentTime, parent)
-}
-
-func writeTraceResult(tracer *tracers.Tracer, f io.WriteCloser) error {
-	defer f.Close()
-	result, err := tracer.GetResult()
-	if err != nil || result == nil {
-		return err
-	}
-	err = json.NewEncoder(f).Encode(result)
-	if err != nil {
-		return err
-	}
-	return nil
 }

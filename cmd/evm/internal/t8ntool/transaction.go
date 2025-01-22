@@ -64,12 +64,10 @@ func (r *result) MarshalJSON() ([]byte, error) {
 }
 
 func Transaction(ctx *cli.Context) error {
-	var (
-		err error
-	)
 	// We need to load the transactions. May be either in stdin input or in files.
 	// Check if anything needs to be read from stdin
 	var (
+		err         error
 		txStr       = ctx.String(InputTxsFlag.Name)
 		inputData   = &input{}
 		chainConfig *params.ChainConfig
@@ -82,6 +80,7 @@ func Transaction(ctx *cli.Context) error {
 	}
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
+
 	var body hexutil.Bytes
 	if txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
@@ -107,6 +106,7 @@ func Transaction(ctx *cli.Context) error {
 		}
 	}
 	signer := types.MakeSigner(chainConfig, new(big.Int), 0)
+
 	// We now have the transactions in 'body', which is supposed to be an
 	// rlp list of transactions
 	it, err := rlp.NewListIterator([]byte(body))

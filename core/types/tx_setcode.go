@@ -148,7 +148,7 @@ func (tx *SetCodeTx) copy() TxData {
 		AccessList: make(AccessList, len(tx.AccessList)),
 		AuthList:   make([]SetCodeAuthorization, len(tx.AuthList)),
 		Value:      new(uint256.Int),
-		ChainID:    tx.ChainID,
+		ChainID:    new(uint256.Int),
 		GasTipCap:  new(uint256.Int),
 		GasFeeCap:  new(uint256.Int),
 		V:          new(uint256.Int),
@@ -159,6 +159,9 @@ func (tx *SetCodeTx) copy() TxData {
 	copy(cpy.AuthList, tx.AuthList)
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
+	}
+	if tx.ChainID != nil {
+		cpy.ChainID.Set(tx.ChainID)
 	}
 	if tx.GasTipCap != nil {
 		cpy.GasTipCap.Set(tx.GasTipCap)
