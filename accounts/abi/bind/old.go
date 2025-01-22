@@ -21,6 +21,7 @@ package bind
 import (
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"io"
 	"math/big"
 
@@ -32,6 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Bind generates a v1 contract binding.
@@ -42,12 +45,152 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 // auth.go
 
+// ErrNoChainID is returned whenever the user failed to specify a chain id.
+var ErrNoChainID = errors.New("no chain id specified")
+
+// ErrNotAuthorized is returned when an account is not properly unlocked.
+var ErrNotAuthorized = bind2.ErrNotAuthorized
+
 // NewTransactor is a utility method to easily create a transaction signer from
 // an encrypted json key stream and the associated passphrase.
 //
 // Deprecated: Use NewTransactorWithChainID instead.
 func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
-	return bind2.NewTransactor(keyin, passphrase)
+	log.Warn("WARNING: NewTransactor has been deprecated in favour of NewTransactorWithChainID")
+	json, err := io.ReadAll(keyin)
+	if err != nil {
+		return nil, err
+	}
+	key, err := keystore.DecryptKey(json, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	return NewKeyedTransactor(key.PrivateKey), nil
+}
+
+// NewKeyStoreTransactor is a utility method to easily create a transaction signer from
+// a decrypted key from a keystore.
+//
+// Deprecated: Use NewKeyStoreTransactorWithChainID instead.
+func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
+	log.Warn("WARNING: NewKeyStoreTransactor has been deprecated in favour of NewTransactorWithChainID")
+	signer := types.HomesteadSigner{}
+	return &TransactOpts{
+		From: account.Address,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != account.Address {
+				return nil, ErrNotAuthorized
+			}
+			signature, err := keystore.SignHash(account, signer.Hash(tx).Bytes())
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+		Context: context.Background(),
+	}, nil
+}
+
+// NewKeyedTransactor is a utility method to easily create a transaction signer
+// from a single private key.
+//
+// Deprecated: Use NewKeyedTransactorWithChainID instead.
+func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
+	log.Warn("WARNING: NewKeyedTransactor has been deprecated in favour of NewKeyedTransactorWithChainID")
+	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
+	signer := types.HomesteadSigner{}
+	return &TransactOpts{
+		From: keyAddr,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != keyAddr {
+				return nil, ErrNotAuthorized
+			}
+			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), key)
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+		Context: context.Background(),
+	}
+}
+
+// NewTransactorWithChainID is a utility method to easily create a transaction signer from
+// an encrypted json key stream and the associated passphrase.
+func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.Int) (*TransactOpts, error) {
+	json, err := io.ReadAll(keyin)
+	if err != nil {
+		return nil, err
+	}
+	key, err := keystore.DecryptKey(json, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	return NewKeyedTransactorWithChainID(key.PrivateKey, chainID)
+}
+
+// NewKeyStoreTransactorWithChainID is a utility method to easily create a transaction signer from
+// a decrypted key from a keystore.
+func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
+	if chainID == nil {
+		return nil, ErrNoChainID
+	}
+	signer := types.LatestSignerForChainID(chainID)
+	return &TransactOpts{
+		From: account.Address,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != account.Address {
+				return nil, ErrNotAuthorized
+			}
+			signature, err := keystore.SignHash(account, signer.Hash(tx).Bytes())
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+		Context: context.Background(),
+	}, nil
+}
+
+// NewKeyedTransactorWithChainID is a utility method to easily create a transaction signer
+// from a single private key.
+func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) (*TransactOpts, error) {
+	if chainID == nil {
+		return nil, ErrNoChainID
+	}
+	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
+	signer := types.LatestSignerForChainID(chainID)
+	return &TransactOpts{
+		From: keyAddr,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != keyAddr {
+				return nil, ErrNotAuthorized
+			}
+			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), key)
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+		Context: context.Background(),
+	}, nil
+}
+
+// NewTransactor is a utility method to easily create a transaction signer from
+// an encrypted json key stream and the associated passphrase.
+//
+// Deprecated: Use NewTransactorWithChainID instead.
+func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
+	log.Warn("WARNING: NewTransactor has been deprecated in favour of NewTransactorWithChainID")
+	json, err := io.ReadAll(keyin)
+	if err != nil {
+		return nil, err
+	}
+	key, err := keystore.DecryptKey(json, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	return NewKeyedTransactor(key.PrivateKey), nil
 }
 
 // NewKeyedTransactor is a utility method to easily create a transaction signer
@@ -55,25 +198,57 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 //
 // Deprecated: Use NewKeyedTransactorWithChainID instead.
 func NewKeyedTransactor(key *ecdsa.PrivateKey) *bind2.TransactOpts {
-	return bind2.NewKeyedTransactor(key)
+	log.Warn("WARNING: NewKeyedTransactor has been deprecated in favour of NewKeyedTransactorWithChainID")
+	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
+	signer := types.HomesteadSigner{}
+	return &TransactOpts{
+		From: keyAddr,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != keyAddr {
+				return nil, ErrNotAuthorized
+			}
+			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), key)
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+		Context: context.Background(),
+	}
 }
 
 // NewTransactorWithChainID is a utility method to easily create a transaction signer from
 // an encrypted json key stream and the associated passphrase.
 func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.Int) (*TransactOpts, error) {
-	return bind2.NewTransactorWithChainID(keyin, passphrase, chainID)
+	json, err := io.ReadAll(keyin)
+	if err != nil {
+		return nil, err
+	}
+	key, err := keystore.DecryptKey(json, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	return NewKeyedTransactorWithChainID(key.PrivateKey, chainID)
 }
 
 // NewKeyStoreTransactorWithChainID is a utility method to easily create a transaction signer from
 // a decrypted key from a keystore.
 func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
-	return bind2.NewKeyStoreTransactorWithChainID(keystore, account, chainID)
+	// New version panics for chainID == nil, catch it here.
+	if chainID == nil {
+		return nil, ErrNoChainID
+	}
+	return bind2.NewKeyStoreTransactor(keystore, account, chainID), nil
 }
 
 // NewKeyedTransactorWithChainID is a utility method to easily create a transaction signer
 // from a single private key.
 func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) (*TransactOpts, error) {
-	return bind2.NewKeyedTransactorWithChainID(key, chainID)
+	// New version panics for chainID == nil, catch it here.
+	if chainID == nil {
+		return nil, ErrNoChainID
+	}
+	return bind2.NewKeyedTransactor(key, chainID), nil
 }
 
 // NewClefTransactor is a utility method to easily create a transaction signer
