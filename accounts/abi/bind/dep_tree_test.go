@@ -97,7 +97,7 @@ type linkTestCaseInput struct {
 // linkDeps will return a set of root dependencies and their sub-dependencies connected via the Deps field
 func linkDeps(deps map[string]*MetaData) []*MetaData {
 	roots := make(map[string]struct{})
-	for pattern, _ := range deps {
+	for pattern := range deps {
 		roots[pattern] = struct{}{}
 	}
 
@@ -106,7 +106,7 @@ func linkDeps(deps map[string]*MetaData) []*MetaData {
 		connectedDeps[pattern] = internalLinkDeps(*dep, deps, &roots) //nolint:all
 	}
 	rootMetadatas := []*MetaData{}
-	for pattern, _ := range roots {
+	for pattern := range roots {
 		dep := connectedDeps[pattern] //nolint:all
 		rootMetadatas = append(rootMetadatas, &dep)
 	}

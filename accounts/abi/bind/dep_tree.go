@@ -107,7 +107,7 @@ func (d *depTreeDeployer) linkAndDeploy(metadata *MetaData) (common.Address, err
 // result returns a result for this deployment, or an error if it failed.
 func (d *depTreeDeployer) result() *DeploymentResult {
 	// remove the override addresses from the resulting deployedAddrs
-	for pattern, _ := range d.deployedAddrs {
+	for pattern := range d.deployedAddrs {
 		if _, ok := d.deployerTxs[pattern]; !ok {
 			delete(d.deployedAddrs, pattern)
 		}
