@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/exp/maps"
@@ -68,8 +69,9 @@ const (
 	slotIndexSize    = common.HashLength + 5     // The length of encoded slot index
 	historyMetaSize  = 9 + 2*common.HashLength   // The length of encoded history meta
 
-	stateHistoryV0 = uint8(0) // initial version of state history structure
-	stateHistoryV1 = uint8(1) // use the storage slot raw key as the identifier instead of the key hash
+	stateHistoryV0 = uint8(0)       // initial version of state history structure
+	stateHistoryV1 = uint8(1)       // use the storage slot raw key as the identifier instead of the key hash
+	historyVersion = stateHistoryV1 // the default state history version
 )
 
 // Each state history entry is consisted of five elements:
@@ -258,9 +260,9 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map
 		slices.SortFunc(slist, common.Hash.Cmp)
 		storageList[addr] = slist
 	}
-	version := stateHistoryV0
-	if rawStorageKey {
-		version = stateHistoryV1
+	version := historyVersion
+	if !rawStorageKey {
+		version = stateHistoryV0
 	}
 	return &history{
 		meta: &meta{
@@ -274,6 +276,35 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map
 		storages:    storages,
 		storageList: storageList,
 	}
+}
+
+// stateSet returns the state set, keyed by the hash of the account address
+// and the hash of the storage slot key.
+func (h *history) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte) {
+	var (
+		buff     = crypto.NewKeccakState()
+		accounts = make(map[common.Hash][]byte)
+		storages = make(map[common.Hash]map[common.Hash][]byte)
+	)
+	for addr, blob := range h.accounts {
+		addrHash := crypto.HashData(buff, addr.Bytes())
+		accounts[addrHash] = blob
+
+		storage, exist := h.storages[addr]
+		if !exist {
+			continue
+		}
+		if h.meta.version == stateHistoryV0 {
+			storages[addrHash] = storage
+		} else {
+			subset := make(map[common.Hash][]byte)
+			for key, slot := range storage {
+				subset[crypto.HashData(buff, key.Bytes())] = slot
+			}
+			storages[addrHash] = subset
+		}
+	}
+	return accounts, storages
 }
 
 // encode serializes the state history and returns four byte streams represent

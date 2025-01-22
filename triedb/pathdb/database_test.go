@@ -73,10 +73,10 @@ const (
 
 type genctx struct {
 	stateRoot     common.Hash
-	accounts      map[common.Hash][]byte
-	storages      map[common.Hash]map[common.Hash][]byte
-	accountOrigin map[common.Address][]byte
-	storageOrigin map[common.Address]map[common.Hash][]byte
+	accounts      map[common.Hash][]byte                    // Keyed by the hash of account address
+	storages      map[common.Hash]map[common.Hash][]byte    // Keyed by the hash of account address and the hash of storage key
+	accountOrigin map[common.Address][]byte                 // Keyed by the account address
+	storageOrigin map[common.Address]map[common.Hash][]byte // Keyed by the account address and the hash of storage key
 	nodes         *trienode.MergedNodeSet
 }
 
@@ -113,22 +113,23 @@ type tester struct {
 	preimages map[common.Hash][]byte
 
 	// current state set
-	accounts map[common.Hash][]byte
-	storages map[common.Hash]map[common.Hash][]byte
+	accounts map[common.Hash][]byte                 // Keyed by the hash of account address
+	storages map[common.Hash]map[common.Hash][]byte // Keyed by the hash of account address and the hash of storage key
 
 	// state snapshots
-	snapAccounts map[common.Hash]map[common.Hash][]byte
-	snapStorages map[common.Hash]map[common.Hash]map[common.Hash][]byte
+	snapAccounts map[common.Hash]map[common.Hash][]byte                 // Keyed by the hash of account address
+	snapStorages map[common.Hash]map[common.Hash]map[common.Hash][]byte // Keyed by the hash of account address and the hash of storage key
 }
 
-func newTester(t *testing.T, historyLimit uint64, isVerkle bool) *tester {
+func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int) *tester {
 	var (
 		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 		db      = New(disk, &Config{
 			StateHistory:    historyLimit,
-			CleanCacheSize:  16 * 1024,
-			WriteBufferSize: 16 * 1024,
+			CleanCacheSize:  256 * 1024,
+			WriteBufferSize: 256 * 1024,
 		}, isVerkle)
+
 		obj = &tester{
 			db:           db,
 			preimages:    make(map[common.Hash][]byte),
@@ -138,7 +139,7 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool) *tester {
 			snapStorages: make(map[common.Hash]map[common.Hash]map[common.Hash][]byte),
 		}
 	)
-	for i := 0; i < 12; i++ {
+	for i := 0; i < layers; i++ {
 		var parent = types.EmptyRootHash
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
@@ -264,11 +265,11 @@ func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, 
 			addr := testrand.Address()
 			addrHash := crypto.Keccak256Hash(addr.Bytes())
 
-			// short circuit if the account was already existent
+			// Short circuit if the account was already existent
 			if _, ok := t.accounts[addrHash]; ok {
 				continue
 			}
-			// short circuit if the account has been modified within the same transition
+			// Short circuit if the account has been modified within the same transition
 			if _, ok := dirties[addrHash]; ok {
 				continue
 			}
@@ -448,7 +449,7 @@ func TestDatabaseRollback(t *testing.T) {
 	}()
 
 	// Verify state histories
-	tester := newTester(t, 0, false)
+	tester := newTester(t, 0, false, 32)
 	defer tester.release()
 
 	if err := tester.verifyHistory(); err != nil {
@@ -482,7 +483,7 @@ func TestDatabaseRecoverable(t *testing.T) {
 	}()
 
 	var (
-		tester = newTester(t, 0, false)
+		tester = newTester(t, 0, false, 12)
 		index  = tester.bottomIndex()
 	)
 	defer tester.release()
@@ -526,7 +527,7 @@ func TestDisable(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false)
+	tester := newTester(t, 0, false, 32)
 	defer tester.release()
 
 	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
@@ -568,7 +569,7 @@ func TestCommit(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false)
+	tester := newTester(t, 0, false, 12)
 	defer tester.release()
 
 	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
@@ -598,7 +599,7 @@ func TestJournal(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false)
+	tester := newTester(t, 0, false, 12)
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -628,7 +629,7 @@ func TestCorruptedJournal(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0, false)
+	tester := newTester(t, 0, false, 12)
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -676,7 +677,7 @@ func TestTailTruncateHistory(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 10, false)
+	tester := newTester(t, 10, false, 12)
 	defer tester.release()
 
 	tester.db.Close()
