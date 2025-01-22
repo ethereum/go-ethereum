@@ -8,7 +8,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -17,7 +17,6 @@ import (
 var (
 	_ = errors.New
 	_ = big.NewInt
-	_ = bind.Bind
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
@@ -55,13 +54,19 @@ var (
 	}
 
 	// New{{.Type}} creates a new instance of {{.Type}}.
-	func New{{.Type}}() (*{{.Type}}, error) {
+	func New{{.Type}}() *{{.Type}} {
 		parsed, err := {{.Type}}MetaData.GetAbi()
 		if err != nil {
-			return nil, err
+			panic(errors.New("invalid ABI: " + err.Error()))
 		}
-		return &{{.Type}}{abi: *parsed}, nil
+		return &{{.Type}}{abi: *parsed}
 	}
+
+    // Instance creates a wrapper for a deployed contract instance at the given address.
+    // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+    func (c *{{.Type}}) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+         return bind.NewContractInstance(backend, addr, c.abi)
+    }
 
     {{ if .Constructor.Inputs }}
 	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
