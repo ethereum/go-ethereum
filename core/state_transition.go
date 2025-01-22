@@ -374,7 +374,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.gas -= gas
 
 	// Check clause 6
-	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) {
+	// Note: If this is an L1MessageTx, we will not return a top-level ErrInsufficientFundsForTransfer.
+	// Instead, we return ErrInsufficientBalance from within st.evm.Call. This means that such transactions
+	// will revert but they can be included in a valid block. This is necessary for supporting enforced txs.
+	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) && !msg.IsL1MessageTx() {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From().Hex())
 	}
 
