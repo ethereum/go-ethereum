@@ -89,27 +89,28 @@ type WatchOpts struct {
 
 // MetaData collects all metadata for a bound contract.
 type MetaData struct {
-	mu      sync.Mutex
 	Sigs    map[string]string
 	Bin     string
 	ABI     string
-	ab      *abi.ABI
 	Pattern string
 	Deps    []*MetaData
+
+	mu        sync.Mutex
+	parsedABI *abi.ABI
 }
 
 func (m *MetaData) GetAbi() (*abi.ABI, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.ab != nil {
-		return m.ab, nil
+	if m.parsedABI != nil {
+		return m.parsedABI, nil
 	}
 	if parsed, err := abi.JSON(strings.NewReader(m.ABI)); err != nil {
 		return nil, err
 	} else {
-		m.ab = &parsed
+		m.parsedABI = &parsed
 	}
-	return m.ab, nil
+	return m.parsedABI, nil
 }
 
 // BoundContract is the base wrapper object that reflects a contract on the
