@@ -17,6 +17,8 @@
 package bind
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	bind1 "github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -34,7 +36,7 @@ type ContractInstance struct {
 	abi     abi.ABI
 }
 
-func NewContractInstance(addr common.Address, backend ContractBackend, abi abi.ABI) ContractInstance {
+func NewContractInstance(backend ContractBackend, addr common.Address, abi abi.ABI) ContractInstance {
 	return ContractInstance{addr, backend, abi}
 }
 
@@ -169,8 +171,11 @@ func Transact(instance ContractInstance, opts *TransactOpts, input []byte) (*typ
 	return c.RawTransact(opts, input)
 }
 
-// Call performs an eth_call on the given bound contract instance, using the
-// provided abi-encoded input (or nil).
+// Call performs an eth_call on the given bound contract instance, using the provided
+// ABI-encoded input.
+//
+// To call a function that doesn't return any output, pass nil as the unpack function.
+// This can be useful if you just want to check that the function doesn't revert.
 func Call[T any](instance ContractInstance, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
 	backend := instance.Backend
@@ -178,6 +183,12 @@ func Call[T any](instance ContractInstance, opts *CallOpts, packedInput []byte, 
 	packedOutput, err := c.CallRaw(opts, packedInput)
 	if err != nil {
 		return defaultResult, err
+	}
+	if unpack == nil {
+		if len(packedOutput) > 0 {
+			return defaultResult, errors.New("contract returned data, but no unpack function was given")
+		}
+		return defaultResult, nil
 	}
 	res, err := unpack(packedOutput)
 	if err != nil {
