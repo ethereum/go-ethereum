@@ -58,7 +58,7 @@ func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account
 
 // NewKeyedTransactor is a utility method to easily create a transaction signer
 // from a single private key.
-func NewKeyedTransactor(key *ecdsa.PrivateKey, chainID *big.Int) (*TransactOpts, error) {
+func NewKeyedTransactor(key *ecdsa.PrivateKey, chainID *big.Int) *TransactOpts {
 	if chainID == nil {
 		panic("nil chainID")
 	}
