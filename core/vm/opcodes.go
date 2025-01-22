@@ -449,6 +449,7 @@ var stringToOp = map[string]OpCode{
 	"TIMESTAMP":      TIMESTAMP,
 	"NUMBER":         NUMBER,
 	"DIFFICULTY":     DIFFICULTY,
+	"PREVRANDAO":     PREVRANDAO,
 	"GASLIMIT":       GASLIMIT,
 	"SELFBALANCE":    SELFBALANCE,
 	"BASEFEE":        BASEFEE,

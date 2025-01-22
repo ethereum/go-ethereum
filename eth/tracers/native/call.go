@@ -48,17 +48,28 @@ type callFrame struct {
 
 type callTracer struct {
 	callstack []callFrame
+	config    callTracerConfig
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
 }
 
+type callTracerConfig struct {
+	OnlyTopCall bool `json:"onlyTopCall"` // If true, call tracer won't collect any subcalls
+}
+
 // NewCallTracer returns a native go tracer which tracks
 // call frames of a tx, and implements vm.EVMLogger.
-func NewCallTracer() tracers.Tracer {
+func NewCallTracer(cfg json.RawMessage) (tracers.Tracer, error) {
+	var config callTracerConfig
+	if cfg != nil {
+		if err := json.Unmarshal(cfg, &config); err != nil {
+			return nil, err
+		}
+	}
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	t := &callTracer{callstack: make([]callFrame, 1)}
-	return t
+	t := &callTracer{callstack: make([]callFrame, 1), config: config}
+	return t, nil
 }
 
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
@@ -94,9 +105,13 @@ func (t *callTracer) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 }
 
 func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	if t.config.OnlyTopCall {
+		return
+	}
 	// Skip if tracing was interrupted
 	if atomic.LoadUint32(&t.interrupt) > 0 {
 		// TODO: env.Cancel()
+
 		return
 	}
 
@@ -112,6 +127,9 @@ func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 }
 
 func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+	if t.config.OnlyTopCall {
+		return
+	}
 	size := len(t.callstack)
 	if size <= 1 {
 		return
