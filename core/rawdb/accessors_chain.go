@@ -90,11 +90,33 @@ func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadHeadHeaderHash retrieves the hash of the current canonical head block's
+// header. The difference between this and GetHeadBlockHash is that whereas the
+// last block hash is only updated upon a full block import, the last header
+// hash is updated already at header import, allowing head tracking for the
+// light synchronization mechanism.
+func ReadHeadHeaderHash(db ethdb.Reader) common.Hash {
+	data, _ := db.Get(headHeaderKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
 // WriteHeadHeaderHash stores the hash of the current canonical head header.
 func WriteHeadHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
 		log.Crit("Failed to store last header's hash", "err", err)
 	}
+}
+
+// ReadHeadBlockHash retrieves the hash of the current canonical head block.
+func ReadHeadBlockHash(db ethdb.KeyValueReader) common.Hash {
+	data, _ := db.Get(headBlockKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
 }
 
 // WriteHeadBlockHash stores the head block's hash.
@@ -104,11 +126,42 @@ func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// ReadHeadFastBlockHash retrieves the hash of the current canonical head block during
+// fast synchronization. The difference between this and GetHeadBlockHash is that
+// whereas the last block hash is only updated upon a full block import, the last
+// fast hash is updated when importing pre-processed blocks.
+func ReadHeadFastBlockHash(db ethdb.KeyValueReader) common.Hash {
+	data, _ := db.Get(headFastBlockKey)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	return common.BytesToHash(data)
+}
+
 // WriteHeadFastBlockHash stores the hash of the current fast-sync head block.
 func WriteHeadFastBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headFastBlockKey, hash.Bytes()); err != nil {
 		log.Crit("Failed to store last fast block's hash", "err", err)
 	}
+}
+
+// ReadFastTrieProgress retrieves the number of tries nodes fast synced to allow
+// reportinc correct numbers across restarts.
+func ReadFastTrieProgress(db ethdb.KeyValueReader) uint64 {
+	data, _ := db.Get(trieSyncKey)
+	if len(data) == 0 {
+		return 0
+	}
+	return new(big.Int).SetBytes(data).Uint64()
+}
+
+// WriteFastTrieProgress stores the fast sync trie process counter to support
+// retrieving it across restarts.
+func WriteFastTrieProgress(db ethdb.KeyValueWriter, count uint64) error {
+	if err := db.Put(trieSyncKey, new(big.Int).SetUint64(count).Bytes()); err != nil {
+		log.Crit("Failed to store fast sync trie progress", "err", err)
+	}
+	return nil
 }
 
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
@@ -236,6 +289,18 @@ func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp 
 	}
 }
 
+// HasBody verifies the existence of a block body corresponding to the hash.
+func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
+	//TODO: need to add isCanon check
+	// if isCanon(db, number, hash) {
+	// 	return true
+	// }
+	if has, err := db.Has(blockBodyKey(number, hash)); !has || err != nil {
+		return false
+	}
+	return true
+}
+
 // ReadBody retrieves the block body corresponding to the hash.
 func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
 	data := ReadBodyRLP(db, hash, number)
@@ -264,6 +329,21 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(blockBodyKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block body", "err", err)
 	}
+}
+
+// ReadTd retrieves a block's total difficulty corresponding to the hash, nil if
+// none found.
+func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) *big.Int {
+	data, _ := db.Get(headerTDKey(number, hash))
+	if len(data) == 0 {
+		return nil
+	}
+	td := new(big.Int)
+	if err := rlp.Decode(bytes.NewReader(data), td); err != nil {
+		log.Error("Invalid block total difficulty RLP", "hash", hash, "err", err)
+		return nil
+	}
+	return td
 }
 
 // WriteTd stores the total difficulty of a block into the database.
@@ -471,8 +551,36 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 	return logs
 }
 
+// ReadBlock retrieves an entire block corresponding to the hash, assembling it
+// back from the stored header and body. If either the header or body could not
+// be retrieved nil is returned.
+//
+// Note, due to concurrent download of header and block body the header and thus
+// canonical hash can be stored in the database but the body data not (yet).
+func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
+	// Retrieve the block header and body contents
+	header := ReadHeader(db, hash, number)
+	if header == nil {
+		return nil
+	}
+	body := ReadBody(db, hash, number)
+	if body == nil {
+		return nil
+	}
+	// Reassemble the block and return
+	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles)
+}
+
 // WriteBlock serializes a block into the database, header and body separately.
 func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
 	WriteHeader(db, block.Header())
+}
+
+// DeleteBlock removes all block data associated with a hash.
+func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	DeleteReceipts(db, hash, number)
+	DeleteHeader(db, hash, number)
+	DeleteBody(db, hash, number)
+	DeleteTd(db, hash, number)
 }

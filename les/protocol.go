@@ -27,7 +27,7 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/crypto/secp256k1"
@@ -225,6 +225,6 @@ type proofsData [][]rlp.RawValue
 
 type txStatus struct {
 	Status txpool.TxStatus
-	Lookup *core.TxLookupEntry `rlp:"nil"`
+	Lookup *rawdb.TxLookupEntry `rlp:"nil"`
 	Error  string
 }

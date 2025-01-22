@@ -60,18 +60,25 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 	var hash common.Hash
 	var num uint64
 	if blockNr == rpc.LatestBlockNumber {
-		hash = core.GetHeadBlockHash(b.db)
-		num = core.GetBlockNumber(b.db, hash)
+		hash = rawdb.ReadHeadBlockHash(b.db)
+		number := rawdb.ReadHeaderNumber(b.db, hash)
+		if number == nil {
+			return nil, nil
+		}
+		num = *number
 	} else {
 		num = uint64(blockNr)
-		hash = core.GetCanonicalHash(b.db, num)
+		hash = rawdb.ReadCanonicalHash(b.db, num)
 	}
-	return core.GetHeader(b.db, hash, num), nil
+	return rawdb.ReadHeader(b.db, hash, num), nil
 }
 
 func (b *testBackend) HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error) {
-	num := core.GetBlockNumber(b.db, blockHash)
-	return core.GetHeader(b.db, blockHash, num), nil
+	number := rawdb.ReadHeaderNumber(b.db, blockHash)
+	if number == nil {
+		return nil, nil
+	}
+	return rawdb.ReadHeader(b.db, blockHash, *number), nil
 }
 
 func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
@@ -82,8 +89,11 @@ func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
-	number := core.GetBlockNumber(b.db, blockHash)
-	return core.GetBlockReceipts(b.db, blockHash, number), nil
+
+	if number := rawdb.ReadHeaderNumber(b.db, blockHash); number != nil {
+		return rawdb.ReadReceipts(b.db, blockHash, *number, params.TestChainConfig), nil
+	}
+	return nil, nil
 }
 
 func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
@@ -136,8 +146,8 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 				task.Bitsets = make([][]byte, len(task.Sections))
 				for i, section := range task.Sections {
 					if rand.Int()%4 != 0 { // Handle occasional missing deliveries
-						head := core.GetCanonicalHash(b.db, (section+1)*params.BloomBitsBlocks-1)
-						task.Bitsets[i], _ = core.GetBloomBits(b.db, task.Bit, section, head)
+						head := rawdb.ReadCanonicalHash(b.db, (section+1)*params.BloomBitsBlocks-1)
+						task.Bitsets[i], _ = rawdb.ReadBloomBits(b.db, task.Bit, section, head)
 					}
 				}
 				request <- task
