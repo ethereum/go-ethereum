@@ -27,10 +27,8 @@ import (
 // TestImportRaw tests clef --importraw
 func TestImportRaw(t *testing.T) {
 	t.Parallel()
-	keyPath := filepath.Join(os.TempDir(), fmt.Sprintf("%v-tempkey.test", t.Name()))
-	_ = os.WriteFile(keyPath, []byte("0102030405060708090a0102030405060708090a0102030405060708090a0102"), 0777)
-
-	t.Cleanup(func() { os.Remove(keyPath) })
+	keyPath := filepath.Join(t.TempDir(), fmt.Sprintf("%v-tempkey.test", t.Name()))
+	os.WriteFile(keyPath, []byte("0102030405060708090a0102030405060708090a0102030405060708090a0102"), 0777)
 
 	t.Run("happy-path", func(t *testing.T) {
 		t.Parallel()
@@ -72,10 +70,8 @@ func TestImportRaw(t *testing.T) {
 // TestListAccounts tests clef --list-accounts
 func TestListAccounts(t *testing.T) {
 	t.Parallel()
-	keyPath := filepath.Join(os.TempDir(), fmt.Sprintf("%v-tempkey.test", t.Name()))
-	_ = os.WriteFile(keyPath, []byte("0102030405060708090a0102030405060708090a0102030405060708090a0102"), 0777)
-
-	t.Cleanup(func() { os.Remove(keyPath) })
+	keyPath := filepath.Join(t.TempDir(), fmt.Sprintf("%v-tempkey.test", t.Name()))
+	os.WriteFile(keyPath, []byte("0102030405060708090a0102030405060708090a0102030405060708090a0102"), 0777)
 
 	t.Run("no-accounts", func(t *testing.T) {
 		t.Parallel()
@@ -102,10 +98,8 @@ func TestListAccounts(t *testing.T) {
 // TestListWallets tests clef --list-wallets
 func TestListWallets(t *testing.T) {
 	t.Parallel()
-	keyPath := filepath.Join(os.TempDir(), fmt.Sprintf("%v-tempkey.test", t.Name()))
-	_ = os.WriteFile(keyPath, []byte("0102030405060708090a0102030405060708090a0102030405060708090a0102"), 0777)
-
-	t.Cleanup(func() { os.Remove(keyPath) })
+	keyPath := filepath.Join(t.TempDir(), fmt.Sprintf("%v-tempkey.test", t.Name()))
+	os.WriteFile(keyPath, []byte("0102030405060708090a0102030405060708090a0102030405060708090a0102"), 0777)
 
 	t.Run("no-accounts", func(t *testing.T) {
 		t.Parallel()

@@ -33,11 +33,9 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -376,10 +374,10 @@ func geth(ctx *cli.Context) error {
 	}
 
 	prepare(ctx)
-	stack, backend := makeFullNode(ctx)
+	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	startNode(ctx, stack, backend, false)
+	startNode(ctx, stack, false)
 	stack.Wait()
 
 	return nil
@@ -388,7 +386,7 @@ func geth(ctx *cli.Context) error {
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
-func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isConsole bool) {
+func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	// Start up the node itself
 	utils.StartNode(ctx, stack, isConsole)
 
@@ -464,24 +462,28 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 		}()
 	}
 
-	// Start auxiliary services if enabled
-	if ctx.Bool(utils.MiningEnabledFlag.Name) {
-		// Mining only makes sense if a full Ethereum node is running
-		if ctx.String(utils.SyncModeFlag.Name) == "light" {
-			utils.Fatalf("Light clients do not support mining")
-		}
+	// POS-2798 - We don't really use cmd/geth for cli purposes
+	// And to maintain compatibility with the future upstream merges,
+	// we are removing the backend ethapi.Backend param from the function signature
 
-		ethBackend, ok := backend.(*eth.EthAPIBackend)
-		if !ok {
-			utils.Fatalf("Ethereum service not running")
-		}
-		// Set the gas price to the limits from the CLI and start mining
-		gasprice := flags.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
-		ethBackend.TxPool().SetGasTip(gasprice)
-		if err := ethBackend.StartMining(); err != nil {
-			utils.Fatalf("Failed to start mining: %v", err)
-		}
-	}
+	// Start auxiliary services if enabled
+	// if ctx.Bool(utils.MiningEnabledFlag.Name) {
+	// 	// Mining only makes sense if a full Ethereum node is running
+	// 	if ctx.String(utils.SyncModeFlag.Name) == "light" {
+	// 		utils.Fatalf("Light clients do not support mining")
+	// 	}
+
+	// 	ethBackend, ok := backend.(*eth.EthAPIBackend)
+	// 	if !ok {
+	// 		utils.Fatalf("Ethereum service not running")
+	// 	}
+	// 	// Set the gas price to the limits from the CLI and start mining
+	// 	gasprice := flags.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
+	// 	ethBackend.TxPool().SetGasTip(gasprice)
+	// 	if err := ethBackend.StartMining(); err != nil {
+	// 		utils.Fatalf("Failed to start mining: %v", err)
+	// 	}
+	// }
 }
 
 // unlockAccounts unlocks any account specifically requested.
