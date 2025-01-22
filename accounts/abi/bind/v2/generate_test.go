@@ -23,12 +23,14 @@ import (
 	"strings"
 	"testing"
 
-	bind1 "github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/abigen"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// Run go generate to recreate the test bindings.
+//
 //go:generate go run github.com/ethereum/go-ethereum/cmd/abigen -v2 -combined-json internal/contracts/db/combined-abi.json -type DBStats -pkg db -out internal/contracts/db/bindings.go
 //go:generate go run github.com/ethereum/go-ethereum/cmd/abigen -v2 -combined-json internal/contracts/events/combined-abi.json -type C -pkg events -out internal/contracts/events/bindings.go
 //go:generate go run github.com/ethereum/go-ethereum/cmd/abigen -v2 -combined-json internal/contracts/nested_libraries/combined-abi.json -type C1 -pkg nested_libraries -out internal/contracts/nested_libraries/bindings.go
@@ -84,7 +86,7 @@ func TestBindingGeneration(t *testing.T) {
 			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36] // the first 2 chars are 0x
 			libs[libPattern] = typeName
 		}
-		code, err := bind1.BindV2(types, abis, bins, dir, libs, make(map[string]string))
+		code, err := abigen.BindV2(types, abis, bins, dir, libs, make(map[string]string))
 		if err != nil {
 			t.Fatalf("error creating bindings for package %s: %v", dir, err)
 		}

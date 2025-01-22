@@ -1,7 +1,22 @@
-package bind
+// Copyright 2024 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package abigen
 
 import (
-	_ "embed"
 	"fmt"
 	"os"
 	"strings"
@@ -249,7 +264,7 @@ var bindTests2 = []bindV2Test{
 // that no mutations occurred compared to the expected output included under internal/convertedv1bindtests.
 func TestBindingV2ConvertedV1Tests(t *testing.T) {
 	for _, tc := range bindTests2 {
-		fname := fmt.Sprintf("v2/internal/convertedv1bindtests/%v.go", strings.ToLower(tc.name))
+		fname := fmt.Sprintf("testdata/v2/%v.go.txt", strings.ToLower(tc.name))
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.types == nil {
 				tc.types = []string{tc.name}

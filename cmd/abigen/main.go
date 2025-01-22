@@ -24,7 +24,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/abigen"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -88,10 +88,10 @@ func init() {
 		aliasFlag,
 		v2Flag,
 	}
-	app.Action = abigen
+	app.Action = generate
 }
 
-func abigen(c *cli.Context) error {
+func generate(c *cli.Context) error {
 	utils.CheckExclusive(c, abiFlag, jsonFlag) // Only one source can be selected.
 
 	if c.String(pkgFlag.Name) == "" {
@@ -213,9 +213,9 @@ func abigen(c *cli.Context) error {
 		err  error
 	)
 	if c.IsSet(v2Flag.Name) {
-		code, err = bind.BindV2(types, abis, bins, c.String(pkgFlag.Name), libs, aliases)
+		code, err = abigen.BindV2(types, abis, bins, c.String(pkgFlag.Name), libs, aliases)
 	} else {
-		code, err = bind.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), libs, aliases)
+		code, err = abigen.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), libs, aliases)
 	}
 	if err != nil {
 		utils.Fatalf("Failed to generate ABI binding: %v", err)

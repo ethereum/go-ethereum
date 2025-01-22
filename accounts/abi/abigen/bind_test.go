@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package bind
+package abigen
 
 import (
 	"fmt"
@@ -2079,13 +2079,15 @@ func TestBindings(t *testing.T) {
 	if !common.FileExist(gocmd) {
 		t.Skip("go sdk not found for testing")
 	}
-	// Create a temporary workspace for the test suite
-	ws := t.TempDir()
 
+	// Create a temporary workspace for the test suite
+	ws, _ := os.MkdirTemp("", "abigen")
 	pkg := filepath.Join(ws, "bindtest")
 	if err := os.MkdirAll(pkg, 0700); err != nil {
 		t.Fatalf("failed to create package: %v", err)
 	}
+	t.Log("tmpdir", pkg)
+
 	// Generate the test suite for all the contracts
 	for i, tt := range bindTests {
 		t.Run(tt.name, func(t *testing.T) {
