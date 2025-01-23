@@ -328,14 +328,6 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if err := op.AppendRaw(ChainFreezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to Freezer: %v", err)
 			}
-			// TODO (rjl493456442) TD has been deprecated and write garbage data for
-			// backward compatibility. See https://github.com/ethereum/go-ethereum/pull/30744/.
-			//
-			// The TD freezer table is retained for backward compatibility within this
-			// major version (1.14.x) and will be discarded in the next major version.
-			if err := op.Append(ChainFreezerDifficultyTable, number, common.Big0); err != nil {
-				return fmt.Errorf("can't write td to Freezer: %v", err)
-			}
 			hashes = append(hashes, hash)
 		}
 		return nil

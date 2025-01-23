@@ -726,14 +726,6 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	if err := op.Append(ChainFreezerReceiptTable, num, receipts); err != nil {
 		return fmt.Errorf("can't append block %d receipts: %v", num, err)
 	}
-	// TODO (rjl493456442) TD has been deprecated and write garbage data for
-	// backward compatibility. See https://github.com/ethereum/go-ethereum/pull/30744/.
-	//
-	// The TD freezer table is retained for backward compatibility within this
-	// major version (1.14.x) and will be discarded in the next major version.
-	if err := op.Append(ChainFreezerDifficultyTable, num, common.Big0); err != nil {
-		return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
-	}
 	return nil
 }
 
