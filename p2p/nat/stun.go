@@ -56,9 +56,13 @@ func newSTUN(serverAddr string) (Interface, error) {
 
 func (s stun) String() string {
 	if len(s.serverList) == 1 {
-		return fmt.Sprintf("STUN(%s)", s.serverList[0])
+		return fmt.Sprintf("stun:%s", s.serverList[0])
 	}
-	return "STUN"
+	return "stun"
+}
+
+func (s stun) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
 }
 
 func (stun) SupportsMapping() bool {
