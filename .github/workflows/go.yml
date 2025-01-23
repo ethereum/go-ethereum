@@ -17,6 +17,11 @@ jobs:
         with:
           go-version: 1.23.0
           cache: false
+      - name: Lint
+        run: go run build/ci.go lint
+        env:
+          GOOS: linux
+          GOARCH: 386
       - name: Run tests
         run: go test -short ./...
         env:
