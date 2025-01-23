@@ -1,3 +1,4 @@
+{{- /* -*- indent-tabs-mode: t -*- */ -}}
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
@@ -62,13 +63,13 @@ var (
 		return &{{.Type}}{abi: *parsed}
 	}
 
-    // Instance creates a wrapper for a deployed contract instance at the given address.
-    // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
-    func (c *{{.Type}}) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
-         return bind.NewContractInstance(backend, addr, c.abi)
-    }
+	// Instance creates a wrapper for a deployed contract instance at the given address.
+	// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+	func (c *{{.Type}}) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+		 return bind.NewContractInstance(backend, addr, c.abi)
+	}
 
-    {{ if .Constructor.Inputs }}
+	{{ if .Constructor.Inputs }}
 	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
 		res, _ := {{ decapitalise $contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
 		return res
