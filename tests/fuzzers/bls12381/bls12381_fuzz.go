@@ -396,7 +396,7 @@ func multiExpG1Gnark(gs []gnark.G1Affine, scalars []fr.Element) gnark.G1Affine {
 	return res
 }
 
-// multiExpG1Gnark is a naive implementation of G1 multi-exponentiation
+// multiExpG2Gnark is a naive implementation of G2 multi-exponentiation
 func multiExpG2Gnark(gs []gnark.G2Affine, scalars []fr.Element) gnark.G2Affine {
 	res := gnark.G2Affine{}
 	for i := 0; i < len(gs); i++ {
