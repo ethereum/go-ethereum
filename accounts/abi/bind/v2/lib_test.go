@@ -126,10 +126,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		}
 	}
 
-	doInput, err := c.PackDo(big.NewInt(1))
-	if err != nil {
-		t.Fatalf("pack function input err: %v\n", doInput)
-	}
+	doInput := c.PackDo(big.NewInt(1))
 	contractAddr := res.Addrs[nested_libraries.C1MetaData.Pattern]
 	callOpts := &bind.CallOpts{From: common.Address{}, Context: context.Background()}
 	instance := c.Instance(bindBackend, contractAddr)
@@ -192,11 +189,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 
 	// call the deployed contract and make sure it returns the correct result
-	doInput, err := c.PackDo(big.NewInt(1))
-	if err != nil {
-		t.Fatalf("pack function input err: %v\n", doInput)
-	}
-
+	doInput := c.PackDo(big.NewInt(1))
 	instance := c.Instance(bindBackend, res.Addrs[nested_libraries.C1MetaData.Pattern])
 	callOpts := new(bind.CallOpts)
 	internalCallCount, err := bind.Call(instance, callOpts, doInput, c.UnpackDo)
@@ -243,7 +236,7 @@ func TestEvents(t *testing.T) {
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
 
-	packedInput, _ := c.PackEmitMulti()
+	packedInput := c.PackEmitMulti()
 	tx, err := bind.Transact(instance, txAuth, packedInput)
 	if err != nil {
 		t.Fatalf("failed to send transaction: %v", err)
@@ -327,7 +320,7 @@ func TestErrors(t *testing.T) {
 
 	c := solc_errors.NewC()
 	instance := c.Instance(backend, res.Addrs[solc_errors.CMetaData.Pattern])
-	packedInput, _ := c.PackFoo()
+	packedInput := c.PackFoo()
 	opts := &bind.CallOpts{From: res.Addrs[solc_errors.CMetaData.Pattern]}
 	_, err = bind.Call[struct{}](instance, opts, packedInput, nil)
 	if err == nil {
