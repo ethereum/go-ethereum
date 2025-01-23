@@ -450,7 +450,7 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 					return fmt.Errorf("export failed on #%d: receipts not found", n)
 				}
 				td.Add(td, block.Difficulty())
-				if err := w.Add(block, receipts, td); err != nil {
+				if err := w.Add(block, receipts, new(big.Int).Set(td)); err != nil {
 					return err
 				}
 			}
