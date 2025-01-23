@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	 "github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 // Verify that Client implements the ethereum interfaces.
@@ -684,4 +685,62 @@ func ExampleRevertErrorData() {
 	// Output:
 	// revert: 08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a75736572206572726f72
 	// message: user error
+}
+
+func TestTracing(t *testing.T) {
+	rpcClient := getRPCClient(t)
+	client := NewClient(rpcClient)
+
+	t.Run("TraceTransaction", func(t *testing.T) {
+		txHash := testTx1.Hash()
+
+		result, err := client.TraceTransaction(context.Background(), txHash.Hex())
+		if err != nil {
+			t.Fatalf("Failed to trace transaction: %v", err)
+		}
+
+		assert.NotNil(t, result, "Trace result should not be nil")
+		t.Logf("Trace Transaction Result: %+v", result)
+	})
+
+	t.Run("TraceCall", func(t *testing.T) {
+		callArgs := map[string]interface{}{
+			"from": testAddr,
+			"to":   revertContractAddr,
+			"data": revertCode,
+		}
+
+		result, err := client.TraceCall(context.Background(), callArgs)
+		if err != nil {
+			t.Fatalf("Failed to trace call: %v", err)
+		}
+
+		assert.NotNil(t, result, "Trace result should not be nil")
+		t.Logf("Trace Call Result: %+v", result)
+	})
+
+	t.Run("TraceBlock", func(t *testing.T) {
+		blockHash := common.HexToHash(testKey)
+
+		result, err := client.TraceBlock(context.Background(), blockHash.Hex())
+		if err != nil {
+			t.Fatalf("Failed to trace block: %v", err)
+		}
+
+		assert.NotNil(t, result, "Trace result should not be nil")
+		t.Logf("Trace Block Result: %+v", result)
+	})
+
+	t.Run("TraceChain", func(t *testing.T) {
+		blockHash := common.HexToHash(testKey)
+		count := 10
+
+		result, err := client.TraceChain(context.Background(), blockHash.Hex(), count)
+		if err != nil {
+			t.Fatalf("Failed to trace chain: %v", err)
+		}
+
+		assert.NotNil(t, result, "Trace result should not be nil")
+		t.Logf("Trace Chain Result: %+v", result)
+	})
 }
