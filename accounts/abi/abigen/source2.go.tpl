@@ -71,8 +71,11 @@ var (
 
 	{{ if .Constructor.Inputs }}
 	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
-		res, _ := {{ decapitalise $contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
-		return res
+		enc, err := {{ decapitalise $contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
+		if err != nil {
+		   panic(err)
+		}
+		return enc
 	}
 	{{ end -}}
 
