@@ -66,6 +66,13 @@ func (c *Client) TraceCall(ctx context.Context, callArgs interface{}) (*tracers.
 	return &result, err
 }
 
+// TraceTransaction: fetches a specific transaction
+func (c *Client) TraceTransaction(ctx context.Context, txHash string) (*tracers.TraceResult, error) {
+    var result tracers.TraceResult
+    err := c.rpcClient.CallContext(ctx, &result, "debug_traceTransaction", txHash, nil)
+    return &result, err
+}
+
 
 // Close closes the underlying RPC connection.
 func (ec *Client) Close() {
