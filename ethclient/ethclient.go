@@ -50,10 +50,22 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	return NewClient(c), nil
 }
 
+type Client struct {
+	rpcClient *rpc.Client
+}
+
 // NewClient creates a client that uses the given RPC client.
 func NewClient(c *rpc.Client) *Client {
 	return &Client{c}
 }
+
+// TraceCall: for call operation
+func (c *Client) TraceCall(ctx context.Context, callArgs interface{}) (*tracers.TraceResult, error) {
+	var result tracers.TraceResult
+	err := c.rpcClient.CallContext(ctx, &result, "debug_traceCall", callArgs)
+	return &result, err
+}
+
 
 // Close closes the underlying RPC connection.
 func (ec *Client) Close() {
