@@ -73,6 +73,20 @@ func (c *Client) TraceTransaction(ctx context.Context, txHash string) (*tracers.
     return &result, err
 }
 
+// TraceBlock: fetches the trace for a specific block
+func (c *Client) TraceBlock(ctx context.Context, blockHash string) (*tracers.TraceResult, error) {
+    var result tracers.TraceResult
+    err := c.rpcClient.CallContext(ctx, &result, "debug_traceBlock", blockHash)
+    return &result, err
+}
+
+// TraceChain: fetches the trace for a chain
+func (c *Client) TraceChain(ctx context.Context, blockHash string, count int) ([]*tracers.TraceResult, error) {
+    var result []*tracers.TraceResult
+    err := c.rpcClient.CallContext(ctx, &result, "debug_traceChain", blockHash, count)
+    return result, err
+}
+
 
 // Close closes the underlying RPC connection.
 func (ec *Client) Close() {
