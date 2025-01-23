@@ -25,8 +25,9 @@ import (
 )
 
 const (
-	freezerTableV1 = 1 // Initial version of metadata struct
-	freezerTableV2 = 2 // Add field: 'flushOffset'
+	freezerTableV1 = 1              // Initial version of metadata struct
+	freezerTableV2 = 2              // Add field: 'flushOffset'
+	freezerVersion = freezerTableV2 // The current used version
 )
 
 // freezerTableMeta is a collection of additional properties that describe the
@@ -164,7 +165,7 @@ func (m *freezerTableMeta) write(sync bool) error {
 		Offset  uint64
 	}
 	var o obj
-	o.Version = freezerTableV2 // forcibly set it to v2
+	o.Version = freezerVersion // forcibly use the current version
 	o.Tail = m.virtualTail
 	o.Offset = m.flushOffset
 

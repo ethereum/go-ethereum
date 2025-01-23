@@ -210,7 +210,7 @@ func (batch *freezerTableBatch) commit() error {
 	// Periodically sync the table, todo (rjl493456442) make it configurable?
 	if time.Since(batch.t.lastSync) > 30*time.Second {
 		batch.t.lastSync = time.Now()
-		return batch.t.syncWithNoLock()
+		return batch.t.Sync()
 	}
 	return nil
 }

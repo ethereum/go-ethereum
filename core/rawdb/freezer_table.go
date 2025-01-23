@@ -320,7 +320,7 @@ func (t *freezerTable) repair() error {
 			// offset is updated, leaving a dangling reference that points to a position
 			// outside the file. If so, the offset will be reset to the new end of the
 			// file during the next run.
-			if t.metadata.flushOffset < uint64(newOffset) {
+			if t.metadata.flushOffset > uint64(newOffset) {
 				if err := t.metadata.setFlushOffset(uint64(newOffset), true); err != nil {
 					return err
 				}
