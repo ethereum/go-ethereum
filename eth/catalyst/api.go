@@ -1303,7 +1303,8 @@ func validateRequests(requests [][]byte) error {
 			return fmt.Errorf("empty request: %v", req)
 		}
 		// Check that requests are ordered by their type.
-		if req[0] < last {
+		// Each type must appear only once.
+		if req[0] <= last {
 			return fmt.Errorf("invalid request order: %v", req)
 		}
 		last = req[0]
