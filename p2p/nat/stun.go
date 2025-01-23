@@ -34,6 +34,8 @@ var stunDefaultServers string
 
 const requestLimit = 3
 
+var errSTUNFailed = errors.New("STUN requests failed")
+
 type stun struct {
 	serverList []string
 }
@@ -80,7 +82,7 @@ func (s *stun) ExternalIP() (net.IP, error) {
 		}
 		return ip, nil
 	}
-	return nil, errors.New("STUN requests failed")
+	return nil, errSTUNFailed
 }
 
 func (s *stun) randomServers(n int) []string {

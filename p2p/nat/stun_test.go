@@ -15,9 +15,10 @@ func TestNatStun(t *testing.T) {
 
 func TestUnreachedNatServer(t *testing.T) {
 	stun := &stun{
-		serverList: []string{"1.2.3.4:1234", "1.2.3.4:1234", "1.2.3.4:1234"},
+		serverList: []string{"198.51.100.2:1234", "198.51.100.5"},
 	}
-	stun.serverList = append(stun.serverList, stunDefaultServerList...)
 	_, err := stun.ExternalIP()
-	assert.NoError(t, err)
+	if err != errSTUNFailed {
+		t.Fatal("wrong error:", err)
+	}
 }

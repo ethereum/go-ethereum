@@ -18,6 +18,7 @@ package nat
 
 import (
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,7 +71,7 @@ func TestParseStun(t *testing.T) {
 		natStr string
 		want   *stun
 	}{
-		{"stun:default", &stun{serverList: stunDefaultServerList}},
+		{"stun:default", &stun{serverList: strings.Split(stunDefaultServers, "\n")}},
 		{"stun:1.2.3.4:1234", &stun{serverList: []string{"1.2.3.4:1234"}}},
 	}
 
