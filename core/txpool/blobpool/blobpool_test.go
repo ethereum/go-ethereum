@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/holiman/billy"
+	"github.com/holiman/uint256"
 	"github.com/tenderly/binance-geth/common"
 	"github.com/tenderly/binance-geth/consensus/misc/eip1559"
 	"github.com/tenderly/binance-geth/consensus/misc/eip4844"
@@ -43,14 +45,12 @@ import (
 	"github.com/tenderly/binance-geth/log"
 	"github.com/tenderly/binance-geth/params"
 	"github.com/tenderly/binance-geth/rlp"
-	"github.com/holiman/billy"
-	"github.com/holiman/uint256"
 )
 
 var (
 	emptyBlob          = kzg4844.Blob{}
-	emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
-	emptyBlobProof, _  = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+	emptyBlobCommit, _ = kzg4844.BlobToCommitment(&emptyBlob)
+	emptyBlobProof, _  = kzg4844.ComputeBlobProof(&emptyBlob, emptyBlobCommit)
 	emptyBlobVHash     = blobHash(emptyBlobCommit)
 )
 

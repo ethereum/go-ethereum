@@ -56,12 +56,12 @@ func testKZGWithPoint(t *testing.T, ckzg bool) {
 
 	blob := randBlob()
 
-	commitment, err := BlobToCommitment(blob)
+	commitment, err := BlobToCommitment(&blob)
 	if err != nil {
 		t.Fatalf("failed to create KZG commitment from blob: %v", err)
 	}
 	point := randFieldElement()
-	proof, claim, err := ComputeProof(blob, point)
+	proof, claim, err := ComputeProof(&blob, point)
 	if err != nil {
 		t.Fatalf("failed to create KZG proof at point: %v", err)
 	}
@@ -81,15 +81,15 @@ func testKZGWithBlob(t *testing.T, ckzg bool) {
 
 	blob := randBlob()
 
-	commitment, err := BlobToCommitment(blob)
+	commitment, err := BlobToCommitment(&blob)
 	if err != nil {
 		t.Fatalf("failed to create KZG commitment from blob: %v", err)
 	}
-	proof, err := ComputeBlobProof(blob, commitment)
+	proof, err := ComputeBlobProof(&blob, commitment)
 	if err != nil {
 		t.Fatalf("failed to create KZG proof for blob: %v", err)
 	}
-	if err := VerifyBlobProof(blob, commitment, proof); err != nil {
+	if err := VerifyBlobProof(&blob, commitment, proof); err != nil {
 		t.Fatalf("failed to verify KZG proof for blob: %v", err)
 	}
 }
@@ -107,7 +107,7 @@ func benchmarkBlobToCommitment(b *testing.B, ckzg bool) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		BlobToCommitment(blob)
+		BlobToCommitment(&blob)
 	}
 }
 
@@ -127,7 +127,7 @@ func benchmarkComputeProof(b *testing.B, ckzg bool) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ComputeProof(blob, point)
+		ComputeProof(&blob, point)
 	}
 }
 
@@ -143,8 +143,8 @@ func benchmarkVerifyProof(b *testing.B, ckzg bool) {
 	var (
 		blob            = randBlob()
 		point           = randFieldElement()
-		commitment, _   = BlobToCommitment(blob)
-		proof, claim, _ = ComputeProof(blob, point)
+		commitment, _   = BlobToCommitment(&blob)
+		proof, claim, _ = ComputeProof(&blob, point)
 	)
 
 	b.ResetTimer()
@@ -164,12 +164,12 @@ func benchmarkComputeBlobProof(b *testing.B, ckzg bool) {
 
 	var (
 		blob          = randBlob()
-		commitment, _ = BlobToCommitment(blob)
+		commitment, _ = BlobToCommitment(&blob)
 	)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ComputeBlobProof(blob, commitment)
+		ComputeBlobProof(&blob, commitment)
 	}
 }
 
@@ -184,12 +184,12 @@ func benchmarkVerifyBlobProof(b *testing.B, ckzg bool) {
 
 	var (
 		blob          = randBlob()
-		commitment, _ = BlobToCommitment(blob)
-		proof, _      = ComputeBlobProof(blob, commitment)
+		commitment, _ = BlobToCommitment(&blob)
+		proof, _      = ComputeBlobProof(&blob, commitment)
 	)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		VerifyBlobProof(blob, commitment, proof)
+		VerifyBlobProof(&blob, commitment, proof)
 	}
 }
