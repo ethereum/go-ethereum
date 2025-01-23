@@ -52,22 +52,34 @@ func (c *NumericMethodName) Instance(backend bind.ContractBackend, addr common.A
 // E1test is a free data retrieval call binding the contract method 0xffa02795.
 //
 // Solidity: function _1test() pure returns()
-func (numericMethodName *NumericMethodName) PackE1test() ([]byte, error) {
-	return numericMethodName.abi.Pack("_1test")
+func (numericMethodName *NumericMethodName) PackE1test() []byte {
+	enc, err := numericMethodName.abi.Pack("_1test")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // E1test0 is a free data retrieval call binding the contract method 0xd02767c7.
 //
 // Solidity: function __1test() pure returns()
-func (numericMethodName *NumericMethodName) PackE1test0() ([]byte, error) {
-	return numericMethodName.abi.Pack("__1test")
+func (numericMethodName *NumericMethodName) PackE1test0() []byte {
+	enc, err := numericMethodName.abi.Pack("__1test")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // E2test is a free data retrieval call binding the contract method 0x9d993132.
 //
 // Solidity: function __2test() pure returns()
-func (numericMethodName *NumericMethodName) PackE2test() ([]byte, error) {
-	return numericMethodName.abi.Pack("__2test")
+func (numericMethodName *NumericMethodName) PackE2test() []byte {
+	enc, err := numericMethodName.abi.Pack("__2test")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // NumericMethodNameE1TestEvent represents a E1TestEvent event raised by the NumericMethodName contract.

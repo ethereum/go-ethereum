@@ -52,8 +52,12 @@ func (c *Underscorer) Instance(backend bind.ContractBackend, addr common.Address
 // AllPurelyUnderscoredOutput is a free data retrieval call binding the contract method 0xb564b34d.
 //
 // Solidity: function AllPurelyUnderscoredOutput() view returns(int256 _, int256 __)
-func (underscorer *Underscorer) PackAllPurelyUnderscoredOutput() ([]byte, error) {
-	return underscorer.abi.Pack("AllPurelyUnderscoredOutput")
+func (underscorer *Underscorer) PackAllPurelyUnderscoredOutput() []byte {
+	enc, err := underscorer.abi.Pack("AllPurelyUnderscoredOutput")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type AllPurelyUnderscoredOutputOutput struct {
@@ -80,8 +84,12 @@ func (underscorer *Underscorer) UnpackAllPurelyUnderscoredOutput(data []byte) (A
 // LowerLowerCollision is a free data retrieval call binding the contract method 0xe409ca45.
 //
 // Solidity: function LowerLowerCollision() view returns(int256 _res, int256 res)
-func (underscorer *Underscorer) PackLowerLowerCollision() ([]byte, error) {
-	return underscorer.abi.Pack("LowerLowerCollision")
+func (underscorer *Underscorer) PackLowerLowerCollision() []byte {
+	enc, err := underscorer.abi.Pack("LowerLowerCollision")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type LowerLowerCollisionOutput struct {
@@ -108,8 +116,12 @@ func (underscorer *Underscorer) UnpackLowerLowerCollision(data []byte) (LowerLow
 // LowerUpperCollision is a free data retrieval call binding the contract method 0x03a59213.
 //
 // Solidity: function LowerUpperCollision() view returns(int256 _res, int256 Res)
-func (underscorer *Underscorer) PackLowerUpperCollision() ([]byte, error) {
-	return underscorer.abi.Pack("LowerUpperCollision")
+func (underscorer *Underscorer) PackLowerUpperCollision() []byte {
+	enc, err := underscorer.abi.Pack("LowerUpperCollision")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type LowerUpperCollisionOutput struct {
@@ -136,8 +148,12 @@ func (underscorer *Underscorer) UnpackLowerUpperCollision(data []byte) (LowerUpp
 // PurelyUnderscoredOutput is a free data retrieval call binding the contract method 0x9df48485.
 //
 // Solidity: function PurelyUnderscoredOutput() view returns(int256 _, int256 res)
-func (underscorer *Underscorer) PackPurelyUnderscoredOutput() ([]byte, error) {
-	return underscorer.abi.Pack("PurelyUnderscoredOutput")
+func (underscorer *Underscorer) PackPurelyUnderscoredOutput() []byte {
+	enc, err := underscorer.abi.Pack("PurelyUnderscoredOutput")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type PurelyUnderscoredOutputOutput struct {
@@ -164,8 +180,12 @@ func (underscorer *Underscorer) UnpackPurelyUnderscoredOutput(data []byte) (Pure
 // UnderscoredOutput is a free data retrieval call binding the contract method 0x67e6633d.
 //
 // Solidity: function UnderscoredOutput() view returns(int256 _int, string _string)
-func (underscorer *Underscorer) PackUnderscoredOutput() ([]byte, error) {
-	return underscorer.abi.Pack("UnderscoredOutput")
+func (underscorer *Underscorer) PackUnderscoredOutput() []byte {
+	enc, err := underscorer.abi.Pack("UnderscoredOutput")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type UnderscoredOutputOutput struct {
@@ -192,8 +212,12 @@ func (underscorer *Underscorer) UnpackUnderscoredOutput(data []byte) (Underscore
 // UpperLowerCollision is a free data retrieval call binding the contract method 0xaf7486ab.
 //
 // Solidity: function UpperLowerCollision() view returns(int256 _Res, int256 res)
-func (underscorer *Underscorer) PackUpperLowerCollision() ([]byte, error) {
-	return underscorer.abi.Pack("UpperLowerCollision")
+func (underscorer *Underscorer) PackUpperLowerCollision() []byte {
+	enc, err := underscorer.abi.Pack("UpperLowerCollision")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type UpperLowerCollisionOutput struct {
@@ -220,8 +244,12 @@ func (underscorer *Underscorer) UnpackUpperLowerCollision(data []byte) (UpperLow
 // UpperUpperCollision is a free data retrieval call binding the contract method 0xe02ab24d.
 //
 // Solidity: function UpperUpperCollision() view returns(int256 _Res, int256 Res)
-func (underscorer *Underscorer) PackUpperUpperCollision() ([]byte, error) {
-	return underscorer.abi.Pack("UpperUpperCollision")
+func (underscorer *Underscorer) PackUpperUpperCollision() []byte {
+	enc, err := underscorer.abi.Pack("UpperUpperCollision")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type UpperUpperCollisionOutput struct {
@@ -248,8 +276,12 @@ func (underscorer *Underscorer) UnpackUpperUpperCollision(data []byte) (UpperUpp
 // UnderScoredFunc is a free data retrieval call binding the contract method 0x46546dbe.
 //
 // Solidity: function _under_scored_func() view returns(int256 _int)
-func (underscorer *Underscorer) PackUnderScoredFunc() ([]byte, error) {
-	return underscorer.abi.Pack("_under_scored_func")
+func (underscorer *Underscorer) PackUnderScoredFunc() []byte {
+	enc, err := underscorer.abi.Pack("_under_scored_func")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (underscorer *Underscorer) UnpackUnderScoredFunc(data []byte) (*big.Int, error) {

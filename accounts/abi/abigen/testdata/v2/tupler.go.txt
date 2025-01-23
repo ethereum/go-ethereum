@@ -52,8 +52,12 @@ func (c *Tupler) Instance(backend bind.ContractBackend, addr common.Address) bin
 // Tuple is a free data retrieval call binding the contract method 0x3175aae2.
 //
 // Solidity: function tuple() returns(string a, int256 b, bytes32 c)
-func (tupler *Tupler) PackTuple() ([]byte, error) {
-	return tupler.abi.Pack("tuple")
+func (tupler *Tupler) PackTuple() []byte {
+	enc, err := tupler.abi.Pack("tuple")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type TupleOutput struct {

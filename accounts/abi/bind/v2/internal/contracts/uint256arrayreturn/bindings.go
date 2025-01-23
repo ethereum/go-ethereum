@@ -52,8 +52,12 @@ func (c *MyContract) Instance(backend bind.ContractBackend, addr common.Address)
 // GetNums is a free data retrieval call binding the contract method 0xbd6d1007.
 //
 // Solidity: function GetNums() pure returns(uint256[5])
-func (myContract *MyContract) PackGetNums() ([]byte, error) {
-	return myContract.abi.Pack("GetNums")
+func (myContract *MyContract) PackGetNums() []byte {
+	enc, err := myContract.abi.Pack("GetNums")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (myContract *MyContract) UnpackGetNums(data []byte) ([5]*big.Int, error) {

@@ -52,8 +52,12 @@ func (c *IdentifierCollision) Instance(backend bind.ContractBackend, addr common
 // MyVar is a free data retrieval call binding the contract method 0x4ef1f0ad.
 //
 // Solidity: function MyVar() view returns(uint256)
-func (identifierCollision *IdentifierCollision) PackMyVar() ([]byte, error) {
-	return identifierCollision.abi.Pack("MyVar")
+func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
+	enc, err := identifierCollision.abi.Pack("MyVar")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (identifierCollision *IdentifierCollision) UnpackMyVar(data []byte) (*big.Int, error) {
@@ -72,8 +76,12 @@ func (identifierCollision *IdentifierCollision) UnpackMyVar(data []byte) (*big.I
 // PubVar is a free data retrieval call binding the contract method 0x01ad4d87.
 //
 // Solidity: function _myVar() view returns(uint256)
-func (identifierCollision *IdentifierCollision) PackPubVar() ([]byte, error) {
-	return identifierCollision.abi.Pack("_myVar")
+func (identifierCollision *IdentifierCollision) PackPubVar() []byte {
+	enc, err := identifierCollision.abi.Pack("_myVar")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (identifierCollision *IdentifierCollision) UnpackPubVar(data []byte) (*big.Int, error) {

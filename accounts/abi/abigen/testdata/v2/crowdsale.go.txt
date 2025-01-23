@@ -50,15 +50,22 @@ func (c *Crowdsale) Instance(backend bind.ContractBackend, addr common.Address) 
 }
 
 func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, fundingGoalInEthers *big.Int, durationInMinutes *big.Int, etherCostOfEachToken *big.Int, addressOfTokenUsedAsReward common.Address) []byte {
-	res, _ := crowdsale.abi.Pack("", ifSuccessfulSendTo, fundingGoalInEthers, durationInMinutes, etherCostOfEachToken, addressOfTokenUsedAsReward)
-	return res
+	enc, err := crowdsale.abi.Pack("", ifSuccessfulSendTo, fundingGoalInEthers, durationInMinutes, etherCostOfEachToken, addressOfTokenUsedAsReward)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // AmountRaised is a free data retrieval call binding the contract method 0x7b3e5e7b.
 //
 // Solidity: function amountRaised() returns(uint256)
-func (crowdsale *Crowdsale) PackAmountRaised() ([]byte, error) {
-	return crowdsale.abi.Pack("amountRaised")
+func (crowdsale *Crowdsale) PackAmountRaised() []byte {
+	enc, err := crowdsale.abi.Pack("amountRaised")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (crowdsale *Crowdsale) UnpackAmountRaised(data []byte) (*big.Int, error) {
@@ -77,8 +84,12 @@ func (crowdsale *Crowdsale) UnpackAmountRaised(data []byte) (*big.Int, error) {
 // Beneficiary is a free data retrieval call binding the contract method 0x38af3eed.
 //
 // Solidity: function beneficiary() returns(address)
-func (crowdsale *Crowdsale) PackBeneficiary() ([]byte, error) {
-	return crowdsale.abi.Pack("beneficiary")
+func (crowdsale *Crowdsale) PackBeneficiary() []byte {
+	enc, err := crowdsale.abi.Pack("beneficiary")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (crowdsale *Crowdsale) UnpackBeneficiary(data []byte) (common.Address, error) {
@@ -97,15 +108,23 @@ func (crowdsale *Crowdsale) UnpackBeneficiary(data []byte) (common.Address, erro
 // CheckGoalReached is a free data retrieval call binding the contract method 0x01cb3b20.
 //
 // Solidity: function checkGoalReached() returns()
-func (crowdsale *Crowdsale) PackCheckGoalReached() ([]byte, error) {
-	return crowdsale.abi.Pack("checkGoalReached")
+func (crowdsale *Crowdsale) PackCheckGoalReached() []byte {
+	enc, err := crowdsale.abi.Pack("checkGoalReached")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // Deadline is a free data retrieval call binding the contract method 0x29dcb0cf.
 //
 // Solidity: function deadline() returns(uint256)
-func (crowdsale *Crowdsale) PackDeadline() ([]byte, error) {
-	return crowdsale.abi.Pack("deadline")
+func (crowdsale *Crowdsale) PackDeadline() []byte {
+	enc, err := crowdsale.abi.Pack("deadline")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
@@ -124,8 +143,12 @@ func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
 // Funders is a free data retrieval call binding the contract method 0xdc0d3dff.
 //
 // Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
-func (crowdsale *Crowdsale) PackFunders(Arg0 *big.Int) ([]byte, error) {
-	return crowdsale.abi.Pack("funders", Arg0)
+func (crowdsale *Crowdsale) PackFunders(Arg0 *big.Int) []byte {
+	enc, err := crowdsale.abi.Pack("funders", Arg0)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type FundersOutput struct {
@@ -152,8 +175,12 @@ func (crowdsale *Crowdsale) UnpackFunders(data []byte) (FundersOutput, error) {
 // FundingGoal is a free data retrieval call binding the contract method 0x7a3a0e84.
 //
 // Solidity: function fundingGoal() returns(uint256)
-func (crowdsale *Crowdsale) PackFundingGoal() ([]byte, error) {
-	return crowdsale.abi.Pack("fundingGoal")
+func (crowdsale *Crowdsale) PackFundingGoal() []byte {
+	enc, err := crowdsale.abi.Pack("fundingGoal")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (crowdsale *Crowdsale) UnpackFundingGoal(data []byte) (*big.Int, error) {
@@ -172,8 +199,12 @@ func (crowdsale *Crowdsale) UnpackFundingGoal(data []byte) (*big.Int, error) {
 // Price is a free data retrieval call binding the contract method 0xa035b1fe.
 //
 // Solidity: function price() returns(uint256)
-func (crowdsale *Crowdsale) PackPrice() ([]byte, error) {
-	return crowdsale.abi.Pack("price")
+func (crowdsale *Crowdsale) PackPrice() []byte {
+	enc, err := crowdsale.abi.Pack("price")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (crowdsale *Crowdsale) UnpackPrice(data []byte) (*big.Int, error) {
@@ -192,8 +223,12 @@ func (crowdsale *Crowdsale) UnpackPrice(data []byte) (*big.Int, error) {
 // TokenReward is a free data retrieval call binding the contract method 0x6e66f6e9.
 //
 // Solidity: function tokenReward() returns(address)
-func (crowdsale *Crowdsale) PackTokenReward() ([]byte, error) {
-	return crowdsale.abi.Pack("tokenReward")
+func (crowdsale *Crowdsale) PackTokenReward() []byte {
+	enc, err := crowdsale.abi.Pack("tokenReward")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (crowdsale *Crowdsale) UnpackTokenReward(data []byte) (common.Address, error) {

@@ -52,6 +52,10 @@ func (c *RangeKeyword) Instance(backend bind.ContractBackend, addr common.Addres
 // FunctionWithKeywordParameter is a free data retrieval call binding the contract method 0x527a119f.
 //
 // Solidity: function functionWithKeywordParameter(uint256 range) pure returns()
-func (rangeKeyword *RangeKeyword) PackFunctionWithKeywordParameter(Arg0 *big.Int) ([]byte, error) {
-	return rangeKeyword.abi.Pack("functionWithKeywordParameter", Arg0)
+func (rangeKeyword *RangeKeyword) PackFunctionWithKeywordParameter(Arg0 *big.Int) []byte {
+	enc, err := rangeKeyword.abi.Pack("functionWithKeywordParameter", Arg0)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }

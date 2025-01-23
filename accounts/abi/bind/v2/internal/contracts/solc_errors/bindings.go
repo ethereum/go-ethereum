@@ -52,15 +52,23 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) bind.Con
 // Bar is a free data retrieval call binding the contract method 0xb0a378b0.
 //
 // Solidity: function Bar() pure returns()
-func (c *C) PackBar() ([]byte, error) {
-	return c.abi.Pack("Bar")
+func (c *C) PackBar() []byte {
+	enc, err := c.abi.Pack("Bar")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // Foo is a free data retrieval call binding the contract method 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
-func (c *C) PackFoo() ([]byte, error) {
-	return c.abi.Pack("Foo")
+func (c *C) PackFoo() []byte {
+	enc, err := c.abi.Pack("Foo")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (c *C) UnpackError(raw []byte) any {
@@ -150,8 +158,12 @@ func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) bind.Co
 // Foo is a free data retrieval call binding the contract method 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
-func (c2 *C2) PackFoo() ([]byte, error) {
-	return c2.abi.Pack("Foo")
+func (c2 *C2) PackFoo() []byte {
+	enc, err := c2.abi.Pack("Foo")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (c2 *C2) UnpackError(raw []byte) any {

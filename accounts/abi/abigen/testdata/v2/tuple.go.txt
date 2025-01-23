@@ -77,8 +77,12 @@ func (c *Tuple) Instance(backend bind.ContractBackend, addr common.Address) bind
 // Func1 is a free data retrieval call binding the contract method 0x443c79b4.
 //
 // Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])
-func (tuple *Tuple) PackFunc1(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) ([]byte, error) {
-	return tuple.abi.Pack("func1", A, B, C, D, E)
+func (tuple *Tuple) PackFunc1(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) []byte {
+	enc, err := tuple.abi.Pack("func1", A, B, C, D, E)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type Func1Output struct {
@@ -114,15 +118,23 @@ func (tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 // Func2 is a free data retrieval call binding the contract method 0xd0062cdd.
 //
 // Solidity: function func2((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) returns()
-func (tuple *Tuple) PackFunc2(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) ([]byte, error) {
-	return tuple.abi.Pack("func2", A, B, C, D, E)
+func (tuple *Tuple) PackFunc2(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) []byte {
+	enc, err := tuple.abi.Pack("func2", A, B, C, D, E)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // Func3 is a free data retrieval call binding the contract method 0xe4d9a43b.
 //
 // Solidity: function func3((uint16,uint16)[] ) pure returns()
-func (tuple *Tuple) PackFunc3(Arg0 []TupleQ) ([]byte, error) {
-	return tuple.abi.Pack("func3", Arg0)
+func (tuple *Tuple) PackFunc3(Arg0 []TupleQ) []byte {
+	enc, err := tuple.abi.Pack("func3", Arg0)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // TupleTupleEvent represents a TupleEvent event raised by the Tuple contract.

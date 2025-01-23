@@ -52,8 +52,12 @@ func (c *Getter) Instance(backend bind.ContractBackend, addr common.Address) bin
 // Getter is a free data retrieval call binding the contract method 0x993a04b7.
 //
 // Solidity: function getter() returns(string, int256, bytes32)
-func (getter *Getter) PackGetter() ([]byte, error) {
-	return getter.abi.Pack("getter")
+func (getter *Getter) PackGetter() []byte {
+	enc, err := getter.abi.Pack("getter")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type GetterOutput struct {

@@ -57,8 +57,12 @@ func (c *Structs) Instance(backend bind.ContractBackend, addr common.Address) bi
 // F is a free data retrieval call binding the contract method 0x28811f59.
 //
 // Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
-func (structs *Structs) PackF() ([]byte, error) {
-	return structs.abi.Pack("F")
+func (structs *Structs) PackF() []byte {
+	enc, err := structs.abi.Pack("F")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type FOutput struct {
@@ -88,8 +92,12 @@ func (structs *Structs) UnpackF(data []byte) (FOutput, error) {
 // G is a free data retrieval call binding the contract method 0x6fecb623.
 //
 // Solidity: function G() view returns((bytes32)[] a)
-func (structs *Structs) PackG() ([]byte, error) {
-	return structs.abi.Pack("G")
+func (structs *Structs) PackG() []byte {
+	enc, err := structs.abi.Pack("G")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (structs *Structs) UnpackG(data []byte) ([]Struct0, error) {

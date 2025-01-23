@@ -52,8 +52,12 @@ func (c *DeeplyNestedArray) Instance(backend bind.ContractBackend, addr common.A
 // DeepUint64Array is a free data retrieval call binding the contract method 0x98ed1856.
 //
 // Solidity: function deepUint64Array(uint256 , uint256 , uint256 ) view returns(uint64)
-func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(Arg0 *big.Int, Arg1 *big.Int, Arg2 *big.Int) ([]byte, error) {
-	return deeplyNestedArray.abi.Pack("deepUint64Array", Arg0, Arg1, Arg2)
+func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(Arg0 *big.Int, Arg1 *big.Int, Arg2 *big.Int) []byte {
+	enc, err := deeplyNestedArray.abi.Pack("deepUint64Array", Arg0, Arg1, Arg2)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (deeplyNestedArray *DeeplyNestedArray) UnpackDeepUint64Array(data []byte) (uint64, error) {
@@ -72,8 +76,12 @@ func (deeplyNestedArray *DeeplyNestedArray) UnpackDeepUint64Array(data []byte) (
 // RetrieveDeepArray is a free data retrieval call binding the contract method 0x8ed4573a.
 //
 // Solidity: function retrieveDeepArray() view returns(uint64[3][4][5])
-func (deeplyNestedArray *DeeplyNestedArray) PackRetrieveDeepArray() ([]byte, error) {
-	return deeplyNestedArray.abi.Pack("retrieveDeepArray")
+func (deeplyNestedArray *DeeplyNestedArray) PackRetrieveDeepArray() []byte {
+	enc, err := deeplyNestedArray.abi.Pack("retrieveDeepArray")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (deeplyNestedArray *DeeplyNestedArray) UnpackRetrieveDeepArray(data []byte) ([5][4][3]uint64, error) {
@@ -92,6 +100,10 @@ func (deeplyNestedArray *DeeplyNestedArray) UnpackRetrieveDeepArray(data []byte)
 // StoreDeepUintArray is a free data retrieval call binding the contract method 0x34424855.
 //
 // Solidity: function storeDeepUintArray(uint64[3][4][5] arr) returns()
-func (deeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(Arr [5][4][3]uint64) ([]byte, error) {
-	return deeplyNestedArray.abi.Pack("storeDeepUintArray", Arr)
+func (deeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(Arr [5][4][3]uint64) []byte {
+	enc, err := deeplyNestedArray.abi.Pack("storeDeepUintArray", Arr)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }

@@ -52,6 +52,10 @@ func (c *CallbackParam) Instance(backend bind.ContractBackend, addr common.Addre
 // Test is a free data retrieval call binding the contract method 0xd7a5aba2.
 //
 // Solidity: function test(function callback) returns()
-func (callbackParam *CallbackParam) PackTest(Callback [24]byte) ([]byte, error) {
-	return callbackParam.abi.Pack("test", Callback)
+func (callbackParam *CallbackParam) PackTest(Callback [24]byte) []byte {
+	enc, err := callbackParam.abi.Pack("test", Callback)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }

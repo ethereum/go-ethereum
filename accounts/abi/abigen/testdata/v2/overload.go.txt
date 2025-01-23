@@ -52,15 +52,23 @@ func (c *Overload) Instance(backend bind.ContractBackend, addr common.Address) b
 // Foo is a free data retrieval call binding the contract method 0x04bc52f8.
 //
 // Solidity: function foo(uint256 i, uint256 j) returns()
-func (overload *Overload) PackFoo(I *big.Int, J *big.Int) ([]byte, error) {
-	return overload.abi.Pack("foo", I, J)
+func (overload *Overload) PackFoo(I *big.Int, J *big.Int) []byte {
+	enc, err := overload.abi.Pack("foo", I, J)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // Foo0 is a free data retrieval call binding the contract method 0x2fbebd38.
 //
 // Solidity: function foo(uint256 i) returns()
-func (overload *Overload) PackFoo0(I *big.Int) ([]byte, error) {
-	return overload.abi.Pack("foo0", I)
+func (overload *Overload) PackFoo0(I *big.Int) []byte {
+	enc, err := overload.abi.Pack("foo0", I)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // OverloadBar represents a Bar event raised by the Overload contract.

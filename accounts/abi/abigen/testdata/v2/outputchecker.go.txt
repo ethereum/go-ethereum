@@ -51,8 +51,12 @@ func (c *OutputChecker) Instance(backend bind.ContractBackend, addr common.Addre
 // AnonOutput is a free data retrieval call binding the contract method 0x008bda05.
 //
 // Solidity: function anonOutput() returns(string)
-func (outputChecker *OutputChecker) PackAnonOutput() ([]byte, error) {
-	return outputChecker.abi.Pack("anonOutput")
+func (outputChecker *OutputChecker) PackAnonOutput() []byte {
+	enc, err := outputChecker.abi.Pack("anonOutput")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (outputChecker *OutputChecker) UnpackAnonOutput(data []byte) (string, error) {
@@ -71,8 +75,12 @@ func (outputChecker *OutputChecker) UnpackAnonOutput(data []byte) (string, error
 // AnonOutputs is a free data retrieval call binding the contract method 0x3c401115.
 //
 // Solidity: function anonOutputs() returns(string, string)
-func (outputChecker *OutputChecker) PackAnonOutputs() ([]byte, error) {
-	return outputChecker.abi.Pack("anonOutputs")
+func (outputChecker *OutputChecker) PackAnonOutputs() []byte {
+	enc, err := outputChecker.abi.Pack("anonOutputs")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type AnonOutputsOutput struct {
@@ -99,8 +107,12 @@ func (outputChecker *OutputChecker) UnpackAnonOutputs(data []byte) (AnonOutputsO
 // CollidingOutputs is a free data retrieval call binding the contract method 0xeccbc1ee.
 //
 // Solidity: function collidingOutputs() returns(string str, string Str)
-func (outputChecker *OutputChecker) PackCollidingOutputs() ([]byte, error) {
-	return outputChecker.abi.Pack("collidingOutputs")
+func (outputChecker *OutputChecker) PackCollidingOutputs() []byte {
+	enc, err := outputChecker.abi.Pack("collidingOutputs")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type CollidingOutputsOutput struct {
@@ -127,8 +139,12 @@ func (outputChecker *OutputChecker) UnpackCollidingOutputs(data []byte) (Collidi
 // MixedOutputs is a free data retrieval call binding the contract method 0x21b77b44.
 //
 // Solidity: function mixedOutputs() returns(string, string str)
-func (outputChecker *OutputChecker) PackMixedOutputs() ([]byte, error) {
-	return outputChecker.abi.Pack("mixedOutputs")
+func (outputChecker *OutputChecker) PackMixedOutputs() []byte {
+	enc, err := outputChecker.abi.Pack("mixedOutputs")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type MixedOutputsOutput struct {
@@ -155,8 +171,12 @@ func (outputChecker *OutputChecker) UnpackMixedOutputs(data []byte) (MixedOutput
 // NamedOutput is a free data retrieval call binding the contract method 0x5e632bd5.
 //
 // Solidity: function namedOutput() returns(string str)
-func (outputChecker *OutputChecker) PackNamedOutput() ([]byte, error) {
-	return outputChecker.abi.Pack("namedOutput")
+func (outputChecker *OutputChecker) PackNamedOutput() []byte {
+	enc, err := outputChecker.abi.Pack("namedOutput")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (outputChecker *OutputChecker) UnpackNamedOutput(data []byte) (string, error) {
@@ -175,8 +195,12 @@ func (outputChecker *OutputChecker) UnpackNamedOutput(data []byte) (string, erro
 // NamedOutputs is a free data retrieval call binding the contract method 0x7970a189.
 //
 // Solidity: function namedOutputs() returns(string str1, string str2)
-func (outputChecker *OutputChecker) PackNamedOutputs() ([]byte, error) {
-	return outputChecker.abi.Pack("namedOutputs")
+func (outputChecker *OutputChecker) PackNamedOutputs() []byte {
+	enc, err := outputChecker.abi.Pack("namedOutputs")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type NamedOutputsOutput struct {
@@ -203,6 +227,10 @@ func (outputChecker *OutputChecker) UnpackNamedOutputs(data []byte) (NamedOutput
 // NoOutput is a free data retrieval call binding the contract method 0x625f0306.
 //
 // Solidity: function noOutput() returns()
-func (outputChecker *OutputChecker) PackNoOutput() ([]byte, error) {
-	return outputChecker.abi.Pack("noOutput")
+func (outputChecker *OutputChecker) PackNoOutput() []byte {
+	enc, err := outputChecker.abi.Pack("noOutput")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }

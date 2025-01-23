@@ -58,15 +58,23 @@ func (c *NameConflict) Instance(backend bind.ContractBackend, addr common.Addres
 // AddRequest is a free data retrieval call binding the contract method 0xcce7b048.
 //
 // Solidity: function addRequest((bytes,bytes) req) pure returns()
-func (nameConflict *NameConflict) PackAddRequest(Req Oraclerequest) ([]byte, error) {
-	return nameConflict.abi.Pack("addRequest", Req)
+func (nameConflict *NameConflict) PackAddRequest(Req Oraclerequest) []byte {
+	enc, err := nameConflict.abi.Pack("addRequest", Req)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // GetRequest is a free data retrieval call binding the contract method 0xc2bb515f.
 //
 // Solidity: function getRequest() pure returns((bytes,bytes))
-func (nameConflict *NameConflict) PackGetRequest() ([]byte, error) {
-	return nameConflict.abi.Pack("getRequest")
+func (nameConflict *NameConflict) PackGetRequest() []byte {
+	enc, err := nameConflict.abi.Pack("getRequest")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (nameConflict *NameConflict) UnpackGetRequest(data []byte) (Oraclerequest, error) {

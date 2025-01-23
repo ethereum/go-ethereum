@@ -50,15 +50,22 @@ func (c *Interactor) Instance(backend bind.ContractBackend, addr common.Address)
 }
 
 func (interactor *Interactor) PackConstructor(str string) []byte {
-	res, _ := interactor.abi.Pack("", str)
-	return res
+	enc, err := interactor.abi.Pack("", str)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // DeployString is a free data retrieval call binding the contract method 0x6874e809.
 //
 // Solidity: function deployString() returns(string)
-func (interactor *Interactor) PackDeployString() ([]byte, error) {
-	return interactor.abi.Pack("deployString")
+func (interactor *Interactor) PackDeployString() []byte {
+	enc, err := interactor.abi.Pack("deployString")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (interactor *Interactor) UnpackDeployString(data []byte) (string, error) {
@@ -77,15 +84,23 @@ func (interactor *Interactor) UnpackDeployString(data []byte) (string, error) {
 // Transact is a free data retrieval call binding the contract method 0xd736c513.
 //
 // Solidity: function transact(string str) returns()
-func (interactor *Interactor) PackTransact(Str string) ([]byte, error) {
-	return interactor.abi.Pack("transact", Str)
+func (interactor *Interactor) PackTransact(Str string) []byte {
+	enc, err := interactor.abi.Pack("transact", Str)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // TransactString is a free data retrieval call binding the contract method 0x0d86a0e1.
 //
 // Solidity: function transactString() returns(string)
-func (interactor *Interactor) PackTransactString() ([]byte, error) {
-	return interactor.abi.Pack("transactString")
+func (interactor *Interactor) PackTransactString() []byte {
+	enc, err := interactor.abi.Pack("transactString")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (interactor *Interactor) UnpackTransactString(data []byte) (string, error) {

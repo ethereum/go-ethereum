@@ -59,8 +59,12 @@ func (c *DB) Instance(backend bind.ContractBackend, addr common.Address) bind.Co
 // Get is a free data retrieval call binding the contract method 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
-func (dB *DB) PackGet(K *big.Int) ([]byte, error) {
-	return dB.abi.Pack("get", K)
+func (dB *DB) PackGet(K *big.Int) []byte {
+	enc, err := dB.abi.Pack("get", K)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dB *DB) UnpackGet(data []byte) (*big.Int, error) {
@@ -79,8 +83,12 @@ func (dB *DB) UnpackGet(data []byte) (*big.Int, error) {
 // GetNamedStatParams is a free data retrieval call binding the contract method 0xe369ba3b.
 //
 // Solidity: function getNamedStatParams() view returns(uint256 gets, uint256 inserts, uint256 mods)
-func (dB *DB) PackGetNamedStatParams() ([]byte, error) {
-	return dB.abi.Pack("getNamedStatParams")
+func (dB *DB) PackGetNamedStatParams() []byte {
+	enc, err := dB.abi.Pack("getNamedStatParams")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type GetNamedStatParamsOutput struct {
@@ -110,8 +118,12 @@ func (dB *DB) UnpackGetNamedStatParams(data []byte) (GetNamedStatParamsOutput, e
 // GetStatParams is a free data retrieval call binding the contract method 0x6fcb9c70.
 //
 // Solidity: function getStatParams() view returns(uint256, uint256, uint256)
-func (dB *DB) PackGetStatParams() ([]byte, error) {
-	return dB.abi.Pack("getStatParams")
+func (dB *DB) PackGetStatParams() []byte {
+	enc, err := dB.abi.Pack("getStatParams")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type GetStatParamsOutput struct {
@@ -141,8 +153,12 @@ func (dB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
 // GetStatsStruct is a free data retrieval call binding the contract method 0xee8161e0.
 //
 // Solidity: function getStatsStruct() view returns((uint256,uint256,uint256))
-func (dB *DB) PackGetStatsStruct() ([]byte, error) {
-	return dB.abi.Pack("getStatsStruct")
+func (dB *DB) PackGetStatsStruct() []byte {
+	enc, err := dB.abi.Pack("getStatsStruct")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
@@ -161,8 +177,12 @@ func (dB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
 // Insert is a free data retrieval call binding the contract method 0x1d834a1b.
 //
 // Solidity: function insert(uint256 k, uint256 v) returns(uint256)
-func (dB *DB) PackInsert(K *big.Int, V *big.Int) ([]byte, error) {
-	return dB.abi.Pack("insert", K, V)
+func (dB *DB) PackInsert(K *big.Int, V *big.Int) []byte {
+	enc, err := dB.abi.Pack("insert", K, V)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dB *DB) UnpackInsert(data []byte) (*big.Int, error) {

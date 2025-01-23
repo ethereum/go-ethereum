@@ -50,29 +50,44 @@ func (c *DAO) Instance(backend bind.ContractBackend, addr common.Address) bind.C
 }
 
 func (dAO *DAO) PackConstructor(minimumQuorumForProposals *big.Int, minutesForDebate *big.Int, marginOfVotesForMajority *big.Int, congressLeader common.Address) []byte {
-	res, _ := dAO.abi.Pack("", minimumQuorumForProposals, minutesForDebate, marginOfVotesForMajority, congressLeader)
-	return res
+	enc, err := dAO.abi.Pack("", minimumQuorumForProposals, minutesForDebate, marginOfVotesForMajority, congressLeader)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // ChangeMembership is a free data retrieval call binding the contract method 0x9644fcbd.
 //
 // Solidity: function changeMembership(address targetMember, bool canVote, string memberName) returns()
-func (dAO *DAO) PackChangeMembership(TargetMember common.Address, CanVote bool, MemberName string) ([]byte, error) {
-	return dAO.abi.Pack("changeMembership", TargetMember, CanVote, MemberName)
+func (dAO *DAO) PackChangeMembership(TargetMember common.Address, CanVote bool, MemberName string) []byte {
+	enc, err := dAO.abi.Pack("changeMembership", TargetMember, CanVote, MemberName)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // ChangeVotingRules is a free data retrieval call binding the contract method 0xbcca1fd3.
 //
 // Solidity: function changeVotingRules(uint256 minimumQuorumForProposals, uint256 minutesForDebate, int256 marginOfVotesForMajority) returns()
-func (dAO *DAO) PackChangeVotingRules(MinimumQuorumForProposals *big.Int, MinutesForDebate *big.Int, MarginOfVotesForMajority *big.Int) ([]byte, error) {
-	return dAO.abi.Pack("changeVotingRules", MinimumQuorumForProposals, MinutesForDebate, MarginOfVotesForMajority)
+func (dAO *DAO) PackChangeVotingRules(MinimumQuorumForProposals *big.Int, MinutesForDebate *big.Int, MarginOfVotesForMajority *big.Int) []byte {
+	enc, err := dAO.abi.Pack("changeVotingRules", MinimumQuorumForProposals, MinutesForDebate, MarginOfVotesForMajority)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // CheckProposalCode is a free data retrieval call binding the contract method 0xeceb2945.
 //
 // Solidity: function checkProposalCode(uint256 proposalNumber, address beneficiary, uint256 etherAmount, bytes transactionBytecode) returns(bool codeChecksOut)
-func (dAO *DAO) PackCheckProposalCode(ProposalNumber *big.Int, Beneficiary common.Address, EtherAmount *big.Int, TransactionBytecode []byte) ([]byte, error) {
-	return dAO.abi.Pack("checkProposalCode", ProposalNumber, Beneficiary, EtherAmount, TransactionBytecode)
+func (dAO *DAO) PackCheckProposalCode(ProposalNumber *big.Int, Beneficiary common.Address, EtherAmount *big.Int, TransactionBytecode []byte) []byte {
+	enc, err := dAO.abi.Pack("checkProposalCode", ProposalNumber, Beneficiary, EtherAmount, TransactionBytecode)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackCheckProposalCode(data []byte) (bool, error) {
@@ -91,8 +106,12 @@ func (dAO *DAO) UnpackCheckProposalCode(data []byte) (bool, error) {
 // DebatingPeriodInMinutes is a free data retrieval call binding the contract method 0x69bd3436.
 //
 // Solidity: function debatingPeriodInMinutes() returns(uint256)
-func (dAO *DAO) PackDebatingPeriodInMinutes() ([]byte, error) {
-	return dAO.abi.Pack("debatingPeriodInMinutes")
+func (dAO *DAO) PackDebatingPeriodInMinutes() []byte {
+	enc, err := dAO.abi.Pack("debatingPeriodInMinutes")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackDebatingPeriodInMinutes(data []byte) (*big.Int, error) {
@@ -111,8 +130,12 @@ func (dAO *DAO) UnpackDebatingPeriodInMinutes(data []byte) (*big.Int, error) {
 // ExecuteProposal is a free data retrieval call binding the contract method 0x237e9492.
 //
 // Solidity: function executeProposal(uint256 proposalNumber, bytes transactionBytecode) returns(int256 result)
-func (dAO *DAO) PackExecuteProposal(ProposalNumber *big.Int, TransactionBytecode []byte) ([]byte, error) {
-	return dAO.abi.Pack("executeProposal", ProposalNumber, TransactionBytecode)
+func (dAO *DAO) PackExecuteProposal(ProposalNumber *big.Int, TransactionBytecode []byte) []byte {
+	enc, err := dAO.abi.Pack("executeProposal", ProposalNumber, TransactionBytecode)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackExecuteProposal(data []byte) (*big.Int, error) {
@@ -131,8 +154,12 @@ func (dAO *DAO) UnpackExecuteProposal(data []byte) (*big.Int, error) {
 // MajorityMargin is a free data retrieval call binding the contract method 0xaa02a90f.
 //
 // Solidity: function majorityMargin() returns(int256)
-func (dAO *DAO) PackMajorityMargin() ([]byte, error) {
-	return dAO.abi.Pack("majorityMargin")
+func (dAO *DAO) PackMajorityMargin() []byte {
+	enc, err := dAO.abi.Pack("majorityMargin")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackMajorityMargin(data []byte) (*big.Int, error) {
@@ -151,8 +178,12 @@ func (dAO *DAO) UnpackMajorityMargin(data []byte) (*big.Int, error) {
 // MemberId is a free data retrieval call binding the contract method 0x39106821.
 //
 // Solidity: function memberId(address ) returns(uint256)
-func (dAO *DAO) PackMemberId(Arg0 common.Address) ([]byte, error) {
-	return dAO.abi.Pack("memberId", Arg0)
+func (dAO *DAO) PackMemberId(Arg0 common.Address) []byte {
+	enc, err := dAO.abi.Pack("memberId", Arg0)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackMemberId(data []byte) (*big.Int, error) {
@@ -171,8 +202,12 @@ func (dAO *DAO) UnpackMemberId(data []byte) (*big.Int, error) {
 // Members is a free data retrieval call binding the contract method 0x5daf08ca.
 //
 // Solidity: function members(uint256 ) returns(address member, bool canVote, string name, uint256 memberSince)
-func (dAO *DAO) PackMembers(Arg0 *big.Int) ([]byte, error) {
-	return dAO.abi.Pack("members", Arg0)
+func (dAO *DAO) PackMembers(Arg0 *big.Int) []byte {
+	enc, err := dAO.abi.Pack("members", Arg0)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type MembersOutput struct {
@@ -205,8 +240,12 @@ func (dAO *DAO) UnpackMembers(data []byte) (MembersOutput, error) {
 // MinimumQuorum is a free data retrieval call binding the contract method 0x8160f0b5.
 //
 // Solidity: function minimumQuorum() returns(uint256)
-func (dAO *DAO) PackMinimumQuorum() ([]byte, error) {
-	return dAO.abi.Pack("minimumQuorum")
+func (dAO *DAO) PackMinimumQuorum() []byte {
+	enc, err := dAO.abi.Pack("minimumQuorum")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackMinimumQuorum(data []byte) (*big.Int, error) {
@@ -225,8 +264,12 @@ func (dAO *DAO) UnpackMinimumQuorum(data []byte) (*big.Int, error) {
 // NewProposal is a free data retrieval call binding the contract method 0xb1050da5.
 //
 // Solidity: function newProposal(address beneficiary, uint256 etherAmount, string JobDescription, bytes transactionBytecode) returns(uint256 proposalID)
-func (dAO *DAO) PackNewProposal(Beneficiary common.Address, EtherAmount *big.Int, JobDescription string, TransactionBytecode []byte) ([]byte, error) {
-	return dAO.abi.Pack("newProposal", Beneficiary, EtherAmount, JobDescription, TransactionBytecode)
+func (dAO *DAO) PackNewProposal(Beneficiary common.Address, EtherAmount *big.Int, JobDescription string, TransactionBytecode []byte) []byte {
+	enc, err := dAO.abi.Pack("newProposal", Beneficiary, EtherAmount, JobDescription, TransactionBytecode)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackNewProposal(data []byte) (*big.Int, error) {
@@ -245,8 +288,12 @@ func (dAO *DAO) UnpackNewProposal(data []byte) (*big.Int, error) {
 // NumProposals is a free data retrieval call binding the contract method 0x400e3949.
 //
 // Solidity: function numProposals() returns(uint256)
-func (dAO *DAO) PackNumProposals() ([]byte, error) {
-	return dAO.abi.Pack("numProposals")
+func (dAO *DAO) PackNumProposals() []byte {
+	enc, err := dAO.abi.Pack("numProposals")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackNumProposals(data []byte) (*big.Int, error) {
@@ -265,8 +312,12 @@ func (dAO *DAO) UnpackNumProposals(data []byte) (*big.Int, error) {
 // Owner is a free data retrieval call binding the contract method 0x8da5cb5b.
 //
 // Solidity: function owner() returns(address)
-func (dAO *DAO) PackOwner() ([]byte, error) {
-	return dAO.abi.Pack("owner")
+func (dAO *DAO) PackOwner() []byte {
+	enc, err := dAO.abi.Pack("owner")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackOwner(data []byte) (common.Address, error) {
@@ -285,8 +336,12 @@ func (dAO *DAO) UnpackOwner(data []byte) (common.Address, error) {
 // Proposals is a free data retrieval call binding the contract method 0x013cf08b.
 //
 // Solidity: function proposals(uint256 ) returns(address recipient, uint256 amount, string description, uint256 votingDeadline, bool executed, bool proposalPassed, uint256 numberOfVotes, int256 currentResult, bytes32 proposalHash)
-func (dAO *DAO) PackProposals(Arg0 *big.Int) ([]byte, error) {
-	return dAO.abi.Pack("proposals", Arg0)
+func (dAO *DAO) PackProposals(Arg0 *big.Int) []byte {
+	enc, err := dAO.abi.Pack("proposals", Arg0)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type ProposalsOutput struct {
@@ -334,15 +389,23 @@ func (dAO *DAO) UnpackProposals(data []byte) (ProposalsOutput, error) {
 // TransferOwnership is a free data retrieval call binding the contract method 0xf2fde38b.
 //
 // Solidity: function transferOwnership(address newOwner) returns()
-func (dAO *DAO) PackTransferOwnership(NewOwner common.Address) ([]byte, error) {
-	return dAO.abi.Pack("transferOwnership", NewOwner)
+func (dAO *DAO) PackTransferOwnership(NewOwner common.Address) []byte {
+	enc, err := dAO.abi.Pack("transferOwnership", NewOwner)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // Vote is a free data retrieval call binding the contract method 0xd3c0715b.
 //
 // Solidity: function vote(uint256 proposalNumber, bool supportsProposal, string justificationText) returns(uint256 voteID)
-func (dAO *DAO) PackVote(ProposalNumber *big.Int, SupportsProposal bool, JustificationText string) ([]byte, error) {
-	return dAO.abi.Pack("vote", ProposalNumber, SupportsProposal, JustificationText)
+func (dAO *DAO) PackVote(ProposalNumber *big.Int, SupportsProposal bool, JustificationText string) []byte {
+	enc, err := dAO.abi.Pack("vote", ProposalNumber, SupportsProposal, JustificationText)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (dAO *DAO) UnpackVote(data []byte) (*big.Int, error) {

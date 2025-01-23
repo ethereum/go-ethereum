@@ -52,8 +52,12 @@ func (c *Slicer) Instance(backend bind.ContractBackend, addr common.Address) bin
 // EchoAddresses is a free data retrieval call binding the contract method 0xbe1127a3.
 //
 // Solidity: function echoAddresses(address[] input) returns(address[] output)
-func (slicer *Slicer) PackEchoAddresses(Input []common.Address) ([]byte, error) {
-	return slicer.abi.Pack("echoAddresses", Input)
+func (slicer *Slicer) PackEchoAddresses(Input []common.Address) []byte {
+	enc, err := slicer.abi.Pack("echoAddresses", Input)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error) {
@@ -72,8 +76,12 @@ func (slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error)
 // EchoBools is a free data retrieval call binding the contract method 0xf637e589.
 //
 // Solidity: function echoBools(bool[] input) returns(bool[] output)
-func (slicer *Slicer) PackEchoBools(Input []bool) ([]byte, error) {
-	return slicer.abi.Pack("echoBools", Input)
+func (slicer *Slicer) PackEchoBools(Input []bool) []byte {
+	enc, err := slicer.abi.Pack("echoBools", Input)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
@@ -92,8 +100,12 @@ func (slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
 // EchoFancyInts is a free data retrieval call binding the contract method 0xd88becc0.
 //
 // Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
-func (slicer *Slicer) PackEchoFancyInts(Input [23]*big.Int) ([]byte, error) {
-	return slicer.abi.Pack("echoFancyInts", Input)
+func (slicer *Slicer) PackEchoFancyInts(Input [23]*big.Int) []byte {
+	enc, err := slicer.abi.Pack("echoFancyInts", Input)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
@@ -112,8 +124,12 @@ func (slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
 // EchoInts is a free data retrieval call binding the contract method 0xe15a3db7.
 //
 // Solidity: function echoInts(int256[] input) returns(int256[] output)
-func (slicer *Slicer) PackEchoInts(Input []*big.Int) ([]byte, error) {
-	return slicer.abi.Pack("echoInts", Input)
+func (slicer *Slicer) PackEchoInts(Input []*big.Int) []byte {
+	enc, err := slicer.abi.Pack("echoInts", Input)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (slicer *Slicer) UnpackEchoInts(data []byte) ([]*big.Int, error) {

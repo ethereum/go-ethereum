@@ -58,8 +58,12 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) bind.Con
 // DoSomethingWithManyArgs is a free data retrieval call binding the contract method 0x6fd8b968.
 //
 // Solidity: function DoSomethingWithManyArgs() pure returns(uint256, uint256, uint256, bool)
-func (c *C) PackDoSomethingWithManyArgs() ([]byte, error) {
-	return c.abi.Pack("DoSomethingWithManyArgs")
+func (c *C) PackDoSomethingWithManyArgs() []byte {
+	enc, err := c.abi.Pack("DoSomethingWithManyArgs")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 type DoSomethingWithManyArgsOutput struct {
@@ -92,8 +96,12 @@ func (c *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgsO
 // DoSomethingWithPoint is a free data retrieval call binding the contract method 0xedcdc894.
 //
 // Solidity: function DoSomethingWithPoint((uint256,uint256) p) pure returns((uint256,uint256))
-func (c *C) PackDoSomethingWithPoint(P CPoint) ([]byte, error) {
-	return c.abi.Pack("DoSomethingWithPoint", P)
+func (c *C) PackDoSomethingWithPoint(P CPoint) []byte {
+	enc, err := c.abi.Pack("DoSomethingWithPoint", P)
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 func (c *C) UnpackDoSomethingWithPoint(data []byte) (CPoint, error) {
@@ -112,15 +120,23 @@ func (c *C) UnpackDoSomethingWithPoint(data []byte) (CPoint, error) {
 // EmitMulti is a free data retrieval call binding the contract method 0xcb493749.
 //
 // Solidity: function EmitMulti() returns()
-func (c *C) PackEmitMulti() ([]byte, error) {
-	return c.abi.Pack("EmitMulti")
+func (c *C) PackEmitMulti() []byte {
+	enc, err := c.abi.Pack("EmitMulti")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // EmitOne is a free data retrieval call binding the contract method 0xe8e49a71.
 //
 // Solidity: function EmitOne() returns()
-func (c *C) PackEmitOne() ([]byte, error) {
-	return c.abi.Pack("EmitOne")
+func (c *C) PackEmitOne() []byte {
+	enc, err := c.abi.Pack("EmitOne")
+	if err != nil {
+		panic(err)
+	}
+	return enc
 }
 
 // CBasic1 represents a Basic1 event raised by the C contract.
