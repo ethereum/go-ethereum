@@ -218,7 +218,11 @@ func (lc *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Bod
 	if cached, ok := lc.bodyCache.Get(hash); ok && cached != nil {
 		return cached, nil
 	}
-	body, err := GetBody(ctx, lc.odr, hash, *lc.hc.GetBlockNumber(hash))
+	number := lc.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil, errors.New("unknown block")
+	}
+	body, err := GetBody(ctx, lc.odr, hash, *number)
 	if err != nil {
 		return nil, err
 	}

@@ -891,7 +891,11 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 
 // GetBlockByHash retrieves a block from the database by hash, caching it if found.
 func (bc *BlockChain) GetBlockByHash(hash common.Hash) *types.Block {
-	return bc.GetBlock(hash, *bc.hc.GetBlockNumber(hash))
+	number := bc.hc.GetBlockNumber(hash)
+	if number == nil {
+		return nil
+	}
+	return bc.GetBlock(hash, *number)
 }
 
 // GetBlockByNumber retrieves a block from the database by number, caching it
