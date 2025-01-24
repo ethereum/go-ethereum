@@ -110,6 +110,7 @@ func (miner *Miner) SetExtra(extra []byte) error {
 	return nil
 }
 
+// SetPrioAddresses sets a list of addresses to prioritize for transaction inclusion.
 func (miner *Miner) SetPrioAddresses(prio []common.Address) {
 	miner.confMu.Lock()
 	miner.prio = prio

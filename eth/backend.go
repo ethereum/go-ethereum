@@ -237,6 +237,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
 
 	eth.txPool, err = txpool.New(config.TxPool.PriceLimit, eth.blockchain, []txpool.SubPool{legacyPool, blobPool})
+	if err != nil {
+		return nil, err
+	}
 
 	if !config.TxPool.NoLocals {
 		rejournal := config.TxPool.Rejournal
@@ -246,10 +249,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 		eth.localTxTracker = locals.New(config.TxPool.Journal, rejournal, eth.blockchain.Config(), eth.txPool)
 		stack.RegisterLifecycle(eth.localTxTracker)
-	}
-
-	if err != nil {
-		return nil, err
 	}
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit

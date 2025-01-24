@@ -58,11 +58,10 @@ type TxTracker struct {
 
 // New creates a new TxTracker
 func New(journalPath string, journalTime time.Duration, chainConfig *params.ChainConfig, next *txpool.TxPool) *TxTracker {
-	signer := types.LatestSigner(chainConfig)
 	pool := &TxTracker{
 		all:        make(map[common.Hash]*types.Transaction),
 		byAddr:     make(map[common.Address]*legacypool.SortedMap),
-		signer:     signer,
+		signer:     types.LatestSigner(chainConfig),
 		shutdownCh: make(chan struct{}),
 		pool:       next,
 	}
@@ -84,6 +83,7 @@ func (tracker *TxTracker) Track(tx *types.Transaction) {
 func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
+
 	for _, tx := range txs {
 		if tx.Type() == types.BlobTxType {
 			continue
@@ -101,6 +101,7 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 			tracker.byAddr[addr] = legacypool.NewSortedMap()
 		}
 		tracker.byAddr[addr].Put(tx)
+
 		if tracker.journal != nil {
 			_ = tracker.journal.insert(tx)
 		}
@@ -112,17 +113,19 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 func (tracker *TxTracker) recheck(journalCheck bool) (resubmits []*types.Transaction, rejournal map[common.Address]types.Transactions) {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
+
 	var (
 		numStales = 0
 		numOk     = 0
 	)
 	for sender, txs := range tracker.byAddr {
-		stales := txs.Forward(tracker.pool.Nonce(sender))
 		// Wipe the stales
+		stales := txs.Forward(tracker.pool.Nonce(sender))
 		for _, tx := range stales {
 			delete(tracker.all, tx.Hash())
 		}
 		numStales += len(stales)
+
 		// Check the non-stale
 		for _, tx := range txs.Flatten() {
 			if tracker.pool.Has(tx.Hash()) {
@@ -172,6 +175,7 @@ func (tracker *TxTracker) Stop() error {
 
 func (tracker *TxTracker) loop() {
 	defer tracker.wg.Done()
+
 	if tracker.journal != nil {
 		tracker.journal.load(func(transactions []*types.Transaction) []error {
 			tracker.TrackAll(transactions)
@@ -179,14 +183,15 @@ func (tracker *TxTracker) loop() {
 		})
 		defer tracker.journal.close()
 	}
-	var lastJournal = time.Now()
-	// Do initial check after 10 seconds, do rechecks more seldom.
-	t := time.NewTimer(10 * time.Second)
+	var (
+		lastJournal = time.Now()
+		timer       = time.NewTimer(10 * time.Second) // Do initial check after 10 seconds, do rechecks more seldom.
+	)
 	for {
 		select {
 		case <-tracker.shutdownCh:
 			return
-		case <-t.C:
+		case <-timer.C:
 			checkJournal := tracker.journal != nil && time.Since(lastJournal) > tracker.rejournal
 			resubmits, rejournal := tracker.recheck(checkJournal)
 			if len(resubmits) > 0 {
@@ -201,7 +206,7 @@ func (tracker *TxTracker) loop() {
 				}
 				tracker.mu.Unlock()
 			}
-			t.Reset(recheckInterval)
+			timer.Reset(recheckInterval)
 		}
 	}
 }

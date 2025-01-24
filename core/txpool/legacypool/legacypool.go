@@ -1638,15 +1638,15 @@ func (as *accountSet) merge(other *accountSet) {
 // peeking into the pool in LegacyPool.Get without having to acquire the widely scoped
 // LegacyPool.mu mutex.
 type lookup struct {
-	slots   int
-	lock    sync.RWMutex
-	remotes map[common.Hash]*types.Transaction
+	slots int
+	lock  sync.RWMutex
+	txs   map[common.Hash]*types.Transaction
 }
 
 // newLookup returns a new lookup structure.
 func newLookup() *lookup {
 	return &lookup{
-		remotes: make(map[common.Hash]*types.Transaction),
+		txs: make(map[common.Hash]*types.Transaction),
 	}
 }
 
@@ -1656,7 +1656,8 @@ func newLookup() *lookup {
 func (t *lookup) Range(f func(hash common.Hash, tx *types.Transaction) bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	for key, value := range t.remotes {
+
+	for key, value := range t.txs {
 		if !f(key, value) {
 			return
 		}
@@ -1667,7 +1668,8 @@ func (t *lookup) Range(f func(hash common.Hash, tx *types.Transaction) bool) {
 func (t *lookup) Get(hash common.Hash) *types.Transaction {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	return t.remotes[hash]
+
+	return t.txs[hash]
 }
 
 // Count returns the current number of transactions in the lookup.
@@ -1675,7 +1677,7 @@ func (t *lookup) Count() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	return len(t.remotes)
+	return len(t.txs)
 }
 
 // Slots returns the current number of slots used in the lookup.
@@ -1694,7 +1696,7 @@ func (t *lookup) Add(tx *types.Transaction) {
 	t.slots += numSlots(tx)
 	slotsGauge.Update(int64(t.slots))
 
-	t.remotes[tx.Hash()] = tx
+	t.txs[tx.Hash()] = tx
 }
 
 // Remove removes a transaction from the lookup.
@@ -1702,7 +1704,7 @@ func (t *lookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	tx, ok := t.remotes[hash]
+	tx, ok := t.txs[hash]
 	if !ok {
 		log.Error("No transaction found to be deleted", "hash", hash)
 		return
@@ -1710,7 +1712,7 @@ func (t *lookup) Remove(hash common.Hash) {
 	t.slots -= numSlots(tx)
 	slotsGauge.Update(int64(t.slots))
 
-	delete(t.remotes, hash)
+	delete(t.txs, hash)
 }
 
 // TxsBelowTip finds all remote transactions below the given tip threshold.
@@ -1750,7 +1752,7 @@ func (pool *LegacyPool) Clear() {
 	// The transaction addition may attempt to reserve the sender addr which
 	// can't happen until Clear releases the reservation lock.  Clear cannot
 	// acquire the subpool lock until the transaction addition is completed.
-	for _, tx := range pool.all.remotes {
+	for _, tx := range pool.all.txs {
 		senderAddr, _ := types.Sender(pool.signer, tx)
 		pool.reserve(senderAddr, false)
 	}
