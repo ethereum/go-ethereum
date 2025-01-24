@@ -29,6 +29,13 @@ type ChainSpanner struct {
 	validatorContractAddress common.Address
 }
 
+// validator response on ValidatorSet contract
+type contractValidator struct {
+	Id     *big.Int
+	Power  *big.Int
+	Signer common.Address
+}
+
 func NewChainSpanner(ethAPI api.Caller, validatorSet abi.ABI, chainConfig *params.ChainConfig, validatorContractAddress common.Address) *ChainSpanner {
 	return &ChainSpanner{
 		ethAPI:                   ethAPI,
@@ -93,6 +100,141 @@ func (c *ChainSpanner) GetCurrentValidatorsByBlockNrOrHash(ctx context.Context, 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	toAddress := c.validatorContractAddress
+	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
+
+	valz, err := c.tryGetBorValidatorsWithId(ctx, blockNrOrHash, blockNumber, toAddress, gas)
+	if err != nil {
+		return nil, err
+	}
+
+	return valz, nil
+}
+
+// Try to get bor validators with Id from ValidatorSet contract by querying each element on mapping(uint256 => Validator[]) public producers
+// If fails then returns GetBorValidators without id
+func (c *ChainSpanner) tryGetBorValidatorsWithId(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, blockNumber uint64, toAddress common.Address, gas hexutil.Uint64) ([]*valset.Validator, error) {
+	firstEndBlock, err := c.getFirstEndBlock(ctx, blockNrOrHash, toAddress, gas)
+	if err != nil {
+		return nil, err
+	}
+	var spanNumber *big.Int
+	if big.NewInt(int64(blockNumber)).Cmp(firstEndBlock) <= 0 {
+		spanNumber = big.NewInt(0)
+	} else {
+		spanNumber, err = c.getSpanByBlock(ctx, blockNrOrHash, blockNumber, toAddress, gas)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	borValidatorsWithoutId, err := c.getBorValidatorsWithoutId(ctx, blockNrOrHash, blockNumber, toAddress, gas)
+	if err != nil {
+		return nil, err
+	}
+
+	producersCount := len(borValidatorsWithoutId)
+
+	valz := make([]*valset.Validator, producersCount)
+
+	for i := 0; i < producersCount; i++ {
+		p, err := c.getProducersBySpanAndIndexMethod(ctx, blockNrOrHash, blockNumber, toAddress, gas, spanNumber, i)
+		// if fails, return validators without id
+		if err != nil {
+			return borValidatorsWithoutId, nil
+		}
+
+		valz[i] = &valset.Validator{
+			ID:          p.Id.Uint64(),
+			Address:     p.Signer,
+			VotingPower: p.Power.Int64(),
+		}
+	}
+
+	return valz, nil
+}
+
+func (c *ChainSpanner) getSpanByBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, blockNumber uint64, toAddress common.Address, gas hexutil.Uint64) (*big.Int, error) {
+	const getSpanByBlockMethod = "getSpanByBlock"
+	spanData, err := c.validatorSet.Pack(getSpanByBlockMethod, big.NewInt(0).SetUint64(blockNumber))
+	if err != nil {
+		log.Error("Unable to pack tx for getSpanByBlock", "error", err)
+		return nil, err
+	}
+
+	spanMsgData := (hexutil.Bytes)(spanData)
+
+	spanResult, err := c.ethAPI.Call(ctx, ethapi.TransactionArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &spanMsgData,
+	}, &blockNrOrHash, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var spanNumber *big.Int
+	if err := c.validatorSet.UnpackIntoInterface(&spanNumber, getSpanByBlockMethod, spanResult); err != nil {
+		return nil, err
+	}
+	return spanNumber, nil
+}
+
+func (c *ChainSpanner) getProducersBySpanAndIndexMethod(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, blockNumber uint64, toAddress common.Address, gas hexutil.Uint64, spanNumber *big.Int, index int) (*contractValidator, error) {
+	const getProducersBySpanAndIndexMethod = "producers"
+	producerData, err := c.validatorSet.Pack(getProducersBySpanAndIndexMethod, spanNumber, big.NewInt(int64(index)))
+	if err != nil {
+		log.Error("Unable to pack tx for producers", "error", err)
+		return nil, err
+	}
+
+	producerMsgData := (hexutil.Bytes)(producerData)
+
+	result, err := c.ethAPI.Call(ctx, ethapi.TransactionArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &producerMsgData,
+	}, &blockNrOrHash, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var producer contractValidator
+	if err := c.validatorSet.UnpackIntoInterface(&producer, getProducersBySpanAndIndexMethod, result); err != nil {
+		return nil, err
+	}
+	return &producer, nil
+}
+
+func (c *ChainSpanner) getFirstEndBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, toAddress common.Address, gas hexutil.Uint64) (*big.Int, error) {
+	const getFirstEndBlockMethod = "FIRST_END_BLOCK"
+	firstEndBlockData, err := c.validatorSet.Pack(getFirstEndBlockMethod)
+	if err != nil {
+		log.Error("Unable to pack tx for getFirstEndBlock", "error", err)
+		return nil, err
+	}
+
+	firstEndBlockMsgData := (hexutil.Bytes)(firstEndBlockData)
+
+	firstEndBlockResult, err := c.ethAPI.Call(ctx, ethapi.TransactionArgs{
+		Gas:  &gas,
+		To:   &toAddress,
+		Data: &firstEndBlockMsgData,
+	}, &blockNrOrHash, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var firstEndBlockNumber *big.Int
+	if err := c.validatorSet.UnpackIntoInterface(&firstEndBlockNumber, getFirstEndBlockMethod, firstEndBlockResult); err != nil {
+		return nil, err
+	}
+	return firstEndBlockNumber, nil
+}
+
+func (c *ChainSpanner) getBorValidatorsWithoutId(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, blockNumber uint64, toAddress common.Address, gas hexutil.Uint64) ([]*valset.Validator, error) {
+
 	// method
 	const method = "getBorValidators"
 
@@ -104,8 +246,6 @@ func (c *ChainSpanner) GetCurrentValidatorsByBlockNrOrHash(ctx context.Context, 
 
 	// call
 	msgData := (hexutil.Bytes)(data)
-	toAddress := c.validatorContractAddress
-	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
 
 	result, err := c.ethAPI.Call(ctx, ethapi.TransactionArgs{
 		Gas:  &gas,

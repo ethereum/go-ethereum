@@ -110,6 +110,24 @@ func (vals *ValidatorSet) IncrementProposerPriority(times int) {
 	vals.Proposer = proposer
 }
 
+// IncludeIds include the proper Id of each validator by getting the id from
+// validator queried on ValidatorSet contract
+func (vals *ValidatorSet) IncludeIds(valsWithId []*Validator) {
+	if vals.IsNilOrEmpty() {
+		panic("empty validator set")
+	}
+
+	addressToId := make(map[common.Address]uint64)
+
+	for _, val := range valsWithId {
+		addressToId[val.Address] = val.ID
+	}
+
+	for _, val := range vals.Validators {
+		val.ID = addressToId[val.Address]
+	}
+}
+
 func (vals *ValidatorSet) RescalePriorities(diffMax int64) {
 	if vals.IsNilOrEmpty() {
 		panic("empty validator set")
