@@ -126,7 +126,6 @@ func (c *ChainSpanner) tryGetBorValidatorsWithId(ctx context.Context, blockNrOrH
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	borValidatorsWithoutId, err := c.getBorValidatorsWithoutId(ctx, blockNrOrHash, blockNumber, toAddress, gas)
@@ -234,7 +233,6 @@ func (c *ChainSpanner) getFirstEndBlock(ctx context.Context, blockNrOrHash rpc.B
 }
 
 func (c *ChainSpanner) getBorValidatorsWithoutId(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, blockNumber uint64, toAddress common.Address, gas hexutil.Uint64) ([]*valset.Validator, error) {
-
 	// method
 	const method = "getBorValidators"
 
