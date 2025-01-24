@@ -1,4 +1,4 @@
-// Copyright 2024 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ type stun struct {
 
 func newSTUN(serverAddr string) (Interface, error) {
 	s := new(stun)
-	if serverAddr == "default" || serverAddr == "" {
+	if serverAddr == "" {
 		s.serverList = strings.Split(stunDefaultServers, "\n")
 	} else {
 		_, err := net.ResolveUDPAddr("udp4", serverAddr)
