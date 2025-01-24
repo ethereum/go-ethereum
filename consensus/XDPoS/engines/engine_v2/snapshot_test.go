@@ -28,7 +28,7 @@ func TestStoreLoadSnapshot(t *testing.T) {
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}
-	db, err := leveldb.New(dir, 256, 0, "")
+	db, err := leveldb.New(dir, 256, 0, "", false)
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}

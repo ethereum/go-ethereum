@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"fmt"
+
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/ethdb/leveldb"
 	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
@@ -101,8 +102,8 @@ func NewMemoryDatabase() ethdb.Database {
 
 // NewLevelDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func NewLevelDBDatabase(file string, cache int, handles int, namespace string) (ethdb.Database, error) {
-	db, err := leveldb.New(file, cache, handles, namespace)
+func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
+	db, err := leveldb.New(file, cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
 	}

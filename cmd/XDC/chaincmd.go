@@ -221,7 +221,7 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabase(name, 0, 0, "")
+		chaindb, err := stack.OpenDatabase(name, 0, 0, "", false)
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
@@ -244,7 +244,7 @@ func importChain(ctx *cli.Context) error {
 	// Start metrics export if enabled
 	utils.SetupMetrics(&cfg.Metrics)
 
-	chain, chainDb := utils.MakeChain(ctx, stack)
+	chain, chainDb := utils.MakeChain(ctx, stack, false)
 	defer chainDb.Close()
 
 	// Start periodically gathering memory profiles
@@ -338,7 +338,7 @@ func exportChain(ctx *cli.Context) error {
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	chain, db := utils.MakeChain(ctx, stack)
+	chain, db := utils.MakeChain(ctx, stack, true)
 	defer db.Close()
 	start := time.Now()
 
@@ -375,7 +375,7 @@ func importPreimages(ctx *cli.Context) error {
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	diskdb := utils.MakeChainDatabase(ctx, stack)
+	diskdb := utils.MakeChainDatabase(ctx, stack, false)
 	defer diskdb.Close()
 
 	start := time.Now()
@@ -394,7 +394,7 @@ func exportPreimages(ctx *cli.Context) error {
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	diskdb := utils.MakeChainDatabase(ctx, stack)
+	diskdb := utils.MakeChainDatabase(ctx, stack, true)
 	defer diskdb.Close()
 
 	start := time.Now()
@@ -414,7 +414,7 @@ func copyDb(ctx *cli.Context) error {
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	chain, chainDb := utils.MakeChain(ctx, stack)
+	chain, chainDb := utils.MakeChain(ctx, stack, false)
 	defer chainDb.Close()
 
 	var syncmode downloader.SyncMode
@@ -424,7 +424,7 @@ func copyDb(ctx *cli.Context) error {
 	dl := downloader.New(syncmode, chainDb, new(event.TypeMux), chain, nil, nil, nil)
 
 	// Create a source peer to satisfy downloader requests from
-	db, err := rawdb.NewLevelDBDatabase(ctx.Args().First(), ctx.Int(utils.CacheFlag.Name), 256, "")
+	db, err := rawdb.NewLevelDBDatabase(ctx.Args().First(), ctx.Int(utils.CacheFlag.Name), 256, "", false)
 	if err != nil {
 		return err
 	}
@@ -492,7 +492,7 @@ func dump(ctx *cli.Context) error {
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	chain, chainDb := utils.MakeChain(ctx, stack)
+	chain, chainDb := utils.MakeChain(ctx, stack, true)
 	defer chainDb.Close()
 
 	for _, arg := range ctx.Args().Slice() {

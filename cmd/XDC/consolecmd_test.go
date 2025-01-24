@@ -44,7 +44,7 @@ func TestConsoleWelcome(t *testing.T) {
 
 	// Start a XDC console, make sure it's cleaned up and terminate the console
 	XDC := runXDC(t,
-		"console", "--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx/"+time.Now().String(),
+		"console", "--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx",
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--miner-etherbase", coinbase)
 
@@ -86,7 +86,7 @@ func TestIPCAttachWelcome(t *testing.T) {
 		ipc = filepath.Join(datadir, "XDC.ipc")
 	}
 	XDC := runXDC(t,
-		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx/"+time.Now().String(),
+		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx",
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--miner-etherbase", coinbase, "--ipcpath", ipc)
 
@@ -103,7 +103,7 @@ func TestHTTPAttachWelcome(t *testing.T) {
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
 	XDC := runXDC(t,
-		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx/"+time.Now().String(),
+		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx",
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--miner-etherbase", coinbase, "--http", "--http-port", port)
 
@@ -120,7 +120,7 @@ func TestWSAttachWelcome(t *testing.T) {
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
 	XDC := runXDC(t,
-		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx/"+time.Now().String(),
+		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx",
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--miner-etherbase", coinbase, "--ws", "--ws-port", port)
 
