@@ -29,11 +29,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/console"
 	"github.com/XinFinOrg/XDPoSChain/core"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
-	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/urfave/cli/v2"
 )
@@ -135,23 +132,6 @@ if already existing.`,
 		},
 		Description: `
 The export-preimages command export hash preimages to an RLP encoded stream`,
-	}
-	copydbCommand = &cli.Command{
-		Action:    copyDb,
-		Name:      "copydb",
-		Usage:     "Create a local chain from a target chaindata folder",
-		ArgsUsage: "<sourceChaindataDir>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.XDCXDataDirFlag,
-			utils.CacheFlag,
-			utils.SyncModeFlag,
-			utils.FakePoWFlag,
-			utils.TestnetFlag,
-			utils.RinkebyFlag,
-		},
-		Description: `
-The first argument must be the directory containing the blockchain to download from`,
 	}
 	removedbCommand = &cli.Command{
 		Action:    removeDB,
@@ -402,60 +382,6 @@ func exportPreimages(ctx *cli.Context) error {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v\n", time.Since(start))
-	return nil
-}
-
-func copyDb(ctx *cli.Context) error {
-	// Ensure we have a source chain directory to copy
-	if ctx.Args().Len() != 1 {
-		utils.Fatalf("Source chaindata directory path argument missing")
-	}
-	// Initialize a new chain for the running node to sync into
-	stack, _ := makeFullNode(ctx)
-	defer stack.Close()
-
-	chain, chainDb := utils.MakeChain(ctx, stack, false)
-	defer chainDb.Close()
-
-	var syncmode downloader.SyncMode
-	if err := syncmode.UnmarshalText([]byte(ctx.String(utils.SyncModeFlag.Name))); err != nil {
-		utils.Fatalf("invalid --syncmode flag: %v", err)
-	}
-	dl := downloader.New(syncmode, chainDb, new(event.TypeMux), chain, nil, nil, nil)
-
-	// Create a source peer to satisfy downloader requests from
-	db, err := rawdb.NewLevelDBDatabase(ctx.Args().First(), ctx.Int(utils.CacheFlag.Name), 256, "", false)
-	if err != nil {
-		return err
-	}
-	hc, err := core.NewHeaderChain(db, chain.Config(), chain.Engine(), func() bool { return false })
-	if err != nil {
-		return err
-	}
-	peer := downloader.NewFakePeer("local", db, hc, dl)
-	if err = dl.RegisterPeer("local", 63, peer); err != nil {
-		return err
-	}
-	// Synchronise with the simulated peer
-	start := time.Now()
-
-	currentHeader := hc.CurrentHeader()
-	if err = dl.Synchronise("local", currentHeader.Hash(), hc.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64()), syncmode); err != nil {
-		return err
-	}
-	for dl.Synchronising() {
-		time.Sleep(10 * time.Millisecond)
-	}
-	fmt.Printf("Database copy done in %v\n", time.Since(start))
-
-	// Compact the entire database to remove any sync overhead
-	start = time.Now()
-	fmt.Println("Compacting entire database...")
-	if err = chainDb.Compact(nil, nil); err != nil {
-		utils.Fatalf("Compaction failed: %v", err)
-	}
-	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
-
 	return nil
 }
 
