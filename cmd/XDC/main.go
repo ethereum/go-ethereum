@@ -188,6 +188,8 @@ func init() {
 		initCommand,
 		importCommand,
 		exportCommand,
+		importPreimagesCommand,
+		exportPreimagesCommand,
 		removedbCommand,
 		dumpCommand,
 		// See accountcmd.go:
@@ -198,9 +200,16 @@ func init() {
 		attachCommand,
 		javascriptCommand,
 		// See misccmd.go:
+		makecacheCommand,
+		makedagCommand,
 		versionCommand,
+		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
+		// see dbcmd.go
+		dbCommand,
+		// See cmd/utils/flags_legacy.go
+		utils.ShowDeprecated,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
