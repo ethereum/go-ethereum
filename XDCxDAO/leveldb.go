@@ -31,7 +31,7 @@ func NewBatchDatabase(datadir string, cacheLimit int) *BatchDatabase {
 
 // batchdatabase is a fast cache db to retrieve in-mem object
 func NewBatchDatabaseWithEncode(datadir string, cacheLimit int) *BatchDatabase {
-	db, err := rawdb.NewLevelDBDatabase(datadir, 128, 1024, "")
+	db, err := rawdb.NewLevelDBDatabase(datadir, 128, 1024, "", false)
 	if err != nil {
 		log.Error("Can't create new DB", "error", err)
 		return nil

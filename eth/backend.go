@@ -328,7 +328,7 @@ func makeExtraData(extra []byte) []byte {
 
 // CreateDB creates the chain database.
 func CreateDB(ctx *node.ServiceContext, config *ethconfig.Config, name string) (ethdb.Database, error) {
-	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
+	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles, false)
 	if err != nil {
 		return nil, err
 	}

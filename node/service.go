@@ -17,10 +17,10 @@
 package node
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"reflect"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
@@ -40,11 +40,11 @@ type ServiceContext struct {
 // OpenDatabase opens an existing database with the given name (or creates one
 // if no previous can be found) from within the node's data directory. If the
 // node is an ephemeral one, a memory database is returned.
-func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int) (ethdb.Database, error) {
+func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int, readonly bool) (ethdb.Database, error) {
 	if ctx.config.DataDir == "" {
 		return rawdb.NewMemoryDatabase(), nil
 	}
-	db, err := rawdb.NewLevelDBDatabase(ctx.config.resolvePath(name), cache, handles, "")
+	db, err := rawdb.NewLevelDBDatabase(ctx.config.resolvePath(name), cache, handles, "", readonly)
 	if err != nil {
 		return nil, err
 	}
