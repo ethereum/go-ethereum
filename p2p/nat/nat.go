@@ -59,13 +59,16 @@ type Interface interface {
 //	"upnp"               uses the Universal Plug and Play protocol
 //	"pmp"                uses NAT-PMP with an auto-detected gateway address
 //	"pmp:192.168.0.1"    uses NAT-PMP with the given gateway address
+//	"stun"       uses stun protocol with default stun server
+//	"stun:192.168.0.1:1234"   uses stun protocol with stun server address 192.168.0.1:1234
 func Parse(spec string) (Interface, error) {
 	var (
 		before, after, found = strings.Cut(spec, ":")
 		mech                 = strings.ToLower(before)
 		ip                   net.IP
 	)
-	if found {
+	// stun is not a valid ip
+	if found && mech != "stun" {
 		ip = net.ParseIP(after)
 		if ip == nil {
 			return nil, errors.New("invalid IP address")
@@ -85,6 +88,8 @@ func Parse(spec string) (Interface, error) {
 		return UPnP(), nil
 	case "pmp", "natpmp", "nat-pmp":
 		return PMP(ip), nil
+	case "stun":
+		return newSTUN(after)
 	default:
 		return nil, fmt.Errorf("unknown mechanism %q", before)
 	}
