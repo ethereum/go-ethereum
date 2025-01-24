@@ -27,18 +27,30 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
-// ReadDatabaseVersion reads the version number from db.
-func ReadDatabaseVersion(db ethdb.KeyValueReader) int {
-	var vsn uint
+// ReadDatabaseVersion retrieves the version number of the database.
+func ReadDatabaseVersion(db ethdb.KeyValueReader) *uint64 {
+	var version uint64
+
 	enc, _ := db.Get(databaseVersionKey)
-	rlp.DecodeBytes(enc, &vsn)
-	return int(vsn)
+	if len(enc) == 0 {
+		return nil
+	}
+	if err := rlp.DecodeBytes(enc, &version); err != nil {
+		return nil
+	}
+
+	return &version
 }
 
-// WriteDatabaseVersion writes vsn as the version number to db.
-func WriteDatabaseVersion(db ethdb.KeyValueWriter, vsn int) {
-	enc, _ := rlp.EncodeToBytes(uint(vsn))
-	db.Put(databaseVersionKey, enc)
+// WriteDatabaseVersion stores the version number of the database
+func WriteDatabaseVersion(db ethdb.KeyValueWriter, version uint64) {
+	enc, err := rlp.EncodeToBytes(version)
+	if err != nil {
+		log.Crit("Failed to encode database version", "err", err)
+	}
+	if err = db.Put(databaseVersionKey, enc); err != nil {
+		log.Crit("Failed to store the database version", "err", err)
+	}
 }
 
 // ReadChainConfig will fetch the network settings based on the given hash.

@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core"
