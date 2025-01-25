@@ -141,7 +141,7 @@ func bindAbstractTokenTRC21(address common.Address, caller bind.ContractCaller, 
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_AbstractTokenTRC21 *AbstractTokenTRC21Raw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_AbstractTokenTRC21 *AbstractTokenTRC21Raw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _AbstractTokenTRC21.Contract.AbstractTokenTRC21Caller.contract.Call(opts, result, method, params...)
 }
 
@@ -160,7 +160,7 @@ func (_AbstractTokenTRC21 *AbstractTokenTRC21Raw) Transact(opts *bind.TransactOp
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_AbstractTokenTRC21 *AbstractTokenTRC21CallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_AbstractTokenTRC21 *AbstractTokenTRC21CallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _AbstractTokenTRC21.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -182,7 +182,9 @@ func (_AbstractTokenTRC21 *AbstractTokenTRC21Caller) Issuer(opts *bind.CallOpts)
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _AbstractTokenTRC21.contract.Call(opts, out, "issuer")
 	return *ret0, err
 }
@@ -328,7 +330,7 @@ func bindTRC21Issuer(address common.Address, caller bind.ContractCaller, transac
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_TRC21Issuer *TRC21IssuerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_TRC21Issuer *TRC21IssuerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _TRC21Issuer.Contract.TRC21IssuerCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -347,7 +349,7 @@ func (_TRC21Issuer *TRC21IssuerRaw) Transact(opts *bind.TransactOpts, method str
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_TRC21Issuer *TRC21IssuerCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_TRC21Issuer *TRC21IssuerCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _TRC21Issuer.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -369,7 +371,9 @@ func (_TRC21Issuer *TRC21IssuerCaller) GetTokenCapacity(opts *bind.CallOpts, tok
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _TRC21Issuer.contract.Call(opts, out, "getTokenCapacity", token)
 	return *ret0, err
 }
@@ -395,7 +399,9 @@ func (_TRC21Issuer *TRC21IssuerCaller) MinCap(opts *bind.CallOpts) (*big.Int, er
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _TRC21Issuer.contract.Call(opts, out, "minCap")
 	return *ret0, err
 }
@@ -421,7 +427,9 @@ func (_TRC21Issuer *TRC21IssuerCaller) Tokens(opts *bind.CallOpts) ([]common.Add
 	var (
 		ret0 = new([]common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _TRC21Issuer.contract.Call(opts, out, "tokens")
 	return *ret0, err
 }

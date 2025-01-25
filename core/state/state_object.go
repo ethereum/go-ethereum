@@ -61,10 +61,10 @@ func (s Storage) Copy() Storage {
 // Account values can be accessed and modified through the object.
 // Finally, call CommitTrie to write the modified storage trie into a database.
 type stateObject struct {
-	address  common.Address
-	addrHash common.Hash // hash of ethereum address of the account
-	data     Account
 	db       *StateDB
+	address  common.Address // address of ethereum account
+	addrHash common.Hash    // hash of ethereum address of the account
+	data     Account        // Account data with all mutations applied in the scope of block
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -82,13 +82,20 @@ type stateObject struct {
 	fakeStorage   Storage // Fake storage which constructed by caller for debugging purpose.
 
 	// Cache flags.
-	// When an object is marked suicided it will be delete from the trie
-	// during the "update" phase of the state transition.
 	dirtyCode bool // true if the code was updated
-	suicided  bool
-	touched   bool
-	deleted   bool
-	onDirty   func(addr common.Address) // Callback method to mark a state object newly dirty
+
+	// Flag whether the account was marked as self-destructed. The self-destructed
+	// account is still accessible in the scope of same transaction.
+	selfDestructed bool
+
+	// Flag whether the account was marked as deleted. A self-destructed account
+	// or an account that is considered as empty will be marked as deleted at
+	// the end of transaction and no longer accessible anymore.
+	deleted bool
+
+	touched bool
+
+	onDirty func(addr common.Address) // Callback method to mark a state object newly dirty
 }
 
 // empty returns whether the account is considered empty.
@@ -136,8 +143,8 @@ func (s *stateObject) setError(err error) {
 	}
 }
 
-func (s *stateObject) markSuicided() {
-	s.suicided = true
+func (s *stateObject) markSelfdestructed() {
+	s.selfDestructed = true
 	if s.onDirty != nil {
 		s.onDirty(s.Address())
 		s.onDirty = nil
@@ -174,7 +181,7 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
 	}
-	// Track the amount of time wasted on reading the storge trie
+	// Track the amount of time wasted on reading the storage trie
 	defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
 	value := common.Hash{}
 	// Load from DB in case it is missing.
@@ -272,7 +279,7 @@ func (s *stateObject) setState(key, value common.Hash) {
 
 // updateTrie writes cached storage modifications into the object's storage trie.
 func (s *stateObject) updateTrie(db Database) Trie {
-	// Track the amount of time wasted on updating the storge trie
+	// Track the amount of time wasted on updating the storage trie
 	defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
 	tr := s.getTrie(db)
 	for key, value := range s.dirtyStorage {
@@ -292,7 +299,7 @@ func (s *stateObject) updateTrie(db Database) Trie {
 func (s *stateObject) updateRoot(db Database) {
 	s.updateTrie(db)
 
-	// Track the amount of time wasted on hashing the storge trie
+	// Track the amount of time wasted on hashing the storage trie
 	defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
 
 	s.data.Root = s.trie.Hash()
@@ -305,7 +312,7 @@ func (s *stateObject) CommitTrie(db Database) error {
 	if s.dbErr != nil {
 		return s.dbErr
 	}
-	// Track the amount of time wasted on committing the storge trie
+	// Track the amount of time wasted on committing the storage trie
 	defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
 
 	root, err := s.trie.Commit(nil)
@@ -363,7 +370,7 @@ func (s *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)) *
 	stateObject.code = s.code
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()
 	stateObject.cachedStorage = s.dirtyStorage.Copy()
-	stateObject.suicided = s.suicided
+	stateObject.selfDestructed = s.selfDestructed
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
 	return stateObject

@@ -139,7 +139,7 @@ func bindBase1(address common.Address, caller bind.ContractCaller, transactor bi
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Base1 *Base1Raw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Base1 *Base1Raw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Base1.Contract.Base1Caller.contract.Call(opts, result, method, params...)
 }
 
@@ -158,7 +158,7 @@ func (_Base1 *Base1Raw) Transact(opts *bind.TransactOpts, method string, params 
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Base1 *Base1CallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Base1 *Base1CallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Base1.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -321,7 +321,7 @@ func bindBase2(address common.Address, caller bind.ContractCaller, transactor bi
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Base2 *Base2Raw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Base2 *Base2Raw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Base2.Contract.Base2Caller.contract.Call(opts, result, method, params...)
 }
 
@@ -340,7 +340,7 @@ func (_Base2 *Base2Raw) Transact(opts *bind.TransactOpts, method string, params 
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Base2 *Base2CallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Base2 *Base2CallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Base2.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -503,7 +503,7 @@ func bindInherited(address common.Address, caller bind.ContractCaller, transacto
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Inherited *InheritedRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Inherited *InheritedRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Inherited.Contract.InheritedCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -522,7 +522,7 @@ func (_Inherited *InheritedRaw) Transact(opts *bind.TransactOpts, method string,
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_Inherited *InheritedCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_Inherited *InheritedCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _Inherited.Contract.contract.Call(opts, result, method, params...)
 }
 

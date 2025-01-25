@@ -100,8 +100,7 @@ func TestDAOForkBlockNewChain(t *testing.T) {
 
 func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBlock *big.Int, expectVote bool) {
 	// Create a temporary data directory to use and inspect later
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
+	datadir := t.TempDir()
 
 	// Start a XDC instance with the requested flags set and immediately terminate
 	if genesis != "" {

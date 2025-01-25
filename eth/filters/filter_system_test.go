@@ -52,21 +52,34 @@ type testBackend struct {
 	chainFeed       event.Feed
 }
 
+func (b *testBackend) ChainConfig() *params.ChainConfig {
+	panic("implement me")
+}
+
+func (b *testBackend) CurrentHeader() *types.Header {
+	panic("implement me")
+}
+
 func (b *testBackend) ChainDb() ethdb.Database {
 	return b.db
 }
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
-	var hash common.Hash
-	var num uint64
-	if blockNr == rpc.LatestBlockNumber {
+	var (
+		hash common.Hash
+		num  uint64
+	)
+	switch blockNr {
+	case rpc.LatestBlockNumber:
 		hash = rawdb.ReadHeadBlockHash(b.db)
 		number := rawdb.ReadHeaderNumber(b.db, hash)
 		if number == nil {
 			return nil, nil
 		}
 		num = *number
-	} else {
+	case rpc.CommittedBlockNumber:
+		return nil, nil
+	default:
 		num = uint64(blockNr)
 		hash = rawdb.ReadCanonicalHash(b.db, num)
 	}
@@ -663,7 +676,7 @@ func TestLightFilterLogs(t *testing.T) {
 		key, _  = crypto.GenerateKey()
 		addr    = crypto.PubkeyToAddress(key.PublicKey)
 		genesis = &core.Genesis{Config: params.TestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr: {Balance: big.NewInt(params.Ether)},
 			},
 		}

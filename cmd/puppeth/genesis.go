@@ -25,6 +25,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
@@ -344,15 +345,15 @@ func newParityChainSpec(network string, genesis *core.Genesis, bootnodes []strin
 // pyEthereumGenesisSpec represents the genesis specification format used by the
 // Python Ethereum implementation.
 type pyEthereumGenesisSpec struct {
-	Nonce      hexutil.Bytes     `json:"nonce"`
-	Timestamp  hexutil.Uint64    `json:"timestamp"`
-	ExtraData  hexutil.Bytes     `json:"extraData"`
-	GasLimit   hexutil.Uint64    `json:"gasLimit"`
-	Difficulty *hexutil.Big      `json:"difficulty"`
-	Mixhash    common.Hash       `json:"mixhash"`
-	Coinbase   common.Address    `json:"coinbase"`
-	Alloc      core.GenesisAlloc `json:"alloc"`
-	ParentHash common.Hash       `json:"parentHash"`
+	Nonce      hexutil.Bytes      `json:"nonce"`
+	Timestamp  hexutil.Uint64     `json:"timestamp"`
+	ExtraData  hexutil.Bytes      `json:"extraData"`
+	GasLimit   hexutil.Uint64     `json:"gasLimit"`
+	Difficulty *hexutil.Big       `json:"difficulty"`
+	Mixhash    common.Hash        `json:"mixhash"`
+	Coinbase   common.Address     `json:"coinbase"`
+	Alloc      types.GenesisAlloc `json:"alloc"`
+	ParentHash common.Hash        `json:"parentHash"`
 }
 
 // newPyEthereumGenesisSpec converts a go-ethereum genesis block into a Parity specific

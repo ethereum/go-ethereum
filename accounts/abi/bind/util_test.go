@@ -18,6 +18,7 @@ package bind_test
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -25,7 +26,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -53,14 +53,18 @@ var waitDeployedTests = map[string]struct {
 }
 
 func TestWaitDeployed(t *testing.T) {
+	t.Parallel()
 	config := *params.TestXDPoSMockChainConfig
 	config.Eip1559Block = big.NewInt(0)
 	for name, test := range waitDeployedTests {
 		backend := backends.NewXDCSimulatedBackend(
-			core.GenesisAlloc{
+			types.GenesisAlloc{
 				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(100000000000000000)},
-			}, 10000000, &config,
+			},
+			10000000,
+			&config,
 		)
+		defer backend.Close()
 
 		// Create the transaction
 		head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
@@ -82,13 +86,15 @@ func TestWaitDeployed(t *testing.T) {
 		}()
 
 		// Send and mine the transaction.
-		backend.SendTransaction(ctx, tx)
+		if err := backend.SendTransaction(ctx, tx); err != nil {
+			t.Errorf("test %q: failed to send transaction: %v", name, err)
+		}
 		backend.Commit()
 
 		select {
 		case <-mined:
 			if err != test.wantErr {
-				t.Errorf("test %q: error mismatch: got %q, want %q", name, err, test.wantErr)
+				t.Errorf("test %q: error mismatch: want %q, got %q", name, test.wantErr, err)
 			}
 			if address != test.wantAddress {
 				t.Errorf("test %q: unexpected contract address %s", name, address.Hex())
@@ -97,4 +103,52 @@ func TestWaitDeployed(t *testing.T) {
 			t.Errorf("test %q: timeout", name)
 		}
 	}
+}
+
+func TestWaitDeployedCornerCases(t *testing.T) {
+	t.Parallel()
+	config := *params.TestXDPoSMockChainConfig
+	config.Eip1559Block = big.NewInt(0)
+	backend := backends.NewXDCSimulatedBackend(
+		types.GenesisAlloc{
+			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(100000000000000000)},
+		},
+		10000000,
+		&config,
+	)
+	defer backend.Close()
+
+	head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+
+	// Create a transaction to an account.
+	code := "6060604052600a8060106000396000f360606040526008565b00"
+	tx := types.NewTransaction(0, common.HexToAddress("0x01"), big.NewInt(0), 3000000, gasPrice, common.FromHex(code))
+	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := backend.SendTransaction(ctx, tx); err != nil {
+		t.Errorf("failed to send transaction: %q", err)
+	}
+	backend.Commit()
+	notContractCreation := errors.New("tx is not contract creation")
+	if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != notContractCreation.Error() {
+		t.Errorf("error mismatch: want %q, got %q, ", notContractCreation, err)
+	}
+
+	// Create a transaction that is not mined.
+	tx = types.NewContractCreation(1, big.NewInt(0), 3000000, gasPrice, common.FromHex(code))
+	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+
+	go func() {
+		contextCanceled := errors.New("context canceled")
+		if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != contextCanceled.Error() {
+			t.Errorf("error mismatch: want %q, got %q, ", contextCanceled, err)
+		}
+	}()
+
+	if err := backend.SendTransaction(ctx, tx); err != nil {
+		t.Errorf("failed to send transaction: %q", err)
+	}
+	cancel()
 }

@@ -22,7 +22,7 @@ import (
 	"sync/atomic"
 
 	"github.com/XinFinOrg/XDPoSChain/log"
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 )
 
 const MetadataApi = "rpc"
@@ -45,12 +45,12 @@ type Server struct {
 	services serviceRegistry
 	idgen    func() ID
 	run      int32
-	codecs   mapset.Set
+	codecs   mapset.Set[*ServerCodec]
 }
 
 // NewServer creates a new server instance with no registered handlers.
 func NewServer() *Server {
-	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet(), run: 1}
+	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet[*ServerCodec](), run: 1}
 	// Register the default service providing meta information about the RPC service such
 	// as the services and methods it offers.
 	rpcService := &RPCService{server}
@@ -80,8 +80,8 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	}
 
 	// Add the codec to the set so it can be closed by Stop.
-	s.codecs.Add(codec)
-	defer s.codecs.Remove(codec)
+	s.codecs.Add(&codec)
+	defer s.codecs.Remove(&codec)
 
 	c := initClient(codec, s.idgen, &s.services)
 	<-codec.closed()
@@ -121,8 +121,8 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 func (s *Server) Stop() {
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
 		log.Debug("RPC server shutting down")
-		s.codecs.Each(func(c interface{}) bool {
-			c.(ServerCodec).close()
+		s.codecs.Each(func(c *ServerCodec) bool {
+			(*c).close()
 			return true
 		})
 	}

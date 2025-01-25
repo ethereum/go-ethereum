@@ -136,12 +136,12 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 		byte(vm.DUP1), byte(vm.PUSH1), 0xff, byte(vm.GAS), // value=0,address=0xff, gas=GAS
 		byte(vm.CALL),
 	}
-	var alloc = core.GenesisAlloc{
-		to: core.GenesisAccount{
+	var alloc = types.GenesisAlloc{
+		to: types.Account{
 			Nonce: 1,
 			Code:  code,
 		},
-		origin: core.GenesisAccount{
+		origin: types.Account{
 			Nonce:   0,
 			Balance: big.NewInt(500000000000000),
 		},
@@ -215,16 +215,16 @@ func TestPrestateTracerCreate2(t *testing.T) {
 		Difficulty:  big.NewInt(0x30000),
 		GasLimit:    uint64(6000000),
 	}
-	alloc := core.GenesisAlloc{}
+	alloc := types.GenesisAlloc{}
 
 	// The code pushes 'deadbeef' into memory, then the other params, and calls CREATE2, then returns
 	// the address
-	alloc[common.HexToAddress("0x00000000000000000000000000000000deadbeef")] = core.GenesisAccount{
+	alloc[common.HexToAddress("0x00000000000000000000000000000000deadbeef")] = types.Account{
 		Nonce:   1,
 		Code:    hexutil.MustDecode("0x63deadbeef60005263cafebabe6004601c6000F560005260206000F3"),
 		Balance: big.NewInt(1),
 	}
-	alloc[origin] = core.GenesisAccount{
+	alloc[origin] = types.Account{
 		Nonce:   1,
 		Code:    []byte{},
 		Balance: big.NewInt(500000000000000),
@@ -309,7 +309,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		GasLimit:    gas,
 		// BaseFee:     big.NewInt(8),
 	}
-	alloc := core.GenesisAlloc{}
+	alloc := types.GenesisAlloc{}
 	// The code pushes 'deadbeef' into memory, then the other params, and calls CREATE2, then returns
 	// the address
 	loop := []byte{
@@ -317,12 +317,12 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		byte(vm.PUSH1), 0, // jumpdestination
 		byte(vm.JUMP),
 	}
-	alloc[common.HexToAddress("0x00000000000000000000000000000000deadbeef")] = core.GenesisAccount{
+	alloc[common.HexToAddress("0x00000000000000000000000000000000deadbeef")] = types.Account{
 		Nonce:   1,
 		Code:    loop,
 		Balance: big.NewInt(1),
 	}
-	alloc[from] = core.GenesisAccount{
+	alloc[from] = types.Account{
 		Nonce:   1,
 		Code:    []byte{},
 		Balance: big.NewInt(500000000000000),

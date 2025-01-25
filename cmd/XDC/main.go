@@ -62,7 +62,9 @@ var (
 		utils.BootnodesV5Flag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		//utils.NoUSBFlag,
+		utils.NoUSBFlag, // deprecated
+		utils.USBFlag,
+		utils.SmartCardDaemonPathFlag,
 		//utils.EthashCacheDirFlag,
 		//utils.EthashCachesInMemoryFlag,
 		//utils.EthashCachesOnDiskFlag,
@@ -312,11 +314,13 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 				status, _ := event.Wallet.Status()
 				log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", status)
 
+				var derivationPaths []accounts.DerivationPath
 				if event.Wallet.URL().Scheme == "ledger" {
-					event.Wallet.SelfDerive(accounts.DefaultLedgerBaseDerivationPath, stateReader)
-				} else {
-					event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
+					derivationPaths = append(derivationPaths, accounts.LegacyLedgerBaseDerivationPath)
 				}
+				derivationPaths = append(derivationPaths, accounts.DefaultBaseDerivationPath)
+
+				event.Wallet.SelfDerive(derivationPaths, stateReader)
 
 			case accounts.WalletDropped:
 				log.Info("Old wallet dropped", "url", event.Wallet.URL())

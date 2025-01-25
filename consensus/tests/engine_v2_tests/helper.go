@@ -77,13 +77,9 @@ func getSignerAndSignFn(pk *ecdsa.PrivateKey) (common.Address, func(account acco
 	veryLightScryptN := 2
 	veryLightScryptP := 1
 	dir, _ := os.MkdirTemp("", fmt.Sprintf("eth-getSignerAndSignFn-test-%v", RandStringBytes(5)))
-
-	new := func(kd string) *keystore.KeyStore {
-		return keystore.NewKeyStore(kd, veryLightScryptN, veryLightScryptP)
-	}
-
 	defer os.RemoveAll(dir)
-	ks := new(dir)
+
+	ks := keystore.NewKeyStore(dir, veryLightScryptN, veryLightScryptP)
 	pass := "" // not used but required by API
 	a1, err := ks.ImportECDSA(pk, pass)
 	if err != nil {
@@ -119,7 +115,7 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.SimulatedBackend {
 
 	// initial helper backend
-	contractBackendForSC := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	contractBackendForSC := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
 	}, 10000000, chainConfig)
 
@@ -188,7 +184,7 @@ func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.S
 	}
 
 	// create test backend with smart contract in it
-	contractBackend2 := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	contractBackend2 := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		acc1Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
 		acc2Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
 		acc3Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
@@ -202,7 +198,7 @@ func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.S
 func getMultiCandidatesBackend(t *testing.T, chainConfig *params.ChainConfig, n int) *backends.SimulatedBackend {
 	assert.GreaterOrEqual(t, n, 4)
 	// initial helper backend, give a very large gas limit
-	contractBackendForSC := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	contractBackendForSC := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
 	}, 1000000000, chainConfig)
 
@@ -272,7 +268,7 @@ func getMultiCandidatesBackend(t *testing.T, chainConfig *params.ChainConfig, n 
 	}
 
 	// create test backend with smart contract in it
-	contractBackend2 := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	contractBackend2 := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		acc1Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
 		acc2Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
 		acc3Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
@@ -373,7 +369,7 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 		panic(fmt.Errorf("error while creating simulated wallet for generating singer address and signer fn: %v", err))
 	}
 	backend := getCommonBackend(t, chainConfig)
-	blockchain := backend.GetBlockChain()
+	blockchain := backend.BlockChain()
 	blockchain.Client = backend
 
 	engine := blockchain.Engine().(*XDPoS.XDPoS)
@@ -463,7 +459,7 @@ func PrepareXDCTestBlockChainWithPenaltyForV2Engine(t *testing.T, numOfBlocks in
 		t.Fatal("Error while creating simulated wallet for generating singer address and signer fn: ", err)
 	}
 	backend := getCommonBackend(t, chainConfig)
-	blockchain := backend.GetBlockChain()
+	blockchain := backend.BlockChain()
 	blockchain.Client = backend
 
 	// Authorise
@@ -514,7 +510,7 @@ func PrepareXDCTestBlockChainWith128Candidates(t *testing.T, numOfBlocks int, ch
 		t.Fatal("Error while creating simulated wallet for generating singer address and signer fn: ", err)
 	}
 	backend := getMultiCandidatesBackend(t, chainConfig, 128)
-	blockchain := backend.GetBlockChain()
+	blockchain := backend.BlockChain()
 	blockchain.Client = backend
 
 	engine := blockchain.Engine().(*XDPoS.XDPoS)

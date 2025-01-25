@@ -28,11 +28,7 @@ import (
 // the configured service context.
 func TestContextDatabases(t *testing.T) {
 	// Create a temporary folder and ensure no database is contained within
-	dir, err := os.MkdirTemp("", "")
-	if err != nil {
-		t.Fatalf("failed to create temporary data directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	if _, err := os.Stat(filepath.Join(dir, "database")); err == nil {
 		t.Fatalf("non-created database already exists")

@@ -142,7 +142,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		engine = ethash.NewFaker()
 		gspec  = core.Genesis{
 			Config: params.TestChainConfig,
-			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+			Alloc:  types.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 		}
 		genesis = gspec.MustCommit(db)
 		chain   BlockChain

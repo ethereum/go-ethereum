@@ -116,7 +116,7 @@ func newTestBackend(t *testing.T, eip1559Block *big.Int, pending bool) *testBack
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
 		gspec  = &core.Genesis{
 			Config: &config,
-			Alloc:  core.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
+			Alloc:  types.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)

@@ -17,7 +17,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -31,10 +30,6 @@ import (
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)
-
-var (
-	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
-)
 
 /*
 The State Transitioning Model

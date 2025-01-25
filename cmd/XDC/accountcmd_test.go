@@ -33,7 +33,7 @@ import (
 // are copied into a temporary keystore directory.
 
 func tmpDatadirWithKeystore(t *testing.T) string {
-	datadir := tmpdir(t)
+	datadir := t.TempDir()
 	keystore := filepath.Join(datadir, "keystore")
 	source := filepath.Join("..", "..", "accounts", "keystore", "testdata", "keystore")
 	if err := cp.CopyAll(keystore, source); err != nil {
@@ -43,8 +43,7 @@ func tmpDatadirWithKeystore(t *testing.T) string {
 }
 
 func TestAccountListEmpty(t *testing.T) {
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
+	datadir := t.TempDir()
 	XDC := runXDC(t, "account", "list", "--datadir", datadir)
 	XDC.ExpectExit()
 }
@@ -79,8 +78,41 @@ Your new account is locked with a password. Please give a password. Do not forge
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "foobar"}}
 Repeat passphrase: {{.InputLine "foobar"}}
+
+Your new key was generated
+
 `)
-	XDC.ExpectRegexp(`Address: \{xdc[0-9a-f]{40}\}\n`)
+	XDC.ExpectRegexp(`
+Public address of the key:   xdc[0-9a-fA-F]{40}
+Path of the secret key file: .*UTC--.+--xdc[0-9a-fA-F]{40}
+
+- You can share your public address with anyone. Others need it to interact with you.
+- You must NEVER share the secret key with anyone! The key controls access to your funds!
+- You must BACKUP your key file! Without the key, it's impossible to access account funds!
+- You must REMEMBER your password! Without the password, it's impossible to decrypt the key!
+
+`)
+}
+
+func TestAccountImport(t *testing.T) {
+	tests := []struct{ name, key, output string }{
+		{
+			name:   "correct account",
+			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			output: "Address: {xdcfcad0b19bb29d4674531d6f115237e16afce377c}\n",
+		},
+		{
+			name:   "invalid character",
+			key:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef1",
+			output: "Fatal: Failed to load the private key: invalid character '1' at end of key file\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			importAccountWithExpect(t, test.key, test.output)
+		})
+	}
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
@@ -111,8 +143,7 @@ Repeat passphrase: {{.InputLine "foobar2"}}
 }
 
 func TestWalletImport(t *testing.T) {
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
+	datadir := t.TempDir()
 	XDC := runXDC(t, "wallet", "import", "--datadir", datadir, "--lightkdf", "testdata/guswallet.json")
 	defer XDC.ExpectExit()
 	XDC.Expect(`
@@ -163,7 +194,7 @@ func TestWalletImportBadPassword(t *testing.T) {
 	XDC.Expect(`
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "wrong"}}
-Fatal: could not decrypt key with given passphrase
+Fatal: could not decrypt key with given password
 `)
 }
 
@@ -207,7 +238,7 @@ Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 2/3
 Passphrase: {{.InputLine "wrong2"}}
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 3/3
 Passphrase: {{.InputLine "wrong3"}}
-Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could not decrypt key with given passphrase)
+Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could not decrypt key with given password)
 `)
 }
 
@@ -269,7 +300,7 @@ func TestUnlockFlagPasswordFileWrongPassword(t *testing.T) {
 		"--password", "testdata/wrong-passwords.txt", "--unlock", "0,2")
 	defer XDC.ExpectExit()
 	XDC.Expect(`
-Fatal: Failed to unlock account 0 (could not decrypt key with given passphrase)
+Fatal: Failed to unlock account 0 (could not decrypt key with given password)
 `)
 }
 

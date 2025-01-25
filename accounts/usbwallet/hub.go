@@ -20,6 +20,7 @@ import (
 	"errors"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
@@ -62,18 +63,48 @@ type Hub struct {
 	stateLock sync.RWMutex // Protects the internals of the hub from racey access
 
 	// TODO(karalabe): remove if hotplug lands on Windows
-	commsPend int        // Number of operations blocking enumeration
-	commsLock sync.Mutex // Lock protecting the pending counter and enumeration
+	commsPend int           // Number of operations blocking enumeration
+	commsLock sync.Mutex    // Lock protecting the pending counter and enumeration
+	enumFails atomic.Uint32 // Number of times enumeration has failed
 }
 
 // NewLedgerHub creates a new hardware wallet manager for Ledger devices.
 func NewLedgerHub() (*Hub, error) {
-	return newHub(LedgerScheme, 0x2c97, []uint16{0x0000 /* Ledger Blue */, 0x0001 /* Ledger Nano S */}, 0xffa0, 0, newLedgerDriver)
+	return newHub(LedgerScheme, 0x2c97, []uint16{
+
+		// Device definitions taken from
+		// https://github.com/LedgerHQ/ledger-live/blob/38012bc8899e0f07149ea9cfe7e64b2c146bc92b/libs/ledgerjs/packages/devices/src/index.ts
+
+		// Original product IDs
+		0x0000, /* Ledger Blue */
+		0x0001, /* Ledger Nano S */
+		0x0004, /* Ledger Nano X */
+		0x0005, /* Ledger Nano S Plus */
+		0x0006, /* Ledger Nano FTS */
+
+		0x0015, /* HID + U2F + WebUSB Ledger Blue */
+		0x1015, /* HID + U2F + WebUSB Ledger Nano S */
+		0x4015, /* HID + U2F + WebUSB Ledger Nano X */
+		0x5015, /* HID + U2F + WebUSB Ledger Nano S Plus */
+		0x6015, /* HID + U2F + WebUSB Ledger Nano FTS */
+
+		0x0011, /* HID + WebUSB Ledger Blue */
+		0x1011, /* HID + WebUSB Ledger Nano S */
+		0x4011, /* HID + WebUSB Ledger Nano X */
+		0x5011, /* HID + WebUSB Ledger Nano S Plus */
+		0x6011, /* HID + WebUSB Ledger Nano FTS */
+	}, 0xffa0, 0, newLedgerDriver)
 }
 
-// NewTrezorHub creates a new hardware wallet manager for Trezor devices.
-func NewTrezorHub() (*Hub, error) {
-	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor 1 */}, 0xff00, 0, newTrezorDriver)
+// NewTrezorHubWithHID creates a new hardware wallet manager for Trezor devices.
+func NewTrezorHubWithHID() (*Hub, error) {
+	return newHub(TrezorScheme, 0x534c, []uint16{0x0001 /* Trezor HID */}, 0xff00, 0, newTrezorDriver)
+}
+
+// NewTrezorHubWithWebUSB creates a new hardware wallet manager for Trezor devices with
+// firmware version > 1.8.0
+func NewTrezorHubWithWebUSB() (*Hub, error) {
+	return newHub(TrezorScheme, 0x1209, []uint16{0x53c1 /* Trezor WebUSB */}, 0xffff /* No usage id on webusb, don't match unset (0) */, 0, newTrezorDriver)
 }
 
 // newHub creates a new hardware wallet manager for generic USB devices.
@@ -119,6 +150,10 @@ func (hub *Hub) refreshWallets() {
 	if elapsed < refreshThrottling {
 		return
 	}
+	// If USB enumeration is continually failing, don't keep trying indefinitely
+	if hub.enumFails.Load() > 2 {
+		return
+	}
 	// Retrieve the current list of USB wallet devices
 	var devices []hid.DeviceInfo
 
@@ -127,7 +162,7 @@ func (hub *Hub) refreshWallets() {
 		// breaking the Ledger protocol if that is waiting for user confirmation. This
 		// is a bug acknowledged at Ledger, but it won't be fixed on old devices so we
 		// need to prevent concurrent comms ourselves. The more elegant solution would
-		// be to ditch enumeration in favor of hutplug events, but that don't work yet
+		// be to ditch enumeration in favor of hotplug events, but that don't work yet
 		// on Windows so if we need to hack it anyway, this is more elegant for now.
 		hub.commsLock.Lock()
 		if hub.commsPend > 0 { // A confirmation is pending, don't refresh
@@ -135,8 +170,22 @@ func (hub *Hub) refreshWallets() {
 			return
 		}
 	}
-	for _, info := range hid.Enumerate(hub.vendorID, 0) {
+	infos, err := hid.Enumerate(hub.vendorID, 0)
+	if err != nil {
+		failcount := hub.enumFails.Add(1)
+		if runtime.GOOS == "linux" {
+			// See rationale before the enumeration why this is needed and only on Linux.
+			hub.commsLock.Unlock()
+		}
+		log.Error("Failed to enumerate USB devices", "hub", hub.scheme,
+			"vendor", hub.vendorID, "failcount", failcount, "err", err)
+		return
+	}
+	hub.enumFails.Store(0)
+
+	for _, info := range infos {
 		for _, id := range hub.productIDs {
+			// Windows and Macos use UsageID matching, Linux uses Interface matching
 			if info.ProductID == id && (info.UsagePage == hub.usageID || info.Interface == hub.endpointID) {
 				devices = append(devices, info)
 				break
@@ -150,8 +199,10 @@ func (hub *Hub) refreshWallets() {
 	// Transform the current list of wallets into the new one
 	hub.stateLock.Lock()
 
-	wallets := make([]accounts.Wallet, 0, len(devices))
-	events := []accounts.WalletEvent{}
+	var (
+		wallets = make([]accounts.Wallet, 0, len(devices))
+		events  []accounts.WalletEvent
+	)
 
 	for _, device := range devices {
 		url := accounts.URL{Scheme: hub.scheme, Path: device.Path}

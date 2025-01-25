@@ -84,7 +84,7 @@ func (ls *LendingStateDB) Error() error {
 }
 
 // Exist reports whether the given tradeId address exists in the state.
-// Notably this also returns true for suicided lenddinges.
+// Notably this also returns true for self-destructed lenddinges.
 func (ls *LendingStateDB) Exist(addr common.Hash) bool {
 	return ls.getLendingExchange(addr) != nil
 }

@@ -16,27 +16,34 @@
 
 package bind
 
-import "github.com/XinFinOrg/XDPoSChain/accounts/abi"
+import (
+	_ "embed"
+
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi"
+)
 
 // tmplData is the data structure required to fill the binding template.
 type tmplData struct {
 	Package   string                   // Name of the package to place the generated file in
 	Contracts map[string]*tmplContract // List of contracts to generate into this file
 	Libraries map[string]string        // Map the bytecode's link pattern to the library name
+	Structs   map[string]*tmplStruct   // Contract struct type definitions
 }
 
 // tmplContract contains the data needed to generate an individual contract binding.
 type tmplContract struct {
 	Type        string                 // Type name of the main contract binding
 	InputABI    string                 // JSON ABI used as the input to generate the binding from
-	InputBin    string                 // Optional EVM bytecode used to denetare deploy code from
+	InputBin    string                 // Optional EVM bytecode used to generate deploy code from
 	FuncSigs    map[string]string      // Optional map: string signature -> 4-byte signature
 	Constructor abi.Method             // Contract constructor for deploy parametrization
 	Calls       map[string]*tmplMethod // Contract calls that only read state data
 	Transacts   map[string]*tmplMethod // Contract calls that write state data
+	Fallback    *tmplMethod            // Additional special fallback function
+	Receive     *tmplMethod            // Additional special receive function
 	Events      map[string]*tmplEvent  // Contract events accessors
 	Libraries   map[string]string      // Same as tmplData, but filtered to only keep what the contract needs
-	Library     bool
+	Library     bool                   // Indicator whether the contract is a library
 }
 
 // tmplMethod is a wrapper around an abi.Method that contains a few preprocessed
@@ -47,10 +54,26 @@ type tmplMethod struct {
 	Structured bool       // Whether the returns should be accumulated into a struct
 }
 
-// tmplEvent is a wrapper around an a
+// tmplEvent is a wrapper around an abi.Event that contains a few preprocessed
+// and cached data fields.
 type tmplEvent struct {
 	Original   abi.Event // Original event as parsed by the abi package
 	Normalized abi.Event // Normalized version of the parsed fields
+}
+
+// tmplField is a wrapper around a struct field with binding language
+// struct type definition and relative filed name.
+type tmplField struct {
+	Type    string   // Field type representation depends on target binding language
+	Name    string   // Field name converted from the raw user-defined field name
+	SolKind abi.Type // Raw abi type information
+}
+
+// tmplStruct is a wrapper around an abi.tuple and contains an auto-generated
+// struct name.
+type tmplStruct struct {
+	Name   string       // Auto-generated struct name(before solidity v0.5.11) or raw name.
+	Fields []*tmplField // Struct fields definition depends on the binding language.
 }
 
 // tmplSource is language to template mapping containing all the supported
@@ -59,400 +82,8 @@ var tmplSource = map[Lang]string{
 	LangGo: tmplSourceGo,
 }
 
-// tmplSourceGo is the Go source template use to generate the contract binding
-// based on.
-const tmplSourceGo = `
-// Code generated - DO NOT EDIT.
-// This file is a generated binding and any manual changes will be lost.
-
-package {{.Package}}
-
-import (
-	"math/big"
-	"strings"
-
-	ethereum "github.com/XinFinOrg/XDPoSChain"
-	"github.com/XinFinOrg/XDPoSChain/accounts/abi"
-	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
-	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/event"
-)
-
-// Reference imports to suppress errors if they are not otherwise used.
-var (
-	_ = big.NewInt
-	_ = strings.NewReader
-	_ = ethereum.ErrNotFound
-	_ = bind.Bind
-	_ = common.Big1
-	_ = types.BloomLookup
-	_ = event.NewSubscription
-)
-
-{{range $contract := .Contracts}}
-	// {{.Type}}ABI is the input ABI used to generate the binding from.
-	const {{.Type}}ABI = "{{.InputABI}}"
-
-	{{if $contract.FuncSigs}}
-		// {{.Type}}FuncSigs maps the 4-byte function signature to its string representation.
-		var {{.Type}}FuncSigs = map[string]string{
-			{{range $strsig, $binsig := .FuncSigs}}"{{$binsig}}": "{{$strsig}}",
-			{{end}}
-		}
-	{{end}}
-
-	{{if .InputBin}}
-		// {{.Type}}Bin is the compiled bytecode used for deploying new contracts.
-		var {{.Type}}Bin = "0x{{.InputBin}}"
-
-		// Deploy{{.Type}} deploys a new Ethereum contract, binding an instance of {{.Type}} to it.
-		func Deploy{{.Type}}(auth *bind.TransactOpts, backend bind.ContractBackend {{range .Constructor.Inputs}}, {{.Name}} {{bindtype .Type}}{{end}}) (common.Address, *types.Transaction, *{{.Type}}, error) {
-		  parsed, err := abi.JSON(strings.NewReader({{.Type}}ABI))
-		  if err != nil {
-		    return common.Address{}, nil, nil, err
-		  }
-		  {{range $pattern, $name := .Libraries}}
-			{{decapitalise $name}}Addr, _, _, _ := Deploy{{capitalise $name}}(auth, backend)
-			{{$contract.Type}}Bin = strings.Replace({{$contract.Type}}Bin, "__${{$pattern}}$__", {{decapitalise $name}}Addr.String()[2:], -1)
-		  {{end}}
-		  address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex({{.Type}}Bin), backend {{range .Constructor.Inputs}}, {{.Name}}{{end}})
-		  if err != nil {
-		    return common.Address{}, nil, nil, err
-		  }
-		  return address, tx, &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{contract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{contract: contract}, {{.Type}}Filterer: {{.Type}}Filterer{contract: contract} }, nil
-		}
-	{{end}}
-
-	// {{.Type}} is an auto generated Go binding around an Ethereum contract.
-	type {{.Type}} struct {
-	  {{.Type}}Caller     // Read-only binding to the contract
-	  {{.Type}}Transactor // Write-only binding to the contract
-		{{.Type}}Filterer   // Log filterer for contract events
-	}
-
-	// {{.Type}}Caller is an auto generated read-only Go binding around an Ethereum contract.
-	type {{.Type}}Caller struct {
-	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
-	}
-
-	// {{.Type}}Transactor is an auto generated write-only Go binding around an Ethereum contract.
-	type {{.Type}}Transactor struct {
-	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
-	}
-
-	// {{.Type}}Filterer is an auto generated log filtering Go binding around an Ethereum contract events.
-	type {{.Type}}Filterer struct {
-	  contract *bind.BoundContract // Generic contract wrapper for the low level calls
-	}
-
-	// {{.Type}}Session is an auto generated Go binding around an Ethereum contract,
-	// with pre-set call and transact options.
-	type {{.Type}}Session struct {
-	  Contract     *{{.Type}}        // Generic contract binding to set the session for
-	  CallOpts     bind.CallOpts     // Call options to use throughout this session
-	  TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
-	}
-
-	// {{.Type}}CallerSession is an auto generated read-only Go binding around an Ethereum contract,
-	// with pre-set call options.
-	type {{.Type}}CallerSession struct {
-	  Contract *{{.Type}}Caller // Generic contract caller binding to set the session for
-	  CallOpts bind.CallOpts    // Call options to use throughout this session
-	}
-
-	// {{.Type}}TransactorSession is an auto generated write-only Go binding around an Ethereum contract,
-	// with pre-set transact options.
-	type {{.Type}}TransactorSession struct {
-	  Contract     *{{.Type}}Transactor // Generic contract transactor binding to set the session for
-	  TransactOpts bind.TransactOpts    // Transaction auth options to use throughout this session
-	}
-
-	// {{.Type}}Raw is an auto generated low-level Go binding around an Ethereum contract.
-	type {{.Type}}Raw struct {
-	  Contract *{{.Type}} // Generic contract binding to access the raw methods on
-	}
-
-	// {{.Type}}CallerRaw is an auto generated low-level read-only Go binding around an Ethereum contract.
-	type {{.Type}}CallerRaw struct {
-		Contract *{{.Type}}Caller // Generic read-only contract binding to access the raw methods on
-	}
-
-	// {{.Type}}TransactorRaw is an auto generated low-level write-only Go binding around an Ethereum contract.
-	type {{.Type}}TransactorRaw struct {
-		Contract *{{.Type}}Transactor // Generic write-only contract binding to access the raw methods on
-	}
-
-	// New{{.Type}} creates a new instance of {{.Type}}, bound to a specific deployed contract.
-	func New{{.Type}}(address common.Address, backend bind.ContractBackend) (*{{.Type}}, error) {
-	  contract, err := bind{{.Type}}(address, backend, backend, backend)
-	  if err != nil {
-	    return nil, err
-	  }
-	  return &{{.Type}}{ {{.Type}}Caller: {{.Type}}Caller{contract: contract}, {{.Type}}Transactor: {{.Type}}Transactor{contract: contract}, {{.Type}}Filterer: {{.Type}}Filterer{contract: contract} }, nil
-	}
-
-	// New{{.Type}}Caller creates a new read-only instance of {{.Type}}, bound to a specific deployed contract.
-	func New{{.Type}}Caller(address common.Address, caller bind.ContractCaller) (*{{.Type}}Caller, error) {
-	  contract, err := bind{{.Type}}(address, caller, nil, nil)
-	  if err != nil {
-	    return nil, err
-	  }
-	  return &{{.Type}}Caller{contract: contract}, nil
-	}
-
-	// New{{.Type}}Transactor creates a new write-only instance of {{.Type}}, bound to a specific deployed contract.
-	func New{{.Type}}Transactor(address common.Address, transactor bind.ContractTransactor) (*{{.Type}}Transactor, error) {
-	  contract, err := bind{{.Type}}(address, nil, transactor, nil)
-	  if err != nil {
-	    return nil, err
-	  }
-	  return &{{.Type}}Transactor{contract: contract}, nil
-	}
-
-	// New{{.Type}}Filterer creates a new log filterer instance of {{.Type}}, bound to a specific deployed contract.
- 	func New{{.Type}}Filterer(address common.Address, filterer bind.ContractFilterer) (*{{.Type}}Filterer, error) {
- 	  contract, err := bind{{.Type}}(address, nil, nil, filterer)
- 	  if err != nil {
- 	    return nil, err
- 	  }
- 	  return &{{.Type}}Filterer{contract: contract}, nil
- 	}
-
-	// bind{{.Type}} binds a generic wrapper to an already deployed contract.
-	func bind{{.Type}}(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, error) {
-	  parsed, err := abi.JSON(strings.NewReader({{.Type}}ABI))
-	  if err != nil {
-	    return nil, err
-	  }
-	  return bind.NewBoundContract(address, parsed, caller, transactor, filterer), nil
-	}
-
-	// Call invokes the (constant) contract method with params as input values and
-	// sets the output to result. The result type might be a single field for simple
-	// returns, a slice of interfaces for anonymous returns and a struct for named
-	// returns.
-	func (_{{$contract.Type}} *{{$contract.Type}}Raw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-		return _{{$contract.Type}}.Contract.{{$contract.Type}}Caller.contract.Call(opts, result, method, params...)
-	}
-
-	// Transfer initiates a plain transaction to move funds to the contract, calling
-	// its default method if one is available.
-	func (_{{$contract.Type}} *{{$contract.Type}}Raw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return _{{$contract.Type}}.Contract.{{$contract.Type}}Transactor.contract.Transfer(opts)
-	}
-
-	// Transact invokes the (paid) contract method with params as input values.
-	func (_{{$contract.Type}} *{{$contract.Type}}Raw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-		return _{{$contract.Type}}.Contract.{{$contract.Type}}Transactor.contract.Transact(opts, method, params...)
-	}
-
-	// Call invokes the (constant) contract method with params as input values and
-	// sets the output to result. The result type might be a single field for simple
-	// returns, a slice of interfaces for anonymous returns and a struct for named
-	// returns.
-	func (_{{$contract.Type}} *{{$contract.Type}}CallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-		return _{{$contract.Type}}.Contract.contract.Call(opts, result, method, params...)
-	}
-
-	// Transfer initiates a plain transaction to move funds to the contract, calling
-	// its default method if one is available.
-	func (_{{$contract.Type}} *{{$contract.Type}}TransactorRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-		return _{{$contract.Type}}.Contract.contract.Transfer(opts)
-	}
-
-	// Transact invokes the (paid) contract method with params as input values.
-	func (_{{$contract.Type}} *{{$contract.Type}}TransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-		return _{{$contract.Type}}.Contract.contract.Transact(opts, method, params...)
-	}
-
-	{{range .Calls}}
-		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.Id}}.
-		//
-		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}Caller) {{.Normalized.Name}}(opts *bind.CallOpts {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type}} {{end}}) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type}},{{end}}{{end}} error) {
-			{{if .Structured}}ret := new(struct{
-				{{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type}}
-				{{end}}
-			}){{else}}var (
-				{{range $i, $_ := .Normalized.Outputs}}ret{{$i}} = new({{bindtype .Type}})
-				{{end}}
-			){{end}}
-			out := {{if .Structured}}ret{{else}}{{if eq (len .Normalized.Outputs) 1}}ret0{{else}}&[]interface{}{
-				{{range $i, $_ := .Normalized.Outputs}}ret{{$i}},
-				{{end}}
-			}{{end}}{{end}}
-			err := _{{$contract.Type}}.contract.Call(opts, out, "{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
-			return {{if .Structured}}*ret,{{else}}{{range $i, $_ := .Normalized.Outputs}}*ret{{$i}},{{end}}{{end}} err
-		}
-
-		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.Id}}.
-		//
-		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}Session) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type}} {{end}}) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type}};{{end}} }, {{else}} {{range .Normalized.Outputs}}{{bindtype .Type}},{{end}} {{end}} error) {
-		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.CallOpts {{range .Normalized.Inputs}}, {{.Name}}{{end}})
-		}
-
-		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.Id}}.
-		//
-		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}CallerSession) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type}} {{end}}) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type}};{{end}} }, {{else}} {{range .Normalized.Outputs}}{{bindtype .Type}},{{end}} {{end}} error) {
-		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.CallOpts {{range .Normalized.Inputs}}, {{.Name}}{{end}})
-		}
-	{{end}}
-
-	{{range .Transacts}}
-		// {{.Normalized.Name}} is a paid mutator transaction binding the contract method 0x{{printf "%x" .Original.Id}}.
-		//
-		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}Transactor) {{.Normalized.Name}}(opts *bind.TransactOpts {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type}} {{end}}) (*types.Transaction, error) {
-			return _{{$contract.Type}}.contract.Transact(opts, "{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
-		}
-
-		// {{.Normalized.Name}} is a paid mutator transaction binding the contract method 0x{{printf "%x" .Original.Id}}.
-		//
-		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}Session) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type}} {{end}}) (*types.Transaction, error) {
-		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.TransactOpts {{range $i, $_ := .Normalized.Inputs}}, {{.Name}}{{end}})
-		}
-
-		// {{.Normalized.Name}} is a paid mutator transaction binding the contract method 0x{{printf "%x" .Original.Id}}.
-		//
-		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}TransactorSession) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type}} {{end}}) (*types.Transaction, error) {
-		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.TransactOpts {{range $i, $_ := .Normalized.Inputs}}, {{.Name}}{{end}})
-		}
-	{{end}}
-
-	{{range .Events}}
-		// {{$contract.Type}}{{.Normalized.Name}}Iterator is returned from Filter{{.Normalized.Name}} and is used to iterate over the raw logs and unpacked data for {{.Normalized.Name}} events raised by the {{$contract.Type}} contract.
-		type {{$contract.Type}}{{.Normalized.Name}}Iterator struct {
-			Event *{{$contract.Type}}{{.Normalized.Name}} // Event containing the contract specifics and raw log
-
-			contract *bind.BoundContract // Generic contract to use for unpacking event data
-			event    string              // Event name to use for unpacking event data
-
-			logs chan types.Log        // Log channel receiving the found contract events
-			sub  ethereum.Subscription // Subscription for errors, completion and termination
-			done bool                  // Whether the subscription completed delivering logs
-			fail error                 // Occurred error to stop iteration
-		}
-		// Next advances the iterator to the subsequent event, returning whether there
-		// are any more events found. In case of a retrieval or parsing error, false is
-		// returned and Error() can be queried for the exact failure.
-		func (it *{{$contract.Type}}{{.Normalized.Name}}Iterator) Next() bool {
-			// If the iterator failed, stop iterating
-			if (it.fail != nil) {
-				return false
-			}
-			// If the iterator completed, deliver directly whatever's available
-			if (it.done) {
-				select {
-				case log := <-it.logs:
-					it.Event = new({{$contract.Type}}{{.Normalized.Name}})
-					if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-						it.fail = err
-						return false
-					}
-					it.Event.Raw = log
-					return true
-
-				default:
-					return false
-				}
-			}
-			// Iterator still in progress, wait for either a data or an error event
-			select {
-			case log := <-it.logs:
-				it.Event = new({{$contract.Type}}{{.Normalized.Name}})
-				if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
-					it.fail = err
-					return false
-				}
-				it.Event.Raw = log
-				return true
-
-			case err := <-it.sub.Err():
-				it.done = true
-				it.fail = err
-				return it.Next()
-			}
-		}
-		// Error returns any retrieval or parsing error occurred during filtering.
-		func (it *{{$contract.Type}}{{.Normalized.Name}}Iterator) Error() error {
-			return it.fail
-		}
-		// Close terminates the iteration process, releasing any pending underlying
-		// resources.
-		func (it *{{$contract.Type}}{{.Normalized.Name}}Iterator) Close() error {
-			it.sub.Unsubscribe()
-			return nil
-		}
-
-		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} event raised by the {{$contract.Type}} contract.
-		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
-			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type}}{{else}}{{bindtype .Type}}{{end}}; {{end}}
-			Raw types.Log // Blockchain specific contextual infos
-		}
-
-		// Filter{{.Normalized.Name}} is a free log retrieval operation binding the contract event 0x{{printf "%x" .Original.Id}}.
-		//
-		// Solidity: {{.Original.String}}
- 		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) Filter{{.Normalized.Name}}(opts *bind.FilterOpts{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}} []{{bindtype .Type}}{{end}}{{end}}) (*{{$contract.Type}}{{.Normalized.Name}}Iterator, error) {
-			{{range .Normalized.Inputs}}
-			{{if .Indexed}}var {{.Name}}Rule []interface{}
-			for _, {{.Name}}Item := range {{.Name}} {
-				{{.Name}}Rule = append({{.Name}}Rule, {{.Name}}Item)
-			}{{end}}{{end}}
-
-			logs, sub, err := _{{$contract.Type}}.contract.FilterLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
-			if err != nil {
-				return nil, err
-			}
-			return &{{$contract.Type}}{{.Normalized.Name}}Iterator{contract: _{{$contract.Type}}.contract, event: "{{.Original.Name}}", logs: logs, sub: sub}, nil
- 		}
-
-		// Watch{{.Normalized.Name}} is a free log subscription operation binding the contract event 0x{{printf "%x" .Original.Id}}.
-		//
-		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) Watch{{.Normalized.Name}}(opts *bind.WatchOpts, sink chan<- *{{$contract.Type}}{{.Normalized.Name}}{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}} []{{bindtype .Type}}{{end}}{{end}}) (event.Subscription, error) {
-			{{range .Normalized.Inputs}}
-			{{if .Indexed}}var {{.Name}}Rule []interface{}
-			for _, {{.Name}}Item := range {{.Name}} {
-				{{.Name}}Rule = append({{.Name}}Rule, {{.Name}}Item)
-			}{{end}}{{end}}
-
-			logs, sub, err := _{{$contract.Type}}.contract.WatchLogs(opts, "{{.Original.Name}}"{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}}Rule{{end}}{{end}})
-			if err != nil {
-				return nil, err
-			}
-			return event.NewSubscription(func(quit <-chan struct{}) error {
-				defer sub.Unsubscribe()
-				for {
-					select {
-					case log := <-logs:
-						// New log arrived, parse the event and forward to the user
-						event := new({{$contract.Type}}{{.Normalized.Name}})
-						if err := _{{$contract.Type}}.contract.UnpackLog(event, "{{.Original.Name}}", log); err != nil {
-							return err
-						}
-						event.Raw = log
-
-						select {
-						case sink <- event:
-						case err := <-sub.Err():
-							return err
-						case <-quit:
-							return nil
-						}
-					case err := <-sub.Err():
-						return err
-					case <-quit:
-						return nil
-					}
-				}
-			}), nil
-		}
- 	{{end}}
-{{end}}
-`
+// tmplSourceGo is the Go source template that the generated Go contract binding
+// is based on.
+//
+//go:embed source.go.tpl
+var tmplSourceGo string

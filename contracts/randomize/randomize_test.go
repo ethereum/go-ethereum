@@ -26,7 +26,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
-	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -42,7 +41,7 @@ var (
 )
 
 func TestRandomize(t *testing.T) {
-	contractBackend := backends.NewXDCSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(100000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
+	contractBackend := backends.NewXDCSimulatedBackend(types.GenesisAlloc{addr: {Balance: big.NewInt(100000000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 	transactOpts := bind.NewKeyedTransactor(key)
 	transactOpts.GasLimit = 1000000
 
@@ -72,8 +71,9 @@ func TestRandomize(t *testing.T) {
 }
 
 func TestSendTxRandomizeSecretAndOpening(t *testing.T) {
-	genesis := core.GenesisAlloc{acc1Addr: {Balance: big.NewInt(1000000000000)}}
-	backend := backends.NewSimulatedBackend(genesis)
+	genesis := types.GenesisAlloc{acc1Addr: {Balance: big.NewInt(1000000000000)}}
+	// TODO(daniel): replace NewSimulatedBackend with NewXDCSimulatedBackend
+	backend := backends.NewSimulatedBackend(genesis, 42000000)
 	backend.Commit()
 	signer := types.HomesteadSigner{}
 	ctx := context.Background()

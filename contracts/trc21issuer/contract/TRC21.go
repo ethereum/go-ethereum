@@ -142,7 +142,7 @@ func bindITRC21(address common.Address, caller bind.ContractCaller, transactor b
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_ITRC21 *ITRC21Raw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_ITRC21 *ITRC21Raw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _ITRC21.Contract.ITRC21Caller.contract.Call(opts, result, method, params...)
 }
 
@@ -161,7 +161,7 @@ func (_ITRC21 *ITRC21Raw) Transact(opts *bind.TransactOpts, method string, param
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_ITRC21 *ITRC21CallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_ITRC21 *ITRC21CallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _ITRC21.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -183,7 +183,9 @@ func (_ITRC21 *ITRC21Caller) Allowance(opts *bind.CallOpts, owner common.Address
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _ITRC21.contract.Call(opts, out, "allowance", owner, spender)
 	return *ret0, err
 }
@@ -209,7 +211,9 @@ func (_ITRC21 *ITRC21Caller) BalanceOf(opts *bind.CallOpts, who common.Address) 
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _ITRC21.contract.Call(opts, out, "balanceOf", who)
 	return *ret0, err
 }
@@ -235,7 +239,9 @@ func (_ITRC21 *ITRC21Caller) EstimateFee(opts *bind.CallOpts, value *big.Int) (*
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _ITRC21.contract.Call(opts, out, "estimateFee", value)
 	return *ret0, err
 }
@@ -261,7 +267,9 @@ func (_ITRC21 *ITRC21Caller) TotalSupply(opts *bind.CallOpts) (*big.Int, error) 
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _ITRC21.contract.Call(opts, out, "totalSupply")
 	return *ret0, err
 }
@@ -905,7 +913,7 @@ func bindMyTRC21(address common.Address, caller bind.ContractCaller, transactor 
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_MyTRC21 *MyTRC21Raw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_MyTRC21 *MyTRC21Raw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _MyTRC21.Contract.MyTRC21Caller.contract.Call(opts, result, method, params...)
 }
 
@@ -924,7 +932,7 @@ func (_MyTRC21 *MyTRC21Raw) Transact(opts *bind.TransactOpts, method string, par
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_MyTRC21 *MyTRC21CallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_MyTRC21 *MyTRC21CallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _MyTRC21.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -946,7 +954,9 @@ func (_MyTRC21 *MyTRC21Caller) Allowance(opts *bind.CallOpts, owner common.Addre
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MyTRC21.contract.Call(opts, out, "allowance", owner, spender)
 	return *ret0, err
 }
@@ -972,7 +982,9 @@ func (_MyTRC21 *MyTRC21Caller) BalanceOf(opts *bind.CallOpts, owner common.Addre
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MyTRC21.contract.Call(opts, out, "balanceOf", owner)
 	return *ret0, err
 }
@@ -998,7 +1010,9 @@ func (_MyTRC21 *MyTRC21Caller) Decimals(opts *bind.CallOpts) (uint8, error) {
 	var (
 		ret0 = new(uint8)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MyTRC21.contract.Call(opts, out, "decimals")
 	return *ret0, err
 }
@@ -1024,7 +1038,9 @@ func (_MyTRC21 *MyTRC21Caller) EstimateFee(opts *bind.CallOpts, value *big.Int) 
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MyTRC21.contract.Call(opts, out, "estimateFee", value)
 	return *ret0, err
 }
@@ -1050,7 +1066,9 @@ func (_MyTRC21 *MyTRC21Caller) Issuer(opts *bind.CallOpts) (common.Address, erro
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MyTRC21.contract.Call(opts, out, "issuer")
 	return *ret0, err
 }
@@ -1076,7 +1094,9 @@ func (_MyTRC21 *MyTRC21Caller) MinFee(opts *bind.CallOpts) (*big.Int, error) {
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MyTRC21.contract.Call(opts, out, "minFee")
 	return *ret0, err
 }
@@ -1102,7 +1122,9 @@ func (_MyTRC21 *MyTRC21Caller) Name(opts *bind.CallOpts) (string, error) {
 	var (
 		ret0 = new(string)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MyTRC21.contract.Call(opts, out, "name")
 	return *ret0, err
 }
@@ -1128,7 +1150,9 @@ func (_MyTRC21 *MyTRC21Caller) Symbol(opts *bind.CallOpts) (string, error) {
 	var (
 		ret0 = new(string)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MyTRC21.contract.Call(opts, out, "symbol")
 	return *ret0, err
 }
@@ -1154,7 +1178,9 @@ func (_MyTRC21 *MyTRC21Caller) TotalSupply(opts *bind.CallOpts) (*big.Int, error
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MyTRC21.contract.Call(opts, out, "totalSupply")
 	return *ret0, err
 }
@@ -1798,7 +1824,7 @@ func bindTRC21(address common.Address, caller bind.ContractCaller, transactor bi
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_TRC21 *TRC21Raw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_TRC21 *TRC21Raw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _TRC21.Contract.TRC21Caller.contract.Call(opts, result, method, params...)
 }
 
@@ -1817,7 +1843,7 @@ func (_TRC21 *TRC21Raw) Transact(opts *bind.TransactOpts, method string, params 
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_TRC21 *TRC21CallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_TRC21 *TRC21CallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _TRC21.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -1839,7 +1865,9 @@ func (_TRC21 *TRC21Caller) Allowance(opts *bind.CallOpts, owner common.Address, 
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _TRC21.contract.Call(opts, out, "allowance", owner, spender)
 	return *ret0, err
 }
@@ -1865,7 +1893,9 @@ func (_TRC21 *TRC21Caller) BalanceOf(opts *bind.CallOpts, owner common.Address) 
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _TRC21.contract.Call(opts, out, "balanceOf", owner)
 	return *ret0, err
 }
@@ -1891,7 +1921,9 @@ func (_TRC21 *TRC21Caller) EstimateFee(opts *bind.CallOpts, value *big.Int) (*bi
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _TRC21.contract.Call(opts, out, "estimateFee", value)
 	return *ret0, err
 }
@@ -1917,7 +1949,9 @@ func (_TRC21 *TRC21Caller) Issuer(opts *bind.CallOpts) (common.Address, error) {
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _TRC21.contract.Call(opts, out, "issuer")
 	return *ret0, err
 }
@@ -1943,7 +1977,9 @@ func (_TRC21 *TRC21Caller) MinFee(opts *bind.CallOpts) (*big.Int, error) {
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _TRC21.contract.Call(opts, out, "minFee")
 	return *ret0, err
 }
@@ -1969,7 +2005,9 @@ func (_TRC21 *TRC21Caller) TotalSupply(opts *bind.CallOpts) (*big.Int, error) {
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _TRC21.contract.Call(opts, out, "totalSupply")
 	return *ret0, err
 }

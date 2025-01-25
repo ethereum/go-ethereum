@@ -6,7 +6,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/stretchr/testify/assert"
@@ -18,13 +18,13 @@ var (
 )
 
 func TestConfigApi(t *testing.T) {
-	bc := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
+	bc := backends.NewXDCSimulatedBackend(types.GenesisAlloc{
 		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
 	}, 10000000, params.TestXDPoSMockChainConfig)
 
-	engine := bc.GetBlockChain().Engine().(*XDPoS.XDPoS)
+	engine := bc.BlockChain().Engine().(*XDPoS.XDPoS)
 
-	info := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).NetworkInformation()
+	info := engine.APIs(bc.BlockChain())[0].Service.(*XDPoS.API).NetworkInformation()
 
 	assert.Equal(t, info.NetworkId, big.NewInt(1337))
 	assert.Equal(t, info.ConsensusConfigs.V2.CurrentConfig.MaxMasternodes, 18)

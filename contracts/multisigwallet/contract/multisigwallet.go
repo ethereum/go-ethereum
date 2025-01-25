@@ -142,7 +142,7 @@ func bindMultiSigWallet(address common.Address, caller bind.ContractCaller, tran
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_MultiSigWallet *MultiSigWalletRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_MultiSigWallet *MultiSigWalletRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _MultiSigWallet.Contract.MultiSigWalletCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -161,7 +161,7 @@ func (_MultiSigWallet *MultiSigWalletRaw) Transact(opts *bind.TransactOpts, meth
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_MultiSigWallet *MultiSigWalletCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_MultiSigWallet *MultiSigWalletCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _MultiSigWallet.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -183,7 +183,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) MAXOWNERCOUNT(opts *bind.CallOpts) 
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "MAX_OWNER_COUNT")
 	return *ret0, err
 }
@@ -209,7 +211,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) Confirmations(opts *bind.CallOpts, 
 	var (
 		ret0 = new(bool)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "confirmations", arg0, arg1)
 	return *ret0, err
 }
@@ -235,7 +239,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) GetConfirmationCount(opts *bind.Cal
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "getConfirmationCount", transactionId)
 	return *ret0, err
 }
@@ -261,7 +267,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) GetConfirmations(opts *bind.CallOpt
 	var (
 		ret0 = new([]common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "getConfirmations", transactionId)
 	return *ret0, err
 }
@@ -287,7 +295,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) GetOwners(opts *bind.CallOpts) ([]c
 	var (
 		ret0 = new([]common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "getOwners")
 	return *ret0, err
 }
@@ -313,7 +323,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) GetTransactionCount(opts *bind.Call
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "getTransactionCount", pending, executed)
 	return *ret0, err
 }
@@ -339,7 +351,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) GetTransactionIds(opts *bind.CallOp
 	var (
 		ret0 = new([]*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "getTransactionIds", from, to, pending, executed)
 	return *ret0, err
 }
@@ -365,7 +379,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) IsConfirmed(opts *bind.CallOpts, tr
 	var (
 		ret0 = new(bool)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "isConfirmed", transactionId)
 	return *ret0, err
 }
@@ -391,7 +407,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) IsOwner(opts *bind.CallOpts, arg0 c
 	var (
 		ret0 = new(bool)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "isOwner", arg0)
 	return *ret0, err
 }
@@ -417,7 +435,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) Owners(opts *bind.CallOpts, arg0 *b
 	var (
 		ret0 = new(common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "owners", arg0)
 	return *ret0, err
 }
@@ -443,7 +463,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) Required(opts *bind.CallOpts) (*big
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "required")
 	return *ret0, err
 }
@@ -469,7 +491,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) TransactionCount(opts *bind.CallOpt
 	var (
 		ret0 = new(*big.Int)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "transactionCount")
 	return *ret0, err
 }
@@ -503,7 +527,9 @@ func (_MultiSigWallet *MultiSigWalletCaller) Transactions(opts *bind.CallOpts, a
 		Data        []byte
 		Executed    bool
 	})
-	out := ret
+	out := &[]interface{}{
+		ret,
+	}
 	err := _MultiSigWallet.contract.Call(opts, out, "transactions", arg0)
 	return *ret, err
 }

@@ -336,7 +336,7 @@ var (
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: nil,
+		ConstantinopleBlock: big.NewInt(0),
 		Ethash:              new(EthashConfig),
 		Clique:              nil,
 		XDPoS: &XDPoSConfig{

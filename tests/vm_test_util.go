@@ -29,6 +29,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -50,8 +51,8 @@ type vmJSON struct {
 	Logs          common.UnprefixedHash `json:"logs"`
 	GasRemaining  *math.HexOrDecimal64  `json:"gas"`
 	Out           hexutil.Bytes         `json:"out"`
-	Pre           core.GenesisAlloc     `json:"pre"`
-	Post          core.GenesisAlloc     `json:"post"`
+	Pre           types.GenesisAlloc    `json:"pre"`
+	Post          types.GenesisAlloc    `json:"post"`
 	PostStateRoot common.Hash           `json:"postStateRoot"`
 }
 

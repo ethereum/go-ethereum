@@ -17,6 +17,7 @@
 package bind
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"io"
@@ -53,6 +54,29 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 	return NewKeyedTransactor(key.PrivateKey), nil
 }
 
+// NewKeyStoreTransactor is a utility method to easily create a transaction signer from
+// a decrypted key from a keystore.
+//
+// Deprecated: Use NewKeyStoreTransactorWithChainID instead.
+func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
+	log.Warn("WARNING: NewKeyStoreTransactor has been deprecated in favour of NewTransactorWithChainID")
+	signer := types.HomesteadSigner{}
+	return &TransactOpts{
+		From: account.Address,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			if address != account.Address {
+				return nil, ErrNotAuthorized
+			}
+			signature, err := keystore.SignHash(account, signer.Hash(tx).Bytes())
+			if err != nil {
+				return nil, err
+			}
+			return tx.WithSignature(signer, signature)
+		},
+		Context: context.Background(),
+	}, nil
+}
+
 // NewKeyedTransactor is a utility method to easily create a transaction signer
 // from a single private key.
 //
@@ -73,6 +97,7 @@ func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 			}
 			return tx.WithSignature(signer, signature)
 		},
+		Context: context.Background(),
 	}
 }
 
@@ -91,12 +116,12 @@ func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.I
 }
 
 // NewKeyStoreTransactorWithChainID is a utility method to easily create a transaction signer from
-// an decrypted key from a keystore.
+// a decrypted key from a keystore.
 func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
 	if chainID == nil {
 		return nil, ErrNoChainID
 	}
-	signer := types.NewEIP155Signer(chainID)
+	signer := types.LatestSignerForChainID(chainID)
 	return &TransactOpts{
 		From: account.Address,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -109,17 +134,18 @@ func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accou
 			}
 			return tx.WithSignature(signer, signature)
 		},
+		Context: context.Background(),
 	}, nil
 }
 
 // NewKeyedTransactorWithChainID is a utility method to easily create a transaction signer
 // from a single private key.
 func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) (*TransactOpts, error) {
-	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	if chainID == nil {
 		return nil, ErrNoChainID
 	}
-	signer := types.NewEIP155Signer(chainID)
+	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
+	signer := types.LatestSignerForChainID(chainID)
 	return &TransactOpts{
 		From: keyAddr,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -132,5 +158,6 @@ func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) (*Tr
 			}
 			return tx.WithSignature(signer, signature)
 		},
+		Context: context.Background(),
 	}, nil
 }

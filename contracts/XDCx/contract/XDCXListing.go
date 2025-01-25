@@ -139,7 +139,7 @@ func bindXDCXListing(address common.Address, caller bind.ContractCaller, transac
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_XDCXListing *XDCXListingRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_XDCXListing *XDCXListingRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _XDCXListing.Contract.XDCXListingCaller.contract.Call(opts, result, method, params...)
 }
 
@@ -158,7 +158,7 @@ func (_XDCXListing *XDCXListingRaw) Transact(opts *bind.TransactOpts, method str
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_XDCXListing *XDCXListingCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+func (_XDCXListing *XDCXListingCallerRaw) Call(opts *bind.CallOpts, result *[]interface{}, method string, params ...interface{}) error {
 	return _XDCXListing.Contract.contract.Call(opts, result, method, params...)
 }
 
@@ -180,7 +180,9 @@ func (_XDCXListing *XDCXListingCaller) GetTokenStatus(opts *bind.CallOpts, token
 	var (
 		ret0 = new(bool)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCXListing.contract.Call(opts, out, "getTokenStatus", token)
 	return *ret0, err
 }
@@ -206,7 +208,9 @@ func (_XDCXListing *XDCXListingCaller) Tokens(opts *bind.CallOpts) ([]common.Add
 	var (
 		ret0 = new([]common.Address)
 	)
-	out := ret0
+	out := &[]interface{}{
+		ret0,
+	}
 	err := _XDCXListing.contract.Call(opts, out, "tokens")
 	return *ret0, err
 }

@@ -41,9 +41,12 @@ import (
 
 // Node is a container on which services can be registered.
 type Node struct {
-	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
-	config   *Config
-	accman   *accounts.Manager
+	eventmux   *event.TypeMux // Event multiplexer used between the services of a stack
+	config     *Config
+	accman     *accounts.Manager
+	log        log.Logger
+	keyDir     string // key store directory
+	keyDirTemp bool   // If true, key directory will be removed by Stop
 
 	ephemeralKeystore string         // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   flock.Releaser // prevents concurrent use of instance directory
@@ -75,8 +78,6 @@ type Node struct {
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
-
-	log log.Logger
 }
 
 const (
@@ -96,6 +97,10 @@ func New(conf *Config) (*Node, error) {
 		}
 		conf.DataDir = absdatadir
 	}
+	if conf.Logger == nil {
+		conf.Logger = log.New()
+	}
+
 	// Ensure that the instance name doesn't cause weird conflicts with
 	// other files in the data directory.
 	if strings.ContainsAny(conf.Name, `/\`) {
@@ -107,28 +112,28 @@ func New(conf *Config) (*Node, error) {
 	if strings.HasSuffix(conf.Name, ".ipc") {
 		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
 	}
-	// Ensure that the AccountManager method works before the node has started.
-	// We rely on this in cmd/geth.
-	am, ephemeralKeystore, err := makeAccountManager(conf)
+
+	node := &Node{
+		config:       conf,
+		eventmux:     new(event.TypeMux),
+		log:          conf.Logger,
+		serviceFuncs: []ServiceConstructor{},
+		ipcEndpoint:  conf.IPCEndpoint(),
+		httpEndpoint: conf.HTTPEndpoint(),
+		wsEndpoint:   conf.WSEndpoint(),
+	}
+
+	keyDir, isEphem, err := getKeyStoreDir(conf)
 	if err != nil {
 		return nil, err
 	}
-	if conf.Logger == nil {
-		conf.Logger = log.New()
-	}
-	// Note: any interaction with Config that would create/touch files
-	// in the data directory or instance directory is delayed until Start.
-	return &Node{
-		accman:            am,
-		ephemeralKeystore: ephemeralKeystore,
-		config:            conf,
-		serviceFuncs:      []ServiceConstructor{},
-		ipcEndpoint:       conf.IPCEndpoint(),
-		httpEndpoint:      conf.HTTPEndpoint(),
-		wsEndpoint:        conf.WSEndpoint(),
-		eventmux:          new(event.TypeMux),
-		log:               conf.Logger,
-	}, nil
+	node.keyDir = keyDir
+	node.keyDirTemp = isEphem
+	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/geth)
+	// are required to add the backends later on.
+	node.accman = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed})
+
+	return node, nil
 }
 
 // Close stops the Node and releases resources acquired in
@@ -143,6 +148,12 @@ func (n *Node) Close() error {
 	if err := n.accman.Close(); err != nil {
 		errs = append(errs, err)
 	}
+	if n.keyDirTemp {
+		if err := os.RemoveAll(n.keyDir); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	// Report any errors that might have occurred
 	switch len(errs) {
 	case 0:
@@ -569,6 +580,11 @@ func (n *Node) RPCHandler() (*rpc.Server, error) {
 	return n.inprocHandler, nil
 }
 
+// Config returns the configuration of node.
+func (n *Node) Config() *Config {
+	return n.config
+}
+
 // Server retrieves the currently running P2P network layer. This method is meant
 // only to inspect fields of the currently running server, life cycle management
 // should be left to this Node entity.
@@ -606,6 +622,11 @@ func (n *Node) DataDir() string {
 // InstanceDir retrieves the instance directory used by the protocol stack.
 func (n *Node) InstanceDir() string {
 	return n.config.instanceDir()
+}
+
+// KeyStoreDir retrieves the key directory
+func (n *Node) KeyStoreDir() string {
+	return n.keyDir
 }
 
 // AccountManager retrieves the account manager used by the protocol stack.

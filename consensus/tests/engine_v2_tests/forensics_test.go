@@ -3,6 +3,7 @@ package engine_v2_tests
 import (
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -15,6 +16,8 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/stretchr/testify/assert"
 )
+
+var errTimeoutAfter5Seconds = errors.New("timeout after 5 seconds")
 
 func TestProcessQcShallSetForensicsCommittedQc(t *testing.T) {
 	t.Skip("Skipping this test for now as we disable forensics")
@@ -200,7 +203,7 @@ func TestForensicsMonitoringNotOnSameChainButHaveSameRoundQC(t *testing.T) {
 			assert.Equal(t, 5, len(content.LargerRoundInfo.SignerAddresses))
 			return
 		case <-time.After(5 * time.Second):
-			t.FailNow()
+			t.Fatal(errTimeoutAfter5Seconds)
 		}
 	}
 }
@@ -262,7 +265,7 @@ func TestForensicsMonitoringNotOnSameChainDoNotHaveSameRoundQC(t *testing.T) {
 			assert.Equal(t, 2, len(content.LargerRoundInfo.SignerAddresses))
 			return
 		case <-time.After(5 * time.Second):
-			t.FailNow()
+			t.Fatal(errTimeoutAfter5Seconds)
 		}
 	}
 }
@@ -327,7 +330,7 @@ func TestForensicsAcrossEpoch(t *testing.T) {
 			assert.Equal(t, 2, len(content.LargerRoundInfo.SignerAddresses))
 			return
 		case <-time.After(5 * time.Second):
-			t.FailNow()
+			t.Fatal(errTimeoutAfter5Seconds)
 		}
 	}
 }
@@ -395,7 +398,7 @@ func TestVoteEquivocationSameRound(t *testing.T) {
 			assert.Equal(t, types.Round(5), content.LargerRoundVote.ProposedBlockInfo.Round)
 			return
 		case <-time.After(5 * time.Second):
-			t.FailNow()
+			t.Fatal(errTimeoutAfter5Seconds)
 		}
 	}
 }
@@ -452,7 +455,7 @@ func TestVoteEquivocationDifferentRound(t *testing.T) {
 			assert.Equal(t, acc1Addr, content.Signer)
 			return
 		case <-time.After(5 * time.Second):
-			t.FailNow()
+			t.Fatal(errTimeoutAfter5Seconds)
 		}
 	}
 }
