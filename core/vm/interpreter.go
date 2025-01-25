@@ -291,7 +291,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				contract.Gas -= dynamicCost
 			}
 
-
 		}
 		// Do tracing before potential memory expansion
 		if debug {
