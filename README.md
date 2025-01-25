@@ -85,7 +85,7 @@ This command will:
    (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://github.com/ChainSafe/web3.js/blob/0.20.7/DOCUMENTATION.md) 
    (note: the `web3` version bundled within `geth` is very old, and not up to date with official docs),
    as well as `geth`'s own [management APIs](https://geth.ethereum.org/docs/interacting-with-geth/rpc).
-   This tool is optional and if you leave it out you can always attach it to an already running
+   This tool is optional and if you leave it out you can always attach it to an already-running
    `geth` instance with `geth attach`.
 
 ### A Full node on the Holesky test network
@@ -178,7 +178,7 @@ HTTP based JSON-RPC API options:
   * `--http.addr` HTTP-RPC server listening interface (default: `localhost`)
   * `--http.port` HTTP-RPC server listening port (default: `8545`)
   * `--http.api` API's offered over the HTTP-RPC interface (default: `eth,net,web3`)
-  * `--http.corsdomain` Comma separated list of domains from which to accept cross origin requests (browser enforced)
+  * `--http.corsdomain` Comma separated list of domains from which to accept cross-origin requests (browser enforced)
   * `--ws` Enable the WS-RPC server
   * `--ws.addr` WS-RPC server listening interface (default: `localhost`)
   * `--ws.port` WS-RPC server listening port (default: `8546`)
