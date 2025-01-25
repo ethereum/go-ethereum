@@ -292,6 +292,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 
 		}
+
 		// Do tracing before potential memory expansion
 		if debug {
 			if in.evm.Config.Tracer.OnGasChange != nil {
