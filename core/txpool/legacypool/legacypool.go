@@ -597,14 +597,9 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			}
 			// Authorities cannot conflict with any pending or queued transactions.
 			for _, addr := range auths {
-				var known bool
 				if list := pool.pending[addr]; list != nil {
-					known = true
-				}
-				if list := pool.queue[addr]; list != nil {
-					known = true
-				}
-				if known {
+					conflicts = append(conflicts, addr)
+				} else if list := pool.queue[addr]; list != nil {
 					conflicts = append(conflicts, addr)
 				}
 			}
