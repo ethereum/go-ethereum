@@ -2212,13 +2212,17 @@ func TestSetCodeTransactions(t *testing.T) {
 	defer pool.Close()
 
 	// Create the test accounts
-	keys := make([]*ecdsa.PrivateKey, 4)
-	addrs := make([]common.Address, len(keys))
-	for i := 0; i < len(keys); i++ {
-		keys[i], _ = crypto.GenerateKey()
-		addrs[i] = crypto.PubkeyToAddress(keys[i].PublicKey)
-		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(params.Ether))
-	}
+	var (
+		keyA, _ = crypto.GenerateKey()
+		keyB, _ = crypto.GenerateKey()
+		keyC, _ = crypto.GenerateKey()
+		addrA   = crypto.PubkeyToAddress(keyA.PublicKey)
+		addrB   = crypto.PubkeyToAddress(keyB.PublicKey)
+		addrC   = crypto.PubkeyToAddress(keyC.PublicKey)
+	)
+	testAddBalance(pool, addrA, big.NewInt(params.Ether))
+	testAddBalance(pool, addrB, big.NewInt(params.Ether))
+	testAddBalance(pool, addrC, big.NewInt(params.Ether))
 
 	// A few situations to test:
 	// 1. Accounts with delegation set can only have one in-flight transaction.
@@ -2237,106 +2241,140 @@ func TestSetCodeTransactions(t *testing.T) {
 		name    string
 		pending int
 		queued  int
-		run     func() error
+		run     func(string)
 	}{
 		{
+			// Check that only one in-flight transaction is allowed for accounts
+			// with delegation set. Also verify the accepted transaction can be
+			// replaced by fee.
 			name:    "only-one-in-flight",
 			pending: 1,
-			run: func() error {
-				// Check that only one in-flight transaction is allowed for accounts
-				// with delegation set. Also verify the accepted transaction can be
-				// replaced by fee.
+			run: func(name string) {
 				aa := common.Address{0xaa, 0xaa}
-				statedb.SetCode(addrs[0], append(types.DelegationPrefix, aa.Bytes()...))
+				statedb.SetCode(addrA, append(types.DelegationPrefix, aa.Bytes()...))
 				statedb.SetCode(aa, []byte{byte(vm.ADDRESS), byte(vm.PUSH0), byte(vm.SSTORE)})
 				// Send transactions. First is accepted, second is rejected.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keys[0])); err != nil {
-					return fmt.Errorf("failed to add remote transaction: %v", err)
+				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keyA)); err != nil {
+					t.Fatalf("%s: failed to add remote transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keys[0])); !errors.Is(err, txpool.ErrAccountLimitExceeded) {
-					return fmt.Errorf("error mismatch: want %v, have %v", txpool.ErrAccountLimitExceeded, err)
+				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyA)); !errors.Is(err, txpool.ErrAccountLimitExceeded) {
+					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrAccountLimitExceeded, err)
 				}
 				// Also check gapped transaction.
-				if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), keys[0])); !errors.Is(err, txpool.ErrAccountLimitExceeded) {
-					return fmt.Errorf("error mismatch: want %v, have %v", txpool.ErrAccountLimitExceeded, err)
+				if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), keyA)); !errors.Is(err, txpool.ErrAccountLimitExceeded) {
+					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrAccountLimitExceeded, err)
 				}
 				// Replace by fee.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(10), keys[0])); err != nil {
-					return fmt.Errorf("failed to replace with remote transaction: %v", err)
+				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(10), keyA)); err != nil {
+					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
-				return nil
 			},
 		},
 		{
-			name:    "reject-setcode-tx-with-pending-authority-tx",
-			pending: 1,
-			run: func() error {
+			name:    "allow-setcode-tx-with-pending-authority-tx",
+			pending: 2,
+			run: func(name string) {
 				// Send two transactions where the first has no conflicting delegations and
-				// the second should be rejected due to a conflict with the tx sent in 1).
-				if err := pool.addRemoteSync(setCodeTx(0, keys[1], []unsignedAuth{{1, keys[2]}})); err != nil {
-					return fmt.Errorf("failed to add with remote setcode transaction: %v", err)
+				// the second should be allowed despite conflicting with the authorities in 1).
+				if err := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{1, keyC}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(setCodeTx(1, keys[1], []unsignedAuth{{1, keys[2]}})); !errors.Is(err, txpool.ErrAuthorityReserved) {
-					return fmt.Errorf("error mismatch: want %v, have %v", txpool.ErrAuthorityReserved, err)
+				if err := pool.addRemoteSync(setCodeTx(0, keyB, []unsignedAuth{{1, keyC}})); err != nil {
+					t.Fatalf("%s: error mismatch: want %v, have %v", txpool.ErrAuthorityReserved, name, err)
 				}
-				return nil
 			},
 		},
 		{
 			name:    "reject-tx-from-pooled-delegation",
 			pending: 1,
-			run: func() error {
-				// Verify key[2] cannot originate another transaction when it has a pooled delegation.
-				if err := pool.addRemoteSync(setCodeTx(0, keys[0], []unsignedAuth{{0, keys[2]}})); err != nil {
-					return fmt.Errorf("failed to add with remote setcode transaction: %v", err)
+			run: func(name string) {
+				// Verify C cannot originate another transaction when it has a pooled delegation.
+				if err := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{0, keyC}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keys[2])); !errors.Is(err, txpool.ErrAuthorityReserved) {
-					return fmt.Errorf("error mismatch: want %v, have %v", txpool.ErrAuthorityReserved, err)
+				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keyC)); !errors.Is(err, txpool.ErrAuthorityReserved) {
+					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrAuthorityReserved, err)
 				}
 				// Also check gapped transaction is rejected.
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keys[2])); !errors.Is(err, txpool.ErrAuthorityReserved) {
-					return fmt.Errorf("error mismatch: want %v, have %v", txpool.ErrAuthorityReserved, err)
+				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyC)); !errors.Is(err, txpool.ErrAuthorityReserved) {
+					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrAuthorityReserved, err)
 				}
-				return nil
 			},
 		},
 		{
 			name:    "replace-by-fee-setcode-tx",
 			pending: 1,
-			run: func() error {
+			run: func(name string) {
 				// 4. Fee bump the setcode tx send.
-				if err := pool.addRemoteSync(setCodeTx(0, keys[1], []unsignedAuth{{1, keys[2]}})); err != nil {
-					return fmt.Errorf("failed to add with remote setcode transaction: %v", err)
+				if err := pool.addRemoteSync(setCodeTx(0, keyB, []unsignedAuth{{1, keyC}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(2000), uint256.NewInt(2), keys[1], []unsignedAuth{{0, keys[2]}})); err != nil {
-					t.Fatalf("failed to add with remote setcode transaction: %v", err)
+				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(2000), uint256.NewInt(2), keyB, []unsignedAuth{{0, keyC}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				return nil
 			},
 		},
 		{
 			name:    "allow-tx-from-replaced-authority",
 			pending: 2,
-			run: func() error {
+			run: func(name string) {
 				// Fee bump with a different auth list. Make sure that unlocks the authorities.
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keys[0], []unsignedAuth{{0, keys[1]}})); err != nil {
-					t.Fatalf("failed to add with remote setcode transaction: %v", err)
+				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyB}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(3000), uint256.NewInt(300), keys[0], []unsignedAuth{{0, keys[2]}})); err != nil {
-					t.Fatalf("failed to add with remote setcode transaction: %v", err)
+				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(3000), uint256.NewInt(300), keyA, []unsignedAuth{{0, keyC}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				fmt.Println(pool.auths)
-				// Now send a regular tx from keys[1].
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(10), keys[1])); err != nil {
-					t.Fatalf("failed to replace with remote transaction: %v", err)
+				// Now send a regular tx from B.
+				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(10), keyB)); err != nil {
+					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
-				return nil
+			},
+		},
+		{
+			name:    "allow-tx-from-replaced-self-sponsor-authority",
+			pending: 2,
+			run: func(name string) {
+				//
+				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyA}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
+				}
+				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(30), uint256.NewInt(30), keyA, []unsignedAuth{{0, keyB}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
+				}
+				// Now send a regular tx from keyA.
+				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keyA)); err != nil {
+					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
+				}
+				// Make sure we can still send from keyB.
+				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keyB)); err != nil {
+					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
+				}
+			},
+		},
+		{
+			name:    "track-multiple-conflicting-delegations",
+			pending: 2,
+			run: func(name string) {
+				// Send two setcode txs both with C as an authority.
+				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyC}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
+				}
+				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(30), uint256.NewInt(30), keyB, []unsignedAuth{{0, keyC}})); err != nil {
+					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
+				}
+				// Replace the tx from A with a non-setcode tx.
+				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keyA)); err != nil {
+					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
+				}
+				// Make sure we cannot send from keyC since it is still a pending authority.
+				if err, want := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keyC)), txpool.ErrAuthorityReserved; !errors.Is(err, want) {
+					t.Fatalf("%s: error mismatch: want %v, have %v", name, want, err)
+				}
 			},
 		},
 	} {
-		if err := tt.run(); err != nil {
-			t.Fatalf("%s: %v", tt.name, err)
-		}
+		tt.run(tt.name)
 		pending, queued := pool.Stats()
 		if pending != tt.pending {
 			t.Fatalf("%s: pending transactions mismatched: have %d, want %d", tt.name, pending, tt.pending)
@@ -2349,16 +2387,6 @@ func TestSetCodeTransactions(t *testing.T) {
 		}
 		pool.Clear()
 	}
-
-	/*
-
-		pool.Clear()
-
-
-		// if err := pool.addRemoteSync(setCodeTx(1, keys[3], []unsignedAuth{{1, keys[2]}})); !errors.Is(err, txpool.ErrAuthorityReserved) {
-		// 	t.Fatalf("expected to reject tx from in-flight authority: want %v, have %v", txpool.ErrAuthorityReserved, err)
-		// }
-	*/
 }
 
 // Benchmarks the speed of validating the contents of the pending queue of the

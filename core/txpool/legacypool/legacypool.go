@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -209,13 +210,13 @@ type LegacyPool struct {
 	currentState  *state.StateDB               // Current state in the blockchain head
 	pendingNonces *noncer                      // Pending state tracking virtual nonces
 
-	reserve txpool.AddressReserver                // Address reserver to ensure exclusivity across subpools
-	pending map[common.Address]*list              // All currently processable transactions
-	queue   map[common.Address]*list              // Queued but non-processable transactions
-	beats   map[common.Address]time.Time          // Last heartbeat from each known account
-	all     *lookup                               // All transactions to allow lookups
-	priced  *pricedList                           // All transactions sorted by price
-	auths   map[common.Address]*types.Transaction // All accounts with a pooled authorization
+	reserve txpool.AddressReserver                  // Address reserver to ensure exclusivity across subpools
+	pending map[common.Address]*list                // All currently processable transactions
+	queue   map[common.Address]*list                // Queued but non-processable transactions
+	beats   map[common.Address]time.Time            // Last heartbeat from each known account
+	all     *lookup                                 // All transactions to allow lookups
+	priced  *pricedList                             // All transactions sorted by price
+	auths   map[common.Address][]*types.Transaction // All accounts with a pooled authorization
 
 	reqResetCh      chan *txpoolResetRequest
 	reqPromoteCh    chan *accountSet
@@ -247,7 +248,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		pending:         make(map[common.Address]*list),
 		queue:           make(map[common.Address]*list),
 		beats:           make(map[common.Address]time.Time),
-		auths:           make(map[common.Address]*types.Transaction),
+		auths:           make(map[common.Address][]*types.Transaction),
 		all:             newLookup(),
 		reqResetCh:      make(chan *txpoolResetRequest),
 		reqPromoteCh:    make(chan *accountSet),
@@ -568,13 +569,9 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			if list := pool.queue[addr]; list != nil {
 				have += list.Len()
 			}
-			// Limit the number of setcode tranasactions per account
 			if pool.currentState.GetCode(addr) != nil {
-				if have >= 1 {
-					return have, 0
-				} else {
-					return have, 1 - have
-				}
+				// Allow at most one in-flight tx for delegated accounts.
+				return have, max(0, 1-have)
 			}
 			return have, math.MaxInt
 		},
@@ -592,20 +589,19 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			}
 			return nil
 		},
-		KnownConflicts: func(sender common.Address, addrs []common.Address) []common.Address {
+		KnownConflicts: func(from common.Address, auths []common.Address) []common.Address {
 			var conflicts []common.Address
-			if _, ok := pool.auths[sender]; ok {
-				conflicts = append(conflicts, sender)
+			// The transaction sender cannot have an in-flight authorization.
+			if _, ok := pool.auths[from]; ok {
+				conflicts = append(conflicts, from)
 			}
-			for _, addr := range addrs {
+			// Authorities cannot conflict with any pending or queued transactions.
+			for _, addr := range auths {
 				var known bool
 				if list := pool.pending[addr]; list != nil {
 					known = true
 				}
 				if list := pool.queue[addr]; list != nil {
-					known = true
-				}
-				if _, ok := pool.auths[addr]; ok {
 					known = true
 				}
 				if known {
@@ -644,7 +640,6 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 
 	// If the address is not yet known, request exclusivity to track the account
 	// only by this subpool until all transactions are evicted
-	// TODO: need to track every authority from setcode txs
 	var (
 		_, hasPending = pool.pending[from]
 		_, hasQueued  = pool.queue[from]
@@ -744,9 +739,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 		pool.all.Add(tx)
 		pool.priced.Put(tx)
 		pool.queueTxEvent(tx)
-		for _, addr := range tx.Authorities() {
-			pool.auths[addr] = tx
-		}
+		pool.addAuthorities(tx)
 		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
 
 		// Successful promotion, bump the heartbeat
@@ -758,9 +751,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	for _, addr := range tx.Authorities() {
-		pool.auths[addr] = tx
-	}
+	pool.addAuthorities(tx)
 
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
 	return replaced, nil
@@ -828,10 +819,7 @@ func (pool *LegacyPool) enqueueTx(hash common.Hash, tx *types.Transaction, addAl
 	if _, exist := pool.beats[from]; !exist {
 		pool.beats[from] = time.Now()
 	}
-	for _, auth := range tx.SetCodeAuthorizations() {
-		addr, _ := auth.Authority()
-		pool.auths[addr] = tx
-	}
+	pool.addAuthorities(tx)
 	return old != nil, nil
 }
 
@@ -1086,9 +1074,40 @@ func (pool *LegacyPool) removeTx(hash common.Hash, outofbound bool, unreserve bo
 	return 0
 }
 
+// addAuthorities tracks the supplied tx in relation to each authority it
+// specifies.
+func (pool *LegacyPool) addAuthorities(tx *types.Transaction) {
+	for _, addr := range tx.Authorities() {
+		list, ok := pool.auths[addr]
+		if !ok {
+			list = []*types.Transaction{}
+		}
+		if slices.Contains(list, tx) {
+			// Don't add duplicates.
+			continue
+		}
+		list = append(list, tx)
+		pool.auths[addr] = list
+	}
+}
+
+// removeAuthorities stops tracking the supplied tx in relation to its
+// authorities.
 func (pool *LegacyPool) removeAuthorities(tx *types.Transaction) {
 	for _, addr := range tx.Authorities() {
-		delete(pool.auths, addr)
+		// Remove tx from tracker.
+		list := pool.auths[addr]
+		if i := slices.Index(list, tx); i >= 0 {
+			list = append(list[:i], list[i+1:]...)
+		} else {
+			log.Error("Authority with untracked tx", "addr", addr, "hash", tx.Hash())
+		}
+		if len(list) == 0 {
+			// If list is newly empty, delete it entirely.
+			delete(pool.auths, addr)
+			continue
+		}
+		pool.auths[addr] = list
 	}
 }
 
@@ -1823,5 +1842,5 @@ func (pool *LegacyPool) Clear() {
 	pool.pending = make(map[common.Address]*list)
 	pool.queue = make(map[common.Address]*list)
 	pool.pendingNonces = newNoncer(pool.currentState)
-	pool.auths = make(map[common.Address]*types.Transaction)
+	pool.auths = make(map[common.Address][]*types.Transaction)
 }
