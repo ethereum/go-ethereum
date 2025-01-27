@@ -31,21 +31,28 @@ func NewContractInstance(backend ContractBackend, addr common.Address, abi abi.A
 	return NewBoundContract(addr, abi, backend, backend, backend)
 }
 
+// ContractEvent is a type constraint for ABI event types.
+type ContractEvent interface {
+	ContractEventName() string
+}
+
 // FilterEvents returns an EventIterator instance for filtering historical events based on the event id and a block range.
-func FilterEvents[T any](c *BoundContract, opts *FilterOpts, eventName string, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
-	logs, sub, err := c.FilterLogs(opts, eventName, topics...)
+func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack func(*types.Log) (*Ev, error), topics ...[]any) (*EventIterator[Ev], error) {
+	var e Ev
+	logs, sub, err := c.FilterLogs(opts, e.ContractEventName(), topics...)
 	if err != nil {
 		return nil, err
 	}
-	return &EventIterator[T]{unpack: unpack, logs: logs, sub: sub}, nil
+	return &EventIterator[Ev]{unpack: unpack, logs: logs, sub: sub}, nil
 }
 
 // WatchEvents causes logs emitted with a given event id from a specified
 // contract to be intercepted, unpacked, and forwarded to sink.  If
 // unpack returns an error, the returned subscription is closed with the
 // error.
-func WatchEvents[T any](c *BoundContract, opts *WatchOpts, eventName string, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
-	logs, sub, err := c.WatchLogs(opts, eventName, topics...)
+func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack func(*types.Log) (*Ev, error), sink chan<- *Ev, topics ...[]any) (event.Subscription, error) {
+	var e Ev
+	logs, sub, err := c.WatchLogs(opts, e.ContractEventName(), topics...)
 	if err != nil {
 		return nil, err
 	}

@@ -208,6 +208,10 @@ type DBInsert struct {
 
 const DBInsertEventName = "Insert"
 
+func (DBInsert) ContractEventName() string {
+	return DBInsertEventName
+}
+
 func (dB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
 	event := "Insert"
 	if log.Topics[0] != dB.abi.Events[event].ID {
@@ -240,6 +244,10 @@ type DBKeyedInsert struct {
 }
 
 const DBKeyedInsertEventName = "KeyedInsert"
+
+func (DBKeyedInsert) ContractEventName() string {
+	return DBKeyedInsertEventName
+}
 
 func (dB *DB) UnpackKeyedInsertEvent(log *types.Log) (*DBKeyedInsert, error) {
 	event := "KeyedInsert"

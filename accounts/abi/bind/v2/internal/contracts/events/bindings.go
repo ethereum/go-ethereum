@@ -148,6 +148,10 @@ type CBasic1 struct {
 
 const CBasic1EventName = "basic1"
 
+func (CBasic1) ContractEventName() string {
+	return CBasic1EventName
+}
+
 func (c *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
 	event := "basic1"
 	if log.Topics[0] != c.abi.Events[event].ID {
@@ -180,6 +184,10 @@ type CBasic2 struct {
 }
 
 const CBasic2EventName = "basic2"
+
+func (CBasic2) ContractEventName() string {
+	return CBasic2EventName
+}
 
 func (c *C) UnpackBasic2Event(log *types.Log) (*CBasic2, error) {
 	event := "basic2"

@@ -233,11 +233,11 @@ func TestEvents(t *testing.T) {
 	newCBasic1Ch := make(chan *events.CBasic1)
 	newCBasic2Ch := make(chan *events.CBasic2)
 	watchOpts := &bind.WatchOpts{}
-	sub1, err := bind.WatchEvents(instance, watchOpts, events.CBasic1EventName, c.UnpackBasic1Event, newCBasic1Ch)
+	sub1, err := bind.WatchEvents(instance, watchOpts, c.UnpackBasic1Event, newCBasic1Ch)
 	if err != nil {
 		t.Fatalf("WatchEvents returned error: %v", err)
 	}
-	sub2, err := bind.WatchEvents(instance, watchOpts, events.CBasic2EventName, c.UnpackBasic2Event, newCBasic2Ch)
+	sub2, err := bind.WatchEvents(instance, watchOpts, c.UnpackBasic2Event, newCBasic2Ch)
 	if err != nil {
 		t.Fatalf("WatchEvents returned error: %v", err)
 	}
@@ -284,11 +284,11 @@ done:
 		Start:   0,
 		Context: context.Background(),
 	}
-	it, err := bind.FilterEvents(instance, filterOpts, events.CBasic1EventName, c.UnpackBasic1Event)
+	it, err := bind.FilterEvents(instance, filterOpts, c.UnpackBasic1Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
-	it2, err := bind.FilterEvents(instance, filterOpts, events.CBasic2EventName, c.UnpackBasic2Event)
+	it2, err := bind.FilterEvents(instance, filterOpts, c.UnpackBasic2Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
