@@ -123,3 +123,11 @@ type ContractBackend interface {
 	ContractTransactor
 	ContractFilterer
 }
+
+// Backend combines all backend methods used in this package. This type is provided for
+// convenience. It is meant to be used when you need to hold a reference to a backend that
+// is used for both deployment and contract interaction.
+type Backend interface {
+	DeployBackend
+	ContractBackend
+}
