@@ -257,3 +257,59 @@ func TestValidatorSet_IncludeIds_EmptySet(t *testing.T) {
 
 	assert.Equal(t, 0, valSet.Size(), "ValidatorSet remains empty")
 }
+
+func TestCheckEmptyId(t *testing.T) {
+	tests := []struct {
+		name         string
+		validatorSet ValidatorSet
+		expected     bool
+	}{
+		{
+			name:         "Empty ValidatorSet",
+			validatorSet: ValidatorSet{Validators: []*Validator{}},
+			expected:     false,
+		},
+		{
+			name: "All Validators with Non-Zero IDs",
+			validatorSet: ValidatorSet{
+				Validators: []*Validator{
+					{ID: 1},
+					{ID: 2},
+					{ID: 3},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "One Validator with ID Zero",
+			validatorSet: ValidatorSet{
+				Validators: []*Validator{
+					{ID: 0},
+					{ID: 2},
+					{ID: 3},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "All Validators with ID Zero",
+			validatorSet: ValidatorSet{
+				Validators: []*Validator{
+					{ID: 0},
+					{ID: 0},
+					{ID: 0},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.validatorSet.CheckEmptyId()
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}

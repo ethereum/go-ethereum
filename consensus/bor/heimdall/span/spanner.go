@@ -111,7 +111,7 @@ func (c *ChainSpanner) GetCurrentValidatorsByBlockNrOrHash(ctx context.Context, 
 	return valz, nil
 }
 
-// Try to get bor validators with Id from ValidatorSet contract by querying each element on mapping(uint256 => Validator[]) public producers
+// tryGetBorValidatorsWithId Try to get bor validators with Id from ValidatorSet contract by querying each element on mapping(uint256 => Validator[]) public producers
 // If fails then returns GetBorValidators without id
 func (c *ChainSpanner) tryGetBorValidatorsWithId(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, blockNumber uint64, toAddress common.Address, gas hexutil.Uint64) ([]*valset.Validator, error) {
 	firstEndBlock, err := c.getFirstEndBlock(ctx, blockNrOrHash, toAddress, gas)

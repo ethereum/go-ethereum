@@ -128,6 +128,18 @@ func (vals *ValidatorSet) IncludeIds(valsWithId []*Validator) {
 	}
 }
 
+// CheckEmptyId checks if any validator in the ValidatorSet has an empty ID (ID == 0).
+// Returns true if at least one validator has an empty ID.
+// Returns false if all validators have non-zero IDs or if the ValidatorSet is empty.
+func (vals *ValidatorSet) CheckEmptyId() bool {
+	for _, val := range vals.Validators {
+		if val.ID == 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (vals *ValidatorSet) RescalePriorities(diffMax int64) {
 	if vals.IsNilOrEmpty() {
 		panic("empty validator set")
