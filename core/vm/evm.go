@@ -170,8 +170,8 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 	return evm.interpreter
 }
 
-func (evm *EVM) isSystemCall() bool {
-	return evm.TxContext.Origin == params.SystemAddress
+func isSystemCall(caller ContractRef) bool {
+	return caller.Address() == params.SystemAddress
 }
 
 // Call executes the contract associated with the addr with the given input as
@@ -198,7 +198,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	p, isPrecompile := evm.precompile(addr)
 
 	if !evm.StateDB.Exist(addr) {
-		if !isPrecompile && evm.chainRules.IsEIP4762 && !evm.isSystemCall() {
+		if !isPrecompile && evm.chainRules.IsEIP4762 && !isSystemCall(caller) {
 			// add proof of absence to witness
 			wgas := evm.AccessEvents.AddAccount(addr, false)
 			if gas < wgas {
@@ -229,7 +229,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.IsSystemCall = evm.isSystemCall()
+			contract.IsSystemCall = isSystemCall(caller)
 			contract.SetCallCode(&addrCopy, evm.resolveCodeHash(addrCopy), code)
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
