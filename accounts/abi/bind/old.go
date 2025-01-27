@@ -24,6 +24,8 @@ import (
 	"errors"
 	"io"
 	"math/big"
+	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -228,10 +230,28 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return bind2.DeployContract(opts, abi, bytecode, backend, params...)
 }
 
-type MetaData bind2.MetaData
+// MetaData collects all metadata for a bound contract.
+type MetaData struct {
+	Bin       string            // runtime bytecode (as a hex string)
+	ABI       string            // the raw ABI definition (JSON)
+	Sigs      map[string]string // 4byte identifier -> function signature
+	mu        sync.Mutex
+	parsedABI *abi.ABI
+}
 
+// GetAbi returns the parsed ABI definition.
 func (m *MetaData) GetAbi() (*abi.ABI, error) {
-	return (*bind2.MetaData)(m).ParseABI()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.parsedABI != nil {
+		return m.parsedABI, nil
+	}
+	if parsed, err := abi.JSON(strings.NewReader(m.ABI)); err != nil {
+		return nil, err
+	} else {
+		m.parsedABI = &parsed
+	}
+	return m.parsedABI, nil
 }
 
 // util.go
