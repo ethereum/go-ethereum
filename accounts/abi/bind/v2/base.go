@@ -89,11 +89,18 @@ type WatchOpts struct {
 
 // MetaData collects all metadata for a bound contract.
 type MetaData struct {
-	Sigs    map[string]string
-	Bin     string
-	ABI     string
+	Bin  string      // runtime bytecode (as a hex string)
+	ABI  string      // the raw ABI definition (JSON)
+	Deps []*MetaData // library dependencies of the contract
+
+	// Solidity library placeholder name. This is a unique identifier of a contract within
+	// a compilation unit. The Pattern is used to link contracts during deployment using
+	// [LinkAndDeploy].
+	//
+	// The library pattern is a 34 character prefix of the hex encoding of the keccak256
+	// hash of the fully qualified 'library name', i.e. the path of the source file
+	// containing the library code.
 	Pattern string
-	Deps    []*MetaData
 
 	mu        sync.Mutex
 	parsedABI *abi.ABI
