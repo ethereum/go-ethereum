@@ -36,7 +36,7 @@ type Overload struct {
 
 // NewOverload creates a new instance of Overload.
 func NewOverload() *Overload {
-	parsed, err := OverloadMetaData.GetAbi()
+	parsed, err := OverloadMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

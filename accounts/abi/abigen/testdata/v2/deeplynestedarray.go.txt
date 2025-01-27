@@ -36,7 +36,7 @@ type DeeplyNestedArray struct {
 
 // NewDeeplyNestedArray creates a new instance of DeeplyNestedArray.
 func NewDeeplyNestedArray() *DeeplyNestedArray {
-	parsed, err := DeeplyNestedArrayMetaData.GetAbi()
+	parsed, err := DeeplyNestedArrayMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

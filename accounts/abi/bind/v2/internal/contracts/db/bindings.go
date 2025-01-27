@@ -43,7 +43,7 @@ type DB struct {
 
 // NewDB creates a new instance of DB.
 func NewDB() *DB {
-	parsed, err := DBMetaData.GetAbi()
+	parsed, err := DBMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

@@ -36,7 +36,7 @@ type C struct {
 
 // NewC creates a new instance of C.
 func NewC() *C {
-	parsed, err := CMetaData.GetAbi()
+	parsed, err := CMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
@@ -142,7 +142,7 @@ type C2 struct {
 
 // NewC2 creates a new instance of C2.
 func NewC2() *C2 {
-	parsed, err := C2MetaData.GetAbi()
+	parsed, err := C2MetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

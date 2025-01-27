@@ -36,7 +36,7 @@ type DAO struct {
 
 // NewDAO creates a new instance of DAO.
 func NewDAO() *DAO {
-	parsed, err := DAOMetaData.GetAbi()
+	parsed, err := DAOMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

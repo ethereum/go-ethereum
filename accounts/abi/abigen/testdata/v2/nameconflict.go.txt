@@ -42,7 +42,7 @@ type NameConflict struct {
 
 // NewNameConflict creates a new instance of NameConflict.
 func NewNameConflict() *NameConflict {
-	parsed, err := NameConflictMetaData.GetAbi()
+	parsed, err := NameConflictMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

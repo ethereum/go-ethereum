@@ -42,7 +42,7 @@ type C struct {
 
 // NewC creates a new instance of C.
 func NewC() *C {
-	parsed, err := CMetaData.GetAbi()
+	parsed, err := CMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

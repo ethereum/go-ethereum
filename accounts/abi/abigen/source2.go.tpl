@@ -56,7 +56,7 @@ var (
 
 	// New{{.Type}} creates a new instance of {{.Type}}.
 	func New{{.Type}}() *{{.Type}} {
-		parsed, err := {{.Type}}MetaData.GetAbi()
+		parsed, err := {{.Type}}MetaData.ParseABI()
 		if err != nil {
 			panic(errors.New("invalid ABI: " + err.Error()))
 		}

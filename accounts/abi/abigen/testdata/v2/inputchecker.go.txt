@@ -35,7 +35,7 @@ type InputChecker struct {
 
 // NewInputChecker creates a new instance of InputChecker.
 func NewInputChecker() *InputChecker {
-	parsed, err := InputCheckerMetaData.GetAbi()
+	parsed, err := InputCheckerMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

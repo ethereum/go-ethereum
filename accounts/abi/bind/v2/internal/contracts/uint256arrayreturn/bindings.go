@@ -36,7 +36,7 @@ type MyContract struct {
 
 // NewMyContract creates a new instance of MyContract.
 func NewMyContract() *MyContract {
-	parsed, err := MyContractMetaData.GetAbi()
+	parsed, err := MyContractMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

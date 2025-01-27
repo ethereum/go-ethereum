@@ -36,7 +36,7 @@ type Underscorer struct {
 
 // NewUnderscorer creates a new instance of Underscorer.
 func NewUnderscorer() *Underscorer {
-	parsed, err := UnderscorerMetaData.GetAbi()
+	parsed, err := UnderscorerMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

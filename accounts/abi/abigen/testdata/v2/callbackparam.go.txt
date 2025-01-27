@@ -36,7 +36,7 @@ type CallbackParam struct {
 
 // NewCallbackParam creates a new instance of CallbackParam.
 func NewCallbackParam() *CallbackParam {
-	parsed, err := CallbackParamMetaData.GetAbi()
+	parsed, err := CallbackParamMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

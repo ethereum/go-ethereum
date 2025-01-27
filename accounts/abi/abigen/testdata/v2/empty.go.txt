@@ -36,7 +36,7 @@ type Empty struct {
 
 // NewEmpty creates a new instance of Empty.
 func NewEmpty() *Empty {
-	parsed, err := EmptyMetaData.GetAbi()
+	parsed, err := EmptyMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

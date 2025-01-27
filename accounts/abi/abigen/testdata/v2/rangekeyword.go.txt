@@ -36,7 +36,7 @@ type RangeKeyword struct {
 
 // NewRangeKeyword creates a new instance of RangeKeyword.
 func NewRangeKeyword() *RangeKeyword {
-	parsed, err := RangeKeywordMetaData.GetAbi()
+	parsed, err := RangeKeywordMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

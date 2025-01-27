@@ -99,7 +99,8 @@ type MetaData struct {
 	parsedABI *abi.ABI
 }
 
-func (m *MetaData) GetAbi() (*abi.ABI, error) {
+// ParseABI returns the parsed ABI specification.
+func (m *MetaData) ParseABI() (*abi.ABI, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.parsedABI != nil {

@@ -36,7 +36,7 @@ type Token struct {
 
 // NewToken creates a new instance of Token.
 func NewToken() *Token {
-	parsed, err := TokenMetaData.GetAbi()
+	parsed, err := TokenMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

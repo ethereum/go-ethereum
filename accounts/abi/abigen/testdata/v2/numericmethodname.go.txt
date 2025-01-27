@@ -36,7 +36,7 @@ type NumericMethodName struct {
 
 // NewNumericMethodName creates a new instance of NumericMethodName.
 func NewNumericMethodName() *NumericMethodName {
-	parsed, err := NumericMethodNameMetaData.GetAbi()
+	parsed, err := NumericMethodNameMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

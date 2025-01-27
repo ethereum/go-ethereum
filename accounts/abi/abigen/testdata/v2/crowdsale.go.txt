@@ -36,7 +36,7 @@ type Crowdsale struct {
 
 // NewCrowdsale creates a new instance of Crowdsale.
 func NewCrowdsale() *Crowdsale {
-	parsed, err := CrowdsaleMetaData.GetAbi()
+	parsed, err := CrowdsaleMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

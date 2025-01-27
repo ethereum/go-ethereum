@@ -40,7 +40,7 @@ type C1 struct {
 
 // NewC1 creates a new instance of C1.
 func NewC1() *C1 {
-	parsed, err := C1MetaData.GetAbi()
+	parsed, err := C1MetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
@@ -103,7 +103,7 @@ type C2 struct {
 
 // NewC2 creates a new instance of C2.
 func NewC2() *C2 {
-	parsed, err := C2MetaData.GetAbi()
+	parsed, err := C2MetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
@@ -162,7 +162,7 @@ type L1 struct {
 
 // NewL1 creates a new instance of L1.
 func NewL1() *L1 {
-	parsed, err := L1MetaData.GetAbi()
+	parsed, err := L1MetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
@@ -216,7 +216,7 @@ type L2 struct {
 
 // NewL2 creates a new instance of L2.
 func NewL2() *L2 {
-	parsed, err := L2MetaData.GetAbi()
+	parsed, err := L2MetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
@@ -270,7 +270,7 @@ type L2b struct {
 
 // NewL2b creates a new instance of L2b.
 func NewL2b() *L2b {
-	parsed, err := L2bMetaData.GetAbi()
+	parsed, err := L2bMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
@@ -321,7 +321,7 @@ type L3 struct {
 
 // NewL3 creates a new instance of L3.
 func NewL3() *L3 {
-	parsed, err := L3MetaData.GetAbi()
+	parsed, err := L3MetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
@@ -376,7 +376,7 @@ type L4 struct {
 
 // NewL4 creates a new instance of L4.
 func NewL4() *L4 {
-	parsed, err := L4MetaData.GetAbi()
+	parsed, err := L4MetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
@@ -430,7 +430,7 @@ type L4b struct {
 
 // NewL4b creates a new instance of L4b.
 func NewL4b() *L4b {
-	parsed, err := L4bMetaData.GetAbi()
+	parsed, err := L4bMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

@@ -36,7 +36,7 @@ type Tupler struct {
 
 // NewTupler creates a new instance of Tupler.
 func NewTupler() *Tupler {
-	parsed, err := TuplerMetaData.GetAbi()
+	parsed, err := TuplerMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

@@ -36,7 +36,7 @@ type Getter struct {
 
 // NewGetter creates a new instance of Getter.
 func NewGetter() *Getter {
-	parsed, err := GetterMetaData.GetAbi()
+	parsed, err := GetterMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

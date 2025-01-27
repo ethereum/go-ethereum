@@ -36,7 +36,7 @@ type Interactor struct {
 
 // NewInteractor creates a new instance of Interactor.
 func NewInteractor() *Interactor {
-	parsed, err := InteractorMetaData.GetAbi()
+	parsed, err := InteractorMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

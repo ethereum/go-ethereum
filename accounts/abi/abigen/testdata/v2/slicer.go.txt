@@ -36,7 +36,7 @@ type Slicer struct {
 
 // NewSlicer creates a new instance of Slicer.
 func NewSlicer() *Slicer {
-	parsed, err := SlicerMetaData.GetAbi()
+	parsed, err := SlicerMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

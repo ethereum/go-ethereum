@@ -218,8 +218,6 @@ type FilterOpts = bind2.FilterOpts
 
 type WatchOpts = bind2.WatchOpts
 
-type MetaData = bind2.MetaData
-
 type BoundContract = bind2.BoundContract
 
 func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller, transactor ContractTransactor, filterer ContractFilterer) *BoundContract {
@@ -228,6 +226,12 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 
 func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
 	return bind2.DeployContract(opts, abi, bytecode, backend, params...)
+}
+
+type MetaData bind2.MetaData
+
+func (m *MetaData) GetAbi() (*abi.ABI, error) {
+	return (*bind2.MetaData)(m).ParseABI()
 }
 
 // util.go

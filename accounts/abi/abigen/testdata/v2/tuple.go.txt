@@ -61,7 +61,7 @@ type Tuple struct {
 
 // NewTuple creates a new instance of Tuple.
 func NewTuple() *Tuple {
-	parsed, err := TupleMetaData.GetAbi()
+	parsed, err := TupleMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

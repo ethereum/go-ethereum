@@ -41,7 +41,7 @@ type Structs struct {
 
 // NewStructs creates a new instance of Structs.
 func NewStructs() *Structs {
-	parsed, err := StructsMetaData.GetAbi()
+	parsed, err := StructsMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

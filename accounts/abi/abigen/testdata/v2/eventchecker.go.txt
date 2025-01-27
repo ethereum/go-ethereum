@@ -35,7 +35,7 @@ type EventChecker struct {
 
 // NewEventChecker creates a new instance of EventChecker.
 func NewEventChecker() *EventChecker {
-	parsed, err := EventCheckerMetaData.GetAbi()
+	parsed, err := EventCheckerMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

@@ -36,7 +36,7 @@ type IdentifierCollision struct {
 
 // NewIdentifierCollision creates a new instance of IdentifierCollision.
 func NewIdentifierCollision() *IdentifierCollision {
-	parsed, err := IdentifierCollisionMetaData.GetAbi()
+	parsed, err := IdentifierCollisionMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}

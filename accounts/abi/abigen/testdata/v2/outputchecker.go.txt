@@ -35,7 +35,7 @@ type OutputChecker struct {
 
 // NewOutputChecker creates a new instance of OutputChecker.
 func NewOutputChecker() *OutputChecker {
-	parsed, err := OutputCheckerMetaData.GetAbi()
+	parsed, err := OutputCheckerMetaData.ParseABI()
 	if err != nil {
 		panic(errors.New("invalid ABI: " + err.Error()))
 	}
