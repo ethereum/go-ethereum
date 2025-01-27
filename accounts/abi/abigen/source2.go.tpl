@@ -141,6 +141,10 @@ var (
 
 		const {{$contract.Type}}{{.Normalized.Name}}EventName = "{{.Original.Name}}"
 
+		func ({{$contract.Type}}{{.Normalized.Name}}) ContractEventName() string {
+			return {{$contract.Type}}{{.Normalized.Name}}EventName
+		}
+
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := "{{.Original.Name}}"
 			if log.Topics[0] != {{ decapitalise $contract.Type}}.abi.Events[event].ID {

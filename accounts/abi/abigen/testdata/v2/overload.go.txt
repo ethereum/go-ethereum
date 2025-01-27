@@ -79,6 +79,10 @@ type OverloadBar struct {
 
 const OverloadBarEventName = "bar"
 
+func (OverloadBar) ContractEventName() string {
+	return OverloadBarEventName
+}
+
 func (overload *Overload) UnpackBarEvent(log *types.Log) (*OverloadBar, error) {
 	event := "bar"
 	if log.Topics[0] != overload.abi.Events[event].ID {
@@ -111,6 +115,10 @@ type OverloadBar0 struct {
 }
 
 const OverloadBar0EventName = "bar0"
+
+func (OverloadBar0) ContractEventName() string {
+	return OverloadBar0EventName
+}
 
 func (overload *Overload) UnpackBar0Event(log *types.Log) (*OverloadBar0, error) {
 	event := "bar0"

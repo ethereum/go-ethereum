@@ -254,6 +254,10 @@ type CrowdsaleFundTransfer struct {
 
 const CrowdsaleFundTransferEventName = "FundTransfer"
 
+func (CrowdsaleFundTransfer) ContractEventName() string {
+	return CrowdsaleFundTransferEventName
+}
+
 func (crowdsale *Crowdsale) UnpackFundTransferEvent(log *types.Log) (*CrowdsaleFundTransfer, error) {
 	event := "FundTransfer"
 	if log.Topics[0] != crowdsale.abi.Events[event].ID {

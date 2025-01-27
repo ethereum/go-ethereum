@@ -59,6 +59,10 @@ type EventCheckerDynamic struct {
 
 const EventCheckerDynamicEventName = "dynamic"
 
+func (EventCheckerDynamic) ContractEventName() string {
+	return EventCheckerDynamicEventName
+}
+
 func (eventChecker *EventChecker) UnpackDynamicEvent(log *types.Log) (*EventCheckerDynamic, error) {
 	event := "dynamic"
 	if log.Topics[0] != eventChecker.abi.Events[event].ID {
@@ -89,6 +93,10 @@ type EventCheckerEmpty struct {
 }
 
 const EventCheckerEmptyEventName = "empty"
+
+func (EventCheckerEmpty) ContractEventName() string {
+	return EventCheckerEmptyEventName
+}
 
 func (eventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventCheckerEmpty, error) {
 	event := "empty"
@@ -123,6 +131,10 @@ type EventCheckerIndexed struct {
 
 const EventCheckerIndexedEventName = "indexed"
 
+func (EventCheckerIndexed) ContractEventName() string {
+	return EventCheckerIndexedEventName
+}
+
 func (eventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventCheckerIndexed, error) {
 	event := "indexed"
 	if log.Topics[0] != eventChecker.abi.Events[event].ID {
@@ -156,6 +168,10 @@ type EventCheckerMixed struct {
 
 const EventCheckerMixedEventName = "mixed"
 
+func (EventCheckerMixed) ContractEventName() string {
+	return EventCheckerMixedEventName
+}
+
 func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventCheckerMixed, error) {
 	event := "mixed"
 	if log.Topics[0] != eventChecker.abi.Events[event].ID {
@@ -188,6 +204,10 @@ type EventCheckerUnnamed struct {
 }
 
 const EventCheckerUnnamedEventName = "unnamed"
+
+func (EventCheckerUnnamed) ContractEventName() string {
+	return EventCheckerUnnamedEventName
+}
 
 func (eventChecker *EventChecker) UnpackUnnamedEvent(log *types.Log) (*EventCheckerUnnamed, error) {
 	event := "unnamed"

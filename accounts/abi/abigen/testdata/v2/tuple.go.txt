@@ -149,6 +149,10 @@ type TupleTupleEvent struct {
 
 const TupleTupleEventEventName = "TupleEvent"
 
+func (TupleTupleEvent) ContractEventName() string {
+	return TupleTupleEventEventName
+}
+
 func (tuple *Tuple) UnpackTupleEventEvent(log *types.Log) (*TupleTupleEvent, error) {
 	event := "TupleEvent"
 	if log.Topics[0] != tuple.abi.Events[event].ID {
@@ -180,6 +184,10 @@ type TupleTupleEvent2 struct {
 }
 
 const TupleTupleEvent2EventName = "TupleEvent2"
+
+func (TupleTupleEvent2) ContractEventName() string {
+	return TupleTupleEvent2EventName
+}
 
 func (tuple *Tuple) UnpackTupleEvent2Event(log *types.Log) (*TupleTupleEvent2, error) {
 	event := "TupleEvent2"

@@ -270,6 +270,10 @@ type TokenTransfer struct {
 
 const TokenTransferEventName = "Transfer"
 
+func (TokenTransfer) ContractEventName() string {
+	return TokenTransferEventName
+}
+
 func (token *Token) UnpackTransferEvent(log *types.Log) (*TokenTransfer, error) {
 	event := "Transfer"
 	if log.Topics[0] != token.abi.Events[event].ID {

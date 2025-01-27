@@ -99,6 +99,10 @@ type NameConflictLog struct {
 
 const NameConflictLogEventName = "log"
 
+func (NameConflictLog) ContractEventName() string {
+	return NameConflictLogEventName
+}
+
 func (nameConflict *NameConflict) UnpackLogEvent(log *types.Log) (*NameConflictLog, error) {
 	event := "log"
 	if log.Topics[0] != nameConflict.abi.Events[event].ID {

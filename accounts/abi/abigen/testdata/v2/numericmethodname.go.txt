@@ -90,6 +90,10 @@ type NumericMethodNameE1TestEvent struct {
 
 const NumericMethodNameE1TestEventEventName = "_1TestEvent"
 
+func (NumericMethodNameE1TestEvent) ContractEventName() string {
+	return NumericMethodNameE1TestEventEventName
+}
+
 func (numericMethodName *NumericMethodName) UnpackE1TestEventEvent(log *types.Log) (*NumericMethodNameE1TestEvent, error) {
 	event := "_1TestEvent"
 	if log.Topics[0] != numericMethodName.abi.Events[event].ID {
