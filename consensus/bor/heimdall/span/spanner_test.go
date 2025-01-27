@@ -72,7 +72,6 @@ func TestGetCurrentValidatorsByBlockNrOrHash(t *testing.T) {
 					}
 					return nil
 				}).AnyTimes()
-
 			},
 			expectedValidators: []*valset.Validator{
 				{
@@ -110,7 +109,6 @@ func TestGetCurrentValidatorsByBlockNrOrHash(t *testing.T) {
 				).DoAndReturn(func(v interface{}, name string, data []byte) error {
 					return fmt.Errorf("failed")
 				}).AnyTimes()
-
 			},
 			expectedValidators: []*valset.Validator{
 				{
