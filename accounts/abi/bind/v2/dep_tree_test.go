@@ -193,7 +193,10 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 		overrides[pattern] = override
 	}
 
-	deployParams := NewDeploymentParams(contractsList, nil, overrides)
+	deployParams := &DeploymentParams{
+		Contracts: contractsList,
+		Overrides: overrides,
+	}
 	res, err := LinkAndDeploy(deployParams, mockDeploy)
 	if err != nil {
 		return err

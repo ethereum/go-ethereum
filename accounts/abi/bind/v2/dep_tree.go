@@ -14,22 +14,15 @@ import (
 // set of contracts.  It takes an optional override
 // list to specify contracts/libraries that have already been deployed on-chain.
 type DeploymentParams struct {
-	contracts []*MetaData
-	// map of solidity library pattern to constructor input.
-	inputs map[string][]byte
+	Contracts []*MetaData
+
+	// Map of solidity library pattern to constructor input.
+	Inputs map[string][]byte
+
 	// Overrides is an optional map of pattern to deployment address.
 	// Contracts/libraries that refer to dependencies in the override
 	// set are linked to the provided address (an already-deployed contract).
-	overrides map[string]common.Address
-}
-
-// NewDeploymentParams instantiates a DeploymentParams instance.
-func NewDeploymentParams(contracts []*MetaData, inputs map[string][]byte, overrides map[string]common.Address) *DeploymentParams {
-	return &DeploymentParams{
-		contracts,
-		inputs,
-		overrides,
-	}
+	Overrides map[string]common.Address
 }
 
 // DeploymentResult encapsulates information about the result of the deployment
@@ -38,6 +31,7 @@ func NewDeploymentParams(contracts []*MetaData, inputs map[string][]byte, overri
 type DeploymentResult struct {
 	// map of contract library pattern -> deploy transaction
 	Txs map[string]*types.Transaction
+
 	// map of contract library pattern -> deployed address
 	Addrs map[string]common.Address
 }
@@ -56,11 +50,11 @@ type depTreeDeployer struct {
 }
 
 func newDepTreeDeployer(deployParams *DeploymentParams, deployFn DeployFn) *depTreeDeployer {
-	deployedAddrs := maps.Clone(deployParams.overrides)
+	deployedAddrs := maps.Clone(deployParams.Overrides)
 	if deployedAddrs == nil {
 		deployedAddrs = make(map[string]common.Address)
 	}
-	inputs := deployParams.inputs
+	inputs := deployParams.Inputs
 	if inputs == nil {
 		inputs = make(map[string][]byte)
 	}
@@ -123,7 +117,7 @@ func (d *depTreeDeployer) result() *DeploymentResult {
 // deployed are returned in the result.
 func LinkAndDeploy(deployParams *DeploymentParams, deploy DeployFn) (res *DeploymentResult, err error) {
 	deployer := newDepTreeDeployer(deployParams, deploy)
-	for _, contract := range deployParams.contracts {
+	for _, contract := range deployParams.Contracts {
 		if _, err := deployer.linkAndDeploy(contract); err != nil {
 			return deployer.result(), err
 		}

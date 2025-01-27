@@ -108,8 +108,10 @@ func TestDeploymentLibraries(t *testing.T) {
 
 	c := nested_libraries.NewC1()
 	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
-	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, nil)
-
+	deploymentParams := &bind.DeploymentParams{
+		Contracts: []*bind.MetaData{&nested_libraries.C1MetaData},
+		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput},
+	}
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
@@ -149,8 +151,9 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	defer bindBackend.Backend.Close()
 
 	// deploy all the library dependencies of our target contract, but not the target contract itself.
-	deploymentParams := bind.NewDeploymentParams(nested_libraries.C1MetaData.Deps, nil, nil)
-
+	deploymentParams := &bind.DeploymentParams{
+		Contracts: nested_libraries.C1MetaData.Deps,
+	}
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
@@ -170,8 +173,13 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	c := nested_libraries.NewC1()
 	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
 	overrides := res.Addrs
+
 	// deploy the contract
-	deploymentParams = bind.NewDeploymentParams([]*bind.MetaData{&nested_libraries.C1MetaData}, map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput}, overrides)
+	deploymentParams = &bind.DeploymentParams{
+		Contracts: []*bind.MetaData{&nested_libraries.C1MetaData},
+		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput},
+		Overrides: overrides,
+	}
 	res, err = bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
@@ -208,7 +216,7 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&events.CMetaData}, nil, nil)
+	deploymentParams := &bind.DeploymentParams{Contracts: []*bind.MetaData{&events.CMetaData}}
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
@@ -307,7 +315,7 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
-	deploymentParams := bind.NewDeploymentParams([]*bind.MetaData{&solc_errors.CMetaData}, nil, nil)
+	deploymentParams := &bind.DeploymentParams{Contracts: []*bind.MetaData{&solc_errors.CMetaData}}
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
