@@ -120,7 +120,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		t.Fatalf("deployment should have generated 5 addresses.  got %d", len(res.Addrs))
 	}
 	for _, tx := range res.Txs {
-		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx.Hash())
 		if err != nil {
 			t.Fatalf("error deploying library: %+v", err)
 		}
@@ -161,7 +161,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		t.Fatalf("deployment should have generated 4 addresses.  got %d", len(res.Addrs))
 	}
 	for _, tx := range res.Txs {
-		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx.Hash())
 		if err != nil {
 			t.Fatalf("error deploying library: %+v", err)
 		}
@@ -182,7 +182,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		t.Fatalf("deployment should have generated 1 address.  got %d", len(res.Addrs))
 	}
 	for _, tx := range res.Txs {
-		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx.Hash())
 		if err != nil {
 			t.Fatalf("error deploying library: %+v", err)
 		}
@@ -215,7 +215,7 @@ func TestEvents(t *testing.T) {
 	}
 
 	backend.Commit()
-	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.Pattern]); err != nil {
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.Pattern].Hash()); err != nil {
 		t.Fatalf("WaitDeployed failed %v", err)
 	}
 
@@ -242,7 +242,7 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("failed to send transaction: %v", err)
 	}
 	backend.Commit()
-	if _, err := bind.WaitMined(context.Background(), backend, tx); err != nil {
+	if _, err := bind.WaitMined(context.Background(), backend, tx.Hash()); err != nil {
 		t.Fatalf("error waiting for tx to be mined: %v", err)
 	}
 
@@ -314,7 +314,7 @@ func TestErrors(t *testing.T) {
 	}
 
 	backend.Commit()
-	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[solc_errors.CMetaData.Pattern]); err != nil {
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[solc_errors.CMetaData.Pattern].Hash()); err != nil {
 		t.Fatalf("WaitDeployed failed %v", err)
 	}
 

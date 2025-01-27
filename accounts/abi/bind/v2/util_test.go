@@ -75,7 +75,7 @@ func TestWaitDeployed(t *testing.T) {
 			ctx     = context.Background()
 		)
 		go func() {
-			address, err = bind.WaitDeployed(ctx, backend.Client(), tx)
+			address, err = bind.WaitDeployed(ctx, backend.Client(), tx.Hash())
 			close(mined)
 		}()
 
@@ -120,9 +120,8 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 		t.Errorf("failed to send transaction: %q", err)
 	}
 	backend.Commit()
-	notContractCreation := errors.New("tx is not contract creation")
-	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != notContractCreation.Error() {
-		t.Errorf("error mismatch: want %q, got %q, ", notContractCreation, err)
+	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx.Hash()); err != bind.ErrNoAddressInReceipt {
+		t.Errorf("error mismatch: want %q, got %q, ", bind.ErrNoAddressInReceipt, err)
 	}
 
 	// Create a transaction that is not mined.
@@ -131,7 +130,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 
 	go func() {
 		contextCanceled := errors.New("context canceled")
-		if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != contextCanceled.Error() {
+		if _, err := bind.WaitDeployed(ctx, backend.Client(), tx.Hash()); err.Error() != contextCanceled.Error() {
 			t.Errorf("error mismatch: want %q, got %q, ", contextCanceled, err)
 		}
 	}()

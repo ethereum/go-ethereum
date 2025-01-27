@@ -239,23 +239,26 @@ func (m *MetaData) GetAbi() (*abi.ABI, error) {
 // WaitMined waits for tx to be mined on the blockchain.
 // It stops waiting when the context is canceled.
 func WaitMined(ctx context.Context, b DeployBackend, tx *types.Transaction) (*types.Receipt, error) {
-	return bind2.WaitMined(ctx, b, tx)
+	return bind2.WaitMined(ctx, b, tx.Hash())
 }
 
 // WaitMinedHash waits for a transaction with the provided hash to be mined on the blockchain.
 // It stops waiting when the context is canceled.
 func WaitMinedHash(ctx context.Context, b DeployBackend, hash common.Hash) (*types.Receipt, error) {
-	return bind2.WaitMinedHash(ctx, b, hash)
+	return bind2.WaitMined(ctx, b, hash)
 }
 
 // WaitDeployed waits for a contract deployment transaction and returns the on-chain
 // contract address when it is mined. It stops waiting when ctx is canceled.
 func WaitDeployed(ctx context.Context, b DeployBackend, tx *types.Transaction) (common.Address, error) {
-	return bind2.WaitDeployed(ctx, b, tx)
+	if tx.To() != nil {
+		return common.Address{}, errors.New("tx is not contract creation")
+	}
+	return bind2.WaitDeployed(ctx, b, tx.Hash())
 }
 
 // WaitDeployedHash waits for a contract deployment transaction with the provided hash and returns the on-chain
 // contract address when it is mined. It stops waiting when ctx is canceled.
 func WaitDeployedHash(ctx context.Context, b DeployBackend, hash common.Hash) (common.Address, error) {
-	return bind2.WaitDeployedHash(ctx, b, hash)
+	return bind2.WaitDeployed(ctx, b, hash)
 }
