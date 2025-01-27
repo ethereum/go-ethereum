@@ -197,3 +197,63 @@ func TestUpdateWithChangeSet(t *testing.T) {
 	_, updatedTempVal := valSet.GetByAddress(tempVal.Address)
 	require.Equal(t, int64(250), updatedTempVal.VotingPower)
 }
+
+func TestValidatorSet_IncludeIds(t *testing.T) {
+	v1 := &Validator{
+		Address:          common.HexToAddress("0x1111111111111111111111111111111111111111"),
+		VotingPower:      100,
+		ProposerPriority: 0,
+		ID:               0,
+	}
+	v2 := &Validator{
+		Address:          common.HexToAddress("0x2222222222222222222222222222222222222222"),
+		VotingPower:      200,
+		ProposerPriority: 0,
+		ID:               0,
+	}
+
+	valSet := NewValidatorSet([]*Validator{v1, v2})
+
+	valsWithId := []*Validator{
+		{
+			Address:          v1.Address,
+			ID:               10, // new ID for v1
+			VotingPower:      999,
+			ProposerPriority: 999,
+		},
+		{
+			Address:          v2.Address,
+			ID:               20, // new ID for v2
+			VotingPower:      999,
+			ProposerPriority: 999,
+		},
+		{
+			Address:     common.HexToAddress("0x3333333333333333333333333333333333333333"),
+			ID:          30,
+			VotingPower: 300,
+		},
+	}
+
+	valSet.IncludeIds(valsWithId)
+
+	assert.Equal(t, uint64(10), valSet.Validators[0].ID, "v1 ID should be updated to 10")
+	assert.Equal(t, uint64(20), valSet.Validators[1].ID, "v2 ID should be updated to 20")
+
+	assert.Equal(t, 2, len(valSet.Validators), "No extra validators should be added")
+
+	assert.Equal(t, int64(100), valSet.Validators[0].VotingPower)
+	assert.Equal(t, int64(200), valSet.Validators[1].VotingPower)
+}
+
+func TestValidatorSet_IncludeIds_EmptySet(t *testing.T) {
+	valSet := NewValidatorSet(nil) // empty set
+
+	valSet.IncludeIds([]*Validator{
+		{
+			Address: common.HexToAddress("0xabcdef"),
+			ID:      42,
+		},
+	})
+
+	assert.Equal(t, 0, valSet.Size(), "ValidatorSet remains empty")
+}

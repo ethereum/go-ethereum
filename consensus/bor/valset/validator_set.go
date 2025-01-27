@@ -114,7 +114,7 @@ func (vals *ValidatorSet) IncrementProposerPriority(times int) {
 // validator queried on ValidatorSet contract
 func (vals *ValidatorSet) IncludeIds(valsWithId []*Validator) {
 	if vals.IsNilOrEmpty() {
-		panic("empty validator set")
+		log.Warn("Empty validator set")
 	}
 
 	addressToId := make(map[common.Address]uint64)

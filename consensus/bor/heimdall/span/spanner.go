@@ -138,7 +138,7 @@ func (c *ChainSpanner) tryGetBorValidatorsWithId(ctx context.Context, blockNrOrH
 	valz := make([]*valset.Validator, producersCount)
 
 	for i := 0; i < producersCount; i++ {
-		p, err := c.getProducersBySpanAndIndexMethod(ctx, blockNrOrHash, blockNumber, toAddress, gas, spanNumber, i)
+		p, err := c.getProducersBySpanAndIndexMethod(ctx, blockNrOrHash, toAddress, gas, spanNumber, i)
 		// if fails, return validators without id
 		if err != nil {
 			return borValidatorsWithoutId, nil
@@ -180,7 +180,7 @@ func (c *ChainSpanner) getSpanByBlock(ctx context.Context, blockNrOrHash rpc.Blo
 	return spanNumber, nil
 }
 
-func (c *ChainSpanner) getProducersBySpanAndIndexMethod(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, blockNumber uint64, toAddress common.Address, gas hexutil.Uint64, spanNumber *big.Int, index int) (*contractValidator, error) {
+func (c *ChainSpanner) getProducersBySpanAndIndexMethod(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, toAddress common.Address, gas hexutil.Uint64, spanNumber *big.Int, index int) (*contractValidator, error) {
 	const getProducersBySpanAndIndexMethod = "producers"
 	producerData, err := c.validatorSet.Pack(getProducersBySpanAndIndexMethod, spanNumber, big.NewInt(int64(index)))
 	if err != nil {
