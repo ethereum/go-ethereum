@@ -28,6 +28,7 @@ func TestCommand_DebugBlock(t *testing.T) {
 
 	// enable archive mode for getting traces of ancient blocks
 	config.GcMode = "archive"
+	config.StateScheme = "hash"
 
 	// start the mock server
 	srv, err := server.CreateMockServer(config)
