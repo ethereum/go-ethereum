@@ -19,12 +19,15 @@ package filters
 import (
 	"context"
 	"errors"
+	"math"
 	"math/big"
 	"slices"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -38,36 +41,14 @@ type Filter struct {
 	block      *common.Hash // Block hash if filtering a single block
 	begin, end int64        // Range interval if filtering multiple blocks
 
-	matcher *bloombits.Matcher
+	rangeLogsTestHook chan rangeLogsTestEvent
 }
 
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
 func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
-	// Flatten the address and topic filter clauses into a single bloombits filter
-	// system. Since the bloombits are not positional, nil topics are permitted,
-	// which get flattened into a nil byte slice.
-	var filters [][][]byte
-	if len(addresses) > 0 {
-		filter := make([][]byte, len(addresses))
-		for i, address := range addresses {
-			filter[i] = address.Bytes()
-		}
-		filters = append(filters, filter)
-	}
-	for _, topicList := range topics {
-		filter := make([][]byte, len(topicList))
-		for i, topic := range topicList {
-			filter[i] = topic.Bytes()
-		}
-		filters = append(filters, filter)
-	}
-	size, _ := sys.backend.BloomStatus()
-
 	// Create a generic filter and convert it into a range filter
 	filter := newFilter(sys, addresses, topics)
-
-	filter.matcher = bloombits.NewMatcher(size, filters)
 	filter.begin = begin
 	filter.end = end
 
@@ -113,161 +94,259 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return nil, errPendingLogsUnsupported
 	}
 
-	resolveSpecial := func(number int64) (int64, error) {
-		var hdr *types.Header
+	resolveSpecial := func(number int64) (uint64, error) {
 		switch number {
-		case rpc.LatestBlockNumber.Int64(), rpc.PendingBlockNumber.Int64():
-			// we should return head here since we've already captured
-			// that we need to get the pending logs in the pending boolean above
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-			if hdr == nil {
-				return 0, errors.New("latest header not found")
-			}
+		case rpc.LatestBlockNumber.Int64():
+			// when searching from and/or until the current head, we resolve it
+			// to MaxUint64 which is translated by rangeLogs to the actual head
+			// in each iteration, ensuring that the head block will be searched
+			// even if the chain is updated during search.
+			return math.MaxUint64, nil
 		case rpc.FinalizedBlockNumber.Int64():
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
+			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
 			if hdr == nil {
 				return 0, errors.New("finalized header not found")
 			}
+			return hdr.Number.Uint64(), nil
 		case rpc.SafeBlockNumber.Int64():
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
+			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
 			if hdr == nil {
 				return 0, errors.New("safe header not found")
 			}
-		default:
-			return number, nil
+			return hdr.Number.Uint64(), nil
 		}
-		return hdr.Number.Int64(), nil
+		if number < 0 {
+			return 0, errors.New("negative block number")
+		}
+		return uint64(number), nil
 	}
 
-	var err error
 	// range query need to resolve the special begin/end block number
-	if f.begin, err = resolveSpecial(f.begin); err != nil {
+	begin, err := resolveSpecial(f.begin)
+	if err != nil {
 		return nil, err
 	}
-	if f.end, err = resolveSpecial(f.end); err != nil {
+	end, err := resolveSpecial(f.end)
+	if err != nil {
 		return nil, err
 	}
-
-	logChan, errChan := f.rangeLogsAsync(ctx)
-	var logs []*types.Log
-	for {
-		select {
-		case log := <-logChan:
-			logs = append(logs, log)
-		case err := <-errChan:
-			return logs, err
-		}
-	}
+	return f.rangeLogs(ctx, begin, end)
 }
 
-// rangeLogsAsync retrieves block-range logs that match the filter criteria asynchronously,
-// it creates and returns two channels: one for delivering log data, and one for reporting errors.
-func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan error) {
-	var (
-		logChan = make(chan *types.Log)
-		errChan = make(chan error)
-	)
+const (
+	rangeLogsTestSync = iota
+	rangeLogsTestTrimmed
+	rangeLogsTestIndexed
+	rangeLogsTestUnindexed
+	rangeLogsTestDone
+)
 
-	go func() {
+type rangeLogsTestEvent struct {
+	event      int
+	begin, end uint64
+}
+
+func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([]*types.Log, error) {
+	if f.rangeLogsTestHook != nil {
 		defer func() {
-			close(errChan)
-			close(logChan)
+			f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestDone, 0, 0}
+			close(f.rangeLogsTestHook)
 		}()
+	}
 
-		// Gather all indexed logs, and finish with non indexed ones
-		var (
-			end            = uint64(f.end)
-			size, sections = f.sys.backend.BloomStatus()
-			err            error
-		)
-		if indexed := sections * size; indexed > uint64(f.begin) {
-			if indexed > end {
-				indexed = end + 1
-			}
-			if err = f.indexedLogs(ctx, indexed-1, logChan); err != nil {
-				errChan <- err
-				return
-			}
+	if firstBlock > lastBlock {
+		return nil, nil
+	}
+
+	mb := f.sys.backend.NewMatcherBackend()
+	defer mb.Close()
+
+	// enforce a consistent state before starting the search in order to be able
+	// to determine valid range later
+	syncRange, err := mb.SyncLogIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !syncRange.Indexed {
+		// fallback to completely unindexed search
+		headNum := syncRange.HeadNumber
+		if firstBlock > headNum {
+			firstBlock = headNum
 		}
+		if lastBlock > headNum {
+			lastBlock = headNum
+		}
+		if f.rangeLogsTestHook != nil {
+			f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestUnindexed, firstBlock, lastBlock}
+		}
+		return f.unindexedLogs(ctx, firstBlock, lastBlock)
+	}
 
-		if err := f.unindexedLogs(ctx, end, logChan); err != nil {
-			errChan <- err
+	headBlock := syncRange.HeadNumber // Head is guaranteed != nil
+	// if haveMatches == true then matches correspond to the block number range
+	// between matchFirst and matchLast
+	var (
+		matches                     []*types.Log
+		haveMatches, forceUnindexed bool
+		matchFirst, matchLast       uint64
+	)
+	trimMatches := func(trimFirst, trimLast uint64) {
+		if !haveMatches {
 			return
 		}
-
-		errChan <- nil
-	}()
-
-	return logChan, errChan
-}
-
-// indexedLogs returns the logs matching the filter criteria based on the bloom
-// bits indexed available locally or via the network.
-func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
-	// Create a matcher session and request servicing from the backend
-	matches := make(chan uint64, 64)
-
-	session, err := f.matcher.Start(ctx, uint64(f.begin), end, matches)
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	f.sys.backend.ServiceFilter(ctx, session)
-
-	for {
-		select {
-		case number, ok := <-matches:
-			// Abort if all matches have been fulfilled
-			if !ok {
-				err := session.Error()
-				if err == nil {
-					f.begin = int64(end) + 1
-				}
-				return err
+		if trimLast < matchFirst || trimFirst > matchLast {
+			matches, haveMatches, matchFirst, matchLast = nil, false, 0, 0
+			return
+		}
+		if trimFirst > matchFirst {
+			for len(matches) > 0 && matches[0].BlockNumber < trimFirst {
+				matches = matches[1:]
 			}
-			f.begin = int64(number) + 1
-
-			// Retrieve the suggested block and pull any truly matching logs
-			header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
-			if header == nil || err != nil {
-				return err
+			matchFirst = trimFirst
+		}
+		if trimLast < matchLast {
+			for len(matches) > 0 && matches[len(matches)-1].BlockNumber > trimLast {
+				matches = matches[:len(matches)-1]
 			}
-			found, err := f.checkMatches(ctx, header)
-			if err != nil {
-				return err
-			}
-			for _, log := range found {
-				logChan <- log
-			}
-
-		case <-ctx.Done():
-			return ctx.Err()
+			matchLast = trimLast
 		}
 	}
+
+	for {
+		// determine range to be searched; for simplicity we only extend the most
+		// recent end of the existing match set by matching between searchFirst
+		// and searchLast.
+		searchFirst, searchLast := firstBlock, lastBlock
+		if searchFirst > headBlock {
+			searchFirst = headBlock
+		}
+		if searchLast > headBlock {
+			searchLast = headBlock
+		}
+		trimMatches(searchFirst, searchLast)
+		if haveMatches && matchFirst == searchFirst && matchLast == searchLast {
+			return matches, nil
+		}
+		var trimTailIfNotValid uint64
+		if haveMatches && matchFirst > searchFirst {
+			// missing tail section; do unindexed search
+			if f.rangeLogsTestHook != nil {
+				f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestUnindexed, searchFirst, matchFirst - 1}
+			}
+			tailMatches, err := f.unindexedLogs(ctx, searchFirst, matchFirst-1)
+			if err != nil {
+				return matches, err
+			}
+			matches = append(tailMatches, matches...)
+			matchFirst = searchFirst
+			// unindexed results are not affected by valid tail; do not trim tail
+			trimTailIfNotValid = math.MaxUint64
+		} else {
+			// if we have matches, they start at searchFirst
+			if haveMatches {
+				searchFirst = matchLast + 1
+				if !syncRange.Indexed || syncRange.FirstIndexed > searchFirst {
+					forceUnindexed = true
+				}
+			}
+			var newMatches []*types.Log
+			if !syncRange.Indexed || syncRange.FirstIndexed > searchLast || syncRange.LastIndexed < searchFirst {
+				forceUnindexed = true
+			}
+			if !forceUnindexed {
+				if syncRange.FirstIndexed > searchFirst {
+					searchFirst = syncRange.FirstIndexed
+				}
+				if syncRange.LastIndexed < searchLast {
+					searchLast = syncRange.LastIndexed
+				}
+				if f.rangeLogsTestHook != nil {
+					f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestIndexed, searchFirst, searchLast}
+				}
+				newMatches, err = f.indexedLogs(ctx, mb, searchFirst, searchLast)
+				// trim tail if it affects the indexed search range
+				trimTailIfNotValid = searchFirst
+				if err == filtermaps.ErrMatchAll {
+					// "match all" filters are not supported by filtermaps; fall back
+					// to unindexed search which is the most efficient in this case
+					forceUnindexed = true
+				}
+			}
+			if forceUnindexed {
+				if f.rangeLogsTestHook != nil {
+					f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestUnindexed, searchFirst, searchLast}
+				}
+				newMatches, err = f.unindexedLogs(ctx, searchFirst, searchLast)
+				// unindexed results are not affected by valid tail; do not trim tail
+				trimTailIfNotValid = math.MaxUint64
+			}
+			if err != nil {
+				return matches, err
+			}
+			if !haveMatches {
+				matches = newMatches
+				haveMatches, matchFirst, matchLast = true, searchFirst, searchLast
+			} else {
+				matches = append(matches, newMatches...)
+				matchLast = searchLast
+			}
+		}
+
+		if f.rangeLogsTestHook != nil {
+			f.rangeLogsTestHook <- rangeLogsTestEvent{event: rangeLogsTestSync, begin: matchFirst, end: matchLast}
+		}
+		syncRange, err = mb.SyncLogIndex(ctx)
+		if err != nil {
+			return matches, err
+		}
+		headBlock = syncRange.HeadNumber // Head is guaranteed != nil
+		if !syncRange.Valid {
+			matches, haveMatches, matchFirst, matchLast = nil, false, 0, 0
+		} else {
+			if syncRange.FirstValid > trimTailIfNotValid {
+				trimMatches(syncRange.FirstValid, syncRange.LastValid)
+			} else {
+				trimMatches(0, syncRange.LastValid)
+			}
+		}
+		if f.rangeLogsTestHook != nil {
+			f.rangeLogsTestHook <- rangeLogsTestEvent{event: rangeLogsTestTrimmed, begin: matchFirst, end: matchLast}
+		}
+	}
+}
+
+func (f *Filter) indexedLogs(ctx context.Context, mb filtermaps.MatcherBackend, begin, end uint64) ([]*types.Log, error) {
+	start := time.Now()
+	potentialMatches, err := filtermaps.GetPotentialMatches(ctx, mb, begin, end, f.addresses, f.topics)
+	matches := filterLogs(potentialMatches, nil, nil, f.addresses, f.topics)
+	log.Trace("Performed indexed log search", "begin", begin, "end", end, "true matches", len(matches), "false positives", len(potentialMatches)-len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
+	return matches, err
 }
 
 // unindexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
-func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
-	for ; f.begin <= int64(end); f.begin++ {
-		header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
+func (f *Filter) unindexedLogs(ctx context.Context, begin, end uint64) ([]*types.Log, error) {
+	start := time.Now()
+	log.Warn("Performing unindexed log search", "begin", begin, "end", end)
+	var matches []*types.Log
+	for blockNumber := begin; blockNumber <= end; blockNumber++ {
+		select {
+		case <-ctx.Done():
+			return matches, ctx.Err()
+		default:
+		}
+		header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNumber))
 		if header == nil || err != nil {
-			return err
+			return matches, err
 		}
 		found, err := f.blockLogs(ctx, header)
 		if err != nil {
-			return err
+			return matches, err
 		}
-		for _, log := range found {
-			select {
-			case logChan <- log:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
+		matches = append(matches, found...)
 	}
-	return nil
+	log.Trace("Performed unindexed log search", "begin", begin, "end", end, "matches", len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
+	return matches, nil
 }
 
 // blockLogs returns the logs matching the filter criteria within a single block.
