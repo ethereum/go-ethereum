@@ -33,11 +33,13 @@ func runPrestateBlock(t *testing.T, prestatePath string, hooks *tracing.Hooks) {
 
 	context := prestate.Context.toBlockContext(prestate.Genesis)
 
-	state := tests.MakePreState(rawdb.NewMemoryDatabase(), prestate.Genesis.Alloc, false, rawdb.HashScheme)
-	defer state.Close()
+	testState := tests.MakePreState(rawdb.NewMemoryDatabase(), prestate.Genesis.Alloc, false, rawdb.HashScheme)
+	defer testState.Close()
 
-	state.StateDB.SetLogger(hooks)
-	state.StateDB.SetTxContext(tx.Hash(), 0)
+	state.NewHookedState(testState.StateDB, hooks)
+
+	// testState.StateDB.SetLogger(hooks)
+	testState.StateDB.SetTxContext(tx.Hash(), 0)
 
 	block := types.NewBlock(&types.Header{
 		ParentHash:       prestate.Genesis.ToBlock().Hash(),
@@ -48,7 +50,9 @@ func runPrestateBlock(t *testing.T, prestatePath string, hooks *tracing.Hooks) {
 		GasLimit:         context.GasLimit,
 		BaseFee:          context.BaseFee,
 		ParentBeaconRoot: ptr(common.Hash{}),
-	}, []*types.Transaction{tx}, nil, nil, trie.NewStackTrie(nil))
+	}, &types.Body{
+		Transactions: []*types.Transaction{tx},
+	}, nil, trie.NewStackTrie(nil))
 
 	hooks.OnBlockchainInit(prestate.Genesis.Config)
 	hooks.OnBlockStart(tracing.BlockEvent{
@@ -62,7 +66,7 @@ func runPrestateBlock(t *testing.T, prestatePath string, hooks *tracing.Hooks) {
 		prestate,
 		&context.Coinbase,
 		new(core.GasPool).AddGas(block.GasLimit()),
-		state.StateDB,
+		testState.StateDB,
 		block.Header(),
 		tx,
 		&usedGas,
@@ -91,7 +95,7 @@ func newBlockchain(t *testing.T, alloc types.GenesisAlloc, context vm.BlockConte
 
 	blockchain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), core.DefaultCacheConfigWithScheme(rawdb.HashScheme), genesis, nil, ethash.NewFullFaker(), vm.Config{
 		Tracer: tracer,
-	}, nil, nil)
+	}, nil)
 	require.NoError(t, err)
 
 	return genesis, blockchain
@@ -126,6 +130,8 @@ func (h *testHasher) Hash() common.Hash {
 	return common.BytesToHash(h.hasher.Sum(nil))
 }
 
+var _ core.Validator = (*ignoreValidateStateValidator)(nil)
+
 type ignoreValidateStateValidator struct {
 	core.Validator
 }
@@ -134,6 +140,6 @@ func (v ignoreValidateStateValidator) ValidateBody(block *types.Block) error {
 	return v.Validator.ValidateBody(block)
 }
 
-func (v ignoreValidateStateValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
+func (v ignoreValidateStateValidator) ValidateState(block *types.Block, state *state.StateDB, res *core.ProcessResult, stateless bool) error {
 	return nil
 }

@@ -133,7 +133,7 @@ func Test_TypesHeader_AllConsensusFieldsAreKnown(t *testing.T) {
 	// When adding support for a new hard-fork that adds new block header fields, it's normal that this value
 	// changes. If you are sure the two struct are the same, then you can update the expected hash below
 	// to the new value.
-	expectedHash := common.HexToHash("5341947c531e5c9cf38202784b16ac66484fe1838aa6e825436b22321b927296")
+	expectedHash := common.HexToHash("4ced4916132bbf6a7819a310bbac4abf354062a00efc980ea4f0bab406546ac5")
 
 	gethHeaderValue := reflect.New(gethHeaderType)
 	fillAllFieldsWithNonEmptyValues(t, gethHeaderValue, reflect.VisibleFields(gethHeaderType))
@@ -146,7 +146,7 @@ func Test_TypesHeader_AllConsensusFieldsAreKnown(t *testing.T) {
 	// actually a computed value based on the other fields in the struct, so if you change any field,
 	// the hash will change also.
 	//
-	// On hard-fork, it happens that new fields are added, this test serves as a way to "detect" in codde
+	// On hard-fork, it happens that new fields are added, this test serves as a way to "detect" in code
 	// that the expected fields of `types.Header` changed
 	require.Equal(t, expectedHash, gethHeader.Hash(),
 		"Geth Header Hash mistmatch, got %q but expecting %q on *types.Header:\n\nGeth Header (from fillNonDefault(new(*types.Header)))\n%s",
@@ -464,7 +464,7 @@ func blockEvent(height uint64) tracing.BlockEvent {
 	return tracing.BlockEvent{
 		Block: types.NewBlock(&types.Header{
 			Number: big.NewInt(int64(height)),
-		}, nil, nil, nil, nil),
+		}, nil, nil, nil),
 		TD: b(1),
 	}
 }

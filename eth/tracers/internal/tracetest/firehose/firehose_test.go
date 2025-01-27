@@ -50,11 +50,11 @@ func TestFirehoseChain(t *testing.T) {
 		GasLimit:         context.GasLimit,
 		BaseFee:          context.BaseFee,
 		ParentBeaconRoot: ptr(common.Hash{}),
-	}, nil, nil, nil, trie.NewStackTrie(nil))
+	}, nil, nil, trie.NewStackTrie(nil))
 
 	blockchain.SetBlockValidatorAndProcessorForTesting(
-		ignoreValidateStateValidator{core.NewBlockValidator(genesis.Config, blockchain, blockchain.Engine())},
-		core.NewStateProcessor(genesis.Config, blockchain, blockchain.Engine()),
+		ignoreValidateStateValidator{core.NewBlockValidator(genesis.Config, blockchain)},
+		core.NewStateProcessor(genesis.Config, blockchain.HeaderChain()),
 	)
 
 	n, err := blockchain.InsertChain(types.Blocks{block})
@@ -62,7 +62,7 @@ func TestFirehoseChain(t *testing.T) {
 	require.Equal(t, 1, n)
 
 	genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
-	require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknwonLine) string { return "- '" + string(l) + "'" }), "\n"))
+	require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
 	require.NotNil(t, genesisLine)
 	blockLines.assertEquals(t, filepath.Join("testdata", t.Name()),
 		firehoseBlockLineParams{"1", "8e6ee4b1054d94df1d8a51fb983447dc2e27a854590c3ac0061f994284be8150", "0", "845bad515694a416bab4b8d44e22cf97a8c894a8502110ab807883940e185ce0", "0", "1000000000"},
@@ -90,7 +90,7 @@ func TestFirehosePrestate(t *testing.T) {
 			runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracers.NewTracingHooksFromFirehose(tracer))
 
 			genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
-			require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknwonLine) string { return "- '" + string(l) + "'" }), "\n"))
+			require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
 			require.NotNil(t, genesisLine)
 			blockLines.assertOnlyBlockEquals(t, folder, 1)
 		})

@@ -23,7 +23,6 @@ import (
 
 var configByName = map[string]*params.ChainConfig{
 	"mainnet": params.MainnetChainConfig,
-	"goerli":  params.GoerliChainConfig,
 	"sepolia": params.SepoliaChainConfig,
 	"holesky": params.HoleskyChainConfig,
 }

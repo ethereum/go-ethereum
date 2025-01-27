@@ -100,9 +100,9 @@ type firehoseBlockLineParams struct {
 	Time         string
 }
 
-type unknwonLine string
+type unknownLine string
 
-func readTracerFirehoseLines(t *testing.T, tracer *tracers.Firehose) (genesisLine *firehoseInitLine, blockLines firehoseBlockLines, unknownLines []unknwonLine) {
+func readTracerFirehoseLines(t *testing.T, tracer *tracers.Firehose) (genesisLine *firehoseInitLine, blockLines firehoseBlockLines, unknownLines []unknownLine) {
 	t.Helper()
 
 	lines := bytes.Split(tracer.InternalTestingBuffer().Bytes(), []byte{'\n'})
@@ -113,7 +113,7 @@ func readTracerFirehoseLines(t *testing.T, tracer *tracers.Firehose) (genesisLin
 
 		parts := bytes.Split(line, []byte{' '})
 		if len(parts) == 0 || string(parts[0]) != "FIRE" {
-			unknownLines = append(unknownLines, unknwonLine(line))
+			unknownLines = append(unknownLines, unknownLine(line))
 			continue
 		}
 
@@ -147,7 +147,7 @@ func readTracerFirehoseLines(t *testing.T, tracer *tracers.Firehose) (genesisLin
 			})
 
 		default:
-			unknownLines = append(unknownLines, unknwonLine(line))
+			unknownLines = append(unknownLines, unknownLine(line))
 		}
 	}
 
