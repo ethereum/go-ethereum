@@ -2224,19 +2224,6 @@ func TestSetCodeTransactions(t *testing.T) {
 	testAddBalance(pool, addrB, big.NewInt(params.Ether))
 	testAddBalance(pool, addrC, big.NewInt(params.Ether))
 
-	// A few situations to test:
-	// 1. Accounts with delegation set can only have one in-flight transaction.
-	// 2. Setcode tx should be rejected if any authority has a known pooled tx.
-	// 3. New txs from senders with pooled delegations should not be accepted.
-	// 4. Ensure setcode tx can replace itself provided the fee bump is enough.
-	// 5. Make sure that if a setcode tx is replaced, the auths associated with
-	//    the tx are removed.
-	//    5.1. This should also work when a self-sponsored setcode tx attempts
-	//         to replace itself.
-
-	// make sure auth list recreated correctly after full reorg?
-	// (in different test?) verify that a setcode tx cannot invalidate a blob tx.
-
 	for _, tt := range []struct {
 		name    string
 		pending int
