@@ -28,7 +28,7 @@ import (
 // along with associated state changes after running a block on top.
 //
 // The goal of a diff layer is to act as a journal, tracking recent modifications
-// made to the state, that have not yet graduated into a semi-immutable state.
+// made to the state, that has not yet graduated into a semi-immutable state.
 type diffLayer struct {
 	// Immutables
 	root   common.Hash         // Root hash to which this layer diff belongs to
