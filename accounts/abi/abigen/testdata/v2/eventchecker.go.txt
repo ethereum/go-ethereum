@@ -44,7 +44,7 @@ func NewEventChecker() *EventChecker {
 
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
-func (c *EventChecker) Instance(backend bind.ContractBackend, addr common.Address) bind.ContractInstance {
+func (c *EventChecker) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
 	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
