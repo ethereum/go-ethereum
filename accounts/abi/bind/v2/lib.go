@@ -27,22 +27,12 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-// ContractInstance represents a contract deployed on-chain that can be interacted with (filter for past logs, watch
-// for new logs, call, transact).
-type ContractInstance struct {
-	Address common.Address
-	Backend ContractBackend
-	abi     abi.ABI
-}
-
-func NewContractInstance(backend ContractBackend, addr common.Address, abi abi.ABI) ContractInstance {
-	return ContractInstance{addr, backend, abi}
+func NewContractInstance(backend ContractBackend, addr common.Address, abi abi.ABI) *BoundContract {
+	return NewBoundContract(addr, abi, backend, backend, backend)
 }
 
 // FilterEvents returns an EventIterator instance for filtering historical events based on the event id and a block range.
-func FilterEvents[T any](instance ContractInstance, opts *FilterOpts, eventName string, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
-	backend := instance.Backend
-	c := NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
+func FilterEvents[T any](c *BoundContract, opts *FilterOpts, eventName string, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
 	logs, sub, err := c.FilterLogs(opts, eventName, topics...)
 	if err != nil {
 		return nil, err
@@ -54,9 +44,7 @@ func FilterEvents[T any](instance ContractInstance, opts *FilterOpts, eventName 
 // contract to be intercepted, unpacked, and forwarded to sink.  If
 // unpack returns an error, the returned subscription is closed with the
 // error.
-func WatchEvents[T any](instance ContractInstance, opts *WatchOpts, eventName string, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
-	backend := instance.Backend
-	c := NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
+func WatchEvents[T any](c *BoundContract, opts *WatchOpts, eventName string, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
 	logs, sub, err := c.WatchLogs(opts, eventName, topics...)
 	if err != nil {
 		return nil, err
@@ -159,26 +147,13 @@ func (it *EventIterator[T]) Close() error {
 	return nil
 }
 
-// Transact creates and submits a transaction to the bound contract instance
-// using the provided abi-encoded input (or nil).
-func Transact(instance ContractInstance, opts *TransactOpts, input []byte) (*types.Transaction, error) {
-	var (
-		addr    = instance.Address
-		backend = instance.Backend
-	)
-	c := NewBoundContract(addr, instance.abi, backend, backend, backend)
-	return c.RawTransact(opts, input)
-}
-
 // Call performs an eth_call on the given bound contract instance, using the provided
 // ABI-encoded input.
 //
 // To call a function that doesn't return any output, pass nil as the unpack function.
 // This can be useful if you just want to check that the function doesn't revert.
-func Call[T any](instance ContractInstance, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
+func Call[T any](c *BoundContract, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
-	backend := instance.Backend
-	c := NewBoundContract(instance.Address, instance.abi, backend, backend, backend)
 	packedOutput, err := c.CallRaw(opts, packedInput)
 	if err != nil {
 		return defaultResult, err
