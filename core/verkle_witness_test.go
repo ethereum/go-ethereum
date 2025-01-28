@@ -372,7 +372,6 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 				t.Fatalf("nil new value in BLOCKHASH contract insert")
 			}
 			if *stemStateDiff.SuffixDiffs[0].NewValue != genesisH {
-				// je sais pas pourquoi, le hash storé est faux. On dirait le empty code hash mais c'est un hasard
 				t.Fatalf("invalid BLOCKHASH value: %x != %x", *stemStateDiff.SuffixDiffs[0].NewValue, genesisH)
 			}
 		} else {
