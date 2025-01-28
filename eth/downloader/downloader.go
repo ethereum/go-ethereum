@@ -20,7 +20,6 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -163,9 +162,6 @@ type BlockChain interface {
 
 	// CurrentHeader retrieves the head header from the local chain.
 	CurrentHeader() *types.Header
-
-	// GetTd returns the total difficulty of a local block.
-	GetTd(common.Hash, uint64) *big.Int
 
 	// InsertHeaderChain inserts a batch of headers into the local chain.
 	InsertHeaderChain([]*types.Header) (int, error)
