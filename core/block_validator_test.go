@@ -18,6 +18,7 @@ package core
 
 import (
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -263,5 +264,42 @@ func TestCalcGasLimit(t *testing.T) {
 		if have, want := CalcGasLimit(tc.pGasLimit, tc.pGasLimit), tc.pGasLimit; have != want {
 			t.Errorf("test %d: have %d want %d", i, have, want)
 		}
+	}
+}
+
+func TestSimulateGasLimit(t *testing.T) {
+	minLimit, maxLimit := params.MinGasLimit, params.MaxGasLimit // can change these
+	params.MinGasLimit, params.MaxGasLimit = minLimit, maxLimit
+	rand.Seed(time.Now().UnixNano())
+
+	type weightedPreference struct {
+		weight float32
+		limit  uint64
+	}
+	stakerPreference := []weightedPreference{
+		{0.1, 100_000},
+		{0.1, 200_000},
+		{0.1, 300_000},
+		{0.1, 400_000},
+		{0.1, 500_000},
+		{0.1, 600_000},
+		{0.1, 700_000},
+		{0.1, 800_000},
+		{0.1, 900_000},
+		{0.1, 1_000_000},
+	}
+
+	start := params.MinGasLimit
+	currentGasLimit := start
+	for i := 0; i < 100_000; i++ {
+		r := rand.Float32()
+		for _, p := range stakerPreference {
+			r -= p.weight
+			if r <= 0 {
+				currentGasLimit = CalcGasLimit(currentGasLimit, p.limit)
+				break
+			}
+		}
+		t.Logf("Gas limit: %d", currentGasLimit)
 	}
 }
