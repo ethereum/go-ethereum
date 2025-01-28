@@ -363,7 +363,7 @@ func BenchmarkEOFValidation(b *testing.B) {
 	}
 }
 
-// BenchmarkEOFValidation tries to benchmark the code validation for the CALLF/RETF operation.
+// BenchmarkEOFValidation2 tries to benchmark the code validation for the CALLF/RETF operation.
 // For this we set up code that calls into 1024 code sections which
 // - contain calls to some other code sections.
 // We can't have all code sections calling each other, otherwise we would exceed 48KB.
