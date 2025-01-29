@@ -19,6 +19,7 @@ package bind
 import (
 	"fmt"
 	"regexp"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,6 +34,26 @@ type linkTestCase struct {
 	contractCodes map[string]string
 
 	overrides map[string]common.Address
+}
+
+func copyMetaData(m *MetaData) *MetaData {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var deps []*MetaData
+	if len(m.Deps) > 0 {
+		for _, dep := range m.Deps {
+			deps = append(deps, copyMetaData(dep))
+		}
+	}
+
+	return &MetaData{
+		Bin:       m.Bin,
+		ABI:       m.ABI,
+		Deps:      deps,
+		Pattern:   m.Pattern,
+		mu:        sync.Mutex{},
+		parsedABI: m.parsedABI,
+	}
 }
 
 func makeLinkTestCase(input map[rune][]rune, overrides map[rune]common.Address) *linkTestCase {
@@ -103,14 +124,15 @@ func linkDeps(deps map[string]*MetaData) []*MetaData {
 		roots[pattern] = struct{}{}
 	}
 
-	connectedDeps := make(map[string]MetaData)
+	connectedDeps := make(map[string]*MetaData)
 	for pattern, dep := range deps {
-		connectedDeps[pattern] = internalLinkDeps(*dep, deps, &roots) //nolint:all
+		connectedDeps[pattern] = internalLinkDeps(dep, deps, &roots)
 	}
-	rootMetadatas := []*MetaData{}
+
+	var rootMetadatas []*MetaData
 	for pattern := range roots {
-		dep := connectedDeps[pattern] //nolint:all
-		rootMetadatas = append(rootMetadatas, &dep)
+		dep := connectedDeps[pattern]
+		rootMetadatas = append(rootMetadatas, dep)
 	}
 	return rootMetadatas
 }
@@ -119,15 +141,15 @@ func linkDeps(deps map[string]*MetaData) []*MetaData {
 // given the depMap (map of solidity link pattern to contract metadata object), deleting contract entries from the roots
 // map if they were referenced as dependencies.  It returns a new MetaData object which is the linked version of metadata
 // parameter.
-func internalLinkDeps(metadata MetaData, depMap map[string]*MetaData, roots *map[string]struct{}) MetaData { //nolint:all
-	linked := metadata //nolint:all
+func internalLinkDeps(metadata *MetaData, depMap map[string]*MetaData, roots *map[string]struct{}) *MetaData {
+	linked := copyMetaData(metadata)
 	depPatterns := parseLibraryDeps(metadata.Bin)
 	for _, pattern := range depPatterns {
 		delete(*roots, pattern)
-		connectedDep := internalLinkDeps(*depMap[pattern], depMap, roots) //nolint:all
-		linked.Deps = append(linked.Deps, &connectedDep)
+		connectedDep := internalLinkDeps(depMap[pattern], depMap, roots)
+		linked.Deps = append(linked.Deps, connectedDep)
 	}
-	return linked //nolint:all
+	return linked
 }
 
 func testLinkCase(tcInput linkTestCaseInput) error {
