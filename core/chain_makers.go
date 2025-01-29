@@ -122,6 +122,11 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	if err != nil {
 		panic(err)
 	}
+	// Merge the tx-local access event into the "block-local" one, in order to collect
+	// all values, so that the witness can be built.
+	if b.statedb.GetTrie().IsVerkle() {
+		b.statedb.AccessEvents().Merge(evm.AccessEvents)
+	}
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
 	if b.header.BlobGasUsed != nil {
@@ -379,7 +384,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			misc.ApplyDAOHardFork(statedb)
 		}
 
-		if config.IsPrague(b.header.Number, b.header.Time) {
+		if config.IsPrague(b.header.Number, b.header.Time) || config.IsVerkle(b.header.Number, b.header.Time) {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
@@ -487,13 +492,11 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		// Save pre state for proof generation
 		// preState := statedb.Copy()
 
-		// Pre-execution system calls.
-		if config.IsPrague(b.header.Number, b.header.Time) {
-			// EIP-2935
-			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
-			ProcessParentBlockHash(b.header.ParentHash, evm)
-		}
+		// EIP-2935 / 7709
+		blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+		blockContext.Random = &common.Hash{} // enable post-merge instruction set
+		evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+		ProcessParentBlockHash(b.header.ParentHash, evm)
 
 		// Execute any user modifications to the block.
 		if gen != nil {
@@ -561,7 +564,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 	return cm.chain, cm.receipts, proofs, keyvals
 }
 
-func GenerateVerkleChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts, []*verkle.VerkleProof, []verkle.StateDiff) {
+func GenerateVerkleChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (common.Hash, ethdb.Database, []*types.Block, []types.Receipts, []*verkle.VerkleProof, []verkle.StateDiff) {
 	db := rawdb.NewMemoryDatabase()
 	cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 	cacheConfig.SnapshotLimit = 0
@@ -572,7 +575,7 @@ func GenerateVerkleChainWithGenesis(genesis *Genesis, engine consensus.Engine, n
 		panic(err)
 	}
 	blocks, receipts, proofs, keyvals := GenerateVerkleChain(genesis.Config, genesisBlock, engine, db, triedb, n, gen)
-	return db, blocks, receipts, proofs, keyvals
+	return genesisBlock.Hash(), db, blocks, receipts, proofs, keyvals
 }
 
 func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
