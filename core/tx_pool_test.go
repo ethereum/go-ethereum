@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
@@ -959,6 +960,92 @@ func testTransactionQueueGlobalLimiting(t *testing.T, nolocals bool) {
 }
 
 // Tests that if an account remains idle for a prolonged amount of time, any
+// executable transactions queued up are dropped.
+func TestPendingTransactionTimeLimiting(t *testing.T) {
+	// Reduce the eviction interval to a testable amount
+	defer func(old time.Duration) { evictionInterval = old }(evictionInterval)
+	evictionInterval = time.Millisecond * 100
+
+	// Create the pool to test the non-expiration enforcement
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{1000000, statedb, new(event.Feed)}
+
+	config := testTxPoolConfig
+	config.AccountPendingLimit = 1
+	config.Lifetime = time.Second
+
+	pool := NewTxPool(config, params.TestChainConfig, blockchain)
+	defer pool.Stop()
+
+	// Create two test accounts to ensure remotes expire but locals do not
+	local, _ := crypto.GenerateKey()
+	remote, _ := crypto.GenerateKey()
+
+	testAddBalance(pool, crypto.PubkeyToAddress(local.PublicKey), big.NewInt(1000000000))
+	testAddBalance(pool, crypto.PubkeyToAddress(remote.PublicKey), big.NewInt(1000000000))
+
+	err := pool.AddLocal(pricedTransaction(0, 100000, big.NewInt(1), local))
+	require.NoError(t, err, "Failed to insert local transaction")
+
+	err = pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(1), remote))
+	require.NoError(t, err, "Failed to insert remote transaction")
+
+	err = validateTxPoolInternals(pool)
+	require.NoError(t, err, "Pool internal state corrupted")
+
+	pending, queued := pool.Stats()
+	require.Equal(t, 2, pending, "Unexpected global pending tx count")
+	require.Equal(t, 0, queued, "Unexpected global queued tx count")
+
+	// Allow the eviction interval to run
+	time.Sleep(2 * evictionInterval)
+
+	// Transactions should not be evicted from the pool yet since lifetime duration has not passed
+	pending, queued = pool.Stats()
+	require.Equal(t, 2, pending, "Unexpected global pending tx count")
+	require.Equal(t, 0, queued, "Unexpected global queued tx count")
+
+	// Wait a bit for eviction to run and clean up any leftovers, and ensure only the local remains
+	time.Sleep(2 * config.Lifetime)
+
+	pending, queued = pool.Stats()
+	require.Equal(t, 1, pending, "Unexpected global pending tx count")
+	require.Equal(t, 0, queued, "Unexpected global queued tx count")
+
+	// Reinsert dropped remote transaction
+	err = pool.AddRemote(pricedTransaction(0, 100000, big.NewInt(1), remote))
+	require.NoError(t, err, "Failed to insert remote transaction")
+
+	err = validateTxPoolInternals(pool)
+	require.NoError(t, err, "Pool internal state corrupted")
+
+	pending, queued = pool.Stats()
+	require.Equal(t, 2, pending, "Unexpected global pending tx count")
+	require.Equal(t, 0, queued, "Unexpected global queued tx count")
+
+	// Try to insert a 2nd transaction but it is discarded due to account pending limit
+	time.Sleep(config.Lifetime / 2)
+
+	err = pool.AddRemote(pricedTransaction(1, 100000, big.NewInt(1), remote))
+	require.NoError(t, err, "Failed to insert remote transaction")
+
+	err = validateTxPoolInternals(pool)
+	require.NoError(t, err, "Pool internal state corrupted")
+
+	pending, queued = pool.Stats()
+	require.Equal(t, 2, pending, "Unexpected global pending tx count")
+	require.Equal(t, 0, queued, "Unexpected global queued tx count")
+
+	// Clean up remote transaction, this shows that beat was not bumped after failed insertion
+	time.Sleep(config.Lifetime)
+
+	pending, queued = pool.Stats()
+	require.Equal(t, 1, pending, "Unexpected global pending tx count")
+	require.Equal(t, 0, queued, "Unexpected global queued tx count")
+
+}
+
+// Tests that if an account remains idle for a prolonged amount of time, any
 // non-executable transactions queued up are dropped to prevent wasting resources
 // on shuffling them around.
 //
@@ -1097,8 +1184,14 @@ func testTransactionQueueTimeLimiting(t *testing.T, nolocals bool) {
 	// The whole life time pass after last promotion, kick out stale transactions
 	time.Sleep(2 * config.Lifetime)
 	pending, queued = pool.Stats()
-	if pending != 2 {
-		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
+	if nolocals {
+		if pending != 0 {
+			t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 0)
+		}
+	} else {
+		if pending != 1 {
+			t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 1)
+		}
 	}
 	if nolocals {
 		if queued != 0 {
@@ -1201,6 +1294,102 @@ func TestTransactionPendingGlobalLimiting(t *testing.T) {
 	if err := validateTxPoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
+}
+
+// Tests that the transaction count belonging to any account cannot go
+// above the configured hard threshold.
+func TestTransactionPendingPerAccountLimiting(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the limit enforcement with
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := &testBlockChain{1000000, statedb, new(event.Feed)}
+
+	limit := 16
+
+	config := testTxPoolConfig
+	config.AccountPendingLimit = uint64(limit)
+
+	pool := NewTxPool(config, params.TestChainConfig, blockchain)
+	defer pool.Stop()
+
+	// Create a number of test accounts and fund them
+	keys := make([]*ecdsa.PrivateKey, 5)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		testAddBalance(pool, crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+	}
+
+	// Generate and queue a batch of transactions (limit + 1 per account)
+	nonces := make(map[common.Address]uint64)
+	txs := types.Transactions{}
+	for _, key := range keys {
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+		for j := 0; j < limit+1; j++ {
+			txs = append(txs, transaction(nonces[addr], 100000, key))
+			nonces[addr]++
+		}
+	}
+
+	// Import the batch and verify txpool consistency
+	pool.AddRemotesSync(txs)
+	err := validateTxPoolInternals(pool)
+	require.NoError(t, err, "pool internal state corrupted")
+
+	// Check that limits are enforced
+	for _, list := range pool.pending {
+		require.LessOrEqual(t, list.Len(), limit, "Pending transactions for account overflow allowance")
+	}
+
+	pending, queued := pool.Stats()
+	require.Equal(t, limit*5, pending, "Unexpected global pending tx count")
+	require.Equal(t, 0, queued, "Unexpected global queued tx count")
+
+	// Save dropped nonce for future use
+	pendingNonces := make(map[common.Address]uint64)
+	for addr, nonce := range nonces {
+		pendingNonces[addr] = nonce - 1
+	}
+
+	// Generate and queue a batch of transactions (with nonce gap)
+	txs = types.Transactions{}
+	for _, key := range keys {
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+		for j := 0; j < limit; j++ {
+			txs = append(txs, transaction(nonces[addr], 100000, key))
+			nonces[addr]++
+		}
+	}
+
+	// Import the batch and verify txpool consistency
+	pool.AddRemotesSync(txs)
+	err = validateTxPoolInternals(pool)
+	require.NoError(t, err, "pool internal state corrupted")
+
+	pending, queued = pool.Stats()
+	require.Equal(t, limit*5, pending, "Unexpected global pending tx count")
+	require.Equal(t, limit*5, queued, "Unexpected global queued tx count")
+
+	// Generate and queue a batch of transactions (fill the nonce gap)
+	txs = types.Transactions{}
+	for _, key := range keys {
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+		txs = append(txs, transaction(pendingNonces[addr], 100000, key))
+	}
+
+	// Import the batch and verify txpool consistency
+	pool.AddRemotesSync(txs)
+	err = validateTxPoolInternals(pool)
+	require.NoError(t, err, "pool internal state corrupted")
+
+	// Check that limits are enforced
+	for _, list := range pool.pending {
+		require.LessOrEqual(t, list.Len(), limit, "Pending transactions for account overflow allowance")
+	}
+
+	pending, queued = pool.Stats()
+	require.Equal(t, limit*5, pending, "Unexpected global pending tx count")
+	require.Equal(t, 0, queued, "Unexpected global queued tx count")
 }
 
 // Test the limit on transaction size is enforced correctly.

@@ -439,7 +439,11 @@ func (l *txList) Ready(start uint64) types.Transactions {
 
 // Len returns the length of the transaction list.
 func (l *txList) Len() int {
-	return l.txs.Len()
+	if l == nil {
+		return 0
+	} else {
+		return l.txs.Len()
+	}
 }
 
 // Empty returns whether the list of transactions is empty or not.
