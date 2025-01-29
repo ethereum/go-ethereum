@@ -19,6 +19,7 @@ package tests
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -42,9 +43,35 @@ func TestTransaction(t *testing.T) {
 	// Geth accepts it, which is not a consensus issue since we use big.Int's
 	// internally to calculate the cost
 	txt.skipLoad("^ttValue/TransactionWithHighValueOverflow.json")
+
+	// Test requires EVM execution and should be probably done as a state test.
+	txt.skipLoad("^ttEIP3860/DataTestInitCodeTooBig.json")
+
+	// The following tests require the tx precheck to be performed.
+	txt.skipLoad("^ttEIP1559/maxPriorityFeePerGass32BytesValue.json")
+	txt.skipLoad("^ttEIP1559/maxPriorityFeePerGasOverflow.json")
+	txt.skipLoad("^ttEIP1559/maxFeePerGas32BytesValue.json")
+	txt.skipLoad("^ttEIP1559/maxFeePerGasOverflow.json")
+	txt.skipLoad("^ttEIP1559/GasLimitPriceProductPlusOneOverflow.json")
+	txt.skipLoad("^ttEIP1559/GasLimitPriceProductOverflow.json")
+
 	txt.walk(t, transactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
 		cfg := params.MainnetChainConfig
 		if err := txt.checkFailure(t, test.Run(cfg)); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+func TestExecutionSpecTransaction(t *testing.T) {
+	if !common.FileExist(executionSpecStateTestDir) {
+		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
+	}
+	st := new(testMatcher)
+
+	st.walk(t, executionSpecTransactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
+		cfg := params.MainnetChainConfig
+		if err := st.checkFailure(t, test.Run(cfg)); err != nil {
 			t.Error(err)
 		}
 	})
