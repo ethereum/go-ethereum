@@ -473,7 +473,7 @@ func checkDeletePermissions(path string) (bool, error) {
 func (c *PruneBlockCommand) pruneBlock(stack *node.Node, fdHandles int) error {
 	name := "chaindata"
 
-	oldAncientPath := c.datadirAncient
+	oldAncientPath := strings.TrimSuffix(c.datadirAncient, "/")
 
 	switch {
 	case oldAncientPath == "":
