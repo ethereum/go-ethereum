@@ -236,15 +236,9 @@ jobs:
         - name: Launch devnet
           run: |
             cd matic-cli/devnet
-            bash docker-ganache-start.sh
-            bash docker-heimdall-start-all.sh
-            bash docker-bor-setup.sh
-            bash docker-bor-start-all.sh
+            bash ../docker_devnet.sh
             cd -
             timeout 2m bash bor/integration-tests/bor_health.sh
-            cd -
-            bash ganache-deployment-bor.sh
-            bash ganache-deployment-sync.sh
 
         - name: Run smoke tests
           run: |

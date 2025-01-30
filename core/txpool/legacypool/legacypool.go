@@ -101,12 +101,8 @@ var (
 	localGauge   = metrics.NewRegisteredGauge("txpool/local", nil)
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
 
-	resetCacheGauge  = metrics.NewRegisteredGauge("txpool/resetcache", nil)
-	reinitCacheGauge = metrics.NewRegisteredGauge("txpool/reinittcache", nil)
-	hitCacheCounter  = metrics.NewRegisteredCounter("txpool/cachehit", nil)
-	missCacheCounter = metrics.NewRegisteredCounter("txpool/cachemiss", nil)
-
-	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
+	resetCacheGauge = metrics.NewRegisteredGauge("txpool/resetcache", nil)
+	reheapTimer     = metrics.NewRegisteredTimer("txpool/reheap", nil)
 )
 
 // BlockChain defines the minimal set of methods needed to back a tx pool with
