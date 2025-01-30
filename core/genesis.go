@@ -280,9 +280,10 @@ func SetupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Gene
 	return SetupGenesisBlockWithOverride(db, triedb, genesis, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, origGenesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 	// Sanitize the supplied genesis, ensuring it has the associated chain
 	// config attached.
+	genesis := origGenesis.Copy()
 	if genesis != nil && genesis.Config == nil {
 		return nil, common.Hash{}, nil, errGenesisNoConfig
 	}
@@ -548,6 +549,19 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 		panic(err)
 	}
 	return block
+}
+
+// Copy copies the genesis.
+func (g *Genesis) Copy() *Genesis {
+	if g != nil {
+		cpy := *g
+		if g.Config != nil {
+			conf := *g.Config
+			cpy.Config = &conf
+		}
+		return &cpy
+	}
+	return nil
 }
 
 // EnableVerkleAtGenesis indicates whether the verkle fork should be activated
