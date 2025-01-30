@@ -171,8 +171,6 @@ func runCmd(ctx *cli.Context) error {
 		sender = common.HexToAddress(ctx.String(SenderFlag.Name))
 	}
 
-	statedb.CreateAccount(sender)
-
 	if ctx.String(ReceiverFlag.Name) != "" {
 		receiver = common.HexToAddress(ctx.String(ReceiverFlag.Name))
 	}
