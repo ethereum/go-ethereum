@@ -192,12 +192,7 @@
 
 [[redirects]]
   from = "/docs/rpc/objects"
-  to = "/docs"
-  force = true
-
-[[redirects]]
-  from = "/docs/interacting-with-geth/rpc/objects"
-  to = "/docs"
+  to = "/docs/interacting-with-geth/rpc/objects"
   force = true
 
 [[redirects]]
