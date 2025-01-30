@@ -34,7 +34,31 @@ type bindV2Test struct {
 	aliases   map[string]string
 }
 
-func bind(test *bindV2Test) (bound string, err error) {
+// bindABI returns bindings for a test case supplying only the ABI definition for bindings, and not the deployer
+// bytecode.
+func bindABI(test *bindV2Test) (bound string, err error) {
+	var (
+		abis  []string
+		bins  []string
+		types []string
+	)
+	libs := make(map[string]string)
+
+	for i := 0; i < len(test.types); i++ {
+		abis = append(abis, test.abis[i])
+		bins = append(bins, "")
+		types = append(types, test.types[i])
+	}
+
+	code, err := BindV2(types, abis, bins, "convertedv1bindtests", libs, test.aliases)
+	if err != nil {
+		return "", fmt.Errorf("error creating bindings: %v", err)
+	}
+
+	return code, nil
+}
+
+func bindCombinedJSON(test *bindV2Test) (bound string, err error) {
 	var (
 		abis  []string
 		bins  []string
@@ -67,7 +91,7 @@ func bind(test *bindV2Test) (bound string, err error) {
 	return code, nil
 }
 
-var bindTests2 = []bindV2Test{
+var combinedJSONBindTestsV2 = []bindV2Test{
 	{
 		"Empty",
 		[]string{`[]`},
@@ -260,18 +284,26 @@ var bindTests2 = []bindV2Test{
 	},
 }
 
+var abiBindTestCase = bindV2Test{
+	"Structs",
+	[]string{`[{"inputs":[],"name":"F","outputs":[{"components":[{"internalType":"bytes32","name":"B","type":"bytes32"}],"internalType":"structStructs.A[]","name":"a","type":"tuple[]"},{"internalType":"uint256[]","name":"c","type":"uint256[]"},{"internalType":"bool[]","name":"d","type":"bool[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"G","outputs":[{"components":[{"internalType":"bytes32","name":"B","type":"bytes32"}],"internalType":"structStructs.A[]","name":"a","type":"tuple[]"}],"stateMutability":"view","type":"function"}]`},
+	[]string{`608060405234801561001057600080fd5b50610278806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c806328811f591461003b5780636fecb6231461005b575b600080fd5b610043610070565b604051610052939291906101a0565b60405180910390f35b6100636100d6565b6040516100529190610186565b604080516002808252606082810190935282918291829190816020015b610095610131565b81526020019060019003908161008d575050805190915061026960611b9082906000906100be57fe5b60209081029190910101515293606093508392509050565b6040805160028082526060828101909352829190816020015b6100f7610131565b8152602001906001900390816100ef575050805190915061026960611b90829060009061012057fe5b602090810291909101015152905090565b60408051602081019091526000815290565b815260200190565b6000815180845260208085019450808401835b8381101561017b578151518752958201959082019060010161015e565b509495945050505050565b600060208252610199602083018461014b565b9392505050565b6000606082526101b3606083018661014b565b6020838203818501528186516101c98185610239565b91508288019350845b818110156101f3576101e5838651610143565b9484019492506001016101d2565b505084810360408601528551808252908201925081860190845b8181101561022b57825115158552938301939183019160010161020d565b509298975050505050505050565b9081526020019056fea2646970667358221220eb85327e285def14230424c52893aebecec1e387a50bb6b75fc4fdbed647f45f64736f6c63430006050033`},
+	nil,
+	nil,
+}
+
 // TestBindingV2ConvertedV1Tests regenerates contracts from the v1 binding test cases (using v2 binding mode) and ensures
 // that no mutations occurred compared to the expected output included under internal/convertedv1bindtests.
 func TestBindingV2ConvertedV1Tests(t *testing.T) {
-	for _, tc := range bindTests2 {
+	for _, tc := range combinedJSONBindTestsV2 {
 		fname := fmt.Sprintf("testdata/v2/%v.go.txt", strings.ToLower(tc.name))
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.types == nil {
 				tc.types = []string{tc.name}
 			}
-			have, err := bind(&tc)
+			have, err := bindCombinedJSON(&tc)
 			if err != nil {
-				t.Fatalf("got error from bind: %v", err)
+				t.Fatalf("got error from bindCombinedJSON: %v", err)
 			}
 			// Set this environment variable to regenerate the test outputs.
 			if os.Getenv("WRITE_TEST_FILES") != "" {
@@ -289,6 +321,37 @@ func TestBindingV2ConvertedV1Tests(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBindingV2ConvertedV1TestABI regenerates contracts from the v1 binding test cases (using v2 binding mode) and ensures
+// that no mutations occurred compared to the expected output included under internal/convertedv1bindtests.  Binding generation
+// is performed sourcing only the ABI definition as input (this is what the --abi option of abigen does).
+func TestBindingV2ConvertedV1TestABI(t *testing.T) {
+	tc := abiBindTestCase
+	fname := fmt.Sprintf("testdata/v2/%v-abi.go.txt", strings.ToLower(tc.name))
+	t.Run(tc.name, func(t *testing.T) {
+		if tc.types == nil {
+			tc.types = []string{tc.name}
+		}
+		have, err := bindABI(&tc)
+		if err != nil {
+			t.Fatalf("got error from bindCombinedJSON: %v", err)
+		}
+		// Set this environment variable to regenerate the test outputs.
+		if os.Getenv("WRITE_TEST_FILES") != "" {
+			if err := os.WriteFile((fname), []byte(have), 0666); err != nil {
+				t.Fatalf("err writing expected output to file: %v\n", err)
+			}
+		}
+		// Verify the generated code
+		want, err := os.ReadFile(fname)
+		if err != nil {
+			t.Fatalf("failed to read file %v", fname)
+		}
+		if have != string(want) {
+			t.Fatalf("wrong output: %v", prettyDiff(have, string(want)))
+		}
+	})
 }
 
 func TestNormalizeArgs(t *testing.T) {
