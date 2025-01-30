@@ -551,7 +551,7 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 	return block
 }
 
-// Copy copies the genesis.
+// copy copies the genesis.
 func (g *Genesis) copy() *Genesis {
 	if g != nil {
 		cpy := *g
