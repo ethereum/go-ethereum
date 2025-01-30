@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,31 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !ios && !js && !wasip1
-// +build !ios,!js,!wasip1
+//go:build wasip1
+// +build wasip1
 
-package metrics
+package rpc
 
 import (
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/shirou/gopsutil/cpu"
+	"context"
+	"errors"
+	"net"
 )
 
-// ReadCPUStats retrieves the current CPU stats.
-func ReadCPUStats(stats *CPUStats) {
-	// passing false to request all cpu times
-	timeStats, err := cpu.Times(false)
-	if err != nil {
-		log.Error("Could not read cpu stats", "err", err)
-		return
-	}
-	if len(timeStats) == 0 {
-		log.Error("Empty cpu stats")
-		return
-	}
-	// requesting all cpu times will always return an array with only one time stats entry
-	timeStat := timeStats[0]
-	stats.GlobalTime = timeStat.User + timeStat.Nice + timeStat.System
-	stats.GlobalWait = timeStat.Iowait
-	stats.LocalTime = getProcessCPUTime()
+var errNotSupported = errors.New("rpc: not supported")
+
+// ipcListen will create a named pipe on the given endpoint.
+func ipcListen(endpoint string) (net.Listener, error) {
+	return nil, errNotSupported
+}
+
+// newIPCConnection will connect to a named pipe with the given endpoint as name.
+func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
+	return nil, errNotSupported
 }
