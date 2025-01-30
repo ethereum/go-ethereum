@@ -261,8 +261,9 @@ type worker struct {
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 
-	profileCount        *int32 // Global count for profiling
-	interruptCommitFlag bool   // Interrupt commit ( Default true )
+	// Interrupt commit to stop block building on time
+	interruptCommitFlag bool // Denotes whether interrupt commit is enabled or not
+	interruptCtx        context.Context
 	interruptedTxCache  *vm.TxCache
 
 	// noempty is the flag used to control whether the feature of pre-seal empty
@@ -300,7 +301,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		interruptCommitFlag: config.CommitInterruptFlag,
 	}
 	worker.noempty.Store(true)
-	worker.profileCount = new(int32)
 	// Subscribe for transaction insertion events (whether from network or resurrects)
 	worker.txsSub = eth.TxPool().SubscribeTransactions(worker.txsCh, true)
 	// Subscribe events for blockchain
@@ -311,6 +311,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		log.Warn("Failed to create interrupted tx cache", "err", err)
 	}
 
+	worker.interruptCtx = context.Background()
 	worker.interruptedTxCache = &vm.TxCache{
 		Cache: interruptedTxCache,
 	}
@@ -633,7 +634,7 @@ func (w *worker) mainLoop() {
 
 				tcount := w.current.tcount
 
-				w.commitTransactions(w.current, plainTxs, blobTxs, nil, new(uint256.Int), context.Background())
+				w.commitTransactions(w.current, plainTxs, blobTxs, nil, new(uint256.Int))
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -859,16 +860,14 @@ func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotState = env.state.Copy()
 }
 
-func (w *worker) commitTransaction(env *environment, tx *types.Transaction, interruptCtx context.Context) ([]*types.Log, error) {
+func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	var (
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
 
-	// nolint : staticcheck
-	interruptCtx = vm.SetCurrentTxOnContext(interruptCtx, tx.Hash())
-
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), interruptCtx)
+	w.interruptCtx = vm.SetCurrentTxOnContext(w.interruptCtx, tx.Hash())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), w.interruptCtx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
@@ -881,7 +880,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, inte
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *uint256.Int, interruptCtx context.Context) error {
+func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *uint256.Int) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -931,14 +930,14 @@ mainloop:
 			}
 		}
 
-		if interruptCtx != nil {
+		if w.interruptCtx != nil {
 			if EnableMVHashMap && w.IsRunning() {
 				env.state.AddEmptyMVHashMap()
 			}
 
 			// case of interrupting by timeout
 			select {
-			case <-interruptCtx.Done():
+			case <-w.interruptCtx.Done():
 				txCommitInterruptCounter.Inc(1)
 				log.Warn("Tx Level Interrupt", "hash", lastTxHash)
 				break mainloop
@@ -1045,7 +1044,15 @@ mainloop:
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
-		logs, err := w.commitTransaction(env, tx, interruptCtx)
+		logs, err := w.commitTransaction(env, tx)
+
+		// Check if we have a `delay` set in interrup context. It's only set during tests.
+		if w.interruptCtx != nil {
+			if delay := w.interruptCtx.Value(vm.InterruptCtxDelayKey); delay != nil {
+				// nolint : durationcheck
+				time.Sleep(time.Duration(delay.(uint)) * time.Millisecond)
+			}
+		}
 
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
@@ -1275,7 +1282,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 
 //
 //nolint:gocognit
-func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, interruptCtx context.Context) error {
+func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) error {
 	w.mu.RLock()
 	tip := w.tip
 	w.mu.RUnlock()
@@ -1325,7 +1332,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, int
 		plainTxs = newTransactionsByPriceAndNonce(env.signer, localPlainTxs, env.header.BaseFee)
 		blobTxs = newTransactionsByPriceAndNonce(env.signer, localBlobTxs, env.header.BaseFee)
 
-		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int), interruptCtx); err != nil {
+		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int)); err != nil {
 			return err
 		}
 	}
@@ -1336,7 +1343,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, int
 		plainTxs = newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, env.header.BaseFee)
 		blobTxs = newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, env.header.BaseFee)
 
-		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int), interruptCtx); err != nil {
+		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int)); err != nil {
 			return err
 		}
 	}
@@ -1352,9 +1359,7 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	}
 	defer work.discard()
 
-	// nolint : contextcheck
-	var interruptCtx = context.Background()
-
+	w.interruptCtx = resetAndCopyInterruptCtx(w.interruptCtx)
 	if !params.noTxs {
 		interrupt := new(atomic.Int32)
 
@@ -1363,7 +1368,7 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 		})
 		defer timer.Stop()
 
-		err := w.fillTransactions(interrupt, work, interruptCtx)
+		err := w.fillTransactions(interrupt, work)
 		if errors.Is(err, errBlockInterruptedByTimeout) {
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
@@ -1416,9 +1421,7 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 		return
 	}
 
-	// nolint:contextcheck
-	var interruptCtx = context.Background()
-
+	w.interruptCtx = resetAndCopyInterruptCtx(w.interruptCtx)
 	stopFn := func() {}
 	defer func() {
 		stopFn()
@@ -1426,9 +1429,8 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 
 	if !noempty && w.interruptCommitFlag {
 		block := w.chain.GetBlockByHash(w.chain.CurrentBlock().Hash())
-		interruptCtx, stopFn = getInterruptTimer(work, block)
-		// nolint : staticcheck
-		interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
+		w.interruptCtx, stopFn = getInterruptTimer(w.interruptCtx, work, block)
+		w.interruptCtx = vm.PutCache(w.interruptCtx, w.interruptedTxCache)
 	}
 
 	// Create an empty block based on temporary copied state for
@@ -1437,7 +1439,7 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 		_ = w.commit(work.copy(), nil, false, start)
 	}
 	// Fill pending transactions from the txpool into the block.
-	err = w.fillTransactions(interrupt, work, interruptCtx)
+	err = w.fillTransactions(interrupt, work)
 
 	switch {
 	case err == nil:
@@ -1479,11 +1481,26 @@ func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int
 	w.current = work
 }
 
-func getInterruptTimer(work *environment, current *types.Block) (context.Context, func()) {
+// resetAndCopyInterruptCtx resets the interrupt context and copies the values set
+// from the old one to newly created one. It is necessary to reset context in this way
+// to get rid of the older parent timeout context.
+func resetAndCopyInterruptCtx(interruptCtx context.Context) context.Context {
+	// Create a fresh new context and copy values from old one
+	newCtx := context.Background()
+	if delay := interruptCtx.Value(vm.InterruptCtxDelayKey); delay != nil {
+		newCtx = context.WithValue(newCtx, vm.InterruptCtxDelayKey, delay)
+	}
+	if opcodeDelay := interruptCtx.Value(vm.InterruptCtxOpcodeDelayKey); opcodeDelay != nil {
+		newCtx = context.WithValue(newCtx, vm.InterruptCtxOpcodeDelayKey, opcodeDelay)
+	}
+
+	return newCtx
+}
+
+func getInterruptTimer(interruptCtx context.Context, work *environment, current *types.Block) (context.Context, func()) {
 	delay := time.Until(time.Unix(int64(work.header.Time), 0))
 
-	interruptCtx, cancel := context.WithTimeout(context.Background(), delay)
-
+	interruptCtx, cancel := context.WithTimeout(interruptCtx, delay)
 	blockNumber := current.NumberU64() + 1
 
 	go func() {
@@ -1564,6 +1581,12 @@ func (w *worker) adjustResubmitInterval(message *intervalAdjust) {
 	default:
 		log.Warn("the resubmitAdjustCh is full, discard the message")
 	}
+}
+
+// setInterruptCtx sets `value` for given `key` for interrupt commit logic. To be only
+// used for e2e unit tests.
+func (w *worker) setInterruptCtx(key any, value any) {
+	w.interruptCtx = context.WithValue(w.interruptCtx, key, value)
 }
 
 // copyReceipts makes a deep copy of the given receipts.

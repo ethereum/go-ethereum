@@ -41,10 +41,12 @@ var (
 	ErrNoCurrentTx               = errors.New("no current tx found in interruptCtx")
 )
 
+type InterruptKeyType string
+
 const (
 	// These are keys for the interruptCtx
-	InterruptCtxDelayKey       = "delay"
-	InterruptCtxOpcodeDelayKey = "opcodeDelay"
+	InterruptCtxDelayKey       InterruptKeyType = "delay"
+	InterruptCtxOpcodeDelayKey InterruptKeyType = "opcodeDelay"
 
 	// InterruptedTxCacheSize is size of lru cache for interrupted txs
 	InterruptedTxCacheSize = 90000
