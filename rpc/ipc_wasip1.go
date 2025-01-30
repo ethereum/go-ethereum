@@ -14,23 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !windows && !js && !wasip1
-// +build !windows,!js,!wasip1
+//go:build wasip1
+// +build wasip1
 
-package metrics
+package rpc
 
 import (
-	syscall "golang.org/x/sys/unix"
-
-	"github.com/XinFinOrg/XDPoSChain/log"
+	"context"
+	"errors"
+	"net"
 )
 
-// getProcessCPUTime retrieves the process' CPU time since program startup.
-func getProcessCPUTime() float64 {
-	var usage syscall.Rusage
-	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
-		log.Warn("Failed to retrieve CPU time", "err", err)
-		return 0
-	}
-	return float64(usage.Utime.Sec+usage.Stime.Sec) + float64(usage.Utime.Usec+usage.Stime.Usec)/1000000 //nolint:unconvert
+var errNotSupported = errors.New("rpc: not supported")
+
+// ipcListen will create a named pipe on the given endpoint.
+func ipcListen(endpoint string) (net.Listener, error) {
+	return nil, errNotSupported
+}
+
+// newIPCConnection will connect to a named pipe with the given endpoint as name.
+func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
+	return nil, errNotSupported
 }
