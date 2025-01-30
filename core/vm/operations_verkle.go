@@ -33,9 +33,6 @@ func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 }
 
 func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	if contract.IsSystemCall {
-		return 0, nil
-	}
 	address := stack.peek().Bytes20()
 	return evm.AccessEvents.BasicDataGas(address, false, contract.Gas, true), nil
 }
@@ -45,16 +42,10 @@ func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
-	if contract.IsSystemCall {
-		return 0, nil
-	}
 	return evm.AccessEvents.BasicDataGas(address, false, contract.Gas, true), nil
 }
 
 func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	if contract.IsSystemCall {
-		return 0, nil
-	}
 	address := stack.peek().Bytes20()
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
@@ -124,7 +115,7 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	if contract.IsSystemCall {
 		return 0, nil
 	}
-	ontractAddr := contract.Address()
+	contractAddr := contract.Address()
 	wanted := evm.AccessEvents.BasicDataGas(contractAddr, false, contract.Gas, false)
 	if wanted > contract.Gas {
 		return wanted, nil
@@ -173,7 +164,6 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if err != nil {
 		return 0, err
 	}
-	_, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, length.Uint64())
 	if !contract.IsDeployment && !contract.IsSystemCall {
 		var (
 			codeOffset = stack.Back(1)
@@ -198,9 +188,8 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 		return 0, err
 	}
 	addr := common.Address(stack.peek().Bytes20())
-	isSystemContract := evm.isSystemContract(addr)
 	_, isPrecompile := evm.precompile(addr)
-	if isPrecompile || contract.isSystemCall {
+	if isPrecompile || evm.isSystemContract(addr) {
 		var overflow bool
 		if gas, overflow = math.SafeAdd(gas, params.WarmStorageReadCostEIP2929); overflow {
 			return 0, ErrGasUintOverflow

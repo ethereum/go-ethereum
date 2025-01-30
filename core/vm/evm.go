@@ -45,6 +45,16 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	return p, ok
 }
 
+func (evm *EVM) isSystemContract(addr common.Address) bool {
+	switch addr {
+	case params.BeaconRootsAddress, params.HistoryStorageAddress, params.WithdrawalQueueAddress,
+		params.ConsolidationQueueAddress, params.SystemAddress:
+		return true
+	default:
+		return false
+	}
+}
+
 // BlockContext provides the EVM with auxiliary information. Once provided
 // it shouldn't be modified.
 type BlockContext struct {
