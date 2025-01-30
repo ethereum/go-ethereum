@@ -13,7 +13,7 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      arch: arm64
+      arch: amd64
       dist: focal
       go: 1.23.x
       env:
