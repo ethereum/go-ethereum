@@ -684,7 +684,8 @@ func maybeSkipArchive(env build.Environment) {
 func doDockerBuildx(cmdline []string) {
 	var (
 		platform = flag.String("platform", "", `Push a multi-arch docker image for the specified architectures (usually "linux/amd64,linux/arm64")`)
-		upload   = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
+		hubImage = flag.String("hub", "ethereum/client-go", `Where to upload the docker image`)
+		upload   = flag.Bool("upload", false, `Whether to trigger upload`)
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -725,19 +726,25 @@ func doDockerBuildx(cmdline []string) {
 		file string
 		base string
 	}{
-		{file: "Dockerfile", base: fmt.Sprintf("%s:", *upload)},
-		{file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *upload)},
+		{file: "Dockerfile", base: fmt.Sprintf("%s:", *hubImage)},
+		{file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *hubImage)},
 	} {
 		for _, tag := range tags { // latest, stable etc
 			gethImage := fmt.Sprintf("%s%s", spec.base, tag)
-			build.MustRunCommand("docker", "buildx", "build",
+			cmd := exec.Command("docker", "buildx", "build",
 				"--build-arg", "COMMIT="+env.Commit,
 				"--build-arg", "VERSION="+version.WithMeta,
 				"--build-arg", "BUILDNUM="+env.Buildnum,
 				"--tag", gethImage,
 				"--platform", *platform,
 				"--push",
-				"--file", spec.file, ".")
+				"--file", spec.file,
+			)
+			if *upload {
+				cmd.Args = append(cmd.Args, "--push")
+			}
+			cmd.Args = append(cmd.Args, ".")
+			build.MustRun(cmd)
 		}
 	}
 }

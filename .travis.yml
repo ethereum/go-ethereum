@@ -25,7 +25,7 @@ jobs:
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
-        - go run build/ci.go dockerx -platform "linux/amd64,linux/arm64,linux/riscv64" -upload ethereum/client-go
+        - go run build/ci.go dockerx -platform "linux/amd64,linux/arm64,linux/riscv64" -hub ethereum/client-go -upload
 
     # This builder does the Linux Azure uploads
     - stage: build
