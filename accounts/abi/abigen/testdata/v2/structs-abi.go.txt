@@ -29,7 +29,8 @@ type Struct0 struct {
 
 // StructsMetaData contains all meta data concerning the Structs contract.
 var StructsMetaData = bind.MetaData{
-	ABI: "[{\"inputs\":[],\"name\":\"F\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"B\",\"type\":\"bytes32\"}],\"internalType\":\"structStructs.A[]\",\"name\":\"a\",\"type\":\"tuple[]\"},{\"internalType\":\"uint256[]\",\"name\":\"c\",\"type\":\"uint256[]\"},{\"internalType\":\"bool[]\",\"name\":\"d\",\"type\":\"bool[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"G\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"B\",\"type\":\"bytes32\"}],\"internalType\":\"structStructs.A[]\",\"name\":\"a\",\"type\":\"tuple[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
+	ABI:     "[{\"inputs\":[],\"name\":\"F\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"B\",\"type\":\"bytes32\"}],\"internalType\":\"structStructs.A[]\",\"name\":\"a\",\"type\":\"tuple[]\"},{\"internalType\":\"uint256[]\",\"name\":\"c\",\"type\":\"uint256[]\"},{\"internalType\":\"bool[]\",\"name\":\"d\",\"type\":\"bool[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"G\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"B\",\"type\":\"bytes32\"}],\"internalType\":\"structStructs.A[]\",\"name\":\"a\",\"type\":\"tuple[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
+	Pattern: "",
 }
 
 // Structs is an auto generated Go binding around an Ethereum contract.
