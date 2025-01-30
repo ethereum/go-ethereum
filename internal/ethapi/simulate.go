@@ -163,7 +163,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		}
 		header.ExcessBlobGas = &excess
 	}
-	blockContext := core.NewEVMBlockContext(header, sim.newSimulatedChainContext(ctx, headers), sim.chainConfig, nil)
+	blockContext := core.NewEVMBlockContext(header, sim.newSimulatedChainContext(ctx, headers), nil)
 	if block.BlockOverrides.BlobBaseFee != nil {
 		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
 	}
@@ -412,4 +412,8 @@ func (b *simBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber)
 		}
 	}
 	return nil, errors.New("header not found")
+}
+
+func (b *simBackend) ChainConfig() *params.ChainConfig {
+	return b.b.ChainConfig()
 }

@@ -569,7 +569,7 @@ func (b testBackend) GetEVM(ctx context.Context, state *state.StateDB, header *t
 	if vmConfig == nil {
 		vmConfig = b.chain.GetVMConfig()
 	}
-	context := core.NewEVMBlockContext(header, b.chain, b.chain.Config(), nil)
+	context := core.NewEVMBlockContext(header, b.chain, nil)
 	if blockContext != nil {
 		context = *blockContext
 	}

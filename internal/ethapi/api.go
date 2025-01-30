@@ -624,6 +624,7 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 type ChainContextBackend interface {
 	Engine() consensus.Engine
 	HeaderByNumber(context.Context, rpc.BlockNumber) (*types.Header, error)
+	ChainConfig() *params.ChainConfig
 }
 
 // ChainContext is an implementation of core.ChainContext. It's main use-case
@@ -652,8 +653,12 @@ func (context *ChainContext) GetHeader(hash common.Hash, number uint64) *types.H
 	return header
 }
 
+func (context *ChainContext) Config() *params.ChainConfig {
+	return context.b.ChainConfig()
+}
+
 func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
-	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), b.ChainConfig(), nil)
+	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if blockOverrides != nil {
 		blockOverrides.Apply(&blockCtx)
 	}
@@ -1145,7 +1150,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		nonce := hexutil.Uint64(db.GetNonce(args.from()))
 		args.Nonce = &nonce
 	}
-	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), b.ChainConfig(), nil)
+	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if err = args.CallDefaults(b.RPCGasCap(), blockCtx.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, 0, nil, err
 	}
