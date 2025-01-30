@@ -720,7 +720,10 @@ func doDockerBuildx(cmdline []string) {
 		tags = []string{"stable", fmt.Sprintf("release-%v", version.Family), "v" + version.Semantic}
 	}
 	// Need to create a mult-arch builder
-	build.MustRunCommand("docker", "buildx", "create", "--use", "--name", "multi-arch-builder", "--platform", *platform)
+	check := exec.Command("docker", "buildx", "inspect", "multi-arch-builder")
+	if check.Run() != nil {
+		build.MustRunCommand("docker", "buildx", "create", "--use", "--name", "multi-arch-builder", "--platform", *platform)
+	}
 
 	for _, spec := range []struct {
 		file string
