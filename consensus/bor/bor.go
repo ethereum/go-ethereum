@@ -17,13 +17,10 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/sha3"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/tracing"
 	balance_tracing "github.com/ethereum/go-ethereum/core/tracing"
 
 	"github.com/ethereum/go-ethereum/consensus"
@@ -820,30 +817,28 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body) {
+	headerNumber := header.Number.Uint64()
+	if body.Withdrawals != nil || header.WithdrawalsHash != nil {
+		return
+	}
+
 	var (
 		stateSyncData []*types.StateSyncData
 		err           error
 	)
 
-	headerNumber := header.Number.Uint64()
-
-	if body.Withdrawals != nil || header.WithdrawalsHash != nil {
-		return
-	}
-
 	if IsSprintStart(headerNumber, c.config.CalculateSprint(headerNumber)) {
 		start := time.Now()
-		ctx := context.Background()
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
 		// check and commit span
-		if err := c.checkAndCommitSpan(ctx, state, header, cx); err != nil {
+		if err := c.checkAndCommitSpan(state, header, cx); err != nil {
 			log.Error("Error while committing span", "error", err)
 			return
 		}
 
 		if c.HeimdallClient != nil {
 			// commit states
-			stateSyncData, err = c.CommitStates(ctx, state, header, cx)
+			stateSyncData, err = c.CommitStates(state, header, cx)
 			if err != nil {
 				log.Error("Error while committing states", "error", err)
 				return
@@ -908,38 +903,28 @@ func (c *Bor) changeContractCodeIfNeeded(headerNumber uint64, state *state.State
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error) {
-	finalizeCtx, finalizeSpan := tracing.StartSpan(context.Background(), "bor.FinalizeAndAssemble")
-	defer tracing.EndSpan(finalizeSpan)
-
 	headerNumber := header.Number.Uint64()
-
 	if body.Withdrawals != nil || header.WithdrawalsHash != nil {
 		return nil, consensus.ErrUnexpectedWithdrawals
 	}
 
-	stateSyncData := []*types.StateSyncData{}
-
-	var err error
+	var (
+		stateSyncData []*types.StateSyncData
+		err           error
+	)
 
 	if IsSprintStart(headerNumber, c.config.CalculateSprint(headerNumber)) {
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
 
-		tracing.Exec(finalizeCtx, "", "bor.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
-			// check and commit span
-			err = c.checkAndCommitSpan(finalizeCtx, state, header, cx)
-		})
-
-		if err != nil {
+		// check and commit span
+		if err = c.checkAndCommitSpan(state, header, cx); err != nil {
 			log.Error("Error while committing span", "error", err)
 			return nil, err
 		}
 
 		if c.HeimdallClient != nil {
-			tracing.Exec(finalizeCtx, "", "bor.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
-				// commit states
-				stateSyncData, err = c.CommitStates(finalizeCtx, state, header, cx)
-			})
-
+			// commit states
+			stateSyncData, err = c.CommitStates(state, header, cx)
 			if err != nil {
 				log.Error("Error while committing states", "error", err)
 				return nil, err
@@ -947,19 +932,13 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 		}
 	}
 
-	tracing.Exec(finalizeCtx, "", "bor.changeContractCodeIfNeeded", func(ctx context.Context, span trace.Span) {
-		err = c.changeContractCodeIfNeeded(headerNumber, state)
-	})
-
-	if err != nil {
+	if err = c.changeContractCodeIfNeeded(headerNumber, state); err != nil {
 		log.Error("Error changing contract code", "error", err)
 		return nil, err
 	}
 
 	// No block rewards in PoA, so the state remains as it is
-	tracing.Exec(finalizeCtx, "", "bor.IntermediateRoot", func(ctx context.Context, span trace.Span) {
-		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	})
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Uncles are dropped
 	header.UncleHash = types.CalcUncleHash(nil)
@@ -970,14 +949,6 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 	// set state sync
 	bc := chain.(core.BorStateSyncer)
 	bc.SetStateSync(stateSyncData)
-
-	tracing.SetAttributes(
-		finalizeSpan,
-		attribute.Int("number", int(header.Number.Int64())),
-		attribute.String("hash", header.Hash().String()),
-		attribute.Int("number of txs", len(body.Transactions)),
-		attribute.Int("gas used", int(block.GasUsed())),
-	)
 
 	// return the final block for sealing
 	return block, nil
@@ -994,18 +965,7 @@ func (c *Bor) Authorize(currentSigner common.Address, signFn SignerFn) {
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
-func (c *Bor) Seal(ctx context.Context, chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	_, sealSpan := tracing.StartSpan(ctx, "bor.Seal")
-
-	var endSpan bool = true
-
-	defer func() {
-		// Only end span in case of early-returns/errors
-		if endSpan {
-			tracing.EndSpan(sealSpan)
-		}
-	}()
-
+func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	header := block.Header()
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
@@ -1051,7 +1011,7 @@ func (c *Bor) Seal(ctx context.Context, chain consensus.ChainHeaderReader, block
 	// Wait until sealing is terminated or delay timeout.
 	log.Info("Waiting for slot to sign and propagate", "number", number, "hash", header.Hash, "delay-in-sec", uint(delay), "delay", common.PrettyDuration(delay))
 
-	go func(sealSpan trace.Span) {
+	go func() {
 		select {
 		case <-stop:
 			log.Debug("Discarding sealing operation for block", "number", number)
@@ -1074,27 +1034,13 @@ func (c *Bor) Seal(ctx context.Context, chain consensus.ChainHeaderReader, block
 				"delay", delay,
 				"headerDifficulty", header.Difficulty,
 			)
-
-			tracing.SetAttributes(
-				sealSpan,
-				attribute.Int("number", int(number)),
-				attribute.String("hash", header.Hash().String()),
-				attribute.Int("delay", int(delay.Milliseconds())),
-				attribute.Int("wiggle", int(wiggle.Milliseconds())),
-				attribute.Bool("out-of-turn", wiggle > 0),
-			)
-
-			tracing.EndSpan(sealSpan)
 		}
 		select {
 		case results <- block.WithSeal(header):
 		default:
 			log.Warn("Sealing result was not read by miner", "number", number, "sealhash", SealHash(header, c.config))
 		}
-	}(sealSpan)
-
-	// Set the endSpan flag to false, as the go routine will handle it
-	endSpan = false
+	}()
 
 	return nil
 }
@@ -1150,11 +1096,11 @@ func (c *Bor) Close() error {
 }
 
 func (c *Bor) checkAndCommitSpan(
-	ctx context.Context,
 	state *state.StateDB,
 	header *types.Header,
 	chain core.ChainContext,
 ) error {
+	var ctx = context.Background()
 	headerNumber := header.Number.Uint64()
 
 	span, err := c.spanner.GetCurrentSpan(ctx, header.ParentHash)
@@ -1228,7 +1174,6 @@ func (c *Bor) FetchAndCommitSpan(
 
 // CommitStates commit states
 func (c *Bor) CommitStates(
-	ctx context.Context,
 	state *state.StateDB,
 	header *types.Header,
 	chain statefull.ChainContext,
@@ -1269,7 +1214,7 @@ func (c *Bor) CommitStates(
 		"fromID", from,
 		"to", to.Format(time.RFC3339))
 
-	eventRecords, err := c.HeimdallClient.StateSyncEvents(ctx, from, to.Unix())
+	eventRecords, err := c.HeimdallClient.StateSyncEvents(context.Background(), from, to.Unix())
 	if err != nil {
 		log.Error("Error occurred when fetching state sync events", "fromID", from, "to", to.Unix(), "err", err)
 	}

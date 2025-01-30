@@ -3,8 +3,6 @@ package miner
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,9 +10,8 @@ import (
 	// nolint:typecheck
 
 	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/common/tracing"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -26,10 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
-
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -102,12 +95,10 @@ func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine 
 
 	worker.newpayloadTimeout = newpayloadTimeout
 
-	ctx := tracing.WithTracer(context.Background(), otel.GetTracerProvider().Tracer("MinerWorker"))
-
 	worker.wg.Add(4)
 
-	go worker.mainLoopWithDelay(ctx, delay, opcodeDelay)
-	go worker.newWorkLoop(ctx, recommit)
+	go worker.mainLoopWithDelay(delay, opcodeDelay)
+	go worker.newWorkLoop(recommit)
 	go worker.resultLoop()
 	go worker.taskLoop()
 
@@ -121,7 +112,7 @@ func newWorkerWithDelay(config *Config, chainConfig *params.ChainConfig, engine 
 
 // mainLoopWithDelay is mainLoop() with extra params to induce artficial delays for tests such as commit-interrupt.
 // nolint:gocognit
-func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay uint) {
+func (w *worker) mainLoopWithDelay(delay uint, opcodeDelay uint) {
 	defer w.wg.Done()
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
@@ -137,15 +128,15 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 			if w.chainConfig.ChainID.Cmp(params.BorMainnetChainConfig.ChainID) == 0 || w.chainConfig.ChainID.Cmp(params.MumbaiChainConfig.ChainID) == 0 {
 				if w.eth.PeerCount() > 0 {
 					//nolint:contextcheck
-					w.commitWorkWithDelay(req.ctx, req.interrupt, req.noempty, req.timestamp, delay, opcodeDelay)
+					w.commitWorkWithDelay(req.interrupt, req.noempty, req.timestamp, delay, opcodeDelay)
 				}
 			} else {
 				//nolint:contextcheck
-				w.commitWorkWithDelay(req.ctx, req.interrupt, req.noempty, req.timestamp, delay, opcodeDelay)
+				w.commitWorkWithDelay(req.interrupt, req.noempty, req.timestamp, delay, opcodeDelay)
 			}
 
 		case req := <-w.getWorkCh:
-			req.result <- w.generateWork(ctx, req.params)
+			req.result <- w.generateWork(req.params)
 
 		case ev := <-w.txsCh:
 			// Apply transactions to the pending state if we're not sealing
@@ -187,7 +178,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
 				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-					w.commitWork(ctx, nil, true, time.Now().Unix())
+					w.commitWork(nil, true, time.Now().Unix())
 				}
 			}
 
@@ -205,7 +196,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 }
 
 // commitWorkWithDelay is commitWork() with extra params to induce artficial delays for tests such as commit-interrupt.
-func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *atomic.Int32, noempty bool, timestamp int64, delay uint, opcodeDelay uint) {
+func (w *worker) commitWorkWithDelay(interrupt *atomic.Int32, noempty bool, timestamp int64, delay uint, opcodeDelay uint) {
 	// Abort committing if node is still syncing
 	if w.syncing.Load() {
 		return
@@ -217,23 +208,20 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *atomic.Int3
 		err  error
 	)
 
-	tracing.Exec(ctx, "", "worker.prepareWork", func(ctx context.Context, span trace.Span) {
-		// Set the coinbase if the worker is running or it's required
-		var coinbase common.Address
-		if w.IsRunning() {
-			coinbase = w.etherbase()
-			if coinbase == (common.Address{}) {
-				log.Error("Refusing to mine without etherbase")
-				return
-			}
+	// Set the coinbase if the worker is running or it's required
+	var coinbase common.Address
+	if w.IsRunning() {
+		coinbase = w.etherbase()
+		if coinbase == (common.Address{}) {
+			log.Error("Refusing to mine without etherbase")
+			return
 		}
+	}
 
-		work, err = w.prepareWork(&generateParams{
-			timestamp: uint64(timestamp),
-			coinbase:  coinbase,
-		})
+	work, err = w.prepareWork(&generateParams{
+		timestamp: uint64(timestamp),
+		coinbase:  coinbase,
 	})
-
 	if err != nil {
 		return
 	}
@@ -248,7 +236,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *atomic.Int3
 
 	if !noempty && w.interruptCommitFlag {
 		block := w.chain.GetBlockByHash(w.chain.CurrentBlock().Hash())
-		interruptCtx, stopFn = getInterruptTimer(ctx, work, block)
+		interruptCtx, stopFn = getInterruptTimer(work, block)
 		// nolint : staticcheck
 		interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
 		// nolint : staticcheck
@@ -257,21 +245,13 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *atomic.Int3
 		interruptCtx = context.WithValue(interruptCtx, vm.InterruptCtxOpcodeDelayKey, opcodeDelay)
 	}
 
-	ctx, span := tracing.StartSpan(ctx, "commitWork")
-	defer tracing.EndSpan(span)
-
-	tracing.SetAttributes(
-		span,
-		attribute.Int("number", int(work.header.Number.Uint64())),
-	)
-
 	// Create an empty block based on temporary copied state for
 	// sealing in advance without waiting block execution finished.
 	if !noempty && !w.noempty.Load() {
-		_ = w.commit(ctx, work.copy(), nil, false, start)
+		_ = w.commit(work.copy(), nil, false, start)
 	}
 	// Fill pending transactions from the txpool into the block.
-	err = w.fillTransactionsWithDelay(ctx, interrupt, work, interruptCtx)
+	err = w.fillTransactionsWithDelay(interrupt, work, interruptCtx)
 
 	switch {
 	case err == nil:
@@ -302,7 +282,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *atomic.Int3
 		return
 	}
 	// Submit the generated block for consensus sealing.
-	_ = w.commit(ctx, work.copy(), w.fullTaskHook, true, start)
+	_ = w.commit(work.copy(), w.fullTaskHook, true, start)
 
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.
@@ -315,182 +295,78 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *atomic.Int3
 
 // fillTransactionsWithDelay is fillTransactions() with extra params to induce artficial delays for tests such as commit-interrupt.
 // nolint:gocognit
-func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *atomic.Int32, env *environment, interruptCtx context.Context) error {
-	ctx, span := tracing.StartSpan(ctx, "fillTransactions")
-	defer tracing.EndSpan(span)
+func (w *worker) fillTransactionsWithDelay(interrupt *atomic.Int32, env *environment, interruptCtx context.Context) error {
+	w.mu.RLock()
+	tip := w.tip
+	w.mu.RUnlock()
 
-	// Split the pending transactions into locals and remotes
+	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
+	filter := txpool.PendingFilter{
+		MinTip: uint256.MustFromBig(tip.ToBig()),
+	}
+
+	if env.header.BaseFee != nil {
+		filter.BaseFee = uint256.MustFromBig(env.header.BaseFee)
+	}
+
+	if env.header.ExcessBlobGas != nil {
+		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas))
+	}
+
+	var (
+		localPlainTxs, remotePlainTxs, localBlobTxs, remoteBlobTxs map[common.Address][]*txpool.LazyTransaction
+	)
+
+	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
+	pendingPlainTxs := w.eth.TxPool().Pending(filter)
+
+	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
+	pendingBlobTxs := w.eth.TxPool().Pending(filter)
+
+	// Split the pending transactions into locals and remotes.
+	localPlainTxs, remotePlainTxs = make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
+	localBlobTxs, remoteBlobTxs = make(map[common.Address][]*txpool.LazyTransaction), pendingBlobTxs
+
+	for _, account := range w.eth.TxPool().Locals() {
+		if txs := remotePlainTxs[account]; len(txs) > 0 {
+			delete(remotePlainTxs, account)
+			localPlainTxs[account] = txs
+		}
+		if txs := remoteBlobTxs[account]; len(txs) > 0 {
+			delete(remoteBlobTxs, account)
+			localBlobTxs[account] = txs
+		}
+	}
+
 	// Fill the block with all available pending transactions.
-	pending := w.eth.TxPool().Pending(txpool.PendingFilter{})
-	localTxs, remoteTxs := make(map[common.Address][]*txpool.LazyTransaction), pending
+	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 {
+		var plainTxs, blobTxs *transactionsByPriceAndNonce
 
-	var (
-		localTxsCount  int
-		remoteTxsCount int
-	)
+		plainTxs = newTransactionsByPriceAndNonce(env.signer, localPlainTxs, env.header.BaseFee)
+		blobTxs = newTransactionsByPriceAndNonce(env.signer, localBlobTxs, env.header.BaseFee)
 
-	// TODO: move to config or RPC
-	const profiling = false
-
-	if profiling {
-		doneCh := make(chan struct{})
-
-		defer func() {
-			close(doneCh)
-		}()
-
-		go func(number uint64) {
-			closeFn := func() error {
-				return nil
-			}
-
-			for {
-				select {
-				case <-time.After(150 * time.Millisecond):
-					// Check if we've not crossed limit
-					if attempt := atomic.AddInt32(w.profileCount, 1); attempt >= 10 {
-						log.Info("Completed profiling", "attempt", attempt)
-
-						return
-					}
-
-					log.Info("Starting profiling in fill transactions", "number", number)
-
-					dir, err := os.MkdirTemp("", fmt.Sprintf("bor-traces-%s-", time.Now().UTC().Format("2006-01-02-150405Z")))
-					if err != nil {
-						log.Error("Error in profiling", "path", dir, "number", number, "err", err)
-						return
-					}
-
-					// grab the cpu profile
-					closeFnInternal, err := startProfiler("cpu", dir, number)
-					if err != nil {
-						log.Error("Error in profiling", "path", dir, "number", number, "err", err)
-						return
-					}
-
-					closeFn = func() error {
-						err := closeFnInternal()
-
-						log.Info("Completed profiling", "path", dir, "number", number, "error", err)
-
-						return nil
-					}
-
-				case <-doneCh:
-					err := closeFn()
-
-					if err != nil {
-						log.Info("closing fillTransactions", "number", number, "error", err)
-					}
-
-					return
-				}
-			}
-		}(env.header.Number.Uint64())
-	}
-
-	tracing.Exec(ctx, "", "worker.SplittingTransactions", func(ctx context.Context, span trace.Span) {
-		prePendingTime := time.Now()
-
-		pending := w.eth.TxPool().Pending(txpool.PendingFilter{})
-		remoteTxs = pending
-
-		postPendingTime := time.Now()
-
-		for _, account := range w.eth.TxPool().Locals() {
-			if txs := remoteTxs[account]; len(txs) > 0 {
-				delete(remoteTxs, account)
-
-				localTxs[account] = txs
-			}
-		}
-
-		postLocalsTime := time.Now()
-
-		tracing.SetAttributes(
-			span,
-			attribute.Int("len of local txs", localTxsCount),
-			attribute.Int("len of remote txs", remoteTxsCount),
-			attribute.String("time taken by Pending()", fmt.Sprintf("%v", postPendingTime.Sub(prePendingTime))),
-			attribute.String("time taken by Locals()", fmt.Sprintf("%v", postLocalsTime.Sub(postPendingTime))),
-		)
-	})
-
-	var (
-		localEnvTCount  int
-		remoteEnvTCount int
-		err             error
-	)
-
-	if len(localTxs) > 0 {
-		var txs *transactionsByPriceAndNonce
-
-		tracing.Exec(ctx, "", "worker.LocalTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
-			var baseFee *uint256.Int
-			if env.header.BaseFee != nil {
-				baseFee = cmath.FromBig(env.header.BaseFee)
-			}
-
-			txs = newTransactionsByPriceAndNonce(env.signer, localTxs, baseFee.ToBig())
-
-			tracing.SetAttributes(
-				span,
-				attribute.Int("len of tx local Heads", txs.GetTxs()),
-			)
-		})
-
-		tracing.Exec(ctx, "", "worker.LocalCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCtx)
-		})
-
-		if err != nil {
+		if err := w.commitTransactionsWithDelay(env, plainTxs, blobTxs, interrupt, new(uint256.Int), interruptCtx); err != nil {
 			return err
 		}
-
-		localEnvTCount = env.tcount
 	}
 
-	if len(remoteTxs) > 0 {
-		var txs *transactionsByPriceAndNonce
+	if len(remotePlainTxs) > 0 || len(remoteBlobTxs) > 0 {
+		var plainTxs, blobTxs *transactionsByPriceAndNonce
 
-		tracing.Exec(ctx, "", "worker.RemoteTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
-			var baseFee *uint256.Int
-			if env.header.BaseFee != nil {
-				baseFee = cmath.FromBig(env.header.BaseFee)
-			}
+		plainTxs = newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, env.header.BaseFee)
+		blobTxs = newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, env.header.BaseFee)
 
-			txs = newTransactionsByPriceAndNonce(env.signer, remoteTxs, baseFee.ToBig())
-
-			tracing.SetAttributes(
-				span,
-				attribute.Int("len of tx remote Heads", txs.GetTxs()),
-			)
-		})
-
-		tracing.Exec(ctx, "", "worker.RemoteCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactionsWithDelay(env, txs, interrupt, interruptCtx)
-		})
-
-		if err != nil {
+		if err := w.commitTransactionsWithDelay(env, plainTxs, blobTxs, interrupt, new(uint256.Int), interruptCtx); err != nil {
 			return err
 		}
-
-		remoteEnvTCount = env.tcount
 	}
-
-	tracing.SetAttributes(
-		span,
-		attribute.Int("len of final local txs ", localEnvTCount),
-		attribute.Int("len of final remote txs", remoteEnvTCount),
-	)
 
 	return nil
 }
 
 // commitTransactionsWithDelay is commitTransactions() with extra params to induce artficial delays for tests such as commit-interrupt.
 // nolint:gocognit, unparam
-func (w *worker) commitTransactionsWithDelay(env *environment, txs *transactionsByPriceAndNonce, interrupt *atomic.Int32, interruptCtx context.Context) error {
+func (w *worker) commitTransactionsWithDelay(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *uint256.Int, interruptCtx context.Context) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -498,35 +374,25 @@ func (w *worker) commitTransactionsWithDelay(env *environment, txs *transactions
 
 	var coalescedLogs []*types.Log
 
-	var depsMVReadList [][]blockstm.ReadDescriptor
-
-	var depsMVFullWriteList [][]blockstm.WriteDescriptor
-
-	var mvReadMapList []map[blockstm.Key]blockstm.ReadDescriptor
-
 	var deps map[int]map[int]bool
 
 	chDeps := make(chan blockstm.TxDep)
 
-	var count int
-
 	var depsWg sync.WaitGroup
+	var once sync.Once
 
 	EnableMVHashMap := w.chainConfig.IsCancun(env.header.Number)
 
 	// create and add empty mvHashMap in statedb
-	if EnableMVHashMap {
-		depsMVReadList = [][]blockstm.ReadDescriptor{}
-
-		depsMVFullWriteList = [][]blockstm.WriteDescriptor{}
-
-		mvReadMapList = []map[blockstm.Key]blockstm.ReadDescriptor{}
-
+	if EnableMVHashMap && w.IsRunning() {
 		deps = map[int]map[int]bool{}
 
 		chDeps = make(chan blockstm.TxDep)
 
-		count = 0
+		// Make sure we safely close the channel in case of interrupt
+		defer once.Do(func() {
+			close(chDeps)
+		})
 
 		depsWg.Add(1)
 
@@ -543,8 +409,15 @@ func (w *worker) commitTransactionsWithDelay(env *environment, txs *transactions
 
 mainloop:
 	for {
+		// Check interruption signal and abort building if it's fired.
+		if interrupt != nil {
+			if signal := interrupt.Load(); signal != commitInterruptNone {
+				return signalToErr(signal)
+			}
+		}
+
 		if interruptCtx != nil {
-			if EnableMVHashMap {
+			if EnableMVHashMap && w.IsRunning() {
 				env.state.AddEmptyMVHashMap()
 			}
 
@@ -558,19 +431,39 @@ mainloop:
 			}
 		}
 
-		// Check interruption signal and abort building if it's fired.
-		if interrupt != nil {
-			if signal := interrupt.Load(); signal != commitInterruptNone {
-				return signalToErr(signal)
-			}
-		}
 		// If we don't have enough gas for any further transactions then we're done.
 		if env.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
 			break
 		}
+		// If we don't have enough blob space for any further blob transactions,
+		// skip that list altogether
+		if !blobTxs.Empty() && env.blobs*params.BlobTxBlobGasPerBlob >= params.MaxBlobGasPerBlock {
+			log.Trace("Not enough blob space for further blob transactions")
+			blobTxs.Clear()
+			// Fall though to pick up any plain txs
+		}
 		// Retrieve the next transaction and abort if all done.
-		ltx, _ := txs.Peek()
+
+		var (
+			ltx *txpool.LazyTransaction
+			txs *transactionsByPriceAndNonce
+		)
+		pltx, ptip := plainTxs.Peek()
+		bltx, btip := blobTxs.Peek()
+
+		switch {
+		case pltx == nil:
+			txs, ltx = blobTxs, bltx
+		case bltx == nil:
+			txs, ltx = plainTxs, pltx
+		default:
+			if ptip.Lt(btip) {
+				txs, ltx = blobTxs, bltx
+			} else {
+				txs, ltx = plainTxs, pltx
+			}
+		}
 		if ltx == nil {
 			break
 		}
@@ -586,6 +479,11 @@ mainloop:
 			txs.Pop()
 			continue
 		}
+		// If we don't receive enough tip for the next transaction, skip the account
+		if ptip.Cmp(minTip) < 0 {
+			log.Trace("Not enough tip for transaction", "hash", ltx.Hash, "tip", ptip, "needed", minTip)
+			break // If the next-best is too low, surely no better will be available
+		}
 		// Transaction seems to fit, pull it up from the pool
 		tx := ltx.Resolve()
 		if tx == nil {
@@ -594,7 +492,7 @@ mainloop:
 			continue
 		}
 		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
+		// during transaction acceptance in the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
 
 		// not prioritising conditional transaction, yet.
@@ -652,19 +550,21 @@ mainloop:
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
 
-			if EnableMVHashMap {
-				depsMVReadList = append(depsMVReadList, env.state.MVReadList())
-				depsMVFullWriteList = append(depsMVFullWriteList, env.state.MVFullWriteList())
-				mvReadMapList = append(mvReadMapList, env.state.MVReadMap())
+			if EnableMVHashMap && w.IsRunning() {
+				env.depsMVFullWriteList = append(env.depsMVFullWriteList, env.state.MVFullWriteList())
+				env.mvReadMapList = append(env.mvReadMapList, env.state.MVReadMap())
+
+				if env.tcount > len(env.depsMVFullWriteList) {
+					log.Warn("blockstm - env.tcount > len(env.depsMVFullWriteList)", "env.tcount", env.tcount, "len(depsMVFullWriteList)", len(env.depsMVFullWriteList))
+				}
 
 				temp := blockstm.TxDep{
 					Index:         env.tcount - 1,
-					ReadList:      depsMVReadList[count],
-					FullWriteList: depsMVFullWriteList,
+					ReadList:      env.state.MVReadList(),
+					FullWriteList: env.depsMVFullWriteList,
 				}
 
 				chDeps <- temp
-				count++
 			}
 
 			txs.Shift()
@@ -675,7 +575,7 @@ mainloop:
 			txs.Pop()
 		}
 
-		if EnableMVHashMap {
+		if EnableMVHashMap && w.IsRunning() {
 			env.state.ClearReadMap()
 			env.state.ClearWriteMap()
 		}
@@ -683,7 +583,9 @@ mainloop:
 
 	// nolint:nestif
 	if EnableMVHashMap && w.IsRunning() {
-		close(chDeps)
+		once.Do(func() {
+			close(chDeps)
+		})
 		depsWg.Wait()
 
 		var blockExtraData types.BlockExtraData
@@ -691,8 +593,8 @@ mainloop:
 		tempVanity := env.header.Extra[:types.ExtraVanityLength]
 		tempSeal := env.header.Extra[len(env.header.Extra)-types.ExtraSealLength:]
 
-		if len(mvReadMapList) > 0 {
-			tempDeps := make([][]uint64, len(mvReadMapList))
+		if len(env.mvReadMapList) > 0 {
+			tempDeps := make([][]uint64, len(env.mvReadMapList))
 
 			for j := range deps[0] {
 				tempDeps[0] = append(tempDeps[0], uint64(j))
@@ -700,14 +602,15 @@ mainloop:
 
 			delayFlag := true
 
-			for i := 1; i <= len(mvReadMapList)-1; i++ {
-				reads := mvReadMapList[i-1]
+			for i := 1; i <= len(env.mvReadMapList)-1; i++ {
+				reads := env.mvReadMapList[i-1]
 
 				_, ok1 := reads[blockstm.NewSubpathKey(env.coinbase, state.BalancePath)]
 				_, ok2 := reads[blockstm.NewSubpathKey(common.HexToAddress(w.chainConfig.Bor.CalculateBurntContract(env.header.Number.Uint64())), state.BalancePath)]
 
 				if ok1 || ok2 {
 					delayFlag = false
+					break
 				}
 
 				for j := range deps[i] {
