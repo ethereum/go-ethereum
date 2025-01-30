@@ -737,7 +737,6 @@ func doDockerBuildx(cmdline []string) {
 				"--build-arg", "BUILDNUM="+env.Buildnum,
 				"--tag", gethImage,
 				"--platform", *platform,
-				"--push",
 				"--file", spec.file,
 			)
 			if *upload {
