@@ -169,6 +169,11 @@ syncmode = "full"
     # period = 0
     # gaslimit = 11500000
 
+# [parallelevm]
+  # enable = true
+  # procs = 8
+  # enforce = false
+
 #   pprof = false
 #   port = 6060
 #   addr = "127.0.0.1"

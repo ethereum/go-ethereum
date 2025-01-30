@@ -168,6 +168,11 @@ syncmode = "full"
     # period = 0
     # gaslimit = 11500000
 
+# [parallelevm]
+  # enable = true
+  # procs = 8
+  # enforce = false
+
 # [pprof]
 #   pprof = false
 #   port = 6060

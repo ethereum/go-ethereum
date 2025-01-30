@@ -181,6 +181,11 @@ devfakeauthor = false           # Run miner without validator set authorization 
   period = 0           # Block period to use in developer mode (0 = mine only if transaction pending)
   gaslimit = 11500000  # Initial block gas limit
 
+[parallelevm]
+  enable = true     # Enables parallel execution using Block STM
+  procs = 8         # Number of speculative processes (cores) in Block STM
+  enforce = false   # Use only Block STM for execution and skip serial execution
+
 [pprof]
   pprof = false            # Enable the pprof HTTP server
   port = 6060              # pprof HTTP server listening port

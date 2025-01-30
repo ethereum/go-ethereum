@@ -179,6 +179,7 @@ syncmode = "full"
 # [parallelevm]
   # enable = true
   # procs = 8
+  # enforce = false
 
 # [pprof]
 #   pprof = false

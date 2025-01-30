@@ -66,6 +66,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```parallelevm.enable```: Enable Block STM (default: true)
 
+- ```parallelevm.enforce```: Enforce block processing via Block STM (default: false)
+
 - ```parallelevm.procs```: Number of speculative processes (cores) in Block STM (default: 8)
 
 - ```pprof```: Enable the pprof HTTP server (default: false)

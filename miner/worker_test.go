@@ -973,7 +973,7 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 	db2 := rawdb.NewMemoryDatabase()
 	back.genesis.MustCommit(db2, triedb.NewDatabase(db2, triedb.HashDefaults))
 
-	chain, _ := core.NewParallelBlockChain(db2, nil, back.genesis, nil, engine, vm.Config{}, nil, nil, nil, 8)
+	chain, _ := core.NewParallelBlockChain(db2, nil, back.genesis, nil, engine, vm.Config{}, nil, nil, nil, 8, false)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
