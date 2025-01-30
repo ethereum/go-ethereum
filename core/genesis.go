@@ -283,7 +283,7 @@ func SetupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Gene
 func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, origGenesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 	// Sanitize the supplied genesis, ensuring it has the associated chain
 	// config attached.
-	genesis := origGenesis.Copy()
+	genesis := origGenesis.copy()
 	if genesis != nil && genesis.Config == nil {
 		return nil, common.Hash{}, nil, errGenesisNoConfig
 	}
@@ -552,7 +552,7 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 }
 
 // Copy copies the genesis.
-func (g *Genesis) Copy() *Genesis {
+func (g *Genesis) copy() *Genesis {
 	if g != nil {
 		cpy := *g
 		if g.Config != nil {
