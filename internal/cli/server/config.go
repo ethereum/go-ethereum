@@ -658,9 +658,9 @@ func DefaultConfig() *Config {
 			PriceLimit:   params.BorDefaultTxPoolPriceLimit, // bor's default
 			PriceBump:    10,
 			AccountSlots: 16,
-			GlobalSlots:  32768,
-			AccountQueue: 16,
-			GlobalQueue:  32768,
+			GlobalSlots:  131072,
+			AccountQueue: 64,
+			GlobalQueue:  131072,
 			LifeTime:     3 * time.Hour,
 		},
 		Sealer: &SealerConfig{

@@ -40,7 +40,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```eth.requiredblocks```: Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
 
-- ```ethstats```: Reporting URL of an ethstats service (nodename:secret@host:port)
+- ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
 
 - ```gcmode```: Blockchain garbage collection mode ("full", "archive") (default: full)
 
@@ -148,7 +148,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```graphql```: Enable GraphQL on the HTTP-RPC server. Note that GraphQL can only be started if an HTTP server is started as well. (default: false)
 
-- ```graphql.corsdomain```: Comma separated list of domains from which to accept cross-origin requests (browser enforced) (default: localhost)
+- ```graphql.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced) (default: localhost)
 
 - ```graphql.vhosts```: Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard. (default: localhost)
 
@@ -158,7 +158,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```http.api```: API's offered over the HTTP-RPC interface (default: eth,net,web3,txpool,bor)
 
-- ```http.corsdomain```: Comma separated list of domains from which to accept cross-origin requests (browser enforced) (default: localhost)
+- ```http.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced) (default: localhost)
 
 - ```http.ep-requesttimeout```: Request Timeout for rpc execution pool for HTTP requests (default: 0s)
 
@@ -290,13 +290,13 @@ The ```bor server``` command runs the Bor client.
 
 ### Transaction Pool Options
 
-- ```txpool.accountqueue```: Maximum number of non-executable transaction slots permitted per account (default: 16)
+- ```txpool.accountqueue```: Maximum number of non-executable transaction slots permitted per account (default: 64)
 
 - ```txpool.accountslots```: Minimum number of executable transaction slots guaranteed per account (default: 16)
 
-- ```txpool.globalqueue```: Maximum number of non-executable transaction slots for all accounts (default: 32768)
+- ```txpool.globalqueue```: Maximum number of non-executable transaction slots for all accounts (default: 131072)
 
-- ```txpool.globalslots```: Maximum number of executable transaction slots for all accounts (default: 32768)
+- ```txpool.globalslots```: Maximum number of executable transaction slots for all accounts (default: 131072)
 
 - ```txpool.journal```: Disk journal for local transaction to survive node restarts (default: transactions.rlp)
 
