@@ -210,7 +210,7 @@ func newTestBlockchain(blocks []*types.Block) *core.BlockChain {
 		testBlockchains[head] = new(testBlockchain)
 	}
 	tbc := testBlockchains[head]
-	testBlockchainsLock.Unlock()
+	defer testBlockchainsLock.Unlock()
 
 	// Ensure that the database is generated
 	tbc.gen.Do(func() {
