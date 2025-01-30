@@ -36,7 +36,9 @@ var (
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
 	var {{.Type}}MetaData = bind.MetaData{
 		ABI: "{{.InputABI}}",
+		{{if (index $.Libraries .Type) -}}
 		Pattern: "{{index $.Libraries .Type}}",
+		{{end -}}
 		{{if .InputBin -}}
 		Bin: "0x{{.InputBin}}",
 		{{end -}}
