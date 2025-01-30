@@ -147,7 +147,7 @@ func TestProcessVerkle(t *testing.T) {
 		params.WitnessChunkWriteCost + /* SSTORE in constructor */
 		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash for tx creation */
 		15*(params.WitnessChunkReadCost+params.WitnessChunkWriteCost) + /* code chunks #0..#14 */
-		4844 /* execution costs */
+		uint64(4844) /* execution costs */
 	blockGasUsagesExpected := []uint64{
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
