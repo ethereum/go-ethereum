@@ -526,7 +526,12 @@ func (b testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.
 }
 func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
-		return b.BlockByNumber(ctx, blockNr)
+		block, err := b.BlockByNumber(ctx, blockNr)
+		if block == nil && err == nil {
+			err = fmt.Errorf("block %v not found", blockNrOrHash)
+			return nil, err
+		}
+		return block, err
 	}
 	if blockHash, ok := blockNrOrHash.Hash(); ok {
 		return b.BlockByHash(ctx, blockHash)
