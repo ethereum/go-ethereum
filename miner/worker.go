@@ -365,23 +365,23 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			continue
 		}
 
+		// Most of the blob gas logic here is agnostic as to if the chain supports
+		// blobs or not, however the max check panics when called on a chain without
+		// a defined schedule, so we need to verify it's safe to call.
+		if miner.chainConfig.IsCancun(env.header.Number, env.header.Time) {
+			if left := miner.chainConfig.MaxBlobsPerBlock(env.header.Time) - uint64(env.blobs); left < (ltx.BlobGas / params.BlobTxBlobGasPerBlob) {
+				log.Trace("Not enough blob space left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas/params.BlobTxBlobGasPerBlob)
+				txs.Pop()
+				continue
+			}
+		}
+
 		// Transaction seems to fit, pull it up from the pool
 		tx := ltx.Resolve()
 		if tx == nil {
 			log.Trace("Ignoring evicted transaction", "hash", ltx.Hash)
 			txs.Pop()
 			continue
-		}
-
-		// Most of the blob gas logic here is agnostic as to if the chain supports
-		// blobs or not, however the max check panics when called on a chain without
-		// a defined schedule, so we need to verify it's safe to call.
-		if miner.chainConfig.IsCancun(env.header.Number, env.header.Time) {
-			if left := miner.chainConfig.MaxBlobsPerBlock(env.header.Time) - uint64(env.blobs); left < (ltx.BlobGas / params.BlobTxBlobGasPerBlob) {
-				log.Trace("Not enough blob space left for transaction", "hash", tx.Hash(), "left", left, "needed", ltx.BlobGas/params.BlobTxBlobGasPerBlob)
-				txs.Pop()
-				continue
-			}
 		}
 
 		// Error may be ignored here. The error has already been checked

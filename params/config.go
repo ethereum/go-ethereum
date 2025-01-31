@@ -301,7 +301,7 @@ var (
 		Max:            6,
 		UpdateFraction: 3338477,
 	}
-	// DefaultPragueBlobConfig is the default blob configuration for the Cancun fork.
+	// DefaultPragueBlobConfig is the default blob configuration for the Prague fork.
 	DefaultPragueBlobConfig = &BlobConfig{
 		Target:         6,
 		Max:            9,
