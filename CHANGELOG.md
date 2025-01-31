@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.12.0](https://github.com/taikoxyz/taiko-geth/compare/v1.11.1...v1.12.0) (2025-01-31)
+
+
+### Features
+
+* **beacon:** introduce soft blocks ([#342](https://github.com/taikoxyz/taiko-geth/issues/342)) ([a2cbf90](https://github.com/taikoxyz/taiko-geth/commit/a2cbf904eaaed308bea29ab67ab9059bde013634))
+* **beacon:** remove soft blocks implementation ([#366](https://github.com/taikoxyz/taiko-geth/issues/366)) ([3b30523](https://github.com/taikoxyz/taiko-geth/commit/3b305232a53a8fe85ca49d93fe80b289cf3ba8cf))
+* **core:** update devnet ontake fork height ([#345](https://github.com/taikoxyz/taiko-geth/issues/345)) ([4578ce1](https://github.com/taikoxyz/taiko-geth/commit/4578ce1ffeed8065d70fb2bc39bff20a9df50f56))
+
+
+### Bug Fixes
+
+* **taiko:** decode basefeeSharingPctg from extradata for ontake blocks ([#370](https://github.com/taikoxyz/taiko-geth/issues/370)) ([cdca791](https://github.com/taikoxyz/taiko-geth/commit/cdca79128bc606f89c12e08474f228ad5d0d89c3))
+
 ## [1.11.1](https://github.com/taikoxyz/taiko-geth/compare/v1.11.0...v1.11.1) (2024-10-22)
 
 
