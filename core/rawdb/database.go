@@ -217,7 +217,7 @@ func WriteOffsetOfLastAncientFreezer(db ethdb.KeyValueWriter, offset uint64) {
 
 // NewDatabaseWithOnlyFreezer create a freezer db without state
 func NewDatabaseWithOnlyFreezer(db ethdb.KeyValueStore, frz, namespace string, readonly bool, newOffSet uint64) (*Freezer, error) {
-	// Create the idle freezer instance, this operation should be atomic to avoid mismatch between offset and acientDB.
+	// Create the idle freezer instance, this operation should be atomic to avoid mismatch between offset and ancientDB.
 	frdb, err := NewChainFreezer(frz, namespace, readonly, newOffSet)
 	if err != nil {
 		return nil, err

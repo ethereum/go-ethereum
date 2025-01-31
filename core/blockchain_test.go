@@ -195,11 +195,14 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 func TestParallelBlockChainImport(t *testing.T) {
 	t.Parallel()
 
-	testParallelBlockChainImport(t, rawdb.HashScheme)
-	testParallelBlockChainImport(t, rawdb.PathScheme)
+	testParallelBlockChainImport(t, rawdb.HashScheme, false)
+	testParallelBlockChainImport(t, rawdb.PathScheme, false)
+
+	testParallelBlockChainImport(t, rawdb.HashScheme, true)
+	testParallelBlockChainImport(t, rawdb.PathScheme, true)
 }
 
-func testParallelBlockChainImport(t *testing.T, scheme string) {
+func testParallelBlockChainImport(t *testing.T, scheme string, enforceParallelProcessor bool) {
 	db, _, blockchain, err := newCanonical(ethash.NewFaker(), 10, true, scheme)
 	blockchain.parallelProcessor = NewParallelStateProcessor(blockchain.chainConfig, blockchain, blockchain.engine)
 
@@ -207,6 +210,8 @@ func testParallelBlockChainImport(t *testing.T, scheme string) {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
 
+	// If required, enforce parallel block processing and skip serial processing completely
+	blockchain.enforceParallelProcessor = enforceParallelProcessor
 	defer blockchain.Stop()
 
 	block := blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash())

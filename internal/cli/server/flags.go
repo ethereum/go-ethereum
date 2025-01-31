@@ -986,6 +986,13 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Value:   &c.cliConfig.ParallelEVM.SpeculativeProcesses,
 		Default: c.cliConfig.ParallelEVM.SpeculativeProcesses,
 	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "parallelevm.enforce",
+		Usage:   "Enforce block processing via Block STM",
+		Value:   &c.cliConfig.ParallelEVM.Enforce,
+		Default: c.cliConfig.ParallelEVM.Enforce,
+	})
+
 	f.Uint64Flag(&flagset.Uint64Flag{
 		Name:    "dev.gaslimit",
 		Usage:   "Initial block gas limit",

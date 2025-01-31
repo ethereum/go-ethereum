@@ -1,8 +1,8 @@
 # This configuration file is for reference and learning purpose only.
 # The default value of the flags is provided below (except a few flags which has custom defaults which are explicitly mentioned).
-# Recommended values for mainnet and/or mumbai,amoy are also provided.
+# Recommended values for mainnet and/or amoy are also provided.
 
-chain = "mainnet"               # Name of the chain to sync ("amoy", "mumbai", "mainnet") or path to a genesis file
+chain = "mainnet"               # Name of the chain to sync ("mainnet" or "amoy") or path to a genesis file
 identity = "Annon-Identity"     # Name/Identity of the node (default = OS hostname)
 verbosity = 3                   # Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit) (`log-level` was replaced by `verbosity`, and thus will be deprecated soon)
 vmdebug = false                 # Record information useful for VM and contract debugging
@@ -153,7 +153,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
       region = "us-north-1"
 
 [cache]
-  cache = 1024             # Megabytes of memory allocated to internal caching (recommended for mainnet = 4096, default suitable for amoy/mumbai/devnet)
+  cache = 1024             # Megabytes of memory allocated to internal caching (recommended for mainnet = 4096, default suitable for amoy/devnet)
   gc = 25                  # Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)
   snapshot = 10            # Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)
   database = 50            # Percentage of cache memory allowance to use for database io
@@ -180,6 +180,11 @@ devfakeauthor = false           # Run miner without validator set authorization 
   dev = false          # Enable developer mode with ephemeral proof-of-authority network and a pre-funded developer account, mining enabled
   period = 0           # Block period to use in developer mode (0 = mine only if transaction pending)
   gaslimit = 11500000  # Initial block gas limit
+
+[parallelevm]
+  enable = true     # Enables parallel execution using Block STM
+  procs = 8         # Number of speculative processes (cores) in Block STM
+  enforce = false   # Use only Block STM for execution and skip serial execution
 
 [pprof]
   pprof = false            # Enable the pprof HTTP server

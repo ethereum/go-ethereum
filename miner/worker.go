@@ -17,15 +17,10 @@
 package miner
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
-	"runtime"
-	"runtime/pprof"
-	ptrace "runtime/trace"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,8 +28,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/tracing"
@@ -155,8 +148,6 @@ func (env *environment) discard() {
 
 // task contains all information for consensus engine sealing and result submitting.
 type task struct {
-	//nolint:containedctx
-	ctx       context.Context
 	receipts  []*types.Receipt
 	state     *state.StateDB
 	block     *types.Block
@@ -172,8 +163,6 @@ const (
 
 // newWorkReq represents a request for new sealing work submitting with relative interrupt notifier.
 type newWorkReq struct {
-	//nolint:containedctx
-	ctx       context.Context
 	interrupt *atomic.Int32
 	noempty   bool
 	timestamp int64
@@ -272,8 +261,9 @@ type worker struct {
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 
-	profileCount        *int32 // Global count for profiling
-	interruptCommitFlag bool   // Interrupt commit ( Default true )
+	// Interrupt commit to stop block building on time
+	interruptCommitFlag bool // Denotes whether interrupt commit is enabled or not
+	interruptCtx        context.Context
 	interruptedTxCache  *vm.TxCache
 
 	// noempty is the flag used to control whether the feature of pre-seal empty
@@ -311,7 +301,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		interruptCommitFlag: config.CommitInterruptFlag,
 	}
 	worker.noempty.Store(true)
-	worker.profileCount = new(int32)
 	// Subscribe for transaction insertion events (whether from network or resurrects)
 	worker.txsSub = eth.TxPool().SubscribeTransactions(worker.txsCh, true)
 	// Subscribe events for blockchain
@@ -322,6 +311,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		log.Warn("Failed to create interrupted tx cache", "err", err)
 	}
 
+	worker.interruptCtx = context.Background()
 	worker.interruptedTxCache = &vm.TxCache{
 		Cache: interruptedTxCache,
 	}
@@ -352,12 +342,10 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 
 	worker.newpayloadTimeout = newpayloadTimeout
 
-	ctx := tracing.WithTracer(context.Background(), otel.GetTracerProvider().Tracer("MinerWorker"))
-
 	worker.wg.Add(4)
 
-	go worker.mainLoop(ctx)
-	go worker.newWorkLoop(ctx, recommit)
+	go worker.mainLoop()
+	go worker.newWorkLoop(recommit)
 	go worker.resultLoop()
 	go worker.taskLoop()
 
@@ -483,7 +471,7 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 // newWorkLoop is a standalone goroutine to submit new sealing work upon received events.
 //
 //nolint:gocognit
-func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
+func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer w.wg.Done()
 
 	var (
@@ -498,15 +486,13 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
-		ctx, span := tracing.Trace(ctx, "worker.newWorkLoop.commit")
-		tracing.EndSpan(span)
 		if interrupt != nil {
 			interrupt.Store(s)
 		}
 
 		interrupt = new(atomic.Int32)
 		select {
-		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, timestamp: timestamp, ctx: ctx, noempty: noempty}:
+		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, timestamp: timestamp, noempty: noempty}:
 		case <-w.exitCh:
 			return
 		}
@@ -515,9 +501,6 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 	}
 	// clearPending cleans the stale pending tasks.
 	clearPending := func(number uint64) {
-		_, span := tracing.Trace(ctx, "worker.newWorkLoop.clearPending")
-		tracing.EndSpan(span)
-
 		w.pendingMu.Lock()
 		for h, t := range w.pendingTasks {
 			if t.block.NumberU64()+staleThreshold <= number {
@@ -594,7 +577,7 @@ func (w *worker) newWorkLoop(ctx context.Context, recommit time.Duration) {
 // the received event. It can support two modes: automatically generate task and
 // submit it or return task according to given parameters for various proposes.
 // nolint: gocognit, contextcheck
-func (w *worker) mainLoop(ctx context.Context) {
+func (w *worker) mainLoop() {
 	defer w.wg.Done()
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
@@ -610,15 +593,15 @@ func (w *worker) mainLoop(ctx context.Context) {
 			if w.chainConfig.ChainID.Cmp(params.BorMainnetChainConfig.ChainID) == 0 || w.chainConfig.ChainID.Cmp(params.MumbaiChainConfig.ChainID) == 0 || w.chainConfig.ChainID.Cmp(params.AmoyChainConfig.ChainID) == 0 {
 				if w.eth.PeerCount() > 0 {
 					//nolint:contextcheck
-					w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+					w.commitWork(req.interrupt, req.noempty, req.timestamp)
 				}
 			} else {
 				//nolint:contextcheck
-				w.commitWork(req.ctx, req.interrupt, req.noempty, req.timestamp)
+				w.commitWork(req.interrupt, req.noempty, req.timestamp)
 			}
 
 		case req := <-w.getWorkCh:
-			req.result <- w.generateWork(ctx, req.params)
+			req.result <- w.generateWork(req.params)
 
 		case ev := <-w.txsCh:
 			// Apply transactions to the pending state if we're not sealing
@@ -651,7 +634,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 
 				tcount := w.current.tcount
 
-				w.commitTransactions(w.current, plainTxs, blobTxs, nil, new(uint256.Int), context.Background())
+				w.commitTransactions(w.current, plainTxs, blobTxs, nil, new(uint256.Int))
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -663,7 +646,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
 				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-					w.commitWork(ctx, nil, true, time.Now().Unix())
+					w.commitWork(nil, true, time.Now().Unix())
 				}
 			}
 
@@ -722,7 +705,7 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
 
-			if err := w.engine.Seal(task.ctx, w.chain, task.block, w.resultCh, stopCh); err != nil {
+			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
 				log.Warn("Block sealing failed", "err", err)
 				w.pendingMu.Lock()
 				delete(w.pendingTasks, sealHash)
@@ -783,45 +766,31 @@ func (w *worker) resultLoop() {
 				err      error
 			)
 
-			tracing.Exec(task.ctx, "", "resultLoop", func(ctx context.Context, span trace.Span) {
-				for i, taskReceipt := range task.receipts {
-					receipt := new(types.Receipt)
-					receipts[i] = receipt
-					*receipt = *taskReceipt
+			for i, taskReceipt := range task.receipts {
+				receipt := new(types.Receipt)
+				receipts[i] = receipt
+				*receipt = *taskReceipt
 
-					// add block location fields
-					receipt.BlockHash = hash
-					receipt.BlockNumber = block.Number()
-					receipt.TransactionIndex = uint(i)
+				// add block location fields
+				receipt.BlockHash = hash
+				receipt.BlockNumber = block.Number()
+				receipt.TransactionIndex = uint(i)
 
-					// Update the block hash in all logs since it is now available and not when the
-					// receipt/log of individual transactions were created.
-					receipt.Logs = make([]*types.Log, len(taskReceipt.Logs))
+				// Update the block hash in all logs since it is now available and not when the
+				// receipt/log of individual transactions were created.
+				receipt.Logs = make([]*types.Log, len(taskReceipt.Logs))
 
-					for i, taskLog := range taskReceipt.Logs {
-						log := new(types.Log)
-						receipt.Logs[i] = log
-						*log = *taskLog
-						log.BlockHash = hash
-					}
-
-					logs = append(logs, receipt.Logs...)
+				for i, taskLog := range taskReceipt.Logs {
+					log := new(types.Log)
+					receipt.Logs[i] = log
+					*log = *taskLog
+					log.BlockHash = hash
 				}
-				// Commit block and state to database.
-				tracing.Exec(ctx, "", "resultLoop.WriteBlockAndSetHead", func(ctx context.Context, span trace.Span) {
-					_, err = w.chain.WriteBlockAndSetHead(ctx, block, receipts, logs, task.state, true)
-				})
 
-				tracing.SetAttributes(
-					span,
-					attribute.String("hash", hash.String()),
-					attribute.Int("number", int(block.Number().Uint64())),
-					attribute.Int("txns", block.Transactions().Len()),
-					attribute.Int("gas used", int(block.GasUsed())),
-					attribute.Int("elapsed", int(time.Since(task.createdAt).Milliseconds())),
-					attribute.Bool("error", err != nil),
-				)
-			})
+				logs = append(logs, receipt.Logs...)
+			}
+			// Commit block and state to database.
+			_, err = w.chain.WriteBlockAndSetHead(block, receipts, logs, task.state, true)
 
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
@@ -891,16 +860,14 @@ func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotState = env.state.Copy()
 }
 
-func (w *worker) commitTransaction(env *environment, tx *types.Transaction, interruptCtx context.Context) ([]*types.Log, error) {
+func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	var (
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
 
-	// nolint : staticcheck
-	interruptCtx = vm.SetCurrentTxOnContext(interruptCtx, tx.Hash())
-
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), interruptCtx)
+	w.interruptCtx = vm.SetCurrentTxOnContext(w.interruptCtx, tx.Hash())
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig(), w.interruptCtx)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)
@@ -913,7 +880,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, inte
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *uint256.Int, interruptCtx context.Context) error {
+func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *uint256.Int) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -963,14 +930,14 @@ mainloop:
 			}
 		}
 
-		if interruptCtx != nil {
+		if w.interruptCtx != nil {
 			if EnableMVHashMap && w.IsRunning() {
 				env.state.AddEmptyMVHashMap()
 			}
 
 			// case of interrupting by timeout
 			select {
-			case <-interruptCtx.Done():
+			case <-w.interruptCtx.Done():
 				txCommitInterruptCounter.Inc(1)
 				log.Warn("Tx Level Interrupt", "hash", lastTxHash)
 				break mainloop
@@ -1077,7 +1044,15 @@ mainloop:
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
-		logs, err := w.commitTransaction(env, tx, interruptCtx)
+		logs, err := w.commitTransaction(env, tx)
+
+		// Check if we have a `delay` set in interrup context. It's only set during tests.
+		if w.interruptCtx != nil {
+			if delay := w.interruptCtx.Value(vm.InterruptCtxDelayKey); delay != nil {
+				// nolint : durationcheck
+				time.Sleep(time.Duration(delay.(uint)) * time.Millisecond)
+			}
+		}
 
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
@@ -1301,80 +1276,13 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	return env, nil
 }
 
-func startProfiler(profile string, filepath string, number uint64) (func() error, error) {
-	var (
-		buf bytes.Buffer
-		err error
-	)
-
-	closeFn := func() {}
-
-	switch profile {
-	case "cpu":
-		err = pprof.StartCPUProfile(&buf)
-
-		if err == nil {
-			closeFn = func() {
-				pprof.StopCPUProfile()
-			}
-		}
-	case "trace":
-		err = ptrace.Start(&buf)
-
-		if err == nil {
-			closeFn = func() {
-				ptrace.Stop()
-			}
-		}
-	case "heap":
-		runtime.GC()
-
-		err = pprof.WriteHeapProfile(&buf)
-	default:
-		log.Info("Incorrect profile name")
-	}
-
-	if err != nil {
-		return func() error {
-			closeFn()
-			return nil
-		}, err
-	}
-
-	closeFnNew := func() error {
-		var err error
-
-		closeFn()
-
-		if buf.Len() == 0 {
-			return nil
-		}
-
-		f, err := os.Create(filepath + "/" + profile + "-" + fmt.Sprint(number) + ".prof")
-		if err != nil {
-			return err
-		}
-
-		defer f.Close()
-
-		_, err = f.Write(buf.Bytes())
-
-		return err
-	}
-
-	return closeFnNew, nil
-}
-
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 
 //
 //nolint:gocognit
-func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, env *environment, interruptCtx context.Context) error {
-	ctx, span := tracing.StartSpan(ctx, "fillTransactions")
-	defer tracing.EndSpan(span)
-
+func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) error {
 	w.mu.RLock()
 	tip := w.tip
 	w.mu.RUnlock()
@@ -1393,187 +1301,65 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 	}
 
 	var (
-		localPlainTxsCount  int
-		remotePlainTxsCount int
-	)
-
-	// TODO: move to config or RPC
-	const profiling = false
-
-	if profiling {
-		doneCh := make(chan struct{})
-
-		defer func() {
-			close(doneCh)
-		}()
-
-		go func(number uint64) {
-			closeFn := func() error {
-				return nil
-			}
-
-			for {
-				select {
-				case <-time.After(150 * time.Millisecond):
-					// Check if we've not crossed limit
-					if attempt := atomic.AddInt32(w.profileCount, 1); attempt >= 10 {
-						log.Info("Completed profiling", "attempt", attempt)
-
-						return
-					}
-
-					log.Info("Starting profiling in fill transactions", "number", number)
-
-					dir, err := os.MkdirTemp("", fmt.Sprintf("bor-traces-%s-", time.Now().UTC().Format("2006-01-02-150405Z")))
-					if err != nil {
-						log.Error("Error in profiling", "path", dir, "number", number, "err", err)
-						return
-					}
-
-					// grab the cpu profile
-					closeFnInternal, err := startProfiler("cpu", dir, number)
-					if err != nil {
-						log.Error("Error in profiling", "path", dir, "number", number, "err", err)
-						return
-					}
-
-					closeFn = func() error {
-						err := closeFnInternal()
-
-						log.Info("Completed profiling", "path", dir, "number", number, "error", err)
-
-						return nil
-					}
-
-				case <-doneCh:
-					err := closeFn()
-
-					if err != nil {
-						log.Info("closing fillTransactions", "number", number, "error", err)
-					}
-
-					return
-				}
-			}
-		}(env.header.Number.Uint64())
-	}
-
-	var (
 		localPlainTxs, remotePlainTxs, localBlobTxs, remoteBlobTxs map[common.Address][]*txpool.LazyTransaction
 	)
 
-	tracing.Exec(ctx, "", "worker.SplittingTransactions", func(ctx context.Context, span trace.Span) {
-		prePendingTime := time.Now()
+	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
+	pendingPlainTxs := w.eth.TxPool().Pending(filter)
 
-		filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
-		pendingPlainTxs := w.eth.TxPool().Pending(filter)
+	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
+	pendingBlobTxs := w.eth.TxPool().Pending(filter)
 
-		filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
-		pendingBlobTxs := w.eth.TxPool().Pending(filter)
+	// Split the pending transactions into locals and remotes.
+	localPlainTxs, remotePlainTxs = make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
+	localBlobTxs, remoteBlobTxs = make(map[common.Address][]*txpool.LazyTransaction), pendingBlobTxs
 
-		// Split the pending transactions into locals and remotes.
-		localPlainTxs, remotePlainTxs = make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
-		localBlobTxs, remoteBlobTxs = make(map[common.Address][]*txpool.LazyTransaction), pendingBlobTxs
-
-		postPendingTime := time.Now()
-
-		for _, account := range w.eth.TxPool().Locals() {
-			if txs := remotePlainTxs[account]; len(txs) > 0 {
-				delete(remotePlainTxs, account)
-				localPlainTxs[account] = txs
-			}
-			if txs := remoteBlobTxs[account]; len(txs) > 0 {
-				delete(remoteBlobTxs, account)
-				localBlobTxs[account] = txs
-			}
+	for _, account := range w.eth.TxPool().Locals() {
+		if txs := remotePlainTxs[account]; len(txs) > 0 {
+			delete(remotePlainTxs, account)
+			localPlainTxs[account] = txs
 		}
-
-		postLocalsTime := time.Now()
-
-		tracing.SetAttributes(
-			span,
-			attribute.Int("len of local txs", localPlainTxsCount),
-			attribute.Int("len of remote txs", remotePlainTxsCount),
-			attribute.String("time taken by Pending()", fmt.Sprintf("%v", postPendingTime.Sub(prePendingTime))),
-			attribute.String("time taken by Locals()", fmt.Sprintf("%v", postLocalsTime.Sub(postPendingTime))),
-		)
-	})
-
-	var (
-		localEnvTCount  int
-		remoteEnvTCount int
-		err             error
-	)
+		if txs := remoteBlobTxs[account]; len(txs) > 0 {
+			delete(remoteBlobTxs, account)
+			localBlobTxs[account] = txs
+		}
+	}
 
 	// Fill the block with all available pending transactions.
 	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 {
 		var plainTxs, blobTxs *transactionsByPriceAndNonce
 
-		tracing.Exec(ctx, "", "worker.LocalTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
-			plainTxs = newTransactionsByPriceAndNonce(env.signer, localPlainTxs, env.header.BaseFee)
-			blobTxs = newTransactionsByPriceAndNonce(env.signer, localBlobTxs, env.header.BaseFee)
+		plainTxs = newTransactionsByPriceAndNonce(env.signer, localPlainTxs, env.header.BaseFee)
+		blobTxs = newTransactionsByPriceAndNonce(env.signer, localBlobTxs, env.header.BaseFee)
 
-			tracing.SetAttributes(
-				span,
-				attribute.Int("len of tx local Heads", plainTxs.GetTxs()),
-			)
-		})
-
-		tracing.Exec(ctx, "", "worker.LocalCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int), interruptCtx)
-		})
-
-		if err != nil {
+		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int)); err != nil {
 			return err
 		}
-
-		localEnvTCount = env.tcount
 	}
 
 	if len(remotePlainTxs) > 0 || len(remoteBlobTxs) > 0 {
 		var plainTxs, blobTxs *transactionsByPriceAndNonce
 
-		tracing.Exec(ctx, "", "worker.RemoteTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
-			plainTxs = newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, env.header.BaseFee)
-			blobTxs = newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, env.header.BaseFee)
+		plainTxs = newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, env.header.BaseFee)
+		blobTxs = newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, env.header.BaseFee)
 
-			tracing.SetAttributes(
-				span,
-				attribute.Int("len of tx remote Heads", plainTxs.GetTxs()),
-			)
-		})
-
-		tracing.Exec(ctx, "", "worker.RemoteCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int), interruptCtx)
-		})
-
-		if err != nil {
+		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int)); err != nil {
 			return err
 		}
-
-		remoteEnvTCount = env.tcount
 	}
-
-	tracing.SetAttributes(
-		span,
-		attribute.Int("len of final local txs ", localEnvTCount),
-		attribute.Int("len of final remote txs", remoteEnvTCount),
-	)
 
 	return nil
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (w *worker) generateWork(ctx context.Context, params *generateParams) *newPayloadResult {
+func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	work, err := w.prepareWork(params)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
 	defer work.discard()
 
-	// nolint : contextcheck
-	var interruptCtx = context.Background()
-
+	w.interruptCtx = resetAndCopyInterruptCtx(w.interruptCtx)
 	if !params.noTxs {
 		interrupt := new(atomic.Int32)
 
@@ -1582,7 +1368,7 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) *newP
 		})
 		defer timer.Stop()
 
-		err := w.fillTransactions(ctx, interrupt, work, interruptCtx)
+		err := w.fillTransactions(interrupt, work)
 		if errors.Is(err, errBlockInterruptedByTimeout) {
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
@@ -1605,7 +1391,7 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) *newP
 
 // commitWork generates several new sealing tasks based on the parent block
 // and submit them to the sealer.
-func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempty bool, timestamp int64) {
+func (w *worker) commitWork(interrupt *atomic.Int32, noempty bool, timestamp int64) {
 	// Abort committing if node is still syncing
 	if w.syncing.Load() {
 		return
@@ -1617,30 +1403,25 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 		err  error
 	)
 
-	tracing.Exec(ctx, "", "worker.prepareWork", func(ctx context.Context, span trace.Span) {
-		// Set the coinbase if the worker is running or it's required
-		var coinbase common.Address
-		if w.IsRunning() {
-			coinbase = w.etherbase()
-			if coinbase == (common.Address{}) {
-				log.Error("Refusing to mine without etherbase")
-				return
-			}
+	// Set the coinbase if the worker is running or it's required
+	var coinbase common.Address
+	if w.IsRunning() {
+		coinbase = w.etherbase()
+		if coinbase == (common.Address{}) {
+			log.Error("Refusing to mine without etherbase")
+			return
 		}
+	}
 
-		work, err = w.prepareWork(&generateParams{
-			timestamp: uint64(timestamp),
-			coinbase:  coinbase,
-		})
+	work, err = w.prepareWork(&generateParams{
+		timestamp: uint64(timestamp),
+		coinbase:  coinbase,
 	})
-
 	if err != nil {
 		return
 	}
 
-	// nolint:contextcheck
-	var interruptCtx = context.Background()
-
+	w.interruptCtx = resetAndCopyInterruptCtx(w.interruptCtx)
 	stopFn := func() {}
 	defer func() {
 		stopFn()
@@ -1648,26 +1429,17 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 
 	if !noempty && w.interruptCommitFlag {
 		block := w.chain.GetBlockByHash(w.chain.CurrentBlock().Hash())
-		interruptCtx, stopFn = getInterruptTimer(ctx, work, block)
-		// nolint : staticcheck
-		interruptCtx = vm.PutCache(interruptCtx, w.interruptedTxCache)
+		w.interruptCtx, stopFn = getInterruptTimer(w.interruptCtx, work, block)
+		w.interruptCtx = vm.PutCache(w.interruptCtx, w.interruptedTxCache)
 	}
-
-	ctx, span := tracing.StartSpan(ctx, "commitWork")
-	defer tracing.EndSpan(span)
-
-	tracing.SetAttributes(
-		span,
-		attribute.Int("number", int(work.header.Number.Uint64())),
-	)
 
 	// Create an empty block based on temporary copied state for
 	// sealing in advance without waiting block execution finished.
 	if !noempty && !w.noempty.Load() {
-		_ = w.commit(ctx, work.copy(), nil, false, start)
+		_ = w.commit(work.copy(), nil, false, start)
 	}
 	// Fill pending transactions from the txpool into the block.
-	err = w.fillTransactions(ctx, interrupt, work, interruptCtx)
+	err = w.fillTransactions(interrupt, work)
 
 	switch {
 	case err == nil:
@@ -1698,7 +1470,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 		return
 	}
 	// Submit the generated block for consensus sealing.
-	_ = w.commit(ctx, work.copy(), w.fullTaskHook, true, start)
+	_ = w.commit(work.copy(), w.fullTaskHook, true, start)
 
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.
@@ -1709,21 +1481,33 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 	w.current = work
 }
 
-func getInterruptTimer(ctx context.Context, work *environment, current *types.Block) (context.Context, func()) {
+// resetAndCopyInterruptCtx resets the interrupt context and copies the values set
+// from the old one to newly created one. It is necessary to reset context in this way
+// to get rid of the older parent timeout context.
+func resetAndCopyInterruptCtx(interruptCtx context.Context) context.Context {
+	// Create a fresh new context and copy values from old one
+	newCtx := context.Background()
+	if delay := interruptCtx.Value(vm.InterruptCtxDelayKey); delay != nil {
+		newCtx = context.WithValue(newCtx, vm.InterruptCtxDelayKey, delay)
+	}
+	if opcodeDelay := interruptCtx.Value(vm.InterruptCtxOpcodeDelayKey); opcodeDelay != nil {
+		newCtx = context.WithValue(newCtx, vm.InterruptCtxOpcodeDelayKey, opcodeDelay)
+	}
+
+	return newCtx
+}
+
+func getInterruptTimer(interruptCtx context.Context, work *environment, current *types.Block) (context.Context, func()) {
 	delay := time.Until(time.Unix(int64(work.header.Time), 0))
 
-	interruptCtx, cancel := context.WithTimeout(context.Background(), delay)
-
+	interruptCtx, cancel := context.WithTimeout(interruptCtx, delay)
 	blockNumber := current.NumberU64() + 1
 
 	go func() {
-		select {
-		case <-interruptCtx.Done():
-			if interruptCtx.Err() != context.Canceled {
-				log.Info("Commit Interrupt. Pre-committing the current block", "block", blockNumber)
-				cancel()
-			}
-		case <-ctx.Done(): // nothing to do
+		<-interruptCtx.Done()
+		if interruptCtx.Err() != context.Canceled {
+			log.Info("Commit Interrupt. Pre-committing the current block", "block", blockNumber)
+			cancel()
 		}
 	}()
 
@@ -1734,11 +1518,8 @@ func getInterruptTimer(ctx context.Context, work *environment, current *types.Bl
 // and commits new work if consensus engine is running.
 // Note the assumption is held that the mutation is allowed to the passed env, do
 // the deep copy first.
-func (w *worker) commit(ctx context.Context, env *environment, interval func(), update bool, start time.Time) error {
+func (w *worker) commit(env *environment, interval func(), update bool, start time.Time) error {
 	if w.IsRunning() {
-		ctx, span := tracing.StartSpan(ctx, "commit")
-		defer tracing.EndSpan(span)
-
 		if interval != nil {
 			interval()
 		}
@@ -1749,21 +1530,13 @@ func (w *worker) commit(ctx context.Context, env *environment, interval func(), 
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, &types.Body{
 			Transactions: env.txs,
 		}, env.receipts)
-		tracing.SetAttributes(
-			span,
-			attribute.Int("number", int(env.header.Number.Uint64())),
-			attribute.String("hash", env.header.Hash().String()),
-			attribute.String("sealhash", w.engine.SealHash(env.header).String()),
-			attribute.Int("len of env.txs", len(env.txs)),
-			attribute.Bool("error", err != nil),
-		)
 
 		if err != nil {
 			return err
 		}
 
 		select {
-		case w.taskCh <- &task{ctx: ctx, receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
+		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
 			fees := totalFees(block, env.receipts)
 			feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
 			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
@@ -1808,6 +1581,12 @@ func (w *worker) adjustResubmitInterval(message *intervalAdjust) {
 	default:
 		log.Warn("the resubmitAdjustCh is full, discard the message")
 	}
+}
+
+// setInterruptCtx sets `value` for given `key` for interrupt commit logic. To be only
+// used for e2e unit tests.
+func (w *worker) setInterruptCtx(key any, value any) {
+	w.interruptCtx = context.WithValue(w.interruptCtx, key, value)
 }
 
 // copyReceipts makes a deep copy of the given receipts.
