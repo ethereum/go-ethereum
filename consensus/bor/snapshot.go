@@ -1,9 +1,11 @@
 package bor
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
+	"github.com/ethereum/go-ethereum/log"
 
 	lru "github.com/hashicorp/golang-lru"
 
@@ -100,7 +102,7 @@ func (s *Snapshot) copy() *Snapshot {
 	return cpy
 }
 
-func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
+func (s *Snapshot) apply(headers []*types.Header, c *Bor) (*Snapshot, error) {
 	// Allow passing in no headers for cleaner code
 	if len(headers) == 0 {
 		return s, nil
@@ -157,6 +159,12 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			newVals, _ := valset.ParseValidators(validatorBytes)
 			v := getUpdatedValidatorSet(snap.ValidatorSet.Copy(), newVals)
 			v.IncrementProposerPriority(1)
+
+			if v.CheckEmptyId() {
+				log.Warn("Empty id found on validator set. Querying on the validatorSet contract")
+				valsWithId, _ := c.spanner.GetCurrentValidatorsByHash(context.Background(), header.Hash(), number+1)
+				v.IncludeIds(valsWithId)
+			}
 			snap.ValidatorSet = v
 		}
 	}
