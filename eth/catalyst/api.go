@@ -1272,7 +1272,8 @@ func convertRequests(hex []hexutil.Bytes) [][]byte {
 
 // validateRequests checks that requests are ordered by their type and are not empty.
 func validateRequests(requests [][]byte) error {
-	var last byte
+	// Magic value to ensure the first request is always valid.
+	last := byte(0xff)
 	for _, req := range requests {
 		// No empty requests.
 		if len(req) < 2 {
@@ -1280,7 +1281,7 @@ func validateRequests(requests [][]byte) error {
 		}
 		// Check that requests are ordered by their type.
 		// Each type must appear only once.
-		if req[0] <= last {
+		if last != 0xff && req[0] <= last {
 			return fmt.Errorf("invalid request order: %v", req)
 		}
 		last = req[0]
