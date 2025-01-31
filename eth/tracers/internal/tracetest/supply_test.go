@@ -544,9 +544,8 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 }
 
 func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, *core.BlockChain, error) {
-	var (
-		engine = beacon.New(ethash.NewFaker())
-	)
+	engine := beacon.New(ethash.NewFaker())
+	engine.TestingTTDBlock(1)
 
 	traceOutputPath := filepath.ToSlash(t.TempDir())
 	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")

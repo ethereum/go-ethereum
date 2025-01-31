@@ -225,56 +225,6 @@ func fuzzCrossG1MultiExp(data []byte) int {
 	return 1
 }
 
-func fuzzCrossG1Mul(data []byte) int {
-	input := bytes.NewReader(data)
-	gp, blpAffine, err := getG1Points(input)
-	if err != nil {
-		return 0
-	}
-	scalar, err := randomScalar(input, fp.Modulus())
-	if err != nil {
-		return 0
-	}
-
-	blScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(scalar.Bytes(), 32))
-
-	blp := new(blst.P1)
-	blp.FromAffine(blpAffine)
-
-	resBl := blp.Mult(blScalar)
-	resGeth := (new(gnark.G1Affine)).ScalarMultiplication(gp, scalar)
-
-	if !bytes.Equal(resGeth.Marshal(), resBl.Serialize()) {
-		panic("bytes(blst.G1) != bytes(geth.G1)")
-	}
-	return 1
-}
-
-func fuzzCrossG2Mul(data []byte) int {
-	input := bytes.NewReader(data)
-	gp, blpAffine, err := getG2Points(input)
-	if err != nil {
-		return 0
-	}
-	scalar, err := randomScalar(input, fp.Modulus())
-	if err != nil {
-		return 0
-	}
-
-	blScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(scalar.Bytes(), 32))
-
-	blp := new(blst.P2)
-	blp.FromAffine(blpAffine)
-
-	resBl := blp.Mult(blScalar)
-	resGeth := (new(gnark.G2Affine)).ScalarMultiplication(gp, scalar)
-
-	if !bytes.Equal(resGeth.Marshal(), resBl.Serialize()) {
-		panic("bytes(blst.G1) != bytes(geth.G1)")
-	}
-	return 1
-}
-
 func fuzzCrossG2MultiExp(data []byte) int {
 	var (
 		input        = bytes.NewReader(data)
@@ -396,7 +346,7 @@ func multiExpG1Gnark(gs []gnark.G1Affine, scalars []fr.Element) gnark.G1Affine {
 	return res
 }
 
-// multiExpG1Gnark is a naive implementation of G1 multi-exponentiation
+// multiExpG2Gnark is a naive implementation of G2 multi-exponentiation
 func multiExpG2Gnark(gs []gnark.G2Affine, scalars []fr.Element) gnark.G2Affine {
 	res := gnark.G2Affine{}
 	for i := 0; i < len(gs); i++ {

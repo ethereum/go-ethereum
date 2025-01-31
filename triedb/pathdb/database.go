@@ -471,8 +471,8 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if id == nil {
 		return false
 	}
-	// Recoverable state must below the disk layer. The recoverable
-	// state only refers the state that is currently not available,
+	// Recoverable state must be below the disk layer. The recoverable
+	// state only refers to the state that is currently not available,
 	// but can be restored by applying state history.
 	dl := db.tree.bottom()
 	if *id >= dl.stateID() {

@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2025 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,11 +14,27 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package version
+package nat
 
-const (
-	Major = 1          // Major version component of the current release
-	Minor = 15         // Minor version component of the current release
-	Patch = 0          // Patch version component of the current release
-	Meta  = "unstable" // Version metadata to append to the version string
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
+
+func TestNatStun(t *testing.T) {
+	nat, err := newSTUN("")
+	assert.NoError(t, err)
+	_, err = nat.ExternalIP()
+	assert.NoError(t, err)
+}
+
+func TestUnreachedNatServer(t *testing.T) {
+	stun := &stun{
+		serverList: []string{"198.51.100.2:1234", "198.51.100.5"},
+	}
+	_, err := stun.ExternalIP()
+	if err != errSTUNFailed {
+		t.Fatal("wrong error:", err)
+	}
+}

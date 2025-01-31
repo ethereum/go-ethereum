@@ -41,6 +41,9 @@ func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 }
 
 func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	if contract.IsSystemCall {
+		return 0, nil
+	}
 	address := stack.peek().Bytes20()
 	gas := evm.AccessEvents.BasicDataGas(address, false)
 	if gas == 0 {
@@ -54,6 +57,9 @@ func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
+	if contract.IsSystemCall {
+		return 0, nil
+	}
 	gas := evm.AccessEvents.BasicDataGas(address, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
@@ -62,6 +68,9 @@ func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 }
 
 func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	if contract.IsSystemCall {
+		return 0, nil
+	}
 	address := stack.peek().Bytes20()
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
@@ -78,6 +87,9 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
 		gas, err := oldCalculator(evm, contract, stack, mem, memorySize)
 		if err != nil {
 			return 0, err
+		}
+		if contract.IsSystemCall {
+			return gas, nil
 		}
 		if _, isPrecompile := evm.precompile(contract.Address()); isPrecompile {
 			return gas, nil
@@ -100,6 +112,9 @@ var (
 func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	beneficiaryAddr := common.Address(stack.peek().Bytes20())
 	if _, isPrecompile := evm.precompile(beneficiaryAddr); isPrecompile {
+		return 0, nil
+	}
+	if contract.IsSystemCall {
 		return 0, nil
 	}
 	contractAddr := contract.Address()
@@ -131,7 +146,7 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 		uint64CodeOffset = gomath.MaxUint64
 	}
 	_, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, length.Uint64())
-	if !contract.IsDeployment {
+	if !contract.IsDeployment && !contract.IsSystemCall {
 		gas += evm.AccessEvents.CodeChunksRangeGas(contract.Address(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
 	}
 	return gas, nil
@@ -142,6 +157,9 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	gas, err := gasExtCodeCopy(evm, contract, stack, mem, memorySize)
 	if err != nil {
 		return 0, err
+	}
+	if contract.IsSystemCall {
+		return gas, nil
 	}
 	addr := common.Address(stack.peek().Bytes20())
 	wgas := evm.AccessEvents.BasicDataGas(addr, false)

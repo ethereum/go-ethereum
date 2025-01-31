@@ -88,7 +88,7 @@ func newGwei(n int64) *big.Int {
 }
 
 // Test fork of length N starting from block i
-func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, comparator func(td1, td2 *big.Int), scheme string) {
+func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, scheme string) {
 	// Copy old chain up to #i into a new db
 	genDb, _, blockchain2, err := newCanonical(ethash.NewFaker(), i, full, scheme)
 	if err != nil {
@@ -125,27 +125,15 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 		}
 	}
 	// Sanity check that the forked chain can be imported into the original
-	var tdPre, tdPost *big.Int
-
 	if full {
-		cur := blockchain.CurrentBlock()
-		tdPre = blockchain.GetTd(cur.Hash(), cur.Number.Uint64())
 		if err := testBlockChainImport(blockChainB, blockchain); err != nil {
 			t.Fatalf("failed to import forked block chain: %v", err)
 		}
-		last := blockChainB[len(blockChainB)-1]
-		tdPost = blockchain.GetTd(last.Hash(), last.NumberU64())
 	} else {
-		cur := blockchain.CurrentHeader()
-		tdPre = blockchain.GetTd(cur.Hash(), cur.Number.Uint64())
 		if err := testHeaderChainImport(headerChainB, blockchain); err != nil {
 			t.Fatalf("failed to import forked header chain: %v", err)
 		}
-		last := headerChainB[len(headerChainB)-1]
-		tdPost = blockchain.GetTd(last.Hash(), last.Number.Uint64())
 	}
-	// Compare the total difficulties of the chains
-	comparator(tdPre, tdPost)
 }
 
 // testBlockChainImport tries to process a chain of blocks, writing them into
@@ -179,7 +167,6 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		}
 
 		blockchain.chainmu.MustLock()
-		rawdb.WriteTd(blockchain.db, block.Hash(), block.NumberU64(), new(big.Int).Add(block.Difficulty(), blockchain.GetTd(block.ParentHash(), block.NumberU64()-1)))
 		rawdb.WriteBlock(blockchain.db, block)
 		statedb.Commit(block.NumberU64(), false, false)
 		blockchain.chainmu.Unlock()
@@ -197,7 +184,6 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 		}
 		// Manually insert the header into the database, but don't reorganise (allows subsequent testing)
 		blockchain.chainmu.MustLock()
-		rawdb.WriteTd(blockchain.db, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, blockchain.GetTd(header.ParentHash, header.Number.Uint64()-1)))
 		rawdb.WriteHeader(blockchain.db, header)
 		blockchain.chainmu.Unlock()
 	}
@@ -294,17 +280,11 @@ func testExtendCanonical(t *testing.T, full bool, scheme string) {
 	}
 	defer processor.Stop()
 
-	// Define the difficulty comparator
-	better := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) <= 0 {
-			t.Errorf("total difficulty mismatch: have %v, expected more than %v", td2, td1)
-		}
-	}
 	// Start fork from current height
-	testFork(t, processor, length, 1, full, better, scheme)
-	testFork(t, processor, length, 2, full, better, scheme)
-	testFork(t, processor, length, 5, full, better, scheme)
-	testFork(t, processor, length, 10, full, better, scheme)
+	testFork(t, processor, length, 1, full, scheme)
+	testFork(t, processor, length, 2, full, scheme)
+	testFork(t, processor, length, 5, full, scheme)
+	testFork(t, processor, length, 10, full, scheme)
 }
 
 // Tests that given a starting canonical chain of a given size, it can be extended
@@ -353,19 +333,13 @@ func testShorterFork(t *testing.T, full bool, scheme string) {
 	}
 	defer processor.Stop()
 
-	// Define the difficulty comparator
-	worse := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) >= 0 {
-			t.Errorf("total difficulty mismatch: have %v, expected less than %v", td2, td1)
-		}
-	}
 	// Sum of numbers must be less than `length` for this to be a shorter fork
-	testFork(t, processor, 0, 3, full, worse, scheme)
-	testFork(t, processor, 0, 7, full, worse, scheme)
-	testFork(t, processor, 1, 1, full, worse, scheme)
-	testFork(t, processor, 1, 7, full, worse, scheme)
-	testFork(t, processor, 5, 3, full, worse, scheme)
-	testFork(t, processor, 5, 4, full, worse, scheme)
+	testFork(t, processor, 0, 3, full, scheme)
+	testFork(t, processor, 0, 7, full, scheme)
+	testFork(t, processor, 1, 1, full, scheme)
+	testFork(t, processor, 1, 7, full, scheme)
+	testFork(t, processor, 5, 3, full, scheme)
+	testFork(t, processor, 5, 4, full, scheme)
 }
 
 // Tests that given a starting canonical chain of a given size, creating shorter
@@ -476,19 +450,13 @@ func testEqualFork(t *testing.T, full bool, scheme string) {
 	}
 	defer processor.Stop()
 
-	// Define the difficulty comparator
-	equal := func(td1, td2 *big.Int) {
-		if td2.Cmp(td1) != 0 {
-			t.Errorf("total difficulty mismatch: have %v, want %v", td2, td1)
-		}
-	}
 	// Sum of numbers must be equal to `length` for this to be an equal fork
-	testFork(t, processor, 0, 10, full, equal, scheme)
-	testFork(t, processor, 1, 9, full, equal, scheme)
-	testFork(t, processor, 2, 8, full, equal, scheme)
-	testFork(t, processor, 5, 5, full, equal, scheme)
-	testFork(t, processor, 6, 4, full, equal, scheme)
-	testFork(t, processor, 9, 1, full, equal, scheme)
+	testFork(t, processor, 0, 10, full, scheme)
+	testFork(t, processor, 1, 9, full, scheme)
+	testFork(t, processor, 2, 8, full, scheme)
+	testFork(t, processor, 5, 5, full, scheme)
+	testFork(t, processor, 6, 4, full, scheme)
+	testFork(t, processor, 9, 1, full, scheme)
 }
 
 // Tests that given a starting canonical chain of a given size, creating equal
@@ -647,19 +615,6 @@ func testReorg(t *testing.T, first, second []int64, td int64, full bool, scheme 
 			}
 		}
 	}
-	// Make sure the chain total difficulty is the correct one
-	want := new(big.Int).Add(blockchain.genesisBlock.Difficulty(), big.NewInt(td))
-	if full {
-		cur := blockchain.CurrentBlock()
-		if have := blockchain.GetTd(cur.Hash(), cur.Number.Uint64()); have.Cmp(want) != 0 {
-			t.Errorf("total difficulty mismatch: have %v, want %v", have, want)
-		}
-	} else {
-		cur := blockchain.CurrentHeader()
-		if have := blockchain.GetTd(cur.Hash(), cur.Number.Uint64()); have.Cmp(want) != 0 {
-			t.Errorf("total difficulty mismatch: have %v, want %v", have, want)
-		}
-	}
 }
 
 // Tests chain insertions in the face of one entity containing an invalid nonce.
@@ -809,12 +764,6 @@ func testFastVsFullChains(t *testing.T, scheme string) {
 	for i := 0; i < len(blocks); i++ {
 		num, hash, time := blocks[i].NumberU64(), blocks[i].Hash(), blocks[i].Time()
 
-		if ftd, atd := fast.GetTd(hash, num), archive.GetTd(hash, num); ftd.Cmp(atd) != 0 {
-			t.Errorf("block #%d [%x]: td mismatch: fastdb %v, archivedb %v", num, hash, ftd, atd)
-		}
-		if antd, artd := ancient.GetTd(hash, num), archive.GetTd(hash, num); antd.Cmp(artd) != 0 {
-			t.Errorf("block #%d [%x]: td mismatch: ancientdb %v, archivedb %v", num, hash, antd, artd)
-		}
 		if fheader, aheader := fast.GetHeaderByHash(hash), archive.GetHeaderByHash(hash); fheader.Hash() != aheader.Hash() {
 			t.Errorf("block #%d [%x]: header mismatch: fastdb %v, archivedb %v", num, hash, fheader, aheader)
 		}
@@ -4038,7 +3987,7 @@ func TestEIP3651(t *testing.T) {
 	var (
 		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
 		bb     = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
-		engine = beacon.NewFaker()
+		engine = beacon.New(ethash.NewFaker())
 
 		// A sender who makes transactions, has some funds
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -4154,7 +4103,7 @@ func TestPragueRequests(t *testing.T) {
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		config  = *params.MergedTestChainConfig
 		signer  = types.LatestSigner(&config)
-		engine  = beacon.NewFaker()
+		engine  = beacon.New(ethash.NewFaker())
 	)
 	gspec := &Genesis{
 		Config: &config,
@@ -4232,7 +4181,7 @@ func TestEIP7702(t *testing.T) {
 	var (
 		config  = *params.MergedTestChainConfig
 		signer  = types.LatestSigner(&config)
-		engine  = beacon.NewFaker()
+		engine  = beacon.New(ethash.NewFaker())
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)

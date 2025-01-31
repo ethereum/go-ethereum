@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -71,12 +70,13 @@ func newTestBackend(blocks int) *testBackend {
 func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, *core.BlockGen)) *testBackend {
 	var (
 		// Create a database pre-initialize with a genesis block
-		db                      = rawdb.NewMemoryDatabase()
-		config                  = params.TestChainConfig
-		engine consensus.Engine = ethash.NewFaker()
+		db     = rawdb.NewMemoryDatabase()
+		config = params.TestChainConfig
+		engine = beacon.New(ethash.NewFaker())
 	)
-
-	if shanghai {
+	if !shanghai {
+		engine.TestingTTDBlock(math.MaxUint64)
+	} else {
 		config = &params.ChainConfig{
 			ChainID:                 big.NewInt(1),
 			HomesteadBlock:          big.NewInt(0),
@@ -99,7 +99,6 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 			TerminalTotalDifficulty: big.NewInt(0),
 			Ethash:                  new(params.EthashConfig),
 		}
-		engine = beacon.NewFaker()
 	}
 
 	gspec := &core.Genesis{
