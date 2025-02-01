@@ -1737,3 +1737,61 @@ func TestGetClientVersion(t *testing.T) {
 		t.Fatalf("client info does match expected, got %s", info.String())
 	}
 }
+
+func TestValidateRequests(t *testing.T) {
+	tests := []struct {
+		name     string
+		requests [][]byte
+		wantErr  bool
+	}{
+		{
+			name: "valid ascending",
+			requests: [][]byte{
+				{0x00, 0xAA, 0xBB}, // type 0x00
+				{0x01, 0xCC},       // type 0x01
+				{0x02, 0xDD},       // type 0x02
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty request (too short)",
+			requests: [][]byte{
+				{0x00}, // only 1 byte: type with no data
+			},
+			wantErr: true,
+		},
+		{
+			name: "duplicate type",
+			requests: [][]byte{
+				{0x00, 0x11},
+				{0x01, 0x22},
+				{0x01, 0x33}, // duplicate type 0x01
+			},
+			wantErr: true,
+		},
+		{
+			name: "out of order",
+			requests: [][]byte{
+				{0x01, 0xAA}, // type 0x01
+				{0x00, 0xBB}, // type 0x00 out of order (should be ascending)
+			},
+			wantErr: true,
+		},
+		{
+			name: "single request valid",
+			requests: [][]byte{
+				{0x01, 0xAB},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRequests(tt.requests)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateRequests(%v) error = %v, wantErr = %v",
+					tt.requests, err, tt.wantErr)
+			}
+		})
+	}
+}
