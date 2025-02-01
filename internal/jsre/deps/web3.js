@@ -1405,7 +1405,7 @@ var SolidityType = function (config) {
  * @return {Bool} true if type match this SolidityType, otherwise false
  */
 SolidityType.prototype.isType = function (name) {
-    throw "this method should be overrwritten for type " + name;
+    throw "this method should be overwritten for type " + name;
 };
 
 /**
