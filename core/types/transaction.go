@@ -21,12 +21,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -40,6 +42,7 @@ var (
 	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
 	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
 	errVYParityMissing      = errors.New("missing 'yParity' or 'v' field in transaction")
+	ErrGasUintOverflow      = errors.New("gas uint64 overflow")
 )
 
 // Transaction types.
@@ -579,6 +582,75 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	cpy := tx.inner.copy()
 	cpy.setSignatureValues(signer.ChainID(), v, r, s)
 	return &Transaction{inner: cpy, time: tx.time}, nil
+}
+
+// IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
+func (tx *Transaction) IntrinsicGas(rules *params.Rules) (uint64, error) {
+	var (
+		data               = tx.Data()
+		accessList         = tx.AccessList()
+		authList           = tx.SetCodeAuthorizations()
+		isContractCreation = tx.To() == nil
+	)
+
+	// Set the starting gas for the raw transaction
+	var gas uint64
+	if isContractCreation && rules.IsHomestead {
+		gas = params.TxGasContractCreation
+	} else {
+		gas = params.TxGas
+	}
+	dataLen := uint64(len(data))
+	// Bump the required gas by the amount of transactional data
+	if dataLen > 0 {
+		// Zero and non-zero bytes are priced differently
+		var nz uint64
+		for _, byt := range data {
+			if byt != 0 {
+				nz++
+			}
+		}
+		// Make sure we don't exceed uint64 for all data combinations
+		nonZeroGas := params.TxDataNonZeroGasFrontier
+		if rules.IsIstanbul {
+			nonZeroGas = params.TxDataNonZeroGasEIP2028
+		}
+		if (math.MaxUint64-gas)/nonZeroGas < nz {
+			return 0, ErrGasUintOverflow
+		}
+		gas += nz * nonZeroGas
+
+		z := dataLen - nz
+		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
+			return 0, ErrGasUintOverflow
+		}
+		gas += z * params.TxDataZeroGas
+
+		if isContractCreation && rules.IsShanghai {
+			lenWords := toWordSize(dataLen)
+			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
+				return 0, ErrGasUintOverflow
+			}
+			gas += lenWords * params.InitCodeWordGas
+		}
+	}
+	if accessList != nil {
+		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
+		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
+	}
+	if authList != nil {
+		gas += uint64(len(authList)) * params.CallNewAccountGas
+	}
+	return gas, nil
+}
+
+// toWordSize returns the ceiled word size required for init code payment calculation.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
+	}
+
+	return (size + 31) / 32
 }
 
 // Transactions implements DerivableList for transactions.
