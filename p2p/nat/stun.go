@@ -36,6 +36,9 @@ const requestLimit = 3
 
 var errSTUNFailed = errors.New("STUN requests failed")
 
+type STUN struct {
+	stun
+}
 type stun struct {
 	serverList []string
 }
@@ -77,7 +80,7 @@ func (stun) DeleteMapping(string, int, int) error {
 	return nil
 }
 
-func (s *stun) ExternalIP() (net.IP, error) {
+func (s stun) ExternalIP() (net.IP, error) {
 	for _, server := range s.randomServers(requestLimit) {
 		ip, err := s.externalIP(server)
 		if err != nil {

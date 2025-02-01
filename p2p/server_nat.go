@@ -57,8 +57,7 @@ func (srv *Server) setupPortMapping() {
 		// No NAT interface configured.
 		srv.loopWG.Add(1)
 		go srv.consumePortMappingRequests()
-
-	case nat.ExtIP:
+	case nat.ExtIP, nat.STUN:
 		// ExtIP doesn't block, set the IP right away.
 		ip, _ := srv.NAT.ExternalIP()
 		srv.localnode.SetStaticIP(ip)
