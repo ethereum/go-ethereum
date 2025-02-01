@@ -54,7 +54,7 @@ func newSTUN(serverAddr string) (Interface, error) {
 		}
 		s.serverList = []string{serverAddr}
 	}
-	return s, nil
+	return STUN{stun: *s}, nil
 }
 
 func (s stun) String() string {

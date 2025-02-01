@@ -69,10 +69,10 @@ func TestAutoDiscRace(t *testing.T) {
 func TestParseStun(t *testing.T) {
 	testcases := []struct {
 		natStr string
-		want   *stun
+		want   STUN
 	}{
-		{"stun", &stun{serverList: strings.Split(stunDefaultServers, "\n")}},
-		{"stun:1.2.3.4:1234", &stun{serverList: []string{"1.2.3.4:1234"}}},
+		{"stun", STUN{stun: stun{serverList: strings.Split(stunDefaultServers, "\n")}}},
+		{"stun:1.2.3.4:1234", STUN{stun: stun{serverList: []string{"1.2.3.4:1234"}}}},
 	}
 
 	for _, tc := range testcases {
@@ -80,7 +80,7 @@ func TestParseStun(t *testing.T) {
 		if err != nil {
 			t.Errorf("should no err, but get %v", err)
 		}
-		stun := nat.(*stun)
+		stun := nat.(STUN)
 		assert.Equal(t, stun.serverList, tc.want.serverList)
 	}
 }
