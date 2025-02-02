@@ -159,47 +159,6 @@ func Parse(validSchemes enr.IdentityScheme, input string) (*Node, error) {
 	return New(validSchemes, &r)
 }
 
-// Portal network not filter multicast address, any other way to support this?
-func ParseForAddEnr(validSchemes enr.IdentityScheme, input string) (*Node, error) {
-	if strings.HasPrefix(input, "enode://") {
-		return ParseV4(input)
-	}
-	if !strings.HasPrefix(input, "enr:") {
-		return nil, errMissingPrefix
-	}
-	bin, err := base64.RawURLEncoding.DecodeString(input[4:])
-	if err != nil {
-		return nil, err
-	}
-	var r enr.Record
-	if err := rlp.DecodeBytes(bin, &r); err != nil {
-		return nil, err
-	}
-	var n *Node
-	if n, err = New(validSchemes, &r); err != nil {
-		return nil, err
-	}
-	var ip4 netip.Addr
-	var ip6 netip.Addr
-	n.Load((*enr.IPv4Addr)(&ip4))
-	n.Load((*enr.IPv6Addr)(&ip6))
-	valid4 := ip4.IsValid()
-	valid6 := ip6.IsValid()
-	switch {
-	case valid4 && valid6:
-		if localityScore(ip4) >= localityScore(ip6) {
-			n.setIP4(ip4)
-		} else {
-			n.setIP6(ip6)
-		}
-	case valid4:
-		n.setIP4(ip4)
-	case valid6:
-		n.setIP6(ip6)
-	}
-	return n, nil
-}
-
 // ID returns the node identifier.
 func (n *Node) ID() ID {
 	return n.id
