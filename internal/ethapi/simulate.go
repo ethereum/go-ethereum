@@ -73,6 +73,19 @@ func (r *simCallResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*callResultAlias)(r))
 }
 
+// simBlockResult is the result of a simulated block.
+type simBlockResult struct {
+	sim   *simulator
+	Block *types.Block
+	Calls []simCallResult
+}
+
+func (r *simBlockResult) MarshalJSON() ([]byte, error) {
+	blockData := RPCMarshalBlock(r.Block, true, r.sim.fullTx, r.sim.chainConfig)
+	blockData["calls"] = r.Calls
+	return json.Marshal(blockData)
+}
+
 // simOpts are the inputs to eth_simulateV1.
 type simOpts struct {
 	BlockStateCalls        []simBlock
@@ -95,7 +108,7 @@ type simulator struct {
 }
 
 // execute runs the simulation of a series of blocks.
-func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[string]interface{}, error) {
+func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]*simBlockResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -123,19 +136,21 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[str
 		return nil, err
 	}
 	var (
-		results = make([]map[string]interface{}, len(blocks))
-		parent  = sim.base
+		results = make([]*simBlockResult, len(blocks))
+		// prevHeaders is the header for all previously simulated blocks.
+		// It is "filled" compared to the barebone header available prior to execution.
+		// It will be used for serving the BLOCKHASH opcode.
+		prevHeaders = make([]*types.Header, 0, len(blocks))
+		parent      = sim.base
 	)
 	for bi, block := range blocks {
-		result, callResults, err := sim.processBlock(ctx, &block, headers[bi], parent, headers[:bi], timeout)
+		result, callResults, err := sim.processBlock(ctx, &block, headers[bi], parent, prevHeaders, timeout)
 		if err != nil {
 			return nil, err
 		}
-		enc := RPCMarshalBlock(result, true, sim.fullTx, sim.chainConfig)
-		enc["calls"] = callResults
-		results[bi] = enc
-
-		parent = headers[bi]
+		results[bi] = &simBlockResult{sim: sim, Block: result, Calls: callResults}
+		parent = result.Header()
+		prevHeaders = append(prevHeaders, parent)
 	}
 	return results, nil
 }
