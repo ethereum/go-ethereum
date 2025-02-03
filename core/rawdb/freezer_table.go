@@ -393,52 +393,57 @@ func (t *freezerTable) repairIndex() error {
 	if err != nil {
 		return err
 	}
-	offset := stat.Size()
+	size := stat.Size()
 
 	// Validate the items in the index file to ensure the data integrity.
 	// It's possible some garbage data is retained in the index file after
 	// the power failures and should be truncated first.
-	offset, err = t.checkIndex(offset)
+	size, err = t.checkIndex(size)
 	if err != nil {
 		return err
 	}
 	// If legacy metadata is detected, attempt to recover the offset from the
 	// index file to avoid clearing the entire table.
 	if t.metadata.version == freezerTableV1 {
-		t.logger.Info("Recover the flush offset for legacy table", "offset", offset)
-		return t.metadata.setFlushOffset(uint64(offset), true)
+		t.logger.Info("Recovering freezer flushOffset for legacy table", "offset", size)
+		return t.metadata.setFlushOffset(uint64(size), true)
 	}
-	// Move the flush offset to the end of the file for fresh new freezer table
-	if offset == indexEntrySize && t.metadata.flushOffset == 0 {
-		return t.metadata.setFlushOffset(uint64(offset), true)
-	}
-	// Short circuit if the offset is aligned with the index file
-	if offset == int64(t.metadata.flushOffset) {
+
+	switch {
+	case size == indexEntrySize && t.metadata.flushOffset == 0:
+		// It's a new freezer table with no content.
+		// Move the flush offset to the end of the file.
+		return t.metadata.setFlushOffset(uint64(size), true)
+
+	case size == int64(t.metadata.flushOffset):
+		// flushOffset is aligned with the index file, all is well.
 		return nil
-	}
-	// Extra index items have been detected beyond the flush offset. Since these
-	// entries correspond to data that has not been fully flushed to disk in the
-	// last run (because of unclean shutdown), their integrity cannot be guaranteed.
-	// To ensure consistency, these index items will be truncated, as there is no
-	// reliable way to validate or recover their associated data.
-	if offset > int64(t.metadata.flushOffset) {
-		size := offset - int64(t.metadata.flushOffset)
+
+	case size > int64(t.metadata.flushOffset):
+		// Extra index items have been detected beyond the flush offset. Since these
+		// entries correspond to data that has not been fully flushed to disk in the
+		// last run (because of unclean shutdown), their integrity cannot be guaranteed.
+		// To ensure consistency, these index items will be truncated, as there is no
+		// reliable way to validate or recover their associated data.
+		extraSize := size - int64(t.metadata.flushOffset)
 		if t.readonly {
-			return fmt.Errorf("index file(path: %s, name: %s) contains garbage data %d", t.path, t.name, size)
+			return fmt.Errorf("index file(path: %s, name: %s) contains %d garbage data bytes", t.path, t.name, extraSize)
 		}
-		t.logger.Info("Truncate excessive items", "size", size)
+		t.logger.Warn("Truncating freezer items after flushOffset", "size", extraSize)
 		return truncateFreezerFile(t.index, int64(t.metadata.flushOffset))
+
+	default: // size < flushOffset
+		// Flush offset refers to a position larger than index file. The only
+		// possible scenario for this is: a power failure or system crash has occurred after
+		// truncating the segment in index file from head or tail, but without updating
+		// the flush offset. In this case, automatically reset the flush offset with
+		// the file size which implies the entire index file is complete.
+		if t.readonly {
+			return nil // do nothing in read only mode
+		}
+		t.logger.Warn("Rewinding freezer flushOffset", "old", t.metadata.flushOffset, "new", size)
+		return t.metadata.setFlushOffset(uint64(size), true)
 	}
-	// Flush offset refers to the position which exceeds the index file. The only
-	// possible scenario for this is: power failure or system crash occurs after
-	// truncating the segment in index file from head or tail, but without updating
-	// the flush offset. In this case, automatically reset the flush offset with
-	// the file size which implies the entire index file is complete.
-	if t.readonly {
-		return nil // do nothing in read only mode
-	}
-	t.logger.Info("Rewind the flush offset", "old", t.metadata.flushOffset, "new", offset)
-	return t.metadata.setFlushOffset(uint64(offset), true)
 }
 
 // checkIndex validates the integrity of the index file. According to the design,
