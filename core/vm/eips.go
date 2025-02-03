@@ -339,7 +339,7 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.GetCode(addr)
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-	if !isSystemCall(AccountRef(addr)) {
+	if !isSystemContract(addr) {
 		statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false)
 		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
 			scope.Contract.Gas = 0
