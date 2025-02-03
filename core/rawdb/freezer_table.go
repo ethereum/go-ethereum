@@ -754,7 +754,7 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	//
 	// Therefore, forcibly flush everything above the offset to ensure this
 	// assumption is satisfied!
-	if err := t.syncWithNoLock(); err != nil {
+	if err := t.doSync(); err != nil {
 		return err
 	}
 	// Count how many items can be deleted from the file.
@@ -835,7 +835,7 @@ func (t *freezerTable) Close() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	if err := t.syncWithNoLock(); err != nil {
+	if err := t.doSync(); err != nil {
 		return err
 	}
 	var errs []error
@@ -1135,7 +1135,7 @@ func (t *freezerTable) advanceHead() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	if err := t.syncWithNoLock(); err != nil {
+	if err := t.doSync(); err != nil {
 		return err
 	}
 	// We open the next file in truncated mode -- if this file already
@@ -1166,12 +1166,11 @@ func (t *freezerTable) Sync() error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	return t.syncWithNoLock()
+	return t.doSync()
 }
 
-// syncWithNoLock is the internal version of Sync which assumes the lock is
-// already held.
-func (t *freezerTable) syncWithNoLock() error {
+// doSync is the internal version of Sync which assumes the lock is already held.
+func (t *freezerTable) doSync() error {
 	// Trying to fsync a file opened in rdonly causes "Access denied"
 	// error on Windows.
 	if t.readonly {
