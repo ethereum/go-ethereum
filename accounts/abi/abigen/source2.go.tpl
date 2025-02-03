@@ -37,7 +37,9 @@ var (
 	var {{.Type}}MetaData = bind.MetaData{
 		ABI: "{{.InputABI}}",
 		{{if (index $.Libraries .Type) -}}
-		Pattern: "{{index $.Libraries .Type}}",
+		Id: "{{index $.Libraries .Type}}",
+		{{ else -}}
+		Id: "{{.Type}}",
 		{{end -}}
 		{{if .InputBin -}}
 		Bin: "0x{{.InputBin}}",

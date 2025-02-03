@@ -110,7 +110,7 @@ func TestDeploymentLibraries(t *testing.T) {
 	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
 	deploymentParams := &bind.DeploymentParams{
 		Contracts: []*bind.MetaData{&nested_libraries.C1MetaData},
-		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput},
+		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Id: constructorInput},
 	}
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
@@ -129,7 +129,7 @@ func TestDeploymentLibraries(t *testing.T) {
 	}
 
 	doInput := c.PackDo(big.NewInt(1))
-	contractAddr := res.Addrs[nested_libraries.C1MetaData.Pattern]
+	contractAddr := res.Addrs[nested_libraries.C1MetaData.Id]
 	callOpts := &bind.CallOpts{From: common.Address{}, Context: context.Background()}
 	instance := c.Instance(bindBackend, contractAddr)
 	internalCallCount, err := bind.Call(instance, callOpts, doInput, c.UnpackDo)
@@ -177,7 +177,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	// deploy the contract
 	deploymentParams = &bind.DeploymentParams{
 		Contracts: []*bind.MetaData{&nested_libraries.C1MetaData},
-		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Pattern: constructorInput},
+		Inputs:    map[string][]byte{nested_libraries.C1MetaData.Id: constructorInput},
 		Overrides: overrides,
 	}
 	res, err = bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
@@ -198,7 +198,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 
 	// call the deployed contract and make sure it returns the correct result
 	doInput := c.PackDo(big.NewInt(1))
-	instance := c.Instance(bindBackend, res.Addrs[nested_libraries.C1MetaData.Pattern])
+	instance := c.Instance(bindBackend, res.Addrs[nested_libraries.C1MetaData.Id])
 	callOpts := new(bind.CallOpts)
 	internalCallCount, err := bind.Call(instance, callOpts, doInput, c.UnpackDo)
 	if err != nil {
@@ -223,12 +223,12 @@ func TestEvents(t *testing.T) {
 	}
 
 	backend.Commit()
-	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.Pattern].Hash()); err != nil {
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.Id].Hash()); err != nil {
 		t.Fatalf("WaitDeployed failed %v", err)
 	}
 
 	c := events.NewC()
-	instance := c.Instance(backend, res.Addrs[events.CMetaData.Pattern])
+	instance := c.Instance(backend, res.Addrs[events.CMetaData.Id])
 
 	newCBasic1Ch := make(chan *events.CBasic1)
 	newCBasic2Ch := make(chan *events.CBasic2)
@@ -322,14 +322,14 @@ func TestErrors(t *testing.T) {
 	}
 
 	backend.Commit()
-	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[solc_errors.CMetaData.Pattern].Hash()); err != nil {
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[solc_errors.CMetaData.Id].Hash()); err != nil {
 		t.Fatalf("WaitDeployed failed %v", err)
 	}
 
 	c := solc_errors.NewC()
-	instance := c.Instance(backend, res.Addrs[solc_errors.CMetaData.Pattern])
+	instance := c.Instance(backend, res.Addrs[solc_errors.CMetaData.Id])
 	packedInput := c.PackFoo()
-	opts := &bind.CallOpts{From: res.Addrs[solc_errors.CMetaData.Pattern]}
+	opts := &bind.CallOpts{From: res.Addrs[solc_errors.CMetaData.Id]}
 	_, err = bind.Call[struct{}](instance, opts, packedInput, nil)
 	if err == nil {
 		t.Fatalf("expected call to fail")

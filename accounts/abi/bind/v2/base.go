@@ -93,14 +93,18 @@ type MetaData struct {
 	ABI  string      // the raw ABI definition (JSON)
 	Deps []*MetaData // library dependencies of the contract
 
-	// Solidity library placeholder name. This is a unique identifier of a contract within
-	// a compilation unit. The Pattern is used to link contracts during deployment using
-	// [LinkAndDeploy].
+	// For bindings that were compiled from combined-json Id is the Solidity library pattern: a 34 character prefix
+	// of the hex encoding of the keccak256
+	// hash of the fully qualified 'library name', i.e. the path of the source file.
 	//
-	// The library pattern is a 34 character prefix of the hex encoding of the keccak256
-	// hash of the fully qualified 'library name', i.e. the path of the source file
-	// containing the library code.
-	Pattern string
+	// For contracts compiled from the ABI definition alone, this is the type name of the contract (as specified
+	// in the ABI definition or overridden via the --type flag).
+	//
+	// This is a unique identifier of a contract within a compilation unit. When used as part of a multi-contract
+	// deployment with library dependencies, the Id is used to link
+	// contracts during deployment using
+	// [LinkAndDeploy].
+	Id string
 
 	mu        sync.Mutex
 	parsedABI *abi.ABI
