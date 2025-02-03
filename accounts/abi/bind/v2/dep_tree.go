@@ -29,7 +29,7 @@ type DeploymentParams struct {
 func (d *DeploymentParams) validate() error {
 	for _, meta := range d.Contracts {
 		if meta.Bin == "" {
-			return fmt.Errorf("cannot deploy contract %s: deployer code missing from metadata", meta.Id)
+			return fmt.Errorf("cannot deploy contract %s: deployer code missing from metadata", meta.ID)
 		}
 	}
 	return nil
@@ -81,7 +81,7 @@ func newDepTreeDeployer(deployParams *DeploymentParams, deployFn DeployFn) *depT
 // The deployment result (deploy addresses/txs or an error) is stored in the depTreeDeployer object.
 func (d *depTreeDeployer) linkAndDeploy(metadata *MetaData) (common.Address, error) {
 	// Don't deploy already deployed contracts
-	if addr, ok := d.deployedAddrs[metadata.Id]; ok {
+	if addr, ok := d.deployedAddrs[metadata.ID]; ok {
 		return addr, nil
 	}
 	// if this contract/library depends on other libraries deploy them (and their dependencies) first
@@ -92,19 +92,19 @@ func (d *depTreeDeployer) linkAndDeploy(metadata *MetaData) (common.Address, err
 			return common.Address{}, err
 		}
 		// link their deployed addresses into the bytecode to produce
-		deployerCode = strings.ReplaceAll(deployerCode, "__$"+dep.Id+"$__", strings.ToLower(addr.String()[2:]))
+		deployerCode = strings.ReplaceAll(deployerCode, "__$"+dep.ID+"$__", strings.ToLower(addr.String()[2:]))
 	}
 	// Finally, deploy the contract.
 	code, err := hex.DecodeString(deployerCode[2:])
 	if err != nil {
 		panic(fmt.Sprintf("error decoding contract deployer hex %s:\n%v", deployerCode[2:], err))
 	}
-	addr, tx, err := d.deployFn(d.inputs[metadata.Id], code)
+	addr, tx, err := d.deployFn(d.inputs[metadata.ID], code)
 	if err != nil {
 		return common.Address{}, err
 	}
-	d.deployedAddrs[metadata.Id] = addr
-	d.deployerTxs[metadata.Id] = tx
+	d.deployedAddrs[metadata.ID] = addr
+	d.deployerTxs[metadata.ID] = tx
 	return addr, nil
 }
 

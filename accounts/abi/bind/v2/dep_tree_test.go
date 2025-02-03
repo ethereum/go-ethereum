@@ -50,7 +50,7 @@ func copyMetaData(m *MetaData) *MetaData {
 		Bin:       m.Bin,
 		ABI:       m.ABI,
 		Deps:      deps,
-		Id:        m.Id,
+		ID:        m.ID,
 		mu:        sync.Mutex{},
 		parsedABI: m.parsedABI,
 	}
@@ -200,12 +200,12 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 	overrides := make(map[string]common.Address)
 
 	for pattern, bin := range tc.contractCodes {
-		contracts[pattern] = &MetaData{Id: pattern, Bin: "0x" + bin}
+		contracts[pattern] = &MetaData{ID: pattern, Bin: "0x" + bin}
 	}
 	for pattern, bin := range tc.libCodes {
 		contracts[pattern] = &MetaData{
 			Bin: "0x" + bin,
-			Id:  pattern,
+			ID:  pattern,
 		}
 	}
 
