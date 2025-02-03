@@ -313,10 +313,16 @@ func (h *handler) handleNonBatchCall(cp *callProc, msg *jsonrpcMessage) {
 
 // close cancels all requests except for inflightReq and waits for
 // call goroutines to shut down.
-func (h *handler) close(err error, inflightReq *requestOp) {
+// force = true must be user only for client-side handlers.
+func (h *handler) close(err error, inflightReq *requestOp, force bool) {
 	h.cancelAllRequests(err, inflightReq)
-	h.cancelRoot()
-	h.callWG.Wait()
+	if force {
+		h.cancelRoot()
+		h.callWG.Wait()
+	} else {
+		h.callWG.Wait()
+		h.cancelRoot()
+	}
 	h.cancelServerSubscriptions(err)
 }
 

@@ -125,7 +125,7 @@ func (c *Client) newClientConn(conn ServerCodec) *clientConn {
 }
 
 func (cc *clientConn) close(err error, inflightReq *requestOp) {
-	cc.handler.close(err, inflightReq)
+	cc.handler.close(err, inflightReq, true)
 	cc.codec.close()
 }
 
