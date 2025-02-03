@@ -17,11 +17,9 @@
 package ethapi
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
@@ -120,19 +118,4 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 
 func newInt(n int64) *hexutil.Big {
 	return (*hexutil.Big)(big.NewInt(n))
-}
-
-func TestHeaderPassing(t *testing.T) {
-	sl := []*types.Header{new(types.Header)}
-	procHeader(sl[0])
-	fmt.Printf("sl[0].Number: %v\n", sl[0].Number)
-	fmt.Printf("sl[0].ParentHash: %v\n", sl[0].ParentHash)
-	if sl[0].Number.Cmp(big.NewInt(100)) != 0 {
-		t.Errorf("Header not processed")
-	}
-}
-
-func procHeader(h *types.Header) {
-	h.Number = big.NewInt(100)
-	h.ParentHash = common.HexToHash("0x1")
 }
