@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -460,7 +461,13 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		head.GasLimit = params.GenesisGasLimit
 	}
 	if g.Difficulty == nil && g.Mixhash == (common.Hash{}) {
-		head.Difficulty = params.GenesisDifficulty
+		if g.Config.LatestFork(g.Timestamp) >= forks.Shanghai {
+			// If chain is merged at genesis, set difficulty to zero.
+			head.Difficulty = big.NewInt(0)
+		} else {
+			// In case chain is not merged at genesis, set default genesis difficulty.
+			head.Difficulty = params.GenesisDifficulty
+		}
 	}
 	if g.Config != nil && g.Config.IsLondon(common.Big0) {
 		if g.BaseFee != nil {
