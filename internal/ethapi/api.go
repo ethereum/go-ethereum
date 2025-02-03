@@ -1746,9 +1746,9 @@ func (api *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (h
 
 // PrintBlock retrieves a block and returns its pretty printed form.
 func (api *DebugAPI) PrintBlock(ctx context.Context, number uint64) (string, error) {
-	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
-	if block == nil {
-		return "", fmt.Errorf("block #%d not found", number)
+	block, err := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
+	if err != nil {
+		return "", err
 	}
 	return spew.Sdump(block), nil
 }
