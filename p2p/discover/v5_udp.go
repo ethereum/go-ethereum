@@ -600,25 +600,30 @@ func (t *UDPv5) dispatch() {
 			t.sendNextCall(c.id)
 
 		case r := <-t.sendCh:
-			// make send request by another thread also be cached to handle WHOAREYOU
-			c := &callV5{id: r.destID, addr: r.destAddr}
-			c.node = r.destNode
-			c.packet = r.msg
-			c.reqid = make([]byte, 8)
-			c.ch = make(chan v5wire.Packet, 1)
-			c.err = make(chan error, 1)
-			// Assign request ID.
-			if tq, ok := r.msg.(*v5wire.TalkRequest); ok {
-				if len(tq.ReqID) == 0 {
-					crand.Read(c.reqid)
-					c.packet.SetRequestID(c.reqid)
+			if _, ok := r.msg.(*v5wire.TalkResponse); ok {
+				// send a TalkResponse out
+				t.send(r.destID, r.destAddr, r.msg, nil)
+			} else {
+				// send out a TalkRequest that is a UTP packet for portal network
+				// request should be cached to handle WHOAREYOU
+				c := &callV5{id: r.destID, addr: r.destAddr}
+				c.node = r.destNode
+				c.packet = r.msg
+				c.reqid = make([]byte, 8)
+				c.ch = make(chan v5wire.Packet, 1)
+				c.err = make(chan error, 1)
+				// Assign request ID.
+				if tq, ok := r.msg.(*v5wire.TalkRequest); ok {
+					if len(tq.ReqID) == 0 {
+						crand.Read(c.reqid)
+						c.packet.SetRequestID(c.reqid)
+					}
 				}
+				nonce, _ := t.send(c.id, c.addr, c.packet, nil)
+				c.nonce = nonce
+				t.activeCallByAuth[nonce] = c
+				t.startResponseTimeout(c)
 			}
-			nonce, _ := t.send(c.id, c.addr, c.packet, nil)
-			c.nonce = nonce
-			t.activeCallByAuth[nonce] = c
-			t.startResponseTimeout(c)
-
 		case p := <-t.packetInCh:
 			t.handlePacket(p.Data, p.Addr)
 			// Arm next read.
