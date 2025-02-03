@@ -320,8 +320,8 @@ func (t *freezerTable) repair() error {
 			// offset is updated, leaving a dangling reference that points to a position
 			// outside the file. If so, the offset will be reset to the new end of the
 			// file during the next run.
-			if t.metadata.flushOffset > uint64(newOffset) {
-				if err := t.metadata.setFlushOffset(uint64(newOffset), true); err != nil {
+			if t.metadata.flushOffset > newOffset {
+				if err := t.metadata.setFlushOffset(newOffset, true); err != nil {
 					return err
 				}
 			}
@@ -406,31 +406,31 @@ func (t *freezerTable) repairIndex() error {
 	// index file to avoid clearing the entire table.
 	if t.metadata.version == freezerTableV1 {
 		t.logger.Info("Recovering freezer flushOffset for legacy table", "offset", size)
-		return t.metadata.setFlushOffset(uint64(size), true)
+		return t.metadata.setFlushOffset(size, true)
 	}
 
 	switch {
 	case size == indexEntrySize && t.metadata.flushOffset == 0:
 		// It's a new freezer table with no content.
 		// Move the flush offset to the end of the file.
-		return t.metadata.setFlushOffset(uint64(size), true)
+		return t.metadata.setFlushOffset(size, true)
 
-	case size == int64(t.metadata.flushOffset):
+	case size == t.metadata.flushOffset:
 		// flushOffset is aligned with the index file, all is well.
 		return nil
 
-	case size > int64(t.metadata.flushOffset):
+	case size > t.metadata.flushOffset:
 		// Extra index items have been detected beyond the flush offset. Since these
 		// entries correspond to data that has not been fully flushed to disk in the
 		// last run (because of unclean shutdown), their integrity cannot be guaranteed.
 		// To ensure consistency, these index items will be truncated, as there is no
 		// reliable way to validate or recover their associated data.
-		extraSize := size - int64(t.metadata.flushOffset)
+		extraSize := size - t.metadata.flushOffset
 		if t.readonly {
 			return fmt.Errorf("index file(path: %s, name: %s) contains %d garbage data bytes", t.path, t.name, extraSize)
 		}
 		t.logger.Warn("Truncating freezer items after flushOffset", "size", extraSize)
-		return truncateFreezerFile(t.index, int64(t.metadata.flushOffset))
+		return truncateFreezerFile(t.index, t.metadata.flushOffset)
 
 	default: // size < flushOffset
 		// Flush offset refers to a position larger than index file. The only
@@ -442,7 +442,7 @@ func (t *freezerTable) repairIndex() error {
 			return nil // do nothing in read only mode
 		}
 		t.logger.Warn("Rewinding freezer flushOffset", "old", t.metadata.flushOffset, "new", size)
-		return t.metadata.setFlushOffset(uint64(size), true)
+		return t.metadata.setFlushOffset(size, true)
 	}
 }
 
@@ -629,8 +629,8 @@ func (t *freezerTable) truncateHead(items uint64) error {
 	// offset is updated, leaving a dangling reference that points to a position
 	// outside the file. If so, the offset will be reset to the new end of the
 	// file during the next run.
-	if t.metadata.flushOffset > newOffset {
-		if err := t.metadata.setFlushOffset(newOffset, true); err != nil {
+	if t.metadata.flushOffset > int64(newOffset) {
+		if err := t.metadata.setFlushOffset(int64(newOffset), true); err != nil {
 			return err
 		}
 	}
@@ -811,7 +811,7 @@ func (t *freezerTable) truncateTail(items uint64) error {
 	//
 	// Note, both the index and head data file has been persisted before performing
 	// tail truncation and all the items in these files are regarded as complete.
-	shorten := indexEntrySize * (newDeleted - deleted)
+	shorten := indexEntrySize * int64(newDeleted-deleted)
 	if t.metadata.flushOffset <= shorten {
 		return fmt.Errorf("invalid index flush offset: %d, shorten: %d", t.metadata.flushOffset, shorten)
 	} else {
@@ -1197,7 +1197,7 @@ func (t *freezerTable) syncWithNoLock() error {
 		return err
 	}
 	offset := stat.Size()
-	trackError(t.metadata.setFlushOffset(uint64(offset), true))
+	trackError(t.metadata.setFlushOffset(offset, true))
 	return err
 }
 

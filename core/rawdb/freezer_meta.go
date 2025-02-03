@@ -19,8 +19,10 @@ package rawdb
 import (
 	"errors"
 	"io"
+	"math"
 	"os"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -62,7 +64,7 @@ type freezerTableMeta struct {
 	//
 	// The offset could be moved forward by applying sync operation, or be moved
 	// backward in cases of head/tail truncation, etc.
-	flushOffset uint64
+	flushOffset int64
 }
 
 // decodeV1 attempts to decode the metadata structure in v1 format. If fails or
@@ -109,11 +111,15 @@ func decodeV2(file *os.File) *freezerTableMeta {
 	if o.Version != freezerTableV2 {
 		return nil
 	}
+	if o.Offset > math.MaxInt64 {
+		log.Error("Invalid flushOffset %d in freezer metadata", o.Offset, "file", file.Name())
+		return nil
+	}
 	return &freezerTableMeta{
 		file:        file,
 		version:     freezerTableV2,
 		virtualTail: o.Tail,
-		flushOffset: o.Offset,
+		flushOffset: int64(o.Offset),
 	}
 }
 
@@ -152,7 +158,7 @@ func (m *freezerTableMeta) setVirtualTail(tail uint64, sync bool) error {
 }
 
 // setFlushOffset sets the flush offset and flushes the metadata if sync is true.
-func (m *freezerTableMeta) setFlushOffset(offset uint64, sync bool) error {
+func (m *freezerTableMeta) setFlushOffset(offset int64, sync bool) error {
 	m.flushOffset = offset
 	return m.write(sync)
 }
@@ -167,7 +173,7 @@ func (m *freezerTableMeta) write(sync bool) error {
 	var o obj
 	o.Version = freezerVersion // forcibly use the current version
 	o.Tail = m.virtualTail
-	o.Offset = m.flushOffset
+	o.Offset = uint64(m.flushOffset)
 
 	_, err := m.file.Seek(0, io.SeekStart)
 	if err != nil {

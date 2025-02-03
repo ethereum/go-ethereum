@@ -1432,7 +1432,7 @@ func TestFlushOffsetTracking(t *testing.T) {
 
 	var cases = []struct {
 		op     func(*freezerTable)
-		offset uint64
+		offset int64
 	}{
 		{
 			// Data files:

@@ -79,7 +79,7 @@ func TestUpgradeMetadata(t *testing.T) {
 	if meta.virtualTail != uint64(100) {
 		t.Fatal("Unexpected virtual tail field")
 	}
-	if meta.flushOffset != uint64(0) {
+	if meta.flushOffset != 0 {
 		t.Fatal("Unexpected flush offset field")
 	}
 
@@ -95,7 +95,7 @@ func TestUpgradeMetadata(t *testing.T) {
 	if meta.virtualTail != uint64(100) {
 		t.Fatal("Unexpected virtual tail field")
 	}
-	if meta.flushOffset != uint64(100) {
+	if meta.flushOffset != 100 {
 		t.Fatal("Unexpected flush offset field")
 	}
 }
