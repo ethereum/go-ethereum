@@ -773,8 +773,14 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "prague", timestamp: c.PragueTime, config: bsc.Prague},
 		{name: "verkle", timestamp: c.VerkleTime, config: bsc.Verkle},
 	} {
-		if cur.timestamp != nil && cur.config == nil {
-			return fmt.Errorf("unsupported fork configuration: missing blob configuration entry for %v in schedule", cur.name)
+		if cur.timestamp != nil {
+			// If the fork is configured, verify the blob schedule is valid.
+			if cur.config == nil {
+				return fmt.Errorf("unsupported fork configuration: missing blob configuration entry for %v in schedule", cur.name)
+			}
+			if cur.config.UpdateFraction == 0 {
+				return fmt.Errorf("unsupported fork configuration: %v update fraction must be defined and non-zero", cur.name)
+			}
 		}
 	}
 
