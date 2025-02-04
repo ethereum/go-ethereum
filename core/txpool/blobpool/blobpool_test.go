@@ -142,6 +142,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		GasLimit:      gasLimit,
 		BaseFee:       baseFee,
 		ExcessBlobGas: &excessBlobGas,
+		Difficulty:    common.Big0,
 	}
 }
 
