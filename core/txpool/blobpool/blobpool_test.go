@@ -1108,7 +1108,7 @@ func TestChangingSlotterSize(t *testing.T) {
 
 		// Try to add the big blob tx. In the initial iteration it should overflow
 		// the pool. On the subsequent iteration it should be accepted.
-		errs := pool.Add([]*types.Transaction{tx3}, false, true)
+		errs := pool.Add([]*types.Transaction{tx3}, true)
 		if _, ok := pool.index[addr3]; ok && maxBlobs == 6 {
 			t.Errorf("expected insert of oversized blob tx to fail: blobs=24, maxBlobs=%d, err=%v", maxBlobs, errs[0])
 		} else if !ok && maxBlobs == 10 {
