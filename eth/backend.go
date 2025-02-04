@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/shutdowncheck"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
@@ -56,6 +57,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	gethversion "github.com/ethereum/go-ethereum/version"
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -172,7 +174,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	if !config.SkipBcVersionCheck {
 		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
-			return nil, fmt.Errorf("database version is v%d, Geth %s only supports v%d", *bcVersion, params.VersionWithMeta, core.BlockChainVersion)
+			return nil, fmt.Errorf("database version is v%d, Geth %s only supports v%d", *bcVersion, version.WithMeta, core.BlockChainVersion)
 		} else if bcVersion == nil || *bcVersion < core.BlockChainVersion {
 			if bcVersion != nil { // only print warning on upgrade, not on init
 				log.Warn("Upgrade blockchain database version", "from", dbVer, "to", core.BlockChainVersion)
@@ -197,7 +199,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	)
 	if config.VMTrace != "" {
-		var traceConfig json.RawMessage
+		traceConfig := json.RawMessage("{}")
 		if config.VMTraceJsonConfig != "" {
 			traceConfig = json.RawMessage(config.VMTraceJsonConfig)
 		}
@@ -278,7 +280,7 @@ func makeExtraData(extra []byte) []byte {
 	if len(extra) == 0 {
 		// create default extradata
 		extra, _ = rlp.EncodeToBytes([]interface{}{
-			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
+			uint(gethversion.Major<<16 | gethversion.Minor<<8 | gethversion.Patch),
 			"geth",
 			runtime.Version(),
 			runtime.GOOS,
@@ -422,17 +424,17 @@ func (s *Ethereum) Stop() error {
 
 // SyncMode retrieves the current sync mode, either explicitly set, or derived
 // from the chain status.
-func (s *Ethereum) SyncMode() downloader.SyncMode {
+func (s *Ethereum) SyncMode() ethconfig.SyncMode {
 	// If we're in snap sync mode, return that directly
 	if s.handler.snapSync.Load() {
-		return downloader.SnapSync
+		return ethconfig.SnapSync
 	}
 	// We are probably in full sync, but we might have rewound to before the
 	// snap sync pivot, check if we should re-enable snap sync.
 	head := s.blockchain.CurrentBlock()
 	if pivot := rawdb.ReadLastPivotNumber(s.chainDb); pivot != nil {
 		if head.Number.Uint64() < *pivot {
-			return downloader.SnapSync
+			return ethconfig.SnapSync
 		}
 	}
 	// We are in a full sync, but the associated head state is missing. To complete
@@ -440,8 +442,8 @@ func (s *Ethereum) SyncMode() downloader.SyncMode {
 	// persistent state is corrupted, just mismatch with the head block.
 	if !s.blockchain.HasState(head.Root) {
 		log.Info("Reenabled snap sync as chain is stateless")
-		return downloader.SnapSync
+		return ethconfig.SnapSync
 	}
 	// Nope, we're really full syncing
-	return downloader.FullSync
+	return ethconfig.FullSync
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -625,7 +626,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) erro
 
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
-func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
+func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 	opts := &txpool.ValidationOptionsWithState{
 		State: pool.currentState,
 
@@ -681,7 +682,7 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 	isLocal := local || pool.locals.containsTx(tx)
 
 	// If the transaction fails basic validation, discard it
-	if err := pool.validateTx(tx, isLocal); err != nil {
+	if err := pool.validateTx(tx); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
 		return false, err
@@ -1077,6 +1078,12 @@ func (pool *LegacyPool) get(hash common.Hash) *types.Transaction {
 	return pool.all.Get(hash)
 }
 
+// GetBlobs is not supported by the legacy transaction pool, it is just here to
+// implement the txpool.SubPool interface.
+func (pool *LegacyPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
+	return nil, nil
+}
+
 // Has returns an indicator whether txpool has a transaction cached with the
 // given hash.
 func (pool *LegacyPool) Has(hash common.Hash) bool {
@@ -1433,7 +1440,7 @@ func (pool *LegacyPool) reset(oldHead, newHead *types.Header) {
 
 	// Inject any transactions discarded due to reorgs
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
-	core.SenderCacher.Recover(pool.signer, reinject)
+	core.SenderCacher().Recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject, false)
 }
 
@@ -1953,4 +1960,46 @@ func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 // numSlots calculates the number of slots needed for a single transaction.
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+}
+
+// Clear implements txpool.SubPool, removing all tracked txs from the pool
+// and rotating the journal.
+func (pool *LegacyPool) Clear() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// unreserve each tracked account.  Ideally, we could just clear the
+	// reservation map in the parent txpool context.  However, if we clear in
+	// parent context, to avoid exposing the subpool lock, we have to lock the
+	// reservations and then lock each subpool.
+	//
+	// This creates the potential for a deadlock situation:
+	//
+	// * TxPool.Clear locks the reservations
+	// * a new transaction is received which locks the subpool mutex
+	// * TxPool.Clear attempts to lock subpool mutex
+	//
+	// The transaction addition may attempt to reserve the sender addr which
+	// can't happen until Clear releases the reservation lock.  Clear cannot
+	// acquire the subpool lock until the transaction addition is completed.
+	for _, tx := range pool.all.remotes {
+		senderAddr, _ := types.Sender(pool.signer, tx)
+		pool.reserve(senderAddr, false)
+	}
+	for localSender := range pool.locals.accounts {
+		pool.reserve(localSender, false)
+	}
+
+	pool.all = newLookup()
+	pool.priced = newPricedList(pool.all)
+	pool.pending = make(map[common.Address]*list)
+	pool.queue = make(map[common.Address]*list)
+	pool.pendingNonces = newNoncer(pool.currentState)
+
+	if !pool.config.NoLocals && pool.config.Journal != "" {
+		pool.journal = newTxJournal(pool.config.Journal)
+		if err := pool.journal.rotate(pool.local()); err != nil {
+			log.Warn("Failed to rotate transaction journal", "err", err)
+		}
+	}
 }

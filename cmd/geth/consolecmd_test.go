@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/internal/version"
 )
 
 const (
@@ -60,7 +60,7 @@ func TestConsoleWelcome(t *testing.T) {
 	geth.SetTemplateFunc("goos", func() string { return runtime.GOOS })
 	geth.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	geth.SetTemplateFunc("gover", runtime.Version)
-	geth.SetTemplateFunc("gethver", func() string { return params.VersionWithCommit("", "") })
+	geth.SetTemplateFunc("gethver", func() string { return version.WithCommit("", "") })
 	geth.SetTemplateFunc("niltime", func() string {
 		return time.Unix(1695902100, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
 	})
@@ -129,7 +129,7 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {
 	attach.SetTemplateFunc("goos", func() string { return runtime.GOOS })
 	attach.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	attach.SetTemplateFunc("gover", runtime.Version)
-	attach.SetTemplateFunc("gethver", func() string { return params.VersionWithCommit("", "") })
+	attach.SetTemplateFunc("gethver", func() string { return version.WithCommit("", "") })
 	attach.SetTemplateFunc("niltime", func() string {
 		return time.Unix(1695902100, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
 	})

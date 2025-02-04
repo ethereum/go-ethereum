@@ -188,6 +188,14 @@ func (h *hasher) hashData(data []byte) hashNode {
 	return n
 }
 
+// hashDataTo hashes the provided data to the given destination buffer. The caller
+// must ensure that the dst buffer is of appropriate size.
+func (h *hasher) hashDataTo(dst, data []byte) {
+	h.sha.Reset()
+	h.sha.Write(data)
+	h.sha.Read(dst)
+}
+
 // proofHash is used to construct trie proofs, and returns the 'collapsed'
 // node (for later RLP encoding) as well as the hashed node -- unless the
 // node is smaller than 32 bytes, in which case it will be returned as is.

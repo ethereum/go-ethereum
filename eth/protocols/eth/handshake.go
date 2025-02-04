@@ -36,7 +36,7 @@ const (
 
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
+func (p *Peer) Handshake(network uint64, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
 	// Send out own handshake in a new thread
 	errc := make(chan error, 2)
 
@@ -46,7 +46,7 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 		errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
 			ProtocolVersion: uint32(p.version),
 			NetworkID:       network,
-			TD:              td,
+			TD:              new(big.Int), // unknown for post-merge tail=pruned networks
 			Head:            head,
 			Genesis:         genesis,
 			ForkID:          forkID,
@@ -68,13 +68,6 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 			markError(p, p2p.DiscReadTimeout)
 			return p2p.DiscReadTimeout
 		}
-	}
-	p.td, p.head = status.TD, status.Head
-
-	// TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
-	// larger, it will still fit within 100 bits
-	if tdlen := p.td.BitLen(); tdlen > 100 {
-		return fmt.Errorf("too large total difficulty: bitlen %d", tdlen)
 	}
 	return nil
 }
@@ -112,7 +105,7 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 
 // markError registers the error with the corresponding metric.
 func markError(p *Peer, err error) {
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return
 	}
 	m := meters.get(p.Inbound())

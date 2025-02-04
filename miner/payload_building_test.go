@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -114,9 +113,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	case *clique.Clique:
 		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
 		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
-		e.Authorize(testBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
-			return crypto.Sign(crypto.Keccak256(data), testBankKey)
-		})
+		e.Authorize(testBankAddress)
 	case *ethash.Ethash:
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)

@@ -83,7 +83,7 @@ type Config struct {
 	// scrypt KDF at the expense of security.
 	UseLightweightKDF bool `toml:",omitempty"`
 
-	// InsecureUnlockAllowed allows user to unlock accounts in unsafe http environment.
+	// InsecureUnlockAllowed is a deprecated option to  allow users to accounts in unsafe http environment.
 	InsecureUnlockAllowed bool `toml:",omitempty"`
 
 	// NoUSB disables hardware wallet monitoring and connectivity.

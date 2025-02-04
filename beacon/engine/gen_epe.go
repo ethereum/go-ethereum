@@ -20,7 +20,7 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 		BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
 		Requests         []hexutil.Bytes `json:"executionRequests"`
 		Override         bool            `json:"shouldOverrideBuilder"`
-		Witness          *hexutil.Bytes  `json:"witness"`
+		Witness          *hexutil.Bytes  `json:"witness,omitempty"`
 	}
 	var enc ExecutionPayloadEnvelope
 	enc.ExecutionPayload = e.ExecutionPayload
@@ -45,7 +45,7 @@ func (e *ExecutionPayloadEnvelope) UnmarshalJSON(input []byte) error {
 		BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
 		Requests         []hexutil.Bytes `json:"executionRequests"`
 		Override         *bool           `json:"shouldOverrideBuilder"`
-		Witness          *hexutil.Bytes  `json:"witness"`
+		Witness          *hexutil.Bytes  `json:"witness,omitempty"`
 	}
 	var dec ExecutionPayloadEnvelope
 	if err := json.Unmarshal(input, &dec); err != nil {

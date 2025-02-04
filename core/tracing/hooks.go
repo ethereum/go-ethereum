@@ -42,6 +42,7 @@ type StateDB interface {
 	GetBalance(common.Address) *uint256.Int
 	GetNonce(common.Address) uint64
 	GetCode(common.Address) []byte
+	GetCodeHash(common.Address) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	GetTransientState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
@@ -54,9 +55,7 @@ type VMContext struct {
 	BlockNumber *big.Int
 	Time        uint64
 	Random      *common.Hash
-	// Effective tx gas price
-	GasPrice    *big.Int
-	ChainConfig *params.ChainConfig
+	BaseFee     *big.Int
 	StateDB     StateDB
 }
 
@@ -64,7 +63,6 @@ type VMContext struct {
 // It contains the block as well as consensus related information.
 type BlockEvent struct {
 	Block     *types.Block
-	TD        *big.Int
 	Finalized *types.Header
 	Safe      *types.Header
 }
@@ -146,6 +144,10 @@ type (
 	// will not be invoked.
 	OnSystemCallStartHook = func()
 
+	// OnSystemCallStartHookV2 is called when a system call is about to be executed. Refer
+	// to `OnSystemCallStartHook` for more information.
+	OnSystemCallStartHookV2 = func(vm *VMContext)
+
 	// OnSystemCallEndHook is called when a system call has finished executing. Today,
 	// this hook is invoked when the EIP-4788 system call is about to be executed to set the
 	// beacon block root.
@@ -181,14 +183,15 @@ type Hooks struct {
 	OnFault     FaultHook
 	OnGasChange GasChangeHook
 	// Chain events
-	OnBlockchainInit  BlockchainInitHook
-	OnClose           CloseHook
-	OnBlockStart      BlockStartHook
-	OnBlockEnd        BlockEndHook
-	OnSkippedBlock    SkippedBlockHook
-	OnGenesisBlock    GenesisBlockHook
-	OnSystemCallStart OnSystemCallStartHook
-	OnSystemCallEnd   OnSystemCallEndHook
+	OnBlockchainInit    BlockchainInitHook
+	OnClose             CloseHook
+	OnBlockStart        BlockStartHook
+	OnBlockEnd          BlockEndHook
+	OnSkippedBlock      SkippedBlockHook
+	OnGenesisBlock      GenesisBlockHook
+	OnSystemCallStart   OnSystemCallStartHook
+	OnSystemCallStartV2 OnSystemCallStartHookV2
+	OnSystemCallEnd     OnSystemCallEndHook
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
@@ -289,7 +292,7 @@ const (
 	GasChangeCallLeftOverRefunded GasChangeReason = 7
 	// GasChangeCallContractCreation is the amount of gas that will be burned for a CREATE.
 	GasChangeCallContractCreation GasChangeReason = 8
-	// GasChangeContractCreation is the amount of gas that will be burned for a CREATE2.
+	// GasChangeCallContractCreation2 is the amount of gas that will be burned for a CREATE2.
 	GasChangeCallContractCreation2 GasChangeReason = 9
 	// GasChangeCallCodeStorage is the amount of gas that will be charged for code storage.
 	GasChangeCallCodeStorage GasChangeReason = 10
@@ -310,6 +313,9 @@ const (
 	GasChangeWitnessCodeChunk GasChangeReason = 17
 	// GasChangeWitnessContractCollisionCheck flags the event of adding to the witness when checking for contract address collision.
 	GasChangeWitnessContractCollisionCheck GasChangeReason = 18
+	// GasChangeTxDataFloor is the amount of extra gas the transaction has to pay to reach the minimum gas requirement for the
+	// transaction data. This change will always be a negative change.
+	GasChangeTxDataFloor GasChangeReason = 19
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.

@@ -64,15 +64,15 @@ func (c *OpenTSDBConfig) writeRegistry(w io.Writer, now int64, shortHostname str
 
 	c.Registry.Each(func(name string, i interface{}) {
 		switch metric := i.(type) {
-		case Counter:
+		case *Counter:
 			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)
-		case CounterFloat64:
+		case *CounterFloat64:
 			fmt.Fprintf(w, "put %s.%s.count %d %f host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)
-		case Gauge:
+		case *Gauge:
 			fmt.Fprintf(w, "put %s.%s.value %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Value(), shortHostname)
-		case GaugeFloat64:
+		case *GaugeFloat64:
 			fmt.Fprintf(w, "put %s.%s.value %d %f host=%s\n", c.Prefix, name, now, metric.Snapshot().Value(), shortHostname)
-		case GaugeInfo:
+		case *GaugeInfo:
 			fmt.Fprintf(w, "put %s.%s.value %d %s host=%s\n", c.Prefix, name, now, metric.Snapshot().Value().String(), shortHostname)
 		case Histogram:
 			h := metric.Snapshot()
@@ -87,14 +87,14 @@ func (c *OpenTSDBConfig) writeRegistry(w io.Writer, now int64, shortHostname str
 			fmt.Fprintf(w, "put %s.%s.95-percentile %d %.2f host=%s\n", c.Prefix, name, now, ps[2], shortHostname)
 			fmt.Fprintf(w, "put %s.%s.99-percentile %d %.2f host=%s\n", c.Prefix, name, now, ps[3], shortHostname)
 			fmt.Fprintf(w, "put %s.%s.999-percentile %d %.2f host=%s\n", c.Prefix, name, now, ps[4], shortHostname)
-		case Meter:
+		case *Meter:
 			m := metric.Snapshot()
 			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, m.Count(), shortHostname)
 			fmt.Fprintf(w, "put %s.%s.one-minute %d %.2f host=%s\n", c.Prefix, name, now, m.Rate1(), shortHostname)
 			fmt.Fprintf(w, "put %s.%s.five-minute %d %.2f host=%s\n", c.Prefix, name, now, m.Rate5(), shortHostname)
 			fmt.Fprintf(w, "put %s.%s.fifteen-minute %d %.2f host=%s\n", c.Prefix, name, now, m.Rate15(), shortHostname)
 			fmt.Fprintf(w, "put %s.%s.mean %d %.2f host=%s\n", c.Prefix, name, now, m.RateMean(), shortHostname)
-		case Timer:
+		case *Timer:
 			t := metric.Snapshot()
 			ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 			fmt.Fprintf(w, "put %s.%s.count %d %d host=%s\n", c.Prefix, name, now, t.Count(), shortHostname)

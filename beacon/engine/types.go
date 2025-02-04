@@ -109,13 +109,18 @@ type ExecutionPayloadEnvelope struct {
 	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
 	Requests         [][]byte        `json:"executionRequests"`
 	Override         bool            `json:"shouldOverrideBuilder"`
-	Witness          *hexutil.Bytes  `json:"witness"`
+	Witness          *hexutil.Bytes  `json:"witness,omitempty"`
 }
 
 type BlobsBundleV1 struct {
 	Commitments []hexutil.Bytes `json:"commitments"`
 	Proofs      []hexutil.Bytes `json:"proofs"`
 	Blobs       []hexutil.Bytes `json:"blobs"`
+}
+
+type BlobAndProofV1 struct {
+	Blob  hexutil.Bytes `json:"blob"`
+	Proof hexutil.Bytes `json:"proof"`
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.
@@ -294,7 +299,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar) *ExecutionPayloadEnvelope {
+func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar, requests [][]byte) *ExecutionPayloadEnvelope {
 	data := &ExecutableData{
 		BlockHash:        block.Hash(),
 		ParentHash:       block.ParentHash(),
@@ -315,6 +320,8 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		ExcessBlobGas:    block.ExcessBlobGas(),
 		ExecutionWitness: block.ExecutionWitness(),
 	}
+
+	// Add blobs.
 	bundle := BlobsBundleV1{
 		Commitments: make([]hexutil.Bytes, 0),
 		Blobs:       make([]hexutil.Bytes, 0),
@@ -327,7 +334,14 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(sidecar.Proofs[j][:]))
 		}
 	}
-	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees, BlobsBundle: &bundle, Override: false}
+
+	return &ExecutionPayloadEnvelope{
+		ExecutionPayload: data,
+		BlockValue:       fees,
+		BlobsBundle:      &bundle,
+		Requests:         requests,
+		Override:         false,
+	}
 }
 
 // ExecutionPayloadBody is used in the response to GetPayloadBodiesByHash and GetPayloadBodiesByRange

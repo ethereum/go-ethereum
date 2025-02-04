@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -85,10 +85,10 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	time.Sleep(250 * time.Millisecond)
 
 	// Check that snap sync was disabled
-	if err := empty.handler.downloader.BeaconSync(downloader.SnapSync, full.chain.CurrentBlock(), nil); err != nil {
+	if err := empty.handler.downloader.BeaconSync(ethconfig.SnapSync, full.chain.CurrentBlock(), nil); err != nil {
 		t.Fatal("sync failed:", err)
 	}
-	empty.handler.enableSyncedFeatures()
+	time.Sleep(time.Second * 5) // Downloader internally has to wait a timer (3s) to be expired before exiting
 
 	if empty.handler.snapSync.Load() {
 		t.Fatalf("snap sync not disabled after successful synchronisation")

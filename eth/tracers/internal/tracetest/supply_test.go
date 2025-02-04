@@ -86,7 +86,7 @@ func TestSupplyOmittedFields(t *testing.T) {
 
 	expected := supplyInfo{
 		Number:     0,
-		Hash:       common.HexToHash("0x52f276d96f0afaaf2c3cb358868bdc2779c4b0cb8de3e7e5302e247c0b66a703"),
+		Hash:       common.HexToHash("0x3055fc27d6b4a08eb07033a0d1ee755a4b2988086f28a6189eac1b507525eeb1"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 	actual := out[expected.Number]
@@ -544,9 +544,8 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 }
 
 func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, *core.BlockChain, error) {
-	var (
-		engine = beacon.New(ethash.NewFaker())
-	)
+	engine := beacon.New(ethash.NewFaker())
+	engine.TestingTTDBlock(1)
 
 	traceOutputPath := filepath.ToSlash(t.TempDir())
 	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
@@ -597,6 +596,7 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 }
 
 func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
+	t.Helper()
 	want, err := json.Marshal(expected)
 	if err != nil {
 		t.Fatalf("failed to marshal expected value to JSON: %v", err)
@@ -608,6 +608,6 @@ func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
 	}
 
 	if !bytes.Equal(want, have) {
-		t.Fatalf("incorrect supply info: expected %s, got %s", string(want), string(have))
+		t.Fatalf("incorrect supply info:\nwant %s\nhave %s", string(want), string(have))
 	}
 }

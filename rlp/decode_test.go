@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	gomath "math"
 	"math/big"
 	"reflect"
 	"strings"
@@ -307,7 +308,6 @@ func TestStreamReadBytes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		name := fmt.Sprintf("input_%s/size_%d", test.input, test.size)
 		t.Run(name, func(t *testing.T) {
 			s := NewStream(bytes.NewReader(unhex(test.input)), 0)
@@ -556,7 +556,7 @@ var decodeTests = []decodeTest{
 	// uint256
 	{input: "80", ptr: new(*uint256.Int), value: uint256.NewInt(0)},
 	{input: "01", ptr: new(*uint256.Int), value: uint256.NewInt(1)},
-	{input: "88FFFFFFFFFFFFFFFF", ptr: new(*uint256.Int), value: uint256.NewInt(math.MaxUint64)},
+	{input: "88FFFFFFFFFFFFFFFF", ptr: new(*uint256.Int), value: uint256.NewInt(gomath.MaxUint64)},
 	{input: "89FFFFFFFFFFFFFFFFFF", ptr: new(*uint256.Int), value: veryBigInt256},
 	{input: "10", ptr: new(uint256.Int), value: *uint256.NewInt(16)}, // non-pointer also works
 

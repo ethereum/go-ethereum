@@ -18,7 +18,6 @@ package vm
 
 import (
 	"encoding/hex"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -95,7 +94,6 @@ func TestEOFSubcontainer(t *testing.T) {
 	if err := got.UnmarshalBinary(b, true); err != nil {
 		t.Fatal(err)
 	}
-	fmt.Print(got)
 	if res := got.MarshalBinary(); !reflect.DeepEqual(res, b) {
 		t.Fatalf("invalid marshalling, want %v got %v", b, res)
 	}

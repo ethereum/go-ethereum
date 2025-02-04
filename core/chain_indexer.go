@@ -222,20 +222,19 @@ func (c *ChainIndexer) eventLoop(currentHeader *types.Header, events chan ChainH
 				errc <- nil
 				return
 			}
-			header := ev.Block.Header()
-			if header.ParentHash != prevHash {
+			if ev.Header.ParentHash != prevHash {
 				// Reorg to the common ancestor if needed (might not exist in light sync mode, skip reorg then)
 				// TODO(karalabe, zsfelfoldi): This seems a bit brittle, can we detect this case explicitly?
 
 				if rawdb.ReadCanonicalHash(c.chainDb, prevHeader.Number.Uint64()) != prevHash {
-					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, header); h != nil {
+					if h := rawdb.FindCommonAncestor(c.chainDb, prevHeader, ev.Header); h != nil {
 						c.newHead(h.Number.Uint64(), true)
 					}
 				}
 			}
-			c.newHead(header.Number.Uint64(), false)
+			c.newHead(ev.Header.Number.Uint64(), false)
 
-			prevHeader, prevHash = header, header.Hash()
+			prevHeader, prevHash = ev.Header, ev.Header.Hash()
 		}
 	}
 }

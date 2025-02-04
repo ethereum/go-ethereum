@@ -12,7 +12,7 @@ func Log(r Registry, freq time.Duration, l Logger) {
 	LogScaled(r, freq, time.Nanosecond, l)
 }
 
-// Output each metric in the given registry periodically using the given
+// LogScaled outputs each metric in the given registry periodically using the given
 // logger. Print timings in `scale` units (eg time.Millisecond) rather than nanos.
 func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 	du := float64(scale)
@@ -21,25 +21,21 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 	for range time.Tick(freq) {
 		r.Each(func(name string, i interface{}) {
 			switch metric := i.(type) {
-			case Counter:
+			case *Counter:
 				l.Printf("counter %s\n", name)
 				l.Printf("  count:       %9d\n", metric.Snapshot().Count())
-			case CounterFloat64:
+			case *CounterFloat64:
 				l.Printf("counter %s\n", name)
 				l.Printf("  count:       %f\n", metric.Snapshot().Count())
-			case Gauge:
+			case *Gauge:
 				l.Printf("gauge %s\n", name)
 				l.Printf("  value:       %9d\n", metric.Snapshot().Value())
-			case GaugeFloat64:
+			case *GaugeFloat64:
 				l.Printf("gauge %s\n", name)
 				l.Printf("  value:       %f\n", metric.Snapshot().Value())
-			case GaugeInfo:
+			case *GaugeInfo:
 				l.Printf("gauge %s\n", name)
 				l.Printf("  value:       %s\n", metric.Snapshot().Value())
-			case Healthcheck:
-				metric.Check()
-				l.Printf("healthcheck %s\n", name)
-				l.Printf("  error:       %v\n", metric.Error())
 			case Histogram:
 				h := metric.Snapshot()
 				ps := h.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
@@ -54,7 +50,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 				l.Printf("  95%%:         %12.2f\n", ps[2])
 				l.Printf("  99%%:         %12.2f\n", ps[3])
 				l.Printf("  99.9%%:       %12.2f\n", ps[4])
-			case Meter:
+			case *Meter:
 				m := metric.Snapshot()
 				l.Printf("meter %s\n", name)
 				l.Printf("  count:       %9d\n", m.Count())
@@ -62,7 +58,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 				l.Printf("  5-min rate:  %12.2f\n", m.Rate5())
 				l.Printf("  15-min rate: %12.2f\n", m.Rate15())
 				l.Printf("  mean rate:   %12.2f\n", m.RateMean())
-			case Timer:
+			case *Timer:
 				t := metric.Snapshot()
 				ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 				l.Printf("timer %s\n", name)

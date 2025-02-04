@@ -70,6 +70,10 @@ func (n *pmp) DeleteMapping(protocol string, extport, intport int) (err error) {
 	return err
 }
 
+func (n *pmp) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("natpmp:%v", n.gw)), nil
+}
+
 func discoverPMP() Interface {
 	// run external address lookups on all potential gateways
 	gws := potentialGateways()

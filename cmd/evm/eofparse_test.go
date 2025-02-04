@@ -43,7 +43,7 @@ func FuzzEofParsing(f *testing.F) {
 	// And do the fuzzing
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var (
-			jt = vm.NewPragueEOFInstructionSetForTesting()
+			jt = vm.NewEOFInstructionSetForTesting()
 			c  vm.Container
 		)
 		cpy := common.CopyBytes(data)
