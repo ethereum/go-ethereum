@@ -17,7 +17,8 @@
 // Package syncx contains exotic synchronization primitives.
 package syncx
 
-// ClosableMutex is a mutex that can be closed. Once closed, it cannot be locked again.
+// ClosableMutex is a mutex that can be closed.
+// Once closed, it cannot be locked again.
 type ClosableMutex struct {
 	ch chan struct{}
 }
@@ -29,7 +30,8 @@ func NewClosableMutex() *ClosableMutex {
 	return &ClosableMutex{ch: ch}
 }
 
-// TryLock attempts to acquire the lock. Returns true if successful, false if the lock is closed or unavailable.
+// TryLock attempts to lock cm.
+// If the mutex is closed, TryLock returns false.
 func (cm *ClosableMutex) TryLock() bool {
 	select {
 	case <-cm.ch:
@@ -39,7 +41,8 @@ func (cm *ClosableMutex) TryLock() bool {
 	}
 }
 
-// MustLock acquires the lock. Panics if the lock is already closed.
+// MustLock locks cm.
+// If the mutex is closed, MustLock panics.
 func (cm *ClosableMutex) MustLock() {
 	select {
 	case <-cm.ch:
@@ -49,7 +52,7 @@ func (cm *ClosableMutex) MustLock() {
 	}
 }
 
-// Unlock releases the lock. Panics if the lock is already closed or if called without holding the lock.
+// Unlock unlocks cm.
 func (cm *ClosableMutex) Unlock() {
 	select {
 	case cm.ch <- struct{}{}:
@@ -58,7 +61,7 @@ func (cm *ClosableMutex) Unlock() {
 	}
 }
 
-// Close closes the mutex, preventing further lock operations. Panics if called on an already-closed mutex.
+// Close locks the mutex, then closes it.
 func (cm *ClosableMutex) Close() {
 	select {
 	case <-cm.ch:
