@@ -85,6 +85,10 @@ func (ds *CalldataBlobSource) L1Height() uint64 {
 	return ds.l1Height
 }
 
+func (ds *CalldataBlobSource) L1Finalized() uint64 {
+	return ds.l1Finalized
+}
+
 func (ds *CalldataBlobSource) processRollupEventsToDA(rollupEvents l1.RollupEvents) (Entries, error) {
 	var entries Entries
 	var entry Entry

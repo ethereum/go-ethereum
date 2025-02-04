@@ -14,6 +14,7 @@ import (
 type DataSource interface {
 	NextData() (da.Entries, error)
 	L1Height() uint64
+	L1Finalized() uint64
 }
 
 type DataSourceFactory struct {

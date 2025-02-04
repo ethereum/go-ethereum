@@ -46,7 +46,7 @@ func (s *DASyncer) SyncOneBlock(block *da.PartialBlock) error {
 	}
 
 	if s.blockchain.CurrentBlock().Number().Uint64()%1000 == 0 {
-		log.Info("L1 sync progress", "blockchain height", s.blockchain.CurrentBlock().Number().Uint64(), "block hash", s.blockchain.CurrentBlock().Hash(), "root", s.blockchain.CurrentBlock().Root())
+		log.Info("L1 sync progress", "blockchain height", s.blockchain.CurrentBlock().Number().Uint64(), "block hash", s.blockchain.CurrentBlock().Hash().Hex(), "root", s.blockchain.CurrentBlock().Root().Hex())
 	}
 
 	return nil

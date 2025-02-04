@@ -39,6 +39,7 @@ type SyncingPipeline struct {
 	blockchain *core.BlockChain
 	blockQueue *BlockQueue
 	daSyncer   *DASyncer
+	daQueue    *DAQueue
 }
 
 func NewSyncingPipeline(ctx context.Context, blockchain *core.BlockChain, genesisConfig *params.ChainConfig, db ethdb.Database, ethClient l1.Client, l1DeploymentBlock uint64, config Config) (*SyncingPipeline, error) {
@@ -92,6 +93,7 @@ func NewSyncingPipeline(ctx context.Context, blockchain *core.BlockChain, genesi
 		blockchain:        blockchain,
 		blockQueue:        blockQueue,
 		daSyncer:          daSyncer,
+		daQueue:           daQueue,
 	}, nil
 }
 
@@ -115,6 +117,9 @@ func (s *SyncingPipeline) Start() {
 }
 
 func (s *SyncingPipeline) mainLoop() {
+	progressTicker := time.NewTicker(1 * time.Minute)
+	defer progressTicker.Stop()
+
 	stepCh := make(chan struct{}, 1)
 	var delayedStepCh <-chan time.Time
 	var resetCounter int
@@ -152,6 +157,14 @@ func (s *SyncingPipeline) mainLoop() {
 		select {
 		case <-s.ctx.Done():
 			return
+		case <-progressTicker.C:
+			currentBlock := s.blockchain.CurrentBlock()
+			dataSource := s.daQueue.DataSource()
+			if dataSource != nil {
+				log.Info("L1 sync progress", "L1 processed", dataSource.L1Height(), "L1 finalized", dataSource.L1Finalized(), "progress(%)", float64(dataSource.L1Height())/float64(dataSource.L1Finalized())*100, "L2 height", currentBlock.Number().Uint64(), "L2 hash", currentBlock.Hash().Hex())
+			} else {
+				log.Info("L1 sync progress", "blockchain height", currentBlock.Number().Uint64(), "block hash", currentBlock.Hash().Hex())
+			}
 		case <-delayedStepCh:
 			delayedStepCh = nil
 			reqStep(false)

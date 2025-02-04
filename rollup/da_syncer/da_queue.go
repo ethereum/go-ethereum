@@ -69,6 +69,10 @@ func (dq *DAQueue) getNextData(ctx context.Context) error {
 	return err
 }
 
+func (dq *DAQueue) DataSource() DataSource {
+	return dq.dataSource
+}
+
 func (dq *DAQueue) Reset(height uint64) {
 	dq.l1height = height
 	dq.dataSource = nil
