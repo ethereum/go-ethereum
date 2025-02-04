@@ -214,7 +214,9 @@ const (
 	// of starting any background processes such as automatic key derivation.
 	WalletOpened
 
-	// WalletDropped
+	// WalletDropped is fired when a wallet is removed or disconnected, either via USB
+	// or due to a filesystem event in the keystore. This event indicates that the wallet
+	// is no longer available for operations.
 	WalletDropped
 )
 

@@ -79,7 +79,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 		}
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit(0, false)
+	root, _ := state.Commit(0, false, false)
 
 	// Return the generated state
 	return db, sdb, nodeDb, root, accounts

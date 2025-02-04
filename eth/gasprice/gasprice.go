@@ -120,16 +120,23 @@ func NewOracle(backend OracleBackend, params Config, startPrice *big.Int) *Oracl
 
 	cache := lru.NewCache[cacheKey, processedFees](2048)
 	headEvent := make(chan core.ChainHeadEvent, 1)
-	backend.SubscribeChainHeadEvent(headEvent)
-	go func() {
-		var lastHead common.Hash
-		for ev := range headEvent {
-			if ev.Header.ParentHash != lastHead {
-				cache.Purge()
+	sub := backend.SubscribeChainHeadEvent(headEvent)
+	if sub != nil { // the gasprice testBackend doesn't support subscribing to head events
+		go func() {
+			var lastHead common.Hash
+			for {
+				select {
+				case ev := <-headEvent:
+					if ev.Header.ParentHash != lastHead {
+						cache.Purge()
+					}
+					lastHead = ev.Header.Hash()
+				case <-sub.Err():
+					return
+				}
 			}
-			lastHead = ev.Header.Hash()
-		}
-	}()
+		}()
+	}
 
 	return &Oracle{
 		backend:          backend,

@@ -34,7 +34,7 @@ type Context struct {
 	TxHash      common.Hash // Hash of the transaction being traced (zero if dangling call)
 }
 
-// The set of methods that must be exposed by a tracer
+// Tracer represents the set of methods that must be exposed by a tracer
 // for it to be available through the RPC interface.
 // This involves a method to retrieve results and one to
 // stop tracing.

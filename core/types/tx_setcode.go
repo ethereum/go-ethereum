@@ -49,7 +49,7 @@ func AddressToDelegation(addr common.Address) []byte {
 // SetCodeTx implements the EIP-7702 transaction type which temporarily installs
 // the code at the signer's address.
 type SetCodeTx struct {
-	ChainID    uint64
+	ChainID    *uint256.Int
 	Nonce      uint64
 	GasTipCap  *uint256.Int // a.k.a. maxPriorityFeePerGas
 	GasFeeCap  *uint256.Int // a.k.a. maxFeePerGas
@@ -58,58 +58,54 @@ type SetCodeTx struct {
 	Value      *uint256.Int
 	Data       []byte
 	AccessList AccessList
-	AuthList   []Authorization
+	AuthList   []SetCodeAuthorization
 
 	// Signature values
-	V *uint256.Int `json:"v" gencodec:"required"`
-	R *uint256.Int `json:"r" gencodec:"required"`
-	S *uint256.Int `json:"s" gencodec:"required"`
+	V *uint256.Int
+	R *uint256.Int
+	S *uint256.Int
 }
 
-//go:generate go run github.com/fjl/gencodec -type Authorization -field-override authorizationMarshaling -out gen_authorization.go
+//go:generate go run github.com/fjl/gencodec -type SetCodeAuthorization -field-override authorizationMarshaling -out gen_authorization.go
 
-// Authorization is an authorization from an account to deploy code at its address.
-type Authorization struct {
-	ChainID uint64         `json:"chainId" gencodec:"required"`
+// SetCodeAuthorization is an authorization from an account to deploy code at its address.
+type SetCodeAuthorization struct {
+	ChainID uint256.Int    `json:"chainId" gencodec:"required"`
 	Address common.Address `json:"address" gencodec:"required"`
 	Nonce   uint64         `json:"nonce" gencodec:"required"`
-	V       uint8          `json:"v" gencodec:"required"`
+	V       uint8          `json:"yParity" gencodec:"required"`
 	R       uint256.Int    `json:"r" gencodec:"required"`
 	S       uint256.Int    `json:"s" gencodec:"required"`
 }
 
 // field type overrides for gencodec
 type authorizationMarshaling struct {
-	ChainID hexutil.Uint64
+	ChainID hexutil.U256
 	Nonce   hexutil.Uint64
 	V       hexutil.Uint64
+	R       hexutil.U256
+	S       hexutil.U256
 }
 
-// SignAuth signs the provided authorization.
-func SignAuth(auth Authorization, prv *ecdsa.PrivateKey) (Authorization, error) {
+// SignSetCode creates a signed the SetCode authorization.
+func SignSetCode(prv *ecdsa.PrivateKey, auth SetCodeAuthorization) (SetCodeAuthorization, error) {
 	sighash := auth.sigHash()
 	sig, err := crypto.Sign(sighash[:], prv)
 	if err != nil {
-		return Authorization{}, err
+		return SetCodeAuthorization{}, err
 	}
-	return auth.withSignature(sig), nil
-}
-
-// withSignature updates the signature of an Authorization to be equal the
-// decoded signature provided in sig.
-func (a *Authorization) withSignature(sig []byte) Authorization {
 	r, s, _ := decodeSignature(sig)
-	return Authorization{
-		ChainID: a.ChainID,
-		Address: a.Address,
-		Nonce:   a.Nonce,
+	return SetCodeAuthorization{
+		ChainID: auth.ChainID,
+		Address: auth.Address,
+		Nonce:   auth.Nonce,
 		V:       sig[64],
 		R:       *uint256.MustFromBig(r),
 		S:       *uint256.MustFromBig(s),
-	}
+	}, nil
 }
 
-func (a *Authorization) sigHash() common.Hash {
+func (a *SetCodeAuthorization) sigHash() common.Hash {
 	return prefixedRlpHash(0x05, []any{
 		a.ChainID,
 		a.Address,
@@ -118,7 +114,7 @@ func (a *Authorization) sigHash() common.Hash {
 }
 
 // Authority recovers the the authorizing account of an authorization.
-func (a *Authorization) Authority() (common.Address, error) {
+func (a *SetCodeAuthorization) Authority() (common.Address, error) {
 	sighash := a.sigHash()
 	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
 		return common.Address{}, ErrInvalidSig
@@ -150,9 +146,9 @@ func (tx *SetCodeTx) copy() TxData {
 		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
-		AuthList:   make([]Authorization, len(tx.AuthList)),
+		AuthList:   make([]SetCodeAuthorization, len(tx.AuthList)),
 		Value:      new(uint256.Int),
-		ChainID:    tx.ChainID,
+		ChainID:    new(uint256.Int),
 		GasTipCap:  new(uint256.Int),
 		GasFeeCap:  new(uint256.Int),
 		V:          new(uint256.Int),
@@ -163,6 +159,9 @@ func (tx *SetCodeTx) copy() TxData {
 	copy(cpy.AuthList, tx.AuthList)
 	if tx.Value != nil {
 		cpy.Value.Set(tx.Value)
+	}
+	if tx.ChainID != nil {
+		cpy.ChainID.Set(tx.ChainID)
 	}
 	if tx.GasTipCap != nil {
 		cpy.GasTipCap.Set(tx.GasTipCap)
@@ -184,7 +183,7 @@ func (tx *SetCodeTx) copy() TxData {
 
 // accessors for innerTx.
 func (tx *SetCodeTx) txType() byte           { return SetCodeTxType }
-func (tx *SetCodeTx) chainID() *big.Int      { return big.NewInt(int64(tx.ChainID)) }
+func (tx *SetCodeTx) chainID() *big.Int      { return tx.ChainID.ToBig() }
 func (tx *SetCodeTx) accessList() AccessList { return tx.AccessList }
 func (tx *SetCodeTx) data() []byte           { return tx.Data }
 func (tx *SetCodeTx) gas() uint64            { return tx.Gas }
@@ -211,7 +210,7 @@ func (tx *SetCodeTx) rawSignatureValues() (v, r, s *big.Int) {
 }
 
 func (tx *SetCodeTx) setSignatureValues(chainID, v, r, s *big.Int) {
-	tx.ChainID = chainID.Uint64()
+	tx.ChainID = uint256.MustFromBig(chainID)
 	tx.V.SetFromBig(v)
 	tx.R.SetFromBig(r)
 	tx.S.SetFromBig(s)

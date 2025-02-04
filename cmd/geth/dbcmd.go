@@ -829,8 +829,7 @@ func inspectAccount(db *triedb.Database, start uint64, end uint64, address commo
 func inspectStorage(db *triedb.Database, start uint64, end uint64, address common.Address, slot common.Hash, raw bool) error {
 	// The hash of storage slot key is utilized in the history
 	// rather than the raw slot key, make the conversion.
-	slotHash := crypto.Keccak256Hash(slot.Bytes())
-	stats, err := db.StorageHistory(address, slotHash, start, end)
+	stats, err := db.StorageHistory(address, slot, start, end)
 	if err != nil {
 		return err
 	}

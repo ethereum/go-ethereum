@@ -18,7 +18,6 @@
 package memorydb
 
 import (
-	"bytes"
 	"errors"
 	"sort"
 	"strings"
@@ -125,12 +124,15 @@ func (db *Database) Delete(key []byte) error {
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
 // (inclusive on start, exclusive on end).
 func (db *Database) DeleteRange(start, end []byte) error {
-	it := db.NewIterator(nil, start)
-	defer it.Release()
+	db.lock.Lock()
+	defer db.lock.Unlock()
+	if db.db == nil {
+		return errMemorydbClosed
+	}
 
-	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
-		if err := db.Delete(it.Key()); err != nil {
-			return err
+	for key := range db.db {
+		if key >= string(start) && key < string(end) {
+			delete(db.db, key)
 		}
 	}
 	return nil

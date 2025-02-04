@@ -83,8 +83,8 @@ var (
 	}
 	TraceFormatFlag = &cli.StringFlag{
 		Name:     "trace.format",
-		Usage:    "Trace output format to use (struct|json)",
-		Value:    "struct",
+		Usage:    "Trace output format to use (json|struct|md)",
+		Value:    "json",
 		Category: traceCategory,
 	}
 	TraceDisableMemoryFlag = &cli.BoolFlag{
@@ -262,10 +262,15 @@ func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
 	}
 }
 
-// collectJSONFiles walks the given path and accumulates all files with json
-// extension.
-func collectJSONFiles(path string) []string {
+// collectFiles walks the given path. If the path is a directory, it will
+// return a list of all accumulates all files with json extension.
+// Otherwise (if path points to a file), it will return the path.
+func collectFiles(path string) []string {
 	var out []string
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		// User explicitly pointed out a file, ignore extension.
+		return []string{path}
+	}
 	err := filepath.Walk(path, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
