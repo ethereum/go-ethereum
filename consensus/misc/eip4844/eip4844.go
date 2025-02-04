@@ -78,14 +78,16 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header) uint64 
 
 // CalcBlobFee calculates the blobfee from the header's excess blob gas field.
 func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
+	var frac uint64
 	switch config.LatestFork(header.Time) {
 	case forks.Prague:
-		return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(config.BlobScheduleConfig.Prague.UpdateFraction))
+		frac = config.BlobScheduleConfig.Prague.UpdateFraction
 	case forks.Cancun:
-		return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(config.BlobScheduleConfig.Cancun.UpdateFraction))
+		frac = config.BlobScheduleConfig.Cancun.UpdateFraction
 	default:
 		panic("calculating blob fee on unsupported fork")
 	}
+	return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(frac))
 }
 
 // MaxBlobsPerBlock returns the max blobs per block for a block at the given timestamp.
