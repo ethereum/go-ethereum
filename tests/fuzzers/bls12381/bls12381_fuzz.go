@@ -168,7 +168,7 @@ func fuzzCrossG2Add(data []byte) int {
 
 	bl3 := blst.P2AffinesAdd([]*blst.P2Affine{bl1, bl2})
 	if !(bytes.Equal(gp.Marshal(), bl3.Serialize())) {
-		panic("G1 point addition mismatch blst / geth ")
+		panic("G2 point addition mismatch blst / geth ")
 	}
 
 	return 1
