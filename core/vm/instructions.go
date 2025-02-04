@@ -352,10 +352,6 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	address := slot.Bytes20()
-	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
-		witness.AddCode(interpreter.evm.StateDB.GetCode(address))
-	}
 	// TODO this should not need to pull up the whole code
 	code := interpreter.evm.StateDB.GetCode(slot.Bytes20())
 	if isEOFVersion1(code) {
@@ -403,9 +399,6 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	}
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.GetCode(addr)
-	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
-		witness.AddCode(code)
-	}
 	if isEOFVersion1(code) {
 		codeCopy = getData(eofMagic, uint64CodeOffset, lengthU64)
 	} else {
