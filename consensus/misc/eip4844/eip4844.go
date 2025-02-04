@@ -42,7 +42,7 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 		return errors.New("header is missing blobGasUsed")
 	}
 	// Verify that the blob gas used remains within reasonable limits.
-	maxBlobGas := config.MaxBlobGasPerBlock(header.Time)
+	maxBlobGas := MaxBlobGasPerBlock(config, header.Time)
 	if *header.BlobGasUsed > maxBlobGas {
 		return fmt.Errorf("blob gas used %d exceeds maximum allowance %d", *header.BlobGasUsed, maxBlobGas)
 	}
@@ -61,7 +61,7 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 // blobs on top of the excess blob gas.
 func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header) uint64 {
 	var (
-		targetGas           = uint64(config.TargetBlobsPerBlock(parent.Time)) * params.BlobTxBlobGasPerBlob
+		targetGas           = uint64(TargetBlobsPerBlock(config, parent.Time)) * params.BlobTxBlobGasPerBlob
 		parentExcessBlobGas uint64
 		parentBlobGasUsed   uint64
 	)
@@ -85,6 +85,67 @@ func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
 		return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(config.BlobScheduleConfig.Cancun.UpdateFraction))
 	default:
 		panic("calculating blob fee on unsupported fork")
+	}
+}
+
+// TargetBlobsPerBlock returns the target blobs per block associated with
+// requested time.
+func TargetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
+	if cfg.BlobScheduleConfig == nil {
+		return 0
+	}
+	var (
+		london = cfg.LondonBlock
+		s      = cfg.BlobScheduleConfig
+	)
+	switch {
+	case cfg.IsPrague(london, time) && s.Prague != nil:
+		return s.Prague.Target
+	case cfg.IsCancun(london, time) && s.Cancun != nil:
+		return s.Cancun.Target
+	default:
+		return 0
+	}
+}
+
+// MaxBlobsPerBlock returns the max blobs per block for a block at the given timestamp.
+func MaxBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
+	if cfg.BlobScheduleConfig == nil {
+		return 0
+	}
+	var (
+		london = cfg.LondonBlock
+		s      = cfg.BlobScheduleConfig
+	)
+	switch {
+	case cfg.IsPrague(london, time) && s.Prague != nil:
+		return s.Prague.Max
+	case cfg.IsCancun(london, time) && s.Cancun != nil:
+		return s.Cancun.Max
+	default:
+		return 0
+	}
+}
+
+// MaxBlobsPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
+func MaxBlobGasPerBlock(cfg *params.ChainConfig, time uint64) uint64 {
+	return uint64(MaxBlobsPerBlock(cfg, time)) * params.BlobTxBlobGasPerBlob
+}
+
+// LatestMaxBlobsPerBlock returns the latest max blobs per block defined by the
+// configuration, regardless of the currently active fork.
+func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
+	s := cfg.BlobScheduleConfig
+	if s == nil {
+		return 0
+	}
+	switch {
+	case s.Prague != nil:
+		return s.Prague.Max
+	case s.Cancun != nil:
+		return s.Cancun.Max
+	default:
+		return 0
 	}
 }
 

@@ -491,67 +491,6 @@ type BlobScheduleConfig struct {
 	Verkle *BlobConfig `json:"verkle,omitempty"`
 }
 
-// TargetBlobsPerBlock returns the target blobs per block associated with
-// requested time.
-func (c *ChainConfig) TargetBlobsPerBlock(time uint64) int {
-	if c.BlobScheduleConfig == nil {
-		return 0
-	}
-	var (
-		london = c.LondonBlock
-		s      = c.BlobScheduleConfig
-	)
-	switch {
-	case c.IsPrague(london, time) && s.Prague != nil:
-		return s.Prague.Target
-	case c.IsCancun(london, time) && s.Cancun != nil:
-		return s.Cancun.Target
-	default:
-		return 0
-	}
-}
-
-// MaxBlobsPerBlock returns the max blobs per block for a block at the given timestamp.
-func (c *ChainConfig) MaxBlobsPerBlock(time uint64) int {
-	if c.BlobScheduleConfig == nil {
-		return 0
-	}
-	var (
-		london = c.LondonBlock
-		s      = c.BlobScheduleConfig
-	)
-	switch {
-	case c.IsPrague(london, time) && s.Prague != nil:
-		return s.Prague.Max
-	case c.IsCancun(london, time) && s.Cancun != nil:
-		return s.Cancun.Max
-	default:
-		return 0
-	}
-}
-
-// MaxBlobsPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
-func (c *ChainConfig) MaxBlobGasPerBlock(time uint64) uint64 {
-	return uint64(c.MaxBlobsPerBlock(time)) * BlobTxBlobGasPerBlob
-}
-
-// LatestMaxBlobsPerBlock returns the latest max blobs per block defined by the
-// configuration, regardless of the currently active fork.
-func (c *ChainConfig) LatestMaxBlobsPerBlock() int {
-	s := c.BlobScheduleConfig
-	if s == nil {
-		return 0
-	}
-	switch {
-	case s.Prague != nil:
-		return s.Prague.Max
-	case s.Cancun != nil:
-		return s.Cancun.Max
-	default:
-		return 0
-	}
-}
-
 // IsHomestead returns whether num is either equal to the homestead block or greater.
 func (c *ChainConfig) IsHomestead(num *big.Int) bool {
 	return isBlockForked(c.HomesteadBlock, num)

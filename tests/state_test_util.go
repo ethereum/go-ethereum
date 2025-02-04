@@ -283,7 +283,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// Here, we just do this shortcut smaller fix, since state tests do not
 	// utilize those codepaths.
 	if config.IsCancun(new(big.Int), block.Time()) {
-		if len(msg.BlobHashes) > config.MaxBlobsPerBlock(block.Time()) {
+		if len(msg.BlobHashes) > eip4844.MaxBlobsPerBlock(config, block.Time()) {
 			return st, common.Hash{}, 0, errors.New("blob gas exceeds maximum")
 		}
 	}

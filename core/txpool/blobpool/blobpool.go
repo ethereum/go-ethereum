@@ -387,7 +387,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 			fails = append(fails, id)
 		}
 	}
-	slotter := newSlotter(p.chain.Config().LatestMaxBlobsPerBlock())
+	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
 	if err != nil {
 		return err
@@ -421,7 +421,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 
 	// Pool initialized, attach the blob limbo to it to track blobs included
 	// recently but not yet finalized
-	p.limbo, err = newLimbo(limbodir, p.chain.Config().LatestMaxBlobsPerBlock())
+	p.limbo, err = newLimbo(limbodir, eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 	if err != nil {
 		p.Close()
 		return err
@@ -1599,7 +1599,8 @@ func (p *BlobPool) updateStorageMetrics() {
 		metrics.GetOrRegisterGauge(fmt.Sprintf(shelfSlotusedGaugeName, shelf.SlotSize/blobSize), nil).Update(int64(shelf.FilledSlots))
 		metrics.GetOrRegisterGauge(fmt.Sprintf(shelfSlotgapsGaugeName, shelf.SlotSize/blobSize), nil).Update(int64(shelf.GappedSlots))
 
-		if shelf.SlotSize/blobSize > uint32(p.chain.Config().LatestMaxBlobsPerBlock()) {
+		maxBlobs := eip4844.LatestMaxBlobsPerBlock(p.chain.Config())
+		if shelf.SlotSize/blobSize > uint32(maxBlobs) {
 			oversizedDataused += slotDataused
 			oversizedDatagaps += slotDatagaps
 			oversizedSlotused += shelf.FilledSlots

@@ -121,7 +121,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	if args.BlobHashes != nil && len(args.BlobHashes) == 0 {
 		return errors.New(`need at least 1 blob for a blob transaction`)
 	}
-	maxBlobs := b.ChainConfig().MaxBlobsPerBlock(b.CurrentHeader().Time)
+	maxBlobs := eip4844.MaxBlobsPerBlock(b.ChainConfig(), b.CurrentHeader().Time)
 	if args.BlobHashes != nil && len(args.BlobHashes) > maxBlobs {
 		return fmt.Errorf(`too many blobs in transaction (have=%d, max=%d)`, len(args.BlobHashes), maxBlobs)
 	}
