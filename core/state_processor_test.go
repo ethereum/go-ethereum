@@ -407,7 +407,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	if config.IsCancun(header.Number, header.Time) {
-		excess := eip4844.CalcExcessBlobGas(config, parent.Header())
+		excess := eip4844.CalcExcessBlobGas(config, parent.Header(), header)
 		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
 		header.ExcessBlobGas = &excess
 		header.BlobGasUsed = &used
