@@ -34,6 +34,9 @@ var (
 // if the current block contains no transactions, the excessBlobGas is updated
 // accordingly.
 func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Header) error {
+	if header.Number.Uint64() != parent.Number.Uint64()+1 {
+		panic("bad header pair")
+	}
 	// Verify the header is not malformed
 	if header.ExcessBlobGas == nil {
 		return errors.New("header is missing excessBlobGas")
