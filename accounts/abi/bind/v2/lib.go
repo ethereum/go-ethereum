@@ -27,8 +27,9 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
+// TODO: remove this and use NewBoundContract directly
 func NewContractInstance(backend ContractBackend, addr common.Address, abi abi.ABI) *BoundContract {
-	return NewBoundContract(addr, abi, backend, backend, backend)
+	return NewBoundContract(backend, addr, abi)
 }
 
 // ContractEvent is a type constraint for ABI event types.
@@ -39,7 +40,8 @@ type ContractEvent interface {
 // FilterEvents returns an EventIterator instance for filtering historical events based on the event id and a block range.
 func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack func(*types.Log) (*Ev, error), topics ...[]any) (*EventIterator[Ev], error) {
 	var e Ev
-	logs, sub, err := c.FilterLogs(opts, e.ContractEventName(), topics...)
+	v1Instance := BoundContractV1{c.address, c.abi, c.backend, c.backend, c.backend}
+	logs, sub, err := v1Instance.FilterLogs(opts, e.ContractEventName(), topics...)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +54,8 @@ func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack f
 // error.
 func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack func(*types.Log) (*Ev, error), sink chan<- *Ev, topics ...[]any) (event.Subscription, error) {
 	var e Ev
-	logs, sub, err := c.WatchLogs(opts, e.ContractEventName(), topics...)
+	v1Instance := BoundContractV1{c.address, c.abi, c.backend, c.backend, c.backend}
+	logs, sub, err := v1Instance.WatchLogs(opts, e.ContractEventName(), topics...)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +164,8 @@ func (it *EventIterator[T]) Close() error {
 // This can be useful if you just want to check that the function doesn't revert.
 func Call[T any](c *BoundContract, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
-	packedOutput, err := c.CallRaw(opts, packedInput)
+	v1Instance := BoundContractV1{c.address, c.abi, c.backend, c.backend, c.backend}
+	packedOutput, err := v1Instance.CallRaw(opts, packedInput)
 	if err != nil {
 		return defaultResult, err
 	}
@@ -181,12 +185,21 @@ func Call[T any](c *BoundContract, opts *CallOpts, packedInput []byte, unpack fu
 // DeployContractRaw deploys a contract onto the Ethereum blockchain and binds the
 // deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
 // bytes.
+//
+// TODO: remove address return?  we can calculate it from the returned tx
 func DeployContractRaw(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, error) {
-	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
+	c := NewBoundContractV1(common.Address{}, abi.ABI{}, backend, backend, backend)
 	tx, err := c.RawCreationTransact(opts, append(bytecode, packedParams...))
 	if err != nil {
 		return common.Address{}, nil, err
 	}
 	address := crypto.CreateAddress(opts.From, tx.Nonce())
 	return address, tx, nil
+}
+
+// RawTransact initiates a transaction with the given raw calldata as the input.
+// It's usually used to initiate transactions for invoking **Fallback** function.
+func (c *BoundContract) RawTransact(opts *TransactOpts, calldata []byte) (*types.Transaction, error) {
+	v1Instance := BoundContractV1{c.address, c.abi, c.backend, c.backend, c.backend}
+	return v1Instance.RawTransact(opts, calldata)
 }
