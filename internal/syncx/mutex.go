@@ -15,6 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package syncx contains exotic synchronization primitives.
+
 package syncx
 
 // ClosableMutex is a mutex that can also be closed.
