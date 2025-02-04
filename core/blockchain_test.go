@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -170,11 +171,16 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 
 			return err
 		}
-		statedb, err := state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.statedb)
+		_, err = state.New(blockchain.GetBlockByHash(block.ParentHash()).Root(), blockchain.statedb)
 		if err != nil {
 			return err
 		}
-		res, err := blockchain.processor.Process(block, statedb, vm.Config{})
+		receipts, logs, usedGas, statedb, _, err := blockchain.ProcessBlock(block, blockchain.GetBlockByHash(block.ParentHash()).Header())
+		res := &ProcessResult{
+			Receipts: receipts,
+			Logs:     logs,
+			GasUsed:  usedGas,
+		}
 		if err != nil {
 			blockchain.reportBlock(block, res, err)
 			return err
@@ -198,11 +204,14 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 func TestParallelBlockChainImport(t *testing.T) {
 	t.Parallel()
 
-	testParallelBlockChainImport(t, rawdb.HashScheme)
-	testParallelBlockChainImport(t, rawdb.PathScheme)
+	testParallelBlockChainImport(t, rawdb.HashScheme, false)
+	testParallelBlockChainImport(t, rawdb.PathScheme, false)
+
+	testParallelBlockChainImport(t, rawdb.HashScheme, true)
+	testParallelBlockChainImport(t, rawdb.PathScheme, true)
 }
 
-func testParallelBlockChainImport(t *testing.T, scheme string) {
+func testParallelBlockChainImport(t *testing.T, scheme string, enforceParallelProcessor bool) {
 	db, _, blockchain, err := newCanonical(ethash.NewFaker(), 10, true, scheme)
 	blockchain.parallelProcessor = NewParallelStateProcessor(blockchain.chainConfig, blockchain, blockchain.engine)
 
@@ -210,6 +219,8 @@ func testParallelBlockChainImport(t *testing.T, scheme string) {
 		t.Fatalf("failed to make new canonical chain: %v", err)
 	}
 
+	// If required, enforce parallel block processing and skip serial processing completely
+	blockchain.enforceParallelProcessor = enforceParallelProcessor
 	defer blockchain.Stop()
 
 	block := blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash())
@@ -223,7 +234,7 @@ func testParallelBlockChainImport(t *testing.T, scheme string) {
 type AlwaysFailParallelStateProcessor struct {
 }
 
-func (p *AlwaysFailParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error) {
+func (p *AlwaysFailParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config, interruptCtx context.Context) (*ProcessResult, error) {
 	return nil, errors.New("always fail")
 }
 
@@ -235,9 +246,9 @@ func NewSlowSerialStateProcessor(s Processor) *SlowSerialStateProcessor {
 	return &SlowSerialStateProcessor{s: s}
 }
 
-func (p *SlowSerialStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error) {
+func (p *SlowSerialStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config, interruptCtx context.Context) (*ProcessResult, error) {
 	time.Sleep(100 * time.Millisecond)
-	return p.s.Process(block, statedb, cfg)
+	return p.s.Process(block, statedb, cfg, interruptCtx)
 }
 
 func TestSuccessfulBlockImportParallelFailed(t *testing.T) {

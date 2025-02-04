@@ -17,6 +17,7 @@
 package tracetest
 
 import (
+	"context"
 	"encoding/json"
 	"math/big"
 	"os"
@@ -119,7 +120,7 @@ func testPrestateDiffTracer(t *testing.T, tracerName string, dirPath string) {
 			}
 			evm := vm.NewEVM(blockContext, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background())
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}

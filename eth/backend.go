@@ -179,11 +179,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	gpoParams := config.GPO
 
-	// POS-2798: Default was removed from gasprice.Config
-	// if gpoParams.Default == nil {
-	// 	gpoParams.Default = config.Miner.GasPrice
-	// }
-
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
 	if config.OverrideCancun != nil {
@@ -258,12 +253,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// check if Parallel EVM is enabled
 	// if enabled, use parallel state processor
 	if config.ParallelEVM.Enable {
-		eth.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TransactionHistory, checker, config.ParallelEVM.SpeculativeProcesses)
+		eth.blockchain, err = core.NewParallelBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TransactionHistory, checker, config.ParallelEVM.SpeculativeProcesses, config.ParallelEVM.Enforce)
 	} else {
 		eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TransactionHistory, checker)
 	}
 
-	// POS-2798: NewOracle function definition was changed to accept (startPrice *big.Int)
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams, config.Miner.GasPrice)
 	if err != nil {
 		return nil, err
@@ -322,7 +316,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}
-	// POS-2798: NewOracle function definition was changed to accept (startPrice *big.Int)
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, config.GPO, config.Miner.GasPrice)
 
 	// Start the RPC service

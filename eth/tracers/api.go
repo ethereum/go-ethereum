@@ -727,7 +727,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		} else {
 			statedb.SetTxContext(tx.Hash(), i)
 			// nolint : contextcheck
-			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit)); err != nil {
+			if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit), context.Background()); err != nil {
 				log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", tx.Hash(), "err", err)
 				// We intentionally don't return the error here: if we do, then the RPC server will not
 				// return the roots. Most likely, the caller already knows that a certain transaction fails to
@@ -929,7 +929,7 @@ txloop:
 				}
 			} else {
 				// nolint : contextcheck
-				if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit)); err != nil {
+				if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit), context.Background()); err != nil {
 					failed = err
 					break txloop
 				}
@@ -940,7 +940,7 @@ txloop:
 		} else {
 			coinbaseBalance := big.NewInt(statedb.GetBalance(blockCtx.Coinbase).ToBig().Int64())
 			// nolint : contextcheck
-			result, err := core.ApplyMessageNoFeeBurnOrTip(vmenv, *msg, new(core.GasPool).AddGas(msg.GasLimit))
+			result, err := core.ApplyMessageNoFeeBurnOrTip(vmenv, *msg, new(core.GasPool).AddGas(msg.GasLimit), context.Background())
 
 			if err != nil {
 				failed = err
@@ -1148,7 +1148,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			}
 
 			// nolint : contextcheck
-			vmRet, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
+			vmRet, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit), context.Background())
 			if vmConf.Tracer.OnTxEnd != nil {
 				vmConf.Tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, err)
 			}
@@ -1424,7 +1424,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	} else {
 		// Call Prepare to clear out the statedb access list
 		statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-		_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, vmenv)
+		_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, vmenv, context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %w", err)
 		}

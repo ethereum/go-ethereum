@@ -40,6 +40,7 @@ import (
 type ParallelEVMConfig struct {
 	Enable               bool
 	SpeculativeProcesses int
+	Enforce              bool
 }
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -118,7 +119,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 
 	// Apply the transaction to the current state (included in the env).
 	if *task.shouldDelayFeeCal {
-		task.result, err = ApplyMessageNoFeeBurnOrTip(evm, task.msg, new(GasPool).AddGas(task.gasLimit))
+		task.result, err = ApplyMessageNoFeeBurnOrTip(evm, task.msg, new(GasPool).AddGas(task.gasLimit), nil)
 
 		if task.result == nil || err != nil {
 			return blockstm.ErrExecAbortError{Dependency: task.statedb.DepTxIndex(), OriginError: err}
@@ -138,7 +139,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 			task.shouldRerunWithoutFeeDelay = true
 		}
 	} else {
-		task.result, err = ApplyMessage(evm, &task.msg, new(GasPool).AddGas(task.gasLimit))
+		task.result, err = ApplyMessage(evm, &task.msg, new(GasPool).AddGas(task.gasLimit), nil)
 	}
 
 	if task.statedb.HadInvalidRead() || err != nil {
@@ -264,7 +265,7 @@ var parallelizabilityTimer = metrics.NewRegisteredTimer("block/parallelizability
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
 // nolint:gocognit
-func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error) {
+func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config, interruptCtx context.Context) (*ProcessResult, error) {
 	var (
 		receipts    types.Receipts
 		header      = block.Header()
@@ -343,9 +344,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	backupStateDB := statedb.Copy()
 
-	ctx := context.Background()
 	profile := false
-	result, err := blockstm.ExecuteParallel(tasks, profile, metadata, p.bc.parallelSpeculativeProcesses, ctx)
+	result, err := blockstm.ExecuteParallel(tasks, profile, metadata, p.bc.parallelSpeculativeProcesses, interruptCtx)
 
 	if err == nil && profile && result.Deps != nil {
 		_, weight := result.Deps.LongestPath(*result.Stats)
@@ -379,7 +379,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 				t.totalUsedGas = usedGas
 			}
 
-			_, err = blockstm.ExecuteParallel(tasks, false, metadata, p.bc.parallelSpeculativeProcesses, ctx)
+			_, err = blockstm.ExecuteParallel(tasks, false, metadata, p.bc.parallelSpeculativeProcesses, interruptCtx)
 
 			break
 		}

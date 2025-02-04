@@ -150,7 +150,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, offset uint64, 
 	}
 
 	// Some blocks in ancientDB may have already been frozen and been pruned, so adding the offset to
-	// reprensent the absolute number of blocks already frozen.
+	// represent the absolute number of blocks already frozen.
 	freezer.frozen.Add(offset)
 
 	// Create the write batch.

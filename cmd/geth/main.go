@@ -457,29 +457,6 @@ func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 			}
 		}()
 	}
-
-	// POS-2798 - We don't really use cmd/geth for cli purposes
-	// And to maintain compatibility with the future upstream merges,
-	// we are removing the backend ethapi.Backend param from the function signature
-
-	// Start auxiliary services if enabled
-	// if ctx.Bool(utils.MiningEnabledFlag.Name) {
-	// 	// Mining only makes sense if a full Ethereum node is running
-	// 	if ctx.String(utils.SyncModeFlag.Name) == "light" {
-	// 		utils.Fatalf("Light clients do not support mining")
-	// 	}
-
-	// 	ethBackend, ok := backend.(*eth.EthAPIBackend)
-	// 	if !ok {
-	// 		utils.Fatalf("Ethereum service not running")
-	// 	}
-	// 	// Set the gas price to the limits from the CLI and start mining
-	// 	gasprice := flags.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
-	// 	ethBackend.TxPool().SetGasTip(gasprice)
-	// 	if err := ethBackend.StartMining(); err != nil {
-	// 		utils.Fatalf("Failed to start mining: %v", err)
-	// 	}
-	// }
 }
 
 // unlockAccounts unlocks any account specifically requested.

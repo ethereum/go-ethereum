@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"context"
 	"errors"
 	"math/big"
 	"sync/atomic"
@@ -170,7 +171,7 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int, interruptCtx context.Context) (ret []byte, leftOverGas uint64, err error) {
 	// Capture the tracer start/end events in debug mode
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, CALL, caller.Address(), addr, input, gas, value.ToBig())
@@ -229,7 +230,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
-			ret, err = evm.interpreter.Run(contract, input, false)
+			ret, err = evm.interpreter.PreRun(contract, input, false, interruptCtx)
 			gas = contract.Gas
 		}
 	}
@@ -295,7 +296,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
-		ret, err = evm.interpreter.PreRun(contract, input, false)
+		ret, err = evm.interpreter.PreRun(contract, input, false, nil)
 		gas = contract.Gas
 	}
 
@@ -348,7 +349,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
-		ret, err = evm.interpreter.PreRun(contract, input, false)
+		ret, err = evm.interpreter.PreRun(contract, input, false, nil)
 		gas = contract.Gas
 	}
 
@@ -412,7 +413,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
-		ret, err = evm.interpreter.PreRun(contract, input, true)
+		ret, err = evm.interpreter.PreRun(contract, input, true, nil)
 		gas = contract.Gas
 	}
 
@@ -550,7 +551,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // initNewContract runs a new contract's creation code, performs checks on the
 // resulting code that is to be deployed, and consumes necessary gas.
 func (evm *EVM) initNewContract(contract *Contract, address common.Address, value *uint256.Int) ([]byte, error) {
-	ret, err := evm.interpreter.Run(contract, nil, false)
+	ret, err := evm.interpreter.Run(contract, nil, false, nil)
 	if err != nil {
 		return ret, err
 	}

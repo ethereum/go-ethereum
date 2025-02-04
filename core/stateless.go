@@ -17,6 +17,8 @@
 package core
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
@@ -66,7 +68,7 @@ func ExecuteStateless(config *params.ChainConfig, block *types.Block, witness *s
 	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
 
 	// Run the stateless blocks processing and self-validate certain fields
-	res, err := processor.Process(block, db, vm.Config{})
+	res, err := processor.Process(block, db, vm.Config{}, context.Background())
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}

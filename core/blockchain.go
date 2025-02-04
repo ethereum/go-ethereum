@@ -19,6 +19,7 @@ package core
 
 import (
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -285,6 +286,7 @@ type BlockChain struct {
 	processor                    Processor // Block transaction processor interface
 	parallelProcessor            Processor // Parallel block transaction processor interface
 	parallelSpeculativeProcesses int       // Number of parallel speculative processes
+	enforceParallelProcessor     bool
 	forker                       *ForkChoice
 	vmConfig                     vm.Config
 	logger                       *tracing.Hooks
@@ -554,7 +556,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 }
 
 // NewParallelBlockChain , similar to NewBlockChain, creates a new blockchain object, but with a parallel state processor
-func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator, numprocs int) (*BlockChain, error) {
+func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator, numprocs int, enforce bool) (*BlockChain, error) {
 	bc, err := NewBlockChain(db, cacheConfig, genesis, overrides, engine, vmConfig, shouldPreserve, txLookupLimit, checker)
 
 	if err != nil {
@@ -572,12 +574,15 @@ func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis 
 
 	bc.parallelProcessor = NewParallelStateProcessor(chainConfig, bc, engine)
 	bc.parallelSpeculativeProcesses = numprocs
+	bc.enforceParallelProcessor = enforce
 
 	return bc, nil
 }
 
 func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ types.Receipts, _ []*types.Log, _ uint64, _ *state.StateDB, vtime time.Duration, blockEndErr error) {
 	// Process the block using processor and parallelProcessor at the same time, take the one which finishes first, cancel the other, and return the result
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	if bc.logger != nil && bc.logger.OnBlockStart != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
@@ -605,7 +610,12 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		parallel bool
 	}
 
-	resultChan := make(chan Result, 2)
+	var resultChanLen int = 2
+	if bc.enforceParallelProcessor {
+		log.Debug("Processing block using Block STM only", "number", block.NumberU64())
+		resultChanLen = 1
+	}
+	resultChan := make(chan Result, resultChanLen)
 
 	processorCount := 0
 
@@ -621,7 +631,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		go func() {
 			parallelStatedb.StartPrefetcher("chain", nil)
 			pstart := time.Now()
-			res, err := bc.parallelProcessor.Process(block, parallelStatedb, bc.vmConfig)
+			res, err := bc.parallelProcessor.Process(block, parallelStatedb, bc.vmConfig, ctx)
 			blockExecutionParallelTimer.UpdateSince(pstart)
 			if err == nil {
 				vstart := time.Now()
@@ -635,7 +645,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		}()
 	}
 
-	if bc.processor != nil {
+	if bc.processor != nil && !bc.enforceParallelProcessor {
 		statedb, err := state.New(parent.Root, bc.statedb)
 		if err != nil {
 			return nil, nil, 0, nil, 0, err
@@ -647,7 +657,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		go func() {
 			statedb.StartPrefetcher("chain", nil)
 			pstart := time.Now()
-			res, err := bc.processor.Process(block, statedb, bc.vmConfig)
+			res, err := bc.processor.Process(block, statedb, bc.vmConfig, ctx)
 			blockExecutionSerialTimer.UpdateSince(pstart)
 			if err == nil {
 				vstart := time.Now()
@@ -2416,7 +2426,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		// Before the actual db insertion happens, verify the block against the whitelisted
 		// milestone and checkpoint. This is to prevent a race condition where a milestone
 		// or checkpoint was whitelisted while the block execution happened (and wasn't
-		// available sometime before) and the block turns out to be inavlid (i.e. not
+		// available sometime before) and the block turns out to be invalid (i.e. not
 		// honouring the milestone or checkpoint). Use the block itself as current block
 		// so that it's considered as a `past` chain and the validation doesn't get bypassed.
 		isValid, err = bc.forker.ValidateReorg(block.Header(), []*types.Header{block.Header()})
@@ -2559,7 +2569,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	res, err := bc.processor.Process(block, statedb, bc.vmConfig)
+	res, err := bc.processor.Process(block, statedb, bc.vmConfig, context.Background())
 	if err != nil {
 		bc.reportBlock(block, res, err)
 		return nil, err

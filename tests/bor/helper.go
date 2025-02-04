@@ -3,7 +3,6 @@
 package bor
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
@@ -219,8 +218,6 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 		b.addTxWithChain(chain, state, tx, addr)
 	}
 
-	ctx := context.Background()
-
 	// Finalize and seal the block
 	block, err := _bor.FinalizeAndAssemble(chain, b.header, state, &types.Body{
 		Transactions: b.txs,
@@ -242,7 +239,7 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 
 	res := make(chan *types.Block, 1)
 
-	err = _bor.Seal(ctx, chain, block, res, nil)
+	err = _bor.Seal(chain, block, res, nil)
 	if err != nil {
 		// an error case - sign manually
 		sign(t, header, signer, borConfig)

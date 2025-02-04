@@ -597,6 +597,8 @@ type ParallelEVMConfig struct {
 	Enable bool `hcl:"enable,optional" toml:"enable,optional"`
 
 	SpeculativeProcesses int `hcl:"procs,optional" toml:"procs,optional"`
+
+	Enforce bool `hcl:"enforce,optional" toml:"enforce,optional"`
 }
 
 func DefaultConfig() *Config {
@@ -658,9 +660,9 @@ func DefaultConfig() *Config {
 			PriceLimit:   params.BorDefaultTxPoolPriceLimit, // bor's default
 			PriceBump:    10,
 			AccountSlots: 16,
-			GlobalSlots:  32768,
-			AccountQueue: 16,
-			GlobalQueue:  32768,
+			GlobalSlots:  131072,
+			AccountQueue: 64,
+			GlobalQueue:  131072,
 			LifeTime:     3 * time.Hour,
 		},
 		Sealer: &SealerConfig{
@@ -794,6 +796,7 @@ func DefaultConfig() *Config {
 		ParallelEVM: &ParallelEVMConfig{
 			Enable:               true,
 			SpeculativeProcesses: 8,
+			Enforce:              false,
 		},
 	}
 }
@@ -1199,6 +1202,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 
 	n.ParallelEVM.Enable = c.ParallelEVM.Enable
 	n.ParallelEVM.SpeculativeProcesses = c.ParallelEVM.SpeculativeProcesses
+	n.ParallelEVM.Enforce = c.ParallelEVM.Enforce
 	n.RPCReturnDataLimit = c.RPCReturnDataLimit
 
 	if c.Ancient != "" {

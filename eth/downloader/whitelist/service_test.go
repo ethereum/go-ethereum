@@ -559,7 +559,7 @@ func TestIsValidChain(t *testing.T) {
 	s.ProcessMilestone(tempChain[1].Number.Uint64(), tempChain[1].Hash())
 
 	// case10: Try importing a past chain having valid checkpoint, should
-	// consider the chain as invalid as still lastest milestone is ahead of the chain.
+	// consider the chain as invalid as still latest milestone is ahead of the chain.
 	res, err = s.IsValidChain(tempChain[1], chainA)
 	require.Nil(t, err)
 	require.Equal(t, res, false, "expected chain to be invalid")

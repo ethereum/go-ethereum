@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -89,7 +90,7 @@ func precacheTransaction(msg *Message, _ *params.ChainConfig, gaspool *GasPool, 
 	// Update the evm with the new transaction context.
 	evm.Reset(NewEVMTxContext(msg), statedb)
 	// Add addresses to access list if applicable
-	_, err := ApplyMessage(evm, msg, gaspool)
+	_, err := ApplyMessage(evm, msg, gaspool, context.Background())
 
 	return err
 }

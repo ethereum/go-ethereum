@@ -196,7 +196,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 
 		vmenv := vm.NewEVM(blockContext, txContext, statedb, b.chainConfig, vm.Config{})
 		// nolint : contextcheck
-		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
+		if _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background()); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 

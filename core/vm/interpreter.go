@@ -41,10 +41,12 @@ var (
 	ErrNoCurrentTx               = errors.New("no current tx found in interruptCtx")
 )
 
+type InterruptKeyType string
+
 const (
 	// These are keys for the interruptCtx
-	InterruptCtxDelayKey       = "delay"
-	InterruptCtxOpcodeDelayKey = "opcodeDelay"
+	InterruptCtxDelayKey       InterruptKeyType = "delay"
+	InterruptCtxOpcodeDelayKey InterruptKeyType = "opcodeDelay"
 
 	// InterruptedTxCacheSize is size of lru cache for interrupted txs
 	InterruptedTxCacheSize = 90000
@@ -229,8 +231,20 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 }
 
 // PreRun is a wrapper around Run that allows for a delay to be injected before each opcode when induced by tests else it calls the lagace Run() method
-func (in *EVMInterpreter) PreRun(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
-	return in.Run(contract, input, readOnly)
+func (in *EVMInterpreter) PreRun(contract *Contract, input []byte, readOnly bool, interruptCtx context.Context) (ret []byte, err error) {
+	var opcodeDelay interface{}
+
+	if interruptCtx != nil {
+		if interruptCtx.Value(InterruptCtxOpcodeDelayKey) != nil {
+			opcodeDelay = interruptCtx.Value(InterruptCtxOpcodeDelayKey)
+		}
+	}
+
+	if opcodeDelay != nil {
+		return in.RunWithDelay(contract, input, readOnly, interruptCtx, opcodeDelay.(uint))
+	}
+
+	return in.Run(contract, input, readOnly, interruptCtx)
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
@@ -240,7 +254,7 @@ func (in *EVMInterpreter) PreRun(contract *Contract, input []byte, readOnly bool
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 // nolint: gocognit
-func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, interruptCtx context.Context) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -287,7 +301,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// they are returned to the pools
 	defer func() {
 		returnStack(stack)
-		mem.Free()
 	}()
 
 	contract.Input = input
@@ -310,6 +323,32 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
 	for {
+		if interruptCtx != nil {
+			// case of interrupting by timeout
+			select {
+			case <-interruptCtx.Done():
+				txHash, _ := GetCurrentTxFromContext(interruptCtx)
+				interruptedTxCache, _ := GetCache(interruptCtx)
+
+				if interruptedTxCache == nil {
+					break
+				}
+
+				// if the tx is already in the cache, it means that it has been interrupted before and we will not interrupt it again
+				found, _ := interruptedTxCache.Cache.ContainsOrAdd(txHash, true)
+				if found {
+					interruptedTxCache.Cache.Remove(txHash)
+				} else {
+					// if the tx is not in the cache, it means that it has not been interrupted before and we will interrupt it
+					opcodeCommitInterruptCounter.Inc(1)
+					log.Warn("OPCODE Level interrupt")
+
+					return nil, ErrInterrupt
+				}
+			default:
+			}
+		}
+
 		if debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas

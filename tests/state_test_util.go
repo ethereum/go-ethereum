@@ -319,7 +319,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	snapshot := st.StateDB.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
-	vmRet, err := core.ApplyMessage(evm, msg, gaspool)
+	vmRet, err := core.ApplyMessage(evm, msg, gaspool, nil)
 	if err != nil {
 		st.StateDB.RevertToSnapshot(snapshot)
 		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
