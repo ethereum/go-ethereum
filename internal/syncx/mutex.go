@@ -17,36 +17,62 @@
 // Package syncx contains exotic synchronization primitives.
 package syncx
 
-// ClosableMutex is a mutex that can also be closed.
-// Once closed, it can never be taken again.
+import (
+	"sync"
+)
+
+// ClosableMutex is a mutex that can be closed. Once closed, it cannot be locked again.
 type ClosableMutex struct {
-	ch chan struct{}
+	mu     sync.Mutex // Protects the following fields
+	closed bool
+	ch     chan struct{}
 }
 
+// NewClosableMutex creates a new closable mutex.
 func NewClosableMutex() *ClosableMutex {
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
-	return &ClosableMutex{ch}
+	return &ClosableMutex{ch: ch}
 }
 
-// TryLock attempts to lock cm.
-// If the mutex is closed, TryLock returns false.
+// TryLock attempts to acquire the lock. Returns true if successful, false if the lock is closed or unavailable.
 func (cm *ClosableMutex) TryLock() bool {
-	_, ok := <-cm.ch
-	return ok
-}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.closed {
+		return false
+	}
 
-// MustLock locks cm.
-// If the mutex is closed, MustLock panics.
-func (cm *ClosableMutex) MustLock() {
-	_, ok := <-cm.ch
-	if !ok {
-		panic("mutex closed")
+	select {
+	case <-cm.ch:
+		return true
+	default:
+		return false
 	}
 }
 
-// Unlock unlocks cm.
+// MustLock acquires the lock. Panics if the lock is already closed.
+func (cm *ClosableMutex) MustLock() {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.closed {
+		panic("mutex closed")
+	}
+	select {
+	case <-cm.ch:
+		return
+	default:
+		panic("mutex is already locked")
+	}
+}
+
+// Unlock releases the lock. Panics if the lock is already closed or if called without holding the lock.
 func (cm *ClosableMutex) Unlock() {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.closed {
+		panic("Unlock after Close")
+	}
 	select {
 	case cm.ch <- struct{}{}:
 	default:
@@ -54,11 +80,13 @@ func (cm *ClosableMutex) Unlock() {
 	}
 }
 
-// Close locks the mutex, then closes it.
+// Close closes the mutex, preventing further lock operations. Panics if called on an already-closed mutex.
 func (cm *ClosableMutex) Close() {
-	_, ok := <-cm.ch
-	if !ok {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.closed {
 		panic("Close of already-closed ClosableMutex")
 	}
-	close(cm.ch)
+	cm.closed = true
+	close(cm.ch) // Closing the channel will cause subsequent send operations to panic
 }
