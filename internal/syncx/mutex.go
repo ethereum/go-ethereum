@@ -65,7 +65,10 @@ func (cm *ClosableMutex) Unlock() {
 // Close locks the mutex, then closes it.
 func (cm *ClosableMutex) Close() {
 	select {
-	case <-cm.ch:
+	case _, ok := <-cm.ch:
+		if !ok {
+			panic("Close of already-closed ClosableMutex")
+		}
 	default:
 	}
 	close(cm.ch)
