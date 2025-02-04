@@ -152,7 +152,7 @@ func Transition(ctx *cli.Context) error {
 	}
 	if err := applyEOFChecks(&prestate, chainConfig); err != nil {
 		return err
-  }
+	}
 
 	// Configure tracer
 	if ctx.IsSet(TraceTracerFlag.Name) { // Custom tracing
@@ -281,7 +281,7 @@ func applyEOFChecks(prestate *Prestate, chainConfig *params.ChainConfig) error {
 			)
 			err = c.UnmarshalBinary(acc.Code, false)
 			if err == nil {
-				jt := vm.NewPragueEOFInstructionSetForTesting()
+				jt := vm.NewEOFInstructionSetForTesting()
 				err = c.ValidateCode(&jt, false)
 			}
 			if err != nil {

@@ -115,7 +115,7 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		expected := new(uint256.Int).SetBytes(common.Hex2Bytes(test.Expected))
 		stack.push(x)
 		stack.push(y)
-		opFn(&pc, evmInterpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
+		opFn(&pc, evm.interpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", name, len(stack.data))
 		}
@@ -229,7 +229,7 @@ func TestAddMod(t *testing.T) {
 		stack.push(z)
 		stack.push(y)
 		stack.push(x)
-		opAddmod(&pc, evmInterpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
+		opAddmod(&pc, evm.interpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
 		actual := stack.pop()
 		if actual.Cmp(expected) != 0 {
 			t.Errorf("Testcase %d, expected  %x, got %x", i, expected, actual)
@@ -255,7 +255,7 @@ func TestWriteExpectedValues(t *testing.T) {
 			y := new(uint256.Int).SetBytes(common.Hex2Bytes(param.y))
 			stack.push(x)
 			stack.push(y)
-			opFn(&pc, interpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
+			opFn(&pc, evm.interpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
 			actual := stack.pop()
 			result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
 		}
@@ -289,10 +289,9 @@ func TestJsonTestcases(t *testing.T) {
 
 func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	var (
-		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
-		stack          = newstack()
-		scope          = &ScopeContext{nil, stack, nil, 0, nil, false}
-		evmInterpreter = NewEVMInterpreter(env)
+		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		stack = newstack()
+		scope = &ScopeContext{nil, stack, nil, 0, nil, false}
 	)
 	// convert args
 	intArgs := make([]*uint256.Int, len(args))
@@ -537,13 +536,13 @@ func TestOpMstore(t *testing.T) {
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
 	stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
 	stack.push(new(uint256.Int))
-	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
+	opMstore(&pc, evm.interpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
 	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
 	stack.push(new(uint256.Int).SetUint64(0x1))
 	stack.push(new(uint256.Int))
-	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
+	opMstore(&pc, evm.interpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
 	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
 	}
@@ -564,23 +563,22 @@ func BenchmarkOpMstore(bench *testing.B) {
 	for i := 0; i < bench.N; i++ {
 		stack.push(value)
 		stack.push(memStart)
-		opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
+		opMstore(&pc, evm.interpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
 	}
 }
 
 func TestOpTstore(t *testing.T) {
 	var (
-		statedb, _     = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-		env            = NewEVM(BlockContext{}, TxContext{}, statedb, params.TestChainConfig, Config{})
-		stack          = newstack()
-		mem            = NewMemory()
-		evmInterpreter = NewEVMInterpreter(env)
-		caller         = common.Address{}
-		to             = common.Address{1}
-		contractRef    = contractRef{caller}
-		contract       = NewContract(contractRef, AccountRef(to), new(uint256.Int), 0)
-		scopeContext   = ScopeContext{mem, stack, contract, 0, nil, false}
-		value          = common.Hex2Bytes("abcdef00000000000000abba000000000deaf000000c0de00100000000133700")
+		statedb, _   = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		evm          = NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+		stack        = newstack()
+		mem          = NewMemory()
+		caller       = common.Address{}
+		to           = common.Address{1}
+		contractRef  = contractRef{caller}
+		contract     = NewContract(contractRef, AccountRef(to), new(uint256.Int), 0)
+		scopeContext = ScopeContext{mem, stack, contract, 0, nil, false}
+		value        = common.Hex2Bytes("abcdef00000000000000abba000000000deaf000000c0de00100000000133700")
 	)
 
 	// Add a stateObject for the caller and the contract being called
@@ -624,7 +622,7 @@ func BenchmarkOpKeccak256(bench *testing.B) {
 	for i := 0; i < bench.N; i++ {
 		stack.push(uint256.NewInt(32))
 		stack.push(start)
-		opKeccak256(&pc, evmInterpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
+		opKeccak256(&pc, evm.interpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
 	}
 }
 
@@ -718,7 +716,7 @@ func TestRandom(t *testing.T) {
 			stack = newstack()
 			pc    = uint64(0)
 		)
-		opRandom(&pc, evmInterpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
+		opRandom(&pc, evm.interpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
 		}
@@ -760,7 +758,7 @@ func TestBlobHash(t *testing.T) {
 		)
 		evm.SetTxContext(TxContext{BlobHashes: tt.hashes})
 		stack.push(uint256.NewInt(tt.idx))
-		opBlobHash(&pc, evmInterpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
+		opBlobHash(&pc, evm.interpreter, &ScopeContext{nil, stack, nil, 0, nil, false})
 		if len(stack.data) != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
 		}
@@ -900,7 +898,7 @@ func TestOpMCopy(t *testing.T) {
 			mem.Resize(memorySize)
 		}
 		// Do the copy
-		opMcopy(&pc, evmInterpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
+		opMcopy(&pc, evm.interpreter, &ScopeContext{mem, stack, nil, 0, nil, false})
 		want := common.FromHex(strings.ReplaceAll(tc.want, " ", ""))
 		if have := mem.store; !bytes.Equal(want, have) {
 			t.Errorf("case %d: \nwant: %#x\nhave: %#x\n", i, want, have)
