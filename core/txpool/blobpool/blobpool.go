@@ -1269,7 +1269,7 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
-func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
+func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
 		adds = make([]*types.Transaction, 0, len(txs))
 		errs = make([]error, len(txs))
@@ -1699,13 +1699,6 @@ func (p *BlobPool) Content() (map[common.Address][]*types.Transaction, map[commo
 // TODO(karalabe): Abstract out the returned metadata.
 func (p *BlobPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
 	return []*types.Transaction{}, []*types.Transaction{}
-}
-
-// Locals retrieves the accounts currently considered local by the pool.
-//
-// There is no notion of local accounts in the blob pool.
-func (p *BlobPool) Locals() []common.Address {
-	return []common.Address{}
 }
 
 // Status returns the known status (unknown/pending/queued) of a transaction
