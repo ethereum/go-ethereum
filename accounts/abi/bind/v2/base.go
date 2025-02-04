@@ -19,10 +19,11 @@ package bind
 import (
 	"context"
 	"errors"
-	"github.com/ethereum/go-ethereum/event"
 	"math/big"
 	"strings"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/event"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
