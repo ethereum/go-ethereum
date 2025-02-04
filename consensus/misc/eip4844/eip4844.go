@@ -53,7 +53,7 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 		return fmt.Errorf("blob gas used %d not a multiple of blob gas per blob %d", header.BlobGasUsed, params.BlobTxBlobGasPerBlob)
 	}
 	// Verify the excessBlobGas is correct based on the parent header
-	expectedExcessBlobGas := CalcExcessBlobGas(config, parent, header)
+	expectedExcessBlobGas := CalcExcessBlobGas(config, parent, header.Time)
 	if *header.ExcessBlobGas != expectedExcessBlobGas {
 		return fmt.Errorf("invalid excessBlobGas: have %d, want %d", *header.ExcessBlobGas, expectedExcessBlobGas)
 	}
@@ -62,9 +62,8 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 
 // CalcExcessBlobGas calculates the excess blob gas after applying the set of
 // blobs on top of the excess blob gas.
-func CalcExcessBlobGas(config *params.ChainConfig, parent, header *types.Header) uint64 {
+func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTimestamp uint64) uint64 {
 	var (
-		targetGas           = uint64(targetBlobsPerBlock(config, header.Time)) * params.BlobTxBlobGasPerBlob
 		parentExcessBlobGas uint64
 		parentBlobGasUsed   uint64
 	)
@@ -73,6 +72,7 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent, header *types.Header)
 		parentBlobGasUsed = *parent.BlobGasUsed
 	}
 	excessBlobGas := parentExcessBlobGas + parentBlobGasUsed
+	targetGas := uint64(targetBlobsPerBlock(config, headTimestamp)) * params.BlobTxBlobGasPerBlob
 	if excessBlobGas < targetGas {
 		return 0
 	}
