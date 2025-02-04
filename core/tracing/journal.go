@@ -24,11 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-const (
-	CREATE  = 0xf0
-	CREATE2 = 0xf5
-)
-
 // journal is a state change journal to be wrapped around a tracer.
 // It will emit the state change hooks with reverse values when a call reverts.
 type journal struct {

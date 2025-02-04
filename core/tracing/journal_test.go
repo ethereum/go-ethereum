@@ -35,6 +35,9 @@ type testTracer struct {
 
 func (t *testTracer) OnBalanceChange(addr common.Address, prev *big.Int, new *big.Int, reason BalanceChangeReason) {
 	t.t.Logf("OnBalanceChange(%v, %v -> %v, %v)", addr, prev, new, reason)
+	if t.bal != nil && t.bal.Cmp(prev) != 0 {
+		t.t.Errorf("  !! wrong prev balance (expected %v)", t.bal)
+	}
 	t.bal = new
 }
 
@@ -71,19 +74,25 @@ func TestJournalIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to wrap test tracer: %v", err)
 	}
+
 	addr := common.HexToAddress("0x1234")
-	wr.OnEnter(0, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnBalanceChange(addr, nil, big.NewInt(100), BalanceChangeUnspecified)
-	wr.OnCodeChange(addr, common.Hash{}, nil, common.Hash{}, []byte{1, 2, 3})
-	wr.OnStorageChange(addr, common.Hash{1}, common.Hash{}, common.Hash{2})
-	wr.OnEnter(1, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnNonceChangeV2(addr, 0, 1, NonceChangeUnspecified)
-	wr.OnBalanceChange(addr, big.NewInt(100), big.NewInt(200), BalanceChangeUnspecified)
-	wr.OnBalanceChange(addr, big.NewInt(200), big.NewInt(250), BalanceChangeUnspecified)
-	wr.OnStorageChange(addr, common.Hash{1}, common.Hash{2}, common.Hash{3})
-	wr.OnStorageChange(addr, common.Hash{2}, common.Hash{}, common.Hash{4})
-	wr.OnExit(1, nil, 100, errors.New("revert"), true)
-	wr.OnExit(0, nil, 150, nil, false)
+	{
+		wr.OnEnter(0, 0, addr, addr, nil, 1000, big.NewInt(0))
+		wr.OnBalanceChange(addr, nil, big.NewInt(100), BalanceChangeUnspecified)
+		wr.OnCodeChange(addr, common.Hash{}, nil, common.Hash{}, []byte{1, 2, 3})
+		wr.OnStorageChange(addr, common.Hash{1}, common.Hash{}, common.Hash{2})
+		{
+			wr.OnEnter(1, 0, addr, addr, nil, 1000, big.NewInt(0))
+			wr.OnNonceChangeV2(addr, 0, 1, NonceChangeUnspecified)
+			wr.OnBalanceChange(addr, big.NewInt(100), big.NewInt(200), BalanceChangeUnspecified)
+			wr.OnBalanceChange(addr, big.NewInt(200), big.NewInt(250), BalanceChangeUnspecified)
+			wr.OnStorageChange(addr, common.Hash{1}, common.Hash{2}, common.Hash{3})
+			wr.OnStorageChange(addr, common.Hash{2}, common.Hash{}, common.Hash{4})
+			wr.OnExit(1, nil, 100, errors.New("revert"), true)
+		}
+		wr.OnExit(0, nil, 150, nil, false)
+	}
+
 	if tr.bal.Cmp(big.NewInt(100)) != 0 {
 		t.Fatalf("unexpected balance: %v", tr.bal)
 	}
@@ -107,15 +116,21 @@ func TestJournalTopRevert(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to wrap test tracer: %v", err)
 	}
+
 	addr := common.HexToAddress("0x1234")
-	wr.OnEnter(0, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnBalanceChange(addr, big.NewInt(0), big.NewInt(100), BalanceChangeUnspecified)
-	wr.OnEnter(1, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnNonceChangeV2(addr, 0, 1, NonceChangeUnspecified)
-	wr.OnBalanceChange(addr, big.NewInt(100), big.NewInt(200), BalanceChangeUnspecified)
-	wr.OnBalanceChange(addr, big.NewInt(200), big.NewInt(250), BalanceChangeUnspecified)
-	wr.OnExit(0, nil, 100, errors.New("revert"), true)
-	wr.OnExit(0, nil, 150, errors.New("revert"), true)
+	{
+		wr.OnEnter(0, 0, addr, addr, nil, 1000, big.NewInt(0))
+		wr.OnBalanceChange(addr, big.NewInt(0), big.NewInt(100), BalanceChangeUnspecified)
+		{
+			wr.OnEnter(1, 0, addr, addr, nil, 1000, big.NewInt(0))
+			wr.OnNonceChangeV2(addr, 0, 1, NonceChangeUnspecified)
+			wr.OnBalanceChange(addr, big.NewInt(100), big.NewInt(200), BalanceChangeUnspecified)
+			wr.OnBalanceChange(addr, big.NewInt(200), big.NewInt(250), BalanceChangeUnspecified)
+			wr.OnExit(1, nil, 100, errors.New("revert"), true)
+		}
+		wr.OnExit(0, nil, 150, errors.New("revert"), true)
+	}
+
 	if tr.bal.Cmp(big.NewInt(0)) != 0 {
 		t.Fatalf("unexpected balance: %v", tr.bal)
 	}
@@ -124,45 +139,75 @@ func TestJournalTopRevert(t *testing.T) {
 	}
 }
 
+// This test checks that changes in nested calls are reverted properly.
 func TestJournalNestedCalls(t *testing.T) {
 	tr := &testTracer{t: t}
 	wr, err := WrapWithJournal(&Hooks{OnBalanceChange: tr.OnBalanceChange, OnNonceChange: tr.OnNonceChange})
 	if err != nil {
 		t.Fatalf("failed to wrap test tracer: %v", err)
 	}
+
 	addr := common.HexToAddress("0x1234")
-	wr.OnEnter(0, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnEnter(1, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnBalanceChange(addr, big.NewInt(0), big.NewInt(100), BalanceChangeUnspecified)
-	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnExit(2, nil, 100, nil, false)
-	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnExit(2, nil, 100, nil, false)
-	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnBalanceChange(addr, big.NewInt(100), big.NewInt(200), BalanceChangeUnspecified)
-	wr.OnExit(2, nil, 100, nil, false)
-	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnBalanceChange(addr, big.NewInt(200), big.NewInt(300), BalanceChangeUnspecified)
-	wr.OnExit(2, nil, 100, errors.New("revert"), true)
-	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnExit(2, nil, 100, errors.New("revert"), true)
-	wr.OnExit(1, nil, 100, errors.New("revert"), true)
-	wr.OnExit(0, nil, 150, nil, false)
-	if tr.bal.Sign() != 0 {
+	{
+		wr.OnEnter(0, 0, addr, addr, nil, 1000, big.NewInt(0))
+		wr.OnBalanceChange(addr, big.NewInt(0), big.NewInt(100), BalanceChangeUnspecified)
+		{
+			wr.OnEnter(1, 0, addr, addr, nil, 1000, big.NewInt(0))
+			wr.OnBalanceChange(addr, big.NewInt(100), big.NewInt(200), BalanceChangeUnspecified)
+			{
+				wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+				wr.OnExit(2, nil, 100, nil, false)
+			}
+			{
+				wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+				wr.OnBalanceChange(addr, big.NewInt(200), big.NewInt(300), BalanceChangeUnspecified)
+				wr.OnExit(2, nil, 100, nil, false)
+			}
+			{
+				wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+				wr.OnExit(2, nil, 100, nil, false)
+			}
+			wr.OnBalanceChange(addr, big.NewInt(300), big.NewInt(400), BalanceChangeUnspecified)
+			{
+				wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+				wr.OnBalanceChange(addr, big.NewInt(400), big.NewInt(500), BalanceChangeUnspecified)
+				wr.OnExit(2, nil, 100, errors.New("revert"), true)
+			}
+			{
+				wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+				wr.OnExit(2, nil, 100, errors.New("revert"), true)
+			}
+			{
+				wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+				wr.OnBalanceChange(addr, big.NewInt(400), big.NewInt(600), BalanceChangeUnspecified)
+				wr.OnExit(2, nil, 100, nil, false)
+			}
+			wr.OnExit(1, nil, 100, errors.New("revert"), true)
+		}
+		wr.OnExit(0, nil, 150, nil, false)
+	}
+
+	if tr.bal.Uint64() != 100 {
 		t.Fatalf("unexpected balance: %v", tr.bal)
 	}
 }
 
 func TestNonceIncOnCreate(t *testing.T) {
+	const opCREATE = 0xf0
+
 	tr := &testTracer{t: t}
 	wr, err := WrapWithJournal(&Hooks{OnNonceChange: tr.OnNonceChange})
 	if err != nil {
 		t.Fatalf("failed to wrap test tracer: %v", err)
 	}
+
 	addr := common.HexToAddress("0x1234")
-	wr.OnEnter(0, CREATE, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnNonceChangeV2(addr, 0, 1, NonceChangeContractCreator)
-	wr.OnExit(0, nil, 100, errors.New("revert"), true)
+	{
+		wr.OnEnter(0, opCREATE, addr, addr, nil, 1000, big.NewInt(0))
+		wr.OnNonceChangeV2(addr, 0, 1, NonceChangeContractCreator)
+		wr.OnExit(0, nil, 100, errors.New("revert"), true)
+	}
+
 	if tr.nonce != 1 {
 		t.Fatalf("unexpected nonce: %v", tr.nonce)
 	}
@@ -174,10 +219,14 @@ func TestOnNonceChangeV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to wrap test tracer: %v", err)
 	}
+
 	addr := common.HexToAddress("0x1234")
-	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnNonceChangeV2(addr, 0, 1, NonceChangeEoACall)
-	wr.OnExit(2, nil, 100, nil, true)
+	{
+		wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+		wr.OnNonceChangeV2(addr, 0, 1, NonceChangeEoACall)
+		wr.OnExit(2, nil, 100, nil, true)
+	}
+
 	if tr.nonce != 0 {
 		t.Fatalf("unexpected nonce: %v", tr.nonce)
 	}
