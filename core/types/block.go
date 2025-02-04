@@ -309,6 +309,7 @@ func CopyHeader(h *Header) *Header {
 		cpy.ParentBeaconRoot = new(common.Hash)
 		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
 	}
+	h.hooks().PostCopy(&cpy)
 	return &cpy
 }
 

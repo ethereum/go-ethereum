@@ -29,6 +29,7 @@ import (
 	. "github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
 	"github.com/ava-labs/libevm/libevm/ethtest"
+	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -36,6 +37,8 @@ type stubHeaderHooks struct {
 	suffix                                   []byte
 	gotRawJSONToUnmarshal, gotRawRLPToDecode []byte
 	setHeaderToOnUnmarshalOrDecode           Header
+	accessor                                 pseudo.Accessor[*Header, *stubHeaderHooks]
+	toCopy                                   *stubHeaderHooks
 
 	errMarshal, errUnmarshal, errEncode, errDecode error
 }
@@ -73,6 +76,10 @@ func (hh *stubHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 	hh.gotRawRLPToDecode = r
 	*h = hh.setHeaderToOnUnmarshalOrDecode
 	return hh.errDecode
+}
+
+func (hh *stubHeaderHooks) PostCopy(dst *Header) {
+	hh.accessor.Set(dst, hh.toCopy)
 }
 
 func TestHeaderHooks(t *testing.T) {
@@ -133,6 +140,20 @@ func TestHeaderHooks(t *testing.T) {
 
 		assert.Equal(t, input, stub.gotRawRLPToDecode, "raw RLP received by hooks")
 		assert.Equalf(t, &stub.setHeaderToOnUnmarshalOrDecode, hdr, "%T after RLP decoding with hook", hdr)
+	})
+
+	t.Run("PostCopy", func(t *testing.T) {
+		hdr := new(Header)
+		stub := &stubHeaderHooks{
+			accessor: extras.Header,
+			toCopy: &stubHeaderHooks{
+				suffix: []byte("copied"),
+			},
+		}
+		extras.Header.Set(hdr, stub)
+
+		got := extras.Header.Get(CopyHeader(hdr))
+		assert.Equal(t, stub.toCopy, got)
 	})
 
 	t.Run("error_propagation", func(t *testing.T) {
