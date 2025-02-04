@@ -27,11 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-// TODO: remove this and use NewBoundContract directly
-func NewContractInstance(backend ContractBackend, addr common.Address, abi abi.ABI) BoundContract {
-	return NewBoundContract(backend, addr, abi)
-}
-
 // ContractEvent is a type constraint for ABI event types.
 type ContractEvent interface {
 	ContractEventName() string
