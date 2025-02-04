@@ -52,7 +52,7 @@ func NewDB() *DB {
 
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
-func (c *DB) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+func (c *DB) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
 	return bind.NewContractInstance(backend, addr, c.abi)
 }
 
