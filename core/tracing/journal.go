@@ -19,7 +19,6 @@ package tracing
 import (
 	"fmt"
 	"math/big"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,20 +29,12 @@ const (
 	CREATE2 = 0xf5
 )
 
-type revision struct {
-	id           int
-	journalIndex int
-}
-
 // journal is a state change journal to be wrapped around a tracer.
 // It will emit the state change hooks with reverse values when a call reverts.
 type journal struct {
-	entries []entry
-	hooks   *Hooks
-
-	validRevisions []revision
-	nextRevisionId int
-	revIds         []int
+	hooks     *Hooks
+	entries   []entry
+	revisions []int
 }
 
 type entry interface {
@@ -64,9 +55,10 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	}
 
 	// Create a new Hooks instance and copy all hooks
-	wrapped := hooks.copy()
+	wrapped := *hooks
+
 	// Create journal
-	j := &journal{entries: make([]entry, 0), hooks: hooks}
+	j := &journal{hooks: hooks}
 	// Scope hooks need to be re-implemented.
 	wrapped.OnTxEnd = j.OnTxEnd
 	wrapped.OnEnter = j.OnEnter
@@ -89,7 +81,7 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 		wrapped.OnStorageChange = j.OnStorageChange
 	}
 
-	return wrapped, nil
+	return &wrapped, nil
 }
 
 // reset clears the journal, after this operation the journal can be used anew.
@@ -97,48 +89,34 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 // can be reused.
 func (j *journal) reset() {
 	j.entries = j.entries[:0]
-	j.validRevisions = j.validRevisions[:0]
-	j.nextRevisionId = 0
+	j.revisions = j.revisions[:0]
 }
 
-// snapshot returns an identifier for the current revision of the state.
-func (j *journal) snapshot() int {
-	id := j.nextRevisionId
-	j.nextRevisionId++
-	j.validRevisions = append(j.validRevisions, revision{id, j.length()})
-	return id
+// snapshot records a revision and stores it to the revision stack.
+func (j *journal) snapshot() {
+	rev := len(j.entries)
+	j.revisions = append(j.revisions, rev)
 }
 
-// revertToSnapshot reverts all state changes made since the given revision.
-func (j *journal) revertToSnapshot(revid int, hooks *Hooks) {
-	// Find the snapshot in the stack of valid snapshots.
-	idx := sort.Search(len(j.validRevisions), func(i int) bool {
-		return j.validRevisions[i].id >= revid
-	})
-	if idx == len(j.validRevisions) || j.validRevisions[idx].id != revid {
-		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
-	}
-	snapshot := j.validRevisions[idx].journalIndex
-
-	// Replay the journal to undo changes and remove invalidated snapshots
-	j.revert(hooks, snapshot)
-	j.validRevisions = j.validRevisions[:idx]
-}
-
-// revert undoes a batch of journaled modifications.
-func (j *journal) revert(hooks *Hooks, snapshot int) {
-	for i := len(j.entries) - 1; i >= snapshot; i-- {
-		// Undo the changes made by the operation
+// revert reverts all state changes up to the last tracked revision.
+func (j *journal) revert(hooks *Hooks) {
+	// Replay the journal entries above the last revision to undo changes,
+	// then remove the reverted changes from the journal.
+	rev := j.revisions[len(j.revisions)-1]
+	for i := len(j.entries) - 1; i >= rev; i-- {
 		j.entries[i].revert(hooks)
 	}
-	j.entries = j.entries[:snapshot]
+	j.entries = j.entries[:rev]
+	j.popRevision()
 }
 
-// length returns the current number of entries in the journal.
-func (j *journal) length() int {
-	return len(j.entries)
+// popRevision removes an item from the revision stack. This basically forgets about
+// the last call to snapshot() and moves to the one prior.
+func (j *journal) popRevision() {
+	j.revisions = j.revisions[:len(j.revisions)-1]
 }
 
+// OnTxEnd resets the journal since each transaction has its own EVM call stack.
 func (j *journal) OnTxEnd(receipt *types.Receipt, err error) {
 	j.reset()
 	if j.hooks.OnTxEnd != nil {
@@ -146,18 +124,22 @@ func (j *journal) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 }
 
+// OnEnter is invoked for each EVM call frame and records a journal revision.
 func (j *journal) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	j.revIds = append(j.revIds, j.snapshot())
+	j.snapshot()
 	if j.hooks.OnEnter != nil {
 		j.hooks.OnEnter(depth, typ, from, to, input, gas, value)
 	}
 }
 
+// OnExit is invoked when an EVM call frame ends.
+// If the call has reverted, all state changes made by that frame are undone.
+// If the call did not revert, we forget about changes in that revision.
 func (j *journal) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	revId := j.revIds[len(j.revIds)-1]
-	j.revIds = j.revIds[:len(j.revIds)-1]
 	if reverted {
-		j.revertToSnapshot(revId, j.hooks)
+		j.revert(j.hooks)
+	} else {
+		j.popRevision()
 	}
 	if j.hooks.OnExit != nil {
 		j.hooks.OnExit(depth, output, gasUsed, err, reverted)
