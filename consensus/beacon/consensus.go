@@ -282,7 +282,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		if header.ParentBeaconRoot == nil {
 			return errors.New("header is missing beaconRoot")
 		}
-		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
+		if err := eip4844.VerifyEIP4844Header(chain.Config(), parent, header); err != nil {
 			return err
 		}
 	}

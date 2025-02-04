@@ -41,7 +41,14 @@
       "grayGlacierBlock": 0,
       "shanghaiTime": 0,
       "cancunTime": 0,
-      "terminalTotalDifficulty": 0
+      "terminalTotalDifficulty": 0,
+      "blobSchedule": {
+        "cancun": {
+          "target": 3,
+          "max": 6,
+          "baseFeeUpdateFraction": 3338477
+        }
+      }
     }
   },
   "context": {

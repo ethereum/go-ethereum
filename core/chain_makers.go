@@ -143,7 +143,9 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 // instruction will panic during execution if it attempts to access a block number outside
 // of the range created by GenerateChain.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
-	b.addTx(nil, vm.Config{}, tx)
+	// Wrap the chain config in an empty BlockChain object to satisfy ChainContext.
+	bc := &BlockChain{chainConfig: b.cm.config}
+	b.addTx(bc, vm.Config{}, tx)
 }
 
 // AddTxWithChain adds a transaction to the generated block. If no coinbase has
@@ -445,7 +447,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		var blobGasPrice *big.Int
 		if block.ExcessBlobGas() != nil {
-			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas())
+			blobGasPrice = eip4844.CalcBlobFee(cm.config, block.Header())
 		}
 		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, txs); err != nil {
 			panic(err)
@@ -548,7 +550,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		}
 		var blobGasPrice *big.Int
 		if block.ExcessBlobGas() != nil {
-			blobGasPrice = eip4844.CalcBlobFee(*block.ExcessBlobGas())
+			blobGasPrice = eip4844.CalcBlobFee(cm.config, block.Header())
 		}
 		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, txs); err != nil {
 			panic(err)
@@ -598,15 +600,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 		}
 	}
 	if cm.config.IsCancun(header.Number, header.Time) {
-		var (
-			parentExcessBlobGas uint64
-			parentBlobGasUsed   uint64
-		)
-		if parent.ExcessBlobGas() != nil {
-			parentExcessBlobGas = *parent.ExcessBlobGas()
-			parentBlobGasUsed = *parent.BlobGasUsed()
-		}
-		excessBlobGas := eip4844.CalcExcessBlobGas(parentExcessBlobGas, parentBlobGasUsed)
+		excessBlobGas := eip4844.CalcExcessBlobGas(cm.config, parent.Header())
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)
