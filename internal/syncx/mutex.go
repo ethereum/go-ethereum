@@ -27,7 +27,7 @@ type ClosableMutex struct {
 func NewClosableMutex() *ClosableMutex {
 	ch := make(chan struct{}, 1)
 	ch <- struct{}{}
-	return &ClosableMutex{ch: ch}
+	return &ClosableMutex{ch}
 }
 
 // TryLock attempts to lock cm.
