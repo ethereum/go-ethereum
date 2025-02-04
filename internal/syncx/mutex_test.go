@@ -21,7 +21,7 @@ func TestClosableMutex_TryLock(t *testing.T) {
 		t.Fatal("expected TryLock to succeed after unlock")
 	}
 	cm.Close()
-	if cm.TryLock() {
+	if !cm.TryLock() {
 		t.Fatal("expected TryLock to fail after close")
 	}
 }
