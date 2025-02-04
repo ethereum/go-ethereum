@@ -61,7 +61,7 @@ func VerifyEIP4844Header(config *params.ChainConfig, parent, header *types.Heade
 // blobs on top of the excess blob gas.
 func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header) uint64 {
 	var (
-		targetGas           = uint64(TargetBlobsPerBlock(config, parent.Time)) * params.BlobTxBlobGasPerBlob
+		targetGas           = uint64(targetBlobsPerBlock(config, parent.Time)) * params.BlobTxBlobGasPerBlob
 		parentExcessBlobGas uint64
 		parentBlobGasUsed   uint64
 	)
@@ -85,26 +85,6 @@ func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
 		return fakeExponential(minBlobGasPrice, new(big.Int).SetUint64(*header.ExcessBlobGas), new(big.Int).SetUint64(config.BlobScheduleConfig.Cancun.UpdateFraction))
 	default:
 		panic("calculating blob fee on unsupported fork")
-	}
-}
-
-// TargetBlobsPerBlock returns the target blobs per block associated with
-// requested time.
-func TargetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
-	if cfg.BlobScheduleConfig == nil {
-		return 0
-	}
-	var (
-		london = cfg.LondonBlock
-		s      = cfg.BlobScheduleConfig
-	)
-	switch {
-	case cfg.IsPrague(london, time) && s.Prague != nil:
-		return s.Prague.Target
-	case cfg.IsCancun(london, time) && s.Cancun != nil:
-		return s.Cancun.Target
-	default:
-		return 0
 	}
 }
 
@@ -144,6 +124,25 @@ func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
 		return s.Prague.Max
 	case s.Cancun != nil:
 		return s.Cancun.Max
+	default:
+		return 0
+	}
+}
+
+// targetBlobsPerBlock returns the target number of blobs in a block at the given timestamp.
+func targetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
+	if cfg.BlobScheduleConfig == nil {
+		return 0
+	}
+	var (
+		london = cfg.LondonBlock
+		s      = cfg.BlobScheduleConfig
+	)
+	switch {
+	case cfg.IsPrague(london, time) && s.Prague != nil:
+		return s.Prague.Target
+	case cfg.IsCancun(london, time) && s.Cancun != nil:
+		return s.Cancun.Target
 	default:
 		return 0
 	}
