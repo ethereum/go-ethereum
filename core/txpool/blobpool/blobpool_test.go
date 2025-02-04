@@ -1073,7 +1073,7 @@ func TestChangingSlotterSize(t *testing.T) {
 	store.Close()
 
 	// Mimic a blobpool with max blob count of 6 upgrading to a max blob count of 24.
-	for _, maxBlobs := range []uint64{6, 24} {
+	for _, maxBlobs := range []int{6, 24} {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)

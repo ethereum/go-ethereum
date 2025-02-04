@@ -17,6 +17,7 @@
 package params
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -476,11 +477,10 @@ func (c *ChainConfig) Description() string {
 	return banner
 }
 
-// BlobConfig specifies the target and max blobs per block for the associated
-// fork.
+// BlobConfig specifies the target and max blobs per block for the associated fork.
 type BlobConfig struct {
-	Target         uint64 `json:"target"`
-	Max            uint64 `json:"max"`
+	Target         int    `json:"target"`
+	Max            int    `json:"max"`
 	UpdateFraction uint64 `json:"baseFeeUpdateFraction"`
 }
 
@@ -493,7 +493,7 @@ type BlobScheduleConfig struct {
 
 // TargetBlobsPerBlock returns the target blobs per block associated with
 // requested time.
-func (c *ChainConfig) TargetBlobsPerBlock(time uint64) uint64 {
+func (c *ChainConfig) TargetBlobsPerBlock(time uint64) int {
 	if c.BlobScheduleConfig == nil {
 		return 0
 	}
@@ -511,9 +511,8 @@ func (c *ChainConfig) TargetBlobsPerBlock(time uint64) uint64 {
 	}
 }
 
-// MaxBlobsPerBlock returns the max blobs per block associated with
-// requested time.
-func (c *ChainConfig) MaxBlobsPerBlock(time uint64) uint64 {
+// MaxBlobsPerBlock returns the max blobs per block for a block at the given timestamp.
+func (c *ChainConfig) MaxBlobsPerBlock(time uint64) int {
 	if c.BlobScheduleConfig == nil {
 		return 0
 	}
@@ -531,9 +530,14 @@ func (c *ChainConfig) MaxBlobsPerBlock(time uint64) uint64 {
 	}
 }
 
+// MaxBlobsPerBlock returns the maximum blob gas that can be spent in a block at the given timestamp.
+func (c *ChainConfig) MaxBlobGasPerBlock(time uint64) uint64 {
+	return uint64(c.MaxBlobsPerBlock(time)) * BlobTxBlobGasPerBlob
+}
+
 // LatestMaxBlobsPerBlock returns the latest max blobs per block defined by the
 // configuration, regardless of the currently active fork.
-func (c *ChainConfig) LatestMaxBlobsPerBlock() uint64 {
+func (c *ChainConfig) LatestMaxBlobsPerBlock() int {
 	s := c.BlobScheduleConfig
 	if s == nil {
 		return 0
@@ -758,11 +762,10 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		}
 	}
 
-	// Check that all forks with blobs explicitly define the blob schedule
-	// configuration.
+	// Check that all forks with blobs explicitly define the blob schedule configuration.
 	bsc := c.BlobScheduleConfig
 	if bsc == nil {
-		bsc = &BlobScheduleConfig{}
+		bsc = new(BlobScheduleConfig)
 	}
 	for _, cur := range []struct {
 		name      string
@@ -773,17 +776,31 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "prague", timestamp: c.PragueTime, config: bsc.Prague},
 		{name: "verkle", timestamp: c.VerkleTime, config: bsc.Verkle},
 	} {
+		if cur.config != nil {
+			if err := cur.config.validate(); err != nil {
+				return fmt.Errorf("invalid blob configuration for fork %s: %v", cur.name, err)
+			}
+		}
 		if cur.timestamp != nil {
-			// If the fork is configured, verify the blob schedule is valid.
+			// If the fork is configured, a blob schedule must be defined for it.
 			if cur.config == nil {
 				return fmt.Errorf("unsupported fork configuration: missing blob configuration entry for %v in schedule", cur.name)
 			}
-			if cur.config.UpdateFraction == 0 {
-				return fmt.Errorf("unsupported fork configuration: %v update fraction must be defined and non-zero", cur.name)
-			}
 		}
 	}
+	return nil
+}
 
+func (bc *BlobConfig) validate() error {
+	if bc.Max < 0 {
+		return errors.New("max < 0")
+	}
+	if bc.Target < 0 {
+		return errors.New("target < 0")
+	}
+	if bc.UpdateFraction == 0 {
+		return errors.New("update fraction must be defined and non-zero")
+	}
 	return nil
 }
 

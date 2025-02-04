@@ -29,11 +29,11 @@ func TestCalcExcessBlobGas(t *testing.T) {
 	var (
 		config        = params.MainnetChainConfig
 		targetBlobs   = config.TargetBlobsPerBlock(*config.CancunTime)
-		targetBlobGas = targetBlobs * params.BlobTxBlobGasPerBlob
+		targetBlobGas = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
 	)
 	var tests = []struct {
 		excess uint64
-		blobs  uint64
+		blobs  int
 		want   uint64
 	}{
 		// The excess blob gas should not increase from zero if the used blob
@@ -56,7 +56,7 @@ func TestCalcExcessBlobGas(t *testing.T) {
 		{params.BlobTxBlobGasPerBlob - 1, targetBlobs - 1, 0},
 	}
 	for i, tt := range tests {
-		blobGasUsed := tt.blobs * params.BlobTxBlobGasPerBlob
+		blobGasUsed := uint64(tt.blobs) * params.BlobTxBlobGasPerBlob
 		parent := &types.Header{
 			Time:          *config.CancunTime,
 			ExcessBlobGas: &tt.excess,

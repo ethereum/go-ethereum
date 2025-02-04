@@ -48,7 +48,7 @@ type limbo struct {
 }
 
 // newLimbo opens and indexes a set of limboed blob transactions.
-func newLimbo(datadir string, maxBlobsPerTransaction uint64) (*limbo, error) {
+func newLimbo(datadir string, maxBlobsPerTransaction int) (*limbo, error) {
 	l := &limbo{
 		index:  make(map[common.Hash]uint64),
 		groups: make(map[uint64]map[uint64]common.Hash),
