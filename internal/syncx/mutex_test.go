@@ -32,7 +32,9 @@ func TestClosableMutex_MustLock(t *testing.T) {
 	cm := NewClosableMutex()
 	cm.MustLock()
 	defer func() {
-		if r := recover(); r == nil {
+		if r := recover(); r != nil {
+			t.Log("panic detected:", r) // Log the panic message
+		} else {
 			t.Fatal("expected MustLock to panic when already locked")
 		}
 	}()
