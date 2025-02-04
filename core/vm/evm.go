@@ -227,7 +227,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
 			contract.IsSystemCall = isSystemCall(caller)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
+			contract.SetCallCode(&addrCopy, evm.resolveCodeHash(addrCopy), code, evm.parseContainer(code))
 			ret, err = evm.interpreter.Run(contract, input, false, false)
 			gas = contract.Gas
 		}
@@ -288,7 +288,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
 		code := evm.StateDB.GetCode(addrCopy)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
+		contract.SetCallCode(&addrCopy, evm.resolveCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false, false)
 		gas = contract.Gas
 	}
@@ -339,7 +339,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		}
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
+		contract.SetCallCode(&addrCopy, evm.resolveCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false, false)
 		gas = contract.Gas
 	}
@@ -395,7 +395,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(uint256.Int), gas)
 		code := evm.StateDB.GetCode(addrCopy)
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
+		contract.SetCallCode(&addrCopy, evm.resolveCodeHash(addrCopy), code, evm.parseContainer(code))
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
