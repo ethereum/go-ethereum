@@ -168,7 +168,7 @@ func (c *BoundContractV1) RawTransact(opts *TransactOpts, calldata []byte) (*typ
 	return c.transact(opts, &c.address, calldata)
 }
 
-// RawTransact initiates a contract-creation transaction with the given raw calldata as the input.
+// RawCreationTransact initiates a contract-creation transaction with the given raw calldata as the input.
 func (c *BoundContractV1) RawCreationTransact(opts *TransactOpts, calldata []byte) (*types.Transaction, error) {
 	return c.transact(opts, nil, calldata)
 }

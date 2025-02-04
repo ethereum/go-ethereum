@@ -19,6 +19,7 @@ package bind
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/event"
 	"math/big"
 	"strings"
 	"sync"
@@ -121,21 +122,34 @@ func (m *MetaData) ParseABI() (*abi.ABI, error) {
 	return m.parsedABI, nil
 }
 
-// BoundContract is the base wrapper object that reflects a contract on the
-// Ethereum network. It contains a collection of methods that are used by the
-// higher level contract bindings to operate.
-type BoundContract struct {
-	address common.Address // Deployment address of the contract on the Ethereum blockchain
-	abi     abi.ABI        // Reflect based ABI to access the correct Ethereum methods
-	backend ContractBackend
+// BoundContract represents a contract deployed on-chain.  It does not export any methods, and is used in the low-level
+// contract interaction API methods provided in the v2 package.
+type BoundContract interface {
+	filterLogs(opts *FilterOpts, name string, query ...[]any) (chan types.Log, event.Subscription, error)
+	watchLogs(opts *WatchOpts, name string, query ...[]any) (chan types.Log, event.Subscription, error)
+	rawCreationTransact(opts *TransactOpts, calldata []byte) (*types.Transaction, error)
+	call(opts *CallOpts, input []byte) ([]byte, error)
+	transact(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error)
+	addr() common.Address
 }
 
-// NewBoundContract creates a low level contract interface through which calls
-// and transactions may be made through.
-func NewBoundContract(backend ContractBackend, address common.Address, abi abi.ABI) *BoundContract {
-	return &BoundContract{
-		address,
-		abi,
-		backend,
-	}
+// NewBoundContract creates a new BoundContract instance.
+func NewBoundContract(backend ContractBackend, address common.Address, abi abi.ABI) BoundContract {
+	return NewBoundContractV1(address, abi, backend, backend, backend)
+}
+
+func (c *BoundContractV1) filterLogs(opts *FilterOpts, name string, query ...[]any) (chan types.Log, event.Subscription, error) {
+	return c.FilterLogs(opts, name, query...)
+}
+
+func (c *BoundContractV1) watchLogs(opts *WatchOpts, name string, query ...[]any) (chan types.Log, event.Subscription, error) {
+	return c.WatchLogs(opts, name, query...)
+}
+
+func (c *BoundContractV1) rawCreationTransact(opts *TransactOpts, calldata []byte) (*types.Transaction, error) {
+	return c.RawCreationTransact(opts, calldata)
+}
+
+func (c *BoundContractV1) addr() common.Address {
+	return c.address
 }
