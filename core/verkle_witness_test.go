@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -218,7 +219,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 	// block 2 parent hash is 0x0200....
 	// etc
 	checkBlockHashes := func(statedb *state.StateDB) {
-		statedb.SetNonce(params.HistoryStorageAddress, 1)
+		statedb.SetNonce(params.HistoryStorageAddress, 1, tracing.NonceChangeUnspecified)
 		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
 		// Process n blocks, from 1 .. num
 		var num = 2

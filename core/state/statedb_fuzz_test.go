@@ -69,7 +69,7 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 		{
 			name: "SetNonce",
 			fn: func(a testAction, s *StateDB) {
-				s.SetNonce(addr, uint64(a.args[0]))
+				s.SetNonce(addr, uint64(a.args[0]), tracing.NonceChangeUnspecified)
 			},
 			args: make([]int64, 1),
 		},

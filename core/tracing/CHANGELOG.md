@@ -9,11 +9,17 @@ The tracing interface has been extended with backwards-compatible changes to sup
 ### Deprecated methods
 
 - `OnSystemCallStart()`: This hook is deprecated in favor of `OnSystemCallStartV2(vm *VMContext)`.
+- `OnNonceChange(addr common.Address, prev, new uint64)`: This hook is deprecated in favor of `OnNonceChangeV2(addr common.Address, prev, new uint64, reason NonceChangeReason)`.
 
 ### New methods
 
 - `OnBlockHashRead(blockNum uint64, hash common.Hash)`: This hook is called when a block hash is read by EVM.
 - `OnSystemCallStartV2(vm *VMContext)`. This allows access to EVM context during system calls. It is a successor to `OnSystemCallStart`.
+- `OnNonceChangeV2(addr common.Address, prev, new uint64, reason NonceChangeReason)`: This hook is called when a nonce change occurs. It is a successor to `OnNonceChange`.
+
+### New types
+
+- `NonceChangeReason` is a new type used to provide a reason for nonce changes. Notably it includes `NonceChangeRevert` which will be emitted by the state journaling library when a nonce change is due to a revert.
 
 ### Modified types
 
@@ -39,7 +45,7 @@ func init() {
 The state changes that are covered by the journaling library are:
 
 - `OnBalanceChange`. Note that `OnBalanceChange` will carry the `BalanceChangeRevert` reason.
-- `OnNonceChange`
+- `OnNonceChange`, `OnNonceChangeV2`
 - `OnCodeChange`
 - `OnStorageChange`
 

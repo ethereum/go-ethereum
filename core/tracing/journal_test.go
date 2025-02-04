@@ -40,6 +40,10 @@ func (t *testTracer) OnNonceChange(addr common.Address, prev uint64, new uint64)
 	t.nonce = new
 }
 
+func (t *testTracer) OnNonceChangeV2(addr common.Address, prev uint64, new uint64, reason NonceChangeReason) {
+	t.nonce = new
+}
+
 func (t *testTracer) OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte) {
 	t.code = code
 }
@@ -67,7 +71,7 @@ func TestJournalIntegration(t *testing.T) {
 	wr.OnCodeChange(addr, common.Hash{}, nil, common.Hash{}, []byte{1, 2, 3})
 	wr.OnStorageChange(addr, common.Hash{1}, common.Hash{}, common.Hash{2})
 	wr.OnEnter(1, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnNonceChange(addr, 0, 1)
+	wr.OnNonceChangeV2(addr, 0, 1, NonceChangeUnspecified)
 	wr.OnBalanceChange(addr, big.NewInt(100), big.NewInt(200), BalanceChangeUnspecified)
 	wr.OnBalanceChange(addr, big.NewInt(200), big.NewInt(250), BalanceChangeUnspecified)
 	wr.OnStorageChange(addr, common.Hash{1}, common.Hash{2}, common.Hash{3})
@@ -101,7 +105,7 @@ func TestJournalTopRevert(t *testing.T) {
 	wr.OnEnter(0, 0, addr, addr, nil, 1000, big.NewInt(0))
 	wr.OnBalanceChange(addr, big.NewInt(0), big.NewInt(100), BalanceChangeUnspecified)
 	wr.OnEnter(1, 0, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnNonceChange(addr, 0, 1)
+	wr.OnNonceChangeV2(addr, 0, 1, NonceChangeUnspecified)
 	wr.OnBalanceChange(addr, big.NewInt(100), big.NewInt(200), BalanceChangeUnspecified)
 	wr.OnBalanceChange(addr, big.NewInt(200), big.NewInt(250), BalanceChangeUnspecified)
 	wr.OnExit(0, nil, 100, errors.New("revert"), true)
@@ -150,9 +154,24 @@ func TestNonceIncOnCreate(t *testing.T) {
 	}
 	addr := common.HexToAddress("0x1234")
 	wr.OnEnter(0, CREATE, addr, addr, nil, 1000, big.NewInt(0))
-	wr.OnNonceChange(addr, 0, 1)
+	wr.OnNonceChangeV2(addr, 0, 1, NonceChangeContractCreator)
 	wr.OnExit(0, nil, 100, errors.New("revert"), true)
 	if tr.nonce != 1 {
+		t.Fatalf("unexpected nonce: %v", tr.nonce)
+	}
+}
+
+func TestOnNonceChangeV2(t *testing.T) {
+	tr := &testTracer{}
+	wr, err := WrapWithJournal(&Hooks{OnNonceChangeV2: tr.OnNonceChangeV2})
+	if err != nil {
+		t.Fatalf("failed to wrap test tracer: %v", err)
+	}
+	addr := common.HexToAddress("0x1234")
+	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+	wr.OnNonceChangeV2(addr, 0, 1, NonceChangeEoACall)
+	wr.OnExit(2, nil, 100, nil, true)
+	if tr.nonce != 0 {
 		t.Fatalf("unexpected nonce: %v", tr.nonce)
 	}
 }
@@ -180,6 +199,10 @@ func TestAllHooksCalled(t *testing.T) {
 		}
 		// Skip non-hooks, i.e. Copy
 		if field.Name == "copy" {
+			continue
+		}
+		// Skip if field is not set
+		if wrappedValue.Field(i).IsNil() {
 			continue
 		}
 
@@ -218,6 +241,7 @@ func newTracerAllHooks() *tracerAllHooks {
 	for i := 0; i < hooksType.NumField(); i++ {
 		t.hooksCalled[hooksType.Field(i).Name] = false
 	}
+	delete(t.hooksCalled, "OnNonceChange")
 	return t
 }
 
@@ -242,6 +266,9 @@ func (t *tracerAllHooks) hooks() *Hooks {
 	hooksValue := reflect.ValueOf(h).Elem()
 	for i := 0; i < hooksValue.NumField(); i++ {
 		field := hooksValue.Type().Field(i)
+		if field.Name == "OnNonceChange" {
+			continue
+		}
 		hookMethod := reflect.MakeFunc(field.Type, func(args []reflect.Value) []reflect.Value {
 			t.hooksCalled[field.Name] = true
 			return nil
