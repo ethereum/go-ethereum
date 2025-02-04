@@ -46,7 +46,9 @@ func TestClosableMutex_Unlock(t *testing.T) {
 	cm.MustLock()
 	cm.Unlock()
 	defer func() {
-		if r := recover(); r == nil {
+		if r := recover(); r != nil {
+			t.Log("panic detected:", r) // Log the panic message
+		} else {
 			t.Fatal("expected Unlock to panic when already unlocked")
 		}
 	}()
@@ -60,8 +62,10 @@ func TestClosableMutex_Close(t *testing.T) {
 	cm.MustLock()
 	cm.Close()
 	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected Close to panic when already closed")
+		if r := recover(); r != nil {
+			t.Log("panic detected:", r) // Log the panic message
+		} else {
+			t.Fatal("expected Close to panic when already closed", r)
 		}
 	}()
 	cm.Close()
