@@ -109,8 +109,8 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable,
 				return nil, err
 			}
 		case RJUMPV:
-			max_size := int(code[i+1])
-			length := max_size + 1
+			maxSize := int(code[i+1])
+			length := maxSize + 1
 			if len(code) <= i+length {
 				return nil, fmt.Errorf("%w: jump table truncated, op %s, pos %d", errTruncatedImmediate, op, i)
 			}
@@ -120,7 +120,7 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable,
 					return nil, err
 				}
 			}
-			i += 2 * max_size
+			i += 2 * maxSize
 		case CALLF:
 			arg, _ := parseUint16(code[i+1:])
 			if arg >= len(container.types) {

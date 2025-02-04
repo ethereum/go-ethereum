@@ -35,19 +35,15 @@ const (
 
 	// ChainFreezerReceiptTable indicates the name of the freezer receipts table.
 	ChainFreezerReceiptTable = "receipts"
-
-	// ChainFreezerDifficultyTable indicates the name of the freezer total difficulty table.
-	ChainFreezerDifficultyTable = "diffs"
 )
 
 // chainFreezerNoSnappy configures whether compression is disabled for the ancient-tables.
 // Hashes and difficulties don't compress well.
 var chainFreezerNoSnappy = map[string]bool{
-	ChainFreezerHeaderTable:     false,
-	ChainFreezerHashTable:       true,
-	ChainFreezerBodiesTable:     false,
-	ChainFreezerReceiptTable:    false,
-	ChainFreezerDifficultyTable: true,
+	ChainFreezerHeaderTable:  false,
+	ChainFreezerHashTable:    true,
+	ChainFreezerBodiesTable:  false,
+	ChainFreezerReceiptTable: false,
 }
 
 const (
@@ -62,6 +58,7 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
+// stateFreezerNoSnappy configures whether compression is disabled for the state freezer.
 var stateFreezerNoSnappy = map[string]bool{
 	stateHistoryMeta:         true,
 	stateHistoryAccountIndex: false,

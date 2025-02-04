@@ -56,6 +56,14 @@ The state changes that are covered by the journaling library are:
 - `GasChangeReason` has been extended with the following reasons which will be enabled only post-Verkle. There shouldn't be any gas changes with those reasons prior to the fork.
   - `GasChangeWitnessContractCollisionCheck` flags the event of adding to the witness when checking for contract address collision.
 
+## [v1.14.12]
+
+This release contains a change in behavior for `OnCodeChange` hook.
+
+### `OnCodeChange` change
+
+The `OnCodeChange` hook is now called when the code of a contract is removed due to a selfdestruct. Previously, no code change was emitted on such occasions.
+
 ## [v1.14.4]
 
 This release contained only minor extensions to the tracing interface.

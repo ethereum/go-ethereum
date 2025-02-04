@@ -23,8 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -345,10 +343,12 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 		self: AccountRef(addr),
 	}
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-	statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
-	if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-		scope.Contract.Gas = 0
-		return nil, ErrOutOfGas
+	if !contract.IsSystemCall {
+		statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
+		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
+			scope.Contract.Gas = 0
+			return nil, ErrOutOfGas
+		}
 	}
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), paddedCodeCopy)
 
@@ -367,7 +367,7 @@ func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	if *pc < codeLen {
 		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
 
-		if !scope.Contract.IsDeployment && *pc%31 == 0 {
+		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall && *pc%31 == 0 {
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
@@ -397,7 +397,7 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 			)),
 		)
 
-		if !scope.Contract.IsDeployment {
+		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall {
 			contractAddr := scope.Contract.Address()
 			statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false)
 			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
@@ -707,65 +707,8 @@ func enableEOF(jt *JumpTable) {
 	}
 }
 
-// opExtCodeCopyEIP7702 implements the EIP-7702 variation of opExtCodeCopy.
-func opExtCodeCopyEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	var (
-		stack      = scope.Stack
-		a          = stack.pop()
-		memOffset  = stack.pop()
-		codeOffset = stack.pop()
-		length     = stack.pop()
-	)
-	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
-	if overflow {
-		uint64CodeOffset = math.MaxUint64
-	}
-	code := interpreter.evm.StateDB.GetCode(common.Address(a.Bytes20()))
-	if _, ok := types.ParseDelegation(code); ok {
-		code = types.DelegationPrefix[:2]
-	}
-	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
-	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
-
-	return nil, nil
-}
-
-// opExtCodeSizeEIP7702 implements the EIP-7702 variation of opExtCodeSize.
-func opExtCodeSizeEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	slot := scope.Stack.peek()
-	code := interpreter.evm.StateDB.GetCode(common.Address(slot.Bytes20()))
-	if _, ok := types.ParseDelegation(code); ok {
-		code = types.DelegationPrefix[:2]
-	}
-	slot.SetUint64(uint64(len(code)))
-	return nil, nil
-}
-
-// opExtCodeHashEIP7702 implements the EIP-7702 variation of opExtCodeHash.
-func opExtCodeHashEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	slot := scope.Stack.peek()
-	addr := common.Address(slot.Bytes20())
-	if interpreter.evm.StateDB.Empty(addr) {
-		slot.Clear()
-		return nil, nil
-	}
-	code := interpreter.evm.StateDB.GetCode(addr)
-	if _, ok := types.ParseDelegation(code); ok {
-		// If the code is a delegation, return the prefix without version.
-		slot.SetBytes(crypto.Keccak256(types.DelegationPrefix[:2]))
-	} else {
-		// Otherwise, return normal code hash.
-		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(addr).Bytes())
-	}
-	return nil, nil
-}
-
 // enable7702 the EIP-7702 changes to support delegation designators.
 func enable7702(jt *JumpTable) {
-	jt[EXTCODECOPY].execute = opExtCodeCopyEIP7702
-	jt[EXTCODESIZE].execute = opExtCodeSizeEIP7702
-	jt[EXTCODEHASH].execute = opExtCodeHashEIP7702
-
 	jt[CALL].dynamicGas = gasCallEIP7702
 	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702

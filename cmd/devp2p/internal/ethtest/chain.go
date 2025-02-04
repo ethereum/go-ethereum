@@ -28,7 +28,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/exp/maps"
 )
 
 // Chain is a lightweight blockchain-like store which can read a hivechain
@@ -143,11 +143,7 @@ func (c *Chain) ForkID() forkid.ID {
 // TD calculates the total difficulty of the chain at the
 // chain head.
 func (c *Chain) TD() *big.Int {
-	sum := new(big.Int)
-	for _, block := range c.blocks[:c.Len()] {
-		sum.Add(sum, block.Difficulty())
-	}
-	return sum
+	return new(big.Int)
 }
 
 // GetBlock returns the block at the specified number.
@@ -166,11 +162,8 @@ func (c *Chain) RootAt(height int) common.Hash {
 // GetSender returns the address associated with account at the index in the
 // pre-funded accounts list.
 func (c *Chain) GetSender(idx int) (common.Address, uint64) {
-	var accounts Addresses
-	for addr := range c.senders {
-		accounts = append(accounts, addr)
-	}
-	sort.Sort(accounts)
+	accounts := maps.Keys(c.senders)
+	slices.SortFunc(accounts, common.Address.Cmp)
 	addr := accounts[idx]
 	return addr, c.senders[addr].Nonce
 }
@@ -258,22 +251,6 @@ func loadGenesis(genesisFile string) (core.Genesis, error) {
 		return core.Genesis{}, err
 	}
 	return gen, nil
-}
-
-type Addresses []common.Address
-
-func (a Addresses) Len() int {
-	return len(a)
-}
-
-func (a Addresses) Less(i, j int) bool {
-	return bytes.Compare(a[i][:], a[j][:]) < 0
-}
-
-func (a Addresses) Swap(i, j int) {
-	tmp := a[i]
-	a[i] = a[j]
-	a[j] = tmp
 }
 
 func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, error) {

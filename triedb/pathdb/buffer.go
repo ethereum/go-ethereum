@@ -46,7 +46,7 @@ func newBuffer(limit int, nodes *nodeSet, states *stateSet, layers uint64) *buff
 		nodes = newNodeSet(nil)
 	}
 	if states == nil {
-		states = newStates(nil, nil)
+		states = newStates(nil, nil, false)
 	}
 	return &buffer{
 		layers: layers,

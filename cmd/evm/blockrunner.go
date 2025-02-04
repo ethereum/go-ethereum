@@ -50,7 +50,7 @@ func blockTestCmd(ctx *cli.Context) error {
 		return errors.New("path argument required")
 	}
 	var (
-		collected = collectJSONFiles(path)
+		collected = collectFiles(path)
 		results   []testResult
 	)
 	for _, fname := range collected {
