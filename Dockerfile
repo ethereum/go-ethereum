@@ -1,4 +1,5 @@
-FROM golang:latest
+# Build Geth in a stock Go builder container
+FROM golang:1.23-alpine as builder
 
 ARG BOR_DIR=/var/lib/bor
 ENV BOR_DIR=$BOR_DIR

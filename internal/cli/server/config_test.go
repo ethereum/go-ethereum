@@ -144,3 +144,17 @@ func TestMakePasswordListFromFile(t *testing.T) {
 		assert.Equal(t, []string{"test1", "test2"}, result)
 	})
 }
+
+func TestConfigStateScheme(t *testing.T) {
+	config := DefaultConfig()
+	config.StateScheme = "path"
+	config.GcMode = "archive"
+
+	assert.NoError(t, config.loadChain())
+
+	_, err := config.buildNode()
+	assert.NoError(t, err)
+
+	_, err = config.buildEth(nil, nil)
+	assert.Error(t, err)
+}

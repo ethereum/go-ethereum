@@ -145,7 +145,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 			}
 
 		case req := <-w.getWorkCh:
-			req.result <- w.generateWork(ctx, req.params)
+			req.result <- w.generateWork(req.params, false)
 
 		case ev := <-w.txsCh:
 			// Apply transactions to the pending state if we're not sealing
@@ -231,7 +231,7 @@ func (w *worker) commitWorkWithDelay(ctx context.Context, interrupt *atomic.Int3
 		work, err = w.prepareWork(&generateParams{
 			timestamp: uint64(timestamp),
 			coinbase:  coinbase,
-		})
+		}, false)
 	})
 
 	if err != nil {

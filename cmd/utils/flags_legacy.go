@@ -92,25 +92,21 @@ var (
 	LightServeFlag = &cli.IntFlag{
 		Name:     "light.serve",
 		Usage:    "Maximum percentage of time allowed for serving LES requests (deprecated)",
-		Value:    ethconfig.Defaults.LightServ,
 		Category: flags.DeprecatedCategory,
 	}
 	LightIngressFlag = &cli.IntFlag{
 		Name:     "light.ingress",
 		Usage:    "Incoming bandwidth limit for serving light clients (deprecated)",
-		Value:    ethconfig.Defaults.LightIngress,
 		Category: flags.DeprecatedCategory,
 	}
 	LightEgressFlag = &cli.IntFlag{
 		Name:     "light.egress",
 		Usage:    "Outgoing bandwidth limit for serving light clients (deprecated)",
-		Value:    ethconfig.Defaults.LightEgress,
 		Category: flags.DeprecatedCategory,
 	}
 	LightMaxPeersFlag = &cli.IntFlag{
 		Name:     "light.maxpeers",
 		Usage:    "Maximum number of light clients to serve, or light servers to attach to (deprecated)",
-		Value:    ethconfig.Defaults.LightPeers,
 		Category: flags.DeprecatedCategory,
 	}
 	LightNoPruneFlag = &cli.BoolFlag{

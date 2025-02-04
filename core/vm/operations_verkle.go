@@ -40,7 +40,7 @@ func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 
 func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	address := stack.peek().Bytes20()
-	gas := evm.AccessEvents.BalanceGas(address, false)
+	gas := evm.AccessEvents.BasicDataGas(address, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -52,8 +52,7 @@ func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
-	gas := evm.AccessEvents.VersionGas(address, false)
-	gas += evm.AccessEvents.CodeSizeGas(address, false)
+	gas := evm.AccessEvents.BasicDataGas(address, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -102,17 +101,15 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 		return 0, nil
 	}
 	contractAddr := contract.Address()
-	statelessGas := evm.AccessEvents.VersionGas(contractAddr, false)
-	statelessGas += evm.AccessEvents.CodeSizeGas(contractAddr, false)
-	statelessGas += evm.AccessEvents.BalanceGas(contractAddr, false)
+	statelessGas := evm.AccessEvents.BasicDataGas(contractAddr, false)
 	if contractAddr != beneficiaryAddr {
-		statelessGas += evm.AccessEvents.BalanceGas(beneficiaryAddr, false)
+		statelessGas += evm.AccessEvents.BasicDataGas(beneficiaryAddr, false)
 	}
 	// Charge write costs if it transfers value
 	if evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
-		statelessGas += evm.AccessEvents.BalanceGas(contractAddr, true)
+		statelessGas += evm.AccessEvents.BasicDataGas(contractAddr, true)
 		if contractAddr != beneficiaryAddr {
-			statelessGas += evm.AccessEvents.BalanceGas(beneficiaryAddr, true)
+			statelessGas += evm.AccessEvents.BasicDataGas(beneficiaryAddr, true)
 		}
 	}
 	return statelessGas, nil
@@ -145,8 +142,7 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 		return 0, err
 	}
 	addr := common.Address(stack.peek().Bytes20())
-	wgas := evm.AccessEvents.VersionGas(addr, false)
-	wgas += evm.AccessEvents.CodeSizeGas(addr, false)
+	wgas := evm.AccessEvents.BasicDataGas(addr, false)
 	if wgas == 0 {
 		wgas = params.WarmStorageReadCostEIP2929
 	}

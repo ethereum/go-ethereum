@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -114,6 +115,7 @@ type environment struct {
 
 	depsMVFullWriteList [][]blockstm.WriteDescriptor
 	mvReadMapList       []map[blockstm.Key]blockstm.ReadDescriptor
+	witness             *stateless.Witness
 }
 
 // copy creates a deep copy of environment.
@@ -185,6 +187,8 @@ type newPayloadResult struct {
 	block    *types.Block
 	fees     *big.Int               // total block fees
 	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
+	witness  *stateless.Witness     // Witness is an optional stateless proof
+
 }
 
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
@@ -618,7 +622,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 			}
 
 		case req := <-w.getWorkCh:
-			req.result <- w.generateWork(ctx, req.params)
+			req.result <- w.generateWork(req.params, false)
 
 		case ev := <-w.txsCh:
 			// Apply transactions to the pending state if we're not sealing
@@ -809,7 +813,7 @@ func (w *worker) resultLoop() {
 				}
 				// Commit block and state to database.
 				tracing.Exec(ctx, "", "resultLoop.WriteBlockAndSetHead", func(ctx context.Context, span trace.Span) {
-					_, err = w.chain.WriteBlockAndSetHead(ctx, block, receipts, logs, task.state, true)
+					_, err = w.chain.WriteBlockAndSetHead(block, receipts, logs, task.state, true)
 				})
 
 				tracing.SetAttributes(
@@ -847,12 +851,18 @@ func (w *worker) resultLoop() {
 }
 
 // makeEnv creates a new environment for the sealing block.
-func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address) (*environment, error) {
-	// Retrieve the parent state to execute on top and start a prefetcher for
-	// the miner to speed block sealing up a bit.
+func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, witness bool) (*environment, error) {
+	// Retrieve the parent state to execute on top.
 	state, err := w.chain.StateAt(parent.Root)
 	if err != nil {
 		return nil, err
+	}
+	if witness {
+		bundle, err := stateless.NewWitness(header, w.chain)
+		if err != nil {
+			return nil, err
+		}
+		state.StartPrefetcher("miner", bundle)
 	}
 
 	// todo: @anshalshukla - check if witness is required
@@ -864,6 +874,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 		state:    state,
 		coinbase: coinbase,
 		header:   header,
+		witness:  state.Witness(),
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
@@ -1220,7 +1231,7 @@ type generateParams struct {
 // prepareWork constructs the sealing task according to the given parameters,
 // either based on the last chain head or specified parent. In this function
 // the pending transactions are not filled yet, only the empty task returned.
-func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
+func (w *worker) prepareWork(genParams *generateParams, witness bool) (*environment, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
@@ -1288,7 +1299,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Could potentially happen if starting to mine in an odd state.
 	// Note genParams.coinbase can be different with header.Coinbase
 	// since clique algorithm can modify the coinbase field in header.
-	env, err := w.makeEnv(parent, header, genParams.coinbase)
+	env, err := w.makeEnv(parent, header, genParams.coinbase, witness)
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
@@ -1297,6 +1308,11 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		context := core.NewEVMBlockContext(header, w.chain, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
+	}
+	if w.chainConfig.IsPrague(header.Number) {
+		context := core.NewEVMBlockContext(header, w.chain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
+		core.ProcessParentBlockHash(header.ParentHash, vmenv, env.state)
 	}
 	return env, nil
 }
@@ -1564,8 +1580,8 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (w *worker) generateWork(ctx context.Context, params *generateParams) *newPayloadResult {
-	work, err := w.prepareWork(params)
+func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadResult {
+	work, err := w.prepareWork(params, witness)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -1582,16 +1598,26 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) *newP
 		})
 		defer timer.Stop()
 
-		err := w.fillTransactions(ctx, interrupt, work, interruptCtx)
+		err := w.fillTransactions(context.Background(), interrupt, work, interruptCtx)
 		if errors.Is(err, errBlockInterruptedByTimeout) {
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
 	}
-	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, &types.Body{
-		Transactions: work.txs,
-		Uncles:       nil,
-		Withdrawals:  params.withdrawals,
-	}, work.receipts)
+
+	body := types.Body{Transactions: work.txs, Withdrawals: params.withdrawals}
+	allLogs := make([]*types.Log, 0)
+	for _, r := range work.receipts {
+		allLogs = append(allLogs, r.Logs...)
+	}
+	// Read requests if Prague is enabled.
+	if w.chainConfig.IsPrague(work.header.Number) {
+		requests, err := core.ParseDepositLogs(allLogs, w.chainConfig)
+		if err != nil {
+			return &newPayloadResult{err: err}
+		}
+		body.Requests = requests
+	}
+	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, &body, work.receipts)
 
 	if err != nil {
 		return &newPayloadResult{err: err}
@@ -1600,6 +1626,7 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) *newP
 		block:    block,
 		fees:     totalFees(block, work.receipts),
 		sidecars: work.sidecars,
+		witness:  work.witness,
 	}
 }
 
@@ -1631,7 +1658,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 		work, err = w.prepareWork(&generateParams{
 			timestamp: uint64(timestamp),
 			coinbase:  coinbase,
-		})
+		}, false)
 	})
 
 	if err != nil {

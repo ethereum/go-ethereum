@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 
@@ -102,8 +103,9 @@ func TestFilterTxConditionalKnownAccounts(t *testing.T) {
 
 	// Create an in memory state db to test against.
 	memDb := rawdb.NewMemoryDatabase()
-	db := state.NewDatabase(memDb)
-	state, _ := state.New(common.Hash{}, db, nil)
+	tdb := triedb.NewDatabase(memDb, &triedb.Config{Preimages: true})
+	db := state.NewDatabase(tdb, nil)
+	state, _ := state.New(common.Hash{}, db)
 
 	header := &types.Header{
 		Number: big.NewInt(0),
@@ -182,8 +184,9 @@ func TestFilterTxConditionalBlockNumber(t *testing.T) {
 
 	// Create an in memory state db to test against.
 	memDb := rawdb.NewMemoryDatabase()
-	db := state.NewDatabase(memDb)
-	state, _ := state.New(common.Hash{}, db, nil)
+	tdb := triedb.NewDatabase(memDb, &triedb.Config{Preimages: true})
+	db := state.NewDatabase(tdb, nil)
+	state, _ := state.New(common.Hash{}, db)
 
 	header := &types.Header{
 		Number: big.NewInt(100),
@@ -241,8 +244,9 @@ func TestFilterTxConditionalTimestamp(t *testing.T) {
 
 	// Create an in memory state db to test against.
 	memDb := rawdb.NewMemoryDatabase()
-	db := state.NewDatabase(memDb)
-	state, _ := state.New(common.Hash{}, db, nil)
+	tdb := triedb.NewDatabase(memDb, &triedb.Config{Preimages: true})
+	db := state.NewDatabase(tdb, nil)
+	state, _ := state.New(common.Hash{}, db)
 
 	header := &types.Header{
 		Number: big.NewInt(0),

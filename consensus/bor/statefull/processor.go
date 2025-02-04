@@ -87,7 +87,6 @@ func ApplyMessage(
 		msg.Data(),
 		msg.Gas(),
 		uint256.NewInt(msg.Value().Uint64()),
-		nil,
 	)
 
 	success := big.NewInt(5).SetBytes(ret)
@@ -98,6 +97,11 @@ func ApplyMessage(
 	// if msg.To() == validatorContractAddress, its committing a span and we don't get any return value
 	if success.Cmp(big.NewInt(0)) == 0 && !bytes.Equal(msg.To().Bytes(), validatorContract.Bytes()) {
 		log.Error("message execution failed on contract", "msgData", msg.Data)
+	}
+
+	// If there's error committing span, log it here. It won't be reported before because the return value is empty.
+	if bytes.Equal(msg.To().Bytes(), validatorContract.Bytes()) && err != nil {
+		log.Error("message execution failed on contract", "err", err)
 	}
 
 	// Update the state with pending changes
@@ -120,7 +124,6 @@ func ApplyBorMessage(vmenv *vm.EVM, msg Callmsg) (*core.ExecutionResult, error) 
 		msg.Data(),
 		msg.Gas(),
 		uint256.NewInt(msg.Value().Uint64()),
-		nil,
 	)
 	// Update the state with pending changes
 	if err != nil {

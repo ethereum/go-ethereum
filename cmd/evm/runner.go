@@ -163,8 +163,8 @@ func runCmd(ctx *cli.Context) error {
 	})
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)
-	sdb := state.NewDatabaseWithNodeDB(db, triedb)
-	statedb, _ = state.New(genesis.Root(), sdb, nil)
+	sdb := state.NewDatabase(triedb, nil)
+	statedb, _ = state.New(genesis.Root(), sdb)
 	chainConfig = genesisConfig.Config
 
 	if ctx.String(SenderFlag.Name) != "" {
@@ -297,7 +297,7 @@ func runCmd(ctx *cli.Context) error {
 			fmt.Printf("Failed to commit changes %v\n", err)
 			return err
 		}
-		dumpdb, err := state.New(root, sdb, nil)
+		dumpdb, err := state.New(root, sdb)
 		if err != nil {
 			fmt.Printf("Failed to open statedb %v\n", err)
 			return err

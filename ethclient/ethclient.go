@@ -127,9 +127,11 @@ func (ec *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumb
 }
 
 type rpcBlock struct {
-	Hash         common.Hash      `json:"hash"`
-	Transactions []rpcTransaction `json:"transactions"`
-	UncleHashes  []common.Hash    `json:"uncles"`
+	Hash         common.Hash         `json:"hash"`
+	Transactions []rpcTransaction    `json:"transactions"`
+	UncleHashes  []common.Hash       `json:"uncles"`
+	Withdrawals  []*types.Withdrawal `json:"withdrawals,omitempty"`
+	Requests     []*types.Request    `json:"requests,omitempty"`
 }
 
 func (ec *Client) getBlock(ctx context.Context, method string, args ...interface{}) (*types.Block, error) {
@@ -210,6 +212,8 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		types.Body{
 			Transactions: txs,
 			Uncles:       uncles,
+			Withdrawals:  body.Withdrawals,
+			Requests:     body.Requests,
 		}), nil
 }
 

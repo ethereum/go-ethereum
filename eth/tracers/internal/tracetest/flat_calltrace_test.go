@@ -1,7 +1,6 @@
 package tracetest
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -106,7 +105,7 @@ func flatCallTracerTestRunner(tb testing.TB, tracerName string, filename string,
 	}
 	evm := vm.NewEVM(blockContext, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 	tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-	vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background())
+	vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %v", err)
 	}

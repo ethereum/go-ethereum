@@ -30,6 +30,14 @@ cover.out
 /build/bin/
 /geth*.zip
 
+# used by the build/ci.go archive + upload tool
+/geth*.tar.gz
+/geth*.tar.gz.sig
+/geth*.tar.gz.asc
+/geth*.zip.sig
+/geth*.zip.asc
+
+
 # travis
 profile.tmp
 profile.cov

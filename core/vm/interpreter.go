@@ -56,7 +56,8 @@ type Config struct {
 	NoBaseFee               bool  // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
 	EnablePreimageRecording bool  // Enables recording of SHA3/keccak preimages
 	ExtraEips               []int // Additional EIPS that are to be enabled
-	EnableWitnessCollection bool  // true if witness collection is enabled
+
+	StatelessSelfValidation bool // Generate execution witnesses and self-check against them (testing purpose)
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -104,6 +105,11 @@ func (ctx *ScopeContext) CallValue() *uint256.Int {
 // the contents of the returned data.
 func (ctx *ScopeContext) CallInput() []byte {
 	return ctx.Contract.Input
+}
+
+// ContractCode returns the code of the contract being executed.
+func (ctx *ScopeContext) ContractCode() []byte {
+	return ctx.Contract.Code
 }
 
 // EVMInterpreter represents an EVM interpreter
@@ -223,20 +229,8 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 }
 
 // PreRun is a wrapper around Run that allows for a delay to be injected before each opcode when induced by tests else it calls the lagace Run() method
-func (in *EVMInterpreter) PreRun(contract *Contract, input []byte, readOnly bool, interruptCtx context.Context) (ret []byte, err error) {
-	var opcodeDelay interface{}
-
-	if interruptCtx != nil {
-		if interruptCtx.Value(InterruptCtxOpcodeDelayKey) != nil {
-			opcodeDelay = interruptCtx.Value(InterruptCtxOpcodeDelayKey)
-		}
-	}
-
-	if opcodeDelay != nil {
-		return in.RunWithDelay(contract, input, readOnly, interruptCtx, opcodeDelay.(uint))
-	}
-
-	return in.Run(contract, input, readOnly, interruptCtx)
+func (in *EVMInterpreter) PreRun(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+	return in.Run(contract, input, readOnly)
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
@@ -246,7 +240,7 @@ func (in *EVMInterpreter) PreRun(contract *Contract, input []byte, readOnly bool
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
 // nolint: gocognit
-func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, interruptCtx context.Context) (ret []byte, err error) {
+func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -293,6 +287,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 	// they are returned to the pools
 	defer func() {
 		returnStack(stack)
+		mem.Free()
 	}()
 
 	contract.Input = input
@@ -315,32 +310,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, i
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
 	for {
-		if interruptCtx != nil {
-			// case of interrupting by timeout
-			select {
-			case <-interruptCtx.Done():
-				txHash, _ := GetCurrentTxFromContext(interruptCtx)
-				interruptedTxCache, _ := GetCache(interruptCtx)
-
-				if interruptedTxCache == nil {
-					break
-				}
-
-				// if the tx is already in the cache, it means that it has been interrupted before and we will not interrupt it again
-				found, _ := interruptedTxCache.Cache.ContainsOrAdd(txHash, true)
-				if found {
-					interruptedTxCache.Cache.Remove(txHash)
-				} else {
-					// if the tx is not in the cache, it means that it has not been interrupted before and we will interrupt it
-					opcodeCommitInterruptCounter.Inc(1)
-					log.Warn("OPCODE Level interrupt")
-
-					return nil, ErrInterrupt
-				}
-			default:
-			}
-		}
-
 		if debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas

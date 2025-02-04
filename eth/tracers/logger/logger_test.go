@@ -65,7 +65,7 @@ func TestStoreCapture(t *testing.T) {
 
 	var index common.Hash
 	logger.OnTxStart(env.GetVMContext(), nil, common.Address{})
-	_, err := env.Interpreter().Run(contract, []byte{}, false, nil)
+	_, err := env.Interpreter().Run(contract, []byte{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
