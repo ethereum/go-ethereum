@@ -713,7 +713,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	}{
 		{name: "cancun", timestamp: c.CancunTime, config: bsc.Cancun},
 		{name: "prague", timestamp: c.PragueTime, config: bsc.Prague},
-		{name: "verkle", timestamp: c.VerkleTime, config: bsc.Verkle},
 	} {
 		if cur.config != nil {
 			if err := cur.config.validate(); err != nil {
