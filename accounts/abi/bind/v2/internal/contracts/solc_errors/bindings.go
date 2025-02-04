@@ -46,7 +46,7 @@ func NewC() *C {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *C) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 // Bar is a free data retrieval call binding the contract method 0xb0a378b0.
@@ -152,7 +152,7 @@ func NewC2() *C2 {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 // Foo is a free data retrieval call binding the contract method 0xbfb4ebcf.

@@ -46,13 +46,13 @@ func NewNumericMethodName() *NumericMethodName {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *NumericMethodName) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
-// E1test is a free data retrieval call binding the contract method 0xffa02795.
+// E1test0 is a free data retrieval call binding the contract method 0xffa02795.
 //
 // Solidity: function _1test() pure returns()
-func (numericMethodName *NumericMethodName) PackE1test() []byte {
+func (numericMethodName *NumericMethodName) PackE1test0() []byte {
 	enc, err := numericMethodName.abi.Pack("_1test")
 	if err != nil {
 		panic(err)
@@ -60,10 +60,10 @@ func (numericMethodName *NumericMethodName) PackE1test() []byte {
 	return enc
 }
 
-// E1test0 is a free data retrieval call binding the contract method 0xd02767c7.
+// E1test is a free data retrieval call binding the contract method 0xd02767c7.
 //
 // Solidity: function __1test() pure returns()
-func (numericMethodName *NumericMethodName) PackE1test0() []byte {
+func (numericMethodName *NumericMethodName) PackE1test() []byte {
 	enc, err := numericMethodName.abi.Pack("__1test")
 	if err != nil {
 		panic(err)

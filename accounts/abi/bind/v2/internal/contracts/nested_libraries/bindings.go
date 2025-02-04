@@ -50,7 +50,7 @@ func NewC1() *C1 {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *C1) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 func (c1 *C1) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
@@ -113,7 +113,7 @@ func NewC2() *C2 {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 func (c2 *C2) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
@@ -172,7 +172,7 @@ func NewL1() *L1 {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *L1) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -226,7 +226,7 @@ func NewL2() *L2 {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *L2) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -280,7 +280,7 @@ func NewL2b() *L2b {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *L2b) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -331,7 +331,7 @@ func NewL3() *L3 {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *L3) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -386,7 +386,7 @@ func NewL4() *L4 {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *L4) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.
@@ -440,7 +440,7 @@ func NewL4b() *L4b {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *L4b) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 // Do is a free data retrieval call binding the contract method 0x2ad11272.

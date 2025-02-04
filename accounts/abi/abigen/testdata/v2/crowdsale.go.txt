@@ -46,7 +46,7 @@ func NewCrowdsale() *Crowdsale {
 // Instance creates a wrapper for a deployed contract instance at the given address.
 // Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
 func (c *Crowdsale) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-	return bind.NewContractInstance(backend, addr, c.abi)
+	return bind.NewBoundContract(backend, addr, c.abi)
 }
 
 func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, fundingGoalInEthers *big.Int, durationInMinutes *big.Int, etherCostOfEachToken *big.Int, addressOfTokenUsedAsReward common.Address) []byte {
