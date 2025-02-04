@@ -17,8 +17,8 @@
 // Package syncx contains exotic synchronization primitives.
 package syncx
 
-// ClosableMutex is a mutex that can be closed.
-// Once closed, it cannot be locked again.
+// ClosableMutex is a mutex that can also be closed.
+// Once closed, it can never be taken again.
 type ClosableMutex struct {
 	ch chan struct{}
 }
