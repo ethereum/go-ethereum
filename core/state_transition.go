@@ -17,8 +17,8 @@
 package core
 
 import (
-	"errors"
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"

@@ -485,7 +485,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas, gas-statelessGas, tracing.GasChangeWitnessContractCollisionCheck)
 		}
-		contract.Gas = contract.Gas - statelessGas
+		gas = gas - statelessGas
 	}
 
 	// We add this to the access list _before_ taking a snapshot. Even if the
@@ -533,9 +533,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas, gas-statelessGas, tracing.GasChangeWitnessContractInit)
 		}
-		contract.Gas = contract.Gas - statelessGas
+		gas = gas - statelessGas
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
+	contract.Gas = gas
 
 	ret, err = evm.initNewContract(contract, address, value, input, isInitcodeEOF)
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
