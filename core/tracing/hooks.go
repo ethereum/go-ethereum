@@ -260,7 +260,7 @@ const (
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
 
 	// BalanceChangeRevert is emitted when the balance is reverted back to a previous value due to call failure.
-	// It is only emitted when the tracer has opted in to use the journaling wrapper.
+	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
 	BalanceChangeRevert BalanceChangeReason = 15
 )
 
@@ -357,6 +357,6 @@ const (
 	NonceChangeAuthorization NonceChangeReason = 5
 
 	// NonceChangeRevert is emitted when the nonce is reverted back to a previous value due to call failure.
-	// It is only emitted when the tracer has opted in to use the journaling wrapper.
+	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
 	NonceChangeRevert NonceChangeReason = 6
 )
