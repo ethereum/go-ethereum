@@ -57,12 +57,15 @@ func TestCalcExcessBlobGas(t *testing.T) {
 	}
 	for i, tt := range tests {
 		blobGasUsed := uint64(tt.blobs) * params.BlobTxBlobGasPerBlob
-		header := &types.Header{
+		head := &types.Header{
+			Time: *config.CancunTime,
+		}
+		parent := &types.Header{
 			Time:          *config.CancunTime,
 			ExcessBlobGas: &tt.excess,
 			BlobGasUsed:   &blobGasUsed,
 		}
-		result := CalcExcessBlobGas(config, header, header)
+		result := CalcExcessBlobGas(config, parent, head)
 		if result != tt.want {
 			t.Errorf("test %d: excess blob gas mismatch: have %v, want %v", i, result, tt.want)
 		}
