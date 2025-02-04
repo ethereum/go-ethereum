@@ -209,14 +209,6 @@ type Hooks struct {
 	OnBlockHashRead BlockHashReadHook
 }
 
-// copy creates a new Hooks instance with all implemented hooks copied from the original.
-// Note: it is not a deep copy. If a hook has been implemented as a closure and acts on
-// a mutable state, the copied hook will still act on the same state.
-func (h *Hooks) copy() *Hooks {
-	c := *h
-	return &c
-}
-
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
 // for tracing and reporting.
 type BalanceChangeReason byte
