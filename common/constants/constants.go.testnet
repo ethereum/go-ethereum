@@ -52,6 +52,7 @@ var LondonBlock = big.NewInt(61290000)
 var MergeBlock = big.NewInt(61290000)
 var ShanghaiBlock = big.NewInt(61290000) // Target 31st March 2024
 var Eip1559Block = big.NewInt(9999999999)
+var CancunBlock = big.NewInt(9999999999)
 
 var TIPXDCXTestnet = big.NewInt(23779191)
 var IsTestnet bool = true

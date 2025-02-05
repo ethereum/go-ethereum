@@ -48,6 +48,7 @@ var TIPXDCXCancellationFeeTestnet = big.NewInt(38383838)
 var TIPXDCXMinerDisable = big.NewInt(80370000)    // Target 2nd Oct 2024
 var TIPXDCXReceiverDisable = big.NewInt(80370900) // Target 2nd Oct 2024, safer to release after disable miner
 var Eip1559Block = big.NewInt(9999999999)
+var CancunBlock = big.NewInt(9999999999)
 var BerlinBlock = big.NewInt(76321000)   // Target 19th June 2024
 var LondonBlock = big.NewInt(76321000)   // Target 19th June 2024
 var MergeBlock = big.NewInt(76321000)    // Target 19th June 2024
