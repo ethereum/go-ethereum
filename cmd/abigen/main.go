@@ -65,7 +65,7 @@ var (
 	}
 	aliasFlag = &cli.StringFlag{
 		Name:  "alias",
-		Usage: "Comma separated aliases for function and event renaming, e.g. original1=alias1, original2=alias2",
+		Usage: "Comma separated aliases for function and event renaming.  If --v2 is set, errors are aliased as well. e.g. original1=alias1, original2=alias2",
 	}
 	v2Flag = &cli.BoolFlag{
 		Name:  "v2",
