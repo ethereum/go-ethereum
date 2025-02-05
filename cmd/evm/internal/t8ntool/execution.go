@@ -198,7 +198,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				Time:          pre.Env.Timestamp,
 				ExcessBlobGas: &excessBlobGas,
 			}
-			excessBlobGas = eip4844.CalcExcessBlobGas(chainConfig, parent, header)
+			excessBlobGas = eip4844.CalcExcessBlobGas(chainConfig, parent, header.Time)
 			vmContext.BlobBaseFee = eip4844.CalcBlobFee(chainConfig, header)
 		}
 	}
