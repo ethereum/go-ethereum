@@ -19,6 +19,7 @@ package les
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -90,7 +91,11 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config) (*LightEthereum, er
 	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
 		return nil, genesisErr
 	}
-	log.Info("Initialised chain configuration", "config", chainConfig)
+	log.Info(strings.Repeat("-", 153))
+	for _, line := range strings.Split(chainConfig.Description(), "\n") {
+		log.Info(line)
+	}
+	log.Info(strings.Repeat("-", 153))
 
 	peers := newPeerSet()
 	quitSync := make(chan struct{})
