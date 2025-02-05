@@ -30,23 +30,7 @@ import (
 // TransactionTest checks RLP decoding and sender derivation of transactions.
 type TransactionTest struct {
 	Txbytes hexutil.Bytes `json:"txbytes"`
-	Result  ttResult
-}
-
-type ttResult struct {
-	Prague         *ttFork
-	Cancun         *ttFork
-	Shanghai       *ttFork
-	Paris          *ttFork
-	London         *ttFork
-	Berlin         *ttFork
-	Byzantium      *ttFork
-	Constantinople *ttFork
-	Istanbul       *ttFork
-	EIP150         *ttFork
-	EIP158         *ttFork
-	Frontier       *ttFork
-	Homestead      *ttFork
+	Result  map[string]*ttFork
 }
 
 type ttFork struct {
@@ -60,44 +44,10 @@ func (tt *TransactionTest) validate() error {
 	if tt.Txbytes == nil {
 		return fmt.Errorf("missing txbytes")
 	}
-	if err := tt.validateFork(tt.Result.Prague); err != nil {
-		return fmt.Errorf("invalid Prague: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.Cancun); err != nil {
-		return fmt.Errorf("invalid Cancun: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.Shanghai); err != nil {
-		return fmt.Errorf("invalid Shanghai: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.Paris); err != nil {
-		return fmt.Errorf("invalid Paris: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.London); err != nil {
-		return fmt.Errorf("invalid London: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.Berlin); err != nil {
-		return fmt.Errorf("invalid Berlin: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.Byzantium); err != nil {
-		return fmt.Errorf("invalid Byzantium: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.Constantinople); err != nil {
-		return fmt.Errorf("invalid Constantinople: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.Istanbul); err != nil {
-		return fmt.Errorf("invalid Istanbul: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.EIP150); err != nil {
-		return fmt.Errorf("invalid EIP150: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.EIP158); err != nil {
-		return fmt.Errorf("invalid EIP158: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.Frontier); err != nil {
-		return fmt.Errorf("invalid Frontier: %v", err)
-	}
-	if err := tt.validateFork(tt.Result.Homestead); err != nil {
-		return fmt.Errorf("invalid Homestead: %v", err)
+	for name, fork := range tt.Result {
+		if err := tt.validateFork(fork); err != nil {
+			return fmt.Errorf("invalid %s: %v", name, err)
+		}
 	}
 	return nil
 }
@@ -147,19 +97,19 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		isIstanbul  bool
 		isShanghai  bool
 	}{
-		{"Frontier", types.FrontierSigner{}, tt.Result.Frontier, false, false, false},
-		{"Homestead", types.HomesteadSigner{}, tt.Result.Homestead, true, false, false},
-		{"EIP150", types.HomesteadSigner{}, tt.Result.EIP150, true, false, false},
-		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.Result.EIP158, true, false, false},
-		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Result.Byzantium, true, false, false},
-		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Result.Constantinople, true, false, false},
-		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Result.Istanbul, true, true, false},
-		{"Berlin", types.NewEIP2930Signer(config.ChainID), tt.Result.Berlin, true, true, false},
-		{"London", types.NewLondonSigner(config.ChainID), tt.Result.London, true, true, false},
-		{"Paris", types.NewLondonSigner(config.ChainID), tt.Result.Paris, true, true, false},
-		{"Shanghai", types.NewLondonSigner(config.ChainID), tt.Result.Shanghai, true, true, true},
-		{"Cancun", types.NewCancunSigner(config.ChainID), tt.Result.Cancun, true, true, true},
-		{"Prague", types.NewPragueSigner(config.ChainID), tt.Result.Prague, true, true, true},
+		{"Frontier", types.FrontierSigner{}, tt.Result["Frontier"], false, false, false},
+		{"Homestead", types.HomesteadSigner{}, tt.Result["Homestead"], true, false, false},
+		{"EIP150", types.HomesteadSigner{}, tt.Result["EIP150"], true, false, false},
+		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.Result["EIP158"], true, false, false},
+		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Result["Byzantium"], true, false, false},
+		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Result["Constantinople"], true, false, false},
+		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Result["Istanbul"], true, true, false},
+		{"Berlin", types.NewEIP2930Signer(config.ChainID), tt.Result["Berlin"], true, true, false},
+		{"London", types.NewLondonSigner(config.ChainID), tt.Result["London"], true, true, false},
+		{"Paris", types.NewLondonSigner(config.ChainID), tt.Result["Paris"], true, true, false},
+		{"Shanghai", types.NewLondonSigner(config.ChainID), tt.Result["Shanghai"], true, true, true},
+		{"Cancun", types.NewCancunSigner(config.ChainID), tt.Result["Cancun"], true, true, true},
+		{"Prague", types.NewPragueSigner(config.ChainID), tt.Result["Prague"], true, true, true},
 	} {
 		if testcase.fork == nil {
 			continue
