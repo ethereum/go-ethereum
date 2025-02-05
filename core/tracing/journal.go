@@ -41,12 +41,17 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks == nil {
 		return nil, fmt.Errorf("wrapping nil tracer")
 	}
-	// No state change to journal, return the wrapped hooks as is
-	if hooks.OnBalanceChange == nil && hooks.OnNonceChange == nil && hooks.OnNonceChangeV2 == nil && hooks.OnCodeChange == nil && hooks.OnStorageChange == nil {
-		return hooks, nil
+
+	// Upgrade hooks so we don't have to bother with old versions.
+	var err error
+	hooks, err = Upgrade(hooks)
+	if err != nil {
+		return nil, err
 	}
-	if hooks.OnNonceChange != nil && hooks.OnNonceChangeV2 != nil {
-		return nil, fmt.Errorf("cannot have both OnNonceChange and OnNonceChangeV2")
+
+	// No state change to journal, return the wrapped hooks as is
+	if hooks.OnBalanceChange == nil && hooks.OnNonceChangeV2 == nil && hooks.OnCodeChange == nil && hooks.OnStorageChange == nil {
+		return hooks, nil
 	}
 
 	// Create a new Hooks instance and copy all hooks
@@ -62,12 +67,10 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks.OnBalanceChange != nil {
 		wrapped.OnBalanceChange = j.OnBalanceChange
 	}
-	if hooks.OnNonceChange != nil || hooks.OnNonceChangeV2 != nil {
+	if hooks.OnNonceChangeV2 != nil {
 		// Regardless of which hook version is used in the tracer,
 		// the journal will want to capture the nonce change reason.
 		wrapped.OnNonceChangeV2 = j.OnNonceChangeV2
-		// A precaution to ensure EVM doesn't call both hooks.
-		wrapped.OnNonceChange = nil
 	}
 	if hooks.OnCodeChange != nil {
 		wrapped.OnCodeChange = j.OnCodeChange
@@ -156,8 +159,6 @@ func (j *journal) OnNonceChangeV2(addr common.Address, prev, new uint64, reason 
 	}
 	if j.hooks.OnNonceChangeV2 != nil {
 		j.hooks.OnNonceChangeV2(addr, prev, new, reason)
-	} else if j.hooks.OnNonceChange != nil {
-		j.hooks.OnNonceChange(addr, prev, new)
 	}
 }
 
@@ -219,8 +220,6 @@ func (b balanceChange) revert(hooks *Hooks) {
 func (n nonceChange) revert(hooks *Hooks) {
 	if hooks.OnNonceChangeV2 != nil {
 		hooks.OnNonceChangeV2(n.addr, n.new, n.prev, NonceChangeRevert)
-	} else if hooks.OnNonceChange != nil {
-		hooks.OnNonceChange(n.addr, n.new, n.prev)
 	}
 }
 

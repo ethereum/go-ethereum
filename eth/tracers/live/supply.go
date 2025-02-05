@@ -120,6 +120,7 @@ func newSupplyTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 		OnGenesisBlock:   t.onGenesisBlock,
 		OnTxStart:        t.onTxStart,
 		OnBalanceChange:  t.onBalanceChange,
+		OnNonceChange:    t.onNonceChange,
 		OnEnter:          t.onEnter,
 		OnExit:           t.onExit,
 		OnClose:          t.onClose,
@@ -325,4 +326,7 @@ func (s *supplyTracer) write(data any) {
 	if _, err := s.logger.Write([]byte{'\n'}); err != nil {
 		log.Warn("failed to write to supply tracer log file", "error", err)
 	}
+}
+func (t *supplyTracer) onNonceChange(addr common.Address, prev, new uint64) {
+	fmt.Printf("Nonce change for %s: %d -> %d\n", addr, prev, new)
 }
