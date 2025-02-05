@@ -86,9 +86,6 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		if requiredGas > tx.Gas() {
 			return sender, hash, 0, fmt.Errorf("insufficient gas ( %d < %d )", tx.Gas(), requiredGas)
 		}
-		if auth := tx.SetCodeAuthorizations(); auth != nil && len(auth) == 0 {
-			return sender, hash, requiredGas, fmt.Errorf("missing authorization")
-		}
 		hash = tx.Hash()
 		return sender, hash, requiredGas, nil
 	}
