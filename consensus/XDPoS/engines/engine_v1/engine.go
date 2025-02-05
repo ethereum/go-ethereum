@@ -18,7 +18,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/consensus/clique"
-	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc/eip1559"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -205,10 +204,6 @@ func (x *XDPoS_v1) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	// Ensure that the block doesn't contain any uncles which are meaningless in XDPoS_v1
 	if header.UncleHash != utils.UncleHash {
 		return utils.ErrInvalidUncleHash
-	}
-	// If all checks passed, validate any special fields for hard forks
-	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
-		return err
 	}
 	// All basic checks passed, verify cascading fields
 	return x.verifyCascadingFields(chain, header, parents, fullVerify)

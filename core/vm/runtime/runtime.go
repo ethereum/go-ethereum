@@ -58,7 +58,6 @@ func setDefaults(cfg *Config) {
 			DAOForkBlock:        new(big.Int),
 			DAOForkSupport:      false,
 			EIP150Block:         new(big.Int),
-			EIP150Hash:          common.Hash{},
 			EIP155Block:         new(big.Int),
 			EIP158Block:         new(big.Int),
 			ByzantiumBlock:      new(big.Int),
