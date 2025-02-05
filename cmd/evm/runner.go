@@ -162,7 +162,6 @@ func runCmd(ctx *cli.Context) error {
 		Value:    flags.GlobalBig(ctx, ValueFlag.Name),
 		EVMConfig: vm.Config{
 			Tracer: tracer,
-			Debug:  ctx.Bool(DebugFlag.Name) || ctx.Bool(MachineFlag.Name),
 		},
 	}
 

@@ -510,7 +510,6 @@ func TestEip2929Cases(t *testing.T) {
 			code, ops)
 		Execute(code, nil, &Config{
 			EVMConfig: vm.Config{
-				Debug:     true,
 				Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
 				ExtraEips: []int{2929},
 			},
@@ -664,7 +663,6 @@ func TestColdAccountAccessCost(t *testing.T) {
 		tracer := vm.NewStructLogger(nil)
 		Execute(tc.code, nil, &Config{
 			EVMConfig: vm.Config{
-				Debug:  true,
 				Tracer: tracer,
 			},
 		})

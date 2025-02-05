@@ -40,7 +40,7 @@ func TestState(t *testing.T) {
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 	// Un-skip this when https://github.com/ethereum/tests/issues/908 is closed
 	st.skipLoad(`^stQuadraticComplexityTest/QuadraticComplexitySolidity_CallDataCopy`)
-	
+
 	// Expected failures:
 	st.fails(`^stRevertTest/RevertPrecompiledTouch\.json/EIP158`, "bug in test")
 	st.fails(`^stRevertTest/RevertPrefoundEmptyOOG\.json/EIP158`, "bug in test")
@@ -87,7 +87,7 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 		return
 	}
 	tracer := vm.NewStructLogger(nil)
-	config.Debug, config.Tracer = true, tracer
+	config.Tracer = tracer
 	err2 := test(config)
 	if !reflect.DeepEqual(err, err2) {
 		t.Errorf("different error for second run: %v", err2)
