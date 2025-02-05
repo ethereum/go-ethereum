@@ -18,7 +18,6 @@
 package core
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -2587,9 +2586,6 @@ func (bc *BlockChain) addBadBlock(block *types.Block) {
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
 	bc.addBadBlock(block)
 
-	// V2 specific logs
-	config, _ := json.Marshal(bc.chainConfig)
-
 	var roundNumber = types.Round(0)
 	engine, ok := bc.Engine().(*XDPoS.XDPoS)
 	if ok {
@@ -2601,21 +2597,21 @@ func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, e
 	}
 
 	var receiptString string
-	for _, receipt := range receipts {
-		receiptString += fmt.Sprintf("\t%v\n", receipt)
+	for i, receipt := range receipts {
+		receiptString += fmt.Sprintf("\n  %d: cumulative: %v gas: %v contract: %v status: %v tx: %v logs: %v bloom: %x state: %x",
+			i, receipt.CumulativeGasUsed, receipt.GasUsed, receipt.ContractAddress.Hex(),
+			receipt.Status, receipt.TxHash.Hex(), receipt.Logs, receipt.Bloom, receipt.PostState)
 	}
 	log.Error(fmt.Sprintf(`
 ########## BAD BLOCK #########
-Chain config: %v
-
 Number: %v
 Hash: %#x
-%v
-
 Round: %v
 Error: %v
+Chain config: %v
+Receipts: %v
 ##############################
-`, string(config), block.Number(), block.Hash(), receiptString, roundNumber, err))
+`, block.Number(), block.Hash(), roundNumber, err, bc.chainConfig, receiptString))
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local
