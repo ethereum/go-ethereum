@@ -75,6 +75,19 @@ type Genesis struct {
 	BlobGasUsed   *uint64     `json:"blobGasUsed"`   // EIP-4844
 }
 
+// copy copies the genesis.
+func (g *Genesis) copy() *Genesis {
+	if g != nil {
+		cpy := *g
+		if g.Config != nil {
+			conf := *g.Config
+			cpy.Config = &conf
+		}
+		return &cpy
+	}
+	return nil
+}
+
 func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	var genesis Genesis
 	stored := rawdb.ReadCanonicalHash(db, 0)
@@ -248,21 +261,17 @@ type ChainOverrides struct {
 }
 
 // apply applies the chain overrides on the supplied chain config.
-func (o *ChainOverrides) apply(cfg *params.ChainConfig) (*params.ChainConfig, error) {
+func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	if o == nil || cfg == nil {
-		return cfg, nil
+		return nil
 	}
-	cpy := *cfg
 	if o.OverrideCancun != nil {
-		cpy.CancunTime = o.OverrideCancun
+		cfg.CancunTime = o.OverrideCancun
 	}
 	if o.OverrideVerkle != nil {
-		cpy.VerkleTime = o.OverrideVerkle
+		cfg.VerkleTime = o.OverrideVerkle
 	}
-	if err := cpy.CheckConfigForkOrder(); err != nil {
-		return nil, err
-	}
-	return &cpy, nil
+	return cfg.CheckConfigForkOrder()
 }
 
 // SetupGenesisBlock writes or updates the genesis block in db.
@@ -281,6 +290,8 @@ func SetupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Gene
 }
 
 func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+	// Copy the genesis, so we can operate on a copy.
+	genesis = genesis.copy()
 	// Sanitize the supplied genesis, ensuring it has the associated chain
 	// config attached.
 	if genesis != nil && genesis.Config == nil {
@@ -295,17 +306,15 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		} else {
 			log.Info("Writing custom genesis block")
 		}
-		chainCfg, err := overrides.apply(genesis.Config)
-		if err != nil {
+		if err := overrides.apply(genesis.Config); err != nil {
 			return nil, common.Hash{}, nil, err
 		}
-		genesis.Config = chainCfg
 
 		block, err := genesis.Commit(db, triedb)
 		if err != nil {
 			return nil, common.Hash{}, nil, err
 		}
-		return chainCfg, block.Hash(), nil, nil
+		return genesis.Config, block.Hash(), nil, nil
 	}
 	// Commit the genesis if the genesis block exists in the ancient database
 	// but the key-value database is empty without initializing the genesis
@@ -322,11 +331,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		} else {
 			log.Info("Writing custom genesis block")
 		}
-		chainCfg, err := overrides.apply(genesis.Config)
-		if err != nil {
+		if err := overrides.apply(genesis.Config); err != nil {
 			return nil, common.Hash{}, nil, err
 		}
-		genesis.Config = chainCfg
 
 		if hash := genesis.ToBlock().Hash(); hash != ghash {
 			return nil, common.Hash{}, nil, &GenesisMismatchError{ghash, hash}
@@ -335,17 +342,15 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		if err != nil {
 			return nil, common.Hash{}, nil, err
 		}
-		return chainCfg, block.Hash(), nil, nil
+		return genesis.Config, block.Hash(), nil, nil
 	}
 	// The genesis block has already been committed previously. Verify that the
 	// provided genesis with chain overrides matches the existing one, and update
 	// the stored chain config if necessary.
 	if genesis != nil {
-		chainCfg, err := overrides.apply(genesis.Config)
-		if err != nil {
+		if err := overrides.apply(genesis.Config); err != nil {
 			return nil, common.Hash{}, nil, err
 		}
-		genesis.Config = chainCfg
 
 		if hash := genesis.ToBlock().Hash(); hash != ghash {
 			return nil, common.Hash{}, nil, &GenesisMismatchError{ghash, hash}
@@ -459,8 +464,12 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
-	if g.Difficulty == nil && g.Mixhash == (common.Hash{}) {
-		head.Difficulty = params.GenesisDifficulty
+	if g.Difficulty == nil {
+		if g.Config != nil && g.Config.Ethash == nil {
+			head.Difficulty = big.NewInt(0)
+		} else if g.Mixhash == (common.Hash{}) {
+			head.Difficulty = params.GenesisDifficulty
+		}
 	}
 	if g.Config != nil && g.Config.IsLondon(common.Big0) {
 		if g.BaseFee != nil {

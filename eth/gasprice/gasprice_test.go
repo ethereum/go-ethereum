@@ -157,6 +157,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 		ts := gspec.Timestamp + cancunBlock.Uint64()*10 // fixed 10 sec block time in blockgen
 		config.ShanghaiTime = &ts
 		config.CancunTime = &ts
+		config.BlobScheduleConfig = params.DefaultBlobSchedule
 		signer = types.LatestSigner(gspec.Config)
 	}
 

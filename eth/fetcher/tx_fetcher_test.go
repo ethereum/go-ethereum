@@ -1108,7 +1108,7 @@ func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 			doTxNotify{peer: "C",
 				hashes: []common.Hash{{0x07}, {0x08}},
 				types:  []byte{types.BlobTxType, types.BlobTxType},
-				sizes:  []uint32{params.MaxBlobGasPerBlock, params.MaxBlobGasPerBlock},
+				sizes:  []uint32{params.BlobTxBlobGasPerBlob * 10, params.BlobTxBlobGasPerBlob * 10},
 			},
 			doWait{time: txArriveTimeout, step: true},
 			isWaiting(nil),
@@ -1125,8 +1125,8 @@ func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 						{common.Hash{0x06}, types.LegacyTxType, maxTxRetrievalSize},
 					},
 					"C": {
-						{common.Hash{0x07}, types.BlobTxType, params.MaxBlobGasPerBlock},
-						{common.Hash{0x08}, types.BlobTxType, params.MaxBlobGasPerBlock},
+						{common.Hash{0x07}, types.BlobTxType, params.BlobTxBlobGasPerBlob * 10},
+						{common.Hash{0x08}, types.BlobTxType, params.BlobTxBlobGasPerBlob * 10},
 					},
 				},
 				fetching: map[string][]common.Hash{

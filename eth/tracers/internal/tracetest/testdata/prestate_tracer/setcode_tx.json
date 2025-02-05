@@ -53,7 +53,19 @@
       "shanghaiTime": 0,
       "cancunTime": 0,
       "pragueTime": 0,
-      "terminalTotalDifficulty": 0
+      "terminalTotalDifficulty": 0,
+      "blobSchedule": {
+        "cancun": {
+          "target": 3,
+          "max": 6,
+          "baseFeeUpdateFraction": 3338477
+        },
+        "prague": {
+          "target": 3,
+          "max": 6,
+          "baseFeeUpdateFraction": 5007716
+        }
+      }
     }
   },
   "context": {

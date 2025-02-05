@@ -21,36 +21,47 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestCalcExcessBlobGas(t *testing.T) {
+	var (
+		config        = params.MainnetChainConfig
+		targetBlobs   = targetBlobsPerBlock(config, *config.CancunTime)
+		targetBlobGas = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
+	)
 	var tests = []struct {
 		excess uint64
-		blobs  uint64
+		blobs  int
 		want   uint64
 	}{
 		// The excess blob gas should not increase from zero if the used blob
 		// slots are below - or equal - to the target.
 		{0, 0, 0},
 		{0, 1, 0},
-		{0, params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob, 0},
+		{0, targetBlobs, 0},
 
 		// If the target blob gas is exceeded, the excessBlobGas should increase
 		// by however much it was overshot
-		{0, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) + 1, params.BlobTxBlobGasPerBlob},
-		{1, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) + 1, params.BlobTxBlobGasPerBlob + 1},
-		{1, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) + 2, 2*params.BlobTxBlobGasPerBlob + 1},
+		{0, targetBlobs + 1, params.BlobTxBlobGasPerBlob},
+		{1, targetBlobs + 1, params.BlobTxBlobGasPerBlob + 1},
+		{1, targetBlobs + 2, 2*params.BlobTxBlobGasPerBlob + 1},
 
 		// The excess blob gas should decrease by however much the target was
 		// under-shot, capped at zero.
-		{params.BlobTxTargetBlobGasPerBlock, params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob, params.BlobTxTargetBlobGasPerBlock},
-		{params.BlobTxTargetBlobGasPerBlock, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) - 1, params.BlobTxTargetBlobGasPerBlock - params.BlobTxBlobGasPerBlob},
-		{params.BlobTxTargetBlobGasPerBlock, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) - 2, params.BlobTxTargetBlobGasPerBlock - (2 * params.BlobTxBlobGasPerBlob)},
-		{params.BlobTxBlobGasPerBlob - 1, (params.BlobTxTargetBlobGasPerBlock / params.BlobTxBlobGasPerBlob) - 1, 0},
+		{targetBlobGas, targetBlobs, targetBlobGas},
+		{targetBlobGas, targetBlobs - 1, targetBlobGas - params.BlobTxBlobGasPerBlob},
+		{targetBlobGas, targetBlobs - 2, targetBlobGas - (2 * params.BlobTxBlobGasPerBlob)},
+		{params.BlobTxBlobGasPerBlob - 1, targetBlobs - 1, 0},
 	}
 	for i, tt := range tests {
-		result := CalcExcessBlobGas(tt.excess, tt.blobs*params.BlobTxBlobGasPerBlob)
+		blobGasUsed := uint64(tt.blobs) * params.BlobTxBlobGasPerBlob
+		header := &types.Header{
+			ExcessBlobGas: &tt.excess,
+			BlobGasUsed:   &blobGasUsed,
+		}
+		result := CalcExcessBlobGas(config, header, *config.CancunTime)
 		if result != tt.want {
 			t.Errorf("test %d: excess blob gas mismatch: have %v, want %v", i, result, tt.want)
 		}
@@ -58,6 +69,8 @@ func TestCalcExcessBlobGas(t *testing.T) {
 }
 
 func TestCalcBlobFee(t *testing.T) {
+	zero := uint64(0)
+
 	tests := []struct {
 		excessBlobGas uint64
 		blobfee       int64
@@ -68,7 +81,9 @@ func TestCalcBlobFee(t *testing.T) {
 		{10 * 1024 * 1024, 23},
 	}
 	for i, tt := range tests {
-		have := CalcBlobFee(tt.excessBlobGas)
+		config := &params.ChainConfig{LondonBlock: big.NewInt(0), CancunTime: &zero, BlobScheduleConfig: params.DefaultBlobSchedule}
+		header := &types.Header{ExcessBlobGas: &tt.excessBlobGas}
+		have := CalcBlobFee(config, header)
 		if have.Int64() != tt.blobfee {
 			t.Errorf("test %d: blobfee mismatch: have %v want %v", i, have, tt.blobfee)
 		}
