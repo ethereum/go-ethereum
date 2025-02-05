@@ -339,7 +339,7 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 	}
 	ext := ".tar.gz"
 	base := "fixtures_pectra-devnet-6" // TODO(s1na) rename once the version becomes part of the filename
-	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/v%s/%s%s", executionSpecTestsVersion, base, ext)
+	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/%s/%s%s", executionSpecTestsVersion, base, ext)
 	archivePath := filepath.Join(cachedir, base+ext)
 	if err := csdb.DownloadFile(url, archivePath); err != nil {
 		log.Fatal(err)
