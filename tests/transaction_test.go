@@ -48,6 +48,7 @@ func TestTransaction(t *testing.T) {
 	txt.skipLoad("^ttEIP3860/DataTestInitCodeTooBig.json")
 
 	// The following tests require the tx precheck to be performed.
+	// TODO(s1na): expose stateTransition.precheck publicly to be able to run these tests.
 	txt.skipLoad("^ttEIP1559/maxPriorityFeePerGass32BytesValue.json")
 	txt.skipLoad("^ttEIP1559/maxPriorityFeePerGasOverflow.json")
 	txt.skipLoad("^ttEIP1559/maxFeePerGas32BytesValue.json")
