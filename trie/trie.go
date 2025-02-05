@@ -525,6 +525,14 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				// check.
 				cnode, err := t.resolve(n.Children[pos], append(prefix, byte(pos)))
 				if err != nil {
+					// --- Following block code is not from the original code ---
+					if _, ok := err.(*MissingNodeError); ok {
+						// In case remaining child cannot be expanded, we assume that
+						// the child node was not a shortNode and thus was note reduced
+						// so n is replaced by a one-nibble short node containing the child.
+						return true, &shortNode{[]byte{byte(pos)}, n.Children[pos], t.newFlag()}, nil
+					}
+					// --- End block code ---
 					return false, nil, err
 				}
 				if cnode, ok := cnode.(*shortNode); ok {

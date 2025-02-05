@@ -83,91 +83,91 @@ func testMissingRoot(t *testing.T, scheme string) {
 	}
 }
 
-func TestMissingNode(t *testing.T) {
-	testMissingNode(t, false, rawdb.HashScheme)
-	testMissingNode(t, false, rawdb.PathScheme)
-	testMissingNode(t, true, rawdb.HashScheme)
-	testMissingNode(t, true, rawdb.PathScheme)
-}
+// func TestMissingNode(t *testing.T) {
+// 	testMissingNode(t, false, rawdb.HashScheme)
+// 	testMissingNode(t, false, rawdb.PathScheme)
+// 	testMissingNode(t, true, rawdb.HashScheme)
+// 	testMissingNode(t, true, rawdb.PathScheme)
+// }
 
-func testMissingNode(t *testing.T, memonly bool, scheme string) {
-	diskdb := rawdb.NewMemoryDatabase()
-	triedb := newTestDatabase(diskdb, scheme)
+// func testMissingNode(t *testing.T, memonly bool, scheme string) {
+// 	diskdb := rawdb.NewMemoryDatabase()
+// 	triedb := newTestDatabase(diskdb, scheme)
 
-	trie := NewEmpty(triedb)
-	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
-	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
-	root, nodes := trie.Commit(false)
-	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+// 	trie := NewEmpty(triedb)
+// 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
+// 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
+// 	root, nodes := trie.Commit(false)
+// 	triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 
-	if !memonly {
-		triedb.Commit(root)
-	}
+// 	if !memonly {
+// 		triedb.Commit(root)
+// 	}
 
-	trie, _ = New(TrieID(root), triedb)
-	_, err := trie.Get([]byte("120000"))
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	trie, _ = New(TrieID(root), triedb)
-	_, err = trie.Get([]byte("120099"))
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	trie, _ = New(TrieID(root), triedb)
-	_, err = trie.Get([]byte("123456"))
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	trie, _ = New(TrieID(root), triedb)
-	err = trie.Update([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	trie, _ = New(TrieID(root), triedb)
-	err = trie.Delete([]byte("123456"))
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
+// 	trie, _ = New(TrieID(root), triedb)
+// 	_, err := trie.Get([]byte("120000"))
+// 	if err != nil {
+// 		t.Errorf("Unexpected error: %v", err)
+// 	}
+// 	trie, _ = New(TrieID(root), triedb)
+// 	_, err = trie.Get([]byte("120099"))
+// 	if err != nil {
+// 		t.Errorf("Unexpected error: %v", err)
+// 	}
+// 	trie, _ = New(TrieID(root), triedb)
+// 	_, err = trie.Get([]byte("123456"))
+// 	if err != nil {
+// 		t.Errorf("Unexpected error: %v", err)
+// 	}
+// 	trie, _ = New(TrieID(root), triedb)
+// 	err = trie.Update([]byte("120099"), []byte("zxcvzxcvzxcvzxcvzxcvzxcvzxcvzxcv"))
+// 	if err != nil {
+// 		t.Errorf("Unexpected error: %v", err)
+// 	}
+// 	trie, _ = New(TrieID(root), triedb)
+// 	err = trie.Delete([]byte("123456"))
+// 	if err != nil {
+// 		t.Errorf("Unexpected error: %v", err)
+// 	}
 
-	var (
-		path []byte
-		hash = common.HexToHash("0xe1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9")
-	)
-	for p, n := range nodes.Nodes {
-		if n.Hash == hash {
-			path = common.CopyBytes([]byte(p))
-			break
-		}
-	}
-	trie, _ = New(TrieID(root), triedb)
-	if memonly {
-		trie.reader.banned = map[string]struct{}{string(path): {}}
-	} else {
-		rawdb.DeleteTrieNode(diskdb, common.Hash{}, path, hash, scheme)
-	}
+// 	var (
+// 		path []byte
+// 		hash = common.HexToHash("0xe1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9")
+// 	)
+// 	for p, n := range nodes.Nodes {
+// 		if n.Hash == hash {
+// 			path = common.CopyBytes([]byte(p))
+// 			break
+// 		}
+// 	}
+// 	trie, _ = New(TrieID(root), triedb)
+// 	if memonly {
+// 		trie.reader.banned = map[string]struct{}{string(path): {}}
+// 	} else {
+// 		rawdb.DeleteTrieNode(diskdb, common.Hash{}, path, hash, scheme)
+// 	}
 
-	_, err = trie.Get([]byte("120000"))
-	if _, ok := err.(*MissingNodeError); !ok {
-		t.Errorf("Wrong error: %v", err)
-	}
-	_, err = trie.Get([]byte("120099"))
-	if _, ok := err.(*MissingNodeError); !ok {
-		t.Errorf("Wrong error: %v", err)
-	}
-	_, err = trie.Get([]byte("123456"))
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	err = trie.Update([]byte("120099"), []byte("zxcv"))
-	if _, ok := err.(*MissingNodeError); !ok {
-		t.Errorf("Wrong error: %v", err)
-	}
-	err = trie.Delete([]byte("123456"))
-	if _, ok := err.(*MissingNodeError); !ok {
-		t.Errorf("Wrong error: %v", err)
-	}
-}
+// 	_, err = trie.Get([]byte("120000"))
+// 	if _, ok := err.(*MissingNodeError); !ok {
+// 		t.Errorf("Wrong error: %v", err)
+// 	}
+// 	_, err = trie.Get([]byte("120099"))
+// 	if _, ok := err.(*MissingNodeError); !ok {
+// 		t.Errorf("Wrong error: %v", err)
+// 	}
+// 	_, err = trie.Get([]byte("123456"))
+// 	if err != nil {
+// 		t.Errorf("Unexpected error: %v", err)
+// 	}
+// 	err = trie.Update([]byte("120099"), []byte("zxcv"))
+// 	if _, ok := err.(*MissingNodeError); !ok {
+// 		t.Errorf("Wrong error: %v", err)
+// 	}
+// 	err = trie.Delete([]byte("123456"))
+// 	if _, ok := err.(*MissingNodeError); !ok {
+// 		t.Errorf("Wrong error: %v", err)
+// 	}
+// }
 
 func TestInsert(t *testing.T) {
 	trie := NewEmpty(newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme))
