@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -25,8 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
@@ -34,25 +33,25 @@ type diskLayer struct {
 	root   common.Hash      // Immutable, root hash to which this layer was made for
 	id     uint64           // Immutable, corresponding state id
 	db     *Database        // Path-based trie database
-	cleans *fastcache.Cache // GC friendly memory cache of clean node RLPs
-	buffer *nodebuffer      // Node buffer to aggregate writes
+	nodes  *fastcache.Cache // GC friendly memory cache of clean nodes
+	buffer *buffer          // Dirty buffer to aggregate writes of nodes and states
 	stale  bool             // Signals that the layer became stale (state progressed)
 	lock   sync.RWMutex     // Lock used to protect stale flag
 }
 
 // newDiskLayer creates a new disk layer based on the passing arguments.
-func newDiskLayer(root common.Hash, id uint64, db *Database, cleans *fastcache.Cache, buffer *nodebuffer) *diskLayer {
+func newDiskLayer(root common.Hash, id uint64, db *Database, nodes *fastcache.Cache, buffer *buffer) *diskLayer {
 	// Initialize a clean cache if the memory allowance is not zero
 	// or reuse the provided cache if it is not nil (inherited from
 	// the original disk layer).
-	if cleans == nil && db.config.CleanCacheSize != 0 {
-		cleans = fastcache.New(db.config.CleanCacheSize)
+	if nodes == nil && db.config.CleanCacheSize != 0 {
+		nodes = fastcache.New(db.config.CleanCacheSize)
 	}
 	return &diskLayer{
 		root:   root,
 		id:     id,
 		db:     db,
-		cleans: cleans,
+		nodes:  nodes,
 		buffer: buffer,
 	}
 }
@@ -108,25 +107,25 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	// layer as stale.
 	n, found := dl.buffer.node(owner, path)
 	if found {
-		dirtyHitMeter.Mark(1)
-		dirtyReadMeter.Mark(int64(len(n.Blob)))
+		dirtyNodeHitMeter.Mark(1)
+		dirtyNodeReadMeter.Mark(int64(len(n.Blob)))
 		dirtyNodeHitDepthHist.Update(int64(depth))
 		return n.Blob, n.Hash, &nodeLoc{loc: locDirtyCache, depth: depth}, nil
 	}
-	dirtyMissMeter.Mark(1)
+	dirtyNodeMissMeter.Mark(1)
 
 	// Try to retrieve the trie node from the clean memory cache
 	h := newHasher()
 	defer h.release()
 
-	key := cacheKey(owner, path)
-	if dl.cleans != nil {
-		if blob := dl.cleans.Get(nil, key); len(blob) > 0 {
-			cleanHitMeter.Mark(1)
-			cleanReadMeter.Mark(int64(len(blob)))
+	key := nodeCacheKey(owner, path)
+	if dl.nodes != nil {
+		if blob := dl.nodes.Get(nil, key); len(blob) > 0 {
+			cleanNodeHitMeter.Mark(1)
+			cleanNodeReadMeter.Mark(int64(len(blob)))
 			return blob, h.hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
-		cleanMissMeter.Mark(1)
+		cleanNodeMissMeter.Mark(1)
 	}
 	// Try to retrieve the trie node from the disk.
 	var blob []byte
@@ -135,16 +134,85 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	} else {
 		blob = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
-	if dl.cleans != nil && len(blob) > 0 {
-		dl.cleans.Set(key, blob)
-		cleanWriteMeter.Mark(int64(len(blob)))
+	if dl.nodes != nil && len(blob) > 0 {
+		dl.nodes.Set(key, blob)
+		cleanNodeWriteMeter.Mark(int64(len(blob)))
 	}
 	return blob, h.hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
+// account directly retrieves the account RLP associated with a particular
+// hash in the slim data format.
+//
+// Note the returned account is not a copy, please don't modify it.
+func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.stale {
+		return nil, errSnapshotStale
+	}
+	// Try to retrieve the account from the not-yet-written
+	// node buffer first. Note the buffer is lock free since
+	// it's impossible to mutate the buffer before tagging the
+	// layer as stale.
+	blob, found := dl.buffer.account(hash)
+	if found {
+		dirtyStateHitMeter.Mark(1)
+		dirtyStateReadMeter.Mark(int64(len(blob)))
+		dirtyStateHitDepthHist.Update(int64(depth))
+
+		if len(blob) == 0 {
+			stateAccountInexMeter.Mark(1)
+		} else {
+			stateAccountExistMeter.Mark(1)
+		}
+		return blob, nil
+	}
+	dirtyStateMissMeter.Mark(1)
+
+	// TODO(rjl493456442) support persistent state retrieval
+	return nil, errors.New("not supported")
+}
+
+// storage directly retrieves the storage data associated with a particular hash,
+// within a particular account.
+//
+// Note the returned account is not a copy, please don't modify it.
+func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([]byte, error) {
+	// Hold the lock, ensure the parent won't be changed during the
+	// state accessing.
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.stale {
+		return nil, errSnapshotStale
+	}
+	// Try to retrieve the storage slot from the not-yet-written
+	// node buffer first. Note the buffer is lock free since
+	// it's impossible to mutate the buffer before tagging the
+	// layer as stale.
+	if blob, found := dl.buffer.storage(accountHash, storageHash); found {
+		dirtyStateHitMeter.Mark(1)
+		dirtyStateReadMeter.Mark(int64(len(blob)))
+		dirtyStateHitDepthHist.Update(int64(depth))
+
+		if len(blob) == 0 {
+			stateStorageInexMeter.Mark(1)
+		} else {
+			stateStorageExistMeter.Mark(1)
+		}
+		return blob, nil
+	}
+	dirtyStateMissMeter.Mark(1)
+
+	// TODO(rjl493456442) support persistent state retrieval
+	return nil, errors.New("not supported")
+}
+
 // update implements the layer interface, returning a new diff layer on top
 // with the given state set.
-func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes map[common.Hash]map[string]*trienode.Node, states *triestate.Set) *diffLayer {
+func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer {
 	return newDiffLayer(dl, root, id, block, nodes, states)
 }
 
@@ -190,21 +258,23 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	}
 	rawdb.WriteStateID(dl.db.diskdb, bottom.rootHash(), bottom.stateID())
 
-	// Construct a new disk layer by merging the nodes from the provided diff
-	// layer, and flush the content in disk layer if there are too many nodes
-	// cached. The clean cache is inherited from the original disk layer.
-	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.cleans, dl.buffer.commit(bottom.nodes))
-
 	// In a unique scenario where the ID of the oldest history object (after tail
 	// truncation) surpasses the persisted state ID, we take the necessary action
-	// of forcibly committing the cached dirty nodes to ensure that the persisted
+	// of forcibly committing the cached dirty states to ensure that the persisted
 	// state ID remains higher.
 	if !force && rawdb.ReadPersistentStateID(dl.db.diskdb) < oldest {
 		force = true
 	}
-	if err := ndl.buffer.flush(ndl.db.diskdb, ndl.db.freezer, ndl.cleans, ndl.id, force); err != nil {
-		return nil, err
+	// Merge the trie nodes and flat states of the bottom-most diff layer into the
+	// buffer as the combined layer.
+	combined := dl.buffer.commit(bottom.nodes, bottom.states.stateSet)
+	if combined.full() || force {
+		if err := combined.flush(dl.db.diskdb, dl.db.freezer, dl.nodes, bottom.stateID()); err != nil {
+			return nil, err
+		}
 	}
+	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.nodes, combined)
+
 	// To remove outdated history objects from the end, we set the 'tail' parameter
 	// to 'oldest-1' due to the offset between the freezer index and the history ID.
 	if overflow {
@@ -228,10 +298,14 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
 	// layer.
-	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.accounts, h.storages)
+	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.meta.version != stateHistoryV0, h.accounts, h.storages)
 	if err != nil {
 		return nil, err
 	}
+	// Derive the state modification set from the history, keyed by the hash
+	// of the account address and the storage key.
+	accounts, storages := h.stateSet()
+
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
@@ -244,30 +318,19 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	// needs to be reverted is not yet flushed and cached in node
 	// buffer, otherwise, manipulate persistent state directly.
 	if !dl.buffer.empty() {
-		err := dl.buffer.revert(dl.db.diskdb, nodes)
+		err := dl.buffer.revertTo(dl.db.diskdb, nodes, accounts, storages)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		batch := dl.db.diskdb.NewBatch()
-		writeNodes(batch, nodes, dl.cleans)
+		writeNodes(batch, nodes, dl.nodes)
 		rawdb.WritePersistentStateID(batch, dl.id-1)
 		if err := batch.Write(); err != nil {
 			log.Crit("Failed to write states", "err", err)
 		}
 	}
-	return newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.cleans, dl.buffer), nil
-}
-
-// setBufferSize sets the node buffer size to the provided value.
-func (dl *diskLayer) setBufferSize(size int) error {
-	dl.lock.RLock()
-	defer dl.lock.RUnlock()
-
-	if dl.stale {
-		return errSnapshotStale
-	}
-	return dl.buffer.setSize(size, dl.db.diskdb, dl.db.freezer, dl.cleans, dl.id)
+	return newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.nodes, dl.buffer), nil
 }
 
 // size returns the approximate size of cached nodes in the disk layer.
@@ -278,7 +341,7 @@ func (dl *diskLayer) size() common.StorageSize {
 	if dl.stale {
 		return 0
 	}
-	return common.StorageSize(dl.buffer.size)
+	return common.StorageSize(dl.buffer.size())
 }
 
 // resetCache releases the memory held by clean cache to prevent memory leak.
@@ -286,12 +349,12 @@ func (dl *diskLayer) resetCache() {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
-	// Stale disk layer loses the ownership of clean cache.
+	// Stale disk layer loses the ownership of clean caches.
 	if dl.stale {
 		return
 	}
-	if dl.cleans != nil {
-		dl.cleans.Reset()
+	if dl.nodes != nil {
+		dl.nodes.Reset()
 	}
 }
 

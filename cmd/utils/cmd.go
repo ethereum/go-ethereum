@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -422,6 +423,10 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		buf       = bytes.NewBuffer(nil)
 		checksums []string
 	)
+	td := new(big.Int)
+	for i := uint64(0); i < first; i++ {
+		td.Add(td, bc.GetHeaderByNumber(i).Difficulty)
+	}
 	for i := first; i <= last; i += step {
 		err := func() error {
 			filename := filepath.Join(dir, era.Filename(network, int(i/step), common.Hash{}))
@@ -444,11 +449,8 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 				if receipts == nil {
 					return fmt.Errorf("export failed on #%d: receipts not found", n)
 				}
-				td := bc.GetTd(block.Hash(), block.NumberU64())
-				if td == nil {
-					return fmt.Errorf("export failed on #%d: total difficulty not found", n)
-				}
-				if err := w.Add(block, receipts, td); err != nil {
+				td.Add(td, block.Difficulty())
+				if err := w.Add(block, receipts, new(big.Int).Set(td)); err != nil {
 					return err
 				}
 			}

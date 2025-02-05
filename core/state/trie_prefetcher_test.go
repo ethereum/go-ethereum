@@ -53,12 +53,12 @@ func TestUseAfterTerminate(t *testing.T) {
 	prefetcher := newTriePrefetcher(db.db, db.originalRoot, "", true)
 	skey := common.HexToHash("aaa")
 
-	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}, false); err != nil {
+	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, nil, []common.Hash{skey}, false); err != nil {
 		t.Errorf("Prefetch failed before terminate: %v", err)
 	}
 	prefetcher.terminate(false)
 
-	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}, false); err == nil {
+	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, nil, []common.Hash{skey}, false); err == nil {
 		t.Errorf("Prefetch succeeded after terminate: %v", err)
 	}
 	if tr := prefetcher.trie(common.Hash{}, db.originalRoot); tr == nil {
@@ -83,21 +83,17 @@ func TestVerklePrefetcher(t *testing.T) {
 	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
 	state.SetCode(addr, []byte("hello"))                                         // Change an external metadata
 	state.SetState(addr, skey, sval)                                             // Change the storage trie
-	root, _ := state.Commit(0, true)
+	root, _ := state.Commit(0, true, false)
 
 	state, _ = New(root, sdb)
 	sRoot := state.GetStorageRoot(addr)
 	fetcher := newTriePrefetcher(sdb, root, "", false)
 
 	// Read account
-	fetcher.prefetch(common.Hash{}, root, common.Address{}, [][]byte{
-		addr.Bytes(),
-	}, false)
+	fetcher.prefetch(common.Hash{}, root, common.Address{}, []common.Address{addr}, nil, false)
 
 	// Read storage slot
-	fetcher.prefetch(crypto.Keccak256Hash(addr.Bytes()), sRoot, addr, [][]byte{
-		skey.Bytes(),
-	}, false)
+	fetcher.prefetch(crypto.Keccak256Hash(addr.Bytes()), sRoot, addr, nil, []common.Hash{skey}, false)
 
 	fetcher.terminate(false)
 	accountTrie := fetcher.trie(common.Hash{}, root)

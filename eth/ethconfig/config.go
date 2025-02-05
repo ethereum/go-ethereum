@@ -18,7 +18,7 @@
 package ethconfig
 
 import (
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,9 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -48,7 +48,7 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode:           downloader.SnapSync,
+	SyncMode:           SnapSync,
 	NetworkId:          0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:      2350000,
 	TransactionHistory: 2350000,
@@ -79,7 +79,7 @@ type Config struct {
 	// Network ID separates blockchains on the peer-to-peer networking level. When left
 	// zero, the chain ID is used as network ID.
 	NetworkId uint64
-	SyncMode  downloader.SyncMode
+	SyncMode  SyncMode
 
 	// This can be set to list of enrtree:// URLs which will be queried for
 	// nodes to connect to.
@@ -138,9 +138,6 @@ type Config struct {
 	VMTrace           string
 	VMTraceJsonConfig string
 
-	// Miscellaneous options
-	DocRoot string `toml:"-"`
-
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64
 
@@ -162,10 +159,9 @@ type Config struct {
 // Clique is allowed for now to live standalone, but ethash is forbidden and can
 // only exist on already merged networks.
 func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (consensus.Engine, error) {
-	// Geth v1.14.0 dropped support for non-merged networks in any consensus
-	// mode. If such a network is requested, reject startup.
-	if !config.TerminalTotalDifficultyPassed {
-		return nil, errors.New("only PoS networks are supported, please transition old ones with Geth v1.13.x")
+	if config.TerminalTotalDifficulty == nil {
+		log.Error("Geth only supports PoS networks. Please transition legacy networks using Geth v1.13.x.")
+		return nil, fmt.Errorf("'terminalTotalDifficulty' is not set in genesis block")
 	}
 	// Wrap previously supported consensus engines into their post-merge counterpart
 	if config.Clique != nil {

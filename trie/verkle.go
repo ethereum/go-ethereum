@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -32,7 +33,6 @@ import (
 )
 
 var (
-	zero               [32]byte
 	errInvalidRootType = errors.New("invalid node type for root")
 )
 
@@ -45,7 +45,7 @@ type VerkleTrie struct {
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
-func NewVerkleTrie(root common.Hash, db database.Database, cache *utils.PointCache) (*VerkleTrie, error) {
+func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
 	reader, err := newTrieReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
@@ -170,25 +170,35 @@ func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) er
 	return t.root.Insert(k, v[:], t.nodeResolver)
 }
 
-// DeleteAccount implements state.Trie, deleting the specified account from the
-// trie. If the account was not existent in the trie, no error will be returned.
-// If the trie is corrupted, an error will be returned.
+// DeleteAccount leaves the account untouched, as no account deletion can happen
+// in verkle.
+// There is a special corner case, in which an account that is prefunded, CREATE2-d
+// and then SELFDESTRUCT-d should see its funds drained. EIP161 says that account
+// should be removed, but this is verboten by the verkle spec. This contains a
+// workaround in which the method checks for this corner case, and if so, overwrites
+// the balance with 0. This will be removed once the spec has been clarified.
 func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
-	var (
-		err    error
-		values = make([][]byte, verkle.NodeWidth)
-	)
-	for i := 0; i < verkle.NodeWidth; i++ {
-		values[i] = zero[:]
+	k := utils.BasicDataKeyWithEvaluatedAddress(t.cache.Get(addr.Bytes()))
+	values, err := t.root.(*verkle.InternalNode).GetValuesAtStem(k, t.nodeResolver)
+	if err != nil {
+		return fmt.Errorf("Error getting data at %x in delete: %w", k, err)
 	}
-	switch n := t.root.(type) {
-	case *verkle.InternalNode:
-		err = n.InsertValuesAtStem(t.cache.GetStem(addr.Bytes()), values, t.nodeResolver)
-		if err != nil {
-			return fmt.Errorf("DeleteAccount (%x) error: %v", addr, err)
+	var prefunded bool
+	for i, v := range values {
+		switch i {
+		case 0:
+			prefunded = len(v) == 32
+		case 1:
+			prefunded = len(v) == 32 && bytes.Equal(v, types.EmptyCodeHash[:])
+		default:
+			prefunded = v == nil
 		}
-	default:
-		return errInvalidRootType
+		if !prefunded {
+			break
+		}
+	}
+	if prefunded {
+		t.root.Insert(k, common.Hash{}.Bytes(), t.nodeResolver)
 	}
 	return nil
 }
@@ -302,21 +312,19 @@ func (t *VerkleTrie) IsVerkle() bool {
 // Proof builds and returns the verkle multiproof for keys, built against
 // the pre tree. The post tree is passed in order to add the post values
 // to that proof.
-func (t *VerkleTrie) Proof(posttrie *VerkleTrie, keys [][]byte, resolver verkle.NodeResolverFn) (*verkle.VerkleProof, verkle.StateDiff, error) {
+func (t *VerkleTrie) Proof(posttrie *VerkleTrie, keys [][]byte) (*verkle.VerkleProof, verkle.StateDiff, error) {
 	var postroot verkle.VerkleNode
 	if posttrie != nil {
 		postroot = posttrie.root
 	}
-	proof, _, _, _, err := verkle.MakeVerkleMultiProof(t.root, postroot, keys, resolver)
+	proof, _, _, _, err := verkle.MakeVerkleMultiProof(t.root, postroot, keys, t.FlatdbNodeResolver)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	p, kvps, err := verkle.SerializeProof(proof)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return p, kvps, nil
 }
 

@@ -48,7 +48,7 @@ func makeReceipt(addr common.Address) *types.Receipt {
 
 func BenchmarkFilters(b *testing.B) {
 	var (
-		db, _   = rawdb.NewLevelDBDatabase(b.TempDir(), 0, 0, "", false)
+		db      = rawdb.NewMemoryDatabase()
 		_, sys  = newTestFilterSystem(b, db, Config{})
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)

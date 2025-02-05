@@ -352,16 +352,12 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	address := slot.Bytes20()
-	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
-		witness.AddCode(interpreter.evm.StateDB.GetCode(address))
-	}
 	// TODO this should not need to pull up the whole code
 	code := interpreter.evm.StateDB.GetCode(slot.Bytes20())
 	if isEOFVersion1(code) {
 		slot.SetUint64(2)
 	} else {
-		slot.SetUint64(uint64(len(interpreter.evm.StateDB.GetCode(slot.Bytes20()))))
+		slot.SetUint64(uint64(len(code)))
 	}
 	return nil, nil
 }
@@ -395,6 +391,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		codeOffset = stack.pop()
 		length     = stack.pop()
 		lengthU64  = length.Uint64()
+		codeCopy   []byte
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
@@ -402,15 +399,12 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	}
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.GetCode(addr)
-	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
-		witness.AddCode(code)
-	}
 	if isEOFVersion1(code) {
-		lengthU64 = 2
+		codeCopy = getData(eofMagic, uint64CodeOffset, lengthU64)
+	} else {
+		codeCopy = getData(code, uint64CodeOffset, lengthU64)
 	}
-	codeCopy := getData(code, uint64CodeOffset, lengthU64)
 	scope.Memory.Set(memOffset.Uint64(), lengthU64, codeCopy)
-
 	return nil, nil
 }
 
@@ -536,7 +530,6 @@ func opMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 }
 
 func opMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	// pop value of the stack
 	mStart, val := scope.Stack.pop(), scope.Stack.pop()
 	scope.Memory.Set32(mStart.Uint64(), &val)
 	return nil, nil
@@ -947,7 +940,7 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
 	interpreter.evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
-	interpreter.evm.StateDB.Selfdestruct6780(scope.Contract.Address())
+	interpreter.evm.StateDB.SelfDestruct6780(scope.Contract.Address())
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
 			tracer.OnEnter(interpreter.evm.depth, byte(SELFDESTRUCT), scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance.ToBig())
@@ -1014,13 +1007,13 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 			start   = min(codeLen, int(*pc+1))
 			end     = min(codeLen, start+pushByteSize)
 		)
-		scope.Stack.push(new(uint256.Int).SetBytes(
-			common.RightPadBytes(
-				code[start:end],
-				pushByteSize,
-			)),
-		)
+		a := new(uint256.Int).SetBytes(scope.Contract.Code[start:end])
 
+		// Missing bytes: pushByteSize - len(pushData)
+		if missing := pushByteSize - (end - start); missing > 0 {
+			a.Lsh(a, uint(8*missing))
+		}
+		scope.Stack.push(a)
 		*pc += size
 		return nil, nil
 	}

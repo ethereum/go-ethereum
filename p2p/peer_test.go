@@ -60,22 +60,22 @@ func uintID(i uint16) enode.ID {
 // newNode creates a node record with the given address.
 func newNode(id enode.ID, addr string) *enode.Node {
 	var r enr.Record
-	if addr != "" {
-		// Set the port if present.
-		if strings.Contains(addr, ":") {
-			hs, ps, err := net.SplitHostPort(addr)
-			if err != nil {
-				panic(fmt.Errorf("invalid address %q", addr))
-			}
-			port, err := strconv.Atoi(ps)
-			if err != nil {
-				panic(fmt.Errorf("invalid port in %q", addr))
-			}
-			r.Set(enr.TCP(port))
-			r.Set(enr.UDP(port))
-			addr = hs
+	// Set the port if present.
+	if strings.Contains(addr, ":") {
+		hs, ps, err := net.SplitHostPort(addr)
+		if err != nil {
+			panic(fmt.Errorf("invalid address %q", addr))
 		}
-		// Set the IP.
+		port, err := strconv.Atoi(ps)
+		if err != nil {
+			panic(fmt.Errorf("invalid port in %q", addr))
+		}
+		r.Set(enr.TCP(port))
+		r.Set(enr.UDP(port))
+		addr = hs
+	}
+	// Set the IP.
+	if addr != "" {
 		ip := net.ParseIP(addr)
 		if ip == nil {
 			panic(fmt.Errorf("invalid IP %q", addr))

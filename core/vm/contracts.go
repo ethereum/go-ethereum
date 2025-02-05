@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -29,7 +30,6 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
@@ -129,14 +129,12 @@ var PrecompiledContractsPrague = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x09}): &blake2F{},
 	common.BytesToAddress([]byte{0x0a}): &kzgPointEvaluation{},
 	common.BytesToAddress([]byte{0x0b}): &bls12381G1Add{},
-	common.BytesToAddress([]byte{0x0c}): &bls12381G1Mul{},
-	common.BytesToAddress([]byte{0x0d}): &bls12381G1MultiExp{},
-	common.BytesToAddress([]byte{0x0e}): &bls12381G2Add{},
-	common.BytesToAddress([]byte{0x0f}): &bls12381G2Mul{},
-	common.BytesToAddress([]byte{0x10}): &bls12381G2MultiExp{},
-	common.BytesToAddress([]byte{0x11}): &bls12381Pairing{},
-	common.BytesToAddress([]byte{0x12}): &bls12381MapG1{},
-	common.BytesToAddress([]byte{0x13}): &bls12381MapG2{},
+	common.BytesToAddress([]byte{0x0c}): &bls12381G1MultiExp{},
+	common.BytesToAddress([]byte{0x0d}): &bls12381G2Add{},
+	common.BytesToAddress([]byte{0x0e}): &bls12381G2MultiExp{},
+	common.BytesToAddress([]byte{0x0f}): &bls12381Pairing{},
+	common.BytesToAddress([]byte{0x10}): &bls12381MapG1{},
+	common.BytesToAddress([]byte{0x11}): &bls12381MapG2{},
 }
 
 var PrecompiledContractsBLS = PrecompiledContractsPrague
@@ -398,7 +396,12 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	}
 	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
 	// Calculate the gas cost of the operation
-	gas := new(big.Int).Set(math.BigMax(modLen, baseLen))
+	gas := new(big.Int)
+	if modLen.Cmp(baseLen) < 0 {
+		gas.Set(baseLen)
+	} else {
+		gas.Set(modLen)
+	}
 	if c.eip2565 {
 		// EIP-2565 has three changes
 		// 1. Different multComplexity (inlined here)
@@ -412,7 +415,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		gas.Rsh(gas, 3)
 		gas.Mul(gas, gas)
 
-		gas.Mul(gas, math.BigMax(adjExpLen, big1))
+		if adjExpLen.Cmp(big1) > 0 {
+			gas.Mul(gas, adjExpLen)
+		}
 		// 2. Different divisor (`GQUADDIVISOR`) (3)
 		gas.Div(gas, big3)
 		if gas.BitLen() > 64 {
@@ -425,7 +430,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		return gas.Uint64()
 	}
 	gas = modexpMultComplexity(gas)
-	gas.Mul(gas, math.BigMax(adjExpLen, big1))
+	if adjExpLen.Cmp(big1) > 0 {
+		gas.Mul(gas, adjExpLen)
+	}
 	gas.Div(gas, big20)
 
 	if gas.BitLen() > 64 {
@@ -741,44 +748,6 @@ func (c *bls12381G1Add) Run(input []byte) ([]byte, error) {
 	return encodePointG1(p0), nil
 }
 
-// bls12381G1Mul implements EIP-2537 G1Mul precompile.
-type bls12381G1Mul struct{}
-
-// RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *bls12381G1Mul) RequiredGas(input []byte) uint64 {
-	return params.Bls12381G1MulGas
-}
-
-func (c *bls12381G1Mul) Run(input []byte) ([]byte, error) {
-	// Implements EIP-2537 G1Mul precompile.
-	// > G1 multiplication call expects `160` bytes as an input that is interpreted as byte concatenation of encoding of G1 point (`128` bytes) and encoding of a scalar value (`32` bytes).
-	// > Output is an encoding of multiplication operation result - single G1 point (`128` bytes).
-	if len(input) != 160 {
-		return nil, errBLS12381InvalidInputLength
-	}
-	var err error
-	var p0 *bls12381.G1Affine
-
-	// Decode G1 point
-	if p0, err = decodePointG1(input[:128]); err != nil {
-		return nil, err
-	}
-	// 'point is on curve' check already done,
-	// Here we need to apply subgroup checks.
-	if !p0.IsInSubGroup() {
-		return nil, errBLS12381G1PointSubgroup
-	}
-	// Decode scalar value
-	e := new(big.Int).SetBytes(input[128:])
-
-	// Compute r = e * p_0
-	r := new(bls12381.G1Affine)
-	r.ScalarMultiplication(p0, e)
-
-	// Encode the G1 point into 128 bytes
-	return encodePointG1(r), nil
-}
-
 // bls12381G1MultiExp implements EIP-2537 G1MultiExp precompile.
 type bls12381G1MultiExp struct{}
 
@@ -792,10 +761,10 @@ func (c *bls12381G1MultiExp) RequiredGas(input []byte) uint64 {
 	}
 	// Lookup discount value for G1 point, scalar value pair length
 	var discount uint64
-	if dLen := len(params.Bls12381MultiExpDiscountTable); k < dLen {
-		discount = params.Bls12381MultiExpDiscountTable[k-1]
+	if dLen := len(params.Bls12381G1MultiExpDiscountTable); k < dLen {
+		discount = params.Bls12381G1MultiExpDiscountTable[k-1]
 	} else {
-		discount = params.Bls12381MultiExpDiscountTable[dLen-1]
+		discount = params.Bls12381G1MultiExpDiscountTable[dLen-1]
 	}
 	// Calculate gas and return the result
 	return (uint64(k) * params.Bls12381G1MulGas * discount) / 1000
@@ -876,44 +845,6 @@ func (c *bls12381G2Add) Run(input []byte) ([]byte, error) {
 	return encodePointG2(r), nil
 }
 
-// bls12381G2Mul implements EIP-2537 G2Mul precompile.
-type bls12381G2Mul struct{}
-
-// RequiredGas returns the gas required to execute the pre-compiled contract.
-func (c *bls12381G2Mul) RequiredGas(input []byte) uint64 {
-	return params.Bls12381G2MulGas
-}
-
-func (c *bls12381G2Mul) Run(input []byte) ([]byte, error) {
-	// Implements EIP-2537 G2MUL precompile logic.
-	// > G2 multiplication call expects `288` bytes as an input that is interpreted as byte concatenation of encoding of G2 point (`256` bytes) and encoding of a scalar value (`32` bytes).
-	// > Output is an encoding of multiplication operation result - single G2 point (`256` bytes).
-	if len(input) != 288 {
-		return nil, errBLS12381InvalidInputLength
-	}
-	var err error
-	var p0 *bls12381.G2Affine
-
-	// Decode G2 point
-	if p0, err = decodePointG2(input[:256]); err != nil {
-		return nil, err
-	}
-	// 'point is on curve' check already done,
-	// Here we need to apply subgroup checks.
-	if !p0.IsInSubGroup() {
-		return nil, errBLS12381G2PointSubgroup
-	}
-	// Decode scalar value
-	e := new(big.Int).SetBytes(input[256:])
-
-	// Compute r = e * p_0
-	r := new(bls12381.G2Affine)
-	r.ScalarMultiplication(p0, e)
-
-	// Encode the G2 point into 256 bytes
-	return encodePointG2(r), nil
-}
-
 // bls12381G2MultiExp implements EIP-2537 G2MultiExp precompile.
 type bls12381G2MultiExp struct{}
 
@@ -927,10 +858,10 @@ func (c *bls12381G2MultiExp) RequiredGas(input []byte) uint64 {
 	}
 	// Lookup discount value for G2 point, scalar value pair length
 	var discount uint64
-	if dLen := len(params.Bls12381MultiExpDiscountTable); k < dLen {
-		discount = params.Bls12381MultiExpDiscountTable[k-1]
+	if dLen := len(params.Bls12381G2MultiExpDiscountTable); k < dLen {
+		discount = params.Bls12381G2MultiExpDiscountTable[k-1]
 	} else {
-		discount = params.Bls12381MultiExpDiscountTable[dLen-1]
+		discount = params.Bls12381G2MultiExpDiscountTable[dLen-1]
 	}
 	// Calculate gas and return the result
 	return (uint64(k) * params.Bls12381G2MulGas * discount) / 1000
