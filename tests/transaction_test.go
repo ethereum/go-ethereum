@@ -44,11 +44,12 @@ func TestTransaction(t *testing.T) {
 	// internally to calculate the cost
 	txt.skipLoad("^ttValue/TransactionWithHighValueOverflow.json")
 
-	// Test requires EVM execution and should be probably done as a state test.
+	// The size of a create tx's initcode is only checked during the state
+	// transition
 	txt.skipLoad("^ttEIP3860/DataTestInitCodeTooBig.json")
 
-	// The following tests require the tx precheck to be performed.
-	// TODO(s1na): expose stateTransition.precheck publicly to be able to run these tests.
+	// The following tests require the tx precheck to be performed
+	// TODO(s1na): expose stateTransition.precheck publicly to be able to run these tests
 	txt.skipLoad("^ttEIP1559/maxPriorityFeePerGass32BytesValue.json")
 	txt.skipLoad("^ttEIP1559/maxPriorityFeePerGasOverflow.json")
 	txt.skipLoad("^ttEIP1559/maxFeePerGas32BytesValue.json")
@@ -69,6 +70,9 @@ func TestExecutionSpecTransaction(t *testing.T) {
 		t.Skipf("directory %s does not exist", executionSpecStateTestDir)
 	}
 	st := new(testMatcher)
+
+	// Emptiness of authorization list is only validated during the tx precheck
+	st.skipLoad("^prague/eip7702_set_code_tx/invalid_tx/empty_authorization_list.json")
 
 	st.walk(t, executionSpecTransactionTestDir, func(t *testing.T, name string, test *TransactionTest) {
 		cfg := params.MainnetChainConfig
