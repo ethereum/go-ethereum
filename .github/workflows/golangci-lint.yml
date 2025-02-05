@@ -22,13 +22,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
-      - name: golangci-lint
+      - name: goheader
+        # The goheader linter is only enabled in the CI so that it runs only on modified or new files
+        # (see only-new-issues: true). It is disabled in .golangci.yml because
+        # golangci-lint running locally is not aware of new/modified files compared to the base
+        # commit of a pull request, and we want to avoid reporting invalid goheader errors.
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.60
           only-new-issues: true
-          # The goheader linter is enabled so that it runs only on modified or new files
-          # (see only-new-issues: true). Note it is disabled in .golangci.yml because
-          # golangci-lint is not aware of new/modified files compared to the last git commit,
-          # and we want to avoid reporting invalid goheader errors when running the linter locally.
-          args: --enable goheader
+          args: --enable-only goheader
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60
