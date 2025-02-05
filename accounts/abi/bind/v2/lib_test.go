@@ -41,6 +41,7 @@ import (
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+var testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
 
 // JSON returns a parsed ABI interface and error if it failed.
 func JSON(reader io.Reader) (abi.ABI, error) {
@@ -53,8 +54,7 @@ func JSON(reader io.Reader) (abi.ABI, error) {
 	return instance, nil
 }
 
-func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
-	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+func testSetup() (*backends.SimulatedBackend, error) {
 	backend := simulated.NewBackend(
 		types.GenesisAlloc{
 			testAddr: {Balance: big.NewInt(10000000000000000)},
@@ -64,23 +64,6 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 		},
 	)
 
-	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
-	opts := &bind.TransactOpts{
-		From:  testAddr,
-		Nonce: nil,
-		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
-			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
-			if err != nil {
-				return nil, err
-			}
-			signedTx, err := tx.WithSignature(signer, signature)
-			if err != nil {
-				return nil, err
-			}
-			return signedTx, nil
-		},
-		Context: context.Background(),
-	}
 	// we should just be able to use the backend directly, instead of using
 	// this deprecated interface.  However, the simulated backend no longer
 	// implements backends.SimulatedBackend...
@@ -88,19 +71,30 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 		Backend: backend,
 		Client:  backend.Client(),
 	}
-	return opts, &bindBackend, nil
+	return &bindBackend, nil
 }
 
-func makeTestDeployer(auth *bind.TransactOpts, backend bind.ContractBackend) func(input, deployer []byte) (common.Address, *types.Transaction, error) {
-	return func(input, deployer []byte) (common.Address, *types.Transaction, error) {
-		return bind.DeployContractRaw(auth, deployer, backend, input)
+func makeTestDeployer(backend bind.ContractBackend) func(input, deployer []byte) (common.Address, *types.Transaction, error) {
+	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
+	sign := func(sender common.Address, tx *types.Transaction) (*types.Transaction, error) {
+		signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
+		if err != nil {
+			return nil, err
+		}
+		signedTx, err := tx.WithSignature(signer, signature)
+		if err != nil {
+			return nil, err
+		}
+		return signedTx, nil
 	}
+
+	return bind.DefaultDeployer(context.Background(), testAddr, backend, sign)
 }
 
 // test that deploying a contract with library dependencies works,
 // verifying by calling method on the deployed contract.
 func TestDeploymentLibraries(t *testing.T) {
-	opts, bindBackend, err := testSetup()
+	bindBackend, err := testSetup()
 	if err != nil {
 		t.Fatalf("err setting up test: %v", err)
 	}
@@ -112,7 +106,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		Contracts: []*bind.MetaData{&nested_libraries.C1MetaData},
 		Inputs:    map[string][]byte{nested_libraries.C1MetaData.ID: constructorInput},
 	}
-	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -144,7 +138,7 @@ func TestDeploymentLibraries(t *testing.T) {
 // Same as TestDeployment.  However, stagger the deployments with overrides:
 // first deploy the library deps and then the contract.
 func TestDeploymentWithOverrides(t *testing.T) {
-	opts, bindBackend, err := testSetup()
+	bindBackend, err := testSetup()
 	if err != nil {
 		t.Fatalf("err setting up test: %v", err)
 	}
@@ -154,7 +148,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	deploymentParams := &bind.DeploymentParams{
 		Contracts: nested_libraries.C1MetaData.Deps,
 	}
-	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -180,7 +174,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		Inputs:    map[string][]byte{nested_libraries.C1MetaData.ID: constructorInput},
 		Overrides: overrides,
 	}
-	res, err = bind.LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
+	res, err = bind.LinkAndDeploy(deploymentParams, makeTestDeployer(bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -209,15 +203,37 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 }
 
+// returns transaction auth to send a basic transaction from testAddr
+func defaultTxAuth() *bind.TransactOpts {
+	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
+	opts := &bind.TransactOpts{
+		From:  testAddr,
+		Nonce: nil,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
+			if err != nil {
+				return nil, err
+			}
+			signedTx, err := tx.WithSignature(signer, signature)
+			if err != nil {
+				return nil, err
+			}
+			return signedTx, nil
+		},
+		Context: context.Background(),
+	}
+	return opts
+}
+
 func TestEvents(t *testing.T) {
 	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
-	txAuth, backend, err := testSetup()
+	backend, err := testSetup()
 	if err != nil {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
 	deploymentParams := &bind.DeploymentParams{Contracts: []*bind.MetaData{&events.CMetaData}}
-	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
 	}
@@ -245,7 +261,7 @@ func TestEvents(t *testing.T) {
 	defer sub2.Unsubscribe()
 
 	packedInput := c.PackEmitMulti()
-	tx, err := bind.Transact(instance, txAuth, packedInput)
+	tx, err := bind.Transact(instance, defaultTxAuth(), packedInput)
 	if err != nil {
 		t.Fatalf("failed to send transaction: %v", err)
 	}
@@ -310,13 +326,13 @@ done:
 
 func TestErrors(t *testing.T) {
 	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
-	txAuth, backend, err := testSetup()
+	backend, err := testSetup()
 	if err != nil {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
 
 	deploymentParams := &bind.DeploymentParams{Contracts: []*bind.MetaData{&solc_errors.CMetaData}}
-	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
 	}

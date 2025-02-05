@@ -227,7 +227,16 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 }
 
 func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
-	return bind2.DeployContract(opts, abi, bytecode, backend, params...)
+	packed, err := abi.Pack("", params...)
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	addr, tx, err := bind2.DeployContract(opts, bytecode, backend, packed)
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	boundContract := NewBoundContract(addr, abi, backend, backend, backend)
+	return addr, tx, boundContract, nil
 }
 
 // MetaData collects all metadata for a bound contract.

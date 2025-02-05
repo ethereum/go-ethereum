@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 )
 
@@ -35,24 +34,6 @@ func NewBoundContractV1(address common.Address, abi abi.ABI, caller ContractCall
 		transactor: transactor,
 		filterer:   filterer,
 	}
-}
-
-// DeployContract deploys a contract onto the Ethereum blockchain and binds the
-// deployment address with a Go wrapper.
-func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...any) (common.Address, *types.Transaction, *BoundContractV1, error) {
-	// Otherwise try to deploy the contract
-	c := NewBoundContractV1(common.Address{}, abi, backend, backend, backend)
-
-	input, err := c.abi.Pack("", params...)
-	if err != nil {
-		return common.Address{}, nil, nil, err
-	}
-	tx, err := c.transact(opts, nil, append(bytecode, input...))
-	if err != nil {
-		return common.Address{}, nil, nil, err
-	}
-	c.address = crypto.CreateAddress(opts.From, tx.Nonce())
-	return c.address, tx, c, nil
 }
 
 // Call invokes the (constant) contract method with params as input values and

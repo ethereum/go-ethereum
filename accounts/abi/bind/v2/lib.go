@@ -17,6 +17,7 @@
 package bind
 
 import (
+	"context"
 	"errors"
 
 	"github.com/ethereum/go-ethereum"
@@ -180,10 +181,10 @@ func Transact(c BoundContract, opt *TransactOpts, packedInput []byte) (*types.Tr
 	return c.transact(opt, &addr, packedInput)
 }
 
-// DeployContractRaw deploys a contract onto the Ethereum blockchain and binds the
+// DeployContract deploys a contract onto the Ethereum blockchain and binds the
 // deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
 // bytes.
-func DeployContractRaw(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, error) {
+func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, error) {
 	c := NewBoundContractV1(common.Address{}, abi.ABI{}, backend, backend, backend)
 	tx, err := c.RawCreationTransact(opts, append(bytecode, packedParams...))
 	if err != nil {
@@ -191,4 +192,21 @@ func DeployContractRaw(opts *TransactOpts, bytecode []byte, backend ContractBack
 	}
 	address := crypto.CreateAddress(opts.From, tx.Nonce())
 	return address, tx, nil
+}
+
+// DefaultDeployer returns a DeployFn that signs and submits creation transactions using the given signer.
+func DefaultDeployer(ctx context.Context, from common.Address, backend ContractBackend, signer SignerFn) DeployFn {
+	opts := &TransactOpts{
+		From:    from,
+		Nonce:   nil,
+		Signer:  signer,
+		Context: ctx,
+	}
+	return func(input []byte, deployer []byte) (common.Address, *types.Transaction, error) {
+		addr, tx, err := DeployContract(opts, deployer, backend, input)
+		if err != nil {
+			return common.Address{}, nil, err
+		}
+		return addr, tx, nil
+	}
 }
