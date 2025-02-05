@@ -115,6 +115,23 @@ func CreateBloom(receipts Receipts) Bloom {
 	return bin
 }
 
+// MergeBloom merges the already calculated bloom in Receipts
+// without recalculating. So it assumes receipt.Bloom is populated
+// with the correct bloom already.
+func MergeBloom(receipts Receipts) Bloom {
+	var bin Bloom
+	for _, receipt := range receipts {
+		if len(receipt.Logs) != 0 {
+			bl := receipt.Bloom.Bytes()
+			for i := range bin {
+				bin[i] |= bl[i]
+			}
+		}
+	}
+
+	return bin
+}
+
 // LogsBloom returns the bloom bytes for the given logs
 func LogsBloom(logs []*Log) []byte {
 	buf := make([]byte, 6)

@@ -152,4 +152,38 @@ func BenchmarkCreateBloom(b *testing.B) {
 			b.Errorf("Got %x, exp %x", got, exp)
 		}
 	})
+	b.Run("small-mergebloom", func(b *testing.B) {
+		for _, receipt := range rSmall {
+			receipt.Bloom = CreateBloom(Receipts{receipt})
+		}
+
+		b.ReportAllocs()
+		var bl Bloom
+		for i := 0; i < b.N; i++ {
+			bl = MergeBloom(rSmall)
+		}
+		b.StopTimer()
+		var exp = common.HexToHash("c384c56ece49458a427c67b90fefe979ebf7104795be65dc398b280f24104949")
+		got := crypto.Keccak256Hash(bl.Bytes())
+		if got != exp {
+			b.Errorf("Got %x, exp %x", got, exp)
+		}
+	})
+	b.Run("large-mergebloom", func(b *testing.B) {
+		for _, receipt := range rLarge {
+			receipt.Bloom = CreateBloom(Receipts{receipt})
+		}
+
+		b.ReportAllocs()
+		var bl Bloom
+		for i := 0; i < b.N; i++ {
+			bl = MergeBloom(rLarge)
+		}
+		b.StopTimer()
+		var exp = common.HexToHash("c384c56ece49458a427c67b90fefe979ebf7104795be65dc398b280f24104949")
+		got := crypto.Keccak256Hash(bl.Bytes())
+		if got != exp {
+			b.Errorf("Got %x, exp %x", got, exp)
+		}
+	})
 }
