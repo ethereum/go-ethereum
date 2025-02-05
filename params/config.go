@@ -536,8 +536,8 @@ func (v *V2) ConfigIndex() []uint64 {
 	return v.configIndex
 }
 
-// String implements the fmt.Stringer interface.
-func (c *ChainConfig) String() string {
+// Description returns a human-readable description of ChainConfig.
+func (c *ChainConfig) Description() string {
 	var engine interface{}
 	switch {
 	case c.Ethash != nil:
@@ -571,25 +571,26 @@ func (c *ChainConfig) String() string {
 	if c.CancunBlock != nil {
 		cancunBlock = c.CancunBlock
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Istanbul: %v  BerlinBlock: %v LondonBlock: %v MergeBlock: %v ShanghaiBlock: %v Eip1559Block: %v CancunBlock: %v Engine: %v}",
-		c.ChainId,
-		c.HomesteadBlock,
-		c.DAOForkBlock,
-		c.DAOForkSupport,
-		c.EIP150Block,
-		c.EIP155Block,
-		c.EIP158Block,
-		c.ByzantiumBlock,
-		c.ConstantinopleBlock,
-		common.TIPXDCXCancellationFee,
-		berlinBlock,
-		londonBlock,
-		mergeBlock,
-		shanghaiBlock,
-		eip1559Block,
-		cancunBlock,
-		engine,
-	)
+
+	var banner = "Chain configuration:\n"
+	banner += fmt.Sprintf("  - ChainID:                     %-8v\n", c.ChainId)
+	banner += fmt.Sprintf("  - Homestead:                   %-8v\n", c.HomesteadBlock)
+	banner += fmt.Sprintf("  - DAO Fork:                    %-8v\n", c.DAOForkBlock)
+	banner += fmt.Sprintf("  - DAO Support:                 %-8v\n", c.DAOForkSupport)
+	banner += fmt.Sprintf("  - Tangerine Whistle (EIP 150): %-8v\n", c.EIP150Block)
+	banner += fmt.Sprintf("  - Spurious Dragon (EIP 155):   %-8v\n", c.EIP155Block)
+	banner += fmt.Sprintf("  - Byzantium:                   %-8v\n", c.ByzantiumBlock)
+	banner += fmt.Sprintf("  - Constantinople:              %-8v\n", c.ConstantinopleBlock)
+	banner += fmt.Sprintf("  - Petersburg:                  %-8v\n", c.PetersburgBlock)
+	banner += fmt.Sprintf("  - Istanbul:                    %-8v\n", c.IstanbulBlock)
+	banner += fmt.Sprintf("  - Berlin:                      %-8v\n", berlinBlock)
+	banner += fmt.Sprintf("  - London:                      %-8v\n", londonBlock)
+	banner += fmt.Sprintf("  - Merge:                       %-8v\n", mergeBlock)
+	banner += fmt.Sprintf("  - Shanghai:                    %-8v\n", shanghaiBlock)
+	banner += fmt.Sprintf("  - Eip1559:                     %-8v\n", eip1559Block)
+	banner += fmt.Sprintf("  - Cancun:                      %-8v\n", cancunBlock)
+	banner += fmt.Sprintf("  - Engine:                      %v", engine)
+	return banner
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
