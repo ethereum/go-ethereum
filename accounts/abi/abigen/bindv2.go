@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"text/template"
 	"unicode"
@@ -245,6 +246,23 @@ func parseLibraryDeps(unlinkedCode string) (res []string) {
 	return res
 }
 
+// iterSorted iterates the map in the lexicographic order of the keys calling onItem on each.  If the callback returns
+// an error, iteration is halted and the error is returned from iterSorted.
+func iterSorted[V any](inp map[string]V, onItem func(string, V) error) error {
+	var sortedKeys []string
+	for key := range inp {
+		sortedKeys = append(sortedKeys, key)
+	}
+	sort.Strings(sortedKeys)
+
+	for _, key := range sortedKeys {
+		if err := onItem(key, inp[key]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // BindV2 generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention as opposed to having to
@@ -269,21 +287,25 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		}
 
 		cb := newContractBinder(&b)
-		for _, original := range evmABI.Methods {
-			if err := cb.bindMethod(original); err != nil {
-				return "", err
-			}
+		err = iterSorted(evmABI.Methods, func(_ string, original abi.Method) error {
+			return cb.bindMethod(original)
+		})
+		if err != nil {
+			return "", err
 		}
 
-		for _, original := range evmABI.Events {
-			if err := cb.bindEvent(original); err != nil {
-				return "", err
-			}
+		err = iterSorted(evmABI.Events, func(_ string, original abi.Event) error {
+			return cb.bindEvent(original)
+		})
+		if err != nil {
+			return "", err
 		}
-		for _, original := range evmABI.Errors {
-			if err := cb.bindError(original); err != nil {
-				return "", err
-			}
+
+		err = iterSorted(evmABI.Errors, func(_ string, original abi.Error) error {
+			return cb.bindError(original)
+		})
+		if err != nil {
+			return "", err
 		}
 
 		b.contracts[types[i]] = newTmplContractV2(types[i], abis[i], bytecodes[i], evmABI.Constructor, cb)
