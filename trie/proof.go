@@ -111,31 +111,77 @@ func (t *StateTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	return t.trie.Prove(key, proofDb)
 }
 
-// VerifyProof checks merkle proofs. The given proof must contain the value for
-// key in a trie with the given root hash. VerifyProof returns an error if the
-// proof contains invalid trie nodes or the wrong value.
-func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader) (value []byte, err error) {
+// VerifyProof verifies a proof against a root hash and a key.
+//
+// If the proof if valid it returns a nil error and
+// - value, the value associated with the key, it is non-nil if the key exists in the trie (inclusion proof) and nil otherwise (exclusion proof)
+// - longestPrefix, the longest prefix of the key that exists in the trie.
+// - lastNode, the node (collapsed) at longestPrefix that either proves the inclusion or exclusion of the key.
+func VerifyProof(root common.Hash, key []byte, proofDB ethdb.KeyValueReader) (value []byte, err error) {
+	value, _, _, err = VerifyProofWithReporting(root, key, proofDB, nil)
+	return value, err
+}
+
+// VerifyProof verifies a proof against a root hash and a key.
+//
+// If the proof if valid it returns a nil error and
+// - value, the value associated with the key, it is non-nil if the key exists in the trie (inclusion proof) and nil otherwise (exclusion proof)
+// - longestPrefix, the longest prefix of the key that exists in the trie.
+// - lastNode, the node (collapsed) at longestPrefix that either proves the inclusion or exclusion of the key.
+func VerifyProofWithLastNode(root common.Hash, key []byte, proofDB ethdb.KeyValueReader) (value, longestPrefix, lastNode []byte, err error) {
+	return VerifyProofWithReporting(root, key, proofDB, nil)
+}
+
+type ProofReporter struct {
+	ReportNode func(hash common.Hash, key, node []byte)
+	ReportLeaf func(parentHash common.Hash, leaf []byte)
+}
+
+func VerifyProofWithReporting(
+	root common.Hash,
+	key []byte,
+	proofDB ethdb.KeyValueReader,
+	reporter *ProofReporter,
+) (value, longestPrefix, lastNode []byte, err error) {
 	key = keybytesToHex(key)
-	wantHash := rootHash
+	wantHash := root
+	nodeKey := []byte{}
+
+	hasher := newHasher(false)
+	defer returnHasherToPool(hasher)
+
 	for i := 0; ; i++ {
-		buf, _ := proofDb.Get(wantHash[:])
+		buf, _ := proofDB.Get(wantHash[:])
 		if buf == nil {
-			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
+			return nil, nil, nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash)
 		}
+
 		n, err := decodeNode(wantHash[:], buf)
 		if err != nil {
-			return nil, fmt.Errorf("bad proof node %d: %v", i, err)
+			return nil, nil, nil, fmt.Errorf("bad proof node %d: %v", i, err)
 		}
-		keyrest, cld := get(n, key, true)
+
+		if reporter != nil && reporter.ReportNode != nil {
+			reporter.ReportNode(wantHash, nodeKey, buf)
+		}
+
+		keyrest, keyvisited, cld := get(n, key, true)
+		nodeKey = append(nodeKey, keyvisited...)
 		switch cld := cld.(type) {
 		case nil:
 			// The trie doesn't contain the key.
-			return nil, nil
+			collapsed, _ := hasher.proofHash(n)
+			return nil, longestPrefix, nodeToBytes(collapsed), nil
 		case hashNode:
 			key = keyrest
+			longestPrefix = append(longestPrefix, keyvisited...)
 			copy(wantHash[:], cld)
 		case valueNode:
-			return cld, nil
+			collapsed, _ := hasher.proofHash(n)
+			if reporter != nil && reporter.ReportLeaf != nil {
+				reporter.ReportLeaf(wantHash, cld)
+			}
+			return cld, longestPrefix, nodeToBytes(collapsed), nil
 		}
 	}
 }
@@ -175,7 +221,7 @@ func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyV
 	)
 	key, parent = keybytesToHex(key), root
 	for {
-		keyrest, child = get(parent, key, false)
+		keyrest, _, child = get(parent, key, false)
 		switch cld := child.(type) {
 		case nil:
 			// The trie doesn't contain the key. It's possible
@@ -583,30 +629,34 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 //
 // There is an additional flag `skipResolved`. If it's set then
 // all resolved nodes won't be returned.
-func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
+func get(tn node, key []byte, skipResolved bool) (keyrest, keyvisited []byte, n node) {
+	keyrest = key
+	keyvisited = []byte{}
 	for {
 		switch n := tn.(type) {
 		case *shortNode:
-			if !bytes.HasPrefix(key, n.Key) {
-				return nil, nil
+			if !bytes.HasPrefix(keyrest, n.Key) {
+				return keyrest, keyvisited, nil
 			}
 			tn = n.Val
-			key = key[len(n.Key):]
+			keyvisited = n.Key[:]
+			keyrest = keyrest[len(n.Key):]
 			if !skipResolved {
-				return key, tn
+				return keyrest, keyvisited, tn
 			}
 		case *fullNode:
-			tn = n.Children[key[0]]
-			key = key[1:]
+			tn = n.Children[keyrest[0]]
+			keyvisited = []byte{keyrest[0]}
+			keyrest = keyrest[1:]
 			if !skipResolved {
-				return key, tn
+				return keyrest, keyvisited, tn
 			}
 		case hashNode:
-			return key, n
+			return keyrest, keyvisited, n
 		case nil:
-			return key, nil
+			return keyrest, keyvisited, nil
 		case valueNode:
-			return nil, n
+			return nil, keyvisited, n
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
