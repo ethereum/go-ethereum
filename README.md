@@ -1,3 +1,17 @@
+## ZK-PIG : Go Ethereum
+
+This project a [Go-Ethereum](https://github.com/ethereum/go-ethereum) fork used by [zk-pig](https://github.com/kkrt-labs/zk-pig) a ZK-EVM prover input generator.
+
+It is up-to-date with [go-ethereum v1.14.13](https://github.com/ethereum/go-ethereum/releases/tag/v1.14.13).
+
+It adds following minimal changes over base go-ethereum implementation
+
+- [Update MPT trie deletion to not error if the remaining child node cannot be resolved during branch node reduction](https://github.com/kkrt-labs/go-ethereum/commit/acc0fdb679fffbdc3aabe678c285567bc591a72a)
+- [Extends MPT Proof Verification while maintaining retro-compatibility](https://github.com/kkrt-labs/go-ethereum/commit/b680cbb6ad9e796f3ba5cb6a607349f1a6d36562)
+- [Adds a function to reduce a MPT short node](https://github.com/kkrt-labs/go-ethereum/commit/663a2f70e2330b4050f4bfbcbc0d85f873185381)
+
+For more details about you can refer to [zk-pig documentation](https://github.com/kkrt-labs/zk-pig/docs/modified-mpt.md)
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
