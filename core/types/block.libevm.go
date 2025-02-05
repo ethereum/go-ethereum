@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -22,6 +22,7 @@ import (
 	"io"
 
 	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm/testonly"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -109,5 +110,104 @@ func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 	type withoutMethods Header
 	return s.Decode((*withoutMethods)(h))
 }
+func (*NOOPHeaderHooks) PostCopy(dst *Header) {}
 
-func (n *NOOPHeaderHooks) PostCopy(dst *Header) {}
+var (
+	_ interface {
+		rlp.Encoder
+		rlp.Decoder
+	} = (*Body)(nil)
+
+	// The implementations of [Body.EncodeRLP] and [Body.DecodeRLP] make
+	// assumptions about the struct fields and their order, which we lock in here as a change
+	// detector. If this breaks then it MUST be updated and the RLP methods
+	// reviewed + new backwards-compatibility tests added.
+	_ = &Body{[]*Transaction{}, []*Header{}, []*Withdrawal{}}
+)
+
+// EncodeRLP implements the [rlp.Encoder] interface.
+func (b *Body) EncodeRLP(dst io.Writer) error {
+	w := rlp.NewEncoderBuffer(dst)
+
+	return w.InList(func() error {
+		if err := rlp.EncodeListToBuffer(w, b.Transactions); err != nil {
+			return err
+		}
+		if err := rlp.EncodeListToBuffer(w, b.Uncles); err != nil {
+			return err
+		}
+
+		hasLaterOptionalField := b.Withdrawals != nil
+		if err := b.hooks().AppendRLPFields(w, hasLaterOptionalField); err != nil {
+			return err
+		}
+		if !hasLaterOptionalField {
+			return nil
+		}
+		return rlp.EncodeListToBuffer(w, b.Withdrawals)
+	})
+}
+
+// DecodeRLP implements the [rlp.Decoder] interface.
+func (b *Body) DecodeRLP(s *rlp.Stream) error {
+	return s.FromList(func() error {
+		txs, err := rlp.DecodeList[Transaction](s)
+		if err != nil {
+			return err
+		}
+		uncles, err := rlp.DecodeList[Header](s)
+		if err != nil {
+			return err
+		}
+		*b = Body{
+			Transactions: txs,
+			Uncles:       uncles,
+		}
+
+		if err := b.hooks().DecodeExtraRLPFields(s); err != nil {
+			return err
+		}
+		if !s.MoreDataInList() {
+			return nil
+		}
+
+		ws, err := rlp.DecodeList[Withdrawal](s)
+		if err != nil {
+			return err
+		}
+		b.Withdrawals = ws
+		return nil
+	})
+}
+
+// BodyHooks are required for all types registered with [RegisterExtras] for
+// [Body] payloads.
+type BodyHooks interface {
+	AppendRLPFields(_ rlp.EncoderBuffer, mustWriteEmptyOptional bool) error
+	DecodeExtraRLPFields(*rlp.Stream) error
+}
+
+// TestOnlyRegisterBodyHooks is a temporary means of "registering" BodyHooks for
+// the purpose of testing. It will panic if called outside of a test.
+func TestOnlyRegisterBodyHooks(h BodyHooks) {
+	testonly.OrPanic(func() {
+		todoRegisteredBodyHooks = h
+	})
+}
+
+// todoRegisteredBodyHooks is a temporary placeholder for "registering"
+// BodyHooks, before they are included in [RegisterExtras].
+var todoRegisteredBodyHooks BodyHooks = NOOPBodyHooks{}
+
+func (b *Body) hooks() BodyHooks {
+	// TODO(arr4n): when incorporating BodyHooks into [RegisterExtras], the
+	// [todoRegisteredBodyHooks] variable MUST be removed.
+	return todoRegisteredBodyHooks
+}
+
+// NOOPBodyHooks implements [BodyHooks] such that they are equivalent to no type
+// having been registered.
+type NOOPBodyHooks struct{}
+
+func (NOOPBodyHooks) AppendRLPFields(rlp.EncoderBuffer, bool) error { return nil }
+func (NOOPBodyHooks) DecodeExtraRLPFields(*rlp.Stream) error        { return nil }

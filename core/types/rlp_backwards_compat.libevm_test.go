@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -20,10 +20,14 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/kr/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ava-labs/libevm/common"
 	. "github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/libevm/cmpeth"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/rlp"
 )
@@ -105,4 +109,196 @@ func testHeaderRLPBackwardsCompatibility(t *testing.T) {
 		require.NoErrorf(t, err, "rlp.DecodeBytes(..., %T)", hdr)
 		assert.Equal(t, hdr, got)
 	})
+}
+
+func TestBodyRLPBackwardsCompatibility(t *testing.T) {
+	newTx := func(nonce uint64) *Transaction { return NewTx(&LegacyTx{Nonce: nonce}) }
+	newHdr := func(hashLow byte) *Header { return &Header{ParentHash: common.Hash{hashLow}} }
+	newWithdraw := func(idx uint64) *Withdrawal { return &Withdrawal{Index: idx} }
+
+	// We build up test-case [Body] instances from the power set of each of
+	// these components.
+	txMatrix := [][]*Transaction{
+		nil, {}, // Must be equivalent for non-optional field
+		{newTx(1)},
+		{newTx(2), newTx(3)}, // Demonstrates nested lists
+	}
+	uncleMatrix := [][]*Header{
+		nil, {},
+		{newHdr(1)},
+		{newHdr(2), newHdr(3)},
+	}
+	withdrawMatrix := [][]*Withdrawal{
+		nil, {}, // Must be different for optional field
+		{newWithdraw(1)},
+		{newWithdraw(2), newWithdraw(3)},
+	}
+
+	var bodies []*Body
+	for _, tx := range txMatrix {
+		for _, u := range uncleMatrix {
+			for _, w := range withdrawMatrix {
+				bodies = append(bodies, &Body{tx, u, w})
+			}
+		}
+	}
+
+	for _, body := range bodies {
+		t.Run("", func(t *testing.T) {
+			t.Logf("\n%s", pretty.Sprint(body))
+
+			// The original [Body] doesn't implement [rlp.Encoder] nor
+			// [rlp.Decoder] so we can use a methodless equivalent as the gold
+			// standard.
+			type withoutMethods Body
+			wantRLP, err := rlp.EncodeToBytes((*withoutMethods)(body))
+			require.NoErrorf(t, err, "rlp.EncodeToBytes([%T with methods stripped])", body)
+
+			t.Run("Encode", func(t *testing.T) {
+				got, err := rlp.EncodeToBytes(body)
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%#v)", body)
+				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%#v)", body)
+			})
+
+			t.Run("Decode", func(t *testing.T) {
+				got := new(Body)
+				err := rlp.DecodeBytes(wantRLP, got)
+				require.NoErrorf(t, err, "rlp.DecodeBytes(%v, %T)", wantRLP, got)
+
+				want := body
+				// Regular RLP decoding will never leave these non-optional
+				// fields nil.
+				if want.Transactions == nil {
+					want.Transactions = []*Transaction{}
+				}
+				if want.Uncles == nil {
+					want.Uncles = []*Header{}
+				}
+
+				opts := cmp.Options{
+					cmpeth.CompareHeadersByHash(),
+					cmpeth.CompareTransactionsByBinary(t),
+				}
+				if diff := cmp.Diff(body, got, opts); diff != "" {
+					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%#v)) diff (-want +got):\n%s", body, diff)
+				}
+			})
+		})
+	}
+}
+
+// cChainBodyExtras carries the same additional fields as the Avalanche C-Chain
+// (ava-labs/coreth) [Body] and implements [BodyHooks] to achieve equivalent RLP
+// {en,de}coding.
+type cChainBodyExtras struct {
+	Version uint32
+	ExtData *[]byte
+}
+
+var _ BodyHooks = (*cChainBodyExtras)(nil)
+
+func (e *cChainBodyExtras) AppendRLPFields(b rlp.EncoderBuffer, _ bool) error {
+	b.WriteUint64(uint64(e.Version))
+
+	var data []byte
+	if e.ExtData != nil {
+		data = *e.ExtData
+	}
+	b.WriteBytes(data)
+
+	return nil
+}
+
+func (e *cChainBodyExtras) DecodeExtraRLPFields(s *rlp.Stream) error {
+	if err := s.Decode(&e.Version); err != nil {
+		return err
+	}
+
+	buf, err := s.Bytes()
+	if err != nil {
+		return err
+	}
+	if len(buf) > 0 {
+		e.ExtData = &buf
+	} else {
+		// Respect the `rlp:"nil"` field tag.
+		e.ExtData = nil
+	}
+
+	return nil
+}
+
+func TestBodyRLPCChainCompat(t *testing.T) {
+	// The inputs to this test were used to generate the expected RLP with
+	// ava-labs/coreth. This serves as both an example of how to use [BodyHooks]
+	// and a test of compatibility.
+
+	t.Cleanup(func() {
+		TestOnlyRegisterBodyHooks(NOOPBodyHooks{})
+	})
+
+	body := &Body{
+		Transactions: []*Transaction{
+			NewTx(&LegacyTx{
+				Nonce: 42,
+				To:    common.PointerTo(common.HexToAddress(`decafc0ffeebad`)),
+			}),
+		},
+		Uncles: []*Header{ /* RLP encoding differs in ava-labs/coreth */ },
+	}
+
+	const version = 314159
+	tests := []struct {
+		name  string
+		extra *cChainBodyExtras
+		// WARNING: changing these values might break backwards compatibility of
+		// RLP encoding!
+		wantRLPHex string
+	}{
+		{
+			extra: &cChainBodyExtras{
+				Version: version,
+			},
+			wantRLPHex: `e5dedd2a80809400000000000000000000000000decafc0ffeebad8080808080c08304cb2f80`,
+		},
+		{
+			extra: &cChainBodyExtras{
+				Version: version,
+				ExtData: &[]byte{1, 4, 2, 8, 5, 7},
+			},
+			wantRLPHex: `ebdedd2a80809400000000000000000000000000decafc0ffeebad8080808080c08304cb2f86010402080507`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wantRLP, err := hex.DecodeString(tt.wantRLPHex)
+			require.NoErrorf(t, err, "hex.DecodeString(%q)", tt.wantRLPHex)
+
+			t.Run("Encode", func(t *testing.T) {
+				TestOnlyRegisterBodyHooks(tt.extra)
+				got, err := rlp.EncodeToBytes(body)
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%+v)", body)
+				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%+v)", body)
+			})
+
+			t.Run("Decode", func(t *testing.T) {
+				var extra cChainBodyExtras
+				TestOnlyRegisterBodyHooks(&extra)
+
+				got := new(Body)
+				err := rlp.DecodeBytes(wantRLP, got)
+				require.NoErrorf(t, err, "rlp.DecodeBytes(%#x, %T)", wantRLP, got)
+				assert.Equal(t, tt.extra, &extra, "rlp.DecodeBytes(%#x, [%T as registered extra in %T carrier])", wantRLP, &extra, got)
+
+				opts := cmp.Options{
+					cmpeth.CompareHeadersByHash(),
+					cmpeth.CompareTransactionsByBinary(t),
+				}
+				if diff := cmp.Diff(body, got, opts); diff != "" {
+					t.Errorf("rlp.DecodeBytes(%#x, [%T while carrying registered %T extra payload]) diff (-want +got):\n%s", wantRLP, got, &extra, diff)
+				}
+			})
+		})
+	}
 }
