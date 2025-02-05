@@ -98,6 +98,11 @@ func (c *AsyncChecker) Wait() {
 
 // Check spawns an async CCC verification task.
 func (c *AsyncChecker) Check(block *types.Block) error {
+	if c.bc.Config().IsEuclid(block.Time()) {
+		// Euclid blocks use MPT and CCC doesn't support them
+		return nil
+	}
+
 	if block.NumberU64() > c.currentHead.Number.Uint64()+1 {
 		log.Warn("non continuous chain observed in AsyncChecker", "prev", c.currentHead, "got", block.Header())
 	}

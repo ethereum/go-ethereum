@@ -500,8 +500,18 @@ func (s *stateObject) Code(db Database) []byte {
 // CodeSize returns the size of the contract code associated with this object,
 // or zero if none. This method is an almost mirror of Code, but uses a cache
 // inside the database to avoid loading codes seen recently.
-func (s *stateObject) CodeSize() uint64 {
-	return s.data.CodeSize
+func (s *stateObject) CodeSize(db Database) uint64 {
+	if s.code != nil {
+		return uint64(len(s.code))
+	}
+	if bytes.Equal(s.KeccakCodeHash(), emptyKeccakCodeHash) {
+		return 0
+	}
+	size, err := db.ContractCodeSize(s.addrHash, common.BytesToHash(s.KeccakCodeHash()))
+	if err != nil {
+		s.setError(fmt.Errorf("can't load code size %x: %v", s.KeccakCodeHash(), err))
+	}
+	return uint64(size)
 }
 
 func (s *stateObject) SetCode(code []byte) {
@@ -534,6 +544,9 @@ func (s *stateObject) setNonce(nonce uint64) {
 }
 
 func (s *stateObject) PoseidonCodeHash() []byte {
+	if !s.db.IsZktrie() {
+		panic("PoseidonCodeHash is only available in zktrie mode")
+	}
 	return s.data.PoseidonCodeHash
 }
 

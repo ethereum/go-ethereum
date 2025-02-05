@@ -228,7 +228,7 @@ func sendCancellable[T any, C comparable](resCh chan T, msg T, cancelCh <-chan C
 }
 
 func (p *Pipeline) traceAndApplyStage(txsIn <-chan *types.Transaction) (<-chan error, <-chan *BlockCandidate, error) {
-	p.state.StartPrefetcher("miner")
+	p.state.StartPrefetcher("miner", nil)
 	downstreamCh := make(chan *BlockCandidate, p.downstreamChCapacity())
 	resCh := make(chan error)
 	p.wg.Add(1)

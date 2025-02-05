@@ -224,14 +224,15 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 		db          = rawdb.NewMemoryDatabase()
 	)
 	if isClique {
-		chainConfig = params.AllCliqueProtocolChanges
+		chainConfig = params.AllCliqueProtocolChanges.Clone()
 		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 		engine = clique.New(chainConfig.Clique, db)
 	} else {
-		chainConfig = params.AllEthashProtocolChanges
+		chainConfig = params.AllEthashProtocolChanges.Clone()
 		engine = ethash.NewFaker()
 	}
 	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = true
 
 	chainConfig.LondonBlock = big.NewInt(0)
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
@@ -285,17 +286,18 @@ func testGenerateBlockWithL1Msg(t *testing.T, isClique bool) {
 	rawdb.WriteL1Messages(db, msgs)
 
 	if isClique {
-		chainConfig = params.AllCliqueProtocolChanges
+		chainConfig = params.AllCliqueProtocolChanges.Clone()
 		chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 		engine = clique.New(chainConfig.Clique, db)
 	} else {
-		chainConfig = params.AllEthashProtocolChanges
+		chainConfig = params.AllEthashProtocolChanges.Clone()
 		engine = ethash.NewFaker()
 	}
 	chainConfig.Scroll.L1Config = &params.L1Config{
 		NumL1MessagesPerBlock: 1,
 	}
 	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = true
 
 	chainConfig.LondonBlock = big.NewInt(0)
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
@@ -341,9 +343,10 @@ func TestAcceptableTxlimit(t *testing.T) {
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
 	)
-	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig = params.AllCliqueProtocolChanges.Clone()
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = true
 	engine = clique.New(chainConfig.Clique, db)
 
 	// Set maxTxPerBlock = 4, which >= non-l1msg + non-skipped l1msg txs
@@ -401,9 +404,10 @@ func TestUnacceptableTxlimit(t *testing.T) {
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
 	)
-	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig = params.AllCliqueProtocolChanges.Clone()
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = true
 	engine = clique.New(chainConfig.Clique, db)
 
 	// Set maxTxPerBlock = 3, which < non-l1msg + l1msg txs
@@ -460,9 +464,10 @@ func TestL1MsgCorrectOrder(t *testing.T) {
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
 	)
-	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig = params.AllCliqueProtocolChanges.Clone()
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = true
 	engine = clique.New(chainConfig.Clique, db)
 
 	maxTxPerBlock := 4
@@ -523,8 +528,9 @@ func l1MessageTest(t *testing.T, msgs []types.L1MessageTx, withL2Tx bool, callba
 	)
 	rawdb.WriteL1Messages(db, msgs)
 
-	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig = params.AllCliqueProtocolChanges.Clone()
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	chainConfig.Scroll.UseZktrie = true
 	engine = clique.New(chainConfig.Clique, db)
 	maxTxPerBlock := 4
 	chainConfig.Scroll.MaxTxPerBlock = &maxTxPerBlock
@@ -872,13 +878,14 @@ func TestPrioritizeOverflowTx(t *testing.T) {
 	assert := assert.New(t)
 
 	var (
-		chainConfig = params.AllCliqueProtocolChanges
+		chainConfig = params.AllCliqueProtocolChanges.Clone()
 		db          = rawdb.NewMemoryDatabase()
 	)
 
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	chainConfig.LondonBlock = big.NewInt(0)
 	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = true
 	engine := clique.New(chainConfig.Clique, db)
 
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
@@ -1033,9 +1040,10 @@ func TestPending(t *testing.T) {
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
 	)
-	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig = params.AllCliqueProtocolChanges.Clone()
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = true
 	engine = clique.New(chainConfig.Clique, db)
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
 	defer w.close()
@@ -1077,9 +1085,10 @@ func TestReorg(t *testing.T) {
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
 	)
-	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig = params.AllCliqueProtocolChanges.Clone()
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000, RelaxedPeriod: true}
 	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = true
 	engine = clique.New(chainConfig.Clique, db)
 
 	maxTxPerBlock := 2
@@ -1191,9 +1200,10 @@ func TestRestartHeadCCC(t *testing.T) {
 		chainConfig *params.ChainConfig
 		db          = rawdb.NewMemoryDatabase()
 	)
-	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig = params.AllCliqueProtocolChanges.Clone()
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000, RelaxedPeriod: true}
 	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = true
 	engine = clique.New(chainConfig.Clique, db)
 
 	maxTxPerBlock := 2

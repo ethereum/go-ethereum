@@ -183,6 +183,10 @@ var (
 		Name:  "scroll",
 		Usage: "Scroll mainnet",
 	}
+	ScrollMPTFlag = cli.BoolFlag{
+		Name:  "scroll-mpt",
+		Usage: "Use MPT trie for state storage",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -1887,12 +1891,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		stack.Config().L1Confirmations = rpc.FinalizedBlockNumber
 		log.Info("Setting flag", "--l1.sync.startblock", "4038000")
 		stack.Config().L1DeploymentBlock = 4038000
-		// disable pruning
-		if ctx.GlobalString(GCModeFlag.Name) != GCModeArchive {
-			log.Crit("Must use --gcmode=archive")
+		cfg.Genesis.Config.Scroll.UseZktrie = !ctx.GlobalBool(ScrollMPTFlag.Name)
+		if cfg.Genesis.Config.Scroll.UseZktrie {
+			// disable pruning
+			if ctx.GlobalString(GCModeFlag.Name) != GCModeArchive {
+				log.Crit("Must use --gcmode=archive")
+			}
+			log.Info("Pruning disabled")
+			cfg.NoPruning = true
 		}
-		log.Info("Pruning disabled")
-		cfg.NoPruning = true
 	case ctx.GlobalBool(ScrollFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 534352
@@ -1903,12 +1910,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		stack.Config().L1Confirmations = rpc.FinalizedBlockNumber
 		log.Info("Setting flag", "--l1.sync.startblock", "18306000")
 		stack.Config().L1DeploymentBlock = 18306000
-		// disable pruning
-		if ctx.GlobalString(GCModeFlag.Name) != GCModeArchive {
-			log.Crit("Must use --gcmode=archive")
+		cfg.Genesis.Config.Scroll.UseZktrie = !ctx.GlobalBool(ScrollMPTFlag.Name)
+		if cfg.Genesis.Config.Scroll.UseZktrie {
+			// disable pruning
+			if ctx.GlobalString(GCModeFlag.Name) != GCModeArchive {
+				log.Crit("Must use --gcmode=archive")
+			}
+			log.Info("Pruning disabled")
+			cfg.NoPruning = true
 		}
-		log.Info("Pruning disabled")
-		cfg.NoPruning = true
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337

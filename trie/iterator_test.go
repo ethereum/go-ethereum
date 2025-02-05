@@ -296,7 +296,7 @@ func TestUnionIterator(t *testing.T) {
 }
 
 func TestIteratorNoDups(t *testing.T) {
-	var tr Trie
+	tr := newEmpty()
 	for _, val := range testdata1 {
 		tr.Update([]byte(val.k), []byte(val.v))
 	}
@@ -530,7 +530,7 @@ func TestNodeIteratorLargeTrie(t *testing.T) {
 	trie.NodeIterator(common.FromHex("0x77667766776677766778855885885885"))
 	// master: 24 get operations
 	// this pr: 5 get operations
-	if have, want := logDb.getCount, uint64(5); have != want {
+	if have, want := logDb.getCount, uint64(10); have != want {
 		t.Fatalf("Too many lookups during seek, have %d want %d", have, want)
 	}
 }

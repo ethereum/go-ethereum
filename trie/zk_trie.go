@@ -233,3 +233,8 @@ func VerifyProofSMT(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueRead
 		return nil, fmt.Errorf("bad proof node %v", proof)
 	}
 }
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *ZkTrie) Witness() map[string]struct{} {
+	panic("not implemented")
+}

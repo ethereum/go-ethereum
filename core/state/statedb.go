@@ -29,6 +29,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state/snapshot"
+	"github.com/scroll-tech/go-ethereum/core/stateless"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/log"
@@ -106,6 +107,9 @@ type StateDB struct {
 	validRevisions []revision
 	nextRevisionId int
 
+	// State witness if cross validation is needed
+	witness *stateless.Witness
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads         time.Duration
 	AccountHashes        time.Duration
@@ -159,11 +163,15 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string) {
+func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) {
 	if s.prefetcher != nil {
 		s.prefetcher.close()
 		s.prefetcher = nil
 	}
+
+	// Enable witness collection if requested
+	s.witness = witness
+
 	if s.snap != nil {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
 	}
@@ -289,6 +297,9 @@ func (s *StateDB) TxIndex() int {
 func (s *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		if s.witness != nil {
+			s.witness.AddCode(stateObject.Code(s.db))
+		}
 		return stateObject.Code(s.db)
 	}
 	return nil
@@ -297,7 +308,10 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 func (s *StateDB) GetCodeSize(addr common.Address) uint64 {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.CodeSize()
+		if s.witness != nil {
+			s.witness.AddCode(stateObject.Code(s.db))
+		}
+		return stateObject.CodeSize(s.db)
 	}
 	return 0
 }
@@ -725,6 +739,9 @@ func (s *StateDB) Copy() *StateDB {
 		journal:             newJournal(),
 		hasher:              crypto.NewKeccakState(),
 	}
+	if s.witness != nil {
+		state.witness = s.witness.Copy()
+	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
 		// As documented [here](https://github.com/scroll-tech/go-ethereum/pull/16485#issuecomment-380438527),
@@ -913,7 +930,33 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// to pull useful data from disk.
 	for addr := range s.stateObjectsPending {
 		if obj := s.stateObjects[addr]; !obj.deleted {
+
+			// If witness building is enabled and the state object has a trie,
+			// gather the witnesses for its specific storage trie
+			if s.witness != nil && obj.trie != nil {
+				s.witness.AddState(obj.trie.Witness())
+			}
+
 			obj.updateRoot(s.db)
+
+			// If witness building is enabled and the state object has a trie,
+			// gather the witnesses for its specific storage trie
+			if s.witness != nil && obj.trie != nil {
+				s.witness.AddState(obj.trie.Witness())
+			}
+		}
+	}
+
+	if s.witness != nil {
+		// If witness building is enabled, gather the account trie witness for read-only operations
+		for _, obj := range s.stateObjects {
+			if len(obj.originStorage) == 0 {
+				continue
+			}
+
+			if trie := obj.getTrie(s.db); trie != nil {
+				s.witness.AddState(trie.Witness())
+			}
 		}
 	}
 	// Now we're about to start to write changes to the trie. The trie is so far
@@ -945,7 +988,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	if metrics.EnabledExpensive {
 		defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())
 	}
-	return s.trie.Hash()
+
+	hash := s.trie.Hash()
+	// If witness building is enabled, gather the account trie witness
+	if s.witness != nil {
+		s.witness.AddState(s.trie.Witness())
+	}
+	return hash
 }
 
 // SetTxContext sets the current transaction hash and index which are

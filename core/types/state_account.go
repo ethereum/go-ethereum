@@ -31,6 +31,6 @@ type StateAccount struct {
 	KeccakCodeHash []byte
 
 	// StateAccount Scroll extensions
-	PoseidonCodeHash []byte
-	CodeSize         uint64
+	PoseidonCodeHash []byte `rlp:"-"`
+	CodeSize         uint64 `rlp:"-"`
 }

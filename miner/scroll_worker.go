@@ -372,7 +372,7 @@ func (w *worker) mainLoop() {
 		select {
 		case <-w.startCh:
 			idleTimer.UpdateSince(idleStart)
-			if w.isRunning() {
+			if w.isRunning() && w.chainConfig.Scroll.UseZktrie {
 				if err := w.checkHeadRowConsumption(); err != nil {
 					log.Error("failed to start head checkers", "err", err)
 					return
@@ -490,9 +490,10 @@ func (w *worker) newWork(now time.Time, parentHash common.Hash, reorging bool, r
 
 	vmConfig := *w.chain.GetVMConfig()
 	cccLogger := ccc.NewLogger()
-	vmConfig.Debug = true
-	vmConfig.Tracer = cccLogger
-
+	if w.chainConfig.Scroll.UseZktrie {
+		vmConfig.Debug = true
+		vmConfig.Tracer = cccLogger
+	}
 	deadline := time.Unix(int64(header.Time), 0)
 	if w.chainConfig.Clique != nil && w.chainConfig.Clique.RelaxedPeriod {
 		// clique with relaxed period uses time.Now() as the header.Time, calculate the deadline
@@ -565,6 +566,11 @@ func (w *worker) handleForks() (bool, error) {
 	if w.chainConfig.CurieBlock != nil && w.chainConfig.CurieBlock.Cmp(w.current.header.Number) == 0 {
 		misc.ApplyCurieHardFork(w.current.state)
 		return true, nil
+	}
+
+	if w.chainConfig.IsEuclid(w.current.header.Time) {
+		parent := w.chain.GetBlockByHash(w.current.header.ParentHash)
+		return parent != nil && !w.chainConfig.IsEuclid(parent.Time()), nil
 	}
 	return false, nil
 }
@@ -809,7 +815,10 @@ func (w *worker) commit() (common.Hash, error) {
 	}(time.Now())
 
 	w.updateSnapshot()
-	if !w.isRunning() && !w.current.reorging {
+	// Since clocks of mpt-sequencer and zktrie-sequencer can be slightly out of sync,
+	// this might result in a reorg at the Euclid fork block. But it will be resolved shortly after.
+	canCommitState := w.chainConfig.Scroll.UseZktrie != w.chainConfig.IsEuclid(w.current.header.Time)
+	if !canCommitState || (!w.isRunning() && !w.current.reorging) {
 		return common.Hash{}, nil
 	}
 
@@ -886,7 +895,7 @@ func (w *worker) commit() (common.Hash, error) {
 
 	currentHeight := w.current.header.Number.Uint64()
 	maxReorgDepth := uint64(w.config.CCCMaxWorkers + 1)
-	if !w.current.reorging && currentHeight > maxReorgDepth {
+	if w.chainConfig.Scroll.UseZktrie && !w.current.reorging && currentHeight > maxReorgDepth {
 		ancestorHeight := currentHeight - maxReorgDepth
 		ancestorHash := w.chain.GetHeaderByNumber(ancestorHeight).Hash()
 		if rawdb.ReadBlockRowConsumption(w.chain.Database(), ancestorHash) == nil {
@@ -914,8 +923,10 @@ func (w *worker) commit() (common.Hash, error) {
 	w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
 	checkStart := time.Now()
-	if err = w.asyncChecker.Check(block); err != nil {
-		log.Error("failed to launch CCC background task", "err", err)
+	if w.chainConfig.Scroll.UseZktrie {
+		if err = w.asyncChecker.Check(block); err != nil {
+			log.Error("failed to launch CCC background task", "err", err)
+		}
 	}
 	cccStallTimer.UpdateSince(checkStart)
 

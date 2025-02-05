@@ -1318,6 +1318,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		return NonStatTy, err
 	}
 	triedb := bc.stateCache.TrieDB()
+	if block.Root() != root {
+		rawdb.WriteDiskStateRoot(bc.db, block.Root(), root)
+	}
 
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
@@ -1677,7 +1680,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 
 		// Enable prefetching to pull in trie node paths while processing transactions
-		statedb.StartPrefetcher("chain")
+		statedb.StartPrefetcher("chain", nil)
 		activeState = statedb
 
 		// If we have a followup block, run that against the current state to pre-cache
@@ -1814,7 +1817,7 @@ func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types
 		return NonStatTy, err
 	}
 
-	statedb.StartPrefetcher("l1sync")
+	statedb.StartPrefetcher("l1sync", nil)
 	defer statedb.StopPrefetcher()
 
 	header.ParentHash = parentBlock.Hash()

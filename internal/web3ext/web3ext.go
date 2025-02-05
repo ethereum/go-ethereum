@@ -482,6 +482,13 @@ web3._extend({
 			params: 2,
 			inputFormatter:[web3._extend.formatters.inputBlockNumberFormatter, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
+		new web3._extend.Method({
+			name: 'executionWitness',
+			call: 'debug_executionWitness',
+			params: 1,
+			inputFormatter: [null]
+		}),
+
 	],
 	properties: []
 });
@@ -942,6 +949,13 @@ web3._extend({
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
+		new web3._extend.Method({
+			name: 'diskRoot',
+			call: 'scroll_diskRoot',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputDefaultBlockNumberFormatter],
+		}),
+
 	],
 	properties:
 	[

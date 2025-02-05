@@ -17,7 +17,6 @@
 package core
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -3032,15 +3031,16 @@ func TestPoseidonCodeHash(t *testing.T) {
 	var callCreate2Code = common.Hex2Bytes("f4754f660000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000005c6080604052348015600f57600080fd5b50603f80601d6000396000f3fe6080604052600080fdfea2646970667358221220707985753fcb6578098bb16f3709cf6d012993cba6dd3712661cf8f57bbc0d4d64736f6c6343000807003300000000")
 
 	var (
-		key1, _       = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr1         = crypto.PubkeyToAddress(key1.PublicKey)
-		db            = rawdb.NewMemoryDatabase()
-		gspec         = &Genesis{Config: params.TestChainConfig, Alloc: GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000000)}}}
-		genesis       = gspec.MustCommit(db)
-		signer        = types.LatestSigner(gspec.Config)
-		engine        = ethash.NewFaker()
-		blockchain, _ = NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil, nil)
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		db      = rawdb.NewMemoryDatabase()
+		gspec   = &Genesis{Config: params.TestChainConfig.Clone(), Alloc: GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000000)}}}
+		signer  = types.LatestSigner(gspec.Config)
+		engine  = ethash.NewFaker()
 	)
+	gspec.Config.Scroll.UseZktrie = true
+	genesis := gspec.MustCommit(db)
+	blockchain, _ := NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil, nil)
 
 	defer blockchain.Stop()
 
@@ -3053,7 +3053,7 @@ func TestPoseidonCodeHash(t *testing.T) {
 	assert.Equal(t, common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"), keccakCodeHash, "code hash mismatch")
 
 	// deploy contract through transaction
-	chain, receipts := GenerateChain(params.TestChainConfig, genesis, engine, db, 1, func(i int, gen *BlockGen) {
+	chain, receipts := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), 1000000, gen.header.BaseFee, deployCode), signer, key1)
 		gen.AddTx(tx)
 	})
@@ -3074,7 +3074,7 @@ func TestPoseidonCodeHash(t *testing.T) {
 	assert.Equal(t, common.HexToHash("0x089bfd332dfa6117cbc20756f31801ce4f5a175eb258e46bf8123317da54cd96"), keccakCodeHash, "code hash mismatch")
 
 	// deploy contract through another contract (CREATE and CREATE2)
-	chain, receipts = GenerateChain(params.TestChainConfig, blockchain.CurrentBlock(), engine, db, 1, func(i int, gen *BlockGen) {
+	chain, receipts = GenerateChain(gspec.Config, blockchain.CurrentBlock(), engine, db, 1, func(i int, gen *BlockGen) {
 		tx, _ := types.SignTx(types.NewTransaction(gen.TxNonce(addr1), contractAddress, new(big.Int), 1000000, gen.header.BaseFee, callCreateCode), signer, key1)
 		gen.AddTx(tx)
 
@@ -3718,12 +3718,11 @@ func TestTransientStorageReset(t *testing.T) {
 func TestCurieTransition(t *testing.T) {
 	// Set fork blocks in config
 	// (we make a deep copy to avoid interference with other tests)
-	var config *params.ChainConfig
-	b, _ := json.Marshal(params.AllEthashProtocolChanges)
-	json.Unmarshal(b, &config)
+	config := params.AllEthashProtocolChanges.Clone()
 	config.CurieBlock = big.NewInt(2)
 	config.DarwinTime = nil
 	config.DarwinV2Time = nil
+	config.Scroll.UseZktrie = true
 
 	var (
 		db      = rawdb.NewMemoryDatabase()
@@ -3748,7 +3747,7 @@ func TestCurieTransition(t *testing.T) {
 		number := block.Number().Uint64()
 		baseFee := block.BaseFee()
 
-		statedb, _ := state.New(block.Root(), state.NewDatabase(db), nil)
+		statedb, _ := state.New(block.Root(), state.NewDatabaseWithConfig(db, &trie.Config{Zktrie: gspec.Config.Scroll.UseZktrie}), nil)
 
 		code := statedb.GetCode(rcfg.L1GasPriceOracleAddress)
 		codeSize := statedb.GetCodeSize(rcfg.L1GasPriceOracleAddress)

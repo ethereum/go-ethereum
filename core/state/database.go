@@ -105,6 +105,9 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
+
+	// Witness returns a set containing all trie nodes that have been accessed.
+	Witness() map[string]struct{}
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -136,6 +139,9 @@ type cachingDB struct {
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
+	if diskRoot, err := rawdb.ReadDiskStateRoot(db.db.DiskDB(), root); err == nil {
+		root = diskRoot
+	}
 	if db.zktrie {
 		tr, err := trie.NewZkTrie(root, trie.NewZktrieDatabaseFromTriedb(db.db))
 		if err != nil {

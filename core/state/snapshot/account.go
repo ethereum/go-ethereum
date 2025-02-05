@@ -33,8 +33,8 @@ type Account struct {
 	Balance          *big.Int
 	Root             []byte
 	KeccakCodeHash   []byte
-	PoseidonCodeHash []byte
-	CodeSize         uint64
+	PoseidonCodeHash []byte `rlp:"-"`
+	CodeSize         uint64 `rlp:"-"`
 }
 
 // SlimAccount converts a state.Account content into a slim snapshot account

@@ -155,7 +155,8 @@ func TestSnapshotEmpty(t *testing.T) {
 }
 
 func TestSnapshot2(t *testing.T) {
-	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	stateDb := NewDatabase(rawdb.NewMemoryDatabase())
+	state, _ := New(common.Hash{}, stateDb, nil)
 
 	stateobjaddr0 := common.BytesToAddress([]byte("so0"))
 	stateobjaddr1 := common.BytesToAddress([]byte("so1"))
@@ -201,7 +202,7 @@ func TestSnapshot2(t *testing.T) {
 	so0Restored.GetState(state.db, storageaddr)
 	so0Restored.Code(state.db)
 	// non-deleted is equal (restored)
-	compareStateObjects(so0Restored, so0, t)
+	compareStateObjects(so0Restored, so0, stateDb, t)
 
 	// deleted should be nil, both before and after restore of state copy
 	so1Restored := state.getStateObject(stateobjaddr1)
@@ -210,7 +211,7 @@ func TestSnapshot2(t *testing.T) {
 	}
 }
 
-func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
+func compareStateObjects(so0, so1 *stateObject, db Database, t *testing.T) {
 	if so0.Address() != so1.Address() {
 		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
 	}
@@ -229,8 +230,8 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	if !bytes.Equal(so0.PoseidonCodeHash(), so1.PoseidonCodeHash()) {
 		t.Fatalf("PoseidonCodeHash mismatch: have %v, want %v", so0.PoseidonCodeHash(), so1.PoseidonCodeHash())
 	}
-	if so0.CodeSize() != so1.CodeSize() {
-		t.Fatalf("CodeSize mismatch: have %v, want %v", so0.CodeSize(), so1.CodeSize())
+	if so0.CodeSize(db) != so1.CodeSize(db) {
+		t.Fatalf("CodeSize mismatch: have %v, want %v", so0.CodeSize(db), so1.CodeSize(db))
 	}
 	if !bytes.Equal(so0.code, so1.code) {
 		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)

@@ -190,6 +190,7 @@ func (t *SecureTrie) Hash() common.Hash {
 // Copy returns a copy of SecureTrie.
 func (t *SecureTrie) Copy() *SecureTrie {
 	cpy := *t
+	cpy.trie.tracer = t.trie.tracer.copy()
 	return &cpy
 }
 
@@ -220,4 +221,9 @@ func (t *SecureTrie) getSecKeyCache() map[string][]byte {
 		t.secKeyCache = make(map[string][]byte)
 	}
 	return t.secKeyCache
+}
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *SecureTrie) Witness() map[string]struct{} {
+	return t.trie.Witness()
 }

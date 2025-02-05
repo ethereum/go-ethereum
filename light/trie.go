@@ -181,6 +181,11 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 	}
 }
 
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *odrTrie) Witness() map[string]struct{} {
+	panic("not implemented")
+}
+
 type nodeIterator struct {
 	trie.NodeIterator
 	t   *odrTrie

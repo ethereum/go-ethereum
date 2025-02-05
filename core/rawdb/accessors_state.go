@@ -94,3 +94,17 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, hash common.Hash) {
 		log.Crit("Failed to delete trie node", "err", err)
 	}
 }
+
+func WriteDiskStateRoot(db ethdb.KeyValueWriter, headerRoot, diskRoot common.Hash) {
+	if err := db.Put(diskStateRootKey(headerRoot), diskRoot.Bytes()); err != nil {
+		log.Crit("Failed to store disk state root", "err", err)
+	}
+}
+
+func ReadDiskStateRoot(db ethdb.KeyValueReader, headerRoot common.Hash) (common.Hash, error) {
+	data, err := db.Get(diskStateRootKey(headerRoot))
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return common.BytesToHash(data), nil
+}
