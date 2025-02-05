@@ -304,7 +304,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 
 			// Set the receipt logs and create the bloom filter.
 			receipt.Logs = statedb.GetLogs(tx.Hash(), vmContext.BlockNumber.Uint64(), blockHash)
-			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+			receipt.Bloom = types.CreateBloom(receipt)
+
 			// These three are non-consensus fields:
 			//receipt.BlockHash
 			//receipt.BlockNumber
@@ -376,7 +377,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		StateRoot:   root,
 		TxRoot:      types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
 		ReceiptRoot: types.DeriveSha(receipts, trie.NewStackTrie(nil)),
-		Bloom:       types.CreateBloom(receipts),
+		Bloom:       types.MergeBloom(receipts),
 		LogsHash:    rlpHash(statedb.Logs()),
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,

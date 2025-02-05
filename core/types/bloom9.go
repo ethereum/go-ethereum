@@ -100,10 +100,28 @@ func (b *Bloom) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("Bloom", input, b[:])
 }
 
-// CreateBloom creates a bloom filter out of the give Receipts (+Logs)
-func CreateBloom(receipts Receipts) Bloom {
-	buf := make([]byte, 6)
-	var bin Bloom
+// CreateBloom creates a bloom filter out of the give Receipt (+Logs)
+func CreateBloom(receipt *Receipt) Bloom {
+	var (
+		bin Bloom
+		buf = make([]byte, 6)
+	)
+	for _, log := range receipt.Logs {
+		bin.add(log.Address.Bytes(), buf)
+		for _, b := range log.Topics {
+			bin.add(b[:], buf)
+		}
+	}
+	return bin
+}
+
+// CreateBlooms creates a bloom filter out of the give Receipts (+Logs).
+// This function is just for benchmarking.
+func CreateBlooms(receipts []*Receipt) Bloom {
+	var (
+		bin Bloom
+		buf = make([]byte, 6)
+	)
 	for _, receipt := range receipts {
 		for _, log := range receipt.Logs {
 			bin.add(log.Address.Bytes(), buf)
@@ -115,9 +133,9 @@ func CreateBloom(receipts Receipts) Bloom {
 	return bin
 }
 
-// MergeBloom merges the already calculated bloom in Receipts
-// without recalculating. So it assumes receipt.Bloom is populated
-// with the correct bloom already.
+// MergeBloom merges the precomputed bloom filters in the Receipts without
+// recalculating them. It assumes that each receipt’s Bloom field is already
+// correctly populated.
 func MergeBloom(receipts Receipts) Bloom {
 	var bin Bloom
 	for _, receipt := range receipts {
@@ -128,21 +146,7 @@ func MergeBloom(receipts Receipts) Bloom {
 			}
 		}
 	}
-
 	return bin
-}
-
-// LogsBloom returns the bloom bytes for the given logs
-func LogsBloom(logs []*Log) []byte {
-	buf := make([]byte, 6)
-	var bin Bloom
-	for _, log := range logs {
-		bin.add(log.Address.Bytes(), buf)
-		for _, b := range log.Topics {
-			bin.add(b[:], buf)
-		}
-	}
-	return bin[:]
 }
 
 // Bloom9 returns the bloom filter for the given data
