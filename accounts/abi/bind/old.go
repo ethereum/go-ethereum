@@ -220,10 +220,10 @@ type FilterOpts = bind2.FilterOpts
 
 type WatchOpts = bind2.WatchOpts
 
-type BoundContract = bind2.BoundContractV1
+type BoundContract = bind2.BoundContract
 
 func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller, transactor ContractTransactor, filterer ContractFilterer) *BoundContract {
-	return bind2.NewBoundContractV1(address, abi, caller, transactor, filterer)
+	return bind2.NewBoundContract(address, abi, caller, transactor, filterer)
 }
 
 func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
@@ -235,8 +235,8 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	boundContract := NewBoundContract(addr, abi, backend, backend, backend)
-	return addr, tx, boundContract, nil
+	contract := NewBoundContract(addr, abi, backend, backend, backend)
+	return addr, tx, contract, nil
 }
 
 // MetaData collects all metadata for a bound contract.

@@ -236,7 +236,7 @@ func TestEvents(t *testing.T) {
 	defer sub2.Unsubscribe()
 
 	packedInput := c.PackEmitMulti()
-	tx, err := bind.Transact(instance, defaultTxAuth(), packedInput)
+	tx, err := instance.RawTransact(defaultTxAuth(), packedInput)
 	if err != nil {
 		t.Fatalf("failed to send transaction: %v", err)
 	}

@@ -33,9 +33,9 @@ type ContractEvent interface {
 }
 
 // FilterEvents returns an EventIterator instance for filtering historical events based on the event id and a block range.
-func FilterEvents[Ev ContractEvent](c BoundContract, opts *FilterOpts, unpack func(*types.Log) (*Ev, error), topics ...[]any) (*EventIterator[Ev], error) {
+func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack func(*types.Log) (*Ev, error), topics ...[]any) (*EventIterator[Ev], error) {
 	var e Ev
-	logs, sub, err := c.filterLogs(opts, e.ContractEventName(), topics...)
+	logs, sub, err := c.FilterLogs(opts, e.ContractEventName(), topics...)
 	if err != nil {
 		return nil, err
 	}
@@ -46,9 +46,9 @@ func FilterEvents[Ev ContractEvent](c BoundContract, opts *FilterOpts, unpack fu
 // contract to be intercepted, unpacked, and forwarded to sink.  If
 // unpack returns an error, the returned subscription is closed with the
 // error.
-func WatchEvents[Ev ContractEvent](c BoundContract, opts *WatchOpts, unpack func(*types.Log) (*Ev, error), sink chan<- *Ev, topics ...[]any) (event.Subscription, error) {
+func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack func(*types.Log) (*Ev, error), sink chan<- *Ev, topics ...[]any) (event.Subscription, error) {
 	var e Ev
-	logs, sub, err := c.watchLogs(opts, e.ContractEventName(), topics...)
+	logs, sub, err := c.WatchLogs(opts, e.ContractEventName(), topics...)
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +156,9 @@ func (it *EventIterator[T]) Close() error {
 //
 // To call a function that doesn't return any output, pass nil as the unpack function.
 // This can be useful if you just want to check that the function doesn't revert.
-func Call[T any](c BoundContract, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
+func Call[T any](c *BoundContract, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
-	packedOutput, err := c.call(opts, packedInput)
+	packedOutput, err := c.CallRaw(opts, packedInput)
 	if err != nil {
 		return defaultResult, err
 	}
@@ -175,17 +175,12 @@ func Call[T any](c BoundContract, opts *CallOpts, packedInput []byte, unpack fun
 	return res, err
 }
 
-// Transact initiates a transaction with the given raw calldata as the input.
-func Transact(c BoundContract, opt *TransactOpts, packedInput []byte) (*types.Transaction, error) {
-	addr := c.addr()
-	return c.transact(opt, &addr, packedInput)
-}
-
 // DeployContract deploys a contract onto the Ethereum blockchain and binds the
-// deployment address with a Go wrapper. It expects its parameters to be abi-encoded
+// deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
 // bytes.
 func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, error) {
-	c := NewBoundContractV1(common.Address{}, abi.ABI{}, backend, backend, backend)
+	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
+
 	tx, err := c.RawCreationTransact(opts, append(bytecode, packedParams...))
 	if err != nil {
 		return common.Address{}, nil, err

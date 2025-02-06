@@ -64,7 +64,7 @@ type DeploymentResult struct {
 }
 
 // DeployFn deploys a contract given a deployer and optional input.  It returns
-// the address of the deployed contract and the deployment transaction, or an error if the deployment failed.
+// the address and a pending transaction, or an error if the deployment failed.
 type DeployFn func(input, deployer []byte) (common.Address, *types.Transaction, error)
 
 // depTreeDeployer is responsible for taking a dependency, deploying-and-linking

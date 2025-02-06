@@ -69,8 +69,8 @@ var (
 
 	// Instance creates a wrapper for a deployed contract instance at the given address.
 	// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
-	func (c *{{.Type}}) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
-		 return bind.NewBoundContract(backend, addr, c.abi)
+	func (c *{{.Type}}) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+		 return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 	}
 
 	{{ if .Constructor.Inputs }}

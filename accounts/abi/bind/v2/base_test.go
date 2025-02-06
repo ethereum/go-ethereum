@@ -142,7 +142,7 @@ func TestPassingBlockNumber(t *testing.T) {
 		},
 	}
 
-	bc := bind.NewBoundContractV1(common.HexToAddress("0x0"), abi.ABI{
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), abi.ABI{
 		Methods: map[string]abi.Method{
 			"something": {
 				Name:    "something",
@@ -197,7 +197,7 @@ func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"name","type":"string"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
-	bc := bind.NewBoundContractV1(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
 	expectedReceivedMap := map[string]interface{}{
 		"name":   hash,
@@ -214,7 +214,7 @@ func TestUnpackAnonymousLogIntoMap(t *testing.T) {
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":false,"name":"amount","type":"uint256"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
-	bc := bind.NewBoundContractV1(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
 	var received map[string]interface{}
 	err := bc.UnpackLogIntoMap(received, "received", mockLog)
@@ -241,7 +241,7 @@ func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"names","type":"string[]"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
-	bc := bind.NewBoundContractV1(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
 	expectedReceivedMap := map[string]interface{}{
 		"names":  hash,
@@ -267,7 +267,7 @@ func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"addresses","type":"address[2]"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
-	bc := bind.NewBoundContractV1(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
 	expectedReceivedMap := map[string]interface{}{
 		"addresses": hash,
@@ -294,7 +294,7 @@ func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
 	mockLog := newMockLog(topics, common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"))
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"function","type":"function"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
-	bc := bind.NewBoundContractV1(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
 	expectedReceivedMap := map[string]interface{}{
 		"function": functionTy,
@@ -317,7 +317,7 @@ func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
 
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"content","type":"bytes"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
 	parsedAbi, _ := abi.JSON(strings.NewReader(abiString))
-	bc := bind.NewBoundContractV1(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
+	bc := bind.NewBoundContract(common.HexToAddress("0x0"), parsedAbi, nil, nil, nil)
 
 	expectedReceivedMap := map[string]interface{}{
 		"content": hash,
@@ -335,7 +335,7 @@ func TestTransactGasFee(t *testing.T) {
 	// GasTipCap and GasFeeCap
 	// When opts.GasTipCap and opts.GasFeeCap are nil
 	mt := &mockTransactor{baseFee: big.NewInt(100), gasTipCap: big.NewInt(5)}
-	bc := bind.NewBoundContractV1(common.Address{}, abi.ABI{}, nil, mt, nil)
+	bc := bind.NewBoundContract(common.Address{}, abi.ABI{}, nil, mt, nil)
 	opts := &bind.TransactOpts{Signer: mockSign}
 	tx, err := bc.Transact(opts, "")
 	assert.Nil(err)
@@ -357,7 +357,7 @@ func TestTransactGasFee(t *testing.T) {
 	// GasPrice
 	// When opts.GasPrice is nil
 	mt = &mockTransactor{gasPrice: big.NewInt(5)}
-	bc = bind.NewBoundContractV1(common.Address{}, abi.ABI{}, nil, mt, nil)
+	bc = bind.NewBoundContract(common.Address{}, abi.ABI{}, nil, mt, nil)
 	opts = &bind.TransactOpts{Signer: mockSign}
 	tx, err = bc.Transact(opts, "")
 	assert.Nil(err)
@@ -374,7 +374,7 @@ func TestTransactGasFee(t *testing.T) {
 	assert.True(mt.suggestGasPriceCalled)
 }
 
-func unpackAndCheck(t *testing.T, bc *bind.BoundContractV1, expected map[string]interface{}, mockLog types.Log) {
+func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]interface{}, mockLog types.Log) {
 	received := make(map[string]interface{})
 	if err := bc.UnpackLogIntoMap(received, "received", mockLog); err != nil {
 		t.Error(err)
@@ -551,7 +551,7 @@ func TestCall(t *testing.T) {
 		wantErr: true,
 	}}
 	for _, test := range tests {
-		bc := bind.NewBoundContractV1(common.HexToAddress("0x0"), abi.ABI{
+		bc := bind.NewBoundContract(common.HexToAddress("0x0"), abi.ABI{
 			Methods: map[string]abi.Method{
 				method: {
 					Name:    method,
