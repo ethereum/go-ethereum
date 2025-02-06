@@ -153,6 +153,7 @@ jobs:
           chmod 600 $HOME/.kube/config
           git_hash=$(git rev-parse --short "$GITHUB_SHA")
           kubectl set image deployment/devnetrpc devnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash} || true
+          kubectl set image deployment/devnetrpc2 devnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash} || true
           kubectl set image deployment/testnetrpc testnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash} || true
           kubectl set image deployment/mainnetrpc mainnetrpc=xinfinorg/devnet:dev-upgrade-${git_hash} || true
           echo done
