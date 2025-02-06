@@ -41,6 +41,8 @@ test: all
 	cd ${PWD}/cmd/geth; go test -test.run TestCustomGenesis
 	# module test
 	$(GORUN) build/ci.go test ./consensus ./core ./eth ./miner ./node ./trie ./rollup/...
+	# RIP-7212 (secp256r1) precompiled contract test
+	cd ${PWD}/core/vm; go test -v -run=^TestPrecompiledP256 -bench=^BenchmarkPrecompiledP256
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint

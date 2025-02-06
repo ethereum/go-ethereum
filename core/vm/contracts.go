@@ -126,6 +126,21 @@ var PrecompiledContractsBernoulli = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
 }
 
+// PrecompiledContractsEuclidV2 contains the default set of pre-compiled Ethereum
+// contracts used in the EuclidV2 release. Same as Bernoulli and adds p256Verify
+var PrecompiledContractsEuclidV2 = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}):          &ecrecover{},
+	common.BytesToAddress([]byte{2}):          &sha256hash{},
+	common.BytesToAddress([]byte{3}):          &ripemd160hashDisabled{},
+	common.BytesToAddress([]byte{4}):          &dataCopy{},
+	common.BytesToAddress([]byte{5}):          &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):          &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):          &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):          &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):          &blake2FDisabled{},
+	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
+}
+
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
 // contracts specified in EIP-2537. These are exported for testing purposes.
 var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
@@ -140,13 +155,8 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
-// PrecompiledContractsP256Verify contains the precompiled Ethereum
-// contract specified in EIP-7212/RIP-7212. This is exported for testing purposes.
-var PrecompiledContractsP256Verify = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{0x01, 0x00}): &p256Verify{},
-}
-
 var (
+	PrecompiledAddressesEuclidV2   []common.Address
 	PrecompiledAddressesBernoulli  []common.Address
 	PrecompiledAddressesArchimedes []common.Address
 	PrecompiledAddressesBerlin     []common.Address
@@ -174,11 +184,16 @@ func init() {
 	for k := range PrecompiledContractsBernoulli {
 		PrecompiledAddressesBernoulli = append(PrecompiledAddressesBernoulli, k)
 	}
+	for k := range PrecompiledContractsEuclidV2 {
+		PrecompiledAddressesEuclidV2 = append(PrecompiledAddressesEuclidV2, k)
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsEuclidV2:
+		return PrecompiledAddressesEuclidV2
 	case rules.IsBernoulli:
 		return PrecompiledAddressesBernoulli
 	case rules.IsArchimedes:
