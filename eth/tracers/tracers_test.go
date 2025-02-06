@@ -152,7 +152,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create call tracer: %v", err)
 	}
-	evm := vm.NewEVM(context, txContext, statedb, nil, params.MainnetChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	evm := vm.NewEVM(context, txContext, statedb, nil, params.MainnetChainConfig, vm.Config{Tracer: tracer})
 	msg, err := tx.AsMessage(signer, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to prepare transaction for tracing: %v", err)
@@ -237,7 +237,7 @@ func TestPrestateTracerCreate2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create call tracer: %v", err)
 	}
-	evm := vm.NewEVM(context, txContext, statedb, nil, params.MainnetChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	evm := vm.NewEVM(context, txContext, statedb, nil, params.MainnetChainConfig, vm.Config{Tracer: tracer})
 
 	msg, err := tx.AsMessage(signer, nil, nil, nil)
 	if err != nil {
@@ -335,7 +335,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		//EnableMemory: false,
 		//EnableReturnData: false,
 	})
-	evm := vm.NewEVM(context, txContext, statedb, nil, params.AllEthashProtocolChanges, vm.Config{Debug: true, Tracer: tracer})
+	evm := vm.NewEVM(context, txContext, statedb, nil, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer})
 	msg, err := tx.AsMessage(signer, nil, nil, nil)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)

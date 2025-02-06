@@ -749,7 +749,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, t
 		tracer = vm.NewStructLogger(config.LogConfig)
 	}
 	// Run the transaction with tracing enabled.
-	vmenv := vm.NewEVM(vmctx, txContext, statedb, nil, api.config, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+	vmenv := vm.NewEVM(vmctx, txContext, statedb, nil, api.config, vm.Config{Tracer: tracer, NoBaseFee: true})
 
 	// Call SetTxContext to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)

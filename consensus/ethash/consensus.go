@@ -283,9 +283,6 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 	if err := misc.VerifyDAOHeaderExtraData(chain.Config(), header); err != nil {
 		return err
 	}
-	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
-		return err
-	}
 	return nil
 }
 

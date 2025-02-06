@@ -63,7 +63,7 @@ func runTrace(tracer Tracer, blockNumber *big.Int, chaincfg *params.ChainConfig)
 		txContext        = vm.TxContext{GasPrice: big.NewInt(100000)}
 	)
 
-	env := vm.NewEVM(ctx, txContext, &dummyStatedb{}, nil, chaincfg, vm.Config{Debug: true, Tracer: tracer})
+	env := vm.NewEVM(ctx, txContext, &dummyStatedb{}, nil, chaincfg, vm.Config{Tracer: tracer})
 
 	contract := vm.NewContract(account{}, account{}, value, startGas)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
@@ -149,7 +149,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{}, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{}, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Tracer: tracer})
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
@@ -169,7 +169,7 @@ func TestNoStepExec(t *testing.T) {
 	runEmptyTrace := func(tracer Tracer) (json.RawMessage, error) {
 		ctx := vm.BlockContext{BlockNumber: big.NewInt(1)}
 		txContext := vm.TxContext{GasPrice: big.NewInt(100000)}
-		env := vm.NewEVM(ctx, txContext, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+		env := vm.NewEVM(ctx, txContext, &dummyStatedb{}, nil, params.TestChainConfig, vm.Config{Tracer: tracer})
 		startGas := uint64(10000)
 		contract := vm.NewContract(account{}, account{}, big.NewInt(0), startGas)
 		tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, big.NewInt(0))
@@ -204,7 +204,23 @@ func TestNoStepExec(t *testing.T) {
 }
 
 func TestIsPrecompile(t *testing.T) {
-	chaincfg := &params.ChainConfig{ChainId: big.NewInt(1), HomesteadBlock: big.NewInt(0), DAOForkBlock: nil, DAOForkSupport: false, EIP150Block: big.NewInt(0), EIP150Hash: common.Hash{}, EIP155Block: big.NewInt(0), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(100), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(200), BerlinBlock: big.NewInt(300), LondonBlock: big.NewInt(0), Ethash: new(params.EthashConfig), Clique: nil}
+	chaincfg := &params.ChainConfig{
+		ChainId:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(100),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(200),
+		BerlinBlock:         big.NewInt(300),
+		LondonBlock:         big.NewInt(0),
+		Ethash:              new(params.EthashConfig),
+		Clique:              nil,
+	}
 	chaincfg.ByzantiumBlock = big.NewInt(100)
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)

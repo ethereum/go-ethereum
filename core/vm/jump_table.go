@@ -80,6 +80,12 @@ func validate(jt JumpTable) JumpTable {
 	return jt
 }
 
+func newCancunInstructionSet() JumpTable {
+	instructionSet := newEip1559InstructionSet()
+	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
+	return validate(instructionSet)
+}
+
 func newEip1559InstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable2929(&instructionSet) // Gas cost increases for state access opcodes https://eips.ethereum.org/EIPS/eip-2929
