@@ -41,6 +41,9 @@ const (
 
 var null = json.RawMessage("null")
 
+// CHANGE(taiko): make taiko-geth compatible with op-service
+type JsonError = jsonError
+
 type subscriptionResult struct {
 	ID     string          `json:"subscription"`
 	Result json.RawMessage `json:"result,omitempty"`

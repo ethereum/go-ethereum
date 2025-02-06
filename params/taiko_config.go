@@ -1,10 +1,37 @@
 package params
 
 import (
+	"encoding/binary"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+// To make taiko-geth compatible with the op-service library, we need to define the following constants and functions.
+type ProtocolVersion [32]byte
+type ProtocolVersionComparison int
+
+func (p ProtocolVersion) String() string {
+	return ""
+}
+
+func (p ProtocolVersion) Compare(other ProtocolVersion) (cmp ProtocolVersionComparison) {
+	return 0
+}
+
+type ProtocolVersionV0 struct {
+	Build                           [8]byte
+	Major, Minor, Patch, PreRelease uint32
+}
+
+func (v ProtocolVersionV0) Encode() (out ProtocolVersion) {
+	copy(out[8:16], v.Build[:])
+	binary.BigEndian.PutUint32(out[16:20], v.Major)
+	binary.BigEndian.PutUint32(out[20:24], v.Minor)
+	binary.BigEndian.PutUint32(out[24:28], v.Patch)
+	binary.BigEndian.PutUint32(out[28:32], v.PreRelease)
+	return
+}
 
 func u64(val uint64) *uint64 { return &val }
 
@@ -20,6 +47,7 @@ var (
 	JolnirNetworkID           = big.NewInt(167007)
 	KatlaNetworkID            = big.NewInt(167008)
 	HeklaNetworkID            = big.NewInt(167009)
+	PreconfDevnetNetworkID    = big.NewInt(167010)
 )
 
 var networkIDToChainConfig = map[*big.Int]*ChainConfig{
@@ -33,6 +61,7 @@ var networkIDToChainConfig = map[*big.Int]*ChainConfig{
 	JolnirNetworkID:            TaikoChainConfig,
 	KatlaNetworkID:             TaikoChainConfig,
 	HeklaNetworkID:             TaikoChainConfig,
+	PreconfDevnetNetworkID:     TaikoChainConfig,
 	MainnetChainConfig.ChainID: MainnetChainConfig,
 	SepoliaChainConfig.ChainID: SepoliaChainConfig,
 	TestChainConfig.ChainID:    TestChainConfig,

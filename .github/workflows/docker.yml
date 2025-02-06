@@ -2,7 +2,7 @@ name: "Push multi-arch docker image to GAR"
 
 on:
   push:
-    branches: [ taiko ]
+    branches: [taiko]
     tags:
       - "v*"
 
@@ -19,9 +19,9 @@ jobs:
             platform: linux/amd64
           - runner: arc-runner-set-arm64
             platform: linux/arm64
-    
+
     runs-on: ${{ matrix.runner }}
-    
+
     steps:
       - name: Prepare Environment
         run: |
@@ -80,7 +80,7 @@ jobs:
         with:
           context: .
           cache-from: type=gha
-          cache-to: type=gha,mode=max          
+          cache-to: type=gha,mode=max
           platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ env.REGISTRY_IMAGE }}

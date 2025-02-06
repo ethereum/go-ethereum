@@ -44,6 +44,7 @@ type BuildPayloadArgs struct {
 	Withdrawals  types.Withdrawals     // The provided withdrawals
 	BeaconRoot   *common.Hash          // The provided beaconRoot (Cancun)
 	Version      engine.PayloadVersion // Versioning byte for payload id calculation.
+	TxListHash   *common.Hash          // CHANGE(taiko): The hash of the transaction list
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -56,6 +57,10 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	rlp.Encode(hasher, args.Withdrawals)
 	if args.BeaconRoot != nil {
 		hasher.Write(args.BeaconRoot[:])
+	}
+	// CHANGE(taiko): include the transaction list hash in the payload id calculation
+	if args.TxListHash != nil {
+		hasher.Write(args.TxListHash[:])
 	}
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])

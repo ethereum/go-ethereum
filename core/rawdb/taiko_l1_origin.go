@@ -31,13 +31,18 @@ func l1OriginKey(blockID *big.Int) []byte {
 type L1Origin struct {
 	BlockID       *big.Int    `json:"blockID" gencodec:"required"`
 	L2BlockHash   common.Hash `json:"l2BlockHash"`
-	L1BlockHeight *big.Int    `json:"l1BlockHeight" gencodec:"required"`
-	L1BlockHash   common.Hash `json:"l1BlockHash" gencodec:"required"`
+	L1BlockHeight *big.Int    `json:"l1BlockHeight" rlp:"optional"`
+	L1BlockHash   common.Hash `json:"l1BlockHash" rlp:"optional"`
 }
 
 type l1OriginMarshaling struct {
 	BlockID       *math.HexOrDecimal256
 	L1BlockHeight *math.HexOrDecimal256
+}
+
+// IsPreconfBlock returns true if the L1Origin is for a preconfirmation block.
+func (l *L1Origin) IsPreconfBlock() bool {
+	return l.L1BlockHeight == nil
 }
 
 // WriteL1Origin stores a L1Origin into the database.

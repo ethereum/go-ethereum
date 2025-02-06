@@ -39,7 +39,7 @@ func init() {
 	config.ArrowGlacierBlock = nil
 	config.Ethash = nil
 	config.Taiko = true
-	testEngine = taiko.New(config)
+	testEngine = taiko.New(config, rawdb.NewMemoryDatabase())
 
 	taikoL2AddressPrefix := strings.TrimPrefix(config.ChainID.String(), "0")
 
