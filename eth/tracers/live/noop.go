@@ -61,7 +61,7 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	}, nil
 }
 
-func (t *noop) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *noop) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, isCancun bool, err error) {
 }
 
 func (t *noop) OnFault(pc uint64, op byte, gas, cost uint64, _ tracing.OpContext, depth int, err error) {

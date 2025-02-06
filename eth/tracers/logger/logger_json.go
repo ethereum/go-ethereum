@@ -97,11 +97,11 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 }
 
 func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
-	// TODO: Add rData to this interface as well
-	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
+	// TODO: Add rData and Cancun status to this interface as well
+	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, true, err)
 }
 
-func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, isCancun bool, err error) {
 	memory := scope.MemoryData()
 	stack := scope.StackData()
 
