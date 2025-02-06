@@ -1310,7 +1310,19 @@ func (f *Firehose) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev
 		// Geth 1.14.12 introduced a new behavior where a code change is emitted when a contract
 		// suicides. This was not the case before and we must ignore those changes to keep backward
 		// compatibility with the Firehose 2.3 and 3.0 model.
-		if activeCall.Suicide && len(code) == 0 {
+		//
+		// There is a gotcha to all that here is that a contract created that selfdestructs in the constructor
+		// directly does create a code change in Firehose 2.3 and 3.0. The weird thing is that the previous
+		// code received in the OnChangeCode in this case is empty.
+		//
+		// The new behavior introduced in Geth 1.14.12 around code change though has a check on
+		// `len(prevCode) > 0` which means those new added OnCodeChange calls are done only if a previous
+		// code existed.
+		//
+		// Since a selfdestruct in the constructor does not have a previous code, it will not enter this condition
+		// and will remain compatible with the Firehose 2.3 and 3.0 model in that particular corner case.
+		if activeCall.Suicide && len(prev) > 0 && len(code) == 0 {
+			firehoseDebug("ignoring code change due to suicide (prev: %s (%d), new: %s (%d)", prevCodeHash, len(prev), codeHash, len(code))
 			return
 		}
 
