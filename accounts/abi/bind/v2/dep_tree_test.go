@@ -19,7 +19,6 @@ package bind
 import (
 	"fmt"
 	"regexp"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,19 +38,18 @@ type linkTestCase struct {
 func copyMetaData(m *MetaData) *MetaData {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	var deps []*MetaData
 	if len(m.Deps) > 0 {
 		for _, dep := range m.Deps {
 			deps = append(deps, copyMetaData(dep))
 		}
 	}
-
 	return &MetaData{
 		Bin:       m.Bin,
 		ABI:       m.ABI,
 		Deps:      deps,
 		ID:        m.ID,
-		mu:        sync.Mutex{},
 		parsedABI: m.parsedABI,
 	}
 }
@@ -137,10 +135,11 @@ func linkDeps(deps map[string]*MetaData) []*MetaData {
 	return rootMetadatas
 }
 
-// internalLinkDeps is the internal recursing logic of linkDeps:  It links the contract referred to by MetaData
-// given the depMap (map of solidity link pattern to contract metadata object), deleting contract entries from the roots
-// map if they were referenced as dependencies.  It returns a new MetaData object which is the linked version of metadata
-// parameter.
+// internalLinkDeps is the internal recursing logic of linkDeps:
+// It links the contract referred to by MetaData given the depMap (map of solidity
+// link pattern to contract metadata object), deleting contract entries from the
+// roots map if they were referenced as dependencies.  It returns a new MetaData
+// object which is the linked version of metadata parameter.
 func internalLinkDeps(metadata *MetaData, depMap map[string]*MetaData, roots *map[string]struct{}) *MetaData {
 	linked := copyMetaData(metadata)
 	depPatterns := parseLibraryDeps(metadata.Bin)
@@ -153,13 +152,13 @@ func internalLinkDeps(metadata *MetaData, depMap map[string]*MetaData, roots *ma
 }
 
 func testLinkCase(tcInput linkTestCaseInput) error {
-	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	var testAddrNonce uint64
-	overridesAddrs := make(map[common.Address]struct{})
-
+	var (
+		testAddr       = crypto.PubkeyToAddress(testKey.PublicKey)
+		overridesAddrs = make(map[common.Address]struct{})
+		overrideAddrs  = make(map[rune]common.Address)
+	)
 	// generate deterministic addresses for the override set.
 	rand.Seed(42)
-	overrideAddrs := make(map[rune]common.Address)
 	for contract := range tcInput.overrides {
 		var addr common.Address
 		rand.Read(addr[:])
@@ -177,6 +176,7 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 		}
 	}
 
+	var testAddrNonce uint64
 	mockDeploy := func(input []byte, deployer []byte) (common.Address, *types.Transaction, error) {
 		contractAddr := crypto.CreateAddress(testAddr, testAddrNonce)
 		testAddrNonce++
@@ -225,11 +225,11 @@ func testLinkCase(tcInput linkTestCaseInput) error {
 	}
 
 	if len(res.Txs) != len(tcInput.expectDeployed) {
-		return fmt.Errorf("got %d deployed contracts.  expected %d.\n", len(res.Addrs), len(tcInput.expectDeployed))
+		return fmt.Errorf("got %d deployed contracts. expected %d.\n", len(res.Addresses), len(tcInput.expectDeployed))
 	}
 	for contract := range tcInput.expectDeployed {
 		pattern := crypto.Keccak256Hash([]byte(string(contract))).String()[2:36]
-		if _, ok := res.Addrs[pattern]; !ok {
+		if _, ok := res.Addresses[pattern]; !ok {
 			return fmt.Errorf("expected contract %s was not deployed\n", string(contract))
 		}
 	}

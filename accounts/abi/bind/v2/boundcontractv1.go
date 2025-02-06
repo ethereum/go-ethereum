@@ -37,9 +37,10 @@ func NewBoundContractV1(address common.Address, abi abi.ABI, caller ContractCall
 }
 
 // Call invokes the (constant) contract method with params as input values and
-// sets the output to result. The result type might be a single field for simple
-// returns, a slice of interfaces for anonymous returns and a struct for named
-// returns.
+// sets the output to result.
+//
+// The result type might be a single field for simple returns, a slice of interfaces
+// for anonymous returns and a struct for named returns.
 func (c *BoundContractV1) Call(opts *CallOpts, results *[]any, method string, params ...any) error {
 	if results == nil {
 		results = new([]any)
@@ -49,23 +50,24 @@ func (c *BoundContractV1) Call(opts *CallOpts, results *[]any, method string, pa
 	if err != nil {
 		return err
 	}
-
 	output, err := c.call(opts, input)
 	if err != nil {
 		return err
 	}
-
 	if len(*results) == 0 {
 		res, err := c.abi.Unpack(method, output)
+		if err != nil {
+			return err
+		}
 		*results = res
-		return err
+		return nil
 	}
 	res := *results
 	return c.abi.UnpackIntoInterface(res[0], method, output)
 }
 
-// CallRaw executes an eth_call against the contract with the raw calldata as
-// input.  It returns the call's return data or an error.
+// CallRaw executes an eth_call against the contract with the raw call data as
+// input. It returns the call's return data or an error.
 func (c *BoundContractV1) CallRaw(opts *CallOpts, input []byte) ([]byte, error) {
 	return c.call(opts, input)
 }
@@ -143,13 +145,13 @@ func (c *BoundContractV1) Transact(opts *TransactOpts, method string, params ...
 	return c.transact(opts, &c.address, input)
 }
 
-// RawTransact initiates a transaction with the given raw calldata as the input.
-// It's usually used to initiate transactions for invoking **Fallback** function.
+// RawTransact initiates a transaction with the given raw call data as the input.
 func (c *BoundContractV1) RawTransact(opts *TransactOpts, calldata []byte) (*types.Transaction, error) {
 	return c.transact(opts, &c.address, calldata)
 }
 
-// RawCreationTransact initiates a contract-creation transaction with the given raw calldata as the input.
+// RawCreationTransact initiates a contract-creation transaction with the given
+// raw call data as the input.
 func (c *BoundContractV1) RawCreationTransact(opts *TransactOpts, calldata []byte) (*types.Transaction, error) {
 	return c.transact(opts, nil, calldata)
 }
@@ -282,9 +284,8 @@ func (c *BoundContractV1) estimateGasLimit(opts *TransactOpts, contract *common.
 func (c *BoundContractV1) getNonce(opts *TransactOpts) (uint64, error) {
 	if opts.Nonce == nil {
 		return c.transactor.PendingNonceAt(ensureContext(opts.Context), opts.From)
-	} else {
-		return opts.Nonce.Uint64(), nil
 	}
+	return opts.Nonce.Uint64(), nil
 }
 
 // transact executes an actual transaction invocation, first deriving any missing

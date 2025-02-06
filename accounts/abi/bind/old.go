@@ -252,6 +252,7 @@ type MetaData struct {
 func (m *MetaData) GetAbi() (*abi.ABI, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.parsedABI != nil {
 		return m.parsedABI, nil
 	}

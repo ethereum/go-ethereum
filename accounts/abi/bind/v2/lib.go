@@ -80,7 +80,8 @@ func WatchEvents[Ev ContractEvent](c BoundContract, opts *WatchOpts, unpack func
 	}), nil
 }
 
-// EventIterator is returned from FilterLogs and is used to iterate over the raw logs and unpacked data for events.
+// EventIterator is returned from FilterLogs and is used to iterate over the raw
+// logs and unpacked data for events.
 type EventIterator[T any] struct {
 	event *T // event containing the contract specifics and raw log
 
@@ -182,7 +183,7 @@ func Transact(c BoundContract, opt *TransactOpts, packedInput []byte) (*types.Tr
 }
 
 // DeployContract deploys a contract onto the Ethereum blockchain and binds the
-// deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
+// deployment address with a Go wrapper. It expects its parameters to be abi-encoded
 // bytes.
 func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, error) {
 	c := NewBoundContractV1(common.Address{}, abi.ABI{}, backend, backend, backend)
@@ -190,11 +191,11 @@ func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend
 	if err != nil {
 		return common.Address{}, nil, err
 	}
-	address := crypto.CreateAddress(opts.From, tx.Nonce())
-	return address, tx, nil
+	return crypto.CreateAddress(opts.From, tx.Nonce()), tx, nil
 }
 
-// DefaultDeployer returns a DeployFn that signs and submits creation transactions using the given signer.
+// DefaultDeployer returns a DeployFn that signs and submits creation transactions
+// using the given signer.
 func DefaultDeployer(ctx context.Context, from common.Address, backend ContractBackend, signer SignerFn) DeployFn {
 	opts := &TransactOpts{
 		From:    from,

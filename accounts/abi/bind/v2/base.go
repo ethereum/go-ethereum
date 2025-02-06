@@ -23,11 +23,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/event"
-
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 const basefeeWiggleMultiplier = 2
@@ -91,17 +90,17 @@ type MetaData struct {
 	ABI  string      // the raw ABI definition (JSON)
 	Deps []*MetaData // library dependencies of the contract
 
-	// For bindings that were compiled from combined-json ID is the Solidity library pattern: a 34 character prefix
-	// of the hex encoding of the keccak256
+	// For bindings that were compiled from combined-json ID is the Solidity
+	// library pattern: a 34 character prefix of the hex encoding of the keccak256
 	// hash of the fully qualified 'library name', i.e. the path of the source file.
 	//
-	// For contracts compiled from the ABI definition alone, this is the type name of the contract (as specified
-	// in the ABI definition or overridden via the --type flag).
+	// For contracts compiled from the ABI definition alone, this is the type name
+	// of the contract (as specified in the ABI definition or overridden via the
+	// --type flag).
 	//
-	// This is a unique identifier of a contract within a compilation unit. When used as part of a multi-contract
-	// deployment with library dependencies, the ID is used to link
-	// contracts during deployment using
-	// [LinkAndDeploy].
+	// This is a unique identifier of a contract within a compilation unit. When
+	// used as part of a multi-contract deployment with library dependencies, the
+	// ID is used to link contracts during deployment using [LinkAndDeploy].
 	ID string
 
 	mu        sync.Mutex
@@ -112,6 +111,7 @@ type MetaData struct {
 func (m *MetaData) ParseABI() (*abi.ABI, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	if m.parsedABI != nil {
 		return m.parsedABI, nil
 	}

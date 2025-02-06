@@ -18,13 +18,10 @@ package bind_test
 
 import (
 	"context"
-	"encoding/json"
-	"io"
 	"math/big"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/events"
@@ -43,17 +40,6 @@ import (
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 var testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
 
-// JSON returns a parsed ABI interface and error if it failed.
-func JSON(reader io.Reader) (abi.ABI, error) {
-	dec := json.NewDecoder(reader)
-
-	var instance abi.ABI
-	if err := dec.Decode(&instance); err != nil {
-		return abi.ABI{}, err
-	}
-	return instance, nil
-}
-
 func testSetup() (*backends.SimulatedBackend, error) {
 	backend := simulated.NewBackend(
 		types.GenesisAlloc{
@@ -65,7 +51,7 @@ func testSetup() (*backends.SimulatedBackend, error) {
 	)
 
 	// we should just be able to use the backend directly, instead of using
-	// this deprecated interface.  However, the simulated backend no longer
+	// this deprecated interface. However, the simulated backend no longer
 	// implements backends.SimulatedBackend...
 	bindBackend := backends.SimulatedBackend{
 		Backend: backend,
@@ -87,7 +73,6 @@ func makeTestDeployer(backend bind.ContractBackend) func(input, deployer []byte)
 		}
 		return signedTx, nil
 	}
-
 	return bind.DefaultDeployer(context.Background(), testAddr, backend, sign)
 }
 
@@ -112,8 +97,8 @@ func TestDeploymentLibraries(t *testing.T) {
 	}
 	bindBackend.Commit()
 
-	if len(res.Addrs) != 5 {
-		t.Fatalf("deployment should have generated 5 addresses.  got %d", len(res.Addrs))
+	if len(res.Addresses) != 5 {
+		t.Fatalf("deployment should have generated 5 addresses.  got %d", len(res.Addresses))
 	}
 	for _, tx := range res.Txs {
 		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx.Hash())
@@ -123,7 +108,7 @@ func TestDeploymentLibraries(t *testing.T) {
 	}
 
 	doInput := c.PackDo(big.NewInt(1))
-	contractAddr := res.Addrs[nested_libraries.C1MetaData.ID]
+	contractAddr := res.Addresses[nested_libraries.C1MetaData.ID]
 	callOpts := &bind.CallOpts{From: common.Address{}, Context: context.Background()}
 	instance := c.Instance(bindBackend, contractAddr)
 	internalCallCount, err := bind.Call(instance, callOpts, doInput, c.UnpackDo)
@@ -154,8 +139,8 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 	bindBackend.Commit()
 
-	if len(res.Addrs) != 4 {
-		t.Fatalf("deployment should have generated 4 addresses.  got %d", len(res.Addrs))
+	if len(res.Addresses) != 4 {
+		t.Fatalf("deployment should have generated 4 addresses.  got %d", len(res.Addresses))
 	}
 	for _, tx := range res.Txs {
 		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx.Hash())
@@ -166,7 +151,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 
 	c := nested_libraries.NewC1()
 	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
-	overrides := res.Addrs
+	overrides := res.Addresses
 
 	// deploy the contract
 	deploymentParams = &bind.DeploymentParams{
@@ -180,8 +165,8 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 	bindBackend.Commit()
 
-	if len(res.Addrs) != 1 {
-		t.Fatalf("deployment should have generated 1 address.  got %d", len(res.Addrs))
+	if len(res.Addresses) != 1 {
+		t.Fatalf("deployment should have generated 1 address.  got %d", len(res.Addresses))
 	}
 	for _, tx := range res.Txs {
 		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx.Hash())
@@ -192,7 +177,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 
 	// call the deployed contract and make sure it returns the correct result
 	doInput := c.PackDo(big.NewInt(1))
-	instance := c.Instance(bindBackend, res.Addrs[nested_libraries.C1MetaData.ID])
+	instance := c.Instance(bindBackend, res.Addresses[nested_libraries.C1MetaData.ID])
 	callOpts := new(bind.CallOpts)
 	internalCallCount, err := bind.Call(instance, callOpts, doInput, c.UnpackDo)
 	if err != nil {
@@ -231,8 +216,9 @@ func TestEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
-
-	deploymentParams := &bind.DeploymentParams{Contracts: []*bind.MetaData{&events.CMetaData}}
+	deploymentParams := &bind.DeploymentParams{
+		Contracts: []*bind.MetaData{&events.CMetaData},
+	}
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
@@ -244,7 +230,7 @@ func TestEvents(t *testing.T) {
 	}
 
 	c := events.NewC()
-	instance := c.Instance(backend, res.Addrs[events.CMetaData.ID])
+	instance := c.Instance(backend, res.Addresses[events.CMetaData.ID])
 
 	newCBasic1Ch := make(chan *events.CBasic1)
 	newCBasic2Ch := make(chan *events.CBasic2)
@@ -330,8 +316,9 @@ func TestErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error setting up testing env: %v", err)
 	}
-
-	deploymentParams := &bind.DeploymentParams{Contracts: []*bind.MetaData{&solc_errors.CMetaData}}
+	deploymentParams := &bind.DeploymentParams{
+		Contracts: []*bind.MetaData{&solc_errors.CMetaData},
+	}
 	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
@@ -343,9 +330,9 @@ func TestErrors(t *testing.T) {
 	}
 
 	c := solc_errors.NewC()
-	instance := c.Instance(backend, res.Addrs[solc_errors.CMetaData.ID])
+	instance := c.Instance(backend, res.Addresses[solc_errors.CMetaData.ID])
 	packedInput := c.PackFoo()
-	opts := &bind.CallOpts{From: res.Addrs[solc_errors.CMetaData.ID]}
+	opts := &bind.CallOpts{From: res.Addresses[solc_errors.CMetaData.ID]}
 	_, err = bind.Call[struct{}](instance, opts, packedInput, nil)
 	if err == nil {
 		t.Fatalf("expected call to fail")

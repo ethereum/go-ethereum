@@ -351,8 +351,8 @@ func bindTopicType(kind abi.Type, structs map[string]*tmplStruct) string {
 }
 
 // bindStructType converts a Solidity tuple type to a Go one and records the mapping
-// in the given map.
-// Notably, this function will resolve and record nested struct recursively.
+// in the given map. Notably, this function will resolve and record nested struct
+// recursively.
 func bindStructType(kind abi.Type, structs map[string]*tmplStruct) string {
 	switch kind.T {
 	case abi.TupleTy:
@@ -374,7 +374,11 @@ func bindStructType(kind abi.Type, structs map[string]*tmplStruct) string {
 			name := abi.ToCamelCase(kind.TupleRawNames[i])
 			name = abi.ResolveNameConflict(name, func(s string) bool { return names[s] })
 			names[name] = true
-			fields = append(fields, &tmplField{Type: bindStructType(*elem, structs), Name: name, SolKind: *elem})
+			fields = append(fields, &tmplField{
+				Type:    bindStructType(*elem, structs),
+				Name:    name,
+				SolKind: *elem,
+			})
 		}
 		name := kind.TupleRawName
 		if name == "" {
@@ -410,7 +414,6 @@ func decapitalise(input string) string {
 	if len(input) == 0 {
 		return input
 	}
-
 	goForm := abi.ToCamelCase(input)
 	return strings.ToLower(goForm[:1]) + goForm[1:]
 }
