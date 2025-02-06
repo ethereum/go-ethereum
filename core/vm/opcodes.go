@@ -634,3 +634,11 @@ var stringToOp = map[string]OpCode{
 func StringToOp(str string) OpCode {
 	return stringToOp[str]
 }
+
+// IsCancunOpcode specifies if an opcode is added at Cancun fork.
+func (op OpCode) IsCancunOpcode() bool {
+	if op == BLOBHASH || op == BLOBBASEFEE || op == TLOAD || op == TSTORE || op == MCOPY {
+		return true
+	}
+	return false
+}
