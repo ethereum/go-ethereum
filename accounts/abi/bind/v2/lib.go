@@ -175,6 +175,12 @@ func Call[T any](c *BoundContract, opts *CallOpts, packedInput []byte, unpack fu
 	return res, err
 }
 
+// Transact initiates a transaction with the given raw calldata as the input.
+func Transact(c *BoundContract, opt *TransactOpts, packedInput []byte) (*types.Transaction, error) {
+	addr := c.address
+	return c.transact(opt, &addr, packedInput)
+}
+
 // DeployContract deploys a contract onto the Ethereum blockchain and binds the
 // deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
 // bytes.
