@@ -9,6 +9,10 @@ on:
       - ".github/workflows/yml.yml"
       - ".github/yamllint.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   yaml-check:
     runs-on: ubuntu-latest

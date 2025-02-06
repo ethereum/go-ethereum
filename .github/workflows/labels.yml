@@ -11,6 +11,10 @@ on:
       - .github/labels.yml
       - .github/workflows/labels.yml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   labeler:
     permissions:

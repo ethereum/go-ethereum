@@ -9,6 +9,10 @@ on:
         type: string
         default: "2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   rename-module:
     runs-on: ubuntu-latest
