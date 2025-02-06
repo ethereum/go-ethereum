@@ -46,7 +46,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.21.4
+          go-version-file: "go.mod"
 
       - name: Smoke tests
         # `go list` shows us the module name and grep will non-zero exit on mismatch
