@@ -60,20 +60,9 @@ func testSetup() (*backends.SimulatedBackend, error) {
 	return &bindBackend, nil
 }
 
-func makeTestDeployer(backend bind.ContractBackend) func(input, deployer []byte) (common.Address, *types.Transaction, error) {
-	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
-	sign := func(sender common.Address, tx *types.Transaction) (*types.Transaction, error) {
-		signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
-		if err != nil {
-			return nil, err
-		}
-		signedTx, err := tx.WithSignature(signer, signature)
-		if err != nil {
-			return nil, err
-		}
-		return signedTx, nil
-	}
-	return bind.DefaultDeployer(context.Background(), testAddr, backend, sign)
+func makeTestDeployer(backend simulated.Client) func(input, deployer []byte) (common.Address, *types.Transaction, error) {
+	chainId, _ := backend.ChainID(context.Background())
+	return bind.DefaultDeployer(bind.NewKeyedTransactor(testKey, chainId), backend)
 }
 
 // test that deploying a contract with library dependencies works,
@@ -91,7 +80,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		Contracts: []*bind.MetaData{&nested_libraries.C1MetaData},
 		Inputs:    map[string][]byte{nested_libraries.C1MetaData.ID: constructorInput},
 	}
-	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(bindBackend))
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(bindBackend.Client))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}

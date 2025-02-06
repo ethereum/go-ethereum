@@ -17,7 +17,6 @@
 package bind
 
 import (
-	"context"
 	"errors"
 
 	"github.com/ethereum/go-ethereum"
@@ -196,13 +195,7 @@ func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend
 
 // DefaultDeployer returns a DeployFn that signs and submits creation transactions
 // using the given signer.
-func DefaultDeployer(ctx context.Context, from common.Address, backend ContractBackend, signer SignerFn) DeployFn {
-	opts := &TransactOpts{
-		From:    from,
-		Nonce:   nil,
-		Signer:  signer,
-		Context: ctx,
-	}
+func DefaultDeployer(opts *TransactOpts, backend ContractBackend) DeployFn {
 	return func(input []byte, deployer []byte) (common.Address, *types.Transaction, error) {
 		addr, tx, err := DeployContract(opts, deployer, backend, input)
 		if err != nil {
