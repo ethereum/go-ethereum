@@ -587,7 +587,7 @@ func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, time uint64,
 	// Compute effective blob gas price.
 	var blobGasPrice *big.Int
 	if header != nil && header.ExcessBlobGas != nil {
-		blobGasPrice = eip4844.CalcBlobFee(*header.ExcessBlobGas)
+		blobGasPrice = eip4844.CalcBlobFee(config, header)
 	}
 	if err := receipts.DeriveFields(config, hash, number, time, baseFee, blobGasPrice, body.Transactions); err != nil {
 		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)

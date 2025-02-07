@@ -1088,6 +1088,10 @@ func overrideConfig(original *params.ChainConfig, override *params.ChainConfig) 
 		copy.PragueTime = timestamp
 		canon = false
 	}
+	if timestamp := override.OsakaTime; timestamp != nil {
+		copy.OsakaTime = timestamp
+		canon = false
+	}
 	if timestamp := override.VerkleTime; timestamp != nil {
 		copy.VerkleTime = timestamp
 		canon = false

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -58,6 +59,9 @@ var (
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
 		EnableVerkleAtGenesis:   true,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Verkle: params.DefaultPragueBlobConfig,
+		},
 		// TODO uncomment when proof generation is merged
 		// ProofInBlocks:                 true,
 	}
@@ -79,6 +83,9 @@ var (
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
 		EnableVerkleAtGenesis:   true,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Verkle: params.DefaultPragueBlobConfig,
+		},
 	}
 )
 
@@ -220,17 +227,17 @@ func TestProcessParentBlockHash(t *testing.T) {
 	// block 2 parent hash is 0x0200....
 	// etc
 	checkBlockHashes := func(statedb *state.StateDB, isVerkle bool) {
-		statedb.SetNonce(params.HistoryStorageAddress, 1)
+		statedb.SetNonce(params.HistoryStorageAddress, 1, tracing.NonceChangeUnspecified)
 		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
 		// Process n blocks, from 1 .. num
 		var num = 2
 		for i := 1; i <= num; i++ {
 			header := &types.Header{ParentHash: common.Hash{byte(i)}, Number: big.NewInt(int64(i)), Difficulty: new(big.Int)}
-			vmContext := NewEVMBlockContext(header, nil, new(common.Address))
 			chainConfig := params.MergedTestChainConfig
 			if isVerkle {
 				chainConfig = testVerkleChainConfig
 			}
+			vmContext := NewEVMBlockContext(header, nil, new(common.Address))
 			evm := vm.NewEVM(vmContext, statedb, chainConfig, vm.Config{})
 			ProcessParentBlockHash(header.ParentHash, evm)
 		}

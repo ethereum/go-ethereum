@@ -178,15 +178,28 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	var excessBlobGas uint64
 	if pre.Env.ExcessBlobGas != nil {
 		excessBlobGas = *pre.Env.ExcessBlobGas
-		vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+		header := &types.Header{
+			Time:          pre.Env.Timestamp,
+			ExcessBlobGas: pre.Env.ExcessBlobGas,
+		}
+		vmContext.BlobBaseFee = eip4844.CalcBlobFee(chainConfig, header)
 	} else {
 		// If it is not explicitly defined, but we have the parent values, we try
 		// to calculate it ourselves.
 		parentExcessBlobGas := pre.Env.ParentExcessBlobGas
 		parentBlobGasUsed := pre.Env.ParentBlobGasUsed
 		if parentExcessBlobGas != nil && parentBlobGasUsed != nil {
-			excessBlobGas = eip4844.CalcExcessBlobGas(*parentExcessBlobGas, *parentBlobGasUsed)
-			vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+			parent := &types.Header{
+				Time:          pre.Env.ParentTimestamp,
+				ExcessBlobGas: pre.Env.ParentExcessBlobGas,
+				BlobGasUsed:   pre.Env.ParentBlobGasUsed,
+			}
+			header := &types.Header{
+				Time:          pre.Env.Timestamp,
+				ExcessBlobGas: &excessBlobGas,
+			}
+			excessBlobGas = eip4844.CalcExcessBlobGas(chainConfig, parent, header.Time)
+			vmContext.BlobBaseFee = eip4844.CalcBlobFee(chainConfig, header)
 		}
 	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
@@ -229,7 +242,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		txBlobGas := uint64(0)
 		if tx.Type() == types.BlobTxType {
 			txBlobGas = uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
-			if used, max := blobGasUsed+txBlobGas, uint64(params.MaxBlobGasPerBlock); used > max {
+			max := eip4844.MaxBlobGasPerBlock(chainConfig, pre.Env.Timestamp)
+			if used := blobGasUsed + txBlobGas; used > max {
 				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", used, max)
 				log.Warn("rejected tx", "index", i, "err", err)
 				rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
@@ -405,7 +419,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
-		statedb.SetNonce(addr, a.Nonce)
+		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeGenesis)
 		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceIncreaseGenesisBalance)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)

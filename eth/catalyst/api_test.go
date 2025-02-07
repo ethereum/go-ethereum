@@ -115,7 +115,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
-	ethservice.TxPool().Add([]*types.Transaction{tx}, true, true)
+	ethservice.TxPool().Add([]*types.Transaction{tx}, true)
 	blockParams := engine.PayloadAttributes{
 		Timestamp: blocks[9].Time() + 5,
 	}
@@ -152,7 +152,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 
 	// Put the 10th block's tx in the pool and produce a new block
 	txs := blocks[9].Transactions()
-	api.eth.TxPool().Add(txs, false, true)
+	api.eth.TxPool().Add(txs, true)
 	blockParams := engine.PayloadAttributes{
 		Timestamp: blocks[8].Time() + 5,
 	}
@@ -174,7 +174,7 @@ func TestEth2PrepareAndGetPayload(t *testing.T) {
 
 	// Put the 10th block's tx in the pool and produce a new block
 	txs := blocks[9].Transactions()
-	ethservice.TxPool().Add(txs, true, true)
+	ethservice.TxPool().Add(txs, true)
 	blockParams := engine.PayloadAttributes{
 		Timestamp: blocks[8].Time() + 5,
 	}
@@ -294,7 +294,7 @@ func TestEth2NewBlock(t *testing.T) {
 		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
-		ethservice.TxPool().Add([]*types.Transaction{tx}, true, true)
+		ethservice.TxPool().Add([]*types.Transaction{tx}, true)
 
 		execData, err := assembleWithTransactions(api, parent.Hash(), &engine.PayloadAttributes{
 			Timestamp: parent.Time() + 5,
@@ -463,7 +463,7 @@ func TestFullAPI(t *testing.T) {
 		statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
-		ethservice.TxPool().Add([]*types.Transaction{tx}, true, false)
+		ethservice.TxPool().Add([]*types.Transaction{tx}, false)
 	}
 
 	setupBlocks(t, ethservice, 10, parent, callback, nil, nil)
@@ -594,7 +594,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 			GasPrice: big.NewInt(2 * params.InitialBaseFee),
 			Data:     logCode,
 		})
-		ethservice.TxPool().Add([]*types.Transaction{tx}, false, true)
+		ethservice.TxPool().Add([]*types.Transaction{tx}, true)
 		var (
 			params = engine.PayloadAttributes{
 				Timestamp:             parent.Time + 1,
@@ -1227,6 +1227,7 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 	genesis.Config.ShanghaiTime = &time
 	genesis.Config.CancunTime = &time
 	genesis.Config.PragueTime = &time
+	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	n, ethservice := startEthService(t, genesis, blocks)
 
@@ -1245,8 +1246,8 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 			// Create tx to trigger deposit generator.
 			tx2, _ = types.SignTx(types.NewTransaction(statedb.GetNonce(testAddr)+1, ethservice.APIBackend.ChainConfig().DepositContractAddress, new(big.Int), 500000, big.NewInt(2*params.InitialBaseFee), nil), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		)
-		ethservice.TxPool().Add([]*types.Transaction{tx1}, false, false)
-		ethservice.TxPool().Add([]*types.Transaction{tx2}, false, false)
+		ethservice.TxPool().Add([]*types.Transaction{tx1}, false)
+		ethservice.TxPool().Add([]*types.Transaction{tx2}, false)
 	}
 
 	// Make some withdrawals to include.
@@ -1543,6 +1544,7 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	time := blocks[len(blocks)-1].Time() + 5
 	genesis.Config.ShanghaiTime = &time
 	genesis.Config.CancunTime = &time
+	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
@@ -1625,6 +1627,7 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 	timestamp := blocks[len(blocks)-2].Time() + 5
 	genesis.Config.ShanghaiTime = &timestamp
 	genesis.Config.CancunTime = &timestamp
+	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
@@ -1634,7 +1637,7 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 	// Put the 10th block's tx in the pool and produce a new block
 	txs := blocks[9].Transactions()
 
-	ethservice.TxPool().Add(txs, true, true)
+	ethservice.TxPool().Add(txs, true)
 	blockParams := engine.PayloadAttributes{
 		Timestamp:   blocks[8].Time() + 5,
 		Withdrawals: make([]*types.Withdrawal, 0),
