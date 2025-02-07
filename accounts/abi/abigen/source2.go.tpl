@@ -1,10 +1,10 @@
-{{- /* -*- indent-tabs-mode: t -*- */ -}}
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
 package {{.Package}}
 
 import (
+	"bytes"
 	"math/big"
 	"errors"
 
@@ -16,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -74,6 +75,10 @@ var (
 	}
 
 	{{ if .Constructor.Inputs }}
+	// PackConstructor is the Go binding used to pack the parameters required for
+	// contract deployment.
+	//
+	// Solidity: {{.Constructor.String}}
 	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
 		enc, err := {{ decapitalise $contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
 		if err != nil {
@@ -81,10 +86,11 @@ var (
 		}
 		return enc
 	}
-	{{ end -}}
+	{{ end }}
 
 	{{range .Calls}}
-		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
+		// {{.Normalized.Name}} is the Go binding used to pack the parameters required for calling
+		// the contract method 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Pack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
@@ -98,57 +104,75 @@ var (
 		{{/* Unpack method is needed only when there are return args */}}
 		{{if .Normalized.Outputs }}
 			{{ if .Structured }}
+			// {{.Normalized.Name}}Output serves as a container for the return parameters of contract
+			// method {{ .Normalized.Name }}.
 			type {{.Normalized.Name}}Output struct {
 			  {{range .Normalized.Outputs}}
 			  {{.Name}} {{bindtype .Type $structs}}{{end}}
 			}
 			{{ end }}
-			func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) ({{if .Structured}} {{.Normalized.Name}}Output,{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
+
+            // Unpack{{.Normalized.Name}} is the Go binding that unpacks the parameters returned
+            // from invoking the contract method with ID 0x{{printf "%x" .Original.ID}}.
+            //
+            // Solidity: {{.Original.String}}
+			func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) (
+			    {{- if .Structured}} {{.Normalized.Name}}Output,{{else}}
+			    {{- range .Normalized.Outputs}} {{bindtype .Type $structs}},{{- end }}
+			    {{- end }} error) {
 				out, err := {{ decapitalise $contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
-				{{if .Structured}}
+				{{- if .Structured}}
 				outstruct := new({{.Normalized.Name}}Output)
 				if err != nil {
 					return *outstruct, err
 				}
-				{{range $i, $t := .Normalized.Outputs}}
-				{{if ispointertype .Type}}
+				{{- range $i, $t := .Normalized.Outputs}}
+				{{- if ispointertype .Type}}
 					outstruct.{{.Name}} = abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type }})).({{bindtype .Type $structs}})
-				{{ else }}
+				{{- else }}
 					outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
-				{{ end }}{{end}}
-
+				{{- end }}
+				{{- end }}
 				return *outstruct, err
 				{{else}}
 				if err != nil {
 					return {{range $i, $_ := .Normalized.Outputs}}{{if ispointertype .Type}}new({{underlyingbindtype .Type }}), {{else}}*new({{bindtype .Type $structs}}), {{end}}{{end}} err
 				}
-				{{range $i, $t := .Normalized.Outputs}}
-				{{ if ispointertype .Type }}
+				{{- range $i, $t := .Normalized.Outputs}}
+				{{- if ispointertype .Type }}
 				out{{$i}} := abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type}})).({{bindtype .Type $structs}})
-				{{ else }}
+				{{- else }}
 				out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
-				{{ end }}
-				{{end}}
-
+				{{- end }}
+				{{- end}}
 				return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} err
-				{{end}}
+                {{- end}}
 			}
 		{{end}}
 	{{end}}
 
 	{{range .Events}}
 		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} event raised by the {{$contract.Type}} contract.
-		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
-			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $structs}}{{else}}{{bindtype .Type $structs}}{{end}}; {{end}}
+		type {{$contract.Type}}{{.Normalized.Name}} struct {
+			{{- range .Normalized.Inputs}}
+				{{- capitalise .Name}}
+				{{- else}} {{bindtype .Type $structs}}
+				{{- end }}
+			{{end}}
 			Raw *types.Log // Blockchain specific contextual infos
 		}
 
 		const {{$contract.Type}}{{.Normalized.Name}}EventName = "{{.Original.Name}}"
 
+		// ContractEventName returns the user-defined event name.
 		func ({{$contract.Type}}{{.Normalized.Name}}) ContractEventName() string {
 			return {{$contract.Type}}{{.Normalized.Name}}EventName
 		}
 
+		// Unpack{{.Normalized.Name}}Event is the Go binding that unpacks the event data emitted
+		// by contract.
+		//
+		// Solidity: {{.Original.String}}
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
 			event := "{{.Original.Name}}"
 			if log.Topics[0] != {{ decapitalise $contract.Type}}.abi.Events[event].ID {
@@ -175,25 +199,17 @@ var (
 	{{end}}
 
 	{{ if .Errors }}
-	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) any {
-		// TODO: we should be able to discern the error type from the selector, instead of trying each possible type
-		// strip off the error type selector
-		raw = raw[4:]
-		{{$i := 0}}
-		{{range $k, $v := .Errors}}
-			{{ if eq $i 0 }}
-				if val, err := {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
-					return val
-			{{ else }}
-				} else if val, err := {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw); err == nil {
-					return val
-			{{ end -}}
-			{{$i = add $i 1}}
-		{{end -}}
-		}
-		return nil
+	// UnpackError attempts to decode the provided error data using user-defined
+	// error definitions.
+	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) (any, error) {
+	    {{- range $k, $v := .Errors}}
+        if bytes.Equal(raw[:4], {{ decapitalise $contract.Type}}.abi.Errors["{{.Normalized.Name}}"].ID.Bytes()[:4]) {
+           return {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw[4:])
+        }
+        {{- end }}
+        return nil, errors.New("Unknown error")
 	}
-	{{ end -}}
+	{{ end }}
 
 	{{range .Errors}}
 		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} error raised by the {{$contract.Type}} contract.
@@ -201,14 +217,20 @@ var (
 			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $structs}}{{else}}{{bindtype .Type $structs}}{{end}}; {{end}}
 		}
 
+		// ErrorID returns the hash of canonical representation of the error's signature.
+		//
+		// Solidity: {{.Original.String}}
 		func {{$contract.Type}}{{.Normalized.Name}}ErrorID() common.Hash {
 			return common.HexToHash("{{.Original.ID}}")
 		}
 
+		// Unpack{{.Normalized.Name}}Error is the Go binding used to decode the provided
+		// error data into the corresponding Go error struct.
+		//
+		// Solidity: {{.Original.String}}
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Error(raw []byte) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
-			errName := "{{.Normalized.Name}}"
 			out := new({{$contract.Type}}{{.Normalized.Name}})
-			if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+			if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, "{{.Normalized.Name}}", raw); err != nil {
 				return nil, err
 			}
 			return out, nil

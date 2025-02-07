@@ -1,9 +1,10 @@
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package convertedv1bindtests
+package bindtests
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -49,6 +51,10 @@ func (c *Token) Instance(backend bind.ContractBackend, addr common.Address) *bin
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
+// PackConstructor is the Go binding used to pack the parameters required for
+// contract deployment.
+//
+// Solidity: constructor(uint256 initialSupply, string tokenName, uint8 decimalUnits, string tokenSymbol) returns()
 func (token *Token) PackConstructor(initialSupply *big.Int, tokenName string, decimalUnits uint8, tokenSymbol string) []byte {
 	enc, err := token.abi.Pack("", initialSupply, tokenName, decimalUnits, tokenSymbol)
 	if err != nil {
@@ -57,7 +63,8 @@ func (token *Token) PackConstructor(initialSupply *big.Int, tokenName string, de
 	return enc
 }
 
-// Allowance is a free data retrieval call binding the contract method 0xdd62ed3e.
+// Allowance is the Go binding used to pack the parameters required for calling
+// the contract method 0xdd62ed3e.
 //
 // Solidity: function allowance(address , address ) returns(uint256)
 func (token *Token) PackAllowance(Arg0 common.Address, Arg1 common.Address) []byte {
@@ -68,20 +75,21 @@ func (token *Token) PackAllowance(Arg0 common.Address, Arg1 common.Address) []by
 	return enc
 }
 
+// UnpackAllowance is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xdd62ed3e.
+//
+// Solidity: function allowance(address , address ) returns(uint256)
 func (token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
 	out, err := token.abi.Unpack("allowance", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
-// ApproveAndCall is a free data retrieval call binding the contract method 0xcae9ca51.
+// ApproveAndCall is the Go binding used to pack the parameters required for calling
+// the contract method 0xcae9ca51.
 //
 // Solidity: function approveAndCall(address _spender, uint256 _value, bytes _extraData) returns(bool success)
 func (token *Token) PackApproveAndCall(Spender common.Address, Value *big.Int, ExtraData []byte) []byte {
@@ -92,20 +100,21 @@ func (token *Token) PackApproveAndCall(Spender common.Address, Value *big.Int, E
 	return enc
 }
 
+// UnpackApproveAndCall is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xcae9ca51.
+//
+// Solidity: function approveAndCall(address _spender, uint256 _value, bytes _extraData) returns(bool success)
 func (token *Token) UnpackApproveAndCall(data []byte) (bool, error) {
 	out, err := token.abi.Unpack("approveAndCall", data)
-
 	if err != nil {
 		return *new(bool), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
-
 	return out0, err
-
 }
 
-// BalanceOf is a free data retrieval call binding the contract method 0x70a08231.
+// BalanceOf is the Go binding used to pack the parameters required for calling
+// the contract method 0x70a08231.
 //
 // Solidity: function balanceOf(address ) returns(uint256)
 func (token *Token) PackBalanceOf(Arg0 common.Address) []byte {
@@ -116,20 +125,21 @@ func (token *Token) PackBalanceOf(Arg0 common.Address) []byte {
 	return enc
 }
 
+// UnpackBalanceOf is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x70a08231.
+//
+// Solidity: function balanceOf(address ) returns(uint256)
 func (token *Token) UnpackBalanceOf(data []byte) (*big.Int, error) {
 	out, err := token.abi.Unpack("balanceOf", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
-// Decimals is a free data retrieval call binding the contract method 0x313ce567.
+// Decimals is the Go binding used to pack the parameters required for calling
+// the contract method 0x313ce567.
 //
 // Solidity: function decimals() returns(uint8)
 func (token *Token) PackDecimals() []byte {
@@ -140,20 +150,21 @@ func (token *Token) PackDecimals() []byte {
 	return enc
 }
 
+// UnpackDecimals is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x313ce567.
+//
+// Solidity: function decimals() returns(uint8)
 func (token *Token) UnpackDecimals(data []byte) (uint8, error) {
 	out, err := token.abi.Unpack("decimals", data)
-
 	if err != nil {
 		return *new(uint8), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new(uint8)).(*uint8)
-
 	return out0, err
-
 }
 
-// Name is a free data retrieval call binding the contract method 0x06fdde03.
+// Name is the Go binding used to pack the parameters required for calling
+// the contract method 0x06fdde03.
 //
 // Solidity: function name() returns(string)
 func (token *Token) PackName() []byte {
@@ -164,20 +175,21 @@ func (token *Token) PackName() []byte {
 	return enc
 }
 
+// UnpackName is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x06fdde03.
+//
+// Solidity: function name() returns(string)
 func (token *Token) UnpackName(data []byte) (string, error) {
 	out, err := token.abi.Unpack("name", data)
-
 	if err != nil {
 		return *new(string), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new(string)).(*string)
-
 	return out0, err
-
 }
 
-// SpentAllowance is a free data retrieval call binding the contract method 0xdc3080f2.
+// SpentAllowance is the Go binding used to pack the parameters required for calling
+// the contract method 0xdc3080f2.
 //
 // Solidity: function spentAllowance(address , address ) returns(uint256)
 func (token *Token) PackSpentAllowance(Arg0 common.Address, Arg1 common.Address) []byte {
@@ -188,20 +200,21 @@ func (token *Token) PackSpentAllowance(Arg0 common.Address, Arg1 common.Address)
 	return enc
 }
 
+// UnpackSpentAllowance is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xdc3080f2.
+//
+// Solidity: function spentAllowance(address , address ) returns(uint256)
 func (token *Token) UnpackSpentAllowance(data []byte) (*big.Int, error) {
 	out, err := token.abi.Unpack("spentAllowance", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
-// Symbol is a free data retrieval call binding the contract method 0x95d89b41.
+// Symbol is the Go binding used to pack the parameters required for calling
+// the contract method 0x95d89b41.
 //
 // Solidity: function symbol() returns(string)
 func (token *Token) PackSymbol() []byte {
@@ -212,20 +225,21 @@ func (token *Token) PackSymbol() []byte {
 	return enc
 }
 
+// UnpackSymbol is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x95d89b41.
+//
+// Solidity: function symbol() returns(string)
 func (token *Token) UnpackSymbol(data []byte) (string, error) {
 	out, err := token.abi.Unpack("symbol", data)
-
 	if err != nil {
 		return *new(string), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new(string)).(*string)
-
 	return out0, err
-
 }
 
-// Transfer is a free data retrieval call binding the contract method 0xa9059cbb.
+// Transfer is the Go binding used to pack the parameters required for calling
+// the contract method 0xa9059cbb.
 //
 // Solidity: function transfer(address _to, uint256 _value) returns()
 func (token *Token) PackTransfer(To common.Address, Value *big.Int) []byte {
@@ -236,7 +250,8 @@ func (token *Token) PackTransfer(To common.Address, Value *big.Int) []byte {
 	return enc
 }
 
-// TransferFrom is a free data retrieval call binding the contract method 0x23b872dd.
+// TransferFrom is the Go binding used to pack the parameters required for calling
+// the contract method 0x23b872dd.
 //
 // Solidity: function transferFrom(address _from, address _to, uint256 _value) returns(bool success)
 func (token *Token) PackTransferFrom(From common.Address, To common.Address, Value *big.Int) []byte {
@@ -247,17 +262,17 @@ func (token *Token) PackTransferFrom(From common.Address, To common.Address, Val
 	return enc
 }
 
+// UnpackTransferFrom is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x23b872dd.
+//
+// Solidity: function transferFrom(address _from, address _to, uint256 _value) returns(bool success)
 func (token *Token) UnpackTransferFrom(data []byte) (bool, error) {
 	out, err := token.abi.Unpack("transferFrom", data)
-
 	if err != nil {
 		return *new(bool), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new(bool)).(*bool)
-
 	return out0, err
-
 }
 
 // TokenTransfer represents a Transfer event raised by the Token contract.
@@ -265,15 +280,21 @@ type TokenTransfer struct {
 	From  common.Address
 	To    common.Address
 	Value *big.Int
-	Raw   *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const TokenTransferEventName = "Transfer"
 
+// ContractEventName returns the user-defined event name.
 func (TokenTransfer) ContractEventName() string {
 	return TokenTransferEventName
 }
 
+// UnpackTransferEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event Transfer(address indexed from, address indexed to, uint256 value)
 func (token *Token) UnpackTransferEvent(log *types.Log) (*TokenTransfer, error) {
 	event := "Transfer"
 	if log.Topics[0] != token.abi.Events[event].ID {

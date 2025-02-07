@@ -330,8 +330,8 @@ func TestErrors(t *testing.T) {
 	if !hasRevertErrorData {
 		t.Fatalf("expected call error to contain revert error data.")
 	}
-	rawUnpackedErr := c.UnpackError(raw)
-	if rawUnpackedErr == nil {
+	rawUnpackedErr, err := c.UnpackError(raw)
+	if err != nil {
 		t.Fatalf("expected to unpack error")
 	}
 

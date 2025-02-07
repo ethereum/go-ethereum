@@ -1,9 +1,10 @@
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package convertedv1bindtests
+package bindtests
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -49,6 +51,10 @@ func (c *Crowdsale) Instance(backend bind.ContractBackend, addr common.Address) 
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
+// PackConstructor is the Go binding used to pack the parameters required for
+// contract deployment.
+//
+// Solidity: constructor(address ifSuccessfulSendTo, uint256 fundingGoalInEthers, uint256 durationInMinutes, uint256 etherCostOfEachToken, address addressOfTokenUsedAsReward) returns()
 func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, fundingGoalInEthers *big.Int, durationInMinutes *big.Int, etherCostOfEachToken *big.Int, addressOfTokenUsedAsReward common.Address) []byte {
 	enc, err := crowdsale.abi.Pack("", ifSuccessfulSendTo, fundingGoalInEthers, durationInMinutes, etherCostOfEachToken, addressOfTokenUsedAsReward)
 	if err != nil {
@@ -57,7 +63,8 @@ func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, f
 	return enc
 }
 
-// AmountRaised is a free data retrieval call binding the contract method 0x7b3e5e7b.
+// AmountRaised is the Go binding used to pack the parameters required for calling
+// the contract method 0x7b3e5e7b.
 //
 // Solidity: function amountRaised() returns(uint256)
 func (crowdsale *Crowdsale) PackAmountRaised() []byte {
@@ -68,20 +75,21 @@ func (crowdsale *Crowdsale) PackAmountRaised() []byte {
 	return enc
 }
 
+// UnpackAmountRaised is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x7b3e5e7b.
+//
+// Solidity: function amountRaised() returns(uint256)
 func (crowdsale *Crowdsale) UnpackAmountRaised(data []byte) (*big.Int, error) {
 	out, err := crowdsale.abi.Unpack("amountRaised", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
-// Beneficiary is a free data retrieval call binding the contract method 0x38af3eed.
+// Beneficiary is the Go binding used to pack the parameters required for calling
+// the contract method 0x38af3eed.
 //
 // Solidity: function beneficiary() returns(address)
 func (crowdsale *Crowdsale) PackBeneficiary() []byte {
@@ -92,20 +100,21 @@ func (crowdsale *Crowdsale) PackBeneficiary() []byte {
 	return enc
 }
 
+// UnpackBeneficiary is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x38af3eed.
+//
+// Solidity: function beneficiary() returns(address)
 func (crowdsale *Crowdsale) UnpackBeneficiary(data []byte) (common.Address, error) {
 	out, err := crowdsale.abi.Unpack("beneficiary", data)
-
 	if err != nil {
 		return *new(common.Address), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
-
 	return out0, err
-
 }
 
-// CheckGoalReached is a free data retrieval call binding the contract method 0x01cb3b20.
+// CheckGoalReached is the Go binding used to pack the parameters required for calling
+// the contract method 0x01cb3b20.
 //
 // Solidity: function checkGoalReached() returns()
 func (crowdsale *Crowdsale) PackCheckGoalReached() []byte {
@@ -116,7 +125,8 @@ func (crowdsale *Crowdsale) PackCheckGoalReached() []byte {
 	return enc
 }
 
-// Deadline is a free data retrieval call binding the contract method 0x29dcb0cf.
+// Deadline is the Go binding used to pack the parameters required for calling
+// the contract method 0x29dcb0cf.
 //
 // Solidity: function deadline() returns(uint256)
 func (crowdsale *Crowdsale) PackDeadline() []byte {
@@ -127,20 +137,21 @@ func (crowdsale *Crowdsale) PackDeadline() []byte {
 	return enc
 }
 
+// UnpackDeadline is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x29dcb0cf.
+//
+// Solidity: function deadline() returns(uint256)
 func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
 	out, err := crowdsale.abi.Unpack("deadline", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
-// Funders is a free data retrieval call binding the contract method 0xdc0d3dff.
+// Funders is the Go binding used to pack the parameters required for calling
+// the contract method 0xdc0d3dff.
 //
 // Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
 func (crowdsale *Crowdsale) PackFunders(Arg0 *big.Int) []byte {
@@ -151,28 +162,31 @@ func (crowdsale *Crowdsale) PackFunders(Arg0 *big.Int) []byte {
 	return enc
 }
 
+// FundersOutput serves as a container for the return parameters of contract
+// method Funders.
 type FundersOutput struct {
 	Addr   common.Address
 	Amount *big.Int
 }
 
+// UnpackFunders is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xdc0d3dff.
+//
+// Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
 func (crowdsale *Crowdsale) UnpackFunders(data []byte) (FundersOutput, error) {
 	out, err := crowdsale.abi.Unpack("funders", data)
-
 	outstruct := new(FundersOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Addr = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
-
 	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	return *outstruct, err
 
 }
 
-// FundingGoal is a free data retrieval call binding the contract method 0x7a3a0e84.
+// FundingGoal is the Go binding used to pack the parameters required for calling
+// the contract method 0x7a3a0e84.
 //
 // Solidity: function fundingGoal() returns(uint256)
 func (crowdsale *Crowdsale) PackFundingGoal() []byte {
@@ -183,20 +197,21 @@ func (crowdsale *Crowdsale) PackFundingGoal() []byte {
 	return enc
 }
 
+// UnpackFundingGoal is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x7a3a0e84.
+//
+// Solidity: function fundingGoal() returns(uint256)
 func (crowdsale *Crowdsale) UnpackFundingGoal(data []byte) (*big.Int, error) {
 	out, err := crowdsale.abi.Unpack("fundingGoal", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
-// Price is a free data retrieval call binding the contract method 0xa035b1fe.
+// Price is the Go binding used to pack the parameters required for calling
+// the contract method 0xa035b1fe.
 //
 // Solidity: function price() returns(uint256)
 func (crowdsale *Crowdsale) PackPrice() []byte {
@@ -207,20 +222,21 @@ func (crowdsale *Crowdsale) PackPrice() []byte {
 	return enc
 }
 
+// UnpackPrice is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xa035b1fe.
+//
+// Solidity: function price() returns(uint256)
 func (crowdsale *Crowdsale) UnpackPrice(data []byte) (*big.Int, error) {
 	out, err := crowdsale.abi.Unpack("price", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
-// TokenReward is a free data retrieval call binding the contract method 0x6e66f6e9.
+// TokenReward is the Go binding used to pack the parameters required for calling
+// the contract method 0x6e66f6e9.
 //
 // Solidity: function tokenReward() returns(address)
 func (crowdsale *Crowdsale) PackTokenReward() []byte {
@@ -231,17 +247,17 @@ func (crowdsale *Crowdsale) PackTokenReward() []byte {
 	return enc
 }
 
+// UnpackTokenReward is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x6e66f6e9.
+//
+// Solidity: function tokenReward() returns(address)
 func (crowdsale *Crowdsale) UnpackTokenReward(data []byte) (common.Address, error) {
 	out, err := crowdsale.abi.Unpack("tokenReward", data)
-
 	if err != nil {
 		return *new(common.Address), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
-
 	return out0, err
-
 }
 
 // CrowdsaleFundTransfer represents a FundTransfer event raised by the Crowdsale contract.
@@ -249,15 +265,21 @@ type CrowdsaleFundTransfer struct {
 	Backer         common.Address
 	Amount         *big.Int
 	IsContribution bool
-	Raw            *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const CrowdsaleFundTransferEventName = "FundTransfer"
 
+// ContractEventName returns the user-defined event name.
 func (CrowdsaleFundTransfer) ContractEventName() string {
 	return CrowdsaleFundTransferEventName
 }
 
+// UnpackFundTransferEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event FundTransfer(address backer, uint256 amount, bool isContribution)
 func (crowdsale *Crowdsale) UnpackFundTransferEvent(log *types.Log) (*CrowdsaleFundTransfer, error) {
 	event := "FundTransfer"
 	if log.Topics[0] != crowdsale.abi.Events[event].ID {

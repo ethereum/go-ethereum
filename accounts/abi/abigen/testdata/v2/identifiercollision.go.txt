@@ -1,9 +1,10 @@
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package convertedv1bindtests
+package bindtests
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -49,7 +51,8 @@ func (c *IdentifierCollision) Instance(backend bind.ContractBackend, addr common
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// MyVar is a free data retrieval call binding the contract method 0x4ef1f0ad.
+// MyVar is the Go binding used to pack the parameters required for calling
+// the contract method 0x4ef1f0ad.
 //
 // Solidity: function MyVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
@@ -60,20 +63,21 @@ func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
 	return enc
 }
 
+// UnpackMyVar is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x4ef1f0ad.
+//
+// Solidity: function MyVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) UnpackMyVar(data []byte) (*big.Int, error) {
 	out, err := identifierCollision.abi.Unpack("MyVar", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
-// PubVar is a free data retrieval call binding the contract method 0x01ad4d87.
+// PubVar is the Go binding used to pack the parameters required for calling
+// the contract method 0x01ad4d87.
 //
 // Solidity: function _myVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) PackPubVar() []byte {
@@ -84,15 +88,15 @@ func (identifierCollision *IdentifierCollision) PackPubVar() []byte {
 	return enc
 }
 
+// UnpackPubVar is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x01ad4d87.
+//
+// Solidity: function _myVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) UnpackPubVar(data []byte) (*big.Int, error) {
 	out, err := identifierCollision.abi.Unpack("_myVar", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }

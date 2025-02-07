@@ -1,9 +1,10 @@
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package convertedv1bindtests
+package bindtests
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -74,7 +76,8 @@ func (c *Tuple) Instance(backend bind.ContractBackend, addr common.Address) *bin
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Func1 is a free data retrieval call binding the contract method 0x443c79b4.
+// Func1 is the Go binding used to pack the parameters required for calling
+// the contract method 0x443c79b4.
 //
 // Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])
 func (tuple *Tuple) PackFunc1(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) []byte {
@@ -85,6 +88,8 @@ func (tuple *Tuple) PackFunc1(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS
 	return enc
 }
 
+// Func1Output serves as a container for the return parameters of contract
+// method Func1.
 type Func1Output struct {
 	Arg0 TupleS
 	Arg1 [][2]TupleT
@@ -93,29 +98,27 @@ type Func1Output struct {
 	Arg4 []*big.Int
 }
 
+// UnpackFunc1 is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x443c79b4.
+//
+// Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])
 func (tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 	out, err := tuple.abi.Unpack("func1", data)
-
 	outstruct := new(Func1Output)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Arg0 = *abi.ConvertType(out[0], new(TupleS)).(*TupleS)
-
 	outstruct.Arg1 = *abi.ConvertType(out[1], new([][2]TupleT)).(*[][2]TupleT)
-
 	outstruct.Arg2 = *abi.ConvertType(out[2], new([2][]TupleT)).(*[2][]TupleT)
-
 	outstruct.Arg3 = *abi.ConvertType(out[3], new([]TupleS)).(*[]TupleS)
-
 	outstruct.Arg4 = *abi.ConvertType(out[4], new([]*big.Int)).(*[]*big.Int)
-
 	return *outstruct, err
 
 }
 
-// Func2 is a free data retrieval call binding the contract method 0xd0062cdd.
+// Func2 is the Go binding used to pack the parameters required for calling
+// the contract method 0xd0062cdd.
 //
 // Solidity: function func2((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) returns()
 func (tuple *Tuple) PackFunc2(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) []byte {
@@ -126,7 +129,8 @@ func (tuple *Tuple) PackFunc2(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS
 	return enc
 }
 
-// Func3 is a free data retrieval call binding the contract method 0xe4d9a43b.
+// Func3 is the Go binding used to pack the parameters required for calling
+// the contract method 0xe4d9a43b.
 //
 // Solidity: function func3((uint16,uint16)[] ) pure returns()
 func (tuple *Tuple) PackFunc3(Arg0 []TupleQ) []byte {
@@ -139,20 +143,26 @@ func (tuple *Tuple) PackFunc3(Arg0 []TupleQ) []byte {
 
 // TupleTupleEvent represents a TupleEvent event raised by the Tuple contract.
 type TupleTupleEvent struct {
-	A   TupleS
-	B   [][2]TupleT
-	C   [2][]TupleT
-	D   []TupleS
-	E   []*big.Int
+	A TupleS
+	B [][2]TupleT
+	C [2][]TupleT
+	D []TupleS
+	E []*big.Int
+
 	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const TupleTupleEventEventName = "TupleEvent"
 
+// ContractEventName returns the user-defined event name.
 func (TupleTupleEvent) ContractEventName() string {
 	return TupleTupleEventEventName
 }
 
+// UnpackTupleEventEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event TupleEvent((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e)
 func (tuple *Tuple) UnpackTupleEventEvent(log *types.Log) (*TupleTupleEvent, error) {
 	event := "TupleEvent"
 	if log.Topics[0] != tuple.abi.Events[event].ID {
@@ -180,15 +190,21 @@ func (tuple *Tuple) UnpackTupleEventEvent(log *types.Log) (*TupleTupleEvent, err
 // TupleTupleEvent2 represents a TupleEvent2 event raised by the Tuple contract.
 type TupleTupleEvent2 struct {
 	Arg0 []TupleP
-	Raw  *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const TupleTupleEvent2EventName = "TupleEvent2"
 
+// ContractEventName returns the user-defined event name.
 func (TupleTupleEvent2) ContractEventName() string {
 	return TupleTupleEvent2EventName
 }
 
+// UnpackTupleEvent2Event is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event TupleEvent2((uint8,uint8)[] arg0)
 func (tuple *Tuple) UnpackTupleEvent2Event(log *types.Log) (*TupleTupleEvent2, error) {
 	event := "TupleEvent2"
 	if log.Topics[0] != tuple.abi.Events[event].ID {

@@ -4,6 +4,7 @@
 package nested_libraries
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -53,6 +55,10 @@ func (c *C1) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
+// PackConstructor is the Go binding used to pack the parameters required for
+// contract deployment.
+//
+// Solidity: constructor(uint256 v1, uint256 v2) returns()
 func (c1 *C1) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 	enc, err := c1.abi.Pack("", v1, v2)
 	if err != nil {
@@ -61,7 +67,8 @@ func (c1 *C1) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 	return enc
 }
 
-// Do is a free data retrieval call binding the contract method 0x2ad11272.
+// Do is the Go binding used to pack the parameters required for calling
+// the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
 func (c1 *C1) PackDo(Val *big.Int) []byte {
@@ -72,17 +79,17 @@ func (c1 *C1) PackDo(Val *big.Int) []byte {
 	return enc
 }
 
+// UnpackDo is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x2ad11272.
+//
+// Solidity: function Do(uint256 val) pure returns(uint256 res)
 func (c1 *C1) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := c1.abi.Unpack("Do", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
 // C2MetaData contains all meta data concerning the C2 contract.
@@ -116,6 +123,10 @@ func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
+// PackConstructor is the Go binding used to pack the parameters required for
+// contract deployment.
+//
+// Solidity: constructor(uint256 v1, uint256 v2) returns()
 func (c2 *C2) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 	enc, err := c2.abi.Pack("", v1, v2)
 	if err != nil {
@@ -124,7 +135,8 @@ func (c2 *C2) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 	return enc
 }
 
-// Do is a free data retrieval call binding the contract method 0x2ad11272.
+// Do is the Go binding used to pack the parameters required for calling
+// the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
 func (c2 *C2) PackDo(Val *big.Int) []byte {
@@ -135,17 +147,17 @@ func (c2 *C2) PackDo(Val *big.Int) []byte {
 	return enc
 }
 
+// UnpackDo is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x2ad11272.
+//
+// Solidity: function Do(uint256 val) pure returns(uint256 res)
 func (c2 *C2) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := c2.abi.Unpack("Do", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
 // L1MetaData contains all meta data concerning the L1 contract.
@@ -175,7 +187,8 @@ func (c *L1) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Do is a free data retrieval call binding the contract method 0x2ad11272.
+// Do is the Go binding used to pack the parameters required for calling
+// the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l1 *L1) PackDo(Val *big.Int) []byte {
@@ -186,17 +199,17 @@ func (l1 *L1) PackDo(Val *big.Int) []byte {
 	return enc
 }
 
+// UnpackDo is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x2ad11272.
+//
+// Solidity: function Do(uint256 val) pure returns(uint256)
 func (l1 *L1) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := l1.abi.Unpack("Do", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
 // L2MetaData contains all meta data concerning the L2 contract.
@@ -229,7 +242,8 @@ func (c *L2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Do is a free data retrieval call binding the contract method 0x2ad11272.
+// Do is the Go binding used to pack the parameters required for calling
+// the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l2 *L2) PackDo(Val *big.Int) []byte {
@@ -240,17 +254,17 @@ func (l2 *L2) PackDo(Val *big.Int) []byte {
 	return enc
 }
 
+// UnpackDo is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x2ad11272.
+//
+// Solidity: function Do(uint256 val) pure returns(uint256)
 func (l2 *L2) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := l2.abi.Unpack("Do", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
 // L2bMetaData contains all meta data concerning the L2b contract.
@@ -283,7 +297,8 @@ func (c *L2b) Instance(backend bind.ContractBackend, addr common.Address) *bind.
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Do is a free data retrieval call binding the contract method 0x2ad11272.
+// Do is the Go binding used to pack the parameters required for calling
+// the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l2b *L2b) PackDo(Val *big.Int) []byte {
@@ -294,17 +309,17 @@ func (l2b *L2b) PackDo(Val *big.Int) []byte {
 	return enc
 }
 
+// UnpackDo is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x2ad11272.
+//
+// Solidity: function Do(uint256 val) pure returns(uint256)
 func (l2b *L2b) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := l2b.abi.Unpack("Do", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
 // L3MetaData contains all meta data concerning the L3 contract.
@@ -334,7 +349,8 @@ func (c *L3) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Do is a free data retrieval call binding the contract method 0x2ad11272.
+// Do is the Go binding used to pack the parameters required for calling
+// the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l3 *L3) PackDo(Val *big.Int) []byte {
@@ -345,17 +361,17 @@ func (l3 *L3) PackDo(Val *big.Int) []byte {
 	return enc
 }
 
+// UnpackDo is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x2ad11272.
+//
+// Solidity: function Do(uint256 val) pure returns(uint256)
 func (l3 *L3) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := l3.abi.Unpack("Do", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
 // L4MetaData contains all meta data concerning the L4 contract.
@@ -389,7 +405,8 @@ func (c *L4) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Do is a free data retrieval call binding the contract method 0x2ad11272.
+// Do is the Go binding used to pack the parameters required for calling
+// the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l4 *L4) PackDo(Val *big.Int) []byte {
@@ -400,17 +417,17 @@ func (l4 *L4) PackDo(Val *big.Int) []byte {
 	return enc
 }
 
+// UnpackDo is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x2ad11272.
+//
+// Solidity: function Do(uint256 val) pure returns(uint256)
 func (l4 *L4) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := l4.abi.Unpack("Do", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
 // L4bMetaData contains all meta data concerning the L4b contract.
@@ -443,7 +460,8 @@ func (c *L4b) Instance(backend bind.ContractBackend, addr common.Address) *bind.
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Do is a free data retrieval call binding the contract method 0x2ad11272.
+// Do is the Go binding used to pack the parameters required for calling
+// the contract method 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l4b *L4b) PackDo(Val *big.Int) []byte {
@@ -454,15 +472,15 @@ func (l4b *L4b) PackDo(Val *big.Int) []byte {
 	return enc
 }
 
+// UnpackDo is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x2ad11272.
+//
+// Solidity: function Do(uint256 val) pure returns(uint256)
 func (l4b *L4b) UnpackDo(data []byte) (*big.Int, error) {
 	out, err := l4b.abi.Unpack("Do", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }

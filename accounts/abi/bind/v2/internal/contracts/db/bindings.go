@@ -4,6 +4,7 @@
 package db
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -56,7 +58,8 @@ func (c *DB) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Get is a free data retrieval call binding the contract method 0x9507d39a.
+// Get is the Go binding used to pack the parameters required for calling
+// the contract method 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
 func (dB *DB) PackGet(K *big.Int) []byte {
@@ -67,20 +70,21 @@ func (dB *DB) PackGet(K *big.Int) []byte {
 	return enc
 }
 
+// UnpackGet is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x9507d39a.
+//
+// Solidity: function get(uint256 k) returns(uint256)
 func (dB *DB) UnpackGet(data []byte) (*big.Int, error) {
 	out, err := dB.abi.Unpack("get", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
-// GetNamedStatParams is a free data retrieval call binding the contract method 0xe369ba3b.
+// GetNamedStatParams is the Go binding used to pack the parameters required for calling
+// the contract method 0xe369ba3b.
 //
 // Solidity: function getNamedStatParams() view returns(uint256 gets, uint256 inserts, uint256 mods)
 func (dB *DB) PackGetNamedStatParams() []byte {
@@ -91,31 +95,33 @@ func (dB *DB) PackGetNamedStatParams() []byte {
 	return enc
 }
 
+// GetNamedStatParamsOutput serves as a container for the return parameters of contract
+// method GetNamedStatParams.
 type GetNamedStatParamsOutput struct {
 	Gets    *big.Int
 	Inserts *big.Int
 	Mods    *big.Int
 }
 
+// UnpackGetNamedStatParams is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xe369ba3b.
+//
+// Solidity: function getNamedStatParams() view returns(uint256 gets, uint256 inserts, uint256 mods)
 func (dB *DB) UnpackGetNamedStatParams(data []byte) (GetNamedStatParamsOutput, error) {
 	out, err := dB.abi.Unpack("getNamedStatParams", data)
-
 	outstruct := new(GetNamedStatParamsOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Gets = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.Inserts = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	outstruct.Mods = abi.ConvertType(out[2], new(big.Int)).(*big.Int)
-
 	return *outstruct, err
 
 }
 
-// GetStatParams is a free data retrieval call binding the contract method 0x6fcb9c70.
+// GetStatParams is the Go binding used to pack the parameters required for calling
+// the contract method 0x6fcb9c70.
 //
 // Solidity: function getStatParams() view returns(uint256, uint256, uint256)
 func (dB *DB) PackGetStatParams() []byte {
@@ -126,31 +132,33 @@ func (dB *DB) PackGetStatParams() []byte {
 	return enc
 }
 
+// GetStatParamsOutput serves as a container for the return parameters of contract
+// method GetStatParams.
 type GetStatParamsOutput struct {
 	Arg0 *big.Int
 	Arg1 *big.Int
 	Arg2 *big.Int
 }
 
+// UnpackGetStatParams is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x6fcb9c70.
+//
+// Solidity: function getStatParams() view returns(uint256, uint256, uint256)
 func (dB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
 	out, err := dB.abi.Unpack("getStatParams", data)
-
 	outstruct := new(GetStatParamsOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	outstruct.Arg2 = abi.ConvertType(out[2], new(big.Int)).(*big.Int)
-
 	return *outstruct, err
 
 }
 
-// GetStatsStruct is a free data retrieval call binding the contract method 0xee8161e0.
+// GetStatsStruct is the Go binding used to pack the parameters required for calling
+// the contract method 0xee8161e0.
 //
 // Solidity: function getStatsStruct() view returns((uint256,uint256,uint256))
 func (dB *DB) PackGetStatsStruct() []byte {
@@ -161,20 +169,21 @@ func (dB *DB) PackGetStatsStruct() []byte {
 	return enc
 }
 
+// UnpackGetStatsStruct is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xee8161e0.
+//
+// Solidity: function getStatsStruct() view returns((uint256,uint256,uint256))
 func (dB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
 	out, err := dB.abi.Unpack("getStatsStruct", data)
-
 	if err != nil {
 		return *new(DBStats), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new(DBStats)).(*DBStats)
-
 	return out0, err
-
 }
 
-// Insert is a free data retrieval call binding the contract method 0x1d834a1b.
+// Insert is the Go binding used to pack the parameters required for calling
+// the contract method 0x1d834a1b.
 //
 // Solidity: function insert(uint256 k, uint256 v) returns(uint256)
 func (dB *DB) PackInsert(K *big.Int, V *big.Int) []byte {
@@ -185,17 +194,17 @@ func (dB *DB) PackInsert(K *big.Int, V *big.Int) []byte {
 	return enc
 }
 
+// UnpackInsert is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x1d834a1b.
+//
+// Solidity: function insert(uint256 k, uint256 v) returns(uint256)
 func (dB *DB) UnpackInsert(data []byte) (*big.Int, error) {
 	out, err := dB.abi.Unpack("insert", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }
 
 // DBInsert represents a Insert event raised by the DB contract.
@@ -203,15 +212,21 @@ type DBInsert struct {
 	Key    *big.Int
 	Value  *big.Int
 	Length *big.Int
-	Raw    *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const DBInsertEventName = "Insert"
 
+// ContractEventName returns the user-defined event name.
 func (DBInsert) ContractEventName() string {
 	return DBInsertEventName
 }
 
+// UnpackInsertEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event Insert(uint256 key, uint256 value, uint256 length)
 func (dB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
 	event := "Insert"
 	if log.Topics[0] != dB.abi.Events[event].ID {
@@ -240,15 +255,21 @@ func (dB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
 type DBKeyedInsert struct {
 	Key   *big.Int
 	Value *big.Int
-	Raw   *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const DBKeyedInsertEventName = "KeyedInsert"
 
+// ContractEventName returns the user-defined event name.
 func (DBKeyedInsert) ContractEventName() string {
 	return DBKeyedInsertEventName
 }
 
+// UnpackKeyedInsertEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event KeyedInsert(uint256 indexed key, uint256 value)
 func (dB *DB) UnpackKeyedInsertEvent(log *types.Log) (*DBKeyedInsert, error) {
 	event := "KeyedInsert"
 	if log.Topics[0] != dB.abi.Events[event].ID {

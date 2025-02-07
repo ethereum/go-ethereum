@@ -1,9 +1,10 @@
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package convertedv1bindtests
+package bindtests
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -49,7 +51,8 @@ func (c *NumericMethodName) Instance(backend bind.ContractBackend, addr common.A
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// E1test is a free data retrieval call binding the contract method 0xffa02795.
+// E1test is the Go binding used to pack the parameters required for calling
+// the contract method 0xffa02795.
 //
 // Solidity: function _1test() pure returns()
 func (numericMethodName *NumericMethodName) PackE1test() []byte {
@@ -60,7 +63,8 @@ func (numericMethodName *NumericMethodName) PackE1test() []byte {
 	return enc
 }
 
-// E1test0 is a free data retrieval call binding the contract method 0xd02767c7.
+// E1test0 is the Go binding used to pack the parameters required for calling
+// the contract method 0xd02767c7.
 //
 // Solidity: function __1test() pure returns()
 func (numericMethodName *NumericMethodName) PackE1test0() []byte {
@@ -71,7 +75,8 @@ func (numericMethodName *NumericMethodName) PackE1test0() []byte {
 	return enc
 }
 
-// E2test is a free data retrieval call binding the contract method 0x9d993132.
+// E2test is the Go binding used to pack the parameters required for calling
+// the contract method 0x9d993132.
 //
 // Solidity: function __2test() pure returns()
 func (numericMethodName *NumericMethodName) PackE2test() []byte {
@@ -85,15 +90,21 @@ func (numericMethodName *NumericMethodName) PackE2test() []byte {
 // NumericMethodNameE1TestEvent represents a E1TestEvent event raised by the NumericMethodName contract.
 type NumericMethodNameE1TestEvent struct {
 	Param common.Address
-	Raw   *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const NumericMethodNameE1TestEventEventName = "_1TestEvent"
 
+// ContractEventName returns the user-defined event name.
 func (NumericMethodNameE1TestEvent) ContractEventName() string {
 	return NumericMethodNameE1TestEventEventName
 }
 
+// UnpackE1TestEventEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event _1TestEvent(address _param)
 func (numericMethodName *NumericMethodName) UnpackE1TestEventEvent(log *types.Log) (*NumericMethodNameE1TestEvent, error) {
 	event := "_1TestEvent"
 	if log.Topics[0] != numericMethodName.abi.Events[event].ID {

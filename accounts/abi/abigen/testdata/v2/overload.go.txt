@@ -1,9 +1,10 @@
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package convertedv1bindtests
+package bindtests
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -49,7 +51,8 @@ func (c *Overload) Instance(backend bind.ContractBackend, addr common.Address) *
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Foo is a free data retrieval call binding the contract method 0x04bc52f8.
+// Foo is the Go binding used to pack the parameters required for calling
+// the contract method 0x04bc52f8.
 //
 // Solidity: function foo(uint256 i, uint256 j) returns()
 func (overload *Overload) PackFoo(I *big.Int, J *big.Int) []byte {
@@ -60,7 +63,8 @@ func (overload *Overload) PackFoo(I *big.Int, J *big.Int) []byte {
 	return enc
 }
 
-// Foo0 is a free data retrieval call binding the contract method 0x2fbebd38.
+// Foo0 is the Go binding used to pack the parameters required for calling
+// the contract method 0x2fbebd38.
 //
 // Solidity: function foo(uint256 i) returns()
 func (overload *Overload) PackFoo0(I *big.Int) []byte {
@@ -73,16 +77,22 @@ func (overload *Overload) PackFoo0(I *big.Int) []byte {
 
 // OverloadBar represents a Bar event raised by the Overload contract.
 type OverloadBar struct {
-	I   *big.Int
+	I *big.Int
+
 	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const OverloadBarEventName = "bar"
 
+// ContractEventName returns the user-defined event name.
 func (OverloadBar) ContractEventName() string {
 	return OverloadBarEventName
 }
 
+// UnpackBarEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event bar(uint256 i)
 func (overload *Overload) UnpackBarEvent(log *types.Log) (*OverloadBar, error) {
 	event := "bar"
 	if log.Topics[0] != overload.abi.Events[event].ID {
@@ -109,17 +119,23 @@ func (overload *Overload) UnpackBarEvent(log *types.Log) (*OverloadBar, error) {
 
 // OverloadBar0 represents a Bar0 event raised by the Overload contract.
 type OverloadBar0 struct {
-	I   *big.Int
-	J   *big.Int
+	I *big.Int
+	J *big.Int
+
 	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const OverloadBar0EventName = "bar0"
 
+// ContractEventName returns the user-defined event name.
 func (OverloadBar0) ContractEventName() string {
 	return OverloadBar0EventName
 }
 
+// UnpackBar0Event is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event bar(uint256 i, uint256 j)
 func (overload *Overload) UnpackBar0Event(log *types.Log) (*OverloadBar0, error) {
 	event := "bar0"
 	if log.Topics[0] != overload.abi.Events[event].ID {

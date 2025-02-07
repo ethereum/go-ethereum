@@ -1,9 +1,10 @@
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package convertedv1bindtests
+package bindtests
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -49,7 +51,8 @@ func (c *Underscorer) Instance(backend bind.ContractBackend, addr common.Address
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// AllPurelyUnderscoredOutput is a free data retrieval call binding the contract method 0xb564b34d.
+// AllPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method 0xb564b34d.
 //
 // Solidity: function AllPurelyUnderscoredOutput() view returns(int256 _, int256 __)
 func (underscorer *Underscorer) PackAllPurelyUnderscoredOutput() []byte {
@@ -60,28 +63,31 @@ func (underscorer *Underscorer) PackAllPurelyUnderscoredOutput() []byte {
 	return enc
 }
 
+// AllPurelyUnderscoredOutputOutput serves as a container for the return parameters of contract
+// method AllPurelyUnderscoredOutput.
 type AllPurelyUnderscoredOutputOutput struct {
 	Arg0 *big.Int
 	Arg1 *big.Int
 }
 
+// UnpackAllPurelyUnderscoredOutput is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xb564b34d.
+//
+// Solidity: function AllPurelyUnderscoredOutput() view returns(int256 _, int256 __)
 func (underscorer *Underscorer) UnpackAllPurelyUnderscoredOutput(data []byte) (AllPurelyUnderscoredOutputOutput, error) {
 	out, err := underscorer.abi.Unpack("AllPurelyUnderscoredOutput", data)
-
 	outstruct := new(AllPurelyUnderscoredOutputOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	return *outstruct, err
 
 }
 
-// LowerLowerCollision is a free data retrieval call binding the contract method 0xe409ca45.
+// LowerLowerCollision is the Go binding used to pack the parameters required for calling
+// the contract method 0xe409ca45.
 //
 // Solidity: function LowerLowerCollision() view returns(int256 _res, int256 res)
 func (underscorer *Underscorer) PackLowerLowerCollision() []byte {
@@ -92,28 +98,31 @@ func (underscorer *Underscorer) PackLowerLowerCollision() []byte {
 	return enc
 }
 
+// LowerLowerCollisionOutput serves as a container for the return parameters of contract
+// method LowerLowerCollision.
 type LowerLowerCollisionOutput struct {
 	Res  *big.Int
 	Res0 *big.Int
 }
 
+// UnpackLowerLowerCollision is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xe409ca45.
+//
+// Solidity: function LowerLowerCollision() view returns(int256 _res, int256 res)
 func (underscorer *Underscorer) UnpackLowerLowerCollision(data []byte) (LowerLowerCollisionOutput, error) {
 	out, err := underscorer.abi.Unpack("LowerLowerCollision", data)
-
 	outstruct := new(LowerLowerCollisionOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	return *outstruct, err
 
 }
 
-// LowerUpperCollision is a free data retrieval call binding the contract method 0x03a59213.
+// LowerUpperCollision is the Go binding used to pack the parameters required for calling
+// the contract method 0x03a59213.
 //
 // Solidity: function LowerUpperCollision() view returns(int256 _res, int256 Res)
 func (underscorer *Underscorer) PackLowerUpperCollision() []byte {
@@ -124,28 +133,31 @@ func (underscorer *Underscorer) PackLowerUpperCollision() []byte {
 	return enc
 }
 
+// LowerUpperCollisionOutput serves as a container for the return parameters of contract
+// method LowerUpperCollision.
 type LowerUpperCollisionOutput struct {
 	Res  *big.Int
 	Res0 *big.Int
 }
 
+// UnpackLowerUpperCollision is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x03a59213.
+//
+// Solidity: function LowerUpperCollision() view returns(int256 _res, int256 Res)
 func (underscorer *Underscorer) UnpackLowerUpperCollision(data []byte) (LowerUpperCollisionOutput, error) {
 	out, err := underscorer.abi.Unpack("LowerUpperCollision", data)
-
 	outstruct := new(LowerUpperCollisionOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	return *outstruct, err
 
 }
 
-// PurelyUnderscoredOutput is a free data retrieval call binding the contract method 0x9df48485.
+// PurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method 0x9df48485.
 //
 // Solidity: function PurelyUnderscoredOutput() view returns(int256 _, int256 res)
 func (underscorer *Underscorer) PackPurelyUnderscoredOutput() []byte {
@@ -156,28 +168,31 @@ func (underscorer *Underscorer) PackPurelyUnderscoredOutput() []byte {
 	return enc
 }
 
+// PurelyUnderscoredOutputOutput serves as a container for the return parameters of contract
+// method PurelyUnderscoredOutput.
 type PurelyUnderscoredOutputOutput struct {
 	Arg0 *big.Int
 	Res  *big.Int
 }
 
+// UnpackPurelyUnderscoredOutput is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x9df48485.
+//
+// Solidity: function PurelyUnderscoredOutput() view returns(int256 _, int256 res)
 func (underscorer *Underscorer) UnpackPurelyUnderscoredOutput(data []byte) (PurelyUnderscoredOutputOutput, error) {
 	out, err := underscorer.abi.Unpack("PurelyUnderscoredOutput", data)
-
 	outstruct := new(PurelyUnderscoredOutputOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.Res = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	return *outstruct, err
 
 }
 
-// UnderscoredOutput is a free data retrieval call binding the contract method 0x67e6633d.
+// UnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method 0x67e6633d.
 //
 // Solidity: function UnderscoredOutput() view returns(int256 _int, string _string)
 func (underscorer *Underscorer) PackUnderscoredOutput() []byte {
@@ -188,28 +203,31 @@ func (underscorer *Underscorer) PackUnderscoredOutput() []byte {
 	return enc
 }
 
+// UnderscoredOutputOutput serves as a container for the return parameters of contract
+// method UnderscoredOutput.
 type UnderscoredOutputOutput struct {
 	Int    *big.Int
 	String string
 }
 
+// UnpackUnderscoredOutput is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x67e6633d.
+//
+// Solidity: function UnderscoredOutput() view returns(int256 _int, string _string)
 func (underscorer *Underscorer) UnpackUnderscoredOutput(data []byte) (UnderscoredOutputOutput, error) {
 	out, err := underscorer.abi.Unpack("UnderscoredOutput", data)
-
 	outstruct := new(UnderscoredOutputOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Int = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.String = *abi.ConvertType(out[1], new(string)).(*string)
-
 	return *outstruct, err
 
 }
 
-// UpperLowerCollision is a free data retrieval call binding the contract method 0xaf7486ab.
+// UpperLowerCollision is the Go binding used to pack the parameters required for calling
+// the contract method 0xaf7486ab.
 //
 // Solidity: function UpperLowerCollision() view returns(int256 _Res, int256 res)
 func (underscorer *Underscorer) PackUpperLowerCollision() []byte {
@@ -220,28 +238,31 @@ func (underscorer *Underscorer) PackUpperLowerCollision() []byte {
 	return enc
 }
 
+// UpperLowerCollisionOutput serves as a container for the return parameters of contract
+// method UpperLowerCollision.
 type UpperLowerCollisionOutput struct {
 	Res  *big.Int
 	Res0 *big.Int
 }
 
+// UnpackUpperLowerCollision is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xaf7486ab.
+//
+// Solidity: function UpperLowerCollision() view returns(int256 _Res, int256 res)
 func (underscorer *Underscorer) UnpackUpperLowerCollision(data []byte) (UpperLowerCollisionOutput, error) {
 	out, err := underscorer.abi.Unpack("UpperLowerCollision", data)
-
 	outstruct := new(UpperLowerCollisionOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	return *outstruct, err
 
 }
 
-// UpperUpperCollision is a free data retrieval call binding the contract method 0xe02ab24d.
+// UpperUpperCollision is the Go binding used to pack the parameters required for calling
+// the contract method 0xe02ab24d.
 //
 // Solidity: function UpperUpperCollision() view returns(int256 _Res, int256 Res)
 func (underscorer *Underscorer) PackUpperUpperCollision() []byte {
@@ -252,28 +273,31 @@ func (underscorer *Underscorer) PackUpperUpperCollision() []byte {
 	return enc
 }
 
+// UpperUpperCollisionOutput serves as a container for the return parameters of contract
+// method UpperUpperCollision.
 type UpperUpperCollisionOutput struct {
 	Res  *big.Int
 	Res0 *big.Int
 }
 
+// UnpackUpperUpperCollision is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xe02ab24d.
+//
+// Solidity: function UpperUpperCollision() view returns(int256 _Res, int256 Res)
 func (underscorer *Underscorer) UnpackUpperUpperCollision(data []byte) (UpperUpperCollisionOutput, error) {
 	out, err := underscorer.abi.Unpack("UpperUpperCollision", data)
-
 	outstruct := new(UpperUpperCollisionOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	return *outstruct, err
 
 }
 
-// UnderScoredFunc is a free data retrieval call binding the contract method 0x46546dbe.
+// UnderScoredFunc is the Go binding used to pack the parameters required for calling
+// the contract method 0x46546dbe.
 //
 // Solidity: function _under_scored_func() view returns(int256 _int)
 func (underscorer *Underscorer) PackUnderScoredFunc() []byte {
@@ -284,15 +308,15 @@ func (underscorer *Underscorer) PackUnderScoredFunc() []byte {
 	return enc
 }
 
+// UnpackUnderScoredFunc is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x46546dbe.
+//
+// Solidity: function _under_scored_func() view returns(int256 _int)
 func (underscorer *Underscorer) UnpackUnderScoredFunc(data []byte) (*big.Int, error) {
 	out, err := underscorer.abi.Unpack("_under_scored_func", data)
-
 	if err != nil {
 		return new(big.Int), err
 	}
-
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	return out0, err
-
 }

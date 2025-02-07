@@ -4,6 +4,7 @@
 package uint256arrayreturn
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -49,7 +51,8 @@ func (c *MyContract) Instance(backend bind.ContractBackend, addr common.Address)
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// GetNums is a free data retrieval call binding the contract method 0xbd6d1007.
+// GetNums is the Go binding used to pack the parameters required for calling
+// the contract method 0xbd6d1007.
 //
 // Solidity: function GetNums() pure returns(uint256[5])
 func (myContract *MyContract) PackGetNums() []byte {
@@ -60,15 +63,15 @@ func (myContract *MyContract) PackGetNums() []byte {
 	return enc
 }
 
+// UnpackGetNums is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xbd6d1007.
+//
+// Solidity: function GetNums() pure returns(uint256[5])
 func (myContract *MyContract) UnpackGetNums(data []byte) ([5]*big.Int, error) {
 	out, err := myContract.abi.Unpack("GetNums", data)
-
 	if err != nil {
 		return *new([5]*big.Int), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new([5]*big.Int)).(*[5]*big.Int)
-
 	return out0, err
-
 }

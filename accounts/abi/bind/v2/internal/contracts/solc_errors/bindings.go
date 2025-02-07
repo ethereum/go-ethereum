@@ -4,6 +4,7 @@
 package solc_errors
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -49,7 +51,8 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) *bind.Bo
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Bar is a free data retrieval call binding the contract method 0xb0a378b0.
+// Bar is the Go binding used to pack the parameters required for calling
+// the contract method 0xb0a378b0.
 //
 // Solidity: function Bar() pure returns()
 func (c *C) PackBar() []byte {
@@ -60,7 +63,8 @@ func (c *C) PackBar() []byte {
 	return enc
 }
 
-// Foo is a free data retrieval call binding the contract method 0xbfb4ebcf.
+// Foo is the Go binding used to pack the parameters required for calling
+// the contract method 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
 func (c *C) PackFoo() []byte {
@@ -71,19 +75,16 @@ func (c *C) PackFoo() []byte {
 	return enc
 }
 
-func (c *C) UnpackError(raw []byte) any {
-	// TODO: we should be able to discern the error type from the selector, instead of trying each possible type
-	// strip off the error type selector
-	raw = raw[4:]
-
-	if val, err := c.UnpackBadThingError(raw); err == nil {
-		return val
-
-	} else if val, err := c.UnpackBadThing2Error(raw); err == nil {
-		return val
-
+// UnpackError attempts to decode the provided error data using user-defined
+// error definitions.
+func (c *C) UnpackError(raw []byte) (any, error) {
+	if bytes.Equal(raw[:4], c.abi.Errors["BadThing"].ID.Bytes()[:4]) {
+		return c.UnpackBadThingError(raw[4:])
 	}
-	return nil
+	if bytes.Equal(raw[:4], c.abi.Errors["BadThing2"].ID.Bytes()[:4]) {
+		return c.UnpackBadThing2Error(raw[4:])
+	}
+	return nil, errors.New("Unknown error")
 }
 
 // CBadThing represents a BadThing error raised by the C contract.
@@ -94,14 +95,20 @@ type CBadThing struct {
 	Arg4 bool
 }
 
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error BadThing(uint256 arg1, uint256 arg2, uint256 arg3, bool arg4)
 func CBadThingErrorID() common.Hash {
 	return common.HexToHash("0xbb6a82f123854747ef4381e30e497f934a3854753fec99a69c35c30d4b46714d")
 }
 
+// UnpackBadThingError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error BadThing(uint256 arg1, uint256 arg2, uint256 arg3, bool arg4)
 func (c *C) UnpackBadThingError(raw []byte) (*CBadThing, error) {
-	errName := "BadThing"
 	out := new(CBadThing)
-	if err := c.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+	if err := c.abi.UnpackIntoInterface(out, "BadThing", raw); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -115,14 +122,20 @@ type CBadThing2 struct {
 	Arg4 *big.Int
 }
 
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error BadThing2(uint256 arg1, uint256 arg2, uint256 arg3, uint256 arg4)
 func CBadThing2ErrorID() common.Hash {
 	return common.HexToHash("0xd233a24f02271fe7c9470e060d0fda6447a142bf12ab31fed7ab65affd546175")
 }
 
+// UnpackBadThing2Error is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error BadThing2(uint256 arg1, uint256 arg2, uint256 arg3, uint256 arg4)
 func (c *C) UnpackBadThing2Error(raw []byte) (*CBadThing2, error) {
-	errName := "BadThing2"
 	out := new(CBadThing2)
-	if err := c.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+	if err := c.abi.UnpackIntoInterface(out, "BadThing2", raw); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -155,7 +168,8 @@ func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Foo is a free data retrieval call binding the contract method 0xbfb4ebcf.
+// Foo is the Go binding used to pack the parameters required for calling
+// the contract method 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
 func (c2 *C2) PackFoo() []byte {
@@ -166,16 +180,13 @@ func (c2 *C2) PackFoo() []byte {
 	return enc
 }
 
-func (c2 *C2) UnpackError(raw []byte) any {
-	// TODO: we should be able to discern the error type from the selector, instead of trying each possible type
-	// strip off the error type selector
-	raw = raw[4:]
-
-	if val, err := c2.UnpackBadThingError(raw); err == nil {
-		return val
-
+// UnpackError attempts to decode the provided error data using user-defined
+// error definitions.
+func (c2 *C2) UnpackError(raw []byte) (any, error) {
+	if bytes.Equal(raw[:4], c2.abi.Errors["BadThing"].ID.Bytes()[:4]) {
+		return c2.UnpackBadThingError(raw[4:])
 	}
-	return nil
+	return nil, errors.New("Unknown error")
 }
 
 // C2BadThing represents a BadThing error raised by the C2 contract.
@@ -186,14 +197,20 @@ type C2BadThing struct {
 	Arg4 bool
 }
 
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error BadThing(uint256 arg1, uint256 arg2, uint256 arg3, bool arg4)
 func C2BadThingErrorID() common.Hash {
 	return common.HexToHash("0xbb6a82f123854747ef4381e30e497f934a3854753fec99a69c35c30d4b46714d")
 }
 
+// UnpackBadThingError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error BadThing(uint256 arg1, uint256 arg2, uint256 arg3, bool arg4)
 func (c2 *C2) UnpackBadThingError(raw []byte) (*C2BadThing, error) {
-	errName := "BadThing"
 	out := new(C2BadThing)
-	if err := c2.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+	if err := c2.abi.UnpackIntoInterface(out, "BadThing", raw); err != nil {
 		return nil, err
 	}
 	return out, nil

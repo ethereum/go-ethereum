@@ -4,6 +4,7 @@
 package events
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -55,7 +57,8 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) *bind.Bo
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// DoSomethingWithManyArgs is a free data retrieval call binding the contract method 0x6fd8b968.
+// DoSomethingWithManyArgs is the Go binding used to pack the parameters required for calling
+// the contract method 0x6fd8b968.
 //
 // Solidity: function DoSomethingWithManyArgs() pure returns(uint256, uint256, uint256, bool)
 func (c *C) PackDoSomethingWithManyArgs() []byte {
@@ -66,6 +69,8 @@ func (c *C) PackDoSomethingWithManyArgs() []byte {
 	return enc
 }
 
+// DoSomethingWithManyArgsOutput serves as a container for the return parameters of contract
+// method DoSomethingWithManyArgs.
 type DoSomethingWithManyArgsOutput struct {
 	Arg0 *big.Int
 	Arg1 *big.Int
@@ -73,27 +78,26 @@ type DoSomethingWithManyArgsOutput struct {
 	Arg3 bool
 }
 
+// UnpackDoSomethingWithManyArgs is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x6fd8b968.
+//
+// Solidity: function DoSomethingWithManyArgs() pure returns(uint256, uint256, uint256, bool)
 func (c *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgsOutput, error) {
 	out, err := c.abi.Unpack("DoSomethingWithManyArgs", data)
-
 	outstruct := new(DoSomethingWithManyArgsOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-
 	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-
 	outstruct.Arg2 = abi.ConvertType(out[2], new(big.Int)).(*big.Int)
-
 	outstruct.Arg3 = *abi.ConvertType(out[3], new(bool)).(*bool)
-
 	return *outstruct, err
 
 }
 
-// DoSomethingWithPoint is a free data retrieval call binding the contract method 0xedcdc894.
+// DoSomethingWithPoint is the Go binding used to pack the parameters required for calling
+// the contract method 0xedcdc894.
 //
 // Solidity: function DoSomethingWithPoint((uint256,uint256) p) pure returns((uint256,uint256))
 func (c *C) PackDoSomethingWithPoint(P CPoint) []byte {
@@ -104,20 +108,21 @@ func (c *C) PackDoSomethingWithPoint(P CPoint) []byte {
 	return enc
 }
 
+// UnpackDoSomethingWithPoint is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xedcdc894.
+//
+// Solidity: function DoSomethingWithPoint((uint256,uint256) p) pure returns((uint256,uint256))
 func (c *C) UnpackDoSomethingWithPoint(data []byte) (CPoint, error) {
 	out, err := c.abi.Unpack("DoSomethingWithPoint", data)
-
 	if err != nil {
 		return *new(CPoint), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new(CPoint)).(*CPoint)
-
 	return out0, err
-
 }
 
-// EmitMulti is a free data retrieval call binding the contract method 0xcb493749.
+// EmitMulti is the Go binding used to pack the parameters required for calling
+// the contract method 0xcb493749.
 //
 // Solidity: function EmitMulti() returns()
 func (c *C) PackEmitMulti() []byte {
@@ -128,7 +133,8 @@ func (c *C) PackEmitMulti() []byte {
 	return enc
 }
 
-// EmitOne is a free data retrieval call binding the contract method 0xe8e49a71.
+// EmitOne is the Go binding used to pack the parameters required for calling
+// the contract method 0xe8e49a71.
 //
 // Solidity: function EmitOne() returns()
 func (c *C) PackEmitOne() []byte {
@@ -143,15 +149,21 @@ func (c *C) PackEmitOne() []byte {
 type CBasic1 struct {
 	Id   *big.Int
 	Data *big.Int
-	Raw  *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const CBasic1EventName = "basic1"
 
+// ContractEventName returns the user-defined event name.
 func (CBasic1) ContractEventName() string {
 	return CBasic1EventName
 }
 
+// UnpackBasic1Event is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event basic1(uint256 indexed id, uint256 data)
 func (c *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
 	event := "basic1"
 	if log.Topics[0] != c.abi.Events[event].ID {
@@ -180,15 +192,21 @@ func (c *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
 type CBasic2 struct {
 	Flag bool
 	Data *big.Int
-	Raw  *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const CBasic2EventName = "basic2"
 
+// ContractEventName returns the user-defined event name.
 func (CBasic2) ContractEventName() string {
 	return CBasic2EventName
 }
 
+// UnpackBasic2Event is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event basic2(bool indexed flag, uint256 data)
 func (c *C) UnpackBasic2Event(log *types.Log) (*CBasic2, error) {
 	event := "basic2"
 	if log.Topics[0] != c.abi.Events[event].ID {

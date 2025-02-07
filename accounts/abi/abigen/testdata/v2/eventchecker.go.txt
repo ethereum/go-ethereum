@@ -1,9 +1,10 @@
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package convertedv1bindtests
+package bindtests
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -54,15 +56,21 @@ type EventCheckerDynamic struct {
 	IdxDat common.Hash
 	Str    string
 	Dat    []byte
-	Raw    *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const EventCheckerDynamicEventName = "dynamic"
 
+// ContractEventName returns the user-defined event name.
 func (EventCheckerDynamic) ContractEventName() string {
 	return EventCheckerDynamicEventName
 }
 
+// UnpackDynamicEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event dynamic(string indexed idxStr, bytes indexed idxDat, string str, bytes dat)
 func (eventChecker *EventChecker) UnpackDynamicEvent(log *types.Log) (*EventCheckerDynamic, error) {
 	event := "dynamic"
 	if log.Topics[0] != eventChecker.abi.Events[event].ID {
@@ -94,10 +102,15 @@ type EventCheckerEmpty struct {
 
 const EventCheckerEmptyEventName = "empty"
 
+// ContractEventName returns the user-defined event name.
 func (EventCheckerEmpty) ContractEventName() string {
 	return EventCheckerEmptyEventName
 }
 
+// UnpackEmptyEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event empty()
 func (eventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventCheckerEmpty, error) {
 	event := "empty"
 	if log.Topics[0] != eventChecker.abi.Events[event].ID {
@@ -126,15 +139,21 @@ func (eventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventChecke
 type EventCheckerIndexed struct {
 	Addr common.Address
 	Num  *big.Int
-	Raw  *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const EventCheckerIndexedEventName = "indexed"
 
+// ContractEventName returns the user-defined event name.
 func (EventCheckerIndexed) ContractEventName() string {
 	return EventCheckerIndexedEventName
 }
 
+// UnpackIndexedEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event indexed(address indexed addr, int256 indexed num)
 func (eventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventCheckerIndexed, error) {
 	event := "indexed"
 	if log.Topics[0] != eventChecker.abi.Events[event].ID {
@@ -163,15 +182,21 @@ func (eventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventChec
 type EventCheckerMixed struct {
 	Addr common.Address
 	Num  *big.Int
-	Raw  *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const EventCheckerMixedEventName = "mixed"
 
+// ContractEventName returns the user-defined event name.
 func (EventCheckerMixed) ContractEventName() string {
 	return EventCheckerMixedEventName
 }
 
+// UnpackMixedEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event mixed(address indexed addr, int256 num)
 func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventCheckerMixed, error) {
 	event := "mixed"
 	if log.Topics[0] != eventChecker.abi.Events[event].ID {
@@ -200,15 +225,21 @@ func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventChecke
 type EventCheckerUnnamed struct {
 	Arg0 *big.Int
 	Arg1 *big.Int
-	Raw  *types.Log // Blockchain specific contextual infos
+
+	Raw *types.Log // Blockchain specific contextual infos
 }
 
 const EventCheckerUnnamedEventName = "unnamed"
 
+// ContractEventName returns the user-defined event name.
 func (EventCheckerUnnamed) ContractEventName() string {
 	return EventCheckerUnnamedEventName
 }
 
+// UnpackUnnamedEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event unnamed(uint256 indexed arg0, uint256 indexed arg1)
 func (eventChecker *EventChecker) UnpackUnnamedEvent(log *types.Log) (*EventCheckerUnnamed, error) {
 	event := "unnamed"
 	if log.Topics[0] != eventChecker.abi.Events[event].ID {

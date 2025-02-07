@@ -1,9 +1,10 @@
 // Code generated via abigen V2 - DO NOT EDIT.
 // This file is a generated binding and any manual changes will be lost.
 
-package convertedv1bindtests
+package bindtests
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 
@@ -15,6 +16,7 @@ import (
 
 // Reference imports to suppress errors if they are not otherwise used.
 var (
+	_ = bytes.Equal
 	_ = errors.New
 	_ = big.NewInt
 	_ = common.Big1
@@ -54,7 +56,8 @@ func (c *Structs) Instance(backend bind.ContractBackend, addr common.Address) *b
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// F is a free data retrieval call binding the contract method 0x28811f59.
+// F is the Go binding used to pack the parameters required for calling
+// the contract method 0x28811f59.
 //
 // Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
 func (structs *Structs) PackF() []byte {
@@ -65,31 +68,33 @@ func (structs *Structs) PackF() []byte {
 	return enc
 }
 
+// FOutput serves as a container for the return parameters of contract
+// method F.
 type FOutput struct {
 	A []Struct0
 	C []*big.Int
 	D []bool
 }
 
+// UnpackF is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x28811f59.
+//
+// Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
 func (structs *Structs) UnpackF(data []byte) (FOutput, error) {
 	out, err := structs.abi.Unpack("F", data)
-
 	outstruct := new(FOutput)
 	if err != nil {
 		return *outstruct, err
 	}
-
 	outstruct.A = *abi.ConvertType(out[0], new([]Struct0)).(*[]Struct0)
-
 	outstruct.C = *abi.ConvertType(out[1], new([]*big.Int)).(*[]*big.Int)
-
 	outstruct.D = *abi.ConvertType(out[2], new([]bool)).(*[]bool)
-
 	return *outstruct, err
 
 }
 
-// G is a free data retrieval call binding the contract method 0x6fecb623.
+// G is the Go binding used to pack the parameters required for calling
+// the contract method 0x6fecb623.
 //
 // Solidity: function G() view returns((bytes32)[] a)
 func (structs *Structs) PackG() []byte {
@@ -100,15 +105,15 @@ func (structs *Structs) PackG() []byte {
 	return enc
 }
 
+// UnpackG is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x6fecb623.
+//
+// Solidity: function G() view returns((bytes32)[] a)
 func (structs *Structs) UnpackG(data []byte) ([]Struct0, error) {
 	out, err := structs.abi.Unpack("G", data)
-
 	if err != nil {
 		return *new([]Struct0), err
 	}
-
 	out0 := *abi.ConvertType(out[0], new([]Struct0)).(*[]Struct0)
-
 	return out0, err
-
 }
