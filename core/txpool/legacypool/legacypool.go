@@ -567,7 +567,7 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			if list := pool.queue[addr]; list != nil {
 				have += list.Len()
 			}
-			if pool.currentState.GetCode(addr) != nil {
+			if pool.currentState.GetCodeHash(addr) != types.EmptyCodeHash {
 				// Allow at most one in-flight tx for delegated accounts.
 				return have, max(0, 1-have)
 			}
