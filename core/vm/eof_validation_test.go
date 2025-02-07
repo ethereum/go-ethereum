@@ -309,7 +309,7 @@ func BenchmarkRJUMPV(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &pragueInstructionSet, false)
+		_, err := validateCode(code, 0, container, &eofInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -357,7 +357,7 @@ func BenchmarkEOFValidation(b *testing.B) {
 		if err := container2.UnmarshalBinary(bin, true); err != nil {
 			b.Fatal(err)
 		}
-		if err := container2.ValidateCode(&pragueInstructionSet, false); err != nil {
+		if err := container2.ValidateCode(&eofInstructionSet, false); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -412,7 +412,7 @@ func BenchmarkEOFValidation2(b *testing.B) {
 		if err := container2.UnmarshalBinary(bin, true); err != nil {
 			b.Fatal(err)
 		}
-		if err := container2.ValidateCode(&pragueInstructionSet, false); err != nil {
+		if err := container2.ValidateCode(&eofInstructionSet, false); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -468,7 +468,7 @@ func BenchmarkEOFValidation3(b *testing.B) {
 			if err := container2.UnmarshalBinary(bin, true); err != nil {
 				b.Fatal(err)
 			}
-			if err := container2.ValidateCode(&pragueInstructionSet, false); err != nil {
+			if err := container2.ValidateCode(&eofInstructionSet, false); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -494,7 +494,7 @@ func BenchmarkRJUMPI_2(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &pragueInstructionSet, false)
+		_, err := validateCode(code, 0, container, &eofInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -512,6 +512,6 @@ func FuzzValidate(f *testing.F) {
 	f.Fuzz(func(_ *testing.T, code []byte, maxStack uint16) {
 		var container Container
 		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: maxStack})
-		validateCode(code, 0, &container, &pragueInstructionSet, true)
+		validateCode(code, 0, &container, &eofInstructionSet, true)
 	})
 }

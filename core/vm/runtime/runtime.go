@@ -183,7 +183,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		input,
 		cfg.GasLimit,
 		uint256.MustFromBig(cfg.Value),
-		rules.IsPrague,
+		rules.IsOsaka,
 	)
 	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
 		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
