@@ -435,7 +435,10 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		if !f.deadline.Stop() {
 			// timer expired but filter is not yet removed in timeout loop
 			// receive timer value and reset timer
-			<-f.deadline.C
+			select {
+			case <-f.deadline.C:
+			default:
+			}
 		}
 		f.deadline.Reset(api.timeout)
 
