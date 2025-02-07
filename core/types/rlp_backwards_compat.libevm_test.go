@@ -116,8 +116,8 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 	newHdr := func(hashLow byte) *Header { return &Header{ParentHash: common.Hash{hashLow}} }
 	newWithdraw := func(idx uint64) *Withdrawal { return &Withdrawal{Index: idx} }
 
-	// We build up test-case [Body] instances from the power set of each of
-	// these components.
+	// We build up test-case [Body] instances from the Cartesian product of each
+	// of these components.
 	txMatrix := [][]*Transaction{
 		nil, {}, // Must be equivalent for non-optional field
 		{newTx(1)},
@@ -197,35 +197,33 @@ type cChainBodyExtras struct {
 
 var _ BodyHooks = (*cChainBodyExtras)(nil)
 
-func (e *cChainBodyExtras) AppendRLPFields(b rlp.EncoderBuffer, _ bool) error {
-	b.WriteUint64(uint64(e.Version))
-
-	var data []byte
-	if e.ExtData != nil {
-		data = *e.ExtData
+func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) *rlp.Fields {
+	// The Avalanche C-Chain uses all of the geth required fields (but none of
+	// the optional ones) so there's no need to explicitly list them. This
+	// pattern might not be ideal for readability but is used here for
+	// demonstrative purposes.
+	//
+	// All new fields will always be tagged as optional for backwards
+	// compatibility so this is safe to do, but only for the required fields.
+	return &rlp.Fields{
+		Required: append(
+			NOOPBodyHooks{}.RLPFieldsForEncoding(b).Required,
+			e.Version, e.ExtData,
+		),
 	}
-	b.WriteBytes(data)
-
-	return nil
 }
 
-func (e *cChainBodyExtras) DecodeExtraRLPFields(s *rlp.Stream) error {
-	if err := s.Decode(&e.Version); err != nil {
-		return err
+func (e *cChainBodyExtras) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+	// An alternative to the pattern used above is to explicitly list all
+	// fields for better introspection.
+	return &rlp.Fields{
+		Required: []any{
+			&b.Transactions,
+			&b.Uncles,
+			&e.Version,
+			rlp.Nillable(&e.ExtData), // equivalent to `rlp:"nil"`
+		},
 	}
-
-	buf, err := s.Bytes()
-	if err != nil {
-		return err
-	}
-	if len(buf) > 0 {
-		e.ExtData = &buf
-	} else {
-		// Respect the `rlp:"nil"` field tag.
-		e.ExtData = nil
-	}
-
-	return nil
 }
 
 func TestBodyRLPCChainCompat(t *testing.T) {
@@ -256,12 +254,14 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 		wantRLPHex string
 	}{
 		{
+			name: "nil_ExtData",
 			extra: &cChainBodyExtras{
 				Version: version,
 			},
 			wantRLPHex: `e5dedd2a80809400000000000000000000000000decafc0ffeebad8080808080c08304cb2f80`,
 		},
 		{
+			name: "non-nil_ExtData",
 			extra: &cChainBodyExtras{
 				Version: version,
 				ExtData: &[]byte{1, 4, 2, 8, 5, 7},

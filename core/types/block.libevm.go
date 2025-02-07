@@ -112,79 +112,26 @@ func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 }
 func (*NOOPHeaderHooks) PostCopy(dst *Header) {}
 
-var (
-	_ interface {
-		rlp.Encoder
-		rlp.Decoder
-	} = (*Body)(nil)
-
-	// The implementations of [Body.EncodeRLP] and [Body.DecodeRLP] make
-	// assumptions about the struct fields and their order, which we lock in here as a change
-	// detector. If this breaks then it MUST be updated and the RLP methods
-	// reviewed + new backwards-compatibility tests added.
-	_ = &Body{[]*Transaction{}, []*Header{}, []*Withdrawal{}}
-)
+var _ interface {
+	rlp.Encoder
+	rlp.Decoder
+} = (*Body)(nil)
 
 // EncodeRLP implements the [rlp.Encoder] interface.
-func (b *Body) EncodeRLP(dst io.Writer) error {
-	w := rlp.NewEncoderBuffer(dst)
-
-	return w.InList(func() error {
-		if err := rlp.EncodeListToBuffer(w, b.Transactions); err != nil {
-			return err
-		}
-		if err := rlp.EncodeListToBuffer(w, b.Uncles); err != nil {
-			return err
-		}
-
-		hasLaterOptionalField := b.Withdrawals != nil
-		if err := b.hooks().AppendRLPFields(w, hasLaterOptionalField); err != nil {
-			return err
-		}
-		if !hasLaterOptionalField {
-			return nil
-		}
-		return rlp.EncodeListToBuffer(w, b.Withdrawals)
-	})
+func (b *Body) EncodeRLP(w io.Writer) error {
+	return b.hooks().RLPFieldsForEncoding(b).EncodeRLP(w)
 }
 
 // DecodeRLP implements the [rlp.Decoder] interface.
 func (b *Body) DecodeRLP(s *rlp.Stream) error {
-	return s.FromList(func() error {
-		txs, err := rlp.DecodeList[Transaction](s)
-		if err != nil {
-			return err
-		}
-		uncles, err := rlp.DecodeList[Header](s)
-		if err != nil {
-			return err
-		}
-		*b = Body{
-			Transactions: txs,
-			Uncles:       uncles,
-		}
-
-		if err := b.hooks().DecodeExtraRLPFields(s); err != nil {
-			return err
-		}
-		if !s.MoreDataInList() {
-			return nil
-		}
-
-		ws, err := rlp.DecodeList[Withdrawal](s)
-		if err != nil {
-			return err
-		}
-		b.Withdrawals = ws
-		return nil
-	})
+	return b.hooks().RLPFieldPointersForDecoding(b).DecodeRLP(s)
 }
 
 // BodyHooks are required for all types registered with [RegisterExtras] for
 // [Body] payloads.
 type BodyHooks interface {
-	AppendRLPFields(_ rlp.EncoderBuffer, mustWriteEmptyOptional bool) error
-	DecodeExtraRLPFields(*rlp.Stream) error
+	RLPFieldsForEncoding(*Body) *rlp.Fields
+	RLPFieldPointersForDecoding(*Body) *rlp.Fields
 }
 
 // TestOnlyRegisterBodyHooks is a temporary means of "registering" BodyHooks for
@@ -209,5 +156,22 @@ func (b *Body) hooks() BodyHooks {
 // having been registered.
 type NOOPBodyHooks struct{}
 
-func (NOOPBodyHooks) AppendRLPFields(rlp.EncoderBuffer, bool) error { return nil }
-func (NOOPBodyHooks) DecodeExtraRLPFields(*rlp.Stream) error        { return nil }
+// The RLP-related methods of [NOOPBodyHooks] make assumptions about the struct
+// fields and their order, which we lock in here as a change detector. If this
+// breaks then it MUST be updated and the RLP methods reviewed + new
+// backwards-compatibility tests added.
+var _ = &Body{[]*Transaction{}, []*Header{}, []*Withdrawal{}}
+
+func (NOOPBodyHooks) RLPFieldsForEncoding(b *Body) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{b.Transactions, b.Uncles},
+		Optional: []any{b.Withdrawals},
+	}
+}
+
+func (NOOPBodyHooks) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{&b.Transactions, &b.Uncles},
+		Optional: []any{&b.Withdrawals},
+	}
+}
