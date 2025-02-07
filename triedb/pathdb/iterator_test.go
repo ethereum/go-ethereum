@@ -198,8 +198,8 @@ func newTestIterator(values ...byte) *testIterator {
 	return &testIterator{values}
 }
 
-func (ti *testIterator) Seek(common.Hash) {
-	panic("implement me")
+func (ti *testIterator) Seek(hash common.Hash) {
+	// No-op: Seek operation is not supported in this test iterator
 }
 
 func (ti *testIterator) Next() bool {
