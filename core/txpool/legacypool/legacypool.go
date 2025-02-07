@@ -1662,14 +1662,14 @@ type lookup struct {
 	lock  sync.RWMutex
 	txs   map[common.Hash]*types.Transaction
 
-	auths map[common.Address][]*types.Transaction // All accounts with a pooled authorization
+	auths map[common.Address][]common.Hash // All accounts with a pooled authorization
 }
 
 // newLookup returns a new lookup structure.
 func newLookup() *lookup {
 	return &lookup{
 		txs:   make(map[common.Hash]*types.Transaction),
-		auths: make(map[common.Address][]*types.Transaction),
+		auths: make(map[common.Address][]common.Hash),
 	}
 }
 
@@ -1728,6 +1728,7 @@ func (t *lookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
+	t.removeAuthorities(hash)
 	tx, ok := t.txs[hash]
 	if !ok {
 		log.Error("No transaction found to be deleted", "hash", hash)
@@ -1735,7 +1736,6 @@ func (t *lookup) Remove(hash common.Hash) {
 	}
 	t.slots -= numSlots(tx)
 	slotsGauge.Update(int64(t.slots))
-	t.removeAuthorities(tx)
 
 	delete(t.txs, hash)
 }
@@ -1758,27 +1758,27 @@ func (t *lookup) addAuthorities(tx *types.Transaction) {
 	for _, addr := range tx.Authorities() {
 		list, ok := t.auths[addr]
 		if !ok {
-			list = []*types.Transaction{}
+			list = []common.Hash{}
 		}
-		if slices.Contains(list, tx) {
+		if slices.Contains(list, tx.Hash()) {
 			// Don't add duplicates.
 			continue
 		}
-		list = append(list, tx)
+		list = append(list, tx.Hash())
 		t.auths[addr] = list
 	}
 }
 
 // removeAuthorities stops tracking the supplied tx in relation to its
 // authorities.
-func (t *lookup) removeAuthorities(tx *types.Transaction) {
-	for _, addr := range tx.Authorities() {
-		// Remove tx from tracker.
+func (t *lookup) removeAuthorities(hash common.Hash) {
+	for addr := range t.auths {
 		list := t.auths[addr]
-		if i := slices.Index(list, tx); i >= 0 {
+		// Remove tx from tracker.
+		if i := slices.Index(list, hash); i >= 0 {
 			list = append(list[:i], list[i+1:]...)
 		} else {
-			log.Error("Authority with untracked tx", "addr", addr, "hash", tx.Hash())
+			log.Error("Authority with untracked tx", "addr", addr, "hash", hash)
 		}
 		if len(list) == 0 {
 			// If list is newly empty, delete it entirely.
