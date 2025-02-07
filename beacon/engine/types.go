@@ -380,6 +380,19 @@ func (inclusionList *InclusionList) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
+func InclusionListToTransactions(inclusionList InclusionList) ([]*types.Transaction, error) {
+	txs, err := decodeTransactions(inclusionList)
+	if err != nil {
+		return nil, err
+	}
+
+	return txs, nil
+}
+
+func TransactionsToInclusionList(txs []*types.Transaction) InclusionList {
+	return encodeTransactions(txs)
+}
+
 // Client identifiers to support ClientVersionV1.
 const (
 	ClientCode = "GE"
