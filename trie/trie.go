@@ -28,7 +28,9 @@ import (
 )
 
 var (
-	// TODO: remove file core/types/derive_sha.go, then remove emptyRoot and emptyState
+	// TODO(daniel):
+	// 1. remove file core/types/derive_sha.go, Ref: #21502
+	// 2. then replace emptyRoot, emptyState with types.EmptyRootHash, types.EmptyCodeHash, Ref: #26718
 
 	// emptyRoot is the known root hash of an empty trie.
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")

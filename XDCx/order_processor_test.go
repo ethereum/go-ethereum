@@ -8,6 +8,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 )
 
 func Test_getCancelFeeV1(t *testing.T) {
@@ -92,7 +93,7 @@ func Test_getCancelFee(t *testing.T) {
 	XDCx := New(&DefaultConfig)
 	db := rawdb.NewMemoryDatabase()
 	stateCache := tradingstate.NewDatabase(db)
-	tradingStateDb, _ := tradingstate.New(common.Hash{}, stateCache)
+	tradingStateDb, _ := tradingstate.New(types.EmptyRootHash, stateCache)
 
 	testTokenA := common.HexToAddress("0x1000000000000000000000000000000000000002")
 	testTokenB := common.HexToAddress("0x1100000000000000000000000000000000000003")

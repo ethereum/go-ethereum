@@ -42,7 +42,7 @@ type testAccount struct {
 func makeTestState() (Database, common.Hash, []*testAccount) {
 	// Create an empty state
 	db := NewDatabase(rawdb.NewMemoryDatabase())
-	state, _ := New(common.Hash{}, db)
+	state, _ := New(types.EmptyRootHash, db)
 
 	// Fill it with some arbitrary data
 	accounts := []*testAccount{}

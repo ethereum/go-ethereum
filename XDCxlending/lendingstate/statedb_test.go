@@ -23,6 +23,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 )
 
 func TestEchangeStates(t *testing.T) {
@@ -40,7 +41,7 @@ func TestEchangeStates(t *testing.T) {
 	// Create an empty statedb database
 	db := rawdb.NewMemoryDatabase()
 	stateCache := NewDatabase(db)
-	statedb, _ := New(common.Hash{}, stateCache)
+	statedb, _ := New(types.EmptyRootHash, stateCache)
 
 	// Update it with some lenddinges
 	for i := 0; i < numberOrder; i++ {
@@ -127,7 +128,7 @@ func TestRevertStates(t *testing.T) {
 	// Create an empty statedb database
 	db := rawdb.NewMemoryDatabase()
 	stateCache := NewDatabase(db)
-	statedb, _ := New(common.Hash{}, stateCache)
+	statedb, _ := New(types.EmptyRootHash, stateCache)
 
 	// Update it with some lenddinges
 	for i := 0; i < numberOrder; i++ {
@@ -234,7 +235,7 @@ func TestDumpStates(t *testing.T) {
 	// Create an empty statedb database
 	db := rawdb.NewMemoryDatabase()
 	stateCache := NewDatabase(db)
-	statedb, _ := New(common.Hash{}, stateCache)
+	statedb, _ := New(types.EmptyRootHash, stateCache)
 	for i := 0; i < len(orderItems); i++ {
 		orderIdHash := common.BigToHash(new(big.Int).SetUint64(orderItems[i].LendingId))
 		statedb.InsertLendingItem(orderBook, orderIdHash, orderItems[i])

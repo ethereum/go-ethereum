@@ -147,7 +147,7 @@ func NewChtIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer {
 
 // Reset implements core.ChainIndexerBackend
 func (c *ChtIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) error {
-	var root common.Hash
+	root := types.EmptyRootHash
 	if section > 0 {
 		root = GetChtRoot(c.diskdb, section-1, lastSectionHead)
 	}
@@ -245,7 +245,7 @@ func NewBloomTrieIndexer(db ethdb.Database, clientMode bool) *core.ChainIndexer 
 
 // Reset implements core.ChainIndexerBackend
 func (b *BloomTrieIndexerBackend) Reset(section uint64, lastSectionHead common.Hash) error {
-	var root common.Hash
+	root := types.EmptyRootHash
 	if section > 0 {
 		root = GetBloomTrieRoot(b.diskdb, section-1, lastSectionHead)
 	}

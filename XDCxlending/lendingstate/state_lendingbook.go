@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
@@ -128,7 +129,7 @@ func (le *lendingExchangeState) getLendingItemTrie(db Database) Trie {
 		var err error
 		le.lendingItemTrie, err = db.OpenStorageTrie(le.lendingBook, le.data.LendingItemRoot)
 		if err != nil {
-			le.lendingItemTrie, _ = db.OpenStorageTrie(le.lendingBook, EmptyHash)
+			le.lendingItemTrie, _ = db.OpenStorageTrie(le.lendingBook, types.EmptyRootHash)
 			le.setError(fmt.Errorf("can't create Lendings trie: %v", err))
 		}
 	}
@@ -140,7 +141,7 @@ func (le *lendingExchangeState) getLendingTradeTrie(db Database) Trie {
 		var err error
 		le.lendingTradeTrie, err = db.OpenStorageTrie(le.lendingBook, le.data.LendingTradeRoot)
 		if err != nil {
-			le.lendingTradeTrie, _ = db.OpenStorageTrie(le.lendingBook, EmptyHash)
+			le.lendingTradeTrie, _ = db.OpenStorageTrie(le.lendingBook, types.EmptyRootHash)
 			le.setError(fmt.Errorf("can't create Lendings trie: %v", err))
 		}
 	}
@@ -152,7 +153,7 @@ func (le *lendingExchangeState) getInvestingTrie(db Database) Trie {
 		var err error
 		le.investingTrie, err = db.OpenStorageTrie(le.lendingBook, le.data.InvestingRoot)
 		if err != nil {
-			le.investingTrie, _ = db.OpenStorageTrie(le.lendingBook, EmptyHash)
+			le.investingTrie, _ = db.OpenStorageTrie(le.lendingBook, types.EmptyRootHash)
 			le.setError(fmt.Errorf("can't create Lendings trie: %v", err))
 		}
 	}
@@ -164,7 +165,7 @@ func (le *lendingExchangeState) getBorrowingTrie(db Database) Trie {
 		var err error
 		le.borrowingTrie, err = db.OpenStorageTrie(le.lendingBook, le.data.BorrowingRoot)
 		if err != nil {
-			le.borrowingTrie, _ = db.OpenStorageTrie(le.lendingBook, EmptyHash)
+			le.borrowingTrie, _ = db.OpenStorageTrie(le.lendingBook, types.EmptyRootHash)
 			le.setError(fmt.Errorf("can't create bids trie: %v", err))
 		}
 	}
@@ -176,7 +177,7 @@ func (le *lendingExchangeState) getLiquidationTimeTrie(db Database) Trie {
 		var err error
 		le.liquidationTimeTrie, err = db.OpenStorageTrie(le.lendingBook, le.data.LiquidationTimeRoot)
 		if err != nil {
-			le.liquidationTimeTrie, _ = db.OpenStorageTrie(le.lendingBook, EmptyHash)
+			le.liquidationTimeTrie, _ = db.OpenStorageTrie(le.lendingBook, types.EmptyRootHash)
 			le.setError(fmt.Errorf("can't create bids trie: %v", err))
 		}
 	}
