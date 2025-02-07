@@ -483,8 +483,8 @@ func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
 	return setcodetx.AuthList
 }
 
-// Authorities returns a list of each authorization's corresponding authority.
-func (tx *Transaction) Authorities() []common.Address {
+// SetCodeAuthorities returns a list of each authorization's corresponding authority.
+func (tx *Transaction) SetCodeAuthorities() []common.Address {
 	setcodetx, ok := tx.inner.(*SetCodeTx)
 	if !ok {
 		return nil

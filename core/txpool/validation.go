@@ -280,7 +280,7 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		// Verify no authorizations will invalidate existing transactions known to
 		// the pool.
 		if opts.KnownConflicts != nil {
-			if conflicts := opts.KnownConflicts(from, tx.Authorities()); len(conflicts) > 0 {
+			if conflicts := opts.KnownConflicts(from, tx.SetCodeAuthorities()); len(conflicts) > 0 {
 				return fmt.Errorf("%w: authorization conflicts with other known tx", ErrAuthorityReserved)
 			}
 		}

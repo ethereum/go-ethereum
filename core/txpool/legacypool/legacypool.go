@@ -1755,7 +1755,7 @@ func (t *lookup) TxsBelowTip(threshold *big.Int) types.Transactions {
 // addAuthorities tracks the supplied tx in relation to each authority it
 // specifies.
 func (t *lookup) addAuthorities(tx *types.Transaction) {
-	for _, addr := range tx.Authorities() {
+	for _, addr := range tx.SetCodeAuthorities() {
 		list, ok := t.auths[addr]
 		if !ok {
 			list = []common.Hash{}
