@@ -487,7 +487,7 @@ func opRandom(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	if interpreter.evm.Context.Random != nil {
 		v = new(uint256.Int).SetBytes((interpreter.evm.Context.Random.Bytes()))
 	} else { // if context random is not set, use emptyCodeHash as default
-		v = new(uint256.Int).SetBytes(emptyCodeHash.Bytes())
+		v = new(uint256.Int).SetBytes(types.EmptyCodeHash.Bytes())
 	}
 	scope.Stack.push(v)
 	return nil, nil
