@@ -491,7 +491,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// gas for initcode execution is not consumed.
 		// Only intrinsic creation transaction costs are charged.
 		if errors.Is(vmerr, vm.ErrInvalidEOFInitcode) {
-			st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
+			st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1, tracing.NonceChangeInvalidEOF)
 		}
 	} else {
 		// Increment the nonce for the next transaction.
