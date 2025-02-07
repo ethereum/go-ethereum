@@ -40,10 +40,9 @@ func MakeTestContainer(
 		idx += len(code)
 		testBytes = append(testBytes, code...)
 	}
-	codeSectionEnd := idx
+	codeSectionOffsets = append(codeSectionOffsets, idx)
 
 	var subContainerOffsets []int
-	subContainerEnd := 0
 	if len(subContainers) > 0 {
 		subContainerOffsets = make([]int, len(subContainers))
 		for _, subContainer := range subContainers {
@@ -52,7 +51,8 @@ func MakeTestContainer(
 			idx += len(containerBytes)
 			testBytes = append(testBytes, containerBytes...)
 		}
-		subContainerEnd = idx
+		// set the subContainer end marker
+		subContainerOffsets = append(subContainerOffsets, idx)
 	}
 
 	testBytes = append(testBytes, data...)
@@ -60,11 +60,8 @@ func MakeTestContainer(
 	return Container{
 		types:               types,
 		codeSectionOffsets:  codeSectionOffsets,
-		codeSectionEnd:      codeSectionEnd,
 		subContainers:       subContainers,
 		subContainerOffsets: subContainerOffsets,
-		subContainerEnd:     subContainerEnd,
-		dataOffest:          subContainerEnd,
 		dataSize:            dataSize,
 		rawContainer:        testBytes,
 	}
@@ -78,9 +75,7 @@ func TestEOFMarshaling(t *testing.T) {
 		{
 			want: Container{
 				types:              []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-				codeSectionOffsets: []int{19}, // 604200
-				codeSectionEnd:     22,
-				dataOffest:         22,
+				codeSectionOffsets: []int{19, 22}, // 604200, endMarker
 				dataSize:           3,
 				rawContainer:       common.Hex2Bytes("ef000101000402000100030400030000800001604200010203"),
 			},
@@ -92,9 +87,7 @@ func TestEOFMarshaling(t *testing.T) {
 					{inputs: 2, outputs: 3, maxStackHeight: 4},
 					{inputs: 1, outputs: 1, maxStackHeight: 1},
 				},
-				codeSectionOffsets: []int{31, 34, 39}, // 604200, 6042604200, 00
-				codeSectionEnd:     40,
-				dataOffest:         40,
+				codeSectionOffsets: []int{31, 34, 39, 40}, // 604200, 6042604200, 00, endMarker
 				rawContainer:       common.Hex2Bytes("ef000101000c02000300030005000104000000008000010203000401010001604200604260420000"),
 			},
 		},

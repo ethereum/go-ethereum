@@ -134,10 +134,11 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	if int(idx) >= len(scope.Contract.Container.subContainerOffsets) {
 		return nil, fmt.Errorf("invalid subcontainer")
 	}
+	subContainer := scope.Contract.Container.subContainerAt(int(idx))
 
 	// Deduct hashing charge
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
-	hashingCharge := (params.Keccak256WordGas) * ((uint64(scope.Contract.Container.subContainerSize(int(idx))) + 31) / 32)
+	hashingCharge := (params.Keccak256WordGas) * ((uint64(len(subContainer)) + 31) / 32)
 	if ok := scope.Contract.UseGas(hashingCharge, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified); !ok {
 		return nil, ErrGasUintOverflow
 	}
@@ -154,7 +155,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 	// Skip the immediate
 	*pc += 1
-	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, scope.Contract.Container.subContainerBytes(int(idx)), gas, &value, &salt)
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, subContainer, gas, &value, &salt)
 	if suberr != nil {
 		stackvalue.Clear()
 	} else {
@@ -185,7 +186,7 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 		return nil, fmt.Errorf("invalid subcontainer")
 	}
 	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
-	containerCode := scope.Contract.Container.subContainerBytes(int(idx))
+	containerCode := scope.Contract.Container.subContainerAt(int(idx))
 	if len(containerCode) == 0 {
 		return nil, errors.New("nonexistant subcontainer")
 	}
@@ -225,7 +226,7 @@ func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		stackItem.Clear()
 		scope.Stack.push(&stackItem)
 	} else {
-		data := getData(scope.Contract.Container.rawContainer, uint64(scope.Contract.Container.dataOffest)+offset, 32)
+		data := scope.Contract.Container.getDataAt(offset, 32)
 		scope.Stack.push(stackItem.SetBytes(data))
 	}
 	return nil, nil
@@ -236,7 +237,7 @@ func opDataLoadN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	var (
 		offset = uint64(binary.BigEndian.Uint16(scope.Contract.Code[*pc+1:]))
 	)
-	data := getData(scope.Contract.Container.rawContainer, uint64(scope.Contract.Container.dataOffest)+offset, 32)
+	data := scope.Contract.Container.getDataAt(offset, 32)
 	scope.Stack.push(new(uint256.Int).SetBytes(data))
 	*pc += 2 // move past 2 byte immediate
 	return nil, nil
@@ -258,7 +259,7 @@ func opDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	)
 	// These values are checked for overflow during memory expansion calculation
 	// (the memorySize function on the opcode).
-	data := getData(scope.Contract.Container.rawContainer, uint64(scope.Contract.Container.dataOffest)+offset.Uint64(), size.Uint64())
+	data := scope.Contract.Container.getDataAt(offset.Uint64(), size.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), size.Uint64(), data)
 	return nil, nil
 }
