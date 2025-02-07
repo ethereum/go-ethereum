@@ -353,7 +353,7 @@ func (f *Forensics) FindAncestorBlockHash(chain consensus.ChainReader, firstBloc
 	}
 
 	// Now, they are on the same starting line, we try find the common ancestor
-	for lowerBlockNumHash.Hex() != higherBlockNumberHash.Hex() {
+	for lowerBlockNumHash != higherBlockNumberHash {
 		lowerBlockNumHash = chain.GetHeaderByHash(lowerBlockNumHash).ParentHash
 		higherBlockNumberHash = chain.GetHeaderByHash(higherBlockNumberHash).ParentHash
 		// Append the path

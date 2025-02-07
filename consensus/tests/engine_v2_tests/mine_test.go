@@ -56,7 +56,7 @@ func TestYourTurnInitialV2(t *testing.T) {
 	assert.NotNil(t, snap)
 	masterNodes := adaptor.EngineV1.GetMasternodesFromCheckpointHeader(block900.Header())
 	for i := 0; i < len(masterNodes); i++ {
-		assert.Equal(t, masterNodes[i].Hex(), snap.NextEpochCandidates[i].Hex())
+		assert.Equal(t, masterNodes[i], snap.NextEpochCandidates[i])
 	}
 }
 

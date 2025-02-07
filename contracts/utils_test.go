@@ -106,7 +106,7 @@ func TestSendTxSign(t *testing.T) {
 			t.Fatalf("Can't get signers: %v", err)
 		}
 
-		if signers[0].String() != oldBlocks[blockHash].String() {
+		if signers[0] != oldBlocks[blockHash] {
 			t.Errorf("Tx sign for block signer not match %v - %v", signers[0].String(), oldBlocks[blockHash].String())
 		}
 
