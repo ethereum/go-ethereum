@@ -114,7 +114,7 @@ func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 	}
 	account := new(types.SlimAccount)
 	if err := rlp.DecodeBytes(blob, account); err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to decode account: %w", err)
 	}
 	return account, nil
 }
