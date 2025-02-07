@@ -107,7 +107,12 @@ func (b *PrestateTest) MarshalJSON() ([]byte, error) {
 	genesis["number"] = hexToIntegerString(genesis["number"].(string))
 	genesis["timestamp"] = hexToIntegerString(genesis["timestamp"].(string))
 	genesis["difficulty"] = hexToIntegerString(genesis["difficulty"].(string))
-	genesis["totalDifficulty"] = hexToIntegerString(genesis["totalDifficulty"].(string))
+	if genesis["totalDifficulty"] != nil {
+		genesis["totalDifficulty"] = hexToIntegerString(genesis["totalDifficulty"].(string))
+	} else {
+		// Total Difficulty has been nuked from the codebase, so we might not have it anymore
+		genesis["totalDifficulty"] = "0"
+	}
 
 	if found := genesis["baseFeePerGas"]; found != nil {
 		genesis["baseFeePerGas"] = hexToIntegerString(genesis["baseFeePerGas"].(string))
