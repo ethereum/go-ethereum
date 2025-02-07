@@ -65,4 +65,8 @@ var (
 	// signed by an address which already has in-flight transactions known to the
 	// pool.
 	ErrAuthorityReserved = errors.New("authority already reserved")
+
+	// ErrAuthorityNonce is returned if a transaction has an authorization with
+	// a nonce that is not currently valid for the authority.
+	ErrAuthorityNonceTooLow = errors.New("authority nonce too low")
 )
