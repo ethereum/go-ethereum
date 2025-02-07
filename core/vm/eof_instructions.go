@@ -131,7 +131,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 	)
-	if int(idx) >= len(scope.Contract.Container.subContainerOffsets) {
+	if int(idx) >= len(scope.Contract.Container.subContainerOffsets)-1 {
 		return nil, fmt.Errorf("invalid subcontainer")
 	}
 	subContainer := scope.Contract.Container.subContainerAt(int(idx))
@@ -182,7 +182,7 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 		offset = scope.Stack.pop()
 		size   = scope.Stack.pop()
 	)
-	if int(idx) >= len(scope.Contract.Container.subContainerOffsets) {
+	if int(idx) >= len(scope.Contract.Container.subContainerOffsets)-1 {
 		return nil, fmt.Errorf("invalid subcontainer")
 	}
 	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
