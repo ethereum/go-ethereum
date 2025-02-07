@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"slices"
@@ -348,6 +349,35 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 type ExecutionPayloadBody struct {
 	TransactionData []hexutil.Bytes     `json:"transactions"`
 	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+}
+
+// Max size of inclusion list in bytes.
+const MaxBytesPerInclusionList = uint64(8192)
+
+// InclusionList is a list of transactions that should be included in a payload.
+type InclusionList [][]byte
+
+func (inclusionList InclusionList) MarshalJSON() ([]byte, error) {
+	inclusionListHex := make([]hexutil.Bytes, len(inclusionList))
+	for i, tx := range inclusionList {
+		inclusionListHex[i] = tx
+	}
+
+	return json.Marshal(inclusionListHex)
+}
+
+func (inclusionList *InclusionList) UnmarshalJSON(input []byte) error {
+	var inclusionListHex []hexutil.Bytes
+	if err := json.Unmarshal(input, &inclusionListHex); err != nil {
+		return err
+	}
+
+	*inclusionList = make([][]byte, len(inclusionListHex))
+	for i, tx := range inclusionListHex {
+		(*inclusionList)[i] = tx
+	}
+
+	return nil
 }
 
 // Client identifiers to support ClientVersionV1.
