@@ -386,6 +386,10 @@ func geth(ctx *cli.Context) error {
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
+
+// 1.14.8 - We don't use cmd/geth for cli purposes,
+// and to maintain compatibility with the future upstream merges,
+// we are removing the backend ethapi.Backend param from the function signature.
 func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	// Start up the node itself
 	utils.StartNode(ctx, stack, isConsole)
