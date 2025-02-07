@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -18,7 +18,16 @@
 // equivalents.
 package legacy
 
-import "github.com/ava-labs/libevm/core/vm"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/ava-labs/libevm/core/vm"
+)
+
+var (
+	errRemainingGasExceedsSuppliedGas = errors.New("remaining gas exceeds supplied gas")
+)
 
 // PrecompiledStatefulContract is the legacy signature of
 // [vm.PrecompiledStatefulContract], which explicitly accepts and returns gas
@@ -31,8 +40,11 @@ func (c PrecompiledStatefulContract) Upgrade() vm.PrecompiledStatefulContract {
 	return func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
 		gas := env.Gas()
 		ret, remainingGas, err := c(env, input, gas)
-		if used := gas - remainingGas; used < gas {
-			env.UseGas(used)
+		if remainingGas > gas {
+			return ret, fmt.Errorf("%w: %d > %d", errRemainingGasExceedsSuppliedGas, remainingGas, gas)
+		}
+		if !env.UseGas(gas - remainingGas) {
+			return ret, vm.ErrOutOfGas
 		}
 		return ret, err
 	}
