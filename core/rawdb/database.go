@@ -31,6 +31,7 @@ import (
 	"github.com/ava-labs/libevm/ethdb/leveldb"
 	"github.com/ava-labs/libevm/ethdb/memorydb"
 	"github.com/ava-labs/libevm/ethdb/pebble"
+	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/log"
 	"github.com/olekukonko/tablewriter"
 )
@@ -451,7 +452,8 @@ func (s *stat) Count() string {
 
 // InspectDatabase traverses the entire database and checks the size
 // of all different categories of data.
-func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
+func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte, opts ...InspectDatabaseOption) error {
+	libevmConfig := options.As[inspectDatabaseConfig](opts...)
 	it := db.NewIterator(keyPrefix, keyStart)
 	defer it.Release()
 
@@ -549,6 +551,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
 			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
 			bloomTrieNodes.Add(size)
+		case libevmConfig.recordStat(key, size):
+		case libevmConfig.isMetadata(key):
+			metadata.Add(size)
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
@@ -617,7 +622,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Database", "Category", "Size", "Items"})
 	table.SetFooter([]string{"", "Total", total.String(), " "})
-	table.AppendBulk(stats)
+	table.AppendBulk(libevmConfig.transformStats(stats))
 	table.Render()
 
 	if unaccounted.size > 0 {
