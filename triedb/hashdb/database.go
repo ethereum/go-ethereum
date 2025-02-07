@@ -58,6 +58,8 @@ var (
 	memcacheCommitTimeTimer  = metrics.NewRegisteredResettingTimer("hashdb/memcache/commit/time", nil)
 	memcacheCommitNodesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/nodes", nil)
 	memcacheCommitBytesMeter = metrics.NewRegisteredMeter("hashdb/memcache/commit/bytes", nil)
+
+	memcacheCleanDeleteMeter = metrics.NewRegisteredMeter("hashdb/memcache/clean/delete", nil)
 )
 
 // Config contains the settings for database.
@@ -528,8 +530,16 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 	return nil
 }
 
+// Delete removes the referenced node from the clean cache.
+// This is called during the replay phase of a commit operation
+// where the trie node has been deleted from the database.
 func (c *cleaner) Delete(key []byte) error {
-	panic("not implemented")
+	hash := common.BytesToHash(key)
+	if c.db.cleans != nil {
+		c.db.cleans.Del(hash[:])
+		memcacheCleanDeleteMeter.Mark(1)
+	}
+	return nil
 }
 
 // Update inserts the dirty nodes in provided nodeset into database and link the
