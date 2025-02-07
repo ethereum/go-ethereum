@@ -9,10 +9,6 @@ on:
         type: string
         default: "2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1"
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-
 jobs:
   rename-module:
     runs-on: ubuntu-latest
@@ -32,14 +28,24 @@ jobs:
           echo "DEST_BRANCH=auto-rename-module_source-${{ inputs.source_commit }}_workflow-${WORKFLOW_HASH}-${{ github.ref_name }}" \
             >> "$GITHUB_OUTPUT";
 
+      - name: Fetch tags from ethereum/go-ethereum
+        run: git fetch --tags https://github.com/ethereum/go-ethereum.git
+
+      - name: Tags pointing to source commit
+        run: git tag --points-at  ${{ inputs.source_commit }}
+
       - name: Check out source commit
         run: git checkout ${{ inputs.source_commit }}
 
       - name: Globally update module name
         run: |
           go mod edit -module github.com/ava-labs/libevm;
-          find . -iname '*.go' -o -iname '*.txt' | xargs sed -i -E \
-            's|(["`]github\.com/)ethereum/go-ethereum|\1ava-labs/libevm|g';
+          find . \
+            -iname '*.go' \
+            -o -iname '*.txt' \
+            -o -iname '*.go.tpl' \
+            -o -iname '*.proto' | xargs \
+            sed -i -E 's|(["`]github\.com/)ethereum/go-ethereum|\1ava-labs/libevm|g';
 
       - name: Remnant references
         run: |
