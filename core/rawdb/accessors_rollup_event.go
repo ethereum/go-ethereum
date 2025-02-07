@@ -18,7 +18,8 @@ type ChunkBlockRange struct {
 
 // CommittedBatchMeta holds metadata for committed batches.
 type CommittedBatchMeta struct {
-	Version             uint8
+	Version uint8
+	// BlobVersionedHashes are the versioned hashes of the blobs in the batch. Currently unused. Left for compatibility.
 	BlobVersionedHashes []common.Hash
 	ChunkBlockRanges    []*ChunkBlockRange
 }

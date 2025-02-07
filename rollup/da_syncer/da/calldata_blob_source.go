@@ -81,6 +81,10 @@ func (ds *CalldataBlobSource) NextData() (Entries, error) {
 	return da, nil
 }
 
+func (ds *CalldataBlobSource) SetL1Height(l1Height uint64) {
+	ds.l1Height = l1Height
+}
+
 func (ds *CalldataBlobSource) L1Height() uint64 {
 	return ds.l1Height
 }
@@ -106,10 +110,22 @@ func (ds *CalldataBlobSource) processRollupEventsToDA(rollupEvents l1.RollupEven
 			}
 
 		case l1.RevertEventType:
-			entry = NewRevertBatch(rollupEvent.BatchIndex().Uint64())
+			revertEvent, ok := rollupEvent.(*l1.RevertBatchEvent)
+			// this should never happen because we just check event type
+			if !ok {
+				return nil, fmt.Errorf("unexpected type of rollup event: %T", rollupEvent)
+			}
+
+			entry = NewRevertBatch(revertEvent)
 
 		case l1.FinalizeEventType:
-			entry = NewFinalizeBatch(rollupEvent.BatchIndex().Uint64())
+			finalizeEvent, ok := rollupEvent.(*l1.FinalizeBatchEvent)
+			// this should never happen because we just check event type
+			if !ok {
+				return nil, fmt.Errorf("unexpected type of rollup event: %T", rollupEvent)
+			}
+
+			entry = NewFinalizeBatch(finalizeEvent)
 
 		default:
 			return nil, fmt.Errorf("unknown rollup event, type: %v", rollupEvent.Type())

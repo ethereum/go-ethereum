@@ -3,7 +3,11 @@ package da
 import (
 	"math/big"
 
+	"github.com/scroll-tech/da-codec/encoding"
+
+	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/rollup/l1"
 )
 
 type Type int
@@ -25,11 +29,15 @@ type Entry interface {
 	BatchIndex() uint64
 	L1BlockNumber() uint64
 	CompareTo(Entry) int
+	Event() l1.RollupEvent
 }
 
 type EntryWithBlocks interface {
 	Entry
 	Blocks() []*PartialBlock
+	Version() encoding.CodecVersion
+	Chunks() []*encoding.DAChunkRawTx
+	BlobVersionedHashes() []common.Hash
 }
 
 type Entries []Entry

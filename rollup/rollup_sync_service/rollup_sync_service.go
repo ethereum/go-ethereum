@@ -3,34 +3,31 @@ package rollup_sync_service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"sync"
 	"time"
 
 	"github.com/scroll-tech/da-codec/encoding"
 
-	"github.com/scroll-tech/go-ethereum/accounts/abi"
-	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
-	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/da_syncer"
+	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/blob_client"
+	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/da"
+	"github.com/scroll-tech/go-ethereum/rollup/l1"
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
-	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
 	"github.com/scroll-tech/go-ethereum/rollup/withdrawtrie"
 )
 
 const (
-	// defaultFetchBlockRange is the number of blocks that we collect in a single eth_getLogs query.
-	defaultFetchBlockRange = uint64(100)
-
 	// defaultSyncInterval is the frequency at which we query for new rollup event.
-	defaultSyncInterval = 60 * time.Second
+	defaultSyncInterval = 30 * time.Second
 
 	// defaultMaxRetries is the maximum number of retries allowed when the local node is not synced up to the required block height.
 	defaultMaxRetries = 20
@@ -40,45 +37,25 @@ const (
 	// of a specific L1 batch finalize event.
 	defaultGetBlockInRangeRetryDelay = 60 * time.Second
 
-	// defaultLogInterval is the frequency at which we print the latestProcessedBlock.
+	// defaultLogInterval is the frequency at which we print the latest processed block.
 	defaultLogInterval = 5 * time.Minute
 )
 
 // RollupSyncService collects ScrollChain batch commit/revert/finalize events and stores metadata into db.
 type RollupSyncService struct {
-	ctx                           context.Context
-	cancel                        context.CancelFunc
-	client                        *L1Client
-	db                            ethdb.Database
-	latestProcessedBlock          uint64
-	scrollChainABI                *abi.ABI
-	l1CommitBatchEventSignature   common.Hash
-	l1RevertBatchEventSignature   common.Hash
-	l1FinalizeBatchEventSignature common.Hash
-	bc                            *core.BlockChain
-	stack                         *node.Node
-	stateMu                       sync.Mutex
+	ctx     context.Context
+	cancel  context.CancelFunc
+	db      ethdb.Database
+	bc      *core.BlockChain
+	stack   *node.Node
+	stateMu sync.Mutex
+
+	callDataBlobSource *da.CalldataBlobSource
 }
 
-func NewRollupSyncService(ctx context.Context, genesisConfig *params.ChainConfig, db ethdb.Database, l1Client sync_service.EthClient, bc *core.BlockChain, stack *node.Node) (*RollupSyncService, error) {
-	// terminate if the caller does not provide an L1 client (e.g. in tests)
-	if l1Client == nil || (reflect.ValueOf(l1Client).Kind() == reflect.Ptr && reflect.ValueOf(l1Client).IsNil()) {
-		log.Warn("No L1 client provided, L1 rollup sync service will not run")
-		return nil, nil
-	}
-
+func NewRollupSyncService(ctx context.Context, genesisConfig *params.ChainConfig, db ethdb.Database, l1Client l1.Client, bc *core.BlockChain, stack *node.Node, config da_syncer.Config) (*RollupSyncService, error) {
 	if genesisConfig.Scroll.L1Config == nil {
 		return nil, fmt.Errorf("missing L1 config in genesis")
-	}
-
-	scrollChainABI, err := ScrollChainMetaData.GetAbi()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get scroll chain abi: %w", err)
-	}
-
-	client, err := NewL1Client(ctx, l1Client, genesisConfig.Scroll.L1Config.L1ChainId, genesisConfig.Scroll.L1Config.ScrollChainAddress, scrollChainABI)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize l1 client: %w", err)
 	}
 
 	// Initialize the latestProcessedBlock with the block just before the L1 deployment block.
@@ -94,23 +71,57 @@ func NewRollupSyncService(ctx context.Context, genesisConfig *params.ChainConfig
 		latestProcessedBlock = *block
 	}
 
+	var success bool
 	ctx, cancel := context.WithCancel(ctx)
+	defer func() {
+		if !success {
+			cancel()
+		}
+	}()
 
-	service := RollupSyncService{
-		ctx:                           ctx,
-		cancel:                        cancel,
-		client:                        client,
-		db:                            db,
-		latestProcessedBlock:          latestProcessedBlock,
-		scrollChainABI:                scrollChainABI,
-		l1CommitBatchEventSignature:   scrollChainABI.Events["CommitBatch"].ID,
-		l1RevertBatchEventSignature:   scrollChainABI.Events["RevertBatch"].ID,
-		l1FinalizeBatchEventSignature: scrollChainABI.Events["FinalizeBatch"].ID,
-		bc:                            bc,
-		stack:                         stack,
+	l1Reader, err := l1.NewReader(ctx, l1.Config{
+		ScrollChainAddress:    genesisConfig.Scroll.L1Config.ScrollChainAddress,
+		L1MessageQueueAddress: genesisConfig.Scroll.L1Config.L1MessageQueueAddress,
+	}, l1Client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize l1.Reader, err = %w", err)
 	}
 
-	return &service, nil
+	blobClientList := blob_client.NewBlobClients()
+	if config.BeaconNodeAPIEndpoint != "" {
+		beaconNodeClient, err := blob_client.NewBeaconNodeClient(config.BeaconNodeAPIEndpoint)
+		if err != nil {
+			log.Warn("failed to create BeaconNodeClient", "err", err)
+		} else {
+			blobClientList.AddBlobClient(beaconNodeClient)
+		}
+	}
+	if config.BlobScanAPIEndpoint != "" {
+		blobClientList.AddBlobClient(blob_client.NewBlobScanClient(config.BlobScanAPIEndpoint))
+	}
+	if config.BlockNativeAPIEndpoint != "" {
+		blobClientList.AddBlobClient(blob_client.NewBlockNativeClient(config.BlockNativeAPIEndpoint))
+	}
+	if blobClientList.Size() == 0 {
+		return nil, errors.New("no blob client is configured for rollup verifier. Please provide at least one blob client via command line flag")
+	}
+
+	calldataBlobSource, err := da.NewCalldataBlobSource(ctx, latestProcessedBlock, l1Reader, blobClientList, db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create calldata blob source: %w", err)
+	}
+
+	success = true
+
+	return &RollupSyncService{
+		ctx:    ctx,
+		cancel: cancel,
+		db:     db,
+		bc:     bc,
+		stack:  stack,
+
+		callDataBlobSource: calldataBlobSource,
+	}, nil
 }
 
 func (s *RollupSyncService) Start() {
@@ -118,7 +129,7 @@ func (s *RollupSyncService) Start() {
 		return
 	}
 
-	log.Info("Starting rollup event sync background service", "latest processed block", s.latestProcessedBlock)
+	log.Info("Starting rollup event sync background service", "latest processed block", s.callDataBlobSource.L1Height())
 
 	go func() {
 		syncTicker := time.NewTicker(defaultSyncInterval)
@@ -132,9 +143,12 @@ func (s *RollupSyncService) Start() {
 			case <-s.ctx.Done():
 				return
 			case <-syncTicker.C:
-				s.fetchRollupEvents()
+				err := s.fetchRollupEvents()
+				if err != nil {
+					log.Error("failed to fetch rollup events", "err", err)
+				}
 			case <-logTicker.C:
-				log.Info("Sync rollup events progress update", "latestProcessedBlock", s.latestProcessedBlock)
+				log.Info("Sync rollup events progress update", "latest processed block", s.callDataBlobSource.L1Height())
 			}
 		}
 	}()
@@ -161,90 +175,79 @@ func (s *RollupSyncService) ResetStartSyncHeight(height uint64) {
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 
-	s.latestProcessedBlock = height
+	s.callDataBlobSource.SetL1Height(height)
 	log.Info("Reset sync service", "height", height)
 }
 
-func (s *RollupSyncService) fetchRollupEvents() {
+func (s *RollupSyncService) fetchRollupEvents() error {
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 
-	latestConfirmed, err := s.client.GetLatestFinalizedBlockNumber()
-	if err != nil {
-		log.Warn("failed to get latest confirmed block number", "err", err)
-		return
-	}
+	for {
+		prevL1Height := s.callDataBlobSource.L1Height()
 
-	log.Trace("Sync service fetch rollup events", "latest processed block", s.latestProcessedBlock, "latest confirmed", latestConfirmed)
-
-	// query in batches
-	for from := s.latestProcessedBlock + 1; from <= latestConfirmed; from += defaultFetchBlockRange {
-		if s.ctx.Err() != nil {
-			log.Info("Context canceled", "reason", s.ctx.Err())
-			return
-		}
-
-		to := from + defaultFetchBlockRange - 1
-		if to > latestConfirmed {
-			to = latestConfirmed
-		}
-
-		logs, err := s.client.FetchRollupEventsInRange(from, to)
+		daEntries, err := s.callDataBlobSource.NextData()
 		if err != nil {
-			log.Error("failed to fetch rollup events in range", "from block", from, "to block", to, "err", err)
-			return
+			if errors.Is(err, da.ErrSourceExhausted) {
+				log.Trace("Sync service exhausted data source, waiting for next data")
+				return nil
+			}
+
+			return fmt.Errorf("failed to get next data: %w", err)
 		}
 
-		if err := s.parseAndUpdateRollupEventLogs(logs, to); err != nil {
-			log.Error("failed to parse and update rollup event logs", "err", err)
-			return
+		if err = s.updateRollupEvents(daEntries); err != nil {
+			// Reset the L1 height to the previous value to retry fetching the same data.
+			s.callDataBlobSource.SetL1Height(prevL1Height)
+			return fmt.Errorf("failed to parse and update rollup event logs: %w", err)
 		}
 
-		s.latestProcessedBlock = to
+		log.Trace("Sync service fetched rollup events", "latest processed L1 block", s.callDataBlobSource.L1Height(), "latest finalized L1 block", s.callDataBlobSource.L1Finalized())
+
+		// note: the batch updates in updateRollupEvents are idempotent, if we crash
+		// before this line and re-execute the previous steps, we will get the same result.
+		rawdb.WriteRollupEventSyncedL1BlockNumber(s.db, s.callDataBlobSource.L1Height())
 	}
 }
 
-func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endBlockNumber uint64) error {
-	for _, vLog := range logs {
-		switch vLog.Topics[0] {
-		case s.l1CommitBatchEventSignature:
-			event := &L1CommitBatchEvent{}
-			if err := UnpackLog(s.scrollChainABI, event, "CommitBatch", vLog); err != nil {
-				return fmt.Errorf("failed to unpack commit rollup event log, err: %w", err)
-			}
-			batchIndex := event.BatchIndex.Uint64()
-			log.Trace("found new CommitBatch event", "batch index", batchIndex)
+func (s *RollupSyncService) updateRollupEvents(daEntries da.Entries) error {
+	for _, entry := range daEntries {
+		switch entry.Type() {
+		case da.CommitBatchV0Type, da.CommitBatchWithBlobType:
+			log.Trace("found new CommitBatch event", "batch index", entry.BatchIndex())
 
-			committedBatchMeta, err := s.getCommittedBatchMeta(batchIndex, &vLog)
+			entryWithBlocks, ok := entry.(da.EntryWithBlocks)
+			if !ok {
+				return fmt.Errorf("failed to cast to EntryWithBlocks, batch index: %v", entry.BatchIndex())
+			}
+
+			committedBatchMeta, err := s.getCommittedBatchMeta(entryWithBlocks)
 			if err != nil {
-				return fmt.Errorf("failed to get chunk ranges, batch index: %v, err: %w", batchIndex, err)
+				return fmt.Errorf("failed to get committed batch meta, batch index: %v, err: %w", entry.BatchIndex(), err)
 			}
-			rawdb.WriteCommittedBatchMeta(s.db, batchIndex, committedBatchMeta)
 
-		case s.l1RevertBatchEventSignature:
-			event := &L1RevertBatchEvent{}
-			if err := UnpackLog(s.scrollChainABI, event, "RevertBatch", vLog); err != nil {
-				return fmt.Errorf("failed to unpack revert rollup event log, err: %w", err)
+			rawdb.WriteCommittedBatchMeta(s.db, entry.BatchIndex(), committedBatchMeta)
+
+		case da.RevertBatchType:
+			log.Trace("found new RevertBatch event", "batch index", entry.BatchIndex())
+			rawdb.DeleteCommittedBatchMeta(s.db, entry.BatchIndex())
+
+		case da.FinalizeBatchType:
+			event, ok := entry.Event().(*l1.FinalizeBatchEvent)
+			// This should never happen because we just checked the batch type
+			if !ok {
+				return fmt.Errorf("failed to cast to FinalizeBatchEvent, batch index: %v", entry.BatchIndex())
 			}
-			batchIndex := event.BatchIndex.Uint64()
-			log.Trace("found new RevertBatch event", "batch index", batchIndex)
 
-			rawdb.DeleteCommittedBatchMeta(s.db, batchIndex)
-
-		case s.l1FinalizeBatchEventSignature:
-			event := &L1FinalizeBatchEvent{}
-			if err := UnpackLog(s.scrollChainABI, event, "FinalizeBatch", vLog); err != nil {
-				return fmt.Errorf("failed to unpack finalized rollup event log, err: %w", err)
-			}
-			batchIndex := event.BatchIndex.Uint64()
+			batchIndex := entry.BatchIndex()
 			log.Trace("found new FinalizeBatch event", "batch index", batchIndex)
 
 			lastFinalizedBatchIndex := rawdb.ReadLastFinalizedBatchIndex(s.db)
 
-			// After darwin, FinalizeBatch event emitted every bundle, which contains multiple batches.
-			// Therefore there are a range of finalized batches need to be saved into db.
+			// After Darwin, FinalizeBatch event emitted every bundle, which contains multiple batches.
+			// Therefore, there are a range of finalized batches need to be saved into db.
 			//
-			// The range logic also applies to the batches before darwin when FinalizeBatch event emitted
+			// The range logic also applies to the batches before Darwin when FinalizeBatch event emitted
 			// per single batch. In this situation, `batchIndex` just equals to `*lastFinalizedBatchIndex + 1`
 			// and only one batch is processed through the for loop.
 			startBatchIndex := batchIndex
@@ -293,14 +296,10 @@ func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endB
 			log.Debug("write finalized l2 block number", "batch index", batchIndex, "finalized l2 block height", highestFinalizedBlockNumber)
 
 		default:
-			return fmt.Errorf("unknown event, topic: %v, tx hash: %v", vLog.Topics[0].Hex(), vLog.TxHash.Hex())
+			return fmt.Errorf("unknown daEntry, type: %d, batch index: %d", entry.Type(), entry.BatchIndex())
 		}
 	}
 
-	// note: the batch updates above are idempotent, if we crash
-	// before this line and reexecute the previous steps, we will
-	// get the same result.
-	rawdb.WriteRollupEventSyncedL1BlockNumber(s.db, endBlockNumber)
 	return nil
 }
 
@@ -355,8 +354,8 @@ func (s *RollupSyncService) getLocalChunksForBatch(chunkBlockRanges []*rawdb.Chu
 	return chunks, nil
 }
 
-func (s *RollupSyncService) getCommittedBatchMeta(batchIndex uint64, vLog *types.Log) (*rawdb.CommittedBatchMeta, error) {
-	if batchIndex == 0 {
+func (s *RollupSyncService) getCommittedBatchMeta(commitedBatch da.EntryWithBlocks) (*rawdb.CommittedBatchMeta, error) {
+	if commitedBatch.BatchIndex() == 0 {
 		return &rawdb.CommittedBatchMeta{
 			Version:             0,
 			BlobVersionedHashes: nil,
@@ -364,111 +363,16 @@ func (s *RollupSyncService) getCommittedBatchMeta(batchIndex uint64, vLog *types
 		}, nil
 	}
 
-	tx, _, err := s.client.client.TransactionByHash(s.ctx, vLog.TxHash)
+	chunkRanges, err := blockRangesFromChunks(commitedBatch.Chunks())
 	if err != nil {
-		log.Debug("failed to get transaction by hash, probably an unindexed transaction, fetching the whole block to get the transaction",
-			"tx hash", vLog.TxHash.Hex(), "block number", vLog.BlockNumber, "block hash", vLog.BlockHash.Hex(), "err", err)
-		block, err := s.client.client.BlockByHash(s.ctx, vLog.BlockHash)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get block by hash, block number: %v, block hash: %v, err: %w", vLog.BlockNumber, vLog.BlockHash.Hex(), err)
-		}
-
-		if block == nil {
-			return nil, fmt.Errorf("failed to get block by hash, block not found, block number: %v, block hash: %v", vLog.BlockNumber, vLog.BlockHash.Hex())
-		}
-
-		found := false
-		for _, txInBlock := range block.Transactions() {
-			if txInBlock.Hash() == vLog.TxHash {
-				tx = txInBlock
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil, fmt.Errorf("transaction not found in the block, tx hash: %v, block number: %v, block hash: %v", vLog.TxHash.Hex(), vLog.BlockNumber, vLog.BlockHash.Hex())
-		}
+		return nil, fmt.Errorf("failed to decode block ranges from chunks, batch index: %v, err: %w", commitedBatch.BatchIndex(), err)
 	}
 
-	var commitBatchMeta rawdb.CommittedBatchMeta
-
-	if tx.Type() == types.BlobTxType {
-		blobVersionedHashes := tx.BlobHashes()
-		if blobVersionedHashes == nil {
-			return nil, fmt.Errorf("invalid blob transaction, blob hashes is nil, tx hash: %v", tx.Hash().Hex())
-		}
-		commitBatchMeta.BlobVersionedHashes = blobVersionedHashes
-	}
-
-	version, ranges, err := s.decodeBatchVersionAndChunkBlockRanges(tx.Data())
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode chunk block ranges, batch index: %v, err: %w", batchIndex, err)
-	}
-
-	commitBatchMeta.Version = version
-	commitBatchMeta.ChunkBlockRanges = ranges
-	return &commitBatchMeta, nil
-}
-
-// decodeBatchVersionAndChunkBlockRanges decodes version and chunks' block ranges in a batch based on the commit batch transaction's calldata.
-func (s *RollupSyncService) decodeBatchVersionAndChunkBlockRanges(txData []byte) (uint8, []*rawdb.ChunkBlockRange, error) {
-	const methodIDLength = 4
-	if len(txData) < methodIDLength {
-		return 0, nil, fmt.Errorf("transaction data is too short, length of tx data: %v, minimum length required: %v", len(txData), methodIDLength)
-	}
-
-	method, err := s.scrollChainABI.MethodById(txData[:methodIDLength])
-	if err != nil {
-		return 0, nil, fmt.Errorf("failed to get method by ID, ID: %v, err: %w", txData[:methodIDLength], err)
-	}
-
-	values, err := method.Inputs.Unpack(txData[methodIDLength:])
-	if err != nil {
-		return 0, nil, fmt.Errorf("failed to unpack transaction data using ABI, tx data: %v, err: %w", txData, err)
-	}
-
-	if method.Name == "commitBatch" {
-		type commitBatchArgs struct {
-			Version                uint8
-			ParentBatchHeader      []byte
-			Chunks                 [][]byte
-			SkippedL1MessageBitmap []byte
-		}
-
-		var args commitBatchArgs
-		if err = method.Inputs.Copy(&args, values); err != nil {
-			return 0, nil, fmt.Errorf("failed to decode calldata into commitBatch args, values: %+v, err: %w", values, err)
-		}
-
-		chunkRanges, err := decodeBlockRangesFromEncodedChunks(encoding.CodecVersion(args.Version), args.Chunks)
-		if err != nil {
-			return 0, nil, fmt.Errorf("failed to decode block ranges from encoded chunks, version: %v, chunks: %+v, err: %w", args.Version, args.Chunks, err)
-		}
-
-		return args.Version, chunkRanges, nil
-	} else if method.Name == "commitBatchWithBlobProof" {
-		type commitBatchWithBlobProofArgs struct {
-			Version                uint8
-			ParentBatchHeader      []byte
-			Chunks                 [][]byte
-			SkippedL1MessageBitmap []byte
-			BlobDataProof          []byte
-		}
-
-		var args commitBatchWithBlobProofArgs
-		if err = method.Inputs.Copy(&args, values); err != nil {
-			return 0, nil, fmt.Errorf("failed to decode calldata into commitBatchWithBlobProofArgs args, values: %+v, err: %w", values, err)
-		}
-
-		chunkRanges, err := decodeBlockRangesFromEncodedChunks(encoding.CodecVersion(args.Version), args.Chunks)
-		if err != nil {
-			return 0, nil, fmt.Errorf("failed to decode block ranges from encoded chunks, version: %v, chunks: %+v, err: %w", args.Version, args.Chunks, err)
-		}
-
-		return args.Version, chunkRanges, nil
-	}
-
-	return 0, nil, fmt.Errorf("unexpected method name: %v", method.Name)
+	return &rawdb.CommittedBatchMeta{
+		Version:             uint8(commitedBatch.Version()),
+		ChunkBlockRanges:    chunkRanges,
+		BlobVersionedHashes: commitedBatch.BlobVersionedHashes(),
+	}, nil
 }
 
 // validateBatch verifies the consistency between the L1 contract and L2 node data.
@@ -494,7 +398,7 @@ func (s *RollupSyncService) decodeBatchVersionAndChunkBlockRanges(txData []byte)
 // Note: This function is compatible with both "finalize by batch" and "finalize by bundle" methods.
 // In "finalize by bundle", only the last batch of each bundle is fully verified.
 // This check still ensures the correctness of all batch hashes in the bundle due to the parent-child relationship between batch hashes.
-func validateBatch(batchIndex uint64, event *L1FinalizeBatchEvent, parentFinalizedBatchMeta *rawdb.FinalizedBatchMeta, committedBatchMeta *rawdb.CommittedBatchMeta, chunks []*encoding.Chunk, stack *node.Node) (uint64, *rawdb.FinalizedBatchMeta, error) {
+func validateBatch(batchIndex uint64, event *l1.FinalizeBatchEvent, parentFinalizedBatchMeta *rawdb.FinalizedBatchMeta, committedBatchMeta *rawdb.CommittedBatchMeta, chunks []*encoding.Chunk, stack *node.Node) (uint64, *rawdb.FinalizedBatchMeta, error) {
 	if len(chunks) == 0 {
 		return 0, nil, fmt.Errorf("invalid argument: length of chunks is 0, batch index: %v", batchIndex)
 	}
@@ -540,15 +444,15 @@ func validateBatch(batchIndex uint64, event *L1FinalizeBatchEvent, parentFinaliz
 	// Only check when batch index matches the index of the event. This is compatible with both "finalize by batch" and "finalize by bundle":
 	// - finalize by batch: check all batches
 	// - finalize by bundle: check the last batch, because only one event (containing the info of the last batch) is emitted per bundle
-	if batchIndex == event.BatchIndex.Uint64() {
-		if localStateRoot != event.StateRoot {
-			log.Error("State root mismatch", "batch index", event.BatchIndex.Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentFinalizedBatchMeta.BatchHash.Hex(), "l1 finalized state root", event.StateRoot.Hex(), "l2 state root", localStateRoot.Hex())
+	if batchIndex == event.BatchIndex().Uint64() {
+		if localStateRoot != event.StateRoot() {
+			log.Error("State root mismatch", "batch index", event.BatchIndex().Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentFinalizedBatchMeta.BatchHash.Hex(), "l1 finalized state root", event.StateRoot().Hex(), "l2 state root", localStateRoot.Hex())
 			stack.Close()
 			os.Exit(1)
 		}
 
-		if localWithdrawRoot != event.WithdrawRoot {
-			log.Error("Withdraw root mismatch", "batch index", event.BatchIndex.Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentFinalizedBatchMeta.BatchHash.Hex(), "l1 finalized withdraw root", event.WithdrawRoot.Hex(), "l2 withdraw root", localWithdrawRoot.Hex())
+		if localWithdrawRoot != event.WithdrawRoot() {
+			log.Error("Withdraw root mismatch", "batch index", event.BatchIndex().Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentFinalizedBatchMeta.BatchHash.Hex(), "l1 finalized withdraw root", event.WithdrawRoot().Hex(), "l2 withdraw root", localWithdrawRoot.Hex())
 			stack.Close()
 			os.Exit(1)
 		}
@@ -556,8 +460,8 @@ func validateBatch(batchIndex uint64, event *L1FinalizeBatchEvent, parentFinaliz
 		// Verify batch hash
 		// This check ensures the correctness of all batch hashes in the bundle
 		// due to the parent-child relationship between batch hashes
-		if localBatchHash != event.BatchHash {
-			log.Error("Batch hash mismatch", "batch index", event.BatchIndex.Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentFinalizedBatchMeta.BatchHash.Hex(), "parent TotalL1MessagePopped", parentFinalizedBatchMeta.TotalL1MessagePopped, "l1 finalized batch hash", event.BatchHash.Hex(), "l2 batch hash", localBatchHash.Hex())
+		if localBatchHash != event.BatchHash() {
+			log.Error("Batch hash mismatch", "batch index", event.BatchIndex().Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentFinalizedBatchMeta.BatchHash.Hex(), "parent TotalL1MessagePopped", parentFinalizedBatchMeta.TotalL1MessagePopped, "l1 finalized batch hash", event.BatchHash().Hex(), "l2 batch hash", localBatchHash.Hex())
 			chunksJson, err := json.Marshal(chunks)
 			if err != nil {
 				log.Error("marshal chunks failed", "err", err)
@@ -581,22 +485,12 @@ func validateBatch(batchIndex uint64, event *L1FinalizeBatchEvent, parentFinaliz
 	return endBlock.Header.Number.Uint64(), finalizedBatchMeta, nil
 }
 
-// decodeBlockRangesFromEncodedChunks decodes the provided chunks into a list of block ranges.
-func decodeBlockRangesFromEncodedChunks(codecVersion encoding.CodecVersion, chunks [][]byte) ([]*rawdb.ChunkBlockRange, error) {
-	codec, err := encoding.CodecFromVersion(codecVersion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get codec from version: %v, err: %w", codecVersion, err)
-	}
-
-	daChunksRawTx, err := codec.DecodeDAChunksRawTx(chunks)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode DA chunks, version: %v, err: %w", codecVersion, err)
-	}
-
+// blockRangesFromChunks decodes the provided chunks into a list of block ranges.
+func blockRangesFromChunks(chunks []*encoding.DAChunkRawTx) ([]*rawdb.ChunkBlockRange, error) {
 	var chunkBlockRanges []*rawdb.ChunkBlockRange
-	for _, daChunkRawTx := range daChunksRawTx {
+	for _, daChunkRawTx := range chunks {
 		if len(daChunkRawTx.Blocks) == 0 {
-			return nil, fmt.Errorf("no blocks found in DA chunk, version: %v", codecVersion)
+			return nil, fmt.Errorf("no blocks found in DA chunk, chunk: %+v", daChunkRawTx)
 		}
 
 		chunkBlockRanges = append(chunkBlockRanges, &rawdb.ChunkBlockRange{

@@ -139,20 +139,23 @@ func (r *Reader) FetchTxData(txHash, blockHash common.Hash) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return tx.Data(), nil
 }
 
-// FetchTxBlobHash fetches tx blob hash corresponding to given event log
-func (r *Reader) FetchTxBlobHash(txHash, blockHash common.Hash) (common.Hash, error) {
+// FetchTxBlobHashes fetches tx blob hash corresponding to given event log
+func (r *Reader) FetchTxBlobHashes(txHash, blockHash common.Hash) ([]common.Hash, error) {
 	tx, err := r.fetchTx(txHash, blockHash)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, fmt.Errorf("failed to fetch tx, tx hash: %v, block hash: %v, err: %w", txHash.Hex(), blockHash.Hex(), err)
 	}
+
 	blobHashes := tx.BlobHashes()
 	if len(blobHashes) == 0 {
-		return common.Hash{}, fmt.Errorf("transaction does not contain any blobs, tx hash: %v", txHash.Hex())
+		return nil, fmt.Errorf("transaction does not contain any blobs, tx hash: %v", txHash.Hex())
 	}
-	return blobHashes[0], nil
+
+	return blobHashes, nil
 }
 
 // FetchRollupEventsInRange retrieves and parses commit/revert/finalize rollup events between block numbers: [from, to].

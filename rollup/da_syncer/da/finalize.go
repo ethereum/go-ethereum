@@ -1,14 +1,16 @@
 package da
 
-type FinalizeBatch struct {
-	batchIndex uint64
+import (
+	"github.com/scroll-tech/go-ethereum/rollup/l1"
+)
 
-	l1BlockNumber uint64
+type FinalizeBatch struct {
+	event *l1.FinalizeBatchEvent
 }
 
-func NewFinalizeBatch(batchIndex uint64) *FinalizeBatch {
+func NewFinalizeBatch(event *l1.FinalizeBatchEvent) *FinalizeBatch {
 	return &FinalizeBatch{
-		batchIndex: batchIndex,
+		event: event,
 	}
 }
 
@@ -17,11 +19,15 @@ func (f *FinalizeBatch) Type() Type {
 }
 
 func (f *FinalizeBatch) L1BlockNumber() uint64 {
-	return f.l1BlockNumber
+	return f.event.BlockNumber()
 }
 
 func (f *FinalizeBatch) BatchIndex() uint64 {
-	return f.batchIndex
+	return f.event.BatchIndex().Uint64()
+}
+
+func (f *FinalizeBatch) Event() l1.RollupEvent {
+	return f.event
 }
 
 func (f *FinalizeBatch) CompareTo(other Entry) int {

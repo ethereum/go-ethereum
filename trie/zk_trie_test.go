@@ -25,9 +25,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	zkt "github.com/scroll-tech/zktrie/types"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/ethdb/leveldb"

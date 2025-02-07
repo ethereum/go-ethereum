@@ -1641,15 +1641,15 @@ func setEnableRollupVerify(ctx *cli.Context, cfg *ethconfig.Config) {
 func setDA(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.IsSet(DASyncEnabledFlag.Name) {
 		cfg.EnableDASyncing = ctx.Bool(DASyncEnabledFlag.Name)
-		if ctx.IsSet(DABlobScanAPIEndpointFlag.Name) {
-			cfg.DA.BlobScanAPIEndpoint = ctx.String(DABlobScanAPIEndpointFlag.Name)
-		}
-		if ctx.IsSet(DABlockNativeAPIEndpointFlag.Name) {
-			cfg.DA.BlockNativeAPIEndpoint = ctx.String(DABlockNativeAPIEndpointFlag.Name)
-		}
-		if ctx.IsSet(DABeaconNodeAPIEndpointFlag.Name) {
-			cfg.DA.BeaconNodeAPIEndpoint = ctx.String(DABeaconNodeAPIEndpointFlag.Name)
-		}
+	}
+	if ctx.IsSet(DABlobScanAPIEndpointFlag.Name) {
+		cfg.DA.BlobScanAPIEndpoint = ctx.String(DABlobScanAPIEndpointFlag.Name)
+	}
+	if ctx.IsSet(DABlockNativeAPIEndpointFlag.Name) {
+		cfg.DA.BlockNativeAPIEndpoint = ctx.String(DABlockNativeAPIEndpointFlag.Name)
+	}
+	if ctx.IsSet(DABeaconNodeAPIEndpointFlag.Name) {
+		cfg.DA.BeaconNodeAPIEndpoint = ctx.String(DABeaconNodeAPIEndpointFlag.Name)
 	}
 }
 

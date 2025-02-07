@@ -1,14 +1,16 @@
 package da
 
-type RevertBatch struct {
-	batchIndex uint64
+import (
+	"github.com/scroll-tech/go-ethereum/rollup/l1"
+)
 
-	l1BlockNumber uint64
+type RevertBatch struct {
+	event *l1.RevertBatchEvent
 }
 
-func NewRevertBatch(batchIndex uint64) *RevertBatch {
+func NewRevertBatch(event *l1.RevertBatchEvent) *RevertBatch {
 	return &RevertBatch{
-		batchIndex: batchIndex,
+		event: event,
 	}
 }
 
@@ -17,10 +19,14 @@ func (r *RevertBatch) Type() Type {
 }
 
 func (r *RevertBatch) L1BlockNumber() uint64 {
-	return r.l1BlockNumber
+	return r.event.BlockNumber()
 }
 func (r *RevertBatch) BatchIndex() uint64 {
-	return r.batchIndex
+	return r.event.BatchIndex().Uint64()
+}
+
+func (r *RevertBatch) Event() l1.RollupEvent {
+	return r.event
 }
 
 func (r *RevertBatch) CompareTo(other Entry) int {
