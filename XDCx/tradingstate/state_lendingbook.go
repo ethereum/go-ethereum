@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
 )
@@ -80,7 +81,7 @@ func (s *stateLendingBook) getTrie(db Database) Trie {
 		var err error
 		s.trie, err = db.OpenStorageTrie(s.lendingBook, s.data.Root)
 		if err != nil {
-			s.trie, _ = db.OpenStorageTrie(s.price, EmptyHash)
+			s.trie, _ = db.OpenStorageTrie(s.price, types.EmptyRootHash)
 			s.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}

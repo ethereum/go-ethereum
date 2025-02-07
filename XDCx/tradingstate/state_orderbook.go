@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
@@ -135,7 +136,7 @@ func (te *tradingExchanges) getAsksTrie(db Database) Trie {
 		var err error
 		te.asksTrie, err = db.OpenStorageTrie(te.orderBookHash, te.data.AskRoot)
 		if err != nil {
-			te.asksTrie, _ = db.OpenStorageTrie(te.orderBookHash, EmptyHash)
+			te.asksTrie, _ = db.OpenStorageTrie(te.orderBookHash, types.EmptyRootHash)
 			te.setError(fmt.Errorf("can't create asks trie: %v", err))
 		}
 	}
@@ -147,7 +148,7 @@ func (te *tradingExchanges) getOrdersTrie(db Database) Trie {
 		var err error
 		te.ordersTrie, err = db.OpenStorageTrie(te.orderBookHash, te.data.OrderRoot)
 		if err != nil {
-			te.ordersTrie, _ = db.OpenStorageTrie(te.orderBookHash, EmptyHash)
+			te.ordersTrie, _ = db.OpenStorageTrie(te.orderBookHash, types.EmptyRootHash)
 			te.setError(fmt.Errorf("can't create asks trie: %v", err))
 		}
 	}
@@ -265,7 +266,7 @@ func (te *tradingExchanges) getBidsTrie(db Database) Trie {
 		var err error
 		te.bidsTrie, err = db.OpenStorageTrie(te.orderBookHash, te.data.BidRoot)
 		if err != nil {
-			te.bidsTrie, _ = db.OpenStorageTrie(te.orderBookHash, EmptyHash)
+			te.bidsTrie, _ = db.OpenStorageTrie(te.orderBookHash, types.EmptyRootHash)
 			te.setError(fmt.Errorf("can't create bids trie: %v", err))
 		}
 	}
@@ -636,7 +637,7 @@ func (t *tradingExchanges) getLiquidationPriceTrie(db Database) Trie {
 		var err error
 		t.liquidationPriceTrie, err = db.OpenStorageTrie(t.orderBookHash, t.data.LiquidationPriceRoot)
 		if err != nil {
-			t.liquidationPriceTrie, _ = db.OpenStorageTrie(t.orderBookHash, EmptyHash)
+			t.liquidationPriceTrie, _ = db.OpenStorageTrie(t.orderBookHash, types.EmptyRootHash)
 			t.setError(fmt.Errorf("can't create liquidation liquidationPrice trie: %v", err))
 		}
 	}

@@ -30,6 +30,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/holiman/uint256"
@@ -588,7 +589,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 
 func TestOpTstore(t *testing.T) {
 	var (
-		statedb, _     = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+		statedb, _     = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()))
 		env            = NewEVM(BlockContext{}, TxContext{}, statedb, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		mem            = NewMemory()
@@ -731,7 +732,7 @@ func TestRandom(t *testing.T) {
 	for _, tt := range []testcase{
 		{name: "empty hash", random: common.Hash{}},
 		{name: "1", random: common.Hash{0}},
-		{name: "emptyCodeHash", random: emptyCodeHash},
+		{name: "emptyCodeHash", random: types.EmptyCodeHash},
 		{name: "hash(0x010203)", random: crypto.Keccak256Hash([]byte{0x01, 0x02, 0x03})},
 	} {
 		var (

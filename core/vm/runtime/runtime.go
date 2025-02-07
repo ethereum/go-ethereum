@@ -24,6 +24,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -113,7 +114,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 
 	if cfg.State == nil {
 		db := rawdb.NewMemoryDatabase()
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
+		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(db))
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"))
@@ -149,7 +150,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 
 	if cfg.State == nil {
 		db := rawdb.NewMemoryDatabase()
-		cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(db))
+		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(db))
 	}
 	var (
 		vmenv  = NewEnv(cfg)

@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
@@ -103,7 +104,7 @@ func (l *liquidationPriceState) getTrie(db Database) Trie {
 		var err error
 		l.trie, err = db.OpenStorageTrie(l.liquidationPrice, l.data.Root)
 		if err != nil {
-			l.trie, _ = db.OpenStorageTrie(l.liquidationPrice, EmptyHash)
+			l.trie, _ = db.OpenStorageTrie(l.liquidationPrice, types.EmptyRootHash)
 			l.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}

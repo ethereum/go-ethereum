@@ -32,6 +32,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/core/vm/runtime"
 	"github.com/XinFinOrg/XDPoSChain/internal/flags"
@@ -102,7 +103,7 @@ func runCmd(ctx *cli.Context) error {
 		chainConfig = gen.Config
 	} else {
 		db := rawdb.NewMemoryDatabase()
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(db))
 	}
 	if ctx.String(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.String(SenderFlag.Name))

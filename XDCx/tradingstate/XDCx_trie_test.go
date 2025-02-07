@@ -2,19 +2,21 @@ package tradingstate
 
 import (
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 )
 
 func TestXDCxTrieTest(t *testing.T) {
 	t.SkipNow()
 	db := rawdb.NewMemoryDatabase()
 	stateCache := NewDatabase(db)
-	trie, _ := stateCache.OpenStorageTrie(EmptyHash, EmptyHash)
+	trie, _ := stateCache.OpenStorageTrie(EmptyHash, types.EmptyRootHash)
 	max := 1000000
 	for i := 1; i < max; i++ {
 		k := common.BigToHash(big.NewInt(int64(i))).Bytes()

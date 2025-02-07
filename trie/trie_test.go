@@ -44,7 +44,7 @@ func init() {
 
 // Used for testing
 func newEmpty() *Trie {
-	trie, _ := New(common.Hash{}, NewDatabase(memorydb.New()))
+	trie, _ := New(emptyRoot, NewDatabase(memorydb.New()))
 	return trie
 }
 
@@ -84,7 +84,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 	diskdb := memorydb.New()
 	triedb := NewDatabase(diskdb)
 
-	trie, _ := New(common.Hash{}, triedb)
+	trie, _ := New(emptyRoot, triedb)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, _ := trie.Commit(nil)
@@ -424,7 +424,7 @@ func runRandTestBool(rt randTest) bool {
 func runRandTest(rt randTest) error {
 	triedb := NewDatabase(memorydb.New())
 
-	tr, _ := New(common.Hash{}, triedb)
+	tr, _ := New(emptyRoot, triedb)
 	values := make(map[string]string) // tracks content of the trie
 
 	for i, step := range rt {
@@ -460,7 +460,7 @@ func runRandTest(rt randTest) error {
 			}
 			tr = newtr
 		case opItercheckhash:
-			checktr, _ := New(common.Hash{}, triedb)
+			checktr, _ := New(emptyRoot, triedb)
 			it := NewIterator(tr.NodeIterator(nil))
 			for it.Next() {
 				checktr.Update(it.Key, it.Value)
@@ -497,7 +497,7 @@ func benchGet(b *testing.B, commit bool) {
 	trie := new(Trie)
 	if commit {
 		tmpdb := tempDB(b)
-		trie, _ = New(common.Hash{}, tmpdb)
+		trie, _ = New(emptyRoot, tmpdb)
 	}
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
@@ -624,7 +624,7 @@ func TestTinyTrie(t *testing.T) {
 		t.Fatalf("3: got %x, exp %x", root, exp)
 	}
 
-	checktr, _ := New(common.Hash{}, trie.Db)
+	checktr, _ := New(emptyRoot, trie.Db)
 	it := NewIterator(trie.NodeIterator(nil))
 	for it.Next() {
 		checktr.Update(it.Key, it.Value)

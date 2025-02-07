@@ -28,7 +28,7 @@ import (
 func makeTestTrie() (*Database, *Trie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
-	trie, _ := New(common.Hash{}, triedb)
+	trie, _ := New(emptyRoot, triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -90,7 +90,7 @@ func checkTrieConsistency(db *Database, root common.Hash) error {
 func TestEmptySync(t *testing.T) {
 	dbA := NewDatabase(memorydb.New())
 	dbB := NewDatabase(memorydb.New())
-	emptyA, _ := New(common.Hash{}, dbA)
+	emptyA, _ := New(emptyRoot, dbA)
 	emptyB, _ := New(emptyRoot, dbB)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {

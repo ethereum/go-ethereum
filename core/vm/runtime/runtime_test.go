@@ -102,7 +102,7 @@ func TestExecute(t *testing.T) {
 
 func TestCall(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	state, _ := state.New(common.Hash{}, state.NewDatabase(db))
+	state, _ := state.New(types.EmptyRootHash, state.NewDatabase(db))
 	address := common.HexToAddress("0x0a")
 	state.SetCode(address, []byte{
 		byte(vm.PUSH1), 10,
@@ -159,7 +159,7 @@ func BenchmarkCall(b *testing.B) {
 func benchmarkEVM_Create(bench *testing.B, code string) {
 	var (
 		db         = rawdb.NewMemoryDatabase()
-		statedb, _ = state.New(common.Hash{}, state.NewDatabase(db))
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(db))
 		sender     = common.BytesToAddress([]byte("sender"))
 		receiver   = common.BytesToAddress([]byte("receiver"))
 	)
@@ -335,7 +335,7 @@ func TestBlockhash(t *testing.T) {
 func benchmarkNonModifyingCode(gas uint64, code []byte, name string, b *testing.B) {
 	cfg := new(Config)
 	setDefaults(cfg)
-	cfg.State, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+	cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()))
 	cfg.GasLimit = gas
 	var (
 		destination = common.BytesToAddress([]byte("contract"))

@@ -419,7 +419,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 	// Special case, there is no edge proof at all. The given range is expected
 	// to be the whole leaf-set in the trie.
 	if firstProof == nil && lastProof == nil {
-		emptytrie, err := New(common.Hash{}, NewDatabase(memorydb.New()))
+		emptytrie, err := New(emptyRoot, NewDatabase(memorydb.New()))
 		if err != nil {
 			return err, false
 		}
