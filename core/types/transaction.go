@@ -89,6 +89,7 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
+	setCodeAuthorizations() []SetCodeAuthorization
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
@@ -482,11 +483,7 @@ func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
 
 // SetCodeAuthorizations returns the authorizations list of the transaction.
 func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
-	setcodetx, ok := tx.inner.(*SetCodeTx)
-	if !ok {
-		return nil
-	}
-	return setcodetx.AuthList
+	return tx.inner.setCodeAuthorizations()
 }
 
 // SetCodeAuthorities returns a list of unique authorities from the
@@ -584,13 +581,18 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
-// IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
+// IntrinsicGas returns the 'intrinsic gas' computed for a message with the given data.
 func (tx *Transaction) IntrinsicGas(rules *params.Rules) (uint64, error) {
+	return IntrinsicGas(tx.inner, rules)
+}
+
+// IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
+func IntrinsicGas(txdata TxData, rules *params.Rules) (uint64, error) {
 	var (
-		data               = tx.Data()
-		accessList         = tx.AccessList()
-		authList           = tx.SetCodeAuthorizations()
-		isContractCreation = tx.To() == nil
+		data               = txdata.data()
+		accessList         = txdata.accessList()
+		authList           = txdata.setCodeAuthorizations()
+		isContractCreation = txdata.to() == nil
 	)
 
 	// Set the starting gas for the raw transaction

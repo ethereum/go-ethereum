@@ -96,23 +96,17 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 			gasPrice = gen.header.BaseFee
 		}
 		rules := params.TestChainConfig.Rules(common.Big0, true, 0)
-		tx0 := types.NewTx(&types.LegacyTx{
+		txdata := &types.LegacyTx{
 			Nonce:    gen.TxNonce(benchRootAddr),
 			To:       &toaddr,
 			Value:    big.NewInt(1),
 			Gas:      params.TxGas,
 			Data:     data,
 			GasPrice: gasPrice,
-		})
-		gas, _ := tx0.IntrinsicGas(&rules)
-		tx, _ := types.SignNewTx(benchRootKey, signer, &types.LegacyTx{
-			Nonce:    gen.TxNonce(benchRootAddr),
-			To:       &toaddr,
-			Value:    big.NewInt(1),
-			Gas:      gas,
-			Data:     data,
-			GasPrice: gasPrice,
-		})
+		}
+		gas, _ := types.IntrinsicGas(txdata, &rules)
+		txdata.Gas = gas
+		tx, _ := types.SignNewTx(benchRootKey, signer, txdata)
 		gen.AddTx(tx)
 	}
 }

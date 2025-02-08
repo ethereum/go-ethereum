@@ -82,15 +82,6 @@ func FloorDataGas(data []byte) (uint64, error) {
 	return params.TxGas + tokens*params.TxCostFloorPerToken, nil
 }
 
-// toWordSize returns the ceiled word size required for init code payment calculation.
-func toWordSize(size uint64) uint64 {
-	if size > math.MaxUint64-31 {
-		return math.MaxUint64/32 + 1
-	}
-
-	return (size + 31) / 32
-}
-
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
 type Message struct {
