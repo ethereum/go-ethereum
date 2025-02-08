@@ -134,7 +134,7 @@ type queue struct {
 	headerPendPool  map[string]*fetchRequest       // Currently pending header retrieval operations
 	headerResults   []*types.Header                // Result cache accumulating the completed headers
 	headerHashes    []common.Hash                  // Result cache accumulating the completed header hashes
-	headerProced    int                            // Number of headers already processed from the results
+	headerProceed    int                            // Number of headers already processed from the results
 	headerOffset    uint64                         // Number of the first header in the result cache
 	headerContCh    chan bool                      // Channel to notify when header download finishes
 
@@ -276,7 +276,7 @@ func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	q.headerPeerMiss = make(map[string]map[uint64]struct{}) // Reset availability to correct invalid chains
 	q.headerResults = make([]*types.Header, len(skeleton)*MaxHeaderFetch)
 	q.headerHashes = make([]common.Hash, len(skeleton)*MaxHeaderFetch)
-	q.headerProced = 0
+	q.headerProceed = 0
 	q.headerOffset = from
 	q.headerContCh = make(chan bool, 1)
 
@@ -294,10 +294,10 @@ func (q *queue) RetrieveHeaders() ([]*types.Header, []common.Hash, int) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	headers, hashes, proced := q.headerResults, q.headerHashes, q.headerProced
-	q.headerResults, q.headerHashes, q.headerProced = nil, nil, 0
+	headers, hashes, proceed := q.headerResults, q.headerHashes, q.headerProceed
+	q.headerResults, q.headerHashes, q.headerProceed = nil, nil, 0
 
-	return headers, hashes, proced
+	return headers, hashes, proceed
 }
 
 // Schedule adds a set of headers for the download queue for scheduling, returning
@@ -752,16 +752,16 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 	delete(q.headerTaskPool, request.From)
 
 	ready := 0
-	for q.headerProced+ready < len(q.headerResults) && q.headerResults[q.headerProced+ready] != nil {
+	for q.headerProceed+ready < len(q.headerResults) && q.headerResults[q.headerProceed+ready] != nil {
 		ready += MaxHeaderFetch
 	}
 	if ready > 0 {
 		// Headers are ready for delivery, gather them and push forward (non blocking)
 		processHeaders := make([]*types.Header, ready)
-		copy(processHeaders, q.headerResults[q.headerProced:q.headerProced+ready])
+		copy(processHeaders, q.headerResults[q.headerProceed:q.headerProceed+ready])
 
 		processHashes := make([]common.Hash, ready)
-		copy(processHashes, q.headerHashes[q.headerProced:q.headerProced+ready])
+		copy(processHashes, q.headerHashes[q.headerProceed:q.headerProceed+ready])
 
 		select {
 		case headerProcCh <- &headerTask{
@@ -769,7 +769,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 			hashes:  processHashes,
 		}:
 			logger.Trace("Pre-scheduled new headers", "count", len(processHeaders), "from", processHeaders[0].Number)
-			q.headerProced += len(processHeaders)
+			q.headerProceed += len(processHeaders)
 		default:
 		}
 	}
