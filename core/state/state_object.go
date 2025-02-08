@@ -93,6 +93,9 @@ type stateObject struct {
 	// the end of transaction and no longer accessible anymore.
 	deleted bool
 
+	// Flag whether the object was created in the current transaction
+	created bool
+
 	touched bool
 
 	onDirty func(addr common.Address) // Callback method to mark a state object newly dirty
