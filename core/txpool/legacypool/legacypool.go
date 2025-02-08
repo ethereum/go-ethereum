@@ -567,8 +567,9 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			if list := pool.queue[addr]; list != nil {
 				have += list.Len()
 			}
-			if pool.currentState.GetCodeHash(addr) != types.EmptyCodeHash {
-				// Allow at most one in-flight tx for delegated accounts.
+			if pool.currentState.GetCodeHash(addr) != types.EmptyCodeHash || len(pool.all.auths[addr]) != 0 {
+				// Allow at most one in-flight tx for delegated accounts or those with
+				// a pending authorization.
 				return have, max(0, 1-have)
 			}
 			return have, math.MaxInt
@@ -589,10 +590,6 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 		},
 		KnownConflicts: func(from common.Address, auths []common.Address) []common.Address {
 			var conflicts []common.Address
-			// The transaction sender cannot have an in-flight authorization.
-			if _, ok := pool.all.auths[from]; ok {
-				conflicts = append(conflicts, from)
-			}
 			// Authorities cannot conflict with any pending or queued transactions.
 			for _, addr := range auths {
 				if list := pool.pending[addr]; list != nil {

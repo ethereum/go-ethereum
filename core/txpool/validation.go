@@ -284,15 +284,6 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 				return fmt.Errorf("%w: authorization conflicts with other known tx", ErrAuthorityReserved)
 			}
 		}
-		// Verify the every authorization's nonce is not stale. This check is expensive.
-		for _, auth := range tx.SetCodeAuthorizations() {
-			if addr, err := auth.Authority(); err == nil {
-				next := opts.State.GetNonce(addr)
-				if auth.Nonce < next {
-					return fmt.Errorf("%w: next nonce %d, auth nonce %d", ErrAuthorityNonceTooLow, next, auth.Nonce)
-				}
-			}
-		}
 	}
 	return nil
 }
