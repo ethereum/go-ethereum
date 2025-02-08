@@ -73,6 +73,8 @@ func TestFirehosePrestate(t *testing.T) {
 	testFolders := []string{
 		"./testdata/TestFirehosePrestate/keccak256_too_few_memory_bytes_get_padded",
 		"./testdata/TestFirehosePrestate/keccak256_wrong_diff",
+		"./testdata/TestFirehosePrestate/suicide_double_withdraw",
+		"./testdata/TestFirehosePrestate/extra_account_creations",
 	}
 
 	for _, folder := range testFolders {
