@@ -279,6 +279,7 @@ func newBackendMock() *backendMock {
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(1000),
 		CancunTime:          &cancunTime,
+		BlobScheduleConfig:  params.DefaultBlobSchedule,
 	}
 	return &backendMock{
 		current: &types.Header{

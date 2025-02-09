@@ -39,4 +39,5 @@ const (
 	Shanghai
 	Cancun
 	Prague
+	Osaka
 )

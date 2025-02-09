@@ -159,9 +159,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if sim.chainConfig.IsCancun(header.Number, header.Time) {
 		var excess uint64
 		if sim.chainConfig.IsCancun(parent.Number, parent.Time) {
-			excess = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
-		} else {
-			excess = eip4844.CalcExcessBlobGas(0, 0)
+			excess = eip4844.CalcExcessBlobGas(sim.chainConfig, parent, header.Time)
 		}
 		header.ExcessBlobGas = &excess
 	}
@@ -414,4 +412,8 @@ func (b *simBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber)
 		}
 	}
 	return nil, errors.New("header not found")
+}
+
+func (b *simBackend) ChainConfig() *params.ChainConfig {
+	return b.b.ChainConfig()
 }

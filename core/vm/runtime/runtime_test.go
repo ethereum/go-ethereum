@@ -314,6 +314,10 @@ func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header {
 	return fakeHeader(n, parentHash)
 }
 
+func (d *dummyChain) Config() *params.ChainConfig {
+	return nil
+}
+
 // TestBlockhash tests the blockhash operation. It's a bit special, since it internally
 // requires access to a chain reader.
 func TestBlockhash(t *testing.T) {
@@ -410,7 +414,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 	eoa := common.HexToAddress("E0")
 	{
 		cfg.State.CreateAccount(eoa)
-		cfg.State.SetNonce(eoa, 100)
+		cfg.State.SetNonce(eoa, 100, tracing.NonceChangeUnspecified)
 	}
 	reverting := common.HexToAddress("EE")
 	{
