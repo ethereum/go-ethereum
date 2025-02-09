@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
@@ -62,15 +63,16 @@ type codecV5 interface {
 // UDPv5 is the implementation of protocol version 5.
 type UDPv5 struct {
 	// static fields
-	conn         UDPConn
-	tab          *Table
-	netrestrict  *netutil.Netlist
-	priv         *ecdsa.PrivateKey
-	localNode    *enode.LocalNode
-	db           *enode.DB
-	log          log.Logger
-	clock        mclock.Clock
-	validSchemes enr.IdentityScheme
+	conn          UDPConn
+	tab           *Table
+	netrestrict   *netutil.Netlist
+	priv          *ecdsa.PrivateKey
+	localNode     *enode.LocalNode
+	db            *enode.DB
+	log           log.Logger
+	clock         mclock.Clock
+	validSchemes  enr.IdentityScheme
+	cacheIdToNode *lru.Cache[enode.ID, *enode.Node]
 
 	// misc buffers used during message handling
 	logcontext []interface{}
@@ -150,14 +152,15 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	cfg = cfg.withDefaults()
 	t := &UDPv5{
 		// static fields
-		conn:         newMeteredConn(conn),
-		localNode:    ln,
-		db:           ln.Database(),
-		netrestrict:  cfg.NetRestrict,
-		priv:         cfg.PrivateKey,
-		log:          cfg.Log,
-		validSchemes: cfg.ValidSchemes,
-		clock:        cfg.Clock,
+		conn:          newMeteredConn(conn),
+		localNode:     ln,
+		db:            ln.Database(),
+		netrestrict:   cfg.NetRestrict,
+		priv:          cfg.PrivateKey,
+		log:           cfg.Log,
+		validSchemes:  cfg.ValidSchemes,
+		clock:         cfg.Clock,
+		cacheIdToNode: lru.NewCache[enode.ID, *enode.Node](1024),
 		// channels into dispatch
 		packetInCh:    make(chan ReadPacket, 1),
 		readNextCh:    make(chan struct{}, 1),
@@ -705,6 +708,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
 		t.tab.addInboundNode(fromNode)
+		t.cacheNode(fromNode)
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.
@@ -737,14 +741,28 @@ func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr netip.AddrPort, p v
 }
 
 // getNode looks for a node record in table and database.
-func (t *UDPv5) getNode(id enode.ID) *enode.Node {
-	if n := t.tab.getNode(id); n != nil {
-		return n
+func (t *UDPv5) GetNode(id enode.ID) (n *enode.Node) {
+	if node, ok := t.cacheIdToNode.Get(id); ok {
+		return node
 	}
-	if n := t.localNode.Database().Node(id); n != nil {
-		return n
+	defer func() {
+		t.cacheNode(n)
+	}()
+	if n = t.tab.getNode(id); n != nil {
+		return
+	}
+	if n = t.localNode.Database().Node(id); n != nil {
+		return
 	}
 	return nil
+}
+
+// cacheNode cache addr to node
+func (t *UDPv5) cacheNode(node *enode.Node) {
+	if node == nil {
+		return
+	}
+	t.cacheIdToNode.Add(node.ID(), node)
 }
 
 // handle processes incoming packets according to their message type.
@@ -776,7 +794,7 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort
 func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr netip.AddrPort) {
 	challenge := &v5wire.Whoareyou{Nonce: p.Nonce}
 	crand.Read(challenge.IDNonce[:])
-	if n := t.getNode(fromID); n != nil {
+	if n := t.GetNode(fromID); n != nil {
 		challenge.Node = n
 		challenge.RecordSeq = n.Seq()
 	}
