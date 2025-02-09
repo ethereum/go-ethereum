@@ -272,7 +272,7 @@ var panicReasons = map[uint64]string{
 }
 
 // UnpackRevert resolves the abi-encoded revert reason. According to the solidity
-// spec https://solidity.readthedocs.io/en/latest/control-structures.html#revert,
+// spec https://docs.soliditylang.org/en/latest/control-structures.html#revert,
 // the provided revert reason is abi-encoded as if it were a call to function
 // `Error(string)` or `Panic(uint256)`. So it's a special tool for it.
 func UnpackRevert(data []byte) (string, error) {
