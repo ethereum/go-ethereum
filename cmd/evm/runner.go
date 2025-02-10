@@ -311,12 +311,16 @@ func runCmd(ctx *cli.Context) error {
 	}
 	input := common.FromHex(string(hexInput))
 
+	bench := ctx.Bool(BenchFlag.Name)
+
 	var execFunc func() ([]byte, uint64, error)
 	if ctx.Bool(CreateFlag.Name) {
 		input = append(code, input...)
 		execFunc = func() ([]byte, uint64, error) {
-			// don't mutate the state!
-			runtimeConfig.State = prestate.Copy()
+			if bench {
+				// don't mutate the state!
+				runtimeConfig.State = prestate.Copy()
+			}
 			output, _, gasLeft, err := runtime.Create(input, &runtimeConfig)
 			return output, gasLeft, err
 		}
@@ -325,14 +329,15 @@ func runCmd(ctx *cli.Context) error {
 			prestate.SetCode(receiver, code)
 		}
 		execFunc = func() ([]byte, uint64, error) {
-			// don't mutate the state!
-			runtimeConfig.State = prestate.Copy()
+			if bench {
+				// don't mutate the state!
+				runtimeConfig.State = prestate.Copy()
+			}
 			output, gasLeft, err := runtime.Call(receiver, input, &runtimeConfig)
 			return output, initialGas - gasLeft, err
 		}
 	}
 
-	bench := ctx.Bool(BenchFlag.Name)
 	output, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
