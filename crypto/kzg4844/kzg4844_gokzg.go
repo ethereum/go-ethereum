@@ -46,10 +46,10 @@ func gokzgInit() {
 }
 
 // gokzgBlobToCommitment creates a small commitment out of a data blob.
-func gokzgBlobToCommitment(blob Blob) (Commitment, error) {
+func gokzgBlobToCommitment(blob *Blob) (Commitment, error) {
 	gokzgIniter.Do(gokzgInit)
 
-	commitment, err := context.BlobToKZGCommitment((gokzg4844.Blob)(blob), 0)
+	commitment, err := context.BlobToKZGCommitment((*gokzg4844.Blob)(blob), 0)
 	if err != nil {
 		return Commitment{}, err
 	}
@@ -58,10 +58,10 @@ func gokzgBlobToCommitment(blob Blob) (Commitment, error) {
 
 // gokzgComputeProof computes the KZG proof at the given point for the polynomial
 // represented by the blob.
-func gokzgComputeProof(blob Blob, point Point) (Proof, Claim, error) {
+func gokzgComputeProof(blob *Blob, point Point) (Proof, Claim, error) {
 	gokzgIniter.Do(gokzgInit)
 
-	proof, claim, err := context.ComputeKZGProof((gokzg4844.Blob)(blob), (gokzg4844.Scalar)(point), 0)
+	proof, claim, err := context.ComputeKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.Scalar)(point), 0)
 	if err != nil {
 		return Proof{}, Claim{}, err
 	}
@@ -80,10 +80,10 @@ func gokzgVerifyProof(commitment Commitment, point Point, claim Claim, proof Pro
 // the commitment.
 //
 // This method does not verify that the commitment is correct with respect to blob.
-func gokzgComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
+func gokzgComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 	gokzgIniter.Do(gokzgInit)
 
-	proof, err := context.ComputeBlobKZGProof((gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), 0)
+	proof, err := context.ComputeBlobKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), 0)
 	if err != nil {
 		return Proof{}, err
 	}
@@ -91,8 +91,8 @@ func gokzgComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
 }
 
 // gokzgVerifyBlobProof verifies that the blob data corresponds to the provided commitment.
-func gokzgVerifyBlobProof(blob Blob, commitment Commitment, proof Proof) error {
+func gokzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	gokzgIniter.Do(gokzgInit)
 
-	return context.VerifyBlobKZGProof((gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), (gokzg4844.KZGProof)(proof))
+	return context.VerifyBlobKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), (gokzg4844.KZGProof)(proof))
 }
