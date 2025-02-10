@@ -291,6 +291,11 @@ func (b *backendMock) SyncProgress() ethereum.SyncProgress { return ethereum.Syn
 func (b *backendMock) FeeHistory(context.Context, uint64, rpc.BlockNumber, []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
 	return nil, nil, nil, nil, nil
 }
+
+func (b *backendMock) BlobBaseFee(ctx context.Context) *big.Int {
+	return new(big.Int)
+}
+
 func (b *backendMock) ChainDb() ethdb.Database           { return nil }
 func (b *backendMock) AccountManager() *accounts.Manager { return nil }
 func (b *backendMock) ExtRPCEnabled() bool               { return false }

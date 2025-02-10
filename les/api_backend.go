@@ -286,6 +286,10 @@ func (b *LesApiBackend) FeeHistory(ctx context.Context, blockCount uint64, lastB
 	return b.gpo.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
 }
 
+func (b *LesApiBackend) BlobBaseFee(ctx context.Context) *big.Int {
+	return new(big.Int)
+}
+
 func (b *LesApiBackend) ChainDb() ethdb.Database {
 	return b.eth.chainDb
 }
