@@ -112,14 +112,14 @@ var (
 			}
 			{{ end }}
 
-            // Unpack{{.Normalized.Name}} is the Go binding that unpacks the parameters returned
-            // from invoking the contract method with ID 0x{{printf "%x" .Original.ID}}.
-            //
-            // Solidity: {{.Original.String}}
+			// Unpack{{.Normalized.Name}} is the Go binding that unpacks the parameters returned
+			// from invoking the contract method with ID 0x{{printf "%x" .Original.ID}}.
+			//
+			// Solidity: {{.Original.String}}
 			func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) (
-			    {{- if .Structured}} {{.Normalized.Name}}Output,{{else}}
-			    {{- range .Normalized.Outputs}} {{bindtype .Type $structs}},{{- end }}
-			    {{- end }} error) {
+				{{- if .Structured}} {{.Normalized.Name}}Output,{{else}}
+				{{- range .Normalized.Outputs}} {{bindtype .Type $structs}},{{- end }}
+				{{- end }} error) {
 				out, err := {{ decapitalise $contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
 				{{- if .Structured}}
 				outstruct := new({{.Normalized.Name}}Output)
@@ -201,12 +201,12 @@ var (
 	// UnpackError attempts to decode the provided error data using user-defined
 	// error definitions.
 	func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) UnpackError(raw []byte) (any, error) {
-	    {{- range $k, $v := .Errors}}
-        if bytes.Equal(raw[:4], {{ decapitalise $contract.Type}}.abi.Errors["{{.Normalized.Name}}"].ID.Bytes()[:4]) {
-           return {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw[4:])
-        }
-        {{- end }}
-        return nil, errors.New("Unknown error")
+		{{- range $k, $v := .Errors}}
+		if bytes.Equal(raw[:4], {{ decapitalise $contract.Type}}.abi.Errors["{{.Normalized.Name}}"].ID.Bytes()[:4]) {
+			return {{ decapitalise $contract.Type}}.Unpack{{.Normalized.Name}}Error(raw[4:])
+		}
+		{{- end }}
+		return nil, errors.New("Unknown error")
 	}
 	{{ end }}
 
