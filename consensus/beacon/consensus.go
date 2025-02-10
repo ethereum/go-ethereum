@@ -72,9 +72,12 @@ func New(ethone consensus.Engine) *Beacon {
 	return &Beacon{ethone: ethone}
 }
 
+// isPreMerge reports whether the given block number is assumed to be pre-merge.
+// Here we check the MergeNetsplitBlock to allow configuring networks with a PoW or
+// PoA chain for unit testing purposes.
 func isPreMerge(config *params.ChainConfig, block uint64) bool {
-	return !(config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Sign() == 0) ||
-		(config.MergeNetsplitBlock != nil && block < config.MergeNetsplitBlock.Uint64())
+	mergedAtGenesis := config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Sign() == 0
+	return !mergedAtGenesis && config.MergeNetsplitBlock != nil && block < config.MergeNetsplitBlock.Uint64()
 }
 
 // Author implements consensus.Engine, returning the verified author of the block.
