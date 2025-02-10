@@ -56,8 +56,7 @@ type EventCheckerDynamic struct {
 	IdxDat common.Hash
 	Str    string
 	Dat    []byte
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw    *types.Log // Blockchain specific contextual infos
 }
 
 const EventCheckerDynamicEventName = "dynamic"
@@ -139,8 +138,7 @@ func (eventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventChecke
 type EventCheckerIndexed struct {
 	Addr common.Address
 	Num  *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw  *types.Log // Blockchain specific contextual infos
 }
 
 const EventCheckerIndexedEventName = "indexed"
@@ -182,8 +180,7 @@ func (eventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventChec
 type EventCheckerMixed struct {
 	Addr common.Address
 	Num  *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw  *types.Log // Blockchain specific contextual infos
 }
 
 const EventCheckerMixedEventName = "mixed"
@@ -225,8 +222,7 @@ func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventChecke
 type EventCheckerUnnamed struct {
 	Arg0 *big.Int
 	Arg1 *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw  *types.Log // Blockchain specific contextual infos
 }
 
 const EventCheckerUnnamedEventName = "unnamed"

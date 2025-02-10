@@ -149,8 +149,7 @@ func (c *C) PackEmitOne() []byte {
 type CBasic1 struct {
 	Id   *big.Int
 	Data *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw  *types.Log // Blockchain specific contextual infos
 }
 
 const CBasic1EventName = "basic1"
@@ -192,8 +191,7 @@ func (c *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
 type CBasic2 struct {
 	Flag bool
 	Data *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw  *types.Log // Blockchain specific contextual infos
 }
 
 const CBasic2EventName = "basic2"

@@ -90,8 +90,7 @@ func (numericMethodName *NumericMethodName) PackE2test() []byte {
 // NumericMethodNameE1TestEvent represents a E1TestEvent event raised by the NumericMethodName contract.
 type NumericMethodNameE1TestEvent struct {
 	Param common.Address
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw   *types.Log // Blockchain specific contextual infos
 }
 
 const NumericMethodNameE1TestEventEventName = "_1TestEvent"

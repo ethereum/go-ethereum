@@ -143,12 +143,11 @@ func (tuple *Tuple) PackFunc3(Arg0 []TupleQ) []byte {
 
 // TupleTupleEvent represents a TupleEvent event raised by the Tuple contract.
 type TupleTupleEvent struct {
-	A TupleS
-	B [][2]TupleT
-	C [2][]TupleT
-	D []TupleS
-	E []*big.Int
-
+	A   TupleS
+	B   [][2]TupleT
+	C   [2][]TupleT
+	D   []TupleS
+	E   []*big.Int
 	Raw *types.Log // Blockchain specific contextual infos
 }
 
@@ -190,8 +189,7 @@ func (tuple *Tuple) UnpackTupleEventEvent(log *types.Log) (*TupleTupleEvent, err
 // TupleTupleEvent2 represents a TupleEvent2 event raised by the Tuple contract.
 type TupleTupleEvent2 struct {
 	Arg0 []TupleP
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw  *types.Log // Blockchain specific contextual infos
 }
 
 const TupleTupleEvent2EventName = "TupleEvent2"

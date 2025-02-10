@@ -98,8 +98,7 @@ func (nameConflict *NameConflict) UnpackGetRequest(data []byte) (Oraclerequest, 
 type NameConflictLog struct {
 	Msg  *big.Int
 	Msg0 *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw  *types.Log // Blockchain specific contextual infos
 }
 
 const NameConflictLogEventName = "log"

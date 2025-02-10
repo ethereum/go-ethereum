@@ -442,8 +442,7 @@ type DAOChangeOfRules struct {
 	MinimumQuorum           *big.Int
 	DebatingPeriodInMinutes *big.Int
 	MajorityMargin          *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw                     *types.Log // Blockchain specific contextual infos
 }
 
 const DAOChangeOfRulesEventName = "ChangeOfRules"
@@ -485,8 +484,7 @@ func (dAO *DAO) UnpackChangeOfRulesEvent(log *types.Log) (*DAOChangeOfRules, err
 type DAOMembershipChanged struct {
 	Member   common.Address
 	IsMember bool
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw      *types.Log // Blockchain specific contextual infos
 }
 
 const DAOMembershipChangedEventName = "MembershipChanged"
@@ -530,8 +528,7 @@ type DAOProposalAdded struct {
 	Recipient   common.Address
 	Amount      *big.Int
 	Description string
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw         *types.Log // Blockchain specific contextual infos
 }
 
 const DAOProposalAddedEventName = "ProposalAdded"
@@ -575,8 +572,7 @@ type DAOProposalTallied struct {
 	Result     *big.Int
 	Quorum     *big.Int
 	Active     bool
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw        *types.Log // Blockchain specific contextual infos
 }
 
 const DAOProposalTalliedEventName = "ProposalTallied"
@@ -620,8 +616,7 @@ type DAOVoted struct {
 	Position      bool
 	Voter         common.Address
 	Justification string
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw           *types.Log // Blockchain specific contextual infos
 }
 
 const DAOVotedEventName = "Voted"

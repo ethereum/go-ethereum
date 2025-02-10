@@ -265,8 +265,7 @@ type CrowdsaleFundTransfer struct {
 	Backer         common.Address
 	Amount         *big.Int
 	IsContribution bool
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw            *types.Log // Blockchain specific contextual infos
 }
 
 const CrowdsaleFundTransferEventName = "FundTransfer"

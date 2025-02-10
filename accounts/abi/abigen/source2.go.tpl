@@ -155,10 +155,9 @@ var (
 		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} event raised by the {{$contract.Type}} contract.
 		type {{$contract.Type}}{{.Normalized.Name}} struct {
 			{{- range .Normalized.Inputs}}
-				{{- capitalise .Name}}
-				{{- else}} {{bindtype .Type $structs}}
-				{{- end }}
-			{{end}}
+				{{ capitalise .Name}}
+				{{- if .Indexed}} {{ bindtopictype .Type $structs}}{{- else}} {{ bindtype .Type $structs}}{{ end }}
+			{{- end}}
 			Raw *types.Log // Blockchain specific contextual infos
 		}
 

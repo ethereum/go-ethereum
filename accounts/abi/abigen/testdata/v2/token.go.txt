@@ -280,8 +280,7 @@ type TokenTransfer struct {
 	From  common.Address
 	To    common.Address
 	Value *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw   *types.Log // Blockchain specific contextual infos
 }
 
 const TokenTransferEventName = "Transfer"

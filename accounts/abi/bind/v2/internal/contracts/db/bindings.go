@@ -212,8 +212,7 @@ type DBInsert struct {
 	Key    *big.Int
 	Value  *big.Int
 	Length *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw    *types.Log // Blockchain specific contextual infos
 }
 
 const DBInsertEventName = "Insert"
@@ -255,8 +254,7 @@ func (dB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
 type DBKeyedInsert struct {
 	Key   *big.Int
 	Value *big.Int
-
-	Raw *types.Log // Blockchain specific contextual infos
+	Raw   *types.Log // Blockchain specific contextual infos
 }
 
 const DBKeyedInsertEventName = "KeyedInsert"

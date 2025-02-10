@@ -77,8 +77,7 @@ func (overload *Overload) PackFoo0(I *big.Int) []byte {
 
 // OverloadBar represents a Bar event raised by the Overload contract.
 type OverloadBar struct {
-	I *big.Int
-
+	I   *big.Int
 	Raw *types.Log // Blockchain specific contextual infos
 }
 
@@ -119,9 +118,8 @@ func (overload *Overload) UnpackBarEvent(log *types.Log) (*OverloadBar, error) {
 
 // OverloadBar0 represents a Bar0 event raised by the Overload contract.
 type OverloadBar0 struct {
-	I *big.Int
-	J *big.Int
-
+	I   *big.Int
+	J   *big.Int
 	Raw *types.Log // Blockchain specific contextual infos
 }
 
