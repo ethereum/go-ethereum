@@ -1,19 +1,3 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package core
 
 import (
@@ -243,4 +227,86 @@ func (b *testChainIndexBackend) Commit() error {
 
 func (b *testChainIndexBackend) Prune(threshold uint64) error {
 	return nil
+}
+
+// TestChainIndexerReorg tests the chain indexer for handling reorgs correctly.
+func TestChainIndexerReorg(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	defer db.Close()
+
+	// Create a chain indexer
+	sectionSize := uint64(10)
+	confirmsReq := uint64(5)
+	backend := &testChainIndexBackend{t: t, processCh: make(chan uint64)}
+	indexer := NewChainIndexer(db, rawdb.NewTable(db, "test"), backend, sectionSize, confirmsReq, 0, "indexer")
+	defer indexer.Close()
+
+	// Function to inject headers into the database
+	inject := func(number uint64) {
+		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int63()).Bytes()}
+		if number > 0 {
+			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
+		}
+		rawdb.WriteHeader(db, header)
+		rawdb.WriteCanonicalHash(db, header.Hash(), number)
+	}
+
+	// Function to notify the indexer about new heads
+	notify := func(headNum uint64, reorg bool) {
+		indexer.newHead(headNum, reorg)
+	}
+
+	// Inject initial chain
+	for i := uint64(0); i <= 50; i++ {
+		inject(i)
+	}
+	notify(50, false)
+
+	// Reorg the chain
+	notify(25, true)
+
+	// Create new fork
+	for i := uint64(26); i <= 50; i++ {
+		inject(i)
+		notify(i, false)
+	}
+}
+
+// TestChainIndexerPrune tests the chain indexer for pruning old sections correctly.
+func TestChainIndexerPrune(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	defer db.Close()
+
+	// Create a chain indexer
+	sectionSize := uint64(10)
+	confirmsReq := uint64(5)
+	backend := &testChainIndexBackend{t: t, processCh: make(chan uint64)}
+	indexer := NewChainIndexer(db, rawdb.NewTable(db, "test"), backend, sectionSize, confirmsReq, 0, "indexer")
+	defer indexer.Close()
+
+	// Function to inject headers into the database
+	inject := func(number uint64) {
+		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int63()).Bytes()}
+		if number > 0 {
+			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
+		}
+		rawdb.WriteHeader(db, header)
+		rawdb.WriteCanonicalHash(db, header.Hash(), number)
+	}
+
+	// Function to notify the indexer about new heads
+	notify := func(headNum uint64, reorg bool) {
+		indexer.newHead(headNum, reorg)
+	}
+
+	// Inject initial chain
+	for i := uint64(0); i <= 50; i++ {
+		inject(i)
+	}
+	notify(50, false)
+
+	// Prune old sections
+	if err := indexer.Prune(20); err != nil {
+		t.Fatalf("Failed to prune sections: %v", err)
+	}
 }

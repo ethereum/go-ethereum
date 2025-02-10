@@ -1,19 +1,3 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package bloombits
 
 import (
@@ -97,4 +81,44 @@ func BenchmarkGenerator(b *testing.B) {
 			}
 		}
 	})
+}
+
+// TestGeneratorEdgeCases tests edge cases for the bloom generator.
+func TestGeneratorEdgeCases(t *testing.T) {
+	// Test with zero sections
+	_, err := NewGenerator(0)
+	if err == nil {
+		t.Fatal("expected error for zero sections, got nil")
+	}
+
+	// Test with non-multiple of 8 sections
+	_, err = NewGenerator(7)
+	if err == nil {
+		t.Fatal("expected error for non-multiple of 8 sections, got nil")
+	}
+
+	// Test with valid sections
+	gen, err := NewGenerator(8)
+	if err != nil {
+		t.Fatalf("failed to create bloombit generator: %v", err)
+	}
+
+	// Test adding bloom with unexpected index
+	err = gen.AddBloom(1, types.Bloom{})
+	if err == nil {
+		t.Fatal("expected error for unexpected index, got nil")
+	}
+
+	// Test retrieving bitset before fully generated
+	_, err = gen.Bitset(0)
+	if err == nil {
+		t.Fatal("expected error for bloom not fully generated, got nil")
+	}
+
+	// Test retrieving bitset with out of bounds index
+	gen.AddBloom(0, types.Bloom{})
+	_, err = gen.Bitset(types.BloomBitLength)
+	if err == nil {
+		t.Fatal("expected error for bloom bit out of bounds, got nil")
+	}
 }

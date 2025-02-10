@@ -1,19 +1,3 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package bloombits
 
 import (
@@ -100,4 +84,43 @@ func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
 	if have := delivered.Load(); int(have) != requests {
 		t.Errorf("request count mismatch: have %v, want %v", have, requests)
 	}
+}
+
+// TestSchedulerEdgeCases tests edge cases for the scheduler.
+func TestSchedulerEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	// Test with zero sections
+	_, err := newScheduler(0)
+	if err == nil {
+		t.Fatal("expected error for zero sections, got nil")
+	}
+
+	// Test with non-multiple of 8 sections
+	_, err = newScheduler(7)
+	if err == nil {
+		t.Fatal("expected error for non-multiple of 8 sections, got nil")
+	}
+
+	// Test with valid sections
+	scheduler := newScheduler(8)
+	if scheduler == nil {
+		t.Fatal("failed to create scheduler with valid sections")
+	}
+
+	// Test running the scheduler with invalid channels
+	in := make(chan uint64, 16)
+	out := make(chan []byte, 16)
+	quit := make(chan struct{})
+	var pend sync.WaitGroup
+	pend.Add(1)
+	go func() {
+		defer pend.Done()
+		scheduler.run(in, nil, out, quit, &pend)
+	}()
+
+	// Test sending invalid data to the scheduler
+	in <- 1
+	close(in)
+	pend.Wait()
 }

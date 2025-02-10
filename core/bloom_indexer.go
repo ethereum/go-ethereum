@@ -1,23 +1,8 @@
-// Copyright 2021 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package core
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,7 +24,7 @@ const (
 type BloomIndexer struct {
 	size    uint64               // section size to generate bloombits for
 	db      ethdb.Database       // database instance to write index data and metadata into
-	gen     *bloombits.Generator // generator to rotate the bloom bits crating the bloom index
+	gen     *bloombits.Generator // generator to rotate the bloom bits creating the bloom index
 	section uint64               // Section is the section number being processed currently
 	head    common.Hash          // Head is the hash of the last header processed
 }
@@ -60,14 +45,22 @@ func NewBloomIndexer(db ethdb.Database, size, confirms uint64) *ChainIndexer {
 // section.
 func (b *BloomIndexer) Reset(ctx context.Context, section uint64, lastSectionHead common.Hash) error {
 	gen, err := bloombits.NewGenerator(uint(b.size))
+	if err != nil {
+		return err
+	}
 	b.gen, b.section, b.head = gen, section, common.Hash{}
-	return err
+	return nil
 }
 
 // Process implements core.ChainIndexerBackend, adding a new header's bloom into
 // the index.
 func (b *BloomIndexer) Process(ctx context.Context, header *types.Header) error {
-	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), header.Bloom)
+	if b.gen == nil {
+		return errors.New("bloom generator is not initialized")
+	}
+	if err := b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), header.Bloom); err != nil {
+		return err
+	}
 	b.head = header.Hash()
 	return nil
 }
@@ -75,13 +68,18 @@ func (b *BloomIndexer) Process(ctx context.Context, header *types.Header) error 
 // Commit implements core.ChainIndexerBackend, finalizing the bloom section and
 // writing it out into the database.
 func (b *BloomIndexer) Commit() error {
+	if b.gen == nil {
+		return errors.New("bloom generator is not initialized")
+	}
 	batch := b.db.NewBatchWithSize((int(b.size) / 8) * types.BloomBitLength)
 	for i := 0; i < types.BloomBitLength; i++ {
 		bits, err := b.gen.Bitset(uint(i))
 		if err != nil {
 			return err
 		}
-		rawdb.WriteBloomBits(batch, uint(i), b.section, b.head, bitutil.CompressBytes(bits))
+		if err := rawdb.WriteBloomBits(batch, uint(i), b.section, b.head, bitutil.CompressBytes(bits)); err != nil {
+			return err
+		}
 	}
 	return batch.Write()
 }

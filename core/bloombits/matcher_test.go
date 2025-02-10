@@ -1,19 +1,3 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package bloombits
 
 import (
@@ -289,4 +273,40 @@ func expMatch3(filter [][]bloomIndexes, i uint64) bool {
 		}
 	}
 	return true
+}
+
+// TestMatcherEdgeCases tests edge cases for the matcher.
+func TestMatcherEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	// Test with zero sections
+	_, err := NewMatcher(0, nil)
+	if err == nil {
+		t.Fatal("expected error for zero sections, got nil")
+	}
+
+	// Test with non-multiple of 8 sections
+	_, err = NewMatcher(7, nil)
+	if err == nil {
+		t.Fatal("expected error for non-multiple of 8 sections, got nil")
+	}
+
+	// Test with valid sections
+	matcher := NewMatcher(8, nil)
+	if matcher == nil {
+		t.Fatal("failed to create matcher with valid sections")
+	}
+
+	// Test starting a session with invalid range
+	_, err = matcher.Start(context.Background(), 10, 5, make(chan uint64))
+	if err == nil {
+		t.Fatal("expected error for invalid range, got nil")
+	}
+
+	// Test starting a session with valid range
+	session, err := matcher.Start(context.Background(), 0, 7, make(chan uint64))
+	if err != nil {
+		t.Fatalf("failed to start matcher session: %v", err)
+	}
+	session.Close()
 }
