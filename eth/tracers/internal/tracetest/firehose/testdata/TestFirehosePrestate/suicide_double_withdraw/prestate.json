@@ -52,7 +52,14 @@
       "cancunTime": 1707305664,
       "terminalTotalDifficulty": 0,
       "depositContractAddress": "0x0000000000000000000000000000000000000000",
-      "ethash": {}
+      "ethash": {},
+      "blobSchedule": {
+        "cancun": {
+          "target": 3,
+          "max": 6,
+          "baseFeeUpdateFraction": 3338477
+        }
+      }
     },
     "difficulty": "0",
     "totalDifficulty": "0",

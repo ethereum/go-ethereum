@@ -157,7 +157,14 @@
       "cancunTime": 1706655072,
       "terminalTotalDifficulty": 17000000000000000,
       "terminalTotalDifficultyPassed": true,
-      "ethash": {}
+      "ethash": {},
+      "blobSchedule": {
+        "cancun": {
+          "target": 3,
+          "max": 6,
+          "baseFeeUpdateFraction": 3338477
+        }
+      }
     }
   },
   "context": {

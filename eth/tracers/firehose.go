@@ -1740,6 +1740,8 @@ func transactionTypeFromChainTxType(txType uint8) pbeth.TransactionTrace_Type {
 		return pbeth.TransactionTrace_TRX_TYPE_LEGACY
 	case types.BlobTxType:
 		return pbeth.TransactionTrace_TRX_TYPE_BLOB
+	case types.SetCodeTxType:
+		return pbeth.TransactionTrace_TRX_TYPE_SET_CODE
 	default:
 		panic(fmt.Errorf("unknown transaction type %d", txType))
 	}
@@ -1920,7 +1922,7 @@ func maxFeePerGas(tx *types.Transaction) *pbeth.BigInt {
 	case types.LegacyTxType, types.AccessListTxType:
 		return nil
 
-	case types.DynamicFeeTxType, types.BlobTxType:
+	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
 		return firehoseBigIntFromNative(tx.GasFeeCap())
 
 	}
@@ -1933,7 +1935,7 @@ func maxPriorityFeePerGas(tx *types.Transaction) *pbeth.BigInt {
 	case types.LegacyTxType, types.AccessListTxType:
 		return nil
 
-	case types.DynamicFeeTxType, types.BlobTxType:
+	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
 		return firehoseBigIntFromNative(tx.GasTipCap())
 	}
 
@@ -1946,7 +1948,7 @@ func gasPrice(tx *types.Transaction, baseFee *big.Int) *pbeth.BigInt {
 		return firehoseBigIntFromNative(tx.GasPrice())
 
 	// In the context of dynamic fee transactions, `GasPrice() == GasFeeCap()`
-	case types.DynamicFeeTxType, types.BlobTxType:
+	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
 		if baseFee == nil {
 			return firehoseBigIntFromNative(tx.GasPrice())
 		}
@@ -2280,6 +2282,7 @@ func staticFirehoseChainValidationOnInit() {
 		types.AccessListTxType: true,
 		types.DynamicFeeTxType: true,
 		types.BlobTxType:       true,
+		types.SetCodeTxType:    true,
 	}
 
 	for txType := byte(0); txType < 255; txType++ {
