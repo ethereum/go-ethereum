@@ -82,6 +82,7 @@ func validate(jt JumpTable) JumpTable {
 
 func newCancunInstructionSet() JumpTable {
 	instructionSet := newEip1559InstructionSet()
+	enable7516(&instructionSet) // EIP-7516 (BLOBBASEFEE opcode)
 	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
 	enable5656(&instructionSet) // EIP-5656 (MCOPY opcode)
 	enable6780(&instructionSet) // EIP-6780 SELFDESTRUCT only in same transaction
