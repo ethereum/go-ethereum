@@ -46,7 +46,7 @@ func ExecutionHeaderFromJSON(forkName string, data []byte) (*ExecutionHeader, er
 	case "deneb":
 		obj = new(deneb.ExecutionPayloadHeader)
 	default:
-		return nil, fmt.Errorf("unsupported fork: " + forkName)
+		return nil, fmt.Errorf("unsupported fork: %s", forkName)
 	}
 	if err := json.Unmarshal(data, obj); err != nil {
 		return nil, err
