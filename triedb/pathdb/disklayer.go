@@ -163,7 +163,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 		dirtyStateHitDepthHist.Update(int64(depth))
 
 		if len(blob) == 0 {
-			stateAccountInexMeter.Mark(1)
+			stateAccountIndexMeter.Mark(1)
 		} else {
 			stateAccountExistMeter.Mark(1)
 		}
@@ -198,7 +198,7 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 		dirtyStateHitDepthHist.Update(int64(depth))
 
 		if len(blob) == 0 {
-			stateStorageInexMeter.Mark(1)
+			stateStorageIndexMeter.Mark(1)
 		} else {
 			stateStorageExistMeter.Mark(1)
 		}
