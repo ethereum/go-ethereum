@@ -65,6 +65,9 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	if merged {
 		config.TerminalTotalDifficulty = common.Big0
 		config.MergeNetsplitBlock = common.Big0
+	} else {
+		// When merged==false, the tests expect the next block to enter the merge.
+		config.MergeNetsplitBlock = big.NewInt(int64(n + 1))
 	}
 
 	genesis := &core.Genesis{
