@@ -31,7 +31,7 @@ jobs:
         # (see only-new-issues: true). It is disabled in .golangci.yml because
         # golangci-lint running locally is not aware of new/modified files compared to the base
         # commit of a pull request, and we want to avoid reporting invalid goheader errors.
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@ec5d18412c0aeab7936cb16880d708ba2a64e1ae # v6.2.0 since v6.3.1 does not handle `only-new-issues` correctly
         with:
           version: v1.60
           only-new-issues: true
