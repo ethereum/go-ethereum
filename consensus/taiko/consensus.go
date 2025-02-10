@@ -39,7 +39,8 @@ var (
 	AnchorV3Selector = crypto.Keccak256(
 		[]byte("anchorV3(uint64,bytes32,bytes32,uint32,(uint8,uint8,uint32,uint64,uint32),bytes32[])"),
 	)[:4]
-	AnchorGasLimit = uint64(250_000)
+	AnchorGasLimit   = uint64(250_000)
+	AnchorV3GasLimit = uint64(1_000_000)
 )
 
 // Taiko is a consensus engine used by L2 rollup.
@@ -313,8 +314,14 @@ func (t *Taiko) ValidateAnchorTx(tx *types.Transaction, header *types.Header) (b
 		return false, nil
 	}
 
-	if tx.Gas() != AnchorGasLimit {
-		return false, nil
+	if t.chainConfig.IsPacaya(header.Number) {
+		if tx.Gas() != AnchorV3GasLimit {
+			return false, nil
+		}
+	} else {
+		if tx.Gas() != AnchorGasLimit {
+			return false, nil
+		}
 	}
 
 	if tx.GasFeeCap().Cmp(header.BaseFee) != 0 {
