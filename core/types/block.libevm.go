@@ -29,8 +29,8 @@ import (
 // HeaderHooks are required for all types registered with [RegisterExtras] for
 // [Header] payloads.
 type HeaderHooks interface {
-	MarshalJSON(*Header) ([]byte, error) //nolint:govet // Type-specific override hook
-	UnmarshalJSON(*Header, []byte) error //nolint:govet
+	EncodeJSON(*Header) ([]byte, error)
+	DecodeJSON(*Header, []byte) error
 	EncodeRLP(*Header, io.Writer) error
 	DecodeRLP(*Header, *rlp.Stream) error
 	PostCopy(dst *Header)
@@ -58,12 +58,12 @@ var _ interface {
 
 // MarshalJSON implements the [json.Marshaler] interface.
 func (h *Header) MarshalJSON() ([]byte, error) {
-	return h.hooks().MarshalJSON(h)
+	return h.hooks().EncodeJSON(h)
 }
 
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (h *Header) UnmarshalJSON(b []byte) error {
-	return h.hooks().UnmarshalJSON(h, b)
+	return h.hooks().DecodeJSON(h, b)
 }
 
 // EncodeRLP implements the [rlp.Encoder] interface.
@@ -94,11 +94,11 @@ type NOOPHeaderHooks struct{}
 
 var _ HeaderHooks = (*NOOPHeaderHooks)(nil)
 
-func (*NOOPHeaderHooks) MarshalJSON(h *Header) ([]byte, error) { //nolint:govet
+func (*NOOPHeaderHooks) EncodeJSON(h *Header) ([]byte, error) {
 	return h.marshalJSON()
 }
 
-func (*NOOPHeaderHooks) UnmarshalJSON(h *Header, b []byte) error { //nolint:govet
+func (*NOOPHeaderHooks) DecodeJSON(h *Header, b []byte) error {
 	return h.unmarshalJSON(b)
 }
 

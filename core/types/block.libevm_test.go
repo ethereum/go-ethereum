@@ -51,11 +51,11 @@ func fakeHeaderRLP(h *Header, suffix []byte) []byte {
 	return append(crypto.Keccak256(h.ParentHash[:]), suffix...)
 }
 
-func (hh *stubHeaderHooks) MarshalJSON(h *Header) ([]byte, error) { //nolint:govet
+func (hh *stubHeaderHooks) EncodeJSON(h *Header) ([]byte, error) {
 	return fakeHeaderJSON(h, hh.suffix), hh.errMarshal
 }
 
-func (hh *stubHeaderHooks) UnmarshalJSON(h *Header, b []byte) error { //nolint:govet
+func (hh *stubHeaderHooks) DecodeJSON(h *Header, b []byte) error {
 	hh.gotRawJSONToUnmarshal = b
 	*h = hh.setHeaderToOnUnmarshalOrDecode
 	return hh.errUnmarshal
