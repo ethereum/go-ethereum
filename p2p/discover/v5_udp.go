@@ -42,8 +42,6 @@ const (
 	lookupRequestLimit      = 3  // max requests against a single node during lookup
 	findnodeResultLimit     = 16 // applies in FINDNODE handler
 	totalNodesResponseLimit = 5  // applies in waitForNodes
-
-	respTimeoutV5 = 700 * time.Millisecond
 )
 
 // codecV5 is implemented by v5wire.Codec (and testCodec).
@@ -71,6 +69,7 @@ type UDPv5 struct {
 	log          log.Logger
 	clock        mclock.Clock
 	validSchemes enr.IdentityScheme
+	respTimeout  time.Duration
 
 	// misc buffers used during message handling
 	logcontext []interface{}
@@ -158,6 +157,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		log:          cfg.Log,
 		validSchemes: cfg.ValidSchemes,
 		clock:        cfg.Clock,
+		respTimeout:  cfg.V5RespTimeout,
 		// channels into dispatch
 		packetInCh:    make(chan ReadPacket, 1),
 		readNextCh:    make(chan struct{}, 1),
@@ -576,7 +576,7 @@ func (t *UDPv5) startResponseTimeout(c *callV5) {
 		timer mclock.Timer
 		done  = make(chan struct{})
 	)
-	timer = t.clock.AfterFunc(respTimeoutV5, func() {
+	timer = t.clock.AfterFunc(t.respTimeout, func() {
 		<-done
 		select {
 		case t.respTimeoutCh <- &callTimeout{c, timer}:
