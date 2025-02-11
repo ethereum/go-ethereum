@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net/http"
 	"strings"
@@ -459,15 +458,13 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 	var engine = beacon.New(ethash.NewFaker())
 	if shanghai {
 		gspec.Config.TerminalTotalDifficulty = common.Big0
+		gspec.Config.MergeNetsplitBlock = common.Big0
 		// GenerateChain will increment timestamps by 10.
 		// Shanghai upgrade at block 1.
 		shanghaiTime := uint64(5)
 		gspec.Config.ShanghaiTime = &shanghaiTime
-	} else {
-		// set an arbitrary large ttd as chains are required to be known to be merged
-		gspec.Config.TerminalTotalDifficulty = big.NewInt(math.MaxInt64)
-		engine.TestingTTDBlock(math.MaxUint64)
 	}
+
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)
