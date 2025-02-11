@@ -56,6 +56,8 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	var table *JumpTable
 	switch {
+	case evm.chainRules.IsCancun:
+		table = &cancunInstructionSet
 	case evm.chainRules.IsEIP1559:
 		table = &eip1559InstructionSet
 	case evm.chainRules.IsShanghai:
