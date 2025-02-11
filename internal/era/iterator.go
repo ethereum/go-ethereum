@@ -73,7 +73,7 @@ func (it *Iterator) Block() (*types.Block, error) {
 	if err := rlp.Decode(it.inner.Body, &body); err != nil {
 		return nil, err
 	}
-	return types.NewBlockWithHeader(&header).WithBody(body.Transactions, body.Uncles), nil
+	return types.NewBlockWithHeader(&header).WithBody(body), nil
 }
 
 // Receipts returns the receipts for the iterator's current position.

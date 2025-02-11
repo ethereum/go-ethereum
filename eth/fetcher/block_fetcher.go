@@ -686,7 +686,8 @@ func (f *BlockFetcher) loop() {
 						// Mark the body matched, reassemble if still unknown
 						matched = true
 						if f.getBlock(hash) == nil {
-							block := types.NewBlockWithHeader(announce.header).WithBody(task.transactions[i], task.uncles[i])
+							body := types.Body{Transactions: task.transactions[i], Uncles: task.uncles[i]}
+							block := types.NewBlockWithHeader(announce.header).WithBody(body)
 							block.ReceivedAt = task.time
 							blocks = append(blocks, block)
 						} else {
