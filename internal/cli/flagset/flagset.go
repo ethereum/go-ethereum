@@ -378,7 +378,7 @@ func (i *SliceStringFlag) UpdateValue(value string) {
 }
 
 func (f *Flagset) SliceStringFlag(s *SliceStringFlag) {
-	if s.Default == nil || len(s.Default) == 0 {
+	if len(s.Default) == 0 {
 		f.addFlag(&FlagVar{
 			Name:    s.Name,
 			Usage:   s.Usage,
@@ -482,7 +482,7 @@ func (m *MapStringFlag) UpdateValue(value string) {
 }
 
 func (f *Flagset) MapStringFlag(m *MapStringFlag) {
-	if m.Default == nil || len(m.Default) == 0 {
+	if len(m.Default) == 0 {
 		f.addFlag(&FlagVar{
 			Name:    m.Name,
 			Usage:   m.Usage,
