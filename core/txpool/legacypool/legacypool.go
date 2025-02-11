@@ -198,18 +198,19 @@ func (config *Config) sanitize() Config {
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 //
-// In addition to tracking transactions, the pool will also track pending set
-// code authorizations. This helps minimize number of transactions that can be
-// trivially churned in the pool. As a standard rule, any account with a
-// deployed delegation or an in-flight authorization to deploy a delegation will
-// only be allowed a single transaction slot instead of the standard number.
-// This is due to the possibility of the account being sweeped by an unrelated
-// account. Because SetCode transactions can have many authorizations included,
-// we avoid explicitly checking their validity to save the state lookup. So long
-// as the encompassing transaction is valid, the authorization will be accepted
-// and tracked by the pool. In case the pool is tracking a pending / queued
-// transaction from a specific account, it will reject new transactions with
-// delegations from that account with standard in-flight transactions.
+// In addition to tracking transactions, the pool also tracks a set of pending SetCode
+// authorizations (EIP7702). This helps minimize number of transactions that can be
+// trivially churned in the pool. As a standard rule, any account with a deployed
+// delegation or an in-flight authorization to deploy a delegation will only be allowed a
+// single transaction slot instead of the standard number. This is due to the possibility
+// of the account being sweeped by an unrelated account.
+//
+// Because SetCode transactions can have many authorizations included, we avoid explicitly
+// checking their validity to save the state lookup. So long as the encompassing
+// transaction is valid, the authorization will be accepted and tracked by the pool. In
+// case the pool is tracking a pending / queued transaction from a specific account, it
+// will reject new transactions with delegations from that account with standard in-flight
+// transactions.
 type LegacyPool struct {
 	config      Config
 	chainconfig *params.ChainConfig
