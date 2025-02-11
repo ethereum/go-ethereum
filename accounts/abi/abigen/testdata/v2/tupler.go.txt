@@ -51,8 +51,8 @@ func (c *Tupler) Instance(backend bind.ContractBackend, addr common.Address) *bi
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Tuple is the Go binding used to pack the parameters required for calling
-// the contract method 0x3175aae2.
+// PackTuple is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x3175aae2.
 //
 // Solidity: function tuple() returns(string a, int256 b, bytes32 c)
 func (tupler *Tupler) PackTuple() []byte {

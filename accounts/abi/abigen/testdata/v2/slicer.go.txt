@@ -51,8 +51,8 @@ func (c *Slicer) Instance(backend bind.ContractBackend, addr common.Address) *bi
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// EchoAddresses is the Go binding used to pack the parameters required for calling
-// the contract method 0xbe1127a3.
+// PackEchoAddresses is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbe1127a3.
 //
 // Solidity: function echoAddresses(address[] input) returns(address[] output)
 func (slicer *Slicer) PackEchoAddresses(Input []common.Address) []byte {
@@ -76,8 +76,8 @@ func (slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error)
 	return out0, err
 }
 
-// EchoBools is the Go binding used to pack the parameters required for calling
-// the contract method 0xf637e589.
+// PackEchoBools is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xf637e589.
 //
 // Solidity: function echoBools(bool[] input) returns(bool[] output)
 func (slicer *Slicer) PackEchoBools(Input []bool) []byte {
@@ -101,8 +101,8 @@ func (slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
 	return out0, err
 }
 
-// EchoFancyInts is the Go binding used to pack the parameters required for calling
-// the contract method 0xd88becc0.
+// PackEchoFancyInts is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd88becc0.
 //
 // Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
 func (slicer *Slicer) PackEchoFancyInts(Input [23]*big.Int) []byte {
@@ -126,8 +126,8 @@ func (slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
 	return out0, err
 }
 
-// EchoInts is the Go binding used to pack the parameters required for calling
-// the contract method 0xe15a3db7.
+// PackEchoInts is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe15a3db7.
 //
 // Solidity: function echoInts(int256[] input) returns(int256[] output)
 func (slicer *Slicer) PackEchoInts(Input []*big.Int) []byte {

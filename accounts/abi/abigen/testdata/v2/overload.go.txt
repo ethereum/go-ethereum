@@ -51,8 +51,8 @@ func (c *Overload) Instance(backend bind.ContractBackend, addr common.Address) *
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Foo is the Go binding used to pack the parameters required for calling
-// the contract method 0x04bc52f8.
+// PackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x04bc52f8.
 //
 // Solidity: function foo(uint256 i, uint256 j) returns()
 func (overload *Overload) PackFoo(I *big.Int, J *big.Int) []byte {
@@ -63,8 +63,8 @@ func (overload *Overload) PackFoo(I *big.Int, J *big.Int) []byte {
 	return enc
 }
 
-// Foo0 is the Go binding used to pack the parameters required for calling
-// the contract method 0x2fbebd38.
+// PackFoo0 is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2fbebd38.
 //
 // Solidity: function foo(uint256 i) returns()
 func (overload *Overload) PackFoo0(I *big.Int) []byte {
@@ -75,7 +75,7 @@ func (overload *Overload) PackFoo0(I *big.Int) []byte {
 	return enc
 }
 
-// OverloadBar represents a Bar event raised by the Overload contract.
+// OverloadBar represents a bar event raised by the Overload contract.
 type OverloadBar struct {
 	I   *big.Int
 	Raw *types.Log // Blockchain specific contextual infos
@@ -116,7 +116,7 @@ func (overload *Overload) UnpackBarEvent(log *types.Log) (*OverloadBar, error) {
 	return out, nil
 }
 
-// OverloadBar0 represents a Bar0 event raised by the Overload contract.
+// OverloadBar0 represents a bar0 event raised by the Overload contract.
 type OverloadBar0 struct {
 	I   *big.Int
 	J   *big.Int

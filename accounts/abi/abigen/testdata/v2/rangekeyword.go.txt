@@ -51,8 +51,8 @@ func (c *RangeKeyword) Instance(backend bind.ContractBackend, addr common.Addres
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// FunctionWithKeywordParameter is the Go binding used to pack the parameters required for calling
-// the contract method 0x527a119f.
+// PackFunctionWithKeywordParameter is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x527a119f.
 //
 // Solidity: function functionWithKeywordParameter(uint256 range) pure returns()
 func (rangeKeyword *RangeKeyword) PackFunctionWithKeywordParameter(Arg0 *big.Int) []byte {

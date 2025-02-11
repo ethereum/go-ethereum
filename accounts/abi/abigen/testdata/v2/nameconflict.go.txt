@@ -57,8 +57,8 @@ func (c *NameConflict) Instance(backend bind.ContractBackend, addr common.Addres
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// AddRequest is the Go binding used to pack the parameters required for calling
-// the contract method 0xcce7b048.
+// PackAddRequest is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xcce7b048.
 //
 // Solidity: function addRequest((bytes,bytes) req) pure returns()
 func (nameConflict *NameConflict) PackAddRequest(Req Oraclerequest) []byte {
@@ -69,8 +69,8 @@ func (nameConflict *NameConflict) PackAddRequest(Req Oraclerequest) []byte {
 	return enc
 }
 
-// GetRequest is the Go binding used to pack the parameters required for calling
-// the contract method 0xc2bb515f.
+// PackGetRequest is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xc2bb515f.
 //
 // Solidity: function getRequest() pure returns((bytes,bytes))
 func (nameConflict *NameConflict) PackGetRequest() []byte {
@@ -94,7 +94,7 @@ func (nameConflict *NameConflict) UnpackGetRequest(data []byte) (Oraclerequest, 
 	return out0, err
 }
 
-// NameConflictLog represents a Log event raised by the NameConflict contract.
+// NameConflictLog represents a log event raised by the NameConflict contract.
 type NameConflictLog struct {
 	Msg  *big.Int
 	Msg0 *big.Int

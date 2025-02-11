@@ -51,8 +51,8 @@ func (c *Getter) Instance(backend bind.ContractBackend, addr common.Address) *bi
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Getter is the Go binding used to pack the parameters required for calling
-// the contract method 0x993a04b7.
+// PackGetter is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x993a04b7.
 //
 // Solidity: function getter() returns(string, int256, bytes32)
 func (getter *Getter) PackGetter() []byte {

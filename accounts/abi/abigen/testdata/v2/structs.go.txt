@@ -56,8 +56,8 @@ func (c *Structs) Instance(backend bind.ContractBackend, addr common.Address) *b
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// F is the Go binding used to pack the parameters required for calling
-// the contract method 0x28811f59.
+// PackF is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x28811f59.
 //
 // Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
 func (structs *Structs) PackF() []byte {
@@ -93,8 +93,8 @@ func (structs *Structs) UnpackF(data []byte) (FOutput, error) {
 
 }
 
-// G is the Go binding used to pack the parameters required for calling
-// the contract method 0x6fecb623.
+// PackG is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6fecb623.
 //
 // Solidity: function G() view returns((bytes32)[] a)
 func (structs *Structs) PackG() []byte {

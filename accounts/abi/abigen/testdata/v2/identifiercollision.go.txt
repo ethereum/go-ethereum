@@ -51,8 +51,8 @@ func (c *IdentifierCollision) Instance(backend bind.ContractBackend, addr common
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// MyVar is the Go binding used to pack the parameters required for calling
-// the contract method 0x4ef1f0ad.
+// PackMyVar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x4ef1f0ad.
 //
 // Solidity: function MyVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
@@ -76,8 +76,8 @@ func (identifierCollision *IdentifierCollision) UnpackMyVar(data []byte) (*big.I
 	return out0, err
 }
 
-// PubVar is the Go binding used to pack the parameters required for calling
-// the contract method 0x01ad4d87.
+// PackPubVar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x01ad4d87.
 //
 // Solidity: function _myVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) PackPubVar() []byte {

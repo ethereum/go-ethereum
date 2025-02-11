@@ -51,8 +51,8 @@ func (c *MyContract) Instance(backend bind.ContractBackend, addr common.Address)
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// GetNums is the Go binding used to pack the parameters required for calling
-// the contract method 0xbd6d1007.
+// PackGetNums is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbd6d1007.
 //
 // Solidity: function GetNums() pure returns(uint256[5])
 func (myContract *MyContract) PackGetNums() []byte {

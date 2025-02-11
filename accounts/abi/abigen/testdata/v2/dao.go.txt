@@ -63,8 +63,8 @@ func (dAO *DAO) PackConstructor(minimumQuorumForProposals *big.Int, minutesForDe
 	return enc
 }
 
-// ChangeMembership is the Go binding used to pack the parameters required for calling
-// the contract method 0x9644fcbd.
+// PackChangeMembership is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x9644fcbd.
 //
 // Solidity: function changeMembership(address targetMember, bool canVote, string memberName) returns()
 func (dAO *DAO) PackChangeMembership(TargetMember common.Address, CanVote bool, MemberName string) []byte {
@@ -75,8 +75,8 @@ func (dAO *DAO) PackChangeMembership(TargetMember common.Address, CanVote bool, 
 	return enc
 }
 
-// ChangeVotingRules is the Go binding used to pack the parameters required for calling
-// the contract method 0xbcca1fd3.
+// PackChangeVotingRules is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbcca1fd3.
 //
 // Solidity: function changeVotingRules(uint256 minimumQuorumForProposals, uint256 minutesForDebate, int256 marginOfVotesForMajority) returns()
 func (dAO *DAO) PackChangeVotingRules(MinimumQuorumForProposals *big.Int, MinutesForDebate *big.Int, MarginOfVotesForMajority *big.Int) []byte {
@@ -87,8 +87,8 @@ func (dAO *DAO) PackChangeVotingRules(MinimumQuorumForProposals *big.Int, Minute
 	return enc
 }
 
-// CheckProposalCode is the Go binding used to pack the parameters required for calling
-// the contract method 0xeceb2945.
+// PackCheckProposalCode is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xeceb2945.
 //
 // Solidity: function checkProposalCode(uint256 proposalNumber, address beneficiary, uint256 etherAmount, bytes transactionBytecode) returns(bool codeChecksOut)
 func (dAO *DAO) PackCheckProposalCode(ProposalNumber *big.Int, Beneficiary common.Address, EtherAmount *big.Int, TransactionBytecode []byte) []byte {
@@ -112,8 +112,8 @@ func (dAO *DAO) UnpackCheckProposalCode(data []byte) (bool, error) {
 	return out0, err
 }
 
-// DebatingPeriodInMinutes is the Go binding used to pack the parameters required for calling
-// the contract method 0x69bd3436.
+// PackDebatingPeriodInMinutes is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x69bd3436.
 //
 // Solidity: function debatingPeriodInMinutes() returns(uint256)
 func (dAO *DAO) PackDebatingPeriodInMinutes() []byte {
@@ -137,8 +137,8 @@ func (dAO *DAO) UnpackDebatingPeriodInMinutes(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// ExecuteProposal is the Go binding used to pack the parameters required for calling
-// the contract method 0x237e9492.
+// PackExecuteProposal is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x237e9492.
 //
 // Solidity: function executeProposal(uint256 proposalNumber, bytes transactionBytecode) returns(int256 result)
 func (dAO *DAO) PackExecuteProposal(ProposalNumber *big.Int, TransactionBytecode []byte) []byte {
@@ -162,8 +162,8 @@ func (dAO *DAO) UnpackExecuteProposal(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// MajorityMargin is the Go binding used to pack the parameters required for calling
-// the contract method 0xaa02a90f.
+// PackMajorityMargin is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xaa02a90f.
 //
 // Solidity: function majorityMargin() returns(int256)
 func (dAO *DAO) PackMajorityMargin() []byte {
@@ -187,8 +187,8 @@ func (dAO *DAO) UnpackMajorityMargin(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// MemberId is the Go binding used to pack the parameters required for calling
-// the contract method 0x39106821.
+// PackMemberId is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x39106821.
 //
 // Solidity: function memberId(address ) returns(uint256)
 func (dAO *DAO) PackMemberId(Arg0 common.Address) []byte {
@@ -212,8 +212,8 @@ func (dAO *DAO) UnpackMemberId(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// Members is the Go binding used to pack the parameters required for calling
-// the contract method 0x5daf08ca.
+// PackMembers is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x5daf08ca.
 //
 // Solidity: function members(uint256 ) returns(address member, bool canVote, string name, uint256 memberSince)
 func (dAO *DAO) PackMembers(Arg0 *big.Int) []byte {
@@ -251,8 +251,8 @@ func (dAO *DAO) UnpackMembers(data []byte) (MembersOutput, error) {
 
 }
 
-// MinimumQuorum is the Go binding used to pack the parameters required for calling
-// the contract method 0x8160f0b5.
+// PackMinimumQuorum is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x8160f0b5.
 //
 // Solidity: function minimumQuorum() returns(uint256)
 func (dAO *DAO) PackMinimumQuorum() []byte {
@@ -276,8 +276,8 @@ func (dAO *DAO) UnpackMinimumQuorum(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// NewProposal is the Go binding used to pack the parameters required for calling
-// the contract method 0xb1050da5.
+// PackNewProposal is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xb1050da5.
 //
 // Solidity: function newProposal(address beneficiary, uint256 etherAmount, string JobDescription, bytes transactionBytecode) returns(uint256 proposalID)
 func (dAO *DAO) PackNewProposal(Beneficiary common.Address, EtherAmount *big.Int, JobDescription string, TransactionBytecode []byte) []byte {
@@ -301,8 +301,8 @@ func (dAO *DAO) UnpackNewProposal(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// NumProposals is the Go binding used to pack the parameters required for calling
-// the contract method 0x400e3949.
+// PackNumProposals is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x400e3949.
 //
 // Solidity: function numProposals() returns(uint256)
 func (dAO *DAO) PackNumProposals() []byte {
@@ -326,8 +326,8 @@ func (dAO *DAO) UnpackNumProposals(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// Owner is the Go binding used to pack the parameters required for calling
-// the contract method 0x8da5cb5b.
+// PackOwner is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x8da5cb5b.
 //
 // Solidity: function owner() returns(address)
 func (dAO *DAO) PackOwner() []byte {
@@ -351,8 +351,8 @@ func (dAO *DAO) UnpackOwner(data []byte) (common.Address, error) {
 	return out0, err
 }
 
-// Proposals is the Go binding used to pack the parameters required for calling
-// the contract method 0x013cf08b.
+// PackProposals is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x013cf08b.
 //
 // Solidity: function proposals(uint256 ) returns(address recipient, uint256 amount, string description, uint256 votingDeadline, bool executed, bool proposalPassed, uint256 numberOfVotes, int256 currentResult, bytes32 proposalHash)
 func (dAO *DAO) PackProposals(Arg0 *big.Int) []byte {
@@ -400,8 +400,8 @@ func (dAO *DAO) UnpackProposals(data []byte) (ProposalsOutput, error) {
 
 }
 
-// TransferOwnership is the Go binding used to pack the parameters required for calling
-// the contract method 0xf2fde38b.
+// PackTransferOwnership is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xf2fde38b.
 //
 // Solidity: function transferOwnership(address newOwner) returns()
 func (dAO *DAO) PackTransferOwnership(NewOwner common.Address) []byte {
@@ -412,8 +412,8 @@ func (dAO *DAO) PackTransferOwnership(NewOwner common.Address) []byte {
 	return enc
 }
 
-// Vote is the Go binding used to pack the parameters required for calling
-// the contract method 0xd3c0715b.
+// PackVote is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd3c0715b.
 //
 // Solidity: function vote(uint256 proposalNumber, bool supportsProposal, string justificationText) returns(uint256 voteID)
 func (dAO *DAO) PackVote(ProposalNumber *big.Int, SupportsProposal bool, JustificationText string) []byte {

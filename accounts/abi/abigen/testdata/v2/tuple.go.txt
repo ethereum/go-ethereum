@@ -76,8 +76,8 @@ func (c *Tuple) Instance(backend bind.ContractBackend, addr common.Address) *bin
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Func1 is the Go binding used to pack the parameters required for calling
-// the contract method 0x443c79b4.
+// PackFunc1 is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x443c79b4.
 //
 // Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])
 func (tuple *Tuple) PackFunc1(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) []byte {
@@ -117,8 +117,8 @@ func (tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 
 }
 
-// Func2 is the Go binding used to pack the parameters required for calling
-// the contract method 0xd0062cdd.
+// PackFunc2 is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd0062cdd.
 //
 // Solidity: function func2((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) returns()
 func (tuple *Tuple) PackFunc2(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS, E []*big.Int) []byte {
@@ -129,8 +129,8 @@ func (tuple *Tuple) PackFunc2(A TupleS, B [][2]TupleT, C [2][]TupleT, D []TupleS
 	return enc
 }
 
-// Func3 is the Go binding used to pack the parameters required for calling
-// the contract method 0xe4d9a43b.
+// PackFunc3 is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe4d9a43b.
 //
 // Solidity: function func3((uint16,uint16)[] ) pure returns()
 func (tuple *Tuple) PackFunc3(Arg0 []TupleQ) []byte {

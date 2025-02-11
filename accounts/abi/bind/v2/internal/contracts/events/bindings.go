@@ -57,8 +57,8 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) *bind.Bo
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// DoSomethingWithManyArgs is the Go binding used to pack the parameters required for calling
-// the contract method 0x6fd8b968.
+// PackDoSomethingWithManyArgs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6fd8b968.
 //
 // Solidity: function DoSomethingWithManyArgs() pure returns(uint256, uint256, uint256, bool)
 func (c *C) PackDoSomethingWithManyArgs() []byte {
@@ -96,8 +96,8 @@ func (c *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgsO
 
 }
 
-// DoSomethingWithPoint is the Go binding used to pack the parameters required for calling
-// the contract method 0xedcdc894.
+// PackDoSomethingWithPoint is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xedcdc894.
 //
 // Solidity: function DoSomethingWithPoint((uint256,uint256) p) pure returns((uint256,uint256))
 func (c *C) PackDoSomethingWithPoint(P CPoint) []byte {
@@ -121,8 +121,8 @@ func (c *C) UnpackDoSomethingWithPoint(data []byte) (CPoint, error) {
 	return out0, err
 }
 
-// EmitMulti is the Go binding used to pack the parameters required for calling
-// the contract method 0xcb493749.
+// PackEmitMulti is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xcb493749.
 //
 // Solidity: function EmitMulti() returns()
 func (c *C) PackEmitMulti() []byte {
@@ -133,8 +133,8 @@ func (c *C) PackEmitMulti() []byte {
 	return enc
 }
 
-// EmitOne is the Go binding used to pack the parameters required for calling
-// the contract method 0xe8e49a71.
+// PackEmitOne is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe8e49a71.
 //
 // Solidity: function EmitOne() returns()
 func (c *C) PackEmitOne() []byte {
@@ -145,7 +145,7 @@ func (c *C) PackEmitOne() []byte {
 	return enc
 }
 
-// CBasic1 represents a Basic1 event raised by the C contract.
+// CBasic1 represents a basic1 event raised by the C contract.
 type CBasic1 struct {
 	Id   *big.Int
 	Data *big.Int
@@ -187,7 +187,7 @@ func (c *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
 	return out, nil
 }
 
-// CBasic2 represents a Basic2 event raised by the C contract.
+// CBasic2 represents a basic2 event raised by the C contract.
 type CBasic2 struct {
 	Flag bool
 	Data *big.Int

@@ -51,8 +51,8 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) *bind.Bo
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Bar is the Go binding used to pack the parameters required for calling
-// the contract method 0xb0a378b0.
+// PackBar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xb0a378b0.
 //
 // Solidity: function Bar() pure returns()
 func (c *C) PackBar() []byte {
@@ -63,8 +63,8 @@ func (c *C) PackBar() []byte {
 	return enc
 }
 
-// Foo is the Go binding used to pack the parameters required for calling
-// the contract method 0xbfb4ebcf.
+// PackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
 func (c *C) PackFoo() []byte {
@@ -168,8 +168,8 @@ func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Foo is the Go binding used to pack the parameters required for calling
-// the contract method 0xbfb4ebcf.
+// PackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
 func (c2 *C2) PackFoo() []byte {

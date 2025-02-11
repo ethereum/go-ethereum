@@ -50,7 +50,7 @@ func (c *EventChecker) Instance(backend bind.ContractBackend, addr common.Addres
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// EventCheckerDynamic represents a Dynamic event raised by the EventChecker contract.
+// EventCheckerDynamic represents a dynamic event raised by the EventChecker contract.
 type EventCheckerDynamic struct {
 	IdxStr common.Hash
 	IdxDat common.Hash
@@ -94,7 +94,7 @@ func (eventChecker *EventChecker) UnpackDynamicEvent(log *types.Log) (*EventChec
 	return out, nil
 }
 
-// EventCheckerEmpty represents a Empty event raised by the EventChecker contract.
+// EventCheckerEmpty represents a empty event raised by the EventChecker contract.
 type EventCheckerEmpty struct {
 	Raw *types.Log // Blockchain specific contextual infos
 }
@@ -134,7 +134,7 @@ func (eventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventChecke
 	return out, nil
 }
 
-// EventCheckerIndexed represents a Indexed event raised by the EventChecker contract.
+// EventCheckerIndexed represents a indexed event raised by the EventChecker contract.
 type EventCheckerIndexed struct {
 	Addr common.Address
 	Num  *big.Int
@@ -176,7 +176,7 @@ func (eventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventChec
 	return out, nil
 }
 
-// EventCheckerMixed represents a Mixed event raised by the EventChecker contract.
+// EventCheckerMixed represents a mixed event raised by the EventChecker contract.
 type EventCheckerMixed struct {
 	Addr common.Address
 	Num  *big.Int
@@ -218,7 +218,7 @@ func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventChecke
 	return out, nil
 }
 
-// EventCheckerUnnamed represents a Unnamed event raised by the EventChecker contract.
+// EventCheckerUnnamed represents a unnamed event raised by the EventChecker contract.
 type EventCheckerUnnamed struct {
 	Arg0 *big.Int
 	Arg1 *big.Int

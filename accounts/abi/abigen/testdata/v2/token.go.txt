@@ -63,8 +63,8 @@ func (token *Token) PackConstructor(initialSupply *big.Int, tokenName string, de
 	return enc
 }
 
-// Allowance is the Go binding used to pack the parameters required for calling
-// the contract method 0xdd62ed3e.
+// PackAllowance is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xdd62ed3e.
 //
 // Solidity: function allowance(address , address ) returns(uint256)
 func (token *Token) PackAllowance(Arg0 common.Address, Arg1 common.Address) []byte {
@@ -88,8 +88,8 @@ func (token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// ApproveAndCall is the Go binding used to pack the parameters required for calling
-// the contract method 0xcae9ca51.
+// PackApproveAndCall is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xcae9ca51.
 //
 // Solidity: function approveAndCall(address _spender, uint256 _value, bytes _extraData) returns(bool success)
 func (token *Token) PackApproveAndCall(Spender common.Address, Value *big.Int, ExtraData []byte) []byte {
@@ -113,8 +113,8 @@ func (token *Token) UnpackApproveAndCall(data []byte) (bool, error) {
 	return out0, err
 }
 
-// BalanceOf is the Go binding used to pack the parameters required for calling
-// the contract method 0x70a08231.
+// PackBalanceOf is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x70a08231.
 //
 // Solidity: function balanceOf(address ) returns(uint256)
 func (token *Token) PackBalanceOf(Arg0 common.Address) []byte {
@@ -138,8 +138,8 @@ func (token *Token) UnpackBalanceOf(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// Decimals is the Go binding used to pack the parameters required for calling
-// the contract method 0x313ce567.
+// PackDecimals is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x313ce567.
 //
 // Solidity: function decimals() returns(uint8)
 func (token *Token) PackDecimals() []byte {
@@ -163,8 +163,8 @@ func (token *Token) UnpackDecimals(data []byte) (uint8, error) {
 	return out0, err
 }
 
-// Name is the Go binding used to pack the parameters required for calling
-// the contract method 0x06fdde03.
+// PackName is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x06fdde03.
 //
 // Solidity: function name() returns(string)
 func (token *Token) PackName() []byte {
@@ -188,8 +188,8 @@ func (token *Token) UnpackName(data []byte) (string, error) {
 	return out0, err
 }
 
-// SpentAllowance is the Go binding used to pack the parameters required for calling
-// the contract method 0xdc3080f2.
+// PackSpentAllowance is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xdc3080f2.
 //
 // Solidity: function spentAllowance(address , address ) returns(uint256)
 func (token *Token) PackSpentAllowance(Arg0 common.Address, Arg1 common.Address) []byte {
@@ -213,8 +213,8 @@ func (token *Token) UnpackSpentAllowance(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// Symbol is the Go binding used to pack the parameters required for calling
-// the contract method 0x95d89b41.
+// PackSymbol is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x95d89b41.
 //
 // Solidity: function symbol() returns(string)
 func (token *Token) PackSymbol() []byte {
@@ -238,8 +238,8 @@ func (token *Token) UnpackSymbol(data []byte) (string, error) {
 	return out0, err
 }
 
-// Transfer is the Go binding used to pack the parameters required for calling
-// the contract method 0xa9059cbb.
+// PackTransfer is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xa9059cbb.
 //
 // Solidity: function transfer(address _to, uint256 _value) returns()
 func (token *Token) PackTransfer(To common.Address, Value *big.Int) []byte {
@@ -250,8 +250,8 @@ func (token *Token) PackTransfer(To common.Address, Value *big.Int) []byte {
 	return enc
 }
 
-// TransferFrom is the Go binding used to pack the parameters required for calling
-// the contract method 0x23b872dd.
+// PackTransferFrom is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x23b872dd.
 //
 // Solidity: function transferFrom(address _from, address _to, uint256 _value) returns(bool success)
 func (token *Token) PackTransferFrom(From common.Address, To common.Address, Value *big.Int) []byte {

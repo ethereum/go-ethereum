@@ -50,8 +50,8 @@ func (c *InputChecker) Instance(backend bind.ContractBackend, addr common.Addres
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// AnonInput is the Go binding used to pack the parameters required for calling
-// the contract method 0x3e708e82.
+// PackAnonInput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x3e708e82.
 //
 // Solidity: function anonInput(string ) returns()
 func (inputChecker *InputChecker) PackAnonInput(Arg0 string) []byte {
@@ -62,8 +62,8 @@ func (inputChecker *InputChecker) PackAnonInput(Arg0 string) []byte {
 	return enc
 }
 
-// AnonInputs is the Go binding used to pack the parameters required for calling
-// the contract method 0x28160527.
+// PackAnonInputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x28160527.
 //
 // Solidity: function anonInputs(string , string ) returns()
 func (inputChecker *InputChecker) PackAnonInputs(Arg0 string, Arg1 string) []byte {
@@ -74,8 +74,8 @@ func (inputChecker *InputChecker) PackAnonInputs(Arg0 string, Arg1 string) []byt
 	return enc
 }
 
-// MixedInputs is the Go binding used to pack the parameters required for calling
-// the contract method 0xc689ebdc.
+// PackMixedInputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xc689ebdc.
 //
 // Solidity: function mixedInputs(string , string str) returns()
 func (inputChecker *InputChecker) PackMixedInputs(Arg0 string, Str string) []byte {
@@ -86,8 +86,8 @@ func (inputChecker *InputChecker) PackMixedInputs(Arg0 string, Str string) []byt
 	return enc
 }
 
-// NamedInput is the Go binding used to pack the parameters required for calling
-// the contract method 0x0d402005.
+// PackNamedInput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x0d402005.
 //
 // Solidity: function namedInput(string str) returns()
 func (inputChecker *InputChecker) PackNamedInput(Str string) []byte {
@@ -98,8 +98,8 @@ func (inputChecker *InputChecker) PackNamedInput(Str string) []byte {
 	return enc
 }
 
-// NamedInputs is the Go binding used to pack the parameters required for calling
-// the contract method 0x63c796ed.
+// PackNamedInputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x63c796ed.
 //
 // Solidity: function namedInputs(string str1, string str2) returns()
 func (inputChecker *InputChecker) PackNamedInputs(Str1 string, Str2 string) []byte {
@@ -110,8 +110,8 @@ func (inputChecker *InputChecker) PackNamedInputs(Str1 string, Str2 string) []by
 	return enc
 }
 
-// NoInput is the Go binding used to pack the parameters required for calling
-// the contract method 0x53539029.
+// PackNoInput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x53539029.
 //
 // Solidity: function noInput() returns()
 func (inputChecker *InputChecker) PackNoInput() []byte {

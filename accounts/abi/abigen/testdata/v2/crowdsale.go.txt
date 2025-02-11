@@ -63,8 +63,8 @@ func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, f
 	return enc
 }
 
-// AmountRaised is the Go binding used to pack the parameters required for calling
-// the contract method 0x7b3e5e7b.
+// PackAmountRaised is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x7b3e5e7b.
 //
 // Solidity: function amountRaised() returns(uint256)
 func (crowdsale *Crowdsale) PackAmountRaised() []byte {
@@ -88,8 +88,8 @@ func (crowdsale *Crowdsale) UnpackAmountRaised(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// Beneficiary is the Go binding used to pack the parameters required for calling
-// the contract method 0x38af3eed.
+// PackBeneficiary is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x38af3eed.
 //
 // Solidity: function beneficiary() returns(address)
 func (crowdsale *Crowdsale) PackBeneficiary() []byte {
@@ -113,8 +113,8 @@ func (crowdsale *Crowdsale) UnpackBeneficiary(data []byte) (common.Address, erro
 	return out0, err
 }
 
-// CheckGoalReached is the Go binding used to pack the parameters required for calling
-// the contract method 0x01cb3b20.
+// PackCheckGoalReached is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x01cb3b20.
 //
 // Solidity: function checkGoalReached() returns()
 func (crowdsale *Crowdsale) PackCheckGoalReached() []byte {
@@ -125,8 +125,8 @@ func (crowdsale *Crowdsale) PackCheckGoalReached() []byte {
 	return enc
 }
 
-// Deadline is the Go binding used to pack the parameters required for calling
-// the contract method 0x29dcb0cf.
+// PackDeadline is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x29dcb0cf.
 //
 // Solidity: function deadline() returns(uint256)
 func (crowdsale *Crowdsale) PackDeadline() []byte {
@@ -150,8 +150,8 @@ func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// Funders is the Go binding used to pack the parameters required for calling
-// the contract method 0xdc0d3dff.
+// PackFunders is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xdc0d3dff.
 //
 // Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
 func (crowdsale *Crowdsale) PackFunders(Arg0 *big.Int) []byte {
@@ -185,8 +185,8 @@ func (crowdsale *Crowdsale) UnpackFunders(data []byte) (FundersOutput, error) {
 
 }
 
-// FundingGoal is the Go binding used to pack the parameters required for calling
-// the contract method 0x7a3a0e84.
+// PackFundingGoal is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x7a3a0e84.
 //
 // Solidity: function fundingGoal() returns(uint256)
 func (crowdsale *Crowdsale) PackFundingGoal() []byte {
@@ -210,8 +210,8 @@ func (crowdsale *Crowdsale) UnpackFundingGoal(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// Price is the Go binding used to pack the parameters required for calling
-// the contract method 0xa035b1fe.
+// PackPrice is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xa035b1fe.
 //
 // Solidity: function price() returns(uint256)
 func (crowdsale *Crowdsale) PackPrice() []byte {
@@ -235,8 +235,8 @@ func (crowdsale *Crowdsale) UnpackPrice(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// TokenReward is the Go binding used to pack the parameters required for calling
-// the contract method 0x6e66f6e9.
+// PackTokenReward is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6e66f6e9.
 //
 // Solidity: function tokenReward() returns(address)
 func (crowdsale *Crowdsale) PackTokenReward() []byte {

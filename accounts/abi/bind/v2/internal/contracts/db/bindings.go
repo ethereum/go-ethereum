@@ -58,8 +58,8 @@ func (c *DB) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// Get is the Go binding used to pack the parameters required for calling
-// the contract method 0x9507d39a.
+// PackGet is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
 func (dB *DB) PackGet(K *big.Int) []byte {
@@ -83,8 +83,8 @@ func (dB *DB) UnpackGet(data []byte) (*big.Int, error) {
 	return out0, err
 }
 
-// GetNamedStatParams is the Go binding used to pack the parameters required for calling
-// the contract method 0xe369ba3b.
+// PackGetNamedStatParams is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe369ba3b.
 //
 // Solidity: function getNamedStatParams() view returns(uint256 gets, uint256 inserts, uint256 mods)
 func (dB *DB) PackGetNamedStatParams() []byte {
@@ -120,8 +120,8 @@ func (dB *DB) UnpackGetNamedStatParams(data []byte) (GetNamedStatParamsOutput, e
 
 }
 
-// GetStatParams is the Go binding used to pack the parameters required for calling
-// the contract method 0x6fcb9c70.
+// PackGetStatParams is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6fcb9c70.
 //
 // Solidity: function getStatParams() view returns(uint256, uint256, uint256)
 func (dB *DB) PackGetStatParams() []byte {
@@ -157,8 +157,8 @@ func (dB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
 
 }
 
-// GetStatsStruct is the Go binding used to pack the parameters required for calling
-// the contract method 0xee8161e0.
+// PackGetStatsStruct is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xee8161e0.
 //
 // Solidity: function getStatsStruct() view returns((uint256,uint256,uint256))
 func (dB *DB) PackGetStatsStruct() []byte {
@@ -182,8 +182,8 @@ func (dB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
 	return out0, err
 }
 
-// Insert is the Go binding used to pack the parameters required for calling
-// the contract method 0x1d834a1b.
+// PackInsert is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x1d834a1b.
 //
 // Solidity: function insert(uint256 k, uint256 v) returns(uint256)
 func (dB *DB) PackInsert(K *big.Int, V *big.Int) []byte {

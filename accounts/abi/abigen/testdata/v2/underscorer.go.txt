@@ -51,8 +51,8 @@ func (c *Underscorer) Instance(backend bind.ContractBackend, addr common.Address
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// AllPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
-// the contract method 0xb564b34d.
+// PackAllPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xb564b34d.
 //
 // Solidity: function AllPurelyUnderscoredOutput() view returns(int256 _, int256 __)
 func (underscorer *Underscorer) PackAllPurelyUnderscoredOutput() []byte {
@@ -86,8 +86,8 @@ func (underscorer *Underscorer) UnpackAllPurelyUnderscoredOutput(data []byte) (A
 
 }
 
-// LowerLowerCollision is the Go binding used to pack the parameters required for calling
-// the contract method 0xe409ca45.
+// PackLowerLowerCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe409ca45.
 //
 // Solidity: function LowerLowerCollision() view returns(int256 _res, int256 res)
 func (underscorer *Underscorer) PackLowerLowerCollision() []byte {
@@ -121,8 +121,8 @@ func (underscorer *Underscorer) UnpackLowerLowerCollision(data []byte) (LowerLow
 
 }
 
-// LowerUpperCollision is the Go binding used to pack the parameters required for calling
-// the contract method 0x03a59213.
+// PackLowerUpperCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x03a59213.
 //
 // Solidity: function LowerUpperCollision() view returns(int256 _res, int256 Res)
 func (underscorer *Underscorer) PackLowerUpperCollision() []byte {
@@ -156,8 +156,8 @@ func (underscorer *Underscorer) UnpackLowerUpperCollision(data []byte) (LowerUpp
 
 }
 
-// PurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
-// the contract method 0x9df48485.
+// PackPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x9df48485.
 //
 // Solidity: function PurelyUnderscoredOutput() view returns(int256 _, int256 res)
 func (underscorer *Underscorer) PackPurelyUnderscoredOutput() []byte {
@@ -191,8 +191,8 @@ func (underscorer *Underscorer) UnpackPurelyUnderscoredOutput(data []byte) (Pure
 
 }
 
-// UnderscoredOutput is the Go binding used to pack the parameters required for calling
-// the contract method 0x67e6633d.
+// PackUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x67e6633d.
 //
 // Solidity: function UnderscoredOutput() view returns(int256 _int, string _string)
 func (underscorer *Underscorer) PackUnderscoredOutput() []byte {
@@ -226,8 +226,8 @@ func (underscorer *Underscorer) UnpackUnderscoredOutput(data []byte) (Underscore
 
 }
 
-// UpperLowerCollision is the Go binding used to pack the parameters required for calling
-// the contract method 0xaf7486ab.
+// PackUpperLowerCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xaf7486ab.
 //
 // Solidity: function UpperLowerCollision() view returns(int256 _Res, int256 res)
 func (underscorer *Underscorer) PackUpperLowerCollision() []byte {
@@ -261,8 +261,8 @@ func (underscorer *Underscorer) UnpackUpperLowerCollision(data []byte) (UpperLow
 
 }
 
-// UpperUpperCollision is the Go binding used to pack the parameters required for calling
-// the contract method 0xe02ab24d.
+// PackUpperUpperCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe02ab24d.
 //
 // Solidity: function UpperUpperCollision() view returns(int256 _Res, int256 Res)
 func (underscorer *Underscorer) PackUpperUpperCollision() []byte {
@@ -296,8 +296,8 @@ func (underscorer *Underscorer) UnpackUpperUpperCollision(data []byte) (UpperUpp
 
 }
 
-// UnderScoredFunc is the Go binding used to pack the parameters required for calling
-// the contract method 0x46546dbe.
+// PackUnderScoredFunc is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x46546dbe.
 //
 // Solidity: function _under_scored_func() view returns(int256 _int)
 func (underscorer *Underscorer) PackUnderScoredFunc() []byte {

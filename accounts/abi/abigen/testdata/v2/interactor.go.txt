@@ -63,8 +63,8 @@ func (interactor *Interactor) PackConstructor(str string) []byte {
 	return enc
 }
 
-// DeployString is the Go binding used to pack the parameters required for calling
-// the contract method 0x6874e809.
+// PackDeployString is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6874e809.
 //
 // Solidity: function deployString() returns(string)
 func (interactor *Interactor) PackDeployString() []byte {
@@ -88,8 +88,8 @@ func (interactor *Interactor) UnpackDeployString(data []byte) (string, error) {
 	return out0, err
 }
 
-// Transact is the Go binding used to pack the parameters required for calling
-// the contract method 0xd736c513.
+// PackTransact is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd736c513.
 //
 // Solidity: function transact(string str) returns()
 func (interactor *Interactor) PackTransact(Str string) []byte {
@@ -100,8 +100,8 @@ func (interactor *Interactor) PackTransact(Str string) []byte {
 	return enc
 }
 
-// TransactString is the Go binding used to pack the parameters required for calling
-// the contract method 0x0d86a0e1.
+// PackTransactString is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x0d86a0e1.
 //
 // Solidity: function transactString() returns(string)
 func (interactor *Interactor) PackTransactString() []byte {
