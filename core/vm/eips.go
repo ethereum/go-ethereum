@@ -256,6 +256,23 @@ func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
+// opBlobBaseFee implements BLOBBASEFEE opcode
+func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	blobBaseFee := new(uint256.Int)
+	scope.Stack.push(blobBaseFee)
+	return nil, nil
+}
+
+// enable7516 applies EIP-7516 (BLOBBASEFEE opcode)
+func enable7516(jt *JumpTable) {
+	jt[BLOBBASEFEE] = &operation{
+		execute:     opBlobBaseFee,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+}
+
 // enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
 func enable6780(jt *JumpTable) {
 	jt[SELFDESTRUCT] = &operation{
