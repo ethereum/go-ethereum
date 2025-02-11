@@ -144,7 +144,7 @@ func (db *NodeSet) Store(target ethdb.KeyValueWriter) {
 	}
 }
 
-// NodeList stores an ordered list of trie nodes. It implements ethdb.Putter.
+// NodeList stores an ordered list of trie nodes. It implements ethdb.Writer.
 type NodeList []rlp.RawValue
 
 func (n NodeList) Delete(key []byte) error {

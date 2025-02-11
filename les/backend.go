@@ -83,7 +83,7 @@ type LightEthereum struct {
 }
 
 func New(ctx *node.ServiceContext, config *ethconfig.Config) (*LightEthereum, error) {
-	chainDb, err := eth.CreateDB(ctx, config, "lightchaindata")
+	chainDb, err := ctx.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", false)
 	if err != nil {
 		return nil, err
 	}

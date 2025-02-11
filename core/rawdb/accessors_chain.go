@@ -95,7 +95,7 @@ func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 // last block hash is only updated upon a full block import, the last header
 // hash is updated already at header import, allowing head tracking for the
 // light synchronization mechanism.
-func ReadHeadHeaderHash(db ethdb.Reader) common.Hash {
+func ReadHeadHeaderHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(headHeaderKey)
 	if len(data) == 0 {
 		return common.Hash{}
@@ -331,10 +331,16 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+// ReadTdRLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
+func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+	data, _ := db.Get(headerTDKey(number, hash))
+	return data
+}
+
 // ReadTd retrieves a block's total difficulty corresponding to the hash, nil if
 // none found.
 func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) *big.Int {
-	data, _ := db.Get(headerTDKey(number, hash))
+	data := ReadTdRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
 	}
@@ -569,6 +575,15 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
 	DeleteHeader(db, hash, number)
+	DeleteBody(db, hash, number)
+	DeleteTd(db, hash, number)
+}
+
+// deleteBlockWithoutNumber removes all block data associated with a hash, except
+// the hash to number mapping.
+func deleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	DeleteReceipts(db, hash, number)
+	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
 	DeleteTd(db, hash, number)
 }
