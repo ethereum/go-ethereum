@@ -46,6 +46,8 @@
   color: "03adfc"
 - name: "Priority: 📌 Before next release"
   color: "03adfc"
+- name: "Priority: ⛓️ With next Geth sync"
+  color: "03adfc"
   description: "Has to be done before the next release"
 - name: "Status: 🔒 After next release"
   color: "03adfc"
