@@ -120,7 +120,9 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	chainDb, err := CreateDB(ctx, config, "chaindata")
+
+	// Assemble the Ethereum object
+	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", false)
 	if err != nil {
 		return nil, err
 	}
@@ -339,15 +341,6 @@ func makeExtraData(extra []byte) []byte {
 		extra = nil
 	}
 	return extra
-}
-
-// CreateDB creates the chain database.
-func CreateDB(ctx *node.ServiceContext, config *ethconfig.Config, name string) (ethdb.Database, error) {
-	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles, false)
-	if err != nil {
-		return nil, err
-	}
-	return db, nil
 }
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service

@@ -100,6 +100,13 @@ func NewMemoryDatabase() ethdb.Database {
 	return NewDatabase(memorydb.New())
 }
 
+// NewMemoryDatabaseWithCap creates an ephemeral in-memory key-value database with
+// an initial starting capacity, but without a freezer moving immutable chain
+// segments into cold storage.
+func NewMemoryDatabaseWithCap(size int) ethdb.Database {
+	return NewDatabase(memorydb.NewWithCap(size))
+}
+
 // NewLevelDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
 func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {

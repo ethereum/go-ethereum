@@ -28,10 +28,10 @@ import (
 	"testing"
 	"testing/quick"
 
-	check "gopkg.in/check.v1"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	check "gopkg.in/check.v1"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -57,10 +57,9 @@ func TestUpdateLeaks(t *testing.T) {
 	// Ensure that no data was leaked into the database
 	it := db.NewIterator(nil, nil)
 	for it.Next() {
-		key := it.Key()
-		value := it.Value()
-		t.Errorf("State leaked into database: %x -> %x", key, value)
+		t.Errorf("State leaked into database: %x -> %x", it.Key(), it.Value())
 	}
+	it.Release()
 }
 
 // Tests that no intermediate state of an object is stored into the database,
@@ -108,16 +107,16 @@ func TestIntermediateLeaks(t *testing.T) {
 	for it.Next() {
 		key := it.Key()
 		if _, err := transDb.Get(key); err != nil {
-			val, _ := finalDb.Get(key)
-			t.Errorf("entry missing from the transition database: %x -> %x", key, val)
+			t.Errorf("entry missing from the transition database: %x -> %x", key, it.Value())
 		}
 	}
+	it.Release()
+
 	it = transDb.NewIterator(nil, nil)
 	for it.Next() {
 		key := it.Key()
 		if _, err := finalDb.Get(key); err != nil {
-			val, _ := transDb.Get(key)
-			t.Errorf("extra entry in the transition database: %x -> %x", key, val)
+			t.Errorf("extra entry in the transition database: %x -> %x", key, it.Value())
 		}
 	}
 }

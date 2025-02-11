@@ -195,6 +195,7 @@ func initGenesis(ctx *cli.Context) error {
 		if err != nil {
 			utils.Fatalf("Failed to write genesis block: %v", err)
 		}
+		chaindb.Close()
 		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
 	}
 	return nil
@@ -322,11 +323,11 @@ func importPreimages(ctx *cli.Context) error {
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	diskdb := utils.MakeChainDatabase(ctx, stack, false)
-	defer diskdb.Close()
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
 
 	start := time.Now()
-	if err := utils.ImportPreimages(diskdb, ctx.Args().First()); err != nil {
+	if err := utils.ImportPreimages(db, ctx.Args().First()); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v\n", time.Since(start))
@@ -341,11 +342,11 @@ func exportPreimages(ctx *cli.Context) error {
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
-	diskdb := utils.MakeChainDatabase(ctx, stack, true)
-	defer diskdb.Close()
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
 
 	start := time.Now()
-	if err := utils.ExportPreimages(diskdb, ctx.Args().First()); err != nil {
+	if err := utils.ExportPreimages(db, ctx.Args().First()); err != nil {
 		utils.Fatalf("Export error: %v\n", err)
 	}
 	fmt.Printf("Export done in %v\n", time.Since(start))
