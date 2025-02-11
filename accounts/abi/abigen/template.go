@@ -80,8 +80,8 @@ func newTmplContractV2(typ string, abiStr string, bytecode string, constructor a
 }
 
 type tmplDataV2 struct {
-	Package   string                     // Name of the package to place the generated file in
-	Contracts map[string]*tmplContractV2 // List of contracts to generate into this file
+	Package   string                     // Name of the package to use for the generated bindings
+	Contracts map[string]*tmplContractV2 // Contracts that will be emitted in the bindings (keyed by contract name)
 	Libraries map[string]string          // Map of the contract's name to link pattern
 	Structs   map[string]*tmplStruct     // Contract struct type definitions
 }

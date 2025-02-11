@@ -89,8 +89,8 @@ var (
 	{{ end }}
 
 	{{range .Calls}}
-		// {{.Normalized.Name}} is the Go binding used to pack the parameters required for calling
-		// the contract method 0x{{printf "%x" .Original.ID}}.
+		// Pack{{.Normalized.Name}} is the Go binding used to pack the parameters required for calling
+		// the contract method with ID 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
 		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Pack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
@@ -152,7 +152,7 @@ var (
 	{{end}}
 
 	{{range .Events}}
-		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} event raised by the {{$contract.Type}} contract.
+		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Original.Name}} event raised by the {{$contract.Type}} contract.
 		type {{$contract.Type}}{{.Normalized.Name}} struct {
 			{{- range .Normalized.Inputs}}
 				{{ capitalise .Name}}
@@ -211,7 +211,7 @@ var (
 	{{ end }}
 
 	{{range .Errors}}
-		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} error raised by the {{$contract.Type}} contract.
+		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Original.Name}} error raised by the {{$contract.Type}} contract.
 		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
 			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $structs}}{{else}}{{bindtype .Type $structs}}{{end}}; {{end}}
 		}

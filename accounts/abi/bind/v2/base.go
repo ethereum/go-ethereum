@@ -89,7 +89,7 @@ type WatchOpts struct {
 
 // MetaData collects all metadata for a bound contract.
 type MetaData struct {
-	Bin  string      // runtime bytecode (as a hex string)
+	Bin  string      // deployer bytecode (as a hex string)
 	ABI  string      // the raw ABI definition (JSON)
 	Deps []*MetaData // library dependencies of the contract
 
@@ -110,7 +110,8 @@ type MetaData struct {
 	parsedABI *abi.ABI
 }
 
-// ParseABI returns the parsed ABI specification.
+// ParseABI returns the parsed ABI specification, or an error if the string
+// representation of the ABI set in the MetaData instance could not be parsed.
 func (m *MetaData) ParseABI() (*abi.ABI, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -262,7 +263,8 @@ func (c *BoundContract) RawTransact(opts *TransactOpts, calldata []byte) (*types
 	return c.transact(opts, &c.address, calldata)
 }
 
-// RawTransact initiates a contract-creation transaction with the given raw calldata as the input.
+// RawCreationTransact creates and submits a contract-creation transaction with
+// the given calldata as the input.
 func (c *BoundContract) RawCreationTransact(opts *TransactOpts, calldata []byte) (*types.Transaction, error) {
 	return c.transact(opts, nil, calldata)
 }

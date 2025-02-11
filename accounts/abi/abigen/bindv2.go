@@ -31,8 +31,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
-// underlyingBindType returns the underlying Go type represented by the given
-// type, panicking if it is not a pointer type.
+// underlyingBindType returns a string representation of the Go type
+// that corresponds to the given ABI type, panicking if it is not a
+// pointer.
 func underlyingBindType(typ abi.Type) string {
 	goType := typ.GetType()
 	if goType.Kind() != reflect.Pointer {
@@ -41,11 +42,12 @@ func underlyingBindType(typ abi.Type) string {
 	return goType.Elem().String()
 }
 
-// isPointerType returns true if the
+// isPointerType returns true if the underlying type is a pointer.
 func isPointerType(typ abi.Type) bool {
 	return typ.GetType().Kind() == reflect.Pointer
 }
 
+// OLD:
 // binder is used during the conversion of an ABI definition into Go bindings
 // (as part of the execution of BindV2). In contrast to contractBinder, binder
 // contains binding-generation-state that is shared between contracts:
@@ -63,6 +65,18 @@ func isPointerType(typ abi.Type) bool {
 // instantiated to produce a set of tmplContractV2 and tmplStruct objects from
 // the provided ABI definition. These are used as part of the input to rendering
 // the binding template.
+
+// NEW:
+// binder is used to translate an ABI definition into a set of data-structures
+// that will be used to render the template and produce Go bindings.  This can
+// be thought of as the "backend" that sanitizes the ABI definition to a format
+// that can be directly rendered with minimal complexity in the template.
+//
+// The input data to the template rendering consists of:
+//   - the set of all contracts requested for binding, each containing
+//     methods/events/errors to emit pack/unpack methods for.
+//   - the set of structures defined by the contracts, and created
+//     as part of the binding process.
 type binder struct {
 	// contracts is the map of each individual contract requested binding.
 	// It is keyed by the contract name provided in the ABI definition.
@@ -79,7 +93,7 @@ type binder struct {
 	aliases map[string]string
 }
 
-// BindStructType register the type to be emitted as a struct in the
+// BindStructType registers the type to be emitted as a struct in the
 // bindings.
 func (b *binder) BindStructType(typ abi.Type) {
 	bindStructType(typ, b.structs)
@@ -87,8 +101,7 @@ func (b *binder) BindStructType(typ abi.Type) {
 
 // contractBinder holds state for binding of a single contract. It is a type
 // registry for compiling maps of identifiers that will be emitted in generated
-// bindings. It also sanitizes/converts information contained in the ABI
-// definition into a data-format that is amenable for rendering the templates.
+// bindings.
 type contractBinder struct {
 	binder *binder
 
@@ -114,8 +127,8 @@ func newContractBinder(binder *binder) *contractBinder {
 	}
 }
 
-// registerIdentifier applies alias renaming, name normalization (conversion to
-// camel case), and registers the normalized name in the specified identifier map.
+// registerIdentifier applies alias renaming, name normalization (conversion
+// from snake to camel-case), and registers the normalized name in the specified identifier map.
 // It returns an error if the normalized name already exists in the map.
 func (cb *contractBinder) registerIdentifier(identifiers map[string]bool, original string) (normalized string, err error) {
 	normalized = abi.ToCamelCase(alias(cb.binder.aliases, original))
@@ -138,7 +151,7 @@ func (cb *contractBinder) registerIdentifier(identifiers map[string]bool, origin
 // bindMethod registers a method to be emitted in the bindings. The name, inputs
 // and outputs are normalized. If any inputs are struct-type their structs are
 // registered to be emitted in the bindings. Any methods that return more than
-// one output have their result coalesced into a struct.
+// one output have their results gathered into a struct.
 func (cb *contractBinder) bindMethod(original abi.Method) error {
 	normalized := original
 	normalizedName, err := cb.registerIdentifier(cb.callIdentifiers, original.Name)
@@ -164,7 +177,7 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 	}
 	isStructured := structured(original.Outputs)
 
-	// If the call returns multiple values, coalesced them into a struct
+	// If the call returns multiple values, gather them into a struct
 	if len(normalized.Outputs) > 1 {
 		isStructured = true
 	}
@@ -202,8 +215,8 @@ func normalizeArgs(args abi.Arguments) abi.Arguments {
 	return args
 }
 
-// normalizeErrorOrEventFields normalizes errors/events for emitting through bindings:
-// Any anonymous fields are given generated names.
+// normalizeErrorOrEventFields normalizes errors/events for emitting through
+// bindings: Any anonymous fields are given generated names.
 func (cb *contractBinder) normalizeErrorOrEventFields(originalInputs abi.Arguments) abi.Arguments {
 	normalizedArguments := normalizeArgs(originalInputs)
 	for _, input := range normalizedArguments {
@@ -246,6 +259,8 @@ func (cb *contractBinder) bindError(original abi.Error) error {
 	return nil
 }
 
+// parseLibraryDeps extracts references to library dependencies from the unlinked
+// hex string deployment bytecode.
 func parseLibraryDeps(unlinkedCode string) (res []string) {
 	reMatchSpecificPattern, err := regexp.Compile(`__\$([a-f0-9]+)\$__`)
 	if err != nil {

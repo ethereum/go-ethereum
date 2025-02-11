@@ -26,23 +26,21 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// DeploymentParams represents parameters needed to deploy a set of contracts.
-// It takes an optional override list to specify contracts/libraries that have
-// already been deployed on-chain.
+// DeploymentParams contains parameters needed to deploy one or more contracts via LinkAndDeploy
 type DeploymentParams struct {
+	// list of all contracts targeted for the deployment
 	Contracts []*MetaData
 
-	// Map of solidity library pattern to constructor input.
+	// optional map of ABI-encoded constructor inputs keyed by the MetaData.ID.
 	Inputs map[string][]byte
 
-	// Overrides is an optional map of pattern to deployment address.
-	// Contracts/libraries that refer to dependencies in the override
-	// set are linked to the provided address (an already-deployed contract).
+	// optional map of override addresses for specifying already-deployed
+	// contracts.  It is keyed by the MetaData.ID.
 	Overrides map[string]common.Address
 }
 
 // validate determines whether the contracts specified in the DeploymentParams
-// instance have provided deployer bytecode.
+// instance have embedded deployer code in their provided MetaData instances.
 func (d *DeploymentParams) validate() error {
 	for _, meta := range d.Contracts {
 		if meta.Bin == "" {
@@ -52,14 +50,13 @@ func (d *DeploymentParams) validate() error {
 	return nil
 }
 
-// DeploymentResult encapsulates information about the result of the deployment
-// of a set of contracts: the pending deployment transactions, and the addresses
-// where the contracts will be deployed at.
+// DeploymentResult contains information about the result of a pending
+// deployment made by LinkAndDeploy.
 type DeploymentResult struct {
-	// Map of contract MetaData Id to deploy transaction
+	// Map of contract MetaData.ID to pending deployment transaction
 	Txs map[string]*types.Transaction
 
-	// Map of contract MetaData Id to deployed contract address
+	// Map of contract MetaData.ID to the address where it will be deployed
 	Addresses map[string]common.Address
 }
 
@@ -94,11 +91,12 @@ func newDepTreeDeployer(deployParams *DeploymentParams, deployFn DeployFn) *depT
 	}
 }
 
-// linkAndDeploy recursively deploys a contract and its dependencies: starting by
-// linking/deploying its dependencies. The deployment result (deploy addresses/txs
-// or an error) is stored in the depTreeDeployer object.
+// linkAndDeploy deploys a contract and it's dependencies.  Because libraries
+// can in-turn have their own library dependencies, linkAndDeploy performs
+// deployment recursively (deepest-dependency first).  The address of the
+// pending contract deployment for the top-level contract is returned.
 func (d *depTreeDeployer) linkAndDeploy(metadata *MetaData) (common.Address, error) {
-	// Don't deploy already deployed contracts
+	// Don't re-deploy aliased or previously-deployed contracts
 	if addr, ok := d.deployedAddrs[metadata.ID]; ok {
 		return addr, nil
 	}
@@ -113,7 +111,7 @@ func (d *depTreeDeployer) linkAndDeploy(metadata *MetaData) (common.Address, err
 		// Link their deployed addresses into the bytecode to produce
 		deployerCode = strings.ReplaceAll(deployerCode, "__$"+dep.ID+"$__", strings.ToLower(addr.String()[2:]))
 	}
-	// Finally, deploy the contract.
+	// Finally, deploy the top-level contract.
 	code, err := hex.DecodeString(deployerCode[2:])
 	if err != nil {
 		panic(fmt.Sprintf("error decoding contract deployer hex %s:\n%v", deployerCode[2:], err))
@@ -127,9 +125,10 @@ func (d *depTreeDeployer) linkAndDeploy(metadata *MetaData) (common.Address, err
 	return addr, nil
 }
 
-// result returns a result for this deployment, or an error if it failed.
+// result returns a DeploymentResult instance referencing contracts deployed
+// and not including any overrides specified for this deployment.
 func (d *depTreeDeployer) result() *DeploymentResult {
-	// remove the override addresses from the resulting deployed addresses
+	// filter the override addresses from the deployed address set.
 	for pattern := range d.deployedAddrs {
 		if _, ok := d.deployerTxs[pattern]; !ok {
 			delete(d.deployedAddrs, pattern)
@@ -141,12 +140,19 @@ func (d *depTreeDeployer) result() *DeploymentResult {
 	}
 }
 
-// LinkAndDeploy deploys a specified set of contracts and their dependent
-// libraries. If an error occurs, only contracts which were successfully
-// deployed are returned in the result.
+// LinkAndDeploy performs the contract deployment specified by params using the
+// provided DeployFn to create, sign and submit transactions.
 //
-// In the case where multiple contracts share a common dependency: the shared
-// dependency will only be deployed once.
+// Contracts can depend on libraries, which in-turn can have their own library
+// dependencies.  Therefore, LinkAndDeploy performs the deployment recursively,
+// starting with libraries (and contracts) that don't have dependencies, and
+// progressing through the contracts that depend upon them.
+//
+// If an error is encountered, the returned DeploymentResult only contains
+// entries for the contracts whose deployment submission succeeded.
+//
+// LinkAndDeploy performs creation and submission of creation transactions,
+// but does not ensure that the contracts are included in the chain.
 func LinkAndDeploy(params *DeploymentParams, deploy DeployFn) (*DeploymentResult, error) {
 	if err := params.validate(); err != nil {
 		return nil, err
