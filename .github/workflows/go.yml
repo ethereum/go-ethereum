@@ -46,3 +46,14 @@ jobs:
 
       - name: git diff
         run: git diff --exit-code
+
+  go_tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+      - run: go mod tidy
+      - run: git diff --exit-code
