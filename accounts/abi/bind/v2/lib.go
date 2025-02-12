@@ -33,7 +33,8 @@ type ContractEvent interface {
 }
 
 // FilterEvents filters a historical block range for instances of emission of a
-// specific event type from a specified contract.  It returns an error if... (TODO: enumerate error scenarios)
+// specific event type from a specified contract.  It returns an error if the
+// provided filter opts are invalid or the backend is closed.
 func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack func(*types.Log) (*Ev, error), topics ...[]any) (*EventIterator[Ev], error) {
 	var e Ev
 	logs, sub, err := c.FilterLogs(opts, e.ContractEventName(), topics...)
@@ -43,11 +44,13 @@ func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack f
 	return &EventIterator[Ev]{unpack: unpack, logs: logs, sub: sub}, nil
 }
 
-// WatchEvents creates an event subscription to notify when logs of the specified event type are emitted from the given contract.
-// Received logs are unpacked and forwarded to sink.  If topics are specified, only events are forwarded which match the
-// topics.
+// WatchEvents creates an event subscription to notify when logs of the
+// specified event type are emitted from the given contract. Received logs are
+// unpacked and forwarded to sink.  If topics are specified, only events are
+// forwarded which match the topics.
 //
-// WatchEvents returns a subscription or an error if ... (TODO: enumerate error scenarios)
+// WatchEvents returns a subscription or an error if the provided WatchOpts are
+// invalid or the backend is closed.
 func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack func(*types.Log) (*Ev, error), sink chan<- *Ev, topics ...[]any) (event.Subscription, error) {
 	var e Ev
 	logs, sub, err := c.WatchLogs(opts, e.ContractEventName(), topics...)
@@ -81,7 +84,8 @@ func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack fun
 	}), nil
 }
 
-// EventIterator is an object for iterating over the results of a event log filter call.
+// EventIterator is an object for iterating over the results of a event log
+// filter call.
 type EventIterator[T any] struct {
 	current *T
 	unpack  func(*types.Log) (*T, error)
@@ -100,8 +104,8 @@ func (it *EventIterator[T]) Value() *T {
 // returning true if the iterator advanced.
 //
 // If the attempt to convert the raw log object to an instance of T using the
-// unpack function provided via FilterEvents returns an error: that error is returned and subsequent calls to Next will
-// not advance the iterator.
+// unpack function provided via FilterEvents returns an error: that error is
+// returned and subsequent calls to Next will not advance the iterator.
 func (it *EventIterator[T]) Next() (advanced bool, err error) {
 	// If the iterator failed with an error, don't proceed
 	if it.fail != nil || it.closed {
@@ -151,8 +155,9 @@ func (it *EventIterator[T]) Close() error {
 
 // Call performs an eth_call to a contract with optional call data.
 //
-// To call a function that doesn't return any output, pass nil as the unpack function.
-// This can be useful if you just want to check that the function doesn't revert.
+// To call a function that doesn't return any output, pass nil as the unpack
+// function. This can be useful if you just want to check that the function
+// doesn't revert.
 func Call[T any](c *BoundContract, opts *CallOpts, calldata []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
 	packedOutput, err := c.CallRaw(opts, calldata)
@@ -178,9 +183,10 @@ func Transact(c *BoundContract, opt *TransactOpts, data []byte) (*types.Transact
 	return c.transact(opt, &addr, data)
 }
 
-// DeployContract creates and submits a deployment transaction based on the deployer bytecode and
-// optional ABI-encoded constructor input.  It returns the address and creation transaction of the
-// pending contract, or an error if the creation failed.
+// DeployContract creates and submits a deployment transaction based on the
+// deployer bytecode and optional ABI-encoded constructor input.  It returns
+// the address and creation transaction of the pending contract, or an error
+// if the creation failed.
 func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend, constructorInput []byte) (common.Address, *types.Transaction, error) {
 	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
 
