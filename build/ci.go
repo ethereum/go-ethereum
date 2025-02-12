@@ -121,9 +121,9 @@ func doInstall(cmdline []string) {
 		var minor int
 		fmt.Sscanf(strings.TrimPrefix(runtime.Version(), "go1."), "%d", &minor)
 
-		if minor < 21 {
+		if minor < 23 {
 			log.Println("You have Go version", runtime.Version())
-			log.Println("XDC requires at least Go version 1.22 and cannot")
+			log.Println("XDC requires at least Go version 1.23 and cannot")
 			log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
 			os.Exit(1)
 		}

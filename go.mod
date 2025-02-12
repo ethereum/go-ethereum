@@ -1,8 +1,6 @@
 module github.com/XinFinOrg/XDPoSChain
 
-go 1.22
-
-toolchain go1.22.0
+go 1.23
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
