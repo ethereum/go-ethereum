@@ -21,9 +21,7 @@ import (
 	"github.com/ava-labs/libevm/libevm/options"
 )
 
-// An InspectDatabaseOption configures the behaviour of [InspectDatabase]. For
-// each type of option, only one instance can be used in the same call to
-// InspectDatabase().
+// An InspectDatabaseOption configures the behaviour of [InspectDatabase].
 type InspectDatabaseOption = options.Option[inspectDatabaseConfig]
 
 type inspectDatabaseConfig struct {
