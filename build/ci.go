@@ -323,10 +323,27 @@ func doTest(cmdline []string) {
 		gotest.Args = append(gotest.Args, "-short")
 	}
 
-	packages := []string{"./..."}
-	if len(flag.CommandLine.Args()) > 0 {
-		packages = flag.CommandLine.Args()
+	// List only packages that contain test files
+	cmd := exec.Command("go", "list", "-f", "{{if .TestGoFiles}}{{.ImportPath}}{{end}}", "./...")
+	out, err := cmd.Output()
+	if err != nil {
+		log.Fatalf("failed to list testable packages: %v", err)
 	}
+	packages := strings.Fields(string(out))
+	
+	// List only testable user-specified packages
+	if len(flag.CommandLine.Args()) > 0 {
+		userPackages := flag.CommandLine.Args()
+		userCmd := exec.Command("go", append([]string{"list", "-f", "{{if .TestGoFiles}}{{.ImportPath}}{{end}}"}, userPackages...)...)
+		userOut, _ := userCmd.Output()
+		filteredPackages := strings.Fields(string(userOut))
+	
+		if len(filteredPackages) == 0 {
+			log.Fatalf("No test files found in the specified packages: %v", userPackages)
+		}
+		packages = filteredPackages
+	}
+	
 	gotest.Args = append(gotest.Args, packages...)
 	build.MustRun(gotest)
 }
