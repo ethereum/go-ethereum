@@ -176,6 +176,8 @@ type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
 	Withdrawals  []*Withdrawal `rlp:"optional"`
+
+	extra *pseudo.Type // See [RegisterExtras]
 }
 
 // Block represents an Ethereum block.
@@ -338,7 +340,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{b.transactions, b.uncles, b.withdrawals, nil /* unexported extras field */}
 }
 
 // Accessors for body data. These do not return a copy because the content

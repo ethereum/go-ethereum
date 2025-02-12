@@ -22,7 +22,6 @@ import (
 	"io"
 
 	"github.com/ava-labs/libevm/libevm/pseudo"
-	"github.com/ava-labs/libevm/libevm/testonly"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -45,7 +44,7 @@ func (h *Header) hooks() HeaderHooks {
 	return new(NOOPHeaderHooks)
 }
 
-func (e ExtraPayloads[HPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
 	return e.Header.Get(h)
 }
 
@@ -134,22 +133,11 @@ type BodyHooks interface {
 	RLPFieldPointersForDecoding(*Body) *rlp.Fields
 }
 
-// TestOnlyRegisterBodyHooks is a temporary means of "registering" BodyHooks for
-// the purpose of testing. It will panic if called outside of a test.
-func TestOnlyRegisterBodyHooks(h BodyHooks) {
-	testonly.OrPanic(func() {
-		todoRegisteredBodyHooks = h
-	})
-}
-
-// todoRegisteredBodyHooks is a temporary placeholder for "registering"
-// BodyHooks, before they are included in [RegisterExtras].
-var todoRegisteredBodyHooks BodyHooks = NOOPBodyHooks{}
-
 func (b *Body) hooks() BodyHooks {
-	// TODO(arr4n): when incorporating BodyHooks into [RegisterExtras], the
-	// [todoRegisteredBodyHooks] variable MUST be removed.
-	return todoRegisteredBodyHooks
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromBody(b)
+	}
+	return NOOPBodyHooks{}
 }
 
 // NOOPBodyHooks implements [BodyHooks] such that they are equivalent to no type
@@ -160,7 +148,7 @@ type NOOPBodyHooks struct{}
 // fields and their order, which we lock in here as a change detector. If this
 // breaks then it MUST be updated and the RLP methods reviewed + new
 // backwards-compatibility tests added.
-var _ = &Body{[]*Transaction{}, []*Header{}, []*Withdrawal{}}
+var _ = &Body{[]*Transaction{}, []*Header{}, []*Withdrawal{}, nil /* extra unexported type */}
 
 func (NOOPBodyHooks) RLPFieldsForEncoding(b *Body) *rlp.Fields {
 	return &rlp.Fields{
@@ -174,4 +162,20 @@ func (NOOPBodyHooks) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 		Required: []any{&b.Transactions, &b.Uncles},
 		Optional: []any{&b.Withdrawals},
 	}
+}
+
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBody(b *Body) BodyHooks {
+	return e.Body.Get(b)
+}
+
+func (b *Body) extraPayload() *pseudo.Type {
+	r := registeredExtras
+	if !r.Registered() {
+		// See params.ChainConfig.extraPayload() for panic rationale.
+		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
+	}
+	if b.extra == nil {
+		b.extra = r.Get().newBody()
+	}
+	return b.extra
 }

@@ -46,7 +46,11 @@ func TestStateAccountRLP(t *testing.T) {
 	explicitFalseBoolean := test{
 		name: "explicit false-boolean extra",
 		register: func() {
-			RegisterExtras[NOOPHeaderHooks, *NOOPHeaderHooks, bool]()
+			RegisterExtras[
+				NOOPHeaderHooks, *NOOPHeaderHooks,
+				NOOPBodyHooks, *NOOPBodyHooks,
+				bool,
+			]()
 		},
 		acc: &StateAccount{
 			Nonce:    0x444444,
@@ -76,7 +80,11 @@ func TestStateAccountRLP(t *testing.T) {
 		{
 			name: "true-boolean extra",
 			register: func() {
-				RegisterExtras[NOOPHeaderHooks, *NOOPHeaderHooks, bool]()
+				RegisterExtras[
+					NOOPHeaderHooks, *NOOPHeaderHooks,
+					NOOPBodyHooks, *NOOPBodyHooks,
+					bool,
+				]()
 			},
 			acc: &StateAccount{
 				Nonce:    0x444444,

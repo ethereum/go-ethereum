@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/kr/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,14 +57,18 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 	for _, tx := range txMatrix {
 		for _, u := range uncleMatrix {
 			for _, w := range withdrawMatrix {
-				bodies = append(bodies, &Body{tx, u, w})
+				bodies = append(bodies, &Body{tx, u, w, nil /* extra field */})
 			}
 		}
 	}
 
 	for _, body := range bodies {
 		t.Run("", func(t *testing.T) {
-			t.Logf("\n%s", pretty.Sprint(body))
+			t.Cleanup(func() {
+				if t.Failed() {
+					t.Logf("\n%s", pretty.Sprint(body))
+				}
+			})
 
 			// The original [Body] doesn't implement [rlp.Encoder] nor
 			// [rlp.Decoder] so we can use a methodless equivalent as the gold
@@ -74,14 +79,15 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 
 			t.Run("Encode", func(t *testing.T) {
 				got, err := rlp.EncodeToBytes(body)
-				require.NoErrorf(t, err, "rlp.EncodeToBytes(%#v)", body)
-				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%#v)", body)
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", body)
+				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%T)", body)
 			})
 
 			t.Run("Decode", func(t *testing.T) {
 				got := new(Body)
 				err := rlp.DecodeBytes(wantRLP, got)
-				require.NoErrorf(t, err, "rlp.DecodeBytes(%v, %T)", wantRLP, got)
+				require.NoErrorf(t, err, "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T) resulted in %s",
+					(*withoutMethods)(body), got, pretty.Sprint(got))
 
 				want := body
 				// Regular RLP decoding will never leave these non-optional
@@ -96,9 +102,10 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 				opts := cmp.Options{
 					cmp.Comparer((*Header).equalHash),
 					cmp.Comparer((*Transaction).equalHash),
+					cmpopts.IgnoreUnexported(Body{}),
 				}
-				if diff := cmp.Diff(body, got, opts); diff != "" {
-					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%#v)) diff (-want +got):\n%s", body, diff)
+				if diff := cmp.Diff(want, got, opts); diff != "" {
+					t.Errorf("rlp.DecodeBytes(rlp.EncodeToBytes(%T)) diff (-want +got):\n%s", (*withoutMethods)(body), diff)
 				}
 			})
 		})
@@ -148,10 +155,13 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 	// The inputs to this test were used to generate the expected RLP with
 	// ava-labs/coreth. This serves as both an example of how to use [BodyHooks]
 	// and a test of compatibility.
-
-	t.Cleanup(func() {
-		TestOnlyRegisterBodyHooks(NOOPBodyHooks{})
-	})
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+	extras := RegisterExtras[
+		NOOPHeaderHooks, *NOOPHeaderHooks,
+		cChainBodyExtras, *cChainBodyExtras,
+		struct{},
+	]()
 
 	body := &Body{
 		Transactions: []*Transaction{
@@ -194,7 +204,7 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 			require.NoErrorf(t, err, "hex.DecodeString(%q)", tt.wantRLPHex)
 
 			t.Run("Encode", func(t *testing.T) {
-				TestOnlyRegisterBodyHooks(tt.extra)
+				extras.Body.Set(body, tt.extra)
 				got, err := rlp.EncodeToBytes(body)
 				require.NoErrorf(t, err, "rlp.EncodeToBytes(%+v)", body)
 				assert.Equalf(t, wantRLP, got, "rlp.EncodeToBytes(%+v)", body)
@@ -202,9 +212,8 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 
 			t.Run("Decode", func(t *testing.T) {
 				var extra cChainBodyExtras
-				TestOnlyRegisterBodyHooks(&extra)
-
 				got := new(Body)
+				extras.Body.Set(got, &extra)
 				err := rlp.DecodeBytes(wantRLP, got)
 				require.NoErrorf(t, err, "rlp.DecodeBytes(%#x, %T)", wantRLP, got)
 				assert.Equal(t, tt.extra, &extra, "rlp.DecodeBytes(%#x, [%T as registered extra in %T carrier])", wantRLP, &extra, got)
@@ -212,6 +221,7 @@ func TestBodyRLPCChainCompat(t *testing.T) {
 				opts := cmp.Options{
 					cmp.Comparer((*Header).equalHash),
 					cmp.Comparer((*Transaction).equalHash),
+					cmpopts.IgnoreUnexported(Body{}),
 				}
 				if diff := cmp.Diff(body, got, opts); diff != "" {
 					t.Errorf("rlp.DecodeBytes(%#x, [%T while carrying registered %T extra payload]) diff (-want +got):\n%s", wantRLP, got, &extra, diff)

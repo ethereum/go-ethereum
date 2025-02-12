@@ -45,7 +45,11 @@ func TestGetSetExtra(t *testing.T) {
 	t.Cleanup(types.TestOnlyClearRegisteredExtras)
 	// Just as its Data field is a pointer, the registered type is a pointer to
 	// test deep copying.
-	payloads := types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, *accountExtra]().StateAccount
+	payloads := types.RegisterExtras[
+		types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
+		types.NOOPBodyHooks, *types.NOOPBodyHooks,
+		*accountExtra,
+	]().StateAccount
 
 	rng := ethtest.NewPseudoRand(42)
 	addr := rng.Address()

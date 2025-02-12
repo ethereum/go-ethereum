@@ -46,21 +46,33 @@ func TestStateObjectEmpty(t *testing.T) {
 		{
 			name: "explicit false bool",
 			registerAndSet: func(acc *types.StateAccount) {
-				types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, bool]().StateAccount.Set(acc, false)
+				types.RegisterExtras[
+					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
+					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					bool,
+				]().StateAccount.Set(acc, false)
 			},
 			wantEmpty: true,
 		},
 		{
 			name: "implicit false bool",
 			registerAndSet: func(*types.StateAccount) {
-				types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, bool]()
+				types.RegisterExtras[
+					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
+					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					bool,
+				]()
 			},
 			wantEmpty: true,
 		},
 		{
 			name: "true bool",
 			registerAndSet: func(acc *types.StateAccount) {
-				types.RegisterExtras[types.NOOPHeaderHooks, *types.NOOPHeaderHooks, bool]().StateAccount.Set(acc, true)
+				types.RegisterExtras[
+					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
+					types.NOOPBodyHooks, *types.NOOPBodyHooks,
+					bool,
+				]().StateAccount.Set(acc, true)
 			},
 			wantEmpty: false,
 		},

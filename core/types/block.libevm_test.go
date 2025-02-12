@@ -86,7 +86,11 @@ func TestHeaderHooks(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	defer TestOnlyClearRegisteredExtras()
 
-	extras := RegisterExtras[stubHeaderHooks, *stubHeaderHooks, struct{}]()
+	extras := RegisterExtras[
+		stubHeaderHooks, *stubHeaderHooks,
+		NOOPBodyHooks, *NOOPBodyHooks,
+		struct{},
+	]()
 	rng := ethtest.NewPseudoRand(13579)
 
 	suffix := rng.Bytes(8)
