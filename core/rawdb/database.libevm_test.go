@@ -52,8 +52,9 @@ func ExampleInspectDatabase() {
 				{key: []byte("iBxxx"), value: []byte("m")},
 				// Optional stat record total = 5 + 7 = 12
 				{key: []byte("mykey"), value: []byte("myvalue")},
-				// metadata total = 13 + 7 = 20
+				// metadata total = (13 + 7) + (14 + 7) = 41
 				{key: []byte("mymetadatakey"), value: []byte("myvalue")},
+				{key: []byte("mymetadatakey2"), value: []byte("myvalue")},
 			},
 		},
 	}
@@ -74,6 +75,9 @@ func ExampleInspectDatabase() {
 		}),
 		rawdb.WithDatabaseMetadataKeys(func(key []byte) bool {
 			return bytes.Equal(key, []byte("mymetadatakey"))
+		}),
+		rawdb.WithDatabaseMetadataKeys(func(key []byte) bool {
+			return bytes.Equal(key, []byte("mymetadatakey2"))
 		}),
 		rawdb.WithDatabaseStatsTransformer(func(rows [][]string) [][]string {
 			sort.Slice(rows, func(i, j int) bool {
@@ -119,7 +123,7 @@ func ExampleInspectDatabase() {
 	// | Key-Value store       | Path trie state lookups | 0.00 B  |     0 |
 	// | Key-Value store       | Path trie storage nodes | 0.00 B  |     0 |
 	// | Key-Value store       | Receipt lists           | 0.00 B  |     0 |
-	// | Key-Value store       | Singleton metadata      | 20.00 B |     1 |
+	// | Key-Value store       | Singleton metadata      | 41.00 B |     2 |
 	// | Key-Value store       | Storage snapshot        | 0.00 B  |     0 |
 	// | Key-Value store       | Transaction index       | 0.00 B  |     0 |
 	// | Key-Value store       | Trie preimages          | 0.00 B  |     0 |
@@ -127,7 +131,7 @@ func ExampleInspectDatabase() {
 	// | Light client          | CHT trie nodes          | 0.00 B  |     0 |
 	// | My database           | My category             | 12.00 B |     1 |
 	// +-----------------------+-------------------------+---------+-------+
-	// |                                  TOTAL          | 38.00 B |       |
+	// |                                  TOTAL          | 59.00 B |       |
 	// +-----------------------+-------------------------+---------+-------+
 }
 

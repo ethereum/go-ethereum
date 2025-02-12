@@ -27,28 +27,33 @@ import (
 type InspectDatabaseOption = options.Option[inspectDatabaseConfig]
 
 type inspectDatabaseConfig struct {
-	statRecorder     func([]byte, common.StorageSize) bool
-	isMeta           func([]byte) bool
-	statsTransformer func([][]string) [][]string
+	statRecorders     []func([]byte, common.StorageSize) bool
+	isMetas           []func([]byte) bool
+	statsTransformers []func([][]string) [][]string
 }
 
 func (c inspectDatabaseConfig) recordStat(key []byte, size common.StorageSize) bool {
-	if r := c.statRecorder; r != nil {
-		return r(key, size)
+	matched := false
+	for _, f := range c.statRecorders {
+		if f(key, size) {
+			matched = true
+		}
 	}
-	return false
+	return matched
 }
 
 func (c inspectDatabaseConfig) isMetadata(key []byte) bool {
-	if m := c.isMeta; m != nil {
-		return m(key)
+	for _, f := range c.isMetas {
+		if f(key) {
+			return true
+		}
 	}
 	return false
 }
 
 func (c inspectDatabaseConfig) transformStats(stats [][]string) [][]string {
-	if f := c.statsTransformer; f != nil {
-		return f(stats)
+	for _, f := range c.statsTransformers {
+		stats = f(stats)
 	}
 	return stats
 }
@@ -63,7 +68,7 @@ func newInspectOpt(fn func(*inspectDatabaseConfig)) InspectDatabaseOption {
 // stopping further matches.
 func WithDatabaseStatRecorder(rec func(key []byte, size common.StorageSize) bool) InspectDatabaseOption {
 	return newInspectOpt(func(c *inspectDatabaseConfig) {
-		c.statRecorder = rec
+		c.statRecorders = append(c.statRecorders, rec)
 	})
 }
 
@@ -75,7 +80,7 @@ type DatabaseStat = stat
 // being counted with the metadata statistic i.f.f. the function returns true.
 func WithDatabaseMetadataKeys(isMetadata func(key []byte) bool) InspectDatabaseOption {
 	return newInspectOpt(func(c *inspectDatabaseConfig) {
-		c.isMeta = isMetadata
+		c.isMetas = append(c.isMetas, isMetadata)
 	})
 }
 
@@ -85,6 +90,6 @@ func WithDatabaseMetadataKeys(isMetadata func(key []byte) bool) InspectDatabaseO
 // Each row contains 4 columns: database, category, size and count.
 func WithDatabaseStatsTransformer(transform func(rows [][]string) [][]string) InspectDatabaseOption {
 	return newInspectOpt(func(c *inspectDatabaseConfig) {
-		c.statsTransformer = transform
+		c.statsTransformers = append(c.statsTransformers, transform)
 	})
 }
