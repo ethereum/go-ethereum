@@ -327,10 +327,9 @@ func TestCopyHeader(t *testing.T) {
 	t.Parallel()
 
 	t.Run("empty_header", func(t *testing.T) {
-		t.Parallel()
+		empty := &Header{}
 
-		empty := Header{}
-		cpy := CopyHeader(&empty)
+		cpy := CopyHeader(empty)
 
 		want := &Header{
 			Difficulty: new(big.Int),
@@ -340,8 +339,6 @@ func TestCopyHeader(t *testing.T) {
 	})
 
 	t.Run("filled_header", func(t *testing.T) {
-		t.Parallel()
-
 		h := &Header{
 			ParentHash:       common.Hash{1},
 			UncleHash:        common.Hash{2},
@@ -393,6 +390,7 @@ func TestCopyHeader(t *testing.T) {
 			ParentBeaconRoot: &common.Hash{20},
 			RequestsHash:     &common.Hash{21},
 		}
+
 		assert.Equal(t, want, cpy)
 
 		// Mutate each non-value field to ensure they are not shared
