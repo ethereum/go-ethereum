@@ -25,7 +25,6 @@ linters:
     - gocheckcompilerdirectives
     - reassign
     - mirror
-    - tenv
     ### linters we tried and will not be using:
     ###
     # - structcheck # lots of false positives
@@ -36,6 +35,7 @@ linters:
     # - exhaustive # silly check
     # - makezero # false positives
     # - nilerr # several intentional
+    # - tenv # replaced by usetesting
 
 linters-settings:
   gofmt:
