@@ -1167,19 +1167,54 @@ func TestAllowedTxSize(t *testing.T) {
 	account := crypto.PubkeyToAddress(key.PublicKey)
 	testAddBalance(pool, account, big.NewInt(1000000000))
 
+	gasLimit := pool.currentHead.Load().GasLimit
+
+	// Try adding a transaction with maximal allowed size
+	tx := sizedDataTransaction(t, txMaxSize, 0, gasLimit, key)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction of size %d, close to maximal: %v", int(tx.Size()), err)
+	}
+	// Try adding a transaction with random allowed size
+	tx = sizedDataTransaction(t, uint64(rand.Intn(txMaxSize+1)), 1, gasLimit, key)
+	if err := pool.addRemoteSync(tx); err != nil {
+		t.Fatalf("failed to add transaction of random allowed size: %v", err)
+	}
+	// Try adding a transaction above maximum size by one
+	tx = sizedDataTransaction(t, txMaxSize+1, 2, gasLimit, key)
+	if err := pool.addRemoteSync(tx); err == nil {
+		t.Fatalf("expected rejection on slightly oversize transaction")
+	}
+	// Try adding a transaction above maximum size by more than one
+	tx = sizedDataTransaction(t, txMaxSize+2+uint64(rand.Intn(10*txMaxSize)), 2, gasLimit, key)
+	if err := pool.addRemoteSync(tx); err == nil {
+		t.Fatalf("expected rejection on oversize transaction")
+	}
+	// Run some sanity checks on the pool internals
+	pending, queued := pool.Stats()
+	if pending != 2 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
+	}
+	if queued != 0 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 0)
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
+func sizedDataTransaction(t *testing.T, targetSize, nonce, gasLimit uint64, key *ecdsa.PrivateKey) *types.Transaction {
+	t.Helper()
+
+	gasPrice := big.NewInt(1)
+
 	// Find the "usual" transaction length without data.
 	// This varies depending on the data length and data content in the transaction:
 	// - The data length encoding varies from 0 to 5 bytes
 	// - The signature encoding varies from 3 bytes to 68 bytes depending on the data content
 	// However, in most cases, the maximum transaction length without data is 103 bytes,
 	// which is used as a starting point to create transactions below.
-	txWithLargeData := pricedDataTransaction(0, pool.currentHead.Load().GasLimit, big.NewInt(1), key, txMaxSize)
+	txWithLargeData := pricedDataTransaction(0, gasLimit, gasPrice, key, txMaxSize)
 	usualTxLengthWithoutData := txWithLargeData.Size() - txMaxSize
-
-	makeTx := func(t *testing.T, nonce, targetSize uint64) *types.Transaction {
-		t.Helper()
-		gasLimit := pool.currentHead.Load().GasLimit
-		gasPrice := big.NewInt(1)
 
 		dataLength := targetSize - usualTxLengthWithoutData
 
@@ -1206,36 +1241,6 @@ func TestAllowedTxSize(t *testing.T) {
 		t.Fatalf("could not generate a transaction of size %d after %d tries",
 			targetSize, tries)
 		return nil
-	}
-
-	// Try adding a transaction with maximal allowed size
-	tx := makeTx(t, 0, txMaxSize)
-	if err := pool.addRemoteSync(tx); err != nil {
-		t.Fatalf("failed to add transaction of size %d, close to maximal: %v", int(tx.Size()), err)
-	}
-	// Try adding a transaction with random allowed size
-	if err := pool.addRemoteSync(makeTx(t, 1, uint64(rand.Intn(txMaxSize+1)))); err != nil {
-		t.Fatalf("failed to add transaction of random allowed size: %v", err)
-	}
-	// Try adding a transaction above maximum size by one
-	if err := pool.addRemoteSync(makeTx(t, 2, txMaxSize+1)); err == nil {
-		t.Fatalf("expected rejection on slightly oversize transaction")
-	}
-	// Try adding a transaction above maximum size by more than one
-	if err := pool.addRemoteSync(makeTx(t, 2, txMaxSize+2+uint64(rand.Intn(10*txMaxSize)))); err == nil {
-		t.Fatalf("expected rejection on oversize transaction")
-	}
-	// Run some sanity checks on the pool internals
-	pending, queued := pool.Stats()
-	if pending != 2 {
-		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
-	}
-	if queued != 0 {
-		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 0)
-	}
-	if err := validatePoolInternals(pool); err != nil {
-		t.Fatalf("pool internal state corrupted: %v", err)
-	}
 }
 
 // Tests that if transactions start being capped, transactions are also removed from 'all'
