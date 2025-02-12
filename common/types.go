@@ -194,6 +194,11 @@ func (h *Hash) UnmarshalGraphQL(input interface{}) error {
 	return err
 }
 
+// IsZero returns true if the hash is the zero hash.
+func (h Hash) IsZero() bool {
+	return h == Hash{}
+}
+
 // UnprefixedHash allows marshaling a Hash without 0x prefix.
 type UnprefixedHash Hash
 
@@ -369,6 +374,11 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 		err = fmt.Errorf("unexpected type %T for Address", input)
 	}
 	return err
+}
+
+// IsZero returns true if the address is the zero address.
+func (a Address) IsZero() bool {
+	return a == Address{}
 }
 
 // UnprefixedAddress allows marshaling an Address without 0x prefix.

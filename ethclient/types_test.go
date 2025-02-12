@@ -151,3 +151,55 @@ func TestToFilterArg(t *testing.T) {
 		})
 	}
 }
+func TestAddress_IsZero(t *testing.T) {
+	tests := []struct {
+		name    string
+		address common.Address
+		want    bool
+	}{
+		{
+			"zero address",
+			common.Address{},
+			true,
+		},
+		{
+			"non-zero address",
+			common.HexToAddress("0xD36722ADeC3EdCB29c8e7b5a47f352D701393462"),
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.address.IsZero(); got != tt.want {
+				t.Errorf("Address.IsZero() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func TestHash_IsZero(t *testing.T) {
+	tests := []struct {
+		name string
+		hash common.Hash
+		want bool
+	}{
+		{
+			"zero hash",
+			common.Hash{},
+			true,
+		},
+		{
+			"non-zero hash",
+			common.HexToHash("0xaba98c3b293961bb1bbd754e148cfd2ad50f887e3eebee0135d77b841a6daac9"),
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.hash.IsZero(); got != tt.want {
+				t.Errorf("Hash.IsZero() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
