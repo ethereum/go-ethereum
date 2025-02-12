@@ -342,7 +342,7 @@ func TestCopyHeader(t *testing.T) {
 	t.Run("filled_header", func(t *testing.T) {
 		t.Parallel()
 
-		h := Header{
+		h := &Header{
 			ParentHash:       common.Hash{1},
 			UncleHash:        common.Hash{2},
 			Coinbase:         common.Address{3},
@@ -368,7 +368,7 @@ func TestCopyHeader(t *testing.T) {
 
 		allFieldsAreSet(t, h)
 
-		cpy := CopyHeader(&h)
+		cpy := CopyHeader(h)
 
 		want := &Header{
 			ParentHash:       common.Hash{1},
@@ -396,52 +396,18 @@ func TestCopyHeader(t *testing.T) {
 		assert.Equal(t, want, cpy)
 
 		// Mutate each non-value field to ensure they are not shared
-		v := reflect.ValueOf(&h).Elem()
-		for i := 0; i < v.NumField(); i++ {
-			field := v.Field(i)
-			fieldName := v.Type().Field(i).Name
-			if unicode.IsLower(rune(fieldName[0])) {
-				field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
-			}
-			var originalField any
-			switch field.Kind() {
-			case reflect.Array, reflect.Uint64: // values
-			case reflect.Slice:
-				originalField = field.Interface()
-				switch originalField.(type) {
-				case []byte:
-					field.Set(reflect.Append(field, reflect.ValueOf(byte(1))))
-				default:
-					t.Fatalf("unexpected slice type %T for %q", originalField, fieldName)
-				}
-				originalField = field.Interface()
-			case reflect.Pointer:
-				originalField = field.Interface()
-				switch ptr := originalField.(type) {
-				case *big.Int:
-					ptr.Add(ptr, big.NewInt(1))
-				case *uint64:
-					*ptr++
-				case *common.Hash:
-					ptr[0]++
-				default:
-					t.Fatalf("unexpected pointer type %T for %q", ptr, fieldName)
-				}
-			default:
-				t.Fatalf("unexpected field kind %v for %q", field.Kind(), fieldName)
-			}
-			cpyField := reflect.ValueOf(*cpy).Field(i).Interface()
-			assert.NotEqualf(t, originalField, cpyField, "field %q", fieldName)
-		}
+		fieldsAreDeepCopied(t, h, cpy)
 	})
 }
 
 func ptrTo[T any](x T) *T { return &x }
 
 func allFieldsAreSet(t *testing.T, x any) {
-	v := reflect.ValueOf(x)
+	t.Helper()
+	require.Equal(t, reflect.Ptr.String(), reflect.TypeOf(x).Kind().String(), "x must be a pointer")
+	v := reflect.ValueOf(x).Elem()
 	typ := v.Type()
-	require.Equal(t, reflect.Struct, typ.Kind())
+	require.Equal(t, reflect.Struct.String(), typ.Kind().String())
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		fieldName := typ.Field(i).Name
@@ -457,5 +423,50 @@ func allFieldsAreSet(t *testing.T, x any) {
 		}
 		isSet := fieldValue.IsValid() && !fieldValue.IsZero()
 		require.True(t, isSet, "field %q is not set", fieldName)
+	}
+}
+
+func fieldsAreDeepCopied(t *testing.T, original, cpy any) {
+	t.Helper()
+	require.Equal(t, reflect.Ptr.String(), reflect.TypeOf(original).Kind().String(), "original must be a pointer")
+	require.Equal(t, reflect.Ptr.String(), reflect.TypeOf(cpy).Kind().String(), "cpy must be a pointer")
+
+	v := reflect.ValueOf(original).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldName := v.Type().Field(i).Name
+		if unicode.IsLower(rune(fieldName[0])) {
+			field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
+		}
+		var originalField any
+		switch field.Kind() {
+		case reflect.Array, reflect.Uint64: // values
+		case reflect.Slice:
+			originalField = field.Interface()
+			switch originalField.(type) {
+			case []byte:
+				field.Set(reflect.Append(field, reflect.ValueOf(byte(1))))
+			default:
+				t.Fatalf("unexpected slice type %T for %q", originalField, fieldName)
+			}
+			originalField = field.Interface()
+		case reflect.Pointer:
+			originalField = field.Interface()
+			switch ptr := originalField.(type) {
+			case *big.Int:
+				ptr.Add(ptr, big.NewInt(1))
+			case *uint64:
+				*ptr++
+			case *common.Hash:
+				ptr[0]++
+			default:
+				t.Fatalf("unexpected pointer type %T for %q", ptr, fieldName)
+			}
+		default:
+			t.Fatalf("unexpected field kind %v for %q", field.Kind(), fieldName)
+		}
+
+		cpyField := reflect.ValueOf(cpy).Elem().Field(i).Interface()
+		assert.NotEqualf(t, originalField, cpyField, "field %q", fieldName)
 	}
 }
