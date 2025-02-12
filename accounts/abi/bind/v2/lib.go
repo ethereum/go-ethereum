@@ -32,7 +32,8 @@ type ContractEvent interface {
 	ContractEventName() string
 }
 
-// FilterEvents returns an EventIterator instance for filtering historical events based on the event id and a block range.
+// FilterEvents filters a historical block range for instances of emission of a
+// specific event type from a specified contract.  It returns an error if... (TODO: enumerate error scenarios)
 func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack func(*types.Log) (*Ev, error), topics ...[]any) (*EventIterator[Ev], error) {
 	var e Ev
 	logs, sub, err := c.FilterLogs(opts, e.ContractEventName(), topics...)
@@ -42,10 +43,11 @@ func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack f
 	return &EventIterator[Ev]{unpack: unpack, logs: logs, sub: sub}, nil
 }
 
-// WatchEvents causes logs emitted with a given event id from a specified
-// contract to be intercepted, unpacked, and forwarded to sink.  If
-// unpack returns an error, the returned subscription is closed with the
-// error.
+// WatchEvents creates an event subscription to notify when logs of the specified event type are emitted from the given contract.
+// Received logs are unpacked and forwarded to sink.  If topics are specified, only events are forwarded which match the
+// topics.
+//
+// WatchEvents returns a subscription or an error if ... (TODO: enumerate error scenarios)
 func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack func(*types.Log) (*Ev, error), sink chan<- *Ev, topics ...[]any) (event.Subscription, error) {
 	var e Ev
 	logs, sub, err := c.WatchLogs(opts, e.ContractEventName(), topics...)
@@ -79,86 +81,81 @@ func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack fun
 	}), nil
 }
 
-// EventIterator is returned from FilterLogs and is used to iterate over the raw
-// logs and unpacked data for events.
+// EventIterator is an object for iterating over the results of a event log filter call.
 type EventIterator[T any] struct {
-	event *T // event containing the contract specifics and raw log
-
-	unpack func(*types.Log) (*T, error) // Unpack function for the event
-
-	logs <-chan types.Log      // Log channel receiving the found contract events
-	sub  ethereum.Subscription // Subscription for solc_errors, completion and termination
-	done bool                  // Whether the subscription completed delivering logs
-	fail error                 // Occurred error to stop iteration
+	current *T
+	unpack  func(*types.Log) (*T, error)
+	logs    <-chan types.Log
+	sub     ethereum.Subscription
+	fail    error // error to hold reason for iteration failure
+	closed  bool  // true if Close has been called
 }
 
 // Value returns the current value of the iterator, or nil if there isn't one.
 func (it *EventIterator[T]) Value() *T {
-	return it.event
+	return it.current
 }
 
-// Next advances the iterator to the subsequent event, returning whether there
-// are any more events found. In case of a retrieval or parsing error, false is
-// returned and Error() can be queried for the exact failure.
-func (it *EventIterator[T]) Next() bool {
-	// If the iterator failed, stop iterating
-	if it.fail != nil {
-		return false
+// Next advances the iterator to the subsequent event (if there is one),
+// returning true if the iterator advanced.
+//
+// If the attempt to convert the raw log object to an instance of T using the
+// unpack function provided via FilterEvents returns an error: that error is returned and subsequent calls to Next will
+// not advance the iterator.
+func (it *EventIterator[T]) Next() (advanced bool, err error) {
+	// If the iterator failed with an error, don't proceed
+	if it.fail != nil || it.closed {
+		return false, it.fail
 	}
-	// If the iterator completed, deliver directly whatever's available
-	if it.done {
-		select {
-		case log := <-it.logs:
-			res, err := it.unpack(&log)
-			if err != nil {
-				it.fail = err
-				return false
-			}
-			it.event = res
-			return true
-
-		default:
-			return false
-		}
-	}
-	// Iterator still in progress, wait for either a data or an error event
+	// if the iterator is still active, block until a log is received or the
+	// underlying subscription terminates.
 	select {
 	case log := <-it.logs:
 		res, err := it.unpack(&log)
 		if err != nil {
 			it.fail = err
-			return false
+			return false, it.fail
 		}
-		it.event = res
-		return true
-
-	case err := <-it.sub.Err():
-		it.done = true
-		it.fail = err
-		return it.Next()
+		it.current = res
+		return true, it.fail
+	case <-it.sub.Err():
+		// regardless of how the subscription ends, still be able to iterate
+		// over any unread logs.
+		select {
+		case log := <-it.logs:
+			res, err := it.unpack(&log)
+			if err != nil {
+				it.fail = err
+				return false, it.fail
+			}
+			it.current = res
+			return true, it.fail
+		default:
+			return false, it.fail
+		}
 	}
 }
 
-// Error returns any retrieval or parsing error occurred during filtering.
+// Error returns an error if iteration has failed.
 func (it *EventIterator[T]) Error() error {
 	return it.fail
 }
 
-// Close terminates the iteration process, releasing any pending underlying
-// resources.
+// Close releases any pending underlying resources.  Any subsequent calls to
+// Next will not advance the iterator, but the current value remains accessible.
 func (it *EventIterator[T]) Close() error {
+	it.closed = true
 	it.sub.Unsubscribe()
 	return nil
 }
 
-// Call performs an eth_call on the given bound contract instance, using the provided
-// ABI-encoded input.
+// Call performs an eth_call to a contract with optional call data.
 //
 // To call a function that doesn't return any output, pass nil as the unpack function.
 // This can be useful if you just want to check that the function doesn't revert.
-func Call[T any](c *BoundContract, opts *CallOpts, packedInput []byte, unpack func([]byte) (T, error)) (T, error) {
+func Call[T any](c *BoundContract, opts *CallOpts, calldata []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
-	packedOutput, err := c.CallRaw(opts, packedInput)
+	packedOutput, err := c.CallRaw(opts, calldata)
 	if err != nil {
 		return defaultResult, err
 	}
@@ -175,19 +172,19 @@ func Call[T any](c *BoundContract, opts *CallOpts, packedInput []byte, unpack fu
 	return res, err
 }
 
-// Transact initiates a transaction with the given raw calldata as the input.
-func Transact(c *BoundContract, opt *TransactOpts, packedInput []byte) (*types.Transaction, error) {
+// Transact creates and submits a transaction to a contract with optional input data.
+func Transact(c *BoundContract, opt *TransactOpts, data []byte) (*types.Transaction, error) {
 	addr := c.address
-	return c.transact(opt, &addr, packedInput)
+	return c.transact(opt, &addr, data)
 }
 
-// DeployContract deploys a contract onto the Ethereum blockchain and binds the
-// deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
-// bytes.
-func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, error) {
+// DeployContract creates and submits a deployment transaction based on the deployer bytecode and
+// optional ABI-encoded constructor input.  It returns the address and creation transaction of the
+// pending contract, or an error if the creation failed.
+func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend, constructorInput []byte) (common.Address, *types.Transaction, error) {
 	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
 
-	tx, err := c.RawCreationTransact(opts, append(bytecode, packedParams...))
+	tx, err := c.RawCreationTransact(opts, append(bytecode, constructorInput...))
 	if err != nil {
 		return common.Address{}, nil, err
 	}

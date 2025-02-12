@@ -283,12 +283,27 @@ done:
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
+
 	e1Count = 0
 	e2Count = 0
-	for it.Next() {
+	for {
+		advanced, err := it.Next()
+		if err != nil {
+			t.Fatalf("got error while iterating events for e1: %v", err)
+		}
+		if !advanced {
+			break
+		}
 		e1Count++
 	}
-	for it2.Next() {
+	for {
+		advanced, err := it2.Next()
+		if err != nil {
+			t.Fatalf("got error while iterating events for e2: %v", err)
+		}
+		if !advanced {
+			break
+		}
 		e2Count++
 	}
 	if e1Count != 2 {
