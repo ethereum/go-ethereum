@@ -18,6 +18,7 @@ package legacypool
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	crand "crypto/rand"
 	"errors"
 	"fmt"
@@ -37,8 +38,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -1170,22 +1173,26 @@ func TestAllowedTxSize(t *testing.T) {
 	gasLimit := pool.currentHead.Load().GasLimit
 
 	// Try adding a transaction with maximal allowed size
-	tx := sizedDataTransaction(t, txMaxSize, 0, gasLimit, key)
+	tx, err := sizedDataTransaction(txMaxSize, 0, gasLimit, key)
+	require.NoError(t, err)
 	if err := pool.addRemoteSync(tx); err != nil {
 		t.Fatalf("failed to add transaction of size %d, close to maximal: %v", int(tx.Size()), err)
 	}
 	// Try adding a transaction with random allowed size
-	tx = sizedDataTransaction(t, uint64(rand.Intn(txMaxSize+1)), 1, gasLimit, key)
+	tx, err = sizedDataTransaction(uint64(rand.Intn(txMaxSize+1)), 1, gasLimit, key)
+	require.NoError(t, err)
 	if err := pool.addRemoteSync(tx); err != nil {
 		t.Fatalf("failed to add transaction of random allowed size: %v", err)
 	}
 	// Try adding a transaction above maximum size by one
-	tx = sizedDataTransaction(t, txMaxSize+1, 2, gasLimit, key)
+	tx, err = sizedDataTransaction(txMaxSize+1, 2, gasLimit, key)
+	require.NoError(t, err)
 	if err := pool.addRemoteSync(tx); err == nil {
 		t.Fatalf("expected rejection on slightly oversize transaction")
 	}
 	// Try adding a transaction above maximum size by more than one
-	tx = sizedDataTransaction(t, txMaxSize+2+uint64(rand.Intn(10*txMaxSize)), 2, gasLimit, key)
+	tx, err = sizedDataTransaction(txMaxSize+2+uint64(rand.Intn(10*txMaxSize)), 2, gasLimit, key)
+	require.NoError(t, err)
 	if err := pool.addRemoteSync(tx); err == nil {
 		t.Fatalf("expected rejection on oversize transaction")
 	}
@@ -1202,45 +1209,97 @@ func TestAllowedTxSize(t *testing.T) {
 	}
 }
 
-func sizedDataTransaction(t *testing.T, targetSize, nonce, gasLimit uint64, key *ecdsa.PrivateKey) *types.Transaction {
-	t.Helper()
-
+// sizedDataTransaction generates a transaction with the size matching the `targetSize` given
+// as argument. It uses the nonce, gasLimit and key given as arguments to generate the transaction.
+// Note some target sizes cannot be generated, notably: 99, 154, 258, 356, 65539 and 65538.
+func sizedDataTransaction(targetSize, nonce, gasLimit uint64, key *ecdsa.PrivateKey) (
+	tx *types.Transaction, err error,
+) {
 	gasPrice := big.NewInt(1)
 
-	// Find the "usual" transaction length without data.
-	// This varies depending on the data length and data content in the transaction:
-	// - The data length encoding varies from 0 to 5 bytes
-	// - The signature encoding varies from 3 bytes to 68 bytes depending on the data content
-	// However, in most cases, the maximum transaction length without data is 103 bytes,
-	// which is used as a starting point to create transactions below.
-	txWithLargeData := pricedDataTransaction(0, gasLimit, gasPrice, key, txMaxSize)
-	usualTxLengthWithoutData := txWithLargeData.Size() - txMaxSize
+	// 1 byte *big.Int + 32 byte *bit.Int + 32 byte *big.Int
+	// with an RLP encoding ranging from 1 + 1 + 1 to 2 + 33 + 33 bytes
+	const targetSignatureLength uint64 = 65 // most of the time it's 1 + 32 + 32 bytes
 
-		dataLength := targetSize - usualTxLengthWithoutData
+	// Enforce the target size is above the minimum signed transaction size
+	txNoData := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), gasLimit, gasPrice, nil)
+	minimumSize := txNoData.Size() + targetSignatureLength
+	if targetSize < minimumSize {
+		return nil, fmt.Errorf("target size %d is less than minimum size %d", targetSize, minimumSize)
+	}
 
-		const tries = 68 - // 68 is the maximum signature encoding size
-			3 + // 3 is the minimum signature encoding size
-			5 - // 5 is the maximum data length encoding size
-			0 // 0 is the minimum data length encoding size
-		for range tries {
-			tx := pricedDataTransaction(nonce, gasLimit, gasPrice, key, dataLength)
-			size := tx.Size()
-			switch {
-			case size == targetSize:
-				return tx
-			case size < targetSize:
-				// either the RLP encoding of the data or the signature is too short,
-				// try increasing the data length
-				dataLength++
-			default:
-				// either the RLP encoding of the data or the signature is too long,
-				// try decreasing the data length
-				dataLength--
-			}
+	// Find data length to reach the target size, assuming a signature of length 65.
+	// This is done because the data length header varies from 0 to 5 bytes.
+	var dataLength uint64
+	for dataLength = targetSize - minimumSize; dataLength > 0; dataLength-- {
+		data := make([]byte, dataLength)
+		// Base this transaction on the transaction created in [pricedDataTransaction].
+		txWithData := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), gasLimit, gasPrice, data)
+		sizeWithSignature := txWithData.Size() + targetSignatureLength
+		// Note sizeWithSignature can decrease by 2 bytes eventhough the data length was decreased by 1 only.
+		if sizeWithSignature < targetSize {
+			break
 		}
-		t.Fatalf("could not generate a transaction of size %d after %d tries",
-			targetSize, tries)
-		return nil
+	}
+
+	previousDataLength := dataLength
+	for {
+		tx = pricedDataTransaction(nonce, gasLimit, gasPrice, key, dataLength)
+		size := tx.Size()
+		if size == targetSize {
+			return tx, nil
+		} else if txSignatureLen(tx) != targetSignatureLength {
+			continue // re-generate with new random data to obtain a signature of 65 bytes.
+		}
+		// The final RLP encoding size sometimes varies by 1 to 2 bytes compared to the target size.
+		newDataLength := dataLength + 1
+		if size > targetSize {
+			newDataLength = dataLength - 1
+		}
+		if newDataLength == previousDataLength {
+			return nil, fmt.Errorf("impossible to generate a transaction of length %d", targetSize)
+		}
+		previousDataLength = dataLength
+		dataLength = newDataLength
+	}
+}
+
+func Test_sizedDataTransaction(t *testing.T) {
+	t.Skip("skipping this test which takes about one minute to complete")
+	const minSize uint64 = 98
+	key, err := ecdsa.GenerateKey(elliptic.P256(), crand.Reader)
+	require.NoError(t, err)
+	for targetSize := minSize; targetSize < txMaxSize; targetSize++ {
+		const nonce = 1
+		const gasLimit = 100000
+		tx, err := sizedDataTransaction(targetSize, nonce, gasLimit, key)
+		if err != nil { // some sizes cannot be generated
+			t.Log(err)
+			continue
+		}
+		require.Equal(t, targetSize, tx.Size())
+	}
+}
+
+func txSignatureLen(tx *types.Transaction) uint64 {
+	v, r, s := tx.RawSignatureValues()
+	empty := &types.LegacyTx{}
+	signatureOnly := &types.LegacyTx{
+		V: v, R: r, S: s,
+	}
+	return rlpSize(signatureOnly) - rlpSize(empty)
+}
+
+func rlpSize(x any) uint64 {
+	return uint64(len(mustRLP(x)))
+}
+
+func mustRLP(x any) []byte {
+	b, err := rlp.EncodeToBytes(x)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 // Tests that if transactions start being capped, transactions are also removed from 'all'
