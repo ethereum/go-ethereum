@@ -413,7 +413,9 @@ func allFieldsAreSet(t *testing.T, x any) {
 		fieldName := typ.Field(i).Name
 		fieldValue := field
 		if unicode.IsLower(rune(fieldName[0])) { // unexported
-			require.Falsef(t, field.IsNil(), "field %q is nil", fieldName)
+			if field.Kind() == reflect.Ptr {
+				require.Falsef(t, field.IsNil(), "field %q is nil", fieldName)
+			}
 			field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 			fieldValue = field
 		}
@@ -435,7 +437,8 @@ func fieldsAreDeepCopied(t *testing.T, original, cpy any) {
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		fieldName := v.Type().Field(i).Name
-		if unicode.IsLower(rune(fieldName[0])) {
+		isUnexported := unicode.IsLower(rune(fieldName[0]))
+		if isUnexported {
 			field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
 		}
 		var originalField any
@@ -466,7 +469,10 @@ func fieldsAreDeepCopied(t *testing.T, original, cpy any) {
 			t.Fatalf("unexpected field kind %v for %q", field.Kind(), fieldName)
 		}
 
-		cpyField := reflect.ValueOf(cpy).Elem().Field(i).Interface()
-		assert.NotEqualf(t, originalField, cpyField, "field %q", fieldName)
+		cpyField := reflect.ValueOf(cpy).Elem().Field(i)
+		if isUnexported {
+			cpyField = reflect.NewAt(cpyField.Type(), unsafe.Pointer(cpyField.UnsafeAddr())).Elem()
+		}
+		assert.NotEqualf(t, originalField, cpyField.Interface(), "field %q", fieldName)
 	}
 }
