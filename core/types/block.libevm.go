@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -84,46 +85,95 @@ func (*NOOPHeaderHooks) DecodeRLP(h *Header, s *rlp.Stream) error {
 }
 func (*NOOPHeaderHooks) PostCopy(dst *Header) {}
 
-var _ interface {
+var _ = []interface {
 	rlp.Encoder
 	rlp.Decoder
-} = (*Body)(nil)
+}{
+	(*Body)(nil),
+	(*extblock)(nil),
+}
 
 // EncodeRLP implements the [rlp.Encoder] interface.
 func (b *Body) EncodeRLP(w io.Writer) error {
-	return b.hooks().RLPFieldsForEncoding(b).EncodeRLP(w)
+	return b.hooks().BodyRLPFieldsForEncoding(b).EncodeRLP(w)
 }
 
 // DecodeRLP implements the [rlp.Decoder] interface.
 func (b *Body) DecodeRLP(s *rlp.Stream) error {
-	return b.hooks().RLPFieldPointersForDecoding(b).DecodeRLP(s)
+	return b.hooks().BodyRLPFieldPointersForDecoding(b).DecodeRLP(s)
 }
 
-// BodyHooks are required for all types registered with [RegisterExtras] for
-// [Body] payloads.
-type BodyHooks interface {
-	RLPFieldsForEncoding(*Body) *rlp.Fields
-	RLPFieldPointersForDecoding(*Body) *rlp.Fields
+// BlockRLPProxy exports the geth-internal type used for RLP {en,de}coding of a
+// [Block].
+type BlockRLPProxy extblock
+
+func (b *extblock) EncodeRLP(w io.Writer) error {
+	bb := (*BlockRLPProxy)(b)
+	return b.hooks.BlockRLPFieldsForEncoding(bb).EncodeRLP(w)
 }
 
-// NOOPBodyHooks implements [BodyHooks] such that they are equivalent to no type
-// having been registered.
-type NOOPBodyHooks struct{}
+func (b *extblock) DecodeRLP(s *rlp.Stream) error {
+	bb := (*BlockRLPProxy)(b)
+	return b.hooks.BlockRLPFieldPointersForDecoding(bb).DecodeRLP(s)
+}
 
-// The RLP-related methods of [NOOPBodyHooks] make assumptions about the struct
-// fields and their order, which we lock in here as a change detector. If this
-// breaks then it MUST be updated and the RLP methods reviewed + new
+// BlockBodyHooks are required for all types registered with [RegisterExtras]
+// for [Block] and [Body] payloads.
+type BlockBodyHooks interface {
+	BlockRLPFieldsForEncoding(*BlockRLPProxy) *rlp.Fields
+	BlockRLPFieldPointersForDecoding(*BlockRLPProxy) *rlp.Fields
+	BodyRLPFieldsForEncoding(*Body) *rlp.Fields
+	BodyRLPFieldPointersForDecoding(*Body) *rlp.Fields
+}
+
+// NOOPBlockBodyHooks implements [BlockBodyHooks] such that they are equivalent
+// to no type having been registered.
+type NOOPBlockBodyHooks struct{}
+
+var _ BlockBodyPayload[*NOOPBlockBodyHooks] = NOOPBlockBodyHooks{}
+
+func (NOOPBlockBodyHooks) Copy() *NOOPBlockBodyHooks { return &NOOPBlockBodyHooks{} }
+
+// The RLP-related methods of [NOOPBlockBodyHooks] make assumptions about the
+// struct fields and their order, which we lock in here as a change detector. If
+// these break then they MUST be updated and the RLP methods reviewed + new
 // backwards-compatibility tests added.
-var _ = &Body{[]*Transaction{}, []*Header{}, []*Withdrawal{}, nil /* extra unexported type */}
+var (
+	_ = &Body{
+		[]*Transaction{}, []*Header{}, []*Withdrawal{}, // geth
+		&pseudo.Type{}, // libevm
+	}
+	_ = extblock{
+		&Header{}, []*Transaction{}, []*Header{}, []*Withdrawal{}, // geth
+		BlockBodyHooks(nil), // libevm
+	}
+	// Demonstrate identity of these two types, by definition but useful for
+	// inspection here.
+	_ = extblock(BlockRLPProxy{})
+)
 
-func (NOOPBodyHooks) RLPFieldsForEncoding(b *Body) *rlp.Fields {
+func (NOOPBlockBodyHooks) BlockRLPFieldsForEncoding(b *BlockRLPProxy) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{b.Header, b.Txs, b.Uncles},
+		Optional: []any{b.Withdrawals},
+	}
+}
+
+func (NOOPBlockBodyHooks) BlockRLPFieldPointersForDecoding(b *BlockRLPProxy) *rlp.Fields {
+	return &rlp.Fields{
+		Required: []any{&b.Header, &b.Txs, &b.Uncles},
+		Optional: []any{&b.Withdrawals},
+	}
+}
+
+func (NOOPBlockBodyHooks) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{b.Transactions, b.Uncles},
 		Optional: []any{b.Withdrawals},
 	}
 }
 
-func (NOOPBodyHooks) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+func (NOOPBlockBodyHooks) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 	return &rlp.Fields{
 		Required: []any{&b.Transactions, &b.Uncles},
 		Optional: []any{&b.Withdrawals},

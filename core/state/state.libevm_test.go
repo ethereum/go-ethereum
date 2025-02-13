@@ -47,7 +47,7 @@ func TestGetSetExtra(t *testing.T) {
 	// test deep copying.
 	payloads := types.RegisterExtras[
 		types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
-		types.NOOPBodyHooks, *types.NOOPBodyHooks,
+		types.NOOPBlockBodyHooks, *types.NOOPBlockBodyHooks,
 		*accountExtra,
 	]().StateAccount
 

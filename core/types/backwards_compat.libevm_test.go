@@ -30,11 +30,11 @@ import (
 	"github.com/ava-labs/libevm/rlp"
 )
 
-func TestBodyRLPBackwardsCompatibility(t *testing.T) {
-	newTx := func(nonce uint64) *Transaction { return NewTx(&LegacyTx{Nonce: nonce}) }
-	newHdr := func(hashLow byte) *Header { return &Header{ParentHash: common.Hash{hashLow}} }
-	newWithdraw := func(idx uint64) *Withdrawal { return &Withdrawal{Index: idx} }
+func newTx(nonce uint64) *Transaction    { return NewTx(&LegacyTx{Nonce: nonce}) }
+func newHdr(parentHashHigh byte) *Header { return &Header{ParentHash: common.Hash{parentHashHigh}} }
+func newWithdraw(idx uint64) *Withdrawal { return &Withdrawal{Index: idx} }
 
+func blockBodyRLPTestInputs() []*Body {
 	// We build up test-case [Body] instances from the Cartesian product of each
 	// of these components.
 	txMatrix := [][]*Transaction{
@@ -61,8 +61,11 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 			}
 		}
 	}
+	return bodies
+}
 
-	for _, body := range bodies {
+func TestBodyRLPBackwardsCompatibility(t *testing.T) {
+	for _, body := range blockBodyRLPTestInputs() {
 		t.Run("", func(t *testing.T) {
 			t.Cleanup(func() {
 				if t.Failed() {
@@ -86,8 +89,10 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 			t.Run("Decode", func(t *testing.T) {
 				got := new(Body)
 				err := rlp.DecodeBytes(wantRLP, got)
-				require.NoErrorf(t, err, "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T) resulted in %s",
-					(*withoutMethods)(body), got, pretty.Sprint(got))
+				require.NoErrorf(
+					t, err, "rlp.DecodeBytes(rlp.EncodeToBytes(%T), %T) resulted in %s",
+					(*withoutMethods)(body), got, pretty.Sprint(got),
+				)
 
 				want := body
 				// Regular RLP decoding will never leave these non-optional
@@ -112,17 +117,94 @@ func TestBodyRLPBackwardsCompatibility(t *testing.T) {
 	}
 }
 
+func TestBlockRLPBackwardsCompatibility(t *testing.T) {
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+
+	RegisterExtras[
+		NOOPHeaderHooks, *NOOPHeaderHooks,
+		NOOPBlockBodyHooks, *NOOPBlockBodyHooks, // types under test
+		struct{},
+	]()
+
+	// Note that there are also a number of tests in `block_test.go` that ensure
+	// backwards compatibility as [NOOPBlockBodyHooks] are used by default when
+	// nothing is registered (the above registration is only for completeness).
+
+	for _, body := range blockBodyRLPTestInputs() {
+		t.Run("", func(t *testing.T) {
+			// [Block] doesn't export most of its fields so uses [extblock] as a
+			// proxy for RLP encoding, which is what we therefore use as the
+			// backwards-compatible gold standard.
+			hdr := newHdr(99)
+			block := extblock{
+				Header:      hdr,
+				Txs:         body.Transactions,
+				Uncles:      body.Uncles,
+				Withdrawals: body.Withdrawals,
+			}
+
+			// We've added [extblock.EncodeRLP] and [extblock.DecodeRLP] for our
+			// hooks.
+			type withoutMethods extblock
+
+			wantRLP, err := rlp.EncodeToBytes(withoutMethods(block))
+			require.NoErrorf(t, err, "rlp.EncodeToBytes([%T with methods stripped])", block)
+
+			// Our input to RLP might not be the canonical RLP output.
+			var wantBlock extblock
+			err = rlp.DecodeBytes(wantRLP, (*withoutMethods)(&wantBlock))
+			require.NoErrorf(t, err, "rlp.DecodeBytes(..., [%T with methods stripped])", &wantBlock)
+
+			t.Run("Encode", func(t *testing.T) {
+				b := NewBlockWithHeader(hdr).WithBody(*body).WithWithdrawals(body.Withdrawals)
+				got, err := rlp.EncodeToBytes(b)
+				require.NoErrorf(t, err, "rlp.EncodeToBytes(%T)", b)
+
+				assert.Equalf(t, wantRLP, got, "expect %T RLP identical to that from %T struct stripped of methods", got, extblock{})
+			})
+
+			t.Run("Decode", func(t *testing.T) {
+				var gotBlock Block
+				err := rlp.DecodeBytes(wantRLP, &gotBlock)
+				require.NoErrorf(t, err, "rlp.DecodeBytes(..., %T)", &gotBlock)
+
+				got := extblock{
+					gotBlock.Header(),
+					gotBlock.Transactions(),
+					gotBlock.Uncles(),
+					gotBlock.Withdrawals(),
+					nil, // unexported libevm hooks
+				}
+
+				opts := cmp.Options{
+					cmp.Comparer((*Header).equalHash),
+					cmp.Comparer((*Transaction).equalHash),
+					cmpopts.IgnoreUnexported(extblock{}),
+				}
+				if diff := cmp.Diff(wantBlock, got, opts); diff != "" {
+					t.Errorf("rlp.DecodeBytes([RLP from %T stripped of methods], ...) diff (-want +got):\n%s", extblock{}, diff)
+				}
+			})
+		})
+	}
+}
+
 // cChainBodyExtras carries the same additional fields as the Avalanche C-Chain
-// (ava-labs/coreth) [Body] and implements [BodyHooks] to achieve equivalent RLP
-// {en,de}coding.
+// (ava-labs/coreth) [Body] and implements [BlockBodyHooks] to achieve
+// equivalent RLP {en,de}coding.
+//
+// It is not intended as a full test of ava-labs/coreth existing functionality,
+// which should be implemented when that module consumes libevm, but as proof of
+// equivalence of the [rlp.Fields] approach.
 type cChainBodyExtras struct {
 	Version uint32
 	ExtData *[]byte
 }
 
-var _ BodyHooks = (*cChainBodyExtras)(nil)
+var _ BlockBodyHooks = (*cChainBodyExtras)(nil)
 
-func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) *rlp.Fields {
+func (e *cChainBodyExtras) BodyRLPFieldsForEncoding(b *Body) *rlp.Fields {
 	// The Avalanche C-Chain uses all of the geth required fields (but none of
 	// the optional ones) so there's no need to explicitly list them. This
 	// pattern might not be ideal for readability but is used here for
@@ -132,13 +214,13 @@ func (e *cChainBodyExtras) RLPFieldsForEncoding(b *Body) *rlp.Fields {
 	// compatibility so this is safe to do, but only for the required fields.
 	return &rlp.Fields{
 		Required: append(
-			NOOPBodyHooks{}.RLPFieldsForEncoding(b).Required,
+			NOOPBlockBodyHooks{}.BodyRLPFieldsForEncoding(b).Required,
 			e.Version, e.ExtData,
 		),
 	}
 }
 
-func (e *cChainBodyExtras) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
+func (e *cChainBodyExtras) BodyRLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 	// An alternative to the pattern used above is to explicitly list all
 	// fields for better introspection.
 	return &rlp.Fields{
@@ -149,6 +231,20 @@ func (e *cChainBodyExtras) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 			rlp.Nillable(&e.ExtData), // equivalent to `rlp:"nil"`
 		},
 	}
+}
+
+// See [cChainBodyExtras] intent.
+
+func (e *cChainBodyExtras) Copy() *cChainBodyExtras {
+	panic("unimplemented")
+}
+
+func (e *cChainBodyExtras) BlockRLPFieldsForEncoding(b *BlockRLPProxy) *rlp.Fields {
+	panic("unimplemented")
+}
+
+func (e *cChainBodyExtras) BlockRLPFieldPointersForDecoding(b *BlockRLPProxy) *rlp.Fields {
+	panic("unimplemented")
 }
 
 func TestBodyRLPCChainCompat(t *testing.T) {

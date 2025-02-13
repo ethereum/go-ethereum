@@ -211,6 +211,8 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
+
+	extra *pseudo.Type // See [RegisterExtras]
 }
 
 // "external" block encoding. used for eth protocol, etc.
@@ -219,6 +221,8 @@ type extblock struct {
 	Txs         []*Transaction
 	Uncles      []*Header
 	Withdrawals []*Withdrawal `rlp:"optional"`
+
+	hooks BlockBodyHooks // libevm: MUST be unexported + populated from [Block.hooks]
 }
 
 // NewBlock creates a new block. The input data is copied, changes to header and to the
@@ -318,6 +322,7 @@ func CopyHeader(h *Header) *Header {
 // DecodeRLP decodes a block from RLP.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
+	eb.hooks = b.hooks()
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
 		return err
@@ -334,13 +339,14 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		Txs:         b.transactions,
 		Uncles:      b.uncles,
 		Withdrawals: b.withdrawals,
+		hooks:       b.hooks(),
 	})
 }
 
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals, nil /* unexported extras field */}
+	return &Body{b.transactions, b.uncles, b.withdrawals, b.cloneExtra()}
 }
 
 // Accessors for body data. These do not return a copy because the content
@@ -458,6 +464,7 @@ func (b *Block) WithSeal(header *Header) *Block {
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
+		extra:        b.cloneExtra(),
 	}
 }
 
@@ -468,6 +475,7 @@ func (b *Block) WithBody(body Body) *Block {
 		transactions: make([]*Transaction, len(body.Transactions)),
 		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  b.withdrawals,
+		extra:        body.cloneExtra(),
 	}
 	copy(block.transactions, body.Transactions)
 	for i := range body.Uncles {
@@ -482,6 +490,7 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 		header:       b.header,
 		transactions: b.transactions,
 		uncles:       b.uncles,
+		extra:        b.cloneExtra(),
 	}
 	if withdrawals != nil {
 		block.withdrawals = make([]*Withdrawal, len(withdrawals))
