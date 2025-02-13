@@ -1435,8 +1435,9 @@ func (f *Firehose) OnGasChange(old, new uint64, reason tracing.GasChangeReason) 
 		return
 	}
 
-	if reason == tracing.GasChangeCallOpCode {
-		// We ignore those because we track OpCode gas consumption manually by tracking the gas value at `OnOpcode` call
+	if reason == tracing.GasChangeCallOpCode || reason == tracing.GasChangeIgnored {
+		// We ignore the 'CallOpCode' ones because we track OpCode gas consumption manually by tracking the gas value at `OnOpcode` call
+		// The 'Ignored' one is actually made to be ignored by tracing
 		return
 	}
 
@@ -1887,19 +1888,24 @@ func balanceChangeReasonFromChain(reason tracing.BalanceChangeReason) pbeth.Bala
 }
 
 var gasChangeReasonToPb = map[tracing.GasChangeReason]pbeth.GasChange_Reason{
-	tracing.GasChangeTxInitialBalance:        pbeth.GasChange_REASON_TX_INITIAL_BALANCE,
-	tracing.GasChangeTxRefunds:               pbeth.GasChange_REASON_TX_REFUNDS,
-	tracing.GasChangeTxLeftOverReturned:      pbeth.GasChange_REASON_TX_LEFT_OVER_RETURNED,
-	tracing.GasChangeCallInitialBalance:      pbeth.GasChange_REASON_CALL_INITIAL_BALANCE,
-	tracing.GasChangeCallLeftOverReturned:    pbeth.GasChange_REASON_CALL_LEFT_OVER_RETURNED,
-	tracing.GasChangeTxIntrinsicGas:          pbeth.GasChange_REASON_INTRINSIC_GAS,
-	tracing.GasChangeCallContractCreation:    pbeth.GasChange_REASON_CONTRACT_CREATION,
-	tracing.GasChangeCallContractCreation2:   pbeth.GasChange_REASON_CONTRACT_CREATION2,
-	tracing.GasChangeCallCodeStorage:         pbeth.GasChange_REASON_CODE_STORAGE,
-	tracing.GasChangeCallPrecompiledContract: pbeth.GasChange_REASON_PRECOMPILED_CONTRACT,
-	tracing.GasChangeCallStorageColdAccess:   pbeth.GasChange_REASON_STATE_COLD_ACCESS,
-	tracing.GasChangeCallLeftOverRefunded:    pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
-	tracing.GasChangeCallFailedExecution:     pbeth.GasChange_REASON_FAILED_EXECUTION,
+	tracing.GasChangeTxInitialBalance:              pbeth.GasChange_REASON_TX_INITIAL_BALANCE,
+	tracing.GasChangeTxRefunds:                     pbeth.GasChange_REASON_TX_REFUNDS,
+	tracing.GasChangeTxLeftOverReturned:            pbeth.GasChange_REASON_TX_LEFT_OVER_RETURNED,
+	tracing.GasChangeCallInitialBalance:            pbeth.GasChange_REASON_CALL_INITIAL_BALANCE,
+	tracing.GasChangeCallLeftOverReturned:          pbeth.GasChange_REASON_CALL_LEFT_OVER_RETURNED,
+	tracing.GasChangeTxIntrinsicGas:                pbeth.GasChange_REASON_INTRINSIC_GAS,
+	tracing.GasChangeCallContractCreation:          pbeth.GasChange_REASON_CONTRACT_CREATION,
+	tracing.GasChangeCallContractCreation2:         pbeth.GasChange_REASON_CONTRACT_CREATION2,
+	tracing.GasChangeCallCodeStorage:               pbeth.GasChange_REASON_CODE_STORAGE,
+	tracing.GasChangeCallPrecompiledContract:       pbeth.GasChange_REASON_PRECOMPILED_CONTRACT,
+	tracing.GasChangeCallStorageColdAccess:         pbeth.GasChange_REASON_STATE_COLD_ACCESS,
+	tracing.GasChangeCallLeftOverRefunded:          pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
+	tracing.GasChangeCallFailedExecution:           pbeth.GasChange_REASON_FAILED_EXECUTION,
+	tracing.GasChangeWitnessContractInit:           pbeth.GasChange_REASON_WITNESS_CONTRACT_INIT,
+	tracing.GasChangeWitnessContractCreation:       pbeth.GasChange_REASON_WITNESS_CONTRACT_CREATION,
+	tracing.GasChangeWitnessCodeChunk:              pbeth.GasChange_REASON_WITNESS_CODE_CHUNK,
+	tracing.GasChangeWitnessContractCollisionCheck: pbeth.GasChange_REASON_WITNESS_CONTRACT_COLLISION_CHECK,
+	tracing.GasChangeTxDataFloor:                   pbeth.GasChange_REASON_TX_DATA_FLOOR,
 
 	// Ignored, we track them manually, newGasChange ensure that we panic if we see Unknown
 	tracing.GasChangeCallOpCode: pbeth.GasChange_REASON_UNKNOWN,
