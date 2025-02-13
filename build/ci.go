@@ -730,7 +730,7 @@ func doDockerBuildx(cmdline []string) {
 		tags = []string{"stable-fh" + tracers.FirehoseProtocolVersion, "v" + version.Semantic + "-fh" + tracers.FirehoseProtocolVersion}
 	}
 	// Need to create a mult-arch builder
-	build.RunCommand("docker", "buildx", "create", "--use", "--name", "multi-arch-builder", "--platform", *platform)
+	build.MustRunCommand("docker", "buildx", "create", "--use", "--name", "multi-arch-builder", "--platform", *platform)
 
 	for _, spec := range []struct {
 		file string
