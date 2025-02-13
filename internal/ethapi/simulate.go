@@ -194,6 +194,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
+	var allLogs []*types.Log
 	for i, call := range block.Calls {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
@@ -234,8 +235,22 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			}
 		} else {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
+			allLogs = append(allLogs, callRes.Logs...)
 		}
 		callResults[i] = callRes
+	}
+	var requests [][]byte
+	// Process EIP-7685 requests
+	if sim.chainConfig.IsPrague(header.Number, header.Time) {
+		requests = [][]byte{}
+		// EIP-6110
+		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
+			return nil, nil, err
+		}
+		// EIP-7002
+		core.ProcessWithdrawalQueue(&requests, evm)
+		// EIP-7251
+		core.ProcessConsolidationQueue(&requests, evm)
 	}
 	header.Root = sim.state.IntermediateRoot(true)
 	header.GasUsed = gasUsed
@@ -245,6 +260,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	var withdrawals types.Withdrawals
 	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
 		withdrawals = make([]*types.Withdrawal, 0)
+	}
+	if requests != nil {
+		reqHash := types.CalcRequestsHash(requests)
+		header.RequestsHash = &reqHash
 	}
 	b := types.NewBlock(header, &types.Body{Transactions: txes, Withdrawals: withdrawals}, receipts, trie.NewStackTrie(nil))
 	repairLogs(callResults, b.Hash())
