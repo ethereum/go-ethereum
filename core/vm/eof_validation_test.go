@@ -246,12 +246,14 @@ func TestValidateCode(t *testing.T) {
 			metadata: []*functionMetadata{{inputs: 0, outputs: 0, maxStackHeight: 2}, {inputs: 2, outputs: 1, maxStackHeight: 2}},
 		},
 	} {
-		container := &Container{
-			types:         test.metadata,
-			data:          make([]byte, 0),
-			subContainers: make([]*Container, 0),
-		}
-		_, err := validateCode(test.code, test.section, container, &eofInstructionSet, false)
+		container := MakeTestContainer(
+			test.metadata,
+			[][]byte{test.code},
+			[]*Container{},
+			[]byte{},
+			0,
+		)
+		_, err := validateCode(test.code, test.section, &container, &eofInstructionSet, false)
 		if !errors.Is(err, test.err) {
 			t.Errorf("test %d (%s): unexpected error (want: %v, got: %v)", i, common.Bytes2Hex(test.code), test.err, err)
 		}
@@ -270,14 +272,16 @@ func BenchmarkRJUMPI(b *testing.B) {
 		code = append(code, snippet...)
 	}
 	code = append(code, byte(STOP))
-	container := &Container{
-		types:         []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-		data:          make([]byte, 0),
-		subContainers: make([]*Container, 0),
-	}
+	container := MakeTestContainer(
+		[]*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
+		[][]byte{code},
+		[]*Container{},
+		[]byte{},
+		0,
+	)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &eofInstructionSet, false)
+		_, err := validateCode(code, 0, &container, &eofInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -302,14 +306,16 @@ func BenchmarkRJUMPV(b *testing.B) {
 	}
 	code = append(code, byte(PUSH0))
 	code = append(code, byte(STOP))
-	container := &Container{
-		types:         []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-		data:          make([]byte, 0),
-		subContainers: make([]*Container, 0),
-	}
+	container := MakeTestContainer(
+		[]*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
+		[][]byte{code},
+		[]*Container{},
+		[]byte{},
+		0,
+	)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &eofInstructionSet, false)
+		_, err := validateCode(code, 0, &container, &eofInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -322,30 +328,32 @@ func BenchmarkRJUMPV(b *testing.B) {
 // - or code to again call into 1024 code sections.
 // We can't have all code sections calling each other, otherwise we would exceed 48KB.
 func BenchmarkEOFValidation(b *testing.B) {
-	var container Container
-	var code []byte
 	maxSections := 1024
+	types := make([]*functionMetadata, maxSections)
+	codeSections := make([][]byte, maxSections)
+	var code []byte
 	for i := 0; i < maxSections; i++ {
 		code = append(code, byte(CALLF))
 		code = binary.BigEndian.AppendUint16(code, uint16(i%(maxSections-1))+1)
 	}
 	// First container
-	container.codeSections = append(container.codeSections, append(code, byte(STOP)))
-	container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
+	codeSections = append(codeSections, append(code, byte(STOP)))
+	types = append(types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
 
 	inner := []byte{
 		byte(RETF),
 	}
 
 	for i := 0; i < 1023; i++ {
-		container.codeSections = append(container.codeSections, inner)
-		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 0})
+		codeSections = append(codeSections, inner)
+		types = append(types, &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 0})
 	}
 
 	for i := 0; i < 12; i++ {
-		container.codeSections[i+1] = append(code, byte(RETF))
+		codeSections[i+1] = append(code, byte(RETF))
 	}
 
+	container := MakeTestContainer(types, codeSections, []*Container{}, []byte{}, 0)
 	bin := container.MarshalBinary()
 	if len(bin) > 48*1024 {
 		b.Fatal("Exceeds 48Kb")
@@ -368,17 +376,18 @@ func BenchmarkEOFValidation(b *testing.B) {
 // - contain calls to some other code sections.
 // We can't have all code sections calling each other, otherwise we would exceed 48KB.
 func BenchmarkEOFValidation2(b *testing.B) {
-	var container Container
-	var code []byte
 	maxSections := 1024
+	types := make([]*functionMetadata, maxSections)
+	codeSections := make([][]byte, maxSections)
+	var code []byte
 	for i := 0; i < maxSections; i++ {
 		code = append(code, byte(CALLF))
 		code = binary.BigEndian.AppendUint16(code, uint16(i%(maxSections-1))+1)
 	}
 	code = append(code, byte(STOP))
 	// First container
-	container.codeSections = append(container.codeSections, code)
-	container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
+	codeSections = append(codeSections, code)
+	types = append(types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
 
 	inner := []byte{
 		byte(CALLF), 0x03, 0xE8,
@@ -397,10 +406,11 @@ func BenchmarkEOFValidation2(b *testing.B) {
 	}
 
 	for i := 0; i < 1023; i++ {
-		container.codeSections = append(container.codeSections, inner)
-		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 0})
+		codeSections = append(codeSections, inner)
+		types = append(types, &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 0})
 	}
 
+	container := MakeTestContainer(types, codeSections, []*Container{}, []byte{}, 0)
 	bin := container.MarshalBinary()
 	if len(bin) > 48*1024 {
 		b.Fatal("Exceeds 48Kb")
@@ -424,7 +434,9 @@ func BenchmarkEOFValidation2(b *testing.B) {
 // - contain calls to other code sections
 // We can't have all code sections calling each other, otherwise we would exceed 48KB.
 func BenchmarkEOFValidation3(b *testing.B) {
-	var container Container
+	maxSections := 1024
+	types := make([]*functionMetadata, maxSections)
+	codeSections := make([][]byte, maxSections)
 	var code []byte
 	snippet := []byte{
 		byte(PUSH0),
@@ -437,25 +449,25 @@ func BenchmarkEOFValidation3(b *testing.B) {
 	}
 	code = append(code, snippet...)
 	// First container, calls into all other containers
-	maxSections := 1024
 	for i := 0; i < maxSections; i++ {
 		code = append(code, byte(CALLF))
 		code = binary.BigEndian.AppendUint16(code, uint16(i%(maxSections-1))+1)
 	}
 	code = append(code, byte(STOP))
-	container.codeSections = append(container.codeSections, code)
-	container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 1})
+	codeSections = append(codeSections, code)
+	types = append(types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 1})
 
 	// Other containers
 	for i := 0; i < 1023; i++ {
-		container.codeSections = append(container.codeSections, []byte{byte(RJUMP), 0x00, 0x00, byte(RETF)})
-		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 0})
+		codeSections = append(codeSections, []byte{byte(RJUMP), 0x00, 0x00, byte(RETF)})
+		types = append(types, &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 0})
 	}
 	// Other containers
 	for i := 0; i < 68; i++ {
-		container.codeSections[i+1] = append(snippet, byte(RETF))
-		container.types[i+1] = &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 1}
+		codeSections[i+1] = append(snippet, byte(RETF))
+		types[i+1] = &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 1}
 	}
+	container := MakeTestContainer(types, codeSections, []*Container{}, []byte{}, 0)
 	bin := container.MarshalBinary()
 	if len(bin) > 48*1024 {
 		b.Fatal("Exceeds 48Kb")
@@ -487,14 +499,16 @@ func BenchmarkRJUMPI_2(b *testing.B) {
 		code = binary.BigEndian.AppendUint16(code, uint16(x))
 	}
 	code = append(code, byte(STOP))
-	container := &Container{
-		types:         []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-		data:          make([]byte, 0),
-		subContainers: make([]*Container, 0),
-	}
+	container := MakeTestContainer(
+		[]*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
+		[][]byte{code},
+		[]*Container{},
+		[]byte{},
+		0,
+	)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &eofInstructionSet, false)
+		_, err := validateCode(code, 0, &container, &eofInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}

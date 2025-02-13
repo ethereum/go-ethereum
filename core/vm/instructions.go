@@ -363,7 +363,7 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 }
 
 func opCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(scope.Contract.CodeAt(scope.CodeSection)))))
+	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(scope.Contract.Code))))
 	return nil, nil
 }
 
@@ -378,7 +378,7 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		uint64CodeOffset = math.MaxUint64
 	}
 
-	codeCopy := getData(scope.Contract.CodeAt(scope.CodeSection), uint64CodeOffset, length.Uint64())
+	codeCopy := getData(scope.Contract.Code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 	return nil, nil
 }
@@ -909,7 +909,7 @@ func opRevert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 }
 
 func opUndefined(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	return nil, &ErrInvalidOpCode{opcode: OpCode(scope.Contract.CodeAt(scope.CodeSection)[*pc])}
+	return nil, &ErrInvalidOpCode{opcode: OpCode(scope.Contract.Code[*pc])}
 }
 
 func opStop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
@@ -988,13 +988,12 @@ func makeLog(size int) executionFunc {
 // opPush1 is a specialized version of pushN
 func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code    = scope.Contract.CodeAt(scope.CodeSection)
-		codeLen = uint64(len(code))
+		codeLen = uint64(len(scope.Contract.Code))
 		integer = new(uint256.Int)
 	)
 	*pc += 1
 	if *pc < codeLen {
-		scope.Stack.push(integer.SetUint64(uint64(code[*pc])))
+		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
 	} else {
 		scope.Stack.push(integer.Clear())
 	}
@@ -1005,8 +1004,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 func makePush(size uint64, pushByteSize int) executionFunc {
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 		var (
-			code    = scope.Contract.CodeAt(scope.CodeSection)
-			codeLen = len(code)
+			codeLen = len(scope.Contract.Code)
 			start   = min(codeLen, int(*pc+1))
 			end     = min(codeLen, start+pushByteSize)
 		)
