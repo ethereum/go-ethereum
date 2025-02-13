@@ -334,7 +334,11 @@ func (api *PublicDebugAPI) ExecutionWitness(ctx context.Context, blockNrOrHash r
 	}
 
 	witness, err := generateWitness(api.eth.blockchain, block)
-	return ToExecutionWitness(witness), err
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate witness: %w", err)
+	}
+
+	return ToExecutionWitness(witness), nil
 }
 
 func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateless.Witness, error) {
@@ -344,7 +348,8 @@ func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateles
 	}
 
 	parentHeader := witness.Headers[0]
-	statedb, err := blockchain.StateAt(parentHeader.Root)
+	// Avoid using snapshots to properly collect the witness data for all reads
+	statedb, err := state.New(parentHeader.Root, blockchain.StateCache(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve parent state: %w", err)
 	}
