@@ -222,7 +222,7 @@ func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		stackItem        = scope.Stack.pop()
 		offset, overflow = stackItem.Uint64WithOverflow()
 	)
-	if overflow {
+	if overflow || offset > uint64(scope.Contract.Container.dataSize) {
 		stackItem.Clear()
 		scope.Stack.push(&stackItem)
 	} else {
@@ -253,13 +253,17 @@ func opDataSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 // opDataCopy implements the DATACOPY opcode
 func opDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		memOffset = scope.Stack.pop()
-		offset    = scope.Stack.pop()
-		size      = scope.Stack.pop()
+		memOffset  = scope.Stack.pop()
+		dataOffset = scope.Stack.pop()
+		size       = scope.Stack.pop()
 	)
-	// These values are checked for overflow during memory expansion calculation
-	// (the memorySize function on the opcode).
-	data := scope.Contract.Container.getDataAt(offset.Uint64(), size.Uint64())
+	dataOffset64, overflow := dataOffset.Uint64WithOverflow()
+	if overflow || dataOffset64 > uint64(scope.Contract.Container.dataSize) {
+		// Setting to dataSize makes this a zero byte read
+		dataOffset64 = uint64(scope.Contract.Container.dataSize)
+	}
+	// memOffset and size are checked for overflow during memory expansion calculation.
+	data := scope.Contract.Container.getDataAt(dataOffset64, size.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), size.Uint64(), data)
 	return nil, nil
 }
