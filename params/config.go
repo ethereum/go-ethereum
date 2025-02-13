@@ -87,9 +87,11 @@ var (
 		MergeNetsplitBlock:      nil,
 		ShanghaiTime:            newUint64(1696000704),
 		CancunTime:              newUint64(1707305664),
+		PragueTime:              newUint64(1740434112),
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
 		},
 	}
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
@@ -114,9 +116,11 @@ var (
 		MergeNetsplitBlock:      big.NewInt(1735371),
 		ShanghaiTime:            newUint64(1677557088),
 		CancunTime:              newUint64(1706655072),
+		PragueTime:              newUint64(1741159776),
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
 		},
 	}
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced

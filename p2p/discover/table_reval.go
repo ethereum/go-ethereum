@@ -79,7 +79,7 @@ func (tr *tableRevalidation) nodeEndpointChanged(tab *Table, n *tableNode) {
 func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mclock.AbsTime) {
 	reval := func(list *revalidationList) {
 		if list.nextTime <= now {
-			if n := list.get(now, &tab.rand, tr.activeReq); n != nil {
+			if n := list.get(&tab.rand, tr.activeReq); n != nil {
 				tr.startRequest(tab, n)
 			}
 			// Update nextTime regardless if any requests were started because
@@ -203,7 +203,7 @@ type revalidationList struct {
 }
 
 // get returns a random node from the queue. Nodes in the 'exclude' map are not returned.
-func (list *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude map[enode.ID]struct{}) *tableNode {
+func (list *revalidationList) get(rand randomSource, exclude map[enode.ID]struct{}) *tableNode {
 	if len(list.nodes) == 0 {
 		return nil
 	}

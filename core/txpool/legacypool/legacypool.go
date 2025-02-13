@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -196,6 +197,20 @@ func (config *Config) sanitize() Config {
 // The pool separates processable transactions (which can be applied to the
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
+//
+// In addition to tracking transactions, the pool also tracks a set of pending SetCode
+// authorizations (EIP7702). This helps minimize number of transactions that can be
+// trivially churned in the pool. As a standard rule, any account with a deployed
+// delegation or an in-flight authorization to deploy a delegation will only be allowed a
+// single transaction slot instead of the standard number. This is due to the possibility
+// of the account being sweeped by an unrelated account.
+//
+// Because SetCode transactions can have many authorizations included, we avoid explicitly
+// checking their validity to save the state lookup. So long as the encompassing
+// transaction is valid, the authorization will be accepted and tracked by the pool. In
+// case the pool is tracking a pending / queued transaction from a specific account, it
+// will reject new transactions with delegations from that account with standard in-flight
+// transactions.
 type LegacyPool struct {
 	config      Config
 	chainconfig *params.ChainConfig
@@ -263,7 +278,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 // pool, specifically, whether it is a Legacy, AccessList or Dynamic transaction.
 func (pool *LegacyPool) Filter(tx *types.Transaction) bool {
 	switch tx.Type() {
-	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType:
+	case types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.SetCodeTxType:
 		return true
 	default:
 		return false
@@ -540,7 +555,8 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction) error {
 		Accept: 0 |
 			1<<types.LegacyTxType |
 			1<<types.AccessListTxType |
-			1<<types.DynamicFeeTxType,
+			1<<types.DynamicFeeTxType |
+			1<<types.SetCodeTxType,
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load().ToBig(),
 	}
@@ -565,6 +581,11 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			if list := pool.queue[addr]; list != nil {
 				have += list.Len()
 			}
+			if pool.currentState.GetCodeHash(addr) != types.EmptyCodeHash || len(pool.all.auths[addr]) != 0 {
+				// Allow at most one in-flight tx for delegated accounts or those with
+				// a pending authorization.
+				return have, max(0, 1-have)
+			}
 			return have, math.MaxInt
 		},
 		ExistingExpenditure: func(addr common.Address) *big.Int {
@@ -580,6 +601,18 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 				}
 			}
 			return nil
+		},
+		KnownConflicts: func(from common.Address, auths []common.Address) []common.Address {
+			var conflicts []common.Address
+			// Authorities cannot conflict with any pending or queued transactions.
+			for _, addr := range auths {
+				if list := pool.pending[addr]; list != nil {
+					conflicts = append(conflicts, addr)
+				} else if list := pool.queue[addr]; list != nil {
+					conflicts = append(conflicts, addr)
+				}
+			}
+			return conflicts
 		},
 	}
 	if err := txpool.ValidateTransactionWithState(tx, pool.signer, opts); err != nil {
@@ -1334,15 +1367,13 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 		// Drop all transactions that are deemed too old (low nonce)
 		forwards := list.Forward(pool.currentState.GetNonce(addr))
 		for _, tx := range forwards {
-			hash := tx.Hash()
-			pool.all.Remove(hash)
+			pool.all.Remove(tx.Hash())
 		}
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 		// Drop all transactions that are too costly (low balance or out of gas)
 		drops, _ := list.Filter(pool.currentState.GetBalance(addr), gasLimit)
 		for _, tx := range drops {
-			hash := tx.Hash()
-			pool.all.Remove(hash)
+			pool.all.Remove(tx.Hash())
 		}
 		log.Trace("Removed unpayable queued transactions", "count", len(drops))
 		queuedNofundsMeter.Mark(int64(len(drops)))
@@ -1531,8 +1562,8 @@ func (pool *LegacyPool) demoteUnexecutables() {
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), gasLimit)
 		for _, tx := range drops {
 			hash := tx.Hash()
-			log.Trace("Removed unpayable pending transaction", "hash", hash)
 			pool.all.Remove(hash)
+			log.Trace("Removed unpayable pending transaction", "hash", hash)
 		}
 		pendingNofundsMeter.Mark(int64(len(drops)))
 
@@ -1641,12 +1672,15 @@ type lookup struct {
 	slots int
 	lock  sync.RWMutex
 	txs   map[common.Hash]*types.Transaction
+
+	auths map[common.Address][]common.Hash // All accounts with a pooled authorization
 }
 
 // newLookup returns a new lookup structure.
 func newLookup() *lookup {
 	return &lookup{
-		txs: make(map[common.Hash]*types.Transaction),
+		txs:   make(map[common.Hash]*types.Transaction),
+		auths: make(map[common.Address][]common.Hash),
 	}
 }
 
@@ -1697,6 +1731,7 @@ func (t *lookup) Add(tx *types.Transaction) {
 	slotsGauge.Update(int64(t.slots))
 
 	t.txs[tx.Hash()] = tx
+	t.addAuthorities(tx)
 }
 
 // Remove removes a transaction from the lookup.
@@ -1704,6 +1739,7 @@ func (t *lookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
+	t.removeAuthorities(hash)
 	tx, ok := t.txs[hash]
 	if !ok {
 		log.Error("No transaction found to be deleted", "hash", hash)
@@ -1725,6 +1761,43 @@ func (t *lookup) TxsBelowTip(threshold *big.Int) types.Transactions {
 		return true
 	})
 	return found
+}
+
+// addAuthorities tracks the supplied tx in relation to each authority it
+// specifies.
+func (t *lookup) addAuthorities(tx *types.Transaction) {
+	for _, addr := range tx.SetCodeAuthorities() {
+		list, ok := t.auths[addr]
+		if !ok {
+			list = []common.Hash{}
+		}
+		if slices.Contains(list, tx.Hash()) {
+			// Don't add duplicates.
+			continue
+		}
+		list = append(list, tx.Hash())
+		t.auths[addr] = list
+	}
+}
+
+// removeAuthorities stops tracking the supplied tx in relation to its
+// authorities.
+func (t *lookup) removeAuthorities(hash common.Hash) {
+	for addr := range t.auths {
+		list := t.auths[addr]
+		// Remove tx from tracker.
+		if i := slices.Index(list, hash); i >= 0 {
+			list = append(list[:i], list[i+1:]...)
+		} else {
+			log.Error("Authority with untracked tx", "addr", addr, "hash", hash)
+		}
+		if len(list) == 0 {
+			// If list is newly empty, delete it entirely.
+			delete(t.auths, addr)
+			continue
+		}
+		t.auths[addr] = list
+	}
 }
 
 // numSlots calculates the number of slots needed for a single transaction.

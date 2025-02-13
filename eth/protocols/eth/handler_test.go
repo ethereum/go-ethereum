@@ -74,9 +74,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 		config = params.TestChainConfig
 		engine = beacon.New(ethash.NewFaker())
 	)
-	if !shanghai {
-		engine.TestingTTDBlock(math.MaxUint64)
-	} else {
+	if shanghai {
 		config = &params.ChainConfig{
 			ChainID:                 big.NewInt(1),
 			HomesteadBlock:          big.NewInt(0),
