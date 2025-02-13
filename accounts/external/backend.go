@@ -187,7 +187,7 @@ func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]by
 	return signature, nil
 }
 
-// signTransactionResult represents the signinig result returned by clef.
+// signTransactionResult represents the signing result returned by clef.
 type signTransactionResult struct {
 	Raw hexutil.Bytes      `json:"raw"`
 	Tx  *types.Transaction `json:"tx"`
