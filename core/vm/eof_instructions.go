@@ -196,8 +196,13 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 		return nil, err
 	}
 
-	// append the auxdata
-	c.rawContainer = append(c.rawContainer, ret...)
+	if size.Uint64() > 0 {
+		// copy the container, so we don't rug parents referencing this data
+		oldContainer := c.rawContainer
+		c.rawContainer = make([]byte, 0, len(oldContainer)+len(ret))
+		c.rawContainer = append(c.rawContainer, oldContainer...)
+		c.rawContainer = append(c.rawContainer, ret...)
+	}
 	newDataSize := c.dataLen()
 	if newDataSize < c.dataSize {
 		return nil, errors.New("incomplete aux data")
