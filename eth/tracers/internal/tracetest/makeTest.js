@@ -22,27 +22,17 @@ var makeTest = function(tx, traceConfig) {
     var block   = eth.getBlock(eth.getTransaction(tx).blockHash);
     var genesis = eth.getBlock(block.parentHash);
 
-    delete genesis.gasUsed;
-    delete genesis.logsBloom;
-    delete genesis.parentHash;
-    delete genesis.receiptsRoot;
-    delete genesis.sha3Uncles;
-    delete genesis.size;
-    delete genesis.transactions;
-    delete genesis.transactionsRoot;
-    delete genesis.uncles;
+    ["gasUsed", "logsBloom", "parentHash", "receiptsRoot", "sha3Uncles", 
+     "size", "transactions", "transactionsRoot", "uncles"].forEach(prop => delete genesis[prop]);
 
-    genesis.gasLimit  = genesis.gasLimit.toString();
-    genesis.number    = genesis.number.toString();
-    genesis.timestamp = genesis.timestamp.toString();
+    ["gasLimit", "number", "timestamp"].forEach(prop => genesis[prop] = genesis[prop].toString());
 
     genesis.alloc = debug.traceTransaction(tx, {tracer: "prestateTracer"});
-    for (var key in genesis.alloc) {
-        var nonce = genesis.alloc[key].nonce;
-        if (nonce) {
-            genesis.alloc[key].nonce = nonce.toString();
+    Object.keys(genesis.alloc).forEach(key => {
+        if (genesis.alloc[key].nonce) {
+            genesis.alloc[key].nonce = genesis.alloc[key].nonce.toString();
         }
-    }
+    });
     genesis.config = admin.nodeInfo.protocols.eth.config;
 
     // Generate the call trace and produce the test input
@@ -61,10 +51,10 @@ var makeTest = function(tx, traceConfig) {
     }
 
     console.log(JSON.stringify({
-        genesis: genesis,
-        context: context,
-        input:  eth.getRawTransaction(tx),
-        result: result,
-        tracerConfig: traceConfig.tracerConfig,
+        genesis:       genesis,
+        context:       context,
+        input:         eth.getRawTransaction(tx),
+        result:        result,
+        tracerConfig:  traceConfig.tracerConfig,
     }, null, 2));
 }
