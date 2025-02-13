@@ -275,6 +275,7 @@ func (t *StateTrie) Copy() *StateTrie {
 		trie:        *t.trie.Copy(),
 		db:          t.db,
 		secKeyCache: t.secKeyCache,
+		preimages:   t.preimages,
 	}
 }
 
