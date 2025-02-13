@@ -79,7 +79,7 @@ func MakeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 				// parameters that are not value types i.e. arrays and structs are not
 				// stored directly but instead a keccak256-hash of an encoding is stored.
 				//
-				// We only convert stringS and bytes to hash, still need to deal with
+				// We only convert strings and bytes to hash, still need to deal with
 				// array(both fixed-size and dynamic-size) and struct.
 
 				// Attempt to generate the topic from funky types
