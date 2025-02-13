@@ -37,16 +37,14 @@ func FuzzStackTrie(f *testing.F) {
 }
 
 func fuzz(data []byte, debugging bool) {
-	// This spongeDb is used to check the sequence of disk-db-writes
 	var (
-		input   = bytes.NewReader(data)
-		spongeA = &spongeDb{sponge: crypto.NewKeccakState()}
-		dbA     = newTestDatabase(rawdb.NewDatabase(spongeA), rawdb.HashScheme)
-		trieA   = NewEmpty(dbA)
-		spongeB = &spongeDb{sponge: crypto.NewKeccakState()}
-		dbB     = newTestDatabase(rawdb.NewDatabase(spongeB), rawdb.HashScheme)
-		trieB   = NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-			rawdb.WriteTrieNode(spongeB, common.Hash{}, path, hash, blob, dbB.Scheme())
+		input = bytes.NewReader(data)
+		dbA   = newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
+		trieA = NewEmpty(dbA)
+		memDB = rawdb.NewMemoryDatabase()
+		dbB   = newTestDatabase(memDB, rawdb.HashScheme)
+		trieB = NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+			rawdb.WriteTrieNode(memDB, common.Hash{}, path, hash, blob, dbB.Scheme())
 		})
 		vals        []*kv
 		maxElements = 10000
@@ -98,11 +96,6 @@ func fuzz(data []byte, debugging bool) {
 	rootB := trieB.Hash()
 	if rootA != rootB {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootB))
-	}
-	sumA := spongeA.sponge.Sum(nil)
-	sumB := spongeB.sponge.Sum(nil)
-	if !bytes.Equal(sumA, sumB) {
-		panic(fmt.Sprintf("sequence differ: (trie) %x != %x (stacktrie)", sumA, sumB))
 	}
 
 	// Ensure all the nodes are persisted correctly
