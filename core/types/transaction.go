@@ -483,6 +483,21 @@ func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
 	return setcodetx.AuthList
 }
 
+// SetCodeAuthorities returns a list of each authorization's corresponding authority.
+func (tx *Transaction) SetCodeAuthorities() []common.Address {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
+		return nil
+	}
+	auths := make([]common.Address, 0, len(setcodetx.AuthList))
+	for _, auth := range setcodetx.AuthList {
+		if addr, err := auth.Authority(); err == nil {
+			auths = append(auths, addr)
+		}
+	}
+	return auths
+}
+
 // SetTime sets the decoding time of a transaction. This is used by tests to set
 // arbitrary times and by persistent transaction pools when loading old txs from
 // disk.
