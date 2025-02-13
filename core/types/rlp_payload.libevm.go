@@ -74,11 +74,10 @@ func RegisterExtras[
 		// The [ExtraPayloads] that we returns is based on [HPtr,BPtr,SA], not
 		// [H,B,SA] so our constructors MUST match that. This guarantees that calls to
 		// the [HeaderHooks] and [BodyHooks] methods will never be performed on a nil pointer.
-		newHeader:         pseudo.NewConstructor[H]().NewPointer, // i.e. non-nil HPtr
-		newBody:           pseudo.NewConstructor[B]().NewPointer, // i.e. non-nil BPtr
-		newStateAccount:   pseudo.NewConstructor[SA]().Zero,
-		cloneStateAccount: extra.cloneStateAccount,
-		hooks:             extra,
+		newHeader:       pseudo.NewConstructor[H]().NewPointer, // i.e. non-nil HPtr
+		newBody:         pseudo.NewConstructor[B]().NewPointer, // i.e. non-nil BPtr
+		newStateAccount: pseudo.NewConstructor[SA]().Zero,
+		hooks:           extra,
 	})
 	return extra
 }
@@ -96,15 +95,57 @@ func TestOnlyClearRegisteredExtras() {
 var registeredExtras register.AtMostOnce[*extraConstructors]
 
 type extraConstructors struct {
-	stateAccountType  string
-	newHeader         func() *pseudo.Type
-	newBody           func() *pseudo.Type
-	newStateAccount   func() *pseudo.Type
-	cloneStateAccount func(*StateAccountExtra) *StateAccountExtra
-	hooks             interface {
+	stateAccountType string
+	newHeader        func() *pseudo.Type
+	newBody          func() *pseudo.Type
+	newStateAccount  func() *pseudo.Type
+	hooks            interface {
 		hooksFromHeader(*Header) HeaderHooks
 		hooksFromBody(*Body) BodyHooks
+		cloneStateAccount(*StateAccountExtra) *StateAccountExtra
 	}
+}
+
+func extraPayloadOrSetDefault(field **pseudo.Type, construct func(*extraConstructors) *pseudo.Type) *pseudo.Type {
+	r := registeredExtras
+	if !r.Registered() {
+		// See params.ChainConfig.extraPayload() for panic rationale.
+		panic("<T>.extraPayload() called before RegisterExtras()")
+	}
+	if *field == nil {
+		*field = construct(r.Get())
+	}
+	return *field
+}
+
+func (h *Header) extraPayload() *pseudo.Type {
+	return extraPayloadOrSetDefault(&h.extra, func(c *extraConstructors) *pseudo.Type {
+		return c.newHeader()
+	})
+}
+
+func (b *Body) extraPayload() *pseudo.Type {
+	return extraPayloadOrSetDefault(&b.extra, func(c *extraConstructors) *pseudo.Type {
+		return c.newBody()
+	})
+}
+
+// hooks returns the [Header]'s registered [HeaderHooks], if any, otherwise a
+// [NOOPHeaderHooks] suitable for running default behaviour.
+func (h *Header) hooks() HeaderHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromHeader(h)
+	}
+	return new(NOOPHeaderHooks)
+}
+
+// hooks returns the [Body]'s registered [BodyHooks], if any, otherwise a
+// [NOOPBodyHooks] suitable for running default behaviour.
+func (b *Body) hooks() BodyHooks {
+	if r := registeredExtras; r.Registered() {
+		return r.Get().hooks.hooksFromBody(b)
+	}
+	return NOOPBodyHooks{}
 }
 
 func (e *StateAccountExtra) clone() *StateAccountExtra {
@@ -112,7 +153,7 @@ func (e *StateAccountExtra) clone() *StateAccountExtra {
 	case !r.Registered(), e == nil:
 		return nil
 	default:
-		return r.Get().cloneStateAccount(e)
+		return r.Get().hooks.cloneStateAccount(e)
 	}
 }
 
@@ -124,6 +165,9 @@ type ExtraPayloads[HPtr HeaderHooks, BPtr BodyHooks, SA any] struct {
 	Body         pseudo.Accessor[*Body, BPtr]
 	StateAccount pseudo.Accessor[StateOrSlimAccount, SA] // Also provides [SlimAccount] access.
 }
+
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks { return e.Header.Get(h) }
+func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBody(b *Body) BodyHooks       { return e.Body.Get(b) }
 
 func (ExtraPayloads[HPtr, BPtr, SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
 	v := pseudo.MustNewValue[SA](s.t)

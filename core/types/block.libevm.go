@@ -18,10 +18,8 @@ package types
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 
-	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -33,19 +31,6 @@ type HeaderHooks interface {
 	EncodeRLP(*Header, io.Writer) error
 	DecodeRLP(*Header, *rlp.Stream) error
 	PostCopy(dst *Header)
-}
-
-// hooks returns the Header's registered HeaderHooks, if any, otherwise a
-// [NOOPHeaderHooks] suitable for running default behaviour.
-func (h *Header) hooks() HeaderHooks {
-	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.hooksFromHeader(h)
-	}
-	return new(NOOPHeaderHooks)
-}
-
-func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks {
-	return e.Header.Get(h)
 }
 
 var _ interface {
@@ -73,18 +58,6 @@ func (h *Header) EncodeRLP(w io.Writer) error {
 // DecodeRLP implements the [rlp.Decoder] interface.
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	return h.hooks().DecodeRLP(h, s)
-}
-
-func (h *Header) extraPayload() *pseudo.Type {
-	r := registeredExtras
-	if !r.Registered() {
-		// See params.ChainConfig.extraPayload() for panic rationale.
-		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
-	}
-	if h.extra == nil {
-		h.extra = r.Get().newHeader()
-	}
-	return h.extra
 }
 
 // NOOPHeaderHooks implements [HeaderHooks] such that they are equivalent to
@@ -133,13 +106,6 @@ type BodyHooks interface {
 	RLPFieldPointersForDecoding(*Body) *rlp.Fields
 }
 
-func (b *Body) hooks() BodyHooks {
-	if r := registeredExtras; r.Registered() {
-		return r.Get().hooks.hooksFromBody(b)
-	}
-	return NOOPBodyHooks{}
-}
-
 // NOOPBodyHooks implements [BodyHooks] such that they are equivalent to no type
 // having been registered.
 type NOOPBodyHooks struct{}
@@ -162,20 +128,4 @@ func (NOOPBodyHooks) RLPFieldPointersForDecoding(b *Body) *rlp.Fields {
 		Required: []any{&b.Transactions, &b.Uncles},
 		Optional: []any{&b.Withdrawals},
 	}
-}
-
-func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromBody(b *Body) BodyHooks {
-	return e.Body.Get(b)
-}
-
-func (b *Body) extraPayload() *pseudo.Type {
-	r := registeredExtras
-	if !r.Registered() {
-		// See params.ChainConfig.extraPayload() for panic rationale.
-		panic(fmt.Sprintf("%T.extraPayload() called before RegisterExtras()", r))
-	}
-	if b.extra == nil {
-		b.extra = r.Get().newBody()
-	}
-	return b.extra
 }
