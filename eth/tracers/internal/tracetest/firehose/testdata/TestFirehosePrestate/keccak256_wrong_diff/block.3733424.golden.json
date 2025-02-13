@@ -13,9 +13,6 @@
     "difficulty":  {
       "bytes":  "AA=="
     },
-    "totalDifficulty":  {
-      "bytes":  "PGVtIwKasA=="
-    },
     "number":  "3733424",
     "gasLimit":  "30000000",
     "timestamp":  "2023-06-20T21:02:36Z",

@@ -13,9 +13,6 @@
     "difficulty": {
       "bytes": "AA=="
     },
-    "totalDifficulty": {
-      "bytes": "AQ=="
-    },
     "number": "1",
     "timestamp": "1970-01-01T00:00:00Z",
     "mixHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",

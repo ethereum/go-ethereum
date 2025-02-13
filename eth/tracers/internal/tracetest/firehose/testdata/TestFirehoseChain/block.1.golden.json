@@ -13,9 +13,6 @@
     "difficulty":  {
       "bytes":  "Ag=="
     },
-    "totalDifficulty":  {
-      "bytes":  "Aw=="
-    },
     "number":  "1",
     "gasLimit":  "1000000",
     "timestamp":  "1970-01-01T00:00:01Z",

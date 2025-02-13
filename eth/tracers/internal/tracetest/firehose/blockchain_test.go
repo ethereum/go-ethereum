@@ -54,27 +54,39 @@ func runPrestateBlock(t *testing.T, prestatePath string, hooks *tracing.Hooks) {
 		Transactions: []*types.Transaction{tx},
 	}, nil, trie.NewStackTrie(nil))
 
-	hooks.OnBlockchainInit(prestate.Genesis.Config)
-	hooks.OnBlockStart(tracing.BlockEvent{
-		Block: block,
-		TD:    prestate.TotalDifficulty,
-	})
+	if hooks.OnBlockchainInit != nil {
+		hooks.OnBlockchainInit(prestate.Genesis.Config)
+	}
+
+	if hooks.OnBlockStart != nil {
+		hooks.OnBlockStart(tracing.BlockEvent{
+			Block: block,
+		})
+	}
+
+	header := block.Header()
+	msg, err := core.TransactionToMessage(tx, types.MakeSigner(prestate.Genesis.Config, header.Number, header.Time), header.BaseFee)
+	require.NoError(t, err)
+
+	blockContext := core.NewEVMBlockContext(block.Header(), prestate, &context.Coinbase)
+	vmenv := vm.NewEVM(blockContext, state.NewHookedState(testState.StateDB, hooks), prestate.Genesis.Config, vm.Config{Tracer: hooks})
 
 	usedGas := uint64(0)
-	_, err := core.ApplyTransaction(
-		prestate.Genesis.Config,
-		prestate,
-		&context.Coinbase,
+	_, err = core.ApplyTransactionWithEVM(
+		msg,
 		new(core.GasPool).AddGas(block.GasLimit()),
 		testState.StateDB,
-		block.Header(),
+		header.Number,
+		header.Hash(),
 		tx,
 		&usedGas,
-		vm.Config{Tracer: hooks},
+		vmenv,
 	)
 	require.NoError(t, err)
 
-	hooks.OnBlockEnd(nil)
+	if hooks.OnBlockEnd != nil {
+		hooks.OnBlockEnd(nil)
+	}
 }
 
 func newBlockchain(t *testing.T, alloc types.GenesisAlloc, context vm.BlockContext, tracer *tracing.Hooks) (*core.Genesis, *core.BlockChain) {
