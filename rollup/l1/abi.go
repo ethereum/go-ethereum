@@ -234,6 +234,7 @@ type CommitBatchArgs struct {
 	ParentBatchHeader      []byte
 	Chunks                 [][]byte
 	SkippedL1MessageBitmap []byte
+	BlobHashes             []common.Hash
 }
 
 func newCommitBatchArgs(method *abi.Method, values []interface{}) (*CommitBatchArgs, error) {

@@ -151,7 +151,6 @@ func TestGetCommittedBatchMetaCodecV1(t *testing.T) {
 
 	require.Equal(t, encoding.CodecV1, encoding.CodecVersion(metadata.Version))
 	require.EqualValues(t, expectedRanges, metadata.ChunkBlockRanges)
-	require.EqualValues(t, expectedVersionedHashes, metadata.BlobVersionedHashes)
 }
 
 type mockEntryWithBlocks struct {
@@ -254,11 +253,10 @@ func TestValidateBatchCodecV0(t *testing.T) {
 		1,
 	)
 	committedBatchMeta1 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV0),
-		BlobVersionedHashes: nil,
+		Version: uint8(encoding.CodecV0),
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, committedBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, &rawdb.CommittedBatchMeta{}, committedBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock1)
 
@@ -283,11 +281,10 @@ func TestValidateBatchCodecV0(t *testing.T) {
 		2,
 	)
 	committedBatchMeta2 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV0),
-		BlobVersionedHashes: nil,
+		Version: uint8(encoding.CodecV0),
 	}
 
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta2, []*encoding.Chunk{chunk4}, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta2, committedBatchMeta2, []*encoding.Chunk{chunk4}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock2)
 
@@ -321,11 +318,10 @@ func TestValidateBatchCodecV1(t *testing.T) {
 		1,
 	)
 	committedBatchMeta1 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV1),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x0129554070e4323800ca0e5ddd17bc447854601b306a70870002a058741214b3")},
+		Version: uint8(encoding.CodecV1),
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, committedBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, &rawdb.CommittedBatchMeta{}, committedBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock1)
 
@@ -349,10 +345,9 @@ func TestValidateBatchCodecV1(t *testing.T) {
 		1,
 	)
 	committedBatchMeta2 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV1),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x01a327088bb2b13151449d8313c281d0006d12e8453e863637b746898b6ad5a6")},
+		Version: uint8(encoding.CodecV1),
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta2, []*encoding.Chunk{chunk4}, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta1, committedBatchMeta2, []*encoding.Chunk{chunk4}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock2)
 
@@ -386,11 +381,10 @@ func TestValidateBatchCodecV2(t *testing.T) {
 		1,
 	)
 	committedBatchMeta1 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV2),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x018d99636f4b20ccdc1dd11c289eb2a470e2c4dd631b1a7b48a6978805f49d18")},
+		Version: uint8(encoding.CodecV2),
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, committedBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, &rawdb.CommittedBatchMeta{}, committedBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock1)
 
@@ -414,10 +408,9 @@ func TestValidateBatchCodecV2(t *testing.T) {
 		1,
 	)
 	committedBatchMeta2 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV2),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x015b4e3d3dcd64cc0eb6a5ad535d7a1844a8c4cdad366ec73557bcc533941370")},
+		Version: uint8(encoding.CodecV2),
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta2, []*encoding.Chunk{chunk4}, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta1, committedBatchMeta2, []*encoding.Chunk{chunk4}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock2)
 
@@ -452,11 +445,10 @@ func TestValidateBatchCodecV3(t *testing.T) {
 	)
 
 	committedBatchMeta1 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV3),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x018d99636f4b20ccdc1dd11c289eb2a470e2c4dd631b1a7b48a6978805f49d18")},
+		Version: uint8(encoding.CodecV3),
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, committedBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, &rawdb.CommittedBatchMeta{}, committedBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock1)
 
@@ -480,10 +472,9 @@ func TestValidateBatchCodecV3(t *testing.T) {
 		1,
 	)
 	committedBatchMeta2 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV3),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x015b4e3d3dcd64cc0eb6a5ad535d7a1844a8c4cdad366ec73557bcc533941370")},
+		Version: uint8(encoding.CodecV3),
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta2, []*encoding.Chunk{chunk4}, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta1, committedBatchMeta2, []*encoding.Chunk{chunk4}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock2)
 
@@ -512,11 +503,10 @@ func TestValidateBatchUpgrades(t *testing.T) {
 	)
 
 	committedBatchMeta1 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV0),
-		BlobVersionedHashes: nil,
+		Version: uint8(encoding.CodecV0),
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, committedBatchMeta1, []*encoding.Chunk{chunk1}, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1.BatchIndex().Uint64(), event1, parentFinalizedBatchMeta1, &rawdb.CommittedBatchMeta{}, committedBatchMeta1, []*encoding.Chunk{chunk1}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(2), endBlock1)
 
@@ -540,10 +530,9 @@ func TestValidateBatchUpgrades(t *testing.T) {
 		1,
 	)
 	committedBatchMeta2 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV1),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x01a688c6e137310df38a62f5ad1e5119b8cb0455c386a9a4079b14fe92a239aa")},
+		Version: uint8(encoding.CodecV1),
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta2, []*encoding.Chunk{chunk2}, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2.BatchIndex().Uint64(), event2, parentFinalizedBatchMeta2, committedBatchMeta1, committedBatchMeta2, []*encoding.Chunk{chunk2}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(3), endBlock2)
 
@@ -567,10 +556,9 @@ func TestValidateBatchUpgrades(t *testing.T) {
 		1,
 	)
 	committedBatchMeta3 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV1),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x01ea66c4de196d36e2c3a5d7c0045100b9e46ef65be8f7a921ef20e6f2e99ebd")},
+		Version: uint8(encoding.CodecV1),
 	}
-	endBlock3, finalizedBatchMeta3, err := validateBatch(event3.BatchIndex().Uint64(), event3, parentFinalizedBatchMeta3, committedBatchMeta3, []*encoding.Chunk{chunk3}, nil)
+	endBlock3, finalizedBatchMeta3, err := validateBatch(event3.BatchIndex().Uint64(), event3, parentFinalizedBatchMeta3, committedBatchMeta2, committedBatchMeta3, []*encoding.Chunk{chunk3}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock3)
 
@@ -594,10 +582,9 @@ func TestValidateBatchUpgrades(t *testing.T) {
 		1,
 	)
 	committedBatchMeta4 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV3),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x015b4e3d3dcd64cc0eb6a5ad535d7a1844a8c4cdad366ec73557bcc533941370")},
+		Version: uint8(encoding.CodecV3),
 	}
-	endBlock4, finalizedBatchMeta4, err := validateBatch(event4.BatchIndex().Uint64(), event4, parentFinalizedBatchMeta4, committedBatchMeta4, []*encoding.Chunk{chunk4}, nil)
+	endBlock4, finalizedBatchMeta4, err := validateBatch(event4.BatchIndex().Uint64(), event4, parentFinalizedBatchMeta4, committedBatchMeta3, committedBatchMeta4, []*encoding.Chunk{chunk4}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock4)
 
@@ -631,38 +618,34 @@ func TestValidateBatchInFinalizeByBundle(t *testing.T) {
 	)
 
 	committedBatchMeta1 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV3),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x01bbc6b98d7d3783730b6208afac839ad37dcf211b9d9e7c83a5f9d02125ddd7")},
+		Version: uint8(encoding.CodecV3),
 	}
 
 	committedBatchMeta2 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV3),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x01c81e5696e00f1e6e7d76c197f74ed51650147c49c4e6e5b0b702cdcc54352a")},
+		Version: uint8(encoding.CodecV3),
 	}
 
 	committedBatchMeta3 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV3),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x012e15203534ae3f4cbe1b0f58fe6db6e5c29432115a8ece6ef5550bf2ffce4c")},
+		Version: uint8(encoding.CodecV3),
 	}
 
 	committedBatchMeta4 := &rawdb.CommittedBatchMeta{
-		Version:             uint8(encoding.CodecV3),
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x015b4e3d3dcd64cc0eb6a5ad535d7a1844a8c4cdad366ec73557bcc533941370")},
+		Version: uint8(encoding.CodecV3),
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(0, event, &rawdb.FinalizedBatchMeta{}, committedBatchMeta1, []*encoding.Chunk{chunk1}, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(0, event, &rawdb.FinalizedBatchMeta{}, &rawdb.CommittedBatchMeta{}, committedBatchMeta1, []*encoding.Chunk{chunk1}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(2), endBlock1)
 
-	endBlock2, finalizedBatchMeta2, err := validateBatch(1, event, finalizedBatchMeta1, committedBatchMeta2, []*encoding.Chunk{chunk2}, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(1, event, finalizedBatchMeta1, committedBatchMeta1, committedBatchMeta2, []*encoding.Chunk{chunk2}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(3), endBlock2)
 
-	endBlock3, finalizedBatchMeta3, err := validateBatch(2, event, finalizedBatchMeta2, committedBatchMeta3, []*encoding.Chunk{chunk3}, nil)
+	endBlock3, finalizedBatchMeta3, err := validateBatch(2, event, finalizedBatchMeta2, committedBatchMeta2, committedBatchMeta3, []*encoding.Chunk{chunk3}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(13), endBlock3)
 
-	endBlock4, finalizedBatchMeta4, err := validateBatch(3, event, finalizedBatchMeta3, committedBatchMeta4, []*encoding.Chunk{chunk4}, nil)
+	endBlock4, finalizedBatchMeta4, err := validateBatch(3, event, finalizedBatchMeta3, committedBatchMeta3, committedBatchMeta4, []*encoding.Chunk{chunk4}, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(17), endBlock4)
 
@@ -675,11 +658,165 @@ func TestValidateBatchInFinalizeByBundle(t *testing.T) {
 	assert.Equal(t, parentFinalizedBatchMeta5, finalizedBatchMeta4)
 }
 
+func TestValidateBatchCodecV7(t *testing.T) {
+	codecV7 := encoding.DACodecV7{}
+
+	var finalizedBatchMeta1 *rawdb.FinalizedBatchMeta
+	var committedBatchMeta1 *rawdb.CommittedBatchMeta
+	{
+		block1 := replaceBlockNumber(readBlockFromJSON(t, "./testdata/blockTrace_02.json"), 1)
+		batch1 := &encoding.Batch{
+			Index:                     1,
+			InitialL1MessageIndex:     0,
+			InitialL1MessageQueueHash: common.Hash{},
+			LastL1MessageQueueHash:    common.Hash{},
+			Blocks:                    []*encoding.Block{block1},
+		}
+		batch1LastBlock := batch1.Blocks[len(batch1.Blocks)-1]
+
+		daBatch1, err := codecV7.NewDABatch(batch1)
+		require.NoError(t, err)
+
+		event1 := l1.NewFinalizeBatchEvent(
+			new(big.Int).SetUint64(batch1.Index),
+			daBatch1.Hash(),
+			batch1LastBlock.Header.Root,
+			batch1LastBlock.WithdrawRoot,
+			common.HexToHash("0x1"),
+			common.HexToHash("0x1"),
+			1,
+		)
+
+		committedBatchMeta1 = &rawdb.CommittedBatchMeta{
+			Version:                uint8(encoding.CodecV7),
+			LastL1MessageQueueHash: common.Hash{},
+		}
+
+		var endBlock1 uint64
+		endBlock1, finalizedBatchMeta1, err = validateBatch(event1.BatchIndex().Uint64(), event1, &rawdb.FinalizedBatchMeta{}, &rawdb.CommittedBatchMeta{}, committedBatchMeta1, []*encoding.Chunk{{Blocks: batch1.Blocks}}, nil)
+		require.NoError(t, err)
+		require.EqualValues(t, 1, endBlock1)
+		require.Equal(t, &rawdb.FinalizedBatchMeta{
+			BatchHash:            daBatch1.Hash(),
+			TotalL1MessagePopped: 0,
+			StateRoot:            batch1LastBlock.Header.Root,
+			WithdrawRoot:         batch1LastBlock.WithdrawRoot,
+		}, finalizedBatchMeta1)
+	}
+
+	// finalize 3 batches with CodecV7 at once
+	block2 := replaceBlockNumber(readBlockFromJSON(t, "./testdata/blockTrace_03.json"), 2)
+	batch2 := &encoding.Batch{
+		Index:                     2,
+		ParentBatchHash:           finalizedBatchMeta1.BatchHash,
+		InitialL1MessageIndex:     0,
+		InitialL1MessageQueueHash: common.Hash{},
+		LastL1MessageQueueHash:    common.Hash{},
+		Blocks:                    []*encoding.Block{block2},
+	}
+	batch2LastBlock := batch2.Blocks[len(batch2.Blocks)-1]
+
+	daBatch2, err := codecV7.NewDABatch(batch2)
+	require.NoError(t, err)
+
+	block3 := replaceBlockNumber(readBlockFromJSON(t, "./testdata/blockTrace_06.json"), 3)
+	LastL1MessageQueueHashBatch3, err := encoding.MessageQueueV2ApplyL1MessagesFromBlocks(common.Hash{}, []*encoding.Block{block3})
+	require.NoError(t, err)
+	batch3 := &encoding.Batch{
+		Index:                     3,
+		ParentBatchHash:           daBatch2.Hash(),
+		InitialL1MessageIndex:     0,
+		InitialL1MessageQueueHash: common.Hash{},
+		LastL1MessageQueueHash:    LastL1MessageQueueHashBatch3,
+		Blocks:                    []*encoding.Block{block3},
+	}
+	batch3LastBlock := batch3.Blocks[len(batch3.Blocks)-1]
+
+	daBatch3, err := codecV7.NewDABatch(batch3)
+	require.NoError(t, err)
+
+	block4 := replaceBlockNumber(readBlockFromJSON(t, "./testdata/blockTrace_07.json"), 4)
+	LastL1MessageQueueHashBatch4, err := encoding.MessageQueueV2ApplyL1MessagesFromBlocks(LastL1MessageQueueHashBatch3, []*encoding.Block{block4})
+	require.NoError(t, err)
+	batch4 := &encoding.Batch{
+		Index:                     4,
+		ParentBatchHash:           daBatch3.Hash(),
+		InitialL1MessageIndex:     1,
+		InitialL1MessageQueueHash: LastL1MessageQueueHashBatch3,
+		LastL1MessageQueueHash:    LastL1MessageQueueHashBatch4,
+		Blocks:                    []*encoding.Block{block4},
+	}
+	batch4LastBlock := batch4.Blocks[len(batch4.Blocks)-1]
+
+	daBatch4, err := codecV7.NewDABatch(batch4)
+	require.NoError(t, err)
+
+	event2 := l1.NewFinalizeBatchEvent(
+		new(big.Int).SetUint64(batch4.Index),
+		daBatch4.Hash(),
+		batch4LastBlock.Header.Root,
+		batch4LastBlock.WithdrawRoot,
+		common.HexToHash("0x1"),
+		common.HexToHash("0x1"),
+		1,
+	)
+
+	committedBatchMeta2 := &rawdb.CommittedBatchMeta{
+		Version:                uint8(encoding.CodecV7),
+		LastL1MessageQueueHash: common.Hash{},
+	}
+
+	committedBatchMeta3 := &rawdb.CommittedBatchMeta{
+		Version:                uint8(encoding.CodecV7),
+		LastL1MessageQueueHash: LastL1MessageQueueHashBatch3,
+	}
+
+	committedBatchMeta4 := &rawdb.CommittedBatchMeta{
+		Version:                uint8(encoding.CodecV7),
+		LastL1MessageQueueHash: LastL1MessageQueueHashBatch4,
+	}
+
+	endBlock2, finalizedBatchMeta2, err := validateBatch(2, event2, finalizedBatchMeta1, committedBatchMeta1, committedBatchMeta2, []*encoding.Chunk{{Blocks: batch2.Blocks}}, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, endBlock2)
+	require.Equal(t, &rawdb.FinalizedBatchMeta{
+		BatchHash:            daBatch2.Hash(),
+		TotalL1MessagePopped: 0,
+		StateRoot:            batch2LastBlock.Header.Root,
+		WithdrawRoot:         batch2LastBlock.WithdrawRoot,
+	}, finalizedBatchMeta2)
+
+	endBlock3, finalizedBatchMeta3, err := validateBatch(3, event2, finalizedBatchMeta2, committedBatchMeta2, committedBatchMeta3, []*encoding.Chunk{{Blocks: batch3.Blocks}}, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, endBlock3)
+	require.Equal(t, &rawdb.FinalizedBatchMeta{
+		BatchHash:            daBatch3.Hash(),
+		TotalL1MessagePopped: 1,
+		StateRoot:            batch3LastBlock.Header.Root,
+		WithdrawRoot:         batch3LastBlock.WithdrawRoot,
+	}, finalizedBatchMeta3)
+
+	endBlock4, finalizedBatchMeta4, err := validateBatch(4, event2, finalizedBatchMeta3, committedBatchMeta3, committedBatchMeta4, []*encoding.Chunk{{Blocks: batch4.Blocks}}, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 4, endBlock4)
+	require.Equal(t, &rawdb.FinalizedBatchMeta{
+		BatchHash:            daBatch4.Hash(),
+		TotalL1MessagePopped: 6,
+		StateRoot:            batch4LastBlock.Header.Root,
+		WithdrawRoot:         batch4LastBlock.WithdrawRoot,
+	}, finalizedBatchMeta4)
+}
+
 func readBlockFromJSON(t *testing.T, filename string) *encoding.Block {
 	data, err := os.ReadFile(filename)
 	assert.NoError(t, err)
 
 	block := &encoding.Block{}
 	assert.NoError(t, json.Unmarshal(data, block))
+	return block
+}
+
+func replaceBlockNumber(block *encoding.Block, newNumber uint64) *encoding.Block {
+	block.Header.Number = new(big.Int).SetUint64(newNumber)
 	return block
 }

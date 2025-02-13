@@ -379,5 +379,7 @@ func (r *Reader) FetchCommitTxData(commitEvent *CommitBatchEvent) (*CommitBatchA
 		return nil, fmt.Errorf("unknown method name for commit transaction: %s", method.Name)
 	}
 
+	args.BlobHashes = tx.BlobHashes()
+
 	return args, nil
 }

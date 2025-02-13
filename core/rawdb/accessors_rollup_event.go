@@ -2,7 +2,10 @@ package rawdb
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
+
+	"github.com/scroll-tech/da-codec/encoding"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/ethdb"
@@ -18,10 +21,24 @@ type ChunkBlockRange struct {
 
 // CommittedBatchMeta holds metadata for committed batches.
 type CommittedBatchMeta struct {
+	Version          uint8
+	ChunkBlockRanges []*ChunkBlockRange
+
+	// introduced with CodecV7
+	LastL1MessageQueueHash common.Hash
+}
+
+type committedBatchMetaV0 struct {
 	Version uint8
 	// BlobVersionedHashes are the versioned hashes of the blobs in the batch. Currently unused. Left for compatibility.
 	BlobVersionedHashes []common.Hash
 	ChunkBlockRanges    []*ChunkBlockRange
+}
+
+type committedBatchMetaV7 struct {
+	Version                uint8
+	ChunkBlockRanges       []*ChunkBlockRange
+	LastL1MessageQueueHash common.Hash
 }
 
 // FinalizedBatchMeta holds metadata for finalized batches.
@@ -143,9 +160,23 @@ func ReadLastFinalizedBatchIndex(db ethdb.Reader) *uint64 {
 
 // WriteCommittedBatchMeta stores the CommittedBatchMeta for a specific batch in the database.
 func WriteCommittedBatchMeta(db ethdb.KeyValueWriter, batchIndex uint64, committedBatchMeta *CommittedBatchMeta) {
-	value, err := rlp.EncodeToBytes(committedBatchMeta)
+	var committedBatchMetaToStore any
+	if encoding.CodecVersion(committedBatchMeta.Version) < encoding.CodecV7 {
+		committedBatchMetaToStore = &committedBatchMetaV0{
+			Version:          committedBatchMeta.Version,
+			ChunkBlockRanges: committedBatchMeta.ChunkBlockRanges,
+		}
+	} else {
+		committedBatchMetaToStore = &committedBatchMetaV7{
+			Version:                committedBatchMeta.Version,
+			ChunkBlockRanges:       committedBatchMeta.ChunkBlockRanges,
+			LastL1MessageQueueHash: committedBatchMeta.LastL1MessageQueueHash,
+		}
+	}
+
+	value, err := rlp.EncodeToBytes(committedBatchMetaToStore)
 	if err != nil {
-		log.Crit("failed to RLP encode committed batch metadata", "batch index", batchIndex, "committed batch meta", committedBatchMeta, "err", err)
+		log.Crit("failed to RLP encode committed batch metadata", "batch index", batchIndex, "committed batch meta", committedBatchMetaToStore, "err", err)
 	}
 	if err := db.Put(committedBatchMetaKey(batchIndex), value); err != nil {
 		log.Crit("failed to store committed batch metadata", "batch index", batchIndex, "value", value, "err", err)
@@ -153,20 +184,38 @@ func WriteCommittedBatchMeta(db ethdb.KeyValueWriter, batchIndex uint64, committ
 }
 
 // ReadCommittedBatchMeta fetches the CommittedBatchMeta for a specific batch from the database.
-func ReadCommittedBatchMeta(db ethdb.Reader, batchIndex uint64) *CommittedBatchMeta {
+func ReadCommittedBatchMeta(db ethdb.Reader, batchIndex uint64) (*CommittedBatchMeta, error) {
 	data, err := db.Get(committedBatchMetaKey(batchIndex))
 	if err != nil && isNotFoundErr(err) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		log.Crit("failed to read committed batch metadata from database", "batch index", batchIndex, "err", err)
+		return nil, fmt.Errorf("failed to read committed batch metadata from database: batch index %d, err: %w", batchIndex, err)
 	}
 
-	cbm := new(CommittedBatchMeta)
-	if err := rlp.Decode(bytes.NewReader(data), cbm); err != nil {
-		log.Crit("Invalid CommittedBatchMeta RLP", "batch index", batchIndex, "data", data, "err", err)
+	// Try decoding from the newest format for future proofness, then the older one for old data.
+	cbm7 := new(committedBatchMetaV7)
+	if err = rlp.Decode(bytes.NewReader(data), cbm7); err == nil {
+		if encoding.CodecVersion(cbm7.Version) < encoding.CodecV7 {
+			return nil, fmt.Errorf("unexpected committed batch metadata version: batch index %d, version %d", batchIndex, cbm7.Version)
+		}
+		return &CommittedBatchMeta{
+			Version:                cbm7.Version,
+			ChunkBlockRanges:       cbm7.ChunkBlockRanges,
+			LastL1MessageQueueHash: cbm7.LastL1MessageQueueHash,
+		}, nil
 	}
-	return cbm
+
+	cbm0 := new(committedBatchMetaV0)
+	if err = rlp.Decode(bytes.NewReader(data), cbm0); err != nil {
+		return nil, fmt.Errorf("failed to decode committed batch metadata: batch index %d, err: %w", batchIndex, err)
+	}
+
+	return &CommittedBatchMeta{
+		Version:                cbm0.Version,
+		ChunkBlockRanges:       cbm0.ChunkBlockRanges,
+		LastL1MessageQueueHash: common.Hash{},
+	}, nil
 }
 
 // DeleteCommittedBatchMeta removes the block ranges of all chunks associated with a specific batch from the database.

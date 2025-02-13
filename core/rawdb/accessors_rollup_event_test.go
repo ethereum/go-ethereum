@@ -3,6 +3,8 @@ package rawdb
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/scroll-tech/go-ethereum/common"
 )
 
@@ -157,36 +159,47 @@ func TestWriteReadDeleteCommittedBatchMeta(t *testing.T) {
 		{
 			batchIndex: 0,
 			meta: &CommittedBatchMeta{
-				Version:             0,
-				BlobVersionedHashes: []common.Hash{},
-				ChunkBlockRanges:    []*ChunkBlockRange{},
+				Version:          0,
+				ChunkBlockRanges: []*ChunkBlockRange{},
 			},
 		},
 		{
 			batchIndex: 1,
 			meta: &CommittedBatchMeta{
-				Version:             1,
-				BlobVersionedHashes: []common.Hash{common.HexToHash("0x1234")},
-				ChunkBlockRanges:    []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}},
+				Version:          1,
+				ChunkBlockRanges: []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}},
+			},
+		},
+		{
+			batchIndex: 1,
+			meta: &CommittedBatchMeta{
+				Version:          2,
+				ChunkBlockRanges: []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}},
+			},
+		},
+		{
+			batchIndex: 1,
+			meta: &CommittedBatchMeta{
+				Version:                7,
+				ChunkBlockRanges:       []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}},
+				LastL1MessageQueueHash: common.Hash{1, 2, 3, 4, 5, 6, 7},
 			},
 		},
 		{
 			batchIndex: 255,
 			meta: &CommittedBatchMeta{
-				Version:             255,
-				BlobVersionedHashes: []common.Hash{common.HexToHash("0xabcd"), common.HexToHash("0xef01")},
-				ChunkBlockRanges:    []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}, {StartBlockNumber: 11, EndBlockNumber: 20}},
+				Version:                255,
+				ChunkBlockRanges:       []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}, {StartBlockNumber: 11, EndBlockNumber: 20}},
+				LastL1MessageQueueHash: common.Hash{255},
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		WriteCommittedBatchMeta(db, tc.batchIndex, tc.meta)
-		got := ReadCommittedBatchMeta(db, tc.batchIndex)
-
-		if got == nil {
-			t.Fatalf("Expected non-nil value for batch index %d", tc.batchIndex)
-		}
+		got, err := ReadCommittedBatchMeta(db, tc.batchIndex)
+		require.NoError(t, err)
+		require.NotNil(t, got)
 
 		if !compareCommittedBatchMeta(tc.meta, got) {
 			t.Fatalf("CommittedBatchMeta mismatch for batch index %d, expected %+v, got %+v", tc.batchIndex, tc.meta, got)
@@ -194,7 +207,9 @@ func TestWriteReadDeleteCommittedBatchMeta(t *testing.T) {
 	}
 
 	// reading a non-existing value
-	if got := ReadCommittedBatchMeta(db, 256); got != nil {
+	got, err := ReadCommittedBatchMeta(db, 256)
+	require.NoError(t, err)
+	if got != nil {
 		t.Fatalf("Expected nil for non-existing value, got %+v", got)
 	}
 
@@ -202,10 +217,9 @@ func TestWriteReadDeleteCommittedBatchMeta(t *testing.T) {
 	for _, tc := range testCases {
 		DeleteCommittedBatchMeta(db, tc.batchIndex)
 
-		readChunkRange := ReadCommittedBatchMeta(db, tc.batchIndex)
-		if readChunkRange != nil {
-			t.Fatal("Committed batch metadata was not deleted", "batch index", tc.batchIndex)
-		}
+		readChunkRange, err := ReadCommittedBatchMeta(db, tc.batchIndex)
+		require.NoError(t, err)
+		require.Nil(t, readChunkRange, "Committed batch metadata was not deleted", "batch index", tc.batchIndex)
 	}
 
 	// delete non-existing value: ensure the delete operation handles non-existing values without errors.
@@ -217,19 +231,19 @@ func TestOverwriteCommittedBatchMeta(t *testing.T) {
 
 	batchIndex := uint64(42)
 	initialMeta := &CommittedBatchMeta{
-		Version:             1,
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x1234")},
-		ChunkBlockRanges:    []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}},
+		Version:          1,
+		ChunkBlockRanges: []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}},
 	}
 	newMeta := &CommittedBatchMeta{
-		Version:             2,
-		BlobVersionedHashes: []common.Hash{common.HexToHash("0x5678"), common.HexToHash("0x9abc")},
-		ChunkBlockRanges:    []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 20}, {StartBlockNumber: 21, EndBlockNumber: 30}},
+		Version:                255,
+		ChunkBlockRanges:       []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 20}, {StartBlockNumber: 21, EndBlockNumber: 30}},
+		LastL1MessageQueueHash: common.Hash{255},
 	}
 
 	// write initial meta
 	WriteCommittedBatchMeta(db, batchIndex, initialMeta)
-	got := ReadCommittedBatchMeta(db, batchIndex)
+	got, err := ReadCommittedBatchMeta(db, batchIndex)
+	require.NoError(t, err)
 
 	if !compareCommittedBatchMeta(initialMeta, got) {
 		t.Fatalf("Initial write failed, expected %+v, got %+v", initialMeta, got)
@@ -237,7 +251,8 @@ func TestOverwriteCommittedBatchMeta(t *testing.T) {
 
 	// overwrite with new meta
 	WriteCommittedBatchMeta(db, batchIndex, newMeta)
-	got = ReadCommittedBatchMeta(db, batchIndex)
+	got, err = ReadCommittedBatchMeta(db, batchIndex)
+	require.NoError(t, err)
 
 	if !compareCommittedBatchMeta(newMeta, got) {
 		t.Fatalf("Overwrite failed, expected %+v, got %+v", newMeta, got)
@@ -245,7 +260,8 @@ func TestOverwriteCommittedBatchMeta(t *testing.T) {
 
 	// read non-existing batch index
 	nonExistingIndex := uint64(999)
-	got = ReadCommittedBatchMeta(db, nonExistingIndex)
+	got, err = ReadCommittedBatchMeta(db, nonExistingIndex)
+	require.NoError(t, err)
 
 	if got != nil {
 		t.Fatalf("Expected nil for non-existing batch index, got %+v", got)
@@ -256,14 +272,7 @@ func compareCommittedBatchMeta(a, b *CommittedBatchMeta) bool {
 	if a.Version != b.Version {
 		return false
 	}
-	if len(a.BlobVersionedHashes) != len(b.BlobVersionedHashes) {
-		return false
-	}
-	for i := range a.BlobVersionedHashes {
-		if a.BlobVersionedHashes[i] != b.BlobVersionedHashes[i] {
-			return false
-		}
-	}
+
 	if len(a.ChunkBlockRanges) != len(b.ChunkBlockRanges) {
 		return false
 	}
@@ -272,5 +281,6 @@ func compareCommittedBatchMeta(a, b *CommittedBatchMeta) bool {
 			return false
 		}
 	}
-	return true
+
+	return a.LastL1MessageQueueHash == b.LastL1MessageQueueHash
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/scroll-tech/da-codec/encoding"
 
+	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/ethdb"
@@ -145,6 +146,13 @@ func (s *RollupSyncService) Start() {
 			case <-syncTicker.C:
 				err := s.fetchRollupEvents()
 				if err != nil {
+					// Do not log the error if the context is canceled.
+					select {
+					case <-s.ctx.Done():
+						return
+					default:
+					}
+
 					log.Error("failed to fetch rollup events", "err", err)
 				}
 			case <-logTicker.C:
@@ -265,14 +273,24 @@ func (s *RollupSyncService) updateRollupEvents(daEntries da.Entries) error {
 			var highestFinalizedBlockNumber uint64
 			batchWriter := s.db.NewBatch()
 			for index := startBatchIndex; index <= batchIndex; index++ {
-				committedBatchMeta := rawdb.ReadCommittedBatchMeta(s.db, index)
+				var parentCommittedBatchMeta *rawdb.CommittedBatchMeta
+				var err error
+				if index > 0 {
+					if parentCommittedBatchMeta, err = rawdb.ReadCommittedBatchMeta(s.db, index-1); err != nil {
+						return fmt.Errorf("failed to read parent committed batch meta, batch index: %v, err: %w", index-1, err)
+					}
+				}
+				committedBatchMeta, err := rawdb.ReadCommittedBatchMeta(s.db, index)
+				if err != nil {
+					return fmt.Errorf("failed to read committed batch meta, batch index: %v, err: %w", index, err)
+				}
 
 				chunks, err := s.getLocalChunksForBatch(committedBatchMeta.ChunkBlockRanges)
 				if err != nil {
 					return fmt.Errorf("failed to get local node info, batch index: %v, err: %w", index, err)
 				}
 
-				endBlock, finalizedBatchMeta, err := validateBatch(index, event, parentFinalizedBatchMeta, committedBatchMeta, chunks, s.stack)
+				endBlock, finalizedBatchMeta, err := validateBatch(index, event, parentFinalizedBatchMeta, parentCommittedBatchMeta, committedBatchMeta, chunks, s.stack)
 				if err != nil {
 					return fmt.Errorf("fatal: validateBatch failed: finalize event: %v, err: %w", event, err)
 				}
@@ -357,9 +375,9 @@ func (s *RollupSyncService) getLocalChunksForBatch(chunkBlockRanges []*rawdb.Chu
 func (s *RollupSyncService) getCommittedBatchMeta(commitedBatch da.EntryWithBlocks) (*rawdb.CommittedBatchMeta, error) {
 	if commitedBatch.BatchIndex() == 0 {
 		return &rawdb.CommittedBatchMeta{
-			Version:             0,
-			BlobVersionedHashes: nil,
-			ChunkBlockRanges:    []*rawdb.ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 0}},
+			Version:                0,
+			ChunkBlockRanges:       []*rawdb.ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 0}},
+			LastL1MessageQueueHash: common.Hash{},
 		}, nil
 	}
 
@@ -368,10 +386,49 @@ func (s *RollupSyncService) getCommittedBatchMeta(commitedBatch da.EntryWithBloc
 		return nil, fmt.Errorf("failed to decode block ranges from chunks, batch index: %v, err: %w", commitedBatch.BatchIndex(), err)
 	}
 
+	// With CodecV7 the batch creation changed. We need to compute and store LastL1MessageQueueHash.
+	// InitialL1MessageQueueHash of a batch == LastL1MessageQueueHash of the previous batch.
+	// We need to do this for every committed batch (instead of finalized batch) because the L1MessageQueueHash
+	// is a continuous hash of all L1 messages over all batches. With bundles we only receive the finalize event
+	// for the last batch of the bundle.
+	var lastL1MessageQueueHash common.Hash
+	if commitedBatch.Version() == encoding.CodecV7 {
+		parentCommittedBatchMeta, err := rawdb.ReadCommittedBatchMeta(s.db, commitedBatch.BatchIndex()-1)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read parent committed batch meta, batch index: %v, err: %w", commitedBatch.BatchIndex()-1, err)
+		}
+
+		// If parent batch has a lower version this means this is the first batch of CodecV7.
+		// In this case we need to compute the InitialL1MessageQueueHash from the empty hash.
+		var initialL1MessageQueueHash common.Hash
+		if encoding.CodecVersion(parentCommittedBatchMeta.Version) < commitedBatch.Version() {
+			initialL1MessageQueueHash = common.Hash{}
+		} else {
+			initialL1MessageQueueHash = parentCommittedBatchMeta.LastL1MessageQueueHash
+		}
+
+		chunks, err := s.getLocalChunksForBatch(chunkRanges)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get local node info, batch index: %v, err: %w", commitedBatch.BatchIndex(), err)
+		}
+
+		// There is no chunks encoded in a batch anymore with CodecV7.
+		// For compatibility reason here we still use a single chunk to store the block ranges of the batch.
+		// We make sure that there is really only one chunk which contains all blocks of the batch.
+		if len(chunks) != 1 {
+			return nil, fmt.Errorf("invalid argument: chunk count is not 1 for CodecV7, batch index: %v", commitedBatch.BatchIndex())
+		}
+
+		lastL1MessageQueueHash, err = encoding.MessageQueueV2ApplyL1MessagesFromBlocks(initialL1MessageQueueHash, chunks[0].Blocks)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply L1 messages from blocks, batch index: %v, err: %w", chunks[0], err)
+		}
+	}
+
 	return &rawdb.CommittedBatchMeta{
-		Version:             uint8(commitedBatch.Version()),
-		ChunkBlockRanges:    chunkRanges,
-		BlobVersionedHashes: commitedBatch.BlobVersionedHashes(),
+		Version:                uint8(commitedBatch.Version()),
+		ChunkBlockRanges:       chunkRanges,
+		LastL1MessageQueueHash: lastL1MessageQueueHash,
 	}, nil
 }
 
@@ -398,7 +455,7 @@ func (s *RollupSyncService) getCommittedBatchMeta(commitedBatch da.EntryWithBloc
 // Note: This function is compatible with both "finalize by batch" and "finalize by bundle" methods.
 // In "finalize by bundle", only the last batch of each bundle is fully verified.
 // This check still ensures the correctness of all batch hashes in the bundle due to the parent-child relationship between batch hashes.
-func validateBatch(batchIndex uint64, event *l1.FinalizeBatchEvent, parentFinalizedBatchMeta *rawdb.FinalizedBatchMeta, committedBatchMeta *rawdb.CommittedBatchMeta, chunks []*encoding.Chunk, stack *node.Node) (uint64, *rawdb.FinalizedBatchMeta, error) {
+func validateBatch(batchIndex uint64, event *l1.FinalizeBatchEvent, parentFinalizedBatchMeta *rawdb.FinalizedBatchMeta, parentCommittedBatchMeta *rawdb.CommittedBatchMeta, committedBatchMeta *rawdb.CommittedBatchMeta, chunks []*encoding.Chunk, stack *node.Node) (uint64, *rawdb.FinalizedBatchMeta, error) {
 	if len(chunks) == 0 {
 		return 0, nil, fmt.Errorf("invalid argument: length of chunks is 0, batch index: %v", batchIndex)
 	}
@@ -416,11 +473,30 @@ func validateBatch(batchIndex uint64, event *l1.FinalizeBatchEvent, parentFinali
 	endBlock := endChunk.Blocks[len(endChunk.Blocks)-1]
 
 	// Note: All params of batch are calculated locally based on the block data.
-	batch := &encoding.Batch{
-		Index:                      batchIndex,
-		TotalL1MessagePoppedBefore: parentFinalizedBatchMeta.TotalL1MessagePopped,
-		ParentBatchHash:            parentFinalizedBatchMeta.BatchHash,
-		Chunks:                     chunks,
+	var batch *encoding.Batch
+	if encoding.CodecVersion(committedBatchMeta.Version) < encoding.CodecV7 {
+		batch = &encoding.Batch{
+			Index:                      batchIndex,
+			TotalL1MessagePoppedBefore: parentFinalizedBatchMeta.TotalL1MessagePopped,
+			ParentBatchHash:            parentFinalizedBatchMeta.BatchHash,
+			Chunks:                     chunks,
+		}
+	} else {
+		// With CodecV7 the batch creation changed. There is no chunks encoded in a batch anymore.
+		// For compatibility reason here we still use a single chunk to store the block ranges of the batch.
+		// We make sure that there is really only one chunk which contains all blocks of the batch.
+		if len(chunks) != 1 {
+			return 0, nil, fmt.Errorf("invalid argument: chunk count is not 1 for CodecV7, batch index: %v", batchIndex)
+		}
+
+		batch = &encoding.Batch{
+			Index:                     batchIndex,
+			ParentBatchHash:           parentFinalizedBatchMeta.BatchHash,
+			InitialL1MessageIndex:     parentFinalizedBatchMeta.TotalL1MessagePopped,
+			Blocks:                    startChunk.Blocks,
+			InitialL1MessageQueueHash: parentCommittedBatchMeta.LastL1MessageQueueHash,
+			LastL1MessageQueueHash:    committedBatchMeta.LastL1MessageQueueHash,
+		}
 	}
 
 	codecVersion := encoding.CodecVersion(committedBatchMeta.Version)
@@ -431,7 +507,7 @@ func validateBatch(batchIndex uint64, event *l1.FinalizeBatchEvent, parentFinali
 
 	daBatch, err := codec.NewDABatch(batch)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to create DA batch, batch index: %v, codec version: %v, expected blob hashes: %v, err: %w", batchIndex, codecVersion, committedBatchMeta.BlobVersionedHashes, err)
+		return 0, nil, fmt.Errorf("failed to create DA batch, batch index: %v, codec version: %v, err: %w", batchIndex, codecVersion, err)
 	}
 	localBatchHash := daBatch.Hash()
 
