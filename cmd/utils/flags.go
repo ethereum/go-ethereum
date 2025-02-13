@@ -334,11 +334,6 @@ var (
 	}
 
 	// Miner settings
-	MiningEnabledFlag = &cli.BoolFlag{
-		Name:     "mine",
-		Usage:    "Enable mining",
-		Category: flags.MinerCategory,
-	}
 	MinerThreadsFlag = &cli.IntFlag{
 		Name:     "miner-threads",
 		Aliases:  []string{"minerthreads"},
