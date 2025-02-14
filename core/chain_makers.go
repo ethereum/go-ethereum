@@ -510,7 +510,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			reqHash := types.CalcRequestsHash(requests)
 			b.header.RequestsHash = &reqHash
 		}
-		
+
 		body := &types.Body{
 			Transactions: b.txs,
 			Uncles:       b.uncles,
