@@ -687,10 +687,12 @@ type ScrollConfig struct {
 
 // L1Config contains the l1 parameters needed to sync l1 contract events (e.g., l1 messages, commit/revert/finalize batches) in the sequencer
 type L1Config struct {
-	L1ChainId             uint64         `json:"l1ChainId,string,omitempty"`
-	L1MessageQueueAddress common.Address `json:"l1MessageQueueAddress,omitempty"`
-	NumL1MessagesPerBlock uint64         `json:"numL1MessagesPerBlock,string,omitempty"`
-	ScrollChainAddress    common.Address `json:"scrollChainAddress,omitempty"`
+	L1ChainId                       uint64         `json:"l1ChainId,string,omitempty"`
+	L1MessageQueueAddress           common.Address `json:"l1MessageQueueAddress,omitempty"`
+	L1MessageQueueV2Address         common.Address `json:"l1MessageQueueV2Address,omitempty"`         // TODO: set address once known
+	L1MessageQueueV2DeploymentBlock uint64         `json:"l1MessageQueueV2DeploymentBlock,omitempty"` // TODO: set block number once known
+	NumL1MessagesPerBlock           uint64         `json:"numL1MessagesPerBlock,string,omitempty"`
+	ScrollChainAddress              common.Address `json:"scrollChainAddress,omitempty"`
 }
 
 func (c *L1Config) String() string {

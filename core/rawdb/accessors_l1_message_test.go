@@ -4,6 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 )
@@ -72,7 +74,7 @@ func TestIterateL1Message(t *testing.T) {
 		t.Fatal("max index mismatch", "expected", 1000, "got", max)
 	}
 
-	it := IterateL1MessagesFrom(db, 103)
+	it := iterateL1MessagesFrom(db, 103)
 	defer it.Release()
 
 	for ii := 2; ii < len(msgs); ii++ {
@@ -104,7 +106,7 @@ func TestReadL1MessageTxRange(t *testing.T) {
 	db := NewMemoryDatabase()
 	WriteL1Messages(db, msgs)
 
-	got := ReadL1MessagesFrom(db, 101, 3)
+	got := ReadL1MessagesV1From(db, 101, 3)
 
 	if len(got) != 3 {
 		t.Fatal("Invalid length", "expected", 3, "got", len(got))
@@ -151,9 +153,83 @@ func TestIterationStopsAtMaxQueueIndex(t *testing.T) {
 	WriteHighestSyncedQueueIndex(db, 102)
 
 	// iteration should terminate at 102 and not read 103
-	got := ReadL1MessagesFrom(db, 100, 10)
+	got := ReadL1MessagesV1From(db, 100, 10)
 
 	if len(got) != 3 {
 		t.Fatal("Invalid length", "expected", 3, "got", len(got))
+	}
+}
+
+func TestIterateL1MessagesV1From(t *testing.T) {
+	msgs := []types.L1MessageTx{
+		newL1MessageTx(100),
+		newL1MessageTx(101),
+		newL1MessageTx(102),
+		newL1MessageTx(103),
+		newL1MessageTx(104),
+	}
+
+	db := NewMemoryDatabase()
+	WriteL1Messages(db, msgs)
+	WriteL1MessageV2StartIndex(db, 103)
+
+	it := IterateL1MessagesV1From(db, 100)
+	defer it.Release()
+
+	for _, msg := range msgs {
+		if msg.QueueIndex < 103 {
+			require.True(t, it.Next(), "Iterator terminated early")
+			require.Equal(t, msg.QueueIndex, it.L1Message().QueueIndex, "Invalid result")
+		} else {
+			require.Falsef(t, it.Next(), "Iterator did not terminate, queueIndex %d", msg.QueueIndex)
+		}
+	}
+
+	finished := !it.Next()
+	if !finished {
+		t.Fatal("Iterator did not terminate")
+	}
+}
+
+func TestIterateL1MessagesV2From(t *testing.T) {
+	msgs := []types.L1MessageTx{
+		newL1MessageTx(100),
+		newL1MessageTx(101),
+		newL1MessageTx(102),
+		newL1MessageTx(103),
+		newL1MessageTx(104),
+	}
+
+	db := NewMemoryDatabase()
+	WriteL1Messages(db, msgs)
+
+	// no L1MessageV2 in the database
+	{
+		it := IterateL1MessagesV2From(db, 100)
+		require.Falsef(t, it.Next(), "Iterator did not terminate")
+		it.Release()
+	}
+
+	WriteL1MessageV2StartIndex(db, 103)
+	// L1MessageV2 in the database starting from 103 -> no iteration
+	{
+		it := IterateL1MessagesV2From(db, 100)
+		require.Falsef(t, it.Next(), "Iterator did not terminate")
+		it.Release()
+	}
+
+	it := IterateL1MessagesV2From(db, 103)
+	defer it.Release()
+
+	for _, msg := range msgs {
+		if msg.QueueIndex >= 103 {
+			require.True(t, it.Next(), "Iterator terminated early")
+			require.Equal(t, msg.QueueIndex, it.L1Message().QueueIndex, "Invalid result")
+		}
+	}
+
+	finished := !it.Next()
+	if !finished {
+		t.Fatal("Iterator did not terminate")
 	}
 }

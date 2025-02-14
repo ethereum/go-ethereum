@@ -141,9 +141,9 @@ type L1MessageIterator struct {
 	maxQueueIndex uint64
 }
 
-// IterateL1MessagesFrom creates an L1MessageIterator that iterates over
+// iterateL1MessagesFrom creates an L1MessageIterator that iterates over
 // all L1 message in the database starting at the provided enqueue index.
-func IterateL1MessagesFrom(db ethdb.Database, fromQueueIndex uint64) L1MessageIterator {
+func iterateL1MessagesFrom(db ethdb.Database, fromQueueIndex uint64) L1MessageIterator {
 	start := encodeBigEndian(fromQueueIndex)
 	it := db.NewIterator(l1MessagePrefix, start)
 	keyLength := len(l1MessagePrefix) + 8
@@ -208,10 +208,72 @@ func (it *L1MessageIterator) Error() error {
 	return it.inner.Error()
 }
 
-// ReadL1MessagesFrom retrieves up to `maxCount` L1 messages starting at `startIndex`.
-func ReadL1MessagesFrom(db ethdb.Database, startIndex, maxCount uint64) []types.L1MessageTx {
+// L1MessageV1Iterator is a wrapper around L1MessageIterator that allows us to iterate over L1 messages V1.
+type L1MessageV1Iterator struct {
+	db           ethdb.Database
+	v2StartIndex *uint64
+	L1MessageIterator
+}
+
+// IterateL1MessagesV1From yields a L1MessageV1Iterator with following behavior:
+// - If fromQueueIndex >= L1MessageV2StartIndex: yield 0 messages.
+// - Otherwise, simply yield all messages (guaranteed to be V1) starting from `fromQueueIndex` until `L1MessageV2StartIndex`.
+func IterateL1MessagesV1From(db ethdb.Database, fromQueueIndex uint64) L1MessageV1Iterator {
+	return L1MessageV1Iterator{
+		db:                db,
+		v2StartIndex:      ReadL1MessageV2StartIndex(db),
+		L1MessageIterator: iterateL1MessagesFrom(db, fromQueueIndex),
+	}
+}
+
+func (it *L1MessageV1Iterator) Next() bool {
+	for it.L1MessageIterator.Next() {
+		// L1MessageV2StartIndex is the first queue index of L1 messages that are from L1MessageQueueV2.
+		// Therefore, we stop reading L1 messages V1 when we reach this index.
+		// We need to check in every iteration if not yet set as the start index can be set in the meantime when we are reading L1 messages.
+		if it.v2StartIndex == nil {
+			it.v2StartIndex = ReadL1MessageV2StartIndex(it.db)
+		}
+
+		if it.v2StartIndex != nil && it.QueueIndex() >= *it.v2StartIndex {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
+// L1MessageV2Iterator is a wrapper around L1MessageIterator that allows us to iterate over L1 messages V2.
+type L1MessageV2Iterator struct {
+	v2StartIndex *uint64
+	L1MessageIterator
+}
+
+// IterateL1MessagesV2From yields a L1MessageV2Iterator with following behavior:
+// - If fromQueueIndex < v2StartIndex: yield 0 messages.
+// - Otherwise, simply yield all messages (guaranteed to be v2) starting from `fromQueueIndex`.
+func IterateL1MessagesV2From(db ethdb.Database, fromQueueIndex uint64) L1MessageV2Iterator {
+	v2StartIndex := ReadL1MessageV2StartIndex(db)
+
+	return L1MessageV2Iterator{
+		v2StartIndex:      v2StartIndex,
+		L1MessageIterator: iterateL1MessagesFrom(db, fromQueueIndex),
+	}
+}
+
+func (it *L1MessageV2Iterator) Next() bool {
+	if it.v2StartIndex == nil {
+		return false
+	}
+
+	return it.L1MessageIterator.Next() && it.QueueIndex() >= *it.v2StartIndex
+}
+
+// ReadL1MessagesV1From retrieves up to `maxCount` L1 messages V1 starting at `startIndex`.
+// If startIndex is >= L1MessageV2StartIndex, this function returns an empty slice.
+func ReadL1MessagesV1From(db ethdb.Database, startIndex, maxCount uint64) []types.L1MessageTx {
 	msgs := make([]types.L1MessageTx, 0, maxCount)
-	it := IterateL1MessagesFrom(db, startIndex)
+	it := IterateL1MessagesV1From(db, startIndex)
 	defer it.Release()
 
 	index := startIndex
@@ -223,7 +285,50 @@ func ReadL1MessagesFrom(db ethdb.Database, startIndex, maxCount uint64) []types.
 		// sanity check
 		if msg.QueueIndex != index {
 			log.Crit(
-				"Unexpected QueueIndex in ReadL1MessagesFrom",
+				"Unexpected QueueIndex in ReadL1MessagesV1From",
+				"expected", index,
+				"got", msg.QueueIndex,
+				"startIndex", startIndex,
+				"maxCount", maxCount,
+			)
+		}
+
+		msgs = append(msgs, msg)
+		index += 1
+		count -= 1
+
+		iteratorL1MessageSizeGauge.Update(int64(unsafe.Sizeof(msg) + uintptr(cap(msg.Data))))
+
+		if msg.QueueIndex == it.maxQueueIndex {
+			break
+		}
+	}
+
+	if err := it.Error(); err != nil {
+		log.Crit("Failed to read L1 messages", "err", err)
+	}
+
+	return msgs
+}
+
+// ReadL1MessagesV2From retrieves up to `maxCount` L1 messages V2 starting at `startIndex`.
+// If startIndex is smaller than L1MessageV2StartIndex, this function returns an empty slice.
+func ReadL1MessagesV2From(db ethdb.Database, startIndex, maxCount uint64) []types.L1MessageTx {
+	msgs := make([]types.L1MessageTx, 0, maxCount)
+
+	it := IterateL1MessagesV2From(db, startIndex)
+	defer it.Release()
+
+	index := startIndex
+	count := maxCount
+
+	for count > 0 && it.Next() {
+		msg := it.L1Message()
+
+		// sanity check
+		if msg.QueueIndex != index {
+			log.Crit(
+				"Unexpected QueueIndex in ReadL1MessagesV2From",
 				"expected", index,
 				"got", msg.QueueIndex,
 				"startIndex", startIndex,
@@ -274,4 +379,66 @@ func ReadFirstQueueIndexNotInL2Block(db ethdb.Reader, l2BlockHash common.Hash) *
 	}
 	queueIndex := binary.BigEndian.Uint64(data)
 	return &queueIndex
+}
+
+// WriteL1MessageV2StartIndex writes the start index of L1 messages that are from L1MessageQueueV2.
+func WriteL1MessageV2StartIndex(db ethdb.KeyValueWriter, queueIndex uint64) {
+	value := big.NewInt(0).SetUint64(queueIndex).Bytes()
+
+	if err := db.Put(l1MessageV2StartIndexKey, value); err != nil {
+		log.Crit("Failed to update L1MessageV2 start index", "err", err)
+	}
+}
+
+// ReadL1MessageV2StartIndex retrieves the start index of L1 messages that are from L1MessageQueueV2.
+func ReadL1MessageV2StartIndex(db ethdb.Reader) *uint64 {
+	data, err := db.Get(l1MessageV2StartIndexKey)
+	if err != nil && isNotFoundErr(err) {
+		return nil
+	}
+	if err != nil {
+		log.Crit("Failed to read L1MessageV2 start index from database", "err", err)
+	}
+	if len(data) == 0 {
+		return nil
+	}
+
+	number := new(big.Int).SetBytes(data)
+	if !number.IsUint64() {
+		log.Crit("Unexpected number for L1MessageV2 start index", "number", number)
+	}
+
+	res := number.Uint64()
+	return &res
+}
+
+// WriteL1MessageV2FirstL1BlockNumber writes the first synced L1 block number for L1MessageV2.
+func WriteL1MessageV2FirstL1BlockNumber(db ethdb.KeyValueWriter, l1BlockNumber uint64) {
+	value := big.NewInt(0).SetUint64(l1BlockNumber).Bytes()
+
+	if err := db.Put(l1MessageV2FirstL1BlockNumberKey, value); err != nil {
+		log.Crit("Failed to update L1MessageV2 start index", "err", err)
+	}
+}
+
+// ReadL1MessageV2FirstL1BlockNumber retrieves the first synced L1 block number for L1MessageV2.
+func ReadL1MessageV2FirstL1BlockNumber(db ethdb.Reader) *uint64 {
+	data, err := db.Get(l1MessageV2FirstL1BlockNumberKey)
+	if err != nil && isNotFoundErr(err) {
+		return nil
+	}
+	if err != nil {
+		log.Crit("Failed to read L1MessageV2 first L1 block number from database", "err", err)
+	}
+	if len(data) == 0 {
+		return nil
+	}
+
+	number := new(big.Int).SetBytes(data)
+	if !number.IsUint64() {
+		log.Crit("Unexpected number for L1MessageV2 first L1 block number", "number", number)
+	}
+
+	res := number.Uint64()
+	return &res
 }

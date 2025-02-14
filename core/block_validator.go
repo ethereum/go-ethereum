@@ -139,8 +139,52 @@ func (v *BlockValidator) ValidateL1Messages(block *types.Block) error {
 	queueIndex := *nextQueueIndex
 
 	L1SectionOver := false
-	it := rawdb.IterateL1MessagesFrom(v.bc.db, queueIndex)
 
+	// From EuclidV2 onwards there can't be any skipped L1 messages, and we use a different L1MessageQueueV2.
+	if v.config.IsEuclidV2(block.Time()) {
+		it := rawdb.IterateL1MessagesV2From(v.bc.db, queueIndex)
+		for _, tx := range block.Transactions() {
+			if !tx.IsL1MessageTx() {
+				L1SectionOver = true
+				continue // we do not verify L2 transactions here
+			}
+
+			// check that L1 messages are before L2 transactions
+			if L1SectionOver {
+				return consensus.ErrInvalidL1MessageOrder
+			}
+
+			// queue index must be equal to the expected value
+			txQueueIndex := tx.AsL1MessageTx().QueueIndex
+			if txQueueIndex != queueIndex {
+				return consensus.ErrInvalidL1MessageOrder
+			}
+
+			if exists := it.Next(); !exists {
+				if err := it.Error(); err != nil {
+					log.Error("Unexpected DB error in ValidateL1Messages", "err", err, "queueIndex", txQueueIndex)
+				}
+				// the message in this block is not available in our local db.
+				// we'll reprocess this block at a later time.
+				return consensus.ErrMissingL1MessageData
+			}
+
+			// check that the L1 message in the block is the same that we collected from L1
+			msg := it.L1Message()
+			expectedHash := types.NewTx(&msg).Hash()
+
+			if tx.Hash() != expectedHash {
+				return consensus.ErrUnknownL1Message
+			}
+
+			// we expect L1 messages to be in order and contiguous
+			queueIndex++
+		}
+
+		return nil
+	}
+
+	it := rawdb.IterateL1MessagesV1From(v.bc.db, queueIndex)
 	for _, tx := range block.Transactions() {
 		if !tx.IsL1MessageTx() {
 			L1SectionOver = true

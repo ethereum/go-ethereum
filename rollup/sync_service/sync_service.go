@@ -65,7 +65,7 @@ func NewSyncService(ctx context.Context, genesisConfig *params.ChainConfig, node
 		return nil, fmt.Errorf("missing L1 config in genesis")
 	}
 
-	client, err := newBridgeClient(ctx, l1Client, genesisConfig.Scroll.L1Config.L1ChainId, nodeConfig.L1Confirmations, genesisConfig.Scroll.L1Config.L1MessageQueueAddress)
+	client, err := newBridgeClient(ctx, l1Client, genesisConfig.Scroll.L1Config.L1ChainId, nodeConfig.L1Confirmations, genesisConfig.Scroll.L1Config.L1MessageQueueAddress, !nodeConfig.L1DisableMessageQueueV2, genesisConfig.Scroll.L1Config.L1MessageQueueV2Address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize bridge client: %w", err)
 	}
@@ -76,6 +76,24 @@ func NewSyncService(ctx context.Context, genesisConfig *params.ChainConfig, node
 	if block != nil {
 		// restart from latest synced block number
 		latestProcessedBlock = *block
+	}
+
+	// reset synced height so that previous V2 messages are re-fetched in case a node upgraded after V2 deployment.
+	// otherwise there's no way for the node to know if it missed any messages of the V2 queue (as it was not querying it before)
+	// but continued to query the V1 queue (which after V2 deployment does not contain any messages anymore).
+	// this is a one-time operation and will not be repeated on subsequent restarts.
+	if genesisConfig.Scroll.L1Config.L1MessageQueueV2DeploymentBlock > 0 &&
+		genesisConfig.Scroll.L1Config.L1MessageQueueV2DeploymentBlock < latestProcessedBlock { // node synced after V2 deployment
+
+		// this means the node has never synced V2 messages before -> we need to reset the synced height to re-fetch V2 messages.
+		// Resetting the synced height will not cause any inconsistency as V1 messages are only available before V2 deployment block
+		// and V2 messages are only available after V2 deployment block. -> rawdb.ReadHighestSyncedQueueIndex(s.db) and the next expected index
+		// will still be consistent.
+		initialV2L1Block := rawdb.ReadL1MessageV2FirstL1BlockNumber(db)
+		if initialV2L1Block == nil {
+			latestProcessedBlock = genesisConfig.Scroll.L1Config.L1MessageQueueV2DeploymentBlock
+			log.Info("Resetting L1 message sync height to fetch previous V2 messages", "L1 block", latestProcessedBlock)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -175,6 +193,9 @@ func (s *SyncService) fetchMessages() {
 	// keep track of next queue index we're expecting to see
 	queueIndex := rawdb.ReadHighestSyncedQueueIndex(s.db)
 
+	// read start index of very first L1MessageV2 from database
+	l1MessageV2StartIndex := rawdb.ReadL1MessageV2StartIndex(s.db)
+
 	batchWriter := s.db.NewBatch()
 	numBlocksPendingDbWrite := uint64(0)
 	numMessagesPendingDbWrite := 0
@@ -227,7 +248,8 @@ func (s *SyncService) fetchMessages() {
 			to = latestConfirmed
 		}
 
-		msgs, err := s.client.fetchMessagesInRange(s.ctx, from, to)
+		queryL1MessagesV1 := l1MessageV2StartIndex == nil
+		msgsV1, msgsV2, err := s.client.fetchMessagesInRange(s.ctx, from, to, queryL1MessagesV1)
 		if err != nil {
 			// flush pending writes to database
 			if from > 0 {
@@ -236,6 +258,17 @@ func (s *SyncService) fetchMessages() {
 			log.Warn("Failed to fetch L1 messages in range", "fromBlock", from, "toBlock", to, "err", err)
 			return
 		}
+
+		// write start index of very first L1MessageV2 to database. This is true only once.
+		if len(msgsV2) > 0 && l1MessageV2StartIndex == nil {
+			firstL1MessageV2 := msgsV2[0]
+			log.Info("Received first L1Message from MessageQueueV2", "queueIndex", firstL1MessageV2.QueueIndex, "L1 blockNumber", to)
+			l1MessageV2StartIndex = &firstL1MessageV2.QueueIndex
+			rawdb.WriteL1MessageV2StartIndex(batchWriter, firstL1MessageV2.QueueIndex)
+			rawdb.WriteL1MessageV2FirstL1BlockNumber(batchWriter, to)
+		}
+
+		msgs := append(msgsV1, msgsV2...)
 
 		if len(msgs) > 0 {
 			log.Debug("Received new L1 events", "fromBlock", from, "toBlock", to, "count", len(msgs))

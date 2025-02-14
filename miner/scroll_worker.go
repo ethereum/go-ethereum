@@ -436,9 +436,34 @@ func (w *worker) updateSnapshot() {
 	w.snapshotState = w.current.state.Copy()
 }
 
+// collectPendingL1Messages reads pending L1 messages from the database.
+// It returns a list of L1 messages that can be included in the block. Depending on the current
+// block time, it reads L1 messages from either L1MessageQueueV1 or L1MessageQueueV2.
+// It also makes sure that all L1 messages V1 are consumed before we activate EuclidV2 fork by backdating the block's time
+// to the parent block's timestamp.
 func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx {
 	maxCount := w.chainConfig.Scroll.L1Config.NumL1MessagesPerBlock
-	return rawdb.ReadL1MessagesFrom(w.eth.ChainDb(), startIndex, maxCount)
+
+	// If we are on EuclidV2, we need to read L1 messages from L1MessageQueueV2.
+	if w.chainConfig.IsEuclidV2(w.current.header.Time) {
+		parent := w.chain.CurrentHeader()
+
+		// w.current would be the first block in the EuclidV2 fork
+		if !w.chainConfig.IsEuclidV2(parent.Time) {
+			// We need to make sure that all the L1 messages V1 are consumed before we activate EuclidV2 as with EuclidV2
+			// only L1 messages V2 are allowed.
+			l1MessagesV1 := rawdb.ReadL1MessagesV1From(w.eth.ChainDb(), startIndex, maxCount)
+			if len(l1MessagesV1) > 0 {
+				// backdate the block to the parent block's timestamp -> not yet EuclidV2
+				w.current.header.Time = parent.Time
+				return l1MessagesV1
+			}
+		}
+
+		return rawdb.ReadL1MessagesV2From(w.eth.ChainDb(), startIndex, maxCount)
+	}
+
+	return rawdb.ReadL1MessagesV1From(w.eth.ChainDb(), startIndex, maxCount)
 }
 
 // newWork

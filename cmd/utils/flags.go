@@ -854,6 +854,10 @@ var (
 		Name:  "l1.sync.startblock",
 		Usage: "L1 block height to start syncing from. Should be set to the L1 message queue deployment block number.",
 	}
+	L1DisableMessageQueueV2Flag = &cli.BoolFlag{
+		Name:  "l1.disablemqv2",
+		Usage: "Disable L1 message queue v2",
+	}
 
 	// Circuit capacity check settings
 	CircuitCapacityCheckEnabledFlag = cli.BoolFlag{
@@ -1407,6 +1411,9 @@ func setL1(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(L1DeploymentBlockFlag.Name) {
 		cfg.L1DeploymentBlock = ctx.GlobalUint64(L1DeploymentBlockFlag.Name)
+	}
+	if ctx.GlobalIsSet(L1DisableMessageQueueV2Flag.Name) {
+		cfg.L1DisableMessageQueueV2 = ctx.GlobalBool(L1DisableMessageQueueV2Flag.Name)
 	}
 }
 

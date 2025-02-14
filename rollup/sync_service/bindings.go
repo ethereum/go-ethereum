@@ -32,7 +32,7 @@ type L1MessageQueueFilterer struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// NewL1MessageQueueFilterer creates a new log filterer instance of L1MessageQueue, bound to a specific deployed contract.
+// NewL1MessageQueueFilterer creates a new log filtererV1 instance of L1MessageQueue, bound to a specific deployed contract.
 func NewL1MessageQueueFilterer(address common.Address, filterer bind.ContractFilterer) (*L1MessageQueueFilterer, error) {
 	contract, err := bindL1MessageQueue(address, nil, nil, filterer)
 	if err != nil {

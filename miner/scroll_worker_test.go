@@ -17,12 +17,14 @@
 package miner
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/agiledragon/gomonkey/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1236,4 +1238,120 @@ func TestRestartHeadCCC(t *testing.T) {
 	time.Sleep(time.Second)
 	// head should be rechecked by CCC
 	require.NotNil(t, rawdb.ReadBlockRowConsumption(db, headHash))
+}
+
+func newUint64(val uint64) *uint64 { return &val }
+
+// TestEuclidV2MessageQueue tests L1 messages are correctly processed and included in the block during the
+// transition from Euclid to EuclidV2 hard fork.
+// - Before EuclidV2 only L1 messages V1 can be included.
+// - During the hard fork, we need to ensure that blocks are backdated and all L1 messages V1 are included before the hard fork time.
+// - After EuclidV2 only L1 messages V2 can be included.
+func TestEuclidV2HardForkMessageQueue(t *testing.T) {
+	// patch time.Now() to be able to simulate hard fork time
+	patches := gomonkey.NewPatches()
+	defer patches.Reset()
+
+	// EuclidV2 hard fork time, leave a big gap so that we can test before and after the hard fork time
+	euclidV2Time := uint64(10000)
+
+	var timeCount int64
+	patches.ApplyFunc(time.Now, func() time.Time {
+		timeCount++
+		return time.Unix(timeCount, 0)
+	})
+
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	msgs := []types.L1MessageTx{
+		{QueueIndex: 0, Gas: 21016, To: &common.Address{3}, Data: []byte{0x01}, Sender: common.Address{4}},
+		{QueueIndex: 1, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 2, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 3, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 4, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+		{QueueIndex: 5, Gas: 21016, To: &common.Address{1}, Data: []byte{0x01}, Sender: common.Address{2}},
+	}
+	rawdb.WriteL1Messages(db, msgs)
+	rawdb.WriteL1MessageV2StartIndex(db, 4)
+
+	chainConfig = params.AllCliqueProtocolChanges.Clone()
+	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	engine = clique.New(chainConfig.Clique, db)
+
+	chainConfig.Scroll.L1Config = &params.L1Config{
+		NumL1MessagesPerBlock: 1,
+	}
+	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	chainConfig.Scroll.UseZktrie = false
+
+	chainConfig.EuclidTime = newUint64(0)
+	chainConfig.EuclidV2Time = newUint64(euclidV2Time)
+	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	b.genesis.MustCommit(db)
+	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
+		Debug:  true,
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
+	defer chain.Stop()
+
+	// Wait for mined blocks.
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+
+	// Start mining!
+	w.start()
+
+	var block1Time uint64
+	for i := 0; i < 6; i++ {
+		select {
+		case ev := <-sub.Chan():
+			// After we received the first block, we activate EuclidV2
+			if i == 0 {
+				timeCount = int64(euclidV2Time)
+			}
+
+			block := ev.Data.(core.NewMinedBlockEvent).Block
+			fmt.Println("block", block.NumberU64(), block.Time())
+			_, err := chain.InsertChain([]*types.Block{block})
+			require.NoError(t, err, "failed to insert new mined block %d", block.NumberU64())
+			require.Equal(t, 1, len(block.Transactions()))
+
+			queueIndex := block.Transactions()[0].AsL1MessageTx().QueueIndex
+			require.Equal(t, uint64(i), queueIndex)
+
+			switch i {
+			case 0:
+				block1Time = block.Time()
+			case 1, 2, 3:
+				// pre EuclidV2, we should include 1 L1 message V1 per block.
+				// we expect backdated blocks (same time as parent) and all L1 messages V1 to be included before the hard fork time.
+
+				if i == 1 {
+					require.GreaterOrEqual(t, block.Time(), block1Time, "block %d", block.NumberU64())
+					block1Time = block.Time() // due to concurrent mining it might be that block2 is mined before the hard fork time is set
+				}
+				// make sure the block is backdated
+				require.Equal(t, block1Time, block.Time(), "block %d", block.NumberU64())
+				// since the block contains L1 message V1 it needs to be included before the hard fork time
+				require.Less(t, block.Time(), euclidV2Time, "block %d", block.NumberU64())
+			case 4, 5:
+				// after EuclidV2 and when all L1 messages are consumed, we should include 1 L1 message V2 per block
+
+				require.GreaterOrEqual(t, block.Time(), euclidV2Time, "block %d", block.NumberU64())
+			}
+
+			// make sure DB is updated correctly
+			queueIndexNotInDB := rawdb.ReadFirstQueueIndexNotInL2Block(db, block.Hash())
+			require.NotNil(t, queueIndexNotInDB)
+			require.Equal(t, uint64(i+1), *queueIndexNotInDB)
+
+		case <-time.After(3 * time.Second):
+			t.Fatalf("timeout")
+		}
+	}
 }
