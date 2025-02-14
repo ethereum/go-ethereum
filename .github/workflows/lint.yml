@@ -1,8 +1,5 @@
 name: lint
 
-# If adding a new linter: (a) create a new job; and (b) add it to the `needs`
-# list of the `lint` job as this is what gates PRs.
-
 on:
   push:
     branches: [main, "release/**"]
@@ -21,6 +18,8 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # If adding a new linter: (a) create a new job; and (b) add it to the `needs`
+  # list of the `lint` job as this is what gates PRs.
   lint:
     runs-on: ubuntu-latest
     needs: [golangci-lint, yamllint, shellcheck]

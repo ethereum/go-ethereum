@@ -12,6 +12,14 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # If adding a new job, add it to the `needs` list of the `go` job as this is
+  # what gates PRs.
+  go:
+    runs-on: ubuntu-latest
+    needs: [go_test_short, go_test_tooling, go_generate, go_tidy]
+    steps:
+      - run: echo "Dependencies successful"
+
   go_test_short:
     env:
       FLAKY_REGEX: "ava-labs/libevm/(triedb/pathdb|eth|eth/tracers/js|eth/tracers/logger|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$"
@@ -62,7 +70,7 @@ jobs:
       - name: git diff
         run: git diff --exit-code
 
-  go_tidy_matrix:
+  go_tidy:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -78,11 +86,3 @@ jobs:
           go-version-file: "${{ matrix.dir }}/go.mod"
       - run: go mod tidy
       - run: git diff --exit-code
-
-  go_tidy:
-    # Each matrix instance runs as a different name, which doesn't play nicely
-    # with branch-protection rules. We instead require this job.
-    needs: go_tidy_matrix
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Dependencies successful"
