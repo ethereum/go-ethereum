@@ -877,35 +877,49 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 
 // setBootstrapNodes creates a list of bootstrap nodes from the command line
 // flags, reverting to pre-configured ones if none have been specified.
+// Priority order for bootnodes configuration:
+//
+// 1. --bootnodes flag
+// 2. Config file
+// 3. Network preset flags (e.g. --holesky)
+// 4. default to mainnet nodes
 func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
-	urls := []string{}
-	switch {
-	case ctx.IsSet(BootnodesFlag.Name) || ctx.IsSet(BootnodesV4Flag.Name):
-		if ctx.IsSet(BootnodesV4Flag.Name) {
-			urls = strings.Split(ctx.String(BootnodesV4Flag.Name), ",")
-		} else {
-			urls = strings.Split(ctx.String(BootnodesFlag.Name), ",")
+	urls := params.MainnetBootnodes
+	if ctx.IsSet(BootnodesFlag.Name) {
+		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
+	} else if ctx.IsSet(BootnodesV4Flag.Name) {
+		urls = SplitAndTrim(ctx.String(BootnodesV4Flag.Name))
+	} else {
+		if cfg.BootstrapNodes != nil {
+			return // Already set by config file, don't apply defaults.
 		}
-	// case ctx.Bool(TestnetFlag.Name):
-	// 	urls = params.TestnetBootnodes
-	// case ctx.Bool(RinkebyFlag.Name):
-	// 	urls = params.RinkebyBootnodes
-	case cfg.BootstrapNodes != nil:
-		return // already set, don't apply defaults.
-	case !ctx.IsSet(BootnodesFlag.Name):
-		urls = params.MainnetBootnodes
-	case ctx.Bool(XDCTestnetFlag.Name):
-		urls = params.TestnetBootnodes
+		networkID := uint64(0)
+		if ctx.IsSet(NetworkIdFlag.Name) {
+			networkID = ctx.Uint64(NetworkIdFlag.Name)
+		}
+		switch {
+		case ctx.Bool(XDCTestnetFlag.Name) || networkID == params.TestnetChainConfig.ChainId.Uint64():
+			urls = params.TestnetBootnodes
+		case networkID == params.DevnetChainConfig.ChainId.Uint64():
+			urls = params.DevnetBootnodes
+		}
 	}
-	cfg.BootstrapNodes = make([]*discover.Node, 0, len(urls))
+	cfg.BootstrapNodes = mustParseBootnodes(urls)
+}
+
+func mustParseBootnodes(urls []string) []*discover.Node {
+	nodes := make([]*discover.Node, 0, len(urls))
 	for _, url := range urls {
-		node, err := discover.ParseNode(url)
-		if err != nil {
-			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
-			continue
+		if url != "" {
+			node, err := discover.ParseNode(url)
+			if err != nil {
+				log.Crit("Bootstrap URL invalid", "enode", url, "err", err)
+				return nil
+			}
+			nodes = append(nodes, node)
 		}
-		cfg.BootstrapNodes = append(cfg.BootstrapNodes, node)
 	}
+	return nodes
 }
 
 // setBootstrapNodesV5 creates a list of bootstrap nodes from the command line
@@ -913,26 +927,26 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 	urls := params.DiscoveryV5Bootnodes
 	switch {
-	case ctx.IsSet(BootnodesFlag.Name) || ctx.IsSet(BootnodesV5Flag.Name):
-		if ctx.IsSet(BootnodesV5Flag.Name) {
-			urls = strings.Split(ctx.String(BootnodesV5Flag.Name), ",")
-		} else {
-			urls = strings.Split(ctx.String(BootnodesFlag.Name), ",")
-		}
-	case ctx.Bool(RinkebyFlag.Name):
-		urls = params.RinkebyBootnodes
+	case ctx.IsSet(BootnodesFlag.Name):
+		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
+	case ctx.IsSet(BootnodesV5Flag.Name):
+		urls = SplitAndTrim(ctx.String(BootnodesV5Flag.Name))
+	case ctx.Bool(XDCTestnetFlag.Name):
+		urls = params.TestnetBootnodes
 	case cfg.BootstrapNodesV5 != nil:
 		return // already set, don't apply defaults.
 	}
 
 	cfg.BootstrapNodesV5 = make([]*discv5.Node, 0, len(urls))
 	for _, url := range urls {
-		node, err := discv5.ParseNode(url)
-		if err != nil {
-			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
-			continue
+		if url != "" {
+			node, err := discv5.ParseNode(url)
+			if err != nil {
+				log.Error("Bootstrap URL invalid", "enode", url, "err", err)
+				continue
+			}
+			cfg.BootstrapNodesV5 = append(cfg.BootstrapNodesV5, node)
 		}
-		cfg.BootstrapNodesV5 = append(cfg.BootstrapNodesV5, node)
 	}
 }
 
@@ -956,13 +970,12 @@ func setNAT(ctx *cli.Context, cfg *p2p.Config) {
 	}
 }
 
-// splitAndTrim splits input separated by a comma
+// SplitAndTrim splits input separated by a comma
 // and trims excessive white space from the substrings.
-func splitAndTrim(input string) (ret []string) {
+func SplitAndTrim(input string) (ret []string) {
 	l := strings.Split(input, ",")
 	for _, r := range l {
-		r = strings.TrimSpace(r)
-		if len(r) > 0 {
+		if r = strings.TrimSpace(r); r != "" {
 			ret = append(ret, r)
 		}
 	}
@@ -991,9 +1004,9 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(HTTPIdleTimeoutFlag.Name) {
 		cfg.HTTPTimeouts.IdleTimeout = ctx.Duration(HTTPIdleTimeoutFlag.Name)
 	}
-	cfg.HTTPCors = splitAndTrim(ctx.String(HTTPCORSDomainFlag.Name))
-	cfg.HTTPModules = splitAndTrim(ctx.String(HTTPApiFlag.Name))
-	cfg.HTTPVirtualHosts = splitAndTrim(ctx.String(HTTPVirtualHostsFlag.Name))
+	cfg.HTTPCors = SplitAndTrim(ctx.String(HTTPCORSDomainFlag.Name))
+	cfg.HTTPModules = SplitAndTrim(ctx.String(HTTPApiFlag.Name))
+	cfg.HTTPVirtualHosts = SplitAndTrim(ctx.String(HTTPVirtualHostsFlag.Name))
 }
 
 // setWS creates the WebSocket RPC listener interface string from the set
@@ -1009,8 +1022,8 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(WSPortFlag.Name) {
 		cfg.WSPort = ctx.Int(WSPortFlag.Name)
 	}
-	cfg.WSOrigins = splitAndTrim(ctx.String(WSAllowedOriginsFlag.Name))
-	cfg.WSModules = splitAndTrim(ctx.String(WSApiFlag.Name))
+	cfg.WSOrigins = SplitAndTrim(ctx.String(WSAllowedOriginsFlag.Name))
+	cfg.WSModules = SplitAndTrim(ctx.String(WSApiFlag.Name))
 }
 
 // setIPC creates an IPC path configuration from the set command line flags,
