@@ -1,4 +1,7 @@
-name: golangci-lint
+name: lint
+
+# If adding a new linter: (a) create a new job; and (b) add it to the `needs`
+# list of the `lint` job as this is what gates PRs.
 
 on:
   push:
@@ -18,8 +21,13 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  golangci:
-    name: lint
+  lint:
+    runs-on: ubuntu-latest
+    needs: [golangci-lint, yamllint, shellcheck]
+    steps:
+      - run: echo "Dependencies successful"
+
+  golangci-lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,3 +48,18 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.60
+
+  yamllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: yamllint -c .yamllint.yml .
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: './libevm'

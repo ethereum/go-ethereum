@@ -85,4 +85,4 @@ jobs:
     needs: go_tidy_matrix
     runs-on: ubuntu-latest
     steps:
-      - run: echo "I'm a no-op"
+      - run: echo "Dependencies successful"
