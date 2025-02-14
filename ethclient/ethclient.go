@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 // Client defines typed wrappers for the Ethereum RPC API.
@@ -50,10 +51,43 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	return NewClient(c), nil
 }
 
+type Client struct {
+	rpcClient *rpc.Client
+}
+
 // NewClient creates a client that uses the given RPC client.
 func NewClient(c *rpc.Client) *Client {
 	return &Client{c}
 }
+
+// TraceCall: for call operation
+func (c *Client) TraceCall(ctx context.Context, callArgs interface{}) (*tracers.TraceResult, error) {
+	var result tracers.TraceResult
+	err := c.rpcClient.CallContext(ctx, &result, "debug_traceCall", callArgs)
+	return &result, err
+}
+
+// TraceTransaction: fetches a specific transaction
+func (c *Client) TraceTransaction(ctx context.Context, txHash string) (*tracers.TraceResult, error) {
+    var result tracers.TraceResult
+    err := c.rpcClient.CallContext(ctx, &result, "debug_traceTransaction", txHash, nil)
+    return &result, err
+}
+
+// TraceBlock: fetches the trace for a specific block
+func (c *Client) TraceBlock(ctx context.Context, blockHash string) (*tracers.TraceResult, error) {
+    var result tracers.TraceResult
+    err := c.rpcClient.CallContext(ctx, &result, "debug_traceBlock", blockHash)
+    return &result, err
+}
+
+// TraceChain: fetches the trace for a chain
+func (c *Client) TraceChain(ctx context.Context, blockHash string, count int) ([]*tracers.TraceResult, error) {
+    var result []*tracers.TraceResult
+    err := c.rpcClient.CallContext(ctx, &result, "debug_traceChain", blockHash, count)
+    return result, err
+}
+
 
 // Close closes the underlying RPC connection.
 func (ec *Client) Close() {
