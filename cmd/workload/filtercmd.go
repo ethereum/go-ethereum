@@ -53,19 +53,26 @@ var (
 
 func filterTestCmd(ctx *cli.Context) error {
 	f := filterTest{ec: makeEthClient(ctx)}
-	f.getFinalizedBlock()
-	query := f.newQuery()
-	f.query(&query)
-	if len(query.results) > 0 && len(query.results) <= maxFilterResultSize {
-		for {
-			extQuery := f.extendQuery(query)
-			f.query(&extQuery)
-			if len(query.results) <= maxFilterResultSize {
-				break
-			}
-			query = extQuery
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
 		}
-		f.storeQuery(query)
+		f.getFinalizedBlock()
+		query := f.newQuery()
+		f.query(&query)
+		if len(query.results) > 0 && len(query.results) <= maxFilterResultSize {
+			for {
+				extQuery := f.extendQuery(query)
+				f.query(&extQuery)
+				if len(query.results) <= maxFilterResultSize {
+					break
+				}
+				query = extQuery
+			}
+			f.storeQuery(query)
+		}
 	}
 	return nil
 }
@@ -81,6 +88,11 @@ func (f *filterTest) storeQuery(query filterQuery) {
 	} else {
 		f.stored[bucket][rand.Intn(len(f.stored[bucket]))] = query
 	}
+	fmt.Print("stored")
+	for _, list := range f.stored {
+		fmt.Print(" ", len(list))
+	}
+	fmt.Println()
 }
 
 func (f *filterTest) extendQuery(q filterQuery) filterQuery {
