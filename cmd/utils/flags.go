@@ -785,13 +785,6 @@ var (
 		Usage:    "Enable the XDCX protocol",
 		Category: flags.XdcxCategory,
 	}
-	XDCXDataDirFlag = &flags.DirectoryFlag{
-		Name:     "XDCx-datadir",
-		Aliases:  []string{"XDCx.datadir"},
-		Usage:    "Data directory for the XDCX databases",
-		Value:    flags.DirectoryString(filepath.Join(DataDirFlag.Value.String(), "XDCx")),
-		Category: flags.XdcxCategory,
-	}
 	XDCXDBEngineFlag = &cli.StringFlag{
 		Name:     "XDCx-dbengine",
 		Aliases:  []string{"XDCx.dbengine"},
@@ -1375,19 +1368,10 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 
 func SetXDCXConfig(ctx *cli.Context, cfg *XDCx.Config, XDCDataDir string) {
 	if ctx.IsSet(XDCXDataDirFlag.Name) {
-		cfg.DataDir = ctx.String(XDCXDataDirFlag.Name)
-	} else {
-		// default XDCx datadir: DATADIR/XDCx
-		defaultXDCXDataDir := filepath.Join(XDCDataDir, "XDCx")
-
-		filesInXDCXDefaultDir, _ := WalkMatch(defaultXDCXDataDir, "*.ldb")
-		filesInNodeDefaultDir, _ := WalkMatch(node.DefaultDataDir(), "*.ldb")
-		if len(filesInXDCXDefaultDir) == 0 && len(filesInNodeDefaultDir) > 0 {
-			cfg.DataDir = node.DefaultDataDir()
-		} else {
-			cfg.DataDir = defaultXDCXDataDir
-		}
+		log.Warn("The flag XDCx-datadir or XDCx.datadir is deprecated, please remove this flag")
 	}
+	// XDCx datadir: XDCDataDir/XDCx
+	cfg.DataDir = filepath.Join(XDCDataDir, "XDCx")
 	log.Info("XDCX datadir", "path", cfg.DataDir)
 	if ctx.IsSet(XDCXDBEngineFlag.Name) {
 		cfg.DBEngine = ctx.String(XDCXDBEngineFlag.Name)
