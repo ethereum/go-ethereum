@@ -786,7 +786,15 @@ func (c *ChainConfig) String() string {
 	if c.DarwinV2Time != nil {
 		darwinV2Time = fmt.Sprintf("@%v", *c.DarwinV2Time)
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, DarwinV2: %v, Engine: %v, Scroll config: %v}",
+	euclidTime := "<nil>"
+	if c.EuclidTime != nil {
+		euclidTime = fmt.Sprintf("@%v", *c.EuclidTime)
+	}
+	euclidV2Time := "<nil>"
+	if c.EuclidV2Time != nil {
+		euclidV2Time = fmt.Sprintf("@%v", *c.EuclidV2Time)
+	}
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, DarwinV2: %v, Euclid: %v, EuclidV2: %v, Engine: %v, Scroll config: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -808,6 +816,8 @@ func (c *ChainConfig) String() string {
 		c.CurieBlock,
 		darwinTime,
 		darwinV2Time,
+		euclidTime,
+		euclidV2Time,
 		engine,
 		c.Scroll,
 	)
