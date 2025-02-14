@@ -30,7 +30,7 @@ import (
 func emptyLayer() *diskLayer {
 	return &diskLayer{
 		db:     New(rawdb.NewMemoryDatabase(), nil, false),
-		buffer: newBuffer(defaultBufferSize, nil, 0),
+		buffer: newBuffer(defaultBufferSize, nil, nil, 0),
 	}
 }
 
@@ -76,7 +76,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 				nblob = common.CopyBytes(blob)
 			}
 		}
-		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), NewStateSetWithOrigin(nil, nil))
+		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), NewStateSetWithOrigin(nil, nil, nil, nil, false))
 	}
 	var layer layer
 	layer = emptyLayer()
@@ -118,7 +118,7 @@ func BenchmarkPersist(b *testing.B) {
 			)
 			nodes[common.Hash{}][string(path)] = node
 		}
-		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), NewStateSetWithOrigin(nil, nil))
+		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), NewStateSetWithOrigin(nil, nil, nil, nil, false))
 	}
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -156,7 +156,7 @@ func BenchmarkJournal(b *testing.B) {
 			)
 			nodes[common.Hash{}][string(path)] = node
 		}
-		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), new(StateSetWithOrigin))
+		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), NewStateSetWithOrigin(nil, nil, nil, nil, false))
 	}
 	var layer layer
 	layer = emptyLayer()

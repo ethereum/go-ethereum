@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -33,7 +34,7 @@ type diskLayer struct {
 	id     uint64           // Immutable, corresponding state id
 	db     *Database        // Path-based trie database
 	nodes  *fastcache.Cache // GC friendly memory cache of clean nodes
-	buffer *buffer          // Dirty buffer to aggregate writes of nodes
+	buffer *buffer          // Dirty buffer to aggregate writes of nodes and states
 	stale  bool             // Signals that the layer became stale (state progressed)
 	lock   sync.RWMutex     // Lock used to protect stale flag
 }
@@ -140,6 +141,75 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	return blob, h.hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
+// account directly retrieves the account RLP associated with a particular
+// hash in the slim data format.
+//
+// Note the returned account is not a copy, please don't modify it.
+func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.stale {
+		return nil, errSnapshotStale
+	}
+	// Try to retrieve the account from the not-yet-written
+	// node buffer first. Note the buffer is lock free since
+	// it's impossible to mutate the buffer before tagging the
+	// layer as stale.
+	blob, found := dl.buffer.account(hash)
+	if found {
+		dirtyStateHitMeter.Mark(1)
+		dirtyStateReadMeter.Mark(int64(len(blob)))
+		dirtyStateHitDepthHist.Update(int64(depth))
+
+		if len(blob) == 0 {
+			stateAccountInexMeter.Mark(1)
+		} else {
+			stateAccountExistMeter.Mark(1)
+		}
+		return blob, nil
+	}
+	dirtyStateMissMeter.Mark(1)
+
+	// TODO(rjl493456442) support persistent state retrieval
+	return nil, errors.New("not supported")
+}
+
+// storage directly retrieves the storage data associated with a particular hash,
+// within a particular account.
+//
+// Note the returned account is not a copy, please don't modify it.
+func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([]byte, error) {
+	// Hold the lock, ensure the parent won't be changed during the
+	// state accessing.
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.stale {
+		return nil, errSnapshotStale
+	}
+	// Try to retrieve the storage slot from the not-yet-written
+	// node buffer first. Note the buffer is lock free since
+	// it's impossible to mutate the buffer before tagging the
+	// layer as stale.
+	if blob, found := dl.buffer.storage(accountHash, storageHash); found {
+		dirtyStateHitMeter.Mark(1)
+		dirtyStateReadMeter.Mark(int64(len(blob)))
+		dirtyStateHitDepthHist.Update(int64(depth))
+
+		if len(blob) == 0 {
+			stateStorageInexMeter.Mark(1)
+		} else {
+			stateStorageExistMeter.Mark(1)
+		}
+		return blob, nil
+	}
+	dirtyStateMissMeter.Mark(1)
+
+	// TODO(rjl493456442) support persistent state retrieval
+	return nil, errors.New("not supported")
+}
+
 // update implements the layer interface, returning a new diff layer on top
 // with the given state set.
 func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes *nodeSet, states *StateSetWithOrigin) *diffLayer {
@@ -190,14 +260,14 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 	// In a unique scenario where the ID of the oldest history object (after tail
 	// truncation) surpasses the persisted state ID, we take the necessary action
-	// of forcibly committing the cached dirty nodes to ensure that the persisted
+	// of forcibly committing the cached dirty states to ensure that the persisted
 	// state ID remains higher.
 	if !force && rawdb.ReadPersistentStateID(dl.db.diskdb) < oldest {
 		force = true
 	}
-	// Merge the trie nodes of the bottom-most diff layer into the buffer as the
-	// combined layer.
-	combined := dl.buffer.commit(bottom.nodes)
+	// Merge the trie nodes and flat states of the bottom-most diff layer into the
+	// buffer as the combined layer.
+	combined := dl.buffer.commit(bottom.nodes, bottom.states.stateSet)
 	if combined.full() || force {
 		if err := combined.flush(dl.db.diskdb, dl.db.freezer, dl.nodes, bottom.stateID()); err != nil {
 			return nil, err
@@ -228,10 +298,14 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
 	// layer.
-	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.accounts, h.storages)
+	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.meta.version != stateHistoryV0, h.accounts, h.storages)
 	if err != nil {
 		return nil, err
 	}
+	// Derive the state modification set from the history, keyed by the hash
+	// of the account address and the storage key.
+	accounts, storages := h.stateSet()
+
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
@@ -244,7 +318,7 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	// needs to be reverted is not yet flushed and cached in node
 	// buffer, otherwise, manipulate persistent state directly.
 	if !dl.buffer.empty() {
-		err := dl.buffer.revert(dl.db.diskdb, nodes)
+		err := dl.buffer.revertTo(dl.db.diskdb, nodes, accounts, storages)
 		if err != nil {
 			return nil, err
 		}

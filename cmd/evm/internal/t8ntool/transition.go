@@ -82,58 +82,9 @@ type input struct {
 }
 
 func Transition(ctx *cli.Context) error {
-	var getTracer = func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
-		return nil, nil, nil
-	}
-
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
 		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
-	}
-
-	if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
-		// Configure the EVM logger
-		logConfig := &logger.Config{
-			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
-			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
-			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
-			Debug:            true,
-		}
-		getTracer = func(txIndex int, txHash common.Hash, _ *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
-			if err != nil {
-				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-			}
-			var l *tracing.Hooks
-			if ctx.Bool(TraceEnableCallFramesFlag.Name) {
-				l = logger.NewJSONLoggerWithCallFrames(logConfig, traceFile)
-			} else {
-				l = logger.NewJSONLogger(logConfig, traceFile)
-			}
-			tracer := &tracers.Tracer{
-				Hooks: l,
-				// jsonLogger streams out result to file.
-				GetResult: func() (json.RawMessage, error) { return nil, nil },
-				Stop:      func(err error) {},
-			}
-			return tracer, traceFile, nil
-		}
-	} else if ctx.IsSet(TraceTracerFlag.Name) {
-		var config json.RawMessage
-		if ctx.IsSet(TraceTracerConfigFlag.Name) {
-			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
-		}
-		getTracer = func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
-			if err != nil {
-				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
-			}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config, chainConfig)
-			if err != nil {
-				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
-			}
-			return tracer, traceFile, nil
-		}
 	}
 	// We need to load three things: alloc, env and transactions. May be either in
 	// stdin input or in files.
@@ -180,6 +131,7 @@ func Transition(ctx *cli.Context) error {
 		chainConfig = cConf
 		vmConfig.ExtraEips = extraEips
 	}
+
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
@@ -198,8 +150,34 @@ func Transition(ctx *cli.Context) error {
 	if err := applyCancunChecks(&prestate.Env, chainConfig); err != nil {
 		return err
 	}
+
+	// Configure tracer
+	if ctx.IsSet(TraceTracerFlag.Name) { // Custom tracing
+		config := json.RawMessage(ctx.String(TraceTracerConfigFlag.Name))
+		tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name),
+			nil, config, chainConfig)
+		if err != nil {
+			return NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %v", err))
+		}
+		vmConfig.Tracer = newResultWriter(baseDir, tracer)
+	} else if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
+		logConfig := &logger.Config{
+			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
+			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
+			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
+		}
+		if ctx.Bool(TraceEnableCallFramesFlag.Name) {
+			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+				return logger.NewJSONLoggerWithCallFrames(logConfig, out)
+			})
+		} else {
+			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+				return logger.NewJSONLogger(logConfig, out)
+			})
+		}
+	}
 	// Run the test and aggregate the result
-	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name), getTracer)
+	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
 	if err != nil {
 		return err
 	}

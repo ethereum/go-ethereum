@@ -60,9 +60,9 @@ type backend interface {
 	// An error will be returned if the specified state is not available.
 	NodeReader(root common.Hash) (database.NodeReader, error)
 
-	// Initialized returns an indicator if the state data is already initialized
-	// according to the state scheme.
-	Initialized(genesisRoot common.Hash) bool
+	// StateReader returns a reader for accessing flat states within the specified
+	// state. An error will be returned if the specified state is not available.
+	StateReader(root common.Hash) (database.StateReader, error)
 
 	// Size returns the current storage size of the diff layers on top of the
 	// disk layer and the storage size of the nodes cached in the disk layer.
@@ -122,6 +122,13 @@ func (db *Database) NodeReader(blockRoot common.Hash) (database.NodeReader, erro
 	return db.backend.NodeReader(blockRoot)
 }
 
+// StateReader returns a reader that allows access to the state data associated
+// with the specified state. An error will be returned if the specified state is
+// not available.
+func (db *Database) StateReader(blockRoot common.Hash) (database.StateReader, error) {
+	return db.backend.StateReader(blockRoot)
+}
+
 // Update performs a state transition by committing dirty nodes contained in the
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
@@ -165,12 +172,6 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize, common.Stora
 		preimages = db.preimages.size()
 	}
 	return diffs, nodes, preimages
-}
-
-// Initialized returns an indicator if the state data is already initialized
-// according to the state scheme.
-func (db *Database) Initialized(genesisRoot common.Hash) bool {
-	return db.backend.Initialized(genesisRoot)
 }
 
 // Scheme returns the node scheme used in the database.

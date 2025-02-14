@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -131,9 +131,9 @@ func (s *nodeSet) merge(set *nodeSet) {
 	s.updateSize(delta)
 }
 
-// revert merges the provided trie nodes into the set. This should reverse the
+// revertTo merges the provided trie nodes into the set. This should reverse the
 // changes made by the most recent state transition.
-func (s *nodeSet) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node) {
+func (s *nodeSet) revertTo(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node) {
 	var delta int64
 	for owner, subset := range nodes {
 		current, ok := s.nodes[owner]

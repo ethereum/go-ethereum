@@ -105,7 +105,7 @@ type Header struct {
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 
 	// RequestsHash was added by EIP-7685 and is ignored in legacy headers.
-	RequestsHash *common.Hash `json:"requestsRoot" rlp:"optional"`
+	RequestsHash *common.Hash `json:"requestsHash" rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -463,9 +463,11 @@ func CalcRequestsHash(requests [][]byte) common.Hash {
 	h1, h2 := sha256.New(), sha256.New()
 	var buf common.Hash
 	for _, item := range requests {
-		h1.Reset()
-		h1.Write(item)
-		h2.Write(h1.Sum(buf[:0]))
+		if len(item) > 1 { // skip items with only requestType and no data.
+			h1.Reset()
+			h1.Write(item)
+			h2.Write(h1.Sum(buf[:0]))
+		}
 	}
 	h2.Sum(buf[:0])
 	return buf

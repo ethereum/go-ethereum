@@ -351,7 +351,7 @@ func (f *Firehose) OnBlockStart(event tracing.BlockEvent) {
 		Hash:   hash.Bytes(),
 		Number: block.NumberU64(),
 		// FIXME: Avoid calling 'Header()', it makes a copy while accessing event.Block getters directly avoids it
-		Header: newBlockHeaderFromChainHeader(hash, block.Header(), firehoseBigIntFromNative(new(big.Int).Add(event.TD, block.Difficulty()))),
+		Header: newBlockHeaderFromChainHeader(hash, block.Header()),
 		Ver:    4,
 
 		// FIXME: 'block.Size()' is a relatively heavy operation, could we do it async?
@@ -363,7 +363,7 @@ func (f *Firehose) OnBlockStart(event tracing.BlockEvent) {
 	}
 
 	for _, uncle := range block.Uncles() {
-		f.block.Uncles = append(f.block.Uncles, newBlockHeaderFromChainHeader(uncle.Hash(), uncle, nil))
+		f.block.Uncles = append(f.block.Uncles, newBlockHeaderFromChainHeader(uncle.Hash(), uncle))
 	}
 
 	if f.block.Header.BaseFeePerGas != nil {
@@ -1174,7 +1174,7 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 
 	f.ensureBlockChainInit()
 
-	f.OnBlockStart(tracing.BlockEvent{Block: b, TD: big.NewInt(0), Finalized: nil, Safe: nil})
+	f.OnBlockStart(tracing.BlockEvent{Block: b, Finalized: nil, Safe: nil})
 	f.onTxStart(types.NewTx(&types.LegacyTx{}), emptyCommonHash, emptyCommonAddress, emptyCommonAddress)
 	f.OnCallEnter(0, byte(vm.CALL), emptyCommonAddress, emptyCommonAddress, nil, 0, nil)
 
@@ -1675,7 +1675,7 @@ func (f *Firehose) InternalTestingBuffer() *bytes.Buffer {
 }
 
 // FIXME: Create a unit test that is going to fail as soon as any header is added in
-func newBlockHeaderFromChainHeader(hash common.Hash, h *types.Header, td *pbeth.BigInt) *pbeth.BlockHeader {
+func newBlockHeaderFromChainHeader(hash common.Hash, h *types.Header) *pbeth.BlockHeader {
 	var withdrawalsHashBytes []byte
 	if hash := h.WithdrawalsHash; hash != nil {
 		withdrawalsHashBytes = hash.Bytes()
@@ -1702,7 +1702,6 @@ func newBlockHeaderFromChainHeader(hash common.Hash, h *types.Header, td *pbeth.
 		ReceiptRoot:      h.ReceiptHash.Bytes(),
 		LogsBloom:        h.Bloom.Bytes(),
 		Difficulty:       firehoseBigIntFromNative(h.Difficulty),
-		TotalDifficulty:  td,
 		GasLimit:         h.GasLimit,
 		GasUsed:          h.GasUsed,
 		Timestamp:        timestamppb.New(time.Unix(int64(h.Time), 0)),
@@ -1715,6 +1714,9 @@ func newBlockHeaderFromChainHeader(hash common.Hash, h *types.Header, td *pbeth.
 		ExcessBlobGas:    h.ExcessBlobGas,
 		ParentBeaconRoot: parentBeaconRootBytes,
 		RequestsHash:     requestHashBytes,
+
+		// This has been removed from Geth entirely, nothing best to do here than to set to nil (e.g. 0)
+		TotalDifficulty: nil,
 
 		// Only set on Polygon fork(s)
 		TxDependency: nil,

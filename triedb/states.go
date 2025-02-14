@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package triedb
 
@@ -23,17 +23,16 @@ import (
 
 // StateSet represents a collection of mutated states during a state transition.
 type StateSet struct {
-	Destructs      map[common.Hash]struct{}                  // Destructed accounts
 	Accounts       map[common.Hash][]byte                    // Mutated accounts in 'slim RLP' encoding
 	AccountsOrigin map[common.Address][]byte                 // Original values of mutated accounts in 'slim RLP' encoding
 	Storages       map[common.Hash]map[common.Hash][]byte    // Mutated storage slots in 'prefix-zero-trimmed' RLP format
 	StoragesOrigin map[common.Address]map[common.Hash][]byte // Original values of mutated storage slots in 'prefix-zero-trimmed' RLP format
+	RawStorageKey  bool                                      // Flag whether the storage set uses the raw slot key or the hash
 }
 
 // NewStateSet initializes an empty state set.
 func NewStateSet() *StateSet {
 	return &StateSet{
-		Destructs:      make(map[common.Hash]struct{}),
 		Accounts:       make(map[common.Hash][]byte),
 		AccountsOrigin: make(map[common.Address][]byte),
 		Storages:       make(map[common.Hash]map[common.Hash][]byte),
@@ -47,5 +46,5 @@ func (set *StateSet) internal() *pathdb.StateSetWithOrigin {
 	if set == nil {
 		return nil
 	}
-	return pathdb.NewStateSetWithOrigin(set.AccountsOrigin, set.StoragesOrigin)
+	return pathdb.NewStateSetWithOrigin(set.Accounts, set.Storages, set.AccountsOrigin, set.StoragesOrigin, set.RawStorageKey)
 }

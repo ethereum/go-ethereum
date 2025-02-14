@@ -18,11 +18,13 @@ package state
 
 import (
 	"errors"
-	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/utils"
@@ -30,9 +32,26 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
-// Reader defines the interface for accessing accounts and storage slots
+// ContractCodeReader defines the interface for accessing contract code.
+type ContractCodeReader interface {
+	// Code retrieves a particular contract's code.
+	//
+	// - Returns nil code along with nil error if the requested contract code
+	//   doesn't exist
+	// - Returns an error only if an unexpected issue occurs
+	Code(addr common.Address, codeHash common.Hash) ([]byte, error)
+
+	// CodeSize retrieves a particular contracts code's size.
+	//
+	// - Returns zero code size along with nil error if the requested contract code
+	//   doesn't exist
+	// - Returns an error only if an unexpected issue occurs
+	CodeSize(addr common.Address, codeHash common.Hash) (int, error)
+}
+
+// StateReader defines the interface for accessing accounts and storage slots
 // associated with a specific state.
-type Reader interface {
+type StateReader interface {
 	// Account retrieves the account associated with a particular address.
 	//
 	// - Returns a nil account if it does not exist
@@ -47,32 +66,84 @@ type Reader interface {
 	// - Returns an error only if an unexpected issue occurs
 	// - The returned storage slot is safe to modify after the call
 	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
-
-	// Copy returns a deep-copied state reader.
-	Copy() Reader
 }
 
-// stateReader wraps a database state reader.
-type stateReader struct {
+// Reader defines the interface for accessing accounts, storage slots and contract
+// code associated with a specific state.
+type Reader interface {
+	ContractCodeReader
+	StateReader
+}
+
+// cachingCodeReader implements ContractCodeReader, accessing contract code either in
+// local key-value store or the shared code cache.
+type cachingCodeReader struct {
+	db ethdb.KeyValueReader
+
+	// These caches could be shared by multiple code reader instances,
+	// they are natively thread-safe.
+	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
+	codeSizeCache *lru.Cache[common.Hash, int]
+}
+
+// newCachingCodeReader constructs the code reader.
+func newCachingCodeReader(db ethdb.KeyValueReader, codeCache *lru.SizeConstrainedCache[common.Hash, []byte], codeSizeCache *lru.Cache[common.Hash, int]) *cachingCodeReader {
+	return &cachingCodeReader{
+		db:            db,
+		codeCache:     codeCache,
+		codeSizeCache: codeSizeCache,
+	}
+}
+
+// Code implements ContractCodeReader, retrieving a particular contract's code.
+// If the contract code doesn't exist, no error will be returned.
+func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	code, _ := r.codeCache.Get(codeHash)
+	if len(code) > 0 {
+		return code, nil
+	}
+	code = rawdb.ReadCode(r.db, codeHash)
+	if len(code) > 0 {
+		r.codeCache.Add(codeHash, code)
+		r.codeSizeCache.Add(codeHash, len(code))
+	}
+	return code, nil
+}
+
+// CodeSize implements ContractCodeReader, retrieving a particular contracts code's size.
+// If the contract code doesn't exist, no error will be returned.
+func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
+		return cached, nil
+	}
+	code, err := r.Code(addr, codeHash)
+	if err != nil {
+		return 0, err
+	}
+	return len(code), nil
+}
+
+// flatReader wraps a database state reader.
+type flatReader struct {
 	reader database.StateReader
 	buff   crypto.KeccakState
 }
 
-// newStateReader constructs a state reader with on the given state root.
-func newStateReader(reader database.StateReader) *stateReader {
-	return &stateReader{
+// newFlatReader constructs a state reader with on the given state root.
+func newFlatReader(reader database.StateReader) *flatReader {
+	return &flatReader{
 		reader: reader,
 		buff:   crypto.NewKeccakState(),
 	}
 }
 
-// Account implements Reader, retrieving the account specified by the address.
+// Account implements StateReader, retrieving the account specified by the address.
 //
 // An error will be returned if the associated snapshot is already stale or
 // the requested account is not yet covered by the snapshot.
 //
 // The returned account might be nil if it's not existent.
-func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 	account, err := r.reader.Account(crypto.HashData(r.buff, addr.Bytes()))
 	if err != nil {
 		return nil, err
@@ -95,14 +166,14 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 	return acct, nil
 }
 
-// Storage implements Reader, retrieving the storage slot specified by the
+// Storage implements StateReader, retrieving the storage slot specified by the
 // address and slot key.
 //
 // An error will be returned if the associated snapshot is already stale or
 // the requested storage slot is not yet covered by the snapshot.
 //
 // The returned storage slot might be empty if it's not existent.
-func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
+func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
 	addrHash := crypto.HashData(r.buff, addr.Bytes())
 	slotHash := crypto.HashData(r.buff, key.Bytes())
 	ret, err := r.reader.Storage(addrHash, slotHash)
@@ -123,15 +194,7 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	return value, nil
 }
 
-// Copy implements Reader, returning a deep-copied snap reader.
-func (r *stateReader) Copy() Reader {
-	return &stateReader{
-		reader: r.reader,
-		buff:   crypto.NewKeccakState(),
-	}
-}
-
-// trieReader implements the Reader interface, providing functions to access
+// trieReader implements the StateReader interface, providing functions to access
 // state from the referenced trie.
 type trieReader struct {
 	root     common.Hash                    // State root which uniquely represent a state
@@ -167,7 +230,7 @@ func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCach
 	}, nil
 }
 
-// Account implements Reader, retrieving the account specified by the address.
+// Account implements StateReader, retrieving the account specified by the address.
 //
 // An error will be returned if the trie state is corrupted. An nil account
 // will be returned if it's not existent in the trie.
@@ -184,7 +247,7 @@ func (r *trieReader) Account(addr common.Address) (*types.StateAccount, error) {
 	return account, nil
 }
 
-// Storage implements Reader, retrieving the storage slot specified by the
+// Storage implements StateReader, retrieving the storage slot specified by the
 // address and slot key.
 //
 // An error will be returned if the trie state is corrupted. An empty storage
@@ -227,48 +290,32 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
-// Copy implements Reader, returning a deep-copied trie reader.
-func (r *trieReader) Copy() Reader {
-	tries := make(map[common.Address]Trie)
-	for addr, tr := range r.subTries {
-		tries[addr] = mustCopyTrie(tr)
-	}
-	return &trieReader{
-		root:     r.root,
-		db:       r.db,
-		buff:     crypto.NewKeccakState(),
-		mainTrie: mustCopyTrie(r.mainTrie),
-		subRoots: maps.Clone(r.subRoots),
-		subTries: tries,
-	}
+// multiStateReader is the aggregation of a list of StateReader interface,
+// providing state access by leveraging all readers. The checking priority
+// is determined by the position in the reader list.
+type multiStateReader struct {
+	readers []StateReader // List of state readers, sorted by checking priority
 }
 
-// multiReader is the aggregation of a list of Reader interface, providing state
-// access by leveraging all readers. The checking priority is determined by the
-// position in the reader list.
-type multiReader struct {
-	readers []Reader // List of readers, sorted by checking priority
-}
-
-// newMultiReader constructs a multiReader instance with the given readers. The
-// priority among readers is assumed to be sorted. Note, it must contain at least
-// one reader for constructing a multiReader.
-func newMultiReader(readers ...Reader) (*multiReader, error) {
+// newMultiStateReader constructs a multiStateReader instance with the given
+// readers. The priority among readers is assumed to be sorted. Note, it must
+// contain at least one reader for constructing a multiStateReader.
+func newMultiStateReader(readers ...StateReader) (*multiStateReader, error) {
 	if len(readers) == 0 {
 		return nil, errors.New("empty reader set")
 	}
-	return &multiReader{
+	return &multiStateReader{
 		readers: readers,
 	}, nil
 }
 
-// Account implementing Reader interface, retrieving the account associated with
-// a particular address.
+// Account implementing StateReader interface, retrieving the account associated
+// with a particular address.
 //
 // - Returns a nil account if it does not exist
 // - Returns an error only if an unexpected issue occurs
 // - The returned account is safe to modify after the call
-func (r *multiReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *multiStateReader) Account(addr common.Address) (*types.StateAccount, error) {
 	var errs []error
 	for _, reader := range r.readers {
 		acct, err := reader.Account(addr)
@@ -280,13 +327,13 @@ func (r *multiReader) Account(addr common.Address) (*types.StateAccount, error) 
 	return nil, errors.Join(errs...)
 }
 
-// Storage implementing Reader interface, retrieving the storage slot associated
-// with a particular account address and slot key.
+// Storage implementing StateReader interface, retrieving the storage slot
+// associated with a particular account address and slot key.
 //
 // - Returns an empty slot if it does not exist
 // - Returns an error only if an unexpected issue occurs
 // - The returned storage slot is safe to modify after the call
-func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+func (r *multiStateReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
 	var errs []error
 	for _, reader := range r.readers {
 		slot, err := reader.Storage(addr, slot)
@@ -298,11 +345,16 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 	return common.Hash{}, errors.Join(errs...)
 }
 
-// Copy implementing Reader interface, returning a deep-copied state reader.
-func (r *multiReader) Copy() Reader {
-	var readers []Reader
-	for _, reader := range r.readers {
-		readers = append(readers, reader.Copy())
+// reader is the wrapper of ContractCodeReader and StateReader interface.
+type reader struct {
+	ContractCodeReader
+	StateReader
+}
+
+// newReader constructs a reader with the supplied code reader and state reader.
+func newReader(codeReader ContractCodeReader, stateReader StateReader) *reader {
+	return &reader{
+		ContractCodeReader: codeReader,
+		StateReader:        stateReader,
 	}
-	return &multiReader{readers: readers}
 }

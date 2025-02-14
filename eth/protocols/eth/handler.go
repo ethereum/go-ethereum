@@ -18,7 +18,6 @@ package eth
 
 import (
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -120,11 +119,10 @@ func MakeProtocols(backend Backend, network uint64, dnsdisc enode.Iterator) []p2
 // NodeInfo represents a short summary of the `eth` sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // Ethereum network ID (1=Mainnet, Holesky=17000)
-	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
-	Head       common.Hash         `json:"head"`       // Hex hash of the host's best owned block
+	Network uint64              `json:"network"` // Ethereum network ID (1=Mainnet, Holesky=17000)
+	Genesis common.Hash         `json:"genesis"` // SHA3 hash of the host's genesis block
+	Config  *params.ChainConfig `json:"config"`  // Chain configuration for the fork rules
+	Head    common.Hash         `json:"head"`    // Hex hash of the host's best owned block
 }
 
 // nodeInfo retrieves some `eth` protocol metadata about the running host node.
@@ -133,11 +131,10 @@ func nodeInfo(chain *core.BlockChain, network uint64) *NodeInfo {
 	hash := head.Hash()
 
 	return &NodeInfo{
-		Network:    network,
-		Difficulty: chain.GetTd(hash, head.Number.Uint64()),
-		Genesis:    chain.Genesis().Hash(),
-		Config:     chain.Config(),
-		Head:       hash,
+		Network: network,
+		Genesis: chain.Genesis().Hash(),
+		Config:  chain.Config(),
+		Head:    hash,
 	}
 }
 
@@ -190,7 +187,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 	var handlers = eth68
 
 	// Track the amount of time it takes to serve the request and run the handler
-	if metrics.Enabled {
+	if metrics.Enabled() {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, ProtocolName, peer.Version(), msg.Code)
 		defer func(start time.Time) {
 			sampler := func() metrics.Sample {

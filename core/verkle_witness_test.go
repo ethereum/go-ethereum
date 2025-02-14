@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -57,6 +58,10 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
+		EnableVerkleAtGenesis:   true,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Verkle: params.DefaultPragueBlobConfig,
+		},
 		// TODO uncomment when proof generation is merged
 		// ProofInBlocks:                 true,
 	}
@@ -77,18 +82,22 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
+		EnableVerkleAtGenesis:   true,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Verkle: params.DefaultPragueBlobConfig,
+		},
 	}
 )
 
 func TestProcessVerkle(t *testing.T) {
 	var (
 		code                            = common.FromHex(`6060604052600a8060106000396000f360606040526008565b00`)
-		intrinsicContractCreationGas, _ = IntrinsicGas(code, nil, true, true, true, true)
+		intrinsicContractCreationGas, _ = IntrinsicGas(code, nil, nil, true, true, true, true)
 		// A contract creation that calls EXTCODECOPY in the constructor. Used to ensure that the witness
 		// will not contain that copied data.
 		// Source: https://gist.github.com/gballet/a23db1e1cb4ed105616b5920feb75985
 		codeWithExtCodeCopy                = common.FromHex(`0x60806040526040516100109061017b565b604051809103906000f08015801561002c573d6000803e3d6000fd5b506000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555034801561007857600080fd5b5060008067ffffffffffffffff8111156100955761009461024a565b5b6040519080825280601f01601f1916602001820160405280156100c75781602001600182028036833780820191505090505b50905060008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1690506020600083833c81610101906101e3565b60405161010d90610187565b61011791906101a3565b604051809103906000f080158015610133573d6000803e3d6000fd5b50600160006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550505061029b565b60d58061046783390190565b6102068061053c83390190565b61019d816101d9565b82525050565b60006020820190506101b86000830184610194565b92915050565b6000819050602082019050919050565b600081519050919050565b6000819050919050565b60006101ee826101ce565b826101f8846101be565b905061020381610279565b925060208210156102435761023e7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8360200360080261028e565b831692505b5050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b600061028582516101d9565b80915050919050565b600082821b905092915050565b6101bd806102aa6000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c8063f566852414610030575b600080fd5b61003861004e565b6040516100459190610146565b60405180910390f35b6000600160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166381ca91d36040518163ffffffff1660e01b815260040160206040518083038186803b1580156100b857600080fd5b505afa1580156100cc573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906100f0919061010a565b905090565b60008151905061010481610170565b92915050565b6000602082840312156101205761011f61016b565b5b600061012e848285016100f5565b91505092915050565b61014081610161565b82525050565b600060208201905061015b6000830184610137565b92915050565b6000819050919050565b600080fd5b61017981610161565b811461018457600080fd5b5056fea2646970667358221220a6a0e11af79f176f9c421b7b12f441356b25f6489b83d38cc828a701720b41f164736f6c63430008070033608060405234801561001057600080fd5b5060b68061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063ab5ed15014602d575b600080fd5b60336047565b604051603e9190605d565b60405180910390f35b60006001905090565b6057816076565b82525050565b6000602082019050607060008301846050565b92915050565b600081905091905056fea26469706673582212203a14eb0d5cd07c277d3e24912f110ddda3e553245a99afc4eeefb2fbae5327aa64736f6c63430008070033608060405234801561001057600080fd5b5060405161020638038061020683398181016040528101906100329190610063565b60018160001c6100429190610090565b60008190555050610145565b60008151905061005d8161012e565b92915050565b60006020828403121561007957610078610129565b5b60006100878482850161004e565b91505092915050565b600061009b826100f0565b91506100a6836100f0565b9250827fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff038211156100db576100da6100fa565b5b828201905092915050565b6000819050919050565b6000819050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b600080fd5b610137816100e6565b811461014257600080fd5b50565b60b3806101536000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806381ca91d314602d575b600080fd5b60336047565b604051603e9190605a565b60405180910390f35b60005481565b6054816073565b82525050565b6000602082019050606d6000830184604d565b92915050565b600081905091905056fea26469706673582212209bff7098a2f526de1ad499866f27d6d0d6f17b74a413036d6063ca6a0998ca4264736f6c63430008070033`)
-		intrinsicCodeWithExtCodeCopyGas, _ = IntrinsicGas(codeWithExtCodeCopy, nil, true, true, true, true)
+		intrinsicCodeWithExtCodeCopyGas, _ = IntrinsicGas(codeWithExtCodeCopy, nil, nil, true, true, true, true)
 		signer                             = types.LatestSigner(testVerkleChainConfig)
 		testKey, _                         = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		bcdb                               = rawdb.NewMemoryDatabase() // Database for the blockchain
@@ -145,12 +154,12 @@ func TestProcessVerkle(t *testing.T) {
 		params.WitnessChunkWriteCost + /* SSTORE in constructor */
 		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash for tx creation */
 		15*(params.WitnessChunkReadCost+params.WitnessChunkWriteCost) + /* code chunks #0..#14 */
-		4844 /* execution costs */
+		uint64(4844) /* execution costs */
 	blockGasUsagesExpected := []uint64{
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
 	}
-	_, chain, _, proofs, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
+	_, _, chain, _, proofs, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 
 		// TODO need to check that the tx cost provided is the exact amount used (no remaining left-over)
@@ -217,28 +226,32 @@ func TestProcessParentBlockHash(t *testing.T) {
 	// block 1 parent hash is 0x0100....
 	// block 2 parent hash is 0x0200....
 	// etc
-	checkBlockHashes := func(statedb *state.StateDB) {
-		statedb.SetNonce(params.HistoryStorageAddress, 1)
+	checkBlockHashes := func(statedb *state.StateDB, isVerkle bool) {
+		statedb.SetNonce(params.HistoryStorageAddress, 1, tracing.NonceChangeUnspecified)
 		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
 		// Process n blocks, from 1 .. num
 		var num = 2
 		for i := 1; i <= num; i++ {
 			header := &types.Header{ParentHash: common.Hash{byte(i)}, Number: big.NewInt(int64(i)), Difficulty: new(big.Int)}
+			chainConfig := params.MergedTestChainConfig
+			if isVerkle {
+				chainConfig = testVerkleChainConfig
+			}
 			vmContext := NewEVMBlockContext(header, nil, new(common.Address))
-			evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, params.MergedTestChainConfig, vm.Config{})
-			ProcessParentBlockHash(header.ParentHash, evm, statedb)
+			evm := vm.NewEVM(vmContext, statedb, chainConfig, vm.Config{})
+			ProcessParentBlockHash(header.ParentHash, evm)
 		}
 		// Read block hashes for block 0 .. num-1
 		for i := 0; i < num; i++ {
-			have, want := getContractStoredBlockHash(statedb, uint64(i)), common.Hash{byte(i + 1)}
+			have, want := getContractStoredBlockHash(statedb, uint64(i), isVerkle), common.Hash{byte(i + 1)}
 			if have != want {
-				t.Errorf("block %d, have parent hash %v, want %v", i, have, want)
+				t.Errorf("block %d, verkle=%v, have parent hash %v, want %v", i, isVerkle, have, want)
 			}
 		}
 	}
 	t.Run("MPT", func(t *testing.T) {
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-		checkBlockHashes(statedb)
+		checkBlockHashes(statedb, false)
 	})
 	t.Run("Verkle", func(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
@@ -246,15 +259,18 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
 		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))
-		checkBlockHashes(statedb)
+		checkBlockHashes(statedb, true)
 	})
 }
 
 // getContractStoredBlockHash is a utility method which reads the stored parent blockhash for block 'number'
-func getContractStoredBlockHash(statedb *state.StateDB, number uint64) common.Hash {
+func getContractStoredBlockHash(statedb *state.StateDB, number uint64, isVerkle bool) common.Hash {
 	ringIndex := number % params.HistoryServeWindow
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
+	if isVerkle {
+		return statedb.GetState(params.HistoryStorageAddress, key)
+	}
 	return statedb.GetState(params.HistoryStorageAddress, key)
 }
 
@@ -277,7 +293,7 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	//
 	// - The second block contains a single failing contract creation transaction,
 	//   that fails right off the bat.
-	_, chain, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
+	genesisH, _, chain, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 
 		if i == 0 {
@@ -362,8 +378,8 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 			if stemStateDiff.SuffixDiffs[0].NewValue == nil {
 				t.Fatalf("nil new value in BLOCKHASH contract insert")
 			}
-			if *stemStateDiff.SuffixDiffs[0].NewValue != chain[0].Hash() {
-				t.Fatalf("invalid BLOCKHASH value: %x != %x", *stemStateDiff.SuffixDiffs[0].NewValue, chain[0].Hash())
+			if *stemStateDiff.SuffixDiffs[0].NewValue != genesisH {
+				t.Fatalf("invalid BLOCKHASH value: %x != %x", *stemStateDiff.SuffixDiffs[0].NewValue, genesisH)
 			}
 		} else {
 			// For all other entries present in the witness, check that nothing beyond
@@ -391,8 +407,8 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 				if stemStateDiff.SuffixDiffs[0].NewValue == nil {
 					t.Fatalf("missing post state value for BLOCKHASH contract at block #2")
 				}
-				if *stemStateDiff.SuffixDiffs[0].NewValue != common.HexToHash("0788c2c0f23aa07eb8bf76fe6c1ca9064a4821c1fd0af803913da488a58dba54") {
-					t.Fatalf("invalid post state value for BLOCKHASH contract at block #2: 0788c2c0f23aa07eb8bf76fe6c1ca9064a4821c1fd0af803913da488a58dba54 != %x", (*stemStateDiff.SuffixDiffs[0].NewValue)[:])
+				if *stemStateDiff.SuffixDiffs[0].NewValue != chain[0].Hash() {
+					t.Fatalf("invalid post state value for BLOCKHASH contract at block #2: %x != %x", chain[0].Hash(), (*stemStateDiff.SuffixDiffs[0].NewValue)[:])
 				}
 			} else if suffixDiff.Suffix > 4 {
 				t.Fatalf("invalid suffix diff found for %x in block #2: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
@@ -438,7 +454,7 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 	config.ChainID.SetUint64(69421)
 	gspec := verkleTestGenesis(&config)
 
-	_, chain, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
+	genesisH, _, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 		var tx types.Transaction
 		// a transaction that does some PUSH1n but returns a 0-sized contract
@@ -470,8 +486,8 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 			if stemStateDiff.SuffixDiffs[0].NewValue == nil {
 				t.Fatalf("nil new value in BLOCKHASH contract insert")
 			}
-			if *stemStateDiff.SuffixDiffs[0].NewValue != chain[0].Hash() {
-				t.Fatalf("invalid BLOCKHASH value: %x != %x", *stemStateDiff.SuffixDiffs[0].NewValue, chain[0].Hash())
+			if *stemStateDiff.SuffixDiffs[0].NewValue != genesisH {
+				t.Fatalf("invalid BLOCKHASH value: %x != %x", *stemStateDiff.SuffixDiffs[0].NewValue, genesisH)
 			}
 		} else {
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
@@ -530,7 +546,7 @@ func TestProcessVerkleExtCodeHashOpcode(t *testing.T) {
 	}
 	extCodeHashContractAddr := crypto.CreateAddress(deployer, 1)
 
-	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
+	_, _, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 
 		if i == 0 {
@@ -603,7 +619,7 @@ func TestProcessVerkleBalanceOpcode(t *testing.T) {
 		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
 		gspec      = verkleTestGenesis(&config)
 	)
-	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
+	_, _, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 		txData := slices.Concat(
 			[]byte{byte(vm.PUSH20)},
@@ -684,7 +700,7 @@ func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
 	deployer := crypto.PubkeyToAddress(testKey.PublicKey)
 	contract := crypto.CreateAddress(deployer, 0)
 
-	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
+	_, _, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 
 		if i == 0 {
@@ -792,7 +808,7 @@ func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 	deployer := crypto.PubkeyToAddress(testKey.PublicKey)
 	contract := crypto.CreateAddress(deployer, 0)
 
-	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
+	_, _, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 		tx, _ := types.SignNewTx(testKey, signer, &types.LegacyTx{Nonce: 0,
 			Value:    big.NewInt(42),
@@ -895,7 +911,7 @@ func TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary(t *testing.T) 
 	deployer := crypto.PubkeyToAddress(testKey.PublicKey)
 	contract := crypto.CreateAddress(deployer, 0)
 
-	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
+	_, _, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 		if i == 0 {
 			// Create self-destruct contract, sending 42 wei.
@@ -975,7 +991,7 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 
 	selfDestructContract := []byte{byte(vm.ADDRESS), byte(vm.SELFDESTRUCT)}
 
-	_, _, _, _, stateDiffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
+	_, _, _, _, _, stateDiffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 		tx, _ := types.SignNewTx(testKey, signer, &types.LegacyTx{Nonce: 0,
 			Value:    big.NewInt(42),
@@ -1033,7 +1049,7 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiaryAndPrefundedAccount
 	)
 	// Prefund the account, at an address that the contract will be deployed at,
 	// before it selfdestrucs. We can therefore check that the account itseld is
-	// NOT destroyed, which is what the currrent version of the spec requires.
+	// NOT destroyed, which is what the current version of the spec requires.
 	// TODO(gballet) revisit after the spec has been modified.
 	gspec.Alloc[contract] = types.Account{
 		Balance: big.NewInt(100),
@@ -1041,7 +1057,7 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiaryAndPrefundedAccount
 
 	selfDestructContract := []byte{byte(vm.ADDRESS), byte(vm.SELFDESTRUCT)}
 
-	_, _, _, _, stateDiffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
+	_, _, _, _, _, stateDiffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 		tx, _ := types.SignNewTx(testKey, signer, &types.LegacyTx{Nonce: 0,
 			Value:    big.NewInt(42),

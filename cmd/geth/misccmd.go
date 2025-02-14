@@ -22,7 +22,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/urfave/cli/v2"
 )
@@ -74,7 +73,6 @@ func printVersion(ctx *cli.Context) error {
 
 	fmt.Println(strings.Title(clientIdentifier))
 	fmt.Println("Version:", version.WithMeta)
-	fmt.Println("Firehose Tracer Protocol Version: fh", tracers.FirehoseProtocolVersion)
 	if git.Commit != "" {
 		fmt.Println("Git Commit:", git.Commit)
 	}

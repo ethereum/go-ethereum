@@ -1,4 +1,4 @@
-// Copyright 2023 go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -41,10 +41,10 @@ var (
 	zero                                = uint256.NewInt(0)
 	verkleNodeWidthLog2                 = 8
 	headerStorageOffset                 = uint256.NewInt(64)
-	mainStorageOffsetLshVerkleNodeWidth = new(uint256.Int).Lsh(uint256.NewInt(256), 31-uint(verkleNodeWidthLog2))
 	codeOffset                          = uint256.NewInt(128)
 	verkleNodeWidth                     = uint256.NewInt(256)
 	codeStorageDelta                    = uint256.NewInt(0).Sub(codeOffset, headerStorageOffset)
+	mainStorageOffsetLshVerkleNodeWidth = new(uint256.Int).Lsh(uint256.NewInt(1), 248-uint(verkleNodeWidthLog2))
 
 	index0Point *verkle.Point // pre-computed commitment of polynomial [2+256*64]
 
@@ -217,7 +217,7 @@ func StorageIndex(storageKey []byte) (*uint256.Int, byte) {
 	// The first MAIN_STORAGE_OFFSET group will see its
 	// first 64 slots unreachable. This is either a typo in the
 	// spec or intended to conserve the 256-u256
-	// aligment. If we decide to ever access these 64
+	// alignment. If we decide to ever access these 64
 	// slots, uncomment this.
 	// // Get the new offset since we now know that we are above 64.
 	// pos.Sub(&pos, codeStorageDelta)
@@ -273,17 +273,9 @@ func StorageSlotKeyWithEvaluatedAddress(evaluated *verkle.Point, storageKey []by
 }
 
 func pointToHash(evaluated *verkle.Point, suffix byte) []byte {
-	// The output of Byte() is big endian for banderwagon. This
-	// introduces an imbalance in the tree, because hashes are
-	// elements of a 253-bit field. This means more than half the
-	// tree would be empty. To avoid this problem, use a little
-	// endian commitment and chop the MSB.
-	bytes := evaluated.Bytes()
-	for i := 0; i < 16; i++ {
-		bytes[31-i], bytes[i] = bytes[i], bytes[31-i]
-	}
-	bytes[31] = suffix
-	return bytes[:]
+	retb := verkle.HashPointToBytes(evaluated)
+	retb[31] = suffix
+	return retb[:]
 }
 
 func evaluateAddressPoint(address []byte) *verkle.Point {

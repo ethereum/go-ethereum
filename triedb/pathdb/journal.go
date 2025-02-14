@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -45,7 +44,9 @@ var (
 //
 // - Version 0: initial version
 // - Version 1: storage.Incomplete field is removed
-const journalVersion uint64 = 1
+// - Version 2: add post-modification state values
+// - Version 3: a flag has been added to indicate whether the storage slot key is the raw key or a hash
+const journalVersion uint64 = 3
 
 // loadJournal tries to parse the layer journal from the disk.
 func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
@@ -92,9 +93,9 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 // loadLayers loads a pre-existing state layer backed by a key-value store.
 func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
-	var root = types.EmptyRootHash
-	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		root = crypto.Keccak256Hash(blob)
+	root, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
+	if err != nil {
+		log.Crit("Failed to compute node hash", "err", err)
 	}
 	// Load the layers by resolving the journal
 	head, err := db.loadJournal(root)
@@ -108,7 +109,7 @@ func (db *Database) loadLayers() layer {
 		log.Info("Failed to load journal, discard it", "err", err)
 	}
 	// Return single layer with persistent state.
-	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, nil, newBuffer(db.config.WriteBufferSize, nil, 0))
+	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0))
 }
 
 // loadDiskLayer reads the binary blob from the layer journal, reconstructing
@@ -135,7 +136,12 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	if err := nodes.decode(r); err != nil {
 		return nil, err
 	}
-	return newDiskLayer(root, id, db, nil, newBuffer(db.config.WriteBufferSize, &nodes, id-stored)), nil
+	// Resolve flat state sets in aggregated buffer
+	var states stateSet
+	if err := states.decode(r); err != nil {
+		return nil, err
+	}
+	return newDiskLayer(root, id, db, nil, newBuffer(db.config.WriteBufferSize, &nodes, &states, id-stored)), nil
 }
 
 // loadDiffLayer reads the next sections of a layer journal, reconstructing a new
@@ -189,6 +195,10 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	if err := dl.buffer.nodes.encode(w); err != nil {
 		return err
 	}
+	// Step four, write the accumulated flat states into the journal
+	if err := dl.buffer.states.encode(w); err != nil {
+		return err
+	}
 	log.Debug("Journaled pathdb disk layer", "root", dl.root)
 	return nil
 }
@@ -226,6 +236,8 @@ func (dl *diffLayer) journal(w io.Writer) error {
 // This is meant to be used during shutdown to persist the layer without
 // flattening everything down (bad for reorgs). And this function will mark the
 // database as read-only to prevent all following mutation to disk.
+//
+// The supplied root must be a valid trie hash value.
 func (db *Database) Journal(root common.Hash) error {
 	// Retrieve the head layer to journal from.
 	l := db.tree.get(root)
@@ -255,9 +267,9 @@ func (db *Database) Journal(root common.Hash) error {
 	}
 	// Secondly write out the state root in disk, ensure all layers
 	// on top are continuous with disk.
-	diskRoot := types.EmptyRootHash
-	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		diskRoot = crypto.Keccak256Hash(blob)
+	diskRoot, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
+	if err != nil {
+		return err
 	}
 	if err := rlp.Encode(journal, diskRoot); err != nil {
 		return err

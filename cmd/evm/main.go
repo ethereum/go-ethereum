@@ -19,11 +19,14 @@ package main
 
 import (
 	"fmt"
-	"math/big"
+	"io/fs"
 	"os"
-	"slices"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
@@ -33,122 +36,100 @@ import (
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
 
+// Some other nice-to-haves:
+// * accumulate traces into an object to bundle with test
+// * write tx identifier for trace before hand (blocktest only)
+// * combine blocktest and statetest runner logic using unified test interface
+
+const traceCategory = "TRACING"
+
 var (
-	DebugFlag = &cli.BoolFlag{
-		Name:     "debug",
-		Usage:    "output full trace logs",
-		Category: flags.VMCategory,
-	}
-	StatDumpFlag = &cli.BoolFlag{
-		Name:     "statdump",
-		Usage:    "displays stack and heap memory information",
-		Category: flags.VMCategory,
-	}
-	CodeFlag = &cli.StringFlag{
-		Name:     "code",
-		Usage:    "EVM code",
-		Category: flags.VMCategory,
-	}
-	CodeFileFlag = &cli.StringFlag{
-		Name:     "codefile",
-		Usage:    "File containing EVM code. If '-' is specified, code is read from stdin ",
-		Category: flags.VMCategory,
-	}
-	GasFlag = &cli.Uint64Flag{
-		Name:     "gas",
-		Usage:    "gas limit for the evm",
-		Value:    10000000000,
-		Category: flags.VMCategory,
-	}
-	PriceFlag = &flags.BigFlag{
-		Name:     "price",
-		Usage:    "price set for the evm",
-		Value:    new(big.Int),
-		Category: flags.VMCategory,
-	}
-	ValueFlag = &flags.BigFlag{
-		Name:     "value",
-		Usage:    "value set for the evm",
-		Value:    new(big.Int),
-		Category: flags.VMCategory,
-	}
-	DumpFlag = &cli.BoolFlag{
-		Name:     "dump",
-		Usage:    "dumps the state after the run",
-		Category: flags.VMCategory,
-	}
-	InputFlag = &cli.StringFlag{
-		Name:     "input",
-		Usage:    "input for the EVM",
-		Category: flags.VMCategory,
-	}
-	InputFileFlag = &cli.StringFlag{
-		Name:     "inputfile",
-		Usage:    "file containing input for the EVM",
-		Category: flags.VMCategory,
+	// Test running flags.
+	RunFlag = &cli.StringFlag{
+		Name:  "run",
+		Value: ".*",
+		Usage: "Run only those tests matching the regular expression.",
 	}
 	BenchFlag = &cli.BoolFlag{
 		Name:     "bench",
 		Usage:    "benchmark the execution",
 		Category: flags.VMCategory,
 	}
-	CreateFlag = &cli.BoolFlag{
-		Name:     "create",
-		Usage:    "indicates the action should be create rather than call",
-		Category: flags.VMCategory,
+	WitnessCrossCheckFlag = &cli.BoolFlag{
+		Name:    "cross-check",
+		Aliases: []string{"xc"},
+		Usage:   "Cross-check stateful execution against stateless, verifying the witness generation.",
 	}
-	GenesisFlag = &cli.StringFlag{
-		Name:     "prestate",
-		Usage:    "JSON file with prestate (genesis) config",
-		Category: flags.VMCategory,
+
+	// Debugging flags.
+	DumpFlag = &cli.BoolFlag{
+		Name:  "dump",
+		Usage: "dumps the state after the run",
+	}
+	HumanReadableFlag = &cli.BoolFlag{
+		Name:  "human",
+		Usage: "\"Human-readable\" output",
+	}
+	StatDumpFlag = &cli.BoolFlag{
+		Name:  "statdump",
+		Usage: "displays stack and heap memory information",
+	}
+
+	// Tracing flags.
+	TraceFlag = &cli.BoolFlag{
+		Name:     "trace",
+		Usage:    "Enable tracing and output trace log.",
+		Category: traceCategory,
+	}
+	TraceFormatFlag = &cli.StringFlag{
+		Name:     "trace.format",
+		Usage:    "Trace output format to use (json|struct|md)",
+		Value:    "json",
+		Category: traceCategory,
+	}
+	TraceDisableMemoryFlag = &cli.BoolFlag{
+		Name:     "trace.nomemory",
+		Aliases:  []string{"nomemory"},
+		Value:    true,
+		Usage:    "disable memory output",
+		Category: traceCategory,
+	}
+	TraceDisableStackFlag = &cli.BoolFlag{
+		Name:     "trace.nostack",
+		Aliases:  []string{"nostack"},
+		Usage:    "disable stack output",
+		Category: traceCategory,
+	}
+	TraceDisableStorageFlag = &cli.BoolFlag{
+		Name:     "trace.nostorage",
+		Aliases:  []string{"nostorage"},
+		Usage:    "disable storage output",
+		Category: traceCategory,
+	}
+	TraceDisableReturnDataFlag = &cli.BoolFlag{
+		Name:     "trace.noreturndata",
+		Aliases:  []string{"noreturndata"},
+		Value:    true,
+		Usage:    "enable return data output",
+		Category: traceCategory,
+	}
+
+	// Deprecated flags.
+	DebugFlag = &cli.BoolFlag{
+		Name:     "debug",
+		Usage:    "output full trace logs (deprecated)",
+		Hidden:   true,
+		Category: traceCategory,
 	}
 	MachineFlag = &cli.BoolFlag{
 		Name:     "json",
-		Usage:    "output trace logs in machine readable format (json)",
-		Category: flags.VMCategory,
-	}
-	SenderFlag = &cli.StringFlag{
-		Name:     "sender",
-		Usage:    "The transaction origin",
-		Category: flags.VMCategory,
-	}
-	ReceiverFlag = &cli.StringFlag{
-		Name:     "receiver",
-		Usage:    "The transaction receiver (execution context)",
-		Category: flags.VMCategory,
-	}
-	DisableMemoryFlag = &cli.BoolFlag{
-		Name:     "nomemory",
-		Value:    true,
-		Usage:    "disable memory output",
-		Category: flags.VMCategory,
-	}
-	DisableStackFlag = &cli.BoolFlag{
-		Name:     "nostack",
-		Usage:    "disable stack output",
-		Category: flags.VMCategory,
-	}
-	DisableStorageFlag = &cli.BoolFlag{
-		Name:     "nostorage",
-		Usage:    "disable storage output",
-		Category: flags.VMCategory,
-	}
-	DisableReturnDataFlag = &cli.BoolFlag{
-		Name:     "noreturndata",
-		Value:    true,
-		Usage:    "enable return data output",
-		Category: flags.VMCategory,
-	}
-	refTestFlag = &cli.StringFlag{
-		Name:  "test",
-		Usage: "Path to EOF validation reference test.",
-	}
-	hexFlag = &cli.StringFlag{
-		Name:  "hex",
-		Usage: "single container data parse and validation",
+		Usage:    "output trace logs in machine readable format, json (deprecated)",
+		Hidden:   true,
+		Category: traceCategory,
 	}
 )
 
+// Command definitions.
 var (
 	stateTransitionCommand = &cli.Command{
 		Name:    "transition",
@@ -175,7 +156,6 @@ var (
 			t8ntool.RewardFlag,
 		},
 	}
-
 	transactionCommand = &cli.Command{
 		Name:    "transaction",
 		Aliases: []string{"t9n"},
@@ -203,62 +183,27 @@ var (
 			t8ntool.SealCliqueFlag,
 		},
 	}
-	eofParseCommand = &cli.Command{
-		Name:    "eofparse",
-		Aliases: []string{"eof"},
-		Usage:   "Parses hex eof container and returns validation errors (if any)",
-		Action:  eofParseAction,
-		Flags: []cli.Flag{
-			hexFlag,
-			refTestFlag,
-		},
-	}
-
-	eofDumpCommand = &cli.Command{
-		Name:   "eofdump",
-		Usage:  "Parses hex eof container and prints out human-readable representation of the container.",
-		Action: eofDumpAction,
-		Flags: []cli.Flag{
-			hexFlag,
-		},
-	}
 )
-
-// vmFlags contains flags related to running the EVM.
-var vmFlags = []cli.Flag{
-	CodeFlag,
-	CodeFileFlag,
-	CreateFlag,
-	GasFlag,
-	PriceFlag,
-	ValueFlag,
-	InputFlag,
-	InputFileFlag,
-	GenesisFlag,
-	SenderFlag,
-	ReceiverFlag,
-}
 
 // traceFlags contains flags that configure tracing output.
 var traceFlags = []cli.Flag{
-	BenchFlag,
+	TraceFlag,
+	TraceFormatFlag,
+	TraceDisableStackFlag,
+	TraceDisableMemoryFlag,
+	TraceDisableStorageFlag,
+	TraceDisableReturnDataFlag,
+
+	// deprecated
 	DebugFlag,
-	DumpFlag,
 	MachineFlag,
-	StatDumpFlag,
-	DisableMemoryFlag,
-	DisableStackFlag,
-	DisableStorageFlag,
-	DisableReturnDataFlag,
 }
 
 var app = flags.NewApp("the evm command line interface")
 
 func init() {
-	app.Flags = slices.Concat(vmFlags, traceFlags, debug.Flags)
+	app.Flags = debug.Flags
 	app.Commands = []*cli.Command{
-		compileCommand,
-		disasmCommand,
 		runCommand,
 		blockTestCommand,
 		stateTestCommand,
@@ -280,11 +225,71 @@ func init() {
 
 func main() {
 	if err := app.Run(os.Args); err != nil {
-		code := 1
-		if ec, ok := err.(*t8ntool.NumberedError); ok {
-			code = ec.ExitCode()
-		}
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(code)
+		os.Exit(1)
 	}
+}
+
+// tracerFromFlags parses the cli flags and returns the specified tracer.
+func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
+	config := &logger.Config{
+		EnableMemory:     !ctx.Bool(TraceDisableMemoryFlag.Name),
+		DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
+		DisableStorage:   ctx.Bool(TraceDisableStorageFlag.Name),
+		EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name),
+	}
+	switch {
+	case ctx.Bool(TraceFlag.Name):
+		switch format := ctx.String(TraceFormatFlag.Name); format {
+		case "struct":
+			return logger.NewStreamingStructLogger(config, os.Stderr).Hooks()
+		case "json":
+			return logger.NewJSONLogger(config, os.Stderr)
+		case "md", "markdown":
+			return logger.NewMarkdownLogger(config, os.Stderr).Hooks()
+		default:
+			fmt.Fprintf(os.Stderr, "unknown trace format: %q\n", format)
+			os.Exit(1)
+			return nil
+		}
+	// Deprecated ways of configuring tracing.
+	case ctx.Bool(MachineFlag.Name):
+		return logger.NewJSONLogger(config, os.Stderr)
+	case ctx.Bool(DebugFlag.Name):
+		return logger.NewStreamingStructLogger(config, os.Stderr).Hooks()
+	default:
+		return nil
+	}
+}
+
+// collectFiles walks the given path. If the path is a directory, it will
+// return a list of all accumulates all files with json extension.
+// Otherwise (if path points to a file), it will return the path.
+func collectFiles(path string) []string {
+	var out []string
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		// User explicitly pointed out a file, ignore extension.
+		return []string{path}
+	}
+	err := filepath.Walk(path, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && filepath.Ext(info.Name()) == ".json" {
+			out = append(out, path)
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	return out
+}
+
+// dump returns a state dump for the most current trie.
+func dump(s *state.StateDB) *state.Dump {
+	root := s.IntermediateRoot(false)
+	cpy, _ := state.New(root, s.Database())
+	dump := cpy.RawDump(nil)
+	return &dump
 }

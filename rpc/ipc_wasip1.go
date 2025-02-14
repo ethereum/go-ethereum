@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,28 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package beacon
+//go:build wasip1
+// +build wasip1
+
+package rpc
 
 import (
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
+	"context"
+	"errors"
+	"net"
 )
 
-// NewFaker creates a fake consensus engine for testing.
-// The fake engine simulates a merged network.
-// It can not be used to test the merge transition.
-// This type is needed since the fakeChainReader can not be used with
-// a normal beacon consensus engine.
-func NewFaker() consensus.Engine {
-	return new(faker)
+var errNotSupported = errors.New("rpc: not supported")
+
+// ipcListen will create a named pipe on the given endpoint.
+func ipcListen(endpoint string) (net.Listener, error) {
+	return nil, errNotSupported
 }
 
-type faker struct {
-	Beacon
-}
-
-func (f *faker) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	return beaconDifficulty
+// newIPCConnection will connect to a named pipe with the given endpoint as name.
+func newIPCConnection(ctx context.Context, endpoint string) (net.Conn, error) {
+	return nil, errNotSupported
 }

@@ -676,7 +676,7 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		if err != nil {
 			return nil, err
 		}
-		return math.U256Bytes(b), nil
+		return math.U256Bytes(new(big.Int).Set(b)), nil
 	}
 	return nil, fmt.Errorf("unrecognized type '%s'", encType)
 }

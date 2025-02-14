@@ -132,7 +132,7 @@ func HandleMessage(backend Backend, peer *Peer) error {
 	defer msg.Discard()
 	start := time.Now()
 	// Track the amount of time it takes to serve the request and run the handler
-	if metrics.Enabled {
+	if metrics.Enabled() {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, ProtocolName, peer.Version(), msg.Code)
 		defer func(start time.Time) {
 			sampler := func() metrics.Sample {
@@ -454,7 +454,7 @@ func ServiceGetByteCodesQuery(chain *core.BlockChain, req *GetByteCodesPacket) [
 			// Peers should not request the empty code, but if they do, at
 			// least sent them back a correct response without db lookups
 			codes = append(codes, []byte{})
-		} else if blob, err := chain.ContractCodeWithPrefix(hash); err == nil {
+		} else if blob := chain.ContractCodeWithPrefix(hash); len(blob) > 0 {
 			codes = append(codes, blob)
 			bytes += uint64(len(blob))
 		}

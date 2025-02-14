@@ -17,7 +17,6 @@
 package state
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -54,12 +53,6 @@ type Database interface {
 
 	// OpenStorageTrie opens the storage trie of an account.
 	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error)
-
-	// ContractCode retrieves a particular contract's code.
-	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
-
-	// ContractCodeSize retrieves a particular contracts code's size.
-	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
 
 	// PointCache returns the cache holding points used in verkle tree key computation
 	PointCache() *utils.PointCache
@@ -180,15 +173,24 @@ func NewDatabaseForTesting() *CachingDB {
 
 // Reader returns a state reader associated with the specified state root.
 func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
-	var readers []Reader
+	var readers []StateReader
 
 	// Set up the state snapshot reader if available. This feature
 	// is optional and may be partially useful if it's not fully
 	// generated.
 	if db.snap != nil {
+		// If standalone state snapshot is available (hash scheme),
+		// then construct the legacy snap reader.
 		snap := db.snap.Snapshot(stateRoot)
 		if snap != nil {
-			readers = append(readers, newStateReader(snap)) // snap reader is optional
+			readers = append(readers, newFlatReader(snap))
+		}
+	} else {
+		// If standalone state snapshot is not available, try to construct
+		// the state reader with database.
+		reader, err := db.triedb.StateReader(stateRoot)
+		if err == nil {
+			readers = append(readers, newFlatReader(reader)) // state reader is optional
 		}
 	}
 	// Set up the trie reader, which is expected to always be available
@@ -199,7 +201,11 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	}
 	readers = append(readers, tr)
 
-	return newMultiReader(readers...)
+	combined, err := newMultiStateReader(readers...)
+	if err != nil {
+		return nil, err
+	}
+	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -229,45 +235,20 @@ func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 	return tr, nil
 }
 
-// ContractCode retrieves a particular contract's code.
-func (db *CachingDB) ContractCode(address common.Address, codeHash common.Hash) ([]byte, error) {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code, nil
-	}
-	code = rawdb.ReadCode(db.disk, codeHash)
-	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
-		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
-	}
-	return nil, errors.New("not found")
-}
-
 // ContractCodeWithPrefix retrieves a particular contract's code. If the
 // code can't be found in the cache, then check the existence with **new**
 // db scheme.
-func (db *CachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) ([]byte, error) {
+func (db *CachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) []byte {
 	code, _ := db.codeCache.Get(codeHash)
 	if len(code) > 0 {
-		return code, nil
+		return code
 	}
 	code = rawdb.ReadCodeWithPrefix(db.disk, codeHash)
 	if len(code) > 0 {
 		db.codeCache.Add(codeHash, code)
 		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
 	}
-	return nil, errors.New("not found")
-}
-
-// ContractCodeSize retrieves a particular contracts code's size.
-func (db *CachingDB) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
-		return cached, nil
-	}
-	code, err := db.ContractCode(addr, codeHash)
-	return len(code), err
+	return code
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.

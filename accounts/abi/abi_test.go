@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 )
 
 const jsondata = `
@@ -315,6 +316,38 @@ func TestCustomErrors(t *testing.T) {
 		}
 	}
 	check("MyError", "MyError(uint256)")
+}
+
+func TestCustomErrorUnpackIntoInterface(t *testing.T) {
+	t.Parallel()
+	errorName := "MyError"
+	json := fmt.Sprintf(`[{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"uint256","name":"balance","type":"uint256"}],"name":"%s","type":"error"}]`, errorName)
+	abi, err := JSON(strings.NewReader(json))
+	if err != nil {
+		t.Fatal(err)
+	}
+	type MyError struct {
+		Sender  common.Address
+		Balance *big.Int
+	}
+
+	sender := testrand.Address()
+	balance := new(big.Int).SetBytes(testrand.Bytes(8))
+	encoded, err := abi.Errors[errorName].Inputs.Pack(sender, balance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := MyError{}
+	err = abi.UnpackIntoInterface(&result, errorName, encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Sender != sender {
+		t.Errorf("expected %x got %x", sender, result.Sender)
+	}
+	if result.Balance.Cmp(balance) != 0 {
+		t.Errorf("expected %v got %v", balance, result.Balance)
+	}
 }
 
 func TestMultiPack(t *testing.T) {

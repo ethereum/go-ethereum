@@ -1,4 +1,4 @@
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -49,9 +49,9 @@ func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[co
 	return accounts, storages
 }
 
-func makeHistory() *history {
+func makeHistory(rawStorageKey bool) *history {
 	accounts, storages := randomStateSet(3)
-	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages)
+	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages, rawStorageKey)
 }
 
 func makeHistories(n int) []*history {
@@ -62,7 +62,7 @@ func makeHistories(n int) []*history {
 	for i := 0; i < n; i++ {
 		root := testrand.Hash()
 		accounts, storages := randomStateSet(3)
-		h := newHistory(root, parent, uint64(i), accounts, storages)
+		h := newHistory(root, parent, uint64(i), accounts, storages, false)
 		parent = root
 		result = append(result, h)
 	}
@@ -70,10 +70,15 @@ func makeHistories(n int) []*history {
 }
 
 func TestEncodeDecodeHistory(t *testing.T) {
+	testEncodeDecodeHistory(t, false)
+	testEncodeDecodeHistory(t, true)
+}
+
+func testEncodeDecodeHistory(t *testing.T, rawStorageKey bool) {
 	var (
 		m   meta
 		dec history
-		obj = makeHistory()
+		obj = makeHistory(rawStorageKey)
 	)
 	// check if meta data can be correctly encode/decode
 	blob := obj.meta.encode()
