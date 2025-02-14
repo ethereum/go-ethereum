@@ -2340,22 +2340,22 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		}
 		statedb.SetLogger(bc.logger)
 
-		// If we are past Byzantium, enable prefetching to pull in trie node paths
-		// while processing transactions. Before Byzantium the prefetcher is mostly
-		// useless due to the intermediate root hashing after each transaction.
-		if bc.chainConfig.IsByzantium(block.Number()) {
-			// Generate witnesses either if we're self-testing, or if it's the
-			// only block being inserted. A bit crude, but witnesses are huge,
-			// so we refuse to make an entire chain of them.
-			if bc.vmConfig.StatelessSelfValidation || (makeWitness && len(chain) == 1) {
-				witness, err = stateless.NewWitness(block.Header(), bc)
-				if err != nil {
-					return nil, it.index, err
-				}
-			}
-			statedb.StartPrefetcher("chain", witness)
-		}
-		activeState = statedb
+		// // If we are past Byzantium, enable prefetching to pull in trie node paths
+		// // while processing transactions. Before Byzantium the prefetcher is mostly
+		// // useless due to the intermediate root hashing after each transaction.
+		// if bc.chainConfig.IsByzantium(block.Number()) {
+		// 	// Generate witnesses either if we're self-testing, or if it's the
+		// 	// only block being inserted. A bit crude, but witnesses are huge,
+		// 	// so we refuse to make an entire chain of them.
+		// 	if bc.vmConfig.StatelessSelfValidation || (makeWitness && len(chain) == 1) {
+		// 		witness, err = stateless.NewWitness(block.Header(), bc)
+		// 		if err != nil {
+		// 			return nil, it.index, err
+		// 		}
+		// 	}
+		// 	statedb.StartPrefetcher("chain", witness)
+		// }
+		// activeState = statedb
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
