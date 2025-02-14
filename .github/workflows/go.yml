@@ -30,6 +30,21 @@ jobs:
         run: |
           go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
 
+  go_test_tooling:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./libevm/tooling
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # everything
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "./libevm/tooling/go.mod"
+      - run: go test ./...
+
   go_generate:
     env:
       EXCLUDE_REGEX: "ava-labs/libevm/(accounts/usbwallet/trezor)$"
@@ -47,13 +62,27 @@ jobs:
       - name: git diff
         run: git diff --exit-code
 
-  go_tidy:
+  go_tidy_matrix:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dir: ["./", "./libevm/tooling"]
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: "go.mod"
+          go-version-file: "${{ matrix.dir }}/go.mod"
       - run: go mod tidy
       - run: git diff --exit-code
+
+  go_tidy:
+    # Each matrix instance runs as a different name, which doesn't play nicely
+    # with branch-protection rules. We instead require this job.
+    needs: go_tidy_matrix
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "I'm a no-op"
