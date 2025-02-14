@@ -132,7 +132,8 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		"$NAT_FLAG" \
 		--txpool.accountqueue=512 \
 		--rpc.allow-unprotected-txs \
-		--miner.gasprice=1000000000 \
+		--miner.gasprice=50000000 \
+		--txpool.pricelimit=50000000 \
 		--gpo.maxprice=500000000000 \
 
 elif [ "$GETH_NODE_TYPE" = "signer" ]; then
@@ -185,7 +186,8 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
-		--miner.gasprice=1000000000 \
+		--miner.gasprice=50000000 \
+		--txpool.pricelimit=50000000 \
 		--gpo.maxprice=500000000000 \
 		"$NAT_FLAG"
 
@@ -232,7 +234,8 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
-		--miner.gasprice=1000000000 \
+		--miner.gasprice=50000000 \
+		--txpool.pricelimit=50000000 \
 		--gpo.maxprice=500000000000 \
 		"$NAT_FLAG"
 elif [ "$GETH_NODE_TYPE" = "archive" ]; then
@@ -277,7 +280,8 @@ elif [ "$GETH_NODE_TYPE" = "archive" ]; then
 		--authrpc.port="8551" \
 		--authrpc.vhosts="*" \
 		--txpool.accountqueue=512 \
-		--miner.gasprice=1000000000 \
+		--miner.gasprice=50000000 \
+		--txpool.pricelimit=50000000 \
 		--gpo.maxprice=500000000000 \
 		"$NAT_FLAG"
 else
