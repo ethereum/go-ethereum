@@ -42,9 +42,8 @@ func fuzz(data []byte, debugging bool) {
 		dbA   = newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
 		trieA = NewEmpty(dbA)
 		memDB = rawdb.NewMemoryDatabase()
-		dbB   = newTestDatabase(memDB, rawdb.HashScheme)
 		trieB = NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-			rawdb.WriteTrieNode(memDB, common.Hash{}, path, hash, blob, dbB.Scheme())
+			rawdb.WriteTrieNode(memDB, common.Hash{}, path, hash, blob, rawdb.HashScheme)
 		})
 		vals        []*kv
 		maxElements = 10000
@@ -53,13 +52,17 @@ func fuzz(data []byte, debugging bool) {
 	)
 	// Fill the trie with elements
 	for i := 0; input.Len() > 0 && i < maxElements; i++ {
+		// Build the key
 		k := make([]byte, 32)
 		input.Read(k)
+
+		// Build the val
 		var a uint16
 		binary.Read(input, binary.LittleEndian, &a)
 		a = 1 + a%100
 		v := make([]byte, a)
 		input.Read(v)
+
 		if input.Len() == 0 {
 			// If it was exhausted while reading, the value may be all zeroes,
 			// thus 'deletion' which is not supported on stacktrie
@@ -71,6 +74,7 @@ func fuzz(data []byte, debugging bool) {
 		}
 		keys[string(k)] = struct{}{}
 		vals = append(vals, &kv{k: k, v: v})
+
 		trieA.MustUpdate(k, v)
 	}
 	if len(vals) == 0 {
