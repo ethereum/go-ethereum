@@ -454,7 +454,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		Op(vm.POP).Jump(lbl).Bytes() // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
-	callInexistant := p.
+	callInexistent := p.
 		Call(nil, 0xff, 0, 0, 0, 0, 0).
 		Op(vm.POP).Jump(lbl).Bytes() // pop return value and jump to label
 
@@ -494,7 +494,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	benchmarkNonModifyingCode(100000000, callIdentity, "call-identity-100M", "", b)
 	benchmarkNonModifyingCode(100000000, loopingCode, "loop-100M", "", b)
 	benchmarkNonModifyingCode(100000000, loopingCode2, "loop2-100M", "", b)
-	benchmarkNonModifyingCode(100000000, callInexistant, "call-nonexist-100M", "", b)
+	benchmarkNonModifyingCode(100000000, callInexistent, "call-nonexist-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callEOA, "call-EOA-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callRevertingContractWithInput, "call-reverting-100M", "", b)
 
