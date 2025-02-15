@@ -22,20 +22,23 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
 const (
-	maxFilterRange      = 100000
-	maxFilterResultSize = 100
-	filterBuckets       = 10
+	maxFilterRange      = 10000000
+	maxFilterResultSize = 300
+	filterBuckets       = 16
 	maxFilterBucketSize = 100
 	filterSeedChance    = 10
 	filterMergeChance   = 45
@@ -53,6 +56,7 @@ var (
 
 func filterTestCmd(ctx *cli.Context) error {
 	f := filterTest{ec: makeEthClient(ctx)}
+	lastWrite := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -61,23 +65,54 @@ func filterTestCmd(ctx *cli.Context) error {
 		}
 		f.getFinalizedBlock()
 		query := f.newQuery()
-		f.query(&query)
+		f.query(query)
+		if query.err != nil {
+			f.failed = append(f.failed, query)
+			continue
+		}
 		if len(query.results) > 0 && len(query.results) <= maxFilterResultSize {
 			for {
 				extQuery := f.extendQuery(query)
-				f.query(&extQuery)
-				if len(query.results) <= maxFilterResultSize {
+				if extQuery == nil {
+					break
+				}
+				f.query(extQuery)
+				if extQuery.err == nil && len(extQuery.results) < len(query.results) {
+					extQuery.err = fmt.Errorf("invalid result length; old range %d %d; old length %d; new range %d %d; new length %d; addresses %v; topics %v",
+						query.begin, query.end, len(query.results),
+						extQuery.begin, extQuery.end, len(extQuery.results),
+						extQuery.addresses, extQuery.topics,
+					)
+				}
+				if extQuery.err != nil {
+					f.failed = append(f.failed, extQuery)
+					break
+				}
+				if len(extQuery.results) > maxFilterResultSize {
 					break
 				}
 				query = extQuery
 			}
 			f.storeQuery(query)
+			if time.Since(lastWrite) > time.Second*10 {
+				f.writeQueries("filter_queries")
+				f.writeFailed("filter_errors")
+				lastWrite = time.Now()
+			}
 		}
 	}
 	return nil
 }
 
-func (f *filterTest) storeQuery(query filterQuery) {
+type filterTest struct {
+	ec        *ethclient.Client
+	finalized int64
+	stored    [filterBuckets][]*filterQuery
+	failed    []*filterQuery
+}
+
+func (f *filterTest) storeQuery(query *filterQuery) {
+	query.resultHash = query.calculateHash()
 	logRatio := math.Log(float64(len(query.results))*maxFilterRange/float64(query.end+1-query.begin)) / math.Log(maxFilterRange*maxFilterResultSize)
 	bucket := int(math.Floor(logRatio * filterBuckets))
 	if bucket >= filterBuckets {
@@ -95,61 +130,72 @@ func (f *filterTest) storeQuery(query filterQuery) {
 	fmt.Println()
 }
 
-func (f *filterTest) extendQuery(q filterQuery) filterQuery {
+func (f *filterTest) extendQuery(q *filterQuery) *filterQuery {
 	rangeLen := q.end + 1 - q.begin
 	extLen := rand.Int63n(rangeLen) + 1
+	if rangeLen+extLen > maxFilterRange {
+		return nil
+	}
 	extBefore := rand.Int63n(extLen + 1)
 	if extBefore > q.begin {
 		extBefore = q.begin
 	}
-	return filterQuery{
+	extAfter := extLen - extBefore
+	if q.end+extAfter > f.finalized {
+		d := f.finalized - q.end - extAfter
+		extAfter -= d
+		if extBefore+d <= q.begin {
+			extBefore += d
+		} else {
+			extBefore = q.begin
+		}
+	}
+	return &filterQuery{
 		begin:     q.begin - extBefore,
-		end:       q.end + extLen - extBefore,
+		end:       q.end + extAfter,
 		addresses: q.addresses,
 		topics:    q.topics,
 	}
 }
 
-func (f *filterTest) newQuery() filterQuery {
+func (f *filterTest) newQuery() *filterQuery {
 	for {
 		t := rand.Intn(100)
 		if t < filterSeedChance {
+			fmt.Println("* seed")
 			return f.newSeedQuery()
 		}
 		if t < filterSeedChance+filterMergeChance {
-			if query, ok := f.newMergedQuery(); ok {
+			if query := f.newMergedQuery(); query != nil {
+				fmt.Println("* merged")
 				return query
 			}
+			fmt.Println("* merged x")
 			continue
 		}
-		if query, ok := f.newNarrowedQuery(); ok {
+		if query := f.newNarrowedQuery(); query != nil {
+			fmt.Println("* narrowed")
 			return query
 		}
+		fmt.Println("* narrowed x")
 	}
 }
 
-func (f *filterTest) newSeedQuery() filterQuery {
+func (f *filterTest) newSeedQuery() *filterQuery {
 	block := rand.Int63n(f.finalized + 1)
-	return filterQuery{
+	return &filterQuery{
 		begin: block,
 		end:   block,
 	}
 }
 
-func (f *filterTest) newMergedQuery() (filterQuery, bool) {
-	count := f.queryCount()
-	if count < 2 {
-		return filterQuery{}, false
+func (f *filterTest) newMergedQuery() *filterQuery {
+	q1 := f.randomQuery()
+	q2 := f.randomQuery()
+	if q1 == nil || q2 == nil || q1 == q2 {
+		return nil
 	}
-	pick1 := rand.Intn(count)
-	pick2 := pick1
-	for pick2 == pick1 {
-		pick2 = rand.Intn(count)
-	}
-	q1 := f.pickQuery(pick1)
-	q2 := f.pickQuery(pick2)
 	var (
-		m          filterQuery
 		block      int64
 		topicCount int
 	)
@@ -160,9 +206,11 @@ func (f *filterTest) newMergedQuery() (filterQuery, bool) {
 		block = q2.begin + rand.Int63n(q2.end+1-q2.begin)
 		topicCount = len(q2.topics)
 	}
-	m.begin = block
-	m.end = block
-	m.topics = make([][]common.Hash, topicCount)
+	m := &filterQuery{
+		begin:  block,
+		end:    block,
+		topics: make([][]common.Hash, topicCount),
+	}
 	for _, addr := range q1.addresses {
 		if rand.Intn(2) == 0 {
 			m.addresses = append(m.addresses, addr)
@@ -189,15 +237,14 @@ func (f *filterTest) newMergedQuery() (filterQuery, bool) {
 			}
 		}
 	}
-	return m, true
+	return m
 }
 
-func (f *filterTest) newNarrowedQuery() (filterQuery, bool) {
-	count := f.queryCount()
-	if count < 1 {
-		return filterQuery{}, false
+func (f *filterTest) newNarrowedQuery() *filterQuery {
+	q := f.randomQuery()
+	if q == nil {
+		return nil
 	}
-	q := f.pickQuery(rand.Intn(count))
 	log := q.results[rand.Intn(len(q.results))]
 	var emptyCount int
 	if len(q.addresses) == 0 {
@@ -208,16 +255,20 @@ func (f *filterTest) newNarrowedQuery() (filterQuery, bool) {
 			emptyCount++
 		}
 	}
-	var query filterQuery
 	if emptyCount == 0 {
-		return query, false
+		return nil
 	}
-	query.addresses, query.topics = q.addresses, q.topics
+	query := &filterQuery{
+		begin:     q.begin,
+		end:       q.end,
+		addresses: q.addresses,
+		topics:    q.topics,
+	}
 	pick := rand.Intn(emptyCount)
 	if len(q.addresses) == 0 {
 		if pick == 0 {
 			q.addresses = []common.Address{log.Address}
-			return query, true
+			return query
 		}
 		pick--
 	}
@@ -228,7 +279,7 @@ func (f *filterTest) newNarrowedQuery() (filterQuery, bool) {
 					q.topics = append(q.topics, make([][]common.Hash, i+1-len(q.topics))...)
 				}
 				q.topics[i] = []common.Hash{log.Topics[i]}
-				return query, true
+				return query
 			}
 			pick--
 		}
@@ -236,36 +287,44 @@ func (f *filterTest) newNarrowedQuery() (filterQuery, bool) {
 	panic(nil)
 }
 
-func (f *filterTest) queryCount() int {
-	var count int
+func (f *filterTest) randomQuery() *filterQuery {
+	var bucket, bucketCount int
 	for _, list := range f.stored {
-		count += len(list)
-	}
-	return count
-}
-
-func (f *filterTest) pickQuery(pick int) filterQuery {
-	for _, list := range f.stored {
-		if pick < len(list) {
-			return list[pick]
+		if len(list) > 0 {
+			bucketCount++
 		}
-		pick -= len(list)
 	}
-	panic(nil)
-}
-
-type filterTest struct {
-	ec        *ethclient.Client
-	finalized int64
-	stored    [filterBuckets][]filterQuery
+	if bucketCount == 0 {
+		return nil
+	}
+	pick := rand.Intn(bucketCount)
+	for i, list := range f.stored {
+		if len(list) > 0 {
+			if pick == 0 {
+				bucket = i
+				break
+			}
+			pick--
+		}
+	}
+	return f.stored[bucket][rand.Intn(len(f.stored[bucket]))]
 }
 
 type filterQuery struct {
 	begin, end int64
 	addresses  []common.Address
 	topics     [][]common.Hash
+	resultHash common.Hash
 	results    []types.Log
 	err        error
+}
+
+func (fq *filterQuery) calculateHash() common.Hash {
+	enc, err := rlp.EncodeToBytes(&fq.results)
+	if err != nil {
+		exit(fmt.Errorf("Error encoding logs", "error", err))
+	}
+	return crypto.Keccak256Hash(enc)
 }
 
 func (f *filterTest) getFinalizedBlock() {
@@ -281,7 +340,7 @@ func (f *filterTest) getFinalizedBlock() {
 }
 
 func (f *filterTest) query(query *filterQuery) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	logs, err := f.ec.FilterLogs(ctx, ethereum.FilterQuery{
 		FromBlock: big.NewInt(query.begin),
@@ -295,5 +354,77 @@ func (f *filterTest) query(query *filterQuery) {
 		return
 	}
 	query.results = logs
-	fmt.Println("filter query results", len(logs))
+	fmt.Println("filter query range", query.end+1-query.begin, "results", len(logs))
+}
+
+func (f *filterTest) writeQueries(fn string) {
+	w, err := os.Create(fn)
+	if err != nil {
+		exit(fmt.Errorf("Error creating filter pattern file", "name", fn, "error", err))
+		return
+	}
+	defer w.Close()
+
+	w.WriteString("\t{\n")
+	for _, list := range f.stored {
+		w.WriteString("\t\t{\n")
+		for _, filter := range list {
+			w.WriteString(fmt.Sprintf("\t\t\t{%d, %d, []common.Address{\n", filter.begin, filter.end))
+			for _, addr := range filter.addresses {
+				w.WriteString(fmt.Sprintf("\t\t\t\t\tcommon.HexToAddress(\"0x%040x\"),\n", addr))
+			}
+			w.WriteString(fmt.Sprintf("\t\t\t\t}, [][]common.Hash{\n"))
+			for i, topics := range filter.topics {
+				if i == 0 {
+					w.WriteString(fmt.Sprintf("\t\t\t\t\t{\n"))
+				}
+				for _, topic := range topics {
+					w.WriteString(fmt.Sprintf("\t\t\t\t\t\tcommon.HexToHash(\"0x%064x\"),\n", topic))
+				}
+				if i == len(filter.topics)-1 {
+					w.WriteString(fmt.Sprintf("\t\t\t\t\t},\n"))
+				} else {
+					w.WriteString(fmt.Sprintf("\t\t\t\t\t}, {\n"))
+				}
+			}
+			w.WriteString(fmt.Sprintf("\t\t\t\t}, common.HexToHash(\"0x%064x\"),\n", filter.resultHash))
+			w.WriteString(fmt.Sprintf("\t\t\t},\n"))
+		}
+		w.WriteString("\t\t},\n")
+	}
+	w.WriteString("\t},\n")
+}
+
+func (f *filterTest) writeFailed(fn string) {
+	w, err := os.Create(fn)
+	if err != nil {
+		exit(fmt.Errorf("Error creating filter error file", "name", fn, "error", err))
+		return
+	}
+	defer w.Close()
+
+	w.WriteString("\t{\n")
+	for _, filter := range f.failed {
+		w.WriteString(fmt.Sprintf("\t\t{%d, %d, []common.Address{\n", filter.begin, filter.end))
+		for _, addr := range filter.addresses {
+			w.WriteString(fmt.Sprintf("\t\t\t\tcommon.HexToAddress(\"0x%040x\"),\n", addr))
+		}
+		w.WriteString(fmt.Sprintf("\t\t\t}, [][]common.Hash{\n"))
+		for i, topics := range filter.topics {
+			if i == 0 {
+				w.WriteString(fmt.Sprintf("\t\t\t\t{\n"))
+			}
+			for _, topic := range topics {
+				w.WriteString(fmt.Sprintf("\t\t\t\t\tcommon.HexToHash(\"0x%064x\"),\n", topic))
+			}
+			if i == len(filter.topics)-1 {
+				w.WriteString(fmt.Sprintf("\t\t\t\t},\n"))
+			} else {
+				w.WriteString(fmt.Sprintf("\t\t\t\t}, {\n"))
+			}
+		}
+		w.WriteString(fmt.Sprintf("\t\t\t}, \"%v\"),\n", filter.err))
+		w.WriteString(fmt.Sprintf("\t\t},\n"))
+	}
+	w.WriteString("\t},\n")
 }
