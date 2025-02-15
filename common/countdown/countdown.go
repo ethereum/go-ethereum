@@ -85,13 +85,14 @@ func (t *CountdownTimer) startTimer(i interface{}, currentRound, highestRound ty
 			}()
 			timer.Reset(t.durationHelper.GetTimeoutDuration(currentRound, highestRound))
 		case info := <-t.resetc:
-			log.Debug("Reset countdown timer")
 			currentRound = info.currentRound
 			highestRound = info.highestRound
+			duration := t.durationHelper.GetTimeoutDuration(currentRound, highestRound)
+			log.Debug("Reset countdown timer", "duration", duration, "currentRound", currentRound, "highestRound", highestRound)
 			if !timer.Stop() {
 				<-timer.C
 			}
-			timer.Reset(t.durationHelper.GetTimeoutDuration(currentRound, highestRound))
+			timer.Reset(duration)
 		}
 	}
 }
