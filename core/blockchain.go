@@ -2608,10 +2608,10 @@ Number: %v
 Hash: %#x
 Round: %v
 Error: %v
-Chain config: %v
+%s
 Receipts: %v
 ##############################
-`, block.Number(), block.Hash(), roundNumber, err, bc.chainConfig, receiptString))
+`, block.Number(), block.Hash(), roundNumber, err, bc.chainConfig.Description(), receiptString))
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local
