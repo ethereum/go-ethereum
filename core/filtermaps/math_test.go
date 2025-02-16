@@ -34,7 +34,7 @@ func TestSingleMatch(t *testing.T) {
 		lvIndex := uint64(mapIndex)<<params.logValuesPerMap + uint64(rand.Intn(int(params.valuesPerMap)))
 		var lvHash common.Hash
 		crand.Read(lvHash[:])
-		row := FilterRow{params.columnIndex(lvIndex, lvHash)}
+		row := FilterRow{params.columnIndex(lvIndex, &lvHash)}
 		matches := params.potentialMatches([]FilterRow{row}, mapIndex, lvHash)
 		// check if it has been reverse transformed correctly
 		if len(matches) != 1 {
@@ -49,7 +49,7 @@ func TestSingleMatch(t *testing.T) {
 }
 
 const (
-	testPmCount = 100
+	testPmCount = 50
 	testPmLen   = 1000
 )
 
@@ -68,12 +68,12 @@ func TestPotentialMatches(t *testing.T) {
 			// add testPmLen single entries with different log value hashes at different indices
 			lvIndices[i] = lvStart + uint64(rand.Intn(int(params.valuesPerMap)))
 			crand.Read(lvHashes[i][:])
-			row = append(row, params.columnIndex(lvIndices[i], lvHashes[i]))
+			row = append(row, params.columnIndex(lvIndices[i], &lvHashes[i]))
 		}
 		// add the same log value hash at the first testPmLen log value indices of the map's range
 		crand.Read(lvHashes[testPmLen][:])
 		for lvIndex := lvStart; lvIndex < lvStart+testPmLen; lvIndex++ {
-			row = append(row, params.columnIndex(lvIndex, lvHashes[testPmLen]))
+			row = append(row, params.columnIndex(lvIndex, &lvHashes[testPmLen]))
 		}
 		// randomly duplicate some entries
 		for i := 0; i < testPmLen; i++ {

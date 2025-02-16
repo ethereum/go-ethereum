@@ -334,7 +334,7 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 				lvp.rowIndex = r.f.rowIndex(r.currentMap.mapIndex, lvp.layerIndex, logValue)
 				cached = false
 			}
-			r.currentMap.filterMap[lvp.rowIndex] = append(r.currentMap.filterMap[lvp.rowIndex], r.f.columnIndex(r.iterator.lvIndex, logValue))
+			r.currentMap.filterMap[lvp.rowIndex] = append(r.currentMap.filterMap[lvp.rowIndex], r.f.columnIndex(r.iterator.lvIndex, &logValue))
 			if !cached {
 				rowMappingCache.Add(logValue, lvp)
 			}
