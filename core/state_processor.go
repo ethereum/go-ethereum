@@ -110,21 +110,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
-	// Read requests if Prague is enabled.
-	var requests types.Requests
-	if p.config.IsPrague(block.Number()) {
-		requests, err = ParseDepositLogs(allLogs, p.config)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.hc.engine.Finalize(p.bc, header, statedb, block.Body())
 
 	return &ProcessResult{
 		Receipts: receipts,
-		Requests: requests,
+		Requests: nil,
 		Logs:     allLogs,
 		GasUsed:  *usedGas,
 	}, nil
