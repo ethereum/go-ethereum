@@ -88,6 +88,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
+		if interruptCtx != nil {
+			select {
+			case <-interruptCtx.Done():
+				return nil, interruptCtx.Err()
+			default:
+			}
+		}
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
