@@ -1467,6 +1467,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)
 	}
+	if ctx.Bool(XDCTestnetFlag.Name) {
+		cfg.NetworkId = 51
+	}
+	common.CopyConstans(cfg.NetworkId)
 
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100

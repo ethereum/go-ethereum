@@ -166,8 +166,8 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("xdc92a289fe95a85c53b8d0d113cbaef0c1ec98ac65"),
 			V2: &V2{
-				SwitchEpoch:   common.TIPV2SwitchBlock.Uint64() / 900,
-				SwitchBlock:   common.TIPV2SwitchBlock,
+				SwitchEpoch:   common.MaintnetConstant.TIPV2SwitchBlock.Uint64() / 900,
+				SwitchBlock:   common.MaintnetConstant.TIPV2SwitchBlock,
 				CurrentConfig: MainnetV2Configs[0],
 				AllConfigs:    MainnetV2Configs,
 			},
@@ -207,8 +207,8 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("xdc746249c61f5832c5eed53172776b460491bdcd5c"),
 			V2: &V2{
-				SwitchEpoch:   common.TIPV2SwitchBlock.Uint64() / 900,
-				SwitchBlock:   common.TIPV2SwitchBlock,
+				SwitchEpoch:   common.TestnetConstant.TIPV2SwitchBlock.Uint64() / 900,
+				SwitchBlock:   common.TestnetConstant.TIPV2SwitchBlock,
 				CurrentConfig: TestnetV2Configs[0],
 				AllConfigs:    TestnetV2Configs,
 			},
@@ -231,8 +231,8 @@ var (
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("0x746249c61f5832c5eed53172776b460491bdcd5c"),
 			V2: &V2{
-				SwitchEpoch:   common.TIPV2SwitchBlock.Uint64() / 900,
-				SwitchBlock:   common.TIPV2SwitchBlock,
+				SwitchEpoch:   common.DevnetConstant.TIPV2SwitchBlock.Uint64() / 900,
+				SwitchBlock:   common.DevnetConstant.TIPV2SwitchBlock,
 				CurrentConfig: DevnetV2Configs[0],
 				AllConfigs:    DevnetV2Configs,
 			},

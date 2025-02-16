@@ -532,7 +532,7 @@ func (pool *OrderPool) validateOrder(tx *types.OrderTransaction) error {
 func (pool *OrderPool) validateTx(tx *types.OrderTransaction, local bool) error {
 
 	// check if sender is in black list
-	if tx.From() != nil && common.Blacklist[*tx.From()] {
+	if common.IsInBlacklist(tx.From()) {
 		return fmt.Errorf("reject transaction with sender in black-list: %v", tx.From().Hex())
 	}
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks

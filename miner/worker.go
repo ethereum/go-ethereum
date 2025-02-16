@@ -892,12 +892,12 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 		if (w.header.Number.Uint64() >= common.BlackListHFNumber) && !common.IsTestnet {
 			from := tx.From()
 			// check if sender is in black list
-			if from != nil && common.Blacklist[*from] {
+			if common.IsInBlacklist(from) {
 				log.Debug("Skipping transaction with sender in black-list", "sender", from.Hex())
 				continue
 			}
 			// check if receiver is in black list
-			if to != nil && common.Blacklist[*to] {
+			if common.IsInBlacklist(to) {
 				log.Debug("Skipping transaction with receiver in black-list", "receiver", to.Hex())
 				continue
 			}
@@ -1005,13 +1005,13 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 		if (w.header.Number.Uint64() >= common.BlackListHFNumber) && !common.IsTestnet {
 			from := tx.From()
 			// check if sender is in black list
-			if from != nil && common.Blacklist[*from] {
+			if common.IsInBlacklist(from) {
 				log.Debug("Skipping transaction with sender in black-list", "sender", from.Hex())
 				txs.Pop()
 				continue
 			}
 			// check if receiver is in black list
-			if to != nil && common.Blacklist[*to] {
+			if common.IsInBlacklist(to) {
 				log.Debug("Skipping transaction with receiver in black-list", "receiver", to.Hex())
 				txs.Shift()
 				continue

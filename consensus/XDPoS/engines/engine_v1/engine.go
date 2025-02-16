@@ -272,7 +272,7 @@ func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *ty
 func (x *XDPoS_v1) checkSignersOnCheckpoint(chain consensus.ChainReader, header *types.Header, signers []common.Address) error {
 	number := header.Number.Uint64()
 	// ignore signerCheck at checkpoint block.
-	if common.IgnoreSignerCheckBlockArray[number] {
+	if common.IsIgnoreSignerCheckBlock(number) {
 		return nil
 	}
 	penPenalties := []common.Address{}
