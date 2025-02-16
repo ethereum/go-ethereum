@@ -76,7 +76,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	var (
 		context vm.BlockContext
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
-		err     error
 	)
 	context = NewEVMBlockContext(header, p.hc, nil)
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
