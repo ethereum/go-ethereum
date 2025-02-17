@@ -65,7 +65,7 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(protocol), 999, td, head.Hash(), genesis.Hash()},
-			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 88)"),
+			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 0)"),
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(protocol), ethconfig.Defaults.NetworkId, td, head.Hash(), common.Hash{3}},
