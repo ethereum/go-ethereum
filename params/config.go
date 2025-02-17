@@ -19,6 +19,7 @@ package params
 import (
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -461,6 +462,54 @@ func (c *XDPoSConfig) String() string {
 	return "XDPoS"
 }
 
+func (c *XDPoSConfig) Description(indent int) string {
+	if c == nil {
+		return "XDPoS: <nil>"
+	}
+
+	banner := "XDPoS\n"
+	prefix := strings.Repeat(" ", indent)
+	banner += fmt.Sprintf("%s- Period: %v\n", prefix, c.Period)
+	banner += fmt.Sprintf("%s- Epoch: %v\n", prefix, c.Epoch)
+	banner += fmt.Sprintf("%s- Reward: %v\n", prefix, c.Reward)
+	banner += fmt.Sprintf("%s- RewardCheckpoint: %v\n", prefix, c.RewardCheckpoint)
+	banner += fmt.Sprintf("%s- Gap: %v\n", prefix, c.Gap)
+	banner += fmt.Sprintf("%s- FoudationWalletAddr: %v\n", prefix, c.FoudationWalletAddr.Hex())
+	banner += fmt.Sprintf("%s- SkipV1Validation: %v\n", prefix, c.SkipV1Validation)
+	banner += fmt.Sprintf("%s- %s", prefix, c.V2.Description(indent+2))
+	return banner
+}
+
+func (v2 *V2) Description(indent int) string {
+	if v2 == nil {
+		return "V2: <nil>"
+	}
+
+	banner := "V2:\n"
+	prefix := strings.Repeat(" ", indent)
+	banner += fmt.Sprintf("%s- SwitchEpoch: %v\n", prefix, v2.SwitchEpoch)
+	banner += fmt.Sprintf("%s- SwitchBlock: %v\n", prefix, v2.SwitchBlock)
+	banner += fmt.Sprintf("%s- SkipV2Validation: %v\n", prefix, v2.SkipV2Validation)
+	banner += fmt.Sprintf("%s- %s", prefix, v2.CurrentConfig.Description("CurrentConfig", indent+2))
+	return banner
+}
+
+func (c *V2Config) Description(name string, indent int) string {
+	if c == nil {
+		return name + ": <nil>"
+	}
+
+	banner := name + ":\n"
+	prefix := strings.Repeat(" ", indent)
+	banner += fmt.Sprintf("%s- MaxMasternodes: %v\n", prefix, c.MaxMasternodes)
+	banner += fmt.Sprintf("%s- SwitchRound: %v\n", prefix, c.SwitchRound)
+	banner += fmt.Sprintf("%s- MinePeriod: %v\n", prefix, c.MinePeriod)
+	banner += fmt.Sprintf("%s- TimeoutSyncThreshold: %v\n", prefix, c.TimeoutSyncThreshold)
+	banner += fmt.Sprintf("%s- TimeoutPeriod: %v\n", prefix, c.TimeoutPeriod)
+	banner += fmt.Sprintf("%s- CertThreshold: %v", prefix, c.CertThreshold)
+	return banner
+}
+
 func (c *XDPoSConfig) BlockConsensusVersion(num *big.Int, extraByte []byte, extraCheck bool) string {
 	if c.V2 != nil && c.V2.SwitchBlock != nil && num.Cmp(c.V2.SwitchBlock) > 0 {
 		return ConsensusEngineVersion2
@@ -531,7 +580,7 @@ func (c *ChainConfig) Description() string {
 	case c.Ethash != nil:
 		engine = c.Ethash
 	case c.XDPoS != nil:
-		engine = c.XDPoS
+		engine = c.XDPoS.Description(4)
 	default:
 		engine = "unknown"
 	}
