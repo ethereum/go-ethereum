@@ -353,13 +353,10 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 	}
 	buffer := new(bytes.Buffer)
 	funcs := map[string]interface{}{
-		"bindtype":      bindType,
-		"bindtopictype": bindTopicType,
-		"capitalise":    abi.ToCamelCase,
-		"decapitalise":  decapitalise,
-		"add": func(val1, val2 int) int {
-			return val1 + val2
-		},
+		"bindtype":           bindType,
+		"bindtopictype":      bindTopicType,
+		"capitalise":         abi.ToCamelCase,
+		"decapitalise":       decapitalise,
 		"ispointertype":      isPointerType,
 		"underlyingbindtype": underlyingBindType,
 	}
