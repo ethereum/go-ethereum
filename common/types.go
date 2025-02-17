@@ -57,17 +57,17 @@ var (
 	// MaxHash represents the maximum possible hash value.
 	MaxHash = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 
-	BlockSignersBinary                     = Address{19: 0x89} // xdc0000000000000000000000000000000000000089
-	MasternodeVotingSMCBinary              = Address{19: 0x88} // xdc0000000000000000000000000000000000000088
-	RandomizeSMCBinary                     = Address{19: 0x90} // xdc0000000000000000000000000000000000000090
-	FoudationAddrBinary                    = Address{19: 0x68} // xdc0000000000000000000000000000000000000068
-	TeamAddrBinary                         = Address{19: 0x99} // xdc0000000000000000000000000000000000000099
-	XDCXAddrBinary                         = Address{19: 0x91} // xdc0000000000000000000000000000000000000091
-	TradingStateAddrBinary                 = Address{19: 0x92} // xdc0000000000000000000000000000000000000092
-	XDCXLendingAddressBinary               = Address{19: 0x93} // xdc0000000000000000000000000000000000000093
-	XDCXLendingFinalizedTradeAddressBinary = Address{19: 0x94} // xdc0000000000000000000000000000000000000094
-	XDCNativeAddressBinary                 = Address{19: 0x01} // xdc0000000000000000000000000000000000000001
-	LendingLockAddressBinary               = Address{19: 0x11} // xdc0000000000000000000000000000000000000011
+	BlockSignersBinary                     = HexToAddress("0x0000000000000000000000000000000000000089")
+	MasternodeVotingSMCBinary              = HexToAddress("0x0000000000000000000000000000000000000088")
+	RandomizeSMCBinary                     = HexToAddress("0x0000000000000000000000000000000000000090")
+	FoudationAddrBinary                    = HexToAddress("0x0000000000000000000000000000000000000068")
+	TeamAddrBinary                         = HexToAddress("0x0000000000000000000000000000000000000099")
+	XDCXAddrBinary                         = HexToAddress("0x0000000000000000000000000000000000000091")
+	TradingStateAddrBinary                 = HexToAddress("0x0000000000000000000000000000000000000092")
+	XDCXLendingAddressBinary               = HexToAddress("0x0000000000000000000000000000000000000093")
+	XDCXLendingFinalizedTradeAddressBinary = HexToAddress("0x0000000000000000000000000000000000000094")
+	XDCNativeAddressBinary                 = HexToAddress("0x0000000000000000000000000000000000000001")
+	LendingLockAddressBinary               = HexToAddress("0x0000000000000000000000000000000000000011")
 )
 
 var (
