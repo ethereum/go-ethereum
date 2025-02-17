@@ -517,7 +517,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	if dec.Hash != (common.Hash{}) {
 		computedHash := tx.Hash()
 		if computedHash != dec.Hash {
-			return errors.New("'Hash'transaction hash mismatch")
+			return errors.New("transaction hash mismatch")
 		}
 	}
 	return nil
