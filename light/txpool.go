@@ -356,11 +356,11 @@ func (p *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error {
 	)
 
 	// check if sender is in black list
-	if tx.From() != nil && common.Blacklist[*tx.From()] {
+	if common.IsInBlacklist(tx.From()) {
 		return fmt.Errorf("reject transaction with sender in black-list: %v", tx.From().Hex())
 	}
 	// check if receiver is in black list
-	if tx.To() != nil && common.Blacklist[*tx.To()] {
+	if common.IsInBlacklist(tx.To()) {
 		return fmt.Errorf("reject transaction with receiver in black-list: %v", tx.To().Hex())
 	}
 
