@@ -256,11 +256,36 @@ func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
+// opBlobHash implements the BLOBHASH opcode
+func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	index := scope.Stack.peek()
+	// xdc chain have no blob hash, so len(interpreter.evm.TxContext.BlobHashes) is always 0
+	// and index.LtUint64(uint64(len(interpreter.evm.TxContext.BlobHashes))) is always false
+	// if index.LtUint64(uint64(len(interpreter.evm.TxContext.BlobHashes))) {
+	// 	blobHash := interpreter.evm.TxContext.BlobHashes[index.Uint64()]
+	// 	index.SetBytes32(blobHash[:])
+	// } else {
+	// 	index.Clear()
+	// }
+	index.Clear()
+	return nil, nil
+}
+
 // opBlobBaseFee implements BLOBBASEFEE opcode
 func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	blobBaseFee := new(uint256.Int)
 	scope.Stack.push(blobBaseFee)
 	return nil, nil
+}
+
+// enable4844 applies EIP-4844 (BLOBHASH opcode)
+func enable4844(jt *JumpTable) {
+	jt[BLOBHASH] = &operation{
+		execute:     opBlobHash,
+		constantGas: GasFastestStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
 }
 
 // enable7516 applies EIP-7516 (BLOBBASEFEE opcode)
