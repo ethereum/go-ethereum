@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  geth:
+    container_name: geth-devnet-go-ethereum
+    image: ivaylorashkov/go-ethereum:latest
+    networks:
+      - devnet
+    ports:
+      - "8545:8545"  # Map host port 8545 to container port 8545
+      - "8546:8546"  # Map host port 8546 to container port 8546
+      - "30303:30303"  # Map host port 30303 to container port 30303
+      - "30303:30303/udp"  # Map UDP port 30303 to the container
+    volumes:
+      - eth_data:/root/.ethereum  # Mount a Docker volume for persistent Ethereum data
+
+networks:
+  devnet:
+    driver: bridge
+
+volumes:
+  eth_data:  # Define the volume here
