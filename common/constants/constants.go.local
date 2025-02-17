@@ -97,10 +97,10 @@ type constant struct {
 	xdcxListingSMC        Address
 	xdcxListingSMCTestNet Address
 
-	relayerRegistrationSMC        string
-	relayerRegistrationSMCTestnet string
-	lendingRegistrationSMC        string
-	lendingRegistrationSMCTestnet string
+	relayerRegistrationSMC        Address
+	relayerRegistrationSMCTestnet Address
+	lendingRegistrationSMC        Address
+	lendingRegistrationSMCTestnet Address
 
 	ignoreSignerCheckBlockArray map[uint64]struct{}
 
