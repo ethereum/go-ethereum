@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -38,7 +39,7 @@ var (
 		Action: localConsole,
 		Name:   "console",
 		Usage:  "Start an interactive JavaScript environment",
-		Flags:  utils.GroupFlags(nodeFlags, rpcFlags, consoleFlags),
+		Flags:  slices.Concat(nodeFlags, rpcFlags, consoleFlags),
 		Description: `
 The XDC console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
@@ -50,7 +51,7 @@ See https://github.com/XinFinOrg/XDPoSChain/wiki/JavaScript-Console.`,
 		Name:      "attach",
 		Usage:     "Start an interactive JavaScript environment (connect to node)",
 		ArgsUsage: "[endpoint]",
-		Flags:     utils.GroupFlags([]cli.Flag{utils.DataDirFlag}, consoleFlags),
+		Flags:     slices.Concat([]cli.Flag{utils.DataDirFlag}, consoleFlags),
 		Description: `
 The XDC console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
@@ -63,7 +64,7 @@ This command allows to open a console on a running XDC node.`,
 		Name:      "js",
 		Usage:     "Execute the specified JavaScript files",
 		ArgsUsage: "<jsfile> [jsfile...]",
-		Flags:     utils.GroupFlags(nodeFlags, consoleFlags),
+		Flags:     slices.Concat(nodeFlags, consoleFlags),
 		Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
 JavaScript API. See https://github.com/XinFinOrg/XDPoSChain/wiki/JavaScript-Console`,
