@@ -81,6 +81,11 @@ type ErrInvalidOpCode struct {
 
 func (e *ErrInvalidOpCode) Error() string { return fmt.Sprintf("invalid opcode: %s", e.opcode) }
 
+// NewErrInvalidOpCode is only used in tests to generate an exact ErrInvalidOpCode error.
+func NewErrInvalidOpCode(opcode OpCode) *ErrInvalidOpCode {
+	return &ErrInvalidOpCode{opcode: opcode}
+}
+
 // rpcError is the same interface as the one defined in rpc/errors.go
 // but we do not want to depend on rpc package here so we redefine it.
 //
