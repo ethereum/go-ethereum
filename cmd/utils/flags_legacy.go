@@ -38,6 +38,7 @@ var DeprecatedFlags = []cli.Flag{
 	LogBacktraceAtFlag,
 	LogDebugFlag,
 	MiningEnabledFlag,
+	XDCXDataDirFlag,
 }
 
 var (
@@ -79,6 +80,12 @@ var (
 	MiningEnabledFlag = &cli.BoolFlag{
 		Name:     "mine",
 		Usage:    "Enable mining (deprecated)",
+		Category: flags.DeprecatedCategory,
+	}
+	XDCXDataDirFlag = &flags.DirectoryFlag{
+		Name:     "XDCx-datadir",
+		Aliases:  []string{"XDCx.datadir"},
+		Usage:    "Data directory for the XDCX databases (deprecated)",
 		Category: flags.DeprecatedCategory,
 	}
 )
