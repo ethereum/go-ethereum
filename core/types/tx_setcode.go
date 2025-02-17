@@ -70,12 +70,13 @@ type SetCodeTx struct {
 
 // SetCodeAuthorization is an authorization from an account to deploy code at its address.
 type SetCodeAuthorization struct {
-	ChainID uint256.Int    `json:"chainId" gencodec:"required"`
-	Address common.Address `json:"address" gencodec:"required"`
-	Nonce   uint64         `json:"nonce" gencodec:"required"`
-	V       uint8          `json:"yParity" gencodec:"required"`
-	R       uint256.Int    `json:"r" gencodec:"required"`
-	S       uint256.Int    `json:"s" gencodec:"required"`
+	ChainID   uint256.Int    `json:"chainId" gencodec:"required"`
+	Address   common.Address `json:"address" gencodec:"required"`
+	Nonce     uint64         `json:"nonce" gencodec:"required"`
+	V         uint8          `json:"yParity" gencodec:"required"`
+	R         uint256.Int    `json:"r" gencodec:"required"`
+	S         uint256.Int    `json:"s" gencodec:"required"`
+	authority common.Address `json:"-"`
 }
 
 // field type overrides for gencodec
@@ -115,6 +116,9 @@ func (a *SetCodeAuthorization) sigHash() common.Hash {
 
 // Authority recovers the the authorizing account of an authorization.
 func (a *SetCodeAuthorization) Authority() (common.Address, error) {
+	if a.authority != (common.Address{}) {
+		return a.authority, nil
+	}
 	sighash := a.sigHash()
 	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
 		return common.Address{}, ErrInvalidSig
@@ -134,6 +138,7 @@ func (a *SetCodeAuthorization) Authority() (common.Address, error) {
 	}
 	var addr common.Address
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
+	a.authority = addr
 	return addr, nil
 }
 
