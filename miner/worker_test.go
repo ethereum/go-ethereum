@@ -876,6 +876,9 @@ func TestCommitInterruptExperimentBor_NewTxFlow(t *testing.T) {
 			head := <-chainHeadCh
 			// We skip the initial 2 blocks as the mining timings are a bit skewed up
 			if head.Block.NumberU64() == 2 {
+				// Wait until `w.current` is updated for next block (3)
+				time.Sleep(100 * time.Millisecond)
+
 				// Stop the miner so that worker assumes it's a sentry and not a validator
 				w.stop()
 
