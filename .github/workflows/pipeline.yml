@@ -28,12 +28,12 @@ jobs:
       - name: Log in to Docker Hub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}   # Ensure your Docker Hub username is stored as a secret
-          password: ${{ secrets.DOCKERHUB_TOKEN }}      # Ensure your Docker Hub token is stored as a secret
+          username: ${{ vars.DOCKERHUB_USERNAME }}  
+          password: ${{ secrets.DOCKERHUB_TOKEN }}  
 
       - name: Build and push Docker image to Docker Hub Registry
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: user/app:latest  # Replace 'user/app' with your Docker Hub repository name
+          tags: ivaylorashkov/go-ethereum:latest 
