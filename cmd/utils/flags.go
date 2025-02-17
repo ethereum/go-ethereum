@@ -345,21 +345,21 @@ var (
 		Name:     "miner-gaslimit",
 		Aliases:  []string{"targetgaslimit"},
 		Usage:    "Target gas limit sets the artificial target gas floor for the blocks to mine",
-		Value:    params.XDCGenesisGasLimit,
+		Value:    50000000,
 		Category: flags.MinerCategory,
 	}
 	MinerGasPriceFlag = &flags.BigFlag{
 		Name:     "miner-gasprice",
 		Aliases:  []string{"gasprice"},
 		Usage:    "Minimal gas price to accept for mining a transactions",
-		Value:    ethconfig.Defaults.GasPrice,
+		Value:    big.NewInt(1),
 		Category: flags.MinerCategory,
 	}
 	MinerEtherbaseFlag = &cli.StringFlag{
 		Name:     "miner-etherbase",
 		Aliases:  []string{"etherbase"},
 		Usage:    "Public address for block mining rewards (default = first account created)",
-		Value:    "0",
+		Value:    "0x000000000000000000000000000000000000abcd",
 		Category: flags.MinerCategory,
 	}
 	MinerExtraDataFlag = &cli.StringFlag{
@@ -437,13 +437,14 @@ var (
 		Name:     "http",
 		Aliases:  []string{"rpc"},
 		Usage:    "Enable the HTTP-RPC server",
+		Value:    true,
 		Category: flags.APICategory,
 	}
 	HTTPListenAddrFlag = &cli.StringFlag{
 		Name:     "http-addr",
 		Aliases:  []string{"rpcaddr"},
 		Usage:    "HTTP-RPC server listening interface",
-		Value:    node.DefaultHTTPHost,
+		Value:    "0.0.0.0",
 		Category: flags.APICategory,
 	}
 	HTTPPortFlag = &cli.IntFlag{
@@ -457,21 +458,21 @@ var (
 		Name:     "http-corsdomain",
 		Aliases:  []string{"rpccorsdomain"},
 		Usage:    "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
-		Value:    "",
+		Value:    "*",
 		Category: flags.APICategory,
 	}
 	HTTPVirtualHostsFlag = &cli.StringFlag{
 		Name:     "http-vhosts",
 		Aliases:  []string{"rpcvhosts"},
 		Usage:    "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
-		Value:    strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
+		Value:    "*",
 		Category: flags.APICategory,
 	}
 	HTTPApiFlag = &cli.StringFlag{
 		Name:     "http-api",
 		Aliases:  []string{"rpcapi"},
 		Usage:    "API's offered over the HTTP-RPC interface",
-		Value:    "",
+		Value:    "debug,eth,net,personal,txpool,web3,XDPoS",
 		Category: flags.APICategory,
 	}
 	HTTPReadTimeoutFlag = &cli.DurationFlag{
@@ -498,13 +499,14 @@ var (
 	WSEnabledFlag = &cli.BoolFlag{
 		Name:     "ws",
 		Usage:    "Enable the WS-RPC server",
+		Value:    true,
 		Category: flags.APICategory,
 	}
 	WSListenAddrFlag = &cli.StringFlag{
 		Name:     "ws-addr",
 		Aliases:  []string{"wsaddr"},
 		Usage:    "WS-RPC server listening interface",
-		Value:    node.DefaultWSHost,
+		Value:    "0.0.0.0",
 		Category: flags.APICategory,
 	}
 	WSPortFlag = &cli.IntFlag{
@@ -518,14 +520,14 @@ var (
 		Name:     "ws-api",
 		Aliases:  []string{"wsapi"},
 		Usage:    "API's offered over the WS-RPC interface",
-		Value:    "",
+		Value:    "debug,eth,net,personal,txpool,web3,XDPoS",
 		Category: flags.APICategory,
 	}
 	WSAllowedOriginsFlag = &cli.StringFlag{
 		Name:     "ws-origins",
 		Aliases:  []string{"wsorigins"},
 		Usage:    "Origins from which to accept websockets requests",
-		Value:    "",
+		Value:    "*",
 		Category: flags.APICategory,
 	}
 	ExecFlag = &cli.StringFlag{
@@ -970,11 +972,11 @@ func splitAndTrim(input string) (ret []string) {
 // setHTTP creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
-	if ctx.Bool(HTTPEnabledFlag.Name) && cfg.HTTPHost == "" {
-		cfg.HTTPHost = "127.0.0.1"
-		if ctx.IsSet(HTTPListenAddrFlag.Name) {
-			cfg.HTTPHost = ctx.String(HTTPListenAddrFlag.Name)
+	if ctx.Bool(HTTPEnabledFlag.Name) {
+		if cfg.HTTPHost == "" {
+			cfg.HTTPHost = "127.0.0.1"
 		}
+		cfg.HTTPHost = ctx.String(HTTPListenAddrFlag.Name)
 	}
 
 	if ctx.IsSet(HTTPPortFlag.Name) {
@@ -989,36 +991,26 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(HTTPIdleTimeoutFlag.Name) {
 		cfg.HTTPTimeouts.IdleTimeout = ctx.Duration(HTTPIdleTimeoutFlag.Name)
 	}
-	if ctx.IsSet(HTTPCORSDomainFlag.Name) {
-		cfg.HTTPCors = splitAndTrim(ctx.String(HTTPCORSDomainFlag.Name))
-	}
-	if ctx.IsSet(HTTPApiFlag.Name) {
-		cfg.HTTPModules = splitAndTrim(ctx.String(HTTPApiFlag.Name))
-	}
-	if ctx.IsSet(HTTPVirtualHostsFlag.Name) {
-		cfg.HTTPVirtualHosts = splitAndTrim(ctx.String(HTTPVirtualHostsFlag.Name))
-	}
+	cfg.HTTPCors = splitAndTrim(ctx.String(HTTPCORSDomainFlag.Name))
+	cfg.HTTPModules = splitAndTrim(ctx.String(HTTPApiFlag.Name))
+	cfg.HTTPVirtualHosts = splitAndTrim(ctx.String(HTTPVirtualHostsFlag.Name))
 }
 
 // setWS creates the WebSocket RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setWS(ctx *cli.Context, cfg *node.Config) {
-	if ctx.Bool(WSEnabledFlag.Name) && cfg.WSHost == "" {
-		cfg.WSHost = "127.0.0.1"
-		if ctx.IsSet(WSListenAddrFlag.Name) {
-			cfg.WSHost = ctx.String(WSListenAddrFlag.Name)
+	if ctx.Bool(WSEnabledFlag.Name) {
+		if cfg.WSHost == "" {
+			cfg.WSHost = "127.0.0.1"
 		}
+		cfg.WSHost = ctx.String(WSListenAddrFlag.Name)
 	}
 
 	if ctx.IsSet(WSPortFlag.Name) {
 		cfg.WSPort = ctx.Int(WSPortFlag.Name)
 	}
-	if ctx.IsSet(WSAllowedOriginsFlag.Name) {
-		cfg.WSOrigins = splitAndTrim(ctx.String(WSAllowedOriginsFlag.Name))
-	}
-	if ctx.IsSet(WSApiFlag.Name) {
-		cfg.WSModules = splitAndTrim(ctx.String(WSApiFlag.Name))
-	}
+	cfg.WSOrigins = splitAndTrim(ctx.String(WSAllowedOriginsFlag.Name))
+	cfg.WSModules = splitAndTrim(ctx.String(WSApiFlag.Name))
 }
 
 // setIPC creates an IPC path configuration from the set command line flags,
@@ -1098,6 +1090,8 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config
 			Fatalf("Option %q: %v", MinerEtherbaseFlag.Name, err)
 		}
 		cfg.Etherbase = account.Address
+	} else {
+		cfg.Etherbase = common.HexToAddress(ctx.String(MinerEtherbaseFlag.Name))
 	}
 }
 
@@ -1482,9 +1476,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(MinerExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.String(MinerExtraDataFlag.Name))
 	}
-	if ctx.IsSet(MinerGasPriceFlag.Name) {
-		cfg.GasPrice = flags.GlobalBig(ctx, MinerGasPriceFlag.Name)
-	}
+	cfg.GasPrice = flags.GlobalBig(ctx, MinerGasPriceFlag.Name)
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}

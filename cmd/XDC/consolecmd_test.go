@@ -101,7 +101,7 @@ func TestHTTPAttachWelcome(t *testing.T) {
 	XDC := runXDC(t,
 		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx",
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--miner-etherbase", coinbase, "--http", "--http-port", port)
+		"--miner-etherbase", coinbase, "--http", "--http-port", port, "--http-api", "eth,net,rpc,web3")
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, XDC, "http://localhost:"+port, httpAPIs)
@@ -117,7 +117,7 @@ func TestWSAttachWelcome(t *testing.T) {
 	XDC := runXDC(t,
 		"--datadir", datadir, "--XDCx-datadir", datadir+"/XDCx",
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
-		"--miner-etherbase", coinbase, "--ws", "--ws-port", port)
+		"--miner-etherbase", coinbase, "--ws", "--ws-port", port, "--ws-api", "eth,net,rpc,web3")
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, XDC, "ws://localhost:"+port, httpAPIs)
