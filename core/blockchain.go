@@ -82,6 +82,8 @@ var (
 	snapshotStorageReadTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
 
+	borConsensusTime = metrics.NewRegisteredTimer("chain/bor/consensus", nil)
+
 	blockImportTimer  = metrics.NewRegisteredMeter("chain/imports", nil)
 	triedbCommitTimer = metrics.NewRegisteredTimer("chain/triedb/commits", nil)
 
@@ -279,6 +281,7 @@ type BlockChain struct {
 	processor                    Processor // Block transaction processor interface
 	parallelProcessor            Processor // Parallel block transaction processor interface
 	parallelSpeculativeProcesses int       // Number of parallel speculative processes
+	enforceParallelProcessor     bool
 	forker                       *ForkChoice
 	vmConfig                     vm.Config
 	logger                       *tracing.Hooks
@@ -549,7 +552,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 }
 
 // NewParallelBlockChain , similar to NewBlockChain, creates a new blockchain object, but with a parallel state processor
-func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator, numprocs int) (*BlockChain, error) {
+func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator, numprocs int, enforce bool) (*BlockChain, error) {
 	bc, err := NewBlockChain(db, cacheConfig, genesis, overrides, engine, vmConfig, shouldPreserve, txLookupLimit, checker)
 
 	if err != nil {
@@ -567,6 +570,7 @@ func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis 
 
 	bc.parallelProcessor = NewParallelStateProcessor(chainConfig, bc, engine)
 	bc.parallelSpeculativeProcesses = numprocs
+	bc.enforceParallelProcessor = enforce
 
 	return bc, nil
 }
@@ -602,7 +606,12 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		parallel bool
 	}
 
-	resultChan := make(chan Result, 2)
+	var resultChanLen int = 2
+	if bc.enforceParallelProcessor {
+		log.Debug("Processing block using Block STM only", "number", block.NumberU64())
+		resultChanLen = 1
+	}
+	resultChan := make(chan Result, resultChanLen)
 
 	processorCount := 0
 
@@ -629,7 +638,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		}()
 	}
 
-	if bc.processor != nil {
+	if bc.processor != nil && !bc.enforceParallelProcessor {
 		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
 		if err != nil {
 			return nil, nil, 0, nil, 0, err
@@ -1920,18 +1929,18 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 // WriteBlockAndSetHead writes the given block and all associated state to the database,
 // and applies the block as the new chain head.
-func (bc *BlockChain) WriteBlockAndSetHead(ctx context.Context, block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) WriteBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if !bc.chainmu.TryLock() {
 		return NonStatTy, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
-	return bc.writeBlockAndSetHead(ctx, block, receipts, logs, state, emitHeadEvent)
+	return bc.writeBlockAndSetHead(block, receipts, logs, state, emitHeadEvent)
 }
 
 // writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
 // This function expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockAndSetHead(ctx context.Context, block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	stateSyncLogs, err := bc.writeBlockWithState(block, receipts, logs, state)
 	if err != nil {
 		return NonStatTy, err
@@ -2355,7 +2364,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
 		}
 		// BOR
-		ptime := time.Since(pstart) - vtime
+		ptime := time.Since(pstart) - vtime - statedb.BorConsensusTime
 
 		proctime := time.Since(start) // processing + validation
 
@@ -2374,7 +2383,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
 		blockExecutionTimer.Update(ptime - trieRead)                    // The time spent on EVM processing
 		blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
-
+		borConsensusTime.Update(statedb.BorConsensusTime)               // The time spent on bor consensus (span + state sync)
 		// Write the block to the chain and get the status.
 		var (
 			wstart = time.Now()
@@ -2384,7 +2393,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// Before the actual db insertion happens, verify the block against the whitelisted
 		// milestone and checkpoint. This is to prevent a race condition where a milestone
 		// or checkpoint was whitelisted while the block execution happened (and wasn't
-		// available sometime before) and the block turns out to be inavlid (i.e. not
+		// available sometime before) and the block turns out to be invalid (i.e. not
 		// honouring the milestone or checkpoint). Use the block itself as current block
 		// so that it's considered as a `past` chain and the validation doesn't get bypassed.
 		isValid, err = bc.forker.ValidateReorg(block.Header(), []*types.Header{block.Header()})
@@ -2399,7 +2408,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			// Don't set the head, only insert the block
 			_, err = bc.writeBlockWithState(block, receipts, logs, statedb)
 		} else {
-			status, err = bc.writeBlockAndSetHead(context.Background(), block, receipts, logs, statedb, false)
+			status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
 		}
 
 		followupInterrupt.Store(true)
@@ -2572,7 +2581,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 		// Don't set the head, only insert the block
 		_, err = bc.writeBlockWithState(block, receipts, logs, statedb)
 	} else {
-		status, err = bc.writeBlockAndSetHead(context.Background(), block, receipts, logs, statedb, false)
+		status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
 	}
 	if err != nil {
 		return nil, err

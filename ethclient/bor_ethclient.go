@@ -8,6 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+const (
+	zeroAddress = "0x0000000000000000000000000000000000000000"
+)
+
 // GetRootHash returns the merkle root of the block headers
 func (ec *Client) GetRootHash(ctx context.Context, startBlockNumber uint64, endBlockNumber uint64) (string, error) {
 	var rootHash string

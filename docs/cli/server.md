@@ -28,7 +28,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```datadir.ancient```: Data directory for ancient chain segments (default = inside chaindata)
 
-- ```db.engine```: Backing database implementation to use ('leveldb' or 'pebble') (default: leveldb)
+- ```db.engine```: Backing database implementation to use ('leveldb' or 'pebble') (default: pebble)
 
 - ```dev```: Enable developer mode with ephemeral proof-of-authority network and a pre-funded developer account, mining enabled (default: false)
 
@@ -66,6 +66,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```parallelevm.enable```: Enable Block STM (default: true)
 
+- ```parallelevm.enforce```: Enforce block processing via Block STM (default: false)
+
 - ```parallelevm.procs```: Number of speculative processes (cores) in Block STM (default: 8)
 
 - ```pprof```: Enable the pprof HTTP server (default: false)
@@ -84,7 +86,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```snapshot```: Enables the snapshot-database mode (default: true)
 
-- ```state.scheme```: Scheme to use for storing ethereum state ('hash' or 'path') (default: hash)
+- ```state.scheme```: Scheme to use for storing ethereum state ('hash' or 'path') (default: path)
 
 - ```syncmode```: Blockchain sync mode (only "full" sync supported) (default: full)
 

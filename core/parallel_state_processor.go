@@ -40,6 +40,7 @@ import (
 type ParallelEVMConfig struct {
 	Enable               bool
 	SpeculativeProcesses int
+	Enforce              bool
 }
 
 // StateProcessor is a basic Processor, which takes care of transitioning

@@ -5,7 +5,8 @@ log-level = ""
 vmdebug = false
 datadir = "/var/lib/bor"
 ancient = ""
-"db.engine" = "leveldb"
+"db.engine" = "pebble"
+"db.scheme" = "path"
 keystore = ""
 "rpc.batchlimit" = 100
 "rpc.returndatalimit" = 100000
@@ -184,6 +185,7 @@ devfakeauthor = false
 [parallelevm]
   enable = true
   procs = 8
+  enforce = false
 
 [pprof]
   pprof = false

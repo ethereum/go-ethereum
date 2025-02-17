@@ -174,6 +174,9 @@ type StateDB struct {
 	SnapshotCommits      time.Duration
 	TrieDBCommits        time.Duration
 
+	// Bor metrics
+	BorConsensusTime time.Duration
+
 	AccountUpdated int
 	StorageUpdated atomic.Int64
 	AccountDeleted int

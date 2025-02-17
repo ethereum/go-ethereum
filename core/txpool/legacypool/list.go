@@ -58,29 +58,22 @@ func (h *nonceHeap) Pop() interface{} {
 // sortedMap is a nonce->transaction hash map with a heap based index to allow
 // iterating over the contents in a nonce-incrementing way.
 type sortedMap struct {
-	items map[uint64]*types.Transaction // Hash map storing the transaction data
-	index *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
-	m     sync.RWMutex
-
-	cache   types.Transactions // Cache of the transactions already sorted
-	isEmpty bool
+	items   map[uint64]*types.Transaction // Hash map storing the transaction data
+	index   *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
+	cache   types.Transactions            // Cache of the transactions already sorted
 	cacheMu sync.RWMutex
 }
 
 // newSortedMap creates a new nonce-sorted transaction map.
 func newSortedMap() *sortedMap {
 	return &sortedMap{
-		items:   make(map[uint64]*types.Transaction),
-		index:   new(nonceHeap),
-		isEmpty: true,
+		items: make(map[uint64]*types.Transaction),
+		index: new(nonceHeap),
 	}
 }
 
 // Get retrieves the current transactions associated with the given nonce.
 func (m *sortedMap) Get(nonce uint64) *types.Transaction {
-	m.m.RLock()
-	defer m.m.RUnlock()
-
 	return m.items[nonce]
 }
 
@@ -89,28 +82,18 @@ func (m *sortedMap) Has(nonce uint64) bool {
 		return false
 	}
 
-	m.m.RLock()
-	defer m.m.RUnlock()
-
 	return m.items[nonce] != nil
 }
 
 // Put inserts a new transaction into the map, also updating the map's nonce
 // index. If a transaction already exists with the same nonce, it's overwritten.
 func (m *sortedMap) Put(tx *types.Transaction) {
-	m.m.Lock()
-	defer m.m.Unlock()
-
 	nonce := tx.Nonce()
 	if m.items[nonce] == nil {
 		heap.Push(m.index, nonce)
 	}
-
-	m.items[nonce] = tx
-
 	m.cacheMu.Lock()
-	m.isEmpty = true
-	m.cache = nil
+	m.items[nonce], m.cache = tx, nil
 	m.cacheMu.Unlock()
 }
 
@@ -118,9 +101,6 @@ func (m *sortedMap) Put(tx *types.Transaction) {
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
 func (m *sortedMap) Forward(threshold uint64) types.Transactions {
-	m.m.Lock()
-	defer m.m.Unlock()
-
 	var removed types.Transactions
 
 	// Pop off heap items until the threshold is reached
@@ -133,8 +113,6 @@ func (m *sortedMap) Forward(threshold uint64) types.Transactions {
 	// If we had a cached order, shift the front
 	m.cacheMu.Lock()
 	if m.cache != nil {
-		hitCacheCounter.Inc(1)
-
 		m.cache = m.cache[len(removed):]
 	}
 	m.cacheMu.Unlock()
@@ -147,9 +125,6 @@ func (m *sortedMap) Forward(threshold uint64) types.Transactions {
 // If you want to do several consecutive filterings, it's therefore better to first
 // do a .filter(func1) followed by .Filter(func2) or reheap()
 func (m *sortedMap) Filter(filter func(*types.Transaction) bool) types.Transactions {
-	m.m.Lock()
-	defer m.m.Unlock()
-
 	removed := m.filter(filter)
 	// If transactions were removed, the heap and cache are ruined
 	if len(removed) > 0 {
@@ -187,10 +162,7 @@ func (m *sortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 	if len(removed) > 0 {
 		m.cacheMu.Lock()
 		m.cache = nil
-		m.isEmpty = true
 		m.cacheMu.Unlock()
-
-		resetCacheGauge.Inc(1)
 	}
 
 	return removed
@@ -199,9 +171,6 @@ func (m *sortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
 func (m *sortedMap) Cap(threshold int) types.Transactions {
-	m.m.Lock()
-	defer m.m.Unlock()
-
 	// Short circuit if the number of items is under the limit
 	if len(m.items) <= threshold {
 		return nil
@@ -233,15 +202,11 @@ func (m *sortedMap) Cap(threshold int) types.Transactions {
 // Remove deletes a transaction from the maintained map, returning whether the
 // transaction was found.
 func (m *sortedMap) Remove(nonce uint64) bool {
-	m.m.Lock()
-	defer m.m.Unlock()
-
 	// Short circuit if no transaction is present
 	_, ok := m.items[nonce]
 	if !ok {
 		return false
 	}
-
 	// Otherwise delete the transaction and fix the heap index
 	for i := 0; i < m.index.Len(); i++ {
 		if (*m.index)[i] == nonce {
@@ -250,15 +215,10 @@ func (m *sortedMap) Remove(nonce uint64) bool {
 			break
 		}
 	}
-
 	delete(m.items, nonce)
-
 	m.cacheMu.Lock()
 	m.cache = nil
-	m.isEmpty = true
 	m.cacheMu.Unlock()
-
-	resetCacheGauge.Inc(1)
 
 	return true
 }
@@ -271,9 +231,6 @@ func (m *sortedMap) Remove(nonce uint64) bool {
 // prevent getting into an invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
 func (m *sortedMap) Ready(start uint64) types.Transactions {
-	m.m.Lock()
-	defer m.m.Unlock()
-
 	// Short circuit if no transactions are available
 	if m.index.Len() == 0 || (*m.index)[0] > start {
 		return nil
@@ -290,7 +247,6 @@ func (m *sortedMap) Ready(start uint64) types.Transactions {
 
 	m.cacheMu.Lock()
 	m.cache = nil
-	m.isEmpty = true
 	m.cacheMu.Unlock()
 
 	resetCacheGauge.Inc(1)
@@ -300,85 +256,25 @@ func (m *sortedMap) Ready(start uint64) types.Transactions {
 
 // Len returns the length of the transaction map.
 func (m *sortedMap) Len() int {
-	m.m.RLock()
-	defer m.m.RUnlock()
-
 	return len(m.items)
 }
 
 func (m *sortedMap) flatten() types.Transactions {
-	// If the sorting was not cached yet, create and cache it
 	m.cacheMu.Lock()
 	defer m.cacheMu.Unlock()
-
-	if m.isEmpty {
-		m.isEmpty = false // to simulate sync.Once
-
-		m.cacheMu.Unlock()
-
-		m.m.RLock()
-
-		cache := make(types.Transactions, 0, len(m.items))
-
+	// If the sorting was not cached yet, create and cache it
+	if m.cache == nil {
+		m.cache = make(types.Transactions, 0, len(m.items))
 		for _, tx := range m.items {
-			cache = append(cache, tx)
+			m.cache = append(m.cache, tx)
 		}
-
-		m.m.RUnlock()
-
-		// exclude sorting from locks
-		sort.Sort(types.TxByNonce(cache))
-
-		m.cacheMu.Lock()
-		m.cache = cache
-
-		reinitCacheGauge.Inc(1)
-		missCacheCounter.Inc(1)
-	} else {
-		hitCacheCounter.Inc(1)
+		sort.Sort(types.TxByNonce(m.cache))
 	}
-
 	return m.cache
 }
 
 func (m *sortedMap) lastElement() *types.Transaction {
-	// If the sorting was not cached yet, create and cache it
-	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
-
-	cache := m.cache
-
-	if m.isEmpty {
-		m.isEmpty = false // to simulate sync.Once
-
-		m.cacheMu.Unlock()
-
-		m.m.RLock()
-		cache = make(types.Transactions, 0, len(m.items))
-
-		for _, tx := range m.items {
-			cache = append(cache, tx)
-		}
-
-		m.m.RUnlock()
-
-		// exclude sorting from locks
-		sort.Sort(types.TxByNonce(cache))
-
-		m.cacheMu.Lock()
-		m.cache = cache
-
-		reinitCacheGauge.Inc(1)
-		missCacheCounter.Inc(1)
-	} else {
-		hitCacheCounter.Inc(1)
-	}
-
-	ln := len(cache)
-	if ln == 0 {
-		return nil
-	}
-
+	cache := m.flatten()
 	return cache[len(cache)-1]
 }
 
@@ -657,9 +553,8 @@ func (l *list) subTotalCost(txs []*types.Transaction) {
 // then the heap is sorted based on the effective tip based on the given base fee.
 // If baseFee is nil then the sorting is based on gasFeeCap.
 type priceHeap struct {
-	baseFee   *big.Int // heap should always be re-sorted after baseFee is changed
-	list      []*types.Transaction
-	baseFeeMu sync.RWMutex
+	baseFee *big.Int // heap should always be re-sorted after baseFee is changed
+	list    []*types.Transaction
 }
 
 func (h *priceHeap) Len() int      { return len(h.list) }
@@ -677,18 +572,12 @@ func (h *priceHeap) Less(i, j int) bool {
 }
 
 func (h *priceHeap) cmp(a, b *types.Transaction) int {
-	h.baseFeeMu.RLock()
-
 	if h.baseFee != nil {
 		// Compare effective tips if baseFee is specified
 		if c := a.EffectiveGasTipCmp(b, h.baseFee); c != 0 {
-			h.baseFeeMu.RUnlock()
-
 			return c
 		}
 	}
-
-	h.baseFeeMu.RUnlock()
 
 	// Compare fee caps if baseFee is not specified or effective tips are equal
 	if c := a.GasFeeCapCmp(b); c != 0 {
@@ -882,9 +771,6 @@ func (l *pricedList) Reheap() {
 // SetBaseFee updates the base fee and triggers a re-heap. Note that Removed is not
 // necessary to call right before SetBaseFee when processing a new block.
 func (l *pricedList) SetBaseFee(baseFee *big.Int) {
-	l.urgent.baseFeeMu.Lock()
 	l.urgent.baseFee = baseFee
-	l.urgent.baseFeeMu.Unlock()
-
 	l.Reheap()
 }
