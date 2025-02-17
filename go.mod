@@ -2,12 +2,6 @@ module github.com/ava-labs/libevm
 
 go 1.20
 
-retract (
-	// Bad semver formats resulting in incorrect precedence
-	v1.13.14-0.1.0-rc.1
-	v1.13.14-0.1.0.rc-2
-)
-
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.0
 	github.com/Microsoft/go-winio v0.6.1
