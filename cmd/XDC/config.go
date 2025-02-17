@@ -92,16 +92,15 @@ type Bootnodes struct {
 }
 
 type XDCConfig struct {
-	Eth         ethconfig.Config
-	Node        node.Config
-	Ethstats    ethstatsConfig
-	Metrics     metrics.Config
-	XDCX        XDCx.Config
-	Account     account
-	StakeEnable bool
-	Bootnodes   Bootnodes
-	Verbosity   int
-	NAT         string
+	Eth       ethconfig.Config
+	Node      node.Config
+	Ethstats  ethstatsConfig
+	Metrics   metrics.Config
+	XDCX      XDCx.Config
+	Account   account
+	Bootnodes Bootnodes
+	Verbosity int
+	NAT       string
 }
 
 func loadConfig(file string, cfg *XDCConfig) error {
@@ -132,13 +131,12 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	// Load defaults.
 	cfg := XDCConfig{
-		Eth:         ethconfig.Defaults,
-		XDCX:        XDCx.DefaultConfig,
-		Node:        defaultNodeConfig(),
-		Metrics:     metrics.DefaultConfig,
-		StakeEnable: true,
-		Verbosity:   3,
-		NAT:         "",
+		Eth:       ethconfig.Defaults,
+		XDCX:      XDCx.DefaultConfig,
+		Node:      defaultNodeConfig(),
+		Metrics:   metrics.DefaultConfig,
+		Verbosity: 3,
+		NAT:       "",
 	}
 	// Load config file.
 	if file := ctx.String(configFileFlag.Name); file != "" {
@@ -147,7 +145,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		}
 	}
 	if ctx.IsSet(utils.MiningEnabledFlag.Name) {
-		cfg.StakeEnable = ctx.Bool(utils.MiningEnabledFlag.Name)
+		log.Warn("The flag --mine is deprecated and will be removed")
 	}
 	// if !ctx.IsSet(debug.VerbosityFlag.Name) {
 	// 	debug.Verbosity(log.Lvl(cfg.Verbosity))
