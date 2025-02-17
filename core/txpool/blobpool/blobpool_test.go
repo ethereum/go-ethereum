@@ -142,6 +142,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		GasLimit:      gasLimit,
 		BaseFee:       baseFee,
 		ExcessBlobGas: &excessBlobGas,
+		Difficulty:    common.Big0,
 	}
 }
 
@@ -1565,8 +1566,9 @@ func TestAdd(t *testing.T) {
 		if tt.block != nil {
 			// Fake a header for the new set of transactions
 			header := &types.Header{
-				Number:  big.NewInt(int64(chain.CurrentBlock().Number.Uint64() + 1)),
-				BaseFee: chain.CurrentBlock().BaseFee, // invalid, but nothing checks it, yolo
+				Number:     big.NewInt(int64(chain.CurrentBlock().Number.Uint64() + 1)),
+				Difficulty: common.Big0,
+				BaseFee:    chain.CurrentBlock().BaseFee, // invalid, but nothing checks it, yolo
 			}
 			// Inject the fake block into the chain
 			txs := make([]*types.Transaction, len(tt.block))

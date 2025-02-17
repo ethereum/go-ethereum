@@ -64,9 +64,12 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	engine := beacon.New(ethash.NewFaker())
 	if merged {
 		config.TerminalTotalDifficulty = common.Big0
+		config.MergeNetsplitBlock = common.Big0
 	} else {
-		engine.TestingTTDBlock(uint64(n))
+		// When !merged, the tests expect the next block after the generated chain to be in PoS.
+		config.MergeNetsplitBlock = big.NewInt(int64(n + 1))
 	}
+
 	genesis := &core.Genesis{
 		Config: &config,
 		Alloc: types.GenesisAlloc{

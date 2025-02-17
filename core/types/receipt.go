@@ -291,7 +291,7 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	}
 	r.CumulativeGasUsed = stored.CumulativeGasUsed
 	r.Logs = stored.Logs
-	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+	r.Bloom = CreateBloom((*Receipt)(r))
 
 	return nil
 }

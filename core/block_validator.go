@@ -129,7 +129,11 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
-	rbloom := types.CreateBloom(res.Receipts)
+	//
+	// Receipts must go through MakeReceipt to calculate the receipt's bloom
+	// already. Merge the receipt's bloom together instead of recalculating
+	// everything.
+	rbloom := types.MergeBloom(res.Receipts)
 	if rbloom != header.Bloom {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
