@@ -2312,17 +2312,18 @@ func TestSimulateV1(t *testing.T) {
 
 func TestSimulateV1ChainLinkage(t *testing.T) {
 	var (
-		acc    = newTestAccount()
-		sender = acc.addr
-		gspec  = &core.Genesis{
-			Config: params.MergedTestChainConfig,
-			Alloc: types.GenesisAlloc{
-				sender: {Balance: big.NewInt(params.Ether)},
-			},
-		}
-		signer       = types.LatestSigner(params.MergedTestChainConfig)
+		acc          = newTestAccount()
+		sender       = acc.addr
 		contractAddr = common.Address{0xaa, 0xaa}
 		recipient    = common.Address{0xbb, 0xbb}
+		gspec        = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				sender:       {Balance: big.NewInt(params.Ether)},
+				contractAddr: {Code: common.Hex2Bytes("5f35405f8114600f575f5260205ff35b5f80fd")},
+			},
+		}
+		signer = types.LatestSigner(params.MergedTestChainConfig)
 	)
 	backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		tx := types.MustSignNewTx(acc.key, signer, &types.LegacyTx{
@@ -2378,15 +2379,7 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 		blocks = []simBlock{
 			{Calls: []TransactionArgs{call1}},
 			{Calls: []TransactionArgs{call2}},
-			{
-				StateOverrides: &override.StateOverride{
-					contractAddr: override.OverrideAccount{
-						// Takes block number as input and returns the block hash.
-						Code: hex2Bytes("0x5f35405f8114600f575f5260205ff35b5f80fd"),
-					},
-				},
-				Calls: []TransactionArgs{call3a, call3b},
-			},
+			{Calls: []TransactionArgs{call3a, call3b}},
 		}
 	)
 
