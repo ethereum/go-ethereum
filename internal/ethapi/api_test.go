@@ -2312,12 +2312,12 @@ func TestSimulateV1(t *testing.T) {
 
 func TestSimulateV1ChainLinkage(t *testing.T) {
 	var (
-		_, acc = newTestAccountManager(t)
-		sender = acc.Address
+		acc    = newTestAccount()
+		sender = acc.addr
 		gspec  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
 			Alloc: types.GenesisAlloc{
-				acc.Address: {Balance: big.NewInt(params.Ether)},
+				sender: {Balance: big.NewInt(params.Ether)},
 			},
 		}
 		signer       = types.LatestSigner(params.MergedTestChainConfig)
@@ -2325,8 +2325,8 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 		recipient    = common.Address{0xbb, 0xbb}
 	)
 	backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
-		key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		tx := types.MustSignNewTx(key, signer, &types.LegacyTx{
+
+		tx := types.MustSignNewTx(acc.key, signer, &types.LegacyTx{
 			Nonce:    uint64(i),
 			GasPrice: b.BaseFee(),
 			Gas:      params.TxGas,
