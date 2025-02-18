@@ -104,10 +104,21 @@ var (
 		Value:    ethconfig.Defaults.NetworkId,
 		Category: flags.EthCategory,
 	}
+	MainnetFlag = &cli.BoolFlag{
+		Name:     "mainnet",
+		Aliases:  []string{"xinfin"},
+		Usage:    "XDC xinfin network",
+		Category: flags.EthCategory,
+	}
 	TestnetFlag = &cli.BoolFlag{
 		Name:     "testnet",
 		Aliases:  []string{"apothem"},
 		Usage:    "XDC apothem network",
+		Category: flags.EthCategory,
+	}
+	DevnetFlag = &cli.BoolFlag{
+		Name:     "devnet",
+		Usage:    "XDC develop network",
 		Category: flags.EthCategory,
 	}
 	RinkebyFlag = &cli.BoolFlag{
@@ -819,6 +830,9 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.Bool(TestnetFlag.Name) {
 			return filepath.Join(path, "testnet")
 		}
+		if ctx.Bool(DevnetFlag.Name) {
+			return filepath.Join(path, "devnet")
+		}
 		if ctx.Bool(RinkebyFlag.Name) {
 			return filepath.Join(path, "rinkeby")
 		}
@@ -883,7 +897,7 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		switch {
 		case ctx.Bool(TestnetFlag.Name) || networkID == 51:
 			urls = params.TestnetBootnodes
-		case networkID == 551:
+		case ctx.Bool(DevnetFlag.Name) || networkID == 551:
 			urls = params.DevnetBootnodes
 		}
 	}
@@ -916,6 +930,8 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 		urls = SplitAndTrim(ctx.String(BootnodesV5Flag.Name))
 	case ctx.Bool(TestnetFlag.Name):
 		urls = params.TestnetBootnodes
+	case ctx.Bool(DevnetFlag.Name):
+		urls = params.DevnetBootnodes
 	case cfg.BootstrapNodesV5 != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1193,6 +1209,8 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.Bool(TestnetFlag.Name):
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
+	case ctx.Bool(DevnetFlag.Name):
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "devnet")
 	case ctx.Bool(RinkebyFlag.Name):
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	}
@@ -1386,7 +1404,7 @@ func SetXDCXConfig(ctx *cli.Context, cfg *XDCx.Config, XDCDataDir string) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag)
+	CheckExclusive(ctx, MainnetFlag, TestnetFlag, DevnetFlag, DeveloperFlag, RinkebyFlag)
 	CheckExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
 	CheckExclusive(ctx, LightServFlag, LightModeFlag)
 	CheckExclusive(ctx, LightServFlag, SyncModeFlag, "light")
@@ -1489,11 +1507,21 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	// Override any default configs for hard coded networks.
 	switch {
+	case ctx.Bool(MainnetFlag.Name):
+		if !ctx.IsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 50
+		}
+		cfg.Genesis = core.DefaultGenesisBlock()
 	case ctx.Bool(TestnetFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 51
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
+	case ctx.Bool(DevnetFlag.Name):
+		if !ctx.IsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 551
+		}
+		cfg.Genesis = core.DefaultDevnetGenesisBlock()
 	case ctx.Bool(RinkebyFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
@@ -1618,8 +1646,12 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
+	case ctx.Bool(MainnetFlag.Name):
+		genesis = core.DefaultGenesisBlock()
 	case ctx.Bool(TestnetFlag.Name):
 		genesis = core.DefaultTestnetGenesisBlock()
+	case ctx.Bool(DevnetFlag.Name):
+		genesis = core.DefaultDevnetGenesisBlock()
 	case ctx.Bool(RinkebyFlag.Name):
 		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.Bool(DeveloperFlag.Name):
