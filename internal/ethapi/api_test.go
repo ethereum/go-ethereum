@@ -2325,7 +2325,6 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 		recipient    = common.Address{0xbb, 0xbb}
 	)
 	backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
-
 		tx := types.MustSignNewTx(acc.key, signer, &types.LegacyTx{
 			Nonce:    uint64(i),
 			GasPrice: b.BaseFee(),
