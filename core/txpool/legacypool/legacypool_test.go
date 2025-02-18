@@ -1273,16 +1273,15 @@ func sizedDataTransaction(t *testing.T, targetSize, nonce, gasLimit uint64, key 
 	for dataLength > 0 {
 		txWithData := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), gasLimit, gasPrice, data)
 		signedTx, err := types.SignTx(txWithData, types.HomesteadSigner{}, key)
-		if txSignatureLen(signedTx) != targetSignatureLength {
+		switch {
+		case err != nil:
+			require.NoError(t, err, "signing transaction")
+		case txSignatureLen(signedTx) != targetSignatureLength:
 			// try again with other data to get a signature of the desired length
 			for i := range data {
 				data[i]++
 			}
 			continue
-		}
-		switch {
-		case err != nil:
-			require.NoError(t, err, "signing transaction")
 		case signedTx.Size() == targetSize:
 			return signedTx
 		case signedTx.Size() < targetSize:
