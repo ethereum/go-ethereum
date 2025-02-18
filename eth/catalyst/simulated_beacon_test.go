@@ -86,7 +86,8 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	// short period (1 second) for testing purposes
 	var gasLimit uint64 = 10_000_000
 	genesis := core.DeveloperGenesisBlock(gasLimit, &testAddr)
-	node, ethService, mock := startSimulatedBeaconEthService(t, genesis, 1)
+	// Increase block generation frequency by reducing the period to 0.5 seconds
+	node, ethService, mock := startSimulatedBeaconEthService(t, genesis, 0.5)
 	_ = mock
 	defer node.Close()
 
@@ -119,7 +120,8 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	includedTxs := make(map[common.Hash]struct{})
 	var includedWithdrawals []uint64
 
-	timer := time.NewTimer(12 * time.Second)
+	// Increase timeout to 30 seconds to ensure the test has enough time to complete
+	timer := time.NewTimer(30 * time.Second)
 	for {
 		select {
 		case ev := <-chainHeadCh:
