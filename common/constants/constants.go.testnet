@@ -143,8 +143,8 @@ var (
 	LendingRegistrationSMC        = MaintnetConstant.lendingRegistrationSMC
 	LendingRegistrationSMCTestnet = MaintnetConstant.lendingRegistrationSMCTestnet
 
-	ignoreSignerCheckBlockArray = map[uint64]struct{}{}
-	blacklist                   = map[Address]struct{}{}
+	ignoreSignerCheckBlockArray = MaintnetConstant.ignoreSignerCheckBlockArray
+	blacklist                   = MaintnetConstant.blacklist
 )
 
 func IsIgnoreSignerCheckBlock(blockNumber uint64) bool {
@@ -160,12 +160,13 @@ func IsInBlacklist(address *Address) bool {
 	return ok
 }
 
+// CopyConstans only handles testnet, devnet, local. It does not
+// handles mainnet since the default value is from mainnet.
 func CopyConstans(chainID uint64) {
 	var c *constant
-	if chainID == MaintnetConstant.chainID {
-		c = &MaintnetConstant
-	} else if chainID == TestnetConstant.chainID {
+	if chainID == TestnetConstant.chainID {
 		c = &TestnetConstant
+		IsTestnet = true
 	} else if chainID == DevnetConstant.chainID {
 		c = &DevnetConstant
 	} else if chainID == localConstant.chainID {
