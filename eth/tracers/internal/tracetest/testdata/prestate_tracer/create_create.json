@@ -11,7 +11,6 @@
     "number": "1",
     "stateRoot": "0xd2ebe0a7f3572ffe3e5b4c78147376d3fca767f236e4dd23f9151acfec7cb0d1",
     "timestamp": "1699617692",
-    "totalDifficulty": "0",
     "alloc": {
       "0x0000000000000000000000000000000000000000": {
         "balance": "0x5208"

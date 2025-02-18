@@ -14,7 +14,6 @@
     "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "stateRoot": "0x577f42ab21ccfd946511c57869ace0bdf7c217c36f02b7cd3459df0ed1cffc1a",
     "timestamp": "1709626771",
-    "totalDifficulty": "1",
     "alloc": {
       "0x0000000000000000000000000000000000000000": {
         "balance": "0x272e0528"
