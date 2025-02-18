@@ -975,7 +975,7 @@ func (api *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash)
 func (api *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := api.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
-		response := RPCMarshalBlock(block, true, fullTx, api.b.ChainConfig())
+		response := RPCMarshalBlock(block, true, fullTx, api.b.ChainConfig(), api.b.ChainDb())
 		if number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
@@ -998,14 +998,15 @@ func (api *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.Block
 // detail, otherwise only the transaction hash is returned.
 func (api *BlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := api.b.BlockByHash(ctx, hash)
-	if block != nil {
-		response, err := api.rpcMarshalBlock(ctx, block, true, fullTx)
+	if block != nil && err == nil {
+		response := RPCMarshalBlock(block, true, fullTx, api.b.ChainConfig(), api.b.ChainDb())
+
 		// append marshalled bor transaction
-		if err == nil && response != nil {
+		if response != nil {
 			return api.appendRPCMarshalBorTransaction(ctx, block, response, fullTx), err
 		}
 
-		return response, err
+		return response, nil
 	}
 
 	return nil, err
@@ -1022,7 +1023,7 @@ func (api *BlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context, blo
 		}
 
 		block = types.NewBlockWithHeader(uncles[index])
-		return RPCMarshalBlock(block, false, false, api.b.ChainConfig()), nil
+		return RPCMarshalBlock(block, false, false, api.b.ChainConfig(), api.b.ChainDb()), nil
 	}
 
 	return nil, err
@@ -1039,7 +1040,7 @@ func (api *BlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, block
 		}
 
 		block = types.NewBlockWithHeader(uncles[index])
-		return RPCMarshalBlock(block, false, false, api.b.ChainConfig()), nil
+		return RPCMarshalBlock(block, false, false, api.b.ChainConfig(), api.b.ChainDb()), nil
 	}
 
 	return nil, err
