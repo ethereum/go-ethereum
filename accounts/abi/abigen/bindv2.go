@@ -167,10 +167,7 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 		}
 	}
 	normalized.Outputs = normalizeArgs(original.Outputs)
-	for j, output := range normalized.Outputs {
-		if output.Name != "" {
-			normalized.Outputs[j].Name = abi.ToCamelCase(output.Name)
-		}
+	for _, output := range normalized.Outputs {
 		if hasStruct(output.Type) {
 			cb.binder.BindStructType(output.Type)
 		}
