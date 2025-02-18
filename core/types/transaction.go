@@ -519,20 +519,25 @@ func (tx *Transaction) SetCodeAuthorities() []common.Address {
 	if !ok {
 		return nil
 	}
-	var (
-		marks = make(map[common.Address]bool)
-		auths = make([]common.Address, 0, len(setcodetx.AuthList))
-	)
-	for _, auth := range setcodetx.AuthList {
-		if addr, err := auth.Authority(); err == nil {
-			if marks[addr] {
-				continue
-			}
-			marks[addr] = true
-			auths = append(auths, addr)
-		}
+	if authorityCache := setcodetx.authorityCache.Load(); authorityCache != nil {
+		return authorityCache.authorities
 	}
-	return auths
+	cache := ToAuthorityCache(setcodetx.AuthList)
+	setcodetx.authorityCache.Store(cache)
+	return cache.authorities
+}
+
+func (tx *Transaction) AuthorityCache() *AuthorityCache {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
+		return nil
+	}
+	if authorityCache := setcodetx.authorityCache.Load(); authorityCache != nil {
+		return authorityCache
+	}
+	cache := ToAuthorityCache(setcodetx.AuthList)
+	setcodetx.authorityCache.Store(cache)
+	return cache
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set
