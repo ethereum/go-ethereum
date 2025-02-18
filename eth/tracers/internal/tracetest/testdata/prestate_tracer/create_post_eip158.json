@@ -11,7 +11,6 @@
     "number": "39137",
     "stateRoot": "0x715f00df764dbadd4863247a215ac44b5420beafde3ec458b15db7aafa89be0c",
     "timestamp": "1709022192",
-    "totalDifficulty": "78275",
     "alloc": {
       "0x2445e8c26a2bf3d1e59f1bb9b1d442caf90768e0": {
         "balance": "0x10f06447a8d44dba190",
