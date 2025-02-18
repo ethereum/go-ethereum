@@ -60,13 +60,7 @@ contract DB {
         balance += msg.value;
     }
 
-    fallback() external {
-
-    }
-
-/*
     fallback(bytes calldata _input) external returns (bytes memory _output) {
         _output = _input;
     }
-    */
 }
