@@ -54,8 +54,8 @@ func (c *InputChecker) Instance(backend bind.ContractBackend, addr common.Addres
 // the contract method with ID 0x3e708e82.
 //
 // Solidity: function anonInput(string ) returns()
-func (inputChecker *InputChecker) PackAnonInput(Arg0 string) []byte {
-	enc, err := inputChecker.abi.Pack("anonInput", Arg0)
+func (inputChecker *InputChecker) PackAnonInput(arg0 string) []byte {
+	enc, err := inputChecker.abi.Pack("anonInput", arg0)
 	if err != nil {
 		panic(err)
 	}
@@ -66,8 +66,8 @@ func (inputChecker *InputChecker) PackAnonInput(Arg0 string) []byte {
 // the contract method with ID 0x28160527.
 //
 // Solidity: function anonInputs(string , string ) returns()
-func (inputChecker *InputChecker) PackAnonInputs(Arg0 string, Arg1 string) []byte {
-	enc, err := inputChecker.abi.Pack("anonInputs", Arg0, Arg1)
+func (inputChecker *InputChecker) PackAnonInputs(arg0 string, arg1 string) []byte {
+	enc, err := inputChecker.abi.Pack("anonInputs", arg0, arg1)
 	if err != nil {
 		panic(err)
 	}
@@ -78,8 +78,8 @@ func (inputChecker *InputChecker) PackAnonInputs(Arg0 string, Arg1 string) []byt
 // the contract method with ID 0xc689ebdc.
 //
 // Solidity: function mixedInputs(string , string str) returns()
-func (inputChecker *InputChecker) PackMixedInputs(Arg0 string, Str string) []byte {
-	enc, err := inputChecker.abi.Pack("mixedInputs", Arg0, Str)
+func (inputChecker *InputChecker) PackMixedInputs(arg0 string, str string) []byte {
+	enc, err := inputChecker.abi.Pack("mixedInputs", arg0, str)
 	if err != nil {
 		panic(err)
 	}
@@ -90,8 +90,8 @@ func (inputChecker *InputChecker) PackMixedInputs(Arg0 string, Str string) []byt
 // the contract method with ID 0x0d402005.
 //
 // Solidity: function namedInput(string str) returns()
-func (inputChecker *InputChecker) PackNamedInput(Str string) []byte {
-	enc, err := inputChecker.abi.Pack("namedInput", Str)
+func (inputChecker *InputChecker) PackNamedInput(str string) []byte {
+	enc, err := inputChecker.abi.Pack("namedInput", str)
 	if err != nil {
 		panic(err)
 	}
@@ -102,8 +102,8 @@ func (inputChecker *InputChecker) PackNamedInput(Str string) []byte {
 // the contract method with ID 0x63c796ed.
 //
 // Solidity: function namedInputs(string str1, string str2) returns()
-func (inputChecker *InputChecker) PackNamedInputs(Str1 string, Str2 string) []byte {
-	enc, err := inputChecker.abi.Pack("namedInputs", Str1, Str2)
+func (inputChecker *InputChecker) PackNamedInputs(str1 string, str2 string) []byte {
+	enc, err := inputChecker.abi.Pack("namedInputs", str1, str2)
 	if err != nil {
 		panic(err)
 	}

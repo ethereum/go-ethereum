@@ -29,7 +29,7 @@ var (
 	// {{.Name}} is an auto generated low-level Go binding around an user-defined struct.
 	type {{.Name}} struct {
 	{{range $field := .Fields}}
-	{{$field.Name}} {{$field.Type}}{{end}}
+	{{capitalise $field.Name}} {{$field.Type}}{{end}}
 	}
 {{end}}
 
@@ -108,7 +108,7 @@ var (
 			// method {{ .Normalized.Name }}.
 			type {{.Normalized.Name}}Output struct {
 			  {{range .Normalized.Outputs}}
-			  {{.Name}} {{bindtype .Type $structs}}{{end}}
+			  {{capitalise .Name}} {{bindtype .Type $structs}}{{end}}
 			}
 			{{ end }}
 
@@ -128,9 +128,9 @@ var (
 				}
 				{{- range $i, $t := .Normalized.Outputs}}
 				{{- if ispointertype .Type}}
-					outstruct.{{.Name}} = abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type }})).({{bindtype .Type $structs}})
+					outstruct.{{capitalise .Name}} = abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type }})).({{bindtype .Type $structs}})
 				{{- else }}
-					outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
+					outstruct.{{capitalise .Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
 				{{- end }}
 				{{- end }}
 				return *outstruct, err

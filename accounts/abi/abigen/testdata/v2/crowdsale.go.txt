@@ -154,8 +154,8 @@ func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
 // the contract method with ID 0xdc0d3dff.
 //
 // Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
-func (crowdsale *Crowdsale) PackFunders(Arg0 *big.Int) []byte {
-	enc, err := crowdsale.abi.Pack("funders", Arg0)
+func (crowdsale *Crowdsale) PackFunders(arg0 *big.Int) []byte {
+	enc, err := crowdsale.abi.Pack("funders", arg0)
 	if err != nil {
 		panic(err)
 	}

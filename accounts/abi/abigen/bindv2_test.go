@@ -303,11 +303,11 @@ func TestNormalizeArgs(t *testing.T) {
 		expected []string
 	}
 	for i, tc := range []normalizeArgsTc{
-		{[]string{"arg1", "Arg1"}, []string{"Arg1", "Arg10"}},
-		{[]string{"", ""}, []string{"Arg0", "Arg1"}},
-		{[]string{"var", "const"}, []string{"Arg0", "Arg1"}},
-		{[]string{"_res", "Res"}, []string{"Res", "Res0"}},
-		{[]string{"_", "__"}, []string{"Arg0", "Arg1"}}} {
+		{[]string{"arg1", "arg1"}, []string{"arg1", "arg10"}},
+		{[]string{"", ""}, []string{"arg0", "arg1"}},
+		{[]string{"var", "const"}, []string{"arg0", "arg1"}},
+		{[]string{"_res", "Res"}, []string{"res", "res0"}},
+		{[]string{"_", "__"}, []string{"arg0", "arg1"}}} {
 		var inpArgs abi.Arguments
 		for _, inpArgName := range tc.inp {
 			inpArgs = append(inpArgs, abi.Argument{

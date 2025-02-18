@@ -55,8 +55,8 @@ func (c *CallbackParam) Instance(backend bind.ContractBackend, addr common.Addre
 // the contract method with ID 0xd7a5aba2.
 //
 // Solidity: function test(function callback) returns()
-func (callbackParam *CallbackParam) PackTest(Callback [24]byte) []byte {
-	enc, err := callbackParam.abi.Pack("test", Callback)
+func (callbackParam *CallbackParam) PackTest(callback [24]byte) []byte {
+	enc, err := callbackParam.abi.Pack("test", callback)
 	if err != nil {
 		panic(err)
 	}

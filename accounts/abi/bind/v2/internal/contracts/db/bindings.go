@@ -62,8 +62,8 @@ func (c *DB) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 // the contract method with ID 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
-func (dB *DB) PackGet(K *big.Int) []byte {
-	enc, err := dB.abi.Pack("get", K)
+func (dB *DB) PackGet(k *big.Int) []byte {
+	enc, err := dB.abi.Pack("get", k)
 	if err != nil {
 		panic(err)
 	}
@@ -186,8 +186,8 @@ func (dB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
 // the contract method with ID 0x1d834a1b.
 //
 // Solidity: function insert(uint256 k, uint256 v) returns(uint256)
-func (dB *DB) PackInsert(K *big.Int, V *big.Int) []byte {
-	enc, err := dB.abi.Pack("insert", K, V)
+func (dB *DB) PackInsert(k *big.Int, v *big.Int) []byte {
+	enc, err := dB.abi.Pack("insert", k, v)
 	if err != nil {
 		panic(err)
 	}

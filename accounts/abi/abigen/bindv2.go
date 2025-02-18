@@ -195,12 +195,15 @@ func normalizeArgs(args abi.Arguments) abi.Arguments {
 
 	for i, input := range args {
 		if isKeyWord(input.Name) {
-			args[i].Name = fmt.Sprintf("Arg%d", i)
+			args[i].Name = fmt.Sprintf("arg%d", i)
 		}
 		args[i].Name = abi.ToCamelCase(args[i].Name)
 		if args[i].Name == "" {
-			args[i].Name = fmt.Sprintf("Arg%d", i)
+			args[i].Name = fmt.Sprintf("arg%d", i)
+		} else {
+			args[i].Name = strings.ToLower(args[i].Name[:1]) + args[i].Name[1:]
 		}
+
 		for index := 0; ; index++ {
 			if !used[args[i].Name] {
 				used[args[i].Name] = true

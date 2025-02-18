@@ -100,8 +100,8 @@ func (c *C) UnpackDoSomethingWithManyArgs(data []byte) (DoSomethingWithManyArgsO
 // the contract method with ID 0xedcdc894.
 //
 // Solidity: function DoSomethingWithPoint((uint256,uint256) p) pure returns((uint256,uint256))
-func (c *C) PackDoSomethingWithPoint(P CPoint) []byte {
-	enc, err := c.abi.Pack("DoSomethingWithPoint", P)
+func (c *C) PackDoSomethingWithPoint(p CPoint) []byte {
+	enc, err := c.abi.Pack("DoSomethingWithPoint", p)
 	if err != nil {
 		panic(err)
 	}

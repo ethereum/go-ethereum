@@ -55,8 +55,8 @@ func (c *DeeplyNestedArray) Instance(backend bind.ContractBackend, addr common.A
 // the contract method with ID 0x98ed1856.
 //
 // Solidity: function deepUint64Array(uint256 , uint256 , uint256 ) view returns(uint64)
-func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(Arg0 *big.Int, Arg1 *big.Int, Arg2 *big.Int) []byte {
-	enc, err := deeplyNestedArray.abi.Pack("deepUint64Array", Arg0, Arg1, Arg2)
+func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(arg0 *big.Int, arg1 *big.Int, arg2 *big.Int) []byte {
+	enc, err := deeplyNestedArray.abi.Pack("deepUint64Array", arg0, arg1, arg2)
 	if err != nil {
 		panic(err)
 	}
@@ -105,8 +105,8 @@ func (deeplyNestedArray *DeeplyNestedArray) UnpackRetrieveDeepArray(data []byte)
 // the contract method with ID 0x34424855.
 //
 // Solidity: function storeDeepUintArray(uint64[3][4][5] arr) returns()
-func (deeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(Arr [5][4][3]uint64) []byte {
-	enc, err := deeplyNestedArray.abi.Pack("storeDeepUintArray", Arr)
+func (deeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(arr [5][4][3]uint64) []byte {
+	enc, err := deeplyNestedArray.abi.Pack("storeDeepUintArray", arr)
 	if err != nil {
 		panic(err)
 	}

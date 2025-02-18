@@ -67,8 +67,8 @@ func (dAO *DAO) PackConstructor(minimumQuorumForProposals *big.Int, minutesForDe
 // the contract method with ID 0x9644fcbd.
 //
 // Solidity: function changeMembership(address targetMember, bool canVote, string memberName) returns()
-func (dAO *DAO) PackChangeMembership(TargetMember common.Address, CanVote bool, MemberName string) []byte {
-	enc, err := dAO.abi.Pack("changeMembership", TargetMember, CanVote, MemberName)
+func (dAO *DAO) PackChangeMembership(targetMember common.Address, canVote bool, memberName string) []byte {
+	enc, err := dAO.abi.Pack("changeMembership", targetMember, canVote, memberName)
 	if err != nil {
 		panic(err)
 	}
@@ -79,8 +79,8 @@ func (dAO *DAO) PackChangeMembership(TargetMember common.Address, CanVote bool, 
 // the contract method with ID 0xbcca1fd3.
 //
 // Solidity: function changeVotingRules(uint256 minimumQuorumForProposals, uint256 minutesForDebate, int256 marginOfVotesForMajority) returns()
-func (dAO *DAO) PackChangeVotingRules(MinimumQuorumForProposals *big.Int, MinutesForDebate *big.Int, MarginOfVotesForMajority *big.Int) []byte {
-	enc, err := dAO.abi.Pack("changeVotingRules", MinimumQuorumForProposals, MinutesForDebate, MarginOfVotesForMajority)
+func (dAO *DAO) PackChangeVotingRules(minimumQuorumForProposals *big.Int, minutesForDebate *big.Int, marginOfVotesForMajority *big.Int) []byte {
+	enc, err := dAO.abi.Pack("changeVotingRules", minimumQuorumForProposals, minutesForDebate, marginOfVotesForMajority)
 	if err != nil {
 		panic(err)
 	}
@@ -91,8 +91,8 @@ func (dAO *DAO) PackChangeVotingRules(MinimumQuorumForProposals *big.Int, Minute
 // the contract method with ID 0xeceb2945.
 //
 // Solidity: function checkProposalCode(uint256 proposalNumber, address beneficiary, uint256 etherAmount, bytes transactionBytecode) returns(bool codeChecksOut)
-func (dAO *DAO) PackCheckProposalCode(ProposalNumber *big.Int, Beneficiary common.Address, EtherAmount *big.Int, TransactionBytecode []byte) []byte {
-	enc, err := dAO.abi.Pack("checkProposalCode", ProposalNumber, Beneficiary, EtherAmount, TransactionBytecode)
+func (dAO *DAO) PackCheckProposalCode(proposalNumber *big.Int, beneficiary common.Address, etherAmount *big.Int, transactionBytecode []byte) []byte {
+	enc, err := dAO.abi.Pack("checkProposalCode", proposalNumber, beneficiary, etherAmount, transactionBytecode)
 	if err != nil {
 		panic(err)
 	}
@@ -141,8 +141,8 @@ func (dAO *DAO) UnpackDebatingPeriodInMinutes(data []byte) (*big.Int, error) {
 // the contract method with ID 0x237e9492.
 //
 // Solidity: function executeProposal(uint256 proposalNumber, bytes transactionBytecode) returns(int256 result)
-func (dAO *DAO) PackExecuteProposal(ProposalNumber *big.Int, TransactionBytecode []byte) []byte {
-	enc, err := dAO.abi.Pack("executeProposal", ProposalNumber, TransactionBytecode)
+func (dAO *DAO) PackExecuteProposal(proposalNumber *big.Int, transactionBytecode []byte) []byte {
+	enc, err := dAO.abi.Pack("executeProposal", proposalNumber, transactionBytecode)
 	if err != nil {
 		panic(err)
 	}
@@ -191,8 +191,8 @@ func (dAO *DAO) UnpackMajorityMargin(data []byte) (*big.Int, error) {
 // the contract method with ID 0x39106821.
 //
 // Solidity: function memberId(address ) returns(uint256)
-func (dAO *DAO) PackMemberId(Arg0 common.Address) []byte {
-	enc, err := dAO.abi.Pack("memberId", Arg0)
+func (dAO *DAO) PackMemberId(arg0 common.Address) []byte {
+	enc, err := dAO.abi.Pack("memberId", arg0)
 	if err != nil {
 		panic(err)
 	}
@@ -216,8 +216,8 @@ func (dAO *DAO) UnpackMemberId(data []byte) (*big.Int, error) {
 // the contract method with ID 0x5daf08ca.
 //
 // Solidity: function members(uint256 ) returns(address member, bool canVote, string name, uint256 memberSince)
-func (dAO *DAO) PackMembers(Arg0 *big.Int) []byte {
-	enc, err := dAO.abi.Pack("members", Arg0)
+func (dAO *DAO) PackMembers(arg0 *big.Int) []byte {
+	enc, err := dAO.abi.Pack("members", arg0)
 	if err != nil {
 		panic(err)
 	}
@@ -280,8 +280,8 @@ func (dAO *DAO) UnpackMinimumQuorum(data []byte) (*big.Int, error) {
 // the contract method with ID 0xb1050da5.
 //
 // Solidity: function newProposal(address beneficiary, uint256 etherAmount, string JobDescription, bytes transactionBytecode) returns(uint256 proposalID)
-func (dAO *DAO) PackNewProposal(Beneficiary common.Address, EtherAmount *big.Int, JobDescription string, TransactionBytecode []byte) []byte {
-	enc, err := dAO.abi.Pack("newProposal", Beneficiary, EtherAmount, JobDescription, TransactionBytecode)
+func (dAO *DAO) PackNewProposal(beneficiary common.Address, etherAmount *big.Int, jobDescription string, transactionBytecode []byte) []byte {
+	enc, err := dAO.abi.Pack("newProposal", beneficiary, etherAmount, jobDescription, transactionBytecode)
 	if err != nil {
 		panic(err)
 	}
@@ -355,8 +355,8 @@ func (dAO *DAO) UnpackOwner(data []byte) (common.Address, error) {
 // the contract method with ID 0x013cf08b.
 //
 // Solidity: function proposals(uint256 ) returns(address recipient, uint256 amount, string description, uint256 votingDeadline, bool executed, bool proposalPassed, uint256 numberOfVotes, int256 currentResult, bytes32 proposalHash)
-func (dAO *DAO) PackProposals(Arg0 *big.Int) []byte {
-	enc, err := dAO.abi.Pack("proposals", Arg0)
+func (dAO *DAO) PackProposals(arg0 *big.Int) []byte {
+	enc, err := dAO.abi.Pack("proposals", arg0)
 	if err != nil {
 		panic(err)
 	}
@@ -404,8 +404,8 @@ func (dAO *DAO) UnpackProposals(data []byte) (ProposalsOutput, error) {
 // the contract method with ID 0xf2fde38b.
 //
 // Solidity: function transferOwnership(address newOwner) returns()
-func (dAO *DAO) PackTransferOwnership(NewOwner common.Address) []byte {
-	enc, err := dAO.abi.Pack("transferOwnership", NewOwner)
+func (dAO *DAO) PackTransferOwnership(newOwner common.Address) []byte {
+	enc, err := dAO.abi.Pack("transferOwnership", newOwner)
 	if err != nil {
 		panic(err)
 	}
@@ -416,8 +416,8 @@ func (dAO *DAO) PackTransferOwnership(NewOwner common.Address) []byte {
 // the contract method with ID 0xd3c0715b.
 //
 // Solidity: function vote(uint256 proposalNumber, bool supportsProposal, string justificationText) returns(uint256 voteID)
-func (dAO *DAO) PackVote(ProposalNumber *big.Int, SupportsProposal bool, JustificationText string) []byte {
-	enc, err := dAO.abi.Pack("vote", ProposalNumber, SupportsProposal, JustificationText)
+func (dAO *DAO) PackVote(proposalNumber *big.Int, supportsProposal bool, justificationText string) []byte {
+	enc, err := dAO.abi.Pack("vote", proposalNumber, supportsProposal, justificationText)
 	if err != nil {
 		panic(err)
 	}
