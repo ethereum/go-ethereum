@@ -1,6 +1,6 @@
 # Security Policy
 
-## Supported Versions
+## Supported Versions 
 
 Please see [Releases](https://github.com/ethereum/go-ethereum/releases). We recommend using the [most recently released version](https://github.com/ethereum/go-ethereum/releases/latest).
 
