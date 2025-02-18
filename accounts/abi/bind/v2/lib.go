@@ -208,3 +208,34 @@ func DefaultDeployer(opts *TransactOpts, backend ContractBackend) DeployFn {
 		return addr, tx, nil
 	}
 }
+
+// PackReceive is a no-op function for crafting a call/transaction to the
+// receive function of a contract.  When defined by the contract ABI, the
+// receive function is called when the calldata input is absent or is not
+// prepended with the function selector bytes of another function.
+//
+// This function simply returns an empty byte slice.
+func PackReceive() []byte {
+	return []byte{}
+}
+
+// PackFallback is used for crafting the input of a call/transaction to a
+// contract with a fallback method defined.  Note: nil should be passed as the input
+// unless the target contract defines a fallback function that takes calldata
+// input.
+//
+// The input bytes to the fallback function are not ABI-encoded, so this
+// function simply returns the input slice.
+func PackFallback(input []byte) []byte {
+	return input
+}
+
+// UnpackFallback decodes the result of a call to a contract's fallback
+// function.  It should only be used if the target contract defines a
+// fallback function that returns a result.
+//
+// The inputs/outputs to the fallback  function are not ABI-encoded, so this
+// function simply returns the input slice.
+func UnpackFallback(input []byte) ([]byte, error) {
+	return input, nil
+}

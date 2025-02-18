@@ -17,6 +17,7 @@
 package bind_test
 
 import (
+	"bytes"
 	"context"
 	"math/big"
 	"testing"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/db"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/events"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/nested_libraries"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/contracts/solc_errors"
@@ -178,7 +180,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 }
 
 // returns transaction auth to send a basic transaction from testAddr
-func defaultTxAuth() *bind.TransactOpts {
+func defaultTxAuth(val *big.Int) *bind.TransactOpts {
 	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
 	opts := &bind.TransactOpts{
 		From:  testAddr,
@@ -194,6 +196,7 @@ func defaultTxAuth() *bind.TransactOpts {
 			}
 			return signedTx, nil
 		},
+		Value:   val,
 		Context: context.Background(),
 	}
 	return opts
@@ -236,7 +239,7 @@ func TestEvents(t *testing.T) {
 	defer sub2.Unsubscribe()
 
 	packedInput := c.PackEmitMulti()
-	tx, err := bind.Transact(instance, defaultTxAuth(), packedInput)
+	tx, err := bind.Transact(instance, defaultTxAuth(nil), packedInput)
 	if err != nil {
 		t.Fatalf("failed to send transaction: %v", err)
 	}
@@ -365,5 +368,141 @@ func TestErrors(t *testing.T) {
 	}
 	if unpackedErr.Arg4 != false {
 		t.Fatalf("bad unpacked error result: expected Arg4 to be false.  got true")
+	}
+}
+
+func TestFallback(t *testing.T) {
+	// test that a function with fallback defined with parameters and results
+	// can be invoked via the pack/unpack functions this lib provides.
+	backend, err := testSetup()
+	if err != nil {
+		t.Fatalf("error setting up testing env: %v", err)
+	}
+	deploymentParams := &bind.DeploymentParams{
+		Contracts: []*bind.MetaData{&db.DBMetaData},
+	}
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(backend))
+	if err != nil {
+		t.Fatalf("error deploying contract for testing: %v", err)
+	}
+
+	backend.Commit()
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[db.DBMetaData.ID].Hash()); err != nil {
+		t.Fatalf("WaitDeployed failed %v", err)
+	}
+
+	c := db.NewDB()
+	instance := c.Instance(backend, res.Addresses[db.DBMetaData.ID])
+
+	// test that calling the fallback with some calldata returns expected output.
+	fbInput := bind.PackFallback([]byte{0xff, 0xee})
+	callOpts := &bind.CallOpts{From: common.Address{}, Context: context.Background()}
+	output, err := bind.Call[[]byte](instance, callOpts, fbInput, bind.UnpackFallback)
+	if err != nil {
+		t.Fatalf("err unpacking result: %v", err)
+	}
+
+	expected := []byte{0xff, 0xee}
+	if !bytes.Equal(output, expected) {
+		t.Fatalf("expected fallback to return same val as input (%v)\ngot: %v", fbInput, output)
+	}
+
+	// test that calling the fallback with no calldata returns expected output
+	fbInput = bind.PackFallback(nil)
+	callOpts = &bind.CallOpts{From: common.Address{}, Context: context.Background()}
+	output, err = bind.Call[[]byte](instance, callOpts, fbInput, bind.UnpackFallback)
+	if err != nil {
+		t.Fatalf("err unpacking result: %v", err)
+	}
+
+	expected = []byte{}
+	if !bytes.Equal(output, expected) {
+		t.Fatalf("expected fallback to return empty byte slice\ngot: %v", output)
+	}
+}
+
+func TestFallbackNoInput(t *testing.T) {
+	// test that we can pass pack/unpack functions (and input) to invoke the fallback
+	// method of a contract that isn't defined to take input.
+	backend, err := testSetup()
+	if err != nil {
+		t.Fatalf("error setting up testing env: %v", err)
+	}
+	deploymentParams := &bind.DeploymentParams{
+		Contracts: []*bind.MetaData{&events.CMetaData},
+	}
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(backend))
+	if err != nil {
+		t.Fatalf("error deploying contract for testing: %v", err)
+	}
+
+	backend.Commit()
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.ID].Hash()); err != nil {
+		t.Fatalf("WaitDeployed failed %v", err)
+	}
+
+	c := db.NewDB()
+	instance := c.Instance(backend, res.Addresses[events.CMetaData.ID])
+
+	// test that calling the fallback with some calldata returns expected output.
+	fbInput := bind.PackFallback([]byte{0xff, 0xee})
+	callOpts := &bind.CallOpts{From: common.Address{}, Context: context.Background()}
+	output, err := bind.Call[[]byte](instance, callOpts, fbInput, bind.UnpackFallback)
+	if err != nil {
+		t.Fatalf("err unpacking result: %v", err)
+	}
+
+	expected := []byte{}
+	if !bytes.Equal(output, expected) {
+		t.Fatalf("expected fallback to return empty byte slice\ngot: %v", output)
+	}
+
+	// call the same fallback with no input, no unpack.  it should succeed.
+	callOpts = &bind.CallOpts{From: common.Address{}, Context: context.Background()}
+	_, err = bind.Call[any](instance, callOpts, nil, nil)
+	if err != nil {
+		t.Fatalf("error calling target contract: %v", err)
+	}
+}
+
+func TestReceive(t *testing.T) {
+	// test that a contract can receive ether via the pack function provided in the API
+	backend, err := testSetup()
+	if err != nil {
+		t.Fatalf("error setting up testing env: %v", err)
+	}
+	deploymentParams := &bind.DeploymentParams{
+		Contracts: []*bind.MetaData{&db.DBMetaData},
+	}
+	res, err := bind.LinkAndDeploy(deploymentParams, makeTestDeployer(backend))
+	if err != nil {
+		t.Fatalf("error deploying contract for testing: %v", err)
+	}
+
+	backend.Commit()
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[db.DBMetaData.ID].Hash()); err != nil {
+		t.Fatalf("WaitDeployed failed %v", err)
+	}
+
+	c := db.NewDB()
+	instance := c.Instance(backend, res.Addresses[db.DBMetaData.ID])
+
+	packedInput := bind.PackReceive()
+	tx, err := bind.Transact(instance, defaultTxAuth(big.NewInt(1)), packedInput)
+	if err != nil {
+		t.Fatalf("failed to send transaction: %v", err)
+	}
+	backend.Commit()
+	if _, err := bind.WaitMined(context.Background(), backend, tx.Hash()); err != nil {
+		t.Fatalf("error waiting for tx to be mined: %v", err)
+	}
+
+	balance, err := backend.BalanceAt(context.Background(), res.Addresses[db.DBMetaData.ID], nil)
+	if err != nil {
+		t.Fatalf("error querying balance of deployed contract: %v", err)
+	}
+
+	if balance.Cmp(big.NewInt(1)) != 0 {
+		t.Fatalf("expected balance to be 1.  got %s", balance.String())
 	}
 }

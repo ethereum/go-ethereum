@@ -33,4 +33,8 @@ contract C {
     constructor() {
         // do something with these
     }
+
+    fallback() external {
+
+    }
 }
