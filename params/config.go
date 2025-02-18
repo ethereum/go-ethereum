@@ -561,6 +561,11 @@ func (c *ChainConfig) IsEIP4762(num *big.Int, time uint64) bool {
 	return c.IsVerkle(num, time)
 }
 
+// IsCCv1 returns whether CCv1 has been activated at given block.
+func (c *ChainConfig) IsCCv1(num *big.Int, time uint64) bool {
+	return true
+}
+
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time uint64) *ConfigCompatError {
@@ -894,6 +899,7 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
 	IsVerkle                                                bool
+	IsEIP7708                                               bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -924,5 +930,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
 		IsVerkle:         isVerkle,
 		IsEIP4762:        isVerkle,
+		IsEIP7708:        c.IsCCv1(num, timestamp),
 	}
 }

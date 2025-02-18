@@ -509,6 +509,22 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
 
+	// Emit log for ETH transfer (EIP-7708)
+	if evm.chainRules.IsEIP7708 && !value.IsZero() {
+		data := value.Bytes32()
+		topics := []common.Hash{
+			common.BytesToHash([]byte{common.MagicTransferLog}),
+			common.BytesToHash(caller.Address().Bytes()),
+			common.BytesToHash(address.Bytes())}
+
+		evm.StateDB.AddLog(&types.Log{
+			Address:     caller.Address(),
+			Topics:      topics,
+			Data:        data[:],
+			BlockNumber: evm.Context.BlockNumber.Uint64(),
+		})
+	}
+
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, AccountRef(address), value, gas)

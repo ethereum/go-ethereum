@@ -762,6 +762,22 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	}
 	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
 
+	// Emit log for ETH transfer (EIP-7708)
+	if interpreter.evm.chainRules.IsEIP7708 && !value.IsZero() && err != nil {
+		data := value.Bytes32()
+		topics := []common.Hash{
+			common.BytesToHash([]byte{common.MagicTransferLog}),
+			common.BytesToHash(scope.Contract.Address().Bytes()),
+			addr.Bytes32()}
+
+		interpreter.evm.StateDB.AddLog(&types.Log{
+			Address:     scope.Contract.Address(),
+			Topics:      topics,
+			Data:        data[:],
+			BlockNumber: interpreter.evm.Context.BlockNumber.Uint64(),
+		})
+	}
+
 	if err != nil {
 		temp.Clear()
 	} else {
@@ -907,6 +923,21 @@ func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 		if tracer.OnExit != nil {
 			tracer.OnExit(interpreter.evm.depth, []byte{}, 0, nil, false)
 		}
+	}
+	// Emit log for ETH transfer (EIP-7708)
+	if interpreter.evm.chainRules.IsEIP7708 && !balance.IsZero() {
+		data := balance.Bytes32()
+		topics := []common.Hash{
+			common.BytesToHash([]byte{common.MagicTransferLog}),
+			common.BytesToHash(scope.Contract.Address().Bytes()),
+			beneficiary.Bytes32()}
+
+		interpreter.evm.StateDB.AddLog(&types.Log{
+			Address:     scope.Contract.Address(),
+			Topics:      topics,
+			Data:        data[:],
+			BlockNumber: interpreter.evm.Context.BlockNumber.Uint64(),
+		})
 	}
 	return nil, errStopToken
 }
