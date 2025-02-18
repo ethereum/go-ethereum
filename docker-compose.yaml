@@ -14,9 +14,18 @@ services:
     volumes:
       - eth_data:/root/.ethereum  # Mount a Docker volume for persistent Ethereum data
 
+    command: >
+      --dev
+      --http
+      --http.addr=0.0.0.0
+      --http.port=8545
+      --http.api=web3,eth,net,personal
+      --dev.period 5
+
 networks:
   devnet:
     driver: bridge
+
 
 volumes:
   eth_data:  # Define the volume here
