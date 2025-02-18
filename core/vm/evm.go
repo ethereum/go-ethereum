@@ -169,6 +169,15 @@ func isSystemCall(caller ContractRef) bool {
 	return caller.Address() == params.SystemAddress
 }
 
+func isSystemContract(callee common.Address) bool {
+	switch callee {
+	case params.BeaconRootsAddress, params.HistoryStorageAddress, params.WithdrawalQueueAddress, params.ConsolidationQueueAddress:
+		return true
+	default:
+		return false
+	}
+}
+
 // Call executes the contract associated with the addr with the given input as
 // parameters. It also handles any necessary value transfer required and takse
 // the necessary steps to create accounts and reverses the state in case of an
