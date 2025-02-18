@@ -18,7 +18,6 @@ package legacypool
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	crand "crypto/rand"
 	"errors"
 	"fmt"
@@ -1296,23 +1295,6 @@ func sizedDataTransaction(targetSize, nonce, gasLimit uint64, key *ecdsa.Private
 		}
 		previousDataLength = dataLength
 		dataLength = newDataLength
-	}
-}
-
-func Test_sizedDataTransaction(t *testing.T) {
-	t.Skip("skipping this test which takes about one minute to complete")
-	const minSize uint64 = 98
-	key, err := ecdsa.GenerateKey(elliptic.P256(), crand.Reader)
-	require.NoError(t, err)
-	for targetSize := minSize; targetSize < txMaxSize; targetSize++ {
-		const nonce = 1
-		const gasLimit = 100000
-		tx, err := sizedDataTransaction(targetSize, nonce, gasLimit, key)
-		if err != nil { // some sizes cannot be generated
-			t.Log(err)
-			continue
-		}
-		require.Equal(t, targetSize, tx.Size())
 	}
 }
 
