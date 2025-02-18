@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -2310,28 +2311,28 @@ func TestSimulateV1(t *testing.T) {
 }
 
 func TestSimulateV1ChainLinkage(t *testing.T) {
-	gspec := &core.Genesis{
-		Config: params.MergedTestChainConfig,
-		Alloc:  make(map[common.Address]types.Account),
-	}
-	_, acc := newTestAccountManager(t)
-	recipient := common.HexToAddress("0x1234567890123456789012345678901234567890")
-	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
-
+	var (
+		_, acc = newTestAccountManager(t)
+		sender = acc.Address
+		gspec  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				acc.Address: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+		signer       = types.LatestSigner(params.MergedTestChainConfig)
+		contractAddr = common.Address{0xaa, 0xaa}
+		recipient    = common.Address{0xbb, 0xbb}
+	)
 	backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
-		b.SetPoS()
 		key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		tx, err := types.SignTx(types.NewTx(&types.LegacyTx{
+		tx := types.MustSignNewTx(key, signer, &types.LegacyTx{
 			Nonce:    uint64(i),
 			GasPrice: b.BaseFee(),
 			Gas:      params.TxGas,
 			To:       &recipient,
 			Value:    big.NewInt(500),
-			Data:     nil,
-		}), types.HomesteadSigner{}, key)
-		if err != nil {
-			t.Fatalf("failed to sign tx in block generation: %v", err)
-		}
+		})
 		b.AddTx(tx)
 	})
 
@@ -2341,22 +2342,19 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 		t.Fatalf("failed to get state and header: %v", err)
 	}
 
-	gp := new(core.GasPool)
-	gp.AddGas(^uint64(0)) // equivalent to math.MaxUint64
 	sim := &simulator{
 		b:              backend,
 		state:          stateDB,
 		base:           baseHeader,
 		chainConfig:    backend.ChainConfig(),
-		gp:             gp,
+		gp:             new(core.GasPool).AddGas(math.MaxUint64),
 		traceTransfers: false,
 		validate:       false,
 		fullTx:         false,
 	}
 
 	var (
-		sender = acc.Address
-		call1  = TransactionArgs{
+		call1 = TransactionArgs{
 			From:  &sender,
 			To:    &recipient,
 			Value: (*hexutil.Big)(big.NewInt(1000)),
@@ -2366,20 +2364,16 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 			To:    &recipient,
 			Value: (*hexutil.Big)(big.NewInt(2000)),
 		}
-
-		contractAddr = common.HexToAddress("0xdeadbeef00000000000000000000000000000001")
-		block1Num    = new(big.Int).Add(baseHeader.Number, big.NewInt(1))
-		block2Num    = new(big.Int).Add(baseHeader.Number, big.NewInt(2))
-		call3a       = TransactionArgs{
+		call3a = TransactionArgs{
 			From:  &sender,
 			To:    &contractAddr,
-			Input: uint256ToBytes(uint256.MustFromBig(block1Num)),
+			Input: uint256ToBytes(uint256.NewInt(baseHeader.Number.Uint64() + 1)),
 			Gas:   newUint64(1000000),
 		}
 		call3b = TransactionArgs{
 			From:  &sender,
 			To:    &contractAddr,
-			Input: uint256ToBytes(uint256.MustFromBig(block2Num)),
+			Input: uint256ToBytes(uint256.NewInt(baseHeader.Number.Uint64() + 2)),
 			Gas:   newUint64(1000000),
 		}
 		blocks = []simBlock{
@@ -2405,18 +2399,18 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 
 	// Check linkages of simulated blocks:
 	// Verify that block2's parent hash equals block1's hash.
-	blk1 := results[0].Block
-	blk2 := results[1].Block
-	blk3 := results[2].Block
-	require.Equal(t, blk1.ParentHash(), baseHeader.Hash(), "parent hash of block1 should equal hash of base block")
-	require.Equal(t, blk1.Hash(), blk2.Header().ParentHash, "parent hash of block2 should equal hash of block1")
-	require.Equal(t, blk2.Hash(), blk3.Header().ParentHash, "parent hash of block3 should equal hash of block2")
+	block1 := results[0].Block
+	block2 := results[1].Block
+	block3 := results[2].Block
+	require.Equal(t, block1.ParentHash(), baseHeader.Hash(), "parent hash of block1 should equal hash of base block")
+	require.Equal(t, block1.Hash(), block2.Header().ParentHash, "parent hash of block2 should equal hash of block1")
+	require.Equal(t, block2.Hash(), block3.Header().ParentHash, "parent hash of block3 should equal hash of block2")
 
 	// In block3, two calls were executed to our contract.
-	// The first call in block3 should return the blockhash for block1 (i.e. blk1.Hash()),
-	// whereas the second call should return the blockhash for block2 (i.e. blk2.Hash()).
-	require.Equal(t, blk1.Hash().Bytes(), []byte(results[2].Calls[0].ReturnValue), "returned blockhash for block1 does not match")
-	require.Equal(t, blk2.Hash().Bytes(), []byte(results[2].Calls[1].ReturnValue), "returned blockhash for block2 does not match")
+	// The first call in block3 should return the blockhash for block1 (i.e. block1.Hash()),
+	// whereas the second call should return the blockhash for block2 (i.e. block2.Hash()).
+	require.Equal(t, block1.Hash().Bytes(), []byte(results[2].Calls[0].ReturnValue), "returned blockhash for block1 does not match")
+	require.Equal(t, block2.Hash().Bytes(), []byte(results[2].Calls[1].ReturnValue), "returned blockhash for block2 does not match")
 }
 
 func TestSignTransaction(t *testing.T) {
