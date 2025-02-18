@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -49,7 +50,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       utils.GroupFlags(nodeFlags, rpcFlags),
+		Flags:       slices.Concat(nodeFlags, rpcFlags),
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 
