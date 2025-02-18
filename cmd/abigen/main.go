@@ -97,6 +97,9 @@ func generate(c *cli.Context) error {
 	if c.String(pkgFlag.Name) == "" {
 		utils.Fatalf("No destination package specified (--pkg)")
 	}
+	if c.String(abiFlag.Name) == "" && c.String(jsonFlag.Name) == "" {
+		utils.Fatalf("Either contract ABI source (--abi) or combined-json (--combined-json) are required")
+	}
 	// If the entire solidity code was specified, build and bind based on that
 	var (
 		abis    []string
