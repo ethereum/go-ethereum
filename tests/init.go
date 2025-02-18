@@ -431,6 +431,11 @@ var Forks = map[string]*params.ChainConfig{
 		PragueTime:              u64(0),
 		OsakaTime:               u64(0),
 		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+			Osaka:  params.DefaultOsakaBlobConfig,
+		},
 	},
 	"PragueToOsakaAtTime15k": {
 		ChainID:                 big.NewInt(1),
@@ -453,6 +458,11 @@ var Forks = map[string]*params.ChainConfig{
 		PragueTime:              u64(0),
 		OsakaTime:               u64(15_000),
 		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+			Osaka:  params.DefaultOsakaBlobConfig,
+		},
 	},
 }
 

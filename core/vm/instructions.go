@@ -323,6 +323,18 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 		length     = scope.Stack.pop()
 	)
 
+	if scope.Contract.IsEOF() {
+		dataOffset64, overflow := dataOffset.Uint64WithOverflow()
+		if overflow {
+			dataOffset64 = math.MaxUint64
+		}
+		// These values are checked for overflow during gas cost calculation
+		memOffset64 := memOffset.Uint64()
+		length64 := length.Uint64()
+		scope.Memory.Set(memOffset64, length64, getData(interpreter.returnData, dataOffset64, length64))
+		return nil, nil
+	}
+
 	offset64, overflow := dataOffset.Uint64WithOverflow()
 	if overflow {
 		return nil, ErrReturnDataOutOfBounds
@@ -340,7 +352,13 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
+	// TODO this should not need to pull up the whole code
+	code := interpreter.evm.StateDB.GetCode(slot.Bytes20())
+	if isEOFVersion1(code) {
+		slot.SetUint64(2)
+	} else {
+		slot.SetUint64(uint64(len(code)))
+	}
 	return nil, nil
 }
 
@@ -372,6 +390,8 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		memOffset  = stack.pop()
 		codeOffset = stack.pop()
 		length     = stack.pop()
+		lengthU64  = length.Uint64()
+		codeCopy   []byte
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
@@ -379,9 +399,12 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	}
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.GetCode(addr)
-	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
-	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
-
+	if isEOFVersion1(code) {
+		codeCopy = getData(eofMagic, uint64CodeOffset, lengthU64)
+	} else {
+		codeCopy = getData(code, uint64CodeOffset, lengthU64)
+	}
+	scope.Memory.Set(memOffset.Uint64(), lengthU64, codeCopy)
 	return nil, nil
 }
 
@@ -417,7 +440,13 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
-		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
+		// TODO this should not need to pull up the whole code
+		code := interpreter.evm.StateDB.GetCode(address)
+		if HasEOFByte(code) {
+			slot.SetFromHex("0x9dbf3648db8210552e9c4f75c6a1c3057c0ca432043bd648be15fe7be05646f5")
+		} else {
+			slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
+		}
 	}
 	return nil, nil
 }
@@ -677,7 +706,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 
 	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation)
 
-	res, addr, returnGas, suberr := interpreter.evm.Create(scope.Contract, input, gas, &value)
+	res, addr, returnGas, suberr := interpreter.evm.Create(scope.Contract, input, gas, &value, false)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -818,7 +847,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
-	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas)
+	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, false)
 	if err != nil {
 		temp.Clear()
 	} else {
