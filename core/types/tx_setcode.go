@@ -65,19 +65,63 @@ type SetCodeTx struct {
 	V *uint256.Int
 	R *uint256.Int
 	S *uint256.Int
+
+	// caches
+	authorityCache atomic.Pointer[AuthorityCache]
+}
+
+func ToAuthorityCache(authList []SetCodeAuthorization) *AuthorityCache {
+	auths := make([]common.Address, 0, len(authList))
+	var invalid []invalidAuth // empty since it's expected to be empty most of the time
+	for i, auth := range authList {
+		if addr, err := auth.Authority(); err == nil {
+			auths = append(auths, addr)
+		} else {
+			invalid = append(invalid, invalidAuth{index: i, error: err})
+		}
+	}
+	return &AuthorityCache{authorities: auths, invalidAuths: invalid}
+}
+
+type AuthorityCache struct {
+	authorities  []common.Address
+	invalidAuths []invalidAuth
+}
+
+type invalidAuth struct {
+	index int
+	error error
+}
+
+func (ac *AuthorityCache) Authority(i int) (common.Address, error) {
+	indexToSub := 0
+	for _, invalid := range ac.invalidAuths {
+		if i == invalid.index {
+			return common.Address{}, invalid.error
+		}
+		if i > invalid.index {
+			indexToSub++
+			continue
+		}
+		break
+	}
+	targetIndex := i - indexToSub
+	if targetIndex < 0 || targetIndex >= len(ac.authorities) {
+		return common.Address{}, errors.New("index out of range")
+	}
+	return ac.authorities[i-indexToSub], nil
 }
 
 //go:generate go run github.com/fjl/gencodec -type SetCodeAuthorization -field-override authorizationMarshaling -out gen_authorization.go
 
 // SetCodeAuthorization is an authorization from an account to deploy code at its address.
 type SetCodeAuthorization struct {
-	ChainID   uint256.Int                    `json:"chainId" gencodec:"required"`
-	Address   common.Address                 `json:"address" gencodec:"required"`
-	Nonce     uint64                         `json:"nonce" gencodec:"required"`
-	V         uint8                          `json:"yParity" gencodec:"required"`
-	R         uint256.Int                    `json:"r" gencodec:"required"`
-	S         uint256.Int                    `json:"s" gencodec:"required"`
-	authority atomic.Pointer[common.Address] `json:"-"`
+	ChainID uint256.Int    `json:"chainId" gencodec:"required"`
+	Address common.Address `json:"address" gencodec:"required"`
+	Nonce   uint64         `json:"nonce" gencodec:"required"`
+	V       uint8          `json:"yParity" gencodec:"required"`
+	R       uint256.Int    `json:"r" gencodec:"required"`
+	S       uint256.Int    `json:"s" gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -117,9 +161,6 @@ func (a *SetCodeAuthorization) sigHash() common.Hash {
 
 // Authority recovers the the authorizing account of an authorization.
 func (a *SetCodeAuthorization) Authority() (common.Address, error) {
-	if authority := a.authority.Load(); authority != nil {
-		return *authority, nil
-	}
 	sighash := a.sigHash()
 	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
 		return common.Address{}, ErrInvalidSig
@@ -139,7 +180,6 @@ func (a *SetCodeAuthorization) Authority() (common.Address, error) {
 	}
 	var addr common.Address
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
-	a.authority.Store(&addr)
 	return addr, nil
 }
 
