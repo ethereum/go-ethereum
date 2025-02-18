@@ -500,45 +500,45 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	if params.Withdrawals != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
+	checks := []param{
+		{params.Withdrawals != nil, "withdrawals not supported in V1"},
+	}
+	if err := verifyConditions(checks); err != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, err
 	}
 	return api.newPayload(params, nil, nil, nil, false)
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.PayloadStatusV1, error) {
-	if api.eth.BlockChain().Config().IsCancun(api.eth.BlockChain().Config().LondonBlock, params.Timestamp) {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("can't use newPayloadV2 post-cancun"))
+	var (
+		isCancun     = api.eth.BlockChain().Config().IsCancun(api.eth.BlockChain().Config().LondonBlock, params.Timestamp)
+		isInShanghai = api.isLatestForkAt(params.Timestamp, forks.Shanghai)
+	)
+
+	checks := []param{
+		{isCancun, "can't use newPayloadV2 post-cancun"},
+		{isInShanghai && params.Withdrawals == nil, "nil withdrawals post-shanghai"},
+		{!isInShanghai && params.Withdrawals != nil, "non-nil withdrawals pre-shanghai"},
+		{params.ExcessBlobGas != nil, "non-nil excessBlobGas pre-cancun"},
+		{params.BlobGasUsed != nil, "non-nil blobGasUsed pre-cancun"},
 	}
-	if api.isLatestForkAt(params.Timestamp, forks.Shanghai) {
-		if params.Withdrawals == nil {
-			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
-		}
-	} else {
-		if params.Withdrawals != nil {
-			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil withdrawals pre-shanghai"))
-		}
+	if err := verifyConditions(checks); err != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, err
 	}
-	if params.ExcessBlobGas != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil excessBlobGas pre-cancun"))
-	}
-	if params.BlobGasUsed != nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil blobGasUsed pre-cancun"))
-	}
+
 	return api.newPayload(params, nil, nil, nil, false)
 }
 
 type param struct {
-	field any
-	name  string
-	fork  string
+	condition bool
+	message   string
 }
 
-func verifyParamsSet(checks []param) error {
+func verifyConditions(checks []param) error {
 	for _, check := range checks {
-		if check.field == nil {
-			return engine.InvalidParams.With(fmt.Errorf("nil %v post-%v", check.name, check.fork))
+		if check.condition {
+			return engine.InvalidParams.With(errors.New(check.message))
 		}
 	}
 	return nil
@@ -547,13 +547,13 @@ func verifyParamsSet(checks []param) error {
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
 	checks := []param{
-		{params.Withdrawals, "withdrawals", "shanghai"},
-		{params.ExcessBlobGas, "excessBlobGas", "cancun"},
-		{params.BlobGasUsed, "blobGasUsed", "cancun"},
-		{versionedHashes, "versionedHashes", "cancun"},
-		{beaconRoot, "beaconRoot", "cancun"},
+		{params.Withdrawals == nil, "nil withdrawals post-shanghai"},
+		{params.ExcessBlobGas == nil, "nil excessBlobGas post-cancun"},
+		{params.BlobGasUsed == nil, "nil blobGasUsed post-cancun"},
+		{versionedHashes == nil, "nil versionedHashes post-cancun"},
+		{beaconRoot == nil, "nil beaconRoot post-cancun"},
 	}
-	if err := verifyParamsSet(checks); err != nil {
+	if err := verifyConditions(checks); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, err
 	}
 
@@ -566,14 +566,14 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 // NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
 func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes) (engine.PayloadStatusV1, error) {
 	checks := []param{
-		{params.Withdrawals, "withdrawals", "shanghai"},
-		{params.ExcessBlobGas, "excessBlobGas", "cancun"},
-		{params.BlobGasUsed, "blobGasUsed", "cancun"},
-		{versionedHashes, "versionedHashes", "cancun"},
-		{beaconRoot, "beaconRoot", "cancun"},
-		{executionRequests, "executionRequests", "prague"},
+		{params.Withdrawals == nil, "nil withdrawals post-shanghai"},
+		{params.ExcessBlobGas == nil, "nil excessBlobGas post-cancun"},
+		{params.BlobGasUsed == nil, "nil blobGasUsed post-cancun"},
+		{versionedHashes == nil, "nil versionedHashes post-cancun"},
+		{beaconRoot == nil, "nil beaconRoot post-cancun"},
+		{executionRequests == nil, "nil executionRequests post-prague"},
 	}
-	if err := verifyParamsSet(checks); err != nil {
+	if err := verifyConditions(checks); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, err
 	}
 
