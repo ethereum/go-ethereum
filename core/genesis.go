@@ -281,10 +281,8 @@ func DefaultGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultTestnetGenesisBlock returns the Ropsten network genesis block.
+// DefaultTestnetGenesisBlock returns the XDC testnet genesis block.
 func DefaultTestnetGenesisBlock() *Genesis {
-	config := params.TestnetChainConfig
-	config.XDPoS.V2 = nil
 	return &Genesis{
 		Config:     params.TestnetChainConfig,
 		Nonce:      0,

@@ -106,12 +106,8 @@ var (
 	}
 	TestnetFlag = &cli.BoolFlag{
 		Name:     "testnet",
-		Usage:    "Ropsten network: pre-configured proof-of-work test network",
-		Category: flags.EthCategory,
-	}
-	XDCTestnetFlag = &cli.BoolFlag{
-		Name:     "apothem",
-		Usage:    "XDC Apothem Network",
+		Aliases:  []string{"apothem"},
+		Usage:    "XDC apothem network",
 		Category: flags.EthCategory,
 	}
 	RinkebyFlag = &cli.BoolFlag{
@@ -883,14 +879,11 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		if cfg.BootstrapNodes != nil {
 			return // Already set by config file, don't apply defaults.
 		}
-		networkID := uint64(0)
-		if ctx.IsSet(NetworkIdFlag.Name) {
-			networkID = ctx.Uint64(NetworkIdFlag.Name)
-		}
+		networkID := ctx.Uint64(NetworkIdFlag.Name)
 		switch {
-		case ctx.Bool(XDCTestnetFlag.Name) || networkID == params.TestnetChainConfig.ChainId.Uint64():
+		case ctx.Bool(TestnetFlag.Name) || networkID == 51:
 			urls = params.TestnetBootnodes
-		case networkID == params.DevnetChainConfig.ChainId.Uint64():
+		case networkID == 551:
 			urls = params.DevnetBootnodes
 		}
 	}
@@ -921,7 +914,7 @@ func setBootstrapNodesV5(ctx *cli.Context, cfg *p2p.Config) {
 		urls = SplitAndTrim(ctx.String(BootnodesFlag.Name))
 	case ctx.IsSet(BootnodesV5Flag.Name):
 		urls = SplitAndTrim(ctx.String(BootnodesV5Flag.Name))
-	case ctx.Bool(XDCTestnetFlag.Name):
+	case ctx.Bool(TestnetFlag.Name):
 		urls = params.TestnetBootnodes
 	case cfg.BootstrapNodesV5 != nil:
 		return // already set, don't apply defaults.
@@ -1443,9 +1436,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)
 	}
-	if ctx.Bool(XDCTestnetFlag.Name) {
-		cfg.NetworkId = 51
-	}
 
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
@@ -1501,7 +1491,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	switch {
 	case ctx.Bool(TestnetFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 3
+			cfg.NetworkId = 51
 		}
 		cfg.Genesis = core.DefaultTestnetGenesisBlock()
 	case ctx.Bool(RinkebyFlag.Name):

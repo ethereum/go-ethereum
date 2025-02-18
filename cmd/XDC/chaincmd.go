@@ -45,7 +45,7 @@ var (
 			utils.DataDirFlag,
 			utils.XDCXDataDirFlag,
 			utils.LightModeFlag,
-			utils.XDCTestnetFlag,
+			utils.TestnetFlag,
 		},
 		Description: `
 The init command initializes a new genesis block and definition for the network.
@@ -156,9 +156,9 @@ Use "ethereum dump 0" to dump the genesis block.`,
 func initGenesis(ctx *cli.Context) error {
 	var err error
 	genesis := new(core.Genesis)
-	if ctx.Bool(utils.XDCTestnetFlag.Name) {
+	if ctx.Bool(utils.TestnetFlag.Name) {
 		if ctx.Args().Len() > 0 {
-			utils.Fatalf("Flags --apothem and genesis file can't be used at the same time")
+			utils.Fatalf("The testnet flag and genesis file can't be used at the same time")
 		}
 		err = json.Unmarshal(xdc_genesis.TestnetGenesis, &genesis)
 	} else {
@@ -168,7 +168,7 @@ func initGenesis(ctx *cli.Context) error {
 		genesisPath := ctx.Args().First()
 		if genesisPath == "mainnet" {
 			err = json.Unmarshal(xdc_genesis.MainnetGenesis, &genesis)
-		} else if genesisPath == "testnet" {
+		} else if genesisPath == "testnet" || genesisPath == "apothem" {
 			err = json.Unmarshal(xdc_genesis.TestnetGenesis, &genesis)
 		} else if genesisPath == "devnet" {
 			err = json.Unmarshal(xdc_genesis.DevnetGenesis, &genesis)
