@@ -92,6 +92,12 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config) (*LightEthereum, er
 		return nil, genesisErr
 	}
 
+	networkID := config.NetworkId
+	if networkID == 0 {
+		networkID = chainConfig.ChainId.Uint64()
+	}
+	common.CopyConstans(networkID)
+
 	log.Info(strings.Repeat("-", 153))
 	for _, line := range strings.Split(chainConfig.Description(), "\n") {
 		log.Info(line)
@@ -101,10 +107,6 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config) (*LightEthereum, er
 	peers := newPeerSet()
 	quitSync := make(chan struct{})
 
-	networkID := config.NetworkId
-	if networkID == 0 {
-		networkID = chainConfig.ChainId.Uint64()
-	}
 	leth := &LightEthereum{
 		config:           config,
 		chainConfig:      chainConfig,
