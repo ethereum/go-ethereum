@@ -120,7 +120,6 @@ var (
 		utils.MainnetFlag,
 		utils.TestnetFlag,
 		utils.DevnetFlag,
-		//utils.RinkebyFlag,
 		//utils.VMEnableDebugFlag,
 		utils.Enable0xPrefixFlag,
 		utils.EnableXDCPrefixFlag,

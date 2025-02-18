@@ -121,11 +121,6 @@ var (
 		Usage:    "XDC develop network",
 		Category: flags.EthCategory,
 	}
-	RinkebyFlag = &cli.BoolFlag{
-		Name:     "rinkeby",
-		Usage:    "Rinkeby network: pre-configured proof-of-authority test network",
-		Category: flags.EthCategory,
-	}
 
 	// Dev mode
 	DeveloperFlag = &cli.BoolFlag{
@@ -833,9 +828,6 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.Bool(DevnetFlag.Name) {
 			return filepath.Join(path, "devnet")
 		}
-		if ctx.Bool(RinkebyFlag.Name) {
-			return filepath.Join(path, "rinkeby")
-		}
 		return path
 	}
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
@@ -1211,8 +1203,6 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
 	case ctx.Bool(DevnetFlag.Name):
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "devnet")
-	case ctx.Bool(RinkebyFlag.Name):
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	}
 
 	if ctx.IsSet(KeyStoreDirFlag.Name) {
@@ -1404,7 +1394,7 @@ func SetXDCXConfig(ctx *cli.Context, cfg *XDCx.Config, XDCDataDir string) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, TestnetFlag, DevnetFlag, DeveloperFlag, RinkebyFlag)
+	CheckExclusive(ctx, MainnetFlag, TestnetFlag, DevnetFlag, DeveloperFlag)
 	CheckExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
 	CheckExclusive(ctx, LightServFlag, LightModeFlag)
 	CheckExclusive(ctx, LightServFlag, SyncModeFlag, "light")
@@ -1522,11 +1512,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.NetworkId = 551
 		}
 		cfg.Genesis = core.DefaultDevnetGenesisBlock()
-	case ctx.Bool(RinkebyFlag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 4
-		}
-		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.Bool(DeveloperFlag.Name):
 		// Create new developer account or reuse existing one
 		var (
@@ -1652,8 +1637,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultTestnetGenesisBlock()
 	case ctx.Bool(DevnetFlag.Name):
 		genesis = core.DefaultDevnetGenesisBlock()
-	case ctx.Bool(RinkebyFlag.Name):
-		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.Bool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}

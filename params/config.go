@@ -240,29 +240,6 @@ var (
 		},
 	}
 
-	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
-	RinkebyChainConfig = &ChainConfig{
-		ChainId:             big.NewInt(4),
-		HomesteadBlock:      big.NewInt(1),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(2),
-		EIP155Block:         big.NewInt(3),
-		EIP158Block:         big.NewInt(3),
-		ByzantiumBlock:      big.NewInt(1035301),
-		ConstantinopleBlock: nil,
-		XDPoS: &XDPoSConfig{
-			Period: 15,
-			Epoch:  900,
-			V2: &V2{
-				SwitchEpoch:   9999999999 / 900,
-				SwitchBlock:   big.NewInt(9999999999),
-				CurrentConfig: MainnetV2Configs[0],
-				AllConfigs:    MainnetV2Configs,
-			},
-		},
-	}
-
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	//
