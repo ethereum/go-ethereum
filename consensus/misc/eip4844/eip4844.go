@@ -83,12 +83,12 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
 	var frac uint64
 	switch config.LatestFork(header.Time) {
+	case forks.Osaka:
+		frac = config.BlobScheduleConfig.Osaka.UpdateFraction
 	case forks.Prague:
 		frac = config.BlobScheduleConfig.Prague.UpdateFraction
 	case forks.Cancun:
 		frac = config.BlobScheduleConfig.Cancun.UpdateFraction
-	case forks.Osaka:
-		frac = config.BlobScheduleConfig.Osaka.UpdateFraction
 	default:
 		panic("calculating blob fee on unsupported fork")
 	}
@@ -105,12 +105,12 @@ func MaxBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 		s      = cfg.BlobScheduleConfig
 	)
 	switch {
+	case cfg.IsOsaka(london, time) && s.Osaka != nil:
+		return s.Osaka.Max
 	case cfg.IsPrague(london, time) && s.Prague != nil:
 		return s.Prague.Max
 	case cfg.IsCancun(london, time) && s.Cancun != nil:
 		return s.Cancun.Max
-	case cfg.IsOsaka(london, time) && s.Osaka != nil:
-		return s.Osaka.Max
 	default:
 		return 0
 	}
@@ -129,12 +129,12 @@ func LatestMaxBlobsPerBlock(cfg *params.ChainConfig) int {
 		return 0
 	}
 	switch {
+	case s.Osaka != nil:
+		return s.Osaka.Max
 	case s.Prague != nil:
 		return s.Prague.Max
 	case s.Cancun != nil:
 		return s.Cancun.Max
-	case s.Osaka != nil:
-		return s.Osaka.Max
 	default:
 		return 0
 	}
@@ -150,12 +150,12 @@ func targetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 		s      = cfg.BlobScheduleConfig
 	)
 	switch {
+	case cfg.IsOsaka(london, time) && s.Osaka != nil:
+		return s.Osaka.Target
 	case cfg.IsPrague(london, time) && s.Prague != nil:
 		return s.Prague.Target
 	case cfg.IsCancun(london, time) && s.Cancun != nil:
 		return s.Cancun.Target
-	case cfg.IsOsaka(london, time) && s.Osaka != nil:
-		return s.Osaka.Target
 	default:
 		return 0
 	}
