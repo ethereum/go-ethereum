@@ -175,8 +175,8 @@ func (cb *contractBinder) bindMethod(original abi.Method) error {
 			cb.binder.BindStructType(output.Type)
 		}
 	}
-	isStructured := structured(original.Outputs)
 
+	var isStructured bool
 	// If the call returns multiple values, gather them into a struct
 	if len(normalized.Outputs) > 1 {
 		isStructured = true
