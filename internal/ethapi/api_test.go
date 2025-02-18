@@ -2309,22 +2309,17 @@ func TestSimulateV1(t *testing.T) {
 	}
 }
 
-// TestSimulateV1ChainLinkage simulates two consecutive blocks each containing a simple transfer call.
-// It then checks that the second block's parent hash is equal to the first block's hash.
 func TestSimulateV1ChainLinkage(t *testing.T) {
-	// Set up a minimal genesis with a test account allocated sufficient balance.
 	gspec := &core.Genesis{
-		Config: params.TestChainConfig,
+		Config: params.MergedTestChainConfig,
 		Alloc:  make(map[common.Address]types.Account),
 	}
-	// Create a test account (sender) using the helper and allocate funds.
 	_, acc := newTestAccountManager(t)
 	recipient := common.HexToAddress("0x1234567890123456789012345678901234567890")
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 
-	// Create the backend. We generate 1 block with a simple transfer so that our simulation starts from a non-genesis state.
-	backend := newTestBackend(t, 1, gspec, ethash.NewFaker(), func(i int, b *core.BlockGen) {
-		// Create a simple transfer in the generated block.
+	backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
 		key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		tx, err := types.SignTx(types.NewTx(&types.LegacyTx{
 			Nonce:    uint64(i),
@@ -2341,17 +2336,13 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	// Retrieve the current state and header (our simulation "base")
 	stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
 	if err != nil {
 		t.Fatalf("failed to get state and header: %v", err)
 	}
 
-	// Create a gas pool with a nearly unlimited amount of gas.
 	gp := new(core.GasPool)
 	gp.AddGas(^uint64(0)) // equivalent to math.MaxUint64
-
-	// Create a simulator instance (the simulator type is unexported but we are in the same package)
 	sim := &simulator{
 		b:              backend,
 		state:          stateDB,
@@ -2364,15 +2355,11 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 	}
 
 	var (
-		// Prepare the sender and a recipient.
 		sender = acc.Address
-		// Create two simulated blocks.
-		// Each block has one call representing a simple transfer.
-		call1 = TransactionArgs{
+		call1  = TransactionArgs{
 			From:  &sender,
 			To:    &recipient,
 			Value: (*hexutil.Big)(big.NewInt(1000)),
-			// Other fields (e.g., Gas) will be set by call defaults.
 		}
 		call2 = TransactionArgs{
 			From:  &sender,
@@ -2380,24 +2367,56 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 			Value: (*hexutil.Big)(big.NewInt(2000)),
 		}
 
-		// Build the simulation chain: two simBlock objects (BlockOverrides and StateOverrides are optional)
+		contractAddr = common.HexToAddress("0xdeadbeef00000000000000000000000000000001")
+		block1Num    = new(big.Int).Add(baseHeader.Number, big.NewInt(1))
+		block2Num    = new(big.Int).Add(baseHeader.Number, big.NewInt(2))
+		call3a       = TransactionArgs{
+			From:  &sender,
+			To:    &contractAddr,
+			Input: uint256ToBytes(uint256.MustFromBig(block1Num)),
+			Gas:   newUint64(1000000),
+		}
+		call3b = TransactionArgs{
+			From:  &sender,
+			To:    &contractAddr,
+			Input: uint256ToBytes(uint256.MustFromBig(block2Num)),
+			Gas:   newUint64(1000000),
+		}
 		blocks = []simBlock{
 			{Calls: []TransactionArgs{call1}},
 			{Calls: []TransactionArgs{call2}},
+			{
+				StateOverrides: &override.StateOverride{
+					contractAddr: override.OverrideAccount{
+						// Takes block number as input and returns the block hash.
+						Code: hex2Bytes("0x5f35405f8114600f575f5260205ff35b5f80fd"),
+					},
+				},
+				Calls: []TransactionArgs{call3a, call3b},
+			},
 		}
 	)
 
-	// Execute the simulation across the two blocks.
 	results, err := sim.execute(ctx, blocks)
 	if err != nil {
 		t.Fatalf("simulation execution failed: %v", err)
 	}
-	require.Equal(t, 2, len(results), "expected 2 simulated blocks")
+	require.Equal(t, 3, len(results), "expected 3 simulated blocks")
 
-	// Check the relation: the ParentHash of the second simulated block must equal the hash of the first block.
-	block1 := results[0].Block
-	block2 := results[1].Block
-	require.Equal(t, block1.Hash(), block2.Header().ParentHash, "parent hash of second block should equal hash of first block")
+	// Check linkages of simulated blocks:
+	// Verify that block2's parent hash equals block1's hash.
+	blk1 := results[0].Block
+	blk2 := results[1].Block
+	blk3 := results[2].Block
+	require.Equal(t, blk1.ParentHash(), baseHeader.Hash(), "parent hash of block1 should equal hash of base block")
+	require.Equal(t, blk1.Hash(), blk2.Header().ParentHash, "parent hash of block2 should equal hash of block1")
+	require.Equal(t, blk2.Hash(), blk3.Header().ParentHash, "parent hash of block3 should equal hash of block2")
+
+	// In block3, two calls were executed to our contract.
+	// The first call in block3 should return the blockhash for block1 (i.e. blk1.Hash()),
+	// whereas the second call should return the blockhash for block2 (i.e. blk2.Hash()).
+	require.Equal(t, blk1.Hash().Bytes(), []byte(results[2].Calls[0].ReturnValue), "returned blockhash for block1 does not match")
+	require.Equal(t, blk2.Hash().Bytes(), []byte(results[2].Calls[1].ReturnValue), "returned blockhash for block2 does not match")
 }
 
 func TestSignTransaction(t *testing.T) {
