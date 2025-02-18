@@ -3417,3 +3417,94 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 func addressToHash(a common.Address) common.Hash {
 	return common.BytesToHash(a.Bytes())
 }
+
+// TestSimulateV1ChainLinkage simulates two consecutive blocks each containing a simple transfer call.
+// It then checks that the second block's parent hash is equal to the first block's hash.
+func TestSimulateV1ChainLinkage(t *testing.T) {
+	// Set up a minimal genesis with a test account allocated sufficient balance.
+	gspec := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc:  make(map[common.Address]types.Account),
+	}
+	// Create a test account (sender) using the helper and allocate funds.
+	_, acc := newTestAccountManager(t)
+	recipient := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
+
+	// Create the backend. We generate 1 block with a simple transfer so that our simulation starts from a non-genesis state.
+	backend := newTestBackend(t, 1, gspec, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+		// Create a simple transfer in the generated block.
+		key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		tx, err := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			GasPrice: b.BaseFee(),
+			Gas:      params.TxGas,
+			To:       &recipient,
+			Value:    big.NewInt(500),
+			Data:     nil,
+		}), types.HomesteadSigner{}, key)
+		if err != nil {
+			t.Fatalf("failed to sign tx in block generation: %v", err)
+		}
+		b.AddTx(tx)
+	})
+
+	ctx := context.Background()
+	// Retrieve the current state and header (our simulation "base")
+	stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("failed to get state and header: %v", err)
+	}
+
+	// Create a gas pool with a nearly unlimited amount of gas.
+	gp := new(core.GasPool)
+	gp.AddGas(^uint64(0)) // equivalent to math.MaxUint64
+
+	// Create a simulator instance (the simulator type is unexported but we are in the same package)
+	sim := &simulator{
+		b:              backend,
+		state:          stateDB,
+		base:           baseHeader,
+		chainConfig:    backend.ChainConfig(),
+		gp:             gp,
+		traceTransfers: false,
+		validate:       false,
+		fullTx:         false,
+	}
+
+	var (
+		// Prepare the sender and a recipient.
+		sender = acc.Address
+		// Create two simulated blocks.
+		// Each block has one call representing a simple transfer.
+		call1 = TransactionArgs{
+			From:  &sender,
+			To:    &recipient,
+			Value: (*hexutil.Big)(big.NewInt(1000)),
+			// Other fields (e.g., Gas) will be set by call defaults.
+		}
+		call2 = TransactionArgs{
+			From:  &sender,
+			To:    &recipient,
+			Value: (*hexutil.Big)(big.NewInt(2000)),
+		}
+
+		// Build the simulation chain: two simBlock objects (BlockOverrides and StateOverrides are optional)
+		blocks = []simBlock{
+			{Calls: []TransactionArgs{call1}},
+			{Calls: []TransactionArgs{call2}},
+		}
+	)
+
+	// Execute the simulation across the two blocks.
+	results, err := sim.execute(ctx, blocks)
+	if err != nil {
+		t.Fatalf("simulation execution failed: %v", err)
+	}
+	require.Equal(t, 2, len(results), "expected 2 simulated blocks")
+
+	// Check the relation: the ParentHash of the second simulated block must equal the hash of the first block.
+	block1 := results[0].Block
+	block2 := results[1].Block
+	require.Equal(t, block1.Hash(), block2.Header().ParentHash, "parent hash of second block should equal hash of first block")
+}
