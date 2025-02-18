@@ -1207,26 +1207,22 @@ func TestAllowedTxSize(t *testing.T) {
 	gasLimit := pool.currentHead.Load().GasLimit
 
 	// Try adding a transaction with maximal allowed size
-	tx, err := sizedDataTransaction(txMaxSize, 0, gasLimit, key)
-	require.NoError(t, err)
+	tx := sizedDataTransaction(t, txMaxSize, 0, gasLimit, key)
 	if err := pool.addRemoteSync(tx); err != nil {
 		t.Fatalf("failed to add transaction of size %d, close to maximal: %v", int(tx.Size()), err)
 	}
 	// Try adding a transaction with random allowed size
-	tx, err = sizedDataTransaction(uint64(rand.Intn(txMaxSize+1)), 1, gasLimit, key)
-	require.NoError(t, err)
+	tx = sizedDataTransaction(t, uint64(rand.Intn(txMaxSize+1)), 1, gasLimit, key)
 	if err := pool.addRemoteSync(tx); err != nil {
 		t.Fatalf("failed to add transaction of random allowed size: %v", err)
 	}
 	// Try adding a transaction above maximum size by one
-	tx, err = sizedDataTransaction(txMaxSize+1, 2, gasLimit, key)
-	require.NoError(t, err)
+	tx = sizedDataTransaction(t, txMaxSize+1, 2, gasLimit, key)
 	if err := pool.addRemoteSync(tx); err == nil {
 		t.Fatalf("expected rejection on slightly oversize transaction")
 	}
 	// Try adding a transaction above maximum size by more than one
-	tx, err = sizedDataTransaction(txMaxSize+2+uint64(rand.Intn(10*txMaxSize)), 2, gasLimit, key)
-	require.NoError(t, err)
+	tx = sizedDataTransaction(t, txMaxSize+2+uint64(rand.Intn(10*txMaxSize)), 2, gasLimit, key)
 	if err := pool.addRemoteSync(tx); err == nil {
 		t.Fatalf("expected rejection on oversize transaction")
 	}
@@ -1246,9 +1242,9 @@ func TestAllowedTxSize(t *testing.T) {
 // sizedDataTransaction generates a transaction with the size matching the `targetSize` given
 // as argument. It uses the nonce, gasLimit and key given as arguments to generate the transaction.
 // Note some target sizes cannot be generated, notably: 99, 154, 258, 356, 65539 and 65538.
-func sizedDataTransaction(targetSize, nonce, gasLimit uint64, key *ecdsa.PrivateKey) (
-	tx *types.Transaction, err error,
-) {
+func sizedDataTransaction(t *testing.T, targetSize, nonce, gasLimit uint64, key *ecdsa.PrivateKey) (
+	tx *types.Transaction) {
+	t.Helper()
 	gasPrice := big.NewInt(1)
 
 	// 1 byte *big.Int + 32 byte *bit.Int + 32 byte *big.Int
@@ -1258,9 +1254,7 @@ func sizedDataTransaction(targetSize, nonce, gasLimit uint64, key *ecdsa.Private
 	// Enforce the target size is above the minimum signed transaction size
 	txNoData := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), gasLimit, gasPrice, nil)
 	minimumSize := txNoData.Size() + targetSignatureLength
-	if targetSize < minimumSize {
-		return nil, fmt.Errorf("target size %d is less than minimum size %d", targetSize, minimumSize)
-	}
+	require.GreaterOrEqual(t, targetSize, minimumSize, "target size is less than minimum size")
 
 	// Find data length to reach the target size, assuming a signature of length 65.
 	// This is done because the data length header varies from 0 to 5 bytes.
@@ -1281,7 +1275,7 @@ func sizedDataTransaction(targetSize, nonce, gasLimit uint64, key *ecdsa.Private
 		tx = pricedDataTransaction(nonce, gasLimit, gasPrice, key, dataLength)
 		size := tx.Size()
 		if size == targetSize {
-			return tx, nil
+			return tx
 		} else if txSignatureLen(tx) != targetSignatureLength {
 			continue // re-generate with new random data to obtain a signature of 65 bytes.
 		}
@@ -1291,7 +1285,7 @@ func sizedDataTransaction(targetSize, nonce, gasLimit uint64, key *ecdsa.Private
 			newDataLength = dataLength - 1
 		}
 		if newDataLength == previousDataLength {
-			return nil, fmt.Errorf("impossible to generate a transaction of length %d", targetSize)
+			t.Fatalf("impossible to generate a transaction of length %d", targetSize)
 		}
 		previousDataLength = dataLength
 		dataLength = newDataLength
