@@ -61,6 +61,15 @@ var (
 	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accept
 	// another remote transaction.
 	ErrTxPoolOverflow = errors.New("txpool is full")
+
+	// ErrInflightTxLimitReached is returned when the maximum number of in-flight
+	// transactions is reached for specific accounts.
+	ErrInflightTxLimitReached = errors.New("in-flight transaction limit reached for delegated accounts")
+
+	// ErrAuthorityReserved is returned if a transaction has an authorization
+	// signed by an address which already has in-flight transactions known to the
+	// pool.
+	ErrAuthorityReserved = errors.New("authority already reserved")
 )
 
 var (
@@ -631,14 +640,14 @@ func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
 		// Replace the existing inflight transaction for delegated accounts
 		// are still supported
 		if count >= 1 && !exists {
-			return txpool.ErrInflightTxLimitReached
+			return ErrInflightTxLimitReached
 		}
 	}
 	// Authorities cannot conflict with any pending or queued transactions.
 	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
 		for _, auth := range auths {
 			if pool.pending[auth] != nil || pool.queue[auth] != nil {
-				return txpool.ErrAuthorityReserved
+				return ErrAuthorityReserved
 			}
 		}
 	}
