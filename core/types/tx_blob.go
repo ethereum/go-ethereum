@@ -162,6 +162,9 @@ func (tx *BlobTx) value() *big.Int        { return tx.Value.ToBig() }
 func (tx *BlobTx) nonce() uint64          { return tx.Nonce }
 func (tx *BlobTx) to() *common.Address    { tmp := tx.To; return &tmp }
 func (tx *BlobTx) blobGas() uint64        { return params.BlobTxBlobGasPerBlob * uint64(len(tx.BlobHashes)) }
+func (tx *BlobTx) setCodeAuthorizations() []SetCodeAuthorization {
+	return nil
+}
 
 func (tx *BlobTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	if baseFee == nil {

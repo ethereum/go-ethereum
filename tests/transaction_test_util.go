@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -78,8 +77,9 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		if err != nil {
 			return
 		}
+		rules := config.Rules(common.Big0, true, 0)
 		// Intrinsic gas
-		requiredGas, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, isHomestead, isIstanbul, isShanghai)
+		requiredGas, err = tx.IntrinsicGas(&rules)
 		if err != nil {
 			return
 		}
