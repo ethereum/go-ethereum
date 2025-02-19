@@ -53,7 +53,7 @@ func TestLoopInterrupt(t *testing.T) {
 		timeout := make(chan bool)
 
 		go func(evm *EVM) {
-			_, _, err := evm.Call(AccountRef(common.Address{}), address, nil, math.MaxUint64, new(uint256.Int))
+			_, _, err := evm.Call(common.Address{}, address, nil, math.MaxUint64, new(uint256.Int))
 			errChannel <- err
 		}(evm)
 
