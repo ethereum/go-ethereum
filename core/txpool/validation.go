@@ -218,11 +218,6 @@ type ValidationOptionsWithState struct {
 	// ExistingCost is a mandatory callback to retrieve an already pooled
 	// transaction's cost with the given nonce to check for overdrafts.
 	ExistingCost func(addr common.Address, nonce uint64) *big.Int
-
-	// KnownConflicts is an optional callback which iterates over the list of
-	// addresses and returns all addresses known to the pool with in-flight
-	// transactions.
-	KnownConflicts func(sender common.Address, authorizers []common.Address) []common.Address
 }
 
 // ValidateTransactionWithState is a helper method to check whether a transaction
@@ -275,14 +270,6 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		// (i.e. max cancellable via out-of-bound transaction).
 		if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
 			return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
-		}
-
-		// Verify no authorizations will invalidate existing transactions known to
-		// the pool.
-		if opts.KnownConflicts != nil {
-			if conflicts := opts.KnownConflicts(from, tx.SetCodeAuthorities()); len(conflicts) > 0 {
-				return fmt.Errorf("%w: authorization conflicts with other known tx", ErrAuthorityReserved)
-			}
 		}
 	}
 	return nil
