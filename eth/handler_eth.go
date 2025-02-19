@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -69,6 +68,16 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.txFetcher.Enqueue(peer.ID(), *packet, false)
 
 	case *eth.PooledTransactionsResponse:
+		for _, tx := range *packet {
+			if tx.Type() == types.BlobTxType {
+				if tx.BlobTxSidecar() == nil {
+					return errors.New("received sidecar-less blob transaction")
+				}
+				if err := tx.BlobTxSidecar().ValidateBlobCommitmentHashes(tx.BlobHashes()); err != nil {
+					return err
+				}
+			}
+		}
 		return h.txFetcher.Enqueue(peer.ID(), *packet, true)
 
 	default:
