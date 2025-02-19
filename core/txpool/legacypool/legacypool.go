@@ -581,11 +581,6 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			if list := pool.queue[addr]; list != nil {
 				have += list.Len()
 			}
-			if pool.currentState.GetCodeHash(addr) != types.EmptyCodeHash || len(pool.all.auths[addr]) != 0 {
-				// Allow at most one in-flight tx for delegated accounts or those with
-				// a pending authorization.
-				return have, max(0, 1-have)
-			}
 			return have, math.MaxInt
 		},
 		ExistingExpenditure: func(addr common.Address) *big.Int {
@@ -602,21 +597,50 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			}
 			return nil
 		},
-		KnownConflicts: func(from common.Address, auths []common.Address) []common.Address {
-			var conflicts []common.Address
-			// Authorities cannot conflict with any pending or queued transactions.
-			for _, addr := range auths {
-				if list := pool.pending[addr]; list != nil {
-					conflicts = append(conflicts, addr)
-				} else if list := pool.queue[addr]; list != nil {
-					conflicts = append(conflicts, addr)
-				}
-			}
-			return conflicts
-		},
 	}
 	if err := txpool.ValidateTransactionWithState(tx, pool.signer, opts); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validateAuth verifies that the transaction complies with code authorization
+// restrictions brought by SetCode transaction type.
+func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
+	from, _ := types.Sender(pool.signer, tx) // validated
+
+	// Allow at most one in-flight tx for delegated accounts or those with a
+	// pending authorization.
+	if pool.currentState.GetCodeHash(from) != types.EmptyCodeHash || len(pool.all.auths[from]) != 0 {
+		var (
+			count  int
+			exists bool
+		)
+		pending := pool.pending[from]
+		if pending != nil {
+			count += pending.Len()
+			exists = pending.Contains(tx.Nonce())
+		}
+		queue := pool.queue[from]
+		if queue != nil {
+			count += queue.Len()
+			if !exists {
+				exists = queue.Contains(tx.Nonce())
+			}
+		}
+		// Replace the existing inflight transaction for delegated accounts
+		// are still supported
+		if count >= 1 && !exists {
+			return txpool.ErrInflightTxLimitReached
+		}
+	}
+	// Authorities cannot conflict with any pending or queued transactions.
+	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
+		for _, auth := range auths {
+			if pool.pending[auth] != nil || pool.queue[auth] != nil {
+				return txpool.ErrAuthorityReserved
+			}
+		}
 	}
 	return nil
 }
@@ -635,6 +659,11 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx); err != nil {
+		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
+		invalidTxMeter.Mark(1)
+		return false, err
+	}
+	if err := pool.validateAuth(tx); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxMeter.Mark(1)
 		return false, err
