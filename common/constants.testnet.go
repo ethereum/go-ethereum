@@ -12,7 +12,7 @@ var TestnetConstant = constant{
 	tip2019Block:                  big.NewInt(1),
 	tipSigning:                    big.NewInt(3000000),
 	tipRandomize:                  big.NewInt(3464000),
-	tipNoHalvingMNReward:          big.NewInt(23779191),
+	tipNoHalvingMNReward:          big.NewInt(23779191), // hardfork no halving masternodes reward
 	tipXDCX:                       big.NewInt(23779191),
 	tipXDCXLending:                big.NewInt(23779191),
 	tipXDCXCancellationFee:        big.NewInt(23779191),
@@ -20,15 +20,15 @@ var TestnetConstant = constant{
 	tipTRC21Fee:                   big.NewInt(23779191),
 	tipTRC21FeeTestnet:            big.NewInt(23779191),
 	tipIncreaseMasternodes:        big.NewInt(5000000),
-	berlinBlock:                   big.NewInt(61290000),
-	londonBlock:                   big.NewInt(61290000),
-	mergeBlock:                    big.NewInt(61290000),
-	shanghaiBlock:                 big.NewInt(61290000),
-	blockNumberGas50x:             big.NewInt(56828700),
-	TIPV2SwitchBlock:              big.NewInt(56828700),
-	tipXDCXMinerDisable:           big.NewInt(61290000),
-	tipXDCXReceiverDisable:        big.NewInt(66825000),
-	eip1559Block:                  big.NewInt(9999999999),
+	blockNumberGas50x:             big.NewInt(56828700), // Target 13rd Nov 2023
+	TIPV2SwitchBlock:              big.NewInt(56828700), // Target 13rd Nov 2023
+	berlinBlock:                   big.NewInt(61290000), // Target 31st March 2024
+	londonBlock:                   big.NewInt(61290000), // Target 31st March 2024
+	mergeBlock:                    big.NewInt(61290000), // Target 31st March 2024
+	shanghaiBlock:                 big.NewInt(61290000), // Target 31st March 2024
+	tipXDCXMinerDisable:           big.NewInt(61290000), // Target 31st March 2024
+	tipXDCXReceiverDisable:        big.NewInt(66825000), // Target 26 Aug 2024
+	eip1559Block:                  big.NewInt(71550000), // Target 14th Feb 2025
 	cancunBlock:                   big.NewInt(9999999999),
 
 	trc21IssuerSMCTestNet: HexToAddress("0x0E2C88753131CE01c7551B726b28BFD04e44003F"),
