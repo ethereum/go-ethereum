@@ -138,20 +138,16 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]*simBlo
 	}
 	var (
 		results = make([]*simBlockResult, len(blocks))
-		// prevHeaders is the header for all previously simulated blocks.
-		// It is "filled" compared to the barebone header available prior to execution.
-		// It will be used for serving the BLOCKHASH opcode.
-		prevHeaders = make([]*types.Header, 0, len(blocks))
-		parent      = sim.base
+		parent  = sim.base
 	)
 	for bi, block := range blocks {
-		result, callResults, err := sim.processBlock(ctx, &block, headers[bi], parent, prevHeaders, timeout)
+		result, callResults, err := sim.processBlock(ctx, &block, headers[bi], parent, headers[:bi], timeout)
 		if err != nil {
 			return nil, err
 		}
+		headers[bi] = result.Header()
 		results[bi] = &simBlockResult{fullTx: sim.fullTx, chainConfig: sim.chainConfig, Block: result, Calls: callResults}
 		parent = result.Header()
-		prevHeaders = append(prevHeaders, parent)
 	}
 	return results, nil
 }
