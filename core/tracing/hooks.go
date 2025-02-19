@@ -25,12 +25,18 @@
 package tracing
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+)
+
+var (
+	// ErrHookConflict is returned when conflicting hooks are exposed.
+	ErrHookConflict = errors.New("hook conflict")
 )
 
 // OpContext provides the context at which the opcode is being
@@ -215,6 +221,36 @@ type Hooks struct {
 	OnLog           LogHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+}
+
+// Upgrade will upgrade the methods to their most recent versions
+// when possible, e.g. use `OnNonceChangeV2` instead of `OnNonceChange`.
+func Upgrade(hooks *Hooks) (*Hooks, error) {
+	if hooks == nil {
+		return &Hooks{}, nil
+	}
+	if hooks.OnNonceChange != nil && hooks.OnNonceChangeV2 != nil {
+		return nil, ErrHookConflict
+	}
+	if hooks.OnSystemCallStart != nil && hooks.OnSystemCallStartV2 != nil {
+		return nil, ErrHookConflict
+	}
+	// Shallow copy
+	tmp := *hooks
+	internal := &tmp
+	if hooks.OnNonceChange != nil {
+		hooks.OnNonceChangeV2 = func(addr common.Address, prev, new uint64, reason NonceChangeReason) {
+			internal.OnNonceChange(addr, prev, new)
+		}
+		hooks.OnNonceChange = nil
+	}
+	if hooks.OnSystemCallStart != nil {
+		hooks.OnSystemCallStartV2 = func(vm *VMContext) {
+			internal.OnSystemCallStart()
+		}
+		hooks.OnSystemCallStart = nil
+	}
+	return hooks, nil
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
