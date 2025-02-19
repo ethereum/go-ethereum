@@ -29,9 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	pbeth "github.com/ethereum/go-ethereum/pb/sf/ethereum/type/v2"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
+	pbeth "github.com/streamingfast/firehose-ethereum/types/pb/sf/ethereum/type/v2"
 	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -158,6 +158,7 @@ type Firehose struct {
 	blockReorderOrdinal         bool
 	blockReorderOrdinalSnapshot uint64
 	blockReorderOrdinalOnce     sync.Once
+	blockIsGenesis              bool
 
 	// Transaction state
 	evm                  *tracing.VMContext
@@ -279,6 +280,7 @@ func (f *Firehose) resetBlock() {
 	f.blockReorderOrdinal = false
 	f.blockReorderOrdinalSnapshot = 0
 	f.blockReorderOrdinalOnce = sync.Once{}
+	f.blockIsGenesis = false
 }
 
 // resetTransaction resets the transaction state and the call state in one shot
@@ -536,7 +538,7 @@ func (f *Firehose) OnSystemCallEnd() {
 }
 
 func (f *Firehose) OnTxStart(evm *tracing.VMContext, tx *types.Transaction, from common.Address) {
-	firehoseInfo("trx start (tracer=%s hash=%s type=%d gas=%d isolated=%t input=%s)", f.tracerID, tx.Hash(), tx.Type(), tx.Gas(), f.transactionIsolated, inputView(tx.Data()))
+	firehoseInfo("trx start (tracer=%s hash=%s %s type=%d gas=%d isolated=%t input=%s)", f.tracerID, tx.Hash(), fromToTxView(&from, tx), tx.Type(), tx.Gas(), f.transactionIsolated, inputView(tx.Data()))
 
 	f.ensureInBlockAndNotInTrxAndNotInCall()
 
@@ -557,12 +559,7 @@ func (f *Firehose) OnTxStart(evm *tracing.VMContext, tx *types.Transaction, from
 func (f *Firehose) onTxStart(tx *types.Transaction, hash common.Hash, from, to common.Address) {
 	v, r, s := tx.RawSignatureValues()
 
-	var blobGas *uint64
-	if tx.Type() == types.BlobTxType {
-		blobGas = ptr(tx.BlobGas())
-	}
-
-	f.transaction = &pbeth.TransactionTrace{
+	trx := &pbeth.TransactionTrace{
 		BeginOrdinal:         f.blockOrdinal.Next(),
 		Hash:                 hash.Bytes(),
 		From:                 from.Bytes(),
@@ -579,14 +576,23 @@ func (f *Firehose) onTxStart(tx *types.Transaction, hash common.Hash, from, to c
 		AccessList:           newAccessListFromChain(tx.AccessList()),
 		MaxFeePerGas:         maxFeePerGas(tx),
 		MaxPriorityFeePerGas: maxPriorityFeePerGas(tx),
-		BlobGas:              blobGas,
-		BlobGasFeeCap:        firehoseBigIntFromNative(tx.BlobGasFeeCap()),
-		BlobHashes:           newBlobHashesFromChain(tx.BlobHashes()),
 	}
+
+	switch tx.Type() {
+	case types.BlobTxType:
+		trx.BlobGas = ptr(tx.BlobGas())
+		trx.BlobGasFeeCap = firehoseBigIntFromNative(tx.BlobGasFeeCap())
+		trx.BlobHashes = newBlobHashesFromChain(tx.BlobHashes())
+
+	case types.SetCodeTxType:
+		trx.SetCodeAuthorizations = newSetCodeAuthorizationsFromChain(tx.SetCodeAuthorizations())
+	}
+
+	f.transaction = trx
 }
 
 func (f *Firehose) OnTxEnd(receipt *types.Receipt, err error) {
-	firehoseInfo("trx ending (tracer=%s, isolated=%t, error=%s)", f.tracerID, f.transactionIsolated, errorView(err))
+	firehoseInfo("trx ending (tracer=%s, isolated=%t, err=%s)", f.tracerID, f.transactionIsolated, errorView(err))
 	f.ensureInBlockAndInTrx()
 
 	trxTrace := f.completeTransaction(receipt)
@@ -613,7 +619,7 @@ func (f *Firehose) OnTxEnd(receipt *types.Receipt, err error) {
 }
 
 func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.TransactionTrace {
-	firehoseInfo("completing transaction (call_count=%d receipt=%s)", len(f.transaction.Calls), (*receiptView)(receipt))
+	firehoseInfo("completing transaction (call_count=%d receipt=%s)", len(f.transaction.Calls), receiptView(receipt))
 
 	// Sorting needs to happen first, before we populate the state reverted
 	slices.SortFunc(f.transaction.Calls, func(i, j *pbeth.Call) int {
@@ -621,6 +627,10 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 	})
 
 	rootCall := f.transaction.Calls[0]
+
+	// Can be done prior moving last deferred call state to the root call as we are only interested from the initial
+	// deferred state that already been transferred into the root call (in `onCallStart(...)`).
+	f.discardUncommittedSetCodeAuthorization(rootCall)
 
 	if !f.deferredCallState.IsEmpty() {
 		f.deferredCallState.MaybePopulateCallAndReset("root", rootCall)
@@ -683,6 +693,39 @@ func (f *Firehose) populateStateReverted() {
 		}
 
 		call.StateReverted = (parent != nil && parent.StateReverted) || call.StatusFailed
+	}
+}
+
+// discardUncommittedSetCodeAuthorization set `discarded = true` for all the SetCodeAuthorization element
+// that don't have a corresponding NonceChange coming from the root call of the transaction, which
+// means they weren't committed to the state.
+//
+// Indeed, EIP-7702 states that are invalid SetCodeAuthorization is simply discard and it's not recorded
+// to chain's state.
+func (f *Firehose) discardUncommittedSetCodeAuthorization(rootCall *pbeth.Call) {
+	usedNonceChange := map[int]bool{}
+	findNonceChange := func(forAddress []byte, nonce uint64) *pbeth.NonceChange {
+		for i, change := range rootCall.NonceChanges {
+			if change.OldValue == nonce && change.NewValue == nonce+1 && bytes.Equal(change.Address, forAddress) && usedNonceChange[i] == false {
+				usedNonceChange[i] = true
+				return change
+			}
+		}
+
+		return nil
+	}
+
+	for _, auth := range f.transaction.SetCodeAuthorizations {
+		if len(auth.Authority) == 0 {
+			// Nothing to check, authority is empty, it's not a valid authorization
+			auth.Discarded = true
+			continue
+		}
+
+		if findNonceChange(auth.Authority, auth.Nonce) == nil {
+			firehoseDebug("discarded set code authorization, no corresponding nonce change found (address=%s nonce=%d)", hex.EncodeToString(auth.Authority), auth.Nonce)
+			auth.Discarded = true
+		}
 	}
 }
 
@@ -995,7 +1038,7 @@ func (f *Firehose) captureInterpreterStep(activeCall *pbeth.Call, pc uint64, op 
 }
 
 func (f *Firehose) callStart(source string, callType pbeth.CallType, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	firehoseDebug("call start (source=%s index=%d type=%s input=%s)", source, f.callStack.NextIndex(), callType, inputView(input))
+	firehoseDebug("call start (source=%s index=%d type=%s ref=%s input=%s)", source, f.callStack.NextIndex(), callType, fromToView(&from, &to), inputView(input))
 	f.ensureInBlockAndInTrx()
 
 	if *f.applyBackwardCompatibility {
@@ -1016,6 +1059,18 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		Input:    bytes.Clone(input),
 		Value:    firehoseBigIntFromNative(value),
 		GasLimit: gas,
+	}
+
+	if f.blockRules.IsPrague && !f.inSystemCall && !f.blockIsGenesis && callType != pbeth.CallType_CREATE {
+		firehoseTrace("call resolving delegation (from=%s)", from)
+
+		code := f.evm.StateDB.GetCode(to)
+		if len(code) != 0 {
+			if target, ok := types.ParseDelegation(code); ok {
+				firehoseDebug("call resolved delegation (from=%s, delegates_to=%s)", from, target)
+				call.AddressDelegatesTo = target.Bytes()
+			}
+		}
 	}
 
 	if *f.applyBackwardCompatibility {
@@ -1174,6 +1229,9 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 
 	f.ensureBlockChainInit()
 
+	// Going to be reset in OnBlockEnd
+	f.blockIsGenesis = true
+
 	f.OnBlockStart(tracing.BlockEvent{Block: b, Finalized: nil, Safe: nil})
 	f.onTxStart(types.NewTx(&types.LegacyTx{}), emptyCommonHash, emptyCommonAddress, emptyCommonAddress)
 	f.OnCallEnter(0, byte(vm.CALL), emptyCommonAddress, emptyCommonAddress, nil, 0, nil)
@@ -1260,7 +1318,7 @@ func (f *Firehose) OnBalanceChange(a common.Address, prev, new *big.Int, reason 
 }
 
 func (f *Firehose) newBalanceChange(tag string, address common.Address, oldValue, newValue *big.Int, reason pbeth.BalanceChange_Reason) *pbeth.BalanceChange {
-	firehoseTrace("balance changed (tag=%s before=%d after=%d reason=%s)", tag, oldValue, newValue, reason)
+	firehoseTrace("balance changed (tag=%s address=%s before=%d after=%d reason=%s)", tag, shortAddressView(&address), oldValue, newValue, reason)
 
 	if reason == pbeth.BalanceChange_REASON_UNKNOWN {
 		panic(fmt.Errorf("received unknown balance change reason %s", reason))
@@ -1302,8 +1360,14 @@ func (f *Firehose) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev
 
 	if f.transaction != nil {
 		activeCall := f.callStack.Peek()
+
+		// Since EIP-7702 and the introduction of the `SetCode` transaction, a traced `StateDB.SetCode(...)` call
+		// is now happening within the "bootstrap" transaction phase which happens before any call is made. So
+		// in the event there is no active call, we push the code change to the deferred state and will be applied
+		// on the root call when it's finally created.
 		if activeCall == nil {
-			f.panicInvalidState("caller expected to be in call state but we were not, this is a bug", 0)
+			f.deferredCallState.codeChanges = append(f.deferredCallState.codeChanges, f.newCodeChange(a, prevCodeHash, prev, codeHash, code))
+			return
 		}
 
 		// Geth 1.14.12 introduced a new behavior where a code change is emitted when a contract
@@ -1325,28 +1389,25 @@ func (f *Firehose) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev
 			return
 		}
 
-		activeCall.CodeChanges = append(activeCall.CodeChanges, &pbeth.CodeChange{
-			Address: a.Bytes(),
-			OldHash: prevCodeHash.Bytes(),
-			OldCode: prev,
-			NewHash: codeHash.Bytes(),
-			NewCode: code,
-			Ordinal: f.blockOrdinal.Next(),
-		})
+		activeCall.CodeChanges = append(activeCall.CodeChanges, f.newCodeChange(a, prevCodeHash, prev, codeHash, code))
 	} else {
-		f.block.CodeChanges = append(f.block.CodeChanges, &pbeth.CodeChange{
-			Address: a.Bytes(),
-			OldHash: prevCodeHash.Bytes(),
-			OldCode: prev,
-			NewHash: codeHash.Bytes(),
-			NewCode: code,
-			Ordinal: f.blockOrdinal.Next(),
-		})
+		f.block.CodeChanges = append(f.block.CodeChanges, f.newCodeChange(a, prevCodeHash, prev, codeHash, code))
+	}
+}
+
+func (f *Firehose) newCodeChange(addr common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) *pbeth.CodeChange {
+	return &pbeth.CodeChange{
+		Address: addr.Bytes(),
+		OldHash: prevCodeHash.Bytes(),
+		OldCode: prev,
+		NewHash: codeHash.Bytes(),
+		NewCode: code,
+		Ordinal: f.blockOrdinal.Next(),
 	}
 }
 
 func (f *Firehose) OnStorageChange(a common.Address, k, prev, new common.Hash) {
-	firehoseTrace("storage changed (key=%s, before=%s after=%s)", k, prev, new)
+	firehoseTrace("storage changed (address=%s key=%s, before=%s after=%s)", shortAddressView(&a), k, prev, new)
 
 	f.ensureInBlockAndInTrxAndInCall()
 
@@ -1609,7 +1670,7 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 	}
 
 	// **Important* The final space in the Sprintf template is mandatory!
-	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.Time().UnixNano()))
+	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
 
 	encoder := base64.NewEncoder(base64.StdEncoding, f.outputBuffer)
 	if _, err = encoder.Write(marshalled); err != nil {
@@ -1855,6 +1916,37 @@ func newBlobHashesFromChain(blobHashes []common.Hash) (out [][]byte) {
 	out = make([][]byte, len(blobHashes))
 	for i, blobHash := range blobHashes {
 		out[i] = blobHash.Bytes()
+	}
+
+	return
+}
+
+func newSetCodeAuthorizationsFromChain(authorizations []types.SetCodeAuthorization) (out []*pbeth.SetCodeAuthorization) {
+	if len(authorizations) == 0 {
+		return nil
+	}
+
+	out = make([]*pbeth.SetCodeAuthorization, len(authorizations))
+	for i, authorization := range authorizations {
+		pbAuthorization := &pbeth.SetCodeAuthorization{
+			ChainId: authorization.ChainID.Bytes(),
+			Nonce:   authorization.Nonce,
+			V:       uint32(authorization.V),
+			R:       normalizeSignaturePoint(authorization.R.Bytes()),
+			S:       normalizeSignaturePoint(authorization.S.Bytes()),
+		}
+
+		authority, err := authorization.Authority()
+		if err != nil {
+			// The node skips invalid authorizations, we do the same, at transaction's end, we will
+			// also remove authorizations that didn't result into a code change.
+			firehoseDebug("failed to compute authority for authorization at index %d (err=%s)", i, errorView(err))
+			pbAuthorization.Discarded = true
+		} else {
+			pbAuthorization.Authority = authority.Bytes()
+		}
+
+		out[i] = pbAuthorization
 	}
 
 	return
@@ -2113,6 +2205,7 @@ type DeferredCallState struct {
 	balanceChanges   []*pbeth.BalanceChange
 	gasChanges       []*pbeth.GasChange
 	nonceChanges     []*pbeth.NonceChange
+	codeChanges      []*pbeth.CodeChange
 }
 
 func NewDeferredCallState() *DeferredCallState {
@@ -2133,6 +2226,7 @@ func (d *DeferredCallState) MaybePopulateCallAndReset(source string, call *pbeth
 	call.BalanceChanges = append(call.BalanceChanges, d.balanceChanges...)
 	call.GasChanges = append(call.GasChanges, d.gasChanges...)
 	call.NonceChanges = append(call.NonceChanges, d.nonceChanges...)
+	call.CodeChanges = append(call.CodeChanges, d.codeChanges...)
 
 	d.Reset()
 
@@ -2140,7 +2234,7 @@ func (d *DeferredCallState) MaybePopulateCallAndReset(source string, call *pbeth
 }
 
 func (d *DeferredCallState) IsEmpty() bool {
-	return len(d.accountCreations) == 0 && len(d.balanceChanges) == 0 && len(d.gasChanges) == 0 && len(d.nonceChanges) == 0
+	return len(d.accountCreations) == 0 && len(d.balanceChanges) == 0 && len(d.gasChanges) == 0 && len(d.nonceChanges) == 0 && len(d.codeChanges) == 0
 }
 
 func (d *DeferredCallState) Reset() {
@@ -2148,8 +2242,10 @@ func (d *DeferredCallState) Reset() {
 	d.balanceChanges = nil
 	d.gasChanges = nil
 	d.nonceChanges = nil
+	d.codeChanges = nil
 }
 
+//go:inline
 func errorView(err error) _errorView {
 	return _errorView{err}
 }
@@ -2163,7 +2259,57 @@ func (e _errorView) String() string {
 		return "<no error>"
 	}
 
-	return e.err.Error()
+	return `"` + e.err.Error() + `"`
+}
+
+//go:inline
+func fromToTxView(from *common.Address, tx *types.Transaction) _fromToView {
+	return _fromToView{from, tx.To()}
+}
+
+//go:inline
+func fromToView(from *common.Address, to *common.Address) _fromToView {
+	return _fromToView{from, to}
+}
+
+type _fromToView struct {
+	// from is actually always set
+	from *common.Address
+	to   *common.Address
+}
+
+func (b _fromToView) String() string {
+	if b.from == nil && b.to == nil {
+		return ""
+	}
+
+	to := "<contract>"
+	if b.to != nil {
+		to = shortenAddress(b.to)
+	}
+
+	return fmt.Sprintf("(%s -> %s)", shortenAddress(b.from), to)
+}
+
+//go:inline
+func shortAddressView(addr *common.Address) *_shortAddressView {
+	return (*_shortAddressView)(addr)
+}
+
+type _shortAddressView common.Address
+
+func (a *_shortAddressView) String() string {
+	if a == nil {
+		return "<nil>"
+	}
+
+	return shortenAddress((*common.Address)(a))
+}
+
+func shortenAddress(addr *common.Address) string {
+	full := addr.String()
+
+	return full[:6] + ".." + full[len(full)-4:]
 }
 
 type inputView []byte
@@ -2199,9 +2345,14 @@ func (b outputView) String() string {
 	return fmt.Sprintf("%d bytes", len(b))
 }
 
-type receiptView types.Receipt
+//go:inline
+func receiptView(receipt *types.Receipt) *_receiptView {
+	return (*_receiptView)(receipt)
+}
 
-func (r *receiptView) String() string {
+type _receiptView types.Receipt
+
+func (r *_receiptView) String() string {
 	if r == nil {
 		return "<failed>"
 	}

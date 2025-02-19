@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/eth/tracers"
-	pbeth "github.com/ethereum/go-ethereum/pb/sf/ethereum/type/v2"
+	"github.com/ethereum/go-ethereum/params"
+	pbeth "github.com/streamingfast/firehose-ethereum/types/pb/sf/ethereum/type/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -23,6 +27,27 @@ type firehoseInitLine struct {
 }
 
 type firehoseBlockLines []firehoseBlockLine
+
+func newFirehoseTestTracer(t *testing.T) (*tracers.Firehose, *tracing.Hooks, func()) {
+	t.Helper()
+
+	tracer, err := tracers.NewFirehoseFromRawJSON([]byte(`{
+		"applyBackwardsCompatibility": true,
+		"_private": {
+			"flushToTestBuffer": true,
+			"ignoreGenesisBlock": true
+		}
+	}`))
+	require.NoError(t, err)
+
+	hooks := tracers.NewTracingHooksFromFirehose(tracer)
+
+	return tracer, hooks, func() {
+		if hooks.OnClose != nil {
+			hooks.OnClose()
+		}
+	}
+}
 
 func (lines firehoseBlockLines) assertEquals(t *testing.T, goldenDir string, expected ...firehoseBlockLineParams) {
 	actualParams := slicesMap(lines, func(l firehoseBlockLine) firehoseBlockLineParams { return l.Params })
@@ -102,6 +127,16 @@ type firehoseBlockLineParams struct {
 
 type unknownLine string
 
+// assertBlockEquals reads the tracer output and compares it to the golden files in the given directory.
+func assertBlockEquals(t *testing.T, tracer *tracers.Firehose, goldenDir string, expectedBlockCount int) {
+	t.Helper()
+
+	genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
+	require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
+	require.NotNil(t, genesisLine)
+	blockLines.assertOnlyBlockEquals(t, goldenDir, expectedBlockCount)
+}
+
 func readTracerFirehoseLines(t *testing.T, tracer *tracers.Firehose) (genesisLine *firehoseInitLine, blockLines firehoseBlockLines, unknownLines []unknownLine) {
 	t.Helper()
 
@@ -156,4 +191,8 @@ func readTracerFirehoseLines(t *testing.T, tracer *tracers.Firehose) (genesisLin
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+func newGwei(n int64) *big.Int {
+	return new(big.Int).Mul(big.NewInt(n), big.NewInt(params.GWei))
 }
