@@ -2280,7 +2280,7 @@ func TestSetCodeTransactions(t *testing.T) {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
 				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keyC)); err != nil {
-					t.Fatalf("%s: failed to add with pending delegatio: %v", name, err)
+					t.Fatalf("%s: failed to add with pending delegation: %v", name, err)
 				}
 				// Also check gapped transaction is rejected.
 				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyC)); !errors.Is(err, txpool.ErrAccountLimitExceeded) {
