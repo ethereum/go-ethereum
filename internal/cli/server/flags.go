@@ -167,6 +167,12 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Value:   &c.cliConfig.Heimdall.URL,
 		Default: c.cliConfig.Heimdall.URL,
 	})
+	f.DurationFlag(&flagset.DurationFlag{
+		Name:    "bor.heimdalltimeout",
+		Usage:   "Timeout of Heimdall service",
+		Value:   &c.cliConfig.Heimdall.Timeout,
+		Default: c.cliConfig.Heimdall.Timeout,
+	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "bor.withoutheimdall",
 		Usage:   "Run without Heimdall service (for testing purpose)",

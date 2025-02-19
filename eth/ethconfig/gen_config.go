@@ -26,6 +26,9 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		NoPruning                            bool
 		NoPrefetch                           bool
 		TxLookupLimit                        uint64                 `toml:",omitempty"`
+		TransactionHistory                   uint64                 `toml:",omitempty"`
+		StateHistory                         uint64                 `toml:",omitempty"`
+		StateScheme                          string                 `toml:",omitempty"`
 		RequiredBlocks                       map[uint64]common.Hash `toml:"-"`
 		LightServ                            int                    `toml:",omitempty"`
 		LightIngress                         int                    `toml:",omitempty"`
@@ -53,9 +56,9 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		BlobPool                             blobpool.Config
 		GPO                                  gasprice.Config
 		EnablePreimageRecording              bool
-		EnableWitnessCollection bool `toml:"-"`
-		VMTrace                 string
-		VMTraceJsonConfig       string
+		EnableWitnessCollection              bool `toml:"-"`
+		VMTrace                              string
+		VMTraceJsonConfig                    string
 		DocRoot                              string `toml:"-"`
 		RPCGasCap                            uint64
 		RPCReturnDataLimit                   uint64
@@ -63,6 +66,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		RPCTxFeeCap                          float64
 		OverrideCancun                       *big.Int `toml:",omitempty"`
 		HeimdallURL                          string
+		HeimdallTimeout                      time.Duration
 		WithoutHeimdall                      bool
 		HeimdallgRPCAddress                  string
 		RunHeimdall                          bool
@@ -72,6 +76,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		ParallelEVM                          core.ParallelEVMConfig `toml:",omitempty"`
 		DevFakeAuthor                        bool                   `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
 		OverrideVerkle                       *big.Int               `toml:",omitempty"`
+		EnableBlockTracking                  bool
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -82,6 +87,9 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.NoPruning = c.NoPruning
 	enc.NoPrefetch = c.NoPrefetch
 	enc.TxLookupLimit = c.TxLookupLimit
+	enc.TransactionHistory = c.TransactionHistory
+	enc.StateHistory = c.StateHistory
+	enc.StateScheme = c.StateScheme
 	enc.RequiredBlocks = c.RequiredBlocks
 	enc.LightServ = c.LightServ
 	enc.LightIngress = c.LightIngress
@@ -119,6 +127,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
 	enc.OverrideCancun = c.OverrideCancun
 	enc.HeimdallURL = c.HeimdallURL
+	enc.HeimdallTimeout = c.HeimdallTimeout
 	enc.WithoutHeimdall = c.WithoutHeimdall
 	enc.HeimdallgRPCAddress = c.HeimdallgRPCAddress
 	enc.RunHeimdall = c.RunHeimdall
@@ -128,6 +137,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.ParallelEVM = c.ParallelEVM
 	enc.DevFakeAuthor = c.DevFakeAuthor
 	enc.OverrideVerkle = c.OverrideVerkle
+	enc.EnableBlockTracking = c.EnableBlockTracking
 	return &enc, nil
 }
 
@@ -142,6 +152,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		NoPruning                            *bool
 		NoPrefetch                           *bool
 		TxLookupLimit                        *uint64                `toml:",omitempty"`
+		TransactionHistory                   *uint64                `toml:",omitempty"`
+		StateHistory                         *uint64                `toml:",omitempty"`
+		StateScheme                          *string                `toml:",omitempty"`
 		RequiredBlocks                       map[uint64]common.Hash `toml:"-"`
 		LightServ                            *int                   `toml:",omitempty"`
 		LightIngress                         *int                   `toml:",omitempty"`
@@ -169,9 +182,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		BlobPool                             *blobpool.Config
 		GPO                                  *gasprice.Config
 		EnablePreimageRecording              *bool
-		EnableWitnessCollection *bool `toml:"-"`
-		VMTrace                 *string
-		VMTraceJsonConfig       *string
+		EnableWitnessCollection              *bool `toml:"-"`
+		VMTrace                              *string
+		VMTraceJsonConfig                    *string
 		DocRoot                              *string `toml:"-"`
 		RPCGasCap                            *uint64
 		RPCReturnDataLimit                   *uint64
@@ -179,6 +192,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		RPCTxFeeCap                          *float64
 		OverrideCancun                       *big.Int `toml:",omitempty"`
 		HeimdallURL                          *string
+		HeimdallTimeout                      *time.Duration
 		WithoutHeimdall                      *bool
 		HeimdallgRPCAddress                  *string
 		RunHeimdall                          *bool
@@ -188,6 +202,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		ParallelEVM                          *core.ParallelEVMConfig `toml:",omitempty"`
 		DevFakeAuthor                        *bool                   `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
 		OverrideVerkle                       *big.Int                `toml:",omitempty"`
+		EnableBlockTracking                  *bool
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -216,6 +231,15 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.TxLookupLimit != nil {
 		c.TxLookupLimit = *dec.TxLookupLimit
+	}
+	if dec.TransactionHistory != nil {
+		c.TransactionHistory = *dec.TransactionHistory
+	}
+	if dec.StateHistory != nil {
+		c.StateHistory = *dec.StateHistory
+	}
+	if dec.StateScheme != nil {
+		c.StateScheme = *dec.StateScheme
 	}
 	if dec.RequiredBlocks != nil {
 		c.RequiredBlocks = dec.RequiredBlocks
@@ -328,6 +352,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.HeimdallURL != nil {
 		c.HeimdallURL = *dec.HeimdallURL
 	}
+	if dec.HeimdallTimeout != nil {
+		c.HeimdallTimeout = *dec.HeimdallTimeout
+	}
 	if dec.WithoutHeimdall != nil {
 		c.WithoutHeimdall = *dec.WithoutHeimdall
 	}
@@ -354,6 +381,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.OverrideVerkle != nil {
 		c.OverrideVerkle = dec.OverrideVerkle
+	}
+	if dec.EnableBlockTracking != nil {
+		c.EnableBlockTracking = *dec.EnableBlockTracking
 	}
 	return nil
 }

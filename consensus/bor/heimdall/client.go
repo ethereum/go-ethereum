@@ -33,7 +33,6 @@ var (
 const (
 	heimdallAPIBodyLimit = 128 * 1024 * 1024 // 128 MB
 	stateFetchLimit      = 50
-	apiHeimdallTimeout   = 5 * time.Second
 	retryCall            = 5 * time.Second
 )
 
@@ -59,11 +58,13 @@ type Request struct {
 	start  time.Time
 }
 
-func NewHeimdallClient(urlString string) *HeimdallClient {
+func NewHeimdallClient(urlString string, timeout time.Duration) *HeimdallClient {
+	// REMOVE BEFORE PR
+	log.Info("############### timeout set on heimdall client", "valueSetByConfig", timeout)
 	return &HeimdallClient{
 		urlString: urlString,
 		client: http.Client{
-			Timeout: apiHeimdallTimeout,
+			Timeout: timeout,
 		},
 		closeCh: make(chan struct{}),
 	}
@@ -469,7 +470,7 @@ func internalFetch(ctx context.Context, client http.Client, u *url.URL) ([]byte,
 }
 
 func internalFetchWithTimeout(ctx context.Context, client http.Client, url *url.URL) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, apiHeimdallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, client.Timeout)
 	defer cancel()
 
 	// request data once

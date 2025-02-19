@@ -186,6 +186,9 @@ type Config struct {
 	// URL to connect to Heimdall node
 	HeimdallURL string
 
+	// timeout in heimdall requests
+	HeimdallTimeout time.Duration
+
 	// No heimdall service
 	WithoutHeimdall bool
 
@@ -242,7 +245,7 @@ func CreateConsensusEngine(chainConfig *params.ChainConfig, ethConfig *Config, d
 			} else if ethConfig.HeimdallgRPCAddress != "" {
 				heimdallClient = heimdallgrpc.NewHeimdallGRPCClient(ethConfig.HeimdallgRPCAddress)
 			} else {
-				heimdallClient = heimdall.NewHeimdallClient(ethConfig.HeimdallURL)
+				heimdallClient = heimdall.NewHeimdallClient(ethConfig.HeimdallURL, ethConfig.HeimdallTimeout)
 			}
 
 			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdallClient, genesisContractsClient, false), nil

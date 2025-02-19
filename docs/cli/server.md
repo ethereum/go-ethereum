@@ -8,6 +8,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.heimdall```: URL of Heimdall service (default: http://localhost:1317)
 
+- ```bor.heimdalltimeout```: Timeout of Heimdall service (default: 5s)
+
 - ```bor.heimdallgRPC```: Address of Heimdall gRPC service
 
 - ```bor.logs```: Enables bor log retrieval (default: false)
