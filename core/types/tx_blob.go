@@ -86,18 +86,12 @@ func (sc *BlobTxSidecar) encodedSize() uint64 {
 	return rlp.ListSize(blobs) + rlp.ListSize(commitments) + rlp.ListSize(proofs)
 }
 
+// ValidateBlobCommitmentHashes checks whether the given hashes correspond to the
+// commitments in the sidecar
 func (sc *BlobTxSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) error {
-	if len(sc.Blobs) != len(hashes) {
-		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sc.Blobs), len(hashes))
-	}
 	if len(sc.Commitments) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blob commitments compared to %d blob hashes", len(sc.Commitments), len(hashes))
 	}
-	if len(sc.Proofs) != len(hashes) {
-		return fmt.Errorf("invalid number of %d blob proofs compared to %d blob hashes", len(sc.Proofs), len(hashes))
-	}
-	// Blob quantities match up, validate that the provers match with the
-	// transaction hash before getting to the cryptography
 	hasher := sha256.New()
 	for i, vhash := range hashes {
 		computed := kzg4844.CalcBlobHashV1(hasher, &sc.Commitments[i])
