@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -31,6 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/internal/flags"
+
+	//"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
@@ -47,16 +51,150 @@ const (
 
 var (
 	filterCommand = &cli.Command{
-		Name:      "filter",
-		Usage:     "Runs range log filter workload test against an RPC endpoint",
+		Name:  "filter",
+		Usage: "Log filter workload test commands",
+		Subcommands: []*cli.Command{
+			filterGenCommand,
+			filterTestCommand,
+		},
+	}
+	filterGenCommand = &cli.Command{
+		Name:      "generate",
+		Usage:     "Generates query set for log filter workload test",
+		ArgsUsage: "<RPC endpoint URL>",
+		Action:    filterGenCmd,
+		Flags: []cli.Flag{
+			filterQueryFileFlag,
+			filterErrorFileFlag,
+		},
+	}
+	filterTestCommand = &cli.Command{
+		Name:      "test",
+		Usage:     "Runs log filter workload test against an RPC endpoint",
 		ArgsUsage: "<RPC endpoint URL>",
 		Action:    filterTestCmd,
-		Flags:     []cli.Flag{},
+		Flags: []cli.Flag{
+			filterQueryFileFlag,
+			filterErrorFileFlag,
+		},
+	}
+	filterQueryFileFlag = &cli.StringFlag{
+		Name:     "queries",
+		Usage:    "JSON file containing filter test queries",
+		Category: flags.TestingCategory,
+		Value:    "filter_queries.json",
+	}
+	filterErrorFileFlag = &cli.StringFlag{
+		Name:     "errors",
+		Usage:    "JSON file containing failed filter queries",
+		Category: flags.TestingCategory,
+		Value:    "filter_errors.json",
 	}
 )
 
+const passCount = 5
+
 func filterTestCmd(ctx *cli.Context) error {
-	f := filterTest{ec: makeEthClient(ctx)}
+	f := newFilterTest(ctx)
+	if f.loadQueries() == 0 {
+		exit("No test requests loaded")
+	}
+	f.getFinalizedBlock()
+
+	type queryTest struct {
+		query         *filterQuery
+		bucket, index int
+		runtime       []time.Duration
+		medianTime    time.Duration
+	}
+	var queries, processed []queryTest
+
+	for i, bucket := range f.stored[:] {
+		for j, query := range bucket {
+			if query.ToBlock > f.finalized {
+				fmt.Println("invalid range")
+				continue
+			}
+			queries = append(queries, queryTest{query: query, bucket: i, index: j})
+		}
+	}
+
+	var failed, mismatch int
+	for i := 1; i <= passCount; i++ {
+		fmt.Println("Performance test pass", i, "/", passCount)
+		for len(queries) > 0 {
+			pick := rand.Intn(len(queries))
+			qt := queries[pick]
+			queries[pick] = queries[len(queries)-1]
+			queries = queries[:len(queries)-1]
+			start := time.Now()
+			f.query(qt.query)
+			qt.runtime = append(qt.runtime, time.Since(start))
+			sort.Slice(qt.runtime, func(i, j int) bool { return qt.runtime[i] < qt.runtime[j] })
+			qt.medianTime = qt.runtime[len(qt.runtime)/2]
+			if qt.query.Err != nil {
+				fmt.Println(qt.bucket, qt.index, "err", qt.query.Err)
+				failed++
+				continue
+			}
+			if *qt.query.ResultHash != qt.query.calculateHash() {
+				fmt.Println(qt.bucket, qt.index, "mismatch")
+				mismatch++
+				continue
+			}
+			processed = append(processed, qt)
+			if len(processed)%50 == 0 {
+				fmt.Println("processed:", len(processed), "remaining", len(queries), "failed:", failed, "result mismatch:", mismatch)
+			}
+		}
+		queries, processed = processed, nil
+	}
+	fmt.Println("Done; processed:", len(queries), "failed:", failed, "result mismatch:", mismatch)
+
+	type bucketStats struct {
+		blocks      int64
+		count, logs int
+		runtime     time.Duration
+	}
+	stats := make([]bucketStats, len(f.stored))
+	var wildcardStats bucketStats
+	for _, qt := range queries {
+		bs := &stats[qt.bucket]
+		if qt.query.isWildcard() {
+			bs = &wildcardStats
+		}
+		bs.blocks += qt.query.ToBlock + 1 - qt.query.FromBlock
+		bs.count++
+		bs.logs += len(qt.query.results)
+		bs.runtime += qt.medianTime
+	}
+
+	printStats := func(name string, stats *bucketStats) {
+		if stats.count == 0 {
+			return
+		}
+		fmt.Println(name, "query count", stats.count, "avg block count", float64(stats.blocks)/float64(stats.count), "avg log count", float64(stats.logs)/float64(stats.count), "avg runtime", stats.runtime/time.Duration(stats.count))
+	}
+
+	fmt.Println()
+	for i := range stats {
+		printStats(fmt.Sprintf("bucket #%d", i), &stats[i])
+	}
+	printStats("wild card queries", &wildcardStats)
+	fmt.Println()
+	sort.Slice(queries, func(i, j int) bool {
+		return queries[i].medianTime > queries[j].medianTime
+	})
+	for i := 0; i < 100; i++ {
+		q := queries[i]
+		fmt.Println("Most expensive query #", i+1, "median time", q.medianTime, "max time", q.runtime[len(q.runtime)-1], "results", len(q.query.results), "fromBlock", q.query.FromBlock, "toBlock", q.query.ToBlock, "addresses", q.query.Address, "topics", q.query.Topics)
+	}
+	return nil
+}
+
+func filterGenCmd(ctx *cli.Context) error {
+	f := newFilterTest(ctx)
+	//f.loadQueries()  //TODO
 	lastWrite := time.Now()
 	for {
 		select {
@@ -96,8 +234,8 @@ func filterTestCmd(ctx *cli.Context) error {
 			}
 			f.storeQuery(query)
 			if time.Since(lastWrite) > time.Second*10 {
-				f.writeQueries("filter_queries")
-				f.writeFailed("filter_errors")
+				f.writeQueries()
+				f.writeErrors()
 				lastWrite = time.Now()
 			}
 		}
@@ -106,10 +244,19 @@ func filterTestCmd(ctx *cli.Context) error {
 }
 
 type filterTest struct {
-	ec        *ethclient.Client
-	finalized int64
-	stored    [filterBuckets][]*filterQuery
-	failed    []*filterQuery
+	ec                   *ethclient.Client
+	finalized            int64
+	queryFile, errorFile string
+	stored               [filterBuckets][]*filterQuery
+	failed               []*filterQuery
+}
+
+func newFilterTest(ctx *cli.Context) *filterTest {
+	return &filterTest{
+		ec:        makeEthClient(ctx),
+		queryFile: ctx.String(filterQueryFileFlag.Name),
+		errorFile: ctx.String(filterErrorFileFlag.Name),
+	}
 }
 
 func (f *filterTest) storeQuery(query *filterQuery) {
@@ -263,24 +410,31 @@ func (f *filterTest) newNarrowedQuery() *filterQuery {
 	query := &filterQuery{
 		FromBlock: q.FromBlock,
 		ToBlock:   q.ToBlock,
-		Address:   q.Address,
-		Topics:    q.Topics,
+		Address:   make([]common.Address, len(q.Address)),
+		Topics:    make([][]common.Hash, len(q.Topics)),
+	}
+	copy(query.Address, q.Address)
+	for i, topics := range q.Topics {
+		if len(topics) > 0 {
+			query.Topics[i] = make([]common.Hash, len(topics))
+			copy(query.Topics[i], topics)
+		}
 	}
 	pick := rand.Intn(emptyCount)
-	if len(q.Address) == 0 {
+	if len(query.Address) == 0 {
 		if pick == 0 {
-			q.Address = []common.Address{log.Address}
+			query.Address = []common.Address{log.Address}
 			return query
 		}
 		pick--
 	}
 	for i := range log.Topics {
-		if len(q.Topics) <= i || len(q.Topics[i]) == 0 {
+		if len(query.Topics) <= i || len(query.Topics[i]) == 0 {
 			if pick == 0 {
-				if len(q.Topics) <= i {
-					q.Topics = append(q.Topics, make([][]common.Hash, i+1-len(q.Topics))...)
+				if len(query.Topics) <= i {
+					query.Topics = append(query.Topics, make([][]common.Hash, i+1-len(query.Topics))...)
 				}
-				q.Topics[i] = []common.Hash{log.Topics[i]}
+				query.Topics[i] = []common.Hash{log.Topics[i]}
 				return query
 			}
 			pick--
@@ -322,6 +476,18 @@ type filterQuery struct {
 	Err        error `json: error, omitEmpty`
 }
 
+func (fq *filterQuery) isWildcard() bool {
+	if len(fq.Address) != 0 {
+		return false
+	}
+	for _, topics := range fq.Topics {
+		if len(topics) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func (fq *filterQuery) calculateHash() common.Hash {
 	enc, err := rlp.EncodeToBytes(&fq.results)
 	if err != nil {
@@ -357,33 +523,39 @@ func (f *filterTest) query(query *filterQuery) {
 		return
 	}
 	query.results = logs
-	fmt.Println("filter query range", query.ToBlock+1-query.FromBlock, "results", len(logs))
+	//fmt.Println("filter query range", query.ToBlock+1-query.FromBlock, "results", len(logs))
 }
 
-func (f *filterTest) readQueries(fn string) {
-	file, err := os.Open(fn)
+func (f *filterTest) loadQueries() int {
+	file, err := os.Open(f.queryFile)
 	if err != nil {
-		exit(fmt.Errorf("Error creating filter pattern file", "name", fn, "error", err))
+		fmt.Println("Error opening", f.queryFile, ":", err)
+		return 0
+	}
+	json.NewDecoder(file).Decode(&f.stored)
+	file.Close()
+	var count int
+	for _, bucket := range f.stored {
+		count += len(bucket)
+	}
+	fmt.Println("Loaded", count, "filter test queries")
+	return count
+}
+
+func (f *filterTest) writeQueries() {
+	file, err := os.Create(f.queryFile)
+	if err != nil {
+		exit(fmt.Errorf("Error creating filter test query file", "name", f.queryFile, "error", err))
 		return
 	}
-	json.NewDecoder(file).Decode(f.stored[:])
+	json.NewEncoder(file).Encode(&f.stored)
 	file.Close()
 }
 
-func (f *filterTest) writeQueries(fn string) {
-	file, err := os.Create(fn)
+func (f *filterTest) writeErrors() {
+	file, err := os.Create(f.errorFile)
 	if err != nil {
-		exit(fmt.Errorf("Error creating filter pattern file", "name", fn, "error", err))
-		return
-	}
-	json.NewEncoder(file).Encode(f.stored[:])
-	file.Close()
-}
-
-func (f *filterTest) writeFailed(fn string) {
-	file, err := os.Create(fn)
-	if err != nil {
-		exit(fmt.Errorf("Error creating filter error file", "name", fn, "error", err))
+		exit(fmt.Errorf("Error creating filter error file", "name", f.errorFile, "error", err))
 		return
 	}
 	json.NewEncoder(file).Encode(f.failed)
