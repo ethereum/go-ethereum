@@ -93,7 +93,7 @@ jobs:
       if: type = push
       os: linux
       dist: focal
-      go: 1.24.x
+      go: 1.23.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
