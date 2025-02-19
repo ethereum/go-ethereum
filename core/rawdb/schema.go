@@ -106,7 +106,7 @@ var (
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
 
 	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
-	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
+	BloomBitsPrefix       = []byte("B") // BloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
 	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
 	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
@@ -144,6 +144,12 @@ var (
 	BestUpdateKey         = []byte("update-")    // bigEndian64(syncPeriod) -> RLP(types.LightClientUpdate)  (nextCommittee only referenced by root hash)
 	FixedCommitteeRootKey = []byte("fixedRoot-") // bigEndian64(syncPeriod) -> committee root hash
 	SyncCommitteeKey      = []byte("committee-") // bigEndian64(syncPeriod) -> serialized committee
+
+	FilterMapsPrefix         = "fm-"
+	filterMapsRangeKey       = []byte(FilterMapsPrefix + "R")
+	filterMapRowPrefix       = []byte(FilterMapsPrefix + "r") // filterMapRowPrefix + mapRowIndex (uint64 big endian) -> filter row
+	filterMapLastBlockPrefix = []byte(FilterMapsPrefix + "b") // filterMapLastBlockPrefix + mapIndex (uint32 big endian) -> block number (uint64 big endian)
+	filterMapBlockLVPrefix   = []byte(FilterMapsPrefix + "p") // filterMapBlockLVPrefix + num (uint64 big endian) -> log value pointer (uint64 big endian)
 
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
@@ -216,16 +222,6 @@ func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
 // storageSnapshotsKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotsKey(accountHash common.Hash) []byte {
 	return append(SnapshotStoragePrefix, accountHash.Bytes()...)
-}
-
-// bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
-func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
-	key := append(append(bloomBitsPrefix, make([]byte, 10)...), hash.Bytes()...)
-
-	binary.BigEndian.PutUint16(key[1:], uint16(bit))
-	binary.BigEndian.PutUint64(key[3:], section)
-
-	return key
 }
 
 // skeletonHeaderKey = skeletonHeaderPrefix + num (uint64 big endian)
@@ -340,4 +336,35 @@ func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 func IsStorageTrieNode(key []byte) bool {
 	ok, _, _ := ResolveStorageTrieNode(key)
 	return ok
+}
+
+// filterMapRowKey = filterMapRowPrefix + mapRowIndex (uint64 big endian)
+func filterMapRowKey(mapRowIndex uint64, base bool) []byte {
+	extLen := 8
+	if base {
+		extLen = 9
+	}
+	l := len(filterMapRowPrefix)
+	key := make([]byte, l+extLen)
+	copy(key[:l], filterMapRowPrefix)
+	binary.BigEndian.PutUint64(key[l:l+8], mapRowIndex)
+	return key
+}
+
+// filterMapLastBlockKey = filterMapLastBlockPrefix + mapIndex (uint32 big endian)
+func filterMapLastBlockKey(mapIndex uint32) []byte {
+	l := len(filterMapLastBlockPrefix)
+	key := make([]byte, l+4)
+	copy(key[:l], filterMapLastBlockPrefix)
+	binary.BigEndian.PutUint32(key[l:], mapIndex)
+	return key
+}
+
+// filterMapBlockLVKey = filterMapBlockLVPrefix + num (uint64 big endian)
+func filterMapBlockLVKey(number uint64) []byte {
+	l := len(filterMapBlockLVPrefix)
+	key := make([]byte, l+8)
+	copy(key[:l], filterMapBlockLVPrefix)
+	binary.BigEndian.PutUint64(key[l:], number)
+	return key
 }

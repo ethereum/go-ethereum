@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -84,9 +84,8 @@ type Ethereum struct {
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 
-	bloomRequests     chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
-	bloomIndexer      *core.ChainIndexer             // Bloom indexer operating during block imports
-	closeBloomHandler chan struct{}
+	filterMaps      *filtermaps.FilterMaps
+	closeFilterMaps chan chan struct{}
 
 	APIBackend *EthAPIBackend
 
@@ -154,19 +153,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		networkID = chainConfig.ChainID.Uint64()
 	}
 	eth := &Ethereum{
-		config:            config,
-		chainDb:           chainDb,
-		eventMux:          stack.EventMux(),
-		accountManager:    stack.AccountManager(),
-		engine:            engine,
-		closeBloomHandler: make(chan struct{}),
-		networkID:         networkID,
-		gasPrice:          config.Miner.GasPrice,
-		bloomRequests:     make(chan chan *bloombits.Retrieval),
-		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
-		p2pServer:         stack.Server(),
-		discmix:           enode.NewFairMix(0),
-		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
+		config:          config,
+		chainDb:         chainDb,
+		eventMux:        stack.EventMux(),
+		accountManager:  stack.AccountManager(),
+		engine:          engine,
+		networkID:       networkID,
+		gasPrice:        config.Miner.GasPrice,
+		p2pServer:       stack.Server(),
+		discmix:         enode.NewFairMix(0),
+		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
 	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"
@@ -224,7 +220,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	eth.bloomIndexer.Start(eth.blockchain)
+	eth.filterMaps = filtermaps.NewFilterMaps(chainDb, eth.newChainView(eth.blockchain.CurrentBlock()), filtermaps.DefaultParams, config.LogHistory, 1000, config.LogNoHistory, config.LogExportCheckpoints)
+	eth.closeFilterMaps = make(chan chan struct{})
 
 	if config.BlobPool.Datadir != "" {
 		config.BlobPool.Datadir = stack.ResolvePath(config.BlobPool.Datadir)
@@ -353,7 +350,6 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downlo
 func (s *Ethereum) Synced() bool                       { return s.handler.synced.Load() }
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
-func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 
 // Protocols returns all the currently configured
 // network protocols to start.
@@ -370,15 +366,116 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 func (s *Ethereum) Start() error {
 	s.setupDiscovery()
 
-	// Start the bloom bits servicing goroutines
-	s.startBloomHandlers(params.BloomBitsBlocks)
-
 	// Regularly update shutdown marker
 	s.shutdownTracker.Start()
 
 	// Start the networking layer
 	s.handler.Start(s.p2pServer.MaxPeers)
+
+	// start log indexer
+	s.filterMaps.Start()
+	go s.updateFilterMapsHeads()
 	return nil
+}
+
+func (s *Ethereum) newChainView(head *types.Header) *filtermaps.StoredChainView {
+	if head == nil {
+		return nil
+	}
+	return filtermaps.NewStoredChainView(s.blockchain, head.Number.Uint64(), head.Hash())
+}
+
+func (s *Ethereum) updateFilterMapsHeads() {
+	headEventCh := make(chan core.ChainEvent, 10)
+	blockProcCh := make(chan bool, 10)
+	sub := s.blockchain.SubscribeChainEvent(headEventCh)
+	sub2 := s.blockchain.SubscribeBlockProcessingEvent(blockProcCh)
+	defer func() {
+		sub.Unsubscribe()
+		sub2.Unsubscribe()
+		for {
+			select {
+			case <-headEventCh:
+			case <-blockProcCh:
+			default:
+				return
+			}
+		}
+	}()
+
+	head := s.blockchain.CurrentBlock()
+	targetView := s.newChainView(head) // nil if already sent to channel
+	var (
+		blockProc, lastBlockProc bool
+		finalBlock, lastFinal    uint64
+	)
+
+	setHead := func(newHead *types.Header) {
+		if newHead == nil {
+			return
+		}
+		if head == nil || newHead.Hash() != head.Hash() {
+			head = newHead
+			targetView = s.newChainView(head)
+		}
+		if fb := s.blockchain.CurrentFinalBlock(); fb != nil {
+			finalBlock = fb.Number.Uint64()
+		}
+	}
+
+	for {
+		if blockProc != lastBlockProc {
+			select {
+			case s.filterMaps.BlockProcessingCh <- blockProc:
+				lastBlockProc = blockProc
+			case ev := <-headEventCh:
+				setHead(ev.Header)
+			case blockProc = <-blockProcCh:
+			case <-time.After(time.Second * 10):
+				setHead(s.blockchain.CurrentBlock())
+			case ch := <-s.closeFilterMaps:
+				close(ch)
+				return
+			}
+		} else if targetView != nil {
+			select {
+			case s.filterMaps.TargetViewCh <- targetView:
+				targetView = nil
+			case ev := <-headEventCh:
+				setHead(ev.Header)
+			case blockProc = <-blockProcCh:
+			case <-time.After(time.Second * 10):
+				setHead(s.blockchain.CurrentBlock())
+			case ch := <-s.closeFilterMaps:
+				close(ch)
+				return
+			}
+		} else if finalBlock != lastFinal {
+			select {
+			case s.filterMaps.FinalBlockCh <- finalBlock:
+				lastFinal = finalBlock
+			case ev := <-headEventCh:
+				setHead(ev.Header)
+			case blockProc = <-blockProcCh:
+			case <-time.After(time.Second * 10):
+				setHead(s.blockchain.CurrentBlock())
+			case ch := <-s.closeFilterMaps:
+				close(ch)
+				return
+			}
+		} else {
+			select {
+			case ev := <-headEventCh:
+				setHead(ev.Header)
+			case <-time.After(time.Second * 10):
+				setHead(s.blockchain.CurrentBlock())
+			case blockProc = <-blockProcCh:
+			case ch := <-s.closeFilterMaps:
+				close(ch)
+				return
+			}
+		}
+	}
 }
 
 func (s *Ethereum) setupDiscovery() error {
@@ -421,8 +518,10 @@ func (s *Ethereum) Stop() error {
 	s.handler.Stop()
 
 	// Then stop everything else.
-	s.bloomIndexer.Close()
-	close(s.closeBloomHandler)
+	ch := make(chan struct{})
+	s.closeFilterMaps <- ch
+	<-ch
+	s.filterMaps.Stop()
 	s.txPool.Close()
 	s.blockchain.Stop()
 	s.engine.Close()
