@@ -268,8 +268,10 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 		// Transaction takes a new nonce value out of the pool. Ensure it doesn't
 		// overflow the number of permitted transactions from a single account
 		// (i.e. max cancellable via out-of-bound transaction).
-		if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
-			return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
+		if opts.UsedAndLeftSlots != nil {
+			if used, left := opts.UsedAndLeftSlots(from); left <= 0 {
+				return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
+			}
 		}
 	}
 	return nil
