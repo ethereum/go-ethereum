@@ -68,6 +68,9 @@ func (h *ethHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
 		return h.txFetcher.Enqueue(peer.ID(), *packet, false)
 
 	case *eth.PooledTransactionsResponse:
+		// If we receive any blob transactions missing sidecars, or with
+		// sidecars that don't correspond to the versioned hashes reported
+		// in the header, disconnect from the sending peer.
 		for _, tx := range *packet {
 			if tx.Type() == types.BlobTxType {
 				if tx.BlobTxSidecar() == nil {
