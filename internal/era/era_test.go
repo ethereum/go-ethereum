@@ -37,7 +37,7 @@ func TestEra1Builder(t *testing.T) {
 	t.Parallel()
 
 	// Get temp directory.
-	f, err := os.CreateTemp("", "era1-test")
+	f, err := os.CreateTemp(t.TempDir(), "era1-test")
 	if err != nil {
 		t.Fatalf("error creating temp file: %v", err)
 	}
@@ -78,6 +78,7 @@ func TestEra1Builder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open era: %v", err)
 	}
+	defer e.Close()
 	it, err := NewRawIterator(e)
 	if err != nil {
 		t.Fatalf("failed to make iterator: %s", err)

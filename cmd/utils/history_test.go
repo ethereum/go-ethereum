@@ -87,11 +87,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 
 	// Make temp directory for era files.
-	dir, err := os.MkdirTemp("", "history-export-test")
-	if err != nil {
-		t.Fatalf("error creating temp test directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Export history to temp directory.
 	if err := ExportHistory(chain, dir, 0, count, step); err != nil {
