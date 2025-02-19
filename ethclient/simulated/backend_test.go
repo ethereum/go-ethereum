@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/goleak"
+
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
 
@@ -349,4 +351,21 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 	if head.Number.Uint64() == 2 && head.ParentHash != h1.Hash() {
 		t.Errorf("failed to build block on fork")
 	}
+}
+
+func createAndCloseSimBackend() {
+	genesisData := types.GenesisAlloc{}
+	simulatedBackend := NewBackend(genesisData)
+	defer simulatedBackend.Close()
+}
+
+// TestCheckSimBackendGoroutineLeak checks whether creation of a simulated backend leaks go-routines.  Any long-lived go-routines
+// spawned by global variables are not considered leaked.
+func TestCheckSimBackendGoroutineLeak(t *testing.T) {
+	createAndCloseSimBackend()
+	ignoreCur := goleak.IgnoreCurrent()
+	// ignore this leveldb function:  this go-routine is guaranteed to be terminated 1 second after closing db handle
+	ignoreLdb := goleak.IgnoreAnyFunction("github.com/syndtr/goleveldb/leveldb.(*DB).mpoolDrain")
+	createAndCloseSimBackend()
+	goleak.VerifyNone(t, ignoreCur, ignoreLdb)
 }
