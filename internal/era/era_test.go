@@ -78,6 +78,7 @@ func TestEra1Builder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open era: %v", err)
 	}
+	defer e.Close()
 	it, err := NewRawIterator(e)
 	if err != nil {
 		t.Fatalf("failed to make iterator: %s", err)
