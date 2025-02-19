@@ -60,6 +60,30 @@ type ValidationFunction func(tx *types.Transaction, head *types.Header, signer t
 // This check is public to allow different transaction pools to check the basic
 // rules without duplicating code and running the risk of missed updates.
 func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types.Signer, opts *ValidationOptions) error {
+	if tx.Type() == types.BlobTxType {
+		// Ensure the blob fee cap satisfies the minimum blob gas price
+		if tx.BlobGasFeeCapIntCmp(blobTxMinBlobGasPrice) < 0 {
+			return fmt.Errorf("%w: blob fee cap %v, minimum needed %v", ErrUnderpriced, tx.BlobGasFeeCap(), blobTxMinBlobGasPrice)
+		}
+		sidecar := tx.BlobTxSidecar()
+		if sidecar == nil {
+			return fmt.Errorf("%w: missing sidecar in blob transaction", ErrInvalidAuxiliaryData)
+		}
+		// Ensure the number of items in the blob transaction and various side
+		// data match up before doing any expensive validations
+		hashes := tx.BlobHashes()
+		if len(hashes) == 0 {
+			return errors.New("blobless blob transaction")
+		}
+		maxBlobs := eip4844.MaxBlobsPerBlock(opts.Config, head.Time)
+		if len(hashes) > maxBlobs {
+			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), maxBlobs)
+		}
+		// Ensure the hash of the commitments are valid
+		if err := validateBlobSidecarHashes(hashes, sidecar); err != nil {
+			return err
+		}
+	}
 	// Ensure transactions not implemented by the calling pool are rejected
 	if opts.Accept&(1<<tx.Type()) == 0 {
 		return fmt.Errorf("%w: tx type %v not supported by this pool", core.ErrTxTypeNotSupported, tx.Type())
@@ -135,26 +159,9 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return fmt.Errorf("%w: gas tip cap %v, minimum needed %v", ErrUnderpriced, tx.GasTipCap(), opts.MinTip)
 	}
 	if tx.Type() == types.BlobTxType {
-		// Ensure the blob fee cap satisfies the minimum blob gas price
-		if tx.BlobGasFeeCapIntCmp(blobTxMinBlobGasPrice) < 0 {
-			return fmt.Errorf("%w: blob fee cap %v, minimum needed %v", ErrUnderpriced, tx.BlobGasFeeCap(), blobTxMinBlobGasPrice)
-		}
+		// ensure the commitments and proof are valid
 		sidecar := tx.BlobTxSidecar()
-		if sidecar == nil {
-			return errors.New("missing sidecar in blob transaction")
-		}
-		// Ensure the number of items in the blob transaction and various side
-		// data match up before doing any expensive validations
-		hashes := tx.BlobHashes()
-		if len(hashes) == 0 {
-			return errors.New("blobless blob transaction")
-		}
-		maxBlobs := eip4844.MaxBlobsPerBlock(opts.Config, head.Time)
-		if len(hashes) > maxBlobs {
-			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), maxBlobs)
-		}
-		// Ensure commitments, proofs and hashes are valid
-		if err := validateBlobSidecar(hashes, sidecar); err != nil {
+		if err := validateBlobSidecarProof(sidecar); err != nil {
 			return err
 		}
 	}
@@ -166,15 +173,19 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	return nil
 }
 
-func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) error {
+// validateBlobSidecarHashes ensures that a blob tx sidecar is well-formed and where the
+// hashes of the commitments in the sidecar match those in the header.
+//
+// TODO (q): we can't really do this at the decoder level because we don't have access to the tx in the sidecar decoder?
+func validateBlobSidecarHashes(hashes []common.Hash, sidecar *types.BlobTxSidecar) error {
 	if len(sidecar.Blobs) != len(hashes) {
-		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
+		return fmt.Errorf("%w, invalid number of %d blobs compared to %d blob hashes", ErrInvalidAuxiliaryData, len(sidecar.Blobs), len(hashes))
 	}
 	if len(sidecar.Commitments) != len(hashes) {
-		return fmt.Errorf("invalid number of %d blob commitments compared to %d blob hashes", len(sidecar.Commitments), len(hashes))
+		return fmt.Errorf("%w: invalid number of %d blob commitments compared to %d blob hashes", ErrInvalidAuxiliaryData, len(sidecar.Commitments), len(hashes))
 	}
 	if len(sidecar.Proofs) != len(hashes) {
-		return fmt.Errorf("invalid number of %d blob proofs compared to %d blob hashes", len(sidecar.Proofs), len(hashes))
+		return fmt.Errorf("%w: invalid number of %d blob proofs compared to %d blob hashes", ErrInvalidAuxiliaryData, len(sidecar.Proofs), len(hashes))
 	}
 	// Blob quantities match up, validate that the provers match with the
 	// transaction hash before getting to the cryptography
@@ -182,9 +193,13 @@ func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) err
 	for i, vhash := range hashes {
 		computed := kzg4844.CalcBlobHashV1(hasher, &sidecar.Commitments[i])
 		if vhash != computed {
-			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, computed, vhash)
+			return fmt.Errorf("%w: blob %d: computed hash %#x mismatches transaction one %#x", ErrInvalidAuxiliaryData, i, computed, vhash)
 		}
 	}
+	return nil
+}
+
+func validateBlobSidecarProof(sidecar *types.BlobTxSidecar) error {
 	// Blob commitments match with the hashes in the transaction, verify the
 	// blobs themselves via KZG
 	for i := range sidecar.Blobs {
