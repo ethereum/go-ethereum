@@ -145,6 +145,13 @@ type txDelivery struct {
 	hashes []common.Hash // Batch of transaction hashes having been delivered
 	metas  []txMetadata  // Batch of metadata associated with the delivered hashes
 	direct bool          // Whether this is a direct reply or a broadcast
+
+	// set of blob transactions that failed to add to the pool due to a mismatch between the
+	// sidecar commitments and the commitment hashes in the header.
+	//
+	// this flag signals to the cleanup routine that the sender peer should be dropped, while any
+	// offending transactions will not be included in hashes.
+	missingAuxData bool
 }
 
 // txDrop is the notification that a peer has disconnected.
@@ -323,8 +330,9 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
 	// re-requesting them and dropping the peer in case of malicious transfers.
 	var (
-		added = make([]common.Hash, 0, len(txs))
-		metas = make([]txMetadata, 0, len(txs))
+		added          = make([]common.Hash, 0, len(txs))
+		metas          = make([]txMetadata, 0, len(txs))
+		missingAuxData bool
 	)
 	// proceed in batches
 	for i := 0; i < len(txs); i += 128 {
@@ -346,10 +354,17 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			if errors.Is(err, txpool.ErrUnderpriced) || errors.Is(err, txpool.ErrReplaceUnderpriced) {
 				f.underpriced.Add(batch[j].Hash(), batch[j].Time())
 			}
+
 			// Track a few interesting failure types
 			switch {
 			case err == nil: // Noop, but need to handle to not count these
 
+			case errors.Is(err, txpool.ErrInvalidAuxiliaryData):
+				// blob tx where commitment hashes in the header cannot be
+				// recomputed from the given sidecar.
+				// flag the sending peer to be dropped by cleanup.
+				missingAuxData = true
+				otherreject++
 			case errors.Is(err, txpool.ErrAlreadyKnown):
 				duplicate++
 
@@ -359,15 +374,29 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			default:
 				otherreject++
 			}
-			added = append(added, batch[j].Hash())
-			metas = append(metas, txMetadata{
+
+			txHash := batch[j].Hash()
+			txMeta := txMetadata{
 				kind: batch[j].Type(),
 				size: uint32(batch[j].Size()),
-			})
+			}
+
+			// In the case of potentially-valid blob transaction with
+			// missing/invalid sidecar: don't mark delivered and remove
+			// the tx hash from the trackers.
+			if !errors.Is(err, txpool.ErrInvalidAuxiliaryData) {
+				added = append(added, txHash)
+				metas = append(metas, txMeta)
+			}
+
+			knownMeter.Mark(duplicate)
+			underpricedMeter.Mark(underpriced)
+			otherRejectMeter.Mark(otherreject)
+
+			if missingAuxData {
+				break
+			}
 		}
-		knownMeter.Mark(duplicate)
-		underpricedMeter.Mark(underpriced)
-		otherRejectMeter.Mark(otherreject)
 
 		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
 		if otherreject > 128/4 {
@@ -375,8 +404,9 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			log.Debug("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
 		}
 	}
+
 	select {
-	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct}:
+	case f.cleanup <- &txDelivery{origin: peer, hashes: added, metas: metas, direct: direct, missingAuxData: missingAuxData}:
 		return nil
 	case <-f.quit:
 		return errTerminated
@@ -640,6 +670,7 @@ func (f *TxFetcher) loop() {
 			f.rescheduleTimeout(timeoutTimer, timeoutTrigger)
 
 		case delivery := <-f.cleanup:
+
 			// Independent if the delivery was direct or broadcast, remove all
 			// traces of the hash from internal trackers. That said, compare any
 			// advertised metadata with the real ones and drop bad peers.
@@ -650,17 +681,6 @@ func (f *TxFetcher) loop() {
 							if delivery.metas[i].kind != meta.kind {
 								log.Warn("Announced transaction type mismatch", "peer", peer, "tx", hash, "type", delivery.metas[i].kind, "ann", meta.kind)
 								f.dropPeer(peer)
-							} else if delivery.metas[i].size != meta.size {
-								if math.Abs(float64(delivery.metas[i].size)-float64(meta.size)) > 8 {
-									log.Warn("Announced transaction size mismatch", "peer", peer, "tx", hash, "size", delivery.metas[i].size, "ann", meta.size)
-
-									// Normally we should drop a peer considering this is a protocol violation.
-									// However, due to the RLP vs consensus format messyness, allow a few bytes
-									// wiggle-room where we only warn, but don't drop.
-									//
-									// TODO(karalabe): Get rid of this relaxation when clients are proven stable.
-									f.dropPeer(peer)
-								}
 							}
 						}
 						delete(txset, hash)
@@ -716,6 +736,13 @@ func (f *TxFetcher) loop() {
 			if delivery.direct {
 				// Mark the requesting successful (independent of individual status)
 				txRequestDoneMeter.Mark(int64(len(delivery.hashes)))
+
+				// if the peer transmitted a blob transaction with a mismatch
+				// between blob_commitments_hashes and the hashes computed
+				// from the sidecar, drop the peer.
+				if delivery.missingAuxData {
+					f.dropPeer(delivery.origin)
+				}
 
 				// Make sure something was pending, nuke it
 				req := f.requests[delivery.origin]
@@ -819,7 +846,6 @@ func (f *TxFetcher) loop() {
 				f.scheduleFetches(timeoutTimer, timeoutTrigger, nil)
 				f.rescheduleTimeout(timeoutTimer, timeoutTrigger)
 			}
-
 		case <-f.quit:
 			return
 		}

@@ -69,4 +69,8 @@ var (
 	// ErrAuthorityNonce is returned if a transaction has an authorization with
 	// a nonce that is not currently valid for the authority.
 	ErrAuthorityNonceTooLow = errors.New("authority nonce too low")
+
+	// ErrInvalidAuxiliaryData conveys transaction validation failure from
+	// verifying the cryptographic integrity of extra-header data.
+	ErrInvalidAuxiliaryData = errors.New("invalid auxiliary data")
 )
