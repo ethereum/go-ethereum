@@ -368,10 +368,6 @@ func (b *EthAPIBackend) ChainDb() ethdb.Database {
 	return b.eth.ChainDb()
 }
 
-func (b *EthAPIBackend) EventMux() *event.TypeMux {
-	return b.eth.EventMux()
-}
-
 func (b *EthAPIBackend) AccountManager() *accounts.Manager {
 	return b.eth.AccountManager()
 }
