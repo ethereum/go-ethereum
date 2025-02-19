@@ -93,6 +93,20 @@ func (ctx *ScopeContext) ContractCode() []byte {
 	return ctx.Contract.Code
 }
 
+// CodeSection returns the current code section of the contract being executed.
+func (ctx *ScopeContext) CurrentCodeSection() uint64 {
+	return ctx.CodeSection
+}
+
+// ReturnStackDepth returns the depth of the return stack.
+func (ctx *ScopeContext) ReturnStackDepth() uint64 {
+	if ctx.Contract.IsEOF() {
+		return uint64(ctx.ReturnStack.Len() + 1)
+	} else {
+		return 0
+	}
+}
+
 type ReturnStack []*ReturnContext
 
 // Pop removes an element from the return stack

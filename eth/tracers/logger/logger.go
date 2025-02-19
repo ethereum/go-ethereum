@@ -57,6 +57,7 @@ type Config struct {
 // current internal state prior to the execution of the statement.
 type StructLog struct {
 	Pc            uint64                      `json:"pc"`
+	Section       uint64                      `json:"section,omitempty"`
 	Op            vm.OpCode                   `json:"op"`
 	Gas           uint64                      `json:"gas"`
 	GasCost       uint64                      `json:"gasCost"`
@@ -66,6 +67,7 @@ type StructLog struct {
 	ReturnData    []byte                      `json:"returnData,omitempty"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
+	FunctionDepth uint64                      `json:"functionDepth,omitempty"`
 	RefundCounter uint64                      `json:"refund"`
 	Err           error                       `json:"-"`
 }
@@ -274,7 +276,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		stack        = scope.StackData()
 		stackLen     = len(stack)
 	)
-	log := StructLog{pc, op, gas, cost, nil, len(memory), nil, nil, nil, depth, l.env.StateDB.GetRefund(), err}
+	log := StructLog{pc, scope.CurrentCodeSection(), op, gas, cost, nil, len(memory), nil, nil, nil, depth, scope.ReturnStackDepth(), l.env.StateDB.GetRefund(), err}
 	if l.cfg.EnableMemory {
 		log.Memory = memory
 	}
