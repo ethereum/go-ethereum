@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
@@ -33,7 +32,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -267,11 +265,10 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	return g.MustCommit(db)
 }
 
-// DefaultGenesisBlock returns the Ethereum main net genesis block.
+// DefaultGenesisBlock returns the XDC mainnet genesis block.
 func DefaultGenesisBlock() *Genesis {
-	config := params.XDCMainnetChainConfig
 	return &Genesis{
-		Config:     config,
+		Config:     params.XDCMainnetChainConfig,
 		Nonce:      0,
 		ExtraData:  hexutil.MustDecode("0x000000000000000000000000000000000000000000000000000000000000000025c65b4b379ac37cf78357c4915f73677022eaffc7d49d0a2cf198deebd6ce581af465944ec8b2bbcfccdea1006a5cfa7d9484b5b293b46964c265c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
 		GasLimit:   4700000,
@@ -281,10 +278,8 @@ func DefaultGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultTestnetGenesisBlock returns the Ropsten network genesis block.
+// DefaultTestnetGenesisBlock returns the XDC testnet genesis block.
 func DefaultTestnetGenesisBlock() *Genesis {
-	config := params.TestnetChainConfig
-	config.XDPoS.V2 = nil
 	return &Genesis{
 		Config:     params.TestnetChainConfig,
 		Nonce:      0,
@@ -296,15 +291,16 @@ func DefaultTestnetGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultRinkebyGenesisBlock returns the Rinkeby network genesis block.
-func DefaultRinkebyGenesisBlock() *Genesis {
+// DefaultDevnetGenesisBlock returns the XDC devnet genesis block.
+func DefaultDevnetGenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.RinkebyChainConfig,
-		Timestamp:  1492009146,
-		ExtraData:  hexutil.MustDecode("0x52657370656374206d7920617574686f7269746168207e452e436172746d616e42eb768f2244c8811c63729a21a3569731535f067ffc57839b00206d1ad20c69a1981b489f772031b279182d99e65703f0076e4812653aab85fca0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		Config:     params.DevnetChainConfig,
+		Nonce:      0,
+		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000311bdf9066246e68559816e7f636435867f824ef442a44a6fc20f5b8dfa8b304d7137581f7e6bef347318441696e9ae962633c16e04d53935272639d537fc89618edae86950e12687a612e15c4786b8473898cc3c5beca5841306b26fdb4e30411392a6a74826141342a4dc33a1045cefa4182b6212ec0317bc30fbeb7208192d1474b5f87ffbc056de43c11888c073313b36cf03cf1f739f39443551ff12bbe8d993351c0e2db739f9bcbfdeda94d73b50b16d3a242960b7ca1937e826bda6c397df74d9f9ab01aa89af636787499e81362e815e36f28763eac120babebf5a6cbe6113780cbe489e3eb0db882381aebaf81190100d82f41ad2c95898195c7a47dc59115bb5ec85408683795da2f604a5c0464868eabfcb6da489a1b4304f49aafaec938c7adc48539470624e1f9c75ce33e568d8fa3ace90497ee0c60dc921eefea93e384a6ccaaf28e33790a2d1b2625bf964dfc087e2622b02b0bb78713e872c02796ef64c8f10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
 		GasLimit:   4700000,
 		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(""),
+		Alloc:      DecodeAllocJson(DevnetAllocData),
+		Timestamp:  1735513074,
 	}
 }
 
@@ -334,18 +330,6 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 			faucet:                           {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
 		},
 	}
-}
-
-func decodePrealloc(data string) types.GenesisAlloc {
-	var p []struct{ Addr, Balance *big.Int }
-	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
-		panic(err)
-	}
-	ga := make(types.GenesisAlloc, len(p))
-	for _, account := range p {
-		ga[common.BigToAddress(account.Addr)] = types.Account{Balance: account.Balance}
-	}
-	return ga
 }
 
 func DecodeAllocJson(s string) types.GenesisAlloc {

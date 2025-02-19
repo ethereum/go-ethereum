@@ -157,7 +157,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	}
 
 	// Check testnet is enable.
-	if ctx.Bool(utils.XDCTestnetFlag.Name) {
+	if ctx.Bool(utils.TestnetFlag.Name) {
 		common.IsTestnet = true
 		common.TRC21IssuerSMC = common.TRC21IssuerSMCTestNet
 		cfg.Eth.NetworkId = 51
