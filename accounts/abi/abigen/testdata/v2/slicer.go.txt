@@ -1,0 +1,152 @@
+// Code generated via abigen V2 - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
+package bindtests
+
+import (
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var (
+	_ = bytes.Equal
+	_ = errors.New
+	_ = big.NewInt
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = abi.ConvertType
+)
+
+// SlicerMetaData contains all meta data concerning the Slicer contract.
+var SlicerMetaData = bind.MetaData{
+	ABI: "[{\"constant\":true,\"inputs\":[{\"name\":\"input\",\"type\":\"address[]\"}],\"name\":\"echoAddresses\",\"outputs\":[{\"name\":\"output\",\"type\":\"address[]\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"input\",\"type\":\"uint24[23]\"}],\"name\":\"echoFancyInts\",\"outputs\":[{\"name\":\"output\",\"type\":\"uint24[23]\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"input\",\"type\":\"int256[]\"}],\"name\":\"echoInts\",\"outputs\":[{\"name\":\"output\",\"type\":\"int256[]\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"input\",\"type\":\"bool[]\"}],\"name\":\"echoBools\",\"outputs\":[{\"name\":\"output\",\"type\":\"bool[]\"}],\"type\":\"function\"}]",
+	ID:  "082c0740ab6537c7169cb573d097c52112",
+	Bin: "0x606060405261015c806100126000396000f3606060405260e060020a6000350463be1127a3811461003c578063d88becc014610092578063e15a3db71461003c578063f637e5891461003c575b005b604080516020600480358082013583810285810185019096528085526100ee959294602494909392850192829185019084908082843750949650505050505050604080516020810190915260009052805b919050565b604080516102e0818101909252610138916004916102e491839060179083908390808284375090955050505050506102e0604051908101604052806017905b60008152602001906001900390816100d15790505081905061008d565b60405180806020018281038252838181518152602001915080519060200190602002808383829060006004602084601f0104600f02600301f1509050019250505060405180910390f35b60405180826102e0808381846000600461015cf15090500191505060405180910390f3",
+}
+
+// Slicer is an auto generated Go binding around an Ethereum contract.
+type Slicer struct {
+	abi abi.ABI
+}
+
+// NewSlicer creates a new instance of Slicer.
+func NewSlicer() *Slicer {
+	parsed, err := SlicerMetaData.ParseABI()
+	if err != nil {
+		panic(errors.New("invalid ABI: " + err.Error()))
+	}
+	return &Slicer{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *Slicer) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+}
+
+// PackEchoAddresses is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbe1127a3.
+//
+// Solidity: function echoAddresses(address[] input) returns(address[] output)
+func (slicer *Slicer) PackEchoAddresses(input []common.Address) []byte {
+	enc, err := slicer.abi.Pack("echoAddresses", input)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackEchoAddresses is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xbe1127a3.
+//
+// Solidity: function echoAddresses(address[] input) returns(address[] output)
+func (slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error) {
+	out, err := slicer.abi.Unpack("echoAddresses", data)
+	if err != nil {
+		return *new([]common.Address), err
+	}
+	out0 := *abi.ConvertType(out[0], new([]common.Address)).(*[]common.Address)
+	return out0, err
+}
+
+// PackEchoBools is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xf637e589.
+//
+// Solidity: function echoBools(bool[] input) returns(bool[] output)
+func (slicer *Slicer) PackEchoBools(input []bool) []byte {
+	enc, err := slicer.abi.Pack("echoBools", input)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackEchoBools is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xf637e589.
+//
+// Solidity: function echoBools(bool[] input) returns(bool[] output)
+func (slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
+	out, err := slicer.abi.Unpack("echoBools", data)
+	if err != nil {
+		return *new([]bool), err
+	}
+	out0 := *abi.ConvertType(out[0], new([]bool)).(*[]bool)
+	return out0, err
+}
+
+// PackEchoFancyInts is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd88becc0.
+//
+// Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
+func (slicer *Slicer) PackEchoFancyInts(input [23]*big.Int) []byte {
+	enc, err := slicer.abi.Pack("echoFancyInts", input)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackEchoFancyInts is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xd88becc0.
+//
+// Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
+func (slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
+	out, err := slicer.abi.Unpack("echoFancyInts", data)
+	if err != nil {
+		return *new([23]*big.Int), err
+	}
+	out0 := *abi.ConvertType(out[0], new([23]*big.Int)).(*[23]*big.Int)
+	return out0, err
+}
+
+// PackEchoInts is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe15a3db7.
+//
+// Solidity: function echoInts(int256[] input) returns(int256[] output)
+func (slicer *Slicer) PackEchoInts(input []*big.Int) []byte {
+	enc, err := slicer.abi.Pack("echoInts", input)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackEchoInts is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xe15a3db7.
+//
+// Solidity: function echoInts(int256[] input) returns(int256[] output)
+func (slicer *Slicer) UnpackEchoInts(data []byte) ([]*big.Int, error) {
+	out, err := slicer.abi.Unpack("echoInts", data)
+	if err != nil {
+		return *new([]*big.Int), err
+	}
+	out0 := *abi.ConvertType(out[0], new([]*big.Int)).(*[]*big.Int)
+	return out0, err
+}
