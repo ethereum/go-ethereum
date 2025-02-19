@@ -73,6 +73,20 @@ func (r *simCallResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*callResultAlias)(r))
 }
 
+// simBlockResult is the result of a simulated block.
+type simBlockResult struct {
+	fullTx      bool
+	chainConfig *params.ChainConfig
+	Block       *types.Block
+	Calls       []simCallResult
+}
+
+func (r *simBlockResult) MarshalJSON() ([]byte, error) {
+	blockData := RPCMarshalBlock(r.Block, true, r.fullTx, r.chainConfig)
+	blockData["calls"] = r.Calls
+	return json.Marshal(blockData)
+}
+
 // simOpts are the inputs to eth_simulateV1.
 type simOpts struct {
 	BlockStateCalls        []simBlock
@@ -95,7 +109,7 @@ type simulator struct {
 }
 
 // execute runs the simulation of a series of blocks.
-func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[string]interface{}, error) {
+func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]*simBlockResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -123,7 +137,7 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[str
 		return nil, err
 	}
 	var (
-		results = make([]map[string]interface{}, len(blocks))
+		results = make([]*simBlockResult, len(blocks))
 		parent  = sim.base
 	)
 	for bi, block := range blocks {
@@ -131,11 +145,9 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[str
 		if err != nil {
 			return nil, err
 		}
-		enc := RPCMarshalBlock(result, true, sim.fullTx, sim.chainConfig)
-		enc["calls"] = callResults
-		results[bi] = enc
-
-		parent = headers[bi]
+		headers[bi] = result.Header()
+		results[bi] = &simBlockResult{fullTx: sim.fullTx, chainConfig: sim.chainConfig, Block: result, Calls: callResults}
+		parent = result.Header()
 	}
 	return results, nil
 }
