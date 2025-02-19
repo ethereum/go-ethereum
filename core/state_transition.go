@@ -93,6 +93,7 @@ type Message struct {
 	GasPrice              *big.Int
 	GasFeeCap             *big.Int
 	GasTipCap             *big.Int
+	Gas                   uint64
 	Data                  []byte
 	AccessList            types.AccessList
 	BlobGasFeeCap         *big.Int
@@ -370,24 +371,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		floorDataGas     uint64
 	)
 
-	tx := types.NewTx(&types.LegacyTx{
-		Nonce:    msg.Nonce,
-		To:       msg.To,
-		Value:    msg.Value,
-		Gas:      msg.GasLimit,
-		Data:     msg.Data,
-		GasPrice: msg.GasPrice,
-	})
+	gas := msg.Gas
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := tx.IntrinsicGas(&rules)
-	if err != nil {
-		return nil, err
-	}
 	if st.gasRemaining < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague {
+		var err error
 		floorDataGas, err = FloorDataGas(msg.Data)
 		if err != nil {
 			return nil, err

@@ -588,30 +588,20 @@ func (tx *Transaction) IntrinsicGas(rules *params.Rules) (uint64, error) {
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
 func IntrinsicGas(txdata TxData, rules *params.Rules) (uint64, error) {
-	var (
-		data               = txdata.data()
-		accessList         = txdata.accessList()
-		authList           = txdata.setCodeAuthorizations()
-		isContractCreation = txdata.to() == nil
-	)
-
 	// Set the starting gas for the raw transaction
 	var gas uint64
-	if isContractCreation && rules.IsHomestead {
+	if txdata.to() == nil && rules.IsHomestead {
 		gas = params.TxGasContractCreation
 	} else {
 		gas = params.TxGas
 	}
-	dataLen := uint64(len(data))
+	dataLen := uint64(len(txdata.data()))
 	// Bump the required gas by the amount of transactional data
 	if dataLen > 0 {
 		// Zero and non-zero bytes are priced differently
-		var nz uint64
-		for _, byt := range data {
-			if byt != 0 {
-				nz++
-			}
-		}
+		z := uint64(bytes.Count(txdata.data(), []byte{0}))
+		nz := dataLen - z
+
 		// Make sure we don't exceed uint64 for all data combinations
 		nonZeroGas := params.TxDataNonZeroGasFrontier
 		if rules.IsIstanbul {
@@ -622,13 +612,12 @@ func IntrinsicGas(txdata TxData, rules *params.Rules) (uint64, error) {
 		}
 		gas += nz * nonZeroGas
 
-		z := dataLen - nz
 		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
 			return 0, ErrGasUintOverflow
 		}
 		gas += z * params.TxDataZeroGas
 
-		if isContractCreation && rules.IsShanghai {
+		if txdata.to() == nil && rules.IsShanghai {
 			lenWords := toWordSize(dataLen)
 			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
 				return 0, ErrGasUintOverflow
@@ -636,12 +625,12 @@ func IntrinsicGas(txdata TxData, rules *params.Rules) (uint64, error) {
 			gas += lenWords * params.InitCodeWordGas
 		}
 	}
-	if accessList != nil {
-		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
-		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
+	if txdata.accessList() != nil {
+		gas += uint64(len(txdata.accessList())) * params.TxAccessListAddressGas
+		gas += uint64(txdata.accessList().StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
-	if authList != nil {
-		gas += uint64(len(authList)) * params.CallNewAccountGas
+	if txdata.setCodeAuthorizations() != nil {
+		gas += uint64(len(txdata.setCodeAuthorizations())) * params.CallNewAccountGas
 	}
 	return gas, nil
 }
