@@ -59,8 +59,6 @@ type Request struct {
 }
 
 func NewHeimdallClient(urlString string, timeout time.Duration) *HeimdallClient {
-	// REMOVE BEFORE PR
-	log.Info("############### timeout set on heimdall client", "valueSetByConfig", timeout)
 	return &HeimdallClient{
 		urlString: urlString,
 		client: http.Client{
