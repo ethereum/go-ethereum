@@ -394,12 +394,21 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		return nil, err
 	}
 
+	// Read requests if Prague is enabled.
+	var requests types.Requests
+	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {
+		requests, err = ParseDepositLogs(allLogs, p.config)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Body())
 
 	return &ProcessResult{
 		Receipts: receipts,
-		Requests: nil,
+		Requests: requests,
 		Logs:     allLogs,
 		GasUsed:  *usedGas,
 	}, nil
