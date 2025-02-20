@@ -1,3 +1,4 @@
+// Minor update: Comment added for GitHub contributions
 // Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
