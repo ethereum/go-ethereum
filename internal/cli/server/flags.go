@@ -1,6 +1,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/internal/cli/flagset"
 )
 
@@ -171,7 +173,7 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Name:    "bor.heimdalltimeout",
 		Usage:   "Timeout of Heimdall service",
 		Value:   &c.cliConfig.Heimdall.Timeout,
-		Default: c.cliConfig.Heimdall.Timeout,
+		Default: 5 * time.Second,
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "bor.withoutheimdall",
