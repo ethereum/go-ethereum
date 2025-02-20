@@ -44,15 +44,14 @@ func NewRecoverTracer(node *node.Node, child *tracing.Hooks) (*tracing.Hooks, er
 
 	// Build and return the Hooks object with all hook functions set to our proxy methods.
 	return &tracing.Hooks{
-		OnTxStart:        rt.OnTxStart,
-		OnTxEnd:          rt.OnTxEnd,
-		OnEnter:          rt.OnEnter,
-		OnExit:           rt.OnExit,
-		OnOpcode:         rt.OnOpcode,
-		OnFault:          rt.OnFault,
-		OnGasChange:      rt.OnGasChange,
-		OnBlockchainInit: rt.OnBlockchainInit,
-		// TODO: how does OnClose interplay with node shutdown. don't create recursive dependency.
+		OnTxStart:           rt.OnTxStart,
+		OnTxEnd:             rt.OnTxEnd,
+		OnEnter:             rt.OnEnter,
+		OnExit:              rt.OnExit,
+		OnOpcode:            rt.OnOpcode,
+		OnFault:             rt.OnFault,
+		OnGasChange:         rt.OnGasChange,
+		OnBlockchainInit:    rt.OnBlockchainInit,
 		OnClose:             rt.OnClose,
 		OnBlockStart:        rt.OnBlockStart,
 		OnBlockEnd:          rt.OnBlockEnd,
