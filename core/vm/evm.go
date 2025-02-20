@@ -343,7 +343,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 			return nil, gas, errors.New("extDelegateCall to non-eof contract")
 		}
 		// Initialise a new contract and make initialise the delegate values
-		contract := NewContract(originCaller, caller, nil, gas, evm.jumpDests)
+		contract := NewContract(originCaller, caller, value, gas, evm.jumpDests)
 		contract.Container = evm.parseContainer(code)
 		contract.SetCallCode(evm.resolveCodeHash(addr), code)
 		ret, err = evm.interpreter.Run(contract, input, false, false)

@@ -30,7 +30,6 @@ func MakeTestContainer(
 	subContainers []*Container,
 	data []byte,
 	dataSize int) Container {
-
 	testBytes := make([]byte, 0, 16*1024)
 
 	codeSectionOffsets := make([]int, 0, len(codeSections))
