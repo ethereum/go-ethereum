@@ -482,9 +482,12 @@ func (tx *Transaction) TxCost(number *big.Int) *big.Int {
 	return total
 }
 
-func (tx *Transaction) IsSpecialTransaction() bool {
-	to := tx.To()
+func IsSpecialTx(to *common.Address) bool {
 	return to != nil && (*to == common.BlockSignersBinary || *to == common.RandomizeSMCBinary)
+}
+
+func (tx *Transaction) IsSpecialTransaction() bool {
+	return IsSpecialTx(tx.To())
 }
 
 func (tx *Transaction) IsTradingTransaction() bool {
