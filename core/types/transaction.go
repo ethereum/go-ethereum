@@ -487,7 +487,7 @@ func IsSpecialTx(to *common.Address) bool {
 }
 
 func (tx *Transaction) IsSpecialTransaction() bool {
-	return IsSpecialTx(tx.To())
+	return tx != nil && IsSpecialTx(tx.To())
 }
 
 func (tx *Transaction) IsTradingTransaction() bool {

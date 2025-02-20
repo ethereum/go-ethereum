@@ -281,7 +281,7 @@ func (l *list) Overlaps(tx *types.Transaction) bool {
 func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
-	if old != nil && old.IsSpecialTransaction() {
+	if old.IsSpecialTransaction() {
 		return false, nil
 	}
 	if old != nil {
