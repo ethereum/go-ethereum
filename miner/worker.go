@@ -1403,10 +1403,6 @@ func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadR
 	}
 
 	body := types.Body{Transactions: work.txs, Withdrawals: params.withdrawals}
-	allLogs := make([]*types.Log, 0)
-	for _, r := range work.receipts {
-		allLogs = append(allLogs, r.Logs...)
-	}
 	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, &body, work.receipts)
 
 	if err != nil {
