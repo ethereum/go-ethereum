@@ -474,6 +474,11 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 				TxListHash:   &txListHash,
 			}
 			id := args.Id()
+			// If we already are busy generating this work, then we do not need
+			// to start a second process.
+			if api.localBlocks.has(id) {
+				return valid(&id), nil
+			}
 			payload, err := api.eth.Miner().BuildPayload(args, false)
 			if err != nil {
 				log.Error("Failed to build payload", "err", err)
