@@ -31,6 +31,9 @@ var makeTest = function(tx, traceConfig) {
     delete genesis.transactions;
     delete genesis.transactionsRoot;
     delete genesis.uncles;
+    delete genesis.withdrawals;
+    delete genesis.withdrawalsRoot;
+    delete genesis.baseFeePerGas;
 
     genesis.gasLimit  = genesis.gasLimit.toString();
     genesis.number    = genesis.number.toString();
@@ -60,11 +63,15 @@ var makeTest = function(tx, traceConfig) {
         context.baseFeePerGas = block.baseFeePerGas.toString();
     }
 
-    console.log(JSON.stringify({
+    var data = {
         genesis: genesis,
         context: context,
-        input:  eth.getRawTransaction(tx),
-        result: result,
-        tracerConfig: traceConfig.tracerConfig,
-    }, null, 2));
+        input:   eth.getRawTransaction(tx),
+        result:  result,
+    };
+    if (traceConfig && traceConfig.tracerConfig) {
+        data.tracerConfig = traceConfig.tracerConfig;
+    }
+
+    console.log(JSON.stringify(data, null, 2));
 }

@@ -744,13 +744,13 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 	} {
 		if cur.config != nil {
 			if err := cur.config.validate(); err != nil {
-				return fmt.Errorf("invalid blob configuration for fork %s: %v", cur.name, err)
+				return fmt.Errorf("invalid chain configuration in blobSchedule for fork %q: %v", cur.name, err)
 			}
 		}
 		if cur.timestamp != nil {
 			// If the fork is configured, a blob schedule must be defined for it.
 			if cur.config == nil {
-				return fmt.Errorf("unsupported fork configuration: missing blob configuration entry for %v in schedule", cur.name)
+				return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", cur.name)
 			}
 		}
 	}

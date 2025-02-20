@@ -424,7 +424,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	var (
 		msg              = st.msg
-		sender           = vm.AccountRef(msg.From)
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
@@ -485,13 +484,13 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
-		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value, rules.IsOsaka)
+		ret, _, st.gasRemaining, vmerr = st.evm.Create(msg.From, msg.Data, st.gasRemaining, value, rules.IsOsaka)
 		// Special case for EOF, if the initcode or deployed code is
 		// invalid, the tx is considered valid (so update nonce), but
 		// gas for initcode execution is not consumed.
 		// Only intrinsic creation transaction costs are charged.
 		if errors.Is(vmerr, vm.ErrInvalidEOFInitcode) {
-			st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1, tracing.NonceChangeInvalidEOF)
+			st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeInvalidEOF)
 		}
 	} else {
 		// Increment the nonce for the next transaction.
@@ -515,7 +514,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 
 		// Execute the transaction's call.
-		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
+		ret, st.gasRemaining, vmerr = st.evm.Call(msg.From, st.to(), msg.Data, st.gasRemaining, value)
 	}
 
 	// Compute refund counter, capped to a refund quotient.

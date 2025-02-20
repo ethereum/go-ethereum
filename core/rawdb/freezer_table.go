@@ -405,6 +405,13 @@ func (t *freezerTable) repairIndex() error {
 	// If legacy metadata is detected, attempt to recover the offset from the
 	// index file to avoid clearing the entire table.
 	if t.metadata.version == freezerTableV1 {
+		// Skip truncation if the legacy metadata is opened in read-only mode.
+		// Since all items in the legacy index file were forcibly synchronized,
+		// data integrity is guaranteed. Therefore, it's safe to leave any extra
+		// items untruncated in this special scenario.
+		if t.readonly {
+			return nil
+		}
 		t.logger.Info("Recovering freezer flushOffset for legacy table", "offset", size)
 		return t.metadata.setFlushOffset(size, true)
 	}

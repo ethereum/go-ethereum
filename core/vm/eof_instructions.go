@@ -155,7 +155,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 	// Skip the immediate
 	*pc += 1
-	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, subContainer, gas, &value, &salt)
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract.Address(), input, subContainer, gas, &value, &salt)
 	if suberr != nil {
 		stackvalue.Clear()
 	} else {
@@ -347,7 +347,7 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		// zero temp call gas indicates a min retained gas error
 		ret, returnGas, err = nil, 0, ErrExecutionReverted
 	} else {
-		ret, returnGas, err = interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
+		ret, returnGas, err = interpreter.evm.Call(scope.Contract.Address(), toAddr, args, gas, &value)
 	}
 
 	if errors.Is(err, ErrExecutionReverted) || errors.Is(err, ErrInsufficientBalance) || errors.Is(err, ErrDepth) {
@@ -396,7 +396,7 @@ func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCont
 		// zero temp call gas indicates a min retained gas error
 		ret, returnGas, err = nil, 0, ErrExecutionReverted
 	} else {
-		ret, returnGas, err = interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, true)
+		ret, returnGas, err = interpreter.evm.DelegateCall(scope.Contract.Caller(), scope.Contract.Address(), toAddr, args, gas, scope.Contract.value, true)
 	}
 
 	if err == ErrExecutionReverted || err == ErrDepth {
@@ -439,7 +439,7 @@ func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContex
 		// zero temp call gas indicates a min retained gas error
 		ret, returnGas, err = nil, 0, ErrExecutionReverted
 	} else {
-		ret, returnGas, err = interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
+		ret, returnGas, err = interpreter.evm.StaticCall(scope.Contract.Address(), toAddr, args, gas)
 	}
 
 	if err == ErrExecutionReverted || err == ErrDepth {
