@@ -149,7 +149,7 @@ func Test_TypesHeader_AllConsensusFieldsAreKnown(t *testing.T) {
 	// On hard-fork, it happens that new fields are added, this test serves as a way to "detect" in code
 	// that the expected fields of `types.Header` changed
 	require.Equal(t, expectedHash, gethHeader.Hash(),
-		"Geth Header Hash mistmatch, got %q but expecting %q on *types.Header:\n\nGeth Header (from fillNonDefault(new(*types.Header)))\n%s",
+		"Geth Header Hash mismatch, got %q but expecting %q on *types.Header:\n\nGeth Header (from fillNonDefault(new(*types.Header)))\n%s",
 		gethHeader.Hash().Hex(),
 		expectedHash,
 		asIndentedJSON(t, gethHeader),
@@ -176,7 +176,7 @@ func Test_FirehoseAndGethHeaderFieldMatches(t *testing.T) {
 		t,
 		pbFieldCount,
 		gethFieldCount,
-		fieldsCountMistmatchMessage(t, pbFieldNames, gethFieldNames))
+		fieldsCountMismatchMessage(t, pbFieldNames, gethFieldNames))
 
 	for pbFieldName := range pbFieldNames {
 		pbFieldRenamedName, found := pbFieldNameToGethMapping[pbFieldName]
@@ -228,7 +228,7 @@ func fillAllFieldsWithNonEmptyValues(t *testing.T, structValue reflect.Value, fi
 	}
 }
 
-func fieldsCountMistmatchMessage(t *testing.T, pbFieldNames map[string]bool, gethFieldNames map[string]bool) string {
+func fieldsCountMismatchMessage(t *testing.T, pbFieldNames map[string]bool, gethFieldNames map[string]bool) string {
 	t.Helper()
 
 	pbRemappedFieldNames := make(map[string]bool, len(pbFieldNames))

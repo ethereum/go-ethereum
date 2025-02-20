@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -16,55 +17,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm/program"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
-
-func TestFirehoseChain(t *testing.T) {
-	context := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		Coinbase:    common.Address{},
-		BlockNumber: new(big.Int).SetUint64(uint64(1)),
-		Time:        1,
-		Difficulty:  big.NewInt(2),
-		GasLimit:    uint64(1000000),
-		BaseFee:     big.NewInt(8),
-	}
-
-	tracer, tracingHooks, onClose := newFirehoseTestTracer(t)
-	defer onClose()
-
-	genesis, blockchain := newBlockchain(t, types.GenesisAlloc{}, context, tracingHooks)
-
-	block := types.NewBlock(&types.Header{
-		ParentHash:       genesis.ToBlock().Hash(),
-		Number:           context.BlockNumber,
-		Difficulty:       context.Difficulty,
-		Coinbase:         context.Coinbase,
-		Time:             context.Time,
-		GasLimit:         context.GasLimit,
-		BaseFee:          context.BaseFee,
-		ParentBeaconRoot: ptr(common.Hash{}),
-	}, nil, nil, trie.NewStackTrie(nil))
-
-	blockchain.SetBlockValidatorAndProcessorForTesting(
-		ignoreValidateStateValidator{core.NewBlockValidator(genesis.Config, blockchain)},
-		core.NewStateProcessor(genesis.Config, blockchain.HeaderChain()),
-	)
-
-	n, err := blockchain.InsertChain(types.Blocks{block})
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
-
-	genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
-	require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
-	require.NotNil(t, genesisLine)
-	blockLines.assertEquals(t, filepath.Join("testdata", t.Name()),
-		firehoseBlockLineParams{"1", "8e6ee4b1054d94df1d8a51fb983447dc2e27a854590c3ac0061f994284be8150", "0", "845bad515694a416bab4b8d44e22cf97a8c894a8502110ab807883940e185ce0", "0", "1000000000"},
-	)
-}
 
 func TestFirehosePrestate(t *testing.T) {
 	testFolders := []string{
@@ -91,7 +46,6 @@ func TestFirehosePrestate(t *testing.T) {
 	}
 
 }
-
 func TestFirehose_EIP7702(t *testing.T) {
 	// Copied from ./core/blockchain_test.go#L4180 (TestEIP7702)
 
@@ -203,15 +157,37 @@ func TestFirehose_EIP7702(t *testing.T) {
 		}
 	})
 
+	assertBlockTracesCorrectly(t, gspec, engine, blocks, "TestEIP7702")
+}
+
+func TestFirehose_SystemCalls(t *testing.T) {
+	gspec := &core.Genesis{
+		Config: params.MergedTestChainConfig,
+	}
+
+	engine := beacon.New(ethash.NewFaker())
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *core.BlockGen) {})
+
+	assertBlockTracesCorrectly(t, gspec, engine, blocks, "TestSystemCalls")
+}
+
+func assertBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine consensus.Engine, blocks []*types.Block, goldenDir string) {
+	t.Helper()
+
 	tracer, tracingHooks, onClose := newFirehoseTestTracer(t)
 	defer onClose()
 
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesisSpec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
 	require.NoError(t, err, "failed to create tester chain")
+
+	chain.SetBlockValidatorAndProcessorForTesting(
+		ignoreValidateStateValidator{core.NewBlockValidator(genesisSpec.Config, chain)},
+		core.NewStateProcessor(genesisSpec.Config, chain.HeaderChain()),
+	)
 
 	defer chain.Stop()
 	n, err := chain.InsertChain(blocks)
 	require.NoError(t, err, "failed to insert chain block %d", n)
 
-	assertBlockEquals(t, tracer, filepath.Join("testdata", "TestEIP7702"), len(blocks))
+	assertBlockEquals(t, tracer, filepath.Join("testdata", goldenDir), len(blocks))
 }
