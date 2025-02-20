@@ -31,8 +31,17 @@ import (
 // thread-safe to use. However, callers need to ensure the thread-safety
 // of the referenced layer by themselves.
 type layerTree struct {
-	base        *diskLayer
-	layers      map[common.Hash]layer
+	base   *diskLayer
+	layers map[common.Hash]layer
+
+	// descendants is a two-dimensional map where the keys represent
+	// an ancestor state root, and the values are the state roots of
+	// all its descendants.
+	//
+	// For example: r -> [c1, c2, ..., cn], where c1 through cn are
+	// the descendants of state r.
+	//
+	// This map includes all the existing diff layers and the disk layer.
 	descendants map[common.Hash]map[common.Hash]struct{}
 	lookup      *lookup
 	lock        sync.RWMutex
@@ -152,8 +161,13 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint6
 	tree.lock.Lock()
 	defer tree.lock.Unlock()
 
+	// Link the given layer into the layer set
 	tree.layers[l.rootHash()] = l
+
+	// Link the given layer into its ancestors (up to the current disk layer)
 	tree.fillAncestors(l)
+
+	// Link the given layer into the state mutation history
 	tree.lookup.addLayer(l)
 	return nil
 }
@@ -185,6 +199,8 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		tree.layers = map[common.Hash]layer{
 			base.rootHash(): base,
 		}
+		// Resets the descendants map, since there's only a single disk layer
+		// with no descendants.
 		tree.descendants = make(map[common.Hash]map[common.Hash]struct{})
 		tree.lookup = newLookup(base, tree.isDescendant)
 		return nil
@@ -227,7 +243,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		//          ->C2'->C3'->C4'
 		//
 		// After change:
-		//      Chain:
+		//     Chain:
 		//        (a) C3->C4 (HEAD)
 		//		  (b) C1->C2
 		//		        ->C2'->C3'->C4'
@@ -291,6 +307,7 @@ func (tree *layerTree) bottom() *diskLayer {
 // lookupAccount returns the layer that is confirmed to contain the account data
 // being searched for.
 func (tree *layerTree) lookupAccount(accountHash common.Hash, state common.Hash) (layer, error) {
+	// Hold the read lock to prevent the unexpected layer changes
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
@@ -308,6 +325,7 @@ func (tree *layerTree) lookupAccount(accountHash common.Hash, state common.Hash)
 // lookupStorage returns the layer that is confirmed to contain the storage slot
 // data being searched for.
 func (tree *layerTree) lookupStorage(accountHash common.Hash, slotHash common.Hash, state common.Hash) (layer, error) {
+	// Hold the read lock to prevent the unexpected layer changes
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 

@@ -25,31 +25,23 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// slicePool is a shared pool of hash slice, for reducing the GC pressure.
-var slicePool = sync.Pool{
-	New: func() interface{} {
-		slice := make([]common.Hash, 0, 16) // Pre-allocate a slice with a reasonable capacity.
-		return &slice
-	},
-}
-
-// getSlice obtains the hash slice from the shared pool.
-func getSlice() []common.Hash {
-	slice := *slicePool.Get().(*[]common.Hash)
-	slice = slice[:0]
-	return slice
-}
-
-// returnSlice returns the hash slice back to the shared pool for following usage.
-func returnSlice(slice []common.Hash) {
-	slicePool.Put(&slice)
-}
-
 // lookup is an internal structure used to efficiently determine the layer in
 // which a state entry resides.
 type lookup struct {
-	accounts   map[common.Hash][]common.Hash
-	storages   map[common.Hash]map[common.Hash][]common.Hash
+	// accounts represents the mutation history for specific accounts.
+	// The key is the account address hash, and the value is a slice
+	// of **diff layer** IDs indicating where the account was modified,
+	// with the order from oldest to newest.
+	accounts map[common.Hash][]common.Hash
+
+	// storages represents the mutation history for specific storage
+	// slot. The key is the account address hash and the storage key
+	// hash, the value is a slice of **diff layer** IDs indicating
+	// where the slot was modified, with the order from oldest to newest.
+	storages map[common.Hash]map[common.Hash][]common.Hash
+
+	// descendant is the callback indicating whether the layer with
+	// given root is a descendant of the one specified by `ancestor`.
 	descendant func(state common.Hash, ancestor common.Hash) bool
 }
 
@@ -87,9 +79,9 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 // If found, the account data corresponding to the supplied stateID resides
 // in that layer. Otherwise, two scenarios are possible:
 //
-// The account remains unmodified from the current disk layer up to the state
-// layer specified by the stateID: fallback to the disk layer for data retrieval.
-// Or the layer specified by the stateID is stale: reject the data retrieval.
+// (a) the account remains unmodified from the current disk layer up to the state
+// layer specified by the stateID: fallback to the disk layer for data retrieval,
+// (b) or the layer specified by the stateID is stale: reject the data retrieval.
 func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base common.Hash) common.Hash {
 	list := l.accounts[accountHash]
 	for i := len(list) - 1; i >= 0; i-- {
@@ -114,10 +106,10 @@ func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base c
 // If found, the storage data corresponding to the supplied stateID resides
 // in that layer. Otherwise, two scenarios are possible:
 //
-// The storage slot remains unmodified from the current disk layer up to the
-// state layer specified by the stateID: fallback to the disk layer for data
-// retrieval. Or the layer specified by the stateID is stale: reject the data
-// retrieval.
+// (a) the storage slot remains unmodified from the current disk layer up to
+// the state layer specified by the stateID: fallback to the disk layer for
+// data retrieval, (b) or the layer specified by the stateID is stale: reject
+// the data retrieval.
 func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, stateID common.Hash, base common.Hash) common.Hash {
 	subset, exists := l.storages[accountHash]
 	if exists {
@@ -159,7 +151,7 @@ func (l *lookup) addLayer(diff *diffLayer) {
 		for accountHash := range diff.states.accountData {
 			list, exists := l.accounts[accountHash]
 			if !exists {
-				list = getSlice()
+				list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
 			}
 			list = append(list, state)
 			l.accounts[accountHash] = list
@@ -178,7 +170,7 @@ func (l *lookup) addLayer(diff *diffLayer) {
 			for slotHash := range slots {
 				list, exists := subset[slotHash]
 				if !exists {
-					list = getSlice()
+					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
 				}
 				list = append(list, state)
 				subset[slotHash] = list
@@ -212,7 +204,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 					if i == 0 {
 						list = list[1:]
 						if cap(list) > 1024 {
-							list = append(getSlice(), list...)
+							list = append(make([]common.Hash, 0, len(list)), list...)
 						}
 					} else {
 						list = append(list[:i], list[i+1:]...)
@@ -227,7 +219,6 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 			if len(list) != 0 {
 				l.accounts[accountHash] = list
 			} else {
-				returnSlice(list)
 				delete(l.accounts, accountHash)
 			}
 		}
@@ -252,7 +243,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 						if i == 0 {
 							list = list[1:]
 							if cap(list) > 1024 {
-								list = append(getSlice(), list...)
+								list = append(make([]common.Hash, 0, len(list)), list...)
 							}
 						} else {
 							list = append(list[:i], list[i+1:]...)
@@ -267,7 +258,6 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 				if len(list) != 0 {
 					subset[slotHash] = list
 				} else {
-					returnSlice(subset[slotHash])
 					delete(subset, slotHash)
 				}
 			}
