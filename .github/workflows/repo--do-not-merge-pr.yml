@@ -1,0 +1,20 @@
+name: Check for "option.do-not-merge" Label
+
+on:
+  pull_request:
+    types: [labeled, unlabeled, synchronize, opened, reopened]
+
+jobs:
+  check_label:
+    if: github.event.pull_request.draft == false
+    runs-on: [arc-runner-set]
+    steps:
+      - name: Check for "option.do-not-merge" label
+        id: check_label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(label => label.name);
+            if (labels.includes("option.do-not-merge")) {
+              core.setFailed('The "option.do-not-merge" label is present. PR cannot be merged.');
+            }
