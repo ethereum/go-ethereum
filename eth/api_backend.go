@@ -272,13 +272,13 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	err := b.eth.txPool.Add([]*types.Transaction{signedTx}, false)[0]
-	if err == nil {
-		if locals := b.eth.localTxTracker; locals != nil {
-			locals.Track(signedTx)
-		}
+	if err := b.eth.txPool.Add([]*types.Transaction{signedTx}, false)[0]; err != nil {
+		return err
 	}
-	return err
+	if locals := b.eth.localTxTracker; locals != nil {
+		locals.Track(signedTx)
+	}
+	return nil
 }
 
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
