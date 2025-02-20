@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"crypto/ecdsa"
+	"encoding"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -133,6 +134,13 @@ type configMarshaling struct {
 
 type configNAT struct {
 	nat.Interface
+}
+
+func (w *configNAT) MarshalText() ([]byte, error) {
+	if tm, ok := w.Interface.(encoding.TextMarshaler); ok {
+		return tm.MarshalText()
+	}
+	return nil, fmt.Errorf("NAT specification %#v cannot be marshaled", w.Interface)
 }
 
 func (w *configNAT) UnmarshalText(input []byte) error {
