@@ -491,7 +491,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		// To keep the same tracing behavior as before, we call the `OnNewAccount`
 		// manually here if the account was previously existing.
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnNewAccount != nil {
-			evm.Config.Tracer.OnNewAccount(address, true)
+			evm.Config.Tracer.OnNewAccount(address)
 		}
 	}
 

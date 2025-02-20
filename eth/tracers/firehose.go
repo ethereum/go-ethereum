@@ -1240,7 +1240,7 @@ func (f *Firehose) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 		account := alloc[addr]
 
 		if *f.applyBackwardCompatibility {
-			f.OnNewAccount(addr, false)
+			f.OnNewAccount(addr)
 		}
 
 		if account.Balance != nil && account.Balance.Sign() != 0 {
@@ -1444,17 +1444,12 @@ func (f *Firehose) OnLog(l *types.Log) {
 	f.transactionLogIndex++
 }
 
-func (f *Firehose) OnNewAccount(a common.Address, previousDataExists bool) {
+func (f *Firehose) OnNewAccount(a common.Address) {
 	// Newer Firehose instrumentation does not track OnNewAccount anymore since it's bogus
 	// and was removed from the Geth live tracer.
 	if !*f.applyBackwardCompatibility {
 		return
 	}
-
-	// Known Firehose issue: The current Firehose instrumentation emits multiple
-	// time the same `OnNewAccount` event for the same account when such account
-	// exists in the past. For now, do nothing and keep the legacy behavior.
-	_ = previousDataExists
 
 	f.ensureInBlockOrTrx()
 	if f.transaction == nil {

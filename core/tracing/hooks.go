@@ -221,7 +221,7 @@ type Hooks struct {
 	// but this field is going to be deprecated and newer chains will not produced
 	// those events anymore. The hook is registered conditionally based on the
 	// tracer configuration.
-	OnNewAccount func(address common.Address, previousExisted bool)
+	OnNewAccount func(address common.Address)
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
