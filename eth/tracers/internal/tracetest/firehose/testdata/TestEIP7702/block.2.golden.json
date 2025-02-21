@@ -51,26 +51,26 @@
     },
     {
       "address": "AAAJYe9IDrVegNGa2DV5pkwAcAI=",
-      "beginOrdinal": "22",
+      "beginOrdinal": "18",
       "callType": "CALL",
       "caller": "//////////////////////////4=",
-      "endOrdinal": "23",
+      "endOrdinal": "19",
       "gasLimit": "30000000",
       "index": 1
     },
     {
       "address": "AAC73cfOSIZC+1efiwDzpZAAclE=",
-      "beginOrdinal": "24",
+      "beginOrdinal": "20",
       "callType": "CALL",
       "caller": "//////////////////////////4=",
-      "endOrdinal": "25",
+      "endOrdinal": "21",
       "gasLimit": "30000000",
       "index": 1
     }
   ],
   "transactionTraces": [
     {
-      "beginOrdinal": "5",
+      "beginOrdinal": "1",
       "calls": [
         {
           "address": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
@@ -84,7 +84,7 @@
               "oldValue": {
                 "bytes": "DeBFrisGZrU="
               },
-              "ordinal": "6",
+              "ordinal": "2",
               "reason": "REASON_GAS_BUY"
             },
             {
@@ -95,7 +95,7 @@
               "oldValue": {
                 "bytes": "CmgYAUEtZrQ="
               },
-              "ordinal": "19",
+              "ordinal": "15",
               "reason": "REASON_GAS_REFUND"
             },
             {
@@ -106,42 +106,42 @@
               "oldValue": {
                 "bytes": "BFWK"
               },
-              "ordinal": "20",
+              "ordinal": "16",
               "reason": "REASON_REWARD_TRANSACTION_FEE"
             }
           ],
           "callType": "CALL",
           "caller": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
-          "endOrdinal": "18",
+          "endOrdinal": "14",
           "gasChanges": [
             {
               "newValue": "479000",
               "oldValue": "500000",
-              "ordinal": "7",
+              "ordinal": "3",
               "reason": "REASON_INTRINSIC_GAS"
             },
             {
               "newValue": "476380",
               "oldValue": "478880",
-              "ordinal": "10",
+              "ordinal": "6",
               "reason": "REASON_STATE_COLD_ACCESS"
             },
             {
               "newValue": "473780",
               "oldValue": "476380",
-              "ordinal": "11",
+              "ordinal": "7",
               "reason": "REASON_STATE_COLD_ACCESS"
             },
             {
               "newValue": "7262",
               "oldValue": "478980",
-              "ordinal": "12",
+              "ordinal": "8",
               "reason": "REASON_CALL"
             },
             {
               "newValue": "464874",
               "oldValue": "7262",
-              "ordinal": "17",
+              "ordinal": "13",
               "reason": "REASON_REFUND_AFTER_EXECUTION"
             }
           ],
@@ -153,7 +153,7 @@
               "address": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
               "newValue": "3",
               "oldValue": "2",
-              "ordinal": "8"
+              "ordinal": "4"
             }
           ]
         },
@@ -169,7 +169,7 @@
               "oldValue": {
                 "bytes": "CmgYAUEtZrU="
               },
-              "ordinal": "14",
+              "ordinal": "10",
               "reason": "REASON_TRANSFER"
             },
             {
@@ -180,15 +180,15 @@
               "oldValue": {
                 "bytes": "DeC2s6dkAAE="
               },
-              "ordinal": "15",
+              "ordinal": "11",
               "reason": "REASON_TRANSFER"
             }
           ],
-          "beginOrdinal": "13",
+          "beginOrdinal": "9",
           "callType": "CALL",
           "caller": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
           "depth": 1,
-          "endOrdinal": "16",
+          "endOrdinal": "12",
           "gasConsumed": "2206",
           "gasLimit": "459818",
           "index": 2,
@@ -198,7 +198,7 @@
           }
         }
       ],
-      "endOrdinal": "21",
+      "endOrdinal": "17",
       "from": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
       "gasLimit": "500000",
       "gasPrice": {

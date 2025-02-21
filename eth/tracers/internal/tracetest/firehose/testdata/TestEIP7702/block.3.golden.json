@@ -51,26 +51,26 @@
     },
     {
       "address": "AAAJYe9IDrVegNGa2DV5pkwAcAI=",
-      "beginOrdinal": "16",
+      "beginOrdinal": "12",
       "callType": "CALL",
       "caller": "//////////////////////////4=",
-      "endOrdinal": "17",
+      "endOrdinal": "13",
       "gasLimit": "30000000",
       "index": 1
     },
     {
       "address": "AAC73cfOSIZC+1efiwDzpZAAclE=",
-      "beginOrdinal": "18",
+      "beginOrdinal": "14",
       "callType": "CALL",
       "caller": "//////////////////////////4=",
-      "endOrdinal": "19",
+      "endOrdinal": "15",
       "gasLimit": "30000000",
       "index": 1
     }
   ],
   "transactionTraces": [
     {
-      "beginOrdinal": "5",
+      "beginOrdinal": "1",
       "calls": [
         {
           "address": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
@@ -83,7 +83,7 @@
               "oldValue": {
                 "bytes": "DaHgOZLVtrQ="
               },
-              "ordinal": "6",
+              "ordinal": "2",
               "reason": "REASON_GAS_BUY"
             },
             {
@@ -94,7 +94,7 @@
               "oldValue": {
                 "bytes": "DaCsTVRHwNQ="
               },
-              "ordinal": "13",
+              "ordinal": "9",
               "reason": "REASON_GAS_REFUND"
             },
             {
@@ -105,7 +105,7 @@
               "oldValue": {
                 "bytes": "PkzJFSq+Qg=="
               },
-              "ordinal": "14",
+              "ordinal": "10",
               "reason": "REASON_REWARD_TRANSACTION_FEE"
             }
           ],
@@ -117,15 +117,15 @@
               "newHash": "xdJGAYb3IzySfn2y3McDwOUAtlPKgic7e/rYBF2FpHA=",
               "oldCode": "7wEAAAAAAAAAAAAAAAAAAAAAAAAAqqo=",
               "oldHash": "6BOVhfT5ksAf8bXRTf8FXcJyKhFA0Cb18MtIsAn1Z9o=",
-              "ordinal": "10"
+              "ordinal": "6"
             }
           ],
-          "endOrdinal": "12",
+          "endOrdinal": "8",
           "gasChanges": [
             {
               "newValue": "454000",
               "oldValue": "500000",
-              "ordinal": "7",
+              "ordinal": "3",
               "reason": "REASON_INTRINSIC_GAS"
             }
           ],
@@ -136,18 +136,18 @@
               "address": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
               "newValue": "4",
               "oldValue": "3",
-              "ordinal": "8"
+              "ordinal": "4"
             },
             {
               "address": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
               "newValue": "5",
               "oldValue": "4",
-              "ordinal": "9"
+              "ordinal": "5"
             }
           ]
         }
       ],
-      "endOrdinal": "15",
+      "endOrdinal": "11",
       "from": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
       "gasLimit": "500000",
       "gasPrice": {

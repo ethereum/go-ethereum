@@ -421,6 +421,13 @@ func (f *Firehose) OnBlockEnd(err error) {
 			f.reorderIsolatedTransactionsAndOrdinals()
 		}
 
+		if *f.applyBackwardCompatibility && len(f.block.SystemCalls) > 0 && len(f.block.TransactionTraces) > 0 {
+			// Known Firehose issue: Wrong ordinals re-ordering in presence of system calls.
+			//
+			// See comment ref 5b4ef712dd18 within this file for more details.
+			f.fixOrdinalsForEndOfBlockChanges()
+		}
+
 		f.ensureInBlockAndNotInTrx()
 		f.printBlockToFirehose(f.block, f.blockFinality)
 	} else {
@@ -432,6 +439,25 @@ func (f *Firehose) OnBlockEnd(err error) {
 	f.resetTransaction()
 
 	firehoseInfo("block end")
+}
+
+func (f *Firehose) fixOrdinalsForEndOfBlockChanges() {
+	lastSystemCallOrdinal := f.block.SystemCalls[len(f.block.SystemCalls)-1].EndOrdinal
+	lastTransactionOrdinal := uint64(0)
+	lastTransactionOrdinal = f.block.TransactionTraces[len(f.block.TransactionTraces)-1].EndOrdinal
+
+	// Change balance changes and code changes that happened after the last transaction
+	for _, ch := range f.block.BalanceChanges {
+		if ch.Ordinal >= lastTransactionOrdinal {
+			ch.Ordinal += lastSystemCallOrdinal
+		}
+	}
+
+	for _, ch := range f.block.CodeChanges {
+		if ch.Ordinal >= lastTransactionOrdinal {
+			ch.Ordinal += lastSystemCallOrdinal
+		}
+	}
 }
 
 // reorderIsolatedTransactionsAndOrdinals is called right after all transactions have completed execution. It will sort transactions
@@ -549,6 +575,25 @@ func (f *Firehose) OnTxStart(evm *tracing.VMContext, tx *types.Transaction, from
 		to = crypto.CreateAddress(from, evm.StateDB.GetNonce(from))
 	} else {
 		to = *tx.To()
+	}
+
+	if *f.applyBackwardCompatibility {
+		// Known Firehose issue: At some point in the Firehose 2.x release lifecycle, a bug was introduced that caused
+		// ordinals within the block to be broken. The problem was that system calls and block level balance changes
+		// were done using a block level ordinals and transactions were done using their own level ordinals.
+		//
+		// Then in the console reader, the ordinals were re-ordered correctly. While block level balance changes
+		// were re-ordered correctly, the system calls were not.
+		//
+		// Here, we re-apply the same bug to the transactions to ensure that the Firehose 3.x release lifecycle.
+		// First, we are going to reset the ordinal once we detect this is the first transaction.
+		//
+		// Then in the end block, we are going to fix balance & code changes ordinals.
+		//
+		// See comment ref 5b4ef712dd18 within this file for more details.
+		if len(f.block.TransactionTraces) == 0 && len(f.block.SystemCalls) > 0 {
+			f.blockOrdinal.Reset()
+		}
 	}
 
 	f.onTxStart(tx, tx.Hash(), from, to)
