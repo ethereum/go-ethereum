@@ -270,11 +270,11 @@ func applyCancunChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 
 // applyEOFChecks does a sanity check of the prestate EOF code validity, to avoid panic during state transition.
 func applyEOFChecks(prestate *Prestate, chainConfig *params.ChainConfig) error {
-	if !chainConfig.IsShanghai(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp) {
+	if !chainConfig.IsOsaka(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp) {
 		return nil
 	}
 	for addr, acc := range prestate.Pre {
-		if vm.HasEOFByte(acc.Code) {
+		if vm.HasEOFMagic(acc.Code) {
 			var (
 				c   vm.Container
 				err error

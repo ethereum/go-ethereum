@@ -48,13 +48,13 @@ const (
 
 var eofMagic = []byte{0xef, 0x00}
 
-// HasEOFByte returns true if code starts with 0xEF byte
-func HasEOFByte(code []byte) bool {
+// hasEOFByte returns true if code starts with 0xEF byte
+func hasEOFByte(code []byte) bool {
 	return len(code) != 0 && code[0] == eofFormatByte
 }
 
-// hasEOFMagic returns true if code starts with magic defined by EIP-3540
-func hasEOFMagic(code []byte) bool {
+// HasEOFMagic returns true if code starts with magic defined by EIP-3540
+func HasEOFMagic(code []byte) bool {
 	return len(eofMagic) <= len(code) && bytes.Equal(eofMagic, code[0:len(eofMagic)])
 }
 
@@ -196,7 +196,7 @@ func (c *Container) UnmarshalSubContainer(b []byte, isInitcode bool) error {
 }
 
 func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool) error {
-	if !hasEOFMagic(b) {
+	if !HasEOFMagic(b) {
 		return fmt.Errorf("%w: want %x", errInvalidMagic, eofMagic)
 	}
 	if len(b) < 14 {

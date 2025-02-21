@@ -339,7 +339,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
 	} else {
 		code := evm.StateDB.GetCode(addr)
-		if fromEOF && !hasEOFMagic(code) {
+		if fromEOF && !HasEOFMagic(code) {
 			return nil, gas, errors.New("extDelegateCall to non-eof contract")
 		}
 		// Initialise a new contract and make initialise the delegate values
@@ -442,7 +442,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	contract.IsDeployment = true
 
 	// Validate initcode per EOF rules. If caller is EOF and initcode is legacy, fail.
-	isInitcodeEOF := hasEOFMagic(code)
+	isInitcodeEOF := HasEOFMagic(code)
 	if isInitcodeEOF {
 		if allowEOF {
 			// If the initcode is EOF, verify it is well-formed.
@@ -556,16 +556,16 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address, isIn
 	}
 
 	// Reject legacy contract deployment from EOF.
-	if isInitcodeEOF && !hasEOFMagic(ret) {
+	if isInitcodeEOF && !HasEOFMagic(ret) {
 		return ret, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, ErrLegacyCode)
 	}
 	// Reject EOF deployment from legacy.
-	if !isInitcodeEOF && hasEOFMagic(ret) {
+	if !isInitcodeEOF && HasEOFMagic(ret) {
 		return ret, ErrLegacyCode
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
-	if len(ret) >= 1 && HasEOFByte(ret) {
+	if len(ret) >= 1 && hasEOFByte(ret) {
 		if evm.chainRules.IsOsaka && isInitcodeEOF {
 			// Don't reject EOF contracts after Osaka
 		} else if evm.chainRules.IsLondon {

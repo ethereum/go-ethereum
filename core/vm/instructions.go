@@ -442,7 +442,7 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	} else {
 		// TODO this should not need to pull up the whole code
 		code := interpreter.evm.StateDB.GetCode(address)
-		if HasEOFByte(code) {
+		if HasEOFMagic(code) {
 			slot.SetFromHex("0x9dbf3648db8210552e9c4f75c6a1c3057c0ca432043bd648be15fe7be05646f5")
 		} else {
 			slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())

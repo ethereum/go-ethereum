@@ -387,7 +387,7 @@ func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCont
 		returnGas uint64
 	)
 	code := interpreter.evm.StateDB.GetCode(toAddr)
-	if !hasEOFMagic(code) {
+	if !HasEOFMagic(code) {
 		// Delegate-calling a non-eof contract should return 1
 		err = ErrExecutionReverted
 		ret = nil
