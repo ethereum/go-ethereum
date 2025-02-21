@@ -514,6 +514,5 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	// Now set the inner transaction.
 	tx.setDecoded(inner, 0)
 
-	// TODO: check hash here?
 	return nil
 }
