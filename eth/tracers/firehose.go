@@ -326,15 +326,17 @@ var bscMainnetChainID = big.NewInt(56)
 var bscTestnetChainID = big.NewInt(97)
 
 func chainNeedsLegacyBackwardCompatibility(id *big.Int) bool {
-	return id.Cmp(mainnetChainID) == 0 ||
-		id.Cmp(goerliChainID) == 0 ||
-		id.Cmp(sepoliaChainID) == 0 ||
-		id.Cmp(holeskyChainID) == 0 ||
-		id.Cmp(polygonMainnetChainID) == 0 ||
-		id.Cmp(polygonMumbaiChainID) == 0 ||
-		id.Cmp(polygonAmoyChainID) == 0 ||
-		id.Cmp(bscMainnetChainID) == 0 ||
-		id.Cmp(bscTestnetChainID) == 0
+	return isChainIDOneOf(id,
+		mainnetChainID,
+		goerliChainID,
+		sepoliaChainID,
+		holeskyChainID,
+		polygonMainnetChainID,
+		polygonMumbaiChainID,
+		polygonAmoyChainID,
+		bscMainnetChainID,
+		bscTestnetChainID,
+	)
 }
 
 func (f *Firehose) OnBlockStart(event tracing.BlockEvent) {
@@ -1686,8 +1688,12 @@ func (f *Firehose) ensureInSystemCall() {
 func (f *Firehose) isChainOneOf(chainIDs ...*big.Int) bool {
 	f.ensureBlockChainInit()
 
+	return isChainIDOneOf(f.chainConfig.ChainID, chainIDs...)
+}
+
+func isChainIDOneOf(actualChainID *big.Int, chainIDs ...*big.Int) bool {
 	for _, chainID := range chainIDs {
-		if f.chainConfig.ChainID.Cmp(chainID) == 0 {
+		if actualChainID.Cmp(chainID) == 0 {
 			return true
 		}
 	}
