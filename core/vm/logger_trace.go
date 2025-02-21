@@ -47,10 +47,16 @@ func traceLastNAddressCode(n int) traceFunc {
 
 func traceCodeWithAddress(l *StructLogger, address common.Address) {
 	code := l.env.StateDB.GetCode(address)
+
 	keccakCodeHash := l.env.StateDB.GetKeccakCodeHash(address)
-	poseidonCodeHash := l.env.StateDB.GetPoseidonCodeHash(address)
+	codeHash := keccakCodeHash
+	poseidonCodeHash := common.Hash{}
+	if !l.env.chainRules.IsEuclid && l.env.chainConfig.Scroll.UseZktrie {
+		poseidonCodeHash = l.env.StateDB.GetPoseidonCodeHash(address)
+		codeHash = poseidonCodeHash
+	}
 	codeSize := l.env.StateDB.GetCodeSize(address)
-	l.bytecodes[poseidonCodeHash] = CodeInfo{
+	l.bytecodes[codeHash] = CodeInfo{
 		codeSize,
 		keccakCodeHash,
 		poseidonCodeHash,

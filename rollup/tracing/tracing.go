@@ -182,6 +182,14 @@ func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext core.ChainCont
 }
 
 func (env *TraceEnv) GetBlockTrace(block *types.Block) (*types.BlockTrace, error) {
+	if !env.chainConfig.Scroll.UseZktrie {
+		return nil, errors.New("scroll tracing methods are not available on MPT-enabled nodes")
+	}
+
+	if env.chainConfig.IsEuclid(block.Time()) {
+		return nil, errors.New("cannot trace post euclid blocks with scroll specific RPC methods")
+	}
+
 	// Execute all the transaction contained within the block concurrently
 	var (
 		txs   = block.Transactions()
