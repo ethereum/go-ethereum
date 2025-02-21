@@ -3,6 +3,7 @@ package firehose_test
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -68,10 +69,12 @@ func (lines firehoseBlockLines) assertOnlyBlockEquals(t *testing.T, goldenDir st
 			t.Fatalf("the golden file %q does not exist, re-run with 'GOLDEN_UPDATE=true go test ./... -run %q' to generate the intial version", goldenPath, t.Name())
 		}
 
-		content, err := protojson.MarshalOptions{Indent: "  "}.Marshal(line.Block)
+		unnormalizedContent, err := protojson.MarshalOptions{Indent: "  "}.Marshal(line.Block)
 		require.NoError(t, err)
 
 		if goldenUpdate {
+			content := normalizedJSON(t, unnormalizedContent)
+
 			require.NoError(t, os.MkdirAll(filepath.Dir(goldenPath), 0755))
 			require.NoError(t, os.WriteFile(goldenPath, content, 0644))
 		}
@@ -195,4 +198,16 @@ func ptr[T any](v T) *T {
 
 func newGwei(n int64) *big.Int {
 	return new(big.Int).Mul(big.NewInt(n), big.NewInt(params.GWei))
+}
+
+func normalizedJSON(t *testing.T, data []byte) []byte {
+	t.Helper()
+
+	var obj map[string]any
+	require.NoError(t, json.Unmarshal(data, &obj))
+
+	normalized, err := json.MarshalIndent(obj, "", "  ")
+	require.NoError(t, err)
+
+	return normalized
 }
