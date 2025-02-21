@@ -35,6 +35,10 @@ clean:
 	go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
+# Check system compatibility for reproducible builds
+compat: 
+	@./compat.sh
+
 # The devtools target installs tools required for 'go generate'.
 # You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
 
