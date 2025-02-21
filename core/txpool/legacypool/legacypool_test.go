@@ -2440,8 +2440,8 @@ func TestSetCodeTransactionsReorg(t *testing.T) {
 		t.Fatalf("failed to add with remote setcode transaction: %v", err)
 	}
 	// Try to add a transactions in
-	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1000), keyA)); !errors.Is(err, txpool.ErrAccountLimitExceeded) {
-		t.Fatalf("unexpected error %v, expecting %v", err, txpool.ErrAccountLimitExceeded)
+	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1000), keyA)); !errors.Is(err, ErrInflightTxLimitReached) {
+		t.Fatalf("unexpected error %v, expecting %v", err, ErrInflightTxLimitReached)
 	}
 	// Simulate the chain moving
 	blockchain.statedb.SetNonce(addrA, 2, tracing.NonceChangeAuthorization)
