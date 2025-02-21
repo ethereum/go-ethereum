@@ -88,6 +88,11 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 		if tx.Type() == types.BlobTxType {
 			continue
 		}
+		// Ignore the transactions which are failed for fundamental
+		// validation such as invalid parameters.
+		if tracker.pool.ValidateTxBasics(tx) != nil {
+			continue
+		}
 		// If we're already tracking it, it's a no-op
 		if _, ok := tracker.all[tx.Hash()]; ok {
 			continue
