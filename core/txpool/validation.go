@@ -206,7 +206,7 @@ type ValidationOptionsWithState struct {
 	// nonce gaps will be ignored and permitted.
 	FirstNonceGap func(addr common.Address) uint64
 
-	// UsedAndLeftSlots is a mandatory callback to retrieve the number of tx slots
+	// UsedAndLeftSlots is an optional callback to retrieve the number of tx slots
 	// used and the number still permitted for an account. New transactions will
 	// be rejected once the number of remaining slots reaches zero.
 	UsedAndLeftSlots func(addr common.Address) (int, int)
