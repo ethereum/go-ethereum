@@ -700,7 +700,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return core.ErrInsufficientFunds
 	}
 
-	if tx.To() == nil || (tx.To() != nil && !tx.IsSpecialTransaction()) {
+	if !tx.IsSpecialTransaction() {
 		// Ensure the transaction has more gas than the basic tx fee.
 		intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.eip1559)
 		if err != nil {
@@ -950,7 +950,7 @@ func (pool *TxPool) promoteSpecialTx(addr common.Address, tx *types.Transaction,
 	list := pool.pending[addr]
 
 	old := list.txs.Get(tx.Nonce())
-	if old != nil && old.IsSpecialTransaction() {
+	if old.IsSpecialTransaction() {
 		return false, ErrDuplicateSpecialTransaction
 	}
 	// Otherwise discard any previous transaction and mark this

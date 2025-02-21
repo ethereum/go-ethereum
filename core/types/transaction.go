@@ -39,11 +39,6 @@ var (
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
 	errShortTypedTx         = errors.New("typed transaction too short")
-	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
-	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
-	errVYParityMissing      = errors.New("missing 'yParity' or 'v' field in transaction")
-	errNoSigner             = errors.New("missing signing methods")
-	ErrFeeCapTooLow         = errors.New("fee cap less than base fee")
 
 	skipNonceDestinationAddress = map[common.Address]bool{
 		common.XDCXAddrBinary:                         true,
@@ -487,9 +482,12 @@ func (tx *Transaction) TxCost(number *big.Int) *big.Int {
 	return total
 }
 
-func (tx *Transaction) IsSpecialTransaction() bool {
-	to := tx.To()
+func IsSpecialTx(to *common.Address) bool {
 	return to != nil && (*to == common.BlockSignersBinary || *to == common.RandomizeSMCBinary)
+}
+
+func (tx *Transaction) IsSpecialTransaction() bool {
+	return tx != nil && IsSpecialTx(tx.To())
 }
 
 func (tx *Transaction) IsTradingTransaction() bool {

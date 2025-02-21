@@ -2294,7 +2294,7 @@ func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transacti
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
-	if tx.To() != nil && tx.IsSpecialTransaction() {
+	if tx.IsSpecialTransaction() {
 		return common.Hash{}, errors.New("don't allow transaction sent to BlockSigners & RandomizeSMC smart contract via API")
 	}
 
