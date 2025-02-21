@@ -246,10 +246,9 @@ func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, b
 
 	prev, changed := s.inner.SelfDestruct6780(address)
 
-	// No balance change hook for EIP-6780 as the instruction handler does it already
-	// if s.hooks.OnBalanceChange != nil && changed && !prev.IsZero() {
-	// 	s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-	// }
+	if s.hooks.OnBalanceChange != nil && changed && !prev.IsZero() {
+		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
+	}
 
 	if s.hooks.OnCodeChange != nil && changed && len(prevCode) > 0 {
 		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)

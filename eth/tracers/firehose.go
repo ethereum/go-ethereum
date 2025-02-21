@@ -895,7 +895,7 @@ func (f *Firehose) OnCallEnter(depth int, typ byte, from common.Address, to comm
 			// So if we are in compatibility mode and the block is Cancun, we must reorder the balance changes
 			// to match the Firehose 2.3 behavior.
 			if *f.applyBackwardCompatibility && f.blockRules.IsCancun {
-				f.maybeReorderSelfDestructBalanceChanges()
+				f.fixSelfDestructBalanceChanges()
 			}
 
 			firehoseDebug("ignoring OnCallEnter for SELFDESTRUCT opcode, not recorded as a call")
@@ -914,57 +914,104 @@ func (f *Firehose) OnCallEnter(depth int, typ byte, from common.Address, to comm
 	f.callStart(computeCallSource(depth), callType, from, to, input, gas, value)
 }
 
-func (f *Firehose) maybeReorderSelfDestructBalanceChanges() {
-	type indexedBalanceChange struct {
-		index   int
-		ordinal uint64
-		change  *pbeth.BalanceChange
-	}
-
+func (f *Firehose) fixSelfDestructBalanceChanges() {
 	f.ensureInCall()
 	activeCall := f.callStack.Peek()
 
-	var increaseBalanceChange indexedBalanceChange
-	var decreaseBalanceChange indexedBalanceChange
+	if len(activeCall.BalanceChanges) == 0 {
+		return
+	}
 
-	for index, change := range activeCall.BalanceChanges {
-		switch change.Reason {
-		case pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW:
-			if decreaseBalanceChange.change != nil {
-				f.panicInvalidState(fmt.Sprintf("more than one balance change with reason REASON_SUICIDE_WITHDRAW found in call #%d, this is not expected", activeCall.Index), 0)
-			}
+	// It's possible in the new tracing API to get 3 balance changes for a self destruct if
+	// the self destruct beneficiary is the same as the contract and if the contract was
+	// created and destructed in the same transaction.
+	//
+	// In this case, we get first a decrease from contract to 0, then an increase from 0 to beneficiary
+	// (which is the contract) and finally a decrease from contract to 0 again.
+	//
+	// In the Firehose 2.3 model, this wasn't recorded properly. The first decrease was always ignored, and
+	// only the second one was recorded.
 
-			decreaseBalanceChange.index = index
-			decreaseBalanceChange.ordinal = change.Ordinal
-			decreaseBalanceChange.change = change
-
-		case pbeth.BalanceChange_REASON_SUICIDE_REFUND:
-			if increaseBalanceChange.change != nil {
-				f.panicInvalidState(fmt.Sprintf("more than one balance change with reason REASON_SUICIDE_REFUND found in call #%d, this is not expected", activeCall.Index), 0)
-			}
-
-			increaseBalanceChange.index = index
-			increaseBalanceChange.ordinal = change.Ordinal
-			increaseBalanceChange.change = change
+	withdrawIndices := make([]int, 0, 2)
+	refundIndices := make([]int, 0, 1)
+	for i, change := range activeCall.BalanceChanges {
+		if change.Reason == pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW {
+			withdrawIndices = append(withdrawIndices, i)
+		} else if change.Reason == pbeth.BalanceChange_REASON_SUICIDE_REFUND {
+			refundIndices = append(refundIndices, i)
 		}
 	}
 
-	// Nothing to do if there is only one side
-	if decreaseBalanceChange.change == nil || increaseBalanceChange.change == nil {
+	// No suicide balance change found, nothing to do
+	if len(withdrawIndices) == 0 && len(refundIndices) == 0 {
 		return
 	}
 
+	// Both side cannot be 0 (due to above condition), if only one side is 0, there is also
+	// nothing todo.
+	if len(withdrawIndices) == 0 || len(refundIndices) == 0 {
+		return
+	}
+
+	if len(refundIndices) == 1 && len(withdrawIndices) == 1 {
+		f.invertWithdrawAndRefundBalanceChange(activeCall, withdrawIndices[0], refundIndices[0])
+		return
+	}
+
+	if len(refundIndices) == 1 && len(withdrawIndices) == 2 {
+		f.removeFirstWithdrawBalanceChange(activeCall, withdrawIndices[1])
+		return
+	}
+
+	f.panicInvalidState(fmt.Sprintf("invalid state when fixing self destruct balance changes found in call #%d, withdraw indices %v and refund indices %v not matching one of the expected case(s)", activeCall.Index, withdrawIndices, refundIndices), 0)
+}
+
+func (f *Firehose) invertWithdrawAndRefundBalanceChange(activeCall *pbeth.Call, withdrawIndex int, refundIndex int) {
 	// Nothing to do if they are already ordered according to Firehose 2.3 rules
-	if decreaseBalanceChange.index > increaseBalanceChange.index {
+	if withdrawIndex > refundIndex {
 		return
 	}
 
-	// Otherwise, invert them and their ordinal
-	decreaseBalanceChange.change.Ordinal = increaseBalanceChange.ordinal
-	increaseBalanceChange.change.Ordinal = decreaseBalanceChange.ordinal
+	// Otherwise, invert them to fit Firehose 2.3 rules
+	changes := activeCall.BalanceChanges
+	withdrawOrdinal := changes[withdrawIndex].Ordinal
+	refundOrdinal := changes[refundIndex].Ordinal
 
-	activeCall.BalanceChanges[decreaseBalanceChange.index] = increaseBalanceChange.change
-	activeCall.BalanceChanges[increaseBalanceChange.index] = decreaseBalanceChange.change
+	changes[withdrawIndex].Ordinal = refundOrdinal
+	changes[refundIndex].Ordinal = withdrawOrdinal
+
+	withdrawChange := changes[withdrawIndex]
+	changes[withdrawIndex] = changes[refundIndex]
+	changes[refundIndex] = withdrawChange
+
+	return
+}
+
+func (f *Firehose) removeFirstWithdrawBalanceChange(activeCall *pbeth.Call, lastWithdrawIndex int) {
+	finalChanges := make([]*pbeth.BalanceChange, 0, len(activeCall.BalanceChanges)-1)
+	for i, change := range activeCall.BalanceChanges {
+		switch change.Reason {
+		case pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW:
+			if i != lastWithdrawIndex {
+				// Skip all except the last withdraw change.
+				continue
+			}
+
+			// We remove the first one, this one must be shifted by one
+			change.Ordinal -= 1
+
+		case pbeth.BalanceChange_REASON_SUICIDE_REFUND:
+			// We remove the first one withdraw, which always happens before the refund,
+			// this one must be shifted by one
+			change.Ordinal -= 1
+		}
+
+		finalChanges = append(finalChanges, change)
+	}
+
+	// We remove one change, we must adjust the overall block ordinal to fit
+	f.blockOrdinal.value -= 1
+	activeCall.BalanceChanges = finalChanges
 }
 
 // OnCallExit is called after the call finishes to finalize the tracing.
