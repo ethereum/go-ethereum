@@ -514,11 +514,5 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	// Now set the inner transaction.
 	tx.setDecoded(inner, 0)
 
-	if dec.Hash != (common.Hash{}) {
-		computedHash := tx.Hash()
-		if computedHash != dec.Hash {
-			return errors.New("transaction hash mismatch")
-		}
-	}
 	return nil
 }
