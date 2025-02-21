@@ -628,11 +628,9 @@ func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
 		queue := pool.queue[from]
 		if queue != nil {
 			count += queue.Len()
-			if !exists {
-				exists = queue.Contains(tx.Nonce())
-			}
+			exists = exists || queue.Contains(tx.Nonce())
 		}
-		// Replace the existing inflight transaction for delegated accounts
+		// Replace the existing in-flight transaction for delegated accounts
 		// are still supported
 		if count >= 1 && !exists {
 			return ErrInflightTxLimitReached
