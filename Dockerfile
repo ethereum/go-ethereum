@@ -1,33 +1,22 @@
-# Support setting various labels on the final image
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
+FROM stagex/pallet-go:2025.02.0@sha256:fb2a63e3ed8756e845ceb44ff8fe57493ba15fc84f75f09487359932e089eea3 AS build
+WORKDIR /go-ethereum
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN --network=none <<-EOF
+  go run build/ci.go install -static ./cmd/geth
+  mkdir -p /rootfs/usr/share/ca-cetificates
+  cp -r /usr/share/ca-certificates/* /rootfs/
+EOF
 
-# Build Geth in a stock Go builder container
-FROM golang:1.24-alpine AS builder
-
-RUN apk add --no-cache gcc musl-dev linux-headers git
-
-# Get dependencies - will also be cached if we won't change go.mod/go.sum
-COPY go.mod /go-ethereum/
-COPY go.sum /go-ethereum/
-RUN cd /go-ethereum && go mod download
-
-ADD . /go-ethereum
-RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
-
-# Pull Geth into a second stage deploy alpine container
-FROM alpine:latest
-
-RUN apk add --no-cache ca-certificates
-COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
-
+FROM scratch
+COPY --from=build /rootfs/* /
+COPY --from=build /go-ethereum/build/bin/geth /usr/bin/geth
 EXPOSE 8545 8546 30303 30303/udp
+
 ENTRYPOINT ["geth"]
 
-# Add some metadata labels to help programmatic image consumption
 ARG COMMIT=""
 ARG VERSION=""
 ARG BUILDNUM=""
-
 LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM"
