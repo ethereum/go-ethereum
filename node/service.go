@@ -44,7 +44,7 @@ func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int, nam
 	if ctx.config.DataDir == "" {
 		return rawdb.NewMemoryDatabase(), nil
 	}
-	db, err := rawdb.NewLevelDBDatabase(ctx.config.resolvePath(name), cache, handles, namespace, readonly)
+	db, err := rawdb.NewLevelDBDatabase(ctx.config.ResolvePath(name), cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int, nam
 // and if the user actually uses persistent storage. It will return an empty string
 // for emphemeral storage and the user's own input for absolute paths.
 func (ctx *ServiceContext) ResolvePath(path string) string {
-	return ctx.config.resolvePath(path)
+	return ctx.config.ResolvePath(path)
 }
 
 // Service retrieves a currently running service registered of a specific type.

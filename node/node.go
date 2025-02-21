@@ -674,12 +674,12 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 	if n.config.DataDir == "" {
 		return rawdb.NewMemoryDatabase(), nil
 	}
-	return rawdb.NewLevelDBDatabase(n.config.resolvePath(name), cache, handles, namespace, readonly)
+	return rawdb.NewLevelDBDatabase(n.config.ResolvePath(name), cache, handles, namespace, readonly)
 }
 
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
-	return n.config.resolvePath(x)
+	return n.config.ResolvePath(x)
 }
 
 // apis returns the collection of RPC descriptors this node offers.
