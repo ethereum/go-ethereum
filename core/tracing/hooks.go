@@ -289,6 +289,8 @@ const (
 // once per transaction, while those that start with `GasChangeCall` are emitted on a call basis.
 type GasChangeReason byte
 
+//go:generate go run golang.org/x/tools/cmd/stringer -type=GasChangeReason -output gen_gas_change_reason_stringer.go
+
 const (
 	GasChangeUnspecified GasChangeReason = 0
 
