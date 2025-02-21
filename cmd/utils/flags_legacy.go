@@ -32,8 +32,6 @@ var ShowDeprecated = &cli.Command{
 }
 
 var DeprecatedFlags = []cli.Flag{
-	FastSyncFlag,
-	LightModeFlag,
 	NoUSBFlag,
 	LogBacktraceAtFlag,
 	LogDebugFlag,
@@ -42,16 +40,6 @@ var DeprecatedFlags = []cli.Flag{
 }
 
 var (
-	FastSyncFlag = &cli.BoolFlag{
-		Name:     "fast",
-		Usage:    "Enable fast syncing through state downloads",
-		Category: flags.DeprecatedCategory,
-	}
-	LightModeFlag = &cli.BoolFlag{
-		Name:     "light",
-		Usage:    "Enable light client mode",
-		Category: flags.DeprecatedCategory,
-	}
 	// Deprecated May 2020, shown in aliased flags section
 	NoUSBFlag = &cli.BoolFlag{
 		Name:     "nousb",

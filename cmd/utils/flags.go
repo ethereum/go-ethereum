@@ -1124,7 +1124,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setBootstrapNodes(ctx, cfg)
 	// setBootstrapNodesV5(ctx, cfg)
 
-	lightClient := ctx.Bool(LightModeFlag.Name) || ctx.String(SyncModeFlag.Name) == "light"
+	lightClient := ctx.String(SyncModeFlag.Name) == "light"
 	lightServer := ctx.Int(LightServFlag.Name) != 0
 	lightPeers := ctx.Int(LightPeersFlag.Name)
 
@@ -1395,8 +1395,6 @@ func SetXDCXConfig(ctx *cli.Context, cfg *XDCx.Config, XDCDataDir string) {
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
 	CheckExclusive(ctx, MainnetFlag, TestnetFlag, DevnetFlag, DeveloperFlag)
-	CheckExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
-	CheckExclusive(ctx, LightServFlag, LightModeFlag)
 	CheckExclusive(ctx, LightServFlag, SyncModeFlag, "light")
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
@@ -1425,15 +1423,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 	godebug.SetGCPercent(int(gogc))
 
-	switch {
-	case ctx.IsSet(SyncModeFlag.Name):
+	if ctx.IsSet(SyncModeFlag.Name) {
 		if err = cfg.SyncMode.UnmarshalText([]byte(ctx.String(SyncModeFlag.Name))); err != nil {
 			Fatalf("invalid --syncmode flag: %v", err)
 		}
-	case ctx.Bool(FastSyncFlag.Name):
-		cfg.SyncMode = downloader.FastSync
-	case ctx.Bool(LightModeFlag.Name):
-		cfg.SyncMode = downloader.LightSync
 	}
 	if ctx.IsSet(LightServFlag.Name) {
 		cfg.LightServ = ctx.Int(LightServFlag.Name)
@@ -1618,7 +1611,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
 	)
 	name := "chaindata"
-	if ctx.Bool(LightModeFlag.Name) {
+	if ctx.String(SyncModeFlag.Name) == "light" {
 		name = "lightchaindata"
 	}
 	chainDb, err := stack.OpenDatabase(name, cache, handles, "", readonly)
