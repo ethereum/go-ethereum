@@ -148,7 +148,7 @@ func WriteHeadFastBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 // ReadFastTrieProgress retrieves the number of tries nodes fast synced to allow
 // reportinc correct numbers across restarts.
 func ReadFastTrieProgress(db ethdb.KeyValueReader) uint64 {
-	data, _ := db.Get(trieSyncKey)
+	data, _ := db.Get(fastTrieProgressKey)
 	if len(data) == 0 {
 		return 0
 	}
@@ -158,7 +158,7 @@ func ReadFastTrieProgress(db ethdb.KeyValueReader) uint64 {
 // WriteFastTrieProgress stores the fast sync trie process counter to support
 // retrieving it across restarts.
 func WriteFastTrieProgress(db ethdb.KeyValueWriter, count uint64) error {
-	if err := db.Put(trieSyncKey, new(big.Int).SetUint64(count).Bytes()); err != nil {
+	if err := db.Put(fastTrieProgressKey, new(big.Int).SetUint64(count).Bytes()); err != nil {
 		log.Crit("Failed to store fast sync trie progress", "err", err)
 	}
 	return nil

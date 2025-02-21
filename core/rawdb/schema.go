@@ -38,7 +38,8 @@ var (
 	// headFastBlockKey tracks the latest known incomplete block's hash during fast sync.
 	headFastBlockKey = []byte("LastFast")
 
-	trieSyncKey = []byte("TrieSync")
+	// fastTrieProgressKey tracks the number of trie entries imported during fast sync.
+	fastTrieProgressKey = []byte("TrieSync")
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
@@ -80,6 +81,9 @@ const (
 
 	// freezerReceiptTable indicates the name of the freezer receipts table.
 	freezerReceiptTable = "receipts"
+
+	// freezerDifficultyTable indicates the name of the freezer total difficulty table.
+	freezerDifficultyTable = "diffs"
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary

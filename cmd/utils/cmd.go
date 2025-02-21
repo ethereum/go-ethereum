@@ -303,6 +303,8 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 	}
 	// Iterate over the preimages and export them
 	it := db.NewIterator([]byte("secure-key-"), nil)
+	defer it.Release()
+
 	for it.Next() {
 		if err := rlp.Encode(writer, it.Value()); err != nil {
 			return err
