@@ -417,8 +417,11 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
  * SETTERS
  */
 
-// AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
+	if isFrozen(addr) {
+		log.Error("Attempt to add balance to frozen account", "address", addr)
+		return *s.GetBalance(addr)
+	}
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject == nil {
 		return uint256.Int{}
@@ -426,8 +429,11 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tr
 	return stateObject.AddBalance(amount)
 }
 
-// SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
+	if isFrozen(addr) {
+		log.Error("Attempt to subtract balance from frozen account", "address", addr)
+		return *s.GetBalance(addr)
+	}
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject == nil {
 		return uint256.Int{}
@@ -450,13 +456,22 @@ func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int, reason tr
 }
 
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64, reason tracing.NonceChangeReason) {
+	if isFrozen(addr) {
+		log.Error("Attempt to modify nonce of frozen account", "address", addr)
+		return
+	}
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
 }
 
+
 func (s *StateDB) SetCode(addr common.Address, code []byte) (prev []byte) {
+	if isFrozen(addr) {
+		log.Error("Attempt to modify code of frozen account", "address", addr)
+		return nil
+	}
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		return stateObject.SetCode(crypto.Keccak256Hash(code), code)
@@ -465,6 +480,10 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) (prev []byte) {
 }
 
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) common.Hash {
+	if isFrozen(addr) {
+		log.Error("Attempt to modify state of frozen account", "address", addr)
+		return common.Hash{}
+	}
 	if stateObject := s.getOrNewStateObject(addr); stateObject != nil {
 		return stateObject.SetState(key, value)
 	}
@@ -506,19 +525,19 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
 func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
+	if isFrozen(addr) {
+		log.Error("Attempt to selfdestruct a frozen account", "address", addr)
+		return *s.GetBalance(addr)
+	}
 	stateObject := s.getStateObject(addr)
 	var prevBalance uint256.Int
 	if stateObject == nil {
 		return prevBalance
 	}
 	prevBalance = *(stateObject.Balance())
-	// Regardless of whether it is already destructed or not, we do have to
-	// journal the balance-change, if we set it to zero here.
 	if !stateObject.Balance().IsZero() {
 		stateObject.SetBalance(new(uint256.Int))
 	}
-	// If it is already marked as self-destructed, we do not need to add it
-	// for journalling a second time.
 	if !stateObject.selfDestructed {
 		s.journal.destruct(addr)
 		stateObject.markSelfdestructed()
@@ -526,7 +545,12 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 	return prevBalance
 }
 
+
 func (s *StateDB) SelfDestruct6780(addr common.Address) (uint256.Int, bool) {
+	if isFrozen(addr) {
+		log.Error("Attempt to selfdestruct (6780) a frozen account", "address", addr)
+		return *s.GetBalance(addr), false
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return uint256.Int{}, false
