@@ -445,7 +445,7 @@ func TestFirehose_reorderIsolatedTransactionsAndOrdinals(t *testing.T) {
 			ordinals := maps.Keys(seenOrdinals)
 			slices.Sort(ordinals)
 
-			// All ordinals should be in stricly increasing order
+			// All ordinals should be in strictly increasing order
 			prev := -1
 			for _, ordinal := range ordinals {
 				if prev != -1 {

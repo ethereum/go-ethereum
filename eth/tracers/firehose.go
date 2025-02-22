@@ -114,8 +114,9 @@ type FirehoseConfig struct {
 }
 
 type privateFirehoseConfig struct {
-	FlushToTestBuffer  bool `json:"flushToTestBuffer"`
-	IgnoreGenesisBlock bool `json:"ignoreGenesisBlock"`
+	FlushToTestBuffer           bool `json:"flushToTestBuffer"`
+	IgnoreGenesisBlock          bool `json:"ignoreGenesisBlock"`
+	ForcedBackwardCompatibility bool `json:"forcedBackwardCompatibility"`
 }
 
 // LogKeValues returns a list of key-values to be logged when the config is printed.
@@ -130,10 +131,19 @@ func (c *FirehoseConfig) LogKeyValues() []any {
 	}
 }
 
+func (c *FirehoseConfig) ForcedBackwardCompatibility() bool {
+	if c.private != nil {
+		return c.private.ForcedBackwardCompatibility
+	}
+
+	return false
+}
+
 type Firehose struct {
 	// Global state
 	outputBuffer *bytes.Buffer
 	initSent     *atomic.Bool
+	config       *FirehoseConfig
 	chainConfig  *params.ChainConfig
 	hasher       crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
 	hasherBuf    common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
@@ -194,7 +204,7 @@ func NewFirehoseFromRawJSON(cfg json.RawMessage) (*Firehose, error) {
 
 		var privateConfig privateConfigRoot
 		if err := json.Unmarshal(cfg, &privateConfig); err != nil {
-			log.Info("Firehose failed to parse private config, ignoring", "error", err)
+			log.Error("Firehose failed to parse private config, ignoring", "error", err)
 		} else {
 			config.private = privateConfig.Private
 		}
@@ -210,6 +220,7 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		// Global state
 		outputBuffer:               bytes.NewBuffer(make([]byte, 0, 100*1024*1024)),
 		initSent:                   new(atomic.Bool),
+		config:                     config,
 		chainConfig:                nil,
 		hasher:                     crypto.NewKeccakState(),
 		tracerID:                   "global",
@@ -245,6 +256,7 @@ func (f *Firehose) newIsolatedTransactionTracer(tracerID string) *Firehose {
 	return &Firehose{
 		// Global state
 		initSent:    f.initSent,
+		config:      f.config,
 		chainConfig: f.chainConfig,
 		hasher:      crypto.NewKeccakState(),
 		hasherBuf:   common.Hash{},
@@ -307,16 +319,36 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 		f.panicInvalidState("The OnBlockchainInit callback was called more than once", 0)
 	}
 
+	applyBackwardCompatibilityLogSuffix := ""
 	if f.applyBackwardCompatibility == nil {
-		f.applyBackwardCompatibility = ptr(chainNeedsLegacyBackwardCompatibility(chainConfig.ChainID))
+		if f.config.ForcedBackwardCompatibility() {
+			f.applyBackwardCompatibility = ptr(true)
+			applyBackwardCompatibilityLogSuffix = " (forced by private config)"
+		} else if chainNeedsLegacyBackwardCompatibility(chainConfig.ChainID) {
+			f.applyBackwardCompatibility = ptr(true)
+			applyBackwardCompatibilityLogSuffix = " (inferred, up to Prague hard-fork)"
+		} else {
+			f.applyBackwardCompatibility = ptr(false)
+			applyBackwardCompatibilityLogSuffix = " (inferred, disabled)"
+		}
+	} else if *f.applyBackwardCompatibility {
+		applyBackwardCompatibilityLogSuffix = " (forced, up to Prague hard-fork)"
+		if f.config.ForcedBackwardCompatibility() {
+			applyBackwardCompatibilityLogSuffix = " (forced by private config)"
+		}
+	} else {
+		applyBackwardCompatibilityLogSuffix = " (disabled)"
 	}
 
-	log.Info("Firehose tracer initialized", "chain_id", chainConfig.ChainID, "apply_backward_compatibility", *f.applyBackwardCompatibility, "protocol_version", FirehoseProtocolVersion)
+	log.Info("Firehose tracer initialized",
+		"chain_id", chainConfig.ChainID,
+		"apply_backward_compatibility", fmt.Sprintf("%t%s", *f.applyBackwardCompatibility, applyBackwardCompatibilityLogSuffix),
+		"protocol_version", FirehoseProtocolVersion,
+	)
 }
 
 var gethDevChainID = big.NewInt(1337)
 var mainnetChainID = big.NewInt(1)
-var goerliChainID = big.NewInt(5)
 var sepoliaChainID = big.NewInt(11155111)
 var holeskyChainID = big.NewInt(17000)
 var polygonMainnetChainID = big.NewInt(137)
@@ -328,7 +360,6 @@ var bscTestnetChainID = big.NewInt(97)
 func chainNeedsLegacyBackwardCompatibility(id *big.Int) bool {
 	return isChainIDOneOf(id,
 		mainnetChainID,
-		goerliChainID,
 		sepoliaChainID,
 		holeskyChainID,
 		polygonMainnetChainID,
@@ -340,23 +371,44 @@ func chainNeedsLegacyBackwardCompatibility(id *big.Int) bool {
 }
 
 func (f *Firehose) OnBlockStart(event tracing.BlockEvent) {
+	f.ensureBlockChainInit()
+
 	// Hash is usually pre-computed within `event.Block`, so it's better to take from there
 	block := event.Block
 	hash := block.Hash()
+	// FIXME: Avoid calling 'Header()', it makes a copy while accessing event.Block getters directly avoids it
 	header := event.Block.Header()
 
-	firehoseInfo("block start (number=%d hash=%s)", block.NumberU64(), hash)
+	// There was a lot of "over time" bugs introduced in Firehose 2.x, e.g. bugs that were fixed or
+	// introduced in a version without even knowing it. This means that for example, reprocessing
+	// a chain with latest Firehose 2.x would not produce the same output as the original Firehose 2.x
+	// making the final dataset indeterministic.
+	//
+	// In the optic and with the switch to a new tracer Firehose 3.0 that as a backward compatibility
+	// mode, we decided that from Prague and onwards, we would stop doing the backward compatibility
+	// mode and simply switch to the new mode right away.
+	//
+	// This will not be worst for the users because the Firehose 2.x is already not deterministic and
+	// the Firehose 3.x will be deterministic (hopefully).
+	//
+	// Also, it means it limits our needed back processing up to Prague only, stopping the "contagion"
+	// at some point.
+	blockRules := f.chainConfig.Rules(header.Number, blockIsMerge(event.Block), block.Time())
 
-	f.ensureBlockChainInit()
+	// If are applying backward compatibility and the block is now Prague, stop applying backward compatibility
+	if *f.applyBackwardCompatibility && blockRules.IsPrague && !f.config.ForcedBackwardCompatibility() {
+		*f.applyBackwardCompatibility = false
+	}
 
-	f.blockRules = f.chainConfig.Rules(header.Number, blockIsMerge(event.Block), block.Time())
+	firehoseInfo("block start (number=%d hash=%s, backward_compatibility=%t)", block.NumberU64(), hash, *f.applyBackwardCompatibility)
+
+	f.blockRules = blockRules
 	f.blockIsPrecompiledAddr = getActivePrecompilesChecker(f.blockRules)
 
 	f.block = &pbeth.Block{
 		Hash:   hash.Bytes(),
 		Number: block.NumberU64(),
-		// FIXME: Avoid calling 'Header()', it makes a copy while accessing event.Block getters directly avoids it
-		Header: newBlockHeaderFromChainHeader(hash, block.Header()),
+		Header: newBlockHeaderFromChainHeader(hash, header),
 		Ver:    4,
 
 		// FIXME: 'block.Size()' is a relatively heavy operation, could we do it async?
@@ -387,7 +439,7 @@ func (f *Firehose) OnSkippedBlock(event tracing.BlockEvent) {
 	// It happened in the past, on Polygon if I recall right, that we missed block because some block
 	// went in this code path.
 	//
-	// See https: //github.com/streamingfast/go-ethereum/blob/a46903cf0cad829479ded66b369017914bf82314/core/blockchain.go#L1797-L1814
+	// See https://github.com/streamingfast/go-ethereum/blob/a46903cf0cad829479ded66b369017914bf82314/core/blockchain.go#L1797-L1814
 	if event.Block.Transactions().Len() > 0 {
 		panic(fmt.Sprintf("The tracer received an `OnSkippedBlock` block #%d (%s) with %d transactions, this according to core/blockchain.go should never happen and is an error",
 			event.Block.NumberU64(),

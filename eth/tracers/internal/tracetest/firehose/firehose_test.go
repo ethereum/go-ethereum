@@ -21,6 +21,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type tracingModel string
+
+const (
+	tracingModelFirehose2_3 tracingModel = "fh2.3"
+	tracingModelFirehose3_0 tracingModel = "fh3.0"
+)
+
+var tracingModels = []tracingModel{tracingModelFirehose2_3, tracingModelFirehose3_0}
+
 func TestFirehosePrestate(t *testing.T) {
 	testFolders := []string{
 		"./testdata/TestFirehosePrestate/keccak256_too_few_memory_bytes_get_padded",
@@ -32,17 +41,20 @@ func TestFirehosePrestate(t *testing.T) {
 	for _, folder := range testFolders {
 		name := filepath.Base(folder)
 
-		t.Run(name, func(t *testing.T) {
-			tracer, tracingHooks, onClose := newFirehoseTestTracer(t)
-			defer onClose()
+		for _, model := range tracingModels {
+			t.Run(string(model)+"/"+name, func(t *testing.T) {
+				tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model)
+				defer onClose()
 
-			runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracingHooks)
+				runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracingHooks)
 
-			genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
-			require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
-			require.NotNil(t, genesisLine)
-			blockLines.assertOnlyBlockEquals(t, folder, 1)
-		})
+				genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
+				require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
+				require.NotNil(t, genesisLine)
+				blockLines.assertOnlyBlockEquals(t, filepath.Join(folder, string(model)), 1)
+			})
+		}
+
 	}
 
 }
@@ -157,7 +169,7 @@ func TestFirehose_EIP7702(t *testing.T) {
 		}
 	})
 
-	assertBlockTracesCorrectly(t, gspec, engine, blocks, "TestEIP7702")
+	testBlockTracesCorrectly(t, gspec, engine, blocks, "TestEIP7702")
 }
 
 func TestFirehose_SystemCalls(t *testing.T) {
@@ -168,26 +180,30 @@ func TestFirehose_SystemCalls(t *testing.T) {
 	engine := beacon.New(ethash.NewFaker())
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *core.BlockGen) {})
 
-	assertBlockTracesCorrectly(t, gspec, engine, blocks, "TestSystemCalls")
+	testBlockTracesCorrectly(t, gspec, engine, blocks, "TestSystemCalls")
 }
 
-func assertBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine consensus.Engine, blocks []*types.Block, goldenDir string) {
+func testBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine consensus.Engine, blocks []*types.Block, goldenDir string) {
 	t.Helper()
 
-	tracer, tracingHooks, onClose := newFirehoseTestTracer(t)
-	defer onClose()
+	for _, model := range tracingModels {
+		t.Run(string(model), func(t *testing.T) {
+			tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model)
+			defer onClose()
 
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesisSpec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
-	require.NoError(t, err, "failed to create tester chain")
+			chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesisSpec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
+			require.NoError(t, err, "failed to create tester chain")
 
-	chain.SetBlockValidatorAndProcessorForTesting(
-		ignoreValidateStateValidator{core.NewBlockValidator(genesisSpec.Config, chain)},
-		core.NewStateProcessor(genesisSpec.Config, chain.HeaderChain()),
-	)
+			chain.SetBlockValidatorAndProcessorForTesting(
+				ignoreValidateStateValidator{core.NewBlockValidator(genesisSpec.Config, chain)},
+				core.NewStateProcessor(genesisSpec.Config, chain.HeaderChain()),
+			)
 
-	defer chain.Stop()
-	n, err := chain.InsertChain(blocks)
-	require.NoError(t, err, "failed to insert chain block %d", n)
+			defer chain.Stop()
+			n, err := chain.InsertChain(blocks)
+			require.NoError(t, err, "failed to insert chain block %d", n)
 
-	assertBlockEquals(t, tracer, filepath.Join("testdata", goldenDir), len(blocks))
+			assertBlockEquals(t, tracer, filepath.Join("testdata", goldenDir, string(model)), len(blocks))
+		})
+	}
 }
