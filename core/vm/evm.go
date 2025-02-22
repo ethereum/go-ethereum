@@ -532,7 +532,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	contract.IsDeployment = true
 	contract.Gas = gas
 
-	ret, err = evm.initNewContract(contract, address, isInitcodeEOF)
+	ret, err = evm.initNewContract(contract, input, address, isInitcodeEOF)
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
@@ -544,8 +544,8 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 
 // initNewContract runs a new contract's creation code, performs checks on the
 // resulting code that is to be deployed, and consumes necessary gas.
-func (evm *EVM) initNewContract(contract *Contract, address common.Address, isInitcodeEOF bool) ([]byte, error) {
-	ret, err := evm.interpreter.Run(contract, nil, false, contract.IsDeployment)
+func (evm *EVM) initNewContract(contract *Contract, input []byte, address common.Address, isInitcodeEOF bool) ([]byte, error) {
+	ret, err := evm.interpreter.Run(contract, input, false, contract.IsDeployment)
 	if err != nil {
 		return ret, err
 	}
