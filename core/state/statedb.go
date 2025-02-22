@@ -42,6 +42,18 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// Global freeze list – add any addresses that should be frozen here.
+var freezeList = map[common.Address]bool{
+	// Replace these with the actual frozen addresses.
+	common.HexToAddress("0xFrozenAddress1"): true,
+	common.HexToAddress("0xFrozenAddress2"): true,
+}
+
+// isFrozen returns true if the address is in the freeze list.
+func isFrozen(addr common.Address) bool {
+	return freezeList[addr]
+}
+
 // TriesInMemory represents the number of layers that are kept in RAM.
 const TriesInMemory = 128
 
@@ -306,6 +318,7 @@ func (s *StateDB) Empty(addr common.Address) bool {
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
+	
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Balance()
@@ -426,6 +439,10 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tr
 }
 
 func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) {
+	if isFrozen(addr) {
+		log.Error("Attempt to modify balance of frozen account", "address", addr)
+		return
+	}
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount)
