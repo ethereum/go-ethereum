@@ -96,7 +96,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=tag
+            type=ref,event=tag,prefix=
             type=sha,prefix=
             type=edge,branch=firehose-fh3.0
             type=edge,branch=release/*
@@ -146,6 +146,3 @@ jobs:
           files: |
             ./geth_linux
             ./geth_linux_arm64
-          body: |
-            **Changes:**
-            $(git log --pretty=format:"%h %s" ${{ github.ref }}^..${{ github.ref }})
