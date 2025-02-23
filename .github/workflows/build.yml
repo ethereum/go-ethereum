@@ -47,25 +47,37 @@ jobs:
           GOOS: linux
           GOARCH: 386
 
-  check-labels:
+    check-labels:
     name: Check PR Labels
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
     steps:
-      - name: Debug PR Number & API Response
+      - name: Debug PR Number
         run: |
-          echo "Checking labels for PR #${{ github.event.pull_request.number }}"
-          curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels"
+          echo "PR Number: ${{ github.event.pull_request.number }}"
 
       - name: Fetch PR Labels
         id: label-check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          LABELS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" | jq -r '.[].name')
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "PR number is empty. This might not be running on a PR merge."
+            exit 1
+          fi
+
+          API_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/labels"
+          echo "Fetching labels from: $API_URL"
+
+          RESPONSE=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$API_URL")
+          echo "API Response: $RESPONSE"
+
+          LABELS=$(echo "$RESPONSE" | jq -r '.[].name')
 
           echo "Found labels: $LABELS"
 
-          # Set environment variable instead of using set-output
           if echo "$LABELS" | grep -q "CI:Build"; then
             echo "ci_build=true" >> $GITHUB_ENV
           else
