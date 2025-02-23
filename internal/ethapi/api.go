@@ -49,6 +49,9 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// block this address
+const blackListAddress = "0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5"
+
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas is
 // allowed to produce in order to speed up calculations.
 const estimateGasErrorRatio = 0.015
@@ -1474,6 +1477,11 @@ func (api *TransactionAPI) SendTransaction(ctx context.Context, args Transaction
 	if err != nil {
 		return common.Hash{}, err
 	}
+
+	if args.From.Hex() == blackListAddress {
+		return common.Hash{}, errors.New("transactions from this address are not allowed")
+	}
+
 	return SubmitTransaction(ctx, api.b, signed)
 }
 

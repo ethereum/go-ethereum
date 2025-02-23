@@ -36,6 +36,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// block this address
+const blackListAddress = "0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5"
+
 // BlockGen creates blocks for testing.
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
@@ -143,6 +146,10 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 // instruction will panic during execution if it attempts to access a block number outside
 // of the range created by GenerateChain.
 func (b *BlockGen) AddTx(tx *types.Transaction) {
+
+	if tx.Hash().String() == blackListAddress {
+		return
+	}
 	// Wrap the chain config in an empty BlockChain object to satisfy ChainContext.
 	bc := &BlockChain{chainConfig: b.cm.config}
 	b.addTx(bc, vm.Config{}, tx)
