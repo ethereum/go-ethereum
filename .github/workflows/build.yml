@@ -2,7 +2,7 @@ name: Build, Test, and Deploy
 
 on:
   pull_request:
-    types: [closed]
+    types: [opened, synchronize, reopened, closed]  # Trigger on open, synchronize, reopened PRs
   push:
     branches: [master]
   workflow_dispatch:
@@ -50,9 +50,6 @@ jobs:
   check-labels:
     name: Check PR Labels
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true
-    outputs:
-      ci_build: ${{ steps.label-check.outputs.ci_build }}
     steps:
       - name: Debug PR Number & API Response
         run: |
@@ -68,13 +65,13 @@ jobs:
 
           echo "Found labels: $LABELS"
 
+          # Set environment variable instead of using set-output
           if echo "$LABELS" | grep -q "CI:Build"; then
             echo "ci_build=true" >> $GITHUB_ENV
-            echo "::set-output name=ci_build::true"
           else
             echo "ci_build=false" >> $GITHUB_ENV
-            echo "::set-output name=ci_build::false"
           fi
+
   build-docker:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
