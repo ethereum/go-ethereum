@@ -47,11 +47,32 @@ jobs:
           GOOS: linux
           GOARCH: 386
 
+  check-labels:
+    name: Check PR Labels
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    outputs:
+      ci_build: ${{ steps.check.outputs.ci_build }}
+    steps:
+      - name: Get PR Labels
+        id: check
+        run: |
+          LABELS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" | jq -r '.[].name')
+
+          echo "Labels found: $LABELS"
+
+          if echo "$LABELS" | grep -q "CI:Build"; then
+            echo "ci_build=true" >> $GITHUB_ENV
+          else
+            echo "ci_build=false" >> $GITHUB_ENV
+          fi
+
   build-docker:
     name: Build & Push Docker Image
-    if: contains(github.event.pull_request.labels.*.name, 'CI:Build')
     runs-on: ubuntu-latest
-    needs: [lint, build-go]
+    needs: [lint, build-go, check-labels]
+    if: needs.check-labels.outputs.ci_build == 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
