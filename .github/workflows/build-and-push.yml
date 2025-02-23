@@ -15,10 +15,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Fetch PR number
+        id: get-pr
+        run: |
+          PR_NUMBER=$(gh pr list --state merged --base main --json number --jq '.[0].number' || echo "")
+          echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail if no PR found
+        if: env.PR_NUMBER == ''
+        run: |
+          echo "No merged PR found. Exiting."
+          exit 1
+
       - name: Fetch PR labels
         id: get-labels
         run: |
-          PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
           LABELS=$(gh pr view $PR_NUMBER --json labels --jq '.labels[].name' || echo "")
           echo "PR_LABELS=${LABELS}" >> $GITHUB_ENV
         env:
