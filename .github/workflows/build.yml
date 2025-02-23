@@ -47,7 +47,7 @@ jobs:
           GOOS: linux
           GOARCH: 386
 
-    check-labels:
+  check-labels:  # 🛠️ FIXED: Now it's at the correct level
     name: Check PR Labels
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true
@@ -82,7 +82,7 @@ jobs:
             echo "ci_build=true" >> $GITHUB_ENV
           else
             echo "ci_build=false" >> $GITHUB_ENV
-          fi
+          fi    
 
   build-docker:
     name: Build & Push Docker Image
