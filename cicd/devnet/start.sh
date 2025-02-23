@@ -62,24 +62,32 @@ fi
 ws_port=8555
 if test -z "$WS_PORT"
 then
-  echo "WS_PORT not set, default to  $ws_port"
+  echo "WS_PORT not set, default to $ws_port"
 else
   echo "WS_PORT found, set to $WS_PORT"
   ws_port=$WS_PORT
 fi
 
-INSTANCE_IP=$(curl https://checkip.amazonaws.com)
-netstats="${NODE_NAME}-${wallet}-${INSTANCE_IP}:xinfin_xdpos_hybrid_network_stats@devnetstats.hashlabs.apothem.network:1999"
+instance_ip=$(ifconfig eth0 | awk '/inet addr:/ {print $2}' | cut -d: -f2)
+if test -z "$INSTANCE_IP"
+then
+  echo "INSTANCE_IP not set, default to $instance_ip"
+else
+  echo "INSTANCE_IP found, set to $INSTANCE_IP"
+  instance_ip=$INSTANCE_IP
+fi
+
+netstats="${NODE_NAME}-${wallet}-${instance_ip}:xinfin_xdpos_hybrid_network_stats@devnetstats.hashlabs.apothem.network:1999"
 
 
-echo "Running a node with wallet: ${wallet} at IP: ${INSTANCE_IP}"
+echo "Running a node with wallet: ${wallet} at IP: ${instance_ip}"
 echo "Starting nodes with $bootnodes ..."
 
 # Note: --gcmode=archive means node will store all historical data. This will lead to high memory usage. But sync mode require archive to sync
 # https://github.com/XinFinOrg/XDPoSChain/issues/268
 
 XDC --ethstats ${netstats} --gcmode archive \
---nat extip:${INSTANCE_IP} \
+--nat extip:${instance_ip} \
 --bootnodes ${bootnodes} --syncmode full \
 --datadir /work/xdcchain --networkid 551 \
 --port $port --http --http-corsdomain "*" --http-addr 0.0.0.0 \
