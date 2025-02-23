@@ -15,45 +15,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Fetch PR number
-        id: get-pr
-        run: |
-          PR_NUMBER=$(gh pr list --state merged --base main --search $(git rev-parse HEAD) --json number --jq '.[0].number' || echo "")
-          echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Fail if no PR found
-        if: env.PR_NUMBER == ''
-        run: |
-          echo "No merged PR found. Exiting."
-          exit 1
-
-      - name: Fetch PR labels
-        id: get-labels
-        run: |
-          LABELS=$(gh pr view $PR_NUMBER --json labels --jq '.labels[].name' || echo "")
-          echo "PR_LABELS=${LABELS}" >> $GITHUB_ENV
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check if PR has CI:Build label
-        if: contains(env.PR_LABELS, 'CI:Build')
-        run: echo "CI:Build label found, proceeding with build."
-
       - name: Set up Docker Buildx
-        if: contains(env.PR_LABELS, 'CI:Build')
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: contains(env.PR_LABELS, 'CI:Build')
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
-        if: contains(env.PR_LABELS, 'CI:Build')
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/go-ethereum:latest .
           docker push ${{ secrets.DOCKER_USERNAME }}/go-ethereum:latest
