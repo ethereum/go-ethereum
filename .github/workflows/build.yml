@@ -52,20 +52,24 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true
     outputs:
-      ci_build: ${{ steps.check.outputs.ci_build }}
+      ci_build: ${{ steps.label-check.outputs.ci_build }}
     steps:
-      - name: Get PR Labels
-        id: check
+      - name: Fetch PR Labels
+        id: label-check
         run: |
+          echo "Fetching labels for PR #${{ github.event.pull_request.number }}..."
+
           LABELS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels" | jq -r '.[].name')
 
-          echo "Labels found: $LABELS"
+          echo "Found labels: $LABELS"
 
           if echo "$LABELS" | grep -q "CI:Build"; then
             echo "ci_build=true" >> $GITHUB_ENV
+            echo "::set-output name=ci_build::true"
           else
             echo "ci_build=false" >> $GITHUB_ENV
+            echo "::set-output name=ci_build::false"
           fi
 
   build-docker:
