@@ -117,15 +117,29 @@ jobs:
           images: "${{ steps.image.outputs.ID }}-amd64, ${{ steps.image.outputs.ID }}-arm64"
           push: true
 
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-22.04
+
+    permissions:
+        contents: write
+
+    steps:
+      - name: Extract image
+        id: image
+        run: |
+            echo "ID=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Extract assets
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          docker cp $(docker create ${{ steps.image.outputs.ID }}-amd64):/usr/local/bin/geth ./geth_linux
-          docker cp $(docker create ${{ steps.image.outputs.ID }}-arm64):/usr/local/bin/geth ./geth_linux_arm64
+          # The --platform are not really needed here, but it removes the warning
+          docker cp $(docker create --platform=linux/amd64 ${{ steps.image.outputs.ID }}-amd64):/usr/local/bin/geth ./geth_linux
+          docker cp $(docker create --platform=linux/arm64 ${{ steps.image.outputs.ID }}-arm64):/usr/local/bin/geth ./geth_linux_arm64
 
       - name: Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           draft: true
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
