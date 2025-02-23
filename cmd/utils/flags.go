@@ -1095,7 +1095,10 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config
 		}
 		cfg.Etherbase = account.Address
 	} else {
-		cfg.Etherbase = common.HexToAddress(ctx.String(MinerEtherbaseFlag.Name))
+		if !ctx.IsSet(UnlockedAccountFlag.Name) {
+			cfg.Etherbase = common.HexToAddress(ctx.String(MinerEtherbaseFlag.Name))
+			log.Info("Set etherbase", "address", cfg.Etherbase.Hex())
+		}
 	}
 }
 
