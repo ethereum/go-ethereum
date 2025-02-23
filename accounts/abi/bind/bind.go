@@ -78,7 +78,7 @@ func isKeyWord(arg string) bool {
 }
 
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
-// to be used as is in client code, but rather as an intermediate struct which
+// to be used as-is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention as opposed to having to
 // manually maintain hard coded strings that break on runtime.
 func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string, aliases map[string]string) (string, error) {
@@ -130,7 +130,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		}
 
 		for _, original := range evmABI.Methods {
-			// Normalize the method for capital cases and non-anonymous inputs/outputs
+			// Normalize the method for uppercase and non-anonymous inputs/outputs
 			normalized := original
 			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
 			// Ensure there is no duplicated identifier
@@ -184,7 +184,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			if original.Anonymous {
 				continue
 			}
-			// Normalize the event for capital cases and non-anonymous outputs
+			// Normalize the event for uppercase and non-anonymous outputs
 			normalized := original
 
 			// Ensure there is no duplicated identifier
@@ -298,7 +298,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		}
 		return string(code), nil
 	}
-	// For all others just return as is for now
+	// For all others just return as-is for now
 	return buffer.String(), nil
 }
 
