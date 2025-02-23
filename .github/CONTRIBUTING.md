@@ -2,7 +2,7 @@
 
 Thank you for considering to help out with the source code! We welcome 
 contributions from anyone on the internet, and are grateful for even the 
-smallest of fixes!
+smallest fixes!
 
 If you'd like to contribute to go-ethereum, please fork, fix, commit and send a 
 pull request for the maintainers to review and merge into the main code base. If
