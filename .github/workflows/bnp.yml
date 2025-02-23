@@ -1,4 +1,4 @@
-name: Build and Push go-ethereum Image
+name: CI:Build go-ethereum Image
 
 on:
   pull_request:
