@@ -18,7 +18,7 @@ jobs:
       - name: Fetch PR number
         id: get-pr
         run: |
-          PR_NUMBER=$(gh pr list --state merged --base main --json number --jq '.[0].number' || echo "")
+          PR_NUMBER=$(gh pr list --state merged --base main --search $(git rev-parse HEAD) --json number --jq '.[0].number' || echo "")
           echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
