@@ -120,8 +120,8 @@ jobs:
       - name: Extract assets
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          docker cp $(docker create ${{ steps.image.outputs.ID }}-amd64):/usr/local/bin/geth /geth_linux
-          docker cp $(docker create ${{ steps.image.outputs.ID }}-arm64):/usr/local/bin/geth /geth_linux_arm64
+          docker cp $(docker create ${{ steps.image.outputs.ID }}-amd64):/usr/local/bin/geth ./geth_linux
+          docker cp $(docker create ${{ steps.image.outputs.ID }}-arm64):/usr/local/bin/geth ./geth_linux_arm64
 
       - name: Release
         uses: softprops/action-gh-release@v2
@@ -130,8 +130,8 @@ jobs:
           draft: true
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
           files: |
-            /geth_linux
-            /geth_linux_arm64
+            ./geth_linux
+            ./geth_linux_arm64
           body: |
             **Changes:**
             $(git log --pretty=format:"%h %s" ${{ github.ref }}^..${{ github.ref }})
