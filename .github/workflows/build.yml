@@ -1,52 +1,66 @@
-name: CI Build and Deploy
+name: Build, Test, and Deploy
 
 on:
   pull_request:
-    types:
-      - closed
+    types: [closed]
+  push:
+    branches: [master]
+  workflow_dispatch:
 
 jobs:
-  build:
-    if: contains(github.event.pull_request.labels.*.name, 'CI:Build')
+  lint:
+    name: Lint Code
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: build/cache
+          key: ${{ runner.os }}-build-tools-cache-${{ hashFiles('build/checksums.txt') }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.0
+          cache: false
+
+      - name: Run linters
+        run: |
+          go run build/ci.go lint
+          go run build/ci.go check_tidy
+          go run build/ci.go check_baddeps
+
+  build-go:
+    name: Build & Test Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.0
+          cache: false
+
+      - name: Run Go tests
+        run: go test -short ./...
+        env:
+          GOOS: linux
+          GOARCH: 386
+
+  build-docker:
+    name: Build & Push Docker Image
+    if: contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    runs-on: ubuntu-latest
+    needs: [lint, build-go]
+    steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       - name: Build Docker image
-        run: |
-          docker build -t ipangelov/go-ethereum:latest .
+        run: docker build -t ipangelov/go-ethereum:latest .
 
       - name: Push Docker image to Docker Hub
-        run: |
-          docker push ipangelov/go-ethereum:latest
-
-  deploy:
-    if: contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      
-      - name: Start local devnet
-        run: |
-          docker-compose up -d
-
-      - name: Deploy Hardhat contracts
-        run: |
-          cd hardhat
-          npx hardhat run scripts/deploy.js --network localhost
-
-      - name: Build & push pre-deployed contracts image
-        run: |
-          docker commit $(docker ps -q --filter ancestor=ipangelov/go-ethereum:latest) ipangelov/go-ethereum:contracts
-          docker push ipangelov/go-ethereum:contracts
-
-      - name: Run Hardhat tests
-        run: |
-          cd hardhat
-          npx hardhat test
+        run: docker push ipangelov/go-ethereum:latest
