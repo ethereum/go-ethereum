@@ -1,11 +1,24 @@
-name: Test Runner
+name: Go Tests
 
 on:
-  workflow_dispatch
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
 
 jobs:
-  test:
+  test-go:
+    name: Run Go Tests
     runs-on: ubuntu-latest
     steps:
-      - name: Check runner
-        run: echo "Runner is working!"
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.0
+          cache: false
+
+      - name: Run Go tests
+        run: go test -short ./...
+        env:
+          GOOS: linux
+          GOARCH: 386
