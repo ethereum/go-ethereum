@@ -47,7 +47,14 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
+            type=ref,event=tag,prefix=
+            type=sha,prefix=
             type=sha,prefix=,suffix=-${{ matrix.platform_suffix }}
+            type=edge,branch=firehose-fh3.0
+            type=edge,branch=release/*
+          flavor: |
+            latest=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
+            prefix=geth-,onlatest=true
 
       - name: Extract version
         id: extract-version
