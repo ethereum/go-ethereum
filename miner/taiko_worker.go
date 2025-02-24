@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -93,7 +94,7 @@ func (w *Miner) buildTransactionsLists(
 		}
 
 		return lastTransaction, &PreBuiltTxList{
-			TxList:           env.txs,
+			TxList:           w.toRPCTransactions(env.txs),
 			EstimatedGasUsed: env.header.GasLimit - env.gasPool.Gas(),
 			BytesLength:      uint64(len(b)),
 		}, nil
@@ -336,6 +337,15 @@ loop:
 	}
 
 	return lastTransaction
+}
+
+// toRPCTransactions converts the given transactions to RPC transactions.
+func (w *Miner) toRPCTransactions(txs types.Transactions) []*ethapi.RPCTransaction {
+	var rpcTxs []*ethapi.RPCTransaction
+	for _, tx := range txs {
+		rpcTxs = append(rpcTxs, ethapi.NewRPCPendingTransaction(tx, nil, w.chainConfig))
+	}
+	return rpcTxs
 }
 
 // encodeAndCompressTxList encodes and compresses the given transactions list.
