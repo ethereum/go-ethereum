@@ -8,6 +8,6 @@ rpc_url="http://localhost:8545"
 cd matic-cli/tests/rpc-tests
 
 go mod tidy
-go main.go --priv-key $privKey --rpc-url $rpc_url
+go run main.go --priv-key $privKey --rpc-url $rpc_url
 
 cd -
