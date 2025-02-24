@@ -16,9 +16,6 @@ package secp256k1
 #  define NDEBUG
 #endif
 
-#define ECMULTWINDOW 15
-#define ECMULTGENKB 22
-#define WIDEMUL auto
 #include "./libsecp256k1/src/secp256k1.c"
 #include "./libsecp256k1/src/modules/recovery/main_impl.h"
 #include "./libsecp256k1/src/precomputed_ecmult.c"
