@@ -19,7 +19,7 @@ jobs:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
-        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+        os: [ ubuntu-22.04 ] # list of os: https://github.com/actions/virtual-environments
     runs-on: ${{ matrix.os }}
     steps:
         - uses: actions/checkout@v4
@@ -51,7 +51,7 @@ jobs:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
-        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+        os: [ ubuntu-22.04 ] # list of os: https://github.com/actions/virtual-environments
     runs-on: ${{ matrix.os }}
     steps:
         - uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
-        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+        os: [ ubuntu-22.04 ] # list of os: https://github.com/actions/virtual-environments
     runs-on: ${{ matrix.os }}
     steps:
         - uses: actions/checkout@v4
@@ -130,7 +130,7 @@ jobs:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
-        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+        os: [ ubuntu-22.04 ] # list of os: https://github.com/actions/virtual-environments
     runs-on: ${{ matrix.os }}
     steps:
         - uses: actions/checkout@v4
@@ -167,7 +167,7 @@ jobs:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
-        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+        os: [ ubuntu-22.04 ] # list of os: https://github.com/actions/virtual-environments
     runs-on: ${{ matrix.os }}
     needs: [unit-tests, integration-tests]
     steps:
@@ -182,7 +182,7 @@ jobs:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
       matrix:
-        os: [ ubuntu-20.04 ] # list of os: https://github.com/actions/virtual-environments
+        os: [ ubuntu-22.04 ] # list of os: https://github.com/actions/virtual-environments
     runs-on: ${{ matrix.os }}
     steps:
         - uses: actions/checkout@v4
