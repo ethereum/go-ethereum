@@ -99,7 +99,7 @@ func newTester() *downloadTester {
 	tester.stateDb = rawdb.NewMemoryDatabase()
 	tester.stateDb.Put(genesis.Root().Bytes(), []byte{0x00})
 
-	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer, tester.handleProposedBlock)
+	tester.downloader = New(tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer, tester.handleProposedBlock)
 
 	return tester
 }
@@ -658,7 +658,7 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 		blocks += length - common
 		receipts += length - common
 	}
-	if tester.downloader.mode == LightSync {
+	if tester.downloader.getMode() == LightSync {
 		blocks, receipts = 1, 1
 	}
 	if hs := len(tester.ownHeaders); hs != headers {
