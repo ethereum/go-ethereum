@@ -22,11 +22,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
-	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/tree"
+
+	// beacon forks
+	"github.com/protolambda/zrnt/eth2/beacon/capella"
+	"github.com/protolambda/zrnt/eth2/beacon/deneb"
+	"github.com/protolambda/zrnt/eth2/beacon/electra"
 )
 
 type blockObject interface {
@@ -43,10 +46,12 @@ type BeaconBlock struct {
 func BlockFromJSON(forkName string, data []byte) (*BeaconBlock, error) {
 	var obj blockObject
 	switch forkName {
-	case "deneb":
-		obj = new(deneb.BeaconBlock)
 	case "capella":
 		obj = new(capella.BeaconBlock)
+	case "deneb":
+		obj = new(deneb.BeaconBlock)
+	case "electra":
+		obj = new(electra.BeaconBlock)
 	default:
 		return nil, fmt.Errorf("unsupported fork: %s", forkName)
 	}
@@ -63,6 +68,8 @@ func NewBeaconBlock(obj blockObject) *BeaconBlock {
 		return &BeaconBlock{obj}
 	case *deneb.BeaconBlock:
 		return &BeaconBlock{obj}
+	case *electra.BeaconBlock:
+		return &BeaconBlock{obj}
 	default:
 		panic(fmt.Errorf("unsupported block type %T", obj))
 	}
@@ -74,6 +81,8 @@ func (b *BeaconBlock) Slot() uint64 {
 	case *capella.BeaconBlock:
 		return uint64(obj.Slot)
 	case *deneb.BeaconBlock:
+		return uint64(obj.Slot)
+	case *electra.BeaconBlock:
 		return uint64(obj.Slot)
 	default:
 		panic(fmt.Errorf("unsupported block type %T", b.blockObj))
@@ -87,6 +96,8 @@ func (b *BeaconBlock) ExecutionPayload() (*types.Block, error) {
 		return convertPayload(&obj.Body.ExecutionPayload, &obj.ParentRoot)
 	case *deneb.BeaconBlock:
 		return convertPayload(&obj.Body.ExecutionPayload, &obj.ParentRoot)
+	case *electra.BeaconBlock:
+		return convertPayload(&obj.Body.ExecutionPayload, &obj.ParentRoot)
 	default:
 		panic(fmt.Errorf("unsupported block type %T", b.blockObj))
 	}
@@ -98,6 +109,8 @@ func (b *BeaconBlock) Header() Header {
 	case *capella.BeaconBlock:
 		return headerFromZRNT(obj.Header(configs.Mainnet))
 	case *deneb.BeaconBlock:
+		return headerFromZRNT(obj.Header(configs.Mainnet))
+	case *electra.BeaconBlock:
 		return headerFromZRNT(obj.Header(configs.Mainnet))
 	default:
 		panic(fmt.Errorf("unsupported block type %T", b.blockObj))
