@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/zrnt/eth2/configs"
+	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
 
 	// beacon forks
@@ -120,4 +122,38 @@ func (b *BeaconBlock) Header() Header {
 // Root computes the SSZ root hash of the block.
 func (b *BeaconBlock) Root() common.Hash {
 	return common.Hash(b.blockObj.HashTreeRoot(configs.Mainnet, tree.GetHashFn()))
+}
+
+// ExecutionRequestsList returns the execution layer requests of the block.
+func (b *BeaconBlock) ExecutionRequestsList() [][]byte {
+	switch obj := b.blockObj.(type) {
+	case *capella.BeaconBlock, *deneb.BeaconBlock:
+		return nil
+	case *electra.BeaconBlock:
+		r := obj.Body.ExecutionRequests
+		return marshalRequests(configs.Mainnet,
+			&r.Deposits,
+			&r.Withdrawals,
+			&r.Consolidations,
+		)
+	default:
+		panic(fmt.Errorf("unsupported block type %T", b.blockObj))
+	}
+}
+
+func marshalRequests(spec *zrntcommon.Spec, items ...zrntcommon.SpecObj) (list [][]byte) {
+	var buf bytes.Buffer
+	for typ, data := range items {
+		buf.Reset()
+		buf.WriteByte(byte(typ))
+		w := codec.NewEncodingWriter(&buf)
+		if err := data.Serialize(spec, w); err != nil {
+			panic(err)
+		}
+		if buf.Len() == 1 {
+			continue // skip empty requests
+		}
+		list = append(list, bytes.Clone(buf.Bytes()))
+	}
+	return list
 }
