@@ -230,7 +230,8 @@ func (u *FinalityUpdate) Validate() error {
 // latest accepted head of the beacon chain, along with the hash of the latest
 // finalized execution block.
 type ChainHeadEvent struct {
-	BeaconHead Header
-	Block      *ctypes.Block
-	Finalized  common.Hash
+	BeaconHead   Header
+	Block        *ctypes.Block
+	ExecRequests [][]byte    // execution layer requests (added in Electra)
+	Finalized    common.Hash // latest finalized block hash
 }
