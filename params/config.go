@@ -88,6 +88,7 @@ var (
 		ShanghaiTime:            newUint64(1696000704),
 		CancunTime:              newUint64(1707305664),
 		PragueTime:              newUint64(1740434112),
+		DepositContractAddress:  common.HexToAddress("0x4242424242424242424242424242424242424242"),
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
@@ -117,6 +118,7 @@ var (
 		ShanghaiTime:            newUint64(1677557088),
 		CancunTime:              newUint64(1706655072),
 		PragueTime:              newUint64(1741159776),
+		DepositContractAddress:  common.HexToAddress("0x7f02c3e3c98b133055b8b348b2ac625669ed295d"),
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
