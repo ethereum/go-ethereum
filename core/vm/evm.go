@@ -23,7 +23,7 @@ import (
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/libevm"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/params"
 	"github.com/holiman/uint256"
 )
@@ -40,6 +40,7 @@ type (
 
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	if p, override := evm.chainRules.Hooks().PrecompileOverride(addr); override {
+		log.Debug("Overriding precompile", "address", addr, "implementation", log.TypeOf(p))
 		return p, p != nil
 	}
 	var precompiles map[common.Address]PrecompiledContract
@@ -459,8 +460,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// This check MUST be placed after the caller's nonce is incremented but
 	// before all other state-modifying behaviour, even if changes may be
 	// reverted to the snapshot.
-	addrs := &libevm.AddressContext{Origin: evm.Origin, Caller: caller.Address(), Self: address}
-	gas, err := evm.chainRules.Hooks().CanCreateContract(addrs, gas, evm.StateDB)
+	gas, err := evm.canCreateContract(caller, address, gas)
 	if err != nil {
 		return nil, common.Address{}, gas, err
 	}

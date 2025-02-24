@@ -148,10 +148,7 @@ func init() {
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
-func ActivePrecompiles(rules params.Rules) (active []common.Address) {
-	defer func() {
-		active = rules.Hooks().ActivePrecompiles(append([]common.Address{}, active...))
-	}()
+func activePrecompiles(rules params.Rules) []common.Address {
 	switch {
 	case rules.IsCancun:
 		return PrecompiledAddressesCancun

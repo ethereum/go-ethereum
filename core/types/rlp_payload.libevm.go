@@ -23,6 +23,7 @@ import (
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/libevm/testonly"
+	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -84,6 +85,12 @@ func RegisterExtras[
 		newStateAccount: pseudo.NewConstructor[SA]().Zero,
 		hooks:           extra,
 	})
+	log.Info(
+		"Registered core/types extras",
+		"Header", log.TypeOf(pseudo.Zero[HPtr]().Value.Get()),
+		"Block/Body", log.TypeOf(pseudo.Zero[BPtr]().Value.Get()),
+		"StateAccount", log.TypeOf(pseudo.Zero[SA]().Value.Get()),
+	)
 	return extra
 }
 

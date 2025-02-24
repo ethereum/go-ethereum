@@ -23,6 +23,7 @@ import (
 
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/register"
+	"github.com/ava-labs/libevm/log"
 )
 
 // Extras are arbitrary payloads to be added as extra fields in [ChainConfig]
@@ -79,6 +80,12 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 		newForRules:    e.newForRules,
 		payloads:       payloads,
 	})
+	log.Info(
+		"Registered params extras",
+		"ChainConfig", log.TypeOf(pseudo.Zero[C]().Value.Get()),
+		"Rules", log.TypeOf(pseudo.Zero[R]().Value.Get()),
+		"ReuseJSONRoot", e.ReuseJSONRoot,
+	)
 	return payloads
 }
 
