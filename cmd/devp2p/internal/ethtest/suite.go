@@ -18,8 +18,6 @@ package ethtest
 
 import (
 	"crypto/rand"
-	"reflect"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,6 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
+	"reflect"
+	"sync/atomic"
+	"time"
 )
 
 // Suite represents a structure used to test a node's conformance
@@ -79,6 +80,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
 		{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
 		{Name: "BlobViolations", Fn: s.TestBlobViolations},
+		{Name: "TestBlobTxMangledSidecar", Fn: s.TestBlobTxMangledSidecar},
 	}
 }
 
@@ -825,3 +827,125 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 		conn.Close()
 	}
 }
+
+// mangleSidecar returns a copy of the given blob transaction where the sidecar
+// data has been modified to produce a different commitment hash.
+func mangleSidecar(tx *types.Transaction) *types.Transaction {
+	sidecar := tx.BlobTxSidecar()
+	var copy types.BlobTxSidecar
+	for _, b := range sidecar.Blobs {
+		copy.Blobs = append(copy.Blobs, b)
+	}
+	for _, c := range sidecar.Commitments {
+		copy.Commitments = append(copy.Commitments, c)
+	}
+	for _, p := range sidecar.Proofs {
+		copy.Proofs = append(copy.Proofs, p)
+	}
+	// zero the first commitment to create an invalid sidecar
+	copy.Commitments[0] = kzg4844.Commitment{}
+	return tx.WithBlobTxSidecar(&copy)
+}
+
+// TestBlobTxMangledSidecar tests that a blob transaction is announced to a client,
+// it is first transmitted with the correct tx and sidecar with mangaled data.
+// The transmitting peer is disconnected and the client should re-request the
+// transaction from other peers that announce it.  It should not disconnect upon
+// receiving the valid tx+sidecar.
+func (s *Suite) TestBlobTxMangledSidecar(t *utesting.T) {
+	var (
+		stage2 atomic.Bool
+		tx     = s.makeBlobTxs(1, 2, 0x1)[0]
+		badTx  = mangleSidecar(tx)
+		ann    = eth.NewPooledTransactionHashesPacket{
+			Types:  []byte{types.BlobTxType},
+			Sizes:  []uint32{uint32(tx.Size())},
+			Hashes: []common.Hash{tx.Hash()},
+		}
+		succCh = make(chan struct{})
+	)
+
+	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+		t.Fatalf("send fcu failed: %v", err)
+	}
+
+	peer := func() {
+		conn, err := s.dial()
+		if err != nil {
+			t.Fatalf("dial fail: %v", err)
+		}
+		defer conn.Close()
+
+		if err := conn.peer(s.chain, nil); err != nil {
+			t.Fatalf("peering failed: %v", err)
+		}
+		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+			t.Fatalf("sending announcement failed: %v", err)
+		}
+
+		req := new(eth.GetPooledTransactionsPacket)
+		if err := conn.ReadMsg(ethProto, eth.GetPooledTransactionsMsg, req); err != nil {
+			t.Fatalf("reading pooled tx request failed: %v", err)
+		}
+
+		if stage2.Swap(true) == false {
+			// this is the first peer that the client will attempt to retrieve the transaction from.
+			// respond with the correct tx hash, and incorrect sidecar data.
+			//
+			// peer should be dropped
+			if req.GetPooledTransactionsRequest[0] != tx.Hash() {
+				t.Fatalf("requested unknown tx hash")
+			}
+
+			resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, PooledTransactionsResponse: eth.PooledTransactionsResponse(types.Transactions{badTx})}
+			if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
+				t.Fatalf("writing pooled tx response failed: %v", err)
+			}
+
+			if code, _, err := conn.Read(); err != nil {
+				t.Fatalf("expected disconnect on blob violation, got err: %v", err)
+			} else if code != discMsg {
+				t.Fatalf("expected disconnect.  got other message")
+			}
+		} else {
+			// this is the second peer that the client contacts, after receiving a response
+			// containing a tx with a mangled sidecar from the first peer.  This peer
+			// responds with the correct tx, and it expects the client to accept and not
+			// immediately disconnect.
+			if req.GetPooledTransactionsRequest[0] != tx.Hash() {
+				t.Fatalf("requested unknown tx hash")
+			}
+
+			resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, PooledTransactionsResponse: eth.PooledTransactionsResponse(types.Transactions{tx})}
+			if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
+				t.Fatalf("writing pooled tx response failed: %v", err)
+			}
+			if code, _, _ := conn.Read(); code == discMsg {
+				t.Fatalf("unexpected disconnect.")
+			}
+
+			succCh <- struct{}{}
+		}
+	}
+
+	for i := 0; i < 2; i++ {
+		go peer()
+	}
+
+	timeout := time.NewTimer(5 * time.Second)
+	select {
+	case <-timeout.C:
+		t.Fatalf("test timed out")
+	case <-succCh:
+	}
+}
+
+// TODO: other scenarios that should be tested:
+/*
+scenario 1:
+	* some peers advertise correct hash + bad size, some correct hash + correct size
+	* the test should proceed if the client requests the bad size + correct hash
+	* the client should disconnect from the offending peer.
+	* the client should request the hash from another peer, and the other peer will submit the correct blob tx.
+	* the client includes the blob tx.
+*/
