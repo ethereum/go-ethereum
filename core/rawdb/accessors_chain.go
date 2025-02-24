@@ -370,6 +370,18 @@ func DeleteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
+// HasReceipts verifies the existence of all the transaction receipts belonging
+// to a block.
+func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
+	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
+		return true
+	}
+	if has, err := db.Has(blockReceiptsKey(number, hash)); !has || err != nil {
+		return false
+	}
+	return true
+}
+
 // ReadReceiptsRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
 func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
