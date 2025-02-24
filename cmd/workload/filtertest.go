@@ -20,31 +20,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"math/big"
-	"math/rand"
 	"os"
-	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
-)
-
-const (
-	maxFilterRange      = 10000000
-	maxFilterResultSize = 300
-	filterBuckets       = 10
-	maxFilterBucketSize = 100
-	filterSeedChance    = 10
-	filterMergeChance   = 45
 )
 
 var (
@@ -102,7 +91,7 @@ func (f *filterTest) initFilterTest(ctx *cli.Context) {
 	f.filterErrorFile = ctx.String(filterErrorFileFlag.Name)
 }
 
-func (s *testSuite) filterRange(t *utesting.T, test func(query *filterQuery) bool, do func(t *utesting.T, query *filterQuery)) {
+func (s *filterTestSuite) filterRange(t *utesting.T, test func(query *filterQuery) bool, do func(t *utesting.T, query *filterQuery)) {
 	if !s.filterQueriesLoaded {
 		s.loadQueries()
 	}
@@ -136,26 +125,31 @@ func (s *testSuite) filterRange(t *utesting.T, test func(query *filterQuery) boo
 
 const filterRangeThreshold = 10000
 
-func (s *testSuite) filterShortRange(t *utesting.T) {
+// filterShortRange runs all short-range filter tests.
+func (s *filterTestSuite) filterShortRange(t *utesting.T) {
 	s.filterRange(t, func(query *filterQuery) bool {
 		return query.ToBlock+1-query.FromBlock <= filterRangeThreshold
 	}, s.queryAndCheck)
 }
 
-func (s *testSuite) filterLongRange(t *utesting.T) {
+// filterShortRange runs all long-range filter tests.
+func (s *filterTestSuite) filterLongRange(t *utesting.T) {
 	s.filterRange(t, func(query *filterQuery) bool {
 		return query.ToBlock+1-query.FromBlock > filterRangeThreshold
 	}, s.queryAndCheck)
 }
 
-func (s *testSuite) filterFullRange(t *utesting.T) {
+// filterFullRange runs all filter tests, extending their range from genesis up
+// to the latest block. Note that results are only partially verified in this mode.
+func (s *filterTestSuite) filterFullRange(t *utesting.T) {
+	finalized := mustGetFinalizedBlock(s.ec)
 	s.filterRange(t, func(query *filterQuery) bool {
-		return query.ToBlock+1-query.FromBlock > s.finalizedBlock/2
+		return query.ToBlock+1-query.FromBlock > finalized/2
 	}, s.fullRangeQueryAndCheck)
 }
 
-func (s *testSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
-	s.query(query)
+func (s *filterTestSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
+	query.run(s.ec)
 	if query.Err != nil {
 		t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
 		return
@@ -165,14 +159,14 @@ func (s *testSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
 	}
 }
 
-func (s *testSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQuery) {
+func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQuery) {
 	frQuery := &filterQuery{ // create full range query
 		FromBlock: 0,
 		ToBlock:   int64(rpc.LatestBlockNumber),
 		Address:   query.Address,
 		Topics:    query.Topics,
 	}
-	s.query(frQuery)
+	frQuery.run(s.ec)
 	if frQuery.Err != nil {
 		t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
 		return
@@ -191,353 +185,24 @@ func (s *testSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQuery) {
 	}
 }
 
-const passCount = 1
-
-func filterPerfCmd(ctx *cli.Context) error {
-	f := newTestSuite(ctx)
-	if f.loadQueries() == 0 {
-		exit("No test requests loaded")
+func (s *filterTestSuite) loadQueries() int {
+	file, err := os.Open(s.filterQueryFile)
+	if err != nil {
+		fmt.Println("Error opening filter test query file:", err)
+		return 0
 	}
-	f.getFinalizedBlock()
-
-	type queryTest struct {
-		query         *filterQuery
-		bucket, index int
-		runtime       []time.Duration
-		medianTime    time.Duration
+	json.NewDecoder(file).Decode(&s.filterQueries)
+	file.Close()
+	var count int
+	for _, bucket := range s.filterQueries {
+		count += len(bucket)
 	}
-	var queries, processed []queryTest
-
-	for i, bucket := range f.filterQueries[:] {
-		for j, query := range bucket {
-			queries = append(queries, queryTest{query: query, bucket: i, index: j})
-		}
-	}
-
-	var failed, mismatch int
-	for i := 1; i <= passCount; i++ {
-		fmt.Println("Performance test pass", i, "/", passCount)
-		for len(queries) > 0 {
-			pick := rand.Intn(len(queries))
-			qt := queries[pick]
-			queries[pick] = queries[len(queries)-1]
-			queries = queries[:len(queries)-1]
-			start := time.Now()
-			f.query(qt.query)
-			qt.runtime = append(qt.runtime, time.Since(start))
-			sort.Slice(qt.runtime, func(i, j int) bool { return qt.runtime[i] < qt.runtime[j] })
-			qt.medianTime = qt.runtime[len(qt.runtime)/2]
-			if qt.query.Err != nil {
-				failed++
-				continue
-			}
-			if rhash := qt.query.calculateHash(); *qt.query.ResultHash != rhash {
-				fmt.Printf("Filter query result mismatch: fromBlock: %d toBlock: %d addresses: %v topics: %v expected hash: %064x calculated hash: %064x\n", qt.query.FromBlock, qt.query.ToBlock, qt.query.Address, qt.query.Topics, *qt.query.ResultHash, rhash)
-				continue
-			}
-			processed = append(processed, qt)
-			if len(processed)%50 == 0 {
-				fmt.Println(" processed:", len(processed), "remaining", len(queries), "failed:", failed, "result mismatch:", mismatch)
-			}
-		}
-		queries, processed = processed, nil
-	}
-	fmt.Println("Performance test finished; processed:", len(queries), "failed:", failed, "result mismatch:", mismatch)
-
-	type bucketStats struct {
-		blocks      int64
-		count, logs int
-		runtime     time.Duration
-	}
-	stats := make([]bucketStats, len(f.filterQueries))
-	var wildcardStats bucketStats
-	for _, qt := range queries {
-		bs := &stats[qt.bucket]
-		if qt.query.isWildcard() {
-			bs = &wildcardStats
-		}
-		bs.blocks += qt.query.ToBlock + 1 - qt.query.FromBlock
-		bs.count++
-		bs.logs += len(qt.query.results)
-		bs.runtime += qt.medianTime
-	}
-
-	printStats := func(name string, stats *bucketStats) {
-		if stats.count == 0 {
-			return
-		}
-		fmt.Printf("%-20s queries: %4d  average block length: %12.2f  average log count: %7.2f  average runtime: %13v\n",
-			name, stats.count, float64(stats.blocks)/float64(stats.count), float64(stats.logs)/float64(stats.count), stats.runtime/time.Duration(stats.count))
-	}
-
-	fmt.Println()
-	for i := range stats {
-		printStats(fmt.Sprintf("bucket #%d", i+1), &stats[i])
-	}
-	printStats("wild card queries", &wildcardStats)
-	fmt.Println()
-	sort.Slice(queries, func(i, j int) bool {
-		return queries[i].medianTime > queries[j].medianTime
-	})
-	for i := 0; i < 10; i++ {
-		q := queries[i]
-		fmt.Printf("Most expensive query #%-2d   median runtime: %13v  max runtime: %13v  result count: %4d  fromBlock: %9d  toBlock: %9d  addresses: %v  topics: %v\n",
-			i+1, q.medianTime, q.runtime[len(q.runtime)-1], len(q.query.results), q.query.FromBlock, q.query.ToBlock, q.query.Address, q.query.Topics)
-	}
-	return nil
+	fmt.Println("Loaded", count, "filter test queries")
+	s.filterQueriesLoaded = true
+	return count
 }
 
-func filterGenCmd(ctx *cli.Context) error {
-	f := newTestSuite(ctx)
-	lastWrite := time.Now()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-		}
-		f.getFinalizedBlock()
-		query := f.newQuery()
-		f.query(query)
-		if query.Err != nil {
-			f.filterErrors = append(f.filterErrors, query)
-			continue
-		}
-		if len(query.results) > 0 && len(query.results) <= maxFilterResultSize {
-			for {
-				extQuery := f.extendRange(query)
-				if extQuery == nil {
-					break
-				}
-				f.query(extQuery)
-				if extQuery.Err == nil && len(extQuery.results) < len(query.results) {
-					extQuery.Err = fmt.Errorf("invalid result length; old range %d %d; old length %d; new range %d %d; new length %d; address %v; Topics %v",
-						query.FromBlock, query.ToBlock, len(query.results),
-						extQuery.FromBlock, extQuery.ToBlock, len(extQuery.results),
-						extQuery.Address, extQuery.Topics,
-					)
-				}
-				if extQuery.Err != nil {
-					f.filterErrors = append(f.filterErrors, extQuery)
-					break
-				}
-				if len(extQuery.results) > maxFilterResultSize {
-					break
-				}
-				query = extQuery
-			}
-			f.storeQuery(query)
-			if time.Since(lastWrite) > time.Second*10 {
-				f.writeQueries()
-				f.writeErrors()
-				lastWrite = time.Now()
-			}
-		}
-	}
-}
-
-func (s *testSuite) storeQuery(query *filterQuery) {
-	query.ResultHash = new(common.Hash)
-	*query.ResultHash = query.calculateHash()
-	logRatio := math.Log(float64(len(query.results))*float64(s.finalizedBlock)/float64(query.ToBlock+1-query.FromBlock)) / math.Log(float64(s.finalizedBlock)*maxFilterResultSize)
-	bucket := int(math.Floor(logRatio * filterBuckets))
-	if bucket >= filterBuckets {
-		bucket = filterBuckets - 1
-	}
-	if len(s.filterQueries[bucket]) < maxFilterBucketSize {
-		s.filterQueries[bucket] = append(s.filterQueries[bucket], query)
-	} else {
-		s.filterQueries[bucket][rand.Intn(len(s.filterQueries[bucket]))] = query
-	}
-	fmt.Print("Generated queries per bucket:")
-	for _, list := range s.filterQueries {
-		fmt.Print(" ", len(list))
-	}
-	fmt.Println()
-}
-
-func (s *testSuite) extendRange(q *filterQuery) *filterQuery {
-	rangeLen := q.ToBlock + 1 - q.FromBlock
-	extLen := rand.Int63n(rangeLen) + 1
-	if rangeLen+extLen > s.finalizedBlock {
-		return nil
-	}
-	extBefore := rand.Int63n(extLen + 1)
-	if extBefore > q.FromBlock {
-		extBefore = q.FromBlock
-	}
-	extAfter := extLen - extBefore
-	if q.ToBlock+extAfter > s.finalizedBlock {
-		d := q.ToBlock + extAfter - s.finalizedBlock
-		extAfter -= d
-		if extBefore+d <= q.FromBlock {
-			extBefore += d
-		} else {
-			extBefore = q.FromBlock
-		}
-	}
-	return &filterQuery{
-		FromBlock: q.FromBlock - extBefore,
-		ToBlock:   q.ToBlock + extAfter,
-		Address:   q.Address,
-		Topics:    q.Topics,
-	}
-}
-
-func (s *testSuite) newQuery() *filterQuery {
-	for {
-		t := rand.Intn(100)
-		if t < filterSeedChance {
-			return s.newSeedQuery()
-		}
-		if t < filterSeedChance+filterMergeChance {
-			if query := s.newMergedQuery(); query != nil {
-				return query
-			}
-			continue
-		}
-		if query := s.newNarrowedQuery(); query != nil {
-			return query
-		}
-	}
-}
-
-func (s *testSuite) newSeedQuery() *filterQuery {
-	block := rand.Int63n(s.finalizedBlock + 1)
-	return &filterQuery{
-		FromBlock: block,
-		ToBlock:   block,
-	}
-}
-
-func (s *testSuite) newMergedQuery() *filterQuery {
-	q1 := s.randomQuery()
-	q2 := s.randomQuery()
-	if q1 == nil || q2 == nil || q1 == q2 {
-		return nil
-	}
-	var (
-		block      int64
-		topicCount int
-	)
-	if rand.Intn(2) == 0 {
-		block = q1.FromBlock + rand.Int63n(q1.ToBlock+1-q1.FromBlock)
-		topicCount = len(q1.Topics)
-	} else {
-		block = q2.FromBlock + rand.Int63n(q2.ToBlock+1-q2.FromBlock)
-		topicCount = len(q2.Topics)
-	}
-	m := &filterQuery{
-		FromBlock: block,
-		ToBlock:   block,
-		Topics:    make([][]common.Hash, topicCount),
-	}
-	for _, addr := range q1.Address {
-		if rand.Intn(2) == 0 {
-			m.Address = append(m.Address, addr)
-		}
-	}
-	for _, addr := range q2.Address {
-		if rand.Intn(2) == 0 {
-			m.Address = append(m.Address, addr)
-		}
-	}
-	for i := range m.Topics {
-		if len(q1.Topics) > i {
-			for _, topic := range q1.Topics[i] {
-				if rand.Intn(2) == 0 {
-					m.Topics[i] = append(m.Topics[i], topic)
-				}
-			}
-		}
-		if len(q2.Topics) > i {
-			for _, topic := range q2.Topics[i] {
-				if rand.Intn(2) == 0 {
-					m.Topics[i] = append(m.Topics[i], topic)
-				}
-			}
-		}
-	}
-	return m
-}
-
-func (s *testSuite) newNarrowedQuery() *filterQuery {
-	q := s.randomQuery()
-	if q == nil {
-		return nil
-	}
-	log := q.results[rand.Intn(len(q.results))]
-	var emptyCount int
-	if len(q.Address) == 0 {
-		emptyCount++
-	}
-	for i := range log.Topics {
-		if len(q.Topics) <= i || len(q.Topics[i]) == 0 {
-			emptyCount++
-		}
-	}
-	if emptyCount == 0 {
-		return nil
-	}
-	query := &filterQuery{
-		FromBlock: q.FromBlock,
-		ToBlock:   q.ToBlock,
-		Address:   make([]common.Address, len(q.Address)),
-		Topics:    make([][]common.Hash, len(q.Topics)),
-	}
-	copy(query.Address, q.Address)
-	for i, topics := range q.Topics {
-		if len(topics) > 0 {
-			query.Topics[i] = make([]common.Hash, len(topics))
-			copy(query.Topics[i], topics)
-		}
-	}
-	pick := rand.Intn(emptyCount)
-	if len(query.Address) == 0 {
-		if pick == 0 {
-			query.Address = []common.Address{log.Address}
-			return query
-		}
-		pick--
-	}
-	for i := range log.Topics {
-		if len(query.Topics) <= i || len(query.Topics[i]) == 0 {
-			if pick == 0 {
-				if len(query.Topics) <= i {
-					query.Topics = append(query.Topics, make([][]common.Hash, i+1-len(query.Topics))...)
-				}
-				query.Topics[i] = []common.Hash{log.Topics[i]}
-				return query
-			}
-			pick--
-		}
-	}
-	panic(nil)
-}
-
-func (s *testSuite) randomQuery() *filterQuery {
-	var bucket, bucketCount int
-	for _, list := range s.filterQueries {
-		if len(list) > 0 {
-			bucketCount++
-		}
-	}
-	if bucketCount == 0 {
-		return nil
-	}
-	pick := rand.Intn(bucketCount)
-	for i, list := range s.filterQueries {
-		if len(list) > 0 {
-			if pick == 0 {
-				bucket = i
-				break
-			}
-			pick--
-		}
-	}
-	return s.filterQueries[bucket][rand.Intn(len(s.filterQueries[bucket]))]
-}
-
+// filterQuery is a single query for testing.
 type filterQuery struct {
 	FromBlock  int64            `json:"fromBlock"`
 	ToBlock    int64            `json:"toBlock"`
@@ -568,56 +233,20 @@ func (fq *filterQuery) calculateHash() common.Hash {
 	return crypto.Keccak256Hash(enc)
 }
 
-func (s *testSuite) query(query *filterQuery) {
+func (fq *filterQuery) run(ec *ethclient.Client) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
-	logs, err := s.ec.FilterLogs(ctx, ethereum.FilterQuery{
-		FromBlock: big.NewInt(query.FromBlock),
-		ToBlock:   big.NewInt(query.ToBlock),
-		Addresses: query.Address,
-		Topics:    query.Topics,
+	logs, err := ec.FilterLogs(ctx, ethereum.FilterQuery{
+		FromBlock: big.NewInt(fq.FromBlock),
+		ToBlock:   big.NewInt(fq.ToBlock),
+		Addresses: fq.Address,
+		Topics:    fq.Topics,
 	})
 	if err != nil {
-		query.Err = err
-		fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n", query.FromBlock, query.ToBlock, query.Address, query.Topics, err)
+		fq.Err = err
+		fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
+			fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, err)
 		return
 	}
-	query.results = logs
-}
-
-func (s *testSuite) loadQueries() int {
-	file, err := os.Open(s.filterQueryFile)
-	if err != nil {
-		fmt.Println("Error opening filter test query file:", err)
-		return 0
-	}
-	json.NewDecoder(file).Decode(&s.filterQueries)
-	file.Close()
-	var count int
-	for _, bucket := range s.filterQueries {
-		count += len(bucket)
-	}
-	fmt.Println("Loaded", count, "filter test queries")
-	s.filterQueriesLoaded = true
-	return count
-}
-
-func (s *testSuite) writeQueries() {
-	file, err := os.Create(s.filterQueryFile)
-	if err != nil {
-		exit(fmt.Errorf("Error creating filter test query file %s: %v", s.filterQueryFile, err))
-		return
-	}
-	json.NewEncoder(file).Encode(&s.filterQueries)
-	file.Close()
-}
-
-func (f *filterTest) writeErrors() {
-	file, err := os.Create(f.filterErrorFile)
-	if err != nil {
-		exit(fmt.Errorf("Error creating filter error file %s: %v", f.filterErrorFile, err))
-		return
-	}
-	json.NewEncoder(file).Encode(f.filterErrors)
-	file.Close()
+	fq.results = logs
 }

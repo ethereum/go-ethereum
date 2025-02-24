@@ -17,17 +17,12 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"math/big"
 	"os"
-	"time"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -56,30 +51,18 @@ var (
 	}
 )
 
-type testSuite struct {
-	ec             *ethclient.Client
-	finalizedBlock int64
+type filterTestSuite struct {
+	ec *ethclient.Client
 	filterTest
 }
 
-func newTestSuite(ctx *cli.Context) *testSuite {
-	s := &testSuite{ec: makeEthClient(ctx)}
-	s.getFinalizedBlock()
+func newTestSuite(ctx *cli.Context) *filterTestSuite {
+	s := &filterTestSuite{ec: makeEthClient(ctx)}
 	s.filterTest.initFilterTest(ctx)
 	return s
 }
 
-func (s *testSuite) getFinalizedBlock() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-	header, err := s.ec.HeaderByNumber(ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
-	if err != nil {
-		exit(fmt.Errorf("could not fetch finalized header (error: %v)", err))
-	}
-	s.finalizedBlock = header.Number.Int64()
-}
-
-func (s *testSuite) allTests() []utesting.Test {
+func (s *filterTestSuite) allTests() []utesting.Test {
 	return []utesting.Test{
 		{Name: "Filter/ShortRange", Fn: s.filterShortRange},
 		{Name: "Filter/LongRange", Fn: s.filterLongRange},
@@ -89,15 +72,18 @@ func (s *testSuite) allTests() []utesting.Test {
 
 func runTestCmd(ctx *cli.Context) error {
 	s := newTestSuite(ctx)
+
 	// Filter test cases.
 	tests := s.allTests()
 	if ctx.IsSet(testPatternFlag.Name) {
 		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
 	}
+
 	// Disable logging unless explicitly enabled.
 	if !ctx.IsSet("verbosity") && !ctx.IsSet("vmodule") {
 		log.SetDefault(log.NewLogger(log.DiscardHandler()))
 	}
+
 	// Run the tests.
 	var run = utesting.RunTests
 	if ctx.Bool(testTAPFlag.Name) {
