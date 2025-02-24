@@ -156,8 +156,9 @@ func (s *beaconBlockSync) updateEventFeed() {
 		return
 	}
 	s.chainHeadFeed.Send(types.ChainHeadEvent{
-		BeaconHead: optimistic.Attested.Header,
-		Block:      execBlock,
-		Finalized:  finalizedHash,
+		BeaconHead:   optimistic.Attested.Header,
+		Block:        execBlock,
+		ExecRequests: headBlock.ExecutionRequestsList(),
+		Finalized:    finalizedHash,
 	})
 }
