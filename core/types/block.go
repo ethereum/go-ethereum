@@ -214,6 +214,11 @@ type Block struct {
 	// that process it.
 	witness *ExecutionWitness
 
+	// inclusion list transactions are not an encoded part of the block body.
+	// It is held in Block in order for easy relaying to the places
+	// that process it.
+	inclusionListTxs Transactions
+
 	// caches
 	hash atomic.Pointer[common.Hash]
 	size atomic.Uint64
@@ -432,6 +437,9 @@ func (b *Block) BlobGasUsed() *uint64 {
 // ExecutionWitness returns the verkle execution witneess + proof for a block
 func (b *Block) ExecutionWitness() *ExecutionWitness { return b.witness }
 
+// InclusionListTransactions returns the inclusion list transactions for a block
+func (b *Block) InclusionListTransactions() Transactions { return b.inclusionListTxs }
+
 // Size returns the true RLP encoded storage size of the block, either by encoding
 // and returning it, or returning a previously cached value.
 func (b *Block) Size() uint64 {
@@ -490,11 +498,12 @@ func NewBlockWithHeader(header *Header) *Block {
 // the sealed one.
 func (b *Block) WithSeal(header *Header) *Block {
 	return &Block{
-		header:       CopyHeader(header),
-		transactions: b.transactions,
-		uncles:       b.uncles,
-		withdrawals:  b.withdrawals,
-		witness:      b.witness,
+		header:           CopyHeader(header),
+		transactions:     b.transactions,
+		uncles:           b.uncles,
+		withdrawals:      b.withdrawals,
+		witness:          b.witness,
+		inclusionListTxs: b.inclusionListTxs,
 	}
 }
 
@@ -502,11 +511,12 @@ func (b *Block) WithSeal(header *Header) *Block {
 // provided body.
 func (b *Block) WithBody(body Body) *Block {
 	block := &Block{
-		header:       b.header,
-		transactions: slices.Clone(body.Transactions),
-		uncles:       make([]*Header, len(body.Uncles)),
-		withdrawals:  slices.Clone(body.Withdrawals),
-		witness:      b.witness,
+		header:           b.header,
+		transactions:     slices.Clone(body.Transactions),
+		uncles:           make([]*Header, len(body.Uncles)),
+		withdrawals:      slices.Clone(body.Withdrawals),
+		witness:          b.witness,
+		inclusionListTxs: b.inclusionListTxs,
 	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])
@@ -516,11 +526,23 @@ func (b *Block) WithBody(body Body) *Block {
 
 func (b *Block) WithWitness(witness *ExecutionWitness) *Block {
 	return &Block{
-		header:       b.header,
-		transactions: b.transactions,
-		uncles:       b.uncles,
-		withdrawals:  b.withdrawals,
-		witness:      witness,
+		header:           b.header,
+		transactions:     b.transactions,
+		uncles:           b.uncles,
+		withdrawals:      b.withdrawals,
+		witness:          witness,
+		inclusionListTxs: b.inclusionListTxs,
+	}
+}
+
+func (b *Block) WithInclusionListTransactions(inclusionListTxs Transactions) *Block {
+	return &Block{
+		header:           b.header,
+		transactions:     b.transactions,
+		uncles:           b.uncles,
+		withdrawals:      b.withdrawals,
+		witness:          b.witness,
+		inclusionListTxs: inclusionListTxs,
 	}
 }
 
