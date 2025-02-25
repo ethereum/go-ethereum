@@ -1014,3 +1014,49 @@ func TestComplexTypedDataWithLowercaseReftype(t *testing.T) {
 		t.Fatalf("Error, got %x, wanted %x", sighash, expSigHash)
 	}
 }
+
+var recursiveBytesTypesStandard = apitypes.Types{
+	"EIP712Domain": {
+		{
+			Name: "name",
+			Type: "string",
+		},
+		{
+			Name: "version",
+			Type: "string",
+		},
+		{
+			Name: "chainId",
+			Type: "uint256",
+		},
+		{
+			Name: "verifyingContract",
+			Type: "address",
+		},
+	},
+	"Val": {
+		{
+			Name: "field",
+			Type: "bytes[][]",
+		},
+	},
+}
+
+var recursiveBytesMessageStandard = map[string]interface{}{
+	"field": [][][]byte{{{1}, {2}}, {{3}, {4}}},
+}
+
+var recursiveBytesTypedData = apitypes.TypedData{
+	Types:       recursiveBytesTypesStandard,
+	PrimaryType: "Val",
+	Domain:      domainStandard,
+	Message:     recursiveBytesMessageStandard,
+}
+
+func TestEncodeDataRecursiveBytes(t *testing.T) {
+	typedData := recursiveBytesTypedData
+	_, err := typedData.EncodeData(typedData.PrimaryType, typedData.Message, 0)
+	if err != nil {
+		t.Fatalf("got err %v", err)
+	}
+}

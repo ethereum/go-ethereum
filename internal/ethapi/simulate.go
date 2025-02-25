@@ -73,6 +73,20 @@ func (r *simCallResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*callResultAlias)(r))
 }
 
+// simBlockResult is the result of a simulated block.
+type simBlockResult struct {
+	fullTx      bool
+	chainConfig *params.ChainConfig
+	Block       *types.Block
+	Calls       []simCallResult
+}
+
+func (r *simBlockResult) MarshalJSON() ([]byte, error) {
+	blockData := RPCMarshalBlock(r.Block, true, r.fullTx, r.chainConfig)
+	blockData["calls"] = r.Calls
+	return json.Marshal(blockData)
+}
+
 // simOpts are the inputs to eth_simulateV1.
 type simOpts struct {
 	BlockStateCalls        []simBlock
@@ -95,7 +109,7 @@ type simulator struct {
 }
 
 // execute runs the simulation of a series of blocks.
-func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[string]interface{}, error) {
+func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]*simBlockResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -123,7 +137,7 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[str
 		return nil, err
 	}
 	var (
-		results = make([]map[string]interface{}, len(blocks))
+		results = make([]*simBlockResult, len(blocks))
 		parent  = sim.base
 	)
 	for bi, block := range blocks {
@@ -131,11 +145,9 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[str
 		if err != nil {
 			return nil, err
 		}
-		enc := RPCMarshalBlock(result, true, sim.fullTx, sim.chainConfig)
-		enc["calls"] = callResults
-		results[bi] = enc
-
-		parent = headers[bi]
+		headers[bi] = result.Header()
+		results[bi] = &simBlockResult{fullTx: sim.fullTx, chainConfig: sim.chainConfig, Block: result, Calls: callResults}
+		parent = result.Header()
 	}
 	return results, nil
 }
@@ -194,6 +206,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
+	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
+		core.ProcessParentBlockHash(header.ParentHash, evm)
+	}
+	var allLogs []*types.Log
 	for i, call := range block.Calls {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
@@ -234,8 +250,22 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			}
 		} else {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
+			allLogs = append(allLogs, callRes.Logs...)
 		}
 		callResults[i] = callRes
+	}
+	var requests [][]byte
+	// Process EIP-7685 requests
+	if sim.chainConfig.IsPrague(header.Number, header.Time) {
+		requests = [][]byte{}
+		// EIP-6110
+		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
+			return nil, nil, err
+		}
+		// EIP-7002
+		core.ProcessWithdrawalQueue(&requests, evm)
+		// EIP-7251
+		core.ProcessConsolidationQueue(&requests, evm)
 	}
 	header.Root = sim.state.IntermediateRoot(true)
 	header.GasUsed = gasUsed
@@ -245,6 +275,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	var withdrawals types.Withdrawals
 	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
 		withdrawals = make([]*types.Withdrawal, 0)
+	}
+	if requests != nil {
+		reqHash := types.CalcRequestsHash(requests)
+		header.RequestsHash = &reqHash
 	}
 	b := types.NewBlock(header, &types.Body{Transactions: txes, Withdrawals: withdrawals}, receipts, trie.NewStackTrie(nil))
 	repairLogs(callResults, b.Hash())

@@ -149,6 +149,10 @@ func pricedSetCodeTx(nonce uint64, gaslimit uint64, gasFee, tip *uint256.Int, ke
 		})
 		authList = append(authList, auth)
 	}
+	return pricedSetCodeTxWithAuth(nonce, gaslimit, gasFee, tip, key, authList)
+}
+
+func pricedSetCodeTxWithAuth(nonce uint64, gaslimit uint64, gasFee, tip *uint256.Int, key *ecdsa.PrivateKey, authList []types.SetCodeAuthorization) *types.Transaction {
 	return types.MustSignNewTx(key, types.LatestSignerForChainID(params.TestChainConfig.ChainID), &types.SetCodeTx{
 		ChainID:    uint256.MustFromBig(params.TestChainConfig.ChainID),
 		Nonce:      nonce,
@@ -1641,8 +1645,8 @@ func TestUnderpricing(t *testing.T) {
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 	// Ensure that replacing a pending transaction with a future transaction fails
-	if err := pool.addRemoteSync(pricedTransaction(5, 100000, big.NewInt(6), keys[1])); err != txpool.ErrFutureReplacePending {
-		t.Fatalf("adding future replace transaction error mismatch: have %v, want %v", err, txpool.ErrFutureReplacePending)
+	if err := pool.addRemoteSync(pricedTransaction(5, 100000, big.NewInt(6), keys[1])); err != ErrFutureReplacePending {
+		t.Fatalf("adding future replace transaction error mismatch: have %v, want %v", err, ErrFutureReplacePending)
 	}
 	pending, queued = pool.Stats()
 	if pending != 4 {
@@ -2244,12 +2248,12 @@ func TestSetCodeTransactions(t *testing.T) {
 				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keyA)); err != nil {
 					t.Fatalf("%s: failed to add remote transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyA)); !errors.Is(err, txpool.ErrAccountLimitExceeded) {
-					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrAccountLimitExceeded, err)
+				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyA)); !errors.Is(err, ErrInflightTxLimitReached) {
+					t.Fatalf("%s: error mismatch: want %v, have %v", name, ErrInflightTxLimitReached, err)
 				}
 				// Also check gapped transaction.
-				if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), keyA)); !errors.Is(err, txpool.ErrAccountLimitExceeded) {
-					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrAccountLimitExceeded, err)
+				if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), keyA)); !errors.Is(err, ErrInflightTxLimitReached) {
+					t.Fatalf("%s: error mismatch: want %v, have %v", name, ErrInflightTxLimitReached, err)
 				}
 				// Replace by fee.
 				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(10), keyA)); err != nil {
@@ -2283,8 +2287,8 @@ func TestSetCodeTransactions(t *testing.T) {
 					t.Fatalf("%s: failed to add with pending delegatio: %v", name, err)
 				}
 				// Also check gapped transaction is rejected.
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyC)); !errors.Is(err, txpool.ErrAccountLimitExceeded) {
-					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrAccountLimitExceeded, err)
+				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyC)); !errors.Is(err, ErrInflightTxLimitReached) {
+					t.Fatalf("%s: error mismatch: want %v, have %v", name, ErrInflightTxLimitReached, err)
 				}
 			},
 		},
@@ -2359,7 +2363,7 @@ func TestSetCodeTransactions(t *testing.T) {
 				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keyC)); err != nil {
 					t.Fatalf("%s: failed to added single pooled for account with pending delegation: %v", name, err)
 				}
-				if err, want := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1000), keyC)), txpool.ErrAccountLimitExceeded; !errors.Is(err, want) {
+				if err, want := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1000), keyC)), ErrInflightTxLimitReached; !errors.Is(err, want) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, want, err)
 				}
 			},
@@ -2372,7 +2376,7 @@ func TestSetCodeTransactions(t *testing.T) {
 				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keyC)); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				if err, want := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{1, keyC}})), txpool.ErrAuthorityReserved; !errors.Is(err, want) {
+				if err, want := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{1, keyC}})), ErrAuthorityReserved; !errors.Is(err, want) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, want, err)
 				}
 			},
@@ -2390,6 +2394,65 @@ func TestSetCodeTransactions(t *testing.T) {
 			t.Fatalf("%s: pool internal state corrupted: %v", tt.name, err)
 		}
 		pool.Clear()
+	}
+}
+
+func TestSetCodeTransactionsReorg(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the status retrievals with
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	blockchain := newTestBlockChain(params.MergedTestChainConfig, 1000000, statedb, new(event.Feed))
+
+	pool := New(testTxPoolConfig, blockchain)
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), makeAddressReserver())
+	defer pool.Close()
+
+	// Create the test accounts
+	var (
+		keyA, _ = crypto.GenerateKey()
+		addrA   = crypto.PubkeyToAddress(keyA.PublicKey)
+	)
+	testAddBalance(pool, addrA, big.NewInt(params.Ether))
+	// Send an authorization for 0x42
+	var authList []types.SetCodeAuthorization
+	auth, _ := types.SignSetCode(keyA, types.SetCodeAuthorization{
+		ChainID: *uint256.MustFromBig(params.TestChainConfig.ChainID),
+		Address: common.Address{0x42},
+		Nonce:   0,
+	})
+	authList = append(authList, auth)
+	if err := pool.addRemoteSync(pricedSetCodeTxWithAuth(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, authList)); err != nil {
+		t.Fatalf("failed to add with remote setcode transaction: %v", err)
+	}
+	// Simulate the chain moving
+	blockchain.statedb.SetNonce(addrA, 1, tracing.NonceChangeAuthorization)
+	blockchain.statedb.SetCode(addrA, types.AddressToDelegation(auth.Address))
+	<-pool.requestReset(nil, nil)
+	// Set an authorization for 0x00
+	auth, _ = types.SignSetCode(keyA, types.SetCodeAuthorization{
+		ChainID: *uint256.MustFromBig(params.TestChainConfig.ChainID),
+		Address: common.Address{},
+		Nonce:   0,
+	})
+	authList = append(authList, auth)
+	if err := pool.addRemoteSync(pricedSetCodeTxWithAuth(1, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, authList)); err != nil {
+		t.Fatalf("failed to add with remote setcode transaction: %v", err)
+	}
+	// Try to add a transactions in
+	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1000), keyA)); !errors.Is(err, ErrInflightTxLimitReached) {
+		t.Fatalf("unexpected error %v, expecting %v", err, ErrInflightTxLimitReached)
+	}
+	// Simulate the chain moving
+	blockchain.statedb.SetNonce(addrA, 2, tracing.NonceChangeAuthorization)
+	blockchain.statedb.SetCode(addrA, nil)
+	<-pool.requestReset(nil, nil)
+	// Now send two transactions from addrA
+	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1000), keyA)); err != nil {
+		t.Fatalf("failed to added single transaction: %v", err)
+	}
+	if err := pool.addRemoteSync(pricedTransaction(3, 100000, big.NewInt(1000), keyA)); err != nil {
+		t.Fatalf("failed to added single transaction: %v", err)
 	}
 }
 
