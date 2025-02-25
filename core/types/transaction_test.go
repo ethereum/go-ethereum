@@ -593,6 +593,3 @@ func BenchmarkHash(b *testing.B) {
 		signer.Hash(tx)
 	}
 }
-
-// BenchmarkHash-8   	  440082	      2639 ns/op	     384 B/op	      13 allocs/op
-// BenchmarkHash-8   	  493566	      2033 ns/op	     240 B/op	       6 allocs/op
