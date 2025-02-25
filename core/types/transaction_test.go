@@ -576,3 +576,22 @@ func TestYParityJSONUnmarshalling(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkHash(b *testing.B) {
+	signer := NewLondonSigner(big.NewInt(1))
+	to := common.Address{}
+	tx := NewTx(&DynamicFeeTx{
+		ChainID:   big.NewInt(123),
+		Nonce:     1,
+		Gas:       1000000,
+		To:        &to,
+		Value:     big.NewInt(1),
+		GasTipCap: big.NewInt(500),
+		GasFeeCap: big.NewInt(500),
+	})
+	for i := 0; i < b.N; i++ {
+		signer.Hash(tx)
+	}
+}
+
+// BenchmarkHash-8   	  541969	      2320 ns/op	     240 B/op	       6 allocs/op
