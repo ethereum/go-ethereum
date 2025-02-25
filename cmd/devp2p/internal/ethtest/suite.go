@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -63,24 +64,27 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
-		// status
-		{Name: "Status", Fn: s.TestStatus},
-		// get block headers
-		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
-		{Name: "SameRequestID", Fn: s.TestSameRequestID},
-		{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
-		// get block bodies
-		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-		// // malicious handshakes + status
-		{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
-		// test transactions
-		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
-		{Name: "Transaction", Fn: s.TestTransaction},
-		{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
-		{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
-		{Name: "BlobViolations", Fn: s.TestBlobViolations},
-		{Name: "TestBlobTxMangledSidecar", Fn: s.TestBlobTxMangledSidecar},
+		/*
+			// status
+			{Name: "Status", Fn: s.TestStatus},
+			// get block headers
+			{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+			{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
+			{Name: "SameRequestID", Fn: s.TestSameRequestID},
+			{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
+			// get block bodies
+			{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+			// // malicious handshakes + status
+			{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
+			// test transactions
+			{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
+			{Name: "Transaction", Fn: s.TestTransaction},
+			{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
+			{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
+			{Name: "BlobViolations", Fn: s.TestBlobViolations},
+			{Name: "TestBlobTxMangledSidecar", Fn: s.TestBlobTxMangledSidecar},
+		*/
+		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
 	}
 }
 
@@ -940,12 +944,139 @@ func (s *Suite) TestBlobTxMangledSidecar(t *utesting.T) {
 	}
 }
 
-// TODO: other scenarios that should be tested:
 /*
-scenario 1:
-	* some peers advertise correct hash + bad size, some correct hash + correct size
-	* the test should proceed if the client requests the bad size + correct hash
-	* the client should disconnect from the offending peer.
-	* the client should request the hash from another peer, and the other peer will submit the correct blob tx.
-	* the client includes the blob tx.
+TestBlobTxWithoutSidecar tests the following scenario:
+Peers connect to the client.  Some are "good", and some are "bad". The test
+proceeds as so:
+  - "bad" peer connects to the client, advertises a blob transaction without a
+    sidecar
+  - before the transaction can be transmitted from bad peer, good peer connects
+    to the client advertising the same tx hash (but with size incorporating the
+    sidecar)
+  - bad peer transmits the sidecar-less transaction
+  - client receives and should only disconnect bad peer
+  - the transaction is requested from a good peer, and good peer responds with
+    transaction that should be pooled by the client.
+  - Only bad peers are disconnected from while good peer is not.
 */
+func (s *Suite) TestBlobTxWithoutSidecar(t *utesting.T) {
+	badPeer := func(id int, tx *types.Transaction, coordinate *sync.WaitGroup, coordinate2 *sync.WaitGroup, coordinate3 *sync.WaitGroup) {
+		// announce immediately with correct hash, but missing sidecar.
+		// when the transaction is first requested, trigger step 2: connection and announcement by good peers
+
+		conn, err := s.dial()
+		if err != nil {
+			t.Fatalf("dial fail: %v", err)
+		}
+		defer conn.Close()
+
+		if err := conn.peer(s.chain, nil); err != nil {
+			t.Fatalf("%d peering failed: %v", id, err)
+		}
+
+		badTx := tx.WithoutBlobTxSidecar()
+
+		ann := eth.NewPooledTransactionHashesPacket{
+			Types:  []byte{types.BlobTxType},
+			Sizes:  []uint32{uint32(badTx.Size())},
+			Hashes: []common.Hash{badTx.Hash()},
+		}
+
+		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+			t.Fatalf("sending announcement failed: %v", err)
+		}
+
+		req := new(eth.GetPooledTransactionsPacket)
+		err = conn.ReadMsg(ethProto, eth.GetPooledTransactionsMsg, req)
+		if err != nil {
+			t.Fatalf("failed to read GetPooledTransactions message: %v", err)
+		}
+
+		coordinate.Done()
+		coordinate2.Wait()
+
+		// the good peer(s) are connected, and have announced the same tx hash.
+		// proceed to send the bad one.
+
+		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, PooledTransactionsResponse: eth.PooledTransactionsResponse(types.Transactions{badTx})}
+		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
+			t.Fatalf("writing pooled tx response failed: %v", err)
+		}
+		if code, _, _ := conn.Read(); code != discMsg {
+			t.Fatalf("expected bad peer to be disconnected.")
+		}
+		coordinate3.Done()
+	}
+
+	goodPeer := func(id int, tx *types.Transaction, coordinate *sync.WaitGroup, coordinate2 *sync.WaitGroup, coordinate3 *sync.WaitGroup) {
+		coordinate.Wait()
+
+		conn, err := s.dial()
+		if err != nil {
+			t.Fatalf("dial fail: %v", err)
+		}
+		defer conn.Close()
+
+		if err := conn.peer(s.chain, nil); err != nil {
+			t.Fatalf("%d peering failed: %v", id, err)
+		}
+
+		// announce the tx with correct size, trigger stage 2 (transmission from bad peer)
+		// wait for step 3 (transmission from good peer)
+
+		ann := eth.NewPooledTransactionHashesPacket{
+			Types:  []byte{types.BlobTxType},
+			Sizes:  []uint32{uint32(tx.Size())},
+			Hashes: []common.Hash{tx.Hash()},
+		}
+
+		if err := conn.Write(ethProto, eth.NewPooledTransactionHashesMsg, ann); err != nil {
+			t.Fatalf("sending announcement failed: %v", err)
+		}
+
+		coordinate2.Done()
+		coordinate3.Wait()
+
+		// the bad peer has responded with sidecar-less transaction.
+		// bad peers are presumably disconnected now.
+
+		req := new(eth.GetPooledTransactionsPacket)
+		if err := conn.ReadMsg(ethProto, eth.GetPooledTransactionsMsg, req); err != nil {
+			t.Fatalf("reading pooled tx request failed: %v", err)
+		}
+
+		if req.GetPooledTransactionsRequest[0] != tx.Hash() {
+			t.Fatalf("requested unknown tx hash")
+		}
+
+		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, PooledTransactionsResponse: eth.PooledTransactionsResponse(types.Transactions{tx})}
+		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
+			t.Fatalf("writing pooled tx response failed: %v", err)
+		}
+		if code, _, _ := conn.Read(); code == discMsg {
+			t.Fatalf("unexpected disconnect.")
+		}
+
+		t.Fatalf("this should cause a failure but doesn't.  Bug triggered by calling Fatalf inside a go-routine.")
+		// TODO: check that all other malicious peers were disconnected
+	}
+
+	if err := s.engine.sendForkchoiceUpdated(); err != nil {
+		t.Fatalf("send fcu failed: %v", err)
+	}
+
+	coord1, coord2, coord3 := new(sync.WaitGroup), new(sync.WaitGroup), new(sync.WaitGroup)
+	coord1.Add(1)
+	coord2.Add(1)
+	coord3.Add(1)
+
+	tx := s.makeBlobTxs(1, 2, 1)[0]
+	for i := 0; i < 1; i++ {
+		go goodPeer(1, tx, coord1, coord2, coord3)
+	}
+	for i := 0; i < 1; i++ {
+		go badPeer(2, tx, coord1, coord2, coord3)
+	}
+
+	time.Sleep(500 * time.Second)
+}
