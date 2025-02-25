@@ -273,14 +273,15 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	if locals := b.eth.localTxTracker; locals != nil {
-		locals.Track(signedTx)
+		if err := locals.Track(signedTx); err != nil {
+			return err
+		}
 	}
-	// TODO(rjl493456442): If a transaction fails stateful validation (e.g., no
-	// available slot), an error will be returned to the user. However, locally
-	// submitted transactions may be resubmitted later via the local tracker, which
-	// could cause confusion that a previously "rejected" transaction is later
-	// accepted.
-	return b.eth.txPool.Add([]*types.Transaction{signedTx}, false)[0]
+	// No error will be returned to user if the transaction fails stateful
+	// validation (e.g., no available slot), as the locally submitted transactions
+	// may be resubmitted later via the local tracker.
+	b.eth.txPool.Add([]*types.Transaction{signedTx}, false)
+	return nil
 }
 
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
