@@ -163,7 +163,7 @@ func (l *Logger) logSha256(inputLen uint64) {
 	l.sha256Usage += numBlocks * blockRows
 }
 
-func (l *Logger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (l *Logger) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int, authorizationResults []types.AuthorizationResult) {
 	l.currentEnv = env
 	l.isCreate = create
 	if !l.isCreate {

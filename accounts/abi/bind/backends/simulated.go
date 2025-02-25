@@ -639,7 +639,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// about the transaction and calling mechanisms.
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
-	signer := types.MakeSigner(b.blockchain.Config(), head.Number)
+	signer := types.MakeSigner(b.blockchain.Config(), head.Number, head.Time)
 	l1DataFee, err := fees.EstimateL1DataFeeForMessage(msg, head.BaseFee, b.blockchain.Config(), signer, stateDB, head.Number)
 	if err != nil {
 		return nil, err
@@ -660,7 +660,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		panic("could not fetch parent")
 	}
 	// Check transaction validity
-	signer := types.MakeSigner(b.blockchain.Config(), block.Number())
+	signer := types.MakeSigner(b.blockchain.Config(), block.Number(), block.Time())
 	sender, err := types.Sender(signer, tx)
 	if err != nil {
 		panic(fmt.Errorf("invalid transaction: %v", err))
@@ -809,19 +809,20 @@ type callMsg struct {
 	ethereum.CallMsg
 }
 
-func (m callMsg) From() common.Address         { return m.CallMsg.From }
-func (m callMsg) Nonce() uint64                { return 0 }
-func (m callMsg) IsFake() bool                 { return true }
-func (m callMsg) To() *common.Address          { return m.CallMsg.To }
-func (m callMsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
-func (m callMsg) GasFeeCap() *big.Int          { return m.CallMsg.GasFeeCap }
-func (m callMsg) GasTipCap() *big.Int          { return m.CallMsg.GasTipCap }
-func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
-func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
-func (m callMsg) Data() []byte                 { return m.CallMsg.Data }
-func (m callMsg) AccessList() types.AccessList { return m.CallMsg.AccessList }
-func (m callMsg) IsL1MessageTx() bool          { return false }
-func (m callMsg) TxSize() common.StorageSize   { return 0 }
+func (m callMsg) From() common.Address                                { return m.CallMsg.From }
+func (m callMsg) Nonce() uint64                                       { return 0 }
+func (m callMsg) IsFake() bool                                        { return true }
+func (m callMsg) To() *common.Address                                 { return m.CallMsg.To }
+func (m callMsg) GasPrice() *big.Int                                  { return m.CallMsg.GasPrice }
+func (m callMsg) GasFeeCap() *big.Int                                 { return m.CallMsg.GasFeeCap }
+func (m callMsg) GasTipCap() *big.Int                                 { return m.CallMsg.GasTipCap }
+func (m callMsg) Gas() uint64                                         { return m.CallMsg.Gas }
+func (m callMsg) Value() *big.Int                                     { return m.CallMsg.Value }
+func (m callMsg) Data() []byte                                        { return m.CallMsg.Data }
+func (m callMsg) AccessList() types.AccessList                        { return m.CallMsg.AccessList }
+func (m callMsg) IsL1MessageTx() bool                                 { return false }
+func (m callMsg) TxSize() common.StorageSize                          { return 0 }
+func (m callMsg) SetCodeAuthorizations() []types.SetCodeAuthorization { return nil }
 
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.

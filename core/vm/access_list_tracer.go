@@ -137,7 +137,14 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	}
 }
 
-func (a *AccessListTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (a *AccessListTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int, authorizationResults []types.AuthorizationResult) {
+	for _, auth := range authorizationResults {
+		if auth.Success {
+			if _, ok := a.excl[auth.Authority]; !ok {
+				a.list.addAddress(auth.Authority)
+			}
+		}
+	}
 }
 
 // CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.

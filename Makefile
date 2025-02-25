@@ -43,6 +43,11 @@ test: all
 	$(GORUN) build/ci.go test ./consensus ./core ./eth ./miner ./node ./trie ./rollup/...
 	# RIP-7212 (secp256r1) precompiled contract test
 	cd ${PWD}/core/vm; go test -v -run=^TestPrecompiledP256 -bench=^BenchmarkPrecompiledP256
+	# EIP-7702 test
+	cd ${PWD}/core/vm/runtime; go test -v -run=^TestDelegatedAccountAccessCost
+	cd ${PWD}/core/types; go test -v -run=^TestParseDelegation
+	cd ${PWD}/internal/ethapi; go test -v -run=^TestEstimateGas
+	cd ${PWD}/cmd/evm; go test -v -run=^TestT8n
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint

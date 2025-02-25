@@ -499,6 +499,8 @@ var (
 		CurieBlock:              big.NewInt(0),
 		DarwinTime:              new(uint64),
 		DarwinV2Time:            new(uint64),
+		EuclidTime:              new(uint64),
+		EuclidV2Time:            new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,

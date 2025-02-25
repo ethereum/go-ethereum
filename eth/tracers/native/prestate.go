@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/eth/tracers"
@@ -71,7 +72,7 @@ func newPrestateTracer(ctx *tracers.Context) tracers.Tracer {
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
-func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int, authorizationResults []types.AuthorizationResult) {
 	t.env = env
 	t.create = create
 	t.to = to
@@ -79,6 +80,10 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	t.lookupAccount(from)
 	t.lookupAccount(to)
 	t.lookupAccount(env.Context.Coinbase)
+
+	for _, auth := range authorizationResults {
+		t.lookupAccount(auth.Authority)
+	}
 
 	// The recipient balance includes the value transferred.
 	toBal := new(big.Int).Sub(t.pre[to].Balance, value)
@@ -92,6 +97,14 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
 	t.pre[from].Balance = fromBal
 	t.pre[from].Nonce--
+
+	for i := len(authorizationResults) - 1; i >= 0; i-- {
+		auth := authorizationResults[i]
+		if auth.Success {
+			t.pre[auth.Authority].Nonce--
+			t.pre[auth.Authority].Code = auth.PreCode
+		}
+	}
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.

@@ -648,7 +648,7 @@ func (w *worker) processTxPool() (bool, error) {
 		}
 	}
 
-	signer := types.MakeSigner(w.chainConfig, w.current.header.Number)
+	signer := types.MakeSigner(w.chainConfig, w.current.header.Number, w.current.header.Time)
 	if w.prioritizedTx != nil && w.current.header.Number.Uint64() > w.prioritizedTx.blockNumber {
 		w.prioritizedTx = nil
 	}
@@ -688,7 +688,7 @@ func (w *worker) processTxPool() (bool, error) {
 // processTxnSlice
 func (w *worker) processTxnSlice(txns types.Transactions) (bool, error) {
 	txsMap := make(map[common.Address]types.Transactions)
-	signer := types.MakeSigner(w.chainConfig, w.current.header.Number)
+	signer := types.MakeSigner(w.chainConfig, w.current.header.Number, w.current.header.Time)
 	for _, tx := range txns {
 		acc, _ := types.Sender(signer, tx)
 		txsMap[acc] = append(txsMap[acc], tx)

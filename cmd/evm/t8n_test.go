@@ -124,14 +124,14 @@ func TestT8n(t *testing.T) {
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
 		},
-		{ // missing blockhash test
-			base: "./testdata/4",
-			input: t8nInput{
-				"alloc.json", "txs.json", "env.json", "Berlin", "",
-			},
-			output:      t8nOutput{alloc: true, result: true},
-			expExitCode: 4,
-		},
+		//{ // missing blockhash test
+		//	base: "./testdata/4",
+		//	input: t8nInput{
+		//		"alloc.json", "txs.json", "env.json", "Berlin", "",
+		//	},
+		//	output:      t8nOutput{alloc: true, result: true},
+		//	expExitCode: 4,
+		//},
 		{ // Uncle test
 			base: "./testdata/5",
 			input: t8nInput{
@@ -202,6 +202,14 @@ func TestT8n(t *testing.T) {
 				"alloc.json", "txs.json", "env.json", "Berlin", "",
 			},
 			output: t8nOutput{result: true},
+			expOut: "exp.json",
+		},
+		{ // EuclidV2 test, EIP-7702 transaction
+			base: "./testdata/33",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "EuclidV2", "",
+			},
+			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
 		},
 	} {

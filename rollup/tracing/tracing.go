@@ -105,7 +105,7 @@ func CreateTraceEnvHelper(chainConfig *params.ChainConfig, logConfig *vm.LogConf
 		commitAfterApply: commitAfterApply,
 		chainConfig:      chainConfig,
 		coinbase:         coinbase,
-		signer:           types.MakeSigner(chainConfig, block.Number()),
+		signer:           types.MakeSigner(chainConfig, block.Number(), block.Time()),
 		state:            statedb,
 		blockCtx:         blockCtx,
 		StorageTrace: &types.StorageTrace{
@@ -533,7 +533,7 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 
 	txs := make([]*types.TransactionData, block.Transactions().Len())
 	for i, tx := range block.Transactions() {
-		txs[i] = types.NewTransactionData(tx, block.NumberU64(), env.chainConfig)
+		txs[i] = types.NewTransactionData(tx, block.NumberU64(), block.Time(), env.chainConfig)
 	}
 
 	intrinsicStorageProofs := map[common.Address][]common.Hash{

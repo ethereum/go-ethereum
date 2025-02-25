@@ -920,7 +920,7 @@ func (api *ScrollAPI) GetSkippedTransaction(ctx context.Context, hash common.Has
 		return nil, nil
 	}
 	var rpcTx RPCTransaction
-	rpcTx.RPCTransaction = *ethapi.NewRPCTransaction(stx.Tx, common.Hash{}, 0, 0, nil, api.eth.blockchain.Config())
+	rpcTx.RPCTransaction = *ethapi.NewRPCTransaction(stx.Tx, common.Hash{}, 0, 0, 0, nil, api.eth.blockchain.Config())
 	rpcTx.SkipReason = stx.Reason
 	rpcTx.SkipBlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(stx.BlockNumber))
 	rpcTx.SkipBlockHash = stx.BlockHash

@@ -61,10 +61,19 @@ var (
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	curieInstructionSet            = newCurieInstructionSet()
 	darwinInstructionSet           = newDarwinInstructionSet()
+	euclidV2InstructionSet         = newEuclidV2InstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
 type JumpTable [256]*operation
+
+// newEuclidV2InstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul, petersburg, berlin, london, shanghai, curie, darwin and euclidV2 instructions.
+func newEuclidV2InstructionSet() JumpTable {
+	instructionSet := newDarwinInstructionSet()
+	enable7702(&instructionSet) // EIP-7702 Setcode transaction type
+	return instructionSet
+}
 
 // newDarwinInstructionSet returns the frontier, homestead, byzantium,
 // contantinople, istanbul, petersburg, berlin, london, shanghai, curie, and darwin instructions.

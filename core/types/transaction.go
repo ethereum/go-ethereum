@@ -52,6 +52,7 @@ const (
 	AccessListTxType = 0x01
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
+	SetCodeTxType    = 0x04
 
 	L1MessageTxType = 0x7E
 )
@@ -202,6 +203,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		inner = new(DynamicFeeTx)
 	case BlobTxType:
 		inner = new(BlobTx)
+	case SetCodeTxType:
+		inner = new(SetCodeTx)
 	case L1MessageTxType:
 		inner = new(L1MessageTx)
 	default:
@@ -463,6 +466,30 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 		return tx.GasTipCapIntCmp(other)
 	}
 	return tx.EffectiveGasTipValue(baseFee).Cmp(other)
+}
+
+// SetCodeAuthorizations returns the authorizations list of the transaction.
+func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
+		return nil
+	}
+	return setcodetx.AuthList
+}
+
+// SetCodeAuthorities returns a list of each authorization's corresponding authority.
+func (tx *Transaction) SetCodeAuthorities() []common.Address {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
+		return nil
+	}
+	auths := make([]common.Address, 0, len(setcodetx.AuthList))
+	for _, auth := range setcodetx.AuthList {
+		if addr, err := auth.Authority(); err == nil {
+			auths = append(auths, addr)
+		}
+	}
+	return auths
 }
 
 // Hash returns the transaction hash.
@@ -740,53 +767,56 @@ func (t *L1MessagesByQueueIndex) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to            *common.Address
-	from          common.Address
-	nonce         uint64
-	amount        *big.Int
-	gasLimit      uint64
-	gasPrice      *big.Int
-	gasFeeCap     *big.Int
-	gasTipCap     *big.Int
-	data          []byte
-	accessList    AccessList
-	isFake        bool
-	isL1MessageTx bool
-	txSize        common.StorageSize
+	to                    *common.Address
+	from                  common.Address
+	nonce                 uint64
+	amount                *big.Int
+	gasLimit              uint64
+	gasPrice              *big.Int
+	gasFeeCap             *big.Int
+	gasTipCap             *big.Int
+	data                  []byte
+	accessList            AccessList
+	isFake                bool
+	isL1MessageTx         bool
+	txSize                common.StorageSize
+	setCodeAuthorizations []SetCodeAuthorization
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool, setCodeAuthorizations []SetCodeAuthorization) Message {
 	return Message{
-		from:          from,
-		to:            to,
-		nonce:         nonce,
-		amount:        amount,
-		gasLimit:      gasLimit,
-		gasPrice:      gasPrice,
-		gasFeeCap:     gasFeeCap,
-		gasTipCap:     gasTipCap,
-		data:          data,
-		accessList:    accessList,
-		isFake:        isFake,
-		isL1MessageTx: false,
+		from:                  from,
+		to:                    to,
+		nonce:                 nonce,
+		amount:                amount,
+		gasLimit:              gasLimit,
+		gasPrice:              gasPrice,
+		gasFeeCap:             gasFeeCap,
+		gasTipCap:             gasTipCap,
+		data:                  data,
+		accessList:            accessList,
+		isFake:                isFake,
+		isL1MessageTx:         false,
+		setCodeAuthorizations: setCodeAuthorizations,
 	}
 }
 
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	msg := Message{
-		nonce:         tx.Nonce(),
-		gasLimit:      tx.Gas(),
-		gasPrice:      new(big.Int).Set(tx.GasPrice()),
-		gasFeeCap:     new(big.Int).Set(tx.GasFeeCap()),
-		gasTipCap:     new(big.Int).Set(tx.GasTipCap()),
-		to:            tx.To(),
-		amount:        tx.Value(),
-		data:          tx.Data(),
-		accessList:    tx.AccessList(),
-		isFake:        false,
-		isL1MessageTx: tx.IsL1MessageTx(),
-		txSize:        tx.Size(),
+		nonce:                 tx.Nonce(),
+		gasLimit:              tx.Gas(),
+		gasPrice:              new(big.Int).Set(tx.GasPrice()),
+		gasFeeCap:             new(big.Int).Set(tx.GasFeeCap()),
+		gasTipCap:             new(big.Int).Set(tx.GasTipCap()),
+		to:                    tx.To(),
+		amount:                tx.Value(),
+		data:                  tx.Data(),
+		accessList:            tx.AccessList(),
+		isFake:                false,
+		isL1MessageTx:         tx.IsL1MessageTx(),
+		txSize:                tx.Size(),
+		setCodeAuthorizations: tx.SetCodeAuthorizations(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -797,19 +827,20 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 	return msg, err
 }
 
-func (m Message) From() common.Address       { return m.from }
-func (m Message) To() *common.Address        { return m.to }
-func (m Message) GasPrice() *big.Int         { return m.gasPrice }
-func (m Message) GasFeeCap() *big.Int        { return m.gasFeeCap }
-func (m Message) GasTipCap() *big.Int        { return m.gasTipCap }
-func (m Message) Value() *big.Int            { return m.amount }
-func (m Message) Gas() uint64                { return m.gasLimit }
-func (m Message) Nonce() uint64              { return m.nonce }
-func (m Message) Data() []byte               { return m.data }
-func (m Message) AccessList() AccessList     { return m.accessList }
-func (m Message) IsFake() bool               { return m.isFake }
-func (m Message) IsL1MessageTx() bool        { return m.isL1MessageTx }
-func (m Message) TxSize() common.StorageSize { return m.txSize }
+func (m Message) From() common.Address                          { return m.from }
+func (m Message) To() *common.Address                           { return m.to }
+func (m Message) GasPrice() *big.Int                            { return m.gasPrice }
+func (m Message) GasFeeCap() *big.Int                           { return m.gasFeeCap }
+func (m Message) GasTipCap() *big.Int                           { return m.gasTipCap }
+func (m Message) Value() *big.Int                               { return m.amount }
+func (m Message) Gas() uint64                                   { return m.gasLimit }
+func (m Message) Nonce() uint64                                 { return m.nonce }
+func (m Message) Data() []byte                                  { return m.data }
+func (m Message) AccessList() AccessList                        { return m.accessList }
+func (m Message) IsFake() bool                                  { return m.isFake }
+func (m Message) IsL1MessageTx() bool                           { return m.isL1MessageTx }
+func (m Message) TxSize() common.StorageSize                    { return m.txSize }
+func (m Message) SetCodeAuthorizations() []SetCodeAuthorization { return m.setCodeAuthorizations }
 
 // copyAddressPtr copies an address.
 func copyAddressPtr(a *common.Address) *common.Address {

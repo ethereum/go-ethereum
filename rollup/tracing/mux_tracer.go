@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	_ "github.com/scroll-tech/go-ethereum/eth/tracers/native"
 )
@@ -20,9 +21,9 @@ func NewMuxTracer(tracers ...vm.EVMLogger) *MuxTracer {
 }
 
 // CaptureStart runs CaptureStart for each tracer in the MuxTracer
-func (t *MuxTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *MuxTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int, authorizationResults []types.AuthorizationResult) {
 	for _, tracer := range t.tracers {
-		tracer.CaptureStart(env, from, to, create, input, gas, value)
+		tracer.CaptureStart(env, from, to, create, input, gas, value, authorizationResults)
 	}
 }
 

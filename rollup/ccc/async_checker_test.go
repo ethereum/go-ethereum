@@ -26,6 +26,8 @@ func TestAsyncChecker(t *testing.T) {
 	// Create a database pre-initialize with a genesis block
 	db := rawdb.NewMemoryDatabase()
 	chainConfig := params.TestChainConfig.Clone()
+	chainConfig.EuclidTime = nil
+	chainConfig.EuclidV2Time = nil
 	chainConfig.Scroll.UseZktrie = true
 	(&core.Genesis{
 		Config: chainConfig,
@@ -38,7 +40,7 @@ func TestAsyncChecker(t *testing.T) {
 
 	bs, _ := core.GenerateChain(chainConfig, chain.Genesis(), ethash.NewFaker(), db, 100, func(i int, block *core.BlockGen) {
 		for i := 0; i < 10; i++ {
-			signer := types.MakeSigner(chainConfig, block.Number())
+			signer := types.MakeSigner(chainConfig, block.Number(), block.Time())
 			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddr), testAddr, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
