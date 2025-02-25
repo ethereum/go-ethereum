@@ -47,7 +47,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=tag,prefix=,priority=1000
+            type=ref,event=tag,prefix=
             type=sha,prefix=
             type=sha,prefix=,suffix=-${{ matrix.platform_suffix }}
             type=edge,branch=firehose-fh3.0,priority=1
