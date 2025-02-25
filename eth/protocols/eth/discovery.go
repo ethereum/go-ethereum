@@ -42,6 +42,7 @@ func StartENRUpdater(chain *core.BlockChain, ln *enode.LocalNode) {
 	var newHead = make(chan core.ChainHeadEvent, 10)
 	sub := chain.SubscribeChainHeadEvent(newHead)
 
+	ln.Set(currentENREntry(chain))
 	go func() {
 		defer sub.Unsubscribe()
 		for {
