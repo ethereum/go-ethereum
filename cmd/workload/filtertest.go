@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -199,10 +198,10 @@ func (fq *filterQuery) calculateHash() common.Hash {
 	return crypto.Keccak256Hash(enc)
 }
 
-func (fq *filterQuery) run(ec *ethclient.Client) {
+func (fq *filterQuery) run(client *client) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
-	logs, err := ec.FilterLogs(ctx, ethereum.FilterQuery{
+	logs, err := client.Eth.FilterLogs(ctx, ethereum.FilterQuery{
 		FromBlock: big.NewInt(fq.FromBlock),
 		ToBlock:   big.NewInt(fq.ToBlock),
 		Addresses: fq.Address,

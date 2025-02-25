@@ -21,7 +21,6 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/log"
@@ -69,9 +68,10 @@ var (
 
 // testConfig holds the parameters for testing.
 type testConfig struct {
-	client          *ethclient.Client
+	client          *client
 	fsys            fs.FS
 	filterQueryFile string
+	historyTestFile string
 }
 
 func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
@@ -81,21 +81,23 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 	}
 
 	// configure ethclient
-	cfg.client = makeEthClient(ctx)
+	cfg.client = makeClient(ctx)
 
 	// configure test files
 	switch {
 	case ctx.Bool(testMainnetFlag.Name):
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
+		cfg.historyTestFile = "queries/history_mainnet.json"
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
+		cfg.historyTestFile = "queries/history_sepolia.json"
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
+		cfg.historyTestFile = ctx.String(historyTestFileFlag.Name)
 	}
-
 	return cfg
 }
 

@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
@@ -79,7 +78,7 @@ func filterGenCmd(ctx *cli.Context) error {
 
 		f.updateFinalizedBlock()
 		query := f.newQuery()
-		query.run(f.ec)
+		query.run(f.client)
 		if query.Err != nil {
 			f.errors = append(f.errors, query)
 			continue
@@ -90,7 +89,7 @@ func filterGenCmd(ctx *cli.Context) error {
 				if extQuery == nil {
 					break
 				}
-				extQuery.run(f.ec)
+				extQuery.run(f.client)
 				if extQuery.Err == nil && len(extQuery.results) < len(query.results) {
 					extQuery.Err = fmt.Errorf("invalid result length; old range %d %d; old length %d; new range %d %d; new length %d; address %v; Topics %v",
 						query.FromBlock, query.ToBlock, len(query.results),
@@ -119,7 +118,7 @@ func filterGenCmd(ctx *cli.Context) error {
 
 // filterTestGen is the filter query test generator.
 type filterTestGen struct {
-	ec        *ethclient.Client
+	client    *client
 	queryFile string
 	errorFile string
 
@@ -130,14 +129,14 @@ type filterTestGen struct {
 
 func newFilterTestGen(ctx *cli.Context) *filterTestGen {
 	return &filterTestGen{
-		ec:        makeEthClient(ctx),
+		client:    makeClient(ctx),
 		queryFile: ctx.String(filterQueryFileFlag.Name),
 		errorFile: ctx.String(filterErrorFileFlag.Name),
 	}
 }
 
 func (s *filterTestGen) updateFinalizedBlock() {
-	s.finalizedBlock = mustGetFinalizedBlock(s.ec)
+	s.finalizedBlock = mustGetFinalizedBlock(s.client)
 }
 
 const (
@@ -380,10 +379,10 @@ func (s *filterTestGen) writeErrors() {
 	json.NewEncoder(file).Encode(s.errors)
 }
 
-func mustGetFinalizedBlock(ec *ethclient.Client) int64 {
+func mustGetFinalizedBlock(client *client) int64 {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
-	header, err := ec.HeaderByNumber(ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
+	header, err := client.Eth.HeaderByNumber(ctx, big.NewInt(int64(rpc.FinalizedBlockNumber)))
 	if err != nil {
 		exit(fmt.Errorf("could not fetch finalized header (error: %v)", err))
 	}
