@@ -55,14 +55,14 @@ var (
 	filterQueryFileFlag = &cli.StringFlag{
 		Name:     "queries",
 		Usage:    "JSON file containing filter test queries",
-		Category: flags.TestingCategory,
 		Value:    "filter_queries.json",
+		Category: flags.TestingCategory,
 	}
 	filterErrorFileFlag = &cli.StringFlag{
 		Name:     "errors",
 		Usage:    "JSON file containing failed filter queries",
-		Category: flags.TestingCategory,
 		Value:    "filter_errors.json",
+		Category: flags.TestingCategory,
 	}
 )
 
