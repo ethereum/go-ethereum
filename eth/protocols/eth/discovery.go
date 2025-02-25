@@ -71,7 +71,7 @@ func NewNodeFilter(chain *core.BlockChain) func(*enode.Node) bool {
 	filter := forkid.NewFilter(chain)
 	return func(n *enode.Node) bool {
 		var entry enrEntry
-		if err := n.Load(entry); err != nil {
+		if err := n.Load(&entry); err != nil {
 			return false
 		}
 		err := filter(entry.ForkID)
