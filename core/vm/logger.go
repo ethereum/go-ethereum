@@ -208,6 +208,8 @@ func (l *StructLogger) CaptureStart(env *EVM, from common.Address, to common.Add
 		// because contract creation is not allowed in set code transactions
 		for _, auth := range authorizationResults {
 			if auth.Success {
+				// Does not record the createdAccount account yet, since it will change the return value of CreatedAccount,
+				// which is used in assigning the "to" field of transaction in scroll_getBlockTraceByNumberOrHash.
 				l.statesAffected[auth.Authority] = struct{}{}
 			}
 		}

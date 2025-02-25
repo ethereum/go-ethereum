@@ -5,6 +5,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/holiman/uint256"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/crypto"
@@ -35,6 +37,7 @@ type Message interface {
 	Data() []byte
 	AccessList() types.AccessList
 	IsL1MessageTx() bool
+	SetCodeAuthorizations() []types.SetCodeAuthorization
 }
 
 // StateDB represents the StateDB interface
@@ -92,7 +95,11 @@ func asUnsignedTx(msg Message, baseFee, chainID *big.Int) *types.Transaction {
 		return asUnsignedAccessListTx(msg, chainID)
 	}
 
-	return asUnsignedDynamicTx(msg, chainID)
+	if msg.SetCodeAuthorizations() == nil {
+		return asUnsignedDynamicTx(msg, chainID)
+	}
+
+	return asUnsignedSetCodeTx(msg, chainID)
 }
 
 func asUnsignedLegacyTx(msg Message) *types.Transaction {
@@ -131,6 +138,24 @@ func asUnsignedDynamicTx(msg Message, chainID *big.Int) *types.Transaction {
 		AccessList: msg.AccessList(),
 		ChainID:    chainID,
 	})
+}
+
+func asUnsignedSetCodeTx(msg Message, chainID *big.Int) *types.Transaction {
+	tx := types.SetCodeTx{
+		Nonce:      msg.Nonce(),
+		Value:      uint256.MustFromBig(msg.Value()),
+		Gas:        msg.Gas(),
+		GasFeeCap:  uint256.MustFromBig(msg.GasFeeCap()),
+		GasTipCap:  uint256.MustFromBig(msg.GasTipCap()),
+		Data:       msg.Data(),
+		AccessList: msg.AccessList(),
+		AuthList:   msg.SetCodeAuthorizations(),
+		ChainID:    uint256.MustFromBig(chainID),
+	}
+	if msg.To() != nil {
+		tx.To = *msg.To()
+	}
+	return types.NewTx(&tx)
 }
 
 func readGPOStorageSlots(addr common.Address, state StateDB) gpoState {
