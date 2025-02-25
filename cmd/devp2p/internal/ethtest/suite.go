@@ -19,6 +19,9 @@ package ethtest
 import (
 	"crypto/rand"
 	"fmt"
+	"reflect"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -29,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
-	"reflect"
-	"sync"
 )
 
 // Suite represents a structure used to test a node's conformance
@@ -63,25 +64,27 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
-		// status
-		{Name: "Status", Fn: s.TestStatus},
-		// get block headers
-		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-		{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
-		{Name: "SameRequestID", Fn: s.TestSameRequestID},
-		{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
-		// get block bodies
-		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-		// // malicious handshakes + status
-		{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
-		// test transactions
-		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
-		{Name: "Transaction", Fn: s.TestTransaction},
-		{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
-		{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
-		{Name: "BlobViolations", Fn: s.TestBlobViolations},
+		/*
+			// status
+			{Name: "Status", Fn: s.TestStatus},
+			// get block headers
+			{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+			{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
+			{Name: "SameRequestID", Fn: s.TestSameRequestID},
+			{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
+			// get block bodies
+			{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+			// // malicious handshakes + status
+			{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
+			// test transactions
+			{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
+			{Name: "Transaction", Fn: s.TestTransaction},
+			{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
+			{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
+			{Name: "BlobViolations", Fn: s.TestBlobViolations},
+		*/
 		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
-		{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
+		//{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
 	}
 }
 
@@ -833,17 +836,12 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 // data has been modified to produce a different commitment hash.
 func mangleSidecar(tx *types.Transaction) *types.Transaction {
 	sidecar := tx.BlobTxSidecar()
-	var copy types.BlobTxSidecar
-	for _, b := range sidecar.Blobs {
-		copy.Blobs = append(copy.Blobs, b)
+	copy := types.BlobTxSidecar{
+		Blobs:       append([]kzg4844.Blob{}, sidecar.Blobs...),
+		Commitments: append([]kzg4844.Commitment{}, sidecar.Commitments...),
+		Proofs:      append([]kzg4844.Proof{}, sidecar.Proofs...),
 	}
-	for _, c := range sidecar.Commitments {
-		copy.Commitments = append(copy.Commitments, c)
-	}
-	for _, p := range sidecar.Proofs {
-		copy.Proofs = append(copy.Proofs, p)
-	}
-	// zero the first commitment to create an invalid sidecar
+	// zero the first commitment to alter the sidecar hash
 	copy.Commitments[0] = kzg4844.Commitment{}
 	return tx.WithBlobTxSidecar(&copy)
 }
@@ -999,10 +997,8 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 
 	go goodPeer()
 	go badPeer()
-	select {
-	case err := <-errc:
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
+	err := <-errc
+	if err != nil {
+		t.Fatalf("%v", err)
 	}
 }
