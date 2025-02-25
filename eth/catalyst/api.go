@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
@@ -728,7 +730,8 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	defer api.newPayloadLock.Unlock()
 
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
-	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
+	inclusionListTxs := api.getValidInclusionListTransactions(inclusionList)
+	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests, inclusionListTxs)
 	if err != nil {
 		bgu := "nil"
 		if params.BlobGasUsed != nil {
@@ -801,7 +804,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
 	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
-	proofs, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
+	proofs, inclusionListSatisfied, err := api.eth.BlockChain().InsertBlockWithoutSetHead(block, witness)
 	if err != nil {
 		log.Warn("NewPayload: inserting block failed", "error", err)
 
@@ -811,6 +814,13 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		api.invalidLock.Unlock()
 
 		return api.invalid(err, parent.Header()), nil
+	}
+	if inclusionListSatisfied != nil && !*inclusionListSatisfied {
+		return engine.PayloadStatusV1{
+			Status:          engine.INVALID_INCLUSION_LIST,
+			LatestValidHash: nil,
+			ValidationError: nil,
+		}, nil
 	}
 	hash := block.Hash()
 
@@ -1059,6 +1069,34 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) 
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByRangeV2(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
 	return api.getBodiesByRange(start, count)
+}
+
+func (api *ConsensusAPI) getValidInclusionListTransactions(inclusionList types.InclusionList) []*types.Transaction {
+	txs := types.InclusionListToTransactions(inclusionList)
+
+	head := api.eth.BlockChain().CurrentBlock()
+	signer := types.MakeSigner(api.config(), head.Number, head.Time)
+
+	validTxs := make([]*types.Transaction, 0, len(txs))
+	for _, tx := range txs {
+		opts := &txpool.ValidationOptions{
+			Config: api.config(),
+			Accept: 0 |
+				1<<types.LegacyTxType |
+				1<<types.AccessListTxType |
+				1<<types.DynamicFeeTxType |
+				1<<types.SetCodeTxType,
+			MaxSize: params.MaxBytesPerInclusionList,
+			MinTip:  new(big.Int).SetUint64(ethconfig.Defaults.TxPool.PriceLimit),
+		}
+		if err := txpool.ValidateTransaction(tx, head, signer, opts); err != nil {
+			log.Warn("invalid inclusion list transaction", "hash", tx.Hash(), "error", err)
+		} else {
+			validTxs = append(validTxs, tx)
+		}
+	}
+
+	return validTxs
 }
 
 func (api *ConsensusAPI) getBodiesByRange(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
