@@ -30,12 +30,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		StateHistory                         uint64                 `toml:",omitempty"`
 		StateScheme                          string                 `toml:",omitempty"`
 		RequiredBlocks                       map[uint64]common.Hash `toml:"-"`
-		LightServ                            int                    `toml:",omitempty"`
-		LightIngress                         int                    `toml:",omitempty"`
-		LightEgress                          int                    `toml:",omitempty"`
-		LightPeers                           int                    `toml:",omitempty"`
-		LightNoPrune                         bool                   `toml:",omitempty"`
-		LightNoSyncServe                     bool                   `toml:",omitempty"`
 		SkipBcVersionCheck                   bool                   `toml:"-"`
 		DatabaseHandles                      int                    `toml:"-"`
 		DatabaseCache                        int
@@ -91,12 +85,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.StateHistory = c.StateHistory
 	enc.StateScheme = c.StateScheme
 	enc.RequiredBlocks = c.RequiredBlocks
-	enc.LightServ = c.LightServ
-	enc.LightIngress = c.LightIngress
-	enc.LightEgress = c.LightEgress
-	enc.LightPeers = c.LightPeers
-	enc.LightNoPrune = c.LightNoPrune
-	enc.LightNoSyncServe = c.LightNoSyncServe
 	enc.SkipBcVersionCheck = c.SkipBcVersionCheck
 	enc.DatabaseHandles = c.DatabaseHandles
 	enc.DatabaseCache = c.DatabaseCache
@@ -117,7 +105,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.BlobPool = c.BlobPool
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
-	enc.EnableWitnessCollection = c.EnableWitnessCollection
 	enc.VMTrace = c.VMTrace
 	enc.VMTraceJsonConfig = c.VMTraceJsonConfig
 	enc.DocRoot = c.DocRoot
@@ -156,12 +143,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		StateHistory                         *uint64                `toml:",omitempty"`
 		StateScheme                          *string                `toml:",omitempty"`
 		RequiredBlocks                       map[uint64]common.Hash `toml:"-"`
-		LightServ                            *int                   `toml:",omitempty"`
-		LightIngress                         *int                   `toml:",omitempty"`
-		LightEgress                          *int                   `toml:",omitempty"`
-		LightPeers                           *int                   `toml:",omitempty"`
-		LightNoPrune                         *bool                  `toml:",omitempty"`
-		LightNoSyncServe                     *bool                  `toml:",omitempty"`
 		SkipBcVersionCheck                   *bool                  `toml:"-"`
 		DatabaseHandles                      *int                   `toml:"-"`
 		DatabaseCache                        *int
@@ -244,24 +225,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.RequiredBlocks != nil {
 		c.RequiredBlocks = dec.RequiredBlocks
 	}
-	if dec.LightServ != nil {
-		c.LightServ = *dec.LightServ
-	}
-	if dec.LightIngress != nil {
-		c.LightIngress = *dec.LightIngress
-	}
-	if dec.LightEgress != nil {
-		c.LightEgress = *dec.LightEgress
-	}
-	if dec.LightPeers != nil {
-		c.LightPeers = *dec.LightPeers
-	}
-	if dec.LightNoPrune != nil {
-		c.LightNoPrune = *dec.LightNoPrune
-	}
-	if dec.LightNoSyncServe != nil {
-		c.LightNoSyncServe = *dec.LightNoSyncServe
-	}
 	if dec.SkipBcVersionCheck != nil {
 		c.SkipBcVersionCheck = *dec.SkipBcVersionCheck
 	}
@@ -321,9 +284,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.EnablePreimageRecording != nil {
 		c.EnablePreimageRecording = *dec.EnablePreimageRecording
-	}
-	if dec.EnableWitnessCollection != nil {
-		c.EnableWitnessCollection = *dec.EnableWitnessCollection
 	}
 	if dec.VMTrace != nil {
 		c.VMTrace = *dec.VMTrace

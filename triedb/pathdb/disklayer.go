@@ -139,7 +139,6 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dl.cleans.Set(key, blob)
 		cleanWriteMeter.Mark(int64(len(blob)))
 	}
-
 	return blob, h.hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 

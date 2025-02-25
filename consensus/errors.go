@@ -41,4 +41,7 @@ var (
 
 	// ErrUnexpectedWithdrawals is returned if a pre-Shanghai block has withdrawals.
 	ErrUnexpectedWithdrawals = errors.New("unexpected withdrawals")
+
+	// ErrUnexpectedRequests is returned if a pre-Shanghai block has requests.
+	ErrUnexpectedRequests = errors.New("unexpected requests")
 )

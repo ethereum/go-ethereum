@@ -26,6 +26,8 @@ import (
 )
 
 func TestEncode(t *testing.T) {
+	t.Parallel()
+
 	for _, test := range []struct {
 		entries []Entry
 		want    string
@@ -53,6 +55,7 @@ func TestEncode(t *testing.T) {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			var (
 				b = bytes.NewBuffer(nil)
 				w = NewWriter(b)
@@ -83,6 +86,8 @@ func TestEncode(t *testing.T) {
 }
 
 func TestDecode(t *testing.T) {
+	t.Parallel()
+
 	for i, tt := range []struct {
 		have string
 		err  error

@@ -24,6 +24,8 @@ import (
 
 // nolint:paralleltest
 func TestPathExpansion(t *testing.T) {
+	// t.Parallel()
+
 	user, _ := user.Current()
 
 	var tests map[string]string
@@ -55,9 +57,13 @@ func TestPathExpansion(t *testing.T) {
 	t.Setenv(`DDDXXX`, `/tmp`)
 
 	for test, expected := range tests {
-		got := expandPath(test)
-		if got != expected {
-			t.Errorf(`test %s, got %s, expected %s\n`, test, got, expected)
-		}
+		t.Run(test, func(t *testing.T) {
+			t.Parallel()
+
+			got := expandPath(test)
+			if got != expected {
+				t.Errorf(`test %s, got %s, expected %s\n`, test, got, expected)
+			}
+		})
 	}
 }
