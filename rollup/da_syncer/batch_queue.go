@@ -36,6 +36,12 @@ func (bq *BatchQueue) NextBatch(ctx context.Context) (da.Entry, error) {
 	}
 
 	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		daEntry, err := bq.DAQueue.NextDA(ctx)
 		if err != nil {
 			return nil, err

@@ -12,6 +12,7 @@ const (
 var (
 	TemporaryError = NewTemporaryError(nil)
 	EOFError       = NewEOFError(nil)
+	Terminated     = fmt.Errorf("terminated")
 )
 
 type Type uint8

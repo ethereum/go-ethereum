@@ -1806,15 +1806,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 	return it.index, err
 }
 
-func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types.Header, txs types.Transactions) (WriteStatus, error) {
+func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types.Header, txs types.Transactions, sign bool) (*types.Block, WriteStatus, error) {
 	if !bc.chainmu.TryLock() {
-		return NonStatTy, errInsertionInterrupted
+		return nil, NonStatTy, errInsertionInterrupted
 	}
 	defer bc.chainmu.Unlock()
 
 	statedb, err := state.New(parentBlock.Root(), bc.stateCache, bc.snaps)
 	if err != nil {
-		return NonStatTy, err
+		return nil, NonStatTy, err
 	}
 
 	statedb.StartPrefetcher("l1sync", nil)
@@ -1825,17 +1825,50 @@ func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types
 	tempBlock := types.NewBlockWithHeader(header).WithBody(txs, nil)
 	receipts, logs, gasUsed, err := bc.processor.Process(tempBlock, statedb, bc.vmConfig)
 	if err != nil {
-		return NonStatTy, fmt.Errorf("error processing block: %w", err)
+		return nil, NonStatTy, fmt.Errorf("error processing block: %w", err)
 	}
 
 	// TODO: once we have the extra and difficulty we need to verify the signature of the block with Clique
 	//  This should be done with https://github.com/scroll-tech/go-ethereum/pull/913.
 
-	// finalize and assemble block as fullBlock
+	if sign {
+		// remember the time as Clique will override it
+		originalTime := header.Time
+
+		err = bc.engine.Prepare(bc, header)
+		if err != nil {
+			return nil, NonStatTy, fmt.Errorf("error preparing block %d: %w", tempBlock.Number().Uint64(), err)
+		}
+
+		// we want to re-sign the block: set time to original value again.
+		header.Time = originalTime
+	}
+
+	// finalize and assemble block as fullBlock: replicates consensus.FinalizeAndAssemble()
 	header.GasUsed = gasUsed
 	header.Root = statedb.IntermediateRoot(bc.chainConfig.IsEIP158(header.Number))
 
 	fullBlock := types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+
+	// Sign the block if requested
+	if sign {
+		resultCh, stopCh := make(chan *types.Block), make(chan struct{})
+		if err = bc.engine.Seal(bc, fullBlock, resultCh, stopCh); err != nil {
+			return nil, NonStatTy, fmt.Errorf("error sealing block %d: %w", fullBlock.Number().Uint64(), err)
+		}
+		// Clique.Seal() will only wait for a second before giving up on us. So make sure there is nothing computational heavy
+		// or a call that blocks between the call to Seal and the line below. Seal might introduce some delay, so we keep track of
+		// that artificially added delay and subtract it from overall runtime of commit().
+		fullBlock = <-resultCh
+		if fullBlock == nil {
+			return nil, NonStatTy, fmt.Errorf("sealing block failed %d: block is nil", header.Number.Uint64())
+		}
+
+		// verify the generated block with local consensus engine to make sure everything is as expected
+		if err = bc.engine.VerifyHeader(bc, fullBlock.Header(), true); err != nil {
+			return nil, NonStatTy, fmt.Errorf("error verifying signed block %d: %w", fullBlock.Number().Uint64(), err)
+		}
+	}
 
 	blockHash := fullBlock.Hash()
 	// manually replace the block hash in the receipts
@@ -1856,16 +1889,17 @@ func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types
 	// Make sure the block body is valid e.g. ordering of L1 messages is correct and continuous.
 	if err = bc.validator.ValidateBody(fullBlock); err != nil {
 		bc.reportBlock(fullBlock, receipts, err)
-		return NonStatTy, fmt.Errorf("error validating block body %d: %w", fullBlock.Number().Uint64(), err)
+		return nil, NonStatTy, fmt.Errorf("error validating block body %d: %w", fullBlock.Number().Uint64(), err)
 	}
 
 	// Double check: even though we just built the block, make sure it is valid.
 	if err = bc.validator.ValidateState(fullBlock, statedb, receipts, gasUsed); err != nil {
 		bc.reportBlock(fullBlock, receipts, err)
-		return NonStatTy, fmt.Errorf("error validating block %d: %w", fullBlock.Number().Uint64(), err)
+		return nil, NonStatTy, fmt.Errorf("error validating block %d: %w", fullBlock.Number().Uint64(), err)
 	}
 
-	return bc.writeBlockWithState(fullBlock, receipts, logs, statedb, false)
+	writeStatus, err := bc.writeBlockWithState(fullBlock, receipts, logs, statedb, false)
+	return fullBlock, writeStatus, err
 }
 
 // insertSideChain is called when an import batch hits upon a pruned ancestor

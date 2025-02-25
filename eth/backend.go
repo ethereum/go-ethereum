@@ -588,7 +588,10 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
-	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
+	// handler is not enabled when DA syncing enabled
+	if !s.config.EnableDASyncing {
+		eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
+	}
 
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)

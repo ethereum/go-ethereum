@@ -890,21 +890,41 @@ var (
 	}
 
 	// DA syncing settings
-	DASyncEnabledFlag = &cli.BoolFlag{
+	DASyncEnabledFlag = cli.BoolFlag{
 		Name:  "da.sync",
 		Usage: "Enable node syncing from DA",
 	}
-	DABlobScanAPIEndpointFlag = &cli.StringFlag{
+	DABlobScanAPIEndpointFlag = cli.StringFlag{
 		Name:  "da.blob.blobscan",
 		Usage: "BlobScan blob API endpoint",
 	}
-	DABlockNativeAPIEndpointFlag = &cli.StringFlag{
+	DABlockNativeAPIEndpointFlag = cli.StringFlag{
 		Name:  "da.blob.blocknative",
 		Usage: "BlockNative blob API endpoint",
 	}
-	DABeaconNodeAPIEndpointFlag = &cli.StringFlag{
+	DABeaconNodeAPIEndpointFlag = cli.StringFlag{
 		Name:  "da.blob.beaconnode",
 		Usage: "Beacon node API endpoint",
+	}
+	DARecoveryModeFlag = cli.BoolFlag{
+		Name:  "da.recovery",
+		Usage: "Enable recovery mode for DA syncing",
+	}
+	DARecoveryInitialL1BlockFlag = cli.Uint64Flag{
+		Name:  "da.recovery.initiall1block",
+		Usage: "Initial L1 block to start recovery from",
+	}
+	DARecoveryInitialBatchFlag = cli.Uint64Flag{
+		Name:  "da.recovery.initialbatch",
+		Usage: "Initial batch to start recovery from",
+	}
+	DARecoverySignBlocksFlag = cli.BoolFlag{
+		Name:  "da.recovery.signblocks",
+		Usage: "Sign blocks during recovery (requires correct Clique signer key and history of blocks with Clique signatures)",
+	}
+	DARecoveryL2EndBlockFlag = cli.Uint64Flag{
+		Name:  "da.recovery.l2endblock",
+		Usage: "End L2 block to recover to",
 	}
 )
 
@@ -1657,6 +1677,21 @@ func setDA(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(DABeaconNodeAPIEndpointFlag.Name) {
 		cfg.DA.BeaconNodeAPIEndpoint = ctx.String(DABeaconNodeAPIEndpointFlag.Name)
+	}
+	if ctx.IsSet(DARecoveryModeFlag.Name) {
+		cfg.DA.RecoveryMode = ctx.Bool(DARecoveryModeFlag.Name)
+	}
+	if ctx.IsSet(DARecoveryInitialL1BlockFlag.Name) {
+		cfg.DA.InitialL1Block = ctx.Uint64(DARecoveryInitialL1BlockFlag.Name)
+	}
+	if ctx.IsSet(DARecoveryInitialBatchFlag.Name) {
+		cfg.DA.InitialBatch = ctx.Uint64(DARecoveryInitialBatchFlag.Name)
+	}
+	if ctx.IsSet(DARecoverySignBlocksFlag.Name) {
+		cfg.DA.SignBlocks = ctx.Bool(DARecoverySignBlocksFlag.Name)
+	}
+	if ctx.IsSet(DARecoveryL2EndBlockFlag.Name) {
+		cfg.DA.L2EndBlock = ctx.Uint64(DARecoveryL2EndBlockFlag.Name)
 	}
 }
 
