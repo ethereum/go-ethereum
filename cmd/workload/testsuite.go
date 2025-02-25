@@ -19,7 +19,6 @@ package main
 import (
 	"os"
 
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/log"
@@ -51,27 +50,8 @@ var (
 	}
 )
 
-type filterTestSuite struct {
-	ec *ethclient.Client
-	filterTest
-}
-
-func newTestSuite(ctx *cli.Context) *filterTestSuite {
-	s := &filterTestSuite{ec: makeEthClient(ctx)}
-	s.filterTest.initFilterTest(ctx)
-	return s
-}
-
-func (s *filterTestSuite) allTests() []utesting.Test {
-	return []utesting.Test{
-		{Name: "Filter/ShortRange", Fn: s.filterShortRange},
-		{Name: "Filter/LongRange", Fn: s.filterLongRange},
-		{Name: "Filter/FullRange", Fn: s.filterFullRange},
-	}
-}
-
 func runTestCmd(ctx *cli.Context) error {
-	s := newTestSuite(ctx)
+	s := newFilterTestSuite(ctx)
 
 	// Filter test cases.
 	tests := s.allTests()

@@ -28,8 +28,52 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
+)
+
+var (
+	filterCommand = &cli.Command{
+		Name:  "filter",
+		Usage: "Log filter workload test commands",
+		Subcommands: []*cli.Command{
+			filterGenCommand,
+			filterPerfCommand,
+		},
+	}
+	filterGenCommand = &cli.Command{
+		Name:      "generate",
+		Usage:     "Generates query set for log filter workload test",
+		ArgsUsage: "<RPC endpoint URL>",
+		Action:    filterGenCmd,
+		Flags: []cli.Flag{
+			filterQueryFileFlag,
+			filterErrorFileFlag,
+		},
+	}
+	filterPerfCommand = &cli.Command{
+		Name:      "performance",
+		Usage:     "Runs log filter performance test against an RPC endpoint",
+		ArgsUsage: "<RPC endpoint URL>",
+		Action:    filterPerfCmd,
+		Flags: []cli.Flag{
+			filterQueryFileFlag,
+			filterErrorFileFlag,
+		},
+	}
+	filterQueryFileFlag = &cli.StringFlag{
+		Name:     "queries",
+		Usage:    "JSON file containing filter test queries",
+		Category: flags.TestingCategory,
+		Value:    "filter_queries.json",
+	}
+	filterErrorFileFlag = &cli.StringFlag{
+		Name:     "errors",
+		Usage:    "JSON file containing failed filter queries",
+		Category: flags.TestingCategory,
+		Value:    "filter_errors.json",
+	}
 )
 
 // filterGenCmd is the main function of the filter tests generator.

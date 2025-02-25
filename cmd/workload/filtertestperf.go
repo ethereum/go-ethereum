@@ -28,7 +28,7 @@ import (
 const passCount = 1
 
 func filterPerfCmd(ctx *cli.Context) error {
-	f := newTestSuite(ctx)
+	f := newFilterTestSuite(ctx)
 	if f.loadQueries() == 0 {
 		exit("No test requests loaded")
 	}
