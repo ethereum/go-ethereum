@@ -26,6 +26,13 @@ import (
 // MakeHashDB imports tries, codes and block hashes from a witness into a new
 // hash-based memory db. We could eventually rewrite this into a pathdb, but
 // simple is better for now.
+//
+// Note, this hashdb approach is quite strictly self-validating:
+//   - Headers are persisted keyed by hash, so blockhash will error on junk
+//   - Codes are persisted keyed by hash, so bytecode lookup will error on junk
+//   - Trie nodes are persisted keyed by hash, so trie expansion will error on junk
+//
+// Acceleration structures built would need to explicitly validate the witness.
 func (w *Witness) MakeHashDB() ethdb.Database {
 	var (
 		memdb  = rawdb.NewMemoryDatabase()

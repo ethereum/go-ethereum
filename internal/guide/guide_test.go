@@ -35,6 +35,8 @@ import (
 
 // Tests that the account management snippets work correctly.
 func TestAccountManagement(t *testing.T) {
+	t.Parallel()
+
 	// Create a temporary folder to work with
 	workdir := t.TempDir()
 

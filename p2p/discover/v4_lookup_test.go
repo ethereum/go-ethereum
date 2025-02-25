@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/netip"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -73,7 +74,11 @@ func TestUDPv4_LookupIterator(t *testing.T) {
 	t.Parallel()
 
 	test := newUDPTest(t)
-	defer test.close()
+	var wg sync.WaitGroup
+	defer func() {
+		test.close()
+		wg.Wait()
+	}()
 
 	// Seed table with initial nodes.
 	bootnodes := make([]*enode.Node, len(lookupTestnet.dists[256]))
@@ -81,7 +86,11 @@ func TestUDPv4_LookupIterator(t *testing.T) {
 		bootnodes[i] = lookupTestnet.node(256, i)
 	}
 	fillTable(test.table, bootnodes, true)
-	go serveTestnet(test, lookupTestnet)
+	wg.Add(1)
+	go func() {
+		serveTestnet(test, lookupTestnet)
+		wg.Done()
+	}()
 
 	// Create the iterator and collect the nodes it yields.
 	iter := test.udp.RandomNodes()
@@ -112,7 +121,11 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 	t.Parallel()
 
 	test := newUDPTest(t)
-	defer test.close()
+	var wg sync.WaitGroup
+	defer func() {
+		test.close()
+		wg.Wait()
+	}()
 
 	// Seed table with initial nodes.
 	bootnodes := make([]*enode.Node, len(lookupTestnet.dists[256]))
@@ -120,7 +133,12 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 		bootnodes[i] = lookupTestnet.node(256, i)
 	}
 	fillTable(test.table, bootnodes, true)
-	go serveTestnet(test, lookupTestnet)
+
+	wg.Add(1)
+	go func() {
+		serveTestnet(test, lookupTestnet)
+		wg.Done()
+	}()
 
 	it := test.udp.RandomNodes()
 	if ok := it.Next(); !ok || it.Node() == nil {

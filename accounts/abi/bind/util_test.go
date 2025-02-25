@@ -85,7 +85,9 @@ func TestWaitDeployed(t *testing.T) {
 		}()
 
 		// Send and mine the transaction.
-		backend.SendTransaction(ctx, tx)
+		if err := backend.SendTransaction(ctx, tx); err != nil {
+			t.Errorf("test %q: failed to send transaction: %v", name, err)
+		}
 		backend.Commit()
 
 		select {
@@ -122,7 +124,9 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	backend.SendTransaction(ctx, tx)
+	if err := backend.SendTransaction(ctx, tx); err != nil {
+		t.Errorf("failed to send transaction: %q", err)
+	}
 	backend.Commit()
 	notContractCreation := errors.New("tx is not contract creation")
 	if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != notContractCreation.Error() {
@@ -140,6 +144,8 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 		}
 	}()
 
-	backend.SendTransaction(ctx, tx)
+	if err := backend.SendTransaction(ctx, tx); err != nil {
+		t.Errorf("failed to send transaction: %q", err)
+	}
 	cancel()
 }
