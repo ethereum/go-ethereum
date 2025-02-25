@@ -250,6 +250,11 @@ jobs:
             cd -
             timeout 60m bash bor/integration-tests/smoke_test.sh
 
+        - name: Run RPC Tests
+          run: |
+            echo "Starting RPC Tests..."
+            timeout 5m bash bor/integration-tests/rpc_test.sh
+
         - name: Upload logs
           if: always()
           uses: actions/upload-artifact@v4.4.0
