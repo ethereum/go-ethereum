@@ -11,6 +11,5 @@
 69f815f6f5791e0e48160bdad284773d0ffb1ba9 # params: print time value instead of pointer in ConfigCompatError (#29514)
 e4b8058d5a5832cdebdac7da385cf6d829c0d433 # eth/gasprice: add query limit for FeeHistory to defend DDOS attack (#29644)
 34b46a2f756da71595ac84eb7f25441f2a5b6ebb # core/state/snapshot: add a missing lock (#30001)
-e4675771eda550e7eeb63a8884816982c1980644 # internal/debug: remove memsize (#30253)
 159fb1a1db551c544978dc16a5568a4730b4abf3 # crypto: add IsOnCurve check (#31100)
 da71839a270a353bac92e3108e4b74fb0eefec29 # internal/ethapi: fix panic in debug methods (#31157)
