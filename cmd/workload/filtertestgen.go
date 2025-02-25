@@ -370,14 +370,14 @@ func (s *filterTestGen) writeQueries() {
 }
 
 // writeQueries serializes the generated errors to the error file.
-func (f *filterTestGen) writeErrors() {
-	file, err := os.Create(f.errorFile)
+func (s *filterTestGen) writeErrors() {
+	file, err := os.Create(s.errorFile)
 	if err != nil {
-		exit(fmt.Errorf("Error creating filter error file %s: %v", f.errorFile, err))
+		exit(fmt.Errorf("Error creating filter error file %s: %v", s.errorFile, err))
 		return
 	}
-	json.NewEncoder(file).Encode(f.errors)
-	file.Close()
+	defer file.Close()
+	json.NewEncoder(file).Encode(s.errors)
 }
 
 func mustGetFinalizedBlock(ec *ethclient.Client) int64 {
