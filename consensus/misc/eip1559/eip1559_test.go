@@ -137,7 +137,7 @@ func TestCalcBaseFee(t *testing.T) {
 	}
 }
 
-// TestCalcBaseFee assumes all blocks are 1559-blocks post Delhi Hard Fork
+// TestCalcBaseFeeDelhi assumes all blocks are 1559-blocks post Delhi Hard Fork
 func TestCalcBaseFeeDelhi(t *testing.T) {
 	t.Parallel()
 
