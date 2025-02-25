@@ -66,7 +66,7 @@ func makeEthClient(ctx *cli.Context) *ethclient.Client {
 	return cl
 }
 
-func exit(err interface{}) {
+func exit(err any) {
 	if err == nil {
 		os.Exit(0)
 	}

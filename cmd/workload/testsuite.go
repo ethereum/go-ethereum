@@ -17,13 +17,19 @@
 package main
 
 import (
+	"embed"
+	"io/fs"
 	"os"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/urfave/cli/v2"
 )
+
+//go:embed queries
+var builtinTestFiles embed.FS
 
 var (
 	runTestCommand = &cli.Command{
@@ -34,8 +40,9 @@ var (
 		Flags: []cli.Flag{
 			testPatternFlag,
 			testTAPFlag,
+			testSepoliaFlag,
+			testMainnetFlag,
 			filterQueryFileFlag,
-			filterErrorFileFlag,
 		},
 	}
 	testPatternFlag = &cli.StringFlag{
@@ -48,10 +55,53 @@ var (
 		Usage:    "Output test results in TAP format",
 		Category: flags.TestingCategory,
 	}
+	testSepoliaFlag = &cli.BoolFlag{
+		Name:     "sepolia",
+		Usage:    "Use test cases for sepolia network",
+		Category: flags.TestingCategory,
+	}
+	testMainnetFlag = &cli.BoolFlag{
+		Name:     "mainnet",
+		Usage:    "Use test cases for mainnet network",
+		Category: flags.TestingCategory,
+	}
 )
 
+// testConfig holds the parameters for testing.
+type testConfig struct {
+	client          *ethclient.Client
+	fsys            fs.FS
+	filterQueryFile string
+}
+
+func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
+	flags.CheckExclusive(ctx, testMainnetFlag, testSepoliaFlag)
+	if (ctx.IsSet(testMainnetFlag.Name) || ctx.IsSet(testSepoliaFlag.Name)) && ctx.IsSet(filterQueryFileFlag.Name) {
+		exit(filterQueryFileFlag.Name + " cannot be used with " + testMainnetFlag.Name + " or " + testSepoliaFlag.Name)
+	}
+
+	// configure ethclient
+	cfg.client = makeEthClient(ctx)
+
+	// configure test files
+	switch {
+	case ctx.Bool(testMainnetFlag.Name):
+		cfg.fsys = builtinTestFiles
+		cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
+	case ctx.Bool(testSepoliaFlag.Name):
+		cfg.fsys = builtinTestFiles
+		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
+	default:
+		cfg.fsys = os.DirFS(".")
+		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
+	}
+
+	return cfg
+}
+
 func runTestCmd(ctx *cli.Context) error {
-	s := newFilterTestSuite(ctx)
+	cfg := testConfigFromCLI(ctx)
+	s := newFilterTestSuite(cfg)
 
 	// Filter test cases.
 	tests := s.allTests()

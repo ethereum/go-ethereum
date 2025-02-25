@@ -52,16 +52,6 @@ var (
 			filterErrorFileFlag,
 		},
 	}
-	filterPerfCommand = &cli.Command{
-		Name:      "performance",
-		Usage:     "Runs log filter performance test against an RPC endpoint",
-		ArgsUsage: "<RPC endpoint URL>",
-		Action:    filterPerfCmd,
-		Flags: []cli.Flag{
-			filterQueryFileFlag,
-			filterErrorFileFlag,
-		},
-	}
 	filterQueryFileFlag = &cli.StringFlag{
 		Name:     "queries",
 		Usage:    "JSON file containing filter test queries",
@@ -91,7 +81,7 @@ func filterGenCmd(ctx *cli.Context) error {
 		query := f.newQuery()
 		query.run(f.ec)
 		if query.Err != nil {
-			f.filterErrors = append(f.filterErrors, query)
+			f.errors = append(f.errors, query)
 			continue
 		}
 		if len(query.results) > 0 && len(query.results) <= maxFilterResultSize {
@@ -109,7 +99,7 @@ func filterGenCmd(ctx *cli.Context) error {
 					)
 				}
 				if extQuery.Err != nil {
-					f.filterErrors = append(f.filterErrors, extQuery)
+					f.errors = append(f.errors, extQuery)
 					break
 				}
 				if len(extQuery.results) > maxFilterResultSize {
@@ -127,16 +117,23 @@ func filterGenCmd(ctx *cli.Context) error {
 	}
 }
 
+// filterTestGen is the filter query test generator.
 type filterTestGen struct {
-	ec             *ethclient.Client
+	ec        *ethclient.Client
+	queryFile string
+	errorFile string
+
 	finalizedBlock int64
-	filterTest
+	queries        [filterBuckets][]*filterQuery
+	errors         []*filterQuery
 }
 
 func newFilterTestGen(ctx *cli.Context) *filterTestGen {
-	s := &filterTestGen{ec: makeEthClient(ctx)}
-	s.filterTest.initFilterTest(ctx)
-	return s
+	return &filterTestGen{
+		ec:        makeEthClient(ctx),
+		queryFile: ctx.String(filterQueryFileFlag.Name),
+		errorFile: ctx.String(filterErrorFileFlag.Name),
+	}
 }
 
 func (s *filterTestGen) updateFinalizedBlock() {
@@ -162,13 +159,13 @@ func (s *filterTestGen) storeQuery(query *filterQuery) {
 	if bucket >= filterBuckets {
 		bucket = filterBuckets - 1
 	}
-	if len(s.filterQueries[bucket]) < maxFilterBucketSize {
-		s.filterQueries[bucket] = append(s.filterQueries[bucket], query)
+	if len(s.queries[bucket]) < maxFilterBucketSize {
+		s.queries[bucket] = append(s.queries[bucket], query)
 	} else {
-		s.filterQueries[bucket][rand.Intn(len(s.filterQueries[bucket]))] = query
+		s.queries[bucket][rand.Intn(len(s.queries[bucket]))] = query
 	}
 	fmt.Print("Generated queries per bucket:")
-	for _, list := range s.filterQueries {
+	for _, list := range s.queries {
 		fmt.Print(" ", len(list))
 	}
 	fmt.Println()
@@ -340,7 +337,7 @@ func (s *filterTestGen) newNarrowedQuery() *filterQuery {
 // randomQuery returns a random query from the ones that were already generated.
 func (s *filterTestGen) randomQuery() *filterQuery {
 	var bucket, bucketCount int
-	for _, list := range s.filterQueries {
+	for _, list := range s.queries {
 		if len(list) > 0 {
 			bucketCount++
 		}
@@ -349,7 +346,7 @@ func (s *filterTestGen) randomQuery() *filterQuery {
 		return nil
 	}
 	pick := rand.Intn(bucketCount)
-	for i, list := range s.filterQueries {
+	for i, list := range s.queries {
 		if len(list) > 0 {
 			if pick == 0 {
 				bucket = i
@@ -358,28 +355,28 @@ func (s *filterTestGen) randomQuery() *filterQuery {
 			pick--
 		}
 	}
-	return s.filterQueries[bucket][rand.Intn(len(s.filterQueries[bucket]))]
+	return s.queries[bucket][rand.Intn(len(s.queries[bucket]))]
 }
 
 // writeQueries serializes the generated queries to the output file.
 func (s *filterTestGen) writeQueries() {
-	file, err := os.Create(s.filterQueryFile)
+	file, err := os.Create(s.queryFile)
 	if err != nil {
-		exit(fmt.Errorf("Error creating filter test query file %s: %v", s.filterQueryFile, err))
+		exit(fmt.Errorf("Error creating filter test query file %s: %v", s.queryFile, err))
 		return
 	}
-	json.NewEncoder(file).Encode(&s.filterQueries)
+	json.NewEncoder(file).Encode(&s.queries)
 	file.Close()
 }
 
 // writeQueries serializes the generated errors to the error file.
 func (f *filterTestGen) writeErrors() {
-	file, err := os.Create(f.filterErrorFile)
+	file, err := os.Create(f.errorFile)
 	if err != nil {
-		exit(fmt.Errorf("Error creating filter error file %s: %v", f.filterErrorFile, err))
+		exit(fmt.Errorf("Error creating filter error file %s: %v", f.errorFile, err))
 		return
 	}
-	json.NewEncoder(file).Encode(f.filterErrors)
+	json.NewEncoder(file).Encode(f.errors)
 	file.Close()
 }
 

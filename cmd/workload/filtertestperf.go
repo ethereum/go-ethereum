@@ -19,19 +19,33 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 	"sort"
 	"time"
 
 	"github.com/urfave/cli/v2"
 )
 
+var (
+	filterPerfCommand = &cli.Command{
+		Name:      "performance",
+		Usage:     "Runs log filter performance test against an RPC endpoint",
+		ArgsUsage: "<RPC endpoint URL>",
+		Action:    filterPerfCmd,
+		Flags: []cli.Flag{
+			testSepoliaFlag,
+			testMainnetFlag,
+			filterQueryFileFlag,
+			filterErrorFileFlag,
+		},
+	}
+)
+
 const passCount = 1
 
 func filterPerfCmd(ctx *cli.Context) error {
-	f := newFilterTestSuite(ctx)
-	if f.loadQueries() == 0 {
-		exit("No test requests loaded")
-	}
+	cfg := testConfigFromCLI(ctx)
+	f := newFilterTestSuite(cfg)
 
 	type queryTest struct {
 		query         *filterQuery
@@ -40,7 +54,7 @@ func filterPerfCmd(ctx *cli.Context) error {
 		medianTime    time.Duration
 	}
 	var queries, processed []queryTest
-	for i, bucket := range f.filterQueries[:] {
+	for i, bucket := range f.queries[:] {
 		for j, query := range bucket {
 			queries = append(queries, queryTest{query: query, bucket: i, index: j})
 		}
@@ -56,9 +70,9 @@ func filterPerfCmd(ctx *cli.Context) error {
 			queries[pick] = queries[len(queries)-1]
 			queries = queries[:len(queries)-1]
 			start := time.Now()
-			qt.query.run(f.ec)
+			qt.query.run(cfg.client)
 			qt.runtime = append(qt.runtime, time.Since(start))
-			sort.Slice(qt.runtime, func(i, j int) bool { return qt.runtime[i] < qt.runtime[j] })
+			slices.Sort(qt.runtime)
 			qt.medianTime = qt.runtime[len(qt.runtime)/2]
 			if qt.query.Err != nil {
 				failed++
@@ -78,7 +92,7 @@ func filterPerfCmd(ctx *cli.Context) error {
 
 	// Show results and stats.
 	fmt.Println("Performance test finished; processed:", len(queries), "failed:", failed, "result mismatch:", mismatch)
-	stats := make([]bucketStats, len(f.filterQueries))
+	stats := make([]bucketStats, len(f.queries))
 	var wildcardStats bucketStats
 	for _, qt := range queries {
 		bs := &stats[qt.bucket]
@@ -120,5 +134,4 @@ func (st *bucketStats) print(name string) {
 	}
 	fmt.Printf("%-20s queries: %4d  average block length: %12.2f  average log count: %7.2f  average runtime: %13v\n",
 		name, st.count, float64(st.blocks)/float64(st.count), float64(st.logs)/float64(st.count), st.runtime/time.Duration(st.count))
-
 }

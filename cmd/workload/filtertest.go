@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -32,17 +31,18 @@ import (
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/urfave/cli/v2"
 )
 
 type filterTestSuite struct {
-	ec *ethclient.Client
-	filterTest
+	cfg     testConfig
+	queries [][]*filterQuery
 }
 
-func newFilterTestSuite(ctx *cli.Context) *filterTestSuite {
-	s := &filterTestSuite{ec: makeEthClient(ctx)}
-	s.filterTest.initFilterTest(ctx)
+func newFilterTestSuite(cfg testConfig) *filterTestSuite {
+	s := &filterTestSuite{cfg: cfg}
+	if err := s.loadQueries(); err != nil {
+		exit(err)
+	}
 	return s
 }
 
@@ -54,24 +54,9 @@ func (s *filterTestSuite) allTests() []utesting.Test {
 	}
 }
 
-type filterTest struct {
-	filterQueryFile, filterErrorFile string
-	filterQueries                    [filterBuckets][]*filterQuery
-	filterQueriesLoaded              bool
-	filterErrors                     []*filterQuery
-}
-
-func (f *filterTest) initFilterTest(ctx *cli.Context) {
-	f.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
-	f.filterErrorFile = ctx.String(filterErrorFileFlag.Name)
-}
-
 func (s *filterTestSuite) filterRange(t *utesting.T, test func(query *filterQuery) bool, do func(t *utesting.T, query *filterQuery)) {
-	if !s.filterQueriesLoaded {
-		s.loadQueries()
-	}
 	var count, total int
-	for _, bucket := range s.filterQueries {
+	for _, bucket := range s.queries {
 		for _, query := range bucket {
 			if test(query) {
 				total++
@@ -83,7 +68,7 @@ func (s *filterTestSuite) filterRange(t *utesting.T, test func(query *filterQuer
 	}
 	start := time.Now()
 	last := start
-	for _, bucket := range s.filterQueries {
+	for _, bucket := range s.queries {
 		for _, query := range bucket {
 			if test(query) {
 				do(t, query)
@@ -117,14 +102,14 @@ func (s *filterTestSuite) filterLongRange(t *utesting.T) {
 // filterFullRange runs all filter tests, extending their range from genesis up
 // to the latest block. Note that results are only partially verified in this mode.
 func (s *filterTestSuite) filterFullRange(t *utesting.T) {
-	finalized := mustGetFinalizedBlock(s.ec)
+	finalized := mustGetFinalizedBlock(s.cfg.client)
 	s.filterRange(t, func(query *filterQuery) bool {
 		return query.ToBlock+1-query.FromBlock > finalized/2
 	}, s.fullRangeQueryAndCheck)
 }
 
 func (s *filterTestSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
-	query.run(s.ec)
+	query.run(s.cfg.client)
 	if query.Err != nil {
 		t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
 		return
@@ -141,7 +126,7 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 		Address:   query.Address,
 		Topics:    query.Topics,
 	}
-	frQuery.run(s.ec)
+	frQuery.run(s.cfg.client)
 	if frQuery.Err != nil {
 		t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
 		return
@@ -160,21 +145,27 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 	}
 }
 
-func (s *filterTestSuite) loadQueries() int {
-	file, err := os.Open(s.filterQueryFile)
+func (s *filterTestSuite) loadQueries() error {
+	file, err := s.cfg.fsys.Open(s.cfg.filterQueryFile)
 	if err != nil {
-		fmt.Println("Error opening filter test query file:", err)
-		return 0
+		return fmt.Errorf("can't open filterQueryFile: %v", err)
 	}
-	json.NewDecoder(file).Decode(&s.filterQueries)
-	file.Close()
+	defer file.Close()
+
+	var queries [][]*filterQuery
+	if err := json.NewDecoder(file).Decode(&queries); err != nil {
+		return fmt.Errorf("invalid JSON in %s: %v", s.cfg.filterQueryFile, err)
+	}
 	var count int
-	for _, bucket := range s.filterQueries {
+	for _, bucket := range queries {
 		count += len(bucket)
 	}
+	if count == 0 {
+		return fmt.Errorf("filterQueryFile %s is empty", s.cfg.filterQueryFile)
+	}
 	fmt.Println("Loaded", count, "filter test queries")
-	s.filterQueriesLoaded = true
-	return count
+	s.queries = queries
+	return nil
 }
 
 // filterQuery is a single query for testing.
