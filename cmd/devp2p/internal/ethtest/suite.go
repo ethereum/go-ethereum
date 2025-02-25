@@ -64,27 +64,26 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
-		/*
-			// status
-			{Name: "Status", Fn: s.TestStatus},
-			// get block headers
-			{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
-			{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
-			{Name: "SameRequestID", Fn: s.TestSameRequestID},
-			{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
-			// get block bodies
-			{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
-			// // malicious handshakes + status
-			{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
-			// test transactions
-			{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
-			{Name: "Transaction", Fn: s.TestTransaction},
-			{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
-			{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
-			{Name: "BlobViolations", Fn: s.TestBlobViolations},
-		*/
+		// status
+		{Name: "Status", Fn: s.TestStatus},
+		// get block headers
+		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
+		{Name: "SameRequestID", Fn: s.TestSameRequestID},
+		{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
+		// get block bodies
+		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+		// // malicious handshakes + status
+		{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
+		// test transactions
+		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
+		{Name: "Transaction", Fn: s.TestTransaction},
+		{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
+		{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
+		{Name: "BlobViolations", Fn: s.TestBlobViolations},
+
 		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
-		//{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
+		{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
 	}
 }
 
