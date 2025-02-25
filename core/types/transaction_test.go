@@ -594,4 +594,5 @@ func BenchmarkHash(b *testing.B) {
 	}
 }
 
-// BenchmarkHash-8   	  541969	      2320 ns/op	     240 B/op	       6 allocs/op
+// BenchmarkHash-8   	  440082	      2639 ns/op	     384 B/op	      13 allocs/op
+// BenchmarkHash-8   	  493566	      2033 ns/op	     240 B/op	       6 allocs/op

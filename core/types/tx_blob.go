@@ -242,3 +242,21 @@ func (tx *BlobTx) decode(input []byte) error {
 	}
 	return nil
 }
+
+func (tx *BlobTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		BlobTxType,
+		[]any{
+			chainID,
+			tx.Nonce,
+			tx.GasTipCap,
+			tx.GasFeeCap,
+			tx.Gas,
+			tx.To,
+			tx.Value,
+			tx.Data,
+			tx.AccessList,
+			tx.BlobFeeCap,
+			tx.BlobHashes,
+		})
+}
