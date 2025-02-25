@@ -51,22 +51,9 @@ var (
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
 
-	// ErrFutureReplacePending is returned if a future transaction replaces a pending
-	// one. Future transactions should only be able to replace other future transactions.
-	ErrFutureReplacePending = errors.New("future transaction tries to replace pending")
-
 	// ErrAlreadyReserved is returned if the sender address has a pending transaction
 	// in a different subpool. For example, this error is returned in response to any
 	// input transaction of non-blob type when a blob transaction from this sender
 	// remains pending (and vice-versa).
 	ErrAlreadyReserved = errors.New("address already reserved")
-
-	// ErrAuthorityReserved is returned if a transaction has an authorization
-	// signed by an address which already has in-flight transactions known to the
-	// pool.
-	ErrAuthorityReserved = errors.New("authority already reserved")
-
-	// ErrAuthorityNonce is returned if a transaction has an authorization with
-	// a nonce that is not currently valid for the authority.
-	ErrAuthorityNonceTooLow = errors.New("authority nonce too low")
 )

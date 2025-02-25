@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -2307,6 +2308,101 @@ func TestSimulateV1(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSimulateV1ChainLinkage(t *testing.T) {
+	var (
+		acc          = newTestAccount()
+		sender       = acc.addr
+		contractAddr = common.Address{0xaa, 0xaa}
+		recipient    = common.Address{0xbb, 0xbb}
+		gspec        = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				sender:       {Balance: big.NewInt(params.Ether)},
+				contractAddr: {Code: common.Hex2Bytes("5f35405f8114600f575f5260205ff35b5f80fd")},
+			},
+		}
+		signer = types.LatestSigner(params.MergedTestChainConfig)
+	)
+	backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		tx := types.MustSignNewTx(acc.key, signer, &types.LegacyTx{
+			Nonce:    uint64(i),
+			GasPrice: b.BaseFee(),
+			Gas:      params.TxGas,
+			To:       &recipient,
+			Value:    big.NewInt(500),
+		})
+		b.AddTx(tx)
+	})
+
+	ctx := context.Background()
+	stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("failed to get state and header: %v", err)
+	}
+
+	sim := &simulator{
+		b:              backend,
+		state:          stateDB,
+		base:           baseHeader,
+		chainConfig:    backend.ChainConfig(),
+		gp:             new(core.GasPool).AddGas(math.MaxUint64),
+		traceTransfers: false,
+		validate:       false,
+		fullTx:         false,
+	}
+
+	var (
+		call1 = TransactionArgs{
+			From:  &sender,
+			To:    &recipient,
+			Value: (*hexutil.Big)(big.NewInt(1000)),
+		}
+		call2 = TransactionArgs{
+			From:  &sender,
+			To:    &recipient,
+			Value: (*hexutil.Big)(big.NewInt(2000)),
+		}
+		call3a = TransactionArgs{
+			From:  &sender,
+			To:    &contractAddr,
+			Input: uint256ToBytes(uint256.NewInt(baseHeader.Number.Uint64() + 1)),
+			Gas:   newUint64(1000000),
+		}
+		call3b = TransactionArgs{
+			From:  &sender,
+			To:    &contractAddr,
+			Input: uint256ToBytes(uint256.NewInt(baseHeader.Number.Uint64() + 2)),
+			Gas:   newUint64(1000000),
+		}
+		blocks = []simBlock{
+			{Calls: []TransactionArgs{call1}},
+			{Calls: []TransactionArgs{call2}},
+			{Calls: []TransactionArgs{call3a, call3b}},
+		}
+	)
+
+	results, err := sim.execute(ctx, blocks)
+	if err != nil {
+		t.Fatalf("simulation execution failed: %v", err)
+	}
+	require.Equal(t, 3, len(results), "expected 3 simulated blocks")
+
+	// Check linkages of simulated blocks:
+	// Verify that block2's parent hash equals block1's hash.
+	block1 := results[0].Block
+	block2 := results[1].Block
+	block3 := results[2].Block
+	require.Equal(t, block1.ParentHash(), baseHeader.Hash(), "parent hash of block1 should equal hash of base block")
+	require.Equal(t, block1.Hash(), block2.Header().ParentHash, "parent hash of block2 should equal hash of block1")
+	require.Equal(t, block2.Hash(), block3.Header().ParentHash, "parent hash of block3 should equal hash of block2")
+
+	// In block3, two calls were executed to our contract.
+	// The first call in block3 should return the blockhash for block1 (i.e. block1.Hash()),
+	// whereas the second call should return the blockhash for block2 (i.e. block2.Hash()).
+	require.Equal(t, block1.Hash().Bytes(), []byte(results[2].Calls[0].ReturnValue), "returned blockhash for block1 does not match")
+	require.Equal(t, block2.Hash().Bytes(), []byte(results[2].Calls[1].ReturnValue), "returned blockhash for block2 does not match")
 }
 
 func TestSignTransaction(t *testing.T) {
