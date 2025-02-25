@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -1010,6 +1011,21 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 
 		return api.invalid(err, parent.Header()), nil
 	}
+	// Verify if the block satisfies the inclusion list constraints.
+	if inclusionList != nil {
+		statedb, err := state.New(block.Root(), api.eth.BlockChain().StateCache())
+		if err != nil {
+			return api.invalid(err, parent.Header()), nil
+		}
+		inclusionListTxs, err := engine.InclusionListToTransactions(inclusionList)
+		if err != nil {
+			return api.invalid(err, parent.Header()), nil
+		}
+		if res := api.validateInclusionListConstraints(block, statedb, inclusionListTxs); res != nil {
+			log.Warn("NewPayload: satisfying the inclusion list constraints failed")
+			return *res, nil
+		}
+	}
 	hash := block.Hash()
 
 	// If witness collection was requested, inject that into the result too
@@ -1176,6 +1192,48 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 		LatestValidHash: lastValid,
 		ValidationError: &failure,
 	}
+}
+
+// validateInclusionListConstraints verifies that all transactions in the inclusion list
+// are either included in the block or cannot be appended at the end of the block.
+// If any appendable transaction is found, the block fails to meet the inclusion list constraints.
+func (api *ConsensusAPI) validateInclusionListConstraints(block *types.Block, statedb *state.StateDB, inclusionListTxs []*types.Transaction) *engine.PayloadStatusV1 {
+	// Create a map of transaction hashes present in the block.
+	includedTxHashes := make(map[common.Hash]bool)
+	for _, tx := range block.Transactions() {
+		includedTxHashes[tx.Hash()] = true
+	}
+
+	// Get the block's gas limit and gas left.
+	gasLimit := block.GasLimit()
+	gasLeft := gasLimit - block.GasUsed()
+
+	// Iterate over each transaction in the inclusion list and check if it is either included in the block or cannot be placed at the end of the block.
+	for _, tx := range inclusionListTxs {
+		// Check if the transaction is included in the block.
+		if _, exists := includedTxHashes[tx.Hash()]; exists {
+			continue
+		}
+
+		// Check if there is enough gas left to execute the transaction.
+		if tx.Gas() > gasLeft {
+			continue
+		}
+
+		// Check if the transaction could have been appended at the end of the block. If yes, the block fails to satisfy the inclusion list constraints.
+		evm := vm.NewEVM(core.NewEVMBlockContext(block.Header(), api.eth.BlockChain(), &block.Header().Coinbase), statedb, api.eth.BlockChain().Config(), vm.Config{})
+		gasPool := new(core.GasPool).AddGas(gasLeft)
+
+		if _, err := core.ApplyTransaction(evm, gasPool, statedb, block.Header(), tx, new(uint64)); err == nil {
+			return &engine.PayloadStatusV1{
+				Status:          engine.INVALID_INCLUSION_LIST,
+				LatestValidHash: nil,
+				ValidationError: nil,
+			}
+		}
+	}
+
+	return nil
 }
 
 // invalid returns a response "INVALID" with the latest valid hash supplied by latest.
