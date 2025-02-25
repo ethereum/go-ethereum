@@ -229,11 +229,15 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 	// simply let them run simultaneously. If messages are missing in DA syncing, it will be handled by the syncing pipeline
 	// by waiting and retrying.
 	if config.EnableDASyncing {
-		eth.syncingPipeline, err = da_syncer.NewSyncingPipeline(context.Background(), eth.blockchain, chainConfig, eth.chainDb, l1Client, stack.Config().L1DeploymentBlock, config.DA)
-		if err != nil {
-			return nil, fmt.Errorf("cannot initialize da syncer: %w", err)
+		// Do not start syncing pipeline if we are producing blocks for permissionless batches.
+		if !config.DA.ProduceBlocks {
+			eth.syncingPipeline, err = da_syncer.NewSyncingPipeline(context.Background(), eth.blockchain, chainConfig, eth.chainDb, l1Client, stack.Config().L1DeploymentBlock, config.DA)
+			if err != nil {
+				return nil, fmt.Errorf("cannot initialize da syncer: %w", err)
+			}
+
+			eth.syncingPipeline.Start()
 		}
-		eth.syncingPipeline.Start()
 	}
 
 	// initialize and start L1 message sync service
@@ -273,7 +277,8 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 		return nil, err
 	}
 
-	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock, config.EnableDASyncing)
+	config.Miner.SigningDisabled = config.DA.ProduceBlocks
+	eth.miner = miner.New(eth, &config.Miner, eth.blockchain.Config(), eth.EventMux(), eth.engine, eth.isLocalBlock, config.EnableDASyncing && !config.DA.ProduceBlocks)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
@@ -632,7 +637,7 @@ func (s *Ethereum) Stop() error {
 	if s.config.EnableRollupVerify {
 		s.rollupSyncService.Stop()
 	}
-	if s.config.EnableDASyncing {
+	if s.config.EnableDASyncing && s.syncingPipeline != nil {
 		s.syncingPipeline.Stop()
 	}
 	s.miner.Close()

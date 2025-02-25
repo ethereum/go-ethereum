@@ -29,6 +29,8 @@ type Config struct {
 	InitialBatch   uint64 // Batch number from which to start syncing and overriding blocks
 	SignBlocks     bool   // Whether to sign the blocks after reading them from the pipeline (requires correct Clique signer key) and history of blocks with Clique signatures
 	L2EndBlock     uint64 // L2 block number to sync until
+
+	ProduceBlocks bool // Whether to produce blocks in DA recovery mode. The pipeline will be disabled when starting the node with this flag.
 }
 
 // SyncingPipeline is a derivation pipeline for syncing data from L1 and DA and transform it into

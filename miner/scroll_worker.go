@@ -502,11 +502,19 @@ func (w *worker) newWork(now time.Time, parentHash common.Hash, reorging bool, r
 		header.Coinbase = w.coinbase
 	}
 
-	prepareStart := time.Now()
-	if err := w.engine.Prepare(w.chain, header); err != nil {
-		return fmt.Errorf("failed to prepare header for mining: %w", err)
+	if w.config.SigningDisabled {
+		// Need to make sure to set difficulty so that a new canonical chain is detected in Blockchain
+		header.Difficulty = new(big.Int).SetUint64(1)
+		header.MixDigest = common.Hash{}
+		header.Coinbase = common.Address{}
+		header.Nonce = types.BlockNonce{}
+	} else {
+		prepareStart := time.Now()
+		if err := w.engine.Prepare(w.chain, header); err != nil {
+			return fmt.Errorf("failed to prepare header for mining: %w", err)
+		}
+		prepareTimer.UpdateSince(prepareStart)
 	}
-	prepareTimer.UpdateSince(prepareStart)
 
 	var nextL1MsgIndex uint64
 	if dbVal := rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), header.ParentHash); dbVal != nil {
@@ -853,28 +861,33 @@ func (w *worker) commit() (common.Hash, error) {
 		return common.Hash{}, err
 	}
 
-	sealHash := w.engine.SealHash(block.Header())
-	log.Info("Committing new mining work", "number", block.Number(), "sealhash", sealHash,
-		"txs", w.current.txs.Len(),
-		"gas", block.GasUsed(), "fees", totalFees(block, w.current.receipts))
+	var sealHash common.Hash
+	if w.config.SigningDisabled {
+		sealHash = block.Hash()
+	} else {
+		sealHash = w.engine.SealHash(block.Header())
+		log.Info("Committing new mining work", "number", block.Number(), "sealhash", sealHash,
+			"txs", w.current.txs.Len(),
+			"gas", block.GasUsed(), "fees", totalFees(block, w.current.receipts))
 
-	resultCh, stopCh := make(chan *types.Block), make(chan struct{})
-	if err := w.engine.Seal(w.chain, block, resultCh, stopCh); err != nil {
-		return common.Hash{}, err
-	}
-	// Clique.Seal() will only wait for a second before giving up on us. So make sure there is nothing computational heavy
-	// or a call that blocks between the call to Seal and the line below. Seal might introduce some delay, so we keep track of
-	// that artificially added delay and subtract it from overall runtime of commit().
-	sealStart := time.Now()
-	block = <-resultCh
-	sealDelay = time.Since(sealStart)
-	if block == nil {
-		return common.Hash{}, errors.New("missed seal response from consensus engine")
-	}
+		resultCh, stopCh := make(chan *types.Block), make(chan struct{})
+		if err := w.engine.Seal(w.chain, block, resultCh, stopCh); err != nil {
+			return common.Hash{}, err
+		}
+		// Clique.Seal() will only wait for a second before giving up on us. So make sure there is nothing computational heavy
+		// or a call that blocks between the call to Seal and the line below. Seal might introduce some delay, so we keep track of
+		// that artificially added delay and subtract it from overall runtime of commit().
+		sealStart := time.Now()
+		block = <-resultCh
+		sealDelay = time.Since(sealStart)
+		if block == nil {
+			return common.Hash{}, errors.New("missed seal response from consensus engine")
+		}
 
-	// verify the generated block with local consensus engine to make sure everything is as expected
-	if err = w.engine.VerifyHeader(w.chain, block.Header(), true); err != nil {
-		return common.Hash{}, retryableCommitError{inner: err}
+		// verify the generated block with local consensus engine to make sure everything is as expected
+		if err = w.engine.VerifyHeader(w.chain, block.Header(), true); err != nil {
+			return common.Hash{}, retryableCommitError{inner: err}
+		}
 	}
 
 	blockHash := block.Hash()
