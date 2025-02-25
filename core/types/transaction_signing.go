@@ -366,21 +366,22 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s londonSigner) Hash(tx *Transaction) common.Hash {
-	if tx.Type() != DynamicFeeTxType {
+	inner, ok := tx.inner.(*DynamicFeeTx)
+	if !ok {
 		return s.eip2930Signer.Hash(tx)
 	}
 	return prefixedRlpHash(
-		tx.Type(),
+		inner.txType(),
 		[]interface{}{
 			s.chainId,
-			tx.Nonce(),
-			tx.GasTipCap(),
-			tx.GasFeeCap(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
+			inner.nonce(),
+			inner.gasTipCap(),
+			inner.gasFeeCap(),
+			inner.gas(),
+			inner.to(),
+			inner.value(),
+			inner.data(),
+			inner.accessList(),
 		})
 }
 
