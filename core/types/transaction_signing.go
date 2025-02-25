@@ -233,20 +233,7 @@ func (s pragueSigner) Hash(tx *Transaction) common.Hash {
 	if tx.Type() != SetCodeTxType {
 		return s.cancunSigner.Hash(tx)
 	}
-	return prefixedRlpHash(
-		tx.Type(),
-		[]interface{}{
-			s.chainId,
-			tx.Nonce(),
-			tx.GasTipCap(),
-			tx.GasFeeCap(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-			tx.SetCodeAuthorizations(),
-		})
+	return tx.inner.sigHash(s.chainId)
 }
 
 type cancunSigner struct{ londonSigner }
