@@ -180,10 +180,7 @@ func (s *filterTestGen) extendRange(q *filterQuery) *filterQuery {
 	if rangeLen+extLen > s.finalizedBlock {
 		return nil
 	}
-	extBefore := rand.Int63n(extLen + 1)
-	if extBefore > q.FromBlock {
-		extBefore = q.FromBlock
-	}
+	extBefore := min(rand.Int63n(extLen+1), q.FromBlock)
 	extAfter := extLen - extBefore
 	if q.ToBlock+extAfter > s.finalizedBlock {
 		d := q.ToBlock + extAfter - s.finalizedBlock
@@ -337,7 +334,7 @@ func (s *filterTestGen) newNarrowedQuery() *filterQuery {
 			pick--
 		}
 	}
-	panic(nil)
+	panic("unreachable")
 }
 
 // randomQuery returns a random query from the ones that were already generated.
