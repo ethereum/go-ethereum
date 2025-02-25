@@ -33,7 +33,6 @@ var (
 const (
 	heimdallAPIBodyLimit = 128 * 1024 * 1024 // 128 MB
 	stateFetchLimit      = 50
-	retryCall            = 5 * time.Second
 )
 
 type StateSyncEventsResponse struct {
@@ -293,7 +292,7 @@ func FetchWithRetry[T any](ctx context.Context, client http.Client, url *url.URL
 	log.Warn("an error while trying fetching from Heimdall", "path", url.Path, "attempt", attempt, "error", err)
 
 	// create a new ticker for retrying the request
-	ticker := time.NewTicker(retryCall)
+	ticker := time.NewTicker(client.Timeout)
 	defer ticker.Stop()
 
 	const logEach = 5

@@ -171,7 +171,7 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 	})
 	f.DurationFlag(&flagset.DurationFlag{
 		Name:    "bor.heimdalltimeout",
-		Usage:   "Timeout of Heimdall service",
+		Usage:   "Timeout period for bor's outgoing requests to heimdall",
 		Value:   &c.cliConfig.Heimdall.Timeout,
 		Default: 5 * time.Second,
 	})
