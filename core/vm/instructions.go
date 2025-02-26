@@ -971,7 +971,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	return nil, nil
 }
 
-// opPush1 is a specialized version of pushN
+// opPush2 is a specialized version of pushN
 func opPush2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		codeLen = uint64(len(scope.Contract.Code))
