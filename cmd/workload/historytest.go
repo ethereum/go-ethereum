@@ -298,7 +298,7 @@ func (c *client) getBlockTransactionCountByHash(ctx context.Context, block commo
 
 func (c *client) getBlockTransactionCountByNumber(ctx context.Context, block uint64) (uint64, error) {
 	var r hexutil.Uint64
-	err := c.RPC.CallContext(ctx, &r, "eth_getBlockTransactionCountByNumber", block)
+	err := c.RPC.CallContext(ctx, &r, "eth_getBlockTransactionCountByNumber", hexutil.Uint64(block))
 	return uint64(r), err
 }
 
