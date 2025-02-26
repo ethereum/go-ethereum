@@ -1,7 +1,7 @@
 ## Workload Testing Tool
 
 This tool performs RPC calls against a live node. It has tests for the Sepolia testnet and
-Mainnet.
+Mainnet. Note the tests require a fully synced node.
 
 To run the tests against a Sepolia node, use:
 
@@ -19,8 +19,11 @@ and `eth_getBlockByNumber`, use this command:
 
 ### Regenerating tests
 
-There are also commands for generating tests. To create filter tests, run:
+There is a facility for updating the tests from the chain. This can also be used to
+generate the tests for a new network. As an example, to recreate tests for mainnet, run
+the following commands (in this directory) against a synced mainnet node:
 
 ```shell
-> ./workload filtergen http://host:8545
+> go run . filtergen --queries queries/filter_queries_mainnet.json http://host:8545
+> go run . historygen --history-tests queries/history_mainnet.json http://host:8545
 ```
