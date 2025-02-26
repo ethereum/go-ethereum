@@ -254,6 +254,8 @@ type HeimdallConfig struct {
 	// URL is the url of the heimdall server
 	URL string `hcl:"url,optional" toml:"url,optional"`
 
+	Timeout time.Duration `hcl:"timeout,optional" toml:"timeout,optional"`
+
 	// Without is used to disable remote heimdall during testing
 	Without bool `hcl:"bor.without,optional" toml:"bor.without,optional"`
 
@@ -644,6 +646,7 @@ func DefaultConfig() *Config {
 		},
 		Heimdall: &HeimdallConfig{
 			URL:         "http://localhost:1317",
+			Timeout:     5 * time.Second,
 			Without:     false,
 			GRPCAddress: "",
 		},
@@ -930,6 +933,7 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	}
 
 	n.HeimdallURL = c.Heimdall.URL
+	n.HeimdallTimeout = c.Heimdall.Timeout
 	n.WithoutHeimdall = c.Heimdall.Without
 	n.HeimdallgRPCAddress = c.Heimdall.GRPCAddress
 	n.RunHeimdall = c.Heimdall.RunHeimdall
