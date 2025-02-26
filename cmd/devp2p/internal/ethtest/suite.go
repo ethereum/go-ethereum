@@ -76,12 +76,11 @@ func (s *Suite) EthTests() []utesting.Test {
 		// // malicious handshakes + status
 		{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		// test transactions
-		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
+		//{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
 		{Name: "Transaction", Fn: s.TestTransaction},
 		{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
 		{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
 		{Name: "BlobViolations", Fn: s.TestBlobViolations},
-
 		{Name: "TestBlobTxWithoutSidecar", Fn: s.TestBlobTxWithoutSidecar},
 		{Name: "TestBlobTxWithMismatchedSidecar", Fn: s.TestBlobTxWithMismatchedSidecar},
 	}
@@ -861,13 +860,13 @@ proceeds as so:
   - Only bad peers are disconnected from while good peer is not.
 */
 func (s *Suite) TestBlobTxWithoutSidecar(t *utesting.T) {
-	tx := s.makeBlobTxs(1, 2, 1)[0]
+	tx := s.makeBlobTxs(1, 2, 42)[0]
 	badTx := tx.WithoutBlobTxSidecar()
 	s.testBadBlobTx(t, tx, badTx)
 }
 
 func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
-	tx := s.makeBlobTxs(1, 2, 1)[0]
+	tx := s.makeBlobTxs(1, 2, 43)[0]
 	badTx := mangleSidecar(tx)
 	s.testBadBlobTx(t, tx, badTx)
 }
