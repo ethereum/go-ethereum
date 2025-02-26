@@ -48,8 +48,8 @@ func newFilterTestSuite(cfg testConfig) *filterTestSuite {
 func (s *filterTestSuite) allTests() []utesting.Test {
 	return []utesting.Test{
 		{Name: "Filter/ShortRange", Fn: s.filterShortRange},
-		{Name: "Filter/LongRange", Fn: s.filterLongRange},
-		{Name: "Filter/FullRange", Fn: s.filterFullRange},
+		{Name: "Filter/LongRange", Fn: s.filterLongRange, Slow: true},
+		{Name: "Filter/FullRange", Fn: s.filterFullRange, Slow: true},
 	}
 }
 
@@ -162,7 +162,6 @@ func (s *filterTestSuite) loadQueries() error {
 	if count == 0 {
 		return fmt.Errorf("filterQueryFile %s is empty", s.cfg.filterQueryFile)
 	}
-	fmt.Println("Loaded", count, "filter test queries")
 	s.queries = queries
 	return nil
 }

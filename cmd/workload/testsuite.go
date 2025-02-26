@@ -20,6 +20,7 @@ import (
 	"embed"
 	"io/fs"
 	"os"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/utesting"
@@ -39,6 +40,7 @@ var (
 		Flags: []cli.Flag{
 			testPatternFlag,
 			testTAPFlag,
+			testSlowFlag,
 			testSepoliaFlag,
 			testMainnetFlag,
 			filterQueryFileFlag,
@@ -52,6 +54,12 @@ var (
 	testTAPFlag = &cli.BoolFlag{
 		Name:     "tap",
 		Usage:    "Output test results in TAP format",
+		Category: flags.TestingCategory,
+	}
+	testSlowFlag = &cli.BoolFlag{
+		Name:     "slow",
+		Usage:    "Enable slow tests",
+		Value:    false,
 		Category: flags.TestingCategory,
 	}
 	testSepoliaFlag = &cli.BoolFlag{
@@ -103,12 +111,19 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 
 func runTestCmd(ctx *cli.Context) error {
 	cfg := testConfigFromCLI(ctx)
-	s := newFilterTestSuite(cfg)
+	filterSuite := newFilterTestSuite(cfg)
+	historySuite := newHistoryTestSuite(cfg)
 
 	// Filter test cases.
-	tests := s.allTests()
+	tests := filterSuite.allTests()
+	tests = append(tests, historySuite.allTests()...)
 	if ctx.IsSet(testPatternFlag.Name) {
 		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
+	}
+	if !ctx.Bool(testSlowFlag.Name) {
+		tests = slices.DeleteFunc(tests, func(test utesting.Test) bool {
+			return test.Slow
+		})
 	}
 
 	// Disable logging unless explicitly enabled.

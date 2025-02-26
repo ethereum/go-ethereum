@@ -31,14 +31,6 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// eth_getBlockByHash
-// eth_getBlockByNumber
-// eth_getBlockReceipts
-// eth_getBlockTransactionCountByHash
-// eth_getBlockTransactionCountByNumber
-// eth_getTransactionByBlockHashAndIndex
-// eth_getTransactionByBlockNumberAndIndex
-
 var (
 	historyGenerateCommand = &cli.Command{
 		Name:      "historygen",
@@ -63,16 +55,6 @@ var (
 		Category: flags.TestingCategory,
 	}
 )
-
-// historyTest is the content of a history test.
-type historyTest struct {
-	BlockNumbers   []uint64       `json:"blockNumbers"`
-	BlockHashes    []common.Hash  `json:"blockHashes"`
-	TxCounts       []int          `json:"txCounts"`
-	TxHashIndex    []int          `json:"txHashIndex"`
-	TxHashes       []*common.Hash `json:"txHashes"`
-	ReceiptsHashes []common.Hash  `json:"blockReceiptsHashes"`
-}
 
 const historyTestBlockCount = 2000
 
@@ -145,12 +127,6 @@ func generateHistoryTests(clictx *cli.Context) error {
 	// Write output file.
 	writeJSON(outputFile, test)
 	return nil
-}
-
-func (c *client) getBlockReceipts(ctx context.Context, arg any) ([]*types.Receipt, error) {
-	var result []*types.Receipt
-	err := c.RPC.CallContext(ctx, &result, "eth_getBlockReceipts", arg)
-	return result, err
 }
 
 func calcReceiptsHash(rcpt []*types.Receipt) common.Hash {
