@@ -972,3 +972,32 @@ func TestPush(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkPush(b *testing.B) {
+	var (
+		code   = common.FromHex("0011223344556677889900aabbccddeeff0102030405060708090a0b0c0d0e0ff1e1d1c1b1a19181716151413121")
+		push32 = makePush(2, 2)
+		scope  = &ScopeContext{
+			Memory: nil,
+			Stack:  newstack(),
+			Contract: &Contract{
+				Code: code,
+			},
+		}
+		pc = new(uint64)
+	)
+
+	b.Run("makePush", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			push32(pc, nil, scope)
+			scope.Stack.pop()
+		}
+	})
+
+	b.Run("push", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			opPush2(pc, nil, scope)
+			scope.Stack.pop()
+		}
+	})
+}
