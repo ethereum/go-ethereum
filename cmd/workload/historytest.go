@@ -112,7 +112,8 @@ func (s *historyTestSuite) testGetBlockByHash(t *utesting.T) {
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		if b == nil {
-			t.Fatalf("block %d (hash %v): not found", num, bhash)
+			t.Errorf("block %d (hash %v): not found", num, bhash)
+			continue
 		}
 		if b.Hash != bhash || uint64(b.Number) != num {
 			t.Errorf("block %d (hash %v): invalid number/hash", num, bhash)
@@ -130,7 +131,8 @@ func (s *historyTestSuite) testGetBlockByNumber(t *utesting.T) {
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		if b == nil {
-			t.Fatalf("block %d (hash %v): not found", num, bhash)
+			t.Errorf("block %d (hash %v): not found", num, bhash)
+			continue
 		}
 		if b.Hash != bhash || uint64(b.Number) != num {
 			t.Errorf("block %d (hash %v): invalid number/hash", num, bhash)
@@ -221,6 +223,7 @@ func (s *historyTestSuite) testGetTransactionByBlockHashAndIndex(t *utesting.T) 
 		}
 		if tx == nil {
 			t.Errorf("block %d (hash %v): txIndex %d not found", num, bhash, txIndex)
+			continue
 		}
 		if tx.Hash != *expectedHash || uint64(tx.TransactionIndex) != uint64(txIndex) {
 			t.Errorf("block %d (hash %v): txIndex %d has wrong txHash/Index", num, bhash, txIndex)
@@ -245,6 +248,7 @@ func (s *historyTestSuite) testGetTransactionByBlockNumberAndIndex(t *utesting.T
 		}
 		if tx == nil {
 			t.Errorf("block %d (hash %v): txIndex %d not found", num, bhash, txIndex)
+			continue
 		}
 		if tx.Hash != *expectedHash || uint64(tx.TransactionIndex) != uint64(txIndex) {
 			t.Errorf("block %d (hash %v): txIndex %d has wrong txHash/Index", num, bhash, txIndex)
