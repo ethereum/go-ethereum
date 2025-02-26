@@ -209,6 +209,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, evm)
 	}
+	if block.BlockOverrides.BeaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*block.BlockOverrides.BeaconRoot, evm)
+	}
+
 	var allLogs []*types.Log
 	for i, call := range block.Calls {
 		if err := ctx.Err(); err != nil {
@@ -254,6 +258,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		}
 		callResults[i] = callRes
 	}
+	header.GasUsed = gasUsed
+	if sim.chainConfig.IsCancun(header.Number, header.Time) {
+		header.BlobGasUsed = &blobGasUsed
+	}
+
 	var requests [][]byte
 	// Process EIP-7685 requests
 	if sim.chainConfig.IsPrague(header.Number, header.Time) {
@@ -267,20 +276,26 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// EIP-7251
 		core.ProcessConsolidationQueue(&requests, evm)
 	}
-	header.Root = sim.state.IntermediateRoot(true)
-	header.GasUsed = gasUsed
-	if sim.chainConfig.IsCancun(header.Number, header.Time) {
-		header.BlobGasUsed = &blobGasUsed
-	}
-	var withdrawals types.Withdrawals
-	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
-		withdrawals = make([]*types.Withdrawal, 0)
-	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
 		header.RequestsHash = &reqHash
 	}
-	b := types.NewBlock(header, &types.Body{Transactions: txes, Withdrawals: withdrawals}, receipts, trie.NewStackTrie(nil))
+	var withdrawals types.Withdrawals
+	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
+		if block.BlockOverrides.Withdrawals != nil {
+			withdrawals = *block.BlockOverrides.Withdrawals
+		} else {
+			withdrawals = make([]*types.Withdrawal, 0)
+		}
+	}
+	blockBody := &types.Body{Transactions: txes, Withdrawals: withdrawals}
+	if block.BlockOverrides.Withdrawals != nil {
+		// We assume that if the user provides Withdrawals, we're operating on Beacon consensus
+		// which can have nil ChainHeadReader
+		sim.b.Engine().Finalize(nil, header, sim.state, blockBody)
+	}
+	header.Root = sim.state.IntermediateRoot(true)
+	b := types.NewBlock(header, blockBody, receipts, trie.NewStackTrie(nil))
 	repairLogs(callResults, b.Hash())
 	return b, callResults, nil
 }

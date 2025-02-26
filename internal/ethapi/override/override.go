@@ -128,6 +128,8 @@ type BlockOverrides struct {
 	PrevRandao    *common.Hash
 	BaseFeePerGas *hexutil.Big
 	BlobBaseFee   *hexutil.Big
+	BeaconRoot    *common.Hash
+	Withdrawals   *types.Withdrawals
 }
 
 // Apply overrides the given header fields into the given block context.
