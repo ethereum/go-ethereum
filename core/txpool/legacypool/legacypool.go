@@ -1814,8 +1814,6 @@ func (t *lookup) removeAuthorities(hash common.Hash) {
 		// Remove tx from tracker.
 		if i := slices.Index(list, hash); i >= 0 {
 			list = append(list[:i], list[i+1:]...)
-		} else {
-			log.Error("Authority with untracked tx", "addr", addr, "hash", hash)
 		}
 		if len(list) == 0 {
 			// If list is newly empty, delete it entirely.
