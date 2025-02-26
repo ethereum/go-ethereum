@@ -973,11 +973,33 @@ func TestPush(t *testing.T) {
 	}
 }
 
+func FuzzPush(f *testing.F) {
+	push2 := makePush(2, 2)
+	f.Fuzz(func(t *testing.T, code []byte, origPC uint64) {
+		scope := &ScopeContext{
+			Memory: nil,
+			Stack:  newstack(),
+			Contract: &Contract{
+				Code: code,
+			},
+		}
+		pc := origPC
+		push2(&pc, nil, scope)
+		a := scope.Stack.pop()
+		pc = origPC
+		opPush2(&pc, nil, scope)
+		b := scope.Stack.pop()
+		if a.Cmp(&b) != 0 {
+			panic(fmt.Sprintf("code: %v origPC: %v, %v %v", code, origPC, a, b))
+		}
+	})
+}
+
 func BenchmarkPush(b *testing.B) {
 	var (
-		code   = common.FromHex("0011223344556677889900aabbccddeeff0102030405060708090a0b0c0d0e0ff1e1d1c1b1a19181716151413121")
-		push32 = makePush(2, 2)
-		scope  = &ScopeContext{
+		code  = common.FromHex("0011223344556677889900aabbccddeeff0102030405060708090a0b0c0d0e0ff1e1d1c1b1a19181716151413121")
+		push2 = makePush(2, 2)
+		scope = &ScopeContext{
 			Memory: nil,
 			Stack:  newstack(),
 			Contract: &Contract{
@@ -989,7 +1011,7 @@ func BenchmarkPush(b *testing.B) {
 
 	b.Run("makePush", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			push32(pc, nil, scope)
+			push2(pc, nil, scope)
 			scope.Stack.pop()
 		}
 	})
