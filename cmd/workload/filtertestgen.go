@@ -33,16 +33,8 @@ import (
 )
 
 var (
-	filterCommand = &cli.Command{
-		Name:  "filter",
-		Usage: "Log filter workload test commands",
-		Subcommands: []*cli.Command{
-			filterGenCommand,
-			filterPerfCommand,
-		},
-	}
-	filterGenCommand = &cli.Command{
-		Name:      "generate",
+	filterGenerateCommand = &cli.Command{
+		Name:      "filtergen",
 		Usage:     "Generates query set for log filter workload test",
 		ArgsUsage: "<RPC endpoint URL>",
 		Action:    filterGenCmd,

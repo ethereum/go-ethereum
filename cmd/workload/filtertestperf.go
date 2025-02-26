@@ -28,7 +28,7 @@ import (
 
 var (
 	filterPerfCommand = &cli.Command{
-		Name:      "performance",
+		Name:      "filterperf",
 		Usage:     "Runs log filter performance test against an RPC endpoint",
 		ArgsUsage: "<RPC endpoint URL>",
 		Action:    filterPerfCmd,

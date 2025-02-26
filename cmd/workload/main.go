@@ -48,7 +48,8 @@ func init() {
 	app.Commands = []*cli.Command{
 		runTestCommand,
 		historyGenerateCommand,
-		filterCommand,
+		filterGenerateCommand,
+		filterPerfCommand,
 	}
 }
 
