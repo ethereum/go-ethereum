@@ -352,21 +352,7 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 
 // doCheckTidy assets that the Go modules files are tidied already.
 func doCheckTidy() {
-	targets := []string{"go.mod", "go.sum"}
-
-	hashes, err := build.HashFiles(targets)
-	if err != nil {
-		log.Fatalf("failed to hash go.mod/go.sum: %v", err)
-	}
-	build.MustRun(new(build.GoToolchain).Go("mod", "tidy"))
-
-	tidied, err := build.HashFiles(targets)
-	if err != nil {
-		log.Fatalf("failed to rehash go.mod/go.sum: %v", err)
-	}
-	if updates := build.DiffHashes(hashes, tidied); len(updates) > 0 {
-		log.Fatalf("files changed on running 'go mod tidy': %v", updates)
-	}
+	build.MustRun(new(build.GoToolchain).Go("mod", "tidy", "-diff"))
 	fmt.Println("No untidy module files detected.")
 }
 
