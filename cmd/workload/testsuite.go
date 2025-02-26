@@ -44,6 +44,7 @@ var (
 			testSepoliaFlag,
 			testMainnetFlag,
 			filterQueryFileFlag,
+			historyTestFileFlag,
 		},
 	}
 	testPatternFlag = &cli.StringFlag{

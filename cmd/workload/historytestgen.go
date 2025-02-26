@@ -39,6 +39,7 @@ var (
 		Action:    generateHistoryTests,
 		Flags: []cli.Flag{
 			historyTestFileFlag,
+			historyTestEarliestFlag,
 		},
 	}
 
@@ -48,7 +49,7 @@ var (
 		Value:    "history_tests.json",
 		Category: flags.TestingCategory,
 	}
-	historyTestEarliesFlag = &cli.IntFlag{
+	historyTestEarliestFlag = &cli.IntFlag{
 		Name:     "earliest",
 		Usage:    "JSON file containing filter test queries",
 		Value:    0,
@@ -61,7 +62,7 @@ const historyTestBlockCount = 2000
 func generateHistoryTests(clictx *cli.Context) error {
 	var (
 		client     = makeClient(clictx)
-		earliest   = uint64(clictx.Int(historyTestEarliesFlag.Name))
+		earliest   = uint64(clictx.Int(historyTestEarliestFlag.Name))
 		outputFile = clictx.String(historyTestFileFlag.Name)
 		ctx        = context.Background()
 	)
