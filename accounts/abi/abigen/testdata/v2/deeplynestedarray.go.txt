@@ -1,0 +1,114 @@
+// Code generated via abigen V2 - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
+package bindtests
+
+import (
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var (
+	_ = bytes.Equal
+	_ = errors.New
+	_ = big.NewInt
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = abi.ConvertType
+)
+
+// DeeplyNestedArrayMetaData contains all meta data concerning the DeeplyNestedArray contract.
+var DeeplyNestedArrayMetaData = bind.MetaData{
+	ABI: "[{\"constant\":false,\"inputs\":[{\"name\":\"arr\",\"type\":\"uint64[3][4][5]\"}],\"name\":\"storeDeepUintArray\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"retrieveDeepArray\",\"outputs\":[{\"name\":\"\",\"type\":\"uint64[3][4][5]\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"uint256\"},{\"name\":\"\",\"type\":\"uint256\"},{\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"deepUint64Array\",\"outputs\":[{\"name\":\"\",\"type\":\"uint64\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"}]",
+	ID:  "3a44c26b21f02743d5dbeb02d24a67bf41",
+	Bin: "0x6060604052341561000f57600080fd5b6106438061001e6000396000f300606060405260043610610057576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063344248551461005c5780638ed4573a1461011457806398ed1856146101ab575b600080fd5b341561006757600080fd5b610112600480806107800190600580602002604051908101604052809291906000905b828210156101055783826101800201600480602002604051908101604052809291906000905b828210156100f25783826060020160038060200260405190810160405280929190826003602002808284378201915050505050815260200190600101906100b0565b505050508152602001906001019061008a565b5050505091905050610208565b005b341561011f57600080fd5b61012761021d565b604051808260056000925b8184101561019b578284602002015160046000925b8184101561018d5782846020020151600360200280838360005b8381101561017c578082015181840152602081019050610161565b505050509050019260010192610147565b925050509260010192610132565b9250505091505060405180910390f35b34156101b657600080fd5b6101de6004808035906020019091908035906020019091908035906020019091905050610309565b604051808267ffffffffffffffff1667ffffffffffffffff16815260200191505060405180910390f35b80600090600561021992919061035f565b5050565b6102256103b0565b6000600580602002604051908101604052809291906000905b8282101561030057838260040201600480602002604051908101604052809291906000905b828210156102ed578382016003806020026040519081016040528092919082600380156102d9576020028201916000905b82829054906101000a900467ffffffffffffffff1667ffffffffffffffff16815260200190600801906020826007010492830192600103820291508084116102945790505b505050505081526020019060010190610263565b505050508152602001906001019061023e565b50505050905090565b60008360058110151561031857fe5b600402018260048110151561032957fe5b018160038110151561033757fe5b6004918282040191900660080292509250509054906101000a900467ffffffffffffffff1681565b826005600402810192821561039f579160200282015b8281111561039e5782518290600461038e9291906103df565b5091602001919060040190610375565b5b5090506103ac919061042d565b5090565b610780604051908101604052806005905b6103c9610459565b8152602001906001900390816103c15790505090565b826004810192821561041c579160200282015b8281111561041b5782518290600361040b929190610488565b50916020019190600101906103f2565b5b5090506104299190610536565b5090565b61045691905b8082111561045257600081816104499190610562565b50600401610433565b5090565b90565b610180604051908101604052806004905b6104726105a7565b81526020019060019003908161046a5790505090565b82600380016004900481019282156105255791602002820160005b838211156104ef57835183826101000a81548167ffffffffffffffff021916908367ffffffffffffffff16021790555092602001926008016020816007010492830192600103026104a3565b80156105235782816101000a81549067ffffffffffffffff02191690556008016020816007010492830192600103026104ef565b505b50905061053291906105d9565b5090565b61055f91905b8082111561055b57600081816105529190610610565b5060010161053c565b5090565b90565b50600081816105719190610610565b50600101600081816105839190610610565b50600101600081816105959190610610565b5060010160006105a59190610610565b565b6060604051908101604052806003905b600067ffffffffffffffff168152602001906001900390816105b75790505090565b61060d91905b8082111561060957600081816101000a81549067ffffffffffffffff0219169055506001016105df565b5090565b90565b50600090555600a165627a7a7230582087e5a43f6965ab6ef7a4ff056ab80ed78fd8c15cff57715a1bf34ec76a93661c0029",
+}
+
+// DeeplyNestedArray is an auto generated Go binding around an Ethereum contract.
+type DeeplyNestedArray struct {
+	abi abi.ABI
+}
+
+// NewDeeplyNestedArray creates a new instance of DeeplyNestedArray.
+func NewDeeplyNestedArray() *DeeplyNestedArray {
+	parsed, err := DeeplyNestedArrayMetaData.ParseABI()
+	if err != nil {
+		panic(errors.New("invalid ABI: " + err.Error()))
+	}
+	return &DeeplyNestedArray{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *DeeplyNestedArray) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+}
+
+// PackDeepUint64Array is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x98ed1856.
+//
+// Solidity: function deepUint64Array(uint256 , uint256 , uint256 ) view returns(uint64)
+func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(arg0 *big.Int, arg1 *big.Int, arg2 *big.Int) []byte {
+	enc, err := deeplyNestedArray.abi.Pack("deepUint64Array", arg0, arg1, arg2)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackDeepUint64Array is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x98ed1856.
+//
+// Solidity: function deepUint64Array(uint256 , uint256 , uint256 ) view returns(uint64)
+func (deeplyNestedArray *DeeplyNestedArray) UnpackDeepUint64Array(data []byte) (uint64, error) {
+	out, err := deeplyNestedArray.abi.Unpack("deepUint64Array", data)
+	if err != nil {
+		return *new(uint64), err
+	}
+	out0 := *abi.ConvertType(out[0], new(uint64)).(*uint64)
+	return out0, err
+}
+
+// PackRetrieveDeepArray is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x8ed4573a.
+//
+// Solidity: function retrieveDeepArray() view returns(uint64[3][4][5])
+func (deeplyNestedArray *DeeplyNestedArray) PackRetrieveDeepArray() []byte {
+	enc, err := deeplyNestedArray.abi.Pack("retrieveDeepArray")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackRetrieveDeepArray is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x8ed4573a.
+//
+// Solidity: function retrieveDeepArray() view returns(uint64[3][4][5])
+func (deeplyNestedArray *DeeplyNestedArray) UnpackRetrieveDeepArray(data []byte) ([5][4][3]uint64, error) {
+	out, err := deeplyNestedArray.abi.Unpack("retrieveDeepArray", data)
+	if err != nil {
+		return *new([5][4][3]uint64), err
+	}
+	out0 := *abi.ConvertType(out[0], new([5][4][3]uint64)).(*[5][4][3]uint64)
+	return out0, err
+}
+
+// PackStoreDeepUintArray is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x34424855.
+//
+// Solidity: function storeDeepUintArray(uint64[3][4][5] arr) returns()
+func (deeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(arr [5][4][3]uint64) []byte {
+	enc, err := deeplyNestedArray.abi.Pack("storeDeepUintArray", arr)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
