@@ -21,16 +21,16 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
@@ -99,7 +99,7 @@ func newTester() *downloadTester {
 	tester.stateDb = rawdb.NewMemoryDatabase()
 	tester.stateDb.Put(genesis.Root().Bytes(), []byte{0x00})
 
-	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer, tester.handleProposedBlock)
+	tester.downloader = New(tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer, tester.handleProposedBlock)
 
 	return tester
 }
@@ -230,6 +230,15 @@ func (dl *downloadTester) HasBlock(hash common.Hash, number uint64) bool {
 	return dl.GetBlockByHash(hash) != nil
 }
 
+// HasFastBlock checks if a block is present in the testers canonical chain.
+func (dl *downloadTester) HasFastBlock(hash common.Hash, number uint64) bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	_, ok := dl.ownReceipts[hash]
+	return ok
+}
+
 // GetHeader retrieves a header from the testers canonical chain.
 func (dl *downloadTester) GetHeaderByHash(hash common.Hash) *types.Header {
 	dl.lock.RLock()
@@ -309,27 +318,32 @@ func (dl *downloadTester) GetTd(hash common.Hash, number uint64) *big.Int {
 func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq int) (int, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
-
 	// Do a quick check, as the blockchain.InsertHeaderChain doesn't insert anything in case of errors
 	if _, ok := dl.ownHeaders[headers[0].ParentHash]; !ok {
-		return 0, errors.New("unknown parent")
+		return 0, errors.New("InsertHeaderChain: unknown parent at first position")
 	}
+	var hashes []common.Hash
 	for i := 1; i < len(headers); i++ {
+		hash := headers[i-1].Hash()
 		if headers[i].ParentHash != headers[i-1].Hash() {
-			return i, errors.New("unknown parent")
+			return i, fmt.Errorf("non-contiguous import at position %d", i)
 		}
+		hashes = append(hashes, hash)
 	}
+	hashes = append(hashes, headers[len(headers)-1].Hash())
 	// Do a full insert if pre-checks passed
 	for i, header := range headers {
-		if _, ok := dl.ownHeaders[header.Hash()]; ok {
+		hash := hashes[i]
+		if _, ok := dl.ownHeaders[hash]; ok {
 			continue
 		}
 		if _, ok := dl.ownHeaders[header.ParentHash]; !ok {
-			return i, errors.New("unknown parent")
+			// This _should_ be impossible, due to precheck and induction
+			return i, fmt.Errorf("InsertHeaderChain: unknown parent at position %d", i)
 		}
-		dl.ownHashes = append(dl.ownHashes, header.Hash())
-		dl.ownHeaders[header.Hash()] = header
-		dl.ownChainTd[header.Hash()] = new(big.Int).Add(dl.ownChainTd[header.ParentHash], header.Difficulty)
+		dl.ownHashes = append(dl.ownHashes, hash)
+		dl.ownHeaders[hash] = header
+		dl.ownChainTd[hash] = new(big.Int).Add(dl.ownChainTd[header.ParentHash], header.Difficulty)
 	}
 	return len(headers), nil
 }
@@ -341,15 +355,16 @@ func (dl *downloadTester) InsertChain(blocks types.Blocks) (int, error) {
 
 	for i, block := range blocks {
 		if parent, ok := dl.ownBlocks[block.ParentHash()]; !ok {
-			return i, errors.New("unknown parent")
+			return i, fmt.Errorf("InsertChain: unknown parent at position %d / %d", i, len(blocks))
 		} else if _, err := dl.stateDb.Get(parent.Root().Bytes()); err != nil {
-			return i, fmt.Errorf("unknown parent state %x: %v", parent.Root(), err)
+			return i, fmt.Errorf("InsertChain: unknown parent state %x: %v", parent.Root(), err)
 		}
 		if _, ok := dl.ownHeaders[block.Hash()]; !ok {
 			dl.ownHashes = append(dl.ownHashes, block.Hash())
 			dl.ownHeaders[block.Hash()] = block.Header()
 		}
 		dl.ownBlocks[block.Hash()] = block
+		dl.ownReceipts[block.Hash()] = make(types.Receipts, 0)
 		dl.stateDb.Put(block.Root().Bytes(), []byte{0x00})
 		dl.ownChainTd[block.Hash()] = new(big.Int).Add(dl.ownChainTd[block.ParentHash()], block.Difficulty())
 	}
@@ -366,7 +381,7 @@ func (dl *downloadTester) InsertReceiptChain(blocks types.Blocks, receipts []typ
 			return i, errors.New("unknown owner")
 		}
 		if _, ok := dl.ownBlocks[blocks[i].ParentHash()]; !ok {
-			return i, errors.New("unknown parent")
+			return i, errors.New("InsertReceiptChain: unknown parent")
 		}
 		dl.ownBlocks[blocks[i].Hash()] = blocks[i]
 		dl.ownReceipts[blocks[i].Hash()] = receipts[i]
@@ -622,28 +637,28 @@ func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
 // assertOwnChain checks if the local chain contains the correct number of items
 // of the various chain components.
 func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
+	// Mark this method as a helper to report errors at callsite, not in here
+	t.Helper()
+
 	assertOwnForkedChain(t, tester, 1, []int{length})
 }
 
 // assertOwnForkedChain checks if the local forked chain contains the correct
 // number of items of the various chain components.
 func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, lengths []int) {
-	// Initialize the counters for the first fork
-	headers, blocks, receipts := lengths[0], lengths[0], lengths[0]-fsMinFullBlocks
+	// Mark this method as a helper to report errors at callsite, not in here
+	t.Helper()
 
-	if receipts < 0 {
-		receipts = 1
-	}
+	// Initialize the counters for the first fork
+	headers, blocks, receipts := lengths[0], lengths[0], lengths[0]
+
 	// Update the counters for each subsequent fork
 	for _, length := range lengths[1:] {
 		headers += length - common
 		blocks += length - common
-		receipts += length - common - fsMinFullBlocks
+		receipts += length - common
 	}
-	switch tester.downloader.mode {
-	case FullSync:
-		receipts = 1
-	case LightSync:
+	if tester.downloader.getMode() == LightSync {
 		blocks, receipts = 1, 1
 	}
 	if hs := len(tester.ownHeaders); hs != headers {
@@ -762,7 +777,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 			tester.downloader.queue.lock.Unlock()
 			tester.lock.Unlock()
 
-			if cached == blockCacheItems || retrieved+cached+frozen == targetBlocks+1 {
+			if cached == blockCacheItems || cached == blockCacheItems-reorgProtHeaderDelay || retrieved+cached+frozen == targetBlocks+1 || retrieved+cached+frozen == targetBlocks+1-reorgProtHeaderDelay {
 				break
 			}
 		}
@@ -772,7 +787,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 		tester.lock.RLock()
 		retrieved = len(tester.ownBlocks)
 		tester.lock.RUnlock()
-		if cached != blockCacheItems && retrieved+cached+frozen != targetBlocks+1 {
+		if cached != blockCacheItems && cached != blockCacheItems-reorgProtHeaderDelay && retrieved+cached+frozen != targetBlocks+1 && retrieved+cached+frozen != targetBlocks+1-reorgProtHeaderDelay {
 			t.Fatalf("block count mismatch: have %v, want %v (owned %v, blocked %v, target %v)", cached, blockCacheItems, retrieved, frozen, targetBlocks+1)
 		}
 		// Permit the blocked blocks to import
@@ -1338,14 +1353,8 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 		{errPeersUnavailable, true},         // Nobody had the advertised blocks, drop the advertiser
 		{errInvalidAncestor, true},          // Agreed upon ancestor is not acceptable, drop the chain rewriter
 		{errInvalidChain, true},             // Hash chain was detected as invalid, definitely drop
-		{errInvalidBlock, false},            // A bad peer was detected, but not the sync origin
 		{errInvalidBody, false},             // A bad peer was detected, but not the sync origin
 		{errInvalidReceipt, false},          // A bad peer was detected, but not the sync origin
-		{errCancelBlockFetch, false},        // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelHeaderFetch, false},       // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelBodyFetch, false},         // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelReceiptFetch, false},      // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelHeaderProcessing, false},  // Synchronisation was canceled, origin may be innocent, don't drop
 		{errCancelContentProcessing, false}, // Synchronisation was canceled, origin may be innocent, don't drop
 	}
 	// Run the tests and check disconnection status
@@ -1771,5 +1780,80 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 
 		// Flush all goroutines to prevent messing with subsequent tests
 		tester.downloader.peers.peers["peer"].peer.(*floodingTestPeer).pend.Wait()
+	}
+}
+
+func TestRemoteHeaderRequestSpan(t *testing.T) {
+	testCases := []struct {
+		remoteHeight uint64
+		localHeight  uint64
+		expected     []int
+	}{
+		// Remote is way higher. We should ask for the remote head and go backwards
+		{1500, 1000,
+			[]int{1323, 1339, 1355, 1371, 1387, 1403, 1419, 1435, 1451, 1467, 1483, 1499},
+		},
+		{15000, 13006,
+			[]int{14823, 14839, 14855, 14871, 14887, 14903, 14919, 14935, 14951, 14967, 14983, 14999},
+		},
+		//Remote is pretty close to us. We don't have to fetch as many
+		{1200, 1150,
+			[]int{1149, 1154, 1159, 1164, 1169, 1174, 1179, 1184, 1189, 1194, 1199},
+		},
+		// Remote is equal to us (so on a fork with higher td)
+		// We should get the closest couple of ancestors
+		{1500, 1500,
+			[]int{1497, 1499},
+		},
+		// We're higher than the remote! Odd
+		{1000, 1500,
+			[]int{997, 999},
+		},
+		// Check some weird edgecases that it behaves somewhat rationally
+		{0, 1500,
+			[]int{0, 2},
+		},
+		{6000000, 0,
+			[]int{5999823, 5999839, 5999855, 5999871, 5999887, 5999903, 5999919, 5999935, 5999951, 5999967, 5999983, 5999999},
+		},
+		{0, 0,
+			[]int{0, 2},
+		},
+	}
+	reqs := func(from, count, span int) []int {
+		var r []int
+		num := from
+		for len(r) < count {
+			r = append(r, num)
+			num += span + 1
+		}
+		return r
+	}
+	for i, tt := range testCases {
+		from, count, span, max := calculateRequestSpan(tt.remoteHeight, tt.localHeight)
+		data := reqs(int(from), count, span)
+
+		if max != uint64(data[len(data)-1]) {
+			t.Errorf("test %d: wrong last value %d != %d", i, data[len(data)-1], max)
+		}
+		failed := false
+		if len(data) != len(tt.expected) {
+			failed = true
+			t.Errorf("test %d: length wrong, expected %d got %d", i, len(tt.expected), len(data))
+		} else {
+			for j, n := range data {
+				if n != tt.expected[j] {
+					failed = true
+					break
+				}
+			}
+		}
+		if failed {
+			res := strings.Replace(fmt.Sprint(data), " ", ",", -1)
+			exp := strings.Replace(fmt.Sprint(tt.expected), " ", ",", -1)
+			fmt.Printf("got: %v\n", res)
+			fmt.Printf("exp: %v\n", exp)
+			t.Errorf("test %d: wrong values", i)
+		}
 	}
 }

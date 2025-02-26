@@ -143,7 +143,7 @@ func (q *queue) Reset() {
 	q.resultOffset = 0
 }
 
-// Close marks the end of the sync, unblocking WaitResults.
+// Close marks the end of the sync, unblocking Results.
 // It may be called even if the queue is already closed.
 func (q *queue) Close() {
 	q.lock.Lock()
@@ -510,7 +510,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		index := int(header.Number.Int64() - int64(q.resultOffset))
 		if index >= len(q.resultCache) || index < 0 {
 			log.Error("index allocation went beyond available resultCache space", "index", index, "len.resultCache", len(q.resultCache), "blockNum", header.Number.Int64(), "resultOffset", q.resultOffset)
-			return nil, false, errInvalidChain
+			return nil, false, fmt.Errorf("%w: index allocation went beyond available resultCache space", errInvalidChain)
 		}
 		if q.resultCache[index] == nil {
 			components := 1
@@ -545,7 +545,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 		taskQueue.Push(header, -int64(header.Number.Uint64()))
 	}
 	if progress {
-		// Wake WaitResults, resultCache was modified
+		// Wake Results, resultCache was modified
 		q.active.Signal()
 	}
 	// Assemble and return the block download request
@@ -860,19 +860,21 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 			taskQueue.Push(header, -int64(header.Number.Uint64()))
 		}
 	}
-	// Wake up WaitResults
+	// Wake up Results
 	if accepted > 0 {
 		q.active.Signal()
 	}
 	// If none of the data was good, it's a stale delivery
-	switch {
-	case failure == nil || failure == errInvalidChain:
-		return accepted, failure
-	case useful:
-		return accepted, fmt.Errorf("partial failure: %v", failure)
-	default:
-		return accepted, errStaleDelivery
+	if failure == nil {
+		return accepted, nil
 	}
+	if errors.Is(failure, errInvalidChain) {
+		return accepted, failure
+	}
+	if useful {
+		return accepted, fmt.Errorf("partial failure: %v", failure)
+	}
+	return accepted, fmt.Errorf("%w: %v", failure, errStaleDelivery)
 }
 
 // Prepare configures the result cache to allow accepting and caching inbound
