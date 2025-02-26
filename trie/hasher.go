@@ -148,7 +148,9 @@ func (h *hasher) shortnodeToHash(n *shortNode, force bool) node {
 	if len(enc) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
-	return h.hashData(enc)
+	var hn hashNode
+	h.hashDataTo(hn, enc)
+	return hn
 }
 
 // fullnodeToHash is used to create a hashNode from a fullNode, (which
@@ -160,7 +162,9 @@ func (h *hasher) fullnodeToHash(n *fullNode, force bool) node {
 	if len(enc) < 32 && !force {
 		return n // Nodes smaller than 32 bytes are stored inside their parent
 	}
-	return h.hashData(enc)
+	var hn hashNode
+	h.hashDataTo(hn, enc)
+	return hn
 }
 
 // encodedBytes returns the result of the last encoding operation on h.encbuf.
