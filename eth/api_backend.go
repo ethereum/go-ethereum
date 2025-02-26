@@ -272,7 +272,8 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	if locals := b.eth.localTxTracker; locals != nil {
+	locals := b.eth.localTxTracker
+	if locals != nil {
 		if err := locals.Track(signedTx); err != nil {
 			return err
 		}
@@ -280,7 +281,10 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	// No error will be returned to user if the transaction fails stateful
 	// validation (e.g., no available slot), as the locally submitted transactions
 	// may be resubmitted later via the local tracker.
-	b.eth.txPool.Add([]*types.Transaction{signedTx}, false)
+	err := b.eth.txPool.Add([]*types.Transaction{signedTx}, false)[0]
+	if err != nil && locals == nil {
+		return err
+	}
 	return nil
 }
 
