@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -31,7 +32,9 @@ var (
 	// serveTimeHistName is the prefix of the per-request serving time histograms.
 	serveTimeHistName = "rpc/duration"
 
-	rpcServingTimer = metrics.NewRegisteredTimer("rpc/duration/all", nil)
+	rpcServingTimer = sync.OnceValue(func() *metrics.Timer {
+		return metrics.NewRegisteredTimer("rpc/duration/all", nil)
+	})
 )
 
 // updateServeTimeHistogram tracks the serving time of a remote RPC call.
