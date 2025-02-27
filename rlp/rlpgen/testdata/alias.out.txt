@@ -1,0 +1,43 @@
+package test
+
+import "github.com/ava-labs/libevm/rlp"
+import "github.com/holiman/uint256"
+import "io"
+
+func (obj *Test) EncodeRLP(_w io.Writer) error {
+	w := rlp.NewEncoderBuffer(_w)
+	_tmp0 := w.List()
+	if obj.BigAlias.Sign() == -1 {
+		return rlp.ErrNegativeBigInt
+	}
+	w.WriteBigInt(&obj.BigAlias)
+	w.WriteUint256(&obj.Uint256Alias)
+	w.ListEnd(_tmp0)
+	return w.Flush()
+}
+
+func (obj *Test) DecodeRLP(dec *rlp.Stream) error {
+	var _tmp0 Test
+	{
+		if _, err := dec.List(); err != nil {
+			return err
+		}
+		// BigAlias:
+		_tmp1, err := dec.BigInt()
+		if err != nil {
+			return err
+		}
+		_tmp0.BigAlias = (*_tmp1)
+		// Uint256Alias:
+		var _tmp2 uint256.Int
+		if err := dec.ReadUint256(&_tmp2); err != nil {
+			return err
+		}
+		_tmp0.Uint256Alias = _tmp2
+		if err := dec.ListEnd(); err != nil {
+			return err
+		}
+	}
+	*obj = _tmp0
+	return nil
+}

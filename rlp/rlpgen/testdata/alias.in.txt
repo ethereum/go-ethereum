@@ -1,0 +1,22 @@
+// -*- mode: go -*-
+
+package test
+
+import (
+    "math/big"
+    "github.com/holiman/uint256"
+)
+
+// Alias types chosen because their originals have special handling that is easy
+// to spot when inspecting generated output.
+type (
+    Big = big.Int
+    // Demonstrate recursive unaliasing
+    intermediate = uint256.Int
+    Uint256      = intermediate
+)
+
+type Test struct {
+    BigAlias     Big
+    Uint256Alias Uint256
+}

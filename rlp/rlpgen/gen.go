@@ -673,7 +673,7 @@ func (op sliceOp) genDecode(ctx *genContext) (string, string) {
 }
 
 func (bctx *buildContext) makeOp(name *types.Named, typ types.Type, tags rlpstruct.Tags) (op, error) {
-	switch typ := typ.(type) {
+	switch typ := types.Unalias(typ).(type) {
 	case *types.Named:
 		if isBigInt(typ) {
 			return bigIntOp{}, nil
