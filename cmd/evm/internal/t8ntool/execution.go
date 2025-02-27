@@ -394,7 +394,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(&excessBlobGas)
 		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
 	}
-	if chainConfig.IsPrague(vmContext.BlockNumber) {
+	if chainConfig.IsPrague(vmContext.BlockNumber) && chainConfig.Bor == nil {
 		// Parse the requests from the logs
 		var allLogs []*types.Log
 		for _, receipt := range receipts {

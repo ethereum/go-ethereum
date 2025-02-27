@@ -301,7 +301,12 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	}
 
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
+	context := NewEVMBlockContext(header, p.bc.hc, nil)
+	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 
+	if p.config.IsPrague(block.Number()) {
+		ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, types.MakeSigner(p.config, header.Number, header.Time), header.BaseFee)
@@ -391,7 +396,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	// Read requests if Prague is enabled.
 	var requests types.Requests
-	if p.config.IsPrague(block.Number()) {
+	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {
 		requests, err = ParseDepositLogs(allLogs, p.config)
 		if err != nil {
 			return nil, err

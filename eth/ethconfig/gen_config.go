@@ -50,6 +50,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		BlobPool                             blobpool.Config
 		GPO                                  gasprice.Config
 		EnablePreimageRecording              bool
+		EnableWitnessCollection              bool `toml:"-"`
 		VMTrace                              string
 		VMTraceJsonConfig                    string
 		DocRoot                              string `toml:"-"`
@@ -59,6 +60,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		RPCTxFeeCap                          float64
 		OverrideCancun                       *big.Int `toml:",omitempty"`
 		HeimdallURL                          string
+		HeimdallTimeout                      time.Duration
 		WithoutHeimdall                      bool
 		HeimdallgRPCAddress                  string
 		RunHeimdall                          bool
@@ -112,6 +114,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
 	enc.OverrideCancun = c.OverrideCancun
 	enc.HeimdallURL = c.HeimdallURL
+	enc.HeimdallTimeout = c.HeimdallTimeout
 	enc.WithoutHeimdall = c.WithoutHeimdall
 	enc.HeimdallgRPCAddress = c.HeimdallgRPCAddress
 	enc.RunHeimdall = c.RunHeimdall
@@ -160,6 +163,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		BlobPool                             *blobpool.Config
 		GPO                                  *gasprice.Config
 		EnablePreimageRecording              *bool
+		EnableWitnessCollection              *bool `toml:"-"`
 		VMTrace                              *string
 		VMTraceJsonConfig                    *string
 		DocRoot                              *string `toml:"-"`
@@ -169,6 +173,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		RPCTxFeeCap                          *float64
 		OverrideCancun                       *big.Int `toml:",omitempty"`
 		HeimdallURL                          *string
+		HeimdallTimeout                      *time.Duration
 		WithoutHeimdall                      *bool
 		HeimdallgRPCAddress                  *string
 		RunHeimdall                          *bool
@@ -306,6 +311,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.HeimdallURL != nil {
 		c.HeimdallURL = *dec.HeimdallURL
+	}
+	if dec.HeimdallTimeout != nil {
+		c.HeimdallTimeout = *dec.HeimdallTimeout
 	}
 	if dec.WithoutHeimdall != nil {
 		c.WithoutHeimdall = *dec.WithoutHeimdall

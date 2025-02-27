@@ -2282,6 +2282,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	configs := &ethconfig.Config{
 		Genesis:             gspec,
 		HeimdallURL:         ctx.String(HeimdallURLFlag.Name),
+		HeimdallTimeout:     ctx.Duration(HeimdallTimeoutFlag.Name),
 		WithoutHeimdall:     ctx.Bool(WithoutHeimdallFlag.Name),
 		HeimdallgRPCAddress: ctx.String(HeimdallgRPCAddressFlag.Name),
 		RunHeimdall:         ctx.Bool(RunHeimdallArgsFlag.Name),

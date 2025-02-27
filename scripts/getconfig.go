@@ -110,6 +110,7 @@ var nameTagMap = map[string]string{
 	"0-snapshot":              "snapshot",
 	"\"bor.logs\"":            "bor.logs",
 	"url":                     "bor.heimdall",
+	"timeout":                 "bor.heimdalltimeout",
 	"\"bor.without\"":         "bor.withoutheimdall",
 	"grpc-address":            "bor.heimdallgRPC",
 	"\"bor.runheimdall\"":     "bor.runheimdall",

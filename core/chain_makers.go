@@ -360,7 +360,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		var requests types.Requests
-		if config.IsPrague(b.header.Number) {
+		if config.IsPrague(b.header.Number) && config.Bor == nil {
 			for _, r := range b.receipts {
 				d, err := ParseDepositLogs(r.Logs, config)
 				if err != nil {
