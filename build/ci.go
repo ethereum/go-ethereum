@@ -25,8 +25,7 @@ Usage: go run build/ci.go <command> <command flags/arguments>
 Available commands are:
 
 	lint           -- runs certain pre-selected linters
-	check_tidy     -- verifies that everything is 'go mod tidy'-ed
-	check_generate -- verifies that everything is 'go generate'-ed
+	check_generate -- verifies that 'go generate' and 'go mod tidy' do not produce changes
 	check_baddeps  -- verifies that certain dependencies are avoided
 
 	install    [ -arch architecture ] [ -cc compiler ] [ packages... ] -- builds packages and executables
@@ -155,8 +154,6 @@ func main() {
 		doTest(os.Args[2:])
 	case "lint":
 		doLint(os.Args[2:])
-	case "check_tidy":
-		doCheckTidy()
 	case "check_generate":
 		doCheckGenerate()
 	case "check_baddeps":
@@ -352,22 +349,6 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 
 // doCheckTidy assets that the Go modules files are tidied already.
 func doCheckTidy() {
-	targets := []string{"go.mod", "go.sum"}
-
-	hashes, err := build.HashFiles(targets)
-	if err != nil {
-		log.Fatalf("failed to hash go.mod/go.sum: %v", err)
-	}
-	build.MustRun(new(build.GoToolchain).Go("mod", "tidy"))
-
-	tidied, err := build.HashFiles(targets)
-	if err != nil {
-		log.Fatalf("failed to rehash go.mod/go.sum: %v", err)
-	}
-	if updates := build.DiffHashes(hashes, tidied); len(updates) > 0 {
-		log.Fatalf("files changed on running 'go mod tidy': %v", updates)
-	}
-	fmt.Println("No untidy module files detected.")
 }
 
 // doCheckGenerate ensures that re-generating generated files does not cause
@@ -375,6 +356,7 @@ func doCheckTidy() {
 func doCheckGenerate() {
 	var (
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching binaries.")
+		tc       = new(build.GoToolchain)
 	)
 	// Compute the origin hashes of all the files
 	var hashes map[string][32]byte
@@ -389,7 +371,7 @@ func doCheckGenerate() {
 		protocPath      = downloadProtoc(*cachedir)
 		protocGenGoPath = downloadProtocGenGo(*cachedir)
 	)
-	c := new(build.GoToolchain).Go("generate", "./...")
+	c := tc.Go("generate", "./...")
 	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
 	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
 	build.MustRun(c)
@@ -407,6 +389,10 @@ func doCheckGenerate() {
 		log.Fatal("One or more generated files were updated by running 'go generate ./...'")
 	}
 	fmt.Println("No stale files detected.")
+
+	// Run go mod tidy check.
+	build.MustRun(tc.Go("mod", "tidy", "-diff"))
+	fmt.Println("No untidy module files detected.")
 }
 
 // doCheckBadDeps verifies whether certain unintended dependencies between some
