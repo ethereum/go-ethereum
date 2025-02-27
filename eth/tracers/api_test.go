@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"slices"
 	"sync/atomic"
@@ -423,7 +424,6 @@ func TestTraceCall(t *testing.T) {
 			},
 			config:    nil,
 			expectErr: fmt.Errorf("block #%d not found", genBlocks+1),
-			//expect:    nil,
 		},
 		// Standard JSON trace upon the latest block
 		{
@@ -740,11 +740,12 @@ func TestTracingWithOverrides(t *testing.T) {
 				Data: newRPCBytes(common.Hex2Bytes("8381f58a")), // call number()
 			},
 			config: &TraceCallConfig{
-				//Tracer: &tracer,
 				StateOverrides: &override.StateOverride{
 					randomAccounts[2].addr: override.OverrideAccount{
-						Code:      newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033")),
-						StateDiff: newStates([]common.Hash{{}}, []common.Hash{common.BigToHash(big.NewInt(123))}),
+						Code: newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033")),
+						State: newStates(
+							[]common.Hash{common.HexToHash("0x03")},
+							[]common.Hash{common.BigToHash(big.NewInt(123))}),
 					},
 				},
 			},
@@ -810,7 +811,7 @@ func TestTracingWithOverrides(t *testing.T) {
 			config: &TraceCallConfig{
 				StateOverrides: &override.StateOverride{
 					randomAccounts[2].addr: override.OverrideAccount{
-						Code: newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060325760003560e01c806366e41cb7146037578063f8a8fd6d14603f575b600080fd5b603d6057565b005b60456062565b60405190815260200160405180910390f35b610539600090815580fd5b60006001600081905550306001600160a01b03166366e41cb76040518163ffffffff1660e01b8152600401600060405180830381600087803b15801560a657600080fd5b505af192505050801560b6575060015b60e9573d80801560e1576040519150601f19603f3d011682016040523d82523d6000602084013e60e6565b606091505b50505b506000549056fea26469706673582212205ce45de745a5308f713cb2f448589177ba5a442d1a2eff945afaa8915961b4d064736f6c634300080c0033")),
+						Code: newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060325760003560e01c806366e41cb7146037578063f8a8fd6d14603f575b600080fd5b603d6057565b005b60456062565b60405190815260200160405180910390f35b610539600090815580fd5b600060016000819055503060016000819055506000549056fea26469706673582212205ce45de745a5308f713cb2f448589177ba5a442d1a2eff945afaa8915961b4d064736f6c634300080c0033")),
 					},
 				},
 			},
@@ -826,43 +827,19 @@ func TestTracingWithOverrides(t *testing.T) {
 			config: &TraceCallConfig{
 				StateOverrides: &override.StateOverride{
 					randomAccounts[2].addr: override.OverrideAccount{
-						Code:  newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060325760003560e01c806366e41cb7146037578063f8a8fd6d14603f575b600080fd5b603d6057565b005b60456062565b60405190815260200160405180910390f35b610539600090815580fd5b60006001600081905550306001600160a01b03166366e41cb76040518163ffffffff1660e01b8152600401600060405180830381600087803b15801560a657600080fd5b505af192505050801560b6575060015b60e9573d80801560e1576040519150601f19603f3d011682016040523d82523d6000602084013e60e6565b606091505b50505b506000549056fea26469706673582212205ce45de745a5308f713cb2f448589177ba5a442d1a2eff945afaa8915961b4d064736f6c634300080c0033")),
-						State: newStates([]common.Hash{{}}, []common.Hash{{}}),
-					},
-				},
-			},
-			//want: `{"gas":46900,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000539"}`,
-			want: `{"gas":44100,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000001"}`,
-		},
-		{ // No state override
-			blockNumber: rpc.LatestBlockNumber,
-			call: ethapi.TransactionArgs{
-				From: &randomAccounts[0].addr,
-				To:   &storageAccount,
-				Data: newRPCBytes(common.Hex2Bytes("f8a8fd6d")), //
-			},
-			config: &TraceCallConfig{
-				StateOverrides: &override.StateOverride{
-					storageAccount: override.OverrideAccount{
 						Code: newRPCBytes([]byte{
-							// SLOAD(3) + SLOAD(4) (which is 0x77)
-							byte(vm.PUSH1), 0x04,
-							byte(vm.SLOAD),
-							byte(vm.PUSH1), 0x03,
-							byte(vm.SLOAD),
-							byte(vm.ADD),
-							// 0x77 -> MSTORE(0)
-							byte(vm.PUSH1), 0x00,
-							byte(vm.MSTORE),
-							// RETURN (0, 32)
 							byte(vm.PUSH1), 32,
 							byte(vm.PUSH1), 00,
 							byte(vm.RETURN),
 						}),
+						State: newStates(
+							[]common.Hash{common.HexToHash("0x03")},
+							[]common.Hash{common.BigToHash(big.NewInt(123))},
+						),
 					},
 				},
 			},
-			want: `{"gas":25288,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000077"}`,
+			want: `{"gas":25288,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000011"}`,
 		},
 		{ // Full state override
 			// The original storage is
@@ -880,23 +857,14 @@ func TestTracingWithOverrides(t *testing.T) {
 				StateOverrides: &override.StateOverride{
 					storageAccount: override.OverrideAccount{
 						Code: newRPCBytes([]byte{
-							// SLOAD(3) + SLOAD(4) (which is now 0x11 + 0x00)
-							byte(vm.PUSH1), 0x04,
-							byte(vm.SLOAD),
-							byte(vm.PUSH1), 0x03,
-							byte(vm.SLOAD),
-							byte(vm.ADD),
-							// 0x11 -> MSTORE(0)
-							byte(vm.PUSH1), 0x00,
-							byte(vm.MSTORE),
-							// RETURN (0, 32)
 							byte(vm.PUSH1), 32,
 							byte(vm.PUSH1), 00,
 							byte(vm.RETURN),
 						}),
 						State: newStates(
 							[]common.Hash{common.HexToHash("0x03")},
-							[]common.Hash{common.HexToHash("0x11")}),
+							[]common.Hash{common.BigToHash(big.NewInt(123))},
+						),
 					},
 				},
 			},
@@ -918,16 +886,6 @@ func TestTracingWithOverrides(t *testing.T) {
 				StateOverrides: &override.StateOverride{
 					storageAccount: override.OverrideAccount{
 						Code: newRPCBytes([]byte{
-							// SLOAD(3) + SLOAD(4) (which is now 0x11 + 0x44)
-							byte(vm.PUSH1), 0x04,
-							byte(vm.SLOAD),
-							byte(vm.PUSH1), 0x03,
-							byte(vm.SLOAD),
-							byte(vm.ADD),
-							// 0x55 -> MSTORE(0)
-							byte(vm.PUSH1), 0x00,
-							byte(vm.MSTORE),
-							// RETURN (0, 32)
 							byte(vm.PUSH1), 32,
 							byte(vm.PUSH1), 00,
 							byte(vm.RETURN),
@@ -945,16 +903,16 @@ func TestTracingWithOverrides(t *testing.T) {
 		result, err := api.TraceCall(context.Background(), tc.call, rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, tc.config)
 		if tc.expectErr != nil {
 			if err == nil {
-				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
+				t.Errorf("test %d: want error %v", i, tc.expectErr)
 				continue
 			}
-			if !errors.Is(err, tc.expectErr) {
-				t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
+			if !reflect.DeepEqual(err, tc.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, got %v", i, tc.expectErr, err)
 			}
 			continue
 		}
 		if err != nil {
-			t.Errorf("test %d: want no error, have %v", i, err)
+			t.Errorf("test %d, want no error, got %v", i, err)
 			continue
 		}
 		// Turn result into res-struct
@@ -1168,6 +1126,386 @@ func TestTraceBlockWithBasefee(t *testing.T) {
 		want := tc.want
 		if string(have) != want {
 			t.Errorf("test %d, result mismatch\nhave: %v\nwant: %v\n", i, string(have), want)
+		}
+	}
+}
+
+func TestStandardTraceBlockToFile(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	accounts := newAccounts(3)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	genBlocks := 10
+	signer := types.HomesteadSigner{}
+	var txHash common.Hash
+	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		// Transfer from account[0] to account[1]
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+		txHash = tx.Hash()
+	})
+	defer backend.chain.Stop()
+	api := NewAPI(backend)
+
+	var testSuite = []struct {
+		blockHash common.Hash
+		config    *StdTraceConfig
+		wantFiles int
+		wantErr   error
+	}{
+		// Trace genesis block, expect error
+		{
+			blockHash: backend.chain.Genesis().Hash(),
+			wantErr:   errors.New("genesis is not traceable"),
+		},
+		// Trace head block
+		{
+			blockHash: backend.chain.CurrentBlock().Hash(),
+			wantFiles: 1,
+		},
+		// Trace non-existent block
+		{
+			blockHash: common.HexToHash("0x1234567890"),
+			wantErr:   fmt.Errorf("block %#x not found", common.HexToHash("0x1234567890")),
+		},
+		// Trace specific transaction
+		{
+			blockHash: backend.chain.CurrentBlock().Hash(),
+			config: &StdTraceConfig{
+				TxHash: txHash,
+			},
+			wantFiles: 1,
+		},
+	}
+
+	for i, tc := range testSuite {
+		files, err := api.StandardTraceBlockToFile(context.Background(), tc.blockHash, tc.config)
+		if tc.wantErr != nil {
+			if err == nil {
+				t.Errorf("test %d, want error %v", i, tc.wantErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, tc.wantErr) {
+				t.Errorf("test %d: error mismatch, want %v, got %v", i, tc.wantErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d, want no error, got %v", i, err)
+			continue
+		}
+		if len(files) != tc.wantFiles {
+			t.Errorf("test %d: wrong number of files, want %d, got %d", i, tc.wantFiles, len(files))
+			continue
+		}
+		// Verify files exist and are readable
+		for _, f := range files {
+			if _, err := os.Stat(f); err != nil {
+				t.Errorf("test %d: file %s not accessible: %v", i, f, err)
+			}
+			// Cleanup
+			os.Remove(f)
+		}
+	}
+}
+
+func TestStandardTraceBadBlockToFile(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	accounts := newAccounts(3)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	genBlocks := 1
+	signer := types.HomesteadSigner{}
+	var badBlockHash common.Hash
+
+	// Create a bad block by making a transaction that will fail
+	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		// Try to transfer more than balance
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(2 * params.Ether), // More than balance
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+	defer backend.chain.Stop()
+
+	// Get the last block and store it as a bad block
+	block := backend.chain.GetBlockByNumber(uint64(genBlocks))
+	badBlockHash = block.Hash()
+	rawdb.WriteBadBlock(backend.chaindb, block)
+	rawdb.WriteCanonicalHash(backend.chaindb, block.Hash(), block.NumberU64())
+	rawdb.WriteHeadBlockHash(backend.chaindb, block.Hash())
+
+	api := NewAPI(backend)
+
+	var testSuite = []struct {
+		blockHash common.Hash
+		config    *StdTraceConfig
+		wantFiles int
+		wantErr   error
+	}{
+		// Trace non-existent bad block
+		{
+			blockHash: common.HexToHash("0x1234567890"),
+			wantErr:   fmt.Errorf("bad block %#x not found", common.HexToHash("0x1234567890")),
+		},
+		// Trace existing bad block
+		{
+			blockHash: badBlockHash,
+			config: &StdTraceConfig{
+				Config: logger.Config{
+					DisableStorage:   true,
+					DisableStack:     true,
+					EnableMemory:     true,
+					EnableReturnData: true,
+				},
+				Reexec: nil,
+			},
+			wantFiles: 1,
+		},
+	}
+
+	for i, tc := range testSuite {
+		files, err := api.StandardTraceBadBlockToFile(context.Background(), tc.blockHash, tc.config)
+		if tc.wantErr != nil {
+			if err == nil {
+				t.Errorf("test %d, want error %v", i, tc.wantErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, tc.wantErr) {
+				t.Errorf("test %d: error mismatch, want %v, got %v", i, tc.wantErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d, want no error, got %v", i, err)
+			continue
+		}
+		if len(files) != tc.wantFiles {
+			t.Errorf("test %d: wrong number of files, want %d, got %d", i, tc.wantFiles, len(files))
+			continue
+		}
+		// Verify files exist and are readable
+		for _, f := range files {
+			if _, err := os.Stat(f); err != nil {
+				t.Errorf("test %d: file %s not accessible: %v", i, f, err)
+			}
+			// Cleanup
+			os.Remove(f)
+		}
+	}
+}
+
+func TestTraceBadBlock(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	accounts := newAccounts(3)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	genBlocks := 1
+	signer := types.HomesteadSigner{}
+	var badBlockHash common.Hash
+
+	// Create a bad block by making a transaction that will fail
+	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		// Try to transfer more than balance
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(2 * params.Ether), // More than balance
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+	})
+	defer backend.chain.Stop()
+
+	// Get the last block and store it as a bad block
+	block := backend.chain.GetBlockByNumber(uint64(genBlocks))
+	badBlockHash = block.Hash()
+	rawdb.WriteBadBlock(backend.chaindb, block)
+	rawdb.WriteCanonicalHash(backend.chaindb, block.Hash(), block.NumberU64())
+	rawdb.WriteHeadBlockHash(backend.chaindb, block.Hash())
+
+	api := NewAPI(backend)
+
+	var testSuite = []struct {
+		blockHash common.Hash
+		config    *TraceConfig
+		want      string
+		wantErr   error
+	}{
+		// Trace non-existent bad block
+		{
+			blockHash: common.HexToHash("0x1234567890"),
+			wantErr:   fmt.Errorf("bad block %#x not found", common.HexToHash("0x1234567890")),
+		},
+		// Trace existing bad block
+		{
+			blockHash: badBlockHash,
+			want:      fmt.Sprintf(`[{"txHash":"%v","result":{"gas":21000,"failed":true,"returnValue":"","structLogs":[]}}]`, block.Transactions()[0].Hash()),
+		},
+	}
+
+	for i, tc := range testSuite {
+		result, err := api.TraceBadBlock(context.Background(), tc.blockHash, tc.config)
+		if tc.wantErr != nil {
+			if err == nil {
+				t.Errorf("test %d, want error %v", i, tc.wantErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, tc.wantErr) {
+				t.Errorf("test %d: error mismatch, want %v, got %v", i, tc.wantErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d, want no error, got %v", i, err)
+			continue
+		}
+		have, _ := json.Marshal(result)
+		if string(have) != tc.want {
+			t.Errorf("test %d: result mismatch, want %v, got %v", i, tc.want, string(have))
+		}
+	}
+}
+
+func TestIntermediateRoots(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	accounts := newAccounts(3)
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	genBlocks := 1
+	signer := types.HomesteadSigner{}
+
+	// Create a block with multiple transactions to test intermediate roots
+	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		// First transaction: normal transfer
+		tx1, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(0),
+			To:       &accounts[1].addr,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx1)
+
+		// Second transaction: another transfer
+		tx2, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(1),
+			To:       &accounts[2].addr,
+			Value:    big.NewInt(2000),
+			Gas:      params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx2)
+	})
+	defer backend.chain.Stop()
+
+	// Get the block hash after all transactions are added
+	block := backend.chain.GetBlockByNumber(uint64(genBlocks))
+	blockHash := block.Hash()
+
+	api := NewAPI(backend)
+
+	var testSuite = []struct {
+		blockHash common.Hash
+		config    *TraceConfig
+		wantLen   int
+		wantErr   error
+	}{
+		// Test genesis block
+		{
+			blockHash: backend.chain.Genesis().Hash(),
+			wantErr:   errors.New("genesis is not traceable"),
+		},
+		// Test non-existent block
+		{
+			blockHash: common.HexToHash("0x1234567890"),
+			wantErr:   fmt.Errorf("block %#x not found", common.HexToHash("0x1234567890")),
+		},
+		// Test block with transactions
+		{
+			blockHash: blockHash,
+			wantLen:   2, // Should have intermediate root for each transaction
+		},
+	}
+
+	for i, tc := range testSuite {
+		roots, err := api.IntermediateRoots(context.Background(), tc.blockHash, tc.config)
+		if tc.wantErr != nil {
+			if err == nil {
+				t.Errorf("test %d, want error %v", i, tc.wantErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, tc.wantErr) {
+				t.Errorf("test %d: error mismatch, want %v, got %v", i, tc.wantErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d, want no error, got %v", i, err)
+			continue
+		}
+		if len(roots) != tc.wantLen {
+			t.Errorf("test %d: wrong number of roots, want %d, got %d", i, tc.wantLen, len(roots))
+			continue
+		}
+		// Verify that roots are not empty and different from each other
+		if tc.wantLen > 1 {
+			for j := 1; j < len(roots); j++ {
+				if roots[j] == roots[j-1] {
+					t.Errorf("test %d: consecutive roots are identical", i)
+				}
+				if roots[j] == (common.Hash{}) {
+					t.Errorf("test %d: empty root at position %d", i, j)
+				}
+			}
 		}
 	}
 }
