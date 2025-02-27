@@ -139,10 +139,16 @@ type meterTicker struct {
 func (ma *meterTicker) add(m *Meter) {
 	ma.mu.Lock()
 	defer ma.mu.Unlock()
+
 	ma.meters[m] = struct{}{}
 	if !ma.started {
 		ma.started = true
-		go ma.loop()
+
+		// Avoid starting the ticker routine if metrics are disabled,
+		// as all created meters will remain inactive.
+		if Enabled() {
+			go ma.loop()
+		}
 	}
 }
 
@@ -157,9 +163,6 @@ func (ma *meterTicker) remove(m *Meter) {
 func (ma *meterTicker) loop() {
 	ticker := time.NewTicker(5 * time.Second)
 	for range ticker.C {
-		if !metricsEnabled {
-			continue
-		}
 		ma.mu.RLock()
 		for meter := range ma.meters {
 			meter.tick()
