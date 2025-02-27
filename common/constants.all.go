@@ -10,9 +10,7 @@ var (
 	IsTestnet      bool = false
 	Enable0xPrefix bool = true
 
-	Rewound = uint64(0)
-
-	RollbackHash Hash
+	RollbackNumber = uint64(0)
 
 	StoreRewardFolder string
 

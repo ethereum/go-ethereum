@@ -273,6 +273,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
+
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
@@ -332,11 +333,8 @@ func (bc *BlockChain) loadLastState() error {
 		log.Warn("Head block missing, resetting chain", "hash", head)
 		return bc.Reset()
 	}
-	repair := false
-	if common.Rewound != uint64(0) {
-		repair = true
-	}
 	// Make sure the state associated with the block is available
+	repair := false
 	_, err := state.New(currentBlock.Root(), bc.stateCache)
 	if err != nil {
 		repair = true
@@ -395,13 +393,6 @@ func (bc *BlockChain) loadLastState() error {
 	}
 	bc.hc.SetCurrentHeader(currentHeader)
 
-	if engine, ok := bc.Engine().(*XDPoS.XDPoS); ok {
-		err := engine.Initial(bc, currentHeader)
-		if err != nil {
-			return err
-		}
-	}
-
 	// Restore the last known head fast block
 	bc.currentFastBlock.Store(currentBlock)
 	headFastBlockGauge.Update(int64(currentBlock.NumberU64()))
@@ -432,8 +423,6 @@ func (bc *BlockChain) loadLastState() error {
 // though, the head may be further rewound if block bodies are missing (non-archive
 // nodes after a fast sync).
 func (bc *BlockChain) SetHead(head uint64) error {
-	log.Warn("Rewinding blockchain", "target", head)
-
 	if !bc.chainmu.TryLock() {
 		return errChainStopped
 	}
@@ -685,7 +674,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 func (bc *BlockChain) repair(head **types.Block) error {
 	for {
 		// Abort if we've rewound to a head block that does have associated state
-		if (common.Rewound == uint64(0)) || ((*head).Number().Uint64() < common.Rewound) {
+		if (common.RollbackNumber == 0) || ((*head).Number().Uint64() < common.RollbackNumber) {
 			if _, err := state.New((*head).Root(), bc.stateCache); err == nil {
 				log.Info("Rewound blockchain to past state", "number", (*head).Number(), "hash", (*head).Hash())
 				engine, ok := bc.Engine().(*XDPoS.XDPoS)

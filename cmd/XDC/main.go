@@ -121,7 +121,6 @@ var (
 		//utils.VMEnableDebugFlag,
 		utils.Enable0xPrefixFlag,
 		utils.EnableXDCPrefixFlag,
-		utils.RewoundFlag,
 		utils.NetworkIdFlag,
 		utils.HTTPCORSDomainFlag,
 		utils.HTTPVirtualHostsFlag,
@@ -138,7 +137,7 @@ var (
 		utils.LogBacktraceAtFlag,
 		utils.AnnounceTxsFlag,
 		utils.StoreRewardFlag,
-		utils.RollbackFlag,
+		utils.SetHeadFlag,
 		utils.XDCSlaveModeFlag,
 	}
 
