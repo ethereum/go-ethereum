@@ -66,7 +66,6 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
-
 		// status
 		{Name: "Status", Fn: s.TestStatus},
 		// get block headers
