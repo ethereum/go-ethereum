@@ -17,10 +17,12 @@
 package ethtest
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -64,6 +66,7 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 
 func (s *Suite) EthTests() []utesting.Test {
 	return []utesting.Test{
+
 		// status
 		{Name: "Status", Fn: s.TestStatus},
 		// get block headers
@@ -76,7 +79,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		// // malicious handshakes + status
 		{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		// test transactions
-		//{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
+		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
 		{Name: "Transaction", Fn: s.TestTransaction},
 		{Name: "InvalidTxs", Fn: s.TestInvalidTxs},
 		{Name: "NewPooledTxs", Fn: s.TestNewPooledTxs},
@@ -844,31 +847,51 @@ func mangleSidecar(tx *types.Transaction) *types.Transaction {
 	return tx.WithBlobTxSidecar(&copy)
 }
 
-/*
-TestBlobTxWithoutSidecar tests the following scenario:
-Peers connect to the client.  Some are "good", and some are "bad". The test
-proceeds as so:
-  - "bad" peer connects to the client, advertises a blob transaction without a
-    sidecar
-  - before the transaction can be transmitted from bad peer, good peer connects
-    to the client advertising the same tx hash (but with size incorporating the
-    sidecar)
-  - bad peer transmits the sidecar-less transaction
-  - client receives and should only disconnect bad peer
-  - the transaction is requested from a good peer, and good peer responds with
-    transaction that should be pooled by the client.
-  - Only bad peers are disconnected from while good peer is not.
-*/
 func (s *Suite) TestBlobTxWithoutSidecar(t *utesting.T) {
+	t.Log(`This test tests that a transaction first advertised/transmitted without a sidecar will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
 	tx := s.makeBlobTxs(1, 2, 42)[0]
 	badTx := tx.WithoutBlobTxSidecar()
 	s.testBadBlobTx(t, tx, badTx)
 }
 
 func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
+	t.Log(`This test tests that a transaction first advertised/transmitted with a sidecar whose commitment don't correspond to the blob_versioned_hashes in the transaction header will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
 	tx := s.makeBlobTxs(1, 2, 43)[0]
 	badTx := mangleSidecar(tx)
 	s.testBadBlobTx(t, tx, badTx)
+}
+
+// readUntil reads eth protocol messages until a message of the target type is
+// received.  It returns an error if there is a disconnect, or if the context
+// is cancelled before a message of the desired type can be read.
+func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, context.Canceled
+		default:
+		}
+		received, err := conn.ReadEth()
+		if err != nil {
+			if err == errDisc {
+				return nil, errDisc
+			}
+			continue
+		}
+		switch received.(type) {
+		case *T:
+			res := received.(*T)
+			return res, nil
+		}
+	}
+}
+
+// readUntilDisconnect reads eth protocol messages until the peer disconnects.
+// It returns whether the peer disconnects in the next 100ms.
+func readUntilDisconnect(conn *Conn) (disconnected bool) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	_, err := readUntil[struct{}](ctx, conn)
+	return err == errDisc
 }
 
 func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types.Transaction) {
@@ -906,8 +929,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		req := new(eth.GetPooledTransactionsPacket)
-		err = conn.ReadMsg(ethProto, eth.GetPooledTransactionsMsg, req)
+		req, err := readUntil[eth.GetPooledTransactionsPacket](context.Background(), conn)
 		if err != nil {
 			errc <- fmt.Errorf("failed to read GetPooledTransactions message: %v", err)
 			return
@@ -924,7 +946,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			errc <- fmt.Errorf("writing pooled tx response failed: %v", err)
 			return
 		}
-		if code, _, _ := conn.Read(); code != discMsg {
+		if !readUntilDisconnect(conn) {
 			errc <- fmt.Errorf("expected bad peer to be disconnected")
 			return
 		}
@@ -966,8 +988,9 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 		// the bad peer has responded with sidecar-less transaction.
 		// bad peers are presumably disconnected now.
 
-		req := new(eth.GetPooledTransactionsPacket)
-		if err := conn.ReadMsg(ethProto, eth.GetPooledTransactionsMsg, req); err != nil {
+		var req *eth.GetPooledTransactionsPacket
+		req, err = readUntil[eth.GetPooledTransactionsPacket](context.Background(), conn)
+		if err != nil {
 			errc <- fmt.Errorf("reading pooled tx request failed: %v", err)
 			return
 		}
@@ -982,7 +1005,7 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			errc <- fmt.Errorf("writing pooled tx response failed: %v", err)
 			return
 		}
-		if code, _, _ := conn.Read(); code == discMsg {
+		if readUntilDisconnect(conn) {
 			errc <- fmt.Errorf("unexpected disconnect")
 			return
 		}
