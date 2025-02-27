@@ -18,7 +18,6 @@ package legacypool
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	crand "crypto/rand"
 	"errors"
 	"fmt"
@@ -1202,14 +1201,8 @@ func TestAllowedTxSize(t *testing.T) {
 	defer pool.Close()
 
 	// We use a deterministic ecdsa key to obtain signed transactions of pre-determined sizes.
-	key := &ecdsa.PrivateKey{
-		PublicKey: ecdsa.PublicKey{
-			Curve: elliptic.P256(),
-			X:     new(big.Int).SetBytes(common.Hex2Bytes("78e68ff485cc934e4096f24091931e91334d6841c6c2be93d1a930e59783902d")),
-			Y:     new(big.Int).SetBytes(common.Hex2Bytes("ca8db229299a4f937eeb0a36c451751cd59df978aceaaf190c28783c321cf267")),
-		},
-		D: new(big.Int).SetBytes(common.Hex2Bytes("e521e757356c1f197f704502dfa10333993e3705ca3d304d6a349461ed67ae71")),
-	}
+	key, err := crypto.HexToECDSA("e521e757356c1f197f704502dfa10333993e3705ca3d304d6a349461ed67ae71")
+	require.NoError(t, err)
 
 	account := crypto.PubkeyToAddress(key.PublicKey)
 	testAddBalance(pool, account, big.NewInt(1000000000))
