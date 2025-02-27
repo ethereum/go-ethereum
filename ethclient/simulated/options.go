@@ -53,3 +53,17 @@ func WithMinerMinTip(tip *big.Int) func(nodeConf *node.Config, ethConf *ethconfi
 		ethConf.Miner.GasPrice = tip
 	}
 }
+
+// WithHTTPRPCServer configures the simulated backend so that the node runs an HTTP server
+// on the specified host and port, and enables the specified HTTP modules.
+// Example usage:
+//
+//	NewBackend(alloc, WithHTTPRPCServer("localhost", 8545, []string{"eth", "net", "web3"}))
+func WithHTTPRPCServer(host string, port int,
+	modules []string) func(nodeConf *node.Config, ethConf *ethconfig.Config) {
+	return func(nodeConf *node.Config, ethConf *ethconfig.Config) {
+		nodeConf.HTTPHost = host
+		nodeConf.HTTPPort = port
+		nodeConf.HTTPModules = modules
+	}
+}
