@@ -231,14 +231,15 @@ type BlockChain struct {
 	statedb       *state.CachingDB                 // State database to reuse between imports (contains state cache)
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	blockProcFeed event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc                *HeaderChain
+	rmLogsFeed        event.Feed
+	rmLogsReverseFeed event.Feed // Feed for removed logs in reverse order
+	chainFeed         event.Feed
+	chainHeadFeed     event.Feed
+	logsFeed          event.Feed
+	blockProcFeed     event.Feed
+	scope             event.SubscriptionScope
+	genesisBlock      *types.Block
 
 	// This mutex synchronizes chain write operations.
 	// Readers don't need to take it, they can just read the database.
@@ -2284,7 +2285,8 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 			// Emit revertals latest first, older then
 			slices.Reverse(logs)
 
-			// TODO(karalabe): Hook into the reverse emission part
+			// Send the reversed logs to the reverse feed
+			bc.rmLogsReverseFeed.Send(RemovedLogsEvent{logs})
 		}
 	}
 	// Apply new blocks in forward order
