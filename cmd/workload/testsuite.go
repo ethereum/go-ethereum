@@ -49,6 +49,8 @@ var (
 			testMainnetFlag,
 			filterQueryFileFlag,
 			historyTestFileFlag,
+			traceTestFileFlag,
+			traceTestInvalidOutputFlag,
 		},
 	}
 	testPatternFlag = &cli.StringFlag{
@@ -86,6 +88,7 @@ type testConfig struct {
 	filterQueryFile   string
 	historyTestFile   string
 	historyPruneBlock *uint64
+	traceTestFile     string
 }
 
 var errPrunedHistory = fmt.Errorf("attempt to access pruned history")
@@ -125,16 +128,19 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		cfg.historyTestFile = "queries/history_mainnet.json"
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.MainnetGenesisHash].BlockNumber
+		cfg.traceTestFile = "queries/trace_mainnet.json"
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
 		cfg.historyTestFile = "queries/history_sepolia.json"
 		cfg.historyPruneBlock = new(uint64)
 		*cfg.historyPruneBlock = history.PrunePoints[params.SepoliaGenesisHash].BlockNumber
+		cfg.traceTestFile = "queries/trace_sepolia.json"
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
 		cfg.historyTestFile = ctx.String(historyTestFileFlag.Name)
+		cfg.traceTestFile = ctx.String(traceTestFileFlag.Name)
 	}
 	return cfg
 }
@@ -143,10 +149,12 @@ func runTestCmd(ctx *cli.Context) error {
 	cfg := testConfigFromCLI(ctx)
 	filterSuite := newFilterTestSuite(cfg)
 	historySuite := newHistoryTestSuite(cfg)
+	traceSuite := newTraceTestSuite(cfg, ctx)
 
 	// Filter test cases.
 	tests := filterSuite.allTests()
 	tests = append(tests, historySuite.allTests()...)
+	tests = append(tests, traceSuite.allTests()...)
 	if ctx.IsSet(testPatternFlag.Name) {
 		tests = utesting.MatchTests(tests, ctx.String(testPatternFlag.Name))
 	}

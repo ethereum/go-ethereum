@@ -20,10 +20,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -49,32 +47,13 @@ func init() {
 		runTestCommand,
 		historyGenerateCommand,
 		filterGenerateCommand,
+		traceGenerateCommand,
 		filterPerfCommand,
 	}
 }
 
 func main() {
 	exit(app.Run(os.Args))
-}
-
-type client struct {
-	Eth *ethclient.Client
-	RPC *rpc.Client
-}
-
-func makeClient(ctx *cli.Context) *client {
-	if ctx.NArg() < 1 {
-		exit("missing RPC endpoint URL as command-line argument")
-	}
-	url := ctx.Args().First()
-	cl, err := rpc.Dial(url)
-	if err != nil {
-		exit(fmt.Errorf("Could not create RPC client at %s: %v", url, err))
-	}
-	return &client{
-		RPC: cl,
-		Eth: ethclient.NewClient(cl),
-	}
 }
 
 func exit(err any) {
