@@ -877,9 +877,9 @@ func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
 			}
 			continue
 		}
-		switch received.(type) {
+
+		switch res := received.(type) {
 		case *T:
-			res := received.(*T)
 			return res, nil
 		}
 	}
@@ -888,7 +888,8 @@ func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
 // readUntilDisconnect reads eth protocol messages until the peer disconnects.
 // It returns whether the peer disconnects in the next 100ms.
 func readUntilDisconnect(conn *Conn) (disconnected bool) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
 	_, err := readUntil[struct{}](ctx, conn)
 	return err == errDisc
 }
