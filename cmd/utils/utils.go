@@ -30,6 +30,9 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config, version string)
 			var lendingServ *XDCxlending.Lending
 			ctx.Service(&lendingServ)
 			fullNode, err := eth.New(ctx, cfg, XDCXServ, lendingServ)
+			if err != nil {
+				return nil, err
+			}
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)
