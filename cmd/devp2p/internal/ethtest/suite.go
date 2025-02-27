@@ -903,8 +903,9 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 	errc := make(chan error)
 
 	badPeer := func() {
-		// announce immediately with correct hash, but missing sidecar.
-		// when the transaction is first requested, trigger step 2: connection and announcement by good peers
+		// announce the correct hash from the bad peer.
+		// when the transaction is first requested before transmitting it from the bad peer,
+		// trigger step 2: connection and announcement by good peers
 
 		conn, err := s.dial()
 		if err != nil {
@@ -938,8 +939,8 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 		stage1.Done()
 		stage2.Wait()
 
-		// the good peer(s) are connected, and have announced the same tx hash.
-		// proceed to send the bad one.
+		// the good peer is connected, and has announced the tx.
+		// proceed to send the incorrect one from the bad peer.
 
 		resp := eth.PooledTransactionsPacket{RequestId: req.RequestId, PooledTransactionsResponse: eth.PooledTransactionsResponse(types.Transactions{badTx})}
 		if err := conn.Write(ethProto, eth.PooledTransactionsMsg, resp); err != nil {
@@ -968,9 +969,6 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
-		// announce the tx with correct size, trigger stage 2 (transmission from bad peer)
-		// wait for step 3 (transmission from good peer)
-
 		ann := eth.NewPooledTransactionHashesPacket{
 			Types:  []byte{types.BlobTxType},
 			Sizes:  []uint32{uint32(tx.Size())},
@@ -982,11 +980,12 @@ func (s *Suite) testBadBlobTx(t *utesting.T, tx *types.Transaction, badTx *types
 			return
 		}
 
+		// wait until the bad peer has transmitted the incorrect transaction
 		stage2.Done()
 		stage3.Wait()
 
-		// the bad peer has responded with sidecar-less transaction.
-		// bad peers are presumably disconnected now.
+		// the bad peer has transmitted the bad tx, and been disconnected.
+		// transmit the same tx but with correct sidecar from the good peer.
 
 		var req *eth.GetPooledTransactionsPacket
 		req, err = readUntil[eth.GetPooledTransactionsPacket](context.Background(), conn)
