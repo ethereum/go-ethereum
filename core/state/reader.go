@@ -19,6 +19,7 @@ package state
 import (
 	"errors"
 	"maps"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -139,12 +140,14 @@ func (r *stateReader) Copy() Reader {
 // trieReader implements the Reader interface, providing functions to access
 // state from the referenced trie.
 type trieReader struct {
-	root     common.Hash                    // State root which uniquely represent a state
-	db       *triedb.Database               // Database for loading trie
-	buff     crypto.KeccakState             // Buffer for keccak256 hashing
-	mainTrie Trie                           // Main trie, resolved in constructor
-	subRoots map[common.Address]common.Hash // Set of storage roots, cached when the account is resolved
-	subTries map[common.Address]Trie        // Group of storage tries, cached when it's resolved
+	root       common.Hash                    // State root which uniquely represent a state
+	db         *triedb.Database               // Database for loading trie
+	buff       crypto.KeccakState             // Buffer for keccak256 hashing
+	mainTrie   Trie                           // Main trie, resolved in constructor
+	subRoots   map[common.Address]common.Hash // Set of storage roots, cached when the account is resolved
+	subTries   map[common.Address]Trie        // Group of storage tries, cached when it's resolved
+	muSubRoot  sync.Mutex
+	muSubTries sync.Mutex
 }
 
 // trieReader constructs a trie reader of the specific state. An error will be
@@ -181,11 +184,14 @@ func (r *trieReader) Account(addr common.Address) (*types.StateAccount, error) {
 	if err != nil {
 		return nil, err
 	}
+	r.muSubRoot.Lock()
 	if account == nil {
 		r.subRoots[addr] = types.EmptyRootHash
 	} else {
 		r.subRoots[addr] = account.Root
 	}
+	r.muSubRoot.Unlock()
+
 	return account, nil
 }
 
@@ -221,7 +227,9 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 			if err != nil {
 				return common.Hash{}, err
 			}
+			r.muSubTries.Lock()
 			r.subTries[addr] = tr
+			r.muSubTries.Unlock()
 		}
 	}
 	ret, err := tr.GetStorage(addr, key.Bytes())
