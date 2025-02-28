@@ -225,6 +225,9 @@ jobs:
               matic-cli/devnet/code/genesis-contracts/package-lock.json
               matic-cli/devnet/code/genesis-contracts/matic-contracts/package-lock.json
 
+        - name: Install Foundry
+          uses: foundry-rs/foundry-toolchain@v1
+
         - name: Bootstrap devnet
           run: |
             cd matic-cli
@@ -242,12 +245,14 @@ jobs:
 
         - name: Run smoke tests
           run: |
-            echo "Funding ganache accounts..."
-            timeout 10m bash bor/integration-tests/fund_ganache_accounts.sh
             echo "Deposit 100 matic for each account to bor network"
-            cd matic-cli/devnet/code/contracts
-            npm run truffle exec scripts/deposit.js -- --network development $(jq -r .root.tokens.MaticToken contractAddresses.json) 100000000000000000000
-            cd -
+            cd matic-cli/devnet/devnet
+            SCRIPT_ADDRESS=$(jq -r '.[0].address' signer-dump.json)
+            SCRIPT_PRIVATE_KEY=$(jq -r '.[0].priv_key' signer-dump.json)
+            cd ../code/pos-contracts
+            CONTRACT_ADDRESS=$(jq -r .root.tokens.MaticToken contractAddresses.json)
+            forge script scripts/matic-cli-scripts/Deposit.s.sol:MaticDeposit --rpc-url http://localhost:9545 --private-key $SCRIPT_PRIVATE_KEY --broadcast --sig "run(address,address,uint256)" $SCRIPT_ADDRESS $CONTRACT_ADDRESS 100000000000000000000
+            cd ../../../..
             timeout 60m bash bor/integration-tests/smoke_test.sh
 
         - name: Run RPC Tests
