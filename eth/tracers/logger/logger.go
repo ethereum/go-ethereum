@@ -167,7 +167,7 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 		Error:         s.ErrorString(),
 		RefundCounter: s.RefundCounter,
 	}
-	if len(s.Stack) > 0 {
+	if s.Stack != nil {
 		stack := make([]string, len(s.Stack))
 		for i, stackValue := range s.Stack {
 			stack[i] = stackValue.Hex()
