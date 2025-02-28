@@ -2,6 +2,7 @@ defaultStake: 10000
 defaultFee: 2000
 borChainId: 15001
 heimdallChainId: heimdall-15001
+contractsRepo: https://github.com/0xPolygon/pos-contracts.git 
 contractsBranch: anvil-pos
 genesisContractsBranch: master
 sprintSize:
