@@ -111,6 +111,8 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) []error {
 			errors = append(errors, err)
 			continue
 		}
+		errors = append(errors, nil)
+
 		tracker.all[tx.Hash()] = tx
 		if tracker.byAddr[addr] == nil {
 			tracker.byAddr[addr] = legacypool.NewSortedMap()
