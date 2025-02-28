@@ -68,7 +68,15 @@ jobs:
 
       - name: Install dependencies on Windows
         run: |
-          choco install mingw
+          choco install mingw -y
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.USERPROFILE }}\go\pkg\mod
+            ${{ env.LOCALAPPDATA }}\go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ runner.os }}-go-
 
       - name: Build
         run: make all
