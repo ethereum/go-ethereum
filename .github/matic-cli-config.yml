@@ -24,3 +24,4 @@ heimdallDockerBuildContext: "https://github.com/maticnetwork/heimdall.git#develo
 sprintSizeBlockNumber:
   - '0'
 devnetBorFlags: config,config,config
+mnemonic: 'clock radar mass judge dismiss just intact mind resemble fringe diary casino'
