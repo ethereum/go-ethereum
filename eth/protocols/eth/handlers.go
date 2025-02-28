@@ -24,6 +24,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
+	"github.com/scroll-tech/go-ethereum/p2p"
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
@@ -266,6 +267,16 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(ann); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+
+	hCopy := ann.Block.Header()
+	if err := hCopy.NetworkCompatibleEuclidV2Fields(); err != nil {
+		peer.Peer.Disconnect(p2p.DiscUselessPeer)
+		return err
+	}
+
+	hCopy.PrepareFromNetwork(backend.Chain().Config().IsEuclidV2(hCopy.Time))
+	ann.Block = ann.Block.CopyBlockDeepWithHeader(hCopy)
+
 	if err := ann.sanityCheck(); err != nil {
 		return err
 	}
@@ -294,6 +305,17 @@ func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	requestTracker.Fulfil(peer.id, peer.version, BlockHeadersMsg, res.RequestId)
 
+	headersCopy := make([]*types.Header, 0, len(res.BlockHeadersPacket))
+	for _, header := range res.BlockHeadersPacket {
+		hCopy := types.CopyHeader(header)
+		if err := hCopy.NetworkCompatibleEuclidV2Fields(); err != nil {
+			peer.Peer.Disconnect(p2p.DiscUselessPeer)
+			return err
+		}
+		hCopy.PrepareFromNetwork(backend.Chain().Config().IsEuclidV2(header.Time))
+		headersCopy = append(headersCopy, hCopy)
+	}
+	res.BlockHeadersPacket = headersCopy
 	return backend.Handle(peer, &res.BlockHeadersPacket)
 }
 

@@ -18,6 +18,7 @@
 package ethconfig
 
 import (
+	"context"
 	"math/big"
 	"os"
 	"os/user"
@@ -25,10 +26,13 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/scroll-tech/go-ethereum/consensus/wrapper"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/clique"
 	"github.com/scroll-tech/go-ethereum/consensus/ethash"
+	"github.com/scroll-tech/go-ethereum/consensus/system_contract"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/eth/downloader"
 	"github.com/scroll-tech/go-ethereum/eth/gasprice"
@@ -38,6 +42,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer"
+	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
@@ -228,11 +233,27 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
-	// If proof-of-authority is requested, set it up
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, l1Client sync_service.EthClient) consensus.Engine {
+	// Case 1: Both SystemContract and Clique are defined: create an upgradable engine.
+	if chainConfig.SystemContract != nil && chainConfig.Clique != nil {
+		cliqueEngine := clique.New(chainConfig.Clique, db)
+		sysEngine := system_contract.New(context.Background(), chainConfig.SystemContract, l1Client)
+		sysEngine.Start()
+		return wrapper.NewUpgradableEngine(chainConfig.IsEuclidV2, cliqueEngine, sysEngine)
+	}
+
+	// Case 2: Only the Clique engine is defined.
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	}
+
+	// Case 3: Only the SystemContract engine is defined.
+	if chainConfig.SystemContract != nil {
+		sysEngine := system_contract.New(context.Background(), chainConfig.SystemContract, l1Client)
+		sysEngine.Start()
+		return sysEngine
+	}
+
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
 	case ethash.ModeFake:

@@ -254,7 +254,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*enode.Node, network ui
 	cfg.Genesis = genesis
 	utils.SetDNSDiscoveryDefaults(&cfg, genesis.ToBlock(nil).Hash())
 
-	lesBackend, err := les.New(stack, &cfg)
+	lesBackend, err := les.New(stack, &cfg, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to register the Ethereum service: %w", err)
 	}

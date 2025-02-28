@@ -498,7 +498,7 @@ func newLesClientService(ctx *adapters.ServiceContext, stack *node.Node) (node.L
 	config := ethconfig.Defaults
 	config.SyncMode = (ethdownloader.SyncMode)(downloader.LightSync)
 	config.Ethash.PowMode = ethash.ModeFake
-	return New(stack, &config)
+	return New(stack, &config, nil)
 }
 
 func newLesServerService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {

@@ -2048,16 +2048,6 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
 func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
-	if cfg.SyncMode == downloader.LightSync {
-		backend, err := les.New(stack, cfg)
-		if err != nil {
-			Fatalf("Failed to register the Ethereum service: %v", err)
-		}
-		scrollTracerWrapper := tracing.NewTracerWrapper()
-		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend, scrollTracerWrapper))
-		return backend.ApiBackend, nil
-	}
-
 	// initialize L1 client for sync service
 	// note: we need to do this here to avoid circular dependency
 	l1EndpointUrl := stack.Config().L1Endpoint
@@ -2071,6 +2061,16 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		}
 
 		log.Info("Initialized L1 client", "endpoint", l1EndpointUrl)
+	}
+
+	if cfg.SyncMode == downloader.LightSync {
+		backend, err := les.New(stack, cfg, l1Client)
+		if err != nil {
+			Fatalf("Failed to register the Ethereum service: %v", err)
+		}
+		scrollTracerWrapper := tracing.NewTracerWrapper()
+		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend, scrollTracerWrapper))
+		return backend.ApiBackend, nil
 	}
 
 	backend, err := eth.New(stack, cfg, l1Client)

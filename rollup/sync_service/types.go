@@ -19,4 +19,5 @@ type EthClient interface {
 	SubscribeFilterLogs(ctx context.Context, query ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error)
 	TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
+	StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)
 }

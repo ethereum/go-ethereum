@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/scroll-tech/go-ethereum/consensus/system_contract"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/misc"
@@ -358,8 +360,11 @@ func (w *worker) mainLoop() {
 		}
 
 		var retryableCommitError *retryableCommitError
-		if errors.As(err, &retryableCommitError) {
+		if errors.As(err, &retryableCommitError) || errors.Is(err, system_contract.ErrUnauthorizedSigner) {
 			log.Warn("failed to commit to a block, retrying", "err", err)
+			if errors.Is(err, system_contract.ErrUnauthorizedSigner) {
+				time.Sleep(5 * time.Second) // half the time it takes for the system contract consensus to read and update the address locally.
+			}
 			if _, err = w.tryCommitNewWork(time.Now(), w.current.header.ParentHash, w.current.reorging, w.current.reorgReason); err != nil {
 				continue
 			}

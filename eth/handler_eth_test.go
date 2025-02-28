@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/scroll-tech/go-ethereum/crypto"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus/ethash"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -48,7 +50,26 @@ type testEthHandler struct {
 	txBroadcasts    event.Feed
 }
 
-func (h *testEthHandler) Chain() *core.BlockChain              { panic("no backing chain") }
+func (h *testEthHandler) Chain() *core.BlockChain {
+	chainConfig := &params.ChainConfig{}
+	engine := ethash.NewFaker()
+	chaindb := rawdb.NewMemoryDatabase()
+
+	// Import the canonical chain
+	cacheConfig := &core.CacheConfig{}
+	key1, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr1 := crypto.PubkeyToAddress(key1.PublicKey)
+	genesis := core.GenesisBlockForTesting(chaindb, addr1, big.NewInt(1000000))
+	rawdb.WriteBlock(chaindb, genesis)
+	rawdb.WriteCanonicalHash(chaindb, genesis.Hash(), genesis.NumberU64())
+	rawdb.WriteHeadBlockHash(chaindb, genesis.Hash())
+
+	chain, err := core.NewBlockChain(chaindb, cacheConfig, chainConfig, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create chain: %v", err))
+	}
+	return chain
+}
 func (h *testEthHandler) StateBloom() *trie.SyncBloom          { panic("no backing state bloom") }
 func (h *testEthHandler) TxPool() eth.TxPool                   { panic("no backing tx pool") }
 func (h *testEthHandler) AcceptTxs() bool                      { return true }
@@ -505,8 +526,7 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	var response *types.Header
 	if checkpoint {
 		number := (uint64(rand.Intn(500))+1)*params.CHTFrequency - 1
-		response = &types.Header{Number: big.NewInt(int64(number)), Extra: []byte("valid")}
-
+		response = &types.Header{Number: big.NewInt(int64(number))}
 		handler.handler.checkpointNumber = number
 		handler.handler.checkpointHash = response.Hash()
 	}
@@ -554,6 +574,7 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 				query.Origin.Number, query.Amount, query.Skip, query.Reverse,
 				response.Number.Uint64(), 1, 0, false)
 		}
+
 		// Create a block to reply to the challenge if no timeout is simulated.
 		if !timeout {
 			if empty {
@@ -565,7 +586,8 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 					t.Fatalf("failed to answer challenge: %v", err)
 				}
 			} else {
-				if err := remote.ReplyBlockHeaders(request.RequestId, []*types.Header{{Number: response.Number}}); err != nil {
+				number := new(big.Int).Add(response.Number, big.NewInt(1)) // mismatching headers to same request
+				if err := remote.ReplyBlockHeaders(request.RequestId, []*types.Header{{Number: number}}); err != nil {
 					t.Fatalf("failed to answer challenge: %v", err)
 				}
 			}
@@ -573,7 +595,6 @@ func testCheckpointChallenge(t *testing.T, syncmode downloader.SyncMode, checkpo
 	}
 	// Wait until the test timeout passes to ensure proper cleanup
 	time.Sleep(syncChallengeTimeout + 300*time.Millisecond)
-
 	// Verify that the remote peer is maintained or dropped.
 	if drop {
 		<-handlerDone

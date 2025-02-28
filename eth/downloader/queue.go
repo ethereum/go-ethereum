@@ -477,9 +477,10 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 // to access the queue, so they already need a lock anyway.
 //
 // Returns:
-//   item     - the fetchRequest
-//   progress - whether any progress was made
-//   throttle - if the caller should throttle for a while
+//
+//	item     - the fetchRequest
+//	progress - whether any progress was made
+//	throttle - if the caller should throttle for a while
 func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool) {
 	// Short circuit if the pool has been depleted, or if the peer's already
@@ -705,6 +706,11 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	headerReqTimer.UpdateSince(request.Time)
 	delete(q.headerPendPool, id)
 
+	// Hacky: mark that the header was explicitly requested
+	for _, header := range headers {
+		header.Requested = true
+	}
+
 	// Ensure headers can be mapped onto the skeleton chain
 	target := q.headerTaskPool[request.From].Hash()
 
@@ -841,6 +847,11 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	}
 	reqTimer.UpdateSince(request.Time)
 	delete(pendPool, id)
+
+	// Hacky: mark that the header was explicitly requested
+	for _, header := range request.Headers {
+		header.Requested = true
+	}
 
 	// If no data items were retrieved, mark them as unavailable for the origin peer
 	if results == 0 {

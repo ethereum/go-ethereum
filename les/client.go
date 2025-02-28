@@ -46,6 +46,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/p2p/enr"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
+	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
@@ -79,7 +80,7 @@ type LightEthereum struct {
 }
 
 // New creates an instance of the light client.
-func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
+func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthClient) (*LightEthereum, error) {
 	chainDb, err := stack.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/", false)
 	if err != nil {
 		return nil, err
@@ -109,7 +110,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*LightEthereum, error) {
 		eventMux:       stack.EventMux(),
 		reqDist:        newRequestDistributor(peers, &mclock.System{}),
 		accountManager: stack.AccountManager(),
-		engine:         ethconfig.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb),
+		engine:         ethconfig.CreateConsensusEngine(stack, chainConfig, &config.Ethash, nil, false, chainDb, l1Client),
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
 		bloomIndexer:   core.NewBloomIndexer(chainDb, params.BloomBitsBlocksClient, params.HelperTrieConfirmations),
 		p2pServer:      stack.Server(),

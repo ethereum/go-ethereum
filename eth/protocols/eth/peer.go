@@ -277,6 +277,9 @@ func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
 func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
+	hCopy := block.Header()
+	hCopy.PrepareForNetwork()
+	block = block.CopyBlockDeepWithHeader(hCopy)
 	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
 		Block: block,
 		TD:    td,
@@ -297,6 +300,14 @@ func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
 
 // ReplyBlockHeaders is the eth/66 version of SendBlockHeaders.
 func (p *Peer) ReplyBlockHeaders(id uint64, headers []*types.Header) error {
+	headersCopy := make([]*types.Header, 0, len(headers))
+	for _, header := range headers {
+		hCopy := types.CopyHeader(header)
+		hCopy.PrepareForNetwork()
+		headersCopy = append(headersCopy, hCopy)
+	}
+	headers = headersCopy
+
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{
 		RequestId:          id,
 		BlockHeadersPacket: headers,

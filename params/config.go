@@ -648,8 +648,9 @@ type ChainConfig struct {
 	TerminalTotalDifficulty *big.Int `json:"terminalTotalDifficulty,omitempty"`
 
 	// Various consensus engines
-	Ethash *EthashConfig `json:"ethash,omitempty"`
-	Clique *CliqueConfig `json:"clique,omitempty"`
+	Ethash         *EthashConfig         `json:"ethash,omitempty"`
+	Clique         *CliqueConfig         `json:"clique,omitempty"`
+	SystemContract *SystemContractConfig `json:"systemContract,omitempty"`
 
 	// Scroll genesis extension: enable scroll rollup-related traces & state transition
 	Scroll ScrollConfig `json:"scroll,omitempty"`
@@ -769,6 +770,21 @@ type CliqueConfig struct {
 // String implements the stringer interface, returning the consensus engine details.
 func (c *CliqueConfig) String() string {
 	return "clique"
+}
+
+// SystemContractConfig is the consensus engine configs for rollup sequencer sealing.
+type SystemContractConfig struct {
+	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
+
+	SystemContractAddress common.Address `json:"system_contract_address"` // address of system contract on L1
+	SystemContractSlot    common.Hash    `json:"system_contract_slot"`    // slot of signer address in system contract on L1
+
+	RelaxedPeriod bool `json:"relaxed_period"` // Relaxes the period to be just an upper bound
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *SystemContractConfig) String() string {
+	return "system_contract"
 }
 
 // String implements the fmt.Stringer interface.

@@ -19,6 +19,7 @@ type Client interface {
 	TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error)
+	StorageAt(ctx context.Context, contract common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error)
 }
 
 type MockNopClient struct{}
@@ -56,5 +57,9 @@ func (m *MockNopClient) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 }
 
 func (m *MockNopClient) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *MockNopClient) StorageAt(ctx context.Context, contract common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
 	return nil, nil
 }
