@@ -50,37 +50,6 @@ jobs:
       - name: Build
         run: make all
 
-  build-windows:
-    name: Build (Windows)
-
-    if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
-    runs-on: windows-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          git submodule update --init --recursive --force
-          git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: 1.23.x
-
-      - name: Install dependencies on Windows
-        run: |
-          choco install mingw -y
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: ${{ runner.os }}-go-
-
-      - name: Build
-        run: make all
-
   lint:
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
