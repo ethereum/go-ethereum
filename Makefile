@@ -90,7 +90,6 @@ lintci-deps:
 vulncheck:
 	@go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
-
 goimports:
 	goimports -local "$(PACKAGE)" -w .
 
