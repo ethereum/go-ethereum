@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-ubuntu:
-    name: Build (Ubuntu-22.04)
+  build:
+    name: Build
 
     if: (github.event.action != 'closed' || github.event.pull_request.merged == true)
     strategy:
@@ -70,11 +70,11 @@ jobs:
         run: |
           choco install mingw -y
 
-      - uses: actions/cache@v3
+      - name: Cache Go modules
+        uses: actions/cache@v3
         with:
           path: |
-            ${{ env.USERPROFILE }}\go\pkg\mod
-            ${{ env.LOCALAPPDATA }}\go-build
+            ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: ${{ runner.os }}-go-
 
