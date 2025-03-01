@@ -195,30 +195,38 @@ func TestAdjustTime(t *testing.T) {
 	}
 }
 
-func TestSendTransaction(t *testing.T) {
+func TestSendTransactions(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
 	client := sim.Client()
 	ctx := context.Background()
 
-	signedTx, err := newTx(sim, testKey)
-	if err != nil {
-		t.Errorf("could not create transaction: %v", err)
-	}
-	// send tx to simulated backend
-	err = client.SendTransaction(ctx, signedTx)
-	if err != nil {
-		t.Errorf("could not add tx to pending block: %v", err)
-	}
-	sim.Commit()
-	block, err := client.BlockByNumber(ctx, big.NewInt(1))
-	if err != nil {
-		t.Errorf("could not get block at height 1: %v", err)
+	txs := []func(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error){
+		newTx,
+		newBlobTx,
+		newSetCodeTx,
 	}
 
-	if signedTx.Hash() != block.Transactions()[0].Hash() {
-		t.Errorf("did not commit sent transaction. expected hash %v got hash %v", block.Transactions()[0].Hash(), signedTx.Hash())
+	for _, tx := range txs {
+		signedTx, err := tx(sim, testKey)
+		if err != nil {
+			t.Errorf("could not create transaction: %v", err)
+		}
+		// send tx to simulated backend
+		err = client.SendTransaction(ctx, signedTx)
+		if err != nil {
+			t.Errorf("could not add tx to pending block: %v", err)
+		}
+		sim.Commit()
+		block, err := client.BlockByNumber(ctx, nil)
+		if err != nil {
+			t.Errorf("could not get block at height 1: %v", err)
+		}
+
+		if signedTx.Hash() != block.Transactions()[0].Hash() {
+			t.Errorf("did not commit sent transaction. expected hash %v got hash %v", block.Transactions()[0].Hash(), signedTx.Hash())
+		}
 	}
 }
 
