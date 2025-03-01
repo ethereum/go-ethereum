@@ -101,10 +101,7 @@ func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, don
 			// It can happen when chain is rewound to a historical point which
 			// is even lower than the indexes tail, recap the indexing target
 			// to new head to avoid reading non-existent block bodies.
-			end := *tail
-			if end > head+1 {
-				end = head + 1
-			}
+			end := min(*tail, head+1)
 			rawdb.IndexTransactions(indexer.db, 0, end, stop, true)
 		}
 		return

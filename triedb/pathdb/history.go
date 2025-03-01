@@ -556,10 +556,8 @@ func writeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 // and performs the callback on each item.
 func checkHistories(reader ethdb.AncientReader, start, count uint64, check func(*meta) error) error {
 	for count > 0 {
-		number := count
-		if number > 10000 {
-			number = 10000 // split the big read into small chunks
-		}
+		// Read a batch of meta objects at maximum 10000 items.
+		number := min(count, 10_000)
 		blobs, err := rawdb.ReadStateHistoryMetaList(reader, start, number)
 		if err != nil {
 			return err

@@ -613,14 +613,8 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			if txs[i].evictionExecTip.Cmp(txs[i].execTipCap) > 0 {
 				txs[i].evictionExecTip = txs[i].execTipCap
 			}
-			txs[i].evictionExecFeeJumps = txs[i-1].evictionExecFeeJumps
-			if txs[i].evictionExecFeeJumps > txs[i].basefeeJumps {
-				txs[i].evictionExecFeeJumps = txs[i].basefeeJumps
-			}
-			txs[i].evictionBlobFeeJumps = txs[i-1].evictionBlobFeeJumps
-			if txs[i].evictionBlobFeeJumps > txs[i].blobfeeJumps {
-				txs[i].evictionBlobFeeJumps = txs[i].blobfeeJumps
-			}
+			txs[i].evictionExecFeeJumps = min(txs[i-1].evictionExecFeeJumps, txs[i].basefeeJumps)
+			txs[i].evictionBlobFeeJumps = min(txs[i-1].evictionBlobFeeJumps, txs[i].blobfeeJumps)
 			continue
 		}
 		// Sanity check that there's no double nonce. This case would generally
@@ -1418,14 +1412,8 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 		if txs[i].evictionExecTip.Cmp(txs[i].execTipCap) > 0 {
 			txs[i].evictionExecTip = txs[i].execTipCap
 		}
-		txs[i].evictionExecFeeJumps = txs[i-1].evictionExecFeeJumps
-		if txs[i].evictionExecFeeJumps > txs[i].basefeeJumps {
-			txs[i].evictionExecFeeJumps = txs[i].basefeeJumps
-		}
-		txs[i].evictionBlobFeeJumps = txs[i-1].evictionBlobFeeJumps
-		if txs[i].evictionBlobFeeJumps > txs[i].blobfeeJumps {
-			txs[i].evictionBlobFeeJumps = txs[i].blobfeeJumps
-		}
+		txs[i].evictionExecFeeJumps = min(txs[i-1].evictionExecFeeJumps, txs[i].basefeeJumps)
+		txs[i].evictionBlobFeeJumps = min(txs[i-1].evictionBlobFeeJumps, txs[i].blobfeeJumps)
 	}
 	// Update the eviction heap with the new information:
 	//   - If the transaction is from a new account, add it to the heap

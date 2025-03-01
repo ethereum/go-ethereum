@@ -351,10 +351,7 @@ func ChunkifyCode(code []byte) ChunkedCode {
 	chunks := make([]byte, chunkCount*32)
 	for i := 0; i < chunkCount; i++ {
 		// number of bytes to copy, 31 unless the end of the code has been reached.
-		end := 31 * (i + 1)
-		if len(code) < end {
-			end = len(code)
-		}
+		end := min(len(code), 31*(i+1))
 		copy(chunks[i*32+1:], code[31*i:end]) // copy the code itself
 
 		// chunk offset = taken from the last chunk.

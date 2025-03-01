@@ -202,10 +202,7 @@ func (t *Tree) build(entries []entry) entry {
 	}
 	var subtrees []entry
 	for len(entries) > 0 {
-		n := maxChildren
-		if len(entries) < n {
-			n = len(entries)
-		}
+		n := min(len(entries), maxChildren)
 		sub := t.build(entries[:n])
 		entries = entries[n:]
 		subtrees = append(subtrees, sub)

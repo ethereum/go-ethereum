@@ -170,13 +170,10 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 				break
 			}
 		}
-		mid := (hi + lo) / 2
-		if mid > lo*2 {
-			// Most txs don't need much higher gas limit than their gas used, and most txs don't
-			// require near the full block limit of gas, so the selection of where to bisect the
-			// range here is skewed to favor the low side.
-			mid = lo * 2
-		}
+		// Most txs don't need much higher gas limit than their gas used, and most txs don't
+		// require near the full block limit of gas, so the selection of where to bisect the
+		// range here is skewed to favor the low side.
+		mid := min((hi+lo)/2, lo*2)
 		failed, _, err = execute(ctx, call, opts, mid)
 		if err != nil {
 			// This should not happen under normal conditions since if we make it this far the

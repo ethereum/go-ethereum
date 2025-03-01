@@ -103,30 +103,21 @@ func (p *peerConnection) UpdateReceiptRate(delivered int, elapsed time.Duration)
 // HeaderCapacity retrieves the peer's header download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) HeaderCapacity(targetRTT time.Duration) int {
-	cap := p.rates.Capacity(eth.BlockHeadersMsg, targetRTT)
-	if cap > MaxHeaderFetch {
-		cap = MaxHeaderFetch
-	}
+	cap := min(p.rates.Capacity(eth.BlockHeadersMsg, targetRTT), MaxHeaderFetch)
 	return cap
 }
 
 // BodyCapacity retrieves the peer's body download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) BodyCapacity(targetRTT time.Duration) int {
-	cap := p.rates.Capacity(eth.BlockBodiesMsg, targetRTT)
-	if cap > MaxBlockFetch {
-		cap = MaxBlockFetch
-	}
+	cap := min(p.rates.Capacity(eth.BlockBodiesMsg, targetRTT), MaxBlockFetch)
 	return cap
 }
 
 // ReceiptCapacity retrieves the peers receipt download allowance based on its
 // previously discovered throughput.
 func (p *peerConnection) ReceiptCapacity(targetRTT time.Duration) int {
-	cap := p.rates.Capacity(eth.ReceiptsMsg, targetRTT)
-	if cap > MaxReceiptFetch {
-		cap = MaxReceiptFetch
-	}
+	cap := min(p.rates.Capacity(eth.ReceiptsMsg, targetRTT), MaxReceiptFetch)
 	return cap
 }
 

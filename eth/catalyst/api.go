@@ -1225,10 +1225,7 @@ func (api *ConsensusAPI) getBodiesByRange(start, count hexutil.Uint64) ([]*engin
 	}
 	// limit count up until current
 	current := api.eth.BlockChain().CurrentBlock().Number.Uint64()
-	last := uint64(start) + uint64(count) - 1
-	if last > current {
-		last = current
-	}
+	last := min(uint64(start)+uint64(count)-1, current)
 	bodies := make([]*engine.ExecutionPayloadBody, 0, uint64(count))
 	for i := uint64(start); i <= last; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(i)

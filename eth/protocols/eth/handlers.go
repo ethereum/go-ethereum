@@ -143,10 +143,7 @@ func serviceNonContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBloc
 }
 
 func serviceContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHeadersRequest) []rlp.RawValue {
-	count := query.Amount
-	if count > maxHeadersServe {
-		count = maxHeadersServe
-	}
+	count := min(query.Amount, maxHeadersServe)
 	if query.Origin.Hash == (common.Hash{}) {
 		// Number mode, just return the canon chain segment. The backend
 		// delivers in [N, N-1, N-2..] descending order, so we need to

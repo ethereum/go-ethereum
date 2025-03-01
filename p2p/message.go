@@ -136,10 +136,7 @@ func (r *eofSignal) Read(buf []byte) (int, error) {
 		return 0, io.EOF
 	}
 
-	max := len(buf)
-	if int(r.count) < len(buf) {
-		max = int(r.count)
-	}
+	max := min(int(r.count), len(buf))
 	n, err := r.wrapped.Read(buf[:max])
 	r.count -= uint32(n)
 	if (err != nil || r.count == 0) && r.eof != nil {

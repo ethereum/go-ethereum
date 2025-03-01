@@ -450,12 +450,9 @@ func (c *ChainIndexer) AddChildIndexer(indexer *ChainIndexer) {
 	c.children = append(c.children, indexer)
 
 	// Cascade any pending updates to new children too
-	sections := c.storedSections
-	if c.knownSections < sections {
-		// if a section is "stored" but not "known" then it is a checkpoint without
-		// available chain data so we should not cascade it yet
-		sections = c.knownSections
-	}
+	// if a section is "stored" but not "known" then it is a checkpoint without
+	// available chain data so we should not cascade it yet
+	sections := min(c.knownSections, c.storedSections)
 	if sections > 0 {
 		indexer.newHead(sections*c.sectionSize-1, false)
 	}

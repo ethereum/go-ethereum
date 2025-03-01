@@ -175,17 +175,11 @@ func CalcGasLimit(parentGasLimit, desiredLimit uint64) uint64 {
 	}
 	// If we're outside our allowed gas range, we try to hone towards them
 	if limit < desiredLimit {
-		limit = parentGasLimit + delta
-		if limit > desiredLimit {
-			limit = desiredLimit
-		}
+		limit = min(parentGasLimit+delta, desiredLimit)
 		return limit
 	}
 	if limit > desiredLimit {
-		limit = parentGasLimit - delta
-		if limit < desiredLimit {
-			limit = desiredLimit
-		}
+		limit = max(parentGasLimit-delta, desiredLimit)
 	}
 	return limit
 }

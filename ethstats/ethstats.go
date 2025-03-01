@@ -685,10 +685,7 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 	} else {
 		// No indexes requested, send back the top ones
 		head := s.backend.CurrentHeader().Number.Int64()
-		start := head - historyUpdateRange + 1
-		if start < 0 {
-			start = 0
-		}
+		start := max(head-historyUpdateRange+1, 0)
 		for i := uint64(start); i <= uint64(head); i++ {
 			indexes = append(indexes, i)
 		}

@@ -328,10 +328,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	)
 	// proceed in batches
 	for i := 0; i < len(txs); i += 128 {
-		end := i + 128
-		if end > len(txs) {
-			end = len(txs)
-		}
+		end := min(i+128, len(txs))
 		var (
 			duplicate   int64
 			underpriced int64
