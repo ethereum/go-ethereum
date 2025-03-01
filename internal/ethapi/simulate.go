@@ -212,7 +212,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if block.BlockOverrides.BeaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*block.BlockOverrides.BeaconRoot, evm)
 	}
-
 	var allLogs []*types.Log
 	for i, call := range block.Calls {
 		if err := ctx.Err(); err != nil {
