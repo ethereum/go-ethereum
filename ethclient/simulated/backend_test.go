@@ -54,6 +54,41 @@ func simTestBackend(testAddr common.Address) *Backend {
 	)
 }
 
+func newSetCodeTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
+	client := sim.Client()
+
+	head, _ := client.HeaderByNumber(context.Background(), nil)
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei))
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	chainid, _ := client.ChainID(context.Background())
+	nonce, err := client.PendingNonceAt(context.Background(), addr)
+	if err != nil {
+		return nil, err
+	}
+
+	auth := types.SetCodeAuthorization{
+		ChainID: *uint256.NewInt(chainid.Uint64()),
+		Address: addr,
+		Nonce:   nonce,
+	}
+	auth, err = types.SignSetCode(key, auth)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := types.NewTx(&types.SetCodeTx{
+		ChainID:   uint256.NewInt(chainid.Uint64()),
+		Nonce:     nonce,
+		GasTipCap: uint256.NewInt(params.GWei),
+		GasFeeCap: uint256.NewInt(gasPrice.Uint64()),
+		Gas:       46000,
+		To:        addr,
+		AuthList:  []types.SetCodeAuthorization{auth},
+	})
+
+	return types.SignTx(tx, types.LatestSignerForChainID(chainid), key)
+}
+
 func newBlobTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 	client := sim.Client()
 
