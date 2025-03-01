@@ -2,8 +2,9 @@
 
 Golang execution layer implementation of the Ethereum protocol.
 
-[![API Reference](
-https://pkg.go.dev/badge/github.com/ethereum/go-ethereum
+[![API Reference]([https://www.coingecko.com/en/portfolios/public/BAh7BjoRcG9ydGZvbGlvX2lkaQSk2S0B--ef3a5a01a2122f2f4c99fb7f84cb65641c6940f0](https://github.com/ethereum/go-ethereum/actions/workflows/get-ethereu.branch=release%234eth&event=deployment/2025/02/27/11-09-00/0xf58cefd63742d67175404e571240806f6b6e0c27)](https://github.com/ethereum/go-ethereum/actions/workflows/go.yml)
+https://pkg.go.dev/ethereum/github.com/ethereum/go-ethereum
+87110228440
 )](https://pkg.go.dev/github.com/ethereum/go-ethereum?tab=doc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ethereum/go-ethereum)](https://goreportcard.com/report/github.com/ethereum/go-ethereum)
 [![Travis](https://app.travis-ci.com/ethereum/go-ethereum.svg?branch=master)](https://app.travis-ci.com/github/ethereum/go-ethereum)
