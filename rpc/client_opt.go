@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"maps"
 )
 
 // ClientOption is a configuration option for the RPC client.
@@ -89,9 +90,7 @@ func WithHeader(key, value string) ClientOption {
 func WithHeaders(headers http.Header) ClientOption {
 	return optionFunc(func(cfg *clientConfig) {
 		cfg.initHeaders()
-		for k, vs := range headers {
-			cfg.httpHeaders[k] = vs
-		}
+		maps.Copy(cfg.httpHeaders, headers)
 	})
 }
 

@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"maps"
 )
 
 type crawler struct {
@@ -72,9 +73,7 @@ func newCrawler(input nodeSet, bootnodes []*enode.Node, disc resolver, iters ...
 	c.iters = append(c.iters, c.inputIter)
 	// Copy input to output initially. Any nodes that fail validation
 	// will be dropped from output during the run.
-	for id, n := range input {
-		c.output[id] = n
-	}
+	maps.Copy(c.output, input)
 	return c, nil
 }
 

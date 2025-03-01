@@ -30,6 +30,7 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/gorilla/websocket"
+	"maps"
 )
 
 const (
@@ -236,9 +237,7 @@ func newClientTransportWS(endpoint string, cfg *clientConfig) (reconnectFunc, er
 	if err != nil {
 		return nil, err
 	}
-	for key, values := range cfg.httpHeaders {
-		header[key] = values
-	}
+	maps.Copy(header, cfg.httpHeaders)
 
 	connect := func(ctx context.Context) (ServerCodec, error) {
 		header := header.Clone()

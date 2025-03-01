@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"maps"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -99,9 +100,7 @@ func (api *API) Proposals() map[common.Address]bool {
 	defer api.clique.lock.RUnlock()
 
 	proposals := make(map[common.Address]bool)
-	for address, auth := range api.clique.proposals {
-		proposals[address] = auth
-	}
+	maps.Copy(proposals, api.clique.proposals)
 	return proposals
 }
 
