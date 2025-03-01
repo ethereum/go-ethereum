@@ -68,9 +68,9 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 			return reflect.TypeOf(uint8(0))
 		case 16:
 			return reflect.TypeOf(uint16(0))
-		case 32:
+		case 24, 32:
 			return reflect.TypeOf(uint32(0))
-		case 64:
+		case 40, 48, 56, 64:
 			return reflect.TypeOf(uint64(0))
 		}
 	}
@@ -79,9 +79,9 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 		return reflect.TypeOf(int8(0))
 	case 16:
 		return reflect.TypeOf(int16(0))
-	case 32:
+	case 24, 32:
 		return reflect.TypeOf(int32(0))
-	case 64:
+	case 40, 48, 56, 64:
 		return reflect.TypeOf(int64(0))
 	}
 	return reflect.TypeOf(&big.Int{})
