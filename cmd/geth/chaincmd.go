@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -105,7 +106,7 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.LogNoHistoryFlag,
 			utils.LogExportCheckpointsFlag,
 			utils.StateHistoryFlag,
-		}, utils.DatabaseFlags),
+		}, utils.DatabaseFlags, debug.Flags),
 		Description: `
 The import command allows the import of blocks from an RLP-encoded format. This format can be a single file
 containing multiple RLP-encoded blocks, or multiple files can be given.
