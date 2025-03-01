@@ -847,14 +847,14 @@ func mangleSidecar(tx *types.Transaction) *types.Transaction {
 }
 
 func (s *Suite) TestBlobTxWithoutSidecar(t *utesting.T) {
-	t.Log(`This test tests that a transaction first advertised/transmitted without a sidecar will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
+	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
 	tx := s.makeBlobTxs(1, 2, 42)[0]
 	badTx := tx.WithoutBlobTxSidecar()
 	s.testBadBlobTx(t, tx, badTx)
 }
 
 func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
-	t.Log(`This test tests that a transaction first advertised/transmitted with a sidecar whose commitment don't correspond to the blob_versioned_hashes in the transaction header will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
+	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs, whose commitment don't correspond to the blob_versioned_hashes in the transaction, will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
 	tx := s.makeBlobTxs(1, 2, 43)[0]
 	badTx := mangleSidecar(tx)
 	s.testBadBlobTx(t, tx, badTx)
