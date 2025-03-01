@@ -262,7 +262,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if sim.chainConfig.IsCancun(header.Number, header.Time) {
 		header.BlobGasUsed = &blobGasUsed
 	}
-
 	var requests [][]byte
 	// Process EIP-7685 requests
 	if sim.chainConfig.IsPrague(header.Number, header.Time) {
