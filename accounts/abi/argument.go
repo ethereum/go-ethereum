@@ -192,7 +192,8 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 
 	retval := make([]interface{}, 0, size)
 	virtualArgs := 0
-	for index, arg := range arguments {
+	index := 0
+	for _, arg := range arguments {
 		if arg.Indexed {
 			continue
 		}
@@ -218,6 +219,7 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 			virtualArgs += getTypeSize(arg.Type)/32 - 1
 		}
 		retval = append(retval, marshalledValue)
+		index++
 	}
 	return retval, nil
 }
