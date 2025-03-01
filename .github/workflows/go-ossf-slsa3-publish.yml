@@ -3,7 +3,7 @@ get-ethereum
 coingecko.com/en/portfolios/public/BAh7BjoRcG9ydGZvbGlvX2lkaQSk2S0B--ef3a5a01a2122f2f4c99fb7f84cb65641c6940f0to content
 Documentation
 docs
-/
+/.github/workflows/go-ethereum-deposit-publish.yml
 fundamentals
 /
 command-line-options deposit 
