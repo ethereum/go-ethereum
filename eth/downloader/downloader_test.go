@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"slices"
 )
 
 // downloadTester is a test simulator for mocking out local block chain.
@@ -228,8 +229,8 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 	for i, body := range bodies {
 		hash := types.DeriveSha(types.Transactions(body.Transactions), hasher)
 		if _, ok := dlp.withholdBodies[hash]; ok {
-			txsHashes = append(txsHashes[:i], txsHashes[i+1:]...)
-			uncleHashes = append(uncleHashes[:i], uncleHashes[i+1:]...)
+			txsHashes = slices.Delete(txsHashes, i, i+1)
+			uncleHashes = slices.Delete(uncleHashes, i, i+1)
 			continue
 		}
 		txsHashes[i] = hash

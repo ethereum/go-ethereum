@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
+	"slices"
 )
 
 // Suite represents a structure used to test a node's conformance
@@ -837,9 +838,9 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 func mangleSidecar(tx *types.Transaction) *types.Transaction {
 	sidecar := tx.BlobTxSidecar()
 	copy := types.BlobTxSidecar{
-		Blobs:       append([]kzg4844.Blob{}, sidecar.Blobs...),
-		Commitments: append([]kzg4844.Commitment{}, sidecar.Commitments...),
-		Proofs:      append([]kzg4844.Proof{}, sidecar.Proofs...),
+		Blobs:       slices.Clone(sidecar.Blobs),
+		Commitments: slices.Clone(sidecar.Commitments),
+		Proofs:      slices.Clone(sidecar.Proofs),
 	}
 	// zero the first commitment to alter the sidecar hash
 	copy.Commitments[0] = kzg4844.Commitment{}

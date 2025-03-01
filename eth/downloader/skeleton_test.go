@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"slices"
 )
 
 // hookedBackfiller is a tester backfiller with all interface methods mocked and
@@ -604,7 +605,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		{
 			head: chain[requestHeaders+100],
 			peers: []*skeletonTestPeer{
-				newSkeletonTestPeer("header-skipper", append(append(append([]*types.Header{}, chain[:99]...), nil), chain[100:]...)),
+				newSkeletonTestPeer("header-skipper", append(append(slices.Clone(chain[:99]), nil), chain[100:]...)),
 			},
 			mid: skeletonExpect{
 				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
@@ -627,7 +628,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		{
 			head: chain[requestHeaders+100],
 			peers: []*skeletonTestPeer{
-				newSkeletonTestPeer("header-skipper", append(append(append([]*types.Header{}, chain[:50]...), nil), chain[51:]...)),
+				newSkeletonTestPeer("header-skipper", append(append(slices.Clone(chain[:50]), nil), chain[51:]...)),
 			},
 			mid: skeletonExpect{
 				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
@@ -650,7 +651,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		{
 			head: chain[requestHeaders+100], // We want to force the 100th header to be a request boundary
 			peers: []*skeletonTestPeer{
-				newSkeletonTestPeer("header-duper", append(append(append([]*types.Header{}, chain[:99]...), chain[98]), chain[100:]...)),
+				newSkeletonTestPeer("header-duper", append(append(slices.Clone(chain[:99]), chain[98]), chain[100:]...)),
 			},
 			mid: skeletonExpect{
 				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
@@ -673,7 +674,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		{
 			head: chain[requestHeaders+100], // We want to force the 100th header to be a request boundary
 			peers: []*skeletonTestPeer{
-				newSkeletonTestPeer("header-duper", append(append(append([]*types.Header{}, chain[:50]...), chain[49]), chain[51:]...)),
+				newSkeletonTestPeer("header-duper", append(append(slices.Clone(chain[:50]), chain[49]), chain[51:]...)),
 			},
 			mid: skeletonExpect{
 				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
@@ -699,7 +700,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 				newSkeletonTestPeer("header-changer",
 					append(
 						append(
-							append([]*types.Header{}, chain[:99]...),
+							slices.Clone(chain[:99]),
 							&types.Header{
 								ParentHash: chain[98].Hash(),
 								Number:     big.NewInt(int64(99)),
@@ -733,7 +734,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 				newSkeletonTestPeer("header-changer",
 					append(
 						append(
-							append([]*types.Header{}, chain[:50]...),
+							slices.Clone(chain[:50]),
 							&types.Header{
 								ParentHash: chain[49].Hash(),
 								Number:     big.NewInt(int64(50)),

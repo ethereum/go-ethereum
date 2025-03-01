@@ -221,7 +221,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 				snap.uncast(vote.Address, vote.Authorize)
 
 				// Uncast the vote from the chronological list
-				snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
+				snap.Votes = slices.Delete(snap.Votes, i, i+1)
 				break // only one vote allowed
 			}
 		}
@@ -261,7 +261,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 						snap.uncast(snap.Votes[i].Address, snap.Votes[i].Authorize)
 
 						// Uncast the vote from the chronological list
-						snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
+						snap.Votes = slices.Delete(snap.Votes, i, i+1)
 
 						i--
 					}
@@ -270,7 +270,7 @@ func (s *Snapshot) apply(headers []*types.Header) (*Snapshot, error) {
 			// Discard any previous votes around the just changed account
 			for i := 0; i < len(snap.Votes); i++ {
 				if snap.Votes[i].Address == header.Coinbase {
-					snap.Votes = append(snap.Votes[:i], snap.Votes[i+1:]...)
+					snap.Votes = slices.Delete(snap.Votes, i, i+1)
 					i--
 				}
 			}

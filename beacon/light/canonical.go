@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"slices"
 )
 
 // canonicalStore stores instances of the given type in a database and caches
@@ -69,7 +70,7 @@ func newCanonicalStore[T any](db ethdb.Iteratee, keyPrefix []byte) (*canonicalSt
 
 // databaseKey returns the database key belonging to the given period.
 func (cs *canonicalStore[T]) databaseKey(period uint64) []byte {
-	return binary.BigEndian.AppendUint64(append([]byte{}, cs.keyPrefix...), period)
+	return binary.BigEndian.AppendUint64(slices.Clone(cs.keyPrefix), period)
 }
 
 // add adds the given item to the database. It also ensures that the range remains

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
+	"slices"
 )
 
 // Test chain parameters.
@@ -150,7 +151,7 @@ func (tc *testChain) copy(newlen int) *testChain {
 		newlen = len(tc.blocks)
 	}
 	cpy := &testChain{
-		blocks: append([]*types.Block{}, tc.blocks[:newlen]...),
+		blocks: slices.Clone(tc.blocks[:newlen]),
 	}
 	return cpy
 }

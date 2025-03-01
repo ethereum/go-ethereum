@@ -141,8 +141,8 @@ func (f *fuzzer) fuzz() int {
 		case 2:
 			// Gapped entry slice
 			index = index % len(keys)
-			keys = append(keys[:index], keys[index+1:]...)
-			vals = append(vals[:index], vals[index+1:]...)
+			keys = slices.Delete(keys, index, index+1)
+			vals = slices.Delete(vals, index, index+1)
 		case 3:
 			// Out of order
 			index1 := index % len(keys)

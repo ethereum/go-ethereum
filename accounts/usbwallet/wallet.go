@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/karalabe/hid"
+	"slices"
 )
 
 // Maximum time between wallet health checks to detect USB unplugs.
@@ -341,8 +342,8 @@ func (w *wallet) selfDerive() {
 			accs  []accounts.Account
 			paths []accounts.DerivationPath
 
-			nextPaths = append([]accounts.DerivationPath{}, w.deriveNextPaths...)
-			nextAddrs = append([]common.Address{}, w.deriveNextAddrs...)
+			nextPaths = slices.Clone(w.deriveNextPaths)
+			nextAddrs = slices.Clone(w.deriveNextAddrs)
 
 			context = context.Background()
 		)

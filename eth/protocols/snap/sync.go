@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"slices"
 )
 
 const (
@@ -943,7 +944,7 @@ func (s *Syncer) cleanAccountTasks() {
 	// Sync wasn't finished previously, check for any task that can be finalized
 	for i := 0; i < len(s.tasks); i++ {
 		if s.tasks[i].done {
-			s.tasks = append(s.tasks[:i], s.tasks[i+1:]...)
+			s.tasks = slices.Delete(s.tasks, i, i+1)
 			i--
 		}
 	}
@@ -966,7 +967,7 @@ func (s *Syncer) cleanStorageTasks() {
 			// Remove storage range retrieval tasks that completed
 			for j := 0; j < len(subtasks); j++ {
 				if subtasks[j].done {
-					subtasks = append(subtasks[:j], subtasks[j+1:]...)
+					subtasks = slices.Delete(subtasks, j, j+1)
 					j--
 				}
 			}

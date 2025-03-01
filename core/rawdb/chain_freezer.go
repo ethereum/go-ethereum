@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"slices"
 )
 
 const (
@@ -258,7 +259,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 						continue
 					}
 					if _, ok := drop[child.ParentHash]; !ok {
-						children = append(children[:i], children[i+1:]...)
+						children = slices.Delete(children, i, i+1)
 						i--
 						continue
 					}
