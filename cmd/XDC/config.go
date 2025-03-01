@@ -170,16 +170,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		common.Enable0xPrefix = false
 	}
 
-	// Rewound
-	if rewound := ctx.Int(utils.RewoundFlag.Name); rewound != 0 {
-		common.Rewound = uint64(rewound)
-	}
-
-	// Check rollback hash exist.
-	if rollbackHash := ctx.String(utils.RollbackFlag.Name); rollbackHash != "" {
-		common.RollbackHash = common.HexToHash(rollbackHash)
-	}
-
 	// Check GasPrice
 	common.MinGasPrice = big.NewInt(common.DefaultMinGasPrice)
 	if ctx.IsSet(utils.MinerGasPriceFlag.Name) {

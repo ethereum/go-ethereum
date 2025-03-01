@@ -200,6 +200,34 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 	if err != nil {
 		return nil, err
 	}
+
+	// Rollback according to SetHeadFlag
+	if common.RollbackNumber != 0 {
+		target := common.RollbackNumber
+		common.RollbackNumber = 0
+		currentBlock := eth.blockchain.CurrentBlock()
+		if currentBlock == nil {
+			return nil, fmt.Errorf("not find current block when rollback to %d", common.RollbackNumber)
+		}
+		currentNumber := currentBlock.NumberU64()
+		if target > currentNumber {
+			return nil, fmt.Errorf("can't rollback to %d which is greater than current %d", target, currentNumber)
+		}
+		log.Warn("Start rollback", "target", target, "current", currentNumber)
+		err := eth.blockchain.SetHead(target)
+		if err != nil {
+			return nil, fmt.Errorf("fail to rollback: target=%d, current=%d, err: %w", target, currentNumber, err)
+		}
+		log.Warn("Rollback completed", "target", target)
+	}
+
+	if engine, ok := eth.blockchain.Engine().(*XDPoS.XDPoS); ok {
+		err := engine.Initial(eth.blockchain, eth.blockchain.CurrentHeader())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -214,29 +242,6 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 	eth.txPool = txpool.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 	eth.orderPool = txpool.NewOrderPool(eth.chainConfig, eth.blockchain)
 	eth.lendingPool = txpool.NewLendingPool(eth.chainConfig, eth.blockchain)
-	if common.RollbackHash != (common.Hash{}) {
-		curBlock := eth.blockchain.CurrentBlock()
-		if curBlock == nil {
-			log.Warn("not find current block when rollback")
-		}
-		prevBlock := eth.blockchain.GetBlockByHash(common.RollbackHash)
-
-		if curBlock != nil && prevBlock != nil && curBlock.NumberU64() > prevBlock.NumberU64() {
-			for ; curBlock != nil && curBlock.NumberU64() != prevBlock.NumberU64(); curBlock = eth.blockchain.GetBlock(curBlock.ParentHash(), curBlock.NumberU64()-1) {
-				eth.blockchain.Rollback([]common.Hash{curBlock.Hash()})
-			}
-		}
-
-		if prevBlock != nil {
-			err := eth.blockchain.SetHead(prevBlock.NumberU64())
-			if err != nil {
-				log.Crit("Err Rollback", "err", err)
-				return nil, err
-			}
-		} else {
-			log.Error("skip SetHead because target block is nil when rollback")
-		}
-	}
 
 	if eth.protocolManager, err = NewProtocolManagerEx(eth.chainConfig, config.SyncMode, networkID, eth.eventMux, eth.txPool, eth.orderPool, eth.lendingPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
