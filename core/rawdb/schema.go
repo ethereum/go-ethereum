@@ -145,8 +145,8 @@ var (
 	FixedCommitteeRootKey = []byte("fixedRoot-") // bigEndian64(syncPeriod) -> committee root hash
 	SyncCommitteeKey      = []byte("committee-") // bigEndian64(syncPeriod) -> serialized committee
 
-	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
-	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
+	preimageCounter     = metrics.NewRegisteredCounter("db/preimage/total", nil)
+	preimageMissCounter = metrics.NewRegisteredCounter("db/preimage/miss", nil)
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
