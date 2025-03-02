@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	gomath "math"
 	"math/big"
 	"math/rand"
@@ -45,7 +46,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
-	"maps"
 )
 
 // So we can deterministically seed different blockchains

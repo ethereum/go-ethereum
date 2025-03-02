@@ -19,6 +19,7 @@ package snapshot
 import (
 	"bytes"
 	crand "crypto/rand"
+	"maps"
 	"math/rand"
 	"testing"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"maps"
 )
 
 func copyAccounts(accounts map[common.Hash][]byte) map[common.Hash][]byte {

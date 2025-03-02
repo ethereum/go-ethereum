@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,7 +31,6 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/gorilla/websocket"
-	"maps"
 )
 
 const (

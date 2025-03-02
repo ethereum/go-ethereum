@@ -19,6 +19,7 @@ package txpool
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"sync"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"maps"
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.

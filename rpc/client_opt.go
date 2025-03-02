@@ -17,10 +17,10 @@
 package rpc
 
 import (
+	"maps"
 	"net/http"
 
 	"github.com/gorilla/websocket"
-	"maps"
 )
 
 // ClientOption is a configuration option for the RPC client.
