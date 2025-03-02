@@ -28,6 +28,7 @@ var MaintnetConstant = constant{
 	TIPV2SwitchBlock:              big.NewInt(80370000), // Target 2nd Oct 2024
 	tipXDCXMinerDisable:           big.NewInt(80370000), // Target 2nd Oct 2024
 	tipXDCXReceiverDisable:        big.NewInt(80370900), // Target 2nd Oct 2024, safer to release after disable miner
+	tipUpgradeReward:              big.NewInt(9999999999),
 	eip1559Block:                  big.NewInt(9999999999),
 	cancunBlock:                   big.NewInt(9999999999),
 

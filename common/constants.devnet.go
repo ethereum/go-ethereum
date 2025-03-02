@@ -28,6 +28,7 @@ var DevnetConstant = constant{
 	TIPV2SwitchBlock:              big.NewInt(1800),
 	tipXDCXMinerDisable:           big.NewInt(0),
 	tipXDCXReceiverDisable:        big.NewInt(0),
+	tipUpgradeReward:              big.NewInt(1773000),
 	eip1559Block:                  big.NewInt(0),
 	cancunBlock:                   big.NewInt(1702800),
 

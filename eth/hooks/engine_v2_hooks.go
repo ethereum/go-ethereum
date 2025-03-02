@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/sort"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -16,6 +18,21 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
+
+// Declaring an enum type Beneficiary of reward
+type Beneficiary int
+
+// Enumerating reward beneficiary
+const (
+	MasterNodeBeneficiary Beneficiary = iota
+	ProtectorNodeBeneficiary
+	ObserverNodeBeneficiary
+)
+
+type RewardLog struct {
+	Sign   uint64   `json:"sign"`
+	Reward *big.Int `json:"reward"`
+}
 
 func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConfig *params.ChainConfig) {
 	// Hook scans for bad masternodes and decide to penalty them
@@ -165,61 +182,138 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
 			return nil, errors.New("foundation wallet address is empty")
 		}
-		rewards := make(map[string]interface{})
+		rewardsMap := make(map[string]interface{})
 		// skip hook reward if this is the first v2
 		if number == chain.Config().XDPoS.V2.SwitchBlock.Uint64()+1 {
-			return rewards, nil
+			return rewardsMap, nil
 		}
 		start := time.Now()
-		// Get reward inflation.
-		chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
-		chainReward = util.RewardInflation(chain, chainReward, number, common.BlocksPerYear)
 
+		round, err := adaptor.EngineV2.GetRoundNumber(header)
+		if err != nil {
+			log.Error("[HookReward] Fail to get round", "error", err)
+			return nil, err
+		}
+		currentConfig := chain.Config().XDPoS.V2.Config(uint64(round))
 		// Get signers/signing tx count
-		totalSigner := new(uint64)
-		signers, err := GetSigningTxCount(adaptor, chain, header, totalSigner)
+		signers, err := GetSigningTxCount(adaptor, chain, header, parentState, currentConfig)
 
 		log.Debug("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 		if err != nil {
 			log.Error("[HookReward] Fail to get signers count for reward checkpoint", "error", err)
 			return nil, err
 		}
-		rewards["signers"] = signers
-		rewardSigners, err := contracts.CalculateRewardForSigner(chainReward, signers, *totalSigner)
-		if err != nil {
-			log.Error("[HookReward] Fail to calculate reward for signers", "error", err)
-			return nil, err
+		rewardsMap["signers"] = signers[MasterNodeBeneficiary]
+
+		rewardSigners := make(map[common.Address]*big.Int)
+		rewardSignersProtector := make(map[common.Address]*big.Int)
+		rewardSignersObserver := make(map[common.Address]*big.Int)
+		if !chain.Config().IsTIPUpgradeReward(header.Number) {
+			// Get reward inflation.
+			chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
+			chainReward = util.RewardInflation(chain, chainReward, number, common.BlocksPerYear)
+			rewardSigners, err = CalculateRewardForSigner(chainReward, signers[MasterNodeBeneficiary])
+			if err != nil {
+				log.Error("[HookReward] Fail to calculate reward for masternode", "error", err)
+				return nil, err
+			}
+		} else {
+			rewardsMap["signersProtector"] = signers[ProtectorNodeBeneficiary]
+			rewardsMap["signersObserver"] = signers[ObserverNodeBeneficiary]
+			// Masternode rewards
+			chainReward := new(big.Int).Mul(new(big.Int).SetUint64(currentConfig.MasternodeReward), new(big.Int).SetUint64(params.Ether))
+			chainReward = util.RewardInflation(chain, chainReward, number, common.BlocksPerYear)
+			rewardSigners, err = CalculateRewardForSigner(chainReward, signers[MasterNodeBeneficiary])
+			if err != nil {
+				log.Error("[HookReward] Fail to calculate reward for masternode", "error", err)
+				return nil, err
+			}
+
+			// Protector rewards
+			chainReward = new(big.Int).Mul(new(big.Int).SetUint64(currentConfig.ProtectorReward), new(big.Int).SetUint64(params.Ether))
+			chainReward = util.RewardInflation(chain, chainReward, number, common.BlocksPerYear)
+			rewardSignersProtector, err = CalculateRewardForSigner(chainReward, signers[ProtectorNodeBeneficiary])
+			if err != nil {
+				log.Error("[HookReward] Fail to calculate reward for protector", "error", err)
+				return nil, err
+			}
+
+			// Observer rewards
+			chainReward = new(big.Int).Mul(new(big.Int).SetUint64(currentConfig.ObserverReward), new(big.Int).SetUint64(params.Ether))
+			chainReward = util.RewardInflation(chain, chainReward, number, common.BlocksPerYear)
+			rewardSignersObserver, err = CalculateRewardForSigner(chainReward, signers[ObserverNodeBeneficiary])
+			if err != nil {
+				log.Error("[HookReward] Fail to calculate reward for observer", "error", err)
+				return nil, err
+			}
 		}
 		// Add reward for coin holders.
 		voterResults := make(map[common.Address]interface{})
-		if len(signers) > 0 {
-			for signer, calcReward := range rewardSigners {
-				rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
-				if err != nil {
-					log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
-					return nil, err
-				}
-				if len(rewards) > 0 {
-					for holder, reward := range rewards {
-						stateBlock.AddBalance(holder, reward)
-					}
-				}
-				voterResults[signer] = rewards
+		for signer, calcReward := range rewardSigners {
+			rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
+			if err != nil {
+				log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
+				return nil, err
 			}
+			if len(rewards) > 0 {
+				for holder, reward := range rewards {
+					stateBlock.AddBalance(holder, reward)
+				}
+			}
+			voterResults[signer] = rewards
 		}
-		rewards["rewards"] = voterResults
+		rewardsMap["rewards"] = voterResults
+
+		voterResultsProtector := make(map[common.Address]interface{})
+		for signer, calcReward := range rewardSignersProtector {
+			rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
+			if err != nil {
+				log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
+				return nil, err
+			}
+			if len(rewards) > 0 {
+				for holder, reward := range rewards {
+					stateBlock.AddBalance(holder, reward)
+				}
+			}
+			voterResultsProtector[signer] = rewards
+		}
+		if len(voterResultsProtector) > 0 {
+			rewardsMap["rewardsProtector"] = voterResultsProtector
+		}
+		voterResultsObserver := make(map[common.Address]interface{})
+		for signer, calcReward := range rewardSignersObserver {
+			rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
+			if err != nil {
+				log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
+				return nil, err
+			}
+			if len(rewards) > 0 {
+				for holder, reward := range rewards {
+					stateBlock.AddBalance(holder, reward)
+				}
+			}
+			voterResultsObserver[signer] = rewards
+		}
+		if len(voterResultsObserver) > 0 {
+			rewardsMap["rewardsObserver"] = voterResultsObserver
+		}
 		log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
-		return rewards, nil
+		return rewardsMap, nil
 	}
 }
 
 // get signing transaction sender count
-func GetSigningTxCount(c *XDPoS.XDPoS, chain consensus.ChainReader, header *types.Header, totalSigner *uint64) (map[common.Address]*contracts.RewardLog, error) {
+func GetSigningTxCount(c *XDPoS.XDPoS, chain consensus.ChainReader, header *types.Header, parentState *state.StateDB, currentConfig *params.V2Config) (map[Beneficiary]map[common.Address]*RewardLog, error) {
 	// header should be a new epoch switch block
 	number := header.Number.Uint64()
 	rewardEpochCount := 2
 	signEpochCount := 1
-	signers := make(map[common.Address]*contracts.RewardLog)
+	signers := make(map[Beneficiary]map[common.Address]*RewardLog)
+	signers[MasterNodeBeneficiary] = make(map[common.Address]*RewardLog)
+	signers[ProtectorNodeBeneficiary] = make(map[common.Address]*RewardLog)
+	signers[ObserverNodeBeneficiary] = make(map[common.Address]*RewardLog)
+
 	mapBlkHash := map[uint64]common.Hash{}
 
 	// prevent overflow
@@ -229,32 +323,75 @@ func GetSigningTxCount(c *XDPoS.XDPoS, chain consensus.ChainReader, header *type
 
 	data := make(map[common.Hash][]common.Address)
 	epochCount := 0
-	var masternodes []common.Address
 	var startBlockNumber, endBlockNumber uint64
+
+	nodesToKeep := make(map[Beneficiary][]common.Address)
+
+	h := header
 	for i := number - 1; ; i-- {
-		header = chain.GetHeader(header.ParentHash, i)
-		isEpochSwitch, _, err := c.IsEpochSwitch(header)
+		h = chain.GetHeader(h.ParentHash, i)
+		isEpochSwitch, _, err := c.IsEpochSwitch(h)
 		if err != nil {
 			return nil, err
 		}
 		if isEpochSwitch && i != chain.Config().XDPoS.V2.SwitchBlock.Uint64()+1 {
 			epochCount += 1
 			if epochCount == signEpochCount {
-				endBlockNumber = header.Number.Uint64() - 1
+				endBlockNumber = h.Number.Uint64() - 1
 			}
 			if epochCount == rewardEpochCount {
-				startBlockNumber = header.Number.Uint64() + 1
-				masternodes = c.GetMasternodesFromCheckpointHeader(header)
+				startBlockNumber = h.Number.Uint64() + 1
+				nodesToKeep[MasterNodeBeneficiary] = c.GetMasternodesFromCheckpointHeader(h)
+				// in reward upgrade, add protector and observer nodes
+				if chain.Config().IsTIPUpgradeReward(header.Number) {
+					candidates := state.GetCandidates(parentState)
+					var ms []utils.Masternode
+					for _, candidate := range candidates {
+						// ignore "0x0000000000000000000000000000000000000000"
+						if !candidate.IsZero() {
+							v := state.GetCandidateCap(parentState, candidate)
+							ms = append(ms, utils.Masternode{Address: candidate, Stake: v})
+						}
+					}
+					sort.Slice(ms, func(i, j int) bool {
+						return ms[i].Stake.Cmp(ms[j].Stake) >= 0
+					})
+					// find penalty and filter them out
+					penalties := common.ExtractAddressFromBytes(h.Penalties)
+					filterMap := make(map[common.Address]struct{})
+					for _, addr := range penalties {
+						filterMap[addr] = struct{}{}
+					}
+					for _, addr := range nodesToKeep[MasterNodeBeneficiary] {
+						filterMap[addr] = struct{}{}
+					}
+					// find top candidates
+					// maxMNP := currentConfig.MaxMasternodes + currentConfig.MaxProtectorNodes
+					protector := []common.Address{}
+					observer := []common.Address{}
+					for _, node := range ms {
+						if _, ok := filterMap[node.Address]; ok {
+							continue
+						}
+						if len(protector) < currentConfig.MaxProtectorNodes {
+							protector = append(protector, node.Address)
+						} else {
+							observer = append(observer, node.Address)
+						}
+					}
+					nodesToKeep[ProtectorNodeBeneficiary] = protector
+					nodesToKeep[ObserverNodeBeneficiary] = observer
+				}
 				break
 			}
 		}
-		mapBlkHash[i] = header.Hash()
-		signingTxs, ok := c.GetCachedSigningTxs(header.Hash())
+		mapBlkHash[i] = h.Hash()
+		signingTxs, ok := c.GetCachedSigningTxs(h.Hash())
 		if !ok {
-			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
-			block := chain.GetBlock(header.Hash(), i)
+			log.Debug("Failed get from cached", "hash", h.Hash().String(), "number", i)
+			block := chain.GetBlock(h.Hash(), i)
 			txs := block.Transactions()
-			signingTxs = c.CacheSigningTxs(header.Hash(), txs)
+			signingTxs = c.CacheSigningTxs(h.Hash(), txs)
 		}
 		for _, tx := range signingTxs {
 			blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
@@ -272,26 +409,35 @@ func GetSigningTxCount(c *XDPoS.XDPoS, chain consensus.ChainReader, header *type
 			addrs := data[mapBlkHash[i]]
 			// Filter duplicate address.
 			if len(addrs) > 0 {
-				addrSigners := make(map[common.Address]bool)
-				for _, masternode := range masternodes {
-					for _, addr := range addrs {
-						if addr == masternode {
-							if _, ok := addrSigners[addr]; !ok {
-								addrSigners[addr] = true
+				addrSigners := make(map[Beneficiary]map[common.Address]bool)
+				addrSigners[MasterNodeBeneficiary] = make(map[common.Address]bool)
+				addrSigners[ProtectorNodeBeneficiary] = make(map[common.Address]bool)
+				addrSigners[ObserverNodeBeneficiary] = make(map[common.Address]bool)
+
+				for _, addr := range addrs {
+					for _, beneficiary := range []Beneficiary{MasterNodeBeneficiary, ProtectorNodeBeneficiary, ObserverNodeBeneficiary} {
+						if _, ok := nodesToKeep[beneficiary]; ok {
+							for _, protector := range nodesToKeep[beneficiary] {
+								if addr == protector {
+									if _, ok := addrSigners[beneficiary][addr]; !ok {
+										addrSigners[beneficiary][addr] = true
+									}
+									break
+								}
 							}
-							break
 						}
 					}
 				}
 
-				for addr := range addrSigners {
-					_, exist := signers[addr]
-					if exist {
-						signers[addr].Sign++
-					} else {
-						signers[addr] = &contracts.RewardLog{Sign: 1, Reward: new(big.Int)}
+				for _, beneficiary := range []Beneficiary{MasterNodeBeneficiary, ProtectorNodeBeneficiary, ObserverNodeBeneficiary} {
+					for addr := range addrSigners[beneficiary] {
+						_, exist := signers[beneficiary][addr]
+						if exist {
+							signers[beneficiary][addr].Sign++
+						} else {
+							signers[beneficiary][addr] = &RewardLog{Sign: 1, Reward: new(big.Int)}
+						}
 					}
-					*totalSigner++
 				}
 			}
 		}
@@ -300,4 +446,32 @@ func GetSigningTxCount(c *XDPoS.XDPoS, chain consensus.ChainReader, header *type
 	log.Info("Calculate reward at checkpoint", "startBlock", startBlockNumber, "endBlock", endBlockNumber)
 
 	return signers, nil
+}
+
+// Calculate reward for signers.
+func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*RewardLog) (map[common.Address]*big.Int, error) {
+	totalSignerCount := uint64(0)
+	for _, rLog := range signers {
+		totalSignerCount += rLog.Sign
+	}
+	resultSigners := make(map[common.Address]*big.Int)
+	// Add reward for signers.
+	if totalSignerCount > 0 {
+		for signer, rLog := range signers {
+			// Add reward for signer.
+			calcReward := new(big.Int)
+			calcReward.Div(chainReward, new(big.Int).SetUint64(totalSignerCount))
+			calcReward.Mul(calcReward, new(big.Int).SetUint64(rLog.Sign))
+			rLog.Reward = calcReward
+
+			resultSigners[signer] = calcReward
+		}
+	}
+
+	log.Info("Signers data", "totalSigner", totalSignerCount, "totalReward", chainReward)
+	for addr, signer := range signers {
+		log.Debug("Signer reward", "signer", addr, "sign", signer.Sign, "reward", signer.Reward)
+	}
+
+	return resultSigners, nil
 }
