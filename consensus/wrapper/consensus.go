@@ -2,7 +2,7 @@ package wrapper
 
 import (
 	"math/big"
-	"sync"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus"
@@ -10,13 +10,14 @@ import (
 	"github.com/scroll-tech/go-ethereum/consensus/system_contract"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
 // UpgradableEngine implements consensus.Engine and acts as a middleware to dispatch
 // calls to either Clique or SystemContract consensus.
 type UpgradableEngine struct {
-	// forkBlock is the block number at which the switchover to SystemContract occurs.
+	// isUpgraded takes a block timestamp, and returns true once the engine should be upgraded to SystemContract.
 	isUpgraded func(uint64) bool
 
 	// clique is the original Clique consensus engine.
@@ -28,6 +29,8 @@ type UpgradableEngine struct {
 
 // NewUpgradableEngine constructs a new upgradable consensus middleware.
 func NewUpgradableEngine(isUpgraded func(uint64) bool, clique consensus.Engine, system consensus.Engine) *UpgradableEngine {
+	log.Info("Initializing upgradable consensus engine")
+
 	return &UpgradableEngine{
 		isUpgraded: isUpgraded,
 		clique:     clique,
@@ -35,7 +38,7 @@ func NewUpgradableEngine(isUpgraded func(uint64) bool, clique consensus.Engine, 
 	}
 }
 
-// chooseEngine returns the appropriate consensus engine based on the header's number.
+// chooseEngine returns the appropriate consensus engine based on the header's timestamp.
 func (ue *UpgradableEngine) chooseEngine(header *types.Header) consensus.Engine {
 	if ue.isUpgraded(header.Time) {
 		return ue.system
@@ -60,12 +63,12 @@ func (ue *UpgradableEngine) VerifyHeader(chain consensus.ChainHeaderReader, head
 // headers can only be all system, all clique, or start with clique and then switch once to system.
 func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
-	out := make(chan error)
+	results := make(chan error, len(headers))
 
 	// If there are no headers, return a closed error channel.
 	if len(headers) == 0 {
-		close(out)
-		return nil, out
+		close(results)
+		return nil, results
 	}
 
 	// Choose engine for the first and last header.
@@ -97,42 +100,55 @@ func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, hea
 	systemHeaders := headers[splitIndex:]
 	systemSeals := seals[splitIndex:]
 
-	// Create a wait group to merge results.
-	var wg sync.WaitGroup
-	wg.Add(2)
+	log.Info("Verifying EuclidV2 transition header chain")
 
-	// Launch concurrent verifications.
+	// Do verification concurrently,
+	// but make sure to run Clique first, then SystemContract,
+	// so that the results are sent in the correct order.
 	go func() {
-		defer wg.Done()
-		_, cliqueResults := ue.clique.VerifyHeaders(chain, cliqueHeaders, cliqueSeals)
-		for err := range cliqueResults {
+		defer close(results)
+
+		// Verify clique headers.
+		log.Info("Start EuclidV2 transition verification in Clique section", "startBlockNumber", cliqueHeaders[0].Number, "endBlockNumber", cliqueHeaders[len(cliqueHeaders)-1].Number)
+		abortClique, cliqueResults := ue.clique.VerifyHeaders(chain, cliqueHeaders, cliqueSeals)
+
+		// Note: cliqueResults is not closed so we cannot directly iterate over it
+		for i := 0; i < len(cliqueHeaders); i++ {
 			select {
 			case <-abort:
+				close(abortClique)
+				log.Warn("Aborted EuclidV2 transition verification in Clique section")
 				return
-			case out <- err:
+			case err := <-cliqueResults:
+				results <- err
 			}
 		}
-	}()
 
-	go func() {
-		defer wg.Done()
-		_, systemResults := ue.system.VerifyHeaders(chain, systemHeaders, systemSeals)
-		for err := range systemResults {
+		// Not sure why we need this here, but without this we get err="unknown ancestor"
+		// at the 1st Euclid block. It seems that `VerifyHeaders` start processing the next
+		// header before the previous one was written into `chain`.
+		time.Sleep(2 * time.Second)
+
+		// Verify system contract headers.
+		log.Info("Start EuclidV2 transition verification in SystemContract section", "startBlockNumber", systemHeaders[0].Number, "endBlockNumber", systemHeaders[len(systemHeaders)-1].Number)
+		abortSystem, systemResults := ue.system.VerifyHeaders(chain, systemHeaders, systemSeals)
+
+		// Note: systemResults is not closed so we cannot directly iterate over it
+		for i := 0; i < len(systemHeaders); i++ {
 			select {
 			case <-abort:
+				close(abortSystem)
+				log.Info("Aborted EuclidV2 transition verification in SystemContract section")
 				return
-			case out <- err:
+			case err := <-systemResults:
+				results <- err
 			}
 		}
+
+		log.Info("Completed EuclidV2 transition verification")
 	}()
 
-	// Close the out channel when both verifications are complete.
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
-
-	return abort, out
+	return abort, results
 }
 
 // Prepare prepares a block header for sealing.
@@ -167,27 +183,22 @@ func (ue *UpgradableEngine) VerifyUncles(chain consensus.ChainReader, block *typ
 
 // APIs returns any RPC APIs exposed by the consensus engine.
 func (ue *UpgradableEngine) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	// Determine the current chain head.
-	head := chain.CurrentHeader()
-	if head == nil {
-		// Fallback: return the clique APIs (or an empty slice) if we don't have a header.
-		return ue.clique.APIs(chain)
-	}
-
-	// Choose engine based on whether the chain head is before or after the fork block.
-	if ue.isUpgraded(head.Time) {
-		return ue.system.APIs(chain)
-	}
-	return ue.clique.APIs(chain)
+	return append(ue.clique.APIs(chain), ue.system.APIs(chain)...)
 }
 
 // Close terminates the consensus engine.
 func (ue *UpgradableEngine) Close() error {
 	// Always close both engines.
-	if err := ue.clique.Close(); err != nil {
-		return err
+	err1 := ue.clique.Close()
+	err2 := ue.system.Close()
+
+	if err1 != nil || err2 != nil {
+		log.Error("Error while closing upgradable engine", "cliqueError", err1, "systemContractError", err2)
 	}
-	return ue.system.Close()
+	if err1 != nil {
+		return err1
+	}
+	return err2
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

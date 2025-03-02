@@ -86,10 +86,17 @@ type Header struct {
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
-	// BlockSignature was added by EuclidV2 to make Extra empty and is ignored during hashing
+	// Note: The subsequent fields are rlp:"optional". When encoding a struct with optional
+	// fields, the output RLP list contains all values up to the last non-zero optional field.
+
+	// BlockSignature was added by EuclidV2 to make Extra empty and is ignored during hashing.
+	// This field is stored in db but not included in messages sent on the network wire protocol,
+	// or in RPC responses. See also `PrepareForNetwork` and `PrepareFromNetwork`.
 	BlockSignature []byte `json:"-" rlp:"optional"`
 
-	// IsEuclidV2 was added by EuclidV2 to make Extra empty and is ignored during hashing
+	// IsEuclidV2 was added by EuclidV2 to make Extra empty and is ignored during hashing.
+	// This field is stored in db but not included in messages sent on the network wire protocol,
+	// or in RPC responses. See also `PrepareForNetwork` and `PrepareFromNetwork`.
 	IsEuclidV2 bool `json:"-" rlp:"optional"`
 
 	// WithdrawalsHash was added by EIP-4895 and is ignored in legacy headers.
@@ -108,7 +115,9 @@ type Header struct {
 	// Included for Ethereum compatibility in Scroll SDK
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 
-	//Hacky: used internally to mark the header as requested by the downloader at the deliver queue
+	// Hacky: used internally to mark the header as requested by the downloader at the deliver queue.
+	// Note: This is only used internally to mark a previously requested block, it is not included
+	// in db, on the network wire protocol, or in RPC responses.
 	Requested bool `json:"-" rlp:"-"`
 }
 

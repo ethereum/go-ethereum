@@ -191,6 +191,8 @@ type Clique struct {
 // New creates a Clique proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
 func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
+	log.Info("Initializing clique consensus engine")
+
 	// Set any missing consensus parameters to their defaults
 	conf := *config
 	if conf.Epoch == 0 {

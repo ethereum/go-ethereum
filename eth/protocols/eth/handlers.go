@@ -270,6 +270,7 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 
 	hCopy := ann.Block.Header()
 	if err := hCopy.NetworkCompatibleEuclidV2Fields(); err != nil {
+		log.Warn("Disconnecting peer in handleNewBlock", "peer", peer.id, "reason", err)
 		peer.Peer.Disconnect(p2p.DiscUselessPeer)
 		return err
 	}
@@ -309,6 +310,7 @@ func handleBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	for _, header := range res.BlockHeadersPacket {
 		hCopy := types.CopyHeader(header)
 		if err := hCopy.NetworkCompatibleEuclidV2Fields(); err != nil {
+			log.Warn("Disconnecting peer in handleBlockHeaders66", "peer", peer.id, "reason", err)
 			peer.Peer.Disconnect(p2p.DiscUselessPeer)
 			return err
 		}

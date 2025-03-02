@@ -793,8 +793,12 @@ func (c *ChainConfig) String() string {
 	switch {
 	case c.Ethash != nil:
 		engine = c.Ethash
+	case c.Clique != nil && c.SystemContract != nil:
+		engine = "upgradable (clique + system_contract)"
 	case c.Clique != nil:
 		engine = c.Clique
+	case c.SystemContract != nil:
+		engine = c.SystemContract
 	default:
 		engine = "unknown"
 	}

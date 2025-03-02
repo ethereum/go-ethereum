@@ -36,20 +36,27 @@ var (
 	// errUnknownBlock is returned when the list of signers is requested for a block
 	// that is not part of the local blockchain.
 	errUnknownBlock = errors.New("unknown block")
+
 	// errNonceNotEmpty is returned if a nonce value is non-zero
 	errInvalidNonce = errors.New("nonce not empty nor zero")
+
 	// errMissingSignature is returned if a block's extra-data section doesn't seem
 	// to contain a 65 byte secp256k1 signature.
 	errMissingSignature = errors.New("extra-data 65 byte signature missing")
+
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
+
 	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
 	errInvalidUncleHash = errors.New("non empty uncle hash")
+
 	// errInvalidDifficulty is returned if a difficulty value is non-zero
 	errInvalidDifficulty = errors.New("non-one difficulty")
+
 	// errInvalidTimestamp is returned if the timestamp of a block is lower than
-	// the previous block's timestamp + the minimum block period.
+	// the previous block's timestamp.
 	errInvalidTimestamp = errors.New("invalid timestamp")
+
 	// errInvalidExtra is returned if the extra data is not empty
 	errInvalidExtra = errors.New("invalid extra")
 )
@@ -335,10 +342,6 @@ func ecrecover(header *types.Header) (common.Address, error) {
 
 // SystemContractRLP returns the rlp bytes which needs to be signed for the system contract
 // sealing. The RLP to sign consists of the entire header apart from the ExtraData
-//
-// Note, the method requires the extra data to be at least 65 bytes, otherwise it
-// panics. This is done to avoid accidentally using both forms (signature present
-// or not), which could be abused to produce different hashes for the same header.
 func SystemContractRLP(header *types.Header) []byte {
 	b := new(bytes.Buffer)
 	encodeSigHeader(b, header)
@@ -354,8 +357,12 @@ func (s *SystemContract) CalcDifficulty(chain consensus.ChainHeaderReader, time 
 // controlling the signer voting.
 func (s *SystemContract) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	return []rpc.API{{
-		Namespace: "system_contract",
-		Service:   &API{},
+		// note: cannot use underscore in namespace,
+		// but overlap with another module's name space works fine.
+		Namespace: "scroll",
+		Version:   "1.0",
+		Service:   &API{system_contract: s},
+		Public:    false,
 	}}
 }
 

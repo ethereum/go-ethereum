@@ -975,6 +975,14 @@ web3._extend({
 			name: 'syncStatus',
 			getter: 'scroll_syncStatus',
 		}),
+		new web3._extend.Property({
+			name: 'authorizedSigner',
+			getter: 'scroll_getAuthorizedSigner',
+		}),
+		new web3._extend.Property({
+			name: 'localSigner',
+			getter: 'scroll_getLocalSigner',
+		}),
 	]
 });
 `
