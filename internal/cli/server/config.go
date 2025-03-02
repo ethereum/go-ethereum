@@ -60,6 +60,12 @@ type Config struct {
 	// Record information useful for VM and contract debugging
 	EnablePreimageRecording bool `hcl:"vmdebug,optional" toml:"vmdebug,optional"`
 
+	// Name of tracer which should record internal VM operations (costly)
+	VMTrace string `hcl:"vmtrace,optional" toml:"vmtrace,optional"`
+
+	// Tracer configuration (JSON)
+	VMTraceJSONConfig string `hcl:"vmtrace.jsonconfig,optional" toml:"vmtrace,optional"`
+
 	// DataDir is the directory to store the state in
 	DataDir string `hcl:"datadir,optional" toml:"datadir,optional"`
 
@@ -609,6 +615,8 @@ func DefaultConfig() *Config {
 		Verbosity:               3,
 		LogLevel:                "",
 		EnablePreimageRecording: false,
+		VMTrace:                 "",
+		VMTraceJSONConfig:       "",
 		DataDir:                 DefaultDataDir(),
 		Ancient:                 "",
 		DBEngine:                "pebble",
@@ -953,6 +961,8 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 	}
 
 	n.EnablePreimageRecording = c.EnablePreimageRecording
+	n.VMTrace = c.VMTrace
+	n.VMTraceJsonConfig = c.VMTraceJSONConfig
 
 	// txpool options
 	{

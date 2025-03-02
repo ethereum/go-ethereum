@@ -57,6 +57,7 @@ import (
 	"github.com/cespare/cp"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -664,7 +665,7 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping archive creation because this is a PR build")
 		os.Exit(0)
 	}
-	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
+	if env.Branch != "master" && !strings.HasPrefix(env.Branch, "firehose") && !strings.HasPrefix(env.Tag, "v1.") && !strings.Contains(env.Tag, "fh") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the inclusion list", env.Branch, env.Tag)
 		os.Exit(0)
 	}
@@ -708,6 +709,10 @@ func doDocker(cmdline []string) {
 		tags = []string{"latest"}
 	case strings.HasPrefix(env.Tag, "v1."):
 		tags = []string{"stable", fmt.Sprintf("release-1.%d", params.VersionMinor), "v" + params.Version}
+	case strings.HasPrefix(env.Branch, "firehose"):
+		tags = []string{"edge-fh" + tracers.FirehoseProtocolVersion}
+	case strings.Contains(env.Tag, "fh"):
+		tags = []string{"stable-fh" + tracers.FirehoseProtocolVersion, "v" + params.Version + "-fh" + tracers.FirehoseProtocolVersion}
 	}
 	// If architecture specific image builds are requested, build and push them
 	if *image {
