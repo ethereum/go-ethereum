@@ -18,6 +18,7 @@
 package locals
 
 import (
+	"slices"
 	"sync"
 	"time"
 
@@ -28,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -74,28 +74,45 @@ func New(journalPath string, journalTime time.Duration, chainConfig *params.Chai
 
 // Track adds a transaction to the tracked set.
 // Note: blob-type transactions are ignored.
-func (tracker *TxTracker) Track(tx *types.Transaction) {
-	tracker.TrackAll([]*types.Transaction{tx})
+func (tracker *TxTracker) Track(tx *types.Transaction) error {
+	return tracker.TrackAll([]*types.Transaction{tx})[0]
 }
 
 // TrackAll adds a list of transactions to the tracked set.
 // Note: blob-type transactions are ignored.
-func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
+func (tracker *TxTracker) TrackAll(txs []*types.Transaction) []error {
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 
+	var errors []error
 	for _, tx := range txs {
 		if tx.Type() == types.BlobTxType {
+			errors = append(errors, nil)
+			continue
+		}
+		// Ignore the transactions which are failed for fundamental
+		// validation such as invalid parameters.
+		if err := tracker.pool.ValidateTxBasics(tx); err != nil {
+			log.Debug("Invalid transaction submitted", "hash", tx.Hash(), "err", err)
+			errors = append(errors, err)
 			continue
 		}
 		// If we're already tracking it, it's a no-op
 		if _, ok := tracker.all[tx.Hash()]; ok {
+			errors = append(errors, nil)
 			continue
 		}
+		// Theoretically, checking the error here is unnecessary since sender recovery
+		// is already part of basic validation. However, retrieving the sender address
+		// from the transaction cache is effectively a no-op if it was previously verified.
+		// Therefore, the error is still checked just in case.
 		addr, err := types.Sender(tracker.signer, tx)
-		if err != nil { // Ignore this tx
+		if err != nil {
+			errors = append(errors, err)
 			continue
 		}
+		errors = append(errors, nil)
+
 		tracker.all[tx.Hash()] = tx
 		if tracker.byAddr[addr] == nil {
 			tracker.byAddr[addr] = legacypool.NewSortedMap()
@@ -107,6 +124,7 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 		}
 	}
 	localGauge.Update(int64(len(tracker.all)))
+	return errors
 }
 
 // recheck checks and returns any transactions that needs to be resubmitted.
