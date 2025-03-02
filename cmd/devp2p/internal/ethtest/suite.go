@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -34,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/holiman/uint256"
-	"slices"
 )
 
 // Suite represents a structure used to test a node's conformance

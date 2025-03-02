@@ -24,13 +24,14 @@ import (
 	"sort"
 	"time"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"slices"
 )
 
 // scratchHeaders is the number of headers to store in a scratch space to allow

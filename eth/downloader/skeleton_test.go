@@ -25,13 +25,14 @@ import (
 	"testing"
 	"time"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"slices"
 )
 
 // hookedBackfiller is a tester backfiller with all interface methods mocked and

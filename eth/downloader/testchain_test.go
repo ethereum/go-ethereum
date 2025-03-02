@@ -19,6 +19,7 @@ package downloader
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 	"time"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
-	"slices"
 )
 
 // Test chain parameters.

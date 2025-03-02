@@ -19,6 +19,7 @@ package trie
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -30,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"slices"
 )
 
 // ErrNotRequested is returned by the trie sync when it's requested to process a

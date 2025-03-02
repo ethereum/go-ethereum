@@ -19,6 +19,7 @@ package native
 import (
 	"encoding/json"
 	"math/big"
+	"slices"
 	"strconv"
 	"sync/atomic"
 
@@ -28,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
-	"slices"
 )
 
 func init() {

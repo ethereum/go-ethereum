@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -41,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	pcsc "github.com/gballet/go-libpcsclite"
 	"github.com/status-im/keycard-go/derivationpath"
-	"slices"
 )
 
 // ErrPairingPasswordNeeded is returned if opening the smart card requires pairing with a pairing

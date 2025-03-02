@@ -18,12 +18,12 @@ package accounts
 
 import (
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
-	"slices"
 )
 
 // managerSubBufferSize determines how many incoming wallet events

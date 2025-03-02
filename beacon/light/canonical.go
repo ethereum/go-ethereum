@@ -19,12 +19,12 @@ package light
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"slices"
 )
 
 // canonicalStore stores instances of the given type in a database and caches
