@@ -42,5 +42,5 @@ func NewEnv(cfg *Config) *vm.EVM {
 		Random:      cfg.Random,
 	}
 
-	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)
+	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig, nil)
 }

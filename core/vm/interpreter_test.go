@@ -49,7 +49,7 @@ func TestLoopInterrupt(t *testing.T) {
 		statedb.SetCode(address, common.Hex2Bytes(tt))
 		statedb.Finalise(true)
 
-		evm := vm.NewEVM(vmctx, vm.TxContext{}, statedb, params.AllEthashProtocolChanges, vm.Config{})
+		evm := vm.NewEVM(vmctx, vm.TxContext{}, statedb, params.AllEthashProtocolChanges, vm.Config{}, nil)
 
 		errChannel := make(chan error)
 		timeout := make(chan bool)

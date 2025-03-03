@@ -107,7 +107,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction for tracing: %v", err)
 	}
-	evm := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+	evm := vm.NewEVM(context, core.NewEVMTxContext(msg), statedb, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks}, nil)
 	tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 	vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 	if err != nil {
