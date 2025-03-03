@@ -464,6 +464,7 @@ func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx
 			if len(l1MessagesV1) > 0 {
 				// backdate the block to the parent block's timestamp -> not yet EuclidV2
 				// TODO: might need to re-run Prepare here
+				log.Warn("Back-labeling header timestamp to ensure it precedes the EuclidV2 transition", "blockNumber", w.current.header.Number, "oldTime", w.current.header.Time, "newTime", parent.Time)
 				w.current.header.Time = parent.Time
 				return l1MessagesV1
 			}
@@ -540,6 +541,10 @@ func (w *worker) newWork(now time.Time, parentHash common.Hash, reorging bool, r
 	if w.chainConfig.Clique != nil && w.chainConfig.Clique.RelaxedPeriod {
 		// clique with relaxed period uses time.Now() as the header.Time, calculate the deadline
 		deadline = time.Unix(int64(header.Time+w.chainConfig.Clique.Period), 0)
+	}
+	if w.chainConfig.SystemContract != nil && w.chainConfig.SystemContract.RelaxedPeriod {
+		// system contract with relaxed period uses time.Now() as the header.Time, calculate the deadline
+		deadline = time.Unix(int64(header.Time+w.chainConfig.SystemContract.Period), 0)
 	}
 
 	w.current = &work{
