@@ -219,9 +219,16 @@ func (s *SystemContract) VerifyUncles(chain consensus.ChainReader, block *types.
 // Prepare initializes the consensus fields of a block header according to the
 // rules of a particular engine. Update only timestamp and prepare ExtraData for Signature
 func (s *SystemContract) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	// Make sure unused fields are empty
+	header.Coinbase = common.Address{}
+	header.Nonce = types.BlockNonce{}
+	header.MixDigest = common.Hash{}
+
+	// Prepare EuclidV2-related fields
 	header.BlockSignature = make([]byte, extraSeal)
 	header.IsEuclidV2 = true
 	header.Extra = nil
+
 	// Ensure the timestamp has the correct delay
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
@@ -233,7 +240,10 @@ func (s *SystemContract) Prepare(chain consensus.ChainHeaderReader, header *type
 	if s.config.RelaxedPeriod || header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
+
+	// Difficulty must be 1
 	header.Difficulty = big.NewInt(1)
+
 	return nil
 }
 
@@ -241,6 +251,8 @@ func (s *SystemContract) Prepare(chain consensus.ChainHeaderReader, header *type
 // No rules here
 func (s *SystemContract) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// No block rewards in PoA, so the state remains as is
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	header.UncleHash = types.CalcUncleHash(nil)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
@@ -248,9 +260,6 @@ func (s *SystemContract) Finalize(chain consensus.ChainHeaderReader, header *typ
 func (s *SystemContract) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Finalize block
 	s.Finalize(chain, header, state, txs, uncles)
-
-	// Assign the final state root to header.
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Assemble and return the final block for sealing.
 	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil)), nil
