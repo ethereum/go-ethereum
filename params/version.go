@@ -18,6 +18,8 @@ package params
 
 import (
 	"fmt"
+
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 const (
@@ -27,7 +29,18 @@ const (
 	VersionMeta  = "" // Version metadata to append to the version string
 )
 
-var GitCommit string
+var (
+	borInfo   = metrics.NewRegisteredGaugeInfo("bor/info", nil)
+	GitCommit string
+)
+
+// UpdateBorInfo updates the bor_info with the current git commit and version details.
+func UpdateBorInfo() {
+	borInfo.Update(metrics.GaugeInfoValue{
+		"commit":  GitCommit,
+		"version": VersionWithMeta,
+	})
+}
 
 // Version holds the textual version string.
 var Version = func() string {
