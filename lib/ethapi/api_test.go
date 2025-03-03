@@ -544,7 +544,7 @@ func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state vm.Sta
 	if blockContext != nil {
 		context = *blockContext
 	}
-	return vm.NewEVM(context, txContext, state, b.chain.Config(), *vmConfig)
+	return vm.NewEVM(context, txContext, state, b.chain.Config(), *vmConfig, nil)
 }
 func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	panic("implement me")
