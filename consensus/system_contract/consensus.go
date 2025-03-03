@@ -37,7 +37,10 @@ var (
 	// that is not part of the local blockchain.
 	errUnknownBlock = errors.New("unknown block")
 
-	// errNonceNotEmpty is returned if a nonce value is non-zero
+	// errInvalidCoinbase is returned if a coinbase value is non-zero
+	errInvalidCoinbase = errors.New("coinbase not empty")
+
+	// errInvalidNonce is returned if a nonce value is non-zero
 	errInvalidNonce = errors.New("nonce not empty nor zero")
 
 	// errMissingSignature is returned if a block's extra-data section doesn't seem
@@ -115,6 +118,10 @@ func (s *SystemContract) verifyHeader(chain consensus.ChainHeaderReader, header 
 	// Don't waste time checking blocks from the future
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
+	}
+	// Ensure that the coinbase is zero
+	if header.Coinbase != (common.Address{}) {
+		return errInvalidCoinbase
 	}
 	// Ensure that the nonce is zero
 	if header.Nonce != (types.BlockNonce{}) {
