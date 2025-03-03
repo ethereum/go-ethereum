@@ -12,13 +12,15 @@ import (
 )
 
 func TestEventSignatures(t *testing.T) {
-	assert.Equal(t, crypto.Keccak256Hash([]byte("CommitBatch(uint256,bytes32)")), ScrollChainABI.Events["CommitBatch"].ID)
-	assert.Equal(t, crypto.Keccak256Hash([]byte("RevertBatch(uint256,bytes32)")), ScrollChainABI.Events["RevertBatch"].ID)
-	assert.Equal(t, crypto.Keccak256Hash([]byte("FinalizeBatch(uint256,bytes32,bytes32,bytes32)")), ScrollChainABI.Events["FinalizeBatch"].ID)
+	assert.Equal(t, crypto.Keccak256Hash([]byte("CommitBatch(uint256,bytes32)")), ScrollChainABI.Events[commitBatchEventName].ID)
+	assert.Equal(t, crypto.Keccak256Hash([]byte("RevertBatch(uint256,bytes32)")), ScrollChainABI.Events[revertBatchV0EventName].ID)
+	assert.Equal(t, crypto.Keccak256Hash([]byte("RevertBatch(uint256,uint256)")), ScrollChainABI.Events[revertBatchV7EventName].ID)
+	assert.Equal(t, crypto.Keccak256Hash([]byte("FinalizeBatch(uint256,bytes32,bytes32,bytes32)")), ScrollChainABI.Events[finalizeBatchEventName].ID)
 }
 
 func TestUnpackLog(t *testing.T) {
 	mockBatchIndex := big.NewInt(123)
+	finishMockBatchIndex := big.NewInt(125)
 	mockBatchHash := crypto.Keccak256Hash([]byte("mockBatch"))
 	mockStateRoot := crypto.Keccak256Hash([]byte("mockStateRoot"))
 	mockWithdrawRoot := crypto.Keccak256Hash([]byte("mockWithdrawRoot"))
@@ -42,16 +44,40 @@ func TestUnpackLog(t *testing.T) {
 			&CommitBatchEventUnpacked{},
 		},
 		{
-			revertBatchEventName,
+			revertBatchV0EventName,
 			types.Log{
 				Data:   nil,
-				Topics: []common.Hash{ScrollChainABI.Events[revertBatchEventName].ID, common.BigToHash(mockBatchIndex), mockBatchHash},
+				Topics: []common.Hash{ScrollChainABI.Events[revertBatchV0EventName].ID, common.BigToHash(mockBatchIndex), mockBatchHash},
 			},
-			&RevertBatchEventUnpacked{
+			&RevertBatchEventV0Unpacked{
 				BatchIndex: mockBatchIndex,
 				BatchHash:  mockBatchHash,
 			},
-			&RevertBatchEventUnpacked{},
+			&RevertBatchEventV0Unpacked{},
+		},
+		{
+			revertBatchV7EventName,
+			types.Log{
+				Data:   nil,
+				Topics: []common.Hash{ScrollChainABI.Events[revertBatchV7EventName].ID, common.BigToHash(mockBatchIndex), common.BigToHash(mockBatchIndex)},
+			},
+			&RevertBatchEventV7Unpacked{
+				StartBatchIndex:  mockBatchIndex,
+				FinishBatchIndex: mockBatchIndex,
+			},
+			&RevertBatchEventV7Unpacked{},
+		},
+		{
+			revertBatchV7EventName,
+			types.Log{
+				Data:   nil,
+				Topics: []common.Hash{ScrollChainABI.Events[revertBatchV7EventName].ID, common.BigToHash(mockBatchIndex), common.BigToHash(finishMockBatchIndex)},
+			},
+			&RevertBatchEventV7Unpacked{
+				StartBatchIndex:  mockBatchIndex,
+				FinishBatchIndex: finishMockBatchIndex,
+			},
+			&RevertBatchEventV7Unpacked{},
 		},
 		{
 			finalizeBatchEventName,

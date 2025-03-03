@@ -161,6 +161,10 @@ type mockEntryWithBlocks struct {
 	versionedHashes []common.Hash
 }
 
+func (m mockEntryWithBlocks) L1MessagesPoppedInBatch() uint64 {
+	panic("implement me")
+}
+
 func (m mockEntryWithBlocks) Type() da.Type {
 	panic("implement me")
 }
@@ -181,7 +185,7 @@ func (m mockEntryWithBlocks) Event() l1.RollupEvent {
 	panic("implement me")
 }
 
-func (m mockEntryWithBlocks) Blocks() []*da.PartialBlock {
+func (m mockEntryWithBlocks) Blocks() ([]*da.PartialBlock, error) {
 	panic("implement me")
 }
 
@@ -191,6 +195,14 @@ func (m mockEntryWithBlocks) Version() encoding.CodecVersion {
 
 func (m mockEntryWithBlocks) Chunks() []*encoding.DAChunkRawTx {
 	return m.chunks
+}
+
+func (m mockEntryWithBlocks) SetParentTotalL1MessagePopped(totalL1MessagePopped uint64) {
+	panic("implement me")
+}
+
+func (m mockEntryWithBlocks) TotalL1MessagesPopped() uint64 {
+	panic("implement me")
 }
 
 func (m mockEntryWithBlocks) BlobVersionedHashes() []common.Hash {
@@ -667,11 +679,10 @@ func TestValidateBatchCodecV7(t *testing.T) {
 	{
 		block1 := replaceBlockNumber(readBlockFromJSON(t, "./testdata/blockTrace_02.json"), 1)
 		batch1 := &encoding.Batch{
-			Index:                     1,
-			InitialL1MessageIndex:     0,
-			InitialL1MessageQueueHash: common.Hash{},
-			LastL1MessageQueueHash:    common.Hash{},
-			Blocks:                    []*encoding.Block{block1},
+			Index:                  1,
+			PrevL1MessageQueueHash: common.Hash{},
+			PostL1MessageQueueHash: common.Hash{},
+			Blocks:                 []*encoding.Block{block1},
 		}
 		batch1LastBlock := batch1.Blocks[len(batch1.Blocks)-1]
 
@@ -690,7 +701,7 @@ func TestValidateBatchCodecV7(t *testing.T) {
 
 		committedBatchMeta1 = &rawdb.CommittedBatchMeta{
 			Version:                uint8(encoding.CodecV7),
-			LastL1MessageQueueHash: common.Hash{},
+			PostL1MessageQueueHash: common.Hash{},
 		}
 
 		var endBlock1 uint64
@@ -708,12 +719,11 @@ func TestValidateBatchCodecV7(t *testing.T) {
 	// finalize 3 batches with CodecV7 at once
 	block2 := replaceBlockNumber(readBlockFromJSON(t, "./testdata/blockTrace_03.json"), 2)
 	batch2 := &encoding.Batch{
-		Index:                     2,
-		ParentBatchHash:           finalizedBatchMeta1.BatchHash,
-		InitialL1MessageIndex:     0,
-		InitialL1MessageQueueHash: common.Hash{},
-		LastL1MessageQueueHash:    common.Hash{},
-		Blocks:                    []*encoding.Block{block2},
+		Index:                  2,
+		ParentBatchHash:        finalizedBatchMeta1.BatchHash,
+		PrevL1MessageQueueHash: common.Hash{},
+		PostL1MessageQueueHash: common.Hash{},
+		Blocks:                 []*encoding.Block{block2},
 	}
 	batch2LastBlock := batch2.Blocks[len(batch2.Blocks)-1]
 
@@ -724,12 +734,11 @@ func TestValidateBatchCodecV7(t *testing.T) {
 	LastL1MessageQueueHashBatch3, err := encoding.MessageQueueV2ApplyL1MessagesFromBlocks(common.Hash{}, []*encoding.Block{block3})
 	require.NoError(t, err)
 	batch3 := &encoding.Batch{
-		Index:                     3,
-		ParentBatchHash:           daBatch2.Hash(),
-		InitialL1MessageIndex:     0,
-		InitialL1MessageQueueHash: common.Hash{},
-		LastL1MessageQueueHash:    LastL1MessageQueueHashBatch3,
-		Blocks:                    []*encoding.Block{block3},
+		Index:                  3,
+		ParentBatchHash:        daBatch2.Hash(),
+		PrevL1MessageQueueHash: common.Hash{},
+		PostL1MessageQueueHash: LastL1MessageQueueHashBatch3,
+		Blocks:                 []*encoding.Block{block3},
 	}
 	batch3LastBlock := batch3.Blocks[len(batch3.Blocks)-1]
 
@@ -740,12 +749,11 @@ func TestValidateBatchCodecV7(t *testing.T) {
 	LastL1MessageQueueHashBatch4, err := encoding.MessageQueueV2ApplyL1MessagesFromBlocks(LastL1MessageQueueHashBatch3, []*encoding.Block{block4})
 	require.NoError(t, err)
 	batch4 := &encoding.Batch{
-		Index:                     4,
-		ParentBatchHash:           daBatch3.Hash(),
-		InitialL1MessageIndex:     1,
-		InitialL1MessageQueueHash: LastL1MessageQueueHashBatch3,
-		LastL1MessageQueueHash:    LastL1MessageQueueHashBatch4,
-		Blocks:                    []*encoding.Block{block4},
+		Index:                  4,
+		ParentBatchHash:        daBatch3.Hash(),
+		PrevL1MessageQueueHash: LastL1MessageQueueHashBatch3,
+		PostL1MessageQueueHash: LastL1MessageQueueHashBatch4,
+		Blocks:                 []*encoding.Block{block4},
 	}
 	batch4LastBlock := batch4.Blocks[len(batch4.Blocks)-1]
 
@@ -764,17 +772,17 @@ func TestValidateBatchCodecV7(t *testing.T) {
 
 	committedBatchMeta2 := &rawdb.CommittedBatchMeta{
 		Version:                uint8(encoding.CodecV7),
-		LastL1MessageQueueHash: common.Hash{},
+		PostL1MessageQueueHash: common.Hash{},
 	}
 
 	committedBatchMeta3 := &rawdb.CommittedBatchMeta{
 		Version:                uint8(encoding.CodecV7),
-		LastL1MessageQueueHash: LastL1MessageQueueHashBatch3,
+		PostL1MessageQueueHash: LastL1MessageQueueHashBatch3,
 	}
 
 	committedBatchMeta4 := &rawdb.CommittedBatchMeta{
 		Version:                uint8(encoding.CodecV7),
-		LastL1MessageQueueHash: LastL1MessageQueueHashBatch4,
+		PostL1MessageQueueHash: LastL1MessageQueueHashBatch4,
 	}
 
 	endBlock2, finalizedBatchMeta2, err := validateBatch(2, event2, finalizedBatchMeta1, committedBatchMeta1, committedBatchMeta2, []*encoding.Chunk{{Blocks: batch2.Blocks}}, nil)

@@ -34,10 +34,13 @@ type Entry interface {
 
 type EntryWithBlocks interface {
 	Entry
-	Blocks() []*PartialBlock
+	Blocks() ([]*PartialBlock, error)
 	Version() encoding.CodecVersion
 	Chunks() []*encoding.DAChunkRawTx
 	BlobVersionedHashes() []common.Hash
+	SetParentTotalL1MessagePopped(uint64)
+	TotalL1MessagesPopped() uint64
+	L1MessagesPoppedInBatch() uint64
 }
 
 type Entries []Entry

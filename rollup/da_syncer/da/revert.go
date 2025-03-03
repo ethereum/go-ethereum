@@ -5,10 +5,10 @@ import (
 )
 
 type RevertBatch struct {
-	event *l1.RevertBatchEvent
+	event l1.RollupEvent
 }
 
-func NewRevertBatch(event *l1.RevertBatchEvent) *RevertBatch {
+func NewRevertBatch(event l1.RollupEvent) *RevertBatch {
 	return &RevertBatch{
 		event: event,
 	}
@@ -21,6 +21,7 @@ func (r *RevertBatch) Type() Type {
 func (r *RevertBatch) L1BlockNumber() uint64 {
 	return r.event.BlockNumber()
 }
+
 func (r *RevertBatch) BatchIndex() uint64 {
 	return r.event.BatchIndex().Uint64()
 }

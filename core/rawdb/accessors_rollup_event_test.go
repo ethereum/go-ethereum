@@ -182,7 +182,7 @@ func TestWriteReadDeleteCommittedBatchMeta(t *testing.T) {
 			meta: &CommittedBatchMeta{
 				Version:                7,
 				ChunkBlockRanges:       []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}},
-				LastL1MessageQueueHash: common.Hash{1, 2, 3, 4, 5, 6, 7},
+				PostL1MessageQueueHash: common.Hash{1, 2, 3, 4, 5, 6, 7},
 			},
 		},
 		{
@@ -190,7 +190,7 @@ func TestWriteReadDeleteCommittedBatchMeta(t *testing.T) {
 			meta: &CommittedBatchMeta{
 				Version:                255,
 				ChunkBlockRanges:       []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 10}, {StartBlockNumber: 11, EndBlockNumber: 20}},
-				LastL1MessageQueueHash: common.Hash{255},
+				PostL1MessageQueueHash: common.Hash{255},
 			},
 		},
 	}
@@ -237,7 +237,7 @@ func TestOverwriteCommittedBatchMeta(t *testing.T) {
 	newMeta := &CommittedBatchMeta{
 		Version:                255,
 		ChunkBlockRanges:       []*ChunkBlockRange{{StartBlockNumber: 0, EndBlockNumber: 20}, {StartBlockNumber: 21, EndBlockNumber: 30}},
-		LastL1MessageQueueHash: common.Hash{255},
+		PostL1MessageQueueHash: common.Hash{255},
 	}
 
 	// write initial meta
@@ -282,5 +282,5 @@ func compareCommittedBatchMeta(a, b *CommittedBatchMeta) bool {
 		}
 	}
 
-	return a.LastL1MessageQueueHash == b.LastL1MessageQueueHash
+	return a.PostL1MessageQueueHash == b.PostL1MessageQueueHash
 }

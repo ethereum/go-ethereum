@@ -4,25 +4,23 @@ import (
 	"context"
 	"errors"
 
-	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/da"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer/serrors"
 )
 
 // DAQueue is a pipeline stage that reads DA entries from a DataSource and provides them to the next stage.
 type DAQueue struct {
-	l1height     uint64
-	initialBatch uint64
+	l1height uint64
 
 	dataSourceFactory *DataSourceFactory
 	dataSource        DataSource
 	da                da.Entries
 }
 
-func NewDAQueue(l1height uint64, initialBatch uint64, dataSourceFactory *DataSourceFactory) *DAQueue {
+func NewDAQueue(l1height uint64, dataSourceFactory *DataSourceFactory) *DAQueue {
 	return &DAQueue{
 		l1height:          l1height,
-		initialBatch:      initialBatch,
 		dataSourceFactory: dataSourceFactory,
 		dataSource:        nil,
 		da:                make(da.Entries, 0),
@@ -46,11 +44,6 @@ func (dq *DAQueue) NextDA(ctx context.Context) (da.Entry, error) {
 
 		daEntry := dq.da[0]
 		dq.da = dq.da[1:]
-
-		if daEntry.BatchIndex() < dq.initialBatch {
-			log.Debug("Skipping DA entry due to initial batch requirement", "batchIndex", daEntry.BatchIndex(), "initialBatch", dq.initialBatch)
-			continue
-		}
 
 		return daEntry, nil
 	}
@@ -86,8 +79,8 @@ func (dq *DAQueue) DataSource() DataSource {
 	return dq.dataSource
 }
 
-func (dq *DAQueue) Reset(height uint64) {
-	dq.l1height = height
+func (dq *DAQueue) Reset(lastProcessedBatchMeta *rawdb.DAProcessedBatchMeta) {
+	dq.l1height = lastProcessedBatchMeta.L1BlockNumber
 	dq.dataSource = nil
 	dq.da = make(da.Entries, 0)
 }

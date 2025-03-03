@@ -144,7 +144,7 @@ func (ds *CalldataBlobSource) processRollupEventsToDA(rollupEvents l1.RollupEven
 			// add commit event to the list of previous commit events, so we can process events created in the same tx together
 			lastCommitTransactionHash = commitEvent.TxHash()
 			lastCommitEvents = append(lastCommitEvents, commitEvent)
-		case l1.RevertEventType:
+		case l1.RevertEventV0Type, l1.RevertEventV7Type:
 			// if we have any previous commit events, we need to create a new DA before processing the revert event
 			if len(lastCommitEvents) > 0 {
 				if err = getAndAppendCommitBatchDA(); err != nil {
@@ -152,13 +152,7 @@ func (ds *CalldataBlobSource) processRollupEventsToDA(rollupEvents l1.RollupEven
 				}
 			}
 
-			revertEvent, ok := rollupEvent.(*l1.RevertBatchEvent)
-			// this should never happen because we just check event type
-			if !ok {
-				return nil, fmt.Errorf("unexpected type of rollup event: %T", rollupEvent)
-			}
-
-			entry = NewRevertBatch(revertEvent)
+			entry = NewRevertBatch(rollupEvent)
 			entries = append(entries, entry)
 		case l1.FinalizeEventType:
 			// if we have any previous commit events, we need to create a new DA before processing the finalized event
@@ -235,15 +229,15 @@ func (ds *CalldataBlobSource) getCommitBatchDA(commitEvents []*l1.CommitBatchEve
 		}
 
 		switch codec.Version() {
-		case 0:
+		case encoding.CodecV0:
 			if entry, err = NewCommitBatchDAV0(ds.db, codec, commitEvent, args.ParentBatchHeader, args.Chunks, args.SkippedL1MessageBitmap); err != nil {
 				return nil, fmt.Errorf("failed to decode DA, batch index: %d, err: %w", commitEvent.BatchIndex().Uint64(), err)
 			}
-		case 1, 2, 3, 4, 5, 6:
+		case encoding.CodecV1, encoding.CodecV2, encoding.CodecV3, encoding.CodecV4, encoding.CodecV5, encoding.CodecV6:
 			if entry, err = NewCommitBatchDAV1(ds.ctx, ds.db, ds.blobClient, codec, commitEvent, args.ParentBatchHeader, args.Chunks, args.SkippedL1MessageBitmap, args.BlobHashes, blockHeader.Time); err != nil {
 				return nil, fmt.Errorf("failed to decode DA, batch index: %d, err: %w", commitEvent.BatchIndex().Uint64(), err)
 			}
-		default: // CodecVersion 7 and above
+		default: // CodecV7 and above
 			if i >= len(args.BlobHashes) {
 				return nil, fmt.Errorf("not enough blob hashes for commit transaction: %s, index in tx: %d, batch index: %d, hash: %s", firstCommitEvent.TxHash(), i, commitEvent.BatchIndex().Uint64(), commitEvent.BatchHash().Hex())
 			}
@@ -251,7 +245,7 @@ func (ds *CalldataBlobSource) getCommitBatchDA(commitEvents []*l1.CommitBatchEve
 
 			var parentBatchHash common.Hash
 			if previousEvent == nil {
-				parentBatchHash = common.BytesToHash(args.ParentBatchHeader)
+				parentBatchHash = args.ParentBatchHash
 			} else {
 				parentBatchHash = previousEvent.BatchHash()
 			}
@@ -263,6 +257,15 @@ func (ds *CalldataBlobSource) getCommitBatchDA(commitEvents []*l1.CommitBatchEve
 
 		previousEvent = commitEvent
 		entries = append(entries, entry)
+	}
+
+	if codec.Version() >= encoding.CodecV7 {
+		// sanity check that the last batch hash from the tx is equal to the last batch hash from the commit events.
+		// this means that all batches in the transaction have been successfully processed.
+		lastBatch := entries[len(entries)-1]
+		if args.LastBatchHash != lastBatch.Event().BatchHash() {
+			return nil, fmt.Errorf("last batch hash from tx is not equal to the one from commit events: LastBatchHash in calldata of tx: %s, last batch hash from events: %s", args.LastBatchHash.Hex(), lastBatch.Event().BatchHash().Hex())
+		}
 	}
 
 	return entries, nil

@@ -7,14 +7,18 @@ ARG SCROLL_LIB_PATH=/scroll/lib
 # Build Geth in a stock Go builder container
 FROM scrolltech/go-rust-builder:go-1.21-rust-nightly-2023-12-03 as builder
 
-ADD . /go-ethereum
-RUN cd /go-ethereum && env GO111MODULE=on go run build/ci.go install ./cmd/geth
+WORKDIR /go-ethereum
+COPY go.mod go.sum ./
+RUN go mod download -x
+
+ADD . ./
+RUN env GO111MODULE=on go run build/ci.go install ./cmd/geth
 
 # Pull Geth into a second stage deploy alpine container
 FROM ubuntu:20.04
 
-RUN apt-get -qq update \
-    && apt-get -qq install -y --no-install-recommends ca-certificates
+#RUN apt-get -qq update \
+#    && apt-get -qq install -y --no-install-recommends ca-certificates
 
 ENV CGO_LDFLAGS="-ldl"
 

@@ -20,13 +20,15 @@ import (
 )
 
 type CommitBatchDAV7 struct {
-	version               encoding.CodecVersion
-	batchIndex            uint64
-	initialL1MessageIndex uint64
-	blocks                []encoding.DABlock
-	transactions          []types.Transactions
-	l1Txs                 []types.Transactions
-	versionedHashes       []common.Hash
+	db ethdb.Database
+
+	version         encoding.CodecVersion
+	batchIndex      uint64
+	versionedHashes []common.Hash
+	blobPayload     encoding.DABlobPayload
+
+	parentTotalL1MessagePopped uint64
+	l1MessagesPopped           uint64
 
 	event *l1.CommitBatchEvent
 }
@@ -71,20 +73,14 @@ func NewCommitBatchDAV7(ctx context.Context, db ethdb.Database,
 		return nil, fmt.Errorf("failed to decode blob: %w", err)
 	}
 
-	l1Txs, err := getL1MessagesV7(db, blobPayload.Blocks(), blobPayload.InitialL1MessageIndex())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get L1 messages for v7 batch %d: %w", commitEvent.BatchIndex().Uint64(), err)
-	}
-
 	return &CommitBatchDAV7{
-		version:               codec.Version(),
-		batchIndex:            commitEvent.BatchIndex().Uint64(),
-		initialL1MessageIndex: blobPayload.InitialL1MessageIndex(),
-		blocks:                blobPayload.Blocks(),
-		transactions:          blobPayload.Transactions(),
-		l1Txs:                 l1Txs,
-		versionedHashes:       []common.Hash{blobVersionedHash},
-		event:                 commitEvent,
+		db:               db,
+		version:          codec.Version(),
+		batchIndex:       commitEvent.BatchIndex().Uint64(),
+		versionedHashes:  []common.Hash{blobVersionedHash},
+		blobPayload:      blobPayload,
+		l1MessagesPopped: getL1MessagesPoppedFromBlocks(blobPayload.Blocks()),
+		event:            commitEvent,
 	}, nil
 }
 
@@ -117,18 +113,26 @@ func (c *CommitBatchDAV7) Event() l1.RollupEvent {
 	return c.event
 }
 
-func (c *CommitBatchDAV7) Blocks() []*PartialBlock {
+func (c *CommitBatchDAV7) Blocks() ([]*PartialBlock, error) {
+	initialL1MessageIndex := c.parentTotalL1MessagePopped
+
+	l1Txs, err := getL1MessagesV7(c.db, c.blobPayload.Blocks(), initialL1MessageIndex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get L1 messages for v7 batch %d: %w", c.event.BatchIndex().Uint64(), err)
+	}
+
 	var blocks []*PartialBlock
 
-	for i, daBlock := range c.blocks {
+	for i, daBlock := range c.blobPayload.Blocks() {
 		// create txs
 		txs := make(types.Transactions, 0, daBlock.NumTransactions())
 
 		// insert L1 messages
-		txs = append(txs, c.l1Txs[i]...)
+		txs = append(txs, l1Txs[i]...)
+		// TODO: sanity check L1 messages with prev and post hashes
 
 		// insert L2 txs
-		txs = append(txs, c.transactions[i]...)
+		txs = append(txs, c.blobPayload.Transactions()[i]...)
 
 		block := NewPartialBlock(
 			&PartialHeader{
@@ -143,7 +147,19 @@ func (c *CommitBatchDAV7) Blocks() []*PartialBlock {
 		blocks = append(blocks, block)
 	}
 
-	return blocks
+	return blocks, nil
+}
+
+func (c *CommitBatchDAV7) SetParentTotalL1MessagePopped(totalL1MessagePopped uint64) {
+	c.parentTotalL1MessagePopped = totalL1MessagePopped
+}
+
+func (c *CommitBatchDAV7) TotalL1MessagesPopped() uint64 {
+	return c.parentTotalL1MessagePopped + c.l1MessagesPopped
+}
+
+func (c *CommitBatchDAV7) L1MessagesPoppedInBatch() uint64 {
+	return c.l1MessagesPopped
 }
 
 func (c *CommitBatchDAV7) Version() encoding.CodecVersion {
@@ -153,8 +169,8 @@ func (c *CommitBatchDAV7) Version() encoding.CodecVersion {
 func (c *CommitBatchDAV7) Chunks() []*encoding.DAChunkRawTx {
 	return []*encoding.DAChunkRawTx{
 		{
-			Blocks:       c.blocks,
-			Transactions: c.transactions,
+			Blocks:       c.blobPayload.Blocks(),
+			Transactions: c.blobPayload.Transactions(),
 		},
 	}
 }
@@ -188,4 +204,14 @@ func getL1MessagesV7(db ethdb.Database, blocks []encoding.DABlock, initialL1Mess
 	}
 
 	return allTxs, nil
+}
+
+func getL1MessagesPoppedFromBlocks(blocks []encoding.DABlock) uint64 {
+	var totalL1MessagePopped uint64
+
+	for _, block := range blocks {
+		totalL1MessagePopped += uint64(block.NumL1Messages())
+	}
+
+	return totalL1MessagePopped
 }

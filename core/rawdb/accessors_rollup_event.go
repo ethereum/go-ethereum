@@ -25,7 +25,7 @@ type CommittedBatchMeta struct {
 	ChunkBlockRanges []*ChunkBlockRange
 
 	// introduced with CodecV7
-	LastL1MessageQueueHash common.Hash
+	PostL1MessageQueueHash common.Hash
 }
 
 type committedBatchMetaV0 struct {
@@ -170,7 +170,7 @@ func WriteCommittedBatchMeta(db ethdb.KeyValueWriter, batchIndex uint64, committ
 		committedBatchMetaToStore = &committedBatchMetaV7{
 			Version:                committedBatchMeta.Version,
 			ChunkBlockRanges:       committedBatchMeta.ChunkBlockRanges,
-			LastL1MessageQueueHash: committedBatchMeta.LastL1MessageQueueHash,
+			LastL1MessageQueueHash: committedBatchMeta.PostL1MessageQueueHash,
 		}
 	}
 
@@ -202,7 +202,7 @@ func ReadCommittedBatchMeta(db ethdb.Reader, batchIndex uint64) (*CommittedBatch
 		return &CommittedBatchMeta{
 			Version:                cbm7.Version,
 			ChunkBlockRanges:       cbm7.ChunkBlockRanges,
-			LastL1MessageQueueHash: cbm7.LastL1MessageQueueHash,
+			PostL1MessageQueueHash: cbm7.LastL1MessageQueueHash,
 		}, nil
 	}
 
@@ -214,7 +214,7 @@ func ReadCommittedBatchMeta(db ethdb.Reader, batchIndex uint64) (*CommittedBatch
 	return &CommittedBatchMeta{
 		Version:                cbm0.Version,
 		ChunkBlockRanges:       cbm0.ChunkBlockRanges,
-		LastL1MessageQueueHash: common.Hash{},
+		PostL1MessageQueueHash: common.Hash{},
 	}, nil
 }
 

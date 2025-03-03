@@ -24,7 +24,7 @@ func init() {
 
 // ScrollChainMetaData contains ABI of the ScrollChain contract.
 var ScrollChainMetaData = &bind.MetaData{
-	ABI: "[{\"anonymous\": false,\"inputs\": [{\"indexed\": true,\"internalType\": \"uint256\",\"name\": \"batchIndex\",\"type\": \"uint256\"},{\"indexed\": true,\"internalType\": \"bytes32\",\"name\": \"batchHash\",\"type\": \"bytes32\"}],\"name\": \"CommitBatch\",\"type\": \"event\"},{\"anonymous\": false,\"inputs\": [{\"indexed\": true,\"internalType\": \"uint256\",\"name\": \"batchIndex\",\"type\": \"uint256\"},{\"indexed\": true,\"internalType\": \"bytes32\",\"name\": \"batchHash\",\"type\": \"bytes32\"},{\"indexed\": false,\"internalType\": \"bytes32\",\"name\": \"stateRoot\",\"type\": \"bytes32\"},{\"indexed\": false,\"internalType\": \"bytes32\",\"name\": \"withdrawRoot\",\"type\": \"bytes32\"}],\"name\": \"FinalizeBatch\",\"type\": \"event\"},{\"anonymous\": false,\"inputs\": [{\"indexed\": true,\"internalType\": \"uint256\",\"name\": \"batchIndex\",\"type\": \"uint256\"},{\"indexed\": true,\"internalType\": \"bytes32\",\"name\": \"batchHash\",\"type\": \"bytes32\"}],\"name\": \"RevertBatch\",\"type\": \"event\"},{\"anonymous\": false,\"inputs\": [{\"indexed\": false,\"internalType\": \"uint256\",\"name\": \"oldMaxNumTxInChunk\",\"type\": \"uint256\"},{\"indexed\": false,\"internalType\": \"uint256\",\"name\": \"newMaxNumTxInChunk\",\"type\": \"uint256\"}],\"name\": \"UpdateMaxNumTxInChunk\",\"type\": \"event\"},{\"anonymous\": false,\"inputs\": [{\"indexed\": true,\"internalType\": \"address\",\"name\": \"account\",\"type\": \"address\"},{\"indexed\": false,\"internalType\": \"bool\",\"name\": \"status\",\"type\": \"bool\"}],\"name\": \"UpdateProver\",\"type\": \"event\"},{\"anonymous\": false,\"inputs\": [{\"indexed\": true,\"internalType\": \"address\",\"name\": \"account\",\"type\": \"address\"},{\"indexed\": false,\"internalType\": \"bool\",\"name\": \"status\",\"type\": \"bool\"}],\"name\": \"UpdateSequencer\",\"type\": \"event\"},{\"inputs\": [{\"internalType\": \"uint8\",\"name\": \"version\",\"type\": \"uint8\"},{\"internalType\": \"bytes\",\"name\": \"parentBatchHeader\",\"type\": \"bytes\"},{\"internalType\": \"bytes[]\",\"name\": \"chunks\",\"type\": \"bytes[]\"},{\"internalType\": \"bytes\",\"name\": \"skippedL1MessageBitmap\",\"type\": \"bytes\"}],\"name\": \"commitBatch\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"uint8\",\"name\": \"version\",\"type\": \"uint8\"},{\"internalType\": \"bytes\",\"name\": \"parentBatchHeader\",\"type\": \"bytes\"},{\"internalType\": \"bytes[]\",\"name\": \"chunks\",\"type\": \"bytes[]\"},{\"internalType\": \"bytes\",\"name\": \"skippedL1MessageBitmap\",\"type\": \"bytes\"},{\"internalType\": \"bytes\",\"name\": \"blobDataProof\",\"type\": \"bytes\"}],\"name\": \"commitBatchWithBlobProof\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"uint256\",\"name\": \"batchIndex\",\"type\": \"uint256\"}],\"name\": \"committedBatches\",\"outputs\": [{\"internalType\": \"bytes32\",\"name\": \"\",\"type\": \"bytes32\"}],\"stateMutability\": \"view\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"bytes\",\"name\": \"batchHeader\",\"type\": \"bytes\"},{\"internalType\": \"bytes32\",\"name\": \"prevStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"postStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"withdrawRoot\",\"type\": \"bytes32\"}],\"name\": \"finalizeBatch\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"bytes\",\"name\": \"batchHeader\",\"type\": \"bytes\"},{\"internalType\": \"bytes32\",\"name\": \"prevStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"postStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"withdrawRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes\",\"name\": \"blobDataProof\",\"type\": \"bytes\"}],\"name\": \"finalizeBatch4844\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"bytes\",\"name\": \"batchHeader\",\"type\": \"bytes\"},{\"internalType\": \"bytes32\",\"name\": \"prevStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"postStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"withdrawRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes\",\"name\": \"aggrProof\",\"type\": \"bytes\"}],\"name\": \"finalizeBatchWithProof\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"bytes\",\"name\": \"batchHeader\",\"type\": \"bytes\"},{\"internalType\": \"bytes32\",\"name\": \"prevStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"postStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"withdrawRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes\",\"name\": \"blobDataProof\",\"type\": \"bytes\"},{\"internalType\": \"bytes\",\"name\": \"aggrProof\",\"type\": \"bytes\"}],\"name\": \"finalizeBatchWithProof4844\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"bytes\",\"name\": \"batchHeader\",\"type\": \"bytes\"},{\"internalType\": \"bytes32\",\"name\": \"postStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"withdrawRoot\",\"type\": \"bytes32\"}],\"name\": \"finalizeBundle\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"bytes\",\"name\": \"batchHeader\",\"type\": \"bytes\"},{\"internalType\": \"bytes32\",\"name\": \"postStateRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes32\",\"name\": \"withdrawRoot\",\"type\": \"bytes32\"},{\"internalType\": \"bytes\",\"name\": \"aggrProof\",\"type\": \"bytes\"}],\"name\": \"finalizeBundleWithProof\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"uint256\",\"name\": \"batchIndex\",\"type\": \"uint256\"}],\"name\": \"finalizedStateRoots\",\"outputs\": [{\"internalType\": \"bytes32\",\"name\": \"\",\"type\": \"bytes32\"}],\"stateMutability\": \"view\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"bytes\",\"name\": \"_batchHeader\",\"type\": \"bytes\"},{\"internalType\": \"bytes32\",\"name\": \"_stateRoot\",\"type\": \"bytes32\"}],\"name\": \"importGenesisBatch\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"uint256\",\"name\": \"batchIndex\",\"type\": \"uint256\"}],\"name\": \"isBatchFinalized\",\"outputs\": [{\"internalType\": \"bool\",\"name\": \"\",\"type\": \"bool\"}],\"stateMutability\": \"view\",\"type\": \"function\"},{\"inputs\": [],\"name\": \"lastFinalizedBatchIndex\",\"outputs\": [{\"internalType\": \"uint256\",\"name\": \"\",\"type\": \"uint256\"}],\"stateMutability\": \"view\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"bytes\",\"name\": \"batchHeader\",\"type\": \"bytes\"},{\"internalType\": \"uint256\",\"name\": \"count\",\"type\": \"uint256\"}],\"name\": \"revertBatch\",\"outputs\": [],\"stateMutability\": \"nonpayable\",\"type\": \"function\"},{\"inputs\": [{\"internalType\": \"uint256\",\"name\": \"batchIndex\",\"type\": \"uint256\"}],\"name\": \"withdrawRoots\",\"outputs\": [{\"internalType\": \"bytes32\",\"name\": \"\",\"type\": \"bytes32\"}],\"stateMutability\": \"view\",\"type\": \"function\"}]",
+	ABI: "[{\"type\":\"constructor\",\"inputs\":[{\"name\":\"_chainId\",\"type\":\"uint64\",\"internalType\":\"uint64\"},{\"name\":\"_messageQueueV1\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"_messageQueueV2\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"_verifier\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"_systemConfig\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"addProver\",\"inputs\":[{\"name\":\"_account\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"addSequencer\",\"inputs\":[{\"name\":\"_account\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"commitAndFinalizeBatch\",\"inputs\":[{\"name\":\"version\",\"type\":\"uint8\",\"internalType\":\"uint8\"},{\"name\":\"parentBatchHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"finalizeStruct\",\"type\":\"tuple\",\"internalType\":\"struct IScrollChain.FinalizeStruct\",\"components\":[{\"name\":\"batchHeader\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"lastProcessedQueueIndex\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"postStateRoot\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"withdrawRoot\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"zkProof\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"commitBatchWithBlobProof\",\"inputs\":[{\"name\":\"_version\",\"type\":\"uint8\",\"internalType\":\"uint8\"},{\"name\":\"_parentBatchHeader\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"_chunks\",\"type\":\"bytes[]\",\"internalType\":\"bytes[]\"},{\"name\":\"_skippedL1MessageBitmap\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"_blobDataProof\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"commitBatches\",\"inputs\":[{\"name\":\"version\",\"type\":\"uint8\",\"internalType\":\"uint8\"},{\"name\":\"parentBatchHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"lastBatchHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"committedBatches\",\"inputs\":[{\"name\":\"\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"disableEnforcedBatchMode\",\"inputs\":[],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"finalizeBundlePostEuclidV2\",\"inputs\":[{\"name\":\"batchHeader\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"lastProcessedQueueIndex\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"postStateRoot\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"withdrawRoot\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"aggrProof\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"finalizeBundleWithProof\",\"inputs\":[{\"name\":\"batchHeader\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"postStateRoot\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"withdrawRoot\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"aggrProof\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"finalizedStateRoots\",\"inputs\":[{\"name\":\"\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"importGenesisBatch\",\"inputs\":[{\"name\":\"_batchHeader\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"_stateRoot\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"initialEuclidBatchIndex\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"initialize\",\"inputs\":[{\"name\":\"_messageQueue\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"_verifier\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"_maxNumTxInChunk\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"initializeV2\",\"inputs\":[],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"isBatchFinalized\",\"inputs\":[{\"name\":\"_batchIndex\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isEnforcedModeEnabled\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isProver\",\"inputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isSequencer\",\"inputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"lastFinalizedBatchIndex\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"layer2ChainId\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint64\",\"internalType\":\"uint64\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"maxNumTxInChunk\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"messageQueueV1\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"messageQueueV2\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"miscData\",\"inputs\":[],\"outputs\":[{\"name\":\"lastCommittedBatchIndex\",\"type\":\"uint64\",\"internalType\":\"uint64\"},{\"name\":\"lastFinalizedBatchIndex\",\"type\":\"uint64\",\"internalType\":\"uint64\"},{\"name\":\"lastFinalizeTimestamp\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"flags\",\"type\":\"uint8\",\"internalType\":\"uint8\"},{\"name\":\"reserved\",\"type\":\"uint88\",\"internalType\":\"uint88\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"owner\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"paused\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"removeProver\",\"inputs\":[{\"name\":\"_account\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"removeSequencer\",\"inputs\":[{\"name\":\"_account\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"renounceOwnership\",\"inputs\":[],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"revertBatch\",\"inputs\":[{\"name\":\"batchHeader\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setPause\",\"inputs\":[{\"name\":\"_status\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"systemConfig\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"transferOwnership\",\"inputs\":[{\"name\":\"newOwner\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"updateMaxNumTxInChunk\",\"inputs\":[{\"name\":\"_maxNumTxInChunk\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"verifier\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"withdrawRoots\",\"inputs\":[{\"name\":\"\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"event\",\"name\":\"CommitBatch\",\"inputs\":[{\"name\":\"batchIndex\",\"type\":\"uint256\",\"indexed\":true,\"internalType\":\"uint256\"},{\"name\":\"batchHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"FinalizeBatch\",\"inputs\":[{\"name\":\"batchIndex\",\"type\":\"uint256\",\"indexed\":true,\"internalType\":\"uint256\"},{\"name\":\"batchHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"stateRoot\",\"type\":\"bytes32\",\"indexed\":false,\"internalType\":\"bytes32\"},{\"name\":\"withdrawRoot\",\"type\":\"bytes32\",\"indexed\":false,\"internalType\":\"bytes32\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"Initialized\",\"inputs\":[{\"name\":\"version\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"uint8\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OwnershipTransferred\",\"inputs\":[{\"name\":\"previousOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"newOwner\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"Paused\",\"inputs\":[{\"name\":\"account\",\"type\":\"address\",\"indexed\":false,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"RevertBatch\",\"inputs\":[{\"name\":\"batchIndex\",\"type\":\"uint256\",\"indexed\":true,\"internalType\":\"uint256\"},{\"name\":\"batchHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"RevertBatch\",\"inputs\":[{\"name\":\"startBatchIndex\",\"type\":\"uint256\",\"indexed\":true,\"internalType\":\"uint256\"},{\"name\":\"finishBatchIndex\",\"type\":\"uint256\",\"indexed\":true,\"internalType\":\"uint256\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"Unpaused\",\"inputs\":[{\"name\":\"account\",\"type\":\"address\",\"indexed\":false,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"UpdateEnforcedBatchMode\",\"inputs\":[{\"name\":\"enabled\",\"type\":\"bool\",\"indexed\":false,\"internalType\":\"bool\"},{\"name\":\"lastCommittedBatchIndex\",\"type\":\"uint256\",\"indexed\":false,\"internalType\":\"uint256\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"UpdateMaxNumTxInChunk\",\"inputs\":[{\"name\":\"oldMaxNumTxInChunk\",\"type\":\"uint256\",\"indexed\":false,\"internalType\":\"uint256\"},{\"name\":\"newMaxNumTxInChunk\",\"type\":\"uint256\",\"indexed\":false,\"internalType\":\"uint256\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"UpdateProver\",\"inputs\":[{\"name\":\"account\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"status\",\"type\":\"bool\",\"indexed\":false,\"internalType\":\"bool\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"UpdateSequencer\",\"inputs\":[{\"name\":\"account\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"status\",\"type\":\"bool\",\"indexed\":false,\"internalType\":\"bool\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"ErrorAccountIsNotEOA\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorBatchHeaderV0LengthTooSmall\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorBatchHeaderV1LengthTooSmall\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorBatchHeaderV3LengthMismatch\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorBatchHeaderV7LengthMismatch\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorBatchIsAlreadyCommitted\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorBatchIsAlreadyVerified\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorBatchIsEmpty\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorBatchNotCommitted\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorCallPointEvaluationPrecompileFailed\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorCallerIsNotProver\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorCallerIsNotSequencer\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorCannotDowngradeVersion\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorEuclidForkEnabled\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorFinalizePreAndPostEuclidBatchInOneBundle\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorFoundMultipleBlobs\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorGenesisBatchHasNonZeroField\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorGenesisBatchImported\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorGenesisDataHashIsZero\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorGenesisParentBatchHashIsNonZero\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorInEnforcedBatchMode\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorIncorrectBatchHash\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorIncorrectBatchVersion\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorIncorrectBitmapLength\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorIncorrectBitmapLengthV0\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorIncorrectBitmapLengthV1\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorIncorrectChunkLengthV1\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorLastL1MessageSkipped\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorNoBlobFound\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorNoBlockInChunkV1\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorNotAllV1MessagesAreFinalized\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorNotInEnforcedBatchMode\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorNumTxsLessThanNumL1Msgs\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorRevertFinalizedBatch\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorStateRootIsZero\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorTooManyTxsInOneChunk\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorUnexpectedPointEvaluationPrecompileOutput\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorV5BatchContainsTransactions\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorV5BatchNotContainsOnlyOneBlock\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorV5BatchNotContainsOnlyOneChunk\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ErrorZeroAddress\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InconsistentBatchHash\",\"inputs\":[{\"name\":\"batchIndex\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"expected\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"actual\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}]}]",
 }
 
 // L1MessageQueueMetaDataManual contains all meta data concerning the L1MessageQueue contract.
@@ -35,13 +35,18 @@ var L1MessageQueueMetaDataManual = &bind.MetaData{
 const (
 	// CommitEventType contains data of event of commit batch
 	CommitEventType int = iota
-	// RevertEventType contains data of event of revert batch
-	RevertEventType
+	// RevertEventV0Type contains data of event of revert batch from V0 to V6
+	RevertEventV0Type
+	// RevertEventV7Type contains data of event of revert batch after V7 (EuclidV2)
+	RevertEventV7Type
 	// FinalizeEventType contains data of event of finalize batch
 	FinalizeEventType
 
 	commitBatchMethodName              = "commitBatch"
 	commitBatchWithBlobProofMethodName = "commitBatchWithBlobProof"
+	commitBatchesV7MethodName          = "commitBatches"
+
+	finalizeBundlePostEuclidV2MethodName = "finalizeBundlePostEuclidV2"
 
 	// the length of method ID at the beginning of transaction data
 	methodIDLength = 4
@@ -102,13 +107,13 @@ func (c *CommitBatchEvent) CompareTo(other *CommitBatchEvent) int {
 	return c.batchIndex.Cmp(other.batchIndex)
 }
 
-type RevertBatchEventUnpacked struct {
+type RevertBatchEventV0Unpacked struct {
 	BatchIndex *big.Int
 	BatchHash  common.Hash
 }
 
-// RevertBatchEvent represents a RevertBatch event raised by the ScrollChain contract.
-type RevertBatchEvent struct {
+// RevertBatchEventV0 represents a RevertBatch event raised by the ScrollChain contract from V0 to V6.
+type RevertBatchEventV0 struct {
 	batchIndex  *big.Int
 	batchHash   common.Hash
 	txHash      common.Hash
@@ -116,28 +121,80 @@ type RevertBatchEvent struct {
 	blockNumber uint64
 }
 
-func (r *RevertBatchEvent) BlockNumber() uint64 {
+func (r *RevertBatchEventV0) BlockNumber() uint64 {
 	return r.blockNumber
 }
 
-func (r *RevertBatchEvent) BlockHash() common.Hash {
+func (r *RevertBatchEventV0) BlockHash() common.Hash {
 	return r.blockHash
 }
 
-func (r *RevertBatchEvent) TxHash() common.Hash {
+func (r *RevertBatchEventV0) TxHash() common.Hash {
 	return r.txHash
 }
 
-func (r *RevertBatchEvent) Type() int {
-	return RevertEventType
+func (r *RevertBatchEventV0) Type() int {
+	return RevertEventV0Type
 }
 
-func (r *RevertBatchEvent) BatchIndex() *big.Int {
+func (r *RevertBatchEventV0) BatchIndex() *big.Int {
 	return r.batchIndex
 }
 
-func (r *RevertBatchEvent) BatchHash() common.Hash {
+func (r *RevertBatchEventV0) BatchHash() common.Hash {
 	return r.batchHash
+}
+
+type RevertBatchEventV7Unpacked struct {
+	StartBatchIndex  *big.Int
+	FinishBatchIndex *big.Int
+}
+
+// RevertBatchEventV7 represents a RevertBatch event raised by the ScrollChain contract after V7 (EuclidV2).
+// It reverts a range of batches from startBatchIndex (inclusive) to finishBatchIndex (inclusive).
+type RevertBatchEventV7 struct {
+	startBatchIndex  *big.Int
+	finishBatchIndex *big.Int
+
+	txHash      common.Hash
+	blockHash   common.Hash
+	blockNumber uint64
+}
+
+func (r *RevertBatchEventV7) BlockNumber() uint64 {
+	return r.blockNumber
+}
+
+func (r *RevertBatchEventV7) BlockHash() common.Hash {
+	return r.blockHash
+}
+
+func (r *RevertBatchEventV7) TxHash() common.Hash {
+	return r.txHash
+}
+
+func (r *RevertBatchEventV7) Type() int {
+	return RevertEventV7Type
+}
+
+// BatchIndex returns the start batch index of the reverted range.
+func (r *RevertBatchEventV7) BatchIndex() *big.Int {
+	return r.startBatchIndex
+}
+
+// BatchHash is not applicable for RevertBatchEventV7.
+func (r *RevertBatchEventV7) BatchHash() common.Hash {
+	return common.Hash{}
+}
+
+// StartBatchIndex returns the start batch index of the reverted range.
+func (r *RevertBatchEventV7) StartBatchIndex() *big.Int {
+	return r.startBatchIndex
+}
+
+// FinishBatchIndex returns the finish batch index of the reverted range.
+func (r *RevertBatchEventV7) FinishBatchIndex() *big.Int {
+	return r.finishBatchIndex
 }
 
 type FinalizeBatchEventUnpacked struct {
@@ -235,6 +292,10 @@ type CommitBatchArgs struct {
 	Chunks                 [][]byte
 	SkippedL1MessageBitmap []byte
 	BlobHashes             []common.Hash
+
+	// added in CodecV7
+	ParentBatchHash common.Hash
+	LastBatchHash   common.Hash
 }
 
 func newCommitBatchArgs(method *abi.Method, values []interface{}) (*CommitBatchArgs, error) {
@@ -257,10 +318,47 @@ func newCommitBatchArgsFromCommitBatchWithProof(method *abi.Method, values []int
 	}, nil
 }
 
+func newCommitBatchArgsFromCommitBatchesV7(method *abi.Method, values []any) (*CommitBatchArgs, error) {
+	var args commitBatchesV7Args
+	err := method.Inputs.Copy(&args, values)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CommitBatchArgs{
+		Version:         args.Version,
+		ParentBatchHash: args.ParentBatchHash,
+		LastBatchHash:   args.LastBatchHash,
+	}, nil
+}
+
 type commitBatchWithBlobProofArgs struct {
 	Version                uint8
 	ParentBatchHeader      []byte
 	Chunks                 [][]byte
 	SkippedL1MessageBitmap []byte
 	BlobDataProof          []byte
+}
+
+type commitBatchesV7Args struct {
+	Version         uint8
+	ParentBatchHash common.Hash
+	LastBatchHash   common.Hash
+}
+
+type FinalizeBatchArgs struct {
+	BatchHeader                  []byte
+	TotalL1MessagesPoppedOverall *big.Int
+	PostStateRoot                common.Hash
+	WithdrawRoot                 common.Hash
+	AggrProof                    []byte
+}
+
+func newFinalizeBatchArgs(method *abi.Method, values []any) (*FinalizeBatchArgs, error) {
+	var args FinalizeBatchArgs
+	err := method.Inputs.Copy(&args, values)
+	if err != nil {
+		return nil, err
+	}
+	return &args, nil
 }
