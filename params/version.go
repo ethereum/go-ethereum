@@ -30,13 +30,15 @@ const (
 )
 
 var (
-	borInfo   = metrics.NewRegisteredGaugeInfo("bor/info", nil)
+	// borInfoGauge stores Bor git commit and version details.
+	borInfoGauge = metrics.NewRegisteredGaugeInfo("bor/info", nil)
+
 	GitCommit string
 )
 
-// UpdateBorInfo updates the bor_info with the current git commit and version details.
+// UpdateBorInfo updates the bor_info metric with the current git commit and version details.
 func UpdateBorInfo() {
-	borInfo.Update(metrics.GaugeInfoValue{
+	borInfoGauge.Update(metrics.GaugeInfoValue{
 		"commit":  GitCommit,
 		"version": VersionWithMeta,
 	})
