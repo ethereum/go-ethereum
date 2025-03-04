@@ -19,5 +19,3 @@ services:
 
 volumes:
   geth-data:
-
-
