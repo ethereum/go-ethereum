@@ -1,0 +1,30 @@
+name: Docker Build
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  build:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: false
+          tags: ethereum/client-go:latest
+          load: true
+          cache-from: type=gha,scope=go-ethereum
+          cache-to: type=gha,mode=max,scope=go-ethereum
+
+      - name: Test Docker image
+        run: docker run --rm ethereum/client-go:latest version
