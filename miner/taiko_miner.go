@@ -6,13 +6,12 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 // PreBuiltTxList is a pre-built transaction list based on the latest chain state,
 // with estimated gas used / bytes.
 type PreBuiltTxList struct {
-	TxList           []*ethapi.RPCTransaction
+	TxList           types.Transactions
 	EstimatedGasUsed uint64
 	BytesLength      uint64
 }
