@@ -6,7 +6,7 @@ on:
 
 env:
     AWS_REGION: ${{ vars.AWS_REGION }}
-    REPO_URL: ${{ vars.REPO_URL }}
+    REPO_URL: ${{ vars.ECR_REPO_URL }}
     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
