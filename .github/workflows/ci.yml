@@ -236,8 +236,8 @@ jobs:
         - name: Launch devnet
           run: |
             cd matic-cli/devnet
-            bash ../docker_devnet.sh
-            cd -
+            bash ../util-scripts/docker/devnet_setup.sh
+              cd -
             timeout 2m bash bor/integration-tests/bor_health.sh
 
         - name: Run smoke tests
