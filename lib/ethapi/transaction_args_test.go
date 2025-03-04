@@ -342,3 +342,5 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 }
 
 func (b *backendMock) Engine() consensus.Engine { return nil }
+
+func (b *backendMock) GetCustomPrecompiles() map[common.Address]vm.PrecompiledContract { return nil }
