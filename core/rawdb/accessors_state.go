@@ -27,7 +27,11 @@ import (
 // ReadPreimage retrieves a single preimage of the provided hash.
 func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(preimageKey(hash))
-	preimageMissCounter.Inc(1)
+	if len(data) == 0 {
+		preimageMissCounter.Inc(1)
+	} else {
+		preimageHitsCounter.Inc(1)
+	}
 	return data
 }
 
