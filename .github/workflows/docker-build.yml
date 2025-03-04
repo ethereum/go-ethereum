@@ -4,27 +4,37 @@ on:
   pull_request:
     types: [closed]
 
+env:
+    AWS_REGION: ${{ vars.AWS_REGION }}
+    REPO_URL: ${{ vars.REPO_URL }}
+    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
 jobs:
   build:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      
-      - name: Build Docker image
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: false
-          tags: ethereum/client-go:latest
-          load: true
-          cache-from: type=gha,scope=go-ethereum
-          cache-to: type=gha,mode=max,scope=go-ethereum
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Test Docker image
-        run: docker run --rm ethereum/client-go:latest version
+    - name: Setup AWS CLI credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      run: aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.REPO_URL }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ env.REPO_URL }}/limechain/geth:latest
+
+    - name: Test Docker image
+      run: docker run --rm ethereum/client-go:latest version
