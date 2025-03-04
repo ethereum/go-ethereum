@@ -39,8 +39,8 @@ func NewUpgradableEngine(isUpgraded func(uint64) bool, clique consensus.Engine, 
 }
 
 // chooseEngine returns the appropriate consensus engine based on the header's timestamp.
-func (ue *UpgradableEngine) chooseEngine(header *types.Header) consensus.Engine {
-	if ue.isUpgraded(header.Time) {
+func (ue *UpgradableEngine) chooseEngine(timestamp uint64) consensus.Engine {
+	if ue.isUpgraded(timestamp) {
 		return ue.system
 	}
 	return ue.clique
@@ -51,12 +51,12 @@ func (ue *UpgradableEngine) chooseEngine(header *types.Header) consensus.Engine 
 
 // Author returns the author of the block based on the header.
 func (ue *UpgradableEngine) Author(header *types.Header) (common.Address, error) {
-	return ue.chooseEngine(header).Author(header)
+	return ue.chooseEngine(header.Time).Author(header)
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the engine.
 func (ue *UpgradableEngine) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	return ue.chooseEngine(header).VerifyHeader(chain, header, seal)
+	return ue.chooseEngine(header.Time).VerifyHeader(chain, header, seal)
 }
 
 // VerifyHeaders verifies a batch of headers concurrently. In our use-case,
@@ -72,8 +72,8 @@ func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, hea
 	}
 
 	// Choose engine for the first and last header.
-	firstEngine := ue.chooseEngine(headers[0])
-	lastEngine := ue.chooseEngine(headers[len(headers)-1])
+	firstEngine := ue.chooseEngine(headers[0].Time)
+	lastEngine := ue.chooseEngine(headers[len(headers)-1].Time)
 
 	// If the first header is system, then all headers must be system.
 	if firstEngine == ue.system {
@@ -89,7 +89,7 @@ func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, hea
 	// a single switchover, find the first header that uses system.
 	splitIndex := 0
 	for i, header := range headers {
-		if ue.chooseEngine(header) == ue.system {
+		if ue.chooseEngine(header.Time) == ue.system {
 			splitIndex = i
 			break
 		}
@@ -151,34 +151,77 @@ func (ue *UpgradableEngine) VerifyHeaders(chain consensus.ChainHeaderReader, hea
 	return abort, results
 }
 
+func (ue *UpgradableEngine) CalcTimestamp(parent *types.Header) uint64 {
+	panic("Called CalcTimestamp on UpgradableEngine, not implemented")
+}
+
 // Prepare prepares a block header for sealing.
-func (ue *UpgradableEngine) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	return ue.chooseEngine(header).Prepare(chain, header)
+func (ue *UpgradableEngine) Prepare(chain consensus.ChainHeaderReader, header *types.Header, timeOverride *uint64) error {
+	// Override provided => select engine based on override timestamp.
+	if timeOverride != nil {
+		return ue.chooseEngine(*timeOverride).Prepare(chain, header, timeOverride)
+	}
+
+	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+	if parent == nil {
+		return consensus.ErrUnknownAncestor
+	}
+
+	// Check if parent is pre- or post-EuclidV2.
+	if ue.chooseEngine(parent.Time) == ue.clique {
+		// This is either a normal Clique block, or the EuclidV2 transition block.
+
+		time := ue.clique.CalcTimestamp(parent)
+
+		if ue.chooseEngine(time) == ue.clique {
+			// We're still in Clique mode.
+			// Note: We must provide timestamp override to avoid the edge case
+			// where we slip over into EuclidV2 in this next call.
+			return ue.clique.Prepare(chain, header, &time)
+		} else {
+			// This is the EuclidV2 transition block.
+			return ue.system.Prepare(chain, header, &time)
+		}
+	} else {
+		// We are already post EuclidV2, in SystemContract mode.
+
+		time := ue.system.CalcTimestamp(parent)
+
+		if ue.chooseEngine(time) == ue.clique {
+			// Somehow we slipped back to Clique, override with a known post-EuclidV2 timestamp.
+			// Note: This should not happen in practice.
+			log.Error("Parent is post-EuclidV2 but SystemContract set pre-EuclidV2 timestamp, overriding", "blockNumber", header.Number, "parentTime", parent.Time, "systemContractTime", time)
+			return ue.system.Prepare(chain, header, &parent.Time)
+		} else {
+			// We are already in SystemContract mode.
+			return ue.system.Prepare(chain, header, &time)
+		}
+	}
 }
 
 // Seal instructs the engine to start sealing a block.
 func (ue *UpgradableEngine) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	return ue.chooseEngine(block.Header()).Seal(chain, block, results, stop)
+	return ue.chooseEngine(block.Time()).Seal(chain, block, results, stop)
 }
 
 // CalcDifficulty calculates the block difficulty if applicable.
 func (ue *UpgradableEngine) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	return ue.chooseEngine(parent).CalcDifficulty(chain, time, parent)
+	return ue.chooseEngine(parent.Time).CalcDifficulty(chain, time, parent)
 }
 
 // Finalize finalizes the block, applying any post-transaction rules.
 func (ue *UpgradableEngine) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	ue.chooseEngine(header).Finalize(chain, header, state, txs, uncles)
+	ue.chooseEngine(header.Time).Finalize(chain, header, state, txs, uncles)
 }
 
 // FinalizeAndAssemble finalizes and assembles a new block.
 func (ue *UpgradableEngine) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	return ue.chooseEngine(header).FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
+	return ue.chooseEngine(header.Time).FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
 }
 
 // VerifyUncles verifies that no uncles are attached to the block.
 func (ue *UpgradableEngine) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	return ue.chooseEngine(block.Header()).VerifyUncles(chain, block)
+	return ue.chooseEngine(block.Time()).VerifyUncles(chain, block)
 }
 
 // APIs returns any RPC APIs exposed by the consensus engine.
@@ -203,7 +246,7 @@ func (ue *UpgradableEngine) Close() error {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (ue *UpgradableEngine) SealHash(header *types.Header) common.Hash {
-	return ue.chooseEngine(header).SealHash(header)
+	return ue.chooseEngine(header.Time).SealHash(header)
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks

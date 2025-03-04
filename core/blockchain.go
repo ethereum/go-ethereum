@@ -1832,16 +1832,13 @@ func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types
 	//  This should be done with https://github.com/scroll-tech/go-ethereum/pull/913.
 
 	if sign {
-		// remember the time as Clique will override it
+		// Prevent Engine from overriding timestamp.
 		originalTime := header.Time
 
-		err = bc.engine.Prepare(bc, header)
+		err = bc.engine.Prepare(bc, header, &originalTime)
 		if err != nil {
 			return nil, NonStatTy, fmt.Errorf("error preparing block %d: %w", tempBlock.Number().Uint64(), err)
 		}
-
-		// we want to re-sign the block: set time to original value again.
-		header.Time = originalTime
 	}
 
 	// finalize and assemble block as fullBlock: replicates consensus.FinalizeAndAssemble()
