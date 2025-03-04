@@ -47,22 +47,17 @@ func newNodeSet(nodes map[common.Hash]map[string]*trienode.Node) *nodeSet {
 	if nodes == nil {
 		nodes = make(map[common.Hash]map[string]*trienode.Node)
 	}
-
-	// Create the new structure with separate maps
 	s := &nodeSet{
 		accountNodes: make(map[string]*trienode.Node),
 		storageNodes: make(map[common.Hash]map[string]*trienode.Node),
 	}
-
-	// Migrate the nodes to the appropriate maps
 	for owner, subset := range nodes {
 		if owner == (common.Hash{}) {
-			maps.Copy(s.accountNodes, subset)
+			s.accountNodes = subset
 		} else {
-			s.storageNodes[owner] = maps.Clone(subset)
+			s.storageNodes[owner] = subset
 		}
 	}
-
 	s.computeSize()
 	return s
 }
@@ -70,15 +65,12 @@ func newNodeSet(nodes map[common.Hash]map[string]*trienode.Node) *nodeSet {
 // computeSize calculates the database size of the held trie nodes.
 func (s *nodeSet) computeSize() {
 	var size uint64
-
 	for path, n := range s.accountNodes {
 		size += uint64(len(n.Blob) + len(path))
 	}
-
 	for _, subset := range s.storageNodes {
-		prefix := common.HashLength // owner (32 bytes) for storage trie nodes
 		for path, n := range subset {
-			size += uint64(prefix + len(n.Blob) + len(path))
+			size += uint64(common.HashLength + len(n.Blob) + len(path))
 		}
 	}
 	s.size = size
@@ -97,12 +89,11 @@ func (s *nodeSet) updateSize(delta int64) {
 
 // node retrieves the trie node with node path and its trie identifier.
 func (s *nodeSet) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
+	// Account trie node
 	if owner == (common.Hash{}) {
-		// Account trie node
 		n, ok := s.accountNodes[string(path)]
 		return n, ok
 	}
-
 	// Storage trie node
 	subset, ok := s.storageNodes[owner]
 	if !ok {
@@ -133,11 +124,10 @@ func (s *nodeSet) merge(set *nodeSet) {
 
 	// Merge storage nodes
 	for owner, subset := range set.storageNodes {
-		prefix := common.HashLength
 		current, exist := s.storageNodes[owner]
 		if !exist {
 			for path, n := range subset {
-				delta += int64(prefix + len(n.Blob) + len(path))
+				delta += int64(common.HashLength + len(n.Blob) + len(path))
 			}
 			// Perform a shallow copy of the map for the subset instead of claiming it
 			// directly from the provided nodeset to avoid potential concurrent map
@@ -150,10 +140,10 @@ func (s *nodeSet) merge(set *nodeSet) {
 		}
 		for path, n := range subset {
 			if orig, exist := current[path]; !exist {
-				delta += int64(prefix + len(n.Blob) + len(path))
+				delta += int64(common.HashLength + len(n.Blob) + len(path))
 			} else {
 				delta += int64(len(n.Blob) - len(orig.Blob))
-				overwrite.add(prefix + len(orig.Blob) + len(path))
+				overwrite.add(common.HashLength + len(orig.Blob) + len(path))
 			}
 			current[path] = n
 		}
@@ -177,7 +167,7 @@ func (s *nodeSet) revertTo(db ethdb.KeyValueReader, nodes map[common.Hash]map[st
 					if bytes.Equal(blob, n.Blob) {
 						continue
 					}
-					panic(fmt.Sprintf("non-existent node (account %v) blob: %v", path, crypto.Keccak256Hash(n.Blob).Hex()))
+					panic(fmt.Sprintf("non-existent account node (%v) blob: %v", path, crypto.Keccak256Hash(n.Blob).Hex()))
 				}
 				s.accountNodes[path] = n
 				delta += int64(len(n.Blob)) - int64(len(orig.Blob))
@@ -195,7 +185,7 @@ func (s *nodeSet) revertTo(db ethdb.KeyValueReader, nodes map[common.Hash]map[st
 					if bytes.Equal(blob, n.Blob) {
 						continue
 					}
-					panic(fmt.Sprintf("non-existent node (%x %v) blob: %v", owner, path, crypto.Keccak256Hash(n.Blob).Hex()))
+					panic(fmt.Sprintf("non-existent storage node (%x %v) blob: %v", owner, path, crypto.Keccak256Hash(n.Blob).Hex()))
 				}
 				current[path] = n
 				delta += int64(len(n.Blob)) - int64(len(orig.Blob))
@@ -220,7 +210,7 @@ type journalNodes struct {
 
 // encode serializes the content of trie nodes into the provided writer.
 func (s *nodeSet) encode(w io.Writer) error {
-	nodes := make([]journalNodes, 0, len(s.storageNodes)+len(s.accountNodes))
+	nodes := make([]journalNodes, 0, len(s.storageNodes)+1)
 
 	// Encode account nodes
 	if len(s.accountNodes) > 0 {
@@ -233,7 +223,6 @@ func (s *nodeSet) encode(w io.Writer) error {
 		}
 		nodes = append(nodes, entry)
 	}
-
 	// Encode storage nodes
 	for owner, subset := range s.storageNodes {
 		entry := journalNodes{Owner: owner}
@@ -254,12 +243,9 @@ func (s *nodeSet) decode(r *rlp.Stream) error {
 	if err := r.Decode(&encoded); err != nil {
 		return fmt.Errorf("load nodes: %v", err)
 	}
-
-	// Initialize the maps
 	s.accountNodes = make(map[string]*trienode.Node)
 	s.storageNodes = make(map[common.Hash]map[string]*trienode.Node)
 
-	// Decode the nodes
 	for _, entry := range encoded {
 		if entry.Owner == (common.Hash{}) {
 			// Account nodes
@@ -289,19 +275,13 @@ func (s *nodeSet) decode(r *rlp.Stream) error {
 
 // write flushes nodes into the provided database batch as a whole.
 func (s *nodeSet) write(batch ethdb.Batch, clean *fastcache.Cache) int {
-	// Convert the separate maps back to the format expected by writeNodes
 	nodes := make(map[common.Hash]map[string]*trienode.Node)
-
-	// Add account nodes
 	if len(s.accountNodes) > 0 {
 		nodes[common.Hash{}] = s.accountNodes
 	}
-
-	// Add storage nodes
 	for owner, subset := range s.storageNodes {
 		nodes[owner] = subset
 	}
-
 	return writeNodes(batch, nodes, clean)
 }
 
@@ -315,12 +295,9 @@ func (s *nodeSet) reset() {
 // dbsize returns the approximate size of db write.
 func (s *nodeSet) dbsize() int {
 	var m int
-
 	m += len(s.accountNodes) * len(rawdb.TrieNodeAccountPrefix) // database key prefix
-
 	for _, nodes := range s.storageNodes {
 		m += len(nodes) * (len(rawdb.TrieNodeStoragePrefix)) // database key prefix
 	}
-
 	return m + int(s.size)
 }
