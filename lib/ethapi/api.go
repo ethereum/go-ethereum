@@ -1194,11 +1194,12 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Construct the gas estimator option from the user input
 	opts := &gasestimator.Options{
-		Config:     b.ChainConfig(),
-		Chain:      NewChainContext(ctx, b),
-		Header:     header,
-		State:      state,
-		ErrorRatio: estimateGasErrorRatio,
+		Config:            b.ChainConfig(),
+		Chain:             NewChainContext(ctx, b),
+		Header:            header,
+		State:             state,
+		ErrorRatio:        estimateGasErrorRatio,
+		CustomPrecompiles: b.GetCustomPrecompiles(),
 	}
 
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
@@ -1233,11 +1234,12 @@ func DoEstimateGasAfterCalls(ctx context.Context, b Backend, args TransactionArg
 	}
 	// Construct the gas estimator option from the user input
 	opts := &gasestimator.Options{
-		Config:     b.ChainConfig(),
-		Chain:      NewChainContext(ctx, b),
-		Header:     header,
-		State:      state,
-		ErrorRatio: estimateGasErrorRatio,
+		Config:            b.ChainConfig(),
+		Chain:             NewChainContext(ctx, b),
+		Header:            header,
+		State:             state,
+		ErrorRatio:        estimateGasErrorRatio,
+		CustomPrecompiles: b.GetCustomPrecompiles(),
 	}
 
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {

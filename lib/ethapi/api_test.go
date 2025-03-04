@@ -595,6 +595,7 @@ func (b testBackend) BloomStatus() (uint64, uint64) { panic("implement me") }
 func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	panic("implement me")
 }
+func (b testBackend) GetCustomPrecompiles() map[common.Address]vm.PrecompiledContract { return nil }
 
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()

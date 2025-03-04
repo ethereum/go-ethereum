@@ -37,10 +37,11 @@ import (
 // these together, it would be excessively hard to test. Splitting the parts out
 // allows testing without needing a proper live chain.
 type Options struct {
-	Config *params.ChainConfig // Chain configuration for hard fork selection
-	Chain  core.ChainContext   // Chain context to access past block hashes
-	Header *types.Header       // Header defining the block context to execute in
-	State  vm.StateDB          // Pre-state on top of which to estimate the gas
+	Config            *params.ChainConfig // Chain configuration for hard fork selection
+	Chain             core.ChainContext   // Chain context to access past block hashes
+	Header            *types.Header       // Header defining the block context to execute in
+	State             vm.StateDB          // Pre-state on top of which to estimate the gas
+	CustomPrecompiles map[common.Address]vm.PrecompiledContract
 
 	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
@@ -217,7 +218,7 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
 
 		dirtyState = opts.State.Copy()
-		evm        = vm.NewEVM(evmContext, msgContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true}, nil)
+		evm        = vm.NewEVM(evmContext, msgContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true}, opts.CustomPrecompiles)
 	)
 	dirtyState.SetEVM(evm)
 
