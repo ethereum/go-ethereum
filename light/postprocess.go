@@ -29,7 +29,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
 )
@@ -56,29 +55,8 @@ type trustedCheckpoint struct {
 	sectionHead, chtRoot, bloomTrieRoot common.Hash
 }
 
-var (
-	mainnetCheckpoint = trustedCheckpoint{
-		name:          "mainnet",
-		sectionIdx:    161,
-		sectionHead:   common.HexToHash("75b0c4baa7a62cece48abdcb03b6f31601961c9bece67dcd61df87aad4fc0d8d"),
-		chtRoot:       common.HexToHash("bbbfaa67b29716348997ec21a39c03b8d1fb973f6a43740b865595ba26ee812f"),
-		bloomTrieRoot: common.HexToHash("d6db6e6248354d7453391ce97830072a28ea4216be0bd95a5db9f53b1a64677b"),
-	}
-
-	ropstenCheckpoint = trustedCheckpoint{
-		name:          "ropsten",
-		sectionIdx:    87,
-		sectionHead:   common.HexToHash("ebc0adcb30ed21cbe95bd77499cc1af0bada621fee3644cb80dbcf1444c123fe"),
-		chtRoot:       common.HexToHash("d9830f4893c821ddf149b8cb9d3e3bfe3109d2eea8e3c4a4ede7c8b2ee8a7800"),
-		bloomTrieRoot: common.HexToHash("c76e12d713f65b84c5a36d06bc77d0c8419248ea0b36e0812a78b76aa6da0ddb"),
-	}
-)
-
 // trustedCheckpoints associates each known checkpoint with the genesis hash of the chain it belongs to
-var trustedCheckpoints = map[common.Hash]trustedCheckpoint{
-	params.MainnetGenesisHash: mainnetCheckpoint,
-	params.TestnetGenesisHash: ropstenCheckpoint,
-}
+var trustedCheckpoints = map[common.Hash]trustedCheckpoint{}
 
 var (
 	ErrNoTrustedCht       = errors.New("no trusted canonical hash trie")
