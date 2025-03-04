@@ -36,5 +36,3 @@ jobs:
         push: true
         tags: ${{ env.REPO_URL }}/limechain/geth:latest
 
-    - name: Test Docker image
-      run: docker run --rm ethereum/client-go:latest version
