@@ -150,7 +150,7 @@ func randomTraceOption() (*tracers.TraceConfig, string) {
 		return &tracers.TraceConfig{
 			Config: &logger.Config{
 				// TODO(rjl493456442) fix it, the empty memory is not properly omitted
-				//EnableMemory:     true,
+				EnableMemory:     true,
 				EnableReturnData: true,
 			},
 		}, "structAll"
