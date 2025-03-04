@@ -27,6 +27,12 @@ const (
 	maxTxPacketSize = 100 * 1024
 )
 
+type TxAnnouncement struct {
+	Hash common.Hash
+	Type uint8
+	Size uint64
+}
+
 // broadcastTransactions is a write loop that schedules transaction broadcasts
 // to the remote peer. The goal is to have an async writer that does not lock up
 // node internals and at the same time rate limits queued data.
@@ -99,7 +105,7 @@ func (p *Peer) broadcastTransactions() {
 // node internals and at the same time rate limits queued data.
 func (p *Peer) announceTransactions() {
 	var (
-		queue  []common.Hash         // Queue of hashes to announce as transaction stubs
+		queue  []*TxAnnouncement     // Queue of hashes to announce as transaction stubs
 		done   chan struct{}         // Non-nil if background announcer is running
 		fail   = make(chan error, 1) // Channel used to receive network error
 		failed bool                  // Flag whether a send failed, discard everything onward
@@ -116,12 +122,12 @@ func (p *Peer) announceTransactions() {
 				size         common.StorageSize
 			)
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
-				if tx := p.txpool.Get(queue[count]); tx != nil {
-					pending = append(pending, queue[count])
-					pendingTypes = append(pendingTypes, tx.Type())
-					pendingSizes = append(pendingSizes, uint32(tx.Size()))
-					size += common.HashLength
-				}
+				announce := queue[count]
+
+				pending = append(pending, announce.Hash)
+				pendingTypes = append(pendingTypes, announce.Type)
+				pendingSizes = append(pendingSizes, uint32(announce.Size))
+				size += common.HashLength
 			}
 			// Shift and trim queue
 			queue = queue[:copy(queue, queue[count:])]
@@ -141,13 +147,13 @@ func (p *Peer) announceTransactions() {
 		}
 		// Transfer goroutine may or may not have been started, listen for events
 		select {
-		case hashes := <-p.txAnnounce:
+		case announces := <-p.txAnnounce:
 			// If the connection failed, discard all transaction events
 			if failed {
 				continue
 			}
 			// New batch of transactions to be broadcast, queue them (with cap)
-			queue = append(queue, hashes...)
+			queue = append(queue, announces...)
 			if len(queue) > maxQueuedTxAnns {
 				// Fancy copy and resize to ensure buffer doesn't grow indefinitely
 				queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]

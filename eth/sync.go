@@ -17,21 +17,26 @@
 package eth
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 )
 
 // syncTransactions starts sending all currently pending transactions to the given peer.
 func (h *handler) syncTransactions(p *eth.Peer) {
-	var hashes []common.Hash
+	var announces []*eth.TxAnnouncement
 	for _, batch := range h.txpool.Pending(txpool.PendingFilter{OnlyPlainTxs: true}) {
 		for _, tx := range batch {
-			hashes = append(hashes, tx.Hash)
+			resolved := tx.Resolve()
+
+			announces = append(announces, &eth.TxAnnouncement{
+				Hash: tx.Hash,
+				Size: resolved.Size(),
+				Type: resolved.Type(),
+			})
 		}
 	}
-	if len(hashes) == 0 {
+	if len(announces) == 0 {
 		return
 	}
-	p.AsyncSendPooledTransactionHashes(hashes)
+	p.AsyncSendPooledTransactionHashes(announces)
 }

@@ -56,6 +56,12 @@ type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
+	// This is only set in blob transaction without sidecar
+	// so that we can quickly get the size of whole blob
+	// transaction without needing to query to database to get
+	// back the whole blob transaction with sidecar
+	sidecarSize uint64
+
 	// caches
 	hash atomic.Pointer[common.Hash]
 	size atomic.Uint64
@@ -444,6 +450,9 @@ func (tx *Transaction) WithoutBlobTxSidecar() *Transaction {
 		inner: blobtx.withoutSidecar(),
 		time:  tx.time,
 	}
+	if sc := blobtx.Sidecar; sc != nil {
+		cpy.sidecarSize = rlp.ListSize(sc.encodedSize())
+	}
 	// Note: tx.size cache not carried over because the sidecar is included in size!
 	if h := tx.hash.Load(); h != nil {
 		cpy.hash.Store(h)
@@ -561,6 +570,10 @@ func (tx *Transaction) Size() uint64 {
 
 	tx.size.Store(size)
 	return size
+}
+
+func (tx *Transaction) SidecarSize() uint64 {
+	return tx.sidecarSize
 }
 
 // WithSignature returns a new transaction with the given signature.
