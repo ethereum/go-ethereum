@@ -48,8 +48,9 @@ func New(ctx context.Context, config *params.SystemContractConfig, client sync_s
 	}
 
 	if err := s.fetchAddressFromL1(); err != nil {
-		log.Error("failed to fetch signer address from L1", "err", err)
+		log.Error("Failed to fetch signer address from L1", "err", err)
 	}
+
 	return s
 }
 
@@ -80,7 +81,7 @@ func (s *SystemContract) Start() {
 				return
 			case <-syncTicker.C:
 				if err := s.fetchAddressFromL1(); err != nil {
-					log.Error("failed to fetch signer address from L1", "err", err)
+					log.Error("Failed to fetch signer address from L1", "err", err)
 				}
 			}
 		}
@@ -94,15 +95,23 @@ func (s *SystemContract) fetchAddressFromL1() error {
 	}
 	bAddress := common.BytesToAddress(address)
 
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	// Validate the address is not empty
 	if bAddress == (common.Address{}) {
-		return fmt.Errorf("retrieved empty signer address from L1 System Contract: contract=%s, slot=%s", s.config.SystemContractAddress.Hex(), s.config.SystemContractSlot.Hex())
+		log.Debug("Retrieved empty signer address from L1 System Contract", "contract", s.config.SystemContractAddress.Hex(), "slot", s.config.SystemContractSlot.Hex())
+
+		// Not initialized yet -- we don't consider this an error
+		if s.signerAddressL1 == (common.Address{}) {
+			log.Warn("System Contract signer address not initialized")
+			return nil
+		}
+
+		return fmt.Errorf("retrieved empty signer address from L1 System Contract")
 	}
 
 	log.Debug("Read address from system contract", "address", bAddress.Hex())
-
-	s.lock.Lock()
-	defer s.lock.Unlock()
 
 	if s.signerAddressL1 != bAddress {
 		s.signerAddressL1 = bAddress

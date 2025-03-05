@@ -328,9 +328,16 @@ var (
 		CurieBlock:          big.NewInt(4740239),
 		DarwinTime:          newUint64(1723622400),
 		DarwinV2Time:        newUint64(1724832000),
+		EuclidTime:          newUint64(1741680000),
+		EuclidV2Time:        newUint64(1741852800),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
+		},
+		SystemContract: &SystemContractConfig{
+			Period:                3,
+			SystemContractAddress: common.HexToAddress("0xC706Ba9fa4fedF4507CB7A898b4766c1bbf9be57"),
+			SystemContractSlot:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000067"),
 		},
 		Scroll: ScrollConfig{
 			UseZktrie:                 true,
@@ -338,10 +345,12 @@ var (
 			MaxTxPayloadBytesPerBlock: &ScrollMaxTxPayloadBytesPerBlock,
 			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
 			L1Config: &L1Config{
-				L1ChainId:             11155111,
-				L1MessageQueueAddress: common.HexToAddress("0xF0B2293F5D834eAe920c6974D50957A1732de763"),
-				NumL1MessagesPerBlock: 10,
-				ScrollChainAddress:    common.HexToAddress("0x2D567EcE699Eabe5afCd141eDB7A4f2D0D6ce8a0"),
+				L1ChainId:                       11155111,
+				L1MessageQueueAddress:           common.HexToAddress("0xF0B2293F5D834eAe920c6974D50957A1732de763"),
+				L1MessageQueueV2Address:         common.HexToAddress("0xA0673eC0A48aa924f067F1274EcD281A10c5f19F"),
+				L1MessageQueueV2DeploymentBlock: 7773746,
+				NumL1MessagesPerBlock:           10,
+				ScrollChainAddress:              common.HexToAddress("0x2D567EcE699Eabe5afCd141eDB7A4f2D0D6ce8a0"),
 			},
 			GenesisStateRoot: &ScrollSepoliaGenesisState,
 		},
@@ -692,8 +701,8 @@ type ScrollConfig struct {
 type L1Config struct {
 	L1ChainId                       uint64         `json:"l1ChainId,string,omitempty"`
 	L1MessageQueueAddress           common.Address `json:"l1MessageQueueAddress,omitempty"`
-	L1MessageQueueV2Address         common.Address `json:"l1MessageQueueV2Address,omitempty"`         // TODO: set address once known
-	L1MessageQueueV2DeploymentBlock uint64         `json:"l1MessageQueueV2DeploymentBlock,omitempty"` // TODO: set block number once known
+	L1MessageQueueV2Address         common.Address `json:"l1MessageQueueV2Address,omitempty"`
+	L1MessageQueueV2DeploymentBlock uint64         `json:"l1MessageQueueV2DeploymentBlock,omitempty"`
 	NumL1MessagesPerBlock           uint64         `json:"numL1MessagesPerBlock,string,omitempty"`
 	ScrollChainAddress              common.Address `json:"scrollChainAddress,omitempty"`
 }
@@ -703,8 +712,8 @@ func (c *L1Config) String() string {
 		return "<nil>"
 	}
 
-	return fmt.Sprintf("{l1ChainId: %v, l1MessageQueueAddress: %v, numL1MessagesPerBlock: %v, ScrollChainAddress: %v}",
-		c.L1ChainId, c.L1MessageQueueAddress.Hex(), c.NumL1MessagesPerBlock, c.ScrollChainAddress.Hex())
+	return fmt.Sprintf("{l1ChainId: %v, l1MessageQueueAddress: %v, l1MessageQueueV2Address: %v, l1MessageQueueV2DeploymentBlock: %v, numL1MessagesPerBlock: %v, ScrollChainAddress: %v}",
+		c.L1ChainId, c.L1MessageQueueAddress.Hex(), c.L1MessageQueueV2Address.Hex(), c.L1MessageQueueV2DeploymentBlock, c.NumL1MessagesPerBlock, c.ScrollChainAddress.Hex())
 }
 
 func (s ScrollConfig) FeeVaultEnabled() bool {
