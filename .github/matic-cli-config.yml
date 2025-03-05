@@ -10,7 +10,8 @@ borDockerBuildContext: '../../bor'
 heimdallDockerBuildContext: 'https://github.com/maticnetwork/heimdall.git#develop'
 
 genesisContractsBranch: master
-contractsBranch: mardizzone/node-16
+contractsRepo: https://github.com/0xPolygon/pos-contracts.git
+contractsBranch: anvil-pos
 
 blockTime:
   - '2'
@@ -32,5 +33,6 @@ numOfErigonValidators: 0
 numOfErigonSentries: 0
 numOfErigonArchiveNodes: 0
 
-ethURL: http://ganache:9545
+ethURL: http://anvil:9545
 ethHostUser: ubuntu
+mnemonic: 'clock radar mass judge dismiss just intact mind resemble fringe diary casino'
