@@ -26,8 +26,8 @@ jobs:
       - name: Prepare
         id: prepare
         run: |
-            TAG=${GITHUB_REF#refs/tags/}
-            echo ::set-output name=tag_name::${TAG}
+          TAG=${GITHUB_REF#refs/tags/}
+          echo ::set-output name=tag_name::${TAG}
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -40,7 +40,7 @@ jobs:
 
       - name: Run GoReleaser
         run: |
-            make release
+          make release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.prepare.outputs.tag_name }}
