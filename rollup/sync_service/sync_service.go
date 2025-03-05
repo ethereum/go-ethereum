@@ -1,6 +1,7 @@
 package sync_service
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"reflect"
@@ -15,6 +16,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rlp"
 )
 
 const (
@@ -272,19 +274,43 @@ func (s *SyncService) fetchMessages() {
 
 		if len(msgs) > 0 {
 			log.Debug("Received new L1 events", "fromBlock", from, "toBlock", to, "count", len(msgs))
-			rawdb.WriteL1Messages(batchWriter, msgs) // collect messages in memory
-			numMsgsCollected += len(msgs)
 		}
 
 		for _, msg := range msgs {
 			if msg.QueueIndex > 0 {
 				queueIndex++
 			}
+
 			// check if received queue index matches expected queue index
-			if msg.QueueIndex != queueIndex {
+			if msg.QueueIndex > queueIndex {
 				log.Error("Unexpected queue index in SyncService", "expected", queueIndex, "got", msg.QueueIndex, "msg", msg)
 				return // do not flush inconsistent data to disk
 			}
+
+			// compare with stored message in database, abort if not equal, ignore if already exists
+			if msg.QueueIndex < queueIndex {
+				log.Warn("Duplicate queue index in SyncService", "expected", queueIndex, "got", msg.QueueIndex)
+
+				receivedMsgBytes, err := rlp.EncodeToBytes(msg)
+				if err != nil {
+					log.Error("Failed to encode message", "err", err)
+					return
+				}
+				storedMsgBytes := rawdb.ReadL1MessageRLP(s.db, msg.QueueIndex)
+				if !bytes.Equal(storedMsgBytes, receivedMsgBytes) {
+					storedL1Message := rawdb.ReadL1Message(s.db, msg.QueueIndex)
+					log.Error("Stored message at same queue index does not match received message", "queueIndex", msg.QueueIndex, "expected", storedL1Message, "got", msg)
+					return
+				}
+
+				// already exists, ignore
+				queueIndex--
+				continue
+			}
+
+			// store message to database (collected in memory and flushed periodically)
+			rawdb.WriteL1Message(batchWriter, msg)
+			numMsgsCollected++
 		}
 
 		numBlocksPendingDbWrite += to - from + 1
