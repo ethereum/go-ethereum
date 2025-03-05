@@ -115,6 +115,9 @@ type Header struct {
 	// Included for Ethereum compatibility in Scroll SDK
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 
+	// RequestsHash was added by EIP-7685 and is ignored in legacy headers.
+	RequestsHash *common.Hash `json:"requestsHash" rlp:"optional"`
+
 	// Hacky: used internally to mark the header as requested by the downloader at the deliver queue.
 	// Note: This is only used internally to mark a previously requested block, it is not included
 	// in db, on the network wire protocol, or in RPC responses.
@@ -314,6 +317,26 @@ func CopyHeader(h *Header) *Header {
 		cpy.BlockSignature = make([]byte, len(h.BlockSignature))
 		copy(cpy.BlockSignature, h.BlockSignature)
 	}
+	if h.WithdrawalsHash != nil {
+		cpy.WithdrawalsHash = new(common.Hash)
+		*cpy.WithdrawalsHash = *h.WithdrawalsHash
+	}
+	if h.ExcessBlobGas != nil {
+		cpy.ExcessBlobGas = new(uint64)
+		*cpy.ExcessBlobGas = *h.ExcessBlobGas
+	}
+	if h.BlobGasUsed != nil {
+		cpy.BlobGasUsed = new(uint64)
+		*cpy.BlobGasUsed = *h.BlobGasUsed
+	}
+	if h.ParentBeaconRoot != nil {
+		cpy.ParentBeaconRoot = new(common.Hash)
+		*cpy.ParentBeaconRoot = *h.ParentBeaconRoot
+	}
+	if h.RequestsHash != nil {
+		cpy.RequestsHash = new(common.Hash)
+		*cpy.RequestsHash = *h.RequestsHash
+	}
 	return &cpy
 }
 
@@ -375,6 +398,27 @@ func (b *Block) BaseFee() *big.Int {
 		return nil
 	}
 	return new(big.Int).Set(b.header.BaseFee)
+}
+
+func (b *Block) BeaconRoot() *common.Hash   { return b.header.ParentBeaconRoot }
+func (b *Block) RequestsHash() *common.Hash { return b.header.RequestsHash }
+
+func (b *Block) ExcessBlobGas() *uint64 {
+	var excessBlobGas *uint64
+	if b.header.ExcessBlobGas != nil {
+		excessBlobGas = new(uint64)
+		*excessBlobGas = *b.header.ExcessBlobGas
+	}
+	return excessBlobGas
+}
+
+func (b *Block) BlobGasUsed() *uint64 {
+	var blobGasUsed *uint64
+	if b.header.BlobGasUsed != nil {
+		blobGasUsed = new(uint64)
+		*blobGasUsed = *b.header.BlobGasUsed
+	}
+	return blobGasUsed
 }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
