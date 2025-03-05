@@ -92,12 +92,12 @@ type Header struct {
 	// BlockSignature was added by EuclidV2 to make Extra empty and is ignored during hashing.
 	// This field is stored in db but not included in messages sent on the network wire protocol,
 	// or in RPC responses. See also `PrepareForNetwork` and `PrepareFromNetwork`.
-	BlockSignature []byte `json:"-" rlp:"optional"`
+	BlockSignature []byte `json:"-" rlp:"-"`
 
 	// IsEuclidV2 was added by EuclidV2 to make Extra empty and is ignored during hashing.
 	// This field is stored in db but not included in messages sent on the network wire protocol,
 	// or in RPC responses. See also `PrepareForNetwork` and `PrepareFromNetwork`.
-	IsEuclidV2 bool `json:"-" rlp:"optional"`
+	IsEuclidV2 bool `json:"-" rlp:"-"`
 
 	// WithdrawalsHash was added by EIP-4895 and is ignored in legacy headers.
 	// Included for Ethereum compatibility in Scroll SDK
