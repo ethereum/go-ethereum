@@ -188,96 +188,60 @@ jobs:
         os: [ubuntu-22.04] # List of OS: https://github.com/actions/virtual-environments
     runs-on: ${{ matrix.os }}
     steps:
-        - uses: actions/checkout@v4
-          with:
-            path: bor
-        - name: Checkout submodules
-          run: |
-            cd bor
-            git submodule update --init --recursive --force
-            git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
+      - uses: actions/checkout@v4
+        with:
+          path: bor
+      - name: Checkout submodules
+        run: |
+          cd bor
+          git submodule update --init --recursive --force
+          git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
 
-        - uses: actions/setup-go@v5
-          with:
-            go-version: 1.23.x
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.x
 
-        - name: Checkout matic-cli
-          uses: actions/checkout@v4
-          with:
-            repository: maticnetwork/matic-cli
-            ref: master
-            path: matic-cli
+      - name: Checkout matic-cli
+        uses: actions/checkout@v4
+        with:
+          repository: maticnetwork/matic-cli
+          ref: master
+          path: matic-cli
 
-        - name: Install dependencies on Linux
-          if: runner.os == 'Linux'
-          run: |
-            sudo apt update
-            sudo apt install build-essential
-            curl https://raw.githubusercontent.com/creationix/nvm/master/install.sh | bash
-            sudo snap install solc
-            sudo apt install python2 jq curl
-            sudo ln -sf /usr/bin/python2 /usr/bin/python
+      - name: Install dependencies on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt update
+          sudo apt install build-essential
+          curl https://raw.githubusercontent.com/creationix/nvm/master/install.sh | bash
+          sudo snap install solc
+          sudo apt install python2 jq curl
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
 
-        - uses: actions/setup-node@v3
-          with:
-            node-version: '18.19.0'
-            cache: 'npm'
-            cache-dependency-path: |
-              matic-cli/package-lock.json
-              matic-cli/devnet/code/contracts/package-lock.json
-              matic-cli/devnet/code/genesis-contracts/package-lock.json
-              matic-cli/devnet/code/genesis-contracts/matic-contracts/package-lock.json
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18.19.0'
+          cache: 'npm'
+          cache-dependency-path: |
+            matic-cli/package-lock.json
+            matic-cli/devnet/code/contracts/package-lock.json
+            matic-cli/devnet/code/genesis-contracts/package-lock.json
+            matic-cli/devnet/code/genesis-contracts/matic-contracts/package-lock.json
 
-        - name: Install Foundry
-          uses: foundry-rs/foundry-toolchain@v1
+      - name: Bootstrap devnet
+        run: |
+          cd matic-cli
+          npm install --prefer-offline --no-audit --progress=false
+          mkdir devnet
+          cd devnet
+          ../bin/matic-cli.js setup devnet -c ../../bor/.github/matic-cli-config.yml
 
-        - name: Bootstrap devnet
-          run: |
-            cd matic-cli
-            npm install --prefer-offline --no-audit --progress=false
-            mkdir devnet
-            cd devnet
-            ../bin/matic-cli.js setup devnet -c ../../bor/.github/matic-cli-config.yml
-
-        - name: Launch devnet
-          run: |
-            cd matic-cli/devnet
-            bash ../util-scripts/docker/devnet_setup.sh
-              cd -
-            timeout 2m bash bor/integration-tests/bor_health.sh
-
-        - name: Run smoke tests
-          run: |
-            echo "Deposit 100 matic for each account to bor network"
-            cd matic-cli/devnet/devnet
-            SCRIPT_ADDRESS=$(jq -r '.[0].address' signer-dump.json)
-            SCRIPT_PRIVATE_KEY=$(jq -r '.[0].priv_key' signer-dump.json)
-            cd ../code/pos-contracts
-            CONTRACT_ADDRESS=$(jq -r .root.tokens.MaticToken contractAddresses.json)
-            forge script scripts/matic-cli-scripts/Deposit.s.sol:MaticDeposit --rpc-url http://localhost:9545 --private-key $SCRIPT_PRIVATE_KEY --broadcast --sig "run(address,address,uint256)" $SCRIPT_ADDRESS $CONTRACT_ADDRESS 100000000000000000000
-            cd ../../../..
-            timeout 60m bash bor/integration-tests/smoke_test.sh
-
-        - name: Run RPC Tests
-          run: |
-            echo "Starting RPC Tests..."
-            timeout 5m bash bor/integration-tests/rpc_test.sh
-
-        - name: Upload logs
-          if: always()
-          uses: actions/upload-artifact@v4.4.0
-          with:
-            name: logs_${{ github.run_id }}
-            path: |
-              matic-cli/devnet/logs
-
-        - name: Package code and chain data
-          if: always()
-          run: |
-            cd matic-cli/devnet
-            docker compose down --remove-orphans
+      - name: Launch devnet
+        run: |
+          cd matic-cli/devnet
+          bash ../util-scripts/docker/devnet_setup.sh
             cd -
-            timeout 2m bash bor/integration-tests/bor_health.sh
+          timeout 2m bash bor/integration-tests/bor_health.sh
 
       - name: Run smoke tests
         run: |
