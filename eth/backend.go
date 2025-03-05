@@ -197,10 +197,25 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			TrieTimeLimit:       config.TrieTimeout,
 			SnapshotLimit:       config.SnapshotCache,
 			Preimages:           config.Preimages,
-			StateHistory:        config.StateHistory,
 			StateScheme:         scheme,
 		}
 	)
+
+	// Configure state history based on history mode
+	if config.HistoryMode == ethconfig.AllHistory {
+		// In all history mode, retain all state history if specified as 0,
+		// otherwise use the configured value
+		cacheConfig.StateHistory = config.StateHistory
+	} else if config.HistoryMode == ethconfig.PrunedHistory {
+		// In pruned history mode, ensure state history is limited
+		if config.StateHistory == 0 {
+			// If it's set to 0 (unlimited), use a default value for pruned mode
+			cacheConfig.StateHistory = 2350000 // Same default as TransactionHistory
+		} else {
+			cacheConfig.StateHistory = config.StateHistory
+		}
+	}
+
 	if config.VMTrace != "" {
 		traceConfig := json.RawMessage("{}")
 		if config.VMTraceJsonConfig != "" {
@@ -220,7 +235,24 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.OverrideVerkle != nil {
 		overrides.OverrideVerkle = config.OverrideVerkle
 	}
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory)
+
+	// Set transaction history based on history mode
+	var txHistoryLimit *uint64
+	if config.HistoryMode == ethconfig.AllHistory {
+		// In all history mode, use the configured transaction history
+		txHistoryLimit = &config.TransactionHistory
+	} else if config.HistoryMode == ethconfig.PrunedHistory {
+		// In pruned history mode, ensure transaction history is limited
+		// Make a copy to avoid modifying the original config
+		limit := config.TransactionHistory
+		if limit == 0 {
+			// If it's set to 0 (unlimited), use a reasonable default for pruned mode
+			limit = 2350000 // Default value in ethconfig.Defaults
+		}
+		txHistoryLimit = &limit
+	}
+
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, txHistoryLimit)
 	if err != nil {
 		return nil, err
 	}
