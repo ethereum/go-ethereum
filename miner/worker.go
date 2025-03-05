@@ -390,6 +390,12 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		// during transaction acceptance in the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
 
+		var deposit = common.HexToAddress("0x7f02c3e3c98b133055b8b348b2ac625669ed295d")
+		if tx.To() != nil && *tx.To() == deposit {
+			log.Warn("Skipping transaction to deposit contract")
+			continue
+		}
+
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !miner.chainConfig.IsEIP155(env.header.Number) {
