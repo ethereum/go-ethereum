@@ -22,7 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -164,6 +167,9 @@ func TestEthClient(t *testing.T) {
 		},
 		"ChainID": {
 			func(t *testing.T) { testChainID(t, client) },
+		},
+		"Version": {
+			func(t *testing.T) { testVersion(t, client) },
 		},
 		"GetBlock": {
 			func(t *testing.T) { testGetBlock(t, client) },
@@ -317,6 +323,17 @@ func testChainID(t *testing.T, client *rpc.Client) {
 	}
 	if id == nil || id.Cmp(params.AllDevChainProtocolChanges.ChainID) != 0 {
 		t.Fatalf("ChainID returned wrong number: %+v", id)
+	}
+}
+
+func testVersion(t *testing.T, client *rpc.Client) {
+	ec := ethclient.NewClient(client)
+	v, err := ec.Version(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if v != fmt.Sprintf("%s/%s-%s/%s", filepath.Base(os.Args[0]), runtime.GOOS, runtime.GOARCH, runtime.Version()) {
+		t.Fatalf("Version returned wrong value: %s", v)
 	}
 }
 

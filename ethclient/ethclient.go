@@ -77,6 +77,15 @@ func (ec *Client) ChainID(ctx context.Context) (*big.Int, error) {
 	return (*big.Int)(&result), err
 }
 
+// Version retrieves the current client version.
+func (ec *Client) Version(ctx context.Context) (string, error) {
+	var version string
+	if err := ec.c.CallContext(ctx, &version, "web3_clientVersion"); err != nil {
+		return "", err
+	}
+	return version, nil
+}
+
 // BlockByHash returns the given full block.
 //
 // Note that loading full blocks requires two requests. Use HeaderByHash
