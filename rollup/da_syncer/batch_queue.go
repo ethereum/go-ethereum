@@ -159,7 +159,7 @@ func (bq *BatchQueue) processAndDeleteBatch(batch da.Entry) da.EntryWithBlocks {
 	// In case of a restart or crash we can continue from the last processed batch (and its metadata).
 	rawdb.WriteDAProcessedBatchMeta(bq.db, bq.previousBatch)
 
-	log.Info("processing batch", "batchIndex", entryWithBlocks.BatchIndex(), "L1BlockNumber", entryWithBlocks.L1BlockNumber(), "totalL1MessagesPopped", entryWithBlocks.TotalL1MessagesPopped(), "previousBatch", bq.previousBatch.BatchIndex, "previousL1BlockNumber", bq.previousBatch.L1BlockNumber, "previous TotalL1MessagesPopped", bq.previousBatch.TotalL1MessagesPopped)
+	log.Debug("processing batch", "batchIndex", entryWithBlocks.BatchIndex(), "L1BlockNumber", entryWithBlocks.L1BlockNumber(), "totalL1MessagesPopped", entryWithBlocks.TotalL1MessagesPopped(), "previousBatch", bq.previousBatch.BatchIndex, "previousL1BlockNumber", bq.previousBatch.L1BlockNumber, "previous TotalL1MessagesPopped", bq.previousBatch.TotalL1MessagesPopped)
 
 	bq.previousBatch = &rawdb.DAProcessedBatchMeta{
 		L1BlockNumber:         entryWithBlocks.L1BlockNumber(),
