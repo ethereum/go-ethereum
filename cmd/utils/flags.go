@@ -255,6 +255,12 @@ var (
 		Value:    "full",
 		Category: flags.StateCategory,
 	}
+	HistoryModeFlag = &cli.StringFlag{
+		Name:     "historymode",
+		Usage:    `Blockchain history pruning mode ("full" keeps all history, "pruned" keeps only recent history according to StateHistory and TransactionHistory settings)`,
+		Value:    "full",
+		Category: flags.StateCategory,
+	}
 	StateSchemeFlag = &cli.StringFlag{
 		Name:     "state.scheme",
 		Usage:    "Scheme to use for storing ethereum state ('hash' or 'path')",
@@ -1587,6 +1593,34 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(GCModeFlag.Name) {
 		cfg.NoPruning = ctx.String(GCModeFlag.Name) == "archive"
 	}
+	if historymode := ctx.String(HistoryModeFlag.Name); historymode != "full" && historymode != "pruned" {
+		Fatalf("--%s must be either 'full' or 'pruned'", HistoryModeFlag.Name)
+	}
+	if ctx.IsSet(HistoryModeFlag.Name) {
+		if ctx.String(HistoryModeFlag.Name) == "full" {
+			cfg.HistoryMode = ethconfig.AllHistory
+		} else {
+			cfg.HistoryMode = ethconfig.PrunedHistory
+		}
+	} else {
+		// Set the default value if not specified
+		// Future versions of Geth will default to pruned, but for now we use full
+		cfg.HistoryMode = ethconfig.AllHistory
+	}
+
+	// If gcmode is set to archive, ensure historymode is set to full
+	if ctx.IsSet(GCModeFlag.Name) && ctx.String(GCModeFlag.Name) == "archive" {
+		cfg.HistoryMode = ethconfig.AllHistory
+		log.Info("Setting historymode to 'full' because gcmode is 'archive'")
+	}
+
+	// Conversely, if historymode is set to pruned, gcmode can't be archive
+	if ctx.IsSet(HistoryModeFlag.Name) && ctx.String(HistoryModeFlag.Name) == "pruned" && ctx.String(GCModeFlag.Name) == "archive" {
+		log.Warn("Conflicting flags: historymode=pruned and gcmode=archive cannot be used together")
+		log.Warn("Setting gcmode to 'full' to be compatible with historymode=pruned")
+		cfg.NoPruning = false
+	}
+
 	if ctx.IsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.Bool(CacheNoPrefetchFlag.Name)
 	}
