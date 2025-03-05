@@ -82,7 +82,9 @@ var (
 		utils.SyncModeFlag,
 		utils.SyncTargetFlag,
 		utils.ExitWhenSyncedFlag,
+		utils.StateSchemeFlag,
 		utils.GCModeFlag,
+		utils.HistoryModeFlag,
 		utils.SnapshotFlag,
 		utils.TxLookupLimitFlag, // deprecated
 		utils.TransactionHistoryFlag,
