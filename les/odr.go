@@ -33,14 +33,11 @@ type LesOdr struct {
 	stop                                       chan struct{}
 }
 
-func NewLesOdr(db ethdb.Database, chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer, retriever *retrieveManager) *LesOdr {
+func NewLesOdr(db ethdb.Database, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
-		db:               db,
-		chtIndexer:       chtIndexer,
-		bloomTrieIndexer: bloomTrieIndexer,
-		bloomIndexer:     bloomIndexer,
-		retriever:        retriever,
-		stop:             make(chan struct{}),
+		db:        db,
+		retriever: retriever,
+		stop:      make(chan struct{}),
 	}
 }
 
@@ -52,6 +49,13 @@ func (odr *LesOdr) Stop() {
 // Database returns the backing database
 func (odr *LesOdr) Database() ethdb.Database {
 	return odr.db
+}
+
+// SetIndexers adds the necessary chain indexers to the ODR backend
+func (odr *LesOdr) SetIndexers(chtIndexer, bloomTrieIndexer, bloomIndexer *core.ChainIndexer) {
+	odr.chtIndexer = chtIndexer
+	odr.bloomTrieIndexer = bloomTrieIndexer
+	odr.bloomIndexer = bloomIndexer
 }
 
 // ChtIndexer returns the CHT chain indexer
