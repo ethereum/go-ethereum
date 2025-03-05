@@ -155,7 +155,7 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 		gasPrice:       config.GasPrice,
 		etherbase:      config.Etherbase,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
-		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks, bloomConfirms),
+		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 	}
 	// Inject XDCX Service into main Eth Service.
 	if XDCXServ != nil {
@@ -556,7 +556,7 @@ func (e *Ethereum) Protocols() []p2p.Protocol {
 // Ethereum protocol implementation.
 func (e *Ethereum) Start(srvr *p2p.Server) error {
 	// Start the bloom bits servicing goroutines
-	e.startBloomHandlers()
+	e.startBloomHandlers(params.BloomBitsBlocks)
 
 	// Start the RPC service
 	e.netRPCService = ethapi.NewPublicNetAPI(srvr, e.NetVersion())
