@@ -118,7 +118,7 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config) (*LightEthereum, er
 		shutdownChan:   make(chan bool),
 		networkId:      networkID,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
-		bloomIndexer:   eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency),
+		bloomIndexer:   eth.NewBloomIndexer(chainDb, light.BloomTrieFrequency, light.HelperTrieConfirmations),
 	}
 
 	leth.relay = NewLesTxRelay(peers, leth.reqDist)
@@ -126,8 +126,8 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config) (*LightEthereum, er
 	leth.retriever = newRetrieveManager(peers, leth.reqDist, leth.serverPool)
 
 	leth.odr = NewLesOdr(chainDb, leth.retriever)
-	leth.chtIndexer = light.NewChtIndexer(chainDb, true)
-	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, true)
+	leth.chtIndexer = light.NewChtIndexer(chainDb, true, leth.odr)
+	leth.bloomTrieIndexer = light.NewBloomTrieIndexer(chainDb, true, leth.odr)
 	leth.odr.SetIndexers(leth.chtIndexer, leth.bloomTrieIndexer, leth.bloomIndexer)
 
 	// Note: NewLightChain adds the trusted checkpoint so it needs an ODR with
@@ -135,6 +135,10 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config) (*LightEthereum, er
 	if leth.blockchain, err = light.NewLightChain(leth.odr, leth.chainConfig, leth.engine); err != nil {
 		return nil, err
 	}
+
+	// Note: AddChildIndexer starts the update process for the child
+	leth.bloomIndexer.AddChildIndexer(leth.bloomTrieIndexer)
+	leth.chtIndexer.Start(leth.blockchain)
 	leth.bloomIndexer.Start(leth.blockchain)
 
 	// Rewind the chain in case of an incompatible config upgrade.
@@ -252,9 +256,6 @@ func (s *LightEthereum) Stop() error {
 	s.odr.Stop()
 	s.bloomIndexer.Close()
 	s.chtIndexer.Close()
-	if s.bloomTrieIndexer != nil {
-		s.bloomTrieIndexer.Close()
-	}
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
 	s.txPool.Stop()

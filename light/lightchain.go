@@ -111,19 +111,19 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 }
 
 // addTrustedCheckpoint adds a trusted checkpoint to the blockchain
-func (lc *LightChain) addTrustedCheckpoint(cp trustedCheckpoint) {
+func (lc *LightChain) addTrustedCheckpoint(cp TrustedCheckpoint) {
 	if lc.odr.ChtIndexer() != nil {
-		StoreChtRoot(lc.chainDb, cp.sectionIdx, cp.sectionHead, cp.chtRoot)
-		lc.odr.ChtIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+		StoreChtRoot(lc.chainDb, cp.SectionIdx, cp.SectionHead, cp.CHTRoot)
+		lc.odr.ChtIndexer().AddKnownSectionHead(cp.SectionIdx, cp.SectionHead)
 	}
 	if lc.odr.BloomTrieIndexer() != nil {
-		StoreBloomTrieRoot(lc.chainDb, cp.sectionIdx, cp.sectionHead, cp.bloomTrieRoot)
-		lc.odr.BloomTrieIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+		StoreBloomTrieRoot(lc.chainDb, cp.SectionIdx, cp.SectionHead, cp.BloomRoot)
+		lc.odr.BloomTrieIndexer().AddKnownSectionHead(cp.SectionIdx, cp.SectionHead)
 	}
 	if lc.odr.BloomIndexer() != nil {
-		lc.odr.BloomIndexer().AddKnownSectionHead(cp.sectionIdx, cp.sectionHead)
+		lc.odr.BloomIndexer().AddKnownSectionHead(cp.SectionIdx, cp.SectionHead)
 	}
-	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.sectionIdx+1)*CHTFrequencyClient-1, "hash", cp.sectionHead)
+	log.Info("Added trusted checkpoint", "chain", cp.name, "block", (cp.SectionIdx+1)*CHTFrequencyClient-1, "hash", cp.SectionHead)
 }
 
 func (lc *LightChain) getProcInterrupt() bool {

@@ -24,6 +24,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/light"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -40,11 +41,12 @@ type lesCommons struct {
 // NodeInfo represents a short summary of the Ethereum sub-protocol metadata
 // known about the host peer.
 type NodeInfo struct {
-	Network    uint64              `json:"network"`    // XDC network ID (50=xinfin, 51=apothem, 551=devnet)
-	Difficulty *big.Int            `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    common.Hash         `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Config     *params.ChainConfig `json:"config"`     // Chain configuration for the fork rules
-	Head       common.Hash         `json:"head"`       // SHA3 hash of the host's best owned block
+	Network    uint64                  `json:"network"`    // XDC network ID (50=xinfin, 51=apothem, 551=devnet)
+	Difficulty *big.Int                `json:"difficulty"` // Total difficulty of the host's blockchain
+	Genesis    common.Hash             `json:"genesis"`    // SHA3 hash of the host's genesis block
+	Config     *params.ChainConfig     `json:"config"`     // Chain configuration for the fork rules
+	Head       common.Hash             `json:"head"`       // SHA3 hash of the host's best owned block
+	CHT        light.TrustedCheckpoint `json:"cht"`        // Trused CHT checkpoint for fast catchup
 }
 
 // makeProtocols creates protocol descriptors for the given LES versions.
@@ -73,6 +75,23 @@ func (c *lesCommons) makeProtocols(versions []uint) []p2p.Protocol {
 
 // nodeInfo retrieves some protocol metadata about the running host node.
 func (c *lesCommons) nodeInfo() interface{} {
+	var cht light.TrustedCheckpoint
+	sections, _, sectionHead := c.chtIndexer.Sections()
+	sections2, _, sectionHead2 := c.bloomTrieIndexer.Sections()
+	if sections2 < sections {
+		sections = sections2
+		sectionHead = sectionHead2
+	}
+	if sections > 0 {
+		sectionIndex := sections - 1
+		cht = light.TrustedCheckpoint{
+			SectionIdx:  sectionIndex,
+			SectionHead: sectionHead,
+			CHTRoot:     light.GetChtRoot(c.chainDb, sectionIndex, sectionHead),
+			BloomRoot:   light.GetBloomTrieRoot(c.chainDb, sectionIndex, sectionHead),
+		}
+	}
+
 	chain := c.protocolManager.blockchain
 	head := chain.CurrentHeader()
 	hash := head.Hash()
@@ -82,5 +101,6 @@ func (c *lesCommons) nodeInfo() interface{} {
 		Genesis:    chain.Genesis().Hash(),
 		Config:     chain.Config(),
 		Head:       chain.CurrentHeader().Hash(),
+		CHT:        cht,
 	}
 }

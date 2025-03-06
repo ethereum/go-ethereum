@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common/mclock"
+	"github.com/XinFinOrg/XDPoSChain/light"
 )
 
 var (
@@ -207,7 +208,7 @@ func (r *sentReq) stateRequesting() reqStateFn {
 					return r.stateNoMorePeers
 				}
 				// nothing to wait for, no more peers to ask, return with error
-				r.stop(ErrNoPeers)
+				r.stop(light.ErrNoPeers)
 				// no need to go to stopped state because waiting() already returned false
 				return nil
 			}
