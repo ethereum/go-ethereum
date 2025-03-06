@@ -183,7 +183,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	db := rawdb.NewMemoryDatabase()
 	ldb := rawdb.NewMemoryDatabase()
 	odr := NewLesOdr(ldb, rm)
-	odr.SetIndexers(light.NewChtIndexer(db, true), light.NewBloomTrieIndexer(db, true), eth.NewBloomIndexer(db, light.BloomTrieFrequency))
+	odr.SetIndexers(light.NewChtIndexer(db, true, nil), light.NewBloomTrieIndexer(db, true, nil), eth.NewBloomIndexer(db, light.BloomTrieFrequency, light.HelperTrieConfirmations))
 	pm := newTestProtocolManagerMust(t, false, 4, testChainGen, nil, nil, db)
 	lpm := newTestProtocolManagerMust(t, true, 0, nil, peers, odr, ldb)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)

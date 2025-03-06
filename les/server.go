@@ -65,8 +65,8 @@ func NewLesServer(eth *eth.Ethereum, config *ethconfig.Config) (*LesServer, erro
 		lesCommons: lesCommons{
 			config:           config,
 			chainDb:          eth.ChainDb(),
-			chtIndexer:       light.NewChtIndexer(eth.ChainDb(), false),
-			bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), false),
+			chtIndexer:       light.NewChtIndexer(eth.ChainDb(), false, nil),
+			bloomTrieIndexer: light.NewBloomTrieIndexer(eth.ChainDb(), false, nil),
 			protocolManager:  pm,
 		},
 		quitSync:  quitSync,
