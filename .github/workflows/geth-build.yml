@@ -1,4 +1,4 @@
-name: Docker Build
+name: Geth Build
 
 on:
   pull_request:
