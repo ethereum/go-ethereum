@@ -181,9 +181,12 @@ func TestFirehose_SystemCalls(t *testing.T) {
 		Config:     params.MergedTestChainConfig,
 		Difficulty: big.NewInt(0),
 	}
+	gspec.Config.ShanghaiBlock = big.NewInt(0)
+	gspec.Config.CancunBlock = big.NewInt(0)
 
 	engine := beacon.New(ethash.NewFaker())
-	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *core.BlockGen) {})
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *core.BlockGen) {
+	})
 
 	testBlockTracesCorrectly(t, gspec, engine, blocks, "TestSystemCalls")
 }

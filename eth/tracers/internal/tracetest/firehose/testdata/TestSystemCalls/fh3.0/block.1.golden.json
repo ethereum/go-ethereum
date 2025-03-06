@@ -1,26 +1,54 @@
 {
-  "hash": "Iu/geSnZgN+2H6S8K8vpj3Oiqk03FaI7qFpX3htyq9U=",
+  "hash": "ucqTABr38yI5OrNZJBmnOSQ+qL8hQhVsGUp9OLEj8U0=",
   "header": {
     "baseFeePerGas": {
       "bytes": "NCdwwA=="
     },
+    "blobGasUsed": "0",
     "coinbase": "AAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "difficulty": {
       "bytes": "AA=="
     },
+    "excessBlobGas": "0",
     "gasLimit": "4712388",
-    "hash": "Iu/geSnZgN+2H6S8K8vpj3Oiqk03FaI7qFpX3htyq9U=",
+    "hash": "ucqTABr38yI5OrNZJBmnOSQ+qL8hQhVsGUp9OLEj8U0=",
     "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "mixHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "number": "1",
+    "parentBeaconRoot": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "parentHash": "zVoIRvboN6qQqCFrZHaZUhpy0QQTWoTrFuDxIv8qRWg=",
     "receiptRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
     "stateRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
     "timestamp": "1970-01-01T00:00:10Z",
     "transactionsRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
-    "uncleHash": "HcxN6N7HXXqrhbVntszUGtMSRRuUinQT8KFC/UDUk0c="
+    "uncleHash": "HcxN6N7HXXqrhbVntszUGtMSRRuUinQT8KFC/UDUk0c=",
+    "withdrawalsRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE="
   },
   "number": "1",
-  "size": "509",
+  "size": "578",
+  "systemCalls": [
+    {
+      "address": "AA899tcygH7xMZ+3uLuFItC+rAI=",
+      "beginOrdinal": "1",
+      "callType": "CALL",
+      "caller": "//////////////////////////4=",
+      "endOrdinal": "4",
+      "gasChanges": [
+        {
+          "newValue": "30000000",
+          "ordinal": "2",
+          "reason": "REASON_CALL_INITIAL_BALANCE"
+        },
+        {
+          "oldValue": "30000000",
+          "ordinal": "3",
+          "reason": "REASON_CALL_LEFT_OVER_RETURNED"
+        }
+      ],
+      "gasLimit": "30000000",
+      "index": 1,
+      "input": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    }
+  ],
   "ver": 4
 }
