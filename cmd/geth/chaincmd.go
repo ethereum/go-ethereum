@@ -36,7 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/era"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
@@ -101,7 +103,11 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.VMTraceJsonConfigFlag,
 			utils.TransactionHistoryFlag,
 			utils.StateHistoryFlag,
-		}, utils.DatabaseFlags),
+		}, utils.DatabaseFlags, debug.Flags),
+		Before: func(ctx *cli.Context) error {
+			flags.MigrateGlobalFlags(ctx)
+			return debug.Setup(ctx)
+		},
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
 with several RLP-encoded blocks, or several files can be used.
