@@ -1,0 +1,24 @@
+# Base image without redundant platform flag
+FROM 967763122477.dkr.ecr.eu-central-1.amazonaws.com/limechain/geth AS devnet
+
+RUN apk add --no-cache nodejs npm curl jq
+
+WORKDIR /app
+
+COPY hardhat/ ./hardhat/
+
+COPY genesis.json /app/genesis.json
+
+WORKDIR /app/hardhat
+RUN npm install
+
+# Create startup script
+COPY scripts/start-with-deploy.sh /usr/local/bin/start-with-deploy.sh
+RUN chmod +x /usr/local/bin/start-with-deploy.sh
+
+# Set entry point
+ENTRYPOINT ["/usr/local/bin/start-with-deploy.sh"]
+
+# Expose necessary ports
+EXPOSE 8545 8546 8547 30303
+
