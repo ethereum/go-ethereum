@@ -1,6 +1,8 @@
 package firehose_test
 
 import (
+	"math/big"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,9 +14,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 )
+
+func init() {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandler(os.Stdout, false)))
+}
 
 type tracingModel string
 
@@ -171,7 +178,8 @@ func TestFirehosePrestate(t *testing.T) {
 
 func TestFirehose_SystemCalls(t *testing.T) {
 	gspec := &core.Genesis{
-		Config: params.MergedTestChainConfig,
+		Config:     params.MergedTestChainConfig,
+		Difficulty: big.NewInt(0),
 	}
 
 	engine := beacon.New(ethash.NewFaker())

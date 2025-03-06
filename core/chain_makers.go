@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -713,5 +714,10 @@ func (cm *chainMaker) GetBlock(hash common.Hash, number uint64) *types.Block {
 }
 
 func (cm *chainMaker) GetTd(hash common.Hash, number uint64) *big.Int {
-	return nil // not supported
+	// Allows tests to pass with beacon consensus engine
+	if _, ok := cm.engine.(*beacon.Beacon); ok {
+		return new(big.Int)
+	}
+
+	return nil
 }

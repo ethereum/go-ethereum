@@ -100,8 +100,6 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnGasChange:     tracer.OnGasChange,
 		OnLog:           tracer.OnLog,
 
-		// This is being discussed in PR https://github.com/ethereum/go-ethereum/pull/29355
-		// but Firehose needs them so we add handling for them in our patch.
 		OnSystemCallStart: tracer.OnSystemCallStart,
 		OnSystemCallEnd:   tracer.OnSystemCallEnd,
 

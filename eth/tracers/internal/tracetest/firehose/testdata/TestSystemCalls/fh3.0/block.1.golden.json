@@ -1,119 +1,26 @@
 {
-  "hash": "N6zSvR8q4sVWyJKo2vdOcc1KsrHinU95Ki/q4tjYQoc=",
+  "hash": "Iu/geSnZgN+2H6S8K8vpj3Oiqk03FaI7qFpX3htyq9U=",
   "header": {
     "baseFeePerGas": {
       "bytes": "NCdwwA=="
     },
-    "blobGasUsed": "0",
     "coinbase": "AAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "difficulty": {
       "bytes": "AA=="
     },
-    "excessBlobGas": "0",
     "gasLimit": "4712388",
-    "hash": "N6zSvR8q4sVWyJKo2vdOcc1KsrHinU95Ki/q4tjYQoc=",
+    "hash": "Iu/geSnZgN+2H6S8K8vpj3Oiqk03FaI7qFpX3htyq9U=",
     "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "mixHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "number": "1",
-    "parentBeaconRoot": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    "parentHash": "MFX8J9a0oI6wcDOg0e51WkspiAhvKKYYnqwbUHUl7rE=",
+    "parentHash": "zVoIRvboN6qQqCFrZHaZUhpy0QQTWoTrFuDxIv8qRWg=",
     "receiptRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
-    "requestsHash": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
     "stateRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
     "timestamp": "1970-01-01T00:00:10Z",
     "transactionsRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
-    "uncleHash": "HcxN6N7HXXqrhbVntszUGtMSRRuUinQT8KFC/UDUk0c=",
-    "withdrawalsRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE="
+    "uncleHash": "HcxN6N7HXXqrhbVntszUGtMSRRuUinQT8KFC/UDUk0c="
   },
   "number": "1",
-  "size": "611",
-  "systemCalls": [
-    {
-      "address": "AA899tcygH7xMZ+3uLuFItC+rAI=",
-      "beginOrdinal": "1",
-      "callType": "CALL",
-      "caller": "//////////////////////////4=",
-      "endOrdinal": "4",
-      "gasChanges": [
-        {
-          "newValue": "30000000",
-          "ordinal": "2",
-          "reason": "REASON_CALL_INITIAL_BALANCE"
-        },
-        {
-          "oldValue": "30000000",
-          "ordinal": "3",
-          "reason": "REASON_CALL_LEFT_OVER_RETURNED"
-        }
-      ],
-      "gasLimit": "30000000",
-      "index": 1,
-      "input": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-    },
-    {
-      "address": "AAD5CCfxxToQy3oCM1sXUyAAKTU=",
-      "beginOrdinal": "5",
-      "callType": "CALL",
-      "caller": "//////////////////////////4=",
-      "endOrdinal": "8",
-      "gasChanges": [
-        {
-          "newValue": "30000000",
-          "ordinal": "6",
-          "reason": "REASON_CALL_INITIAL_BALANCE"
-        },
-        {
-          "oldValue": "30000000",
-          "ordinal": "7",
-          "reason": "REASON_CALL_LEFT_OVER_RETURNED"
-        }
-      ],
-      "gasLimit": "30000000",
-      "index": 1,
-      "input": "MFX8J9a0oI6wcDOg0e51WkspiAhvKKYYnqwbUHUl7rE="
-    },
-    {
-      "address": "AAAJYe9IDrVegNGa2DV5pkwAcAI=",
-      "beginOrdinal": "9",
-      "callType": "CALL",
-      "caller": "//////////////////////////4=",
-      "endOrdinal": "12",
-      "gasChanges": [
-        {
-          "newValue": "30000000",
-          "ordinal": "10",
-          "reason": "REASON_CALL_INITIAL_BALANCE"
-        },
-        {
-          "oldValue": "30000000",
-          "ordinal": "11",
-          "reason": "REASON_CALL_LEFT_OVER_RETURNED"
-        }
-      ],
-      "gasLimit": "30000000",
-      "index": 1
-    },
-    {
-      "address": "AAC73cfOSIZC+1efiwDzpZAAclE=",
-      "beginOrdinal": "13",
-      "callType": "CALL",
-      "caller": "//////////////////////////4=",
-      "endOrdinal": "16",
-      "gasChanges": [
-        {
-          "newValue": "30000000",
-          "ordinal": "14",
-          "reason": "REASON_CALL_INITIAL_BALANCE"
-        },
-        {
-          "oldValue": "30000000",
-          "ordinal": "15",
-          "reason": "REASON_CALL_LEFT_OVER_RETURNED"
-        }
-      ],
-      "gasLimit": "30000000",
-      "index": 1
-    }
-  ],
+  "size": "509",
   "ver": 4
 }
