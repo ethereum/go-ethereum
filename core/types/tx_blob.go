@@ -19,6 +19,7 @@ package types
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -83,6 +84,22 @@ func (sc *BlobTxSidecar) encodedSize() uint64 {
 		proofs += rlp.BytesSize(sc.Proofs[i][:])
 	}
 	return rlp.ListSize(blobs) + rlp.ListSize(commitments) + rlp.ListSize(proofs)
+}
+
+// ValidateBlobCommitmentHashes checks whether the given hashes correspond to the
+// commitments in the sidecar
+func (sc *BlobTxSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) error {
+	if len(sc.Commitments) != len(hashes) {
+		return fmt.Errorf("invalid number of %d blob commitments compared to %d blob hashes", len(sc.Commitments), len(hashes))
+	}
+	hasher := sha256.New()
+	for i, vhash := range hashes {
+		computed := kzg4844.CalcBlobHashV1(hasher, &sc.Commitments[i])
+		if vhash != computed {
+			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, computed, vhash)
+		}
+	}
+	return nil
 }
 
 // blobTxWithBlobs is used for encoding of transactions when blobs are present.

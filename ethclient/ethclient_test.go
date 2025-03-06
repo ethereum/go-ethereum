@@ -404,6 +404,15 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected gas tip cap: %v", gasTipCap)
 	}
 
+	// BlobBaseFee
+	blobBaseFee, err := ec.BlobBaseFee(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if blobBaseFee.Cmp(big.NewInt(1)) != 0 {
+		t.Fatalf("unexpected blob base fee: %v", blobBaseFee)
+	}
+
 	// FeeHistory
 	history, err := ec.FeeHistory(context.Background(), 1, big.NewInt(2), []float64{95, 99})
 	if err != nil {
