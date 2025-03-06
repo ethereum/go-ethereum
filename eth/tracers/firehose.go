@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -50,6 +51,12 @@ var isFirehoseTraceFullEnabled = firehoseTracerLogLevel == "trace_full"
 
 var emptyCommonAddress = common.Address{}
 var emptyCommonHash = common.Hash{}
+
+// FIXME: Make that a static configuration files `a la` params.Rules type
+// FIXME: There is a problem with unit tests where some tests are generated from Ethereum chain like Sepolia and Holesky
+// but are now executed as if they were Polygon. I think the best will be to bring the idea of the `Chains` type and have
+// a private config to set the active chain rule so we can force certain tracer behavior.
+const isPolygon = true
 
 func init() {
 	staticFirehoseChainValidationOnInit()
@@ -685,7 +692,7 @@ func (f *Firehose) onTxStart(tx *types.Transaction, hash common.Hash, from, to c
 		trx.BlobGasFeeCap = firehoseBigIntFromNative(tx.BlobGasFeeCap())
 		trx.BlobHashes = newBlobHashesFromChain(tx.BlobHashes())
 
-		// Not supported by Polygon yet
+		// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
 		// case types.SetCodeTxType:
 		// 	trx.SetCodeAuthorizations = newSetCodeAuthorizationsFromChain(tx.SetCodeAuthorizations())
 	}
@@ -852,6 +859,10 @@ func (f *Firehose) assignOrdinalAndIndexToReceiptLogs() {
 	callLogs := []*pbeth.Log{}
 	for _, call := range trx.Calls {
 		if call.StateReverted {
+			if isPolygon {
+				callLogs = append(callLogs, f.getPolygonNeverRevertedLogs(call.Logs)...)
+			}
+
 			continue
 		}
 
@@ -908,6 +919,24 @@ func (f *Firehose) assignOrdinalAndIndexToReceiptLogs() {
 		receiptsLog.Index = callLog.Index
 		receiptsLog.Ordinal = callLog.Ordinal
 	}
+}
+
+func (f *Firehose) getPolygonNeverRevertedLogs(logs []*pbeth.Log) (out []*pbeth.Log) {
+	for _, log := range logs {
+		if f.isPolygonNeverRevertedLog(log) {
+			out = append(out, log)
+		}
+	}
+
+	return
+}
+
+var polygonSystemFeeAddress = core.GetFeeAddress().Bytes()
+var polygonSystemTransferFeeLogTopic0 = core.GetTransferFeeLogSig().Bytes()
+
+//go:inline
+func (f *Firehose) isPolygonNeverRevertedLog(log *pbeth.Log) bool {
+	return bytes.Equal(log.Address, polygonSystemFeeAddress) && len(log.Topics) == 4 && bytes.Equal(log.Topics[0], polygonSystemTransferFeeLogTopic0)
 }
 
 func (f *Firehose) noTopicsLogOnFailedCallSetToEmptyHash() {
@@ -1211,7 +1240,7 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 	if f.blockRules.IsPrague && !f.inSystemCall && !f.blockIsGenesis && callType != pbeth.CallType_CREATE {
 		firehoseTrace("call resolving delegation (from=%s)", from)
 
-		// Polygon not supporting Prague fully yet
+		// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
 		// code := f.evm.StateDB.GetCode(to)
 		// if len(code) != 0 {
 		// 	if target, ok := types.ParseDelegation(code); ok {
@@ -1570,24 +1599,40 @@ func (f *Firehose) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 }
 
 func (f *Firehose) OnLog(l *types.Log) {
-	f.ensureInBlockAndInTrxAndInCall()
+	f.ensureInBlockAndInTrx()
+
+	// Polygon does add logs outside of a transaction, at the very end of it in some cases.
+	if !isPolygon {
+		f.ensureInCall()
+	}
 
 	topics := make([][]byte, len(l.Topics))
 	for i, topic := range l.Topics {
 		topics[i] = topic.Bytes()
 	}
 
-	activeCall := f.callStack.Peek()
-	firehoseTrace("adding log to call (address=%s call=%d [has already %d logs])", l.Address, activeCall.Index, len(activeCall.Logs))
-
-	activeCall.Logs = append(activeCall.Logs, &pbeth.Log{
+	log := &pbeth.Log{
 		Address:    l.Address.Bytes(),
 		Topics:     topics,
 		Data:       l.Data,
 		Index:      f.transactionLogIndex,
 		BlockIndex: uint32(l.Index),
 		Ordinal:    f.blockOrdinal.Next(),
-	})
+	}
+
+	activeCall := f.callStack.Peek()
+	if activeCall == nil {
+		if !isPolygon {
+			f.panicInvalidState("We are not in call state and outside Polygon, this already has been checked, shouldn't happen", 1)
+		}
+
+		// Polygon does add logs outside of a transaction to track native transfers, this is actually deprecated but we must support it
+		firehoseTrace("adding Polygon log to deferred call state (address=%s)", l.Address)
+		f.deferredCallState.logs = append(f.deferredCallState.logs, log)
+	} else {
+		firehoseTrace("adding log to call (address=%s call=%d [has already %d logs])", l.Address, activeCall.Index, len(activeCall.Logs))
+		activeCall.Logs = append(activeCall.Logs, log)
+	}
 
 	f.transactionLogIndex++
 }
@@ -1923,7 +1968,7 @@ func newBlockHeaderFromChainHeader(hash common.Hash, h *types.Header) *pbeth.Blo
 		parentBeaconRootBytes = root.Bytes()
 	}
 
-	// Polygon don't have Prague request hash(s) yet
+	// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
 	// var requestHashBytes []byte
 	// if hash := h.RequestsHash; hash != nil {
 	// 	requestHashBytes = hash.Bytes()
@@ -1978,7 +2023,7 @@ func transactionTypeFromChainTxType(txType uint8) pbeth.TransactionTrace_Type {
 		return pbeth.TransactionTrace_TRX_TYPE_LEGACY
 	case types.BlobTxType:
 		return pbeth.TransactionTrace_TRX_TYPE_BLOB
-	// Polygon don't have Prague SetCode tx yet
+	// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
 	// case types.SetCodeTxType:
 	// 	return pbeth.TransactionTrace_TRX_TYPE_SET_CODE
 	default:
@@ -2098,7 +2143,7 @@ func newBlobHashesFromChain(blobHashes []common.Hash) (out [][]byte) {
 	return
 }
 
-// Polygon don't have Prague SetCode tx yet
+// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
 // func newSetCodeAuthorizationsFromChain(authorizations []types.SetCodeAuthorization) (out []*pbeth.SetCodeAuthorization) {
 // 	if len(authorizations) == 0 {
 // 		return nil
@@ -2174,7 +2219,8 @@ var gasChangeReasonToPb = map[tracing.GasChangeReason]pbeth.GasChange_Reason{
 	tracing.GasChangeWitnessContractInit:     pbeth.GasChange_REASON_WITNESS_CONTRACT_INIT,
 	tracing.GasChangeWitnessContractCreation: pbeth.GasChange_REASON_WITNESS_CONTRACT_CREATION,
 	tracing.GasChangeWitnessCodeChunk:        pbeth.GasChange_REASON_WITNESS_CODE_CHUNK,
-	// Polygon don't have Prague witness contract collision check yet and tx data floor
+	// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
+	// (This is not actually EIP-7702 related but will most probably be activated at the same time as EIP-7702)
 	// tracing.GasChangeWitnessContractCollisionCheck: pbeth.GasChange_REASON_WITNESS_CONTRACT_COLLISION_CHECK,
 	// tracing.GasChangeTxDataFloor:                   pbeth.GasChange_REASON_TX_DATA_FLOOR,
 
@@ -2385,6 +2431,7 @@ type DeferredCallState struct {
 	gasChanges       []*pbeth.GasChange
 	nonceChanges     []*pbeth.NonceChange
 	codeChanges      []*pbeth.CodeChange
+	logs             []*pbeth.Log
 }
 
 func NewDeferredCallState() *DeferredCallState {
@@ -2400,12 +2447,13 @@ func (d *DeferredCallState) MaybePopulateCallAndReset(source string, call *pbeth
 		return fmt.Errorf("unexpected source for deferred call state, expected root but got %s, deferred call's state are always produced on the 'root' call", source)
 	}
 
-	// We must happen because it's populated at beginning of the call as well as at the very end
+	// We must append because it's populated at beginning of the call as well as at the very end
 	call.AccountCreations = append(call.AccountCreations, d.accountCreations...)
 	call.BalanceChanges = append(call.BalanceChanges, d.balanceChanges...)
 	call.GasChanges = append(call.GasChanges, d.gasChanges...)
 	call.NonceChanges = append(call.NonceChanges, d.nonceChanges...)
 	call.CodeChanges = append(call.CodeChanges, d.codeChanges...)
+	call.Logs = append(call.Logs, d.logs...)
 
 	d.Reset()
 
@@ -2413,7 +2461,7 @@ func (d *DeferredCallState) MaybePopulateCallAndReset(source string, call *pbeth
 }
 
 func (d *DeferredCallState) IsEmpty() bool {
-	return len(d.accountCreations) == 0 && len(d.balanceChanges) == 0 && len(d.gasChanges) == 0 && len(d.nonceChanges) == 0 && len(d.codeChanges) == 0
+	return len(d.accountCreations) == 0 && len(d.balanceChanges) == 0 && len(d.gasChanges) == 0 && len(d.nonceChanges) == 0 && len(d.codeChanges) == 0 && len(d.logs) == 0
 }
 
 func (d *DeferredCallState) Reset() {
@@ -2422,6 +2470,7 @@ func (d *DeferredCallState) Reset() {
 	d.gasChanges = nil
 	d.nonceChanges = nil
 	d.codeChanges = nil
+	d.logs = nil
 }
 
 //go:inline

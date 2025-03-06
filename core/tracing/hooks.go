@@ -206,7 +206,7 @@ type Hooks struct {
 // for tracing and reporting.
 type BalanceChangeReason byte
 
-//go:generate go run golang.org/x/tools/cmd/stringer -type=BalanceChangeReason -output gen_balance_change_reason_stringer.go
+//go:generate go run golang.org/x/tools/cmd/stringer@latest -type=BalanceChangeReason -output gen_balance_change_reason_stringer.go
 
 const (
 	BalanceChangeUnspecified BalanceChangeReason = 0
@@ -252,6 +252,8 @@ const (
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
 )
+
+//go:generate go run golang.org/x/tools/cmd/stringer@latest -type=GasChangeReason -trimprefix=GasChange -output gen_gas_change_reason_stringer.go
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
 // for tracing and reporting.

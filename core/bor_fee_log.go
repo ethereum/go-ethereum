@@ -17,6 +17,10 @@ func GetFeeAddress() common.Address {
 	return feeAddress
 }
 
+func GetTransferFeeLogSig() common.Hash {
+	return transferFeeLogSig
+}
+
 // AddTransferLog adds transfer log into state
 func AddTransferLog(
 	state vm.StateDB,

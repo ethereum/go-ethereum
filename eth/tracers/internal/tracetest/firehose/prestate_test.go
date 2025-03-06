@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/cli/server/chains"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/require"
 )
@@ -36,6 +37,11 @@ func readPrestateData(t *testing.T, path string) *prestateData {
 	if err := json.Unmarshal(blob, &genesisWithTD); err == nil {
 		test.TotalDifficulty = (*big.Int)(genesisWithTD.Genesis.TotalDifficulty)
 	}
+
+	chain, err := chains.GetChain("mainnet")
+	require.NoError(t, err)
+
+	test.Genesis.Config.Bor = chain.Genesis.Config.Bor
 
 	return test
 }
@@ -106,16 +112,9 @@ func (c *callContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 	if genesis.Config.IsLondon(context.BlockNumber) {
 		context.BaseFee = (*big.Int)(c.BaseFee)
 	}
-
-	if genesis.Config.TerminalTotalDifficulty != nil && genesis.Config.TerminalTotalDifficulty.Sign() == 0 {
-		context.Random = &genesis.Mixhash
-	}
-
 	if genesis.ExcessBlobGas != nil && genesis.BlobGasUsed != nil {
-		header := &types.Header{Number: genesis.Config.LondonBlock, Time: *genesis.Config.CancunTime}
-		excess := eip4844.CalcExcessBlobGas(genesis.Config, header, genesis.Timestamp)
-		header.ExcessBlobGas = &excess
-		context.BlobBaseFee = eip4844.CalcBlobFee(genesis.Config, header)
+		excessBlobGas := eip4844.CalcExcessBlobGas(*genesis.ExcessBlobGas, *genesis.BlobGasUsed)
+		context.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
 	}
 	return context
 }
