@@ -34,6 +34,27 @@ func TestBlockFromJSON(t *testing.T) {
 	}
 	tests := []blocktest{
 		{
+			file:            "block_electra_withdrawals.json",
+			version:         "electra",
+			wantSlot:        151850,
+			wantBlockNumber: 141654,
+			wantBlockHash:   common.HexToHash("0xf6730485a38be5ada3e110990a2c7adaabd2e8d4a49782134f1a8bfbc246a5d7"),
+		},
+		{
+			file:            "block_electra_deposits.json",
+			version:         "electra",
+			wantSlot:        151016,
+			wantBlockNumber: 140858,
+			wantBlockHash:   common.HexToHash("0x1f2637170986346c7993d5adbadbebbf4c9ed89c6a4d2dff653db99c8c168076"),
+		},
+		{
+			file:            "block_electra_consolidations.json",
+			version:         "electra",
+			wantSlot:        151717,
+			wantBlockNumber: 141529,
+			wantBlockHash:   common.HexToHash("0xc8807f7a1f96b0a073ff27065776dd21eff6b7e64079c60bffd33f690efbb330"),
+		},
+		{
 			file:            "block_deneb.json",
 			version:         "deneb",
 			wantSlot:        8631513,

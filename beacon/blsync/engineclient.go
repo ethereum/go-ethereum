@@ -100,6 +100,11 @@ func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) 
 		params = []any{execData}
 	)
 	switch fork {
+	case "electra":
+		method = "engine_newPayloadV4"
+		parentBeaconRoot := event.BeaconHead.ParentRoot
+		blobHashes := collectBlobHashes(event.Block)
+		params = append(params, blobHashes, parentBeaconRoot, event.ExecRequests)
 	case "deneb":
 		method = "engine_newPayloadV3"
 		parentBeaconRoot := event.BeaconHead.ParentRoot

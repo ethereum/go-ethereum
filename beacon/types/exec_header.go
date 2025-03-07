@@ -22,10 +22,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
-	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 	"github.com/protolambda/ztyp/tree"
+
+	// beacon chain forks
+	"github.com/protolambda/zrnt/eth2/beacon/capella"
+	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 )
 
 type headerObject interface {
@@ -43,7 +45,7 @@ func ExecutionHeaderFromJSON(forkName string, data []byte) (*ExecutionHeader, er
 	switch forkName {
 	case "capella":
 		obj = new(capella.ExecutionPayloadHeader)
-	case "deneb":
+	case "deneb", "electra": // note: the payload type was not changed in electra
 		obj = new(deneb.ExecutionPayloadHeader)
 	default:
 		return nil, fmt.Errorf("unsupported fork: %s", forkName)
