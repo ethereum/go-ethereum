@@ -3,11 +3,15 @@ name: Rename Go module
 on:
   workflow_dispatch:
     inputs:
-      source_commit:
-        description: "Upstream commit on which to base module renaming"
+      source:
+        description: "Reference or commit on which to base module renaming"
         required: true
         type: string
-        default: "2bd6bd01d2e8561dd7fc21b631f4a34ac16627a1"
+        default: "main"
+      branch:
+        description: "Branch to which a commit of the changes is pushed; leave blank for auto-naming. If non-existent, the branch is created."
+        type: string
+        default: ""
 
 jobs:
   rename-module:
@@ -17,71 +21,97 @@ jobs:
         with:
           fetch-depth: 0 # everything
 
-      - name: Set variables
-        id: vars
-        # Including hashes of both the source commit and the workflow file makes
-        # this idempotent.
-        env:
-          WORKFLOW_HASH: ${{ hashFiles('.github/workflows/rename-module.yml') }}
+      - run: git fetch --tags https://github.com/ethereum/go-ethereum.git
+
+      - run: git checkout ${{ inputs.source }}
+
+      - name: References pointing to source
+        # NOTE: This step assumes that the source has been checked out, which
+        # might not hold if reordered.
         run: |
-          echo "WORKFLOW_HASH=${WORKFLOW_HASH}" >> "$GITHUB_OUTPUT";
-          echo "DEST_BRANCH=auto-rename-module_source-${{ inputs.source_commit }}_workflow-${WORKFLOW_HASH}-${{ github.ref_name }}" \
-            >> "$GITHUB_OUTPUT";
-
-      - name: Fetch tags from ethereum/go-ethereum
-        run: git fetch --tags https://github.com/ethereum/go-ethereum.git
-
-      - name: Tags pointing to source commit
-        run: git tag --points-at  ${{ inputs.source_commit }}
-
-      - name: Check out source commit
-        run: git checkout ${{ inputs.source_commit }}
-
-      - name: Globally update module name
-        run: |
-          go mod edit -module github.com/ava-labs/libevm;
-          find . \
-            -iname '*.go' \
-            -o -iname '*.txt' \
-            -o -iname '*.go.tpl' \
-            -o -iname '*.proto' | xargs \
-            sed -i -E 's|(["`]github\.com/)ethereum/go-ethereum|\1ava-labs/libevm|g';
-
-      - name: Remnant references
-        run: |
-          find . -type f | \
-            xargs grep -In github.com/ethereum/go-ethereum | \
-            grep -v "https://github.com/ethereum/go-ethereum"
+          git branch --points-at HEAD;
+          git tag --points-at HEAD;
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: "go.mod"
 
+      - name: Detect Go module
+        id: go
+        run: |
+            echo "MODULE=$(go list -m)" >> "$GITHUB_OUTPUT";
+            echo "MODULE_SUFFIX=$(go list -m | cut -b 12-)" >> "$GITHUB_OUTPUT"; # Strip github.com/
+
+      - name: Validate Go module
+        if: ${{ steps.go.outputs.MODULE != 'github.com/ava-labs/libevm' && steps.go.outputs.MODULE != 'github.com/ethereum/go-ethereum' }}
+        run: echo "Unexpected Go module ${{ steps.go.outputs.MODULE }}" && exit 1;
+
+      - name: Set variables
+        id: vars
+        env:
+          # `cond && ifTrue || ifFalse` is effectively a ternary operator, based on short-circuiting Boolean logic (assumes `ifTrue` is truthy)
+          RENAME_TO: ${{ steps.go.outputs.MODULE_SUFFIX == 'ava-labs/libevm' && 'ethereum/go-ethereum' || 'ava-labs/libevm' }}
+        run: |
+          echo "RENAME_FROM=${{ steps.go.outputs.MODULE_SUFFIX}}" >> "$GITHUB_OUTPUT";
+          echo "RENAME_TO=${RENAME_TO}" >> "$GITHUB_OUTPUT";
+          echo "WORKFLOW_HASH=${WORKFLOW_HASH}" >> "$GITHUB_OUTPUT";
+          echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT";
+          echo "AUTO_BRANCH_NAME=auto/rename-module/to=${RENAME_TO}/src=$(git rev-parse HEAD)/workflow_sha=${{ github.workflow_sha }}/run=${{ github.run_id }}" \
+            >> "$GITHUB_OUTPUT";
+
+      - name: Globally rename module from ${{ steps.vars.outputs.RENAME_FROM }} to ${{ steps.vars.outputs.RENAME_TO }}
+        run: |
+          go mod edit -module github.com/${{ steps.vars.outputs.RENAME_TO }};
+          find . \
+            -iname '*.go' \
+            -o -iname '*.txt' \
+            -o -iname '*.go.tpl' \
+            -o -iname '*.proto' \
+            -not -wholename '*/libevm/tooling/*' | xargs \
+            sed -i -E 's|(["`]github\.com/)${{ steps.vars.outputs.RENAME_FROM }}|\1${{ steps.vars.outputs.RENAME_TO }}|g';
+
+      - name: Remnant references
+        run: |
+          find . -type f | \
+            xargs grep -In github.com/${{ steps.vars.outputs.RENAME_FROM }} | \
+            grep -v "https://github.com/${{ steps.vars.outputs.RENAME_FROM }}"
+
       - name: Smoke tests
-        # `go list` shows us the module name and grep will non-zero exit on mismatch
+        # `go list -m` shows us the module name and grep will non-zero exit on mismatch
         # `go build` is a rudimentary but broad test of correctness
         # The explicitly tested packages are edge cases:
         # - bind generates tests and a go.mod on the fly
         # - rlpgen has testdata with imports that need updating
         run: |
-          go list . | grep ava-labs/libevm;
+          go list -m | grep github.com/${{ steps.vars.outputs.RENAME_TO }};
           go build ./...;
           go test ./accounts/abi/bind ./rlp/rlpgen
 
-      - name: Create new branch
+      - name: Set branch name
+        id: branch
         env:
-          BRANCH: ${{ steps.vars.outputs.DEST_BRANCH }}
-        run: |
-          git checkout -b "${BRANCH}";
-          git push origin "${BRANCH}";
+          BRANCH: ${{ inputs.branch || steps.vars.outputs.AUTO_BRANCH_NAME }}
+        run: echo "NAME=${BRANCH}" >> "$GITHUB_OUTPUT";
 
-      - name: Commit to new branch
+      - name: Check out branch (create if non-existent)
+        env:
+          BRANCH: ${{ steps.branch.outputs.NAME }}
+        run: |
+          git checkout "${BRANCH}" 2>/dev/null || \
+          (git checkout -b "${BRANCH}" && git push origin "${BRANCH}");
+
+      - name: Commit to branch
         uses: planetscale/ghcommit-action@d4176bfacef926cc2db351eab20398dfc2f593b5 # v0.2.0
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         with:
           # WARNING: mirror any change to the commit_message value below in libevm-delta.yml
-          commit_message: "[AUTO] rename Go module + update internal import paths\n\nWorkflow: ${{ steps.vars.outputs.WORKFLOW_HASH }} on branch ${{ github.ref_name }}"
+          commit_message: |
+            [AUTO] rename Go module to ${{ steps.vars.outputs.RENAME_TO }}
+
+            Source: ${{ steps.vars.outputs.SOURCE_COMMIT }} (${{ inputs.source }})
+            Workflow: ${{ github.workflow_sha }} (${{ github.workflow_ref }})
+            Run ID: ${{ github.run_id }}
           repo: ${{ github.repository }}
-          branch: ${{ steps.vars.outputs.DEST_BRANCH }}
+          branch: ${{ steps.branch.outputs.NAME }}
