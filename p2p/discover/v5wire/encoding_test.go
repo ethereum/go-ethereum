@@ -155,6 +155,37 @@ func TestHandshake_norecord(t *testing.T) {
 	net.nodeA.expectDecode(t, NodesMsg, nodes)
 }
 
+func TestEncodeWhoareyouAlreadySent(t *testing.T) {
+	t.Parallel()
+	net := newHandshakeTest()
+	defer net.close()
+
+	// A -> B   RANDOM PACKET
+	packet, _ := net.nodeA.encode(t, net.nodeB, &Findnode{})
+	resp := net.nodeB.expectDecode(t, UnknownPacket, packet)
+
+	// A <- B   First WHOAREYOU
+	challenge1 := &Whoareyou{
+		Nonce:     resp.(*Unknown).Nonce,
+		IDNonce:   testIDnonce,
+		RecordSeq: 0,
+	}
+	whoareyou1, _ := net.nodeB.encode(t, net.nodeA, challenge1)
+	net.nodeA.expectDecode(t, WhoareyouPacket, whoareyou1)
+
+	// A <- B   Second WHOAREYOU (should fail)
+	challenge2 := &Whoareyou{
+		Nonce:     resp.(*Unknown).Nonce,
+		IDNonce:   testIDnonce,
+		RecordSeq: 0,
+	}
+
+	_, _, err := net.nodeB.c.Encode(net.nodeA.id(), net.nodeA.addr(), challenge2, nil)
+	if !errors.Is(err, errChallengeAlreadySent) {
+		t.Fatalf("second challenge should fail with errChallengeAlreadySent, got %v", err)
+	}
+}
+
 // In this test, A tries to send FINDNODE with existing secrets but B doesn't know
 // anything about A.
 func TestHandshake_rekey(t *testing.T) {
