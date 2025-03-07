@@ -286,23 +286,15 @@ done:
 
 	e1Count = 0
 	e2Count = 0
-	for {
-		advanced, err := it.Next()
-		if err != nil {
+	for it.Next() {
+		if err := it.Error(); err != nil {
 			t.Fatalf("got error while iterating events for e1: %v", err)
-		}
-		if !advanced {
-			break
 		}
 		e1Count++
 	}
-	for {
-		advanced, err := it2.Next()
-		if err != nil {
+	for it2.Next() {
+		if err := it2.Error(); err != nil {
 			t.Fatalf("got error while iterating events for e2: %v", err)
-		}
-		if !advanced {
-			break
 		}
 		e2Count++
 	}

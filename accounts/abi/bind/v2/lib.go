@@ -106,10 +106,10 @@ func (it *EventIterator[T]) Value() *T {
 // If the attempt to convert the raw log object to an instance of T using the
 // unpack function provided via FilterEvents returns an error: that error is
 // returned and subsequent calls to Next will not advance the iterator.
-func (it *EventIterator[T]) Next() (advanced bool, err error) {
+func (it *EventIterator[T]) Next() (advanced bool) {
 	// If the iterator failed with an error, don't proceed
 	if it.fail != nil || it.closed {
-		return false, it.fail
+		return false
 	}
 	// if the iterator is still active, block until a log is received or the
 	// underlying subscription terminates.
@@ -118,10 +118,10 @@ func (it *EventIterator[T]) Next() (advanced bool, err error) {
 		res, err := it.unpack(&log)
 		if err != nil {
 			it.fail = err
-			return false, it.fail
+			return false
 		}
 		it.current = res
-		return true, it.fail
+		return true
 	case <-it.sub.Err():
 		// regardless of how the subscription ends, still be able to iterate
 		// over any unread logs.
@@ -130,12 +130,12 @@ func (it *EventIterator[T]) Next() (advanced bool, err error) {
 			res, err := it.unpack(&log)
 			if err != nil {
 				it.fail = err
-				return false, it.fail
+				return false
 			}
 			it.current = res
-			return true, it.fail
+			return true
 		default:
-			return false, it.fail
+			return false
 		}
 	}
 }
