@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -642,7 +643,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			if err := p.store.Delete(id); err != nil {
 				log.Error("Failed to delete blob transaction", "from", addr, "id", id, "err", err)
 			}
-			txs = append(txs[:i], txs[i+1:]...)
+			txs = slices.Delete(txs, i, i+1)
 			p.index[addr] = txs
 
 			i--

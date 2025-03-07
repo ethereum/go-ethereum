@@ -24,6 +24,8 @@ import (
 	"sort"
 	"time"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -1070,7 +1072,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 			if s.progress.Subchains[1].Tail >= s.progress.Subchains[0].Tail {
 				// Fully overwritten, get rid of the subchain as a whole
 				log.Debug("Previous subchain fully overwritten", "head", head, "tail", tail, "next", next)
-				s.progress.Subchains = append(s.progress.Subchains[:1], s.progress.Subchains[2:]...)
+				s.progress.Subchains = slices.Delete(s.progress.Subchains, 1, 2)
 				continue
 			} else {
 				// Partially overwritten, trim the head to the overwritten size
@@ -1084,7 +1086,7 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 				s.progress.Subchains[0].Tail = s.progress.Subchains[1].Tail
 				s.progress.Subchains[0].Next = s.progress.Subchains[1].Next
 
-				s.progress.Subchains = append(s.progress.Subchains[:1], s.progress.Subchains[2:]...)
+				s.progress.Subchains = slices.Delete(s.progress.Subchains, 1, 2)
 				merged = true
 			}
 		}

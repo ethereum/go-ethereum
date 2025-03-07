@@ -1811,7 +1811,7 @@ func (t *lookup) removeAuthorities(tx *types.Transaction) {
 		list := t.auths[addr]
 		// Remove tx from tracker.
 		if i := slices.Index(list, hash); i >= 0 {
-			list = append(list[:i], list[i+1:]...)
+			list = slices.Delete(list, i, i+1)
 		} else {
 			log.Error("Authority with untracked tx", "addr", addr, "hash", hash)
 		}

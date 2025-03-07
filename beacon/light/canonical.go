@@ -19,6 +19,7 @@ package light
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -69,7 +70,7 @@ func newCanonicalStore[T any](db ethdb.Iteratee, keyPrefix []byte) (*canonicalSt
 
 // databaseKey returns the database key belonging to the given period.
 func (cs *canonicalStore[T]) databaseKey(period uint64) []byte {
-	return binary.BigEndian.AppendUint64(append([]byte{}, cs.keyPrefix...), period)
+	return binary.BigEndian.AppendUint64(slices.Clone(cs.keyPrefix), period)
 }
 
 // add adds the given item to the database. It also ensures that the range remains

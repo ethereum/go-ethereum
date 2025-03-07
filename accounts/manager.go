@@ -18,6 +18,7 @@ package accounts
 
 import (
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 
@@ -259,7 +260,7 @@ func drop(slice []Wallet, wallets ...Wallet) []Wallet {
 			// Wallet not found, may happen during startup
 			continue
 		}
-		slice = append(slice[:n], slice[n+1:]...)
+		slice = slices.Delete(slice, n, n+1)
 	}
 	return slice
 }

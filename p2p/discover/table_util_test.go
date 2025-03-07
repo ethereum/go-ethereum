@@ -182,7 +182,7 @@ func (t *pingRecorder) waitPing(timeout time.Duration) *enode.Node {
 		}
 		if len(t.pinged) > 0 {
 			n := t.pinged[0]
-			t.pinged = append(t.pinged[:0], t.pinged[1:]...)
+			t.pinged = slices.Delete(t.pinged, 0, 1)
 			return n
 		}
 		t.cond.Wait()

@@ -19,6 +19,7 @@ package rawdb
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -258,7 +259,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 						continue
 					}
 					if _, ok := drop[child.ParentHash]; !ok {
-						children = append(children[:i], children[i+1:]...)
+						children = slices.Delete(children, i, i+1)
 						i--
 						continue
 					}

@@ -490,8 +490,8 @@ func TestBadRangeProof(t *testing.T) {
 			if (index == 0 && start < 100) || (index == end-start-1) {
 				continue
 			}
-			keys = append(keys[:index], keys[index+1:]...)
-			vals = append(vals[:index], vals[index+1:]...)
+			keys = slices.Delete(keys, index, index+1)
+			vals = slices.Delete(vals, index, index+1)
 		case 3:
 			// Out of order
 			index1 := mrand.Intn(end - start)
@@ -741,7 +741,7 @@ func TestEmptyValueRangeProof(t *testing.T) {
 		}
 	}
 	noop := &kv{key, []byte{}, false}
-	entries = append(append(append([]*kv{}, entries[:mid]...), noop), entries[mid:]...)
+	entries = append(append(slices.Clone(entries[:mid]), noop), entries[mid:]...)
 
 	start, end := 1, len(entries)-1
 
@@ -785,7 +785,7 @@ func TestAllElementsEmptyValueRangeProof(t *testing.T) {
 		}
 	}
 	noop := &kv{key, []byte{}, false}
-	entries = append(append(append([]*kv{}, entries[:mid]...), noop), entries[mid:]...)
+	entries = append(append(slices.Clone(entries[:mid]), noop), entries[mid:]...)
 
 	var keys [][]byte
 	var vals [][]byte
