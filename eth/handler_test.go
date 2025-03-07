@@ -87,7 +87,12 @@ func (p *testTxPool) Add(txs []*types.Transaction, sync bool) []error {
 	for _, tx := range txs {
 		p.pool[tx.Hash()] = tx
 	}
-	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
+
+	txsWithoutSidecar := make([]*types.Transaction, len(txs))
+	for i, tx := range txs {
+		txsWithoutSidecar[i] = tx.WithoutBlobTxSidecar()
+	}
+	p.txFeed.Send(core.NewTxsEvent{Txs: txsWithoutSidecar})
 	return make([]error, len(txs))
 }
 
@@ -139,17 +144,30 @@ type testHandler struct {
 
 // newTestHandler creates a new handler for testing purposes with no blocks.
 func newTestHandler() *testHandler {
-	return newTestHandlerWithBlocks(0)
+	return newTestHandlerWithBlocks(0, false)
 }
 
 // newTestHandlerWithBlocks creates a new handler for testing purposes, with a
 // given number of initial blocks.
-func newTestHandlerWithBlocks(blocks int) *testHandler {
+func newTestHandlerWithBlocks(blocks int, cancun bool) *testHandler {
 	// Create a database pre-initialize with a genesis block
 	db := rawdb.NewMemoryDatabase()
 	gspec := &core.Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
+		Config:     params.TestChainConfig,
+		Alloc:      types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
+		Difficulty: common.Big0,
+	}
+	if cancun {
+		var forkTime uint64 = 0
+		gspec.Config.ShanghaiTime = &forkTime
+		gspec.Config.CancunTime = &forkTime
+		gspec.Config.BlobScheduleConfig = &params.BlobScheduleConfig{
+			Cancun: &params.BlobConfig{
+				Target:         3,
+				Max:            6,
+				UpdateFraction: params.DefaultCancunBlobConfig.UpdateFraction,
+			},
+		}
 	}
 	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
 

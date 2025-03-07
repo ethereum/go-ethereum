@@ -465,8 +465,8 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		directCount int // Number of transactions sent directly to peers (duplicates included)
 		annCount    int // Number of transactions announced across all peers (duplicates included)
 
-		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
-		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
+		txset = make(map[*ethPeer][]common.Hash)         // Set peer->hash to transfer directly
+		annos = make(map[*ethPeer][]*eth.TxAnnouncement) // Set peer->txAnnouncement to announce
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
 	direct := big.NewInt(int64(math.Sqrt(float64(h.peers.len())))) // Approximate number of peers to broadcast to
@@ -515,7 +515,14 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 			if broadcast {
 				txset[peer] = append(txset[peer], tx.Hash())
 			} else {
-				annos[peer] = append(annos[peer], tx.Hash())
+				annos[peer] = append(annos[peer], &eth.TxAnnouncement{
+					Hash: tx.Hash(),
+					Type: tx.Type(),
+					// If this is a blob transaction, tx is already a
+					// transaction without sidecar. So we need to add
+					// the sidecar size to get the correct size.
+					Size: tx.Size() + tx.SidecarSize(),
+				})
 			}
 		}
 	}
@@ -523,9 +530,9 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		directCount += len(hashes)
 		peer.AsyncSendTransactions(hashes)
 	}
-	for peer, hashes := range annos {
-		annCount += len(hashes)
-		peer.AsyncSendPooledTransactionHashes(hashes)
+	for peer, announces := range annos {
+		annCount += len(announces)
+		peer.AsyncSendPooledTransactionHashes(announces)
 	}
 	log.Debug("Distributed transactions", "plaintxs", len(txs)-blobTxs-largeTxs, "blobtxs", blobTxs, "largetxs", largeTxs,
 		"bcastpeers", len(txset), "bcastcount", directCount, "annpeers", len(annos), "anncount", annCount)
