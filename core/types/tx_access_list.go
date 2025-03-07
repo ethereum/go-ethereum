@@ -127,3 +127,18 @@ func (tx *AccessListTx) encode(b *bytes.Buffer) error {
 func (tx *AccessListTx) decode(input []byte) error {
 	return rlp.DecodeBytes(input, tx)
 }
+
+func (tx *AccessListTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		AccessListTxType,
+		[]any{
+			chainID,
+			tx.Nonce,
+			tx.GasPrice,
+			tx.Gas,
+			tx.To,
+			tx.Value,
+			tx.Data,
+			tx.AccessList,
+		})
+}
