@@ -85,8 +85,5 @@ var mumbaiTestnet = &Chain{
 		Coinbase:   common.HexToAddress("0x0000000000000000000000000000000000000000"),
 		Alloc:      readPrealloc("allocs/mumbai.json"),
 	},
-	Bootnodes: []string{
-		"enode://bdcd4786a616a853b8a041f53496d853c68d99d54ff305615cd91c03cd56895e0a7f6e9f35dbf89131044e2114a9a782b792b5661e3aff07faf125a98606a071@43.200.206.40:30303",
-		"enode://209aaf7ed549cf4a5700fd833da25413f80a1248bd3aa7fe2a87203e3f7b236dd729579e5c8df61c97bf508281bae4969d6de76a7393bcbd04a0af70270333b3@54.216.248.9:30303",
-	},
+	Bootnodes: params.MumbaiBootnodes,
 }
