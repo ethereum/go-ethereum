@@ -17,15 +17,15 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 )
 
@@ -210,13 +210,13 @@ func (b *testChainIndexBackend) reorg(headNum uint64) uint64 {
 	return b.stored * b.indexer.sectionSize
 }
 
-func (b *testChainIndexBackend) Reset(section uint64, prevHead common.Hash) error {
+func (b *testChainIndexBackend) Reset(ctx context.Context, section uint64, prevHead common.Hash) error {
 	b.section = section
 	b.headerCnt = 0
 	return nil
 }
 
-func (b *testChainIndexBackend) Process(header *types.Header) {
+func (b *testChainIndexBackend) Process(ctx context.Context, header *types.Header) error {
 	b.headerCnt++
 	if b.headerCnt > b.indexer.sectionSize {
 		b.t.Error("Processing too many headers")
@@ -227,6 +227,7 @@ func (b *testChainIndexBackend) Process(header *types.Header) {
 		b.t.Fatal("Unexpected call to Process")
 	case b.processCh <- header.Number.Uint64():
 	}
+	return nil
 }
 
 func (b *testChainIndexBackend) Commit() error {
