@@ -181,14 +181,8 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 				// Calculate the first and last blocks of the section
 				sectionStart := res.section * m.sectionSize
 
-				first := sectionStart
-				if begin > first {
-					first = begin
-				}
-				last := sectionStart + m.sectionSize - 1
-				if end < last {
-					last = end
-				}
+				first := max(begin, sectionStart)
+				last := min(end, sectionStart+m.sectionSize-1)
 				// Iterate over all the blocks in the section and return the matching ones
 				for i := first; i <= last; i++ {
 					// Skip the entire byte if no matches are found inside (and we're processing an entire byte!)

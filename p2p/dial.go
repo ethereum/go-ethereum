@@ -365,10 +365,7 @@ func (d *dialScheduler) expireHistory() {
 // freeDialSlots returns the number of free dial slots. The result can be negative
 // when peers are connected while their task is still running.
 func (d *dialScheduler) freeDialSlots() int {
-	slots := (d.maxDialPeers - d.dialPeers) * 2
-	if slots > d.maxActiveDials {
-		slots = d.maxActiveDials
-	}
+	slots := min((d.maxDialPeers-d.dialPeers)*2, d.maxActiveDials)
 	free := slots - len(d.dialing)
 	return free
 }

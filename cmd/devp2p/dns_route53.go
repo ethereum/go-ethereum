@@ -415,10 +415,7 @@ func isSubdomain(name, domain string) bool {
 func splitTXT(value string) string {
 	var result strings.Builder
 	for len(value) > 0 {
-		rlen := len(value)
-		if rlen > 253 {
-			rlen = 253
-		}
+		rlen := min(len(value), 253)
 		result.WriteString(strconv.Quote(value[:rlen]))
 		value = value[rlen:]
 	}

@@ -378,10 +378,7 @@ func (t *Trackers) TargetTimeout() time.Duration {
 // targetTimeout is the internal lockless version of TargetTimeout to be used
 // during QoS tuning.
 func (t *Trackers) targetTimeout() time.Duration {
-	timeout := time.Duration(ttlScaling * float64(t.roundtrip) / t.confidence)
-	if timeout > t.OverrideTTLLimit {
-		timeout = t.OverrideTTLLimit
-	}
+	timeout := min(time.Duration(ttlScaling*float64(t.roundtrip)/t.confidence), t.OverrideTTLLimit)
 	return timeout
 }
 
@@ -433,10 +430,7 @@ func (t *Trackers) detune() {
 	// Otherwise drop the confidence factor
 	peers := float64(len(t.trackers))
 
-	t.confidence = t.confidence * (peers - 1) / peers
-	if t.confidence < rttMinConfidence {
-		t.confidence = rttMinConfidence
-	}
+	t.confidence = max(t.confidence*(peers-1)/peers, rttMinConfidence)
 	t.log.Debug("Relaxed msgrate QoS values", "rtt", t.roundtrip, "confidence", t.confidence, "ttl", t.targetTimeout())
 }
 
