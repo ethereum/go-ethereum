@@ -18,6 +18,7 @@ package catalyst
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -71,8 +72,11 @@ func (a *simulatedBeaconAPI) loop() {
 					break
 				}
 				// Avoids spinlooping if the txPool is alredy terminated.
-				if _, err := a.sim.fallibleCommit(); err != nil {
-					break
+				if _, err := a.sim.commit(); err != nil {
+					var txpTermErr *txPoolTerminatedError
+					if errors.As(err, &txpTermErr) {
+						break
+					}
 				}
 			}
 		}
