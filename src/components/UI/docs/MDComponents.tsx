@@ -91,13 +91,6 @@ const MDComponents = {
       </Heading>
     );
   },
-  h4: ({ children }: any) => {
-    return (
-      <Heading as='h4' mb='2.5 !important' {...h4} id={children}>
-        {children}
-      </Heading>
-    );
-  },
   // tables
   table: ({ children }: any) => (
     <Flex overflowX='auto'>
