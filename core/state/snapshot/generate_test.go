@@ -655,7 +655,7 @@ func testGenerateWithManyExtraAccounts(t *testing.T, scheme string) {
 		for i := 0; i < 1000; i++ {
 			acc := &types.StateAccount{Balance: uint256.NewInt(uint64(i)), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes()}
 			val, _ := rlp.EncodeToBytes(acc)
-			key := hashData([]byte(fmt.Sprintf("acc-%d", i)))
+			key := hashData(fmt.Appendf(nil, "acc-%d", i))
 			rawdb.WriteAccountSnapshot(helper.diskdb, key, val)
 		}
 	}
