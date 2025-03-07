@@ -210,7 +210,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tracer %s: %v", config.VMTrace, err)
 		}
-		vmConfig.Tracer = t
+		safeHooks, err := tracers.NewRecoverTracer(stack, t)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create safety wrappers for %s tracer: %v", config.VMTrace, err)
+		}
+		vmConfig.Tracer = safeHooks
 	}
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
