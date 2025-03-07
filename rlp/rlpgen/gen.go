@@ -22,8 +22,10 @@ import (
 	"go/format"
 	"go/types"
 	"sort"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
+	"golang.org/x/tools/go/packages"
 )
 
 // buildContext keeps the data needed for make*Op.
@@ -96,14 +98,15 @@ func (bctx *buildContext) typeToStructType(typ types.Type) *rlpstruct.Type {
 // file and assigns unique names of temporary variables.
 type genContext struct {
 	inPackage   *types.Package
-	imports     map[string]struct{}
+	imports     map[string]string // Changed from map[string]struct{} to map[string]string to store package aliases
 	tempCounter int
 }
 
 func newGenContext(inPackage *types.Package) *genContext {
 	return &genContext{
-		inPackage: inPackage,
-		imports:   make(map[string]struct{}),
+		inPackage:   inPackage,
+		imports:     make(map[string]string),
+		tempCounter: 0,
 	}
 }
 
@@ -117,32 +120,83 @@ func (ctx *genContext) resetTemp() {
 	ctx.tempCounter = 0
 }
 
-func (ctx *genContext) addImport(path string) {
+func (ctx *genContext) addImport(path string) string {
 	if path == ctx.inPackage.Path() {
-		return // avoid importing the package that we're generating in.
+		return "" // avoid importing the package that we're generating in
 	}
-	// TODO: renaming?
-	ctx.imports[path] = struct{}{}
+	
+	// Check if we already have an alias for this package
+	if alias, exists := ctx.imports[path]; exists {
+		return alias
+	}
+
+	// Get the package name and check for conflicts
+	pkg, err := ctx.loadPackage(path)
+	if err != nil {
+		// If we can't load the package, use the last component of the path
+		parts := strings.Split(path, "/")
+		pkg = types.NewPackage(path, parts[len(parts)-1])
+	}
+
+	baseName := pkg.Name()
+	alias := baseName
+	counter := 1
+	
+	// If the base name conflicts with any existing import, add a numeric suffix
+	for ctx.hasAlias(alias) {
+		alias = fmt.Sprintf("%s%d", baseName, counter)
+		counter++
+	}
+	
+	ctx.imports[path] = alias
+	return alias
 }
 
-// importsList returns all packages that need to be imported.
-func (ctx *genContext) importsList() []string {
-	imp := make([]string, 0, len(ctx.imports))
-	for k := range ctx.imports {
-		imp = append(imp, k)
+// hasAlias checks if an alias is already in use
+func (ctx *genContext) hasAlias(alias string) bool {
+	for _, existingAlias := range ctx.imports {
+		if existingAlias == alias {
+			return true
+		}
 	}
-	sort.Strings(imp)
-	return imp
+	return false
 }
 
-// qualify is the types.Qualifier used for printing types.
+// loadPackage attempts to load package information
+func (ctx *genContext) loadPackage(path string) (*types.Package, error) {
+	cfg := &packages.Config{Mode: packages.NeedName}
+	pkgs, err := packages.Load(cfg, path)
+	if err != nil {
+		return nil, err
+	}
+	if len(pkgs) == 0 {
+		return nil, fmt.Errorf("no package found for path %s", path)
+	}
+	return types.NewPackage(path, pkgs[0].Name), nil
+}
+
+// qualify is the types.Qualifier used for printing types
 func (ctx *genContext) qualify(pkg *types.Package) string {
 	if pkg.Path() == ctx.inPackage.Path() {
 		return ""
 	}
-	ctx.addImport(pkg.Path())
-	// TODO: renaming?
-	return pkg.Name()
+	return ctx.addImport(pkg.Path())
+}
+
+// importsList returns all packages that need to be imported
+func (ctx *genContext) importsList() []string {
+	imp := make([]string, 0, len(ctx.imports))
+	for path, alias := range ctx.imports {
+		if alias == pkg.Name() {
+			// If the alias matches the package name, use standard import
+			imp = append(imp, fmt.Sprintf("%q", path))
+		} else {
+			// If we have a custom alias, use aliased import
+			imp = append(imp, fmt.Sprintf("%s %q", alias, path))
+		}
+	}
+	sort.Strings(imp)
+	return imp
 }
 
 type op interface {
