@@ -43,7 +43,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/eth/filters"
 	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
@@ -148,7 +147,7 @@ var (
 
 	SyncModeFlag = &cli.StringFlag{
 		Name:     "syncmode",
-		Usage:    `Blockchain sync mode ("fast", "full", or "light")`,
+		Usage:    `Blockchain sync mode ("fast" or "full")`,
 		Value:    ethconfig.Defaults.SyncMode.String(),
 		Category: flags.EthCategory,
 	}
@@ -162,22 +161,6 @@ var (
 		Name:     "lightkdf",
 		Usage:    "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 		Category: flags.AccountCategory,
-	}
-
-	// Light server and client settings
-	LightServFlag = &cli.IntFlag{
-		Name:     "light-serv",
-		Aliases:  []string{"lightserv"},
-		Usage:    "Maximum percentage of time allowed for serving LES requests (0-90)",
-		Value:    ethconfig.Defaults.LightServ,
-		Category: flags.LightCategory,
-	}
-	LightPeersFlag = &cli.IntFlag{
-		Name:     "light-peers",
-		Aliases:  []string{"lightpeers"},
-		Usage:    "Maximum number of LES client peers",
-		Value:    ethconfig.Defaults.LightPeers,
-		Category: flags.LightCategory,
 	}
 
 	// Ethash settings
@@ -1023,8 +1006,14 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-func setPrefix(ctx *cli.Context, cfg *node.Config) {
-	CheckExclusive(ctx, Enable0xPrefixFlag, EnableXDCPrefixFlag)
+// setLes shows the deprecation warnings for LES flags.
+func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.IsSet(LightServFlag.Name) {
+		log.Warn("The light server has been deprecated, please remove this flag", "flag", LightServFlag.Name)
+	}
+	if ctx.IsSet(LightPeersFlag.Name) {
+		log.Warn("The light server has been deprecated, please remove this flag", "flag", LightPeersFlag.Name)
+	}
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
@@ -1121,48 +1110,21 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setBootstrapNodes(ctx, cfg)
 	// setBootstrapNodesV5(ctx, cfg)
 
-	lightClient := ctx.String(SyncModeFlag.Name) == "light"
-	lightServer := ctx.Int(LightServFlag.Name) != 0
-	lightPeers := ctx.Int(LightPeersFlag.Name)
-
 	if ctx.IsSet(MaxPeersFlag.Name) {
 		cfg.MaxPeers = ctx.Int(MaxPeersFlag.Name)
-		if lightServer && !ctx.IsSet(LightPeersFlag.Name) {
-			cfg.MaxPeers += lightPeers
-		}
-	} else {
-		if lightServer {
-			cfg.MaxPeers += lightPeers
-		}
-		if lightClient && ctx.IsSet(LightPeersFlag.Name) && cfg.MaxPeers < lightPeers {
-			cfg.MaxPeers = lightPeers
-		}
 	}
-	if !(lightClient || lightServer) {
-		lightPeers = 0
-	}
-	ethPeers := cfg.MaxPeers - lightPeers
-	if lightClient {
-		ethPeers = 0
-	}
-	log.Info("Maximum peer count", "ETH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
+	ethPeers := cfg.MaxPeers
+	log.Info("Maximum peer count", "ETH", ethPeers, "total", cfg.MaxPeers)
 
 	if ctx.IsSet(MaxPendingPeersFlag.Name) {
 		cfg.MaxPendingPeers = ctx.Int(MaxPendingPeersFlag.Name)
 	}
-	if ctx.IsSet(NoDiscoverFlag.Name) || lightClient {
+	if ctx.IsSet(NoDiscoverFlag.Name) {
 		cfg.NoDiscovery = true
 	}
 
-	// if we're running a light client or server, force enable the v5 peer discovery
-	// unless it is explicitly disabled with --nodiscover note that explicitly specifying
-	// --v5disc overrides --nodiscover, in which case the later only disables v4 discovery
-	forceV5Discovery := (lightClient || lightServer) && !ctx.Bool(NoDiscoverFlag.Name)
-	if ctx.IsSet(DiscoveryV5Flag.Name) {
-		cfg.DiscoveryV5 = ctx.Bool(DiscoveryV5Flag.Name)
-	} else if forceV5Discovery {
-		cfg.DiscoveryV5 = true
-	}
+	CheckExclusive(ctx, DiscoveryV5Flag, NoDiscoverFlag)
+	cfg.DiscoveryV5 = ctx.Bool(DiscoveryV5Flag.Name)
 
 	if netrestrict := ctx.String(NetrestrictFlag.Name); netrestrict != "" {
 		list, err := netutil.ParseNetlist(netrestrict)
@@ -1183,12 +1145,12 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 
 // SetNodeConfig applies node-related command line flags to the config.
 func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
+	CheckExclusive(ctx, Enable0xPrefixFlag, EnableXDCPrefixFlag)
 	SetP2PConfig(ctx, &cfg.P2P)
 	setIPC(ctx, cfg)
 	setHTTP(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
-	setPrefix(ctx, cfg)
 	setSmartCard(ctx, cfg)
 
 	switch {
@@ -1246,12 +1208,7 @@ func setSmartCard(ctx *cli.Context, cfg *node.Config) {
 	cfg.SmartCardDaemonPath = path
 }
 
-func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
-	// If we are running the light client, apply another group
-	// settings for gas oracle.
-	if light {
-		*cfg = ethconfig.LightClientGPO
-	}
+func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
 	if ctx.IsSet(GpoBlocksFlag.Name) {
 		cfg.Blocks = ctx.Int(GpoBlocksFlag.Name)
 	}
@@ -1392,13 +1349,13 @@ func SetXDCXConfig(ctx *cli.Context, cfg *XDCx.Config, XDCDataDir string) {
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
 	CheckExclusive(ctx, MainnetFlag, TestnetFlag, DevnetFlag, DeveloperFlag)
-	CheckExclusive(ctx, LightServFlag, SyncModeFlag, "light")
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
-	setGPO(ctx, &cfg.GPO, ctx.String(SyncModeFlag.Name) == "light")
+	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
+	setLes(ctx, cfg)
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
@@ -1424,12 +1381,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		if err = cfg.SyncMode.UnmarshalText([]byte(ctx.String(SyncModeFlag.Name))); err != nil {
 			Fatalf("invalid --syncmode flag: %v", err)
 		}
-	}
-	if ctx.IsSet(LightServFlag.Name) {
-		cfg.LightServ = ctx.Int(LightServFlag.Name)
-	}
-	if ctx.IsSet(LightPeersFlag.Name) {
-		cfg.LightPeers = ctx.Int(LightPeersFlag.Name)
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)
@@ -1727,13 +1678,12 @@ func WalkMatch(root, pattern string) ([]string, error) {
 
 // RegisterFilterAPI adds the eth log filtering RPC API to the node.
 func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconfig.Config) *filters.FilterSystem {
-	isLightClient := ethcfg.SyncMode == downloader.LightSync
 	filterSystem := filters.NewFilterSystem(backend, filters.Config{
 		LogCacheSize: ethcfg.FilterLogCacheSize,
 	})
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, isLightClient),
+		Service:   filters.NewFilterAPI(filterSystem, false),
 	}})
 	return filterSystem
 }

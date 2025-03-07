@@ -19,6 +19,7 @@ package utils
 import (
 	"fmt"
 
+	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/internal/flags"
 	"github.com/urfave/cli/v2"
 )
@@ -37,6 +38,8 @@ var DeprecatedFlags = []cli.Flag{
 	LogDebugFlag,
 	MiningEnabledFlag,
 	XDCXDataDirFlag,
+	LightServFlag,
+	LightPeersFlag,
 }
 
 var (
@@ -74,6 +77,21 @@ var (
 		Name:     "XDCx-datadir",
 		Aliases:  []string{"XDCx.datadir"},
 		Usage:    "Data directory for the XDCX databases (deprecated)",
+		Category: flags.DeprecatedCategory,
+	}
+	// Deprecated March 2025
+	LightServFlag = &cli.IntFlag{
+		Name:     "light-serv",
+		Aliases:  []string{"lightserv"},
+		Usage:    "Maximum percentage of time allowed for serving LES requests (0-90)",
+		Value:    ethconfig.Defaults.LightServ,
+		Category: flags.DeprecatedCategory,
+	}
+	LightPeersFlag = &cli.IntFlag{
+		Name:     "light-peers",
+		Aliases:  []string{"lightpeers"},
+		Usage:    "Maximum number of LES client peers",
+		Value:    ethconfig.Defaults.LightPeers,
 		Category: flags.DeprecatedCategory,
 	}
 )

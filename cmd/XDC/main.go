@@ -89,8 +89,8 @@ var (
 		utils.TxPoolLifetimeFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
-		//utils.LightServFlag,
-		//utils.LightPeersFlag,
+		// utils.LightServFlag,  // deprecated
+		// utils.LightPeersFlag, // deprecated
 		//utils.LightKDFFlag,
 		utils.CacheFlag,
 		utils.CacheDatabaseFlag,
@@ -326,11 +326,6 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 		}
 	}()
 	// Start auxiliary services if enabled
-
-	// Mining only makes sense if a full Ethereum node is running
-	if ctx.String(utils.SyncModeFlag.Name) == "light" {
-		utils.Fatalf("Light clients do not support staking")
-	}
 
 	var ethereum *eth.Ethereum
 	if err := stack.Service(&ethereum); err != nil {
