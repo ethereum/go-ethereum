@@ -157,10 +157,15 @@ type structLogLegacy struct {
 }
 
 // toLegacyJSON converts the structLog to legacy json-encoded legacy form.
-func (s *StructLog) toLegacyJSON() json.RawMessage {
+func (s *StructLog) toLegacyJSON(isCancun bool) json.RawMessage {
+	opString := s.OpName()
+	// Use hex string if Cancun is inactive but the opcode is invalid before Cancun fork
+	if !isCancun && s.Op.IsCancunOpcode() {
+		opString = fmt.Sprintf("0x%x", byte(s.Op))
+	}
 	msg := structLogLegacy{
 		Pc:            s.Pc,
-		Op:            s.Op.String(),
+		Op:            opString,
 		Gas:           s.Gas,
 		GasCost:       s.GasCost,
 		Depth:         s.Depth,
@@ -254,7 +259,7 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 // OnOpcode logs a new structured log message and pushes it out to the environment
 //
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
-func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, isCancun bool, err error) {
 	// If tracing was interrupted, exit
 	if l.interrupt.Load() {
 		return
@@ -315,7 +320,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 
 	// create a log
 	if l.writer == nil {
-		entry := log.toLegacyJSON()
+		entry := log.toLegacyJSON(isCancun)
 		l.resultSize += len(entry)
 		l.logs = append(l.logs, entry)
 		return
@@ -491,12 +496,17 @@ func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 }
 
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, isCancun bool, err error) {
 	if t.skip {
 		return
 	}
 	stack := scope.StackData()
-	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10v |", pc, vm.OpCode(op).String(),
+	opString := vm.OpCode(op).String()
+	// Use hex string if Cancun is inactive but the opcode is invalid before Cancun fork
+	if !isCancun && vm.OpCode(op).IsCancunOpcode() {
+		opString = fmt.Sprintf("0x%x", byte(vm.OpCode(op)))
+	}
+	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10v |", pc, opString,
 		cost, t.env.StateDB.GetRefund())
 
 	if !t.cfg.DisableStack {
