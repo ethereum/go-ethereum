@@ -18,6 +18,7 @@ package main
 
 import (
 	"errors"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -72,9 +73,7 @@ func newCrawler(input nodeSet, bootnodes []*enode.Node, disc resolver, iters ...
 	c.iters = append(c.iters, c.inputIter)
 	// Copy input to output initially. Any nodes that fail validation
 	// will be dropped from output during the run.
-	for id, n := range input {
-		c.output[id] = n
-	}
+	maps.Copy(c.output, input)
 	return c, nil
 }
 

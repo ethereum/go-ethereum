@@ -19,6 +19,7 @@ package txpool
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"sync"
 
@@ -390,9 +391,7 @@ func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 func (p *TxPool) Pending(filter PendingFilter) map[common.Address][]*LazyTransaction {
 	txs := make(map[common.Address][]*LazyTransaction)
 	for _, subpool := range p.subpools {
-		for addr, set := range subpool.Pending(filter) {
-			txs[addr] = set
-		}
+		maps.Copy(txs, subpool.Pending(filter))
 	}
 	return txs
 }
@@ -445,12 +444,8 @@ func (p *TxPool) Content() (map[common.Address][]*types.Transaction, map[common.
 	for _, subpool := range p.subpools {
 		run, block := subpool.Content()
 
-		for addr, txs := range run {
-			runnable[addr] = txs
-		}
-		for addr, txs := range block {
-			blocked[addr] = txs
-		}
+		maps.Copy(runnable, run)
+		maps.Copy(blocked, block)
 	}
 	return runnable, blocked
 }
