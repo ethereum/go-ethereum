@@ -70,15 +70,10 @@ func (a *simulatedBeaconAPI) loop() {
 				if executable, _ := a.sim.eth.TxPool().Stats(); executable == 0 {
 					break
 				}
-				// Avoid a race condition where doCommit is closed while in this loop.
-				select {
-				case _, ok := <-doCommit:
-					if !ok {
-						break
-					}
-				default:
+				// Avoids spinlooping if the txPool is alredy terminated.
+				if _, err := a.sim.fallibleCommit(); err != nil {
+					break
 				}
-				a.sim.Commit()
 			}
 		}
 	}()
