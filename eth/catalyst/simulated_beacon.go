@@ -302,11 +302,18 @@ func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
 
 // Commit seals a block on demand.
 func (c *SimulatedBeacon) Commit() common.Hash {
+	hash, _ := c.fallibleCommit()
+	return hash
+}
+
+// fallibleCommit attempts to seal a block on demand, but may return an error.
+func (c *SimulatedBeacon) fallibleCommit() (common.Hash, error) {
 	withdrawals := c.withdrawals.pop(10)
 	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 		log.Warn("Error performing sealing work", "err", err)
+		return common.Hash{}, err
 	}
-	return c.eth.BlockChain().CurrentBlock().Hash()
+	return c.eth.BlockChain().CurrentBlock().Hash(), nil
 }
 
 // Rollback un-sends previously added transactions.
