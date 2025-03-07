@@ -1565,11 +1565,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		cache   = ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
 		handles = MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name))
 	)
-	name := "chaindata"
-	if ctx.String(SyncModeFlag.Name) == "light" {
-		name = "lightchaindata"
-	}
-	chainDb, err := stack.OpenDatabase(name, cache, handles, "", readonly)
+	chainDb, err := stack.OpenDatabase("chaindata", cache, handles, "", readonly)
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
