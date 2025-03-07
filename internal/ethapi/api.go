@@ -1202,7 +1202,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}
 		if tracer.Equal(prevTracer) {
-			return accessList, res.UsedGas, res.Err, nil
+			return accessList.WithoutAuthorizations(b.ChainConfig().ChainID, msg.SetCodeAuthorizations), res.UsedGas, res.Err, nil
 		}
 		prevTracer = tracer
 	}
