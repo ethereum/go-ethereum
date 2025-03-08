@@ -210,8 +210,8 @@ func (t *UDPv4) ourEndpoint() v4wire.Endpoint {
 	return v4wire.NewEndpoint(addr, uint16(node.TCP()))
 }
 
-// Ping sends a ping message to the given node.
-func (t *UDPv4) Ping(n *enode.Node) error {
+// PingWithoutResp sends a ping message to the given node.
+func (t *UDPv4) PingWithoutResp(n *enode.Node) error {
 	_, err := t.ping(n)
 	return err
 }
