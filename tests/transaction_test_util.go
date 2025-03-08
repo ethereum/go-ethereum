@@ -18,11 +18,11 @@ package tests
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -69,7 +69,7 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 	if err := tt.validate(); err != nil {
 		return err
 	}
-	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, isHomestead, isIstanbul, isShanghai bool) (sender common.Address, hash common.Hash, requiredGas uint64, err error) {
+	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, rules *params.Rules) (sender common.Address, hash common.Hash, requiredGas uint64, err error) {
 		tx := new(types.Transaction)
 		if err = tx.UnmarshalBinary(rlpData); err != nil {
 			return
@@ -79,7 +79,7 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 			return
 		}
 		// Intrinsic gas
-		requiredGas, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, isHomestead, isIstanbul, isShanghai)
+		requiredGas, err = tx.IntrinsicGas(rules)
 		if err != nil {
 			return
 		}
@@ -90,31 +90,32 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		return sender, hash, requiredGas, nil
 	}
 	for _, testcase := range []struct {
-		name        string
-		signer      types.Signer
-		fork        *ttFork
-		isHomestead bool
-		isIstanbul  bool
-		isShanghai  bool
+		name   string
+		signer types.Signer
+		fork   *ttFork
 	}{
-		{"Frontier", types.FrontierSigner{}, tt.Result["Frontier"], false, false, false},
-		{"Homestead", types.HomesteadSigner{}, tt.Result["Homestead"], true, false, false},
-		{"EIP150", types.HomesteadSigner{}, tt.Result["EIP150"], true, false, false},
-		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.Result["EIP158"], true, false, false},
-		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Result["Byzantium"], true, false, false},
-		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Result["Constantinople"], true, false, false},
-		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Result["Istanbul"], true, true, false},
-		{"Berlin", types.NewEIP2930Signer(config.ChainID), tt.Result["Berlin"], true, true, false},
-		{"London", types.NewLondonSigner(config.ChainID), tt.Result["London"], true, true, false},
-		{"Paris", types.NewLondonSigner(config.ChainID), tt.Result["Paris"], true, true, false},
-		{"Shanghai", types.NewLondonSigner(config.ChainID), tt.Result["Shanghai"], true, true, true},
-		{"Cancun", types.NewCancunSigner(config.ChainID), tt.Result["Cancun"], true, true, true},
-		{"Prague", types.NewPragueSigner(config.ChainID), tt.Result["Prague"], true, true, true},
+		{"Frontier", types.FrontierSigner{}, tt.Result["Frontier"]},
+		{"Homestead", types.HomesteadSigner{}, tt.Result["Homestead"]},
+		{"EIP150", types.HomesteadSigner{}, tt.Result["EIP150"]},
+		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.Result["EIP158"]},
+		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Result["Byzantium"]},
+		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Result["Constantinople"]},
+		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Result["Istanbul"]},
+		{"Berlin", types.NewEIP2930Signer(config.ChainID), tt.Result["Berlin"]},
+		{"London", types.NewLondonSigner(config.ChainID), tt.Result["London"]},
+		{"Paris", types.NewLondonSigner(config.ChainID), tt.Result["Paris"]},
+		{"Shanghai", types.NewLondonSigner(config.ChainID), tt.Result["Shanghai"]},
+		{"Cancun", types.NewCancunSigner(config.ChainID), tt.Result["Cancun"]},
+		{"Prague", types.NewPragueSigner(config.ChainID), tt.Result["Prague"]},
 	} {
 		if testcase.fork == nil {
 			continue
 		}
-		sender, hash, gas, err := validateTx(tt.Txbytes, testcase.signer, testcase.isHomestead, testcase.isIstanbul, testcase.isShanghai)
+		rules, err := getRules(config, testcase.name)
+		if err != nil {
+			return err
+		}
+		sender, hash, gas, err := validateTx(tt.Txbytes, testcase.signer, &rules)
 		if err != nil {
 			if testcase.fork.Hash != nil {
 				return fmt.Errorf("unexpected error: %v", err)
@@ -138,4 +139,36 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		}
 	}
 	return nil
+}
+
+func getRules(config *params.ChainConfig, fork string) (params.Rules, error) {
+	switch fork {
+	case "Frontier":
+		return config.Rules(new(big.Int), false, 0), nil
+	case "Homestead":
+		return config.Rules(config.HomesteadBlock, false, 0), nil
+	case "EIP150":
+		return config.Rules(config.EIP150Block, false, 0), nil
+	case "EIP158":
+		return config.Rules(config.EIP158Block, false, 0), nil
+	case "Byzantium":
+		return config.Rules(config.ByzantiumBlock, false, 0), nil
+	case "Constantinople":
+		return config.Rules(config.ConstantinopleBlock, false, 0), nil
+	case "Istanbul":
+		return config.Rules(config.IstanbulBlock, false, 0), nil
+	case "Berlin":
+		return config.Rules(config.BerlinBlock, false, 0), nil
+	case "London":
+		return config.Rules(config.LondonBlock, false, 0), nil
+	case "Paris":
+		return config.Rules(config.LondonBlock, true, 0), nil
+	case "Shanghai":
+		return config.Rules(config.LondonBlock, true, *config.ShanghaiTime), nil
+	case "Cancun":
+		return config.Rules(config.LondonBlock, true, *config.CancunTime), nil
+	case "Prague":
+		return config.Rules(config.LondonBlock, true, *config.PragueTime), nil
+	}
+	return params.Rules{}, UnsupportedForkError{Name: fork}
 }
