@@ -27,6 +27,11 @@ import (
 // ReadPreimage retrieves a single preimage of the provided hash.
 func ReadPreimage(db ethdb.KeyValueReader, hash common.Hash) []byte {
 	data, _ := db.Get(preimageKey(hash))
+	if len(data) == 0 {
+		preimageMissCounter.Inc(1)
+	} else {
+		preimageHitsCounter.Inc(1)
+	}
 	return data
 }
 
@@ -38,7 +43,6 @@ func WritePreimages(db ethdb.KeyValueWriter, preimages map[common.Hash][]byte) {
 		}
 	}
 	preimageCounter.Inc(int64(len(preimages)))
-	preimageHitCounter.Inc(int64(len(preimages)))
 }
 
 // ReadCode retrieves the contract code of the provided code hash.
