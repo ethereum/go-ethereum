@@ -366,7 +366,6 @@ func GetSigningTxCount(c *XDPoS.XDPoS, chain consensus.ChainReader, header *type
 						filterMap[addr] = struct{}{}
 					}
 					// find top candidates
-					// maxMNP := currentConfig.MaxMasternodes + currentConfig.MaxProtectorNodes
 					protector := []common.Address{}
 					observer := []common.Address{}
 					for _, node := range ms {
