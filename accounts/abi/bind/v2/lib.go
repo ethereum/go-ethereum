@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package bind implements utilities for interacting with Solidity contracts
-// via their Go bindings generated from the abigen command.  It includes
-// methods for calling/transacting, filtering chain history for
-// specific custom Solidity event types, creating event subscriptions to
-// monitor the chain for event occurrences.
+// Package bind implements utilities for interacting with Solidity contracts.
+// This is the 'runtime' for contract bindings generated with the abigen command.
+// It includes methods for calling/transacting, filtering chain history for
+// specific custom Solidity event types, and creating event subscriptions to monitor the
+// chain for event occurrences.
 //
 // Two methods for contract deployment are provided:
-//   - DeployContract is intended to be used for deployment of a single contract.
-//   - LinkAndDeploy is intended to be used for the deployment of multiple
+//   - [DeployContract] is intended to be used for deployment of a single contract.
+//   - [LinkAndDeploy] is intended for the deployment of multiple
 //     contracts, potentially with library dependencies.
 package bind
 
