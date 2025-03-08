@@ -47,7 +47,7 @@ type ContractEvent interface {
 // provided filter opts are invalid or the backend is closed.
 //
 // FilterEvents is intended to be used with contract event unpack methods in
-// bindings generated with the abigen --v2 flag.  In this case, it should be
+// bindings generated with the abigen --v2 flag. It should be
 // preferred over BoundContract.FilterLogs.
 func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack func(*types.Log) (*Ev, error), topics ...[]any) (*EventIterator[Ev], error) {
 	var e Ev
@@ -67,7 +67,7 @@ func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack f
 // invalid or the backend is closed.
 //
 // WatchEvents is intended to be used with contract event unpack methods in
-// bindings generated with the abigen --v2 flag.  In this case, it should be
+// bindings generated with the abigen --v2 flag. It should be
 // preferred over BoundContract.WatchLogs.
 func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack func(*types.Log) (*Ev, error), sink chan<- *Ev, topics ...[]any) (event.Subscription, error) {
 	var e Ev
@@ -178,8 +178,8 @@ func (it *EventIterator[T]) Close() error {
 // doesn't revert.
 //
 // Call is intended to be used with contract method unpack methods in
-// bindings generated with the abigen --v2 flag.  In this case, it should be
-// preferred over BoundContract.Call.
+// bindings generated with the abigen --v2 flag. It should be
+// preferred over BoundContract.Call
 func Call[T any](c *BoundContract, opts *CallOpts, calldata []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
 	packedOutput, err := c.CallRaw(opts, calldata)
@@ -216,7 +216,7 @@ func Transact(c *BoundContract, opt *TransactOpts, data []byte) (*types.Transact
 // if the creation failed.
 //
 // To initiate the deployment of multiple contracts with one method call, see the
-// LinkAndDeploy method.
+// [LinkAndDeploy] method.
 func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend, constructorInput []byte) (common.Address, *types.Transaction, error) {
 	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
 
