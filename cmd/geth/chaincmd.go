@@ -50,7 +50,7 @@ var (
 		ArgsUsage: "<genesisPath>",
 		Flags: slices.Concat([]cli.Flag{
 			utils.CachePreimagesFlag,
-			utils.OverrideCancun,
+			utils.OverridePrague,
 			utils.OverrideVerkle,
 		}, utils.DatabaseFlags),
 		Description: `
@@ -212,9 +212,9 @@ func initGenesis(ctx *cli.Context) error {
 	defer stack.Close()
 
 	var overrides core.ChainOverrides
-	if ctx.IsSet(utils.OverrideCancun.Name) {
-		v := ctx.Uint64(utils.OverrideCancun.Name)
-		overrides.OverrideCancun = &v
+	if ctx.IsSet(utils.OverridePrague.Name) {
+		v := ctx.Uint64(utils.OverridePrague.Name)
+		overrides.OverridePrague = &v
 	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
