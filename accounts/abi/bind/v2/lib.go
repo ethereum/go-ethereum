@@ -14,6 +14,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+// Package bind implements utilities for interacting with Solidity contracts
+// via their Go bindings generated from the abigen command.  It includes
+// methods for calling/transacting, filtering chain history for
+// specific custom Solidity event types, creating event subscriptions to
+// monitor the chain for event occurrences.
+//
+// Two methods for contract deployment are provided:
+//   - DeployContract is intended to be used for deployment of a single contract.
+//   - LinkAndDeploy is intended to be used for the deployment of multiple
+//     contracts, potentially with library dependencies.
 package bind
 
 import (
@@ -199,6 +209,9 @@ func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend
 
 // DefaultDeployer returns a DeployFn that signs and submits creation transactions
 // using the given signer.
+//
+// The DeployFn returned by DefaultDeployer should be used by LinkAndDeploy in
+// almost all cases, unless a custom DeployFn implementation is needed.
 func DefaultDeployer(opts *TransactOpts, backend ContractBackend) DeployFn {
 	return func(input []byte, deployer []byte) (common.Address, *types.Transaction, error) {
 		addr, tx, err := DeployContract(opts, deployer, backend, input)
