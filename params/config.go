@@ -888,7 +888,7 @@ func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 	case fork == forks.Shanghai:
 		return c.ShanghaiTime
 	default:
-		panic("unknown timestamp fork requested")
+		return nil
 	}
 }
 

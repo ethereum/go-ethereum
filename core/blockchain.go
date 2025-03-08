@@ -2471,10 +2471,11 @@ func (bc *BlockChain) reportBlock(block *types.Block, res *ProcessResult, err er
 func (bc *BlockChain) logForkReadiness(block *types.Block) {
 	c := bc.Config()
 	current, last := c.LatestFork(block.Time()), c.LatestFork(math.MaxUint64)
-	var at time.Time
-	if t := c.Timestamp(last); t != nil {
-		at = time.Unix(int64(*t), 0)
+	t := c.Timestamp(last)
+	if t == nil {
+		return
 	}
+	at := time.Unix(int64(*t), 0)
 	if current < last && time.Now().After(bc.lastForkReadyAlert.Add(forkReadyInterval)) {
 		log.Info("Ready for fork activation", "fork", last, "date", at.Format(time.RFC822),
 			"remaining", time.Until(at).Round(time.Second), "timestamp", at.Unix())
