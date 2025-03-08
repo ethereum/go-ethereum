@@ -45,6 +45,10 @@ type ContractEvent interface {
 // FilterEvents filters a historical block range for instances of emission of a
 // specific event type from a specified contract.  It returns an error if the
 // provided filter opts are invalid or the backend is closed.
+//
+// FilterEvents is intended to be used with contract event unpack methods in
+// bindings generated with the abigen --v2 flag.  In this case, it should be
+// preferred over BoundContract.FilterLogs.
 func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack func(*types.Log) (*Ev, error), topics ...[]any) (*EventIterator[Ev], error) {
 	var e Ev
 	logs, sub, err := c.FilterLogs(opts, e.ContractEventName(), topics...)
@@ -61,6 +65,10 @@ func FilterEvents[Ev ContractEvent](c *BoundContract, opts *FilterOpts, unpack f
 //
 // WatchEvents returns a subscription or an error if the provided WatchOpts are
 // invalid or the backend is closed.
+//
+// WatchEvents is intended to be used with contract event unpack methods in
+// bindings generated with the abigen --v2 flag.  In this case, it should be
+// preferred over BoundContract.WatchLogs.
 func WatchEvents[Ev ContractEvent](c *BoundContract, opts *WatchOpts, unpack func(*types.Log) (*Ev, error), sink chan<- *Ev, topics ...[]any) (event.Subscription, error) {
 	var e Ev
 	logs, sub, err := c.WatchLogs(opts, e.ContractEventName(), topics...)
@@ -168,6 +176,10 @@ func (it *EventIterator[T]) Close() error {
 // To call a function that doesn't return any output, pass nil as the unpack
 // function. This can be useful if you just want to check that the function
 // doesn't revert.
+//
+// Call is intended to be used with contract method unpack methods in
+// bindings generated with the abigen --v2 flag.  In this case, it should be
+// preferred over BoundContract.Call.
 func Call[T any](c *BoundContract, opts *CallOpts, calldata []byte, unpack func([]byte) (T, error)) (T, error) {
 	var defaultResult T
 	packedOutput, err := c.CallRaw(opts, calldata)
@@ -187,16 +199,24 @@ func Call[T any](c *BoundContract, opts *CallOpts, calldata []byte, unpack func(
 	return res, err
 }
 
-// Transact creates and submits a transaction to a contract with optional input data.
+// Transact creates and submits a transaction to a contract with optional input
+// data.
+//
+// Transact is identical to BoundContract.RawTransact, and is provided as a
+// package-level method so that interactions with contracts whose bindings were
+// generated with the abigen --v2 flag are consistent (they do not require
+// calling methods on the BoundContract instance).
 func Transact(c *BoundContract, opt *TransactOpts, data []byte) (*types.Transaction, error) {
-	addr := c.address
-	return c.transact(opt, &addr, data)
+	return c.RawTransact(opt, data)
 }
 
 // DeployContract creates and submits a deployment transaction based on the
 // deployer bytecode and optional ABI-encoded constructor input.  It returns
 // the address and creation transaction of the pending contract, or an error
 // if the creation failed.
+//
+// To initiate the deployment of multiple contracts with one method call, see the
+// LinkAndDeploy method.
 func DeployContract(opts *TransactOpts, bytecode []byte, backend ContractBackend, constructorInput []byte) (common.Address, *types.Transaction, error) {
 	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
 
