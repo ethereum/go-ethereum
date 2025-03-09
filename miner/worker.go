@@ -486,6 +486,7 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
 	for i, tx := range block.Transactions() {
 		minerFee, _ := tx.EffectiveGasTip(block.BaseFee())
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
+		// TODO (MariusVanDerWijden) add blob fees
 	}
 	return feesWei
 }
