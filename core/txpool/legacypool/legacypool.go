@@ -633,10 +633,21 @@ func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
 			return ErrInflightTxLimitReached
 		}
 	}
-	// Authorities cannot conflict with any pending or queued transactions.
+	// For symmetry, Allow at most one in-flight tx for any authority with a pending
+	// transaction
 	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
 		for _, auth := range auths {
-			if pool.pending[auth] != nil || pool.queue[auth] != nil {
+			var count int
+			pending := pool.pending[auth]
+
+			if pending != nil {
+				count += pending.Len()
+			}
+			queue := pool.queue[auth]
+			if queue != nil {
+				count += queue.Len()
+			}
+			if count > 1 {
 				return ErrAuthorityReserved
 			}
 		}
