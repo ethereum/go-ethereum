@@ -52,22 +52,37 @@ func NewReservationTracker() *ReservationTracker {
 
 // NewHandle creates a named handle on the ReservationTracker. The handle
 // identifies the subpool so ownership of reservations can be determined.
-func (r *ReservationTracker) NewHandle(id int) *Reserver {
-	return &Reserver{r, id}
+func (r *ReservationTracker) NewHandle(id int) *ReserverHandle {
+	return &ReserverHandle{r, id}
 }
 
-// Reserver is a named handle on ReservationTracker. It is held by subpools to
+// Reserver is an interface for creating and releasing owned reservations in the
+// ReservationTracker struct, which is shared between subpools.
+type Reserver interface {
+	// Hold attempts to reserve the specified account address for the given pool.
+	// Returns an error if the account is already reserved.
+	Hold(addr common.Address) error
+
+	// Release attempts to release the reservation for the specified account.
+	// Returns an error if the address is not reserved or is reserved by another pool.
+	Release(addr common.Address) error
+
+	// Has returns a flag indicating if the address has been reserved by another
+	// pool or not.
+	Has(address common.Address) bool
+}
+
+// ReserverHandle is a named handle on ReservationTracker. It is held by subpools to
 // make reservations for accounts it is tracking. The id is used to determine
 // which pool owns an address and disallows non-owners to hold or release
 // addresses it doesn't own.
-type Reserver struct {
+type ReserverHandle struct {
 	tracker *ReservationTracker
 	id      int
 }
 
-// Hold attempts to reserve the specified account address for the given pool.
-// Returns an error if the account is already reserved.
-func (h *Reserver) Hold(addr common.Address) error {
+// Hold implements the Reserver interface.
+func (h *ReserverHandle) Hold(addr common.Address) error {
 	h.tracker.lock.Lock()
 	defer h.tracker.lock.Unlock()
 
@@ -89,9 +104,8 @@ func (h *Reserver) Hold(addr common.Address) error {
 	return nil
 }
 
-// Release attempts to release the reservation for the specified account.
-// Returns an error if the address is not reserved or is reserved by another pool.
-func (h *Reserver) Release(addr common.Address) error {
+// Release implements the Reserver interface.
+func (h *ReserverHandle) Release(addr common.Address) error {
 	h.tracker.lock.Lock()
 	defer h.tracker.lock.Unlock()
 
@@ -114,11 +128,11 @@ func (h *Reserver) Release(addr common.Address) error {
 	return nil
 }
 
-// Has returns a flag indicating if the address has been reserved or not.
-func (h *Reserver) Has(address common.Address) bool {
+// Has implements the Reserver interface.
+func (h *ReserverHandle) Has(address common.Address) bool {
 	h.tracker.lock.RLock()
 	defer h.tracker.lock.RUnlock()
 
-	_, exists := h.tracker.accounts[address]
-	return exists
+	id, exists := h.tracker.accounts[address]
+	return exists && id != h.id
 }
