@@ -44,46 +44,6 @@ func (al AccessList) StorageKeys() int {
 	return sum
 }
 
-// WithoutAuthorizations removes authorities of valid authorizations from the resulting array,
-// because such addresses will be added to the access list automatically, so there is no reason to return them
-// (exception if they have not empty storage keys list).
-func (al AccessList) WithoutAuthorizations(chainID *big.Int, authorizations []SetCodeAuthorization) AccessList {
-	validAuthorities := make(map[common.Address]struct{}, len(authorizations))
-
-	for _, auth := range authorizations {
-		// According to stateTransition.applyAuthorization(),
-		// authority address will be added to the access list if the next three conditions are satisfied.
-		if !auth.ChainID.IsZero() && auth.ChainID.CmpBig(chainID) != 0 {
-			continue
-		}
-
-		if auth.Nonce+1 < auth.Nonce {
-			continue
-		}
-
-		authority, err := auth.Authority()
-		if err != nil {
-			continue
-		}
-
-		validAuthorities[authority] = struct{}{}
-	}
-
-	if len(validAuthorities) == 0 {
-		return al
-	}
-
-	output := make(AccessList, 0, len(validAuthorities))
-	for _, accessTuple := range al {
-		// Keep this address if it is not present in valid authorities map, or if it contains not empty storage keys.
-		if _, ok := validAuthorities[accessTuple.Address]; !ok || len(accessTuple.StorageKeys) != 0 {
-			output = append(output, accessTuple)
-		}
-	}
-
-	return output
-}
-
 // AccessListTx is the data of EIP-2930 access list transactions.
 type AccessListTx struct {
 	ChainID    *big.Int        // destination chain ID
