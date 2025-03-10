@@ -88,7 +88,7 @@ type errTxPoolTerminated struct {
 
 // Error returns the message from the wrapped error.
 func (t *errTxPoolTerminated) Error() string {
-	return t.error.Error()
+	return fmt.Errorf("failed to sync txpool: %w", t.error).Error()
 }
 
 // SimulatedBeacon drives an Ethereum instance as if it were a real beacon
@@ -192,7 +192,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	// behavior, the pool will be explicitly blocked on its reset before
 	// continuing to the block production below.
 	if err := c.eth.APIBackend.TxPool().Sync(); err != nil {
-		return &errTxPoolTerminated{fmt.Errorf("failed to sync txpool: %w", err)}
+		return &errTxPoolTerminated{err}
 	}
 
 	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
