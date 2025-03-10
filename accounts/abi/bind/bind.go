@@ -318,6 +318,10 @@ func bindBasicTypeGo(kind abi.Type) string {
 		switch parts[2] {
 		case "8", "16", "32", "64":
 			return fmt.Sprintf("%sint%s", parts[1], parts[2])
+		case "24":
+			return fmt.Sprintf("%sint32", parts[1])
+		case "40", "48", "56":
+			return fmt.Sprintf("%sint64", parts[1])
 		}
 		return "*big.Int"
 	case abi.FixedBytesTy:

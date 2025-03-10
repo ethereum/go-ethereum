@@ -1000,6 +1000,17 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 			expectValue: uint16(math.MaxUint16),
 		},
 		{
+			decodeType: "uint24",
+			inputValue: big.NewInt(1 << 24),
+			err:        errBadUint24,
+		},
+		{
+			decodeType:  "uint24",
+			inputValue:  big.NewInt(1<<24 - 1),
+			err:         nil,
+			expectValue: uint32(1<<24 - 1),
+		},
+		{
 			decodeType: "uint32",
 			inputValue: big.NewInt(math.MaxUint32 + 1),
 			err:        errBadUint32,
@@ -1009,6 +1020,39 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 			inputValue:  big.NewInt(math.MaxUint32),
 			err:         nil,
 			expectValue: uint32(math.MaxUint32),
+		},
+		{
+			decodeType: "uint40",
+			inputValue: big.NewInt(1 << 40),
+			err:        errBadUint40,
+		},
+		{
+			decodeType:  "uint40",
+			inputValue:  big.NewInt(1<<40 - 1),
+			err:         nil,
+			expectValue: uint64(1<<40 - 1),
+		},
+		{
+			decodeType: "uint48",
+			inputValue: big.NewInt(1 << 48),
+			err:        errBadUint48,
+		},
+		{
+			decodeType:  "uint48",
+			inputValue:  big.NewInt(1<<48 - 1),
+			err:         nil,
+			expectValue: uint64(1<<48 - 1),
+		},
+		{
+			decodeType: "uint56",
+			inputValue: big.NewInt(1 << 56),
+			err:        errBadUint56,
+		},
+		{
+			decodeType:  "uint56",
+			inputValue:  big.NewInt(1<<56 - 1),
+			err:         nil,
+			expectValue: uint64(1<<56 - 1),
 		},
 		{
 			decodeType: "uint64",
@@ -1060,6 +1104,28 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 			expectValue: int16(math.MaxInt16),
 		},
 		{
+			decodeType: "int24",
+			inputValue: big.NewInt(-1<<23 - 1),
+			err:        errBadInt24,
+		},
+		{
+			decodeType: "int24",
+			inputValue: big.NewInt(1<<23 - 1 + 1),
+			err:        errBadInt24,
+		},
+		{
+			decodeType:  "int24",
+			inputValue:  big.NewInt(-1 << 23),
+			err:         nil,
+			expectValue: int32(-1 << 23),
+		},
+		{
+			decodeType:  "int24",
+			inputValue:  big.NewInt(1<<23 - 1),
+			err:         nil,
+			expectValue: int32(1<<23 - 1),
+		},
+		{
 			decodeType: "int32",
 			inputValue: big.NewInt(math.MaxInt32 + 1),
 			err:        errBadInt32,
@@ -1074,6 +1140,72 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 			inputValue:  big.NewInt(math.MaxInt32),
 			err:         nil,
 			expectValue: int32(math.MaxInt32),
+		},
+		{
+			decodeType: "int40",
+			inputValue: big.NewInt(-1<<39 - 1),
+			err:        errBadInt40,
+		},
+		{
+			decodeType: "int40",
+			inputValue: big.NewInt(1<<39 - 1 + 1),
+			err:        errBadInt40,
+		},
+		{
+			decodeType:  "int40",
+			inputValue:  big.NewInt(-1 << 39),
+			err:         nil,
+			expectValue: int64(-1 << 39),
+		},
+		{
+			decodeType:  "int40",
+			inputValue:  big.NewInt(1<<39 - 1),
+			err:         nil,
+			expectValue: int64(1<<39 - 1),
+		},
+		{
+			decodeType: "int48",
+			inputValue: big.NewInt(-1<<47 - 1),
+			err:        errBadInt48,
+		},
+		{
+			decodeType: "int48",
+			inputValue: big.NewInt(1<<47 - 1 + 1),
+			err:        errBadInt48,
+		},
+		{
+			decodeType:  "int48",
+			inputValue:  big.NewInt(-1 << 47),
+			err:         nil,
+			expectValue: int64(-1 << 47),
+		},
+		{
+			decodeType:  "int48",
+			inputValue:  big.NewInt(1<<47 - 1),
+			err:         nil,
+			expectValue: int64(1<<47 - 1),
+		},
+		{
+			decodeType: "int56",
+			inputValue: big.NewInt(-1<<55 - 1),
+			err:        errBadInt56,
+		},
+		{
+			decodeType: "int56",
+			inputValue: big.NewInt(1<<55 - 1 + 1),
+			err:        errBadInt56,
+		},
+		{
+			decodeType:  "int56",
+			inputValue:  big.NewInt(-1 << 55),
+			err:         nil,
+			expectValue: int64(-1 << 55),
+		},
+		{
+			decodeType:  "int56",
+			inputValue:  big.NewInt(1<<55 - 1),
+			err:         nil,
+			expectValue: int64(1<<55 - 1),
 		},
 		{
 			decodeType: "int64",

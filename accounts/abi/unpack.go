@@ -51,11 +51,31 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 				return nil, errBadUint16
 			}
 			return uint16(u64), nil
+		case 24:
+			if !isu64 || u64 > 1<<24-1 {
+				return nil, errBadUint24
+			}
+			return uint32(u64), nil
 		case 32:
 			if !isu64 || u64 > math.MaxUint32 {
 				return nil, errBadUint32
 			}
 			return uint32(u64), nil
+		case 40:
+			if !isu64 || u64 > 1<<40-1 {
+				return nil, errBadUint40
+			}
+			return u64, nil
+		case 48:
+			if !isu64 || u64 > 1<<48-1 {
+				return nil, errBadUint48
+			}
+			return u64, nil
+		case 56:
+			if !isu64 || u64 > 1<<56-1 {
+				return nil, errBadUint56
+			}
+			return u64, nil
 		case 64:
 			if !isu64 {
 				return nil, errBadUint64
@@ -87,19 +107,38 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 			return nil, errBadInt16
 		}
 		return int16(i64), nil
+	case 24:
+		if !isi64 || i64 < -1<<23 || i64 > 1<<23-1 {
+			return nil, errBadInt24
+		}
+		return int32(i64), nil
 	case 32:
 		if !isi64 || i64 < math.MinInt32 || i64 > math.MaxInt32 {
 			return nil, errBadInt32
 		}
 		return int32(i64), nil
+	case 40:
+		if !isi64 || i64 < -1<<39 || i64 > 1<<39-1 {
+			return nil, errBadInt40
+		}
+		return i64, nil
+	case 48:
+		if !isi64 || i64 < -1<<47 || i64 > 1<<47-1 {
+			return nil, errBadInt48
+		}
+		return i64, nil
+	case 56:
+		if !isi64 || i64 < -1<<55 || i64 > 1<<55-1 {
+			return nil, errBadInt56
+		}
+		return i64, nil
 	case 64:
 		if !isi64 {
 			return nil, errBadInt64
 		}
 		return i64, nil
 	default:
-		// the only case left for integer is int256
-
+		// The only remaining case for an integer is a range where int64 > x <= int256
 		return ret, nil
 	}
 }
