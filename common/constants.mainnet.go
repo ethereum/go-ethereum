@@ -31,6 +31,7 @@ var MaintnetConstant = constant{
 	eip1559Block:                  big.NewInt(9999999999),
 	cancunBlock:                   big.NewInt(9999999999),
 	tipUpgradeReward:              big.NewInt(9999999999),
+	tipEpochHalving:               big.NewInt(9999999999),
 
 	trc21IssuerSMCTestNet: HexToAddress("0x0E2C88753131CE01c7551B726b28BFD04e44003F"),
 	trc21IssuerSMC:        HexToAddress("0x8c0faeb5C6bEd2129b8674F262Fd45c4e9468bee"),

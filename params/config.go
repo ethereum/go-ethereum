@@ -764,6 +764,10 @@ func (c *ChainConfig) IsTIPUpgradeReward(num *big.Int) bool {
 	return isForked(common.TIPUpgradeReward, num)
 }
 
+func (c *ChainConfig) IsTIPEpochHalving(num *big.Int) bool {
+	return isForked(common.TIPEpochHalving, num)
+}
+
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
 //
 // The returned GasTable's fields shouldn't, under any circumstances, be changed.

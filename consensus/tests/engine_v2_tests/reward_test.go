@@ -10,6 +10,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth/hooks"
+	"github.com/XinFinOrg/XDPoSChain/eth/util"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/stretchr/testify/assert"
 )
@@ -296,4 +297,58 @@ func TestHookRewardAfterUpgrade(t *testing.T) {
 		assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
 	}
 	common.TIPUpgradeReward = backup
+}
+
+func TestRewardHalvingVanishing(t *testing.T) {
+	billion := big.NewInt(1000000000)
+	epochRewardTotal := big.NewInt(16000)
+	epochRewardTotal.Mul(epochRewardTotal, billion)
+	epochReward1 := big.NewInt(10000)
+	epochReward1.Mul(epochReward1, billion)
+	epochReward2 := big.NewInt(4000)
+	epochReward2.Mul(epochReward2, billion)
+	epochReward3 := big.NewInt(2000)
+	epochReward3.Mul(epochReward3, billion)
+	// 45 Billion - 39 Billion XDC (1 XDC = 10^9 wei)
+	halvingSupply := big.NewInt(6000000000)
+	halvingSupply.Mul(halvingSupply, billion)
+	sum := big.NewInt(0)
+	iterMax := uint64(30000000)
+	for i := uint64(0); i < iterMax; i++ {
+		r := new(big.Int).Add(util.RewardHalving(epochReward1, epochRewardTotal, halvingSupply, i), util.RewardHalving(epochReward2, epochRewardTotal, halvingSupply, i))
+		r.Add(r, util.RewardHalving(epochReward3, epochRewardTotal, halvingSupply, i))
+		if r.BitLen() == 0 {
+			t.Log("reward be 0 at i=", i) // reward be 0 at i= 11225088, wich is more than 200 years in the future
+			break
+		}
+		sum.Add(sum, r)
+		if i == iterMax-1 {
+			t.Fatal("reward should be 0 at end")
+		}
+	}
+	t.Log("sum", sum) // sum 5999999999982635022, which is less than total, and never reach totoal
+	assert.True(t, sum.Cmp(halvingSupply) < 0)
+}
+
+func TestRewardHalvingSplit(t *testing.T) {
+	billion := big.NewInt(1000000000)
+	epochRewardTotal := big.NewInt(16000)
+	epochRewardTotal.Mul(epochRewardTotal, billion)
+	epochReward1 := big.NewInt(10000)
+	epochReward1.Mul(epochReward1, billion)
+	epochReward2 := big.NewInt(4000)
+	epochReward2.Mul(epochReward2, billion)
+	epochReward3 := big.NewInt(2000)
+	epochReward3.Mul(epochReward3, billion)
+	// 45 Billion - 39 Billion XDC (1 XDC = 10^9 wei)
+	halvingSupply := big.NewInt(6000000000)
+	halvingSupply.Mul(halvingSupply, billion)
+	i := uint64(50000) // a random number suffice
+	r1 := util.RewardHalving(epochReward1, epochRewardTotal, halvingSupply, i)
+	r2 := util.RewardHalving(epochReward2, epochRewardTotal, halvingSupply, i)
+	r3 := util.RewardHalving(epochReward3, epochRewardTotal, halvingSupply, i)
+	t.Log(r1, r2, r3)
+
+	assert.Equal(t, int64(5), r1.Div(r1, r3).Int64()) // since epochReward1/epochReward3=5
+	assert.Equal(t, int64(2), r2.Div(r2, r3).Int64()) // since epochReward2/epochReward3=2
 }

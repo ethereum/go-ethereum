@@ -205,98 +205,80 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 		}
 		rewardsMap["signers"] = signers[MasterNodeBeneficiary]
 
-		rewardSigners := make(map[common.Address]*big.Int)
-		rewardSignersProtector := make(map[common.Address]*big.Int)
-		rewardSignersObserver := make(map[common.Address]*big.Int)
 		if !chain.Config().IsTIPUpgradeReward(header.Number) {
 			// Get reward inflation.
-			chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
-			chainReward = util.RewardInflation(chain, chainReward, number, common.BlocksPerYear)
-			rewardSigners, err = CalculateRewardForSigner(chainReward, signers[MasterNodeBeneficiary])
+			originalReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
+			chainReward := util.RewardInflation(chain, originalReward, number, common.BlocksPerYear)
+			rewardSigners, err := CalculateRewardForSigner(chainReward, signers[MasterNodeBeneficiary])
 			if err != nil {
 				log.Error("[HookReward] Fail to calculate reward for masternode", "error", err)
 				return nil, err
 			}
+			// Add reward for coin holders.
+			voterResults := make(map[common.Address]interface{})
+			for signer, calcReward := range rewardSigners {
+				rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
+				if err != nil {
+					log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
+					return nil, err
+				}
+				if len(rewards) > 0 {
+					for holder, reward := range rewards {
+						stateBlock.AddBalance(holder, reward)
+					}
+				}
+				voterResults[signer] = rewards
+			}
+			rewardsMap["rewards"] = voterResults
 		} else {
 			rewardsMap["signersProtector"] = signers[ProtectorNodeBeneficiary]
 			rewardsMap["signersObserver"] = signers[ObserverNodeBeneficiary]
-			// Masternode rewards
-			chainReward := new(big.Int).Mul(new(big.Int).SetUint64(currentConfig.MasternodeReward), new(big.Int).SetUint64(params.Ether))
-			chainReward = util.RewardInflation(chain, chainReward, number, common.BlocksPerYear)
-			rewardSigners, err = CalculateRewardForSigner(chainReward, signers[MasterNodeBeneficiary])
-			if err != nil {
-				log.Error("[HookReward] Fail to calculate reward for masternode", "error", err)
-				return nil, err
+			epochRewardTotal := new(big.Int).SetUint64(currentConfig.MasternodeReward + currentConfig.ProtectorReward + currentConfig.ObserverReward)
+			type rewardWithType struct {
+				r   uint64
+				t   Beneficiary
+				key string
 			}
-
-			// Protector rewards
-			chainReward = new(big.Int).Mul(new(big.Int).SetUint64(currentConfig.ProtectorReward), new(big.Int).SetUint64(params.Ether))
-			chainReward = util.RewardInflation(chain, chainReward, number, common.BlocksPerYear)
-			rewardSignersProtector, err = CalculateRewardForSigner(chainReward, signers[ProtectorNodeBeneficiary])
-			if err != nil {
-				log.Error("[HookReward] Fail to calculate reward for protector", "error", err)
-				return nil, err
-			}
-
-			// Observer rewards
-			chainReward = new(big.Int).Mul(new(big.Int).SetUint64(currentConfig.ObserverReward), new(big.Int).SetUint64(params.Ether))
-			chainReward = util.RewardInflation(chain, chainReward, number, common.BlocksPerYear)
-			rewardSignersObserver, err = CalculateRewardForSigner(chainReward, signers[ObserverNodeBeneficiary])
-			if err != nil {
-				log.Error("[HookReward] Fail to calculate reward for observer", "error", err)
-				return nil, err
-			}
-		}
-		// Add reward for coin holders.
-		voterResults := make(map[common.Address]interface{})
-		for signer, calcReward := range rewardSigners {
-			rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
-			if err != nil {
-				log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
-				return nil, err
-			}
-			if len(rewards) > 0 {
-				for holder, reward := range rewards {
-					stateBlock.AddBalance(holder, reward)
+			for _, rwt := range []rewardWithType{
+				{currentConfig.MasternodeReward, MasterNodeBeneficiary, "rewards"},
+				{currentConfig.ProtectorReward, ProtectorNodeBeneficiary, "rewardsProtector"},
+				{currentConfig.ObserverReward, ObserverNodeBeneficiary, "rewardsObserver"},
+			} {
+				originalReward := new(big.Int).Mul(new(big.Int).SetUint64(rwt.r), new(big.Int).SetUint64(params.Ether))
+				chainReward := new(big.Int)
+				if !chain.Config().IsTIPEpochHalving(header.Number) {
+					chainReward = util.RewardInflation(chain, originalReward, number, common.BlocksPerYear)
+				} else {
+					halvingSupply := big.NewInt(9000000000) // TODO use config.halvingSupply
+					_, epochNum, err := adaptor.EngineV2.IsEpochSwitch(header)
+					if err != nil {
+						return nil, err
+					}
+					epochSinceHalving := epochNum // TODO Minus config.epochHalvingOnset
+					chainReward = util.RewardHalving(originalReward, epochRewardTotal, halvingSupply, epochSinceHalving)
 				}
-			}
-			voterResults[signer] = rewards
-		}
-		rewardsMap["rewards"] = voterResults
-
-		voterResultsProtector := make(map[common.Address]interface{})
-		for signer, calcReward := range rewardSignersProtector {
-			rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
-			if err != nil {
-				log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
-				return nil, err
-			}
-			if len(rewards) > 0 {
-				for holder, reward := range rewards {
-					stateBlock.AddBalance(holder, reward)
+				rewardSigners, err := CalculateRewardForSigner(chainReward, signers[rwt.t])
+				if err != nil {
+					log.Error("[HookReward] Fail to calculate reward type 0 for masternode, 1 for protector, 2 for observer", "error", err, "type", rwt.t)
+					return nil, err
 				}
-			}
-			voterResultsProtector[signer] = rewards
-		}
-		if len(voterResultsProtector) > 0 {
-			rewardsMap["rewardsProtector"] = voterResultsProtector
-		}
-		voterResultsObserver := make(map[common.Address]interface{})
-		for signer, calcReward := range rewardSignersObserver {
-			rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
-			if err != nil {
-				log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
-				return nil, err
-			}
-			if len(rewards) > 0 {
-				for holder, reward := range rewards {
-					stateBlock.AddBalance(holder, reward)
+				// Add reward for coin holders.
+				voterResults := make(map[common.Address]interface{})
+				for signer, calcReward := range rewardSigners {
+					rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
+					if err != nil {
+						log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
+						return nil, err
+					}
+					if len(rewards) > 0 {
+						for holder, reward := range rewards {
+							stateBlock.AddBalance(holder, reward)
+						}
+					}
+					voterResults[signer] = rewards
 				}
+				rewardsMap[rwt.key] = voterResults
 			}
-			voterResultsObserver[signer] = rewards
-		}
-		if len(voterResultsObserver) > 0 {
-			rewardsMap["rewardsObserver"] = voterResultsObserver
 		}
 		log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 		return rewardsMap, nil
@@ -474,3 +456,30 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 
 	return resultSigners, nil
 }
+
+// func TestRewardBeZero(t *testing.T) {
+// 	billion := big.NewInt(1000000000)
+// 	epochRewardTotal := big.NewInt(16000)
+// 	epochRewardTotal.Mul(epochRewardTotal, billion)
+// 	epochReward1 := big.NewInt(10000)
+// 	epochReward1.Mul(epochReward1, billion)
+// 	epochReward2 := big.NewInt(4000)
+// 	epochReward2.Mul(epochReward2, billion)
+// 	epochReward3 := big.NewInt(2000)
+// 	epochReward3.Mul(epochReward3, billion)
+// 	// 45 Billion - 39 Billion XDC (1 XDC = 10^9 wei)
+// 	halvingSupply := big.NewInt(6000000000)
+// 	halvingSupply.Mul(halvingSupply, billion)
+// 	sum := big.NewInt(0)
+// 	for i := uint64(0); i < 30000000; i++ {
+// 		r := new(big.Int).Add(RewardHalving(epochReward1, epochRewardTotal, halvingSupply, i), RewardHalving(epochReward2, epochRewardTotal, halvingSupply, i))
+// 		r.Add(r, RewardHalving(epochReward3, epochRewardTotal, halvingSupply, i))
+// 		if r.BitLen() == 0 {
+// 			t.Log("reward be 0 at i=", i) // reward be 0 at i= 11225088, wich is more than 200 years in the future
+// 			break
+// 		}
+// 		sum.Add(sum, r)
+// 	}
+// 	t.Log("sum", sum) // sum 5999999999982635022, which is less than total, and never reach totoal
+// 	assert.True(t, sum.Cmp(halvingSupply) < 0)
+// }
