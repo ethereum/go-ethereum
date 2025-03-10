@@ -20,11 +20,11 @@ import (
 	"encoding/json"
 	"sync"
 
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
+	goethkzg "github.com/crate-crypto/go-eth-kzg"
 )
 
 // context is the crypto primitive pre-seeded with the trusted setup parameters.
-var context *gokzg4844.Context
+var context *goethkzg.Context
 
 // gokzgIniter ensures that we initialize the KZG library once before using it.
 var gokzgIniter sync.Once
@@ -35,11 +35,11 @@ func gokzgInit() {
 	if err != nil {
 		panic(err)
 	}
-	params := new(gokzg4844.JSONTrustedSetup)
+	params := new(goethkzg.JSONTrustedSetup)
 	if err = json.Unmarshal(config, params); err != nil {
 		panic(err)
 	}
-	context, err = gokzg4844.NewContext4096(params)
+	context, err = goethkzg.NewContext4096(params)
 	if err != nil {
 		panic(err)
 	}
@@ -49,7 +49,7 @@ func gokzgInit() {
 func gokzgBlobToCommitment(blob *Blob) (Commitment, error) {
 	gokzgIniter.Do(gokzgInit)
 
-	commitment, err := context.BlobToKZGCommitment((*gokzg4844.Blob)(blob), 0)
+	commitment, err := context.BlobToKZGCommitment((*goethkzg.Blob)(blob), 0)
 	if err != nil {
 		return Commitment{}, err
 	}
@@ -61,7 +61,7 @@ func gokzgBlobToCommitment(blob *Blob) (Commitment, error) {
 func gokzgComputeProof(blob *Blob, point Point) (Proof, Claim, error) {
 	gokzgIniter.Do(gokzgInit)
 
-	proof, claim, err := context.ComputeKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.Scalar)(point), 0)
+	proof, claim, err := context.ComputeKZGProof((*goethkzg.Blob)(blob), (goethkzg.Scalar)(point), 0)
 	if err != nil {
 		return Proof{}, Claim{}, err
 	}
@@ -73,7 +73,7 @@ func gokzgComputeProof(blob *Blob, point Point) (Proof, Claim, error) {
 func gokzgVerifyProof(commitment Commitment, point Point, claim Claim, proof Proof) error {
 	gokzgIniter.Do(gokzgInit)
 
-	return context.VerifyKZGProof((gokzg4844.KZGCommitment)(commitment), (gokzg4844.Scalar)(point), (gokzg4844.Scalar)(claim), (gokzg4844.KZGProof)(proof))
+	return context.VerifyKZGProof((goethkzg.KZGCommitment)(commitment), (goethkzg.Scalar)(point), (goethkzg.Scalar)(claim), (goethkzg.KZGProof)(proof))
 }
 
 // gokzgComputeBlobProof returns the KZG proof that is used to verify the blob against
@@ -83,7 +83,7 @@ func gokzgVerifyProof(commitment Commitment, point Point, claim Claim, proof Pro
 func gokzgComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 	gokzgIniter.Do(gokzgInit)
 
-	proof, err := context.ComputeBlobKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), 0)
+	proof, err := context.ComputeBlobKZGProof((*goethkzg.Blob)(blob), (goethkzg.KZGCommitment)(commitment), 0)
 	if err != nil {
 		return Proof{}, err
 	}
@@ -94,5 +94,44 @@ func gokzgComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 func gokzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	gokzgIniter.Do(gokzgInit)
 
-	return context.VerifyBlobKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), (gokzg4844.KZGProof)(proof))
+	return context.VerifyBlobKZGProof((*goethkzg.Blob)(blob), (goethkzg.KZGCommitment)(commitment), (goethkzg.KZGProof)(proof))
+}
+
+// gokzgVerifyCellKZGProofBatch verifies a batch of KZG proofs for a set of cells.
+func gokzgVerifyCellKZGProofBatch(commitments []Commitment, cellIndicies []uint64, cells []Cell, proofs []Proof) error {
+	gokzgIniter.Do(gokzgInit)
+
+	comts := make([]goethkzg.KZGCommitment, len(commitments))
+	for i, commitment := range commitments {
+		comts[i] = (goethkzg.KZGCommitment)(commitment)
+	}
+
+	cellInputs := make([]*goethkzg.Cell, len(cells))
+	for i := range cells {
+		cellInputs[i] = (*goethkzg.Cell)(&cells[i])
+	}
+
+	proofsInput := make([]goethkzg.KZGProof, len(proofs))
+	for i, proof := range proofs {
+		proofsInput[i] = (goethkzg.KZGProof)(proof)
+	}
+
+	return context.VerifyCellKZGProofBatch(comts, cellIndicies, cellInputs, proofsInput)
+}
+
+// gokzgComputeCells computes the cells for a given blob.
+func gokzgComputeCells(blob *Blob) ([]Cell, error) {
+	gokzgIniter.Do(gokzgInit)
+
+	results, err := context.ComputeCells((*goethkzg.Blob)(blob), 0)
+	if err != nil {
+		return nil, err
+	}
+
+	cells := make([]Cell, len(results))
+	for i, result := range results {
+		cells[i] = (Cell)(*result)
+	}
+
+	return cells, nil
 }

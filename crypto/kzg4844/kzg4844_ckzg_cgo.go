@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build ckzg && !nacl && !js && !wasip1 && cgo && !gofuzz
+//xgo:build ckzg && !nacl && !js && !wasip1 && cgo && !gofuzz
 
 package kzg4844
 
@@ -23,8 +23,8 @@ import (
 	"errors"
 	"sync"
 
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
-	ckzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
+	goethkzg "github.com/crate-crypto/go-eth-kzg"
+	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -40,22 +40,34 @@ func ckzgInit() {
 	if err != nil {
 		panic(err)
 	}
-	params := new(gokzg4844.JSONTrustedSetup)
+	params := new(goethkzg.JSONTrustedSetup)
 	if err = json.Unmarshal(config, params); err != nil {
 		panic(err)
 	}
-	if err = gokzg4844.CheckTrustedSetupIsWellFormed(params); err != nil {
+	if err = goethkzg.CheckTrustedSetupIsWellFormed(params); err != nil {
 		panic(err)
 	}
-	g1s := make([]byte, len(params.SetupG1Lagrange)*(len(params.SetupG1Lagrange[0])-2)/2)
+	g1MonomialBytes := make([]byte, len(params.SetupG1Monomial)*(len(params.SetupG1Monomial[0])-2)/2)
+	for i, g1 := range &params.SetupG1Monomial {
+		copy(g1MonomialBytes[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
+	}
+	g1LagrangeBytes := make([]byte, len(params.SetupG1Lagrange)*(len(params.SetupG1Lagrange[0])-2)/2)
 	for i, g1 := range params.SetupG1Lagrange {
-		copy(g1s[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
+		copy(g1LagrangeBytes[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
 	}
-	g2s := make([]byte, len(params.SetupG2)*(len(params.SetupG2[0])-2)/2)
+	g2MonomialBytes := make([]byte, len(params.SetupG2)*(len(params.SetupG2[0])-2)/2)
 	for i, g2 := range params.SetupG2 {
-		copy(g2s[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
+		copy(g2MonomialBytes[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
 	}
-	if err = ckzg4844.LoadTrustedSetup(g1s, g2s); err != nil {
+
+	// c-kzg-4844 uses a global context/setup file, so it needs to be 8 for both the EL and CL (currently CL sets it at 8)
+	//
+	// the parameter is mainly for optimization purposes. Heuristically 8 has been shown to be the best tradeoff
+	// It essentially stores something like 2^8 * len(g1_monomial) points
+	// So the higher the number, the more memory it uses
+	// You can set it to 0 to store nothing and it uses a different codepath, but its slow
+	precompute := uint(8)
+	if err = ckzg4844.LoadTrustedSetup(g1MonomialBytes, g1LagrangeBytes, g2MonomialBytes, precompute); err != nil {
 		panic(err)
 	}
 }
@@ -124,4 +136,48 @@ func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 		return errors.New("invalid proof")
 	}
 	return nil
+}
+
+// VerifyCellKZGProofBatch verifies a batch of KZG proofs for a set of cells.
+func ckzgVerifyCellKZGProofBatch(commitments []Commitment, cellIndicies []uint64, cells []Cell, proofs []Proof) error {
+	ckzgIniter.Do(ckzgInit)
+
+	comts := make([]ckzg4844.Bytes48, len(commitments))
+	for i, commitment := range commitments {
+		comts[i] = (ckzg4844.Bytes48)(commitment)
+	}
+
+	cellInputs := make([]ckzg4844.Cell, len(cells))
+	for i := range cells {
+		cellInputs[i] = (ckzg4844.Cell)(cells[i])
+	}
+
+	proofsInput := make([]ckzg4844.Bytes48, len(proofs))
+	for i, proof := range proofs {
+		proofsInput[i] = (ckzg4844.Bytes48)(proof)
+	}
+
+	valid, err := ckzg4844.VerifyCellKZGProofBatch(comts, cellIndicies, cellInputs, proofsInput)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return errors.New("invalid proof")
+	}
+	return nil
+}
+
+func ckzgComputeCells(blob *Blob) ([]Cell, error) {
+	ckzgIniter.Do(ckzgInit)
+
+	result, err := ckzg4844.ComputeCells((*ckzg4844.Blob)(blob))
+	if err != nil {
+		return nil, err
+	}
+
+	cells := make([]Cell, len(result))
+	for i, cell := range result {
+		cells[i] = (Cell)(cell)
+	}
+	return cells, nil
 }
