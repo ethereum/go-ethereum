@@ -43,6 +43,8 @@ type OpContext interface {
 	CallValue() *uint256.Int
 	CallInput() []byte
 	ContractCode() []byte
+	CurrentCodeSection() uint64
+	ReturnStackDepth() uint64
 }
 
 // StateDB gives tracers access to the whole state.
@@ -371,4 +373,8 @@ const (
 	// NonceChangeRevert is emitted when the nonce is reverted back to a previous value due to call failure.
 	// It is only emitted when the tracer has opted in to use the journaling wrapper (WrapWithJournal).
 	NonceChangeRevert NonceChangeReason = 6
+
+	// NonceChangeInvalidEOF is emitted when the nonce is changed when a new contract is created,
+	// but the creation fails because of an EOF error.
+	NonceChangeInvalidEOF NonceChangeReason = 6
 )
