@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -332,7 +333,7 @@ func testVersion(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if v != fmt.Sprintf("%s/%s-%s/%s", filepath.Base(os.Args[0]), runtime.GOOS, runtime.GOARCH, runtime.Version()) {
+	if v != fmt.Sprintf("%s/%s-%s/%s", strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe"), runtime.GOOS, runtime.GOARCH, runtime.Version()) {
 		t.Fatalf("Version returned wrong value: %s", v)
 	}
 }
