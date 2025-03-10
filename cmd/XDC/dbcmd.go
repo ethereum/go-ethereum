@@ -148,13 +148,12 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 
 func removeDB(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
-	for _, name := range []string{"chaindata", "lightchaindata"} {
-		dbdir := stack.ResolvePath(name)
-		if common.FileExist(dbdir) {
-			confirmAndRemoveDB(dbdir, name)
-		} else {
-			log.Info("Database doesn't exist, skipping", "path", dbdir)
-		}
+	name := "chaindata"
+	dbdir := stack.ResolvePath(name)
+	if common.FileExist(dbdir) {
+		confirmAndRemoveDB(dbdir, name)
+	} else {
+		log.Info("Database doesn't exist, skipping", "path", dbdir)
 	}
 	return nil
 }
