@@ -642,6 +642,7 @@ func TestTracingWithOverrides(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
 	accounts := newAccounts(3)
+	ecRecoverAddress := common.HexToAddress("0x0000000000000000000000000000000000000001")
 	storageAccount := common.Address{0x13, 37}
 	genesis := &core.Genesis{
 		Config: params.TestChainConfig,
@@ -939,6 +940,46 @@ func TestTracingWithOverrides(t *testing.T) {
 				},
 			},
 			want: `{"gas":25288,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000055"}`,
+		},
+		{ // Call to precompile ECREC (0x01), but code was modified to add 1 to input
+			blockNumber: rpc.LatestBlockNumber,
+			call: ethapi.TransactionArgs{
+				From: &randomAccounts[0].addr,
+				To:   &ecRecoverAddress,
+				Data: newRPCBytes(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001")),
+			},
+			config: &TraceCallConfig{
+				StateOverrides: &override.StateOverride{
+					randomAccounts[0].addr: override.OverrideAccount{
+						Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether))),
+					},
+					ecRecoverAddress: override.OverrideAccount{
+						Code:             newRPCBytes(common.Hex2Bytes("60003560010160005260206000f3")),
+						MovePrecompileTo: &randomAccounts[2].addr,
+					},
+				},
+			},
+			want: `{"gas":21167,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000002"}`,
+		},
+		{ // Call to ECREC Precompiled on a different address, expect the original behaviour of ECREC precompile
+			blockNumber: rpc.LatestBlockNumber,
+			call: ethapi.TransactionArgs{
+				From: &randomAccounts[0].addr,
+				To:   &randomAccounts[2].addr,
+				Data: newRPCBytes(common.Hex2Bytes("82f3df49d3645876de6313df2bbe9fbce593f21341a7b03acdb9423bc171fcc9000000000000000000000000000000000000000000000000000000000000001cba13918f50da910f2d55a7ea64cf716ba31dad91856f45908dde900530377d8a112d60f36900d18eb8f9d3b4f85a697b545085614509e3520e4b762e35d0d6bd")),
+			},
+			config: &TraceCallConfig{
+				StateOverrides: &override.StateOverride{
+					randomAccounts[0].addr: override.OverrideAccount{
+						Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether))),
+					},
+					ecRecoverAddress: override.OverrideAccount{
+						Code:             newRPCBytes(common.Hex2Bytes("60003560010160005260206000f3")),
+						MovePrecompileTo: &randomAccounts[2].addr,
+					},
+				},
+			},
+			want: `{"gas":25664,"failed":false,"returnValue":"000000000000000000000000c6e93f4c1920eaeaa1e699f76a7a8c18e3056074"}`,
 		},
 	}
 	for i, tc := range testSuite {
