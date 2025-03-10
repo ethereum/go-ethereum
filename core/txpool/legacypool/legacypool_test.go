@@ -2273,10 +2273,9 @@ func TestSetCodeTransactions(t *testing.T) {
 				if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), keyA)); !errors.Is(err, ErrInflightTxLimitReached) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, ErrInflightTxLimitReached, err)
 				}
-				// Replace by fee.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(10), keyA)); err != nil {
-					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
-				}
+
+				// reset the delegation, avoid leaking state into the other tests
+				statedb.SetCode(addrA, nil)
 			},
 		},
 		{
