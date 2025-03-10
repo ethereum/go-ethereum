@@ -121,17 +121,17 @@ var (
 			ProtectorReward:      4000,
 			ObserverReward:       1000,
 		},
-		9999999999: {
-			MaxMasternodes:       15,
-			MaxProtectorNodes:    2,
-			SwitchRound:          9999999999,
+		2052900: {
+			MaxMasternodes:       10,
+			MaxProtectorNodes:    3,
+			SwitchRound:          2053800,
 			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        5,
 			MinePeriod:           2,
 			ExpTimeoutConfig:     ExpTimeoutConfig{Base: 2.0, MaxExponent: 5},
-			MasternodeReward:     5000,
-			ProtectorReward:      4000,
+			MasternodeReward:     3000,
+			ProtectorReward:      2000,
 			ObserverReward:       1000,
 		},
 	}
