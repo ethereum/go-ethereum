@@ -80,14 +80,14 @@ func (w *withdrawalQueue) subscribe(ch chan<- newWithdrawalsEvent) event.Subscri
 	return w.subs.Track(sub)
 }
 
-// txPoolTerminatedError is returned when the txpool is already terminated when
+// errTxPoolTerminated is returned when the txpool is already terminated when
 // trying to seal a block.
-type txPoolTerminatedError struct {
+type errTxPoolTerminated struct {
 	error
 }
 
 // Error returns the message from the wrapped error.
-func (t *txPoolTerminatedError) Error() string {
+func (t *errTxPoolTerminated) Error() string {
 	return t.error.Error()
 }
 
@@ -192,7 +192,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	// behavior, the pool will be explicitly blocked on its reset before
 	// continuing to the block production below.
 	if err := c.eth.APIBackend.TxPool().Sync(); err != nil {
-		return &txPoolTerminatedError{fmt.Errorf("failed to sync txpool: %w", err)}
+		return &errTxPoolTerminated{fmt.Errorf("failed to sync txpool: %w", err)}
 	}
 
 	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
@@ -317,7 +317,7 @@ func (c *SimulatedBeacon) Commit() common.Hash {
 	return hash
 }
 
-// fallibleCommit attempts to seal a block on demand, but may return an error.
+// commit attempts to seal a block on demand, but may return an error.
 func (c *SimulatedBeacon) commit() (common.Hash, error) {
 	withdrawals := c.withdrawals.pop(10)
 	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {

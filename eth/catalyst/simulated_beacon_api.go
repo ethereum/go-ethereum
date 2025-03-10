@@ -73,7 +73,7 @@ func (a *simulatedBeaconAPI) loop() {
 				}
 				// Avoids spinlooping if the txPool is alredy terminated.
 				if _, err := a.sim.commit(); err != nil {
-					var txpTermErr *txPoolTerminatedError
+					var txpTermErr *errTxPoolTerminated
 					if errors.As(err, &txpTermErr) {
 						break
 					}
