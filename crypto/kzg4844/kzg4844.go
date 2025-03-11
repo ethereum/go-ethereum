@@ -84,6 +84,10 @@ type Claim [32]byte
 // useCKZG controls whether the cryptography should use the Go or C backend.
 var useCKZG atomic.Bool
 
+func init() {
+	UseCKZG(true)
+}
+
 // UseCKZG can be called to switch the default Go implementation of KZG to the C
 // library if for some reason the user wishes to do so (e.g. consensus bug in one
 // or the other).
@@ -176,4 +180,8 @@ func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {
 // IsValidVersionedHash checks that h is a structurally-valid versioned blob hash.
 func IsValidVersionedHash(h []byte) bool {
 	return len(h) == 32 && h[0] == 0x01
+}
+
+func ComputeCells(blob *Blob) ([]Proof, error) {
+	return ckzgComputeCells(blob)
 }

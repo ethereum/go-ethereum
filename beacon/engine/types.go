@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -116,11 +117,17 @@ type BlobsBundleV1 struct {
 	Commitments []hexutil.Bytes `json:"commitments"`
 	Proofs      []hexutil.Bytes `json:"proofs"`
 	Blobs       []hexutil.Bytes `json:"blobs"`
+	CellProofs  []hexutil.Bytes `json:"cell_proofs"`
 }
 
 type BlobAndProofV1 struct {
 	Blob  hexutil.Bytes `json:"blob"`
 	Proof hexutil.Bytes `json:"proof"`
+}
+
+type BlobAndProofV2 struct {
+	Blob       hexutil.Bytes   `json:"blob"`
+	CellProofs []hexutil.Bytes `json:"cell_proofs"`
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.
@@ -326,12 +333,20 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Commitments: make([]hexutil.Bytes, 0),
 		Blobs:       make([]hexutil.Bytes, 0),
 		Proofs:      make([]hexutil.Bytes, 0),
+		CellProofs:  make([]hexutil.Bytes, 0),
 	}
 	for _, sidecar := range sidecars {
 		for j := range sidecar.Blobs {
 			bundle.Blobs = append(bundle.Blobs, hexutil.Bytes(sidecar.Blobs[j][:]))
 			bundle.Commitments = append(bundle.Commitments, hexutil.Bytes(sidecar.Commitments[j][:]))
 			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(sidecar.Proofs[j][:]))
+			cellProofs, err := kzg4844.ComputeCells(&sidecar.Blobs[j])
+			if err != nil {
+				panic(err)
+			}
+			for _, proof := range cellProofs {
+				bundle.CellProofs = append(bundle.CellProofs, hexutil.Bytes(proof[:]))
+			}
 		}
 	}
 
