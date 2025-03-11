@@ -55,6 +55,21 @@ var (
 		Usage: "If set, selects the state data for removal",
 	}
 
+	// Flags for the freezer truncation command
+	dryRunFlag = &cli.BoolFlag{
+		Name:  "dry-run",
+		Usage: "Perform a dry run without actually truncating the freezer",
+	}
+	yesFlag = &cli.BoolFlag{
+		Name:  "yes",
+		Usage: "Skip confirmation prompt",
+	}
+	keepHeadersFlag = &cli.BoolFlag{
+		Name:  "keep-headers",
+		Usage: "Keep headers when pruning history (default: true)",
+		Value: true,
+	}
+
 	removedbCommand = &cli.Command{
 		Action:    removeDB,
 		Name:      "removedb",
@@ -83,6 +98,8 @@ Remove blockchain and state databases`,
 			dbMetadataCmd,
 			dbCheckStateContentCmd,
 			dbInspectHistoryCmd,
+			dbPruneHistoryCmd,
+			dbTruncateFreezerCmd,
 		},
 	}
 	dbInspectCmd = &cli.Command{
@@ -228,6 +245,42 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 			},
 		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command queries the history of the account or storage slot within the specified block range",
+	}
+	dbPruneHistoryCmd = &cli.Command{
+		Action:    pruneHistory,
+		Name:      "prune-history",
+		Usage:     "Prune pre-merge history from the freezer",
+		ArgsUsage: "",
+		Flags: []cli.Flag{
+			dryRunFlag,
+			yesFlag,
+			keepHeadersFlag,
+		},
+		Description: `This command prunes historical chain data before the merge block.
+The merge block is identified by the first block with zero difficulty.
+
+By default, headers are kept but bodies are pruned. This allows the chain to maintain
+its integrity while significantly reducing disk usage. If you want to prune everything
+including headers, use --keep-headers=false.
+`,
+	}
+
+	dbTruncateFreezerCmd = &cli.Command{
+		Action:    truncateFreezer,
+		Name:      "truncate-freezer",
+		Usage:     "Truncate freezer at the merge block, keeping headers but removing bodies",
+		ArgsUsage: "",
+		Flags: []cli.Flag{
+			dryRunFlag,
+			yesFlag,
+		},
+		Description: `
+This command truncates the freezer at the merge block, keeping headers but removing bodies.
+The merge block is identified by the first block with zero difficulty.
+
+This operation is specifically designed to maintain chain integrity while reducing disk usage
+by removing the pre-merge body data which is no longer needed after the merge.
+`,
 	}
 )
 
@@ -928,4 +981,346 @@ func inspectHistory(ctx *cli.Context) error {
 		return inspectAccount(triedb, start, end, address, ctx.Bool("raw"))
 	}
 	return inspectStorage(triedb, start, end, address, slot, ctx.Bool("raw"))
+}
+
+// pruneHistory implements the 'db prune-history' command, truncating the freezer
+// at the merge block.
+func pruneHistory(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	// Find the merge block (first block with zero difficulty)
+	log.Info("Looking for the merge block...")
+
+	// Get the current head block
+	headHash := rawdb.ReadHeadBlockHash(db)
+	if headHash == (common.Hash{}) {
+		return fmt.Errorf("chain head not found")
+	}
+
+	headNumber := rawdb.ReadHeaderNumber(db, headHash)
+	if headNumber == nil {
+		return fmt.Errorf("header number of head block not found")
+	}
+
+	// Binary search to find the merge block
+	var (
+		low        = uint64(0)
+		high       = *headNumber
+		mergeBlock = uint64(0)
+		found      = false
+	)
+
+	log.Info("Searching for merge block using binary search", "head", *headNumber)
+
+	for low <= high {
+		mid := (low + high) / 2
+		header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, mid), mid)
+		if header == nil {
+			return fmt.Errorf("header %d not found", mid)
+		}
+
+		if header.Difficulty.Sign() == 0 {
+			// This is a post-merge block, look earlier
+			high = mid - 1
+			mergeBlock = mid
+			found = true
+		} else {
+			// This is a pre-merge block, look later
+			low = mid + 1
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("merge block not found, chain may not have transitioned to PoS yet")
+	}
+
+	// The merge block is the first block with zero difficulty
+	log.Info("Found merge block", "number", mergeBlock)
+
+	// Check if we're in dry-run mode
+	if ctx.Bool("dry-run") {
+		log.Info("Dry run completed, no data was pruned", "mergeBlock", mergeBlock)
+		return nil
+	}
+
+	// Ask for confirmation before proceeding
+	fmt.Printf("You are about to prune all pre-merge history before block %d.\n", mergeBlock)
+	fmt.Println("This operation cannot be undone and will permanently delete data.")
+	fmt.Println("Make sure you have a backup if you might need this data in the future.")
+
+	if !ctx.Bool("yes") {
+		confirm, err := prompt.Stdin.PromptConfirm("Do you want to continue?")
+		if err != nil {
+			return err
+		}
+		if !confirm {
+			return nil
+		}
+	}
+
+	// Determine which tables to prune
+	keepHeaders := ctx.Bool("keep-headers")
+
+	// Get the freezer instance
+	ancientDb, ok := db.(ethdb.AncientReader)
+	if !ok {
+		return fmt.Errorf("database doesn't support ancient storage")
+	}
+
+	// Get the first and last items in the freezer
+	first, err := ancientDb.Ancients()
+	if err != nil {
+		return fmt.Errorf("failed to get ancients count: %v", err)
+	}
+	if first == 0 {
+		log.Info("No ancient data to prune")
+		return nil
+	}
+
+	// Ensure the merge block is in the freezer
+	if mergeBlock < first {
+		log.Info("Merge block is not in the freezer, nothing to prune",
+			"mergeBlock", mergeBlock, "freezerStart", first)
+		return nil
+	}
+
+	// Truncate the freezer tables
+	if keepHeaders {
+		log.Info("Pruning bodies but keeping headers", "mergeBlock", mergeBlock)
+
+		// We can't truncate individual tables with the current API
+		// Instead, we need to read the headers at the merge block and re-insert them
+		// after truncating everything
+
+		// First, read all headers up to the merge block
+		log.Info("Reading headers to preserve them", "count", mergeBlock)
+		headers := make([][]byte, mergeBlock)
+		hashes := make([][]byte, mergeBlock)
+
+		var err error
+		for i := uint64(0); i < mergeBlock; i++ {
+			headers[i], err = db.(ethdb.AncientReader).Ancient(rawdb.ChainFreezerHeaderTable, i)
+			if err != nil {
+				return fmt.Errorf("failed to read header %d: %v", i, err)
+			}
+			hashes[i], err = db.(ethdb.AncientReader).Ancient(rawdb.ChainFreezerHashTable, i)
+			if err != nil {
+				return fmt.Errorf("failed to read hash %d: %v", i, err)
+			}
+		}
+
+		// Truncate all tables
+		log.Info("Truncating all tables", "mergeBlock", mergeBlock)
+		if err := truncateAncientStore(db, mergeBlock); err != nil {
+			return fmt.Errorf("failed to truncate ancient store: %v", err)
+		}
+
+		// Re-insert the headers and hashes
+		log.Info("Re-inserting headers", "count", len(headers))
+		freezerDb := db.(ethdb.AncientStore)
+		_, err = freezerDb.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+			for i := uint64(0); i < mergeBlock; i++ {
+				if err := op.AppendRaw(rawdb.ChainFreezerHeaderTable, i, headers[i]); err != nil {
+					return fmt.Errorf("failed to re-insert header %d: %v", i, err)
+				}
+				if err := op.AppendRaw(rawdb.ChainFreezerHashTable, i, hashes[i]); err != nil {
+					return fmt.Errorf("failed to re-insert hash %d: %v", i, err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to re-insert headers: %v", err)
+		}
+	} else {
+		log.Info("Pruning all pre-merge history", "mergeBlock", mergeBlock)
+
+		// Truncate all tables
+		if err := truncateAncientStore(db, mergeBlock); err != nil {
+			return fmt.Errorf("failed to truncate ancient store: %v", err)
+		}
+	}
+
+	log.Info("Successfully pruned pre-merge history", "mergeBlock", mergeBlock)
+	return nil
+}
+
+// truncateAncientStore truncates all tables in the ancient store to the given block number
+func truncateAncientStore(db ethdb.Database, blockNum uint64) error {
+	freezerDb, ok := db.(ethdb.AncientStore)
+	if !ok {
+		return fmt.Errorf("database doesn't support ancient writing")
+	}
+
+	// Get the current number of items in the store
+	ancients, err := freezerDb.Ancients()
+	if err != nil {
+		return fmt.Errorf("failed to get ancients count: %v", err)
+	}
+
+	if blockNum >= ancients {
+		log.Info("No need to truncate ancient store", "blockNum", blockNum, "ancients", ancients)
+		return nil
+	}
+
+	log.Info("Truncating ancient store", "from", 0, "to", blockNum)
+
+	// Truncate the head to the merge block
+	_, err = freezerDb.TruncateHead(blockNum)
+	if err != nil {
+		return fmt.Errorf("failed to truncate head: %v", err)
+	}
+
+	return nil
+}
+
+// truncateFreezer implements the 'db truncate-freezer' command, truncating the freezer
+// at the merge block but keeping headers.
+func truncateFreezer(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack, false)
+	defer db.Close()
+
+	// Find the merge block (first block with zero difficulty)
+	log.Info("Looking for the merge block...")
+
+	// Get the current head block
+	headHash := rawdb.ReadHeadBlockHash(db)
+	if headHash == (common.Hash{}) {
+		return fmt.Errorf("chain head not found")
+	}
+
+	headNumber := rawdb.ReadHeaderNumber(db, headHash)
+	if headNumber == nil {
+		return fmt.Errorf("header number of head block not found")
+	}
+
+	// Binary search to find the merge block
+	var (
+		low        = uint64(0)
+		high       = *headNumber
+		mergeBlock = uint64(0)
+		found      = false
+	)
+
+	log.Info("Searching for merge block using binary search", "head", *headNumber)
+
+	for low <= high {
+		mid := (low + high) / 2
+		header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, mid), mid)
+		if header == nil {
+			return fmt.Errorf("header %d not found", mid)
+		}
+
+		if header.Difficulty.Sign() == 0 {
+			// This is a post-merge block, look earlier
+			high = mid - 1
+			mergeBlock = mid
+			found = true
+		} else {
+			// This is a pre-merge block, look later
+			low = mid + 1
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("merge block not found, chain may not have transitioned to PoS yet")
+	}
+
+	// The merge block is the first block with zero difficulty
+	log.Info("Found merge block", "number", mergeBlock)
+
+	// Check if we're in dry-run mode
+	if ctx.Bool("dry-run") {
+		log.Info("Dry run completed, no data was pruned", "mergeBlock", mergeBlock)
+		return nil
+	}
+
+	// Ask for confirmation before proceeding
+	fmt.Printf("You are about to truncate the freezer at block %d, keeping headers but removing bodies.\n", mergeBlock)
+	fmt.Println("This operation cannot be undone and will permanently delete data.")
+	fmt.Println("Make sure you have a backup if you might need this data in the future.")
+
+	if !ctx.Bool("yes") {
+		confirm, err := prompt.Stdin.PromptConfirm("Do you want to continue?")
+		if err != nil {
+			return err
+		}
+		if !confirm {
+			return nil
+		}
+	}
+
+	// Get the freezer instance
+	ancientDb, ok := db.(ethdb.AncientReader)
+	if !ok {
+		return fmt.Errorf("database doesn't support ancient storage")
+	}
+
+	// Get the first and last items in the freezer
+	first, err := ancientDb.Ancients()
+	if err != nil {
+		return fmt.Errorf("failed to get ancients count: %v", err)
+	}
+	if first == 0 {
+		log.Info("No ancient data to prune")
+		return nil
+	}
+
+	// Ensure the merge block is in the freezer
+	if mergeBlock < first {
+		log.Info("Merge block is not in the freezer, nothing to prune",
+			"mergeBlock", mergeBlock, "freezerStart", first)
+		return nil
+	}
+
+	// We need to read the headers at the merge block and re-insert them
+	// after truncating everything
+	log.Info("Reading headers to preserve them", "count", mergeBlock)
+	headers := make([][]byte, mergeBlock)
+	hashes := make([][]byte, mergeBlock)
+
+	for i := uint64(0); i < mergeBlock; i++ {
+		headers[i], err = db.(ethdb.AncientReader).Ancient(rawdb.ChainFreezerHeaderTable, i)
+		if err != nil {
+			return fmt.Errorf("failed to read header %d: %v", i, err)
+		}
+		hashes[i], err = db.(ethdb.AncientReader).Ancient(rawdb.ChainFreezerHashTable, i)
+		if err != nil {
+			return fmt.Errorf("failed to read hash %d: %v", i, err)
+		}
+	}
+
+	// Truncate all tables
+	log.Info("Truncating all tables", "mergeBlock", mergeBlock)
+	if err := truncateAncientStore(db, mergeBlock); err != nil {
+		return fmt.Errorf("failed to truncate ancient store: %v", err)
+	}
+
+	// Re-insert the headers and hashes
+	log.Info("Re-inserting headers", "count", len(headers))
+	freezerDb := db.(ethdb.AncientStore)
+	_, err = freezerDb.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		for i := uint64(0); i < mergeBlock; i++ {
+			if err := op.AppendRaw(rawdb.ChainFreezerHeaderTable, i, headers[i]); err != nil {
+				return fmt.Errorf("failed to re-insert header %d: %v", i, err)
+			}
+			if err := op.AppendRaw(rawdb.ChainFreezerHashTable, i, hashes[i]); err != nil {
+				return fmt.Errorf("failed to re-insert hash %d: %v", i, err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to re-insert headers: %v", err)
+	}
+
+	log.Info("Successfully truncated freezer, keeping headers but removing bodies", "mergeBlock", mergeBlock)
+	return nil
 }
