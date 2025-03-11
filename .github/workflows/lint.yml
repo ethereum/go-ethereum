@@ -5,6 +5,8 @@ on:
     branches: [main, "release/**"]
   pull_request:
     branches: [main, "release/**"]
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
