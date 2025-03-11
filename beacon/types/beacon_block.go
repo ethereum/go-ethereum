@@ -144,6 +144,7 @@ func (b *BeaconBlock) ExecutionRequestsList() [][]byte {
 
 func marshalRequests(spec *zrntcommon.Spec, items ...zrntcommon.SpecObj) (list [][]byte) {
 	var buf bytes.Buffer
+	list = [][]byte{}
 	for typ, data := range items {
 		buf.Reset()
 		buf.WriteByte(byte(typ))

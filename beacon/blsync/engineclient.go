@@ -140,7 +140,7 @@ func (ec *engineClient) callForkchoiceUpdated(fork string, event types.ChainHead
 
 	var method string
 	switch fork {
-	case "deneb":
+	case "deneb", "electra":
 		method = "engine_forkchoiceUpdatedV3"
 	case "capella":
 		method = "engine_forkchoiceUpdatedV2"
