@@ -41,7 +41,8 @@ var (
 		AddFork("ALTAIR", 50, []byte{144, 0, 0, 112}).
 		AddFork("BELLATRIX", 100, []byte{144, 0, 0, 113}).
 		AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}).
-		AddFork("DENEB", 132608, []byte{144, 0, 0, 115})
+		AddFork("DENEB", 132608, []byte{144, 0, 0, 115}).
+		AddFork("ELECTRA", 222464, []byte{144, 0, 0, 116})
 
 	HoleskyLightConfig = (&ChainConfig{
 		GenesisValidatorsRoot: common.HexToHash("0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"),
@@ -52,5 +53,6 @@ var (
 		AddFork("ALTAIR", 0, []byte{2, 1, 112, 0}).
 		AddFork("BELLATRIX", 0, []byte{3, 1, 112, 0}).
 		AddFork("CAPELLA", 256, []byte{4, 1, 112, 0}).
-		AddFork("DENEB", 29696, []byte{5, 1, 112, 0})
+		AddFork("DENEB", 29696, []byte{5, 1, 112, 0}).
+		AddFork("ELECTRA", 115968, []byte{6, 1, 112, 0})
 )
