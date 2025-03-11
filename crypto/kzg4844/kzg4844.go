@@ -149,6 +149,17 @@ func VerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	return gokzgVerifyBlobProof(blob, commitment, proof)
 }
 
+// ComputeCells returns the KZG cell proofs that are used to verify the blob against
+// the commitment.
+//
+// This method does not verify that the commitment is correct with respect to blob.
+func ComputeCells(blob *Blob) ([]Proof, error) {
+	if useCKZG.Load() {
+		return ckzgComputeCells(blob)
+	}
+	return gokzgComputeCells(blob)
+}
+
 // CalcBlobHashV1 calculates the 'versioned blob hash' of a commitment.
 // The given hasher must be a sha256 hash instance, otherwise the result will be invalid!
 func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {

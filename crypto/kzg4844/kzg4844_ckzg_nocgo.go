@@ -60,3 +60,11 @@ func ckzgComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	panic("unsupported platform")
 }
+
+// ckzgComputeCells returns the KZG cell proofs that are used to verify the blob against
+// the commitment.
+//
+// This method does not verify that the commitment is correct with respect to blob.
+func ckzgComputeCells(blob *Blob) ([]Proof, error) {
+	panic("unsupported platform")
+}
