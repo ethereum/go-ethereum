@@ -26,8 +26,10 @@ import (
 )
 
 var (
-	ingressTrafficMeter = metrics.NewRegisteredMeter("p2p/InboundTraffic", nil)
-	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/OutboundTraffic", nil)
+	MetricsInboundTraffic  = "p2p/ingress" // Name for the registered inbound traffic meter
+	MetricsOutboundTraffic = "p2p/egress"  // Name for the registered outbound traffic meter
+	ingressTrafficMeter    = metrics.NewRegisteredMeter("p2p/InboundTraffic", nil)
+	egressTrafficMeter     = metrics.NewRegisteredMeter("p2p/OutboundTraffic", nil)
 )
 
 var (
