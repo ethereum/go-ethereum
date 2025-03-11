@@ -59,7 +59,7 @@ func ckzgInit() {
 	for i, g2 := range params.SetupG2 {
 		copy(g2s[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
 	}
-	if err = ckzg4844.LoadTrustedSetup(g1s, g1Lag, g2s, 1); err != nil {
+	if err = ckzg4844.LoadTrustedSetup(g1s, g1Lag, g2s, 0); err != nil {
 		panic(err)
 	}
 }
