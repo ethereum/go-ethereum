@@ -55,6 +55,7 @@ type BlobTx struct {
 
 // BlobTxSidecar contains the blobs of a blob transaction.
 type BlobTxSidecar struct {
+	Version     byte                 // Version
 	Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
 	Commitments []kzg4844.Commitment // Commitments needed by the blob pool
 	Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
@@ -68,6 +69,20 @@ func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 		h[i] = kzg4844.CalcBlobHashV1(hasher, &sc.Commitments[i])
 	}
 	return h
+}
+
+// CellProofsAt returns the cell proofs for blob with index idx.
+func (sc *BlobTxSidecar) CellProofsAt(idx int) []kzg4844.Proof {
+	var cellProofs []kzg4844.Proof
+	for i := range kzg4844.CellProofsPerBlob {
+		index := idx*kzg4844.CellProofsPerBlob + i
+		if index > len(sc.Proofs) {
+			return nil
+		}
+		proof := sc.Proofs[index]
+		cellProofs = append(cellProofs, proof)
+	}
+	return cellProofs
 }
 
 // encodedSize computes the RLP size of the sidecar elements. This does NOT return the
@@ -105,6 +120,14 @@ func (sc *BlobTxSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) erro
 // blobTxWithBlobs is used for encoding of transactions when blobs are present.
 type blobTxWithBlobs struct {
 	BlobTx      *BlobTx
+	Blobs       []kzg4844.Blob
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
+}
+
+type versionedBlobTxWithBlobs struct {
+	BlobTx      *BlobTx
+	Version     byte
 	Blobs       []kzg4844.Blob
 	Commitments []kzg4844.Commitment
 	Proofs      []kzg4844.Proof
@@ -218,6 +241,17 @@ func (tx *BlobTx) encode(b *bytes.Buffer) error {
 	if tx.Sidecar == nil {
 		return rlp.Encode(b, tx)
 	}
+	// Encode a cell proof transaction
+	if tx.Sidecar.Version != 0 {
+		inner := &versionedBlobTxWithBlobs{
+			BlobTx:      tx,
+			Version:     tx.Sidecar.Version,
+			Blobs:       tx.Sidecar.Blobs,
+			Commitments: tx.Sidecar.Commitments,
+			Proofs:      tx.Sidecar.Proofs,
+		}
+		return rlp.Encode(b, inner)
+	}
 	inner := &blobTxWithBlobs{
 		BlobTx:      tx,
 		Blobs:       tx.Sidecar.Blobs,
@@ -246,13 +280,23 @@ func (tx *BlobTx) decode(input []byte) error {
 	if firstElemKind != rlp.List {
 		return rlp.DecodeBytes(input, tx)
 	}
-	// It's a tx with blobs.
-	var inner blobTxWithBlobs
+
+	// It's a tx with blobs. Try to decode it as version 0.
+	var inner versionedBlobTxWithBlobs
 	if err := rlp.DecodeBytes(input, &inner); err != nil {
-		return err
+		var innerV0 blobTxWithBlobs
+		if err := rlp.DecodeBytes(input, &innerV0); err != nil {
+			return err
+		}
+		inner.BlobTx = innerV0.BlobTx
+		inner.Version = 0
+		inner.Blobs = innerV0.Blobs
+		inner.Commitments = innerV0.Commitments
+		inner.Proofs = innerV0.Proofs
 	}
 	*tx = *inner.BlobTx
 	tx.Sidecar = &BlobTxSidecar{
+		Version:     inner.Version,
 		Blobs:       inner.Blobs,
 		Commitments: inner.Commitments,
 		Proofs:      inner.Proofs,
