@@ -23,7 +23,7 @@ import (
 	"errors"
 	"sync"
 
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
 	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -47,15 +47,19 @@ func ckzgInit() {
 	if err = gokzg4844.CheckTrustedSetupIsWellFormed(params); err != nil {
 		panic(err)
 	}
-	g1s := make([]byte, len(params.SetupG1Lagrange)*(len(params.SetupG1Lagrange[0])-2)/2)
+	g1Lag := make([]byte, len(params.SetupG1Lagrange)*(len(params.SetupG1Lagrange[0])-2)/2)
 	for i, g1 := range params.SetupG1Lagrange {
+		copy(g1Lag[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
+	}
+	g1s := make([]byte, len(params.SetupG1Monomial)*(len(params.SetupG1Monomial[0])-2)/2)
+	for i, g1 := range params.SetupG1Monomial {
 		copy(g1s[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
 	}
 	g2s := make([]byte, len(params.SetupG2)*(len(params.SetupG2[0])-2)/2)
 	for i, g2 := range params.SetupG2 {
 		copy(g2s[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
 	}
-	if err = ckzg4844.LoadTrustedSetup(g1s, g2s); err != nil {
+	if err = ckzg4844.LoadTrustedSetup(g1s, g1Lag, g2s, 1); err != nil {
 		panic(err)
 	}
 }
@@ -133,5 +137,9 @@ func ckzgComputeCells(blob *Blob) ([]Proof, error) {
 	if err != nil {
 		return []Proof{}, err
 	}
-	return ([]Proof)(proofs), nil
+	var p []Proof
+	for _, proof := range proofs {
+		p = append(p, (Proof)(proof))
+	}
+	return p, nil
 }
