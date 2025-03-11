@@ -55,9 +55,13 @@ var (
 		Usage: "number of blocks per era",
 		Value: era.MaxEra1Size,
 	}
+	inclTxsFlag = &cli.BoolFlag{
+		Name:  "incltx",
+		Usage: "include transaction field",
+	}
 	txsFlag = &cli.BoolFlag{
 		Name:  "txs",
-		Usage: "print full transaction values",
+		Usage: "print full transaction values. only valid when incltx is true",
 	}
 )
 
@@ -68,6 +72,7 @@ var (
 		ArgsUsage: "<number>",
 		Action:    block,
 		Flags: []cli.Flag{
+			inclTxsFlag,
 			txsFlag,
 		},
 	}
@@ -122,7 +127,7 @@ func block(ctx *cli.Context) error {
 		return fmt.Errorf("error reading block %d: %w", num, err)
 	}
 	// Convert block to JSON and print.
-	val := ethapi.RPCMarshalBlock(block, ctx.Bool(txsFlag.Name), ctx.Bool(txsFlag.Name), params.MainnetChainConfig)
+	val := ethapi.RPCMarshalBlock(block, ctx.Bool(inclTxsFlag.Name), ctx.Bool(txsFlag.Name), params.MainnetChainConfig)
 	b, err := json.MarshalIndent(val, "", "  ")
 	if err != nil {
 		return fmt.Errorf("error marshaling json: %w", err)
