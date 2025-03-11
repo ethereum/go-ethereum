@@ -34,6 +34,8 @@ var (
 	blobT       = reflect.TypeOf(Blob{})
 	commitmentT = reflect.TypeOf(Commitment{})
 	proofT      = reflect.TypeOf(Proof{})
+
+	CellProofsPerBlob = 128
 )
 
 // Blob represents a 4844 data blob.
@@ -83,6 +85,10 @@ type Claim [32]byte
 
 // useCKZG controls whether the cryptography should use the Go or C backend.
 var useCKZG atomic.Bool
+
+func init() {
+	UseCKZG(true)
+}
 
 // UseCKZG can be called to switch the default Go implementation of KZG to the C
 // library if for some reason the user wishes to do so (e.g. consensus bug in one
@@ -149,6 +155,16 @@ func VerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	return gokzgVerifyBlobProof(blob, commitment, proof)
 }
 
+// VerifyCellProofs verifies a batch of proofs corresponding to the blobs and commitments.
+// Expects length of blobs and commitments to be equal.
+// Expects length of proofs be 128 * length of blobs.
+func VerifyCellProofs(blobs []*Blob, commitments []Commitment, proofs []Proof) error {
+	if useCKZG.Load() {
+		return ckzgVerifyCellProofBatch(blobs, commitments, proofs)
+	}
+	return gokzgVerifyCellProofBatch(blobs, commitments, proofs)
+}
+
 // ComputeCellProofs returns the KZG cell proofs that are used to verify the blob against
 // the commitment.
 //
@@ -176,4 +192,11 @@ func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {
 // IsValidVersionedHash checks that h is a structurally-valid versioned blob hash.
 func IsValidVersionedHash(h []byte) bool {
 	return len(h) == 32 && h[0] == 0x01
+}
+
+func ComputeCells(blob *Blob) ([]Proof, error) {
+	if useCKZG.Load() {
+		return ckzgComputeCellProofs(blob)
+	}
+	return gokzgComputeCellProofs(blob)
 }

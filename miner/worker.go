@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -388,6 +389,25 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			log.Trace("Ignoring evicted transaction", "hash", ltx.Hash)
 			txs.Pop()
 			continue
+		}
+
+		// Make sure all transactions after osaka have cell proofs
+		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
+				if sidecar.Version == 0 {
+					log.Warn("Encountered Version 0 transaction post-Osaka, recompute proofs", "hash", ltx.Hash)
+					sidecar.Proofs = make([]kzg4844.Proof, 0)
+					for _, blob := range sidecar.Blobs {
+						cellProofs, err := kzg4844.ComputeCells(&blob)
+						if err != nil {
+							panic(err)
+						}
+						sidecar.Proofs = append(sidecar.Proofs, cellProofs...)
+					}
+					//txs.Pop()
+					//continue
+				}
+			}
 		}
 
 		// Error may be ignored here. The error has already been checked

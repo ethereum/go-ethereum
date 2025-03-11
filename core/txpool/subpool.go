@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/holiman/uint256"
 )
@@ -136,7 +135,11 @@ type SubPool interface {
 	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 	// This is a utility method for the engine API, enabling consensus clients to
 	// retrieve blobs from the pools directly instead of the network.
-	GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof)
+	GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar
+
+	// AvailableBlobs returns number of blobs corresponding to the  versioned hashes
+	// that are available in the sub pool.
+	AvailableBlobs(vhashes []common.Hash) int
 
 	// ValidateTxBasics checks whether a transaction is valid according to the consensus
 	// rules, but does not check state-dependent validation such as sufficient balance.
