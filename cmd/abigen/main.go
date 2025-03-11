@@ -93,10 +93,13 @@ func init() {
 }
 
 func abigen(c *cli.Context) error {
-	utils.CheckExclusive(c, abiFlag, jsonFlag) // Only one source can be selected.
+	flags.CheckExclusive(c, abiFlag, jsonFlag) // Only one source can be selected.
 
 	if c.String(pkgFlag.Name) == "" {
 		utils.Fatalf("No destination package specified (--pkg)")
+	}
+	if c.String(abiFlag.Name) == "" && c.String(jsonFlag.Name) == "" {
+		utils.Fatalf("Either contract ABI source (--abi) or combined-json (--combined-json) are required")
 	}
 	var lang bind.Lang
 	switch c.String(langFlag.Name) {

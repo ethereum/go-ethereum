@@ -238,7 +238,7 @@ func TestSetFeeDefaults(t *testing.T) {
 			t.Fatalf("failed to set fork: %v", err)
 		}
 		got := test.in
-		err := got.setFeeDefaults(ctx, b)
+		err := got.setFeeDefaults(ctx, b, b.CurrentHeader())
 		if err != nil {
 			if test.err == nil {
 				t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
@@ -279,6 +279,7 @@ func newBackendMock() *backendMock {
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(1000),
 		CancunTime:          &cancunTime,
+		BlobScheduleConfig:  params.DefaultBlobSchedule,
 	}
 	return &backendMock{
 		current: &types.Header{
@@ -369,15 +370,11 @@ func (b *backendMock) GetReceipts(ctx context.Context, hash common.Hash) (types.
 func (b *backendMock) GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error) {
 	return nil, nil
 }
-func (b *backendMock) GetTd(ctx context.Context, hash common.Hash) *big.Int { return nil }
-func (b *backendMock) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
+func (b *backendMock) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	return nil
 }
 func (b *backendMock) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription { return nil }
 func (b *backendMock) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return nil
-}
-func (b *backendMock) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return nil
 }
 func (b *backendMock) SendTx(ctx context.Context, signedTx *types.Transaction) error { return nil }

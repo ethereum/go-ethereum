@@ -8,8 +8,11 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -20,9 +23,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr     = crypto.PubkeyToAddress(testKey.PublicKey)
+	testContract = common.HexToAddress("0xbeef")
+	testEmpty    = common.HexToAddress("0xeeee")
+	testSlot     = common.HexToHash("0xdeadbeef")
+	testValue    = crypto.Keccak256Hash(testSlot[:])
+	testBalance  = big.NewInt(2e15)
+)
+
+func generateTestChain() (*core.Genesis, []*types.Block) {
+	genesis := &core.Genesis{
+		Config: params.AllEthashProtocolChanges,
+		Alloc: types.GenesisAlloc{
+			testAddr:     {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
+			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}},
+			testEmpty:    {Balance: big.NewInt(1)},
+		},
+		ExtraData: []byte("test genesis"),
+		Timestamp: 9000,
+	}
+	generate := func(i int, g *core.BlockGen) {
+		g.OffsetTime(5)
+		g.SetExtra([]byte("test"))
+	}
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, generate)
+	blocks = append([]*types.Block{genesis.ToBlock()}, blocks...)
+	return genesis, blocks
+}
+
 func newTaikoAPITestClient(t *testing.T) (*Client, []*types.Block, ethdb.Database) {
 	// Generate test chain.
-	blocks := generateTestChain()
+	genesis, blocks := generateTestChain()
 
 	// Create node
 	n, err := node.New(&node.Config{})
@@ -37,7 +70,6 @@ func newTaikoAPITestClient(t *testing.T) (*Client, []*types.Block, ethdb.Databas
 	n.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "taiko",
-			Version:   params.VersionWithMeta,
 			Service:   eth.NewTaikoAPIBackend(ethservice),
 			Public:    true,
 		},

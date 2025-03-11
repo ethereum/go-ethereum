@@ -18,26 +18,22 @@ package core
 
 import (
 	"crypto/ecdsa"
-	"encoding/binary"
+	"math"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -50,25 +46,7 @@ func u64(val uint64) *uint64 { return &val }
 // contain invalid transactions
 func TestStateProcessorErrors(t *testing.T) {
 	var (
-		config = &params.ChainConfig{
-			ChainID:                       big.NewInt(1),
-			HomesteadBlock:                big.NewInt(0),
-			EIP150Block:                   big.NewInt(0),
-			EIP155Block:                   big.NewInt(0),
-			EIP158Block:                   big.NewInt(0),
-			ByzantiumBlock:                big.NewInt(0),
-			ConstantinopleBlock:           big.NewInt(0),
-			PetersburgBlock:               big.NewInt(0),
-			IstanbulBlock:                 big.NewInt(0),
-			MuirGlacierBlock:              big.NewInt(0),
-			BerlinBlock:                   big.NewInt(0),
-			LondonBlock:                   big.NewInt(0),
-			Ethash:                        new(params.EthashConfig),
-			TerminalTotalDifficulty:       big.NewInt(0),
-			TerminalTotalDifficultyPassed: true,
-			ShanghaiTime:                  new(uint64),
-			CancunTime:                    new(uint64),
-		}
+		config  = params.MergedTestChainConfig
 		signer  = types.LatestSigner(config)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("0202020202020202020202020202020202020202020202020202002020202020")
@@ -109,6 +87,21 @@ func TestStateProcessorErrors(t *testing.T) {
 			BlobHashes: hashes,
 			BlobFeeCap: uint256.MustFromBig(blobGasFeeCap),
 			Value:      new(uint256.Int),
+		}), signer, key1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tx
+	}
+	var mkSetCodeTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int, authlist []types.SetCodeAuthorization) *types.Transaction {
+		tx, err := types.SignTx(types.NewTx(&types.SetCodeTx{
+			Nonce:     nonce,
+			GasTipCap: uint256.MustFromBig(gasTipCap),
+			GasFeeCap: uint256.MustFromBig(gasFeeCap),
+			Gas:       gasLimit,
+			To:        to,
+			Value:     new(uint256.Int),
+			AuthList:  authlist,
 		}), signer, key1)
 		if err != nil {
 			t.Fatal(err)
@@ -240,9 +233,9 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrMaxInitCodeSizeExceeded
 				txs: []*types.Transaction{
-					mkDynamicCreationTx(0, 500000, common.Big0, big.NewInt(params.InitialBaseFee), tooBigInitCode[:]),
+					mkDynamicCreationTx(0, 520000, common.Big0, big.NewInt(params.InitialBaseFee), tooBigInitCode[:]),
 				},
-				want: "could not apply tx 0 [0xd491405f06c92d118dd3208376fcee18a57c54bc52063ee4a26b1cf296857c25]: max initcode size exceeded: code size 49153 limit 49152",
+				want: "could not apply tx 0 [0x3a30404d42d6ccc843d7c391fd0c87b9b9795a0c174261b46d2ac95ca17b81cd]: max initcode size exceeded: code size 49153 limit 49152",
 			},
 			{ // ErrIntrinsicGas: Not enough gas to cover init code
 				txs: []*types.Transaction{
@@ -256,8 +249,15 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				want: "could not apply tx 0 [0x6c11015985ce82db691d7b2d017acda296db88b811c3c60dc71449c76256c716]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 1, baseFee: 875000000",
 			},
+			{ // ErrEmptyAuthList
+				txs: []*types.Transaction{
+					mkSetCodeTx(0, common.Address{}, params.TxGas, big.NewInt(params.InitialBaseFee), big.NewInt(params.InitialBaseFee), nil),
+				},
+				want: "could not apply tx 0 [0xc18d10f4c809dbdfa1a074c3300de9bc4b7f16a20f0ec667f6f67312b71b956a]: EIP-7702 transaction with empty auth list (sender 0x71562b71999873DB5b286dF957af199Ec94617F7)",
+			},
+			// ErrSetCodeTxCreate cannot be tested: it is impossible to create a SetCode-tx with nil `to`.
 		} {
-			block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
+			block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config, false)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
@@ -306,7 +306,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: transaction type not supported",
 			},
 		} {
-			block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config)
+			block := GenerateBadBlock(gspec.ToBlock(), ethash.NewFaker(), tt.txs, gspec.Config, true)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
@@ -342,10 +342,10 @@ func TestStateProcessorErrors(t *testing.T) {
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas-1000, big.NewInt(0), big.NewInt(0)),
 				},
-				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, codehash: 0x9280914443471259d4570a8661015ae4a5b80186dbc619658fb494bebc3da3d1",
+				want: "could not apply tx 0 [0x88626ac0d53cb65308f2416103c62bb1f18b805573d4f96a3640bbbfff13c14f]: sender not an eoa: address 0x71562b71999873DB5b286dF957af199Ec94617F7, len(code): 4",
 			},
 		} {
-			block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
+			block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config, false)
 			_, err := blockchain.InsertChain(types.Blocks{block})
 			if err == nil {
 				t.Fatal("block imported without errors")
@@ -361,9 +361,9 @@ func TestStateProcessorErrors(t *testing.T) {
 // valid, and no proper post-state can be made. But from the perspective of the blockchain, the block is sufficiently
 // valid to be considered for import:
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
-func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
+func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig, isPOW bool) *types.Block {
 	difficulty := big.NewInt(0)
-	if !config.TerminalTotalDifficultyPassed {
+	if isPOW {
 		fakeChainReader := newChainMaker(nil, config, engine)
 		difficulty = engine.CalcDifficulty(fakeChainReader, parent.Time()+10, &types.Header{
 			Number:     parent.Number(),
@@ -407,12 +407,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	if config.IsCancun(header.Number, header.Time) {
-		var pExcess, pUsed = uint64(0), uint64(0)
-		if parent.ExcessBlobGas() != nil {
-			pExcess = *parent.ExcessBlobGas()
-			pUsed = *parent.BlobGasUsed()
-		}
-		excess := eip4844.CalcExcessBlobGas(pExcess, pUsed)
+		excess := eip4844.CalcExcessBlobGas(config, parent.Header(), header.Time)
 		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
 		header.ExcessBlobGas = &excess
 		header.BlobGasUsed = &used
@@ -426,197 +421,4 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		body.Withdrawals = []*types.Withdrawal{}
 	}
 	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
-}
-
-var (
-	code                            = common.FromHex(`6060604052600a8060106000396000f360606040526008565b00`)
-	intrinsicContractCreationGas, _ = IntrinsicGas(code, nil, true, true, true, true)
-	// A contract creation that calls EXTCODECOPY in the constructor. Used to ensure that the witness
-	// will not contain that copied data.
-	// Source: https://gist.github.com/gballet/a23db1e1cb4ed105616b5920feb75985
-	codeWithExtCodeCopy                = common.FromHex(`0x60806040526040516100109061017b565b604051809103906000f08015801561002c573d6000803e3d6000fd5b506000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555034801561007857600080fd5b5060008067ffffffffffffffff8111156100955761009461024a565b5b6040519080825280601f01601f1916602001820160405280156100c75781602001600182028036833780820191505090505b50905060008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1690506020600083833c81610101906101e3565b60405161010d90610187565b61011791906101a3565b604051809103906000f080158015610133573d6000803e3d6000fd5b50600160006101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550505061029b565b60d58061046783390190565b6102068061053c83390190565b61019d816101d9565b82525050565b60006020820190506101b86000830184610194565b92915050565b6000819050602082019050919050565b600081519050919050565b6000819050919050565b60006101ee826101ce565b826101f8846101be565b905061020381610279565b925060208210156102435761023e7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8360200360080261028e565b831692505b5050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b600061028582516101d9565b80915050919050565b600082821b905092915050565b6101bd806102aa6000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c8063f566852414610030575b600080fd5b61003861004e565b6040516100459190610146565b60405180910390f35b6000600160009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166381ca91d36040518163ffffffff1660e01b815260040160206040518083038186803b1580156100b857600080fd5b505afa1580156100cc573d6000803e3d6000fd5b505050506040513d601f19601f820116820180604052508101906100f0919061010a565b905090565b60008151905061010481610170565b92915050565b6000602082840312156101205761011f61016b565b5b600061012e848285016100f5565b91505092915050565b61014081610161565b82525050565b600060208201905061015b6000830184610137565b92915050565b6000819050919050565b600080fd5b61017981610161565b811461018457600080fd5b5056fea2646970667358221220a6a0e11af79f176f9c421b7b12f441356b25f6489b83d38cc828a701720b41f164736f6c63430008070033608060405234801561001057600080fd5b5060b68061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063ab5ed15014602d575b600080fd5b60336047565b604051603e9190605d565b60405180910390f35b60006001905090565b6057816076565b82525050565b6000602082019050607060008301846050565b92915050565b600081905091905056fea26469706673582212203a14eb0d5cd07c277d3e24912f110ddda3e553245a99afc4eeefb2fbae5327aa64736f6c63430008070033608060405234801561001057600080fd5b5060405161020638038061020683398181016040528101906100329190610063565b60018160001c6100429190610090565b60008190555050610145565b60008151905061005d8161012e565b92915050565b60006020828403121561007957610078610129565b5b60006100878482850161004e565b91505092915050565b600061009b826100f0565b91506100a6836100f0565b9250827fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff038211156100db576100da6100fa565b5b828201905092915050565b6000819050919050565b6000819050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b600080fd5b610137816100e6565b811461014257600080fd5b50565b60b3806101536000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806381ca91d314602d575b600080fd5b60336047565b604051603e9190605a565b60405180910390f35b60005481565b6054816073565b82525050565b6000602082019050606d6000830184604d565b92915050565b600081905091905056fea26469706673582212209bff7098a2f526de1ad499866f27d6d0d6f17b74a413036d6063ca6a0998ca4264736f6c63430008070033`)
-	intrinsicCodeWithExtCodeCopyGas, _ = IntrinsicGas(codeWithExtCodeCopy, nil, true, true, true, true)
-)
-
-func TestProcessVerkle(t *testing.T) {
-	var (
-		config = &params.ChainConfig{
-			ChainID:                       big.NewInt(1),
-			HomesteadBlock:                big.NewInt(0),
-			EIP150Block:                   big.NewInt(0),
-			EIP155Block:                   big.NewInt(0),
-			EIP158Block:                   big.NewInt(0),
-			ByzantiumBlock:                big.NewInt(0),
-			ConstantinopleBlock:           big.NewInt(0),
-			PetersburgBlock:               big.NewInt(0),
-			IstanbulBlock:                 big.NewInt(0),
-			MuirGlacierBlock:              big.NewInt(0),
-			BerlinBlock:                   big.NewInt(0),
-			LondonBlock:                   big.NewInt(0),
-			Ethash:                        new(params.EthashConfig),
-			ShanghaiTime:                  u64(0),
-			VerkleTime:                    u64(0),
-			TerminalTotalDifficulty:       common.Big0,
-			TerminalTotalDifficultyPassed: true,
-			// TODO uncomment when proof generation is merged
-			// ProofInBlocks:                 true,
-		}
-		signer     = types.LatestSigner(config)
-		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		bcdb       = rawdb.NewMemoryDatabase() // Database for the blockchain
-		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
-		gspec      = &Genesis{
-			Config: config,
-			Alloc: GenesisAlloc{
-				coinbase: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-			},
-		}
-	)
-	// Verkle trees use the snapshot, which must be enabled before the
-	// data is saved into the tree+database.
-	// genesis := gspec.MustCommit(bcdb, triedb)
-	cacheConfig := DefaultCacheConfigWithScheme("path")
-	cacheConfig.SnapshotLimit = 0
-	blockchain, _ := NewBlockChain(bcdb, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
-	defer blockchain.Stop()
-
-	txCost1 := params.TxGas
-	txCost2 := params.TxGas
-	contractCreationCost := intrinsicContractCreationGas +
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* creation with value */
-		739 /* execution costs */
-	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas +
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (tx) */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (CREATE at pc=0x20) */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #0 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #1 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #2 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #3 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #4 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #5 */
-		params.WitnessChunkReadCost + /* SLOAD in constructor */
-		params.WitnessChunkWriteCost + /* SSTORE in constructor */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (CREATE at PC=0x121) */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #0 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #1 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #2 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #3 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #4 */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #5 */
-		params.WitnessChunkReadCost + /* SLOAD in constructor */
-		params.WitnessChunkWriteCost + /* SSTORE in constructor */
-		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash for tx creation */
-		15*(params.WitnessChunkReadCost+params.WitnessChunkWriteCost) + /* code chunks #0..#14 */
-		4844 /* execution costs */
-	blockGasUsagesExpected := []uint64{
-		txCost1*2 + txCost2,
-		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
-	}
-	_, chain, _, proofs, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
-		gen.SetPoS()
-
-		// TODO need to check that the tx cost provided is the exact amount used (no remaining left-over)
-		tx, _ := types.SignTx(types.NewTransaction(uint64(i)*3, common.Address{byte(i), 2, 3}, big.NewInt(999), txCost1, big.NewInt(875000000), nil), signer, testKey)
-		gen.AddTx(tx)
-		tx, _ = types.SignTx(types.NewTransaction(uint64(i)*3+1, common.Address{}, big.NewInt(999), txCost1, big.NewInt(875000000), nil), signer, testKey)
-		gen.AddTx(tx)
-		tx, _ = types.SignTx(types.NewTransaction(uint64(i)*3+2, common.Address{}, big.NewInt(0), txCost2, big.NewInt(875000000), nil), signer, testKey)
-		gen.AddTx(tx)
-
-		// Add two contract creations in block #2
-		if i == 1 {
-			tx, _ = types.SignTx(types.NewContractCreation(6, big.NewInt(16), 3000000, big.NewInt(875000000), code), signer, testKey)
-			gen.AddTx(tx)
-
-			tx, _ = types.SignTx(types.NewContractCreation(7, big.NewInt(0), 3000000, big.NewInt(875000000), codeWithExtCodeCopy), signer, testKey)
-			gen.AddTx(tx)
-		}
-	})
-
-	// Check proof for both blocks
-	err := verkle.Verify(proofs[0], gspec.ToBlock().Root().Bytes(), chain[0].Root().Bytes(), statediffs[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = verkle.Verify(proofs[1], chain[0].Root().Bytes(), chain[1].Root().Bytes(), statediffs[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log("verified verkle proof, inserting blocks into the chain")
-
-	endnum, err := blockchain.InsertChain(chain)
-	if err != nil {
-		t.Fatalf("block %d imported with error: %v", endnum, err)
-	}
-
-	for i := 0; i < 2; i++ {
-		b := blockchain.GetBlockByNumber(uint64(i) + 1)
-		if b == nil {
-			t.Fatalf("expected block %d to be present in chain", i+1)
-		}
-		if b.Hash() != chain[i].Hash() {
-			t.Fatalf("block #%d not found at expected height", b.NumberU64())
-		}
-		if b.GasUsed() != blockGasUsagesExpected[i] {
-			t.Fatalf("expected block #%d txs to use %d, got %d\n", b.NumberU64(), blockGasUsagesExpected[i], b.GasUsed())
-		}
-	}
-}
-
-func TestProcessParentBlockHash(t *testing.T) {
-	var (
-		chainConfig = params.MergedTestChainConfig
-		hashA       = common.Hash{0x01}
-		hashB       = common.Hash{0x02}
-		header      = &types.Header{ParentHash: hashA, Number: big.NewInt(2), Difficulty: big.NewInt(0)}
-		parent      = &types.Header{ParentHash: hashB, Number: big.NewInt(1), Difficulty: big.NewInt(0)}
-		coinbase    = common.Address{}
-	)
-	test := func(statedb *state.StateDB) {
-		statedb.SetNonce(params.HistoryStorageAddress, 1)
-		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
-		statedb.IntermediateRoot(true)
-
-		vmContext := NewEVMBlockContext(header, nil, &coinbase)
-		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-		ProcessParentBlockHash(header.ParentHash, evm, statedb)
-
-		vmContext = NewEVMBlockContext(parent, nil, &coinbase)
-		evm = vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-		ProcessParentBlockHash(parent.ParentHash, evm, statedb)
-
-		// make sure that the state is correct
-		if have := getParentBlockHash(statedb, 1); have != hashA {
-			t.Errorf("want parent hash %v, have %v", hashA, have)
-		}
-		if have := getParentBlockHash(statedb, 0); have != hashB {
-			t.Errorf("want parent hash %v, have %v", hashB, have)
-		}
-	}
-	t.Run("MPT", func(t *testing.T) {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-		test(statedb)
-	})
-	t.Run("Verkle", func(t *testing.T) {
-		db := rawdb.NewMemoryDatabase()
-		cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
-		cacheConfig.SnapshotLimit = 0
-		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
-		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))
-		test(statedb)
-	})
-}
-
-func getParentBlockHash(statedb *state.StateDB, number uint64) common.Hash {
-	ringIndex := number % params.HistoryServeWindow
-	var key common.Hash
-	binary.BigEndian.PutUint64(key[24:], ringIndex)
-	return statedb.GetState(params.HistoryStorageAddress, key)
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/taiko"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -16,17 +17,23 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
 	testL2RollupAddress = common.HexToAddress("0x79fcdef22feed20eddacbb2587640e45491b757f")
-	testKey, _          = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	goldenTouchKey, _   = crypto.HexToECDSA("92954368afd3caa1f3ce3ead0069c1af414054aefe1ef9aeacc1bf426222ce38")
+	testKey, _          = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddr            = crypto.PubkeyToAddress(testKey.PublicKey)
+	testContract        = common.HexToAddress("0xbeef")
+	testEmpty           = common.HexToAddress("0xeeee")
+	testSlot            = common.HexToHash("0xdeadbeef")
+	testValue           = crypto.Keccak256Hash(testSlot[:])
+	testBalance         = big.NewInt(2e15)
 
 	genesis    *core.Genesis
 	txs        []*types.Transaction
@@ -95,64 +102,52 @@ func init() {
 
 func newTestBackend(t *testing.T) (*eth.Ethereum, []*types.Block) {
 	// Generate test chain.
-	blocks := generateTestChain()
-
+	genesis, blocks := generateTestChain()
 	// Create node
 	n, err := node.New(&node.Config{})
 	if err != nil {
 		t.Fatalf("can't create new node: %v", err)
 	}
-
 	// Create Ethereum Service
-	config := &ethconfig.Config{
-		Genesis: genesis,
-	}
-
+	config := &ethconfig.Config{Genesis: genesis, RPCGasCap: 1000000}
 	ethservice, err := eth.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
+	filterSystem := filters.NewFilterSystem(ethservice.APIBackend, filters.Config{})
+	n.RegisterAPIs([]rpc.API{{
+		Namespace: "eth",
+		Service:   filters.NewFilterAPI(filterSystem),
+	}})
 
 	// Import the test chain.
 	if err := n.Start(); err != nil {
 		t.Fatalf("can't start test node: %v", err)
 	}
-
 	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
 		t.Fatalf("can't import test blocks: %v", err)
 	}
-
-	if _, ok := ethservice.Engine().(*taiko.Taiko); !ok {
-		t.Fatalf("not use taiko engine")
-	}
-
 	return ethservice, blocks
 }
 
-func generateTestChain() []*types.Block {
-	db := rawdb.NewMemoryDatabase()
+func generateTestChain() (*core.Genesis, []*types.Block) {
+	genesis := &core.Genesis{
+		Config: params.AllEthashProtocolChanges,
+		Alloc: types.GenesisAlloc{
+			testAddr:     {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
+			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}},
+			testEmpty:    {Balance: big.NewInt(1)},
+		},
+		ExtraData: []byte("test genesis"),
+		Timestamp: 9000,
+	}
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
-
 		g.SetExtra([]byte("test_taiko"))
-		g.SetDifficulty(common.Big0)
-
-		for i, tx := range txs {
-			if i == 0 {
-				if err := tx.MarkAsAnchor(); err != nil {
-					panic(err)
-				}
-			}
-			g.AddTx(tx)
-		}
 	}
-
-	gblock := genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
-
-	blocks, _ := core.GenerateChain(genesis.Config, gblock, testEngine, db, 1, generate)
-
-	blocks = append([]*types.Block{gblock}, blocks...)
-	return blocks
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, generate)
+	blocks = append([]*types.Block{genesis.ToBlock()}, blocks...)
+	return genesis, blocks
 }
 
 func TestVerifyHeader(t *testing.T) {

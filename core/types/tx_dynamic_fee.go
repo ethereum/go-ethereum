@@ -37,9 +37,9 @@ type DynamicFeeTx struct {
 	AccessList AccessList
 
 	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
+	V *big.Int
+	R *big.Int
+	S *big.Int
 
 	// CHANGE(taiko): if this transaction is the first TaikoL2.anchor transaction in a block
 	isAnhcor bool

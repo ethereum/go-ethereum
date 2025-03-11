@@ -546,9 +546,7 @@ func TestYParityJSONUnmarshalling(t *testing.T) {
 		DynamicFeeTxType,
 		BlobTxType,
 	} {
-		txType := txType
 		for _, test := range tests {
-			test := test
 			t.Run(fmt.Sprintf("txType=%d: %s", txType, test.name), func(t *testing.T) {
 				// Copy the base json
 				testJson := maps.Clone(baseJson)

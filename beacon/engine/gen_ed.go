@@ -34,7 +34,6 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 		Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 		BlobGasUsed      *hexutil.Uint64         `json:"blobGasUsed"`
 		ExcessBlobGas    *hexutil.Uint64         `json:"excessBlobGas"`
-		Deposits         types.Deposits          `json:"depositRequests"`
 		ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 		TxHash           common.Hash             `json:"txHash"`
 		WithdrawalsHash  common.Hash             `json:"withdrawalsHash"`
@@ -63,7 +62,6 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 	enc.Withdrawals = e.Withdrawals
 	enc.BlobGasUsed = (*hexutil.Uint64)(e.BlobGasUsed)
 	enc.ExcessBlobGas = (*hexutil.Uint64)(e.ExcessBlobGas)
-	enc.Deposits = e.Deposits
 	enc.ExecutionWitness = e.ExecutionWitness
 	enc.TxHash = e.TxHash
 	enc.WithdrawalsHash = e.WithdrawalsHash
@@ -91,7 +89,6 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 		Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 		BlobGasUsed      *hexutil.Uint64         `json:"blobGasUsed"`
 		ExcessBlobGas    *hexutil.Uint64         `json:"excessBlobGas"`
-		Deposits         *types.Deposits         `json:"depositRequests"`
 		ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 		TxHash           *common.Hash            `json:"txHash"`
 		WithdrawalsHash  *common.Hash            `json:"withdrawalsHash"`
@@ -167,9 +164,6 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ExcessBlobGas != nil {
 		e.ExcessBlobGas = (*uint64)(dec.ExcessBlobGas)
-	}
-	if dec.Deposits != nil {
-		e.Deposits = *dec.Deposits
 	}
 	if dec.ExecutionWitness != nil {
 		e.ExecutionWitness = dec.ExecutionWitness

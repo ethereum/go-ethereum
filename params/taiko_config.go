@@ -77,20 +77,19 @@ func NetworkIDToChainConfigOrDefault(networkID *big.Int) *ChainConfig {
 }
 
 var TaikoChainConfig = &ChainConfig{
-	ChainID:                       TaikoInternalL2ANetworkID, // Use Internal Devnet network ID by default.
-	HomesteadBlock:                common.Big0,
-	EIP150Block:                   common.Big0,
-	EIP155Block:                   common.Big0,
-	EIP158Block:                   common.Big0,
-	ByzantiumBlock:                common.Big0,
-	ConstantinopleBlock:           common.Big0,
-	PetersburgBlock:               common.Big0,
-	IstanbulBlock:                 common.Big0,
-	BerlinBlock:                   common.Big0,
-	LondonBlock:                   common.Big0,
-	ShanghaiTime:                  u64(0),
-	MergeNetsplitBlock:            nil,
-	TerminalTotalDifficulty:       common.Big0,
-	TerminalTotalDifficultyPassed: true,
-	Taiko:                         true,
+	ChainID:                 TaikoInternalL2ANetworkID, // Use Internal Devnet network ID by default.
+	HomesteadBlock:          common.Big0,
+	EIP150Block:             common.Big0,
+	EIP155Block:             common.Big0,
+	EIP158Block:             common.Big0,
+	ByzantiumBlock:          common.Big0,
+	ConstantinopleBlock:     common.Big0,
+	PetersburgBlock:         common.Big0,
+	IstanbulBlock:           common.Big0,
+	BerlinBlock:             common.Big0,
+	LondonBlock:             common.Big0,
+	ShanghaiTime:            u64(0),
+	MergeNetsplitBlock:      nil,
+	TerminalTotalDifficulty: common.Big0,
+	Taiko:                   true,
 }

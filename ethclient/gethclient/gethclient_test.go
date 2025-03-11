@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
@@ -164,55 +165,85 @@ func TestGethClient(t *testing.T) {
 
 func testAccessList(t *testing.T, client *rpc.Client) {
 	ec := New(client)
-	// Test transfer
-	msg := ethereum.CallMsg{
-		From:     testAddr,
-		To:       &common.Address{},
-		Gas:      21000,
-		GasPrice: big.NewInt(875000000),
-		Value:    big.NewInt(1),
-	}
-	al, gas, vmErr, err := ec.CreateAccessList(context.Background(), msg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if vmErr != "" {
-		t.Fatalf("unexpected vm error: %v", vmErr)
-	}
-	if gas != 21000 {
-		t.Fatalf("unexpected gas used: %v", gas)
-	}
-	if len(*al) != 0 {
-		t.Fatalf("unexpected length of accesslist: %v", len(*al))
-	}
-	// Test reverting transaction
-	msg = ethereum.CallMsg{
-		From:     testAddr,
-		To:       nil,
-		Gas:      100000,
-		GasPrice: big.NewInt(1000000000),
-		Value:    big.NewInt(1),
-		Data:     common.FromHex("0x608060806080608155fd"),
-	}
-	al, gas, vmErr, err = ec.CreateAccessList(context.Background(), msg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if vmErr == "" {
-		t.Fatalf("wanted vmErr, got none")
-	}
-	if gas == 21000 {
-		t.Fatalf("unexpected gas used: %v", gas)
-	}
-	if len(*al) != 1 || al.StorageKeys() != 1 {
-		t.Fatalf("unexpected length of accesslist: %v", len(*al))
-	}
-	// address changes between calls, so we can't test for it.
-	if (*al)[0].Address == common.HexToAddress("0x0") {
-		t.Fatalf("unexpected address: %v", (*al)[0].Address)
-	}
-	if (*al)[0].StorageKeys[0] != common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000081") {
-		t.Fatalf("unexpected storage key: %v", (*al)[0].StorageKeys[0])
+
+	for i, tc := range []struct {
+		msg       ethereum.CallMsg
+		wantGas   uint64
+		wantErr   string
+		wantVMErr string
+		wantAL    string
+	}{
+		{ // Test transfer
+			msg: ethereum.CallMsg{
+				From:     testAddr,
+				To:       &common.Address{},
+				Gas:      21000,
+				GasPrice: big.NewInt(875000000),
+				Value:    big.NewInt(1),
+			},
+			wantGas: 21000,
+			wantAL:  `[]`,
+		},
+		{ // Test reverting transaction
+			msg: ethereum.CallMsg{
+				From:     testAddr,
+				To:       nil,
+				Gas:      100000,
+				GasPrice: big.NewInt(1000000000),
+				Value:    big.NewInt(1),
+				Data:     common.FromHex("0x608060806080608155fd"),
+			},
+			wantGas:   77496,
+			wantVMErr: "execution reverted",
+			wantAL: `[
+  {
+    "address": "0x3a220f351252089d385b29beca14e27f204c296a",
+    "storageKeys": [
+      "0x0000000000000000000000000000000000000000000000000000000000000081"
+    ]
+  }
+]`,
+		},
+		{ // error when gasPrice is less than baseFee
+			msg: ethereum.CallMsg{
+				From:     testAddr,
+				To:       &common.Address{},
+				Gas:      21000,
+				GasPrice: big.NewInt(1), // less than baseFee
+				Value:    big.NewInt(1),
+			},
+			wantErr: "max fee per gas less than block base fee",
+		},
+		{ // when gasPrice is not specified
+			msg: ethereum.CallMsg{
+				From:  testAddr,
+				To:    &common.Address{},
+				Gas:   21000,
+				Value: big.NewInt(1),
+			},
+			wantGas: 21000,
+			wantAL:  `[]`,
+		},
+	} {
+		al, gas, vmErr, err := ec.CreateAccessList(context.Background(), tc.msg)
+		if tc.wantErr != "" {
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("test %d: wrong error: %v", i, err)
+			}
+			continue
+		} else if err != nil {
+			t.Fatalf("test %d: wrong error: %v", i, err)
+		}
+		if have, want := vmErr, tc.wantVMErr; have != want {
+			t.Fatalf("test %d: vmErr wrong, have %v want %v", i, have, want)
+		}
+		if have, want := gas, tc.wantGas; have != want {
+			t.Fatalf("test %d: gas wrong, have %v want %v", i, have, want)
+		}
+		haveList, _ := json.MarshalIndent(al, "", "  ")
+		if have, want := string(haveList), tc.wantAL; have != want {
+			t.Fatalf("test %d: access list wrong, have:\n%v\nwant:\n%v", i, have, want)
+		}
 	}
 }
 

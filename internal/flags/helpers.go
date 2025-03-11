@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
@@ -39,23 +38,14 @@ func NewApp(usage string) *cli.App {
 	git, _ := version.VCS()
 	app := cli.NewApp()
 	app.EnableBashCompletion = true
-	app.Version = params.VersionWithCommit(git.Commit, git.Date)
+	app.Version = version.WithCommit(git.Commit, git.Date)
 	app.Usage = usage
-	app.Copyright = "Copyright 2013-2024 The go-ethereum Authors"
+	app.Copyright = "Copyright 2013-2025 The go-ethereum Authors"
 	app.Before = func(ctx *cli.Context) error {
 		MigrateGlobalFlags(ctx)
 		return nil
 	}
 	return app
-}
-
-// Merge merges the given flag slices.
-func Merge(groups ...[]cli.Flag) []cli.Flag {
-	var ret []cli.Flag
-	for _, group := range groups {
-		ret = append(ret, group...)
-	}
-	return ret
 }
 
 var migrationApplied = map[*cli.Command]struct{}{}
@@ -266,9 +256,6 @@ func AutoEnvVars(flags []cli.Flag, prefix string) {
 		case *BigFlag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
 
-		case *TextMarshalerFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
 		case *DirectoryFlag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
 		}
@@ -306,5 +293,47 @@ func CheckEnvVars(ctx *cli.Context, flags []cli.Flag, prefix string) {
 		} else {
 			log.Warn("Unknown config environment variable", "envvar", key)
 		}
+	}
+}
+
+// CheckExclusive verifies that only a single instance of the provided flags was
+// set by the user. Each flag might optionally be followed by a string type to
+// specialize it further.
+func CheckExclusive(ctx *cli.Context, args ...any) {
+	set := make([]string, 0, 1)
+	for i := 0; i < len(args); i++ {
+		// Make sure the next argument is a flag and skip if not set
+		flag, ok := args[i].(cli.Flag)
+		if !ok {
+			panic(fmt.Sprintf("invalid argument, not cli.Flag type: %T", args[i]))
+		}
+		// Check if next arg extends current and expand its name if so
+		name := flag.Names()[0]
+
+		if i+1 < len(args) {
+			switch option := args[i+1].(type) {
+			case string:
+				// Extended flag check, make sure value set doesn't conflict with passed in option
+				if ctx.String(flag.Names()[0]) == option {
+					name += "=" + option
+					set = append(set, "--"+name)
+				}
+				// shift arguments and continue
+				i++
+				continue
+
+			case cli.Flag:
+			default:
+				panic(fmt.Sprintf("invalid argument, not cli.Flag or string extension: %T", args[i+1]))
+			}
+		}
+		// Mark the flag if it's set
+		if ctx.IsSet(flag.Names()[0]) {
+			set = append(set, "--"+name)
+		}
+	}
+	if len(set) > 1 {
+		fmt.Fprintf(os.Stderr, "Flags %v can't be used at the same time", strings.Join(set, ", "))
+		os.Exit(1)
 	}
 }

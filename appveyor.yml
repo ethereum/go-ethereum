@@ -24,7 +24,8 @@ for:
         - image: Ubuntu
     build_script:
       - go run build/ci.go lint
-      - go run build/ci.go generate -verify
+      - go run build/ci.go check_generate
+      - go run build/ci.go check_baddeps
       - go run build/ci.go install -dlgo
     test_script:
       - go run build/ci.go test -dlgo -short
@@ -46,9 +47,9 @@ for:
       GETH_CC: '%GETH_MINGW%\bin\gcc.exe'
       PATH: '%GETH_MINGW%\bin;C:\Program Files (x86)\NSIS\;%PATH%'
     build_script:
-      - 'echo %GETH_ARCH%'
-      - 'echo %GETH_CC%'
-      - '%GETH_CC% --version'
+      - "echo %GETH_ARCH%"
+      - "echo %GETH_CC%"
+      - "%GETH_CC% --version"
       - go run build/ci.go install -dlgo -arch %GETH_ARCH% -cc %GETH_CC%
     after_build:
       # Upload builds. Note that ci.go makes this a no-op PR builds.

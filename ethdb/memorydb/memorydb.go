@@ -121,6 +121,23 @@ func (db *Database) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
+func (db *Database) DeleteRange(start, end []byte) error {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+	if db.db == nil {
+		return errMemorydbClosed
+	}
+
+	for key := range db.db {
+		if key >= string(start) && key < string(end) {
+			delete(db.db, key)
+		}
+	}
+	return nil
+}
+
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
 func (db *Database) NewBatch() ethdb.Batch {

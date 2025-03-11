@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -8,14 +9,10 @@ import (
 	"sync"
 )
 
-// DuplicateMetric is the error returned by Registry. Register when a metric
+// ErrDuplicateMetric is the error returned by Registry.Register when a metric
 // already exists. If you mean to Register that metric you must first
 // Unregister the existing metric.
-type DuplicateMetric string
-
-func (err DuplicateMetric) Error() string {
-	return fmt.Sprintf("duplicate metric: %s", string(err))
-}
+var ErrDuplicateMetric = errors.New("duplicate metric")
 
 // A Registry holds references to a set of metrics by name and can iterate
 // over them, calling callback functions provided by the user.
@@ -114,13 +111,13 @@ func (r *StandardRegistry) GetOrRegister(name string, i interface{}) interface{}
 	return item
 }
 
-// Register the given metric under the given name. Returns a DuplicateMetric
+// Register the given metric under the given name. Returns a ErrDuplicateMetric
 // if a metric by the given name is already registered.
 func (r *StandardRegistry) Register(name string, i interface{}) error {
 	// fast path
 	_, ok := r.metrics.Load(name)
 	if ok {
-		return DuplicateMetric(name)
+		return fmt.Errorf("%w: %v", ErrDuplicateMetric, name)
 	}
 
 	if v := reflect.ValueOf(i); v.Kind() == reflect.Func {
@@ -128,7 +125,7 @@ func (r *StandardRegistry) Register(name string, i interface{}) error {
 	}
 	_, loaded, _ := r.loadOrRegister(name, i)
 	if loaded {
-		return DuplicateMetric(name)
+		return fmt.Errorf("%w: %v", ErrDuplicateMetric, name)
 	}
 	return nil
 }
@@ -136,7 +133,7 @@ func (r *StandardRegistry) Register(name string, i interface{}) error {
 // RunHealthchecks run all registered healthchecks.
 func (r *StandardRegistry) RunHealthchecks() {
 	r.metrics.Range(func(key, value any) bool {
-		if h, ok := value.(Healthcheck); ok {
+		if h, ok := value.(*Healthcheck); ok {
 			h.Check()
 		}
 		return true
@@ -149,15 +146,15 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 	r.Each(func(name string, i interface{}) {
 		values := make(map[string]interface{})
 		switch metric := i.(type) {
-		case Counter:
+		case *Counter:
 			values["count"] = metric.Snapshot().Count()
-		case CounterFloat64:
+		case *CounterFloat64:
 			values["count"] = metric.Snapshot().Count()
-		case Gauge:
+		case *Gauge:
 			values["value"] = metric.Snapshot().Value()
-		case GaugeFloat64:
+		case *GaugeFloat64:
 			values["value"] = metric.Snapshot().Value()
-		case Healthcheck:
+		case *Healthcheck:
 			values["error"] = nil
 			metric.Check()
 			if err := metric.Error(); nil != err {
@@ -176,14 +173,14 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 			values["95%"] = ps[2]
 			values["99%"] = ps[3]
 			values["99.9%"] = ps[4]
-		case Meter:
+		case *Meter:
 			m := metric.Snapshot()
 			values["count"] = m.Count()
 			values["1m.rate"] = m.Rate1()
 			values["5m.rate"] = m.Rate5()
 			values["15m.rate"] = m.Rate15()
 			values["mean.rate"] = m.RateMean()
-		case Timer:
+		case *Timer:
 			t := metric.Snapshot()
 			ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 			values["count"] = t.Count()
@@ -214,7 +211,7 @@ func (r *StandardRegistry) Unregister(name string) {
 
 func (r *StandardRegistry) loadOrRegister(name string, i interface{}) (interface{}, bool, bool) {
 	switch i.(type) {
-	case Counter, CounterFloat64, Gauge, GaugeFloat64, GaugeInfo, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
+	case *Counter, *CounterFloat64, *Gauge, *GaugeFloat64, *GaugeInfo, *Healthcheck, Histogram, *Meter, *Timer, *ResettingTimer:
 	default:
 		return nil, false, false
 	}
@@ -326,9 +323,7 @@ func (r *PrefixedRegistry) Unregister(name string) {
 }
 
 var (
-	DefaultRegistry    = NewRegistry()
-	EphemeralRegistry  = NewRegistry()
-	AccountingRegistry = NewRegistry() // registry used in swarm
+	DefaultRegistry = NewRegistry()
 )
 
 // Each call the given function for each registered metric.
@@ -347,7 +342,7 @@ func GetOrRegister(name string, i interface{}) interface{} {
 	return DefaultRegistry.GetOrRegister(name, i)
 }
 
-// Register the given metric under the given name.  Returns a DuplicateMetric
+// Register the given metric under the given name.  Returns a ErrDuplicateMetric
 // if a metric by the given name is already registered.
 func Register(name string, i interface{}) error {
 	return DefaultRegistry.Register(name, i)

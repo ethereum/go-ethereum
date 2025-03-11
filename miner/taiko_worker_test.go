@@ -46,8 +46,8 @@ func testGenerateWorker(t *testing.T, txCount int) *Miner {
 	w, b := newTestWorker(t, &config, engine, db, 0)
 
 	for i := 0; i < txCount; i++ {
-		b.txPool.Add([]*types.Transaction{newRandomTx(b.txPool, true)}, true, false)
-		b.txPool.Add([]*types.Transaction{newRandomTx(b.txPool, false)}, true, false)
+		b.txPool.Add([]*types.Transaction{newRandomTx(b.txPool, true)}, true)
+		b.txPool.Add([]*types.Transaction{newRandomTx(b.txPool, false)}, true)
 	}
 
 	return w

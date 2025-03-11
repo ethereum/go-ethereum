@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
@@ -27,13 +26,11 @@ func RegisterTaikoAPIs(stack *node.Node, cfg *ethconfig.Config, backend *eth.Eth
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "taiko",
-			Version:   params.VersionWithMeta,
 			Service:   eth.NewTaikoAPIBackend(backend),
 			Public:    true,
 		},
 		{
 			Namespace:     "taikoAuth",
-			Version:       params.VersionWithMeta,
 			Service:       eth.NewTaikoAuthAPIBackend(backend),
 			Authenticated: true,
 		},

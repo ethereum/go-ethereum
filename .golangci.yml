@@ -3,9 +3,6 @@
 run:
   timeout: 20m
   tests: true
-  # default is true. Enables skipping of directories:
-  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
-  skip-dirs-use-default: true
 
 linters:
   disable-all: true
@@ -21,10 +18,14 @@ linters:
     - staticcheck
     - bidichk
     - durationcheck
-    - exportloopref
+    - copyloopvar
     - whitespace
     - revive # only certain checks enabled
-
+    - durationcheck
+    - gocheckcompilerdirectives
+    - reassign
+    - mirror
+    - usetesting
     ### linters we tried and will not be using:
     ###
     # - structcheck # lots of false positives
@@ -50,6 +51,9 @@ linters-settings:
         exclude: [""]
 
 issues:
+  # default is true. Enables skipping of directories:
+  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
+  exclude-dirs-use-default: true
   exclude-files:
     - core/genesis_alloc.go
   exclude-rules:
@@ -69,7 +73,7 @@ issues:
     - path: core/vm/contracts.go
       text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'
   exclude:
-    - 'SA1019: event.TypeMux is deprecated: use Feed'
-    - 'SA1019: strings.Title is deprecated'
-    - 'SA1019: strings.Title has been deprecated since Go 1.18 and an alternative has been available since Go 1.0: The rule Title uses for word boundaries does not handle Unicode punctuation properly. Use golang.org/x/text/cases instead.'
-    - 'SA1029: should not use built-in type string as key for value'
+    - "SA1019: event.TypeMux is deprecated: use Feed"
+    - "SA1019: strings.Title is deprecated"
+    - "SA1019: strings.Title has been deprecated since Go 1.18 and an alternative has been available since Go 1.0: The rule Title uses for word boundaries does not handle Unicode punctuation properly. Use golang.org/x/text/cases instead."
+    - "SA1029: should not use built-in type string as key for value"

@@ -40,6 +40,7 @@ var activators = map[int]func(*JumpTable){
 	1344: enable1344,
 	1153: enable1153,
 	4762: enable4762,
+	7702: enable7702,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -337,15 +338,13 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	}
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.GetCode(addr)
-	contract := &Contract{
-		Code: code,
-		self: AccountRef(addr),
-	}
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-	statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
-	if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-		scope.Contract.Gas = 0
-		return nil, ErrOutOfGas
+	if !scope.Contract.IsSystemCall {
+		statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false)
+		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
+			scope.Contract.Gas = 0
+			return nil, ErrOutOfGas
+		}
 	}
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), paddedCodeCopy)
 
@@ -364,7 +363,7 @@ func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	if *pc < codeLen {
 		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
 
-		if !scope.Contract.IsDeployment && *pc%31 == 0 {
+		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall && *pc%31 == 0 {
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
@@ -394,7 +393,7 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 			)),
 		)
 
-		if !scope.Contract.IsDeployment {
+		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall {
 			contractAddr := scope.Contract.Address()
 			statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false)
 			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
@@ -532,4 +531,182 @@ func enable4762(jt *JumpTable) {
 			maxStack:    maxStack(0, 1),
 		}
 	}
+}
+
+// enableEOF applies the EOF changes.
+// OBS! For EOF, there are two changes:
+//  1. Two separate jumptables are required. One, EOF-jumptable, is used by
+//     eof contracts. This one contains things like RJUMP.
+//  2. The regular non-eof jumptable also needs to be modified, specifically to
+//     modify how EXTCODECOPY works under the hood.
+//
+// This method _only_ deals with case 1.
+func enableEOF(jt *JumpTable) {
+	// Deprecate opcodes
+	undefined := &operation{
+		execute:     opUndefined,
+		constantGas: 0,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+		undefined:   true,
+	}
+	jt[CALL] = undefined
+	jt[CALLCODE] = undefined
+	jt[DELEGATECALL] = undefined
+	jt[STATICCALL] = undefined
+	jt[SELFDESTRUCT] = undefined
+	jt[JUMP] = undefined
+	jt[JUMPI] = undefined
+	jt[PC] = undefined
+	jt[CREATE] = undefined
+	jt[CREATE2] = undefined
+	jt[CODESIZE] = undefined
+	jt[CODECOPY] = undefined
+	jt[EXTCODESIZE] = undefined
+	jt[EXTCODECOPY] = undefined
+	jt[EXTCODEHASH] = undefined
+	jt[GAS] = undefined
+	// Allow 0xFE to terminate sections
+	jt[INVALID] = &operation{
+		execute:     opUndefined,
+		constantGas: 0,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+
+	// New opcodes
+	jt[RJUMP] = &operation{
+		execute:     opRjump,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[RJUMPI] = &operation{
+		execute:     opRjumpi,
+		constantGas: GasFastishStep,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+	}
+	jt[RJUMPV] = &operation{
+		execute:     opRjumpv,
+		constantGas: GasFastishStep,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+	}
+	jt[CALLF] = &operation{
+		execute:     opCallf,
+		constantGas: GasFastStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[RETF] = &operation{
+		execute:     opRetf,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[JUMPF] = &operation{
+		execute:     opJumpf,
+		constantGas: GasFastStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[EOFCREATE] = &operation{
+		execute:     opEOFCreate,
+		constantGas: params.Create2Gas,
+		dynamicGas:  gasEOFCreate,
+		minStack:    minStack(4, 1),
+		maxStack:    maxStack(4, 1),
+		memorySize:  memoryEOFCreate,
+	}
+	jt[RETURNCONTRACT] = &operation{
+		execute: opReturnContract,
+		// returncontract has zero constant gas cost
+		dynamicGas: pureMemoryGascost,
+		minStack:   minStack(2, 0),
+		maxStack:   maxStack(2, 0),
+		memorySize: memoryReturnContract,
+	}
+	jt[DATALOAD] = &operation{
+		execute:     opDataLoad,
+		constantGas: GasFastishStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	jt[DATALOADN] = &operation{
+		execute:     opDataLoadN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	jt[DATASIZE] = &operation{
+		execute:     opDataSize,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	jt[DATACOPY] = &operation{
+		execute:     opDataCopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  memoryCopierGas(2),
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+		memorySize:  memoryDataCopy,
+	}
+	jt[DUPN] = &operation{
+		execute:     opDupN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	jt[SWAPN] = &operation{
+		execute:     opSwapN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[EXCHANGE] = &operation{
+		execute:     opExchange,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+	}
+	jt[RETURNDATALOAD] = &operation{
+		execute:     opReturnDataLoad,
+		constantGas: GasFastestStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	jt[EXTCALL] = &operation{
+		execute:     opExtCall,
+		constantGas: params.WarmStorageReadCostEIP2929,
+		dynamicGas:  makeCallVariantGasCallEIP2929(gasExtCall, 0),
+		minStack:    minStack(4, 1),
+		maxStack:    maxStack(4, 1),
+		memorySize:  memoryExtCall,
+	}
+	jt[EXTDELEGATECALL] = &operation{
+		execute:     opExtDelegateCall,
+		dynamicGas:  makeCallVariantGasCallEIP2929(gasExtDelegateCall, 0),
+		constantGas: params.WarmStorageReadCostEIP2929,
+		minStack:    minStack(3, 1),
+		maxStack:    maxStack(3, 1),
+		memorySize:  memoryExtCall,
+	}
+	jt[EXTSTATICCALL] = &operation{
+		execute:     opExtStaticCall,
+		constantGas: params.WarmStorageReadCostEIP2929,
+		dynamicGas:  makeCallVariantGasCallEIP2929(gasExtStaticCall, 0),
+		minStack:    minStack(3, 1),
+		maxStack:    maxStack(3, 1),
+		memorySize:  memoryExtCall,
+	}
+}
+
+// enable7702 the EIP-7702 changes to support delegation designators.
+func enable7702(jt *JumpTable) {
+	jt[CALL].dynamicGas = gasCallEIP7702
+	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
+	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702
+	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
 }

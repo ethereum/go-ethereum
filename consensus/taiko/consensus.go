@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -216,7 +217,7 @@ func (t *Taiko) Prepare(chain consensus.ChainHeaderReader, header *types.Header)
 //
 // Note: The block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
-func (t *Taiko) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body) {
+func (t *Taiko) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
 	// no block rewards in l2
 	header.UncleHash = types.CalcUncleHash(nil)
 	header.Difficulty = common.Big0
@@ -228,7 +229,6 @@ func (t *Taiko) Finalize(chain consensus.ChainHeaderReader, header *types.Header
 			tracing.BalanceIncreaseWithdrawal,
 		)
 	}
-	header.Root = state.IntermediateRoot(true)
 }
 
 // FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
@@ -254,6 +254,7 @@ func (t *Taiko) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *t
 
 	// Finalize block
 	t.Finalize(chain, header, state, body)
+	header.Root = state.IntermediateRoot(true)
 	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)), nil
 }
 

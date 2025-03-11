@@ -170,7 +170,6 @@ func TestKeyID(t *testing.T) {
 		{"third key", args{id: extractKeyId(gethPubKeys[2])}, "FD9813B2D2098484"},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			if got := keyID(tt.args.id); got != tt.want {
