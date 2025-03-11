@@ -24,7 +24,7 @@ import (
 	"sync"
 
 	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
-	ckzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
+	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -124,4 +124,14 @@ func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 		return errors.New("invalid proof")
 	}
 	return nil
+}
+
+func ckzgComputeCells(blob *Blob) ([]Proof, error) {
+	ckzgIniter.Do(ckzgInit)
+
+	_, proofs, err := ckzg4844.ComputeCellsAndKZGProofs((*ckzg4844.Blob)(blob))
+	if err != nil {
+		return []Proof{}, err
+	}
+	return ([]Proof)(proofs), nil
 }
