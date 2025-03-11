@@ -59,10 +59,7 @@ func TestOfflineBlockPrune(t *testing.T) {
 func testOfflineBlockPruneWithAmountReserved(t *testing.T, amountReserved uint64) {
 	t.Helper()
 
-	datadir, err := os.MkdirTemp("", "")
-	require.NoError(t, err, "failed to create temporary datadir")
-
-	os.RemoveAll(datadir)
+	datadir := t.TempDir()
 
 	chaindbPath := filepath.Join(datadir, "chaindata")
 	oldAncientPath := filepath.Join(chaindbPath, "ancient")
