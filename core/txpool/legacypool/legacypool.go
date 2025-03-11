@@ -1604,7 +1604,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 			gapped := list.Cap(0)
 			for _, tx := range gapped {
 				hash := tx.Hash()
-				log.Error("Demoting invalidated transaction", "hash", hash)
+				log.Warn("Demoting invalidated transaction", "hash", hash)
 
 				// Internal shuffle shouldn't touch the lookup set.
 				pool.enqueueTx(hash, tx, false)
