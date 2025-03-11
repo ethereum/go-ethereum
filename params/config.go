@@ -134,10 +134,10 @@ var (
 			ProtectorReward:      2000,
 			ObserverReward:       1000,
 		},
-		2084400: {
+		2090700: {
 			MaxMasternodes:       10,
 			MaxProtectorNodes:    0,
-			SwitchRound:          2084400,
+			SwitchRound:          2090700,
 			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 3,
 			TimeoutPeriod:        5,
