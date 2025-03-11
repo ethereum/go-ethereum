@@ -717,6 +717,10 @@ func (c *testCodec) Encode(toID enode.ID, addr string, p v5wire.Packet, _ *v5wir
 	return frame, authTag, err
 }
 
+func (c *testCodec) CurrentChallenge(enode.ID, string) *v5wire.Whoareyou {
+	return nil
+}
+
 func (c *testCodec) Decode(input []byte, addr string) (enode.ID, *enode.Node, v5wire.Packet, error) {
 	frame, p, err := c.decodeFrame(input)
 	if err != nil {
