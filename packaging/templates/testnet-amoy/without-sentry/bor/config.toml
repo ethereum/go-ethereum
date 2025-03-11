@@ -35,6 +35,7 @@ syncmode = "full"
     # nodekey = ""
     # nodekeyhex = ""
     # txarrivalwait = "500ms"
+    # txannouncementonly = false
     [p2p.discovery]
         # v5disc = false
         # bootnodesv4 = []

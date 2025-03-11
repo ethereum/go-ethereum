@@ -306,6 +306,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		EthAPI:              blockChainAPI,
 		checker:             checker,
 		enableBlockTracking: eth.config.EnableBlockTracking,
+		txAnnouncementOnly:  eth.p2pServer.TxAnnouncementOnly,
 	}); err != nil {
 		return nil, err
 	}

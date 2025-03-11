@@ -36,6 +36,7 @@ devfakeauthor = false
   nodekey = ""
   nodekeyhex = ""
   txarrivalwait = "500ms"
+  txannouncementonly = false
   [p2p.discovery]
     v4disc = true
     v5disc = false

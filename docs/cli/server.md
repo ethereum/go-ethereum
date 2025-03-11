@@ -242,6 +242,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```txarrivalwait```: Maximum duration to wait for a transaction before explicitly requesting it (default: 500ms)
 
+- ```txannouncementonly```: Whether to only announce transactions to peers (default: false)
+
 - ```v4disc```: Enables the V4 discovery mechanism (default: true)
 
 - ```v5disc```: Enables the experimental RLPx V5 (Topic Discovery) mechanism (default: false)
