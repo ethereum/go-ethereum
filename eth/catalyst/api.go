@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -511,7 +512,12 @@ func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	return api.getPayload(payloadID, false)
+	envelope, err := api.getPayload(payloadID, false)
+	if err != nil {
+		return nil, err
+	}
+	envelope.BlobsBundle.CellProofs = nil
+	return envelope, nil
 }
 
 // GetPayloadV4 returns a cached payload by id.
@@ -519,7 +525,25 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	return api.getPayload(payloadID, false)
+	envelope, err := api.getPayload(payloadID, false)
+	if err != nil {
+		return nil, err
+	}
+	envelope.BlobsBundle.CellProofs = nil
+	return envelope, nil
+}
+
+// GetPayloadV4 returns a cached payload by id.
+func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
+	if !payloadID.Is(engine.PayloadV3) {
+		return nil, engine.UnsupportedFork
+	}
+	envelope, err := api.getPayload(payloadID, false)
+	if err != nil {
+		return nil, err
+	}
+	envelope.BlobsBundle.Proofs = nil
+	return envelope, nil
 }
 
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
@@ -544,6 +568,33 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 			res[i] = &engine.BlobAndProofV1{
 				Blob:  (*blobs[i])[:],
 				Proof: (*proofs[i])[:],
+			}
+		}
+	}
+	return res, nil
+}
+
+// GetBlobsV2 returns a blob from the transaction pool.
+func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
+	if len(hashes) > 128 {
+		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
+	}
+	res := make([]*engine.BlobAndProofV2, len(hashes))
+
+	blobs, _ := api.eth.TxPool().GetBlobs(hashes)
+	for i := 0; i < len(blobs); i++ {
+		if blobs[i] != nil {
+			cellProofs, err := kzg4844.ComputeCells(blobs[i])
+			if err != nil {
+				return nil, err
+			}
+			var proofs []hexutil.Bytes
+			for _, proof := range cellProofs {
+				proofs = append(proofs, hexutil.Bytes(proof[:]))
+			}
+			res[i] = &engine.BlobAndProofV2{
+				Blob:       (*blobs[i])[:],
+				CellProofs: proofs,
 			}
 		}
 	}
