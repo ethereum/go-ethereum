@@ -59,7 +59,9 @@ func ckzgInit() {
 	for i, g2 := range params.SetupG2 {
 		copy(g2s[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
 	}
-	if err = ckzg4844.LoadTrustedSetup(g1s, g1Lag, g2s, 0); err != nil {
+	// The last parameter determines the multiplication table, see https://notes.ethereum.org/@jtraglia/windowed_multiplications
+	// I think 6 is an decent compromise between size and speed
+	if err = ckzg4844.LoadTrustedSetup(g1s, g1Lag, g2s, 6); err != nil {
 		panic(err)
 	}
 }
