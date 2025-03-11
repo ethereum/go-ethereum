@@ -39,10 +39,10 @@ func GenerateTestUpdate(config *params.ChainConfig, period uint64, committee, ne
 	var attestedHeader types.Header
 	if finalizedHeader {
 		update.FinalizedHeader = new(types.Header)
-		*update.FinalizedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+100, params.StateIndexNextSyncCommittee, merkle.Value(update.NextSyncCommitteeRoot))
-		attestedHeader, update.FinalityBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+200, params.StateIndexFinalBlock, merkle.Value(update.FinalizedHeader.Hash()))
+		*update.FinalizedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+100, params.StateIndexNextSyncCommittee(""), merkle.Value(update.NextSyncCommitteeRoot))
+		attestedHeader, update.FinalityBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+200, params.StateIndexFinalBlock(""), merkle.Value(update.FinalizedHeader.Hash()))
 	} else {
-		attestedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+2000, params.StateIndexNextSyncCommittee, merkle.Value(update.NextSyncCommitteeRoot))
+		attestedHeader, update.NextSyncCommitteeBranch = makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+2000, params.StateIndexNextSyncCommittee(""), merkle.Value(update.NextSyncCommitteeRoot))
 	}
 	update.AttestedHeader = GenerateTestSignedHeader(attestedHeader, config, committee, attestedHeader.Slot+1, signerCount)
 	return update
@@ -63,7 +63,7 @@ func GenerateTestSignedHeader(header types.Header, config *params.ChainConfig, c
 }
 
 func GenerateTestCheckpoint(period uint64, committee *types.SerializedSyncCommittee) *types.BootstrapData {
-	header, branch := makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+200, params.StateIndexSyncCommittee, merkle.Value(committee.Root()))
+	header, branch := makeTestHeaderWithMerkleProof(types.SyncPeriodStart(period)+200, params.StateIndexSyncCommittee(""), merkle.Value(committee.Root()))
 	return &types.BootstrapData{
 		Header:          header,
 		Committee:       committee,
