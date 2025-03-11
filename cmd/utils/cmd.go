@@ -60,8 +60,8 @@ const (
 // is redirected to a different file.
 func Fatalf(format string, args ...interface{}) {
 	w := io.MultiWriter(os.Stdout, os.Stderr)
-	if runtime.GOOS == "windows" {
-		// The SameFile check below doesn't work on Windows.
+	if runtime.GOOS == "windows" || runtime.GOOS == "openbsd" {
+		// The SameFile check below doesn't work on Windows neither OpenBSD.
 		// stdout is unlikely to get redirected though, so just print there.
 		w = os.Stdout
 	} else {
