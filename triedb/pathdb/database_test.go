@@ -126,7 +126,8 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int) *te
 		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 		db      = New(disk, &Config{
 			StateHistory:    historyLimit,
-			CleanCacheSize:  256 * 1024,
+			TrieCleanSize:   256 * 1024,
+			StateCleanSize:  256 * 1024,
 			WriteBufferSize: 256 * 1024,
 		}, isVerkle)
 
@@ -160,6 +161,20 @@ func (t *tester) accountPreimage(hash common.Hash) common.Address {
 
 func (t *tester) hashPreimage(hash common.Hash) common.Hash {
 	return common.BytesToHash(t.preimages[hash])
+}
+
+func (t *tester) extend(layers int) {
+	for i := 0; i < layers; i++ {
+		var parent = types.EmptyRootHash
+		if len(t.roots) != 0 {
+			parent = t.roots[len(t.roots)-1]
+		}
+		root, nodes, states := t.generate(parent, true)
+		if err := t.db.Update(root, parent, uint64(i), nodes, states); err != nil {
+			panic(fmt.Errorf("failed to update state changes, err: %w", err))
+		}
+		t.roots = append(t.roots, root)
+	}
 }
 
 func (t *tester) release() {
