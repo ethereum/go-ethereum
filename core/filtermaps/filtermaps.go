@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -60,9 +61,9 @@ type FilterMaps struct {
 	// fields written by the indexer and read by matcher backend. Indexer can
 	// read them without a lock and write them under indexLock write lock.
 	// Matcher backend can read them under indexLock read lock.
-	indexLock sync.RWMutex
-	filterMapsRange
-	indexedView *ChainView // always consistent with the log index
+	indexLock    sync.RWMutex
+	indexedRange filterMapsRange
+	indexedView  *ChainView // always consistent with the log index
 
 	// also accessed by indexer and matcher backend but no locking needed.
 	filterMapCache *lru.Cache[uint32, filterMap]
@@ -132,15 +133,7 @@ type FilterRow []uint32
 
 // Equal returns true if the given filter rows are equivalent.
 func (a FilterRow) Equal(b FilterRow) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if b[i] != v {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(a, b)
 }
 
 // filterMapsRange describes the rendered range of filter maps and the range
@@ -192,7 +185,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, h
 		unindexLimit:      unindexLimit,
 		exportFileName:    exportFileName,
 		Params:            params,
-		filterMapsRange: filterMapsRange{
+		indexedRange: filterMapsRange{
 			initialized:           initialized,
 			headBlockIndexed:      rs.HeadBlockIndexed,
 			headBlockDelimiter:    rs.HeadBlockDelimiter,
@@ -211,23 +204,26 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, h
 		renderSnapshots: lru.NewCache[uint64, *renderedMap](cachedRenderSnapshots),
 	}
 	f.targetView = initView
-	if f.initialized {
+	if f.indexedRange.initialized {
 		f.indexedView = f.initChainView(f.targetView)
-		f.headBlockIndexed = f.afterLastIndexedBlock == f.indexedView.headNumber+1
-		if !f.headBlockIndexed {
-			f.headBlockDelimiter = 0
+		f.indexedRange.headBlockIndexed = f.indexedRange.afterLastIndexedBlock == f.indexedView.headNumber+1
+		if !f.indexedRange.headBlockIndexed {
+			f.indexedRange.headBlockDelimiter = 0
 		}
 	}
-	if f.hasIndexedBlocks() {
-		log.Info("Initialized log indexer", "first block", f.firstIndexedBlock, "last block", f.afterLastIndexedBlock-1, "first map", f.firstRenderedMap, "last map", f.afterLastRenderedMap-1, "head indexed", f.headBlockIndexed)
+	if f.indexedRange.hasIndexedBlocks() {
+		log.Info("Initialized log indexer",
+			"first block", f.indexedRange.firstIndexedBlock, "last block", f.indexedRange.afterLastIndexedBlock-1,
+			"first map", f.indexedRange.firstRenderedMap, "last map", f.indexedRange.afterLastRenderedMap-1,
+			"head indexed", f.indexedRange.headBlockIndexed)
 	}
 	return f
 }
 
 // Start starts the indexer.
 func (f *FilterMaps) Start() {
-	if !f.testDisableSnapshots && f.initialized && f.headBlockIndexed &&
-		f.firstRenderedMap < f.afterLastRenderedMap {
+	if !f.testDisableSnapshots && f.indexedRange.initialized && f.indexedRange.headBlockIndexed &&
+		f.indexedRange.firstRenderedMap < f.indexedRange.afterLastRenderedMap {
 		// previous target head rendered; load last map as snapshot
 		if err := f.loadHeadSnapshot(); err != nil {
 			log.Error("Could not load head filter map snapshot", "error", err)
@@ -249,7 +245,7 @@ func (f *FilterMaps) Stop() {
 // Note that the returned view might be shorter than the existing index if
 // the latest maps are not consistent with targetView.
 func (f *FilterMaps) initChainView(chainView *ChainView) *ChainView {
-	mapIndex := f.afterLastRenderedMap
+	mapIndex := f.indexedRange.afterLastRenderedMap
 	for {
 		var ok bool
 		mapIndex, ok = f.lastMapBoundaryBefore(mapIndex)
@@ -272,7 +268,7 @@ func (f *FilterMaps) initChainView(chainView *ChainView) *ChainView {
 // the database. The function returns true if everything was successfully removed.
 func (f *FilterMaps) reset() bool {
 	f.indexLock.Lock()
-	f.filterMapsRange = filterMapsRange{}
+	f.indexedRange = filterMapsRange{}
 	f.indexedView = nil
 	f.filterMapCache.Purge()
 	f.renderSnapshots.Purge()
@@ -369,7 +365,7 @@ func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
 // Note that this function assumes that the index write lock is being held.
 func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, newRange filterMapsRange) {
 	f.indexedView = newView
-	f.filterMapsRange = newRange
+	f.indexedRange = newRange
 	f.updateMatchersValidRange()
 	if newRange.initialized {
 		rs := rawdb.FilterMapsRange{
@@ -397,7 +393,7 @@ func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, ne
 // called from outside the indexerLoop goroutine.
 func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 	mapIndex := uint32(lvIndex >> f.logValuesPerMap)
-	if mapIndex < f.firstRenderedMap || mapIndex >= f.afterLastRenderedMap {
+	if mapIndex < f.indexedRange.firstRenderedMap || mapIndex >= f.indexedRange.afterLastRenderedMap {
 		return nil, nil
 	}
 	// find possible block range based on map to block pointers
@@ -412,8 +408,8 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 			return nil, fmt.Errorf("failed to retrieve last block of map %d before searched log value index %d: %v", mapIndex, lvIndex, err)
 		}
 	}
-	if firstBlockNumber < f.firstIndexedBlock {
-		firstBlockNumber = f.firstIndexedBlock
+	if firstBlockNumber < f.indexedRange.firstIndexedBlock {
+		firstBlockNumber = f.indexedRange.firstIndexedBlock
 	}
 	// find block with binary search based on block to log value index pointers
 	for firstBlockNumber < lastBlockNumber {
@@ -567,8 +563,8 @@ func (f *FilterMaps) mapRowIndex(mapIndex, rowIndex uint32) uint64 {
 // Note that this function assumes that the indexer read lock is being held when
 // called from outside the indexerLoop goroutine.
 func (f *FilterMaps) getBlockLvPointer(blockNumber uint64) (uint64, error) {
-	if blockNumber >= f.afterLastIndexedBlock && f.headBlockIndexed {
-		return f.headBlockDelimiter, nil
+	if blockNumber >= f.indexedRange.afterLastIndexedBlock && f.indexedRange.headBlockIndexed {
+		return f.indexedRange.headBlockDelimiter, nil
 	}
 	if lvPointer, ok := f.lvPointerCache.Get(blockNumber); ok {
 		return lvPointer, nil
@@ -644,11 +640,13 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) error {
 		}
 		firstBlock++
 	}
-	fmr := f.filterMapsRange
-	if f.firstRenderedMap == firstMap && f.afterLastRenderedMap > firstMap+f.mapsPerEpoch && f.tailPartialEpoch == 0 {
+	fmr := f.indexedRange
+	if f.indexedRange.firstRenderedMap == firstMap &&
+		f.indexedRange.afterLastRenderedMap > firstMap+f.mapsPerEpoch &&
+		f.indexedRange.tailPartialEpoch == 0 {
 		fmr.firstRenderedMap = firstMap + f.mapsPerEpoch
 		fmr.firstIndexedBlock = lastBlock + 1
-	} else if f.firstRenderedMap == firstMap+f.mapsPerEpoch {
+	} else if f.indexedRange.firstRenderedMap == firstMap+f.mapsPerEpoch {
 		fmr.tailPartialEpoch = 0
 	} else {
 		return errors.New("invalid tail epoch number")

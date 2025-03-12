@@ -41,7 +41,7 @@ func (f *FilterMaps) indexerLoop() {
 	log.Info("Started log indexer")
 
 	for !f.stop {
-		if !f.initialized {
+		if !f.indexedRange.initialized {
 			if err := f.init(); err != nil {
 				log.Error("Error initializing log index", "error", err)
 				f.waitForEvent()
@@ -199,20 +199,20 @@ func (f *FilterMaps) tryIndexHead() bool {
 		f.lastLogHeadIndex = time.Now()
 		f.startedHeadIndexAt = f.lastLogHeadIndex
 		f.startedHeadIndex = true
-		f.ptrHeadIndex = f.afterLastIndexedBlock
+		f.ptrHeadIndex = f.indexedRange.afterLastIndexedBlock
 	}
 	if _, err := headRenderer.run(func() bool {
 		f.processEvents()
 		return f.stop
 	}, func() {
 		f.tryUnindexTail()
-		if f.hasIndexedBlocks() && f.afterLastIndexedBlock >= f.ptrHeadIndex &&
+		if f.indexedRange.hasIndexedBlocks() && f.indexedRange.afterLastIndexedBlock >= f.ptrHeadIndex &&
 			((!f.loggedHeadIndex && time.Since(f.startedHeadIndexAt) > headLogDelay) ||
 				time.Since(f.lastLogHeadIndex) > logFrequency) {
 			log.Info("Log index head rendering in progress",
-				"first block", f.firstIndexedBlock, "last block", f.afterLastIndexedBlock-1,
-				"processed", f.afterLastIndexedBlock-f.ptrHeadIndex,
-				"remaining", f.indexedView.headNumber+1-f.afterLastIndexedBlock,
+				"first block", f.indexedRange.firstIndexedBlock, "last block", f.indexedRange.afterLastIndexedBlock-1,
+				"processed", f.indexedRange.afterLastIndexedBlock-f.ptrHeadIndex,
+				"remaining", f.indexedView.headNumber+1-f.indexedRange.afterLastIndexedBlock,
 				"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
 			f.loggedHeadIndex = true
 			f.lastLogHeadIndex = time.Now()
@@ -223,8 +223,8 @@ func (f *FilterMaps) tryIndexHead() bool {
 	}
 	if f.loggedHeadIndex {
 		log.Info("Log index head rendering finished",
-			"first block", f.firstIndexedBlock, "last block", f.afterLastIndexedBlock-1,
-			"processed", f.afterLastIndexedBlock-f.ptrHeadIndex,
+			"first block", f.indexedRange.firstIndexedBlock, "last block", f.indexedRange.afterLastIndexedBlock-1,
+			"processed", f.indexedRange.afterLastIndexedBlock-f.ptrHeadIndex,
 			"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
 	}
 	f.loggedHeadIndex, f.startedHeadIndex = false, false
@@ -237,7 +237,7 @@ func (f *FilterMaps) tryIndexHead() bool {
 // rendered according to targetView and is suspended as soon as the targetView
 // is changed.
 func (f *FilterMaps) tryIndexTail() bool {
-	for firstEpoch := f.firstRenderedMap >> f.logMapsPerEpoch; firstEpoch > 0 && f.needTailEpoch(firstEpoch-1); {
+	for firstEpoch := f.indexedRange.firstRenderedMap >> f.logMapsPerEpoch; firstEpoch > 0 && f.needTailEpoch(firstEpoch-1); {
 		f.processEvents()
 		if f.stop || !f.targetHeadIndexed() {
 			return false
@@ -245,12 +245,12 @@ func (f *FilterMaps) tryIndexTail() bool {
 		// resume process if tail rendering was interrupted because of head rendering
 		tailRenderer := f.tailRenderer
 		f.tailRenderer = nil
-		if tailRenderer != nil && tailRenderer.afterLastMap != f.firstRenderedMap {
+		if tailRenderer != nil && tailRenderer.afterLastMap != f.indexedRange.firstRenderedMap {
 			tailRenderer = nil
 		}
 		if tailRenderer == nil {
 			var err error
-			tailRenderer, err = f.renderMapsBefore(f.firstRenderedMap)
+			tailRenderer, err = f.renderMapsBefore(f.indexedRange.firstRenderedMap)
 			if err != nil {
 				log.Error("Error creating log index tail renderer", "error", err)
 				return false
@@ -263,7 +263,7 @@ func (f *FilterMaps) tryIndexTail() bool {
 			f.lastLogTailIndex = time.Now()
 			f.startedTailIndexAt = f.lastLogTailIndex
 			f.startedTailIndex = true
-			f.ptrTailIndex = f.firstIndexedBlock - f.tailPartialBlocks()
+			f.ptrTailIndex = f.indexedRange.firstIndexedBlock - f.tailPartialBlocks()
 		}
 		done, err := tailRenderer.run(func() bool {
 			f.processEvents()
@@ -271,16 +271,16 @@ func (f *FilterMaps) tryIndexTail() bool {
 		}, func() {
 			tpb, ttb := f.tailPartialBlocks(), f.tailTargetBlock()
 			remaining := uint64(1)
-			if f.firstIndexedBlock > ttb+tpb {
-				remaining = f.firstIndexedBlock - ttb - tpb
+			if f.indexedRange.firstIndexedBlock > ttb+tpb {
+				remaining = f.indexedRange.firstIndexedBlock - ttb - tpb
 			}
-			if f.hasIndexedBlocks() && f.ptrTailIndex >= f.firstIndexedBlock &&
+			if f.indexedRange.hasIndexedBlocks() && f.ptrTailIndex >= f.indexedRange.firstIndexedBlock &&
 				(!f.loggedTailIndex || time.Since(f.lastLogTailIndex) > logFrequency) {
 				log.Info("Log index tail rendering in progress",
-					"first block", f.firstIndexedBlock, "last block", f.afterLastIndexedBlock-1,
-					"processed", f.ptrTailIndex-f.firstIndexedBlock+tpb,
+					"first block", f.indexedRange.firstIndexedBlock, "last block", f.indexedRange.afterLastIndexedBlock-1,
+					"processed", f.ptrTailIndex-f.indexedRange.firstIndexedBlock+tpb,
 					"remaining", remaining,
-					"next tail epoch percentage", f.tailPartialEpoch*100/f.mapsPerEpoch,
+					"next tail epoch percentage", f.indexedRange.tailPartialEpoch*100/f.mapsPerEpoch,
 					"elapsed", common.PrettyDuration(time.Since(f.startedTailIndexAt)))
 				f.loggedTailIndex = true
 				f.lastLogTailIndex = time.Now()
@@ -296,8 +296,8 @@ func (f *FilterMaps) tryIndexTail() bool {
 	}
 	if f.loggedTailIndex {
 		log.Info("Log index tail rendering finished",
-			"first block", f.firstIndexedBlock, "last block", f.afterLastIndexedBlock-1,
-			"processed", f.ptrTailIndex-f.firstIndexedBlock,
+			"first block", f.indexedRange.firstIndexedBlock, "last block", f.indexedRange.afterLastIndexedBlock-1,
+			"processed", f.ptrTailIndex-f.indexedRange.firstIndexedBlock,
 			"elapsed", common.PrettyDuration(time.Since(f.startedTailIndexAt)))
 		f.loggedTailIndex = false
 	}
@@ -310,7 +310,7 @@ func (f *FilterMaps) tryIndexTail() bool {
 // data from the database and is also called while running head indexing.
 func (f *FilterMaps) tryUnindexTail() bool {
 	for {
-		firstEpoch := (f.firstRenderedMap - f.tailPartialEpoch) >> f.logMapsPerEpoch
+		firstEpoch := (f.indexedRange.firstRenderedMap - f.indexedRange.tailPartialEpoch) >> f.logMapsPerEpoch
 		if f.needTailEpoch(firstEpoch) {
 			break
 		}
@@ -321,8 +321,8 @@ func (f *FilterMaps) tryUnindexTail() bool {
 		if !f.startedTailUnindex {
 			f.startedTailUnindexAt = time.Now()
 			f.startedTailUnindex = true
-			f.ptrTailUnindexMap = f.firstRenderedMap - f.tailPartialEpoch
-			f.ptrTailUnindexBlock = f.firstIndexedBlock - f.tailPartialBlocks()
+			f.ptrTailUnindexMap = f.indexedRange.firstRenderedMap - f.indexedRange.tailPartialEpoch
+			f.ptrTailUnindexBlock = f.indexedRange.firstIndexedBlock - f.tailPartialBlocks()
 		}
 		if err := f.deleteTailEpoch(firstEpoch); err != nil {
 			log.Error("Log index tail epoch unindexing failed", "error", err)
@@ -331,9 +331,9 @@ func (f *FilterMaps) tryUnindexTail() bool {
 	}
 	if f.startedTailUnindex {
 		log.Info("Log index tail unindexing finished",
-			"first block", f.firstIndexedBlock, "last block", f.afterLastIndexedBlock-1,
-			"removed maps", f.firstRenderedMap-f.ptrTailUnindexMap,
-			"removed blocks", f.firstIndexedBlock-f.tailPartialBlocks()-f.ptrTailUnindexBlock,
+			"first block", f.indexedRange.firstIndexedBlock, "last block", f.indexedRange.afterLastIndexedBlock-1,
+			"removed maps", f.indexedRange.firstRenderedMap-f.ptrTailUnindexMap,
+			"removed blocks", f.indexedRange.firstIndexedBlock-f.tailPartialBlocks()-f.ptrTailUnindexBlock,
 			"elapsed", common.PrettyDuration(time.Since(f.startedTailUnindexAt)))
 		f.startedTailUnindex = false
 	}
@@ -343,7 +343,7 @@ func (f *FilterMaps) tryUnindexTail() bool {
 // needTailEpoch returns true if the given tail epoch needs to be kept
 // according to the current tail target, false if it can be removed.
 func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
-	firstEpoch := f.firstRenderedMap >> f.logMapsPerEpoch
+	firstEpoch := f.indexedRange.firstRenderedMap >> f.logMapsPerEpoch
 	if epoch > firstEpoch {
 		return true
 	}
@@ -351,7 +351,7 @@ func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
 		return false
 	}
 	tailTarget := f.tailTargetBlock()
-	if tailTarget < f.firstIndexedBlock {
+	if tailTarget < f.indexedRange.firstIndexedBlock {
 		return true
 	}
 	tailLvIndex, err := f.getBlockLvPointer(tailTarget)
@@ -374,18 +374,18 @@ func (f *FilterMaps) tailTargetBlock() uint64 {
 // tailPartialBlocks returns the number of rendered blocks in the partially
 // rendered next tail epoch.
 func (f *FilterMaps) tailPartialBlocks() uint64 {
-	if f.tailPartialEpoch == 0 {
+	if f.indexedRange.tailPartialEpoch == 0 {
 		return 0
 	}
-	end, _, err := f.getLastBlockOfMap(f.firstRenderedMap - f.mapsPerEpoch + f.tailPartialEpoch - 1)
+	end, _, err := f.getLastBlockOfMap(f.indexedRange.firstRenderedMap - f.mapsPerEpoch + f.indexedRange.tailPartialEpoch - 1)
 	if err != nil {
-		log.Error("Error fetching last block of map", "mapIndex", f.firstRenderedMap-f.mapsPerEpoch+f.tailPartialEpoch-1, "error", err)
+		log.Error("Error fetching last block of map", "mapIndex", f.indexedRange.firstRenderedMap-f.mapsPerEpoch+f.indexedRange.tailPartialEpoch-1, "error", err)
 	}
 	var start uint64
-	if f.firstRenderedMap-f.mapsPerEpoch > 0 {
-		start, _, err = f.getLastBlockOfMap(f.firstRenderedMap - f.mapsPerEpoch - 1)
+	if f.indexedRange.firstRenderedMap-f.mapsPerEpoch > 0 {
+		start, _, err = f.getLastBlockOfMap(f.indexedRange.firstRenderedMap - f.mapsPerEpoch - 1)
 		if err != nil {
-			log.Error("Error fetching last block of map", "mapIndex", f.firstRenderedMap-f.mapsPerEpoch-1, "error", err)
+			log.Error("Error fetching last block of map", "mapIndex", f.indexedRange.firstRenderedMap-f.mapsPerEpoch-1, "error", err)
 		}
 	}
 	return end - start
@@ -394,5 +394,5 @@ func (f *FilterMaps) tailPartialBlocks() uint64 {
 // targetHeadIndexed returns true if the current log index is consistent with
 // targetView with its head block fully rendered.
 func (f *FilterMaps) targetHeadIndexed() bool {
-	return equalViews(f.targetView, f.indexedView) && f.headBlockIndexed
+	return equalViews(f.targetView, f.indexedView) && f.indexedRange.headBlockIndexed
 }

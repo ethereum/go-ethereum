@@ -101,12 +101,12 @@ func TestIndexerRandomRange(t *testing.T) {
 			checkSnapshot = false
 		}
 		if noHistory {
-			if ts.fm.initialized {
+			if ts.fm.indexedRange.initialized {
 				t.Fatalf("filterMapsRange initialized while indexing is disabled")
 			}
 			continue
 		}
-		if !ts.fm.initialized {
+		if !ts.fm.indexedRange.initialized {
 			t.Fatalf("filterMapsRange not initialized while indexing is enabled")
 		}
 		var tailBlock uint64
@@ -124,14 +124,14 @@ func TestIndexerRandomRange(t *testing.T) {
 			// (expTailBlock-1)*lvPerBlock >= tailLvPtr
 			expTailBlock = (tailLvPtr + lvPerBlock*2 - 1) / lvPerBlock
 		}
-		if ts.fm.afterLastIndexedBlock != uint64(head+1) {
-			ts.t.Fatalf("Invalid index head (expected #%d, got #%d)", head, ts.fm.afterLastIndexedBlock-1)
+		if ts.fm.indexedRange.afterLastIndexedBlock != uint64(head+1) {
+			ts.t.Fatalf("Invalid index head (expected #%d, got #%d)", head, ts.fm.indexedRange.afterLastIndexedBlock-1)
 		}
-		if ts.fm.headBlockDelimiter != uint64(head)*lvPerBlock {
-			ts.t.Fatalf("Invalid index head delimiter pointer (expected %d, got %d)", uint64(head)*lvPerBlock, ts.fm.headBlockDelimiter)
+		if ts.fm.indexedRange.headBlockDelimiter != uint64(head)*lvPerBlock {
+			ts.t.Fatalf("Invalid index head delimiter pointer (expected %d, got %d)", uint64(head)*lvPerBlock, ts.fm.indexedRange.headBlockDelimiter)
 		}
-		if ts.fm.firstIndexedBlock != expTailBlock {
-			ts.t.Fatalf("Invalid index tail block (expected #%d, got #%d)", expTailBlock, ts.fm.firstIndexedBlock)
+		if ts.fm.indexedRange.firstIndexedBlock != expTailBlock {
+			ts.t.Fatalf("Invalid index tail block (expected #%d, got #%d)", expTailBlock, ts.fm.indexedRange.firstIndexedBlock)
 		}
 	}
 }

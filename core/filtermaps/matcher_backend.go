@@ -45,9 +45,9 @@ func (f *FilterMaps) NewMatcherBackend() *FilterMapsMatcherBackend {
 
 	fm := &FilterMapsMatcherBackend{
 		f:          f,
-		valid:      f.initialized && f.afterLastIndexedBlock > f.firstIndexedBlock,
-		firstValid: f.firstIndexedBlock,
-		lastValid:  f.afterLastIndexedBlock - 1,
+		valid:      f.indexedRange.initialized && f.indexedRange.afterLastIndexedBlock > f.indexedRange.firstIndexedBlock,
+		firstValid: f.indexedRange.firstIndexedBlock,
+		lastValid:  f.indexedRange.afterLastIndexedBlock - 1,
 	}
 	f.matchers[fm] = struct{}{}
 	return fm
@@ -126,11 +126,11 @@ func (fm *FilterMapsMatcherBackend) synced() {
 		indexed                     bool
 		lastIndexed, subLastIndexed uint64
 	)
-	if !fm.f.headBlockIndexed {
+	if !fm.f.indexedRange.headBlockIndexed {
 		subLastIndexed = 1
 	}
-	if fm.f.afterLastIndexedBlock-subLastIndexed > fm.f.firstIndexedBlock {
-		indexed, lastIndexed = true, fm.f.afterLastIndexedBlock-subLastIndexed-1
+	if fm.f.indexedRange.afterLastIndexedBlock-subLastIndexed > fm.f.indexedRange.firstIndexedBlock {
+		indexed, lastIndexed = true, fm.f.indexedRange.afterLastIndexedBlock-subLastIndexed-1
 	}
 	fm.syncCh <- SyncRange{
 		HeadNumber:   fm.f.indexedView.headNumber,
@@ -138,11 +138,11 @@ func (fm *FilterMapsMatcherBackend) synced() {
 		FirstValid:   fm.firstValid,
 		LastValid:    fm.lastValid,
 		Indexed:      indexed,
-		FirstIndexed: fm.f.firstIndexedBlock,
+		FirstIndexed: fm.f.indexedRange.firstIndexedBlock,
 		LastIndexed:  lastIndexed,
 	}
 	fm.valid = indexed
-	fm.firstValid = fm.f.firstIndexedBlock
+	fm.firstValid = fm.f.indexedRange.firstIndexedBlock
 	fm.lastValid = lastIndexed
 	fm.syncCh = nil
 }
@@ -189,17 +189,17 @@ func (f *FilterMaps) updateMatchersValidRange() {
 	defer f.matchersLock.Unlock()
 
 	for fm := range f.matchers {
-		if !f.hasIndexedBlocks() {
+		if !f.indexedRange.hasIndexedBlocks() {
 			fm.valid = false
 		}
 		if !fm.valid {
 			continue
 		}
-		if fm.firstValid < f.firstIndexedBlock {
-			fm.firstValid = f.firstIndexedBlock
+		if fm.firstValid < f.indexedRange.firstIndexedBlock {
+			fm.firstValid = f.indexedRange.firstIndexedBlock
 		}
-		if fm.lastValid >= f.afterLastIndexedBlock {
-			fm.lastValid = f.afterLastIndexedBlock - 1
+		if fm.lastValid >= f.indexedRange.afterLastIndexedBlock {
+			fm.lastValid = f.indexedRange.afterLastIndexedBlock - 1
 		}
 		if fm.firstValid > fm.lastValid {
 			fm.valid = false

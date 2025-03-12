@@ -139,7 +139,7 @@ func (f *FilterMaps) renderMapsFromMapBoundary(firstMap, afterLastMap uint32, st
 func (f *FilterMaps) lastCanonicalSnapshotBefore(afterLastMap uint32) *renderedMap {
 	var best *renderedMap
 	for _, blockNumber := range f.renderSnapshots.Keys() {
-		if cp, _ := f.renderSnapshots.Get(blockNumber); cp != nil && blockNumber < f.afterLastIndexedBlock &&
+		if cp, _ := f.renderSnapshots.Get(blockNumber); cp != nil && blockNumber < f.indexedRange.afterLastIndexedBlock &&
 			blockNumber <= f.targetView.headNumber && f.targetView.getBlockId(blockNumber) == cp.lastBlockId &&
 			cp.mapIndex < afterLastMap && (best == nil || blockNumber > best.lastBlock) {
 			best = cp
@@ -155,7 +155,7 @@ func (f *FilterMaps) lastCanonicalSnapshotBefore(afterLastMap uint32) *renderedM
 // Along with the next map index where the rendering can be started, the number
 // and starting log value pointer of the last block is also returned.
 func (f *FilterMaps) lastCanonicalMapBoundaryBefore(afterLastMap uint32) (nextMap uint32, startBlock, startLvPtr uint64, err error) {
-	if !f.initialized {
+	if !f.indexedRange.initialized {
 		return 0, 0, 0, nil
 	}
 	mapIndex := afterLastMap
@@ -184,18 +184,18 @@ func (f *FilterMaps) lastCanonicalMapBoundaryBefore(afterLastMap uint32) (nextMa
 // lastMapBoundaryBefore returns the latest map boundary before the specified
 // map index.
 func (f *FilterMaps) lastMapBoundaryBefore(mapIndex uint32) (uint32, bool) {
-	if !f.initialized || f.afterLastRenderedMap == 0 {
+	if !f.indexedRange.initialized || f.indexedRange.afterLastRenderedMap == 0 {
 		return 0, false
 	}
-	if mapIndex > f.afterLastRenderedMap {
-		mapIndex = f.afterLastRenderedMap
+	if mapIndex > f.indexedRange.afterLastRenderedMap {
+		mapIndex = f.indexedRange.afterLastRenderedMap
 	}
-	if mapIndex > f.firstRenderedMap {
+	if mapIndex > f.indexedRange.firstRenderedMap {
 		return mapIndex - 1, true
 	}
-	if mapIndex+f.mapsPerEpoch > f.firstRenderedMap {
-		if mapIndex > f.firstRenderedMap-f.mapsPerEpoch+f.tailPartialEpoch {
-			mapIndex = f.firstRenderedMap - f.mapsPerEpoch + f.tailPartialEpoch
+	if mapIndex+f.mapsPerEpoch > f.indexedRange.firstRenderedMap {
+		if mapIndex > f.indexedRange.firstRenderedMap-f.mapsPerEpoch+f.indexedRange.tailPartialEpoch {
+			mapIndex = f.indexedRange.firstRenderedMap - f.mapsPerEpoch + f.indexedRange.tailPartialEpoch
 		}
 	} else {
 		mapIndex = (mapIndex >> f.logMapsPerEpoch) << f.logMapsPerEpoch
@@ -214,19 +214,19 @@ func (f *FilterMaps) emptyFilterMap() filterMap {
 // loadHeadSnapshot loads the last rendered map from the database and creates
 // a snapshot.
 func (f *FilterMaps) loadHeadSnapshot() error {
-	fm, err := f.getFilterMap(f.afterLastRenderedMap - 1)
+	fm, err := f.getFilterMap(f.indexedRange.afterLastRenderedMap - 1)
 	if err != nil {
-		return fmt.Errorf("failed to load head snapshot map %d: %v", f.afterLastRenderedMap-1, err)
+		return fmt.Errorf("failed to load head snapshot map %d: %v", f.indexedRange.afterLastRenderedMap-1, err)
 	}
-	lastBlock, _, err := f.getLastBlockOfMap(f.afterLastRenderedMap - 1)
+	lastBlock, _, err := f.getLastBlockOfMap(f.indexedRange.afterLastRenderedMap - 1)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve last block of head snapshot map %d: %v", f.afterLastRenderedMap-1, err)
+		return fmt.Errorf("failed to retrieve last block of head snapshot map %d: %v", f.indexedRange.afterLastRenderedMap-1, err)
 	}
 	var firstBlock uint64
-	if f.afterLastRenderedMap > 1 {
-		prevLastBlock, _, err := f.getLastBlockOfMap(f.afterLastRenderedMap - 2)
+	if f.indexedRange.afterLastRenderedMap > 1 {
+		prevLastBlock, _, err := f.getLastBlockOfMap(f.indexedRange.afterLastRenderedMap - 2)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve last block of map %d before head snapshot: %v", f.afterLastRenderedMap-2, err)
+			return fmt.Errorf("failed to retrieve last block of map %d before head snapshot: %v", f.indexedRange.afterLastRenderedMap-2, err)
 		}
 		firstBlock = prevLastBlock + 1
 	}
@@ -237,14 +237,14 @@ func (f *FilterMaps) loadHeadSnapshot() error {
 			return fmt.Errorf("failed to retrieve log value pointer of head snapshot block %d: %v", firstBlock+uint64(i), err)
 		}
 	}
-	f.renderSnapshots.Add(f.afterLastIndexedBlock-1, &renderedMap{
+	f.renderSnapshots.Add(f.indexedRange.afterLastIndexedBlock-1, &renderedMap{
 		filterMap:     fm,
-		mapIndex:      f.afterLastRenderedMap - 1,
-		lastBlock:     f.afterLastIndexedBlock - 1,
-		lastBlockId:   f.indexedView.getBlockId(f.afterLastIndexedBlock - 1),
+		mapIndex:      f.indexedRange.afterLastRenderedMap - 1,
+		lastBlock:     f.indexedRange.afterLastIndexedBlock - 1,
+		lastBlockId:   f.indexedView.getBlockId(f.indexedRange.afterLastIndexedBlock - 1),
 		blockLvPtrs:   lvPtrs,
 		finished:      true,
-		headDelimiter: f.headBlockDelimiter,
+		headDelimiter: f.indexedRange.headBlockDelimiter,
 	})
 	return nil
 }
@@ -342,7 +342,7 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 		if err := r.iterator.next(); err != nil {
 			return false, fmt.Errorf("failed to advance log iterator at %d while rendering map %d: %v", r.iterator.lvIndex, r.currentMap.mapIndex, err)
 		}
-		if !r.f.testDisableSnapshots && r.afterLastMap >= r.f.afterLastRenderedMap &&
+		if !r.f.testDisableSnapshots && r.afterLastMap >= r.f.indexedRange.afterLastRenderedMap &&
 			(r.iterator.delimiter || r.iterator.finished) {
 			r.makeSnapshot()
 		}
@@ -364,7 +364,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	r.f.indexLock.Lock()
 	defer r.f.indexLock.Unlock()
 
-	oldRange := r.f.filterMapsRange
+	oldRange := r.f.indexedRange
 	tempRange, err := r.getTempRange()
 	if err != nil {
 		return fmt.Errorf("failed to get temporary rendered range: %v", err)
@@ -476,11 +476,11 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 // performance so instead safety is ensured by first reverting the valid map
 // range to the unchanged region until all new map data is committed.
 func (r *mapRenderer) getTempRange() (filterMapsRange, error) {
-	tempRange := r.f.filterMapsRange
+	tempRange := r.f.indexedRange
 	if err := tempRange.addRenderedRange(r.firstFinished, r.firstFinished, r.afterLastMap, r.f.mapsPerEpoch); err != nil {
 		return filterMapsRange{}, fmt.Errorf("failed to update temporary rendered range: %v", err)
 	}
-	if tempRange.firstRenderedMap != r.f.firstRenderedMap {
+	if tempRange.firstRenderedMap != r.f.indexedRange.firstRenderedMap {
 		// first rendered map changed; update first indexed block
 		if tempRange.firstRenderedMap > 0 {
 			lastBlock, _, err := r.f.getLastBlockOfMap(tempRange.firstRenderedMap - 1)
@@ -492,7 +492,7 @@ func (r *mapRenderer) getTempRange() (filterMapsRange, error) {
 			tempRange.firstIndexedBlock = 0
 		}
 	}
-	if tempRange.afterLastRenderedMap != r.f.afterLastRenderedMap {
+	if tempRange.afterLastRenderedMap != r.f.indexedRange.afterLastRenderedMap {
 		// first rendered map changed; update first indexed block
 		if tempRange.afterLastRenderedMap > 0 {
 			lastBlock, _, err := r.f.getLastBlockOfMap(tempRange.afterLastRenderedMap - 1)
@@ -512,11 +512,11 @@ func (r *mapRenderer) getTempRange() (filterMapsRange, error) {
 // rendered maps.
 func (r *mapRenderer) getUpdatedRange() (filterMapsRange, error) {
 	// update filterMapsRange
-	newRange := r.f.filterMapsRange
+	newRange := r.f.indexedRange
 	if err := newRange.addRenderedRange(r.firstFinished, r.afterLastFinished, r.afterLastMap, r.f.mapsPerEpoch); err != nil {
 		return filterMapsRange{}, fmt.Errorf("failed to update rendered range: %v", err)
 	}
-	if newRange.firstRenderedMap != r.f.firstRenderedMap {
+	if newRange.firstRenderedMap != r.f.indexedRange.firstRenderedMap {
 		// first rendered map changed; update first indexed block
 		if newRange.firstRenderedMap > 0 {
 			lastBlock, _, err := r.f.getLastBlockOfMap(newRange.firstRenderedMap - 1)
@@ -625,12 +625,12 @@ func (f *FilterMaps) newLogIteratorFromBlockDelimiter(blockNumber uint64) (*logI
 	if blockNumber > f.targetView.headNumber {
 		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", blockNumber, f.targetView.headNumber)
 	}
-	if blockNumber < f.firstIndexedBlock || blockNumber >= f.afterLastIndexedBlock {
+	if blockNumber < f.indexedRange.firstIndexedBlock || blockNumber >= f.indexedRange.afterLastIndexedBlock {
 		return nil, errUnindexedRange
 	}
 	var lvIndex uint64
-	if f.headBlockIndexed && blockNumber+1 == f.afterLastIndexedBlock {
-		lvIndex = f.headBlockDelimiter
+	if f.indexedRange.headBlockIndexed && blockNumber+1 == f.indexedRange.afterLastIndexedBlock {
+		lvIndex = f.indexedRange.headBlockDelimiter
 	} else {
 		var err error
 		lvIndex, err = f.getBlockLvPointer(blockNumber + 1)
