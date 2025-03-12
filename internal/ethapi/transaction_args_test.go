@@ -403,4 +403,4 @@ func (b *backendMock) Engine() consensus.Engine { return nil }
 
 func (b *backendMock) NewMatcherBackend() filtermaps.MatcherBackend { return nil }
 
-func (b *backendMock) HistoryCutoff() uint64 { return b.HistoryCutoff() }
+func (b *backendMock) HistoryCutoff() uint64 { return 0 }
