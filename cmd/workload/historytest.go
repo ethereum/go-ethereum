@@ -121,7 +121,7 @@ func (s *historyTestSuite) testGetBlockByHash(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByHash(ctx, bhash, false)
 		if err != nil {
-			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			if errIsPrunedHistory(err) {
 				t.Logf("test case accessed pruned history")
 				continue
 			}
