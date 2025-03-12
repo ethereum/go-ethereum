@@ -536,12 +536,12 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		chainConfig        = api.backend.ChainConfig()
 		vmctx              = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		deleteEmptyObjects = chainConfig.IsEIP158(block.Number())
+		evm                = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+		rules              = evm.Rules()
 	)
-	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	rules := evm.Rules()
 	if rules.IsPrague {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
@@ -601,12 +601,14 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	}
 	defer release()
 
-	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-	evm := vm.NewEVM(blockCtx, statedb, api.backend.ChainConfig(), vm.Config{})
+	var (
+		blockCtx = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+		evm      = vm.NewEVM(blockCtx, statedb, api.backend.ChainConfig(), vm.Config{})
+		rules    = evm.Rules()
+	)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	rules := evm.Rules()
 	if rules.IsPrague {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
@@ -781,11 +783,13 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Note: This copies the config, to not screw up the main config
 		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
 	}
-	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+	var (
+		evm   = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+		rules = evm.Rules()
+	)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	rules := evm.Rules()
 	if rules.IsPrague {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}

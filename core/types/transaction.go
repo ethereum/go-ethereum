@@ -581,12 +581,12 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	return &Transaction{inner: cpy, time: tx.time}, nil
 }
 
-// IntrinsicGas returns the 'intrinsic gas' computed for a message with the given data.
+// IntrinsicGas returns the calculated intrinsic gas for the given transaction.
 func (tx *Transaction) IntrinsicGas(rules *params.Rules) (uint64, error) {
 	return calcIntrinsicGas(tx.inner, rules)
 }
 
-// IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
+// IntrinsicGas returns the calculated intrinsic gas for the given transaction.
 func IntrinsicGas(txdata TxData, rules *params.Rules) uint64 {
 	gas, err := calcIntrinsicGas(txdata, rules)
 	if err != nil {

@@ -591,8 +591,10 @@ func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
+// Rules returns the rules for the EVM given the current block's context.
 func (evm *EVM) Rules() *params.Rules {
-	rules := evm.ChainConfig().Rules(evm.Context.BlockNumber, evm.Context.Random != nil, evm.Context.Time)
+	bctx := evm.Context
+	rules := evm.ChainConfig().Rules(bctx.BlockNumber, bctx.Random != nil, bctx.Time)
 	return &rules
 }
 

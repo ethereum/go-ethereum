@@ -376,16 +376,15 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
 		contractCreation = msg.To == nil
 		floorDataGas     uint64
+		err              error
 	)
 
-	gas := msg.IntrinsicGas
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	if st.gasRemaining < gas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
+	if st.gasRemaining < msg.IntrinsicGas {
+		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, msg.IntrinsicGas)
 	}
 	// Gas limit suffices for the floor data cost (EIP-7623)
 	if rules.IsPrague {
-		var err error
 		floorDataGas, err = FloorDataGas(msg.Data)
 		if err != nil {
 			return nil, err
@@ -395,9 +394,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
+		t.OnGasChange(st.gasRemaining, st.gasRemaining-msg.IntrinsicGas, tracing.GasChangeTxIntrinsicGas)
 	}
-	st.gasRemaining -= gas
+	st.gasRemaining -= msg.IntrinsicGas
 
 	if rules.IsEIP4762 {
 		st.evm.AccessEvents.AddTxOrigin(msg.From)

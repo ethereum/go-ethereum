@@ -100,12 +100,10 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 			Nonce:    gen.TxNonce(benchRootAddr),
 			To:       &toaddr,
 			Value:    big.NewInt(1),
-			Gas:      params.TxGas,
 			Data:     data,
 			GasPrice: gasPrice,
 		}
-		gas := types.IntrinsicGas(txdata, &rules)
-		txdata.Gas = gas
+		txdata.Gas = types.IntrinsicGas(txdata, &rules)
 		tx, _ := types.SignNewTx(benchRootKey, signer, txdata)
 		gen.AddTx(tx)
 	}
