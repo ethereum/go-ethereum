@@ -1447,7 +1447,7 @@ func findMergeBlock(ctx *cli.Context, db ethdb.Database) (uint64, error) {
 		}))
 
 		// Check if we found a valid merge block
-		if mergeBlock < uint64(*headNumber) {
+		if mergeBlock < *headNumber {
 			header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, mergeBlock), mergeBlock)
 			if header != nil && header.Difficulty.Sign() == 0 {
 				found = true
