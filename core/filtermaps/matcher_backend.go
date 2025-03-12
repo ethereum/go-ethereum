@@ -133,7 +133,7 @@ func (fm *FilterMapsMatcherBackend) synced() {
 		indexed, lastIndexed = true, fm.f.afterLastIndexedBlock-subLastIndexed-1
 	}
 	fm.syncCh <- SyncRange{
-		HeadNumber:   fm.f.indexedView.headNumber(),
+		HeadNumber:   fm.f.indexedView.headNumber,
 		Valid:        fm.valid,
 		FirstValid:   fm.firstValid,
 		LastValid:    fm.lastValid,
@@ -159,7 +159,7 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 		if fm.f.targetView == nil {
 			return SyncRange{}, errors.New("canonical chain head not available")
 		}
-		return SyncRange{HeadNumber: fm.f.targetView.headNumber()}, nil
+		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
 	}
 	syncCh := make(chan SyncRange, 1)
 	fm.f.matchersLock.Lock()

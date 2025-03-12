@@ -140,7 +140,7 @@ func (f *FilterMaps) lastCanonicalSnapshotBefore(afterLastMap uint32) *renderedM
 	var best *renderedMap
 	for _, blockNumber := range f.renderSnapshots.Keys() {
 		if cp, _ := f.renderSnapshots.Get(blockNumber); cp != nil && blockNumber < f.afterLastIndexedBlock &&
-			blockNumber <= f.targetView.headNumber() && f.targetView.getBlockId(blockNumber) == cp.lastBlockId &&
+			blockNumber <= f.targetView.headNumber && f.targetView.getBlockId(blockNumber) == cp.lastBlockId &&
 			cp.mapIndex < afterLastMap && (best == nil || blockNumber > best.lastBlock) {
 			best = cp
 		}
@@ -168,7 +168,7 @@ func (f *FilterMaps) lastCanonicalMapBoundaryBefore(afterLastMap uint32) (nextMa
 		if err != nil {
 			return 0, 0, 0, fmt.Errorf("failed to retrieve last block of reverse iterated map %d: %v", mapIndex, err)
 		}
-		if lastBlock >= f.indexedView.headNumber() || lastBlock >= f.targetView.headNumber() ||
+		if lastBlock >= f.indexedView.headNumber || lastBlock >= f.targetView.headNumber ||
 			lastBlockId != f.targetView.getBlockId(lastBlock) {
 			// map is not full or inconsistent with targetView; roll back
 			continue
@@ -533,8 +533,8 @@ func (r *mapRenderer) getUpdatedRange() (filterMapsRange, error) {
 		lm := r.finishedMaps[r.afterLastFinished-1]
 		newRange.headBlockIndexed = lm.finished
 		if lm.finished {
-			newRange.afterLastIndexedBlock = r.f.targetView.headNumber() + 1
-			if lm.lastBlock != r.f.targetView.headNumber() {
+			newRange.afterLastIndexedBlock = r.f.targetView.headNumber + 1
+			if lm.lastBlock != r.f.targetView.headNumber {
 				panic("map rendering finished but last block != head block")
 			}
 			newRange.headBlockDelimiter = lm.headDelimiter
@@ -608,7 +608,7 @@ func (fmr *filterMapsRange) addRenderedRange(firstRendered, afterLastRendered, a
 
 // logIterator iterates on the linear log value index range.
 type logIterator struct {
-	chainView                       chainView
+	chainView                       *ChainView
 	blockNumber                     uint64
 	receipts                        types.Receipts
 	blockStart, delimiter, finished bool
@@ -622,8 +622,8 @@ var errUnindexedRange = errors.New("unindexed range")
 // given block's first log value entry (the block delimiter), according to the
 // current targetView.
 func (f *FilterMaps) newLogIteratorFromBlockDelimiter(blockNumber uint64) (*logIterator, error) {
-	if blockNumber > f.targetView.headNumber() {
-		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", blockNumber, f.targetView.headNumber())
+	if blockNumber > f.targetView.headNumber {
+		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", blockNumber, f.targetView.headNumber)
 	}
 	if blockNumber < f.firstIndexedBlock || blockNumber >= f.afterLastIndexedBlock {
 		return nil, errUnindexedRange
@@ -639,7 +639,7 @@ func (f *FilterMaps) newLogIteratorFromBlockDelimiter(blockNumber uint64) (*logI
 		}
 		lvIndex--
 	}
-	finished := blockNumber == f.targetView.headNumber()
+	finished := blockNumber == f.targetView.headNumber
 	return &logIterator{
 		chainView:   f.targetView,
 		blockNumber: blockNumber,
@@ -652,8 +652,8 @@ func (f *FilterMaps) newLogIteratorFromBlockDelimiter(blockNumber uint64) (*logI
 // newLogIteratorFromMapBoundary creates a logIterator starting at the given
 // map boundary, according to the current targetView.
 func (f *FilterMaps) newLogIteratorFromMapBoundary(mapIndex uint32, startBlock, startLvPtr uint64) (*logIterator, error) {
-	if startBlock > f.targetView.headNumber() {
-		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", startBlock, f.targetView.headNumber())
+	if startBlock > f.targetView.headNumber {
+		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", startBlock, f.targetView.headNumber)
 	}
 	// get block receipts
 	receipts := f.targetView.getReceipts(startBlock)
@@ -687,7 +687,7 @@ func (f *FilterMaps) newLogIteratorFromMapBoundary(mapIndex uint32, startBlock, 
 
 // updateChainView updates the iterator's chain view if it still matches the
 // previous view at the current position. Returns true if successful.
-func (l *logIterator) updateChainView(cv chainView) bool {
+func (l *logIterator) updateChainView(cv *ChainView) bool {
 	if !matchViews(cv, l.chainView, l.blockNumber) {
 		return false
 	}
@@ -744,7 +744,7 @@ func (l *logIterator) nextValid() {
 		}
 		l.logIndex = 0
 	}
-	if l.blockNumber == l.chainView.headNumber() {
+	if l.blockNumber == l.chainView.headNumber {
 		l.finished = true
 	} else {
 		l.delimiter = true

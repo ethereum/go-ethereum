@@ -62,7 +62,7 @@ type FilterMaps struct {
 	// Matcher backend can read them under indexLock read lock.
 	indexLock sync.RWMutex
 	filterMapsRange
-	indexedView chainView // always consistent with the log index
+	indexedView *ChainView // always consistent with the log index
 
 	// also accessed by indexer and matcher backend but no locking needed.
 	filterMapCache *lru.Cache[uint32, filterMap]
@@ -86,12 +86,12 @@ type FilterMaps struct {
 	ptrHeadIndex, ptrTailIndex, ptrTailUnindexBlock              uint64
 	ptrTailUnindexMap                                            uint32
 
-	targetView            chainView
+	targetView            *ChainView
 	matcherSyncRequest    *FilterMapsMatcherBackend
 	finalBlock, lastFinal uint64
 	lastFinalEpoch        uint32
 	stop                  bool
-	TargetViewCh          chan chainView
+	TargetViewCh          chan *ChainView
 	FinalBlockCh          chan uint64
 	BlockProcessingCh     chan bool
 	blockProcessing       bool
@@ -174,7 +174,7 @@ type lastBlockOfMap struct {
 }
 
 // NewFilterMaps creates a new FilterMaps and starts the indexer.
-func NewFilterMaps(db ethdb.KeyValueStore, initView chainView, params Params, history, unindexLimit uint64, noHistory bool, exportFileName string) *FilterMaps {
+func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, history, unindexLimit uint64, noHistory bool, exportFileName string) *FilterMaps {
 	rs, initialized, err := rawdb.ReadFilterMapsRange(db)
 	if err != nil {
 		log.Error("Error reading log index range", "error", err)
@@ -184,7 +184,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView chainView, params Params, hi
 		db:                db,
 		closeCh:           make(chan struct{}),
 		waitIdleCh:        make(chan chan bool),
-		TargetViewCh:      make(chan chainView),
+		TargetViewCh:      make(chan *ChainView),
 		FinalBlockCh:      make(chan uint64),
 		BlockProcessingCh: make(chan bool),
 		history:           history,
@@ -213,7 +213,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView chainView, params Params, hi
 	f.targetView = initView
 	if f.initialized {
 		f.indexedView = f.initChainView(f.targetView)
-		f.headBlockIndexed = f.afterLastIndexedBlock == f.indexedView.headNumber()+1
+		f.headBlockIndexed = f.afterLastIndexedBlock == f.indexedView.headNumber+1
 		if !f.headBlockIndexed {
 			f.headBlockDelimiter = 0
 		}
@@ -248,7 +248,7 @@ func (f *FilterMaps) Stop() {
 // on the last block of stored maps.
 // Note that the returned view might be shorter than the existing index if
 // the latest maps are not consistent with targetView.
-func (f *FilterMaps) initChainView(chainView chainView) chainView {
+func (f *FilterMaps) initChainView(chainView *ChainView) *ChainView {
 	mapIndex := f.afterLastRenderedMap
 	for {
 		var ok bool
@@ -261,11 +261,11 @@ func (f *FilterMaps) initChainView(chainView chainView) chainView {
 			log.Error("Could not initialize indexed chain view", "error", err)
 			break
 		}
-		if lastBlockNumber <= chainView.headNumber() && chainView.getBlockId(lastBlockNumber) == lastBlockId {
-			return newLimitedChainView(chainView, lastBlockNumber)
+		if lastBlockNumber <= chainView.headNumber && chainView.getBlockId(lastBlockNumber) == lastBlockId {
+			return chainView.limitedView(lastBlockNumber)
 		}
 	}
-	return newLimitedChainView(chainView, 0)
+	return chainView.limitedView(0)
 }
 
 // reset un-initializes the FilterMaps structure and removes all related data from
@@ -298,7 +298,7 @@ func (f *FilterMaps) init() error {
 		for min < max {
 			mid := (min + max + 1) / 2
 			cp := checkpointList[mid-1]
-			if cp.blockNumber <= f.targetView.headNumber() && f.targetView.getBlockId(cp.blockNumber) == cp.blockId {
+			if cp.blockNumber <= f.targetView.headNumber && f.targetView.getBlockId(cp.blockNumber) == cp.blockId {
 				min = mid
 			} else {
 				max = mid - 1
@@ -367,7 +367,7 @@ func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
 // setRange updates the indexed chain view and covered range and also adds the
 // changes to the given batch.
 // Note that this function assumes that the index write lock is being held.
-func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView chainView, newRange filterMapsRange) {
+func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, newRange filterMapsRange) {
 	f.indexedView = newView
 	f.filterMapsRange = newRange
 	f.updateMatchersValidRange()

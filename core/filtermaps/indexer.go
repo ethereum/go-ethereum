@@ -132,7 +132,7 @@ func (f *FilterMaps) processSingleEvent(blocking bool) bool {
 }
 
 // setTargetView updates the target chain view of the iterator.
-func (f *FilterMaps) setTargetView(targetView chainView) {
+func (f *FilterMaps) setTargetView(targetView *ChainView) {
 	if equalViews(f.targetView, targetView) {
 		return
 	}
@@ -170,7 +170,7 @@ func (f *FilterMaps) tryIndexHead() bool {
 			log.Info("Log index head rendering in progress",
 				"first block", f.firstIndexedBlock, "last block", f.afterLastIndexedBlock-1,
 				"processed", f.afterLastIndexedBlock-f.ptrHeadIndex,
-				"remaining", f.indexedView.headNumber()+1-f.afterLastIndexedBlock,
+				"remaining", f.indexedView.headNumber+1-f.afterLastIndexedBlock,
 				"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
 			f.loggedHeadIndex = true
 			f.lastLogHeadIndex = time.Now()
@@ -323,10 +323,10 @@ func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
 // tailTargetBlock returns the target value for the tail block number according
 // to the log history parameter and the current index head.
 func (f *FilterMaps) tailTargetBlock() uint64 {
-	if f.history == 0 || f.indexedView.headNumber() < f.history {
+	if f.history == 0 || f.indexedView.headNumber < f.history {
 		return 0
 	}
-	return f.indexedView.headNumber() + 1 - f.history
+	return f.indexedView.headNumber + 1 - f.history
 }
 
 // tailPartialBlocks returns the number of rendered blocks in the partially
