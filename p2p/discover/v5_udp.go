@@ -252,15 +252,20 @@ func (t *UDPv5) ResolveNodeId(id enode.ID) *enode.Node {
 
 // AllNodes returns all the nodes stored in the local table.
 func (t *UDPv5) AllNodes() []*enode.Node {
-	return t.tab.nodeList()
+	t.tab.mutex.Lock()
+	defer t.tab.mutex.Unlock()
+	nodes := make([]*enode.Node, 0)
+
+	for _, b := range &t.tab.buckets {
+		for _, n := range b.entries {
+			nodes = append(nodes, n.Node)
+		}
+	}
+	return nodes
 }
 
-// RoutingTableInfo returns the routing table information. Used for Portal discv5 RoutingTableInfo API.
-func (t *UDPv5) RoutingTableInfo() [][]string {
-	return t.tab.nodeIds()
-}
-
-// AddKnownNode adds a node to the routing table. Used for Portal discv5 AddEnr API.
+// AddKnownNode adds a node to the routing table.
+// The function should be used for testing only.
 func (t *UDPv5) AddKnownNode(n *enode.Node) bool {
 	return t.tab.addFoundNode(n, true)
 }
@@ -268,11 +273,6 @@ func (t *UDPv5) AddKnownNode(n *enode.Node) bool {
 // DeleteNode removes a node from the routing table. Used for Portal discv5 DeleteEnr API.
 func (t *UDPv5) DeleteNode(n *enode.Node) {
 	t.tab.deleteNode(n)
-}
-
-// WaitInit waits for the routing table to be initialized.
-func (t *UDPv5) WaitInit() {
-	t.tab.waitInit()
 }
 
 // LocalNode returns the current local Node running the
