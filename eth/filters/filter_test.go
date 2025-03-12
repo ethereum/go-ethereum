@@ -476,7 +476,7 @@ func TestRangeLogs(t *testing.T) {
 
 	updateHead := func() {
 		head := bc.CurrentBlock()
-		backend.fm.TargetViewCh <- filtermaps.NewStoredChainView(backend, head.Number.Uint64(), head.Hash())
+		backend.fm.SetTargetView(filtermaps.NewChainView(backend, head.Number.Uint64(), head.Hash()))
 		backend.fm.WaitIdle()
 	}
 
