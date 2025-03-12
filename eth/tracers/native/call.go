@@ -38,6 +38,10 @@ func init() {
 	tracers.DefaultDirectory.Register("callTracer", newCallTracer, false)
 }
 
+type CallFrame struct {
+	callFrame
+}
+
 type callLog struct {
 	Address common.Address `json:"address"`
 	Topics  []common.Hash  `json:"topics"`
