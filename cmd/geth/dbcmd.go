@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -1433,36 +1434,30 @@ func findMergeBlock(ctx *cli.Context, db ethdb.Database) (uint64, error) {
 
 	// If no hardcoded value was used or found, detect the merge block
 	if !found {
-		// Binary search to find the merge block
-		var low uint64 = 0
-		var high uint64 = *headNumber
+		// Use sort.Search to find the merge block
+		log.Info("Searching for merge block using sort.Search", "head", *headNumber)
 
-		log.Info("Searching for merge block using binary search", "head", *headNumber)
-
-		for low <= high {
-			mid := (low + high) / 2
-			header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, mid), mid)
+		// Convert the result of sort.Search (int) to uint64
+		mergeBlock = uint64(sort.Search(int(*headNumber), func(index int) bool {
+			header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, uint64(index)), uint64(index))
 			if header == nil {
-				return 0, fmt.Errorf("header %d not found", mid)
+				panic(fmt.Sprintf("header %d not found", index))
 			}
+			return header.Difficulty.Sign() == 0
+		}))
 
-			if header.Difficulty.Sign() == 0 {
-				// This is a post-merge block, look earlier
-				high = mid - 1
-				mergeBlock = mid
+		// Check if we found a valid merge block
+		if mergeBlock < uint64(*headNumber) {
+			header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, mergeBlock), mergeBlock)
+			if header != nil && header.Difficulty.Sign() == 0 {
 				found = true
-			} else {
-				// This is a pre-merge block, look later
-				low = mid + 1
+				log.Info("Found merge block", "number", mergeBlock)
 			}
 		}
 
 		if !found {
 			return 0, fmt.Errorf("merge block not found, chain may not have transitioned to PoS yet")
 		}
-
-		// The merge block is the first block with zero difficulty
-		log.Info("Found merge block", "number", mergeBlock)
 	}
 
 	return mergeBlock, nil
