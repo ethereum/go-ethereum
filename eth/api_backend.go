@@ -251,11 +251,18 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
+func (b *EthAPIBackend) HistoryCutoff() uint64 {
+	return b.eth.blockchain.HistoryCutoff()
+}
+
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	return b.eth.blockchain.GetReceiptsByHash(hash), nil
 }
 
 func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
+	if number < b.eth.blockchain.HistoryCutoff() {
+		return nil, &prunedHistoryError{}
+	}
 	return rawdb.ReadLogs(b.eth.chainDb, hash, number), nil
 }
 

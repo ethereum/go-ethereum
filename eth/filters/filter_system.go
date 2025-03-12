@@ -64,6 +64,7 @@ type Backend interface {
 
 	CurrentHeader() *types.Header
 	ChainConfig() *params.ChainConfig
+	HistoryCutoff() uint64
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
@@ -138,6 +139,11 @@ func (sys *FilterSystem) cachedGetBody(ctx context.Context, elem *logCacheElem, 
 	elem.body.Store(body)
 	return body, nil
 }
+
+type prunedHistoryError struct{}
+
+func (e *prunedHistoryError) Error() string  { return "Pruned history unavailable" }
+func (e *prunedHistoryError) ErrorCode() int { return 4444 }
 
 // Type determines the kind of filter and is used to put the filter in to
 // the correct bucket when added.

@@ -618,6 +618,9 @@ func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscripti
 func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("implement me")
 }
+
+func (b testBackend) HistoryCutoff() uint64 { return b.chain.HistoryCutoff() }
+
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts

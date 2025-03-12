@@ -181,7 +181,15 @@ func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {
 	b.pendingReceipts = receipts
 }
 
+<<<<<<< HEAD
 func newTestFilterSystem(db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
+=======
+func (b *testBackend) HistoryCutoff() uint64 {
+	return 0
+}
+
+func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
+>>>>>>> 7139f930b0 (return prunedHistoryError from GetLogs/FilterLogs if accessing pruned state.  duplicate prunedHistoryError into eth/filters package.  add HistoryCutoff method to eth backend)
 	backend := &testBackend{db: db}
 	sys := NewFilterSystem(backend, cfg)
 	return backend, sys
