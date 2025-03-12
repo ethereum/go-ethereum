@@ -43,6 +43,17 @@ type historyTestSuite struct {
 	tests historyTest
 }
 
+// errIsPrunedHistory returns true if an error is an rpc.Error with an error
+// code of 4444.
+func errIsPrunedHistory(err error) bool {
+	if err != nil {
+		if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			return true
+		}
+	}
+	return false
+}
+
 func newHistoryTestSuite(cfg testConfig) *historyTestSuite {
 	s := &historyTestSuite{cfg: cfg}
 	if err := s.loadTests(); err != nil {
@@ -133,7 +144,7 @@ func (s *historyTestSuite) testGetBlockByNumber(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByNumber(ctx, num, false)
 		if err != nil {
-			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			if errIsPrunedHistory(err) {
 				t.Logf("test case accessed pruned history")
 				continue
 			}
@@ -156,7 +167,7 @@ func (s *historyTestSuite) testGetBlockTransactionCountByHash(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByHash(ctx, bhash)
 		if err != nil {
-			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			if errIsPrunedHistory(err) {
 				t.Logf("test case accessed pruned history")
 				continue
 			}
@@ -176,7 +187,7 @@ func (s *historyTestSuite) testGetBlockTransactionCountByNumber(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByNumber(ctx, num)
 		if err != nil {
-			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			if errIsPrunedHistory(err) {
 				t.Logf("test case accessed pruned history")
 				continue
 			}
@@ -196,7 +207,7 @@ func (s *historyTestSuite) testGetBlockReceiptsByHash(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, bhash)
 		if err != nil {
-			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			if errIsPrunedHistory(err) {
 				t.Logf("test case accessed pruned history")
 				continue
 			}
@@ -217,7 +228,7 @@ func (s *historyTestSuite) testGetBlockReceiptsByNumber(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, hexutil.Uint64(num))
 		if err != nil {
-			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			if errIsPrunedHistory(err) {
 				t.Logf("test case accessed pruned history")
 				continue
 			}
@@ -244,7 +255,7 @@ func (s *historyTestSuite) testGetTransactionByBlockHashAndIndex(t *utesting.T) 
 
 		tx, err := s.cfg.client.getTransactionByBlockHashAndIndex(ctx, bhash, uint64(txIndex))
 		if err != nil {
-			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			if errIsPrunedHistory(err) {
 				t.Logf("test case accessed pruned history")
 				continue
 			}
@@ -273,7 +284,7 @@ func (s *historyTestSuite) testGetTransactionByBlockNumberAndIndex(t *utesting.T
 
 		tx, err := s.cfg.client.getTransactionByBlockNumberAndIndex(ctx, num, uint64(txIndex))
 		if err != nil {
-			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			if errIsPrunedHistory(err) {
 				t.Logf("test case accessed pruned history")
 				continue
 			}
