@@ -22,6 +22,7 @@ func TestMethodSignatures(t *testing.T) {
 	assert.Equal(t, crypto.Keccak256Hash([]byte("commitBatch(uint8,bytes,bytes[],bytes)")).Bytes()[:4], ScrollChainABI.Methods[commitBatchMethodName].ID)
 	assert.Equal(t, crypto.Keccak256Hash([]byte("commitBatchWithBlobProof(uint8,bytes,bytes[],bytes,bytes)")).Bytes()[:4], ScrollChainABI.Methods[commitBatchWithBlobProofMethodName].ID)
 	assert.Equal(t, crypto.Keccak256Hash([]byte("commitBatches(uint8,bytes32,bytes32)")).Bytes()[:4], ScrollChainABI.Methods[commitBatchesV7MethodName].ID)
+	assert.Equal(t, crypto.Keccak256Hash([]byte("commitAndFinalizeBatch(uint8,bytes32,(bytes,uint256,bytes32,bytes32,bytes))")).Bytes()[:4], ScrollChainABI.Methods[commitAndFinalizeBatch].ID)
 	assert.Equal(t, crypto.Keccak256Hash([]byte("finalizeBundlePostEuclidV2(bytes,uint256,bytes32,bytes32,bytes)")).Bytes()[:4], ScrollChainABI.Methods[finalizeBundlePostEuclidV2MethodName].ID)
 }
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/scroll-tech/da-codec/encoding"
+
 	"github.com/scroll-tech/go-ethereum"
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
 	"github.com/scroll-tech/go-ethereum/common"
@@ -97,7 +99,7 @@ func (r *Reader) FinalizedL1MessageQueueIndex(blockNumber uint64) (uint64, error
 	return next - 1, nil
 }
 
-func (r *Reader) LatestFinalizedBatch(blockNumber uint64) (uint64, error) {
+func (r *Reader) LatestFinalizedBatchIndex(blockNumber uint64) (uint64, error) {
 	data, err := r.scrollChainABI.Pack(lastFinalizedBatchIndex)
 	if err != nil {
 		return 0, fmt.Errorf("failed to pack %s: %w", lastFinalizedBatchIndex, err)
@@ -397,6 +399,28 @@ func (r *Reader) FetchCommitTxData(commitEvent *CommitBatchEvent) (*CommitBatchA
 		args, err = newCommitBatchArgsFromCommitBatchesV7(method, values)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode calldata into commitBatch args %s, values: %+v, err: %w", commitBatchesV7MethodName, values, err)
+		}
+	} else if method.Name == commitAndFinalizeBatch {
+		commitAndFinalizeArgs, err := newCommitAndFinalizeBatchArgs(method, values)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode calldata into commitAndFinalizeBatch args %s, values: %+v, err: %w", commitAndFinalizeBatch, values, err)
+		}
+
+		// in commitAndFinalizeBatch, the last batch hash is encoded in the finalize struct as this is the only batch we're
+		// committing when calling this function.
+		codec, err := encoding.CodecFromVersion(encoding.CodecVersion(commitAndFinalizeArgs.Version))
+		if err != nil {
+			return nil, fmt.Errorf("failed to get codec from version %d, err: %w", commitAndFinalizeArgs.Version, err)
+		}
+		daBatch, err := codec.NewDABatchFromBytes(commitAndFinalizeArgs.FinalizeStruct.BatchHeader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode daBatch from bytes, err: %w", err)
+		}
+
+		args = &CommitBatchArgs{
+			Version:         commitAndFinalizeArgs.Version,
+			ParentBatchHash: commitAndFinalizeArgs.ParentBatchHash,
+			LastBatchHash:   daBatch.Hash(),
 		}
 	} else {
 		return nil, fmt.Errorf("unknown method name for commit transaction: %s", method.Name)
