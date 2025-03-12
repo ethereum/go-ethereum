@@ -200,12 +200,6 @@ func (t *UDPv5) Close() {
 	})
 }
 
-// PingWithoutResp sends a ping message to the given node.
-func (t *UDPv5) PingWithoutResp(n *enode.Node) error {
-	_, err := t.ping(n)
-	return err
-}
-
 // Resolve searches for a specific node with the given ID and tries to get the most recent
 // version of the node record for it. It returns n if the node could not be resolved.
 func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
@@ -400,7 +394,7 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 
 // ping calls PING on a node and waits for a PONG response.
 func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
-	pong, err := t.PingWithResp(n)
+	pong, err := t.Ping(n)
 	if err != nil {
 		return 0, err
 	}
@@ -408,8 +402,8 @@ func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 	return pong.ENRSeq, nil
 }
 
-// PingWithResp calls PING on a node and waits for a PONG response.
-func (t *UDPv5) PingWithResp(n *enode.Node) (*v5wire.Pong, error) {
+// Ping calls PING on a node and waits for a PONG response.
+func (t *UDPv5) Ping(n *enode.Node) (*v5wire.Pong, error) {
 	req := &v5wire.Ping{ENRSeq: t.localNode.Node().Seq()}
 	resp := t.callToNode(n, v5wire.PongMsg, req)
 	defer t.callDone(resp)
