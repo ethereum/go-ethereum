@@ -104,14 +104,11 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 		}, utils.DatabaseFlags),
 		Description: `
 The import command allows the import of blocks from an RLP-encoded format. This format can be a single file
-containing multiple RLP-encoded blocks, or multiple files can be utilized.
+containing multiple RLP-encoded blocks, or multiple files can be given.
 
-If only one file is used, an import error will result in the entire import process failing. Conversely, if
-multiple files are employed, the import process will continue even if an individual RLP file fails to import
-successfully.
-
-The import command will batch-import 2500 blocks into the database at a time. The import process can be
-interrupted using Ctrl-C, and it will halt at the end of the current batch.`,
+If only one file is used, an import error will result in the entire import process failing. If
+multiple files are processed, the import process will continue even if an individual RLP file fails
+to import successfully.`,
 	}
 	exportCommand = &cli.Command{
 		Action:    exportChain,
