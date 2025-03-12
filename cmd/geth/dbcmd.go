@@ -1312,8 +1312,8 @@ func truncateFreezer(ctx *cli.Context) error {
 // extractHeaders copies headers from the main freezer to a temporary freezer in batches
 func extractHeaders(ancientDb ethdb.AncientReader, headersFreezer *rawdb.Freezer, mergeBlock, batchSize uint64) error {
 	// Create a progress reporter
-	progressReporter := utils.NewProgressReporter("Copying headers to temporary freezer", int(mergeBlock), 5)
-	defer progressReporter.Stop()
+	log.Info("Starting to copy headers to temporary freezer", "count", mergeBlock)
+
 
 	for i := uint64(0); i < mergeBlock; i += batchSize {
 		end := i + batchSize
@@ -1321,7 +1321,9 @@ func extractHeaders(ancientDb ethdb.AncientReader, headersFreezer *rawdb.Freezer
 			end = mergeBlock
 		}
 
-		log.Info("Processing batch of headers", "from", i, "to", end)
+		// Log progress as percentage
+		progress := float64(end) / float64(mergeBlock) * 100
+		log.Info("Processing batch of headers", "from", i, "to", end, "progress", fmt.Sprintf("%.2f%%", progress))
 
 		// Process this batch
 		_, err := headersFreezer.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -1351,7 +1353,6 @@ func extractHeaders(ancientDb ethdb.AncientReader, headersFreezer *rawdb.Freezer
 		}
 
 		// Update progress
-		progressReporter.Report(int(end))
 	}
 
 	return nil
@@ -1360,8 +1361,6 @@ func extractHeaders(ancientDb ethdb.AncientReader, headersFreezer *rawdb.Freezer
 // reinsertHeaders copies headers from the temporary freezer back to the main freezer in batches
 func reinsertHeaders(freezerDb ethdb.AncientStore, headersFreezer *rawdb.Freezer, mergeBlock, batchSize uint64) error {
 	// Create a progress reporter
-	progressReporter := utils.NewProgressReporter("Copying headers back to main freezer", int(mergeBlock), 5)
-	defer progressReporter.Stop()
 
 	for i := uint64(0); i < mergeBlock; i += batchSize {
 		end := i + batchSize
@@ -1373,6 +1372,7 @@ func reinsertHeaders(freezerDb ethdb.AncientStore, headersFreezer *rawdb.Freezer
 
 		_, err := freezerDb.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 			for j := i; j < end; j++ {
+	log.Info("Completed copying headers back to main freezer", "count", mergeBlock)
 				// Read from temporary freezer
 				headerBytes, err := headersFreezer.Ancient(rawdb.ChainFreezerHeaderTable, j)
 				if err != nil {
@@ -1398,7 +1398,6 @@ func reinsertHeaders(freezerDb ethdb.AncientStore, headersFreezer *rawdb.Freezer
 		}
 
 		// Update progress
-		progressReporter.Report(int(end))
 	}
 
 	return nil
