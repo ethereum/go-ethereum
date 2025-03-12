@@ -143,11 +143,25 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		}
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
-	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
+	bn := uint64(number)
+	if number == rpc.EarliestBlockNumber {
+		bn = b.eth.blockchain.HistoryCutoff()
+	}
+	if bn < b.eth.blockchain.HistoryCutoff() {
+		return nil, &prunedHistoryError{}
+	}
+	return b.eth.blockchain.GetBlockByNumber(bn), nil
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(hash), nil
+	number := b.eth.blockchain.GetBlockNumber(hash)
+	if number == nil {
+		return nil, nil
+	}
+	if *number < b.eth.blockchain.HistoryCutoff() {
+		return nil, &prunedHistoryError{}
+	}
+	return b.eth.blockchain.GetBlock(hash, *number), nil
 }
 
 // GetBody returns body of a block. It does not resolve special block numbers.
@@ -172,6 +186,9 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		}
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
+		}
+		if header.Number.Uint64() < b.eth.blockchain.HistoryCutoff() {
+			return nil, &prunedHistoryError{}
 		}
 		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
 		if block == nil {
@@ -421,3 +438,8 @@ func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }
+
+type prunedHistoryError struct{}
+
+func (e *prunedHistoryError) Error() string  { return "Pruned history unavailable" }
+func (e *prunedHistoryError) ErrorCode() int { return 4444 }
