@@ -389,6 +389,30 @@ func (f *MemoryFreezer) TruncateTail(tail uint64) (uint64, error) {
 	return old, nil
 }
 
+// TruncateTailBlocks discards any recent data below the provided threshold number.
+// Only truncates blocks and receipts.
+func (f *MemoryFreezer) TruncateTailBlocks(tail uint64) (uint64, error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if f.readonly {
+		return 0, errReadOnly
+	}
+	old := f.tail
+	if old >= tail {
+		return old, nil
+	}
+	for kind, table := range f.tables {
+		if kind == ChainFreezerBodiesTable || kind == ChainFreezerReceiptTable {
+			if err := table.truncateTail(tail); err != nil {
+				return 0, err
+			}
+		}
+	}
+	f.tail = tail
+	return old, nil
+}
+
 // Sync flushes all data tables to disk.
 func (f *MemoryFreezer) Sync() error {
 	return nil

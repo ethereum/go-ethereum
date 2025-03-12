@@ -130,6 +130,13 @@ type AncientWriter interface {
 	// will be removed all together.
 	TruncateTail(n uint64) (uint64, error)
 
+	// TruncateTailBlocks discards the first n ancient data from the ancient store. The already
+	// deleted items are ignored. After the truncation, the earliest item can be accessed
+	// is item_n(start from 0). The deleted items may not be removed from the ancient store
+	// immediately, but only when the accumulated deleted data reach the threshold then
+	// will be removed all together. Only deletes bodies and receipts.
+	TruncateTailBlocks(n uint64) (uint64, error)
+
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
 }

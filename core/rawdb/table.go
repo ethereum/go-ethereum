@@ -107,6 +107,12 @@ func (t *table) TruncateTail(items uint64) (uint64, error) {
 	return t.db.TruncateTail(items)
 }
 
+// TruncateTailBlocks is a noop passthrough that just forwards the request to the underlying
+// database.
+func (t *table) TruncateTailBlocks(items uint64) (uint64, error) {
+	return t.db.TruncateTailBlocks(items)
+}
+
 // Sync is a noop passthrough that just forwards the request to the underlying
 // database.
 func (t *table) Sync() error {

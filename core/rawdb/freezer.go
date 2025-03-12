@@ -301,9 +301,9 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 	return oitems, nil
 }
 
-// TruncateTailNoHeads discards any recent data below the provided threshold number.
-// Does not truncate the header and hash table
-func (f *Freezer) TruncateTailNoHeads(tail uint64) (uint64, error) {
+// TruncateTailBlocks discards any recent data below the provided threshold number.
+// Only truncates blocks and receipts.
+func (f *Freezer) TruncateTailBlocks(tail uint64) (uint64, error) {
 	if f.readonly {
 		return 0, errReadOnly
 	}
@@ -315,11 +315,10 @@ func (f *Freezer) TruncateTailNoHeads(tail uint64) (uint64, error) {
 		return old, nil
 	}
 	for kind, table := range f.tables {
-		if kind == ChainFreezerHeaderTable || kind == ChainFreezerHashTable {
-			continue
-		}
-		if err := table.truncateTail(tail); err != nil {
-			return 0, err
+		if kind == ChainFreezerBodiesTable || kind == ChainFreezerReceiptTable {
+			if err := table.truncateTail(tail); err != nil {
+				return 0, err
+			}
 		}
 	}
 	f.tail.Store(tail)

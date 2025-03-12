@@ -194,6 +194,15 @@ func (f *resettableFreezer) TruncateTail(tail uint64) (uint64, error) {
 	return f.freezer.TruncateTail(tail)
 }
 
+// TruncateTailBlocks discards any recent data below the provided threshold number.
+// It returns the previous value
+func (f *resettableFreezer) TruncateTailBlocks(tail uint64) (uint64, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	return f.freezer.TruncateTailBlocks(tail)
+}
+
 // Sync flushes all data tables to disk.
 func (f *resettableFreezer) Sync() error {
 	f.lock.RLock()
