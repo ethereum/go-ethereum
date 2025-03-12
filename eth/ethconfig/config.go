@@ -36,6 +36,14 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+const (
+	// ChainDbName is the name of the chain database
+	ChainDbName = "chaindata"
+
+	// ChainDbNamespace is the namespace for the chain database
+	ChainDbNamespace = "eth/db/chaindata/"
+)
+
 // FullNodeGPO contains default gasprice oracle settings for full node.
 var FullNodeGPO = gasprice.Config{
 	Blocks:           20,

@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/log"
@@ -222,7 +223,7 @@ func initGenesis(ctx *cli.Context) error {
 		overrides.OverrideVerkle = &v
 	}
 
-	chaindb, err := stack.OpenDatabaseWithFreezer("chaindata", 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
+	chaindb, err := stack.OpenDatabaseWithFreezer(ethconfig.ChainDbName, 0, 0, ctx.String(utils.AncientFlag.Name), ethconfig.ChainDbNamespace, false)
 	if err != nil {
 		utils.Fatalf("Failed to open database: %v", err)
 	}
