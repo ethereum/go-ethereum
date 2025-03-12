@@ -71,6 +71,7 @@ type Backend interface {
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
+	HistoryCutoff() uint64
 }
 
 // FilterSystem holds resources shared by all filters.
@@ -139,6 +140,11 @@ func (sys *FilterSystem) cachedGetBody(ctx context.Context, elem *logCacheElem, 
 	elem.body.Store(body)
 	return body, nil
 }
+
+type prunedHistoryError struct{}
+
+func (e *prunedHistoryError) Error() string  { return "Pruned history unavailable" }
+func (e *prunedHistoryError) ErrorCode() int { return 4444 }
 
 // Type determines the kind of filter and is used to put the filter in to
 // the correct bucket when added.

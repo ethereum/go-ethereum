@@ -402,3 +402,4 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 }
 
 func (b *backendMock) Engine() consensus.Engine { return nil }
+func (b *backendMock) HistoryCutoff() uint64    { return b.HistoryCutoff() }
