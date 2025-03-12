@@ -219,6 +219,7 @@ func (fq *filterQuery) run(client *client) {
 		}
 		fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
 			fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, err)
+		return
 	}
 	fq.results = logs
 }
