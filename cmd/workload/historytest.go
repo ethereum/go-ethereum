@@ -20,11 +20,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/utesting"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // historyTest is the content of a history test.
@@ -109,6 +109,10 @@ func (s *historyTestSuite) testGetBlockByHash(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByHash(ctx, bhash, false)
 		if err != nil {
+			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+				t.Logf("test case accessed pruned history")
+				continue
+			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		if b == nil {
@@ -128,6 +132,10 @@ func (s *historyTestSuite) testGetBlockByNumber(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByNumber(ctx, num, false)
 		if err != nil {
+			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+				t.Logf("test case accessed pruned history")
+				continue
+			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		if b == nil {
@@ -147,6 +155,10 @@ func (s *historyTestSuite) testGetBlockTransactionCountByHash(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByHash(ctx, bhash)
 		if err != nil {
+			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+				t.Logf("test case accessed pruned history")
+				continue
+			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		expectedCount := uint64(s.tests.TxCounts[i])
@@ -163,6 +175,10 @@ func (s *historyTestSuite) testGetBlockTransactionCountByNumber(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByNumber(ctx, num)
 		if err != nil {
+			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+				t.Logf("test case accessed pruned history")
+				continue
+			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		expectedCount := uint64(s.tests.TxCounts[i])
@@ -179,6 +195,10 @@ func (s *historyTestSuite) testGetBlockReceiptsByHash(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, bhash)
 		if err != nil {
+			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+				t.Logf("test case accessed pruned history")
+				continue
+			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		hash := calcReceiptsHash(receipts)
@@ -196,6 +216,10 @@ func (s *historyTestSuite) testGetBlockReceiptsByNumber(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, hexutil.Uint64(num))
 		if err != nil {
+			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+				t.Logf("test case accessed pruned history")
+				continue
+			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		hash := calcReceiptsHash(receipts)
@@ -219,6 +243,10 @@ func (s *historyTestSuite) testGetTransactionByBlockHashAndIndex(t *utesting.T) 
 
 		tx, err := s.cfg.client.getTransactionByBlockHashAndIndex(ctx, bhash, uint64(txIndex))
 		if err != nil {
+			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+				t.Logf("test case accessed pruned history")
+				continue
+			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		if tx == nil {
@@ -244,6 +272,10 @@ func (s *historyTestSuite) testGetTransactionByBlockNumberAndIndex(t *utesting.T
 
 		tx, err := s.cfg.client.getTransactionByBlockNumberAndIndex(ctx, num, uint64(txIndex))
 		if err != nil {
+			if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+				t.Logf("test case accessed pruned history")
+				continue
+			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
 		}
 		if tx == nil {

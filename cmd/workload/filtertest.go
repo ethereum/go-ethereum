@@ -110,6 +110,9 @@ func (s *filterTestSuite) filterFullRange(t *utesting.T) {
 func (s *filterTestSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
 	query.run(s.cfg.client)
 	if query.Err != nil {
+		if rpcErr := query.Err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			t.Logf("test case accessed pruned history")
+		}
 		t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
 		return
 	}
@@ -127,6 +130,9 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 	}
 	frQuery.run(s.cfg.client)
 	if frQuery.Err != nil {
+		if rpcErr := frQuery.Err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			t.Logf("test case accessed pruned history")
+		}
 		t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
 		return
 	}
@@ -208,9 +214,11 @@ func (fq *filterQuery) run(client *client) {
 	})
 	if err != nil {
 		fq.Err = err
+		if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+			return
+		}
 		fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
 			fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, err)
-		return
 	}
 	fq.results = logs
 }
