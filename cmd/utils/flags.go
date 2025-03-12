@@ -1733,14 +1733,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else {
 			if accs := ks.Accounts(); len(accs) > 0 {
 				developer = ks.Accounts()[0]
-				if err := ks.Unlock(developer, passphrase); err != nil {
-					Fatalf("Failed to unlock developer account: %v", err)
-				}
 			} else {
 				developer, err = ks.NewAccount(passphrase)
 				if err != nil {
 					Fatalf("Failed to create developer account: %v", err)
 				}
+			}
+			if err := ks.Unlock(developer, passphrase); err != nil {
+				Fatalf("Failed to unlock developer account: %v", err)
 			}
 			// Make sure the address is configured as fee recipient, otherwise
 			// the miner will fail to start.
