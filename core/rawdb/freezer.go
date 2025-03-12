@@ -301,6 +301,31 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 	return oitems, nil
 }
 
+// TruncateTailNoHeads discards any recent data below the provided threshold number.
+// Does not truncate the header and hash table
+func (f *Freezer) TruncateTailNoHeads(tail uint64) (uint64, error) {
+	if f.readonly {
+		return 0, errReadOnly
+	}
+	f.writeLock.Lock()
+	defer f.writeLock.Unlock()
+
+	old := f.tail.Load()
+	if old >= tail {
+		return old, nil
+	}
+	for kind, table := range f.tables {
+		if kind == ChainFreezerHeaderTable || kind == ChainFreezerHashTable {
+			continue
+		}
+		if err := table.truncateTail(tail); err != nil {
+			return 0, err
+		}
+	}
+	f.tail.Store(tail)
+	return old, nil
+}
+
 // TruncateTail discards any recent data below the provided threshold number.
 func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	if f.readonly {
