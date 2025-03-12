@@ -47,7 +47,7 @@ type historyTestSuite struct {
 // code of 4444.
 func errIsPrunedHistory(err error) bool {
 	if err != nil {
-		if rpcErr := err.(rpc.Error); rpcErr != nil && rpcErr.ErrorCode() == 4444 {
+		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == 4444 {
 			return true
 		}
 	}
