@@ -112,8 +112,9 @@ func (s *filterTestSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
 	if query.Err != nil {
 		if errIsPrunedHistory(query.Err) {
 			t.Logf("test case accessed pruned history")
+		} else {
+			t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
 		}
-		t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
 		return
 	}
 	if *query.ResultHash != query.calculateHash() {
@@ -132,8 +133,9 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 	if frQuery.Err != nil {
 		if errIsPrunedHistory(frQuery.Err) {
 			t.Logf("test case accessed pruned history")
+		} else {
+			t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
 		}
-		t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
 		return
 	}
 	// filter out results outside the original query range
