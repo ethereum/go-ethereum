@@ -233,7 +233,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, errMsg})
 			continue
 		}
-		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee)
+		rules := evm.ChainConfig().Rules(evm.Context.BlockNumber, evm.Context.Difficulty.BitLen() == 0, evm.Context.Time)
+		msg, err := core.TransactionToMessage(tx, signer, pre.Env.BaseFee, &rules)
 		if err != nil {
 			log.Warn("rejected tx", "index", i, "hash", tx.Hash(), "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})

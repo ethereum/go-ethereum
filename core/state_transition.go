@@ -110,7 +110,7 @@ type Message struct {
 }
 
 // TransactionToMessage converts a transaction into a Message.
-func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
+func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int, rules *params.Rules) (*Message, error) {
 	msg := &Message{
 		Nonce:                 tx.Nonce(),
 		GasLimit:              tx.Gas(),
@@ -134,7 +134,14 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 			msg.GasPrice = msg.GasFeeCap
 		}
 	}
-	var err error
+	// Fill in intrinsic gas.
+	gas, err := tx.IntrinsicGas(rules)
+	if err != nil {
+		return nil, err
+	}
+	msg.Gas = gas
+
+	// Recover sender.
 	msg.From, err = types.Sender(s, tx)
 	return msg, err
 }

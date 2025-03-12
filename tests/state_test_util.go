@@ -257,6 +257,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		return st, common.Hash{}, 0, UnsupportedForkError{subtest.Fork}
 	}
 	vmconfig.ExtraEips = eips
+	rules := config.Rules(new(big.Int).SetUint64(t.json.Env.Number), t.json.Env.Random != nil, t.json.Env.Timestamp)
 
 	block := t.genesis(config).ToBlock()
 	st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
@@ -271,7 +272,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		}
 	}
 	post := t.json.Post[subtest.Fork][subtest.Index]
-	msg, err := t.json.Tx.toMessage(post, baseFee)
+	msg, err := t.json.Tx.toMessage(post, baseFee, &rules)
 	if err != nil {
 		return st, common.Hash{}, 0, err
 	}
@@ -376,7 +377,7 @@ func (t *StateTest) genesis(config *params.ChainConfig) *core.Genesis {
 	return genesis
 }
 
-func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Message, error) {
+func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, rules *params.Rules) (*core.Message, error) {
 	var from common.Address
 	// If 'sender' field is present, use that
 	if tx.Sender != nil {
@@ -463,11 +464,24 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		}
 	}
 
+	// Compute the intrinsic gas for stTransaction. Since the test file doesn't
+	// specify the transaction type we need to infer. This is hacky but we can use
+	// dynamic fee tx to represent all txs (with respect to instrinsic gas calc at
+	// least) types except the set code tx type.
+	var txdata types.TxData
+	if to == nil {
+		txdata = &types.DynamicFeeTx{To: to, Data: data, AccessList: accessList}
+	} else {
+		txdata = &types.SetCodeTx{To: *to, Data: data, AccessList: accessList, AuthList: authList}
+	}
+	gas := types.IntrinsicGas(txdata, rules)
+
 	msg := &core.Message{
 		From:                  from,
 		To:                    to,
 		Nonce:                 tx.Nonce,
 		Value:                 value,
+		Gas:                   gas,
 		GasLimit:              gasLimit,
 		GasPrice:              gasPrice,
 		GasFeeCap:             tx.MaxFeePerGas,

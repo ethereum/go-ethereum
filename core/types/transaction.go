@@ -583,11 +583,20 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 
 // IntrinsicGas returns the 'intrinsic gas' computed for a message with the given data.
 func (tx *Transaction) IntrinsicGas(rules *params.Rules) (uint64, error) {
-	return IntrinsicGas(tx.inner, rules)
+	return calcIntrinsicGas(tx.inner, rules)
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(txdata TxData, rules *params.Rules) (uint64, error) {
+func IntrinsicGas(txdata TxData, rules *params.Rules) uint64 {
+	gas, err := calcIntrinsicGas(txdata, rules)
+	if err != nil {
+		panic(err)
+	}
+	return gas
+}
+
+// calcIntrinsicGas is an internal function that drives exported versions of the function.
+func calcIntrinsicGas(txdata TxData, rules *params.Rules) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if txdata.to() == nil && rules.IsHomestead {

@@ -104,7 +104,7 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 			Data:     data,
 			GasPrice: gasPrice,
 		}
-		gas, _ := types.IntrinsicGas(txdata, &rules)
+		gas := types.IntrinsicGas(txdata, &rules)
 		txdata.Gas = gas
 		tx, _ := types.SignNewTx(benchRootKey, signer, txdata)
 		gen.AddTx(tx)
