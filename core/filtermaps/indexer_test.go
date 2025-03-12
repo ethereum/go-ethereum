@@ -414,7 +414,8 @@ func (tc *testChain) setTargetHead() {
 	head := tc.CurrentBlock()
 	if tc.ts.fm != nil {
 		if !tc.ts.fm.noHistory {
-			tc.ts.fm.TargetViewCh <- NewChainView(tc, head.Number.Uint64(), head.Hash())
+			//tc.ts.fm.targetViewCh <- NewChainView(tc, head.Number.Uint64(), head.Hash())
+			tc.ts.fm.SetTargetView(NewChainView(tc, head.Number.Uint64(), head.Hash()))
 		}
 	}
 }

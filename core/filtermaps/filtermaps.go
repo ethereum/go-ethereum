@@ -91,9 +91,9 @@ type FilterMaps struct {
 	finalBlock, lastFinal uint64
 	lastFinalEpoch        uint32
 	stop                  bool
-	TargetViewCh          chan *ChainView
-	FinalBlockCh          chan uint64
-	BlockProcessingCh     chan bool
+	targetViewCh          chan *ChainView
+	finalBlockCh          chan uint64
+	blockProcessingCh     chan bool
 	blockProcessing       bool
 	matcherSyncCh         chan *FilterMapsMatcherBackend
 	waitIdleCh            chan chan bool
@@ -184,9 +184,9 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, h
 		db:                db,
 		closeCh:           make(chan struct{}),
 		waitIdleCh:        make(chan chan bool),
-		TargetViewCh:      make(chan *ChainView),
-		FinalBlockCh:      make(chan uint64),
-		BlockProcessingCh: make(chan bool),
+		targetViewCh:      make(chan *ChainView, 1),
+		finalBlockCh:      make(chan uint64, 1),
+		blockProcessingCh: make(chan bool, 1),
 		history:           history,
 		noHistory:         noHistory,
 		unindexLimit:      unindexLimit,

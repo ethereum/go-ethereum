@@ -66,6 +66,43 @@ func (f *FilterMaps) indexerLoop() {
 	}
 }
 
+// SetTargetView sets a new target chain view for the indexer to render.
+// Note that SetTargetView never blocks.
+func (f *FilterMaps) SetTargetView(targetView *ChainView) {
+	for {
+		select {
+		case <-f.targetViewCh:
+		case f.targetViewCh <- targetView:
+			return
+		}
+	}
+}
+
+// SetFinalBlock sets the finalized block number used for exporting checkpoints.
+// Note that SetFinalBlock never blocks.
+func (f *FilterMaps) SetFinalBlock(finalBlock uint64) {
+	for {
+		select {
+		case <-f.finalBlockCh:
+		case f.finalBlockCh <- finalBlock:
+			return
+		}
+	}
+}
+
+// SetBlockProcessing sets the block processing flag that temporarily suspends
+// log index rendering.
+// Note that SetBlockProcessing never blocks.
+func (f *FilterMaps) SetBlockProcessing(blockProcessing bool) {
+	for {
+		select {
+		case <-f.blockProcessingCh:
+		case f.blockProcessingCh <- blockProcessing:
+			return
+		}
+	}
+}
+
 // WaitIdle blocks until the indexer is in an idle state while synced up to the
 // latest targetView.
 func (f *FilterMaps) WaitIdle() {
@@ -105,23 +142,28 @@ func (f *FilterMaps) processSingleEvent(blocking bool) bool {
 	}
 	if blocking {
 		select {
-		case targetView := <-f.TargetViewCh:
+		case targetView := <-f.targetViewCh:
 			f.setTargetView(targetView)
-		case f.finalBlock = <-f.FinalBlockCh:
+		case f.finalBlock = <-f.finalBlockCh:
 		case f.matcherSyncRequest = <-f.matcherSyncCh:
-		case f.blockProcessing = <-f.BlockProcessingCh:
+		case f.blockProcessing = <-f.blockProcessingCh:
 		case <-f.closeCh:
 			f.stop = true
 		case ch := <-f.waitIdleCh:
+			select {
+			case targetView := <-f.targetViewCh:
+				f.setTargetView(targetView)
+			default:
+			}
 			ch <- !f.blockProcessing && f.targetHeadIndexed()
 		}
 	} else {
 		select {
-		case targetView := <-f.TargetViewCh:
+		case targetView := <-f.targetViewCh:
 			f.setTargetView(targetView)
-		case f.finalBlock = <-f.FinalBlockCh:
+		case f.finalBlock = <-f.finalBlockCh:
 		case f.matcherSyncRequest = <-f.matcherSyncCh:
-		case f.blockProcessing = <-f.BlockProcessingCh:
+		case f.blockProcessing = <-f.blockProcessingCh:
 		case <-f.closeCh:
 			f.stop = true
 		default:
