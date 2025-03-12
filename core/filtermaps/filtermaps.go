@@ -294,7 +294,7 @@ func (f *FilterMaps) init() error {
 		for min < max {
 			mid := (min + max + 1) / 2
 			cp := checkpointList[mid-1]
-			if cp.blockNumber <= f.targetView.headNumber && f.targetView.getBlockId(cp.blockNumber) == cp.blockId {
+			if cp.BlockNumber <= f.targetView.headNumber && f.targetView.getBlockId(cp.BlockNumber) == cp.BlockId {
 				min = mid
 			} else {
 				max = mid - 1
@@ -307,16 +307,16 @@ func (f *FilterMaps) init() error {
 	batch := f.db.NewBatch()
 	for epoch := 0; epoch < bestLen; epoch++ {
 		cp := checkpoints[bestIdx][epoch]
-		f.storeLastBlockOfMap(batch, (uint32(epoch+1)<<f.logMapsPerEpoch)-1, cp.blockNumber, cp.blockId)
-		f.storeBlockLvPointer(batch, cp.blockNumber, cp.firstLvIndex)
+		f.storeLastBlockOfMap(batch, (uint32(epoch+1)<<f.logMapsPerEpoch)-1, cp.BlockNumber, cp.BlockId)
+		f.storeBlockLvPointer(batch, cp.BlockNumber, cp.FirstIndex)
 	}
 	fmr := filterMapsRange{
 		initialized: true,
 	}
 	if bestLen > 0 {
 		cp := checkpoints[bestIdx][bestLen-1]
-		fmr.firstIndexedBlock = cp.blockNumber + 1
-		fmr.afterLastIndexedBlock = cp.blockNumber + 1
+		fmr.firstIndexedBlock = cp.BlockNumber + 1
+		fmr.afterLastIndexedBlock = cp.BlockNumber + 1
 		fmr.firstRenderedMap = uint32(bestLen) << f.logMapsPerEpoch
 		fmr.afterLastRenderedMap = uint32(bestLen) << f.logMapsPerEpoch
 	}
@@ -686,7 +686,8 @@ func (f *FilterMaps) exportCheckpoints() {
 	defer w.Close()
 
 	log.Info("Exporting log index checkpoints", "epochs", epochCount, "file", f.exportFileName)
-	w.WriteString("\t{\n")
+	w.WriteString("[\n")
+	comma := ","
 	for epoch := uint32(0); epoch < epochCount; epoch++ {
 		lastBlock, lastBlockId, err := f.getLastBlockOfMap((epoch+1)<<f.logMapsPerEpoch - 1)
 		if err != nil {
@@ -698,8 +699,11 @@ func (f *FilterMaps) exportCheckpoints() {
 			log.Error("Error fetching log value pointer of last block", "block", lastBlock, "error", err)
 			return
 		}
-		w.WriteString(fmt.Sprintf("\t\t{%d, common.HexToHash(\"0x%064x\"), %d},\n", lastBlock, lastBlockId, lvPtr))
+		if epoch == epochCount-1 {
+			comma = ""
+		}
+		w.WriteString(fmt.Sprintf("{\"blockNumber\": %d, \"blockId\": \"0x%064x\", \"firstIndex\": %d}%s\n", lastBlock, lastBlockId, lvPtr, comma))
 	}
-	w.WriteString("\t},\n")
+	w.WriteString("]\n")
 	f.lastFinalEpoch = epochCount
 }
