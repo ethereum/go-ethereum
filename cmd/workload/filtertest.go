@@ -110,9 +110,7 @@ func (s *filterTestSuite) filterFullRange(t *utesting.T) {
 func (s *filterTestSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
 	query.run(s.cfg.client)
 	if query.Err != nil {
-		if errIsPrunedHistory(query.Err) {
-			t.Logf("test case accessed pruned history")
-		} else {
+		if !errIsPrunedHistory(query.Err) {
 			t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
 		}
 		return
@@ -131,9 +129,7 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 	}
 	frQuery.run(s.cfg.client)
 	if frQuery.Err != nil {
-		if errIsPrunedHistory(frQuery.Err) {
-			t.Logf("test case accessed pruned history")
-		} else {
+		if !errIsPrunedHistory(frQuery.Err) {
 			t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
 		}
 		return
