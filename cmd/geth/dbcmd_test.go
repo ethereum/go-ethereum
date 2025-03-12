@@ -180,15 +180,15 @@ func TestTruncateFreezerBatching(t *testing.T) {
 	// or the number of items in the original freezer, whichever is smaller
 	expectedCount := mergeBlock
 	if ancients < mergeBlock {
-		expectedCount = ancients
+		expectedCount = int(ancients)
 	}
 
-	if headersFreezerAncients != expectedCount {
+	if int(headersFreezerAncients) != expectedCount {
 		t.Fatalf("Expected %d items in headers freezer, got %d", expectedCount, headersFreezerAncients)
 	}
 
 	// Verify that the headers in the temporary freezer match the originals
-	for i := uint64(0); i < expectedCount; i++ {
+	for i := uint64(0); i < uint64(expectedCount); i++ {
 		// Read from original freezer
 		originalHeader, err := ancientDb.Ancient(rawdb.ChainFreezerHeaderTable, i)
 		if err != nil {
