@@ -69,7 +69,26 @@ var (
 		Usage: "Keep headers when pruning history (default: true)",
 		Value: true,
 	}
+	useHardcodedMergeFlag = &cli.BoolFlag{
+		Name:  "use-hardcoded-merge",
+		Usage: "Use hardcoded merge block for known networks instead of detecting it",
+	}
+	batchSizeFlag = &cli.IntFlag{
+		Name:  "batch-size",
+		Usage: "Number of headers to process in each batch (default: 10000)",
+		Value: 10000,
+	}
+)
 
+// Known merge block numbers for different networks
+var knownMergeBlocks = map[string]uint64{
+	"mainnet": 15537394,
+	"sepolia": 1735371,
+	"goerli":  7382818,
+	"holesky": 0, // Holesky was launched post-merge
+}
+
+var (
 	removedbCommand = &cli.Command{
 		Action:    removeDB,
 		Name:      "removedb",
@@ -268,19 +287,27 @@ including headers, use --keep-headers=false.
 	dbTruncateFreezerCmd = &cli.Command{
 		Action:    truncateFreezer,
 		Name:      "truncate-freezer",
-		Usage:     "Truncate freezer at the merge block, keeping headers but removing bodies",
+		Usage:     "Truncate the freezer at the merge block, keeping headers but removing bodies",
 		ArgsUsage: "",
-		Flags: []cli.Flag{
+		Flags: slices.Concat([]cli.Flag{
 			dryRunFlag,
 			yesFlag,
-		},
+			keepHeadersFlag,
+			useHardcodedMergeFlag,
+			batchSizeFlag,
+		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `
 This command truncates the freezer at the merge block, keeping headers but removing bodies.
-The merge block is identified by the first block with zero difficulty.
+This can significantly reduce disk space usage for nodes that don't need pre-merge block bodies.
 
-This operation is specifically designed to maintain chain integrity while reducing disk usage
-by removing the pre-merge body data which is no longer needed after the merge.
-`,
+The command will:
+1. Find the merge block (first block with zero difficulty)
+2. Create a temporary copy of the headers and hashes up to the merge block
+3. Truncate all freezer tables at the merge block
+4. Re-insert the headers and hashes from the temporary copy
+
+WARNING: This operation cannot be undone. Make sure you have a backup if you might need
+the removed data in the future.`,
 	}
 )
 
@@ -1006,7 +1033,6 @@ func pruneHistory(ctx *cli.Context) error {
 		return fmt.Errorf("header number of head block not found")
 	}
 
-	// Binary search to find the merge block
 	var (
 		low        = uint64(0)
 		high       = *headNumber
@@ -1189,55 +1215,13 @@ func truncateFreezer(ctx *cli.Context) error {
 
 	// Find the merge block (first block with zero difficulty)
 	log.Info("Looking for the merge block...")
-
-	// Get the current head block
-	headHash := rawdb.ReadHeadBlockHash(db)
-	if headHash == (common.Hash{}) {
-		return fmt.Errorf("chain head not found")
+	mergeBlock, err := findMergeBlock(ctx, db)
+	if err != nil {
+		return err
 	}
-
-	headNumber := rawdb.ReadHeaderNumber(db, headHash)
-	if headNumber == nil {
-		return fmt.Errorf("header number of head block not found")
-	}
-
-	// Binary search to find the merge block
-	var (
-		low        = uint64(0)
-		high       = *headNumber
-		mergeBlock = uint64(0)
-		found      = false
-	)
-
-	log.Info("Searching for merge block using binary search", "head", *headNumber)
-
-	for low <= high {
-		mid := (low + high) / 2
-		header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, mid), mid)
-		if header == nil {
-			return fmt.Errorf("header %d not found", mid)
-		}
-
-		if header.Difficulty.Sign() == 0 {
-			// This is a post-merge block, look earlier
-			high = mid - 1
-			mergeBlock = mid
-			found = true
-		} else {
-			// This is a pre-merge block, look later
-			low = mid + 1
-		}
-	}
-
-	if !found {
-		return fmt.Errorf("merge block not found, chain may not have transitioned to PoS yet")
-	}
-
-	// The merge block is the first block with zero difficulty
-	log.Info("Found merge block", "number", mergeBlock)
 
 	// Check if we're in dry-run mode
-	if ctx.Bool("dry-run") {
+	if ctx.Bool(dryRunFlag.Name) {
 		log.Info("Dry run completed, no data was pruned", "mergeBlock", mergeBlock)
 		return nil
 	}
@@ -1247,7 +1231,7 @@ func truncateFreezer(ctx *cli.Context) error {
 	fmt.Println("This operation cannot be undone and will permanently delete data.")
 	fmt.Println("Make sure you have a backup if you might need this data in the future.")
 
-	if !ctx.Bool("yes") {
+	if !ctx.Bool(yesFlag.Name) {
 		confirm, err := prompt.Stdin.PromptConfirm("Do you want to continue?")
 		if err != nil {
 			return err
@@ -1280,47 +1264,208 @@ func truncateFreezer(ctx *cli.Context) error {
 		return nil
 	}
 
-	// We need to read the headers at the merge block and re-insert them
-	// after truncating everything
-	log.Info("Reading headers to preserve them", "count", mergeBlock)
-	headers := make([][]byte, mergeBlock)
-	hashes := make([][]byte, mergeBlock)
+	// Create a temporary directory for the headers freezer
+	tmpDir, err := os.MkdirTemp("", "geth-headers-freezer-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary directory: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+	log.Info("Created temporary directory for headers", "path", tmpDir)
 
-	for i := uint64(0); i < mergeBlock; i++ {
-		headers[i], err = db.(ethdb.AncientReader).Ancient(rawdb.ChainFreezerHeaderTable, i)
-		if err != nil {
-			return fmt.Errorf("failed to read header %d: %v", i, err)
-		}
-		hashes[i], err = db.(ethdb.AncientReader).Ancient(rawdb.ChainFreezerHashTable, i)
-		if err != nil {
-			return fmt.Errorf("failed to read hash %d: %v", i, err)
-		}
+	// Create a new freezer for headers and hashes
+	headersFreezer, err := rawdb.NewFreezer(tmpDir, "headers", false, 2*1000*1000*1000, map[string]bool{
+		rawdb.ChainFreezerHeaderTable: false,
+		rawdb.ChainFreezerHashTable:   false,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create headers freezer: %v", err)
+	}
+	defer headersFreezer.Close()
+
+	// Get batch size from flag
+	batchSize := uint64(ctx.Int(batchSizeFlag.Name))
+	log.Info("Using batch size for processing", "batchSize", batchSize)
+
+	// Copy headers and hashes to the temporary freezer in batches
+	log.Info("Copying headers to temporary freezer", "count", mergeBlock)
+	if err := extractHeaders(ancientDb, headersFreezer, mergeBlock, batchSize); err != nil {
+		return err
 	}
 
-	// Truncate all tables
-	log.Info("Truncating all tables", "mergeBlock", mergeBlock)
-	if err := truncateAncientStore(db, mergeBlock); err != nil {
+	// Truncate all tables in the original freezer
+	log.Info("Truncating all tables in the original freezer", "mergeBlock", mergeBlock)
+	if err := truncateAncientStore(db, 0); err != nil {
 		return fmt.Errorf("failed to truncate ancient store: %v", err)
 	}
 
-	// Re-insert the headers and hashes
-	log.Info("Re-inserting headers", "count", len(headers))
+	// Copy headers and hashes back from the temporary freezer in batches
+	log.Info("Copying headers back to the main freezer", "count", mergeBlock)
 	freezerDb := db.(ethdb.AncientStore)
-	_, err = freezerDb.ModifyAncients(func(op ethdb.AncientWriteOp) error {
-		for i := uint64(0); i < mergeBlock; i++ {
-			if err := op.AppendRaw(rawdb.ChainFreezerHeaderTable, i, headers[i]); err != nil {
-				return fmt.Errorf("failed to re-insert header %d: %v", i, err)
-			}
-			if err := op.AppendRaw(rawdb.ChainFreezerHashTable, i, hashes[i]); err != nil {
-				return fmt.Errorf("failed to re-insert hash %d: %v", i, err)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to re-insert headers: %v", err)
+	if err := reinsertHeaders(freezerDb, headersFreezer, mergeBlock, batchSize); err != nil {
+		return err
 	}
 
 	log.Info("Successfully truncated freezer, keeping headers but removing bodies", "mergeBlock", mergeBlock)
 	return nil
+}
+
+// extractHeaders copies headers from the main freezer to a temporary freezer in batches
+func extractHeaders(ancientDb ethdb.AncientReader, headersFreezer *rawdb.Freezer, mergeBlock, batchSize uint64) error {
+	// Create a progress reporter
+	progressReporter := utils.NewProgressReporter("Copying headers to temporary freezer", int(mergeBlock), 5)
+	defer progressReporter.Stop()
+
+	for i := uint64(0); i < mergeBlock; i += batchSize {
+		end := i + batchSize
+		if end > mergeBlock {
+			end = mergeBlock
+		}
+
+		log.Info("Processing batch of headers", "from", i, "to", end)
+
+		// Process this batch
+		_, err := headersFreezer.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+			for j := i; j < end; j++ {
+				// Read header and hash
+				headerBytes, err := ancientDb.Ancient(rawdb.ChainFreezerHeaderTable, j)
+				if err != nil {
+					return fmt.Errorf("failed to read header %d: %w", j, err)
+				}
+				hashBytes, err := ancientDb.Ancient(rawdb.ChainFreezerHashTable, j)
+				if err != nil {
+					return fmt.Errorf("failed to read hash %d: %w", j, err)
+				}
+
+				// Write to temporary freezer
+				if err := op.AppendRaw(rawdb.ChainFreezerHeaderTable, j, headerBytes); err != nil {
+					return fmt.Errorf("failed to write header %d: %w", j, err)
+				}
+				if err := op.AppendRaw(rawdb.ChainFreezerHashTable, j, hashBytes); err != nil {
+					return fmt.Errorf("failed to write hash %d: %w", j, err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to copy headers batch: %w", err)
+		}
+
+		// Update progress
+		progressReporter.Report(int(end))
+	}
+
+	return nil
+}
+
+// reinsertHeaders copies headers from the temporary freezer back to the main freezer in batches
+func reinsertHeaders(freezerDb ethdb.AncientStore, headersFreezer *rawdb.Freezer, mergeBlock, batchSize uint64) error {
+	// Create a progress reporter
+	progressReporter := utils.NewProgressReporter("Copying headers back to main freezer", int(mergeBlock), 5)
+	defer progressReporter.Stop()
+
+	for i := uint64(0); i < mergeBlock; i += batchSize {
+		end := i + batchSize
+		if end > mergeBlock {
+			end = mergeBlock
+		}
+
+		log.Info("Processing batch of headers", "from", i, "to", end)
+
+		_, err := freezerDb.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+			for j := i; j < end; j++ {
+				// Read from temporary freezer
+				headerBytes, err := headersFreezer.Ancient(rawdb.ChainFreezerHeaderTable, j)
+				if err != nil {
+					return fmt.Errorf("failed to read header %d from temp freezer: %w", j, err)
+				}
+				hashBytes, err := headersFreezer.Ancient(rawdb.ChainFreezerHashTable, j)
+				if err != nil {
+					return fmt.Errorf("failed to read hash %d from temp freezer: %w", j, err)
+				}
+
+				// Write back to main freezer
+				if err := op.AppendRaw(rawdb.ChainFreezerHeaderTable, j, headerBytes); err != nil {
+					return fmt.Errorf("failed to write header %d to main freezer: %w", j, err)
+				}
+				if err := op.AppendRaw(rawdb.ChainFreezerHashTable, j, hashBytes); err != nil {
+					return fmt.Errorf("failed to write hash %d to main freezer: %w", j, err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to copy headers batch back to main freezer: %w", err)
+		}
+
+		// Update progress
+		progressReporter.Report(int(end))
+	}
+
+	return nil
+}
+
+// findMergeBlock detects the merge block (first block with zero difficulty)
+func findMergeBlock(ctx *cli.Context, db ethdb.Database) (uint64, error) {
+	// Get the current head block
+	headHash := rawdb.ReadHeadBlockHash(db)
+	if headHash == (common.Hash{}) {
+		return 0, fmt.Errorf("chain head not found")
+	}
+
+	headNumber := rawdb.ReadHeaderNumber(db, headHash)
+	if headNumber == nil {
+		return 0, fmt.Errorf("header number of head block not found")
+	}
+
+	var mergeBlock uint64
+	var found bool
+
+	// Check if we should use hardcoded merge block values
+	if ctx.Bool(useHardcodedMergeFlag.Name) {
+		// Get the network ID to determine which hardcoded value to use
+		networkName := ctx.String(utils.NetworkIdFlag.Name)
+		if blockNum, ok := knownMergeBlocks[networkName]; ok {
+			mergeBlock = blockNum
+			found = true
+			log.Info("Using hardcoded merge block", "network", networkName, "block", mergeBlock)
+		} else {
+			log.Warn("No hardcoded merge block for network, detecting dynamically", "network", networkName)
+		}
+	}
+
+	// If no hardcoded value was used or found, detect the merge block
+	if !found {
+		// Binary search to find the merge block
+		var low uint64 = 0
+		var high uint64 = *headNumber
+
+		log.Info("Searching for merge block using binary search", "head", *headNumber)
+
+		for low <= high {
+			mid := (low + high) / 2
+			header := rawdb.ReadHeader(db, rawdb.ReadCanonicalHash(db, mid), mid)
+			if header == nil {
+				return 0, fmt.Errorf("header %d not found", mid)
+			}
+
+			if header.Difficulty.Sign() == 0 {
+				// This is a post-merge block, look earlier
+				high = mid - 1
+				mergeBlock = mid
+				found = true
+			} else {
+				// This is a pre-merge block, look later
+				low = mid + 1
+			}
+		}
+
+		if !found {
+			return 0, fmt.Errorf("merge block not found, chain may not have transitioned to PoS yet")
+		}
+
+		// The merge block is the first block with zero difficulty
+		log.Info("Found merge block", "number", mergeBlock)
+	}
+
+	return mergeBlock, nil
 }
