@@ -792,6 +792,11 @@ func (t *UDPv5) GetNode(id enode.ID) *enode.Node {
 	return nil
 }
 
+// Nodes returns the nodes in the routing table.
+func (t *UDPv5) Nodes() [][]BucketNode {
+	return t.tab.Nodes()
+}
+
 // handle processes incoming packets according to their message type.
 func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort) {
 	switch p := p.(type) {
