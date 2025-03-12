@@ -1726,12 +1726,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			Fatalf("Keystore is not available")
 		}
 
-		isKeystoreNonEmpty := len(ks.Accounts()) > 0
 		// Figure out the dev account address.
 		// setEtherbase has been called above, configuring the miner address from command line flags.
 		if cfg.Miner.PendingFeeRecipient != (common.Address{}) {
 			developer = accounts.Account{Address: cfg.Miner.PendingFeeRecipient}
-		} else if isKeystoreNonEmpty {
+		} else if accs := ks.Accounts(); len(accs) > 0 {
 			developer = ks.Accounts()[0]
 		} else {
 			developer, err = ks.NewAccount(passphrase)
@@ -1744,7 +1743,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.Miner.PendingFeeRecipient = developer.Address
 
 		// try to unlock the first keystore account
-		if isKeystoreNonEmpty {
+		if len(ks.Accounts()) > 0 {
 			if err := ks.Unlock(developer, passphrase); err != nil {
 				Fatalf("Failed to unlock developer account: %v", err)
 			}
