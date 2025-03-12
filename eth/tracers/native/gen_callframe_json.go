@@ -16,7 +16,7 @@ var _ = (*callFrameMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (c callFrame) MarshalJSON() ([]byte, error) {
 	type callFrame0 struct {
-		Type         vm.OpCode       `json:"-"`
+		Type         vm.OpCode       `json:"type"`
 		From         common.Address  `json:"from"`
 		Gas          hexutil.Uint64  `json:"gas"`
 		GasUsed      hexutil.Uint64  `json:"gasUsed"`
@@ -50,7 +50,7 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (c *callFrame) UnmarshalJSON(input []byte) error {
 	type callFrame0 struct {
-		Type         *vm.OpCode      `json:"-"`
+		Type         *vm.OpCode      `json:"type"`
 		From         *common.Address `json:"from"`
 		Gas          *hexutil.Uint64 `json:"gas"`
 		GasUsed      *hexutil.Uint64 `json:"gasUsed"`

@@ -52,7 +52,7 @@ type callLog struct {
 }
 
 type callFrame struct {
-	Type         vm.OpCode       `json:"-"`
+	Type         vm.OpCode       `json:"type"`
 	From         common.Address  `json:"from"`
 	Gas          uint64          `json:"gas"`
 	GasUsed      uint64          `json:"gasUsed"`
