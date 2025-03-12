@@ -93,7 +93,7 @@ type Message struct {
 	GasPrice              *big.Int
 	GasFeeCap             *big.Int
 	GasTipCap             *big.Int
-	Gas                   uint64
+	IntrinsicGas          uint64
 	Data                  []byte
 	AccessList            types.AccessList
 	BlobGasFeeCap         *big.Int
@@ -139,7 +139,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 	if err != nil {
 		return nil, err
 	}
-	msg.Gas = gas
+	msg.IntrinsicGas = gas
 
 	// Recover sender.
 	msg.From, err = types.Sender(s, tx)
@@ -378,7 +378,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		floorDataGas     uint64
 	)
 
-	gas := msg.Gas
+	gas := msg.IntrinsicGas
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	if st.gasRemaining < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)

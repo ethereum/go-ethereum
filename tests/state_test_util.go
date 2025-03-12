@@ -481,7 +481,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int, rules *para
 		To:                    to,
 		Nonce:                 tx.Nonce,
 		Value:                 value,
-		Gas:                   gas,
+		IntrinsicGas:          gas,
 		GasLimit:              gasLimit,
 		GasPrice:              gasPrice,
 		GasFeeCap:             tx.MaxFeePerGas,

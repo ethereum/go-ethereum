@@ -693,7 +693,8 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if err := args.CallDefaults(gp.Gas(), blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	msg := args.ToMessage(header.BaseFee, skipChecks, skipChecks)
+	rules := b.ChainConfig().Rules(header.Number, header.Difficulty.BitLen() == 0, header.Time)
+	msg := args.ToMessage(&rules, header.BaseFee, skipChecks, skipChecks)
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
 	if msg.GasPrice.Sign() == 0 {
@@ -837,7 +838,8 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return 0, err
 	}
-	call := args.ToMessage(header.BaseFee, true, true)
+	rules := b.ChainConfig().Rules(header.Number, header.Difficulty.BitLen() == 0, header.Time)
+	call := args.ToMessage(&rules, header.BaseFee, true, true)
 
 	// Run the gas estimation and wrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
@@ -1180,14 +1182,14 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
-		// Set the accesslist to the last al
-		args.AccessList = &accessList
-		msg := args.ToMessage(header.BaseFee, true, true)
-
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true}
 		evm := b.GetEVM(ctx, statedb, header, &config, nil)
+
+		// Set the accesslist to the last al
+		args.AccessList = &accessList
+		msg := args.ToMessage(evm.Rules(), header.BaseFee, true, true)
 
 		// Lower the basefee to 0 to avoid breaking EVM
 		// invariants (basefee < feecap).

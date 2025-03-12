@@ -271,7 +271,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				}
 			}
 			post := t.json.Post[subtest.Fork][subtest.Index]
-			msg, err := t.json.Tx.toMessage(post, baseFee)
+			msg, err := t.json.Tx.toMessage(post, baseFee, &rules)
 			if err != nil {
 				b.Error(err)
 				return

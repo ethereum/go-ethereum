@@ -592,7 +592,7 @@ func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) Rules() *params.Rules {
-	rules := evm.ChainConfig().Rules(evm.Context.BlockNumber, evm.Context.Difficulty.BitLen() == 0, evm.Context.Time)
+	rules := evm.ChainConfig().Rules(evm.Context.BlockNumber, evm.Context.Random != nil, evm.Context.Time)
 	return &rules
 }
 
