@@ -319,6 +319,9 @@ func importChain(ctx *cli.Context) error {
 			if err := utils.ImportChain(chain, arg); err != nil {
 				importErr = err
 				log.Error("Import error", "file", arg, "err", err)
+				if err == utils.ErrImportInterrupted {
+					break
+				}
 			}
 		}
 	}
