@@ -411,11 +411,11 @@ func (s *Ethereum) Start() error {
 	return nil
 }
 
-func (s *Ethereum) newChainView(head *types.Header) *filtermaps.StoredChainView {
+func (s *Ethereum) newChainView(head *types.Header) *filtermaps.ChainView {
 	if head == nil {
 		return nil
 	}
-	return filtermaps.NewStoredChainView(s.blockchain, head.Number.Uint64(), head.Hash())
+	return filtermaps.NewChainView(s.blockchain, head.Number.Uint64(), head.Hash())
 }
 
 func (s *Ethereum) updateFilterMapsHeads() {
@@ -437,11 +437,8 @@ func (s *Ethereum) updateFilterMapsHeads() {
 	}()
 
 	head := s.blockchain.CurrentBlock()
-	targetView := s.newChainView(head) // nil if already sent to channel
-	var (
-		blockProc, lastBlockProc bool
-		finalBlock, lastFinal    uint64
-	)
+	s.filterMaps.SetTargetView(s.newChainView(head))
+	var lastFinalBlock uint64
 
 	setHead := func(newHead *types.Header) {
 		if newHead == nil {
@@ -449,64 +446,27 @@ func (s *Ethereum) updateFilterMapsHeads() {
 		}
 		if head == nil || newHead.Hash() != head.Hash() {
 			head = newHead
-			targetView = s.newChainView(head)
+			s.filterMaps.SetTargetView(s.newChainView(head))
 		}
 		if fb := s.blockchain.CurrentFinalBlock(); fb != nil {
-			finalBlock = fb.Number.Uint64()
+			if finalBlock := fb.Number.Uint64(); finalBlock != lastFinalBlock {
+				s.filterMaps.SetFinalBlock(finalBlock)
+				lastFinalBlock = finalBlock
+			}
 		}
 	}
 
 	for {
-		if blockProc != lastBlockProc {
-			select {
-			case s.filterMaps.BlockProcessingCh <- blockProc:
-				lastBlockProc = blockProc
-			case ev := <-headEventCh:
-				setHead(ev.Header)
-			case blockProc = <-blockProcCh:
-			case <-time.After(time.Second * 10):
-				setHead(s.blockchain.CurrentBlock())
-			case ch := <-s.closeFilterMaps:
-				close(ch)
-				return
-			}
-		} else if targetView != nil {
-			select {
-			case s.filterMaps.TargetViewCh <- targetView:
-				targetView = nil
-			case ev := <-headEventCh:
-				setHead(ev.Header)
-			case blockProc = <-blockProcCh:
-			case <-time.After(time.Second * 10):
-				setHead(s.blockchain.CurrentBlock())
-			case ch := <-s.closeFilterMaps:
-				close(ch)
-				return
-			}
-		} else if finalBlock != lastFinal {
-			select {
-			case s.filterMaps.FinalBlockCh <- finalBlock:
-				lastFinal = finalBlock
-			case ev := <-headEventCh:
-				setHead(ev.Header)
-			case blockProc = <-blockProcCh:
-			case <-time.After(time.Second * 10):
-				setHead(s.blockchain.CurrentBlock())
-			case ch := <-s.closeFilterMaps:
-				close(ch)
-				return
-			}
-		} else {
-			select {
-			case ev := <-headEventCh:
-				setHead(ev.Header)
-			case <-time.After(time.Second * 10):
-				setHead(s.blockchain.CurrentBlock())
-			case blockProc = <-blockProcCh:
-			case ch := <-s.closeFilterMaps:
-				close(ch)
-				return
-			}
+		select {
+		case ev := <-headEventCh:
+			setHead(ev.Header)
+		case blockProc := <-blockProcCh:
+			s.filterMaps.SetBlockProcessing(blockProc)
+		case <-time.After(time.Second * 10):
+			setHead(s.blockchain.CurrentBlock())
+		case ch := <-s.closeFilterMaps:
+			close(ch)
+			return
 		}
 	}
 }
