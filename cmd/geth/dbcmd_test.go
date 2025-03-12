@@ -33,10 +33,7 @@ import (
 // in the truncate-freezer command.
 func TestTruncateFreezerBatching(t *testing.T) {
 	// Create a temporary directory for the test
-	datadir, err := os.MkdirTemp("", "geth-test-freezer-truncation-*")
-	if err != nil {
-		t.Fatalf("Failed to create temporary directory: %v", err)
-	}
+	datadir := t.TempDir()
 	defer os.RemoveAll(datadir)
 
 	// Create a freezer database
@@ -100,11 +97,7 @@ func TestTruncateFreezerBatching(t *testing.T) {
 	rawdb.WriteHeadBlockHash(db, parentHash)
 
 	// Create a temporary directory for the headers freezer
-	tmpDir, err := os.MkdirTemp("", "geth-headers-freezer-*")
-	if err != nil {
-		t.Fatalf("Failed to create temporary directory: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create a new freezer for headers and hashes
 	headersFreezer, err := rawdb.NewFreezer(tmpDir, "headers", false, 2*1000*1000*1000, map[string]bool{
