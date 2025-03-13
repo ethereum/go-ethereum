@@ -117,7 +117,7 @@ type BlobsBundleV1 struct {
 	Commitments []hexutil.Bytes `json:"commitments"`
 	Proofs      []hexutil.Bytes `json:"proofs"`
 	Blobs       []hexutil.Bytes `json:"blobs"`
-	CellProofs  []hexutil.Bytes `json:"cell_proofs"`
+	CellProofs  []hexutil.Bytes `json:"cellProofs"`
 }
 
 type BlobAndProofV1 struct {
@@ -127,7 +127,7 @@ type BlobAndProofV1 struct {
 
 type BlobAndProofV2 struct {
 	Blob       hexutil.Bytes   `json:"blob"`
-	CellProofs []hexutil.Bytes `json:"cell_proofs"`
+	CellProofs []hexutil.Bytes `json:"cellProofs"`
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.
