@@ -18,6 +18,8 @@ package main
 
 import (
 	"embed"
+	"fmt"
+	"github.com/ethereum/go-ethereum/rpc"
 	"io/fs"
 	"os"
 	"slices"
@@ -75,12 +77,35 @@ var (
 	}
 )
 
+const (
+	sepoliaMergeBlock uint64 = 1450409
+	mainnetMergeBlock uint64 = 15537393
+)
+
 // testConfig holds the parameters for testing.
 type testConfig struct {
-	client          *client
-	fsys            fs.FS
-	filterQueryFile string
-	historyTestFile string
+	client            *client
+	fsys              fs.FS
+	filterQueryFile   string
+	historyTestFile   string
+	historyPruneBlock *uint64
+}
+
+// validateHistoryPruneErr checks whether the given error is caused by access
+// to history before the pruning threshold block (it is an rpc.Error with code 4444).
+// If the error is of a different type, it is returned.  If the error is a pruned
+// history error occurring past the pruning threshold, an error is returned.
+// Otherwise, nil is returned.
+func validateHistoryPruneErr(err error, blockNum uint64, cfg testConfig) error {
+	if err != nil {
+		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == 4444 {
+			if cfg.historyPruneBlock != nil && blockNum > *cfg.historyPruneBlock {
+				return fmt.Errorf("pruned history error returned after pruning threshold")
+			}
+			return nil
+		}
+	}
+	return err
 }
 
 func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
@@ -98,10 +123,14 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
 		cfg.historyTestFile = "queries/history_mainnet.json"
+		cfg.historyPruneBlock = new(uint64)
+		*cfg.historyPruneBlock = mainnetMergeBlock
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
 		cfg.historyTestFile = "queries/history_sepolia.json"
+		cfg.historyPruneBlock = new(uint64)
+		*cfg.historyPruneBlock = sepoliaMergeBlock
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)

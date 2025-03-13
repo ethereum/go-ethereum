@@ -108,11 +108,9 @@ func (s *filterTestSuite) filterFullRange(t *utesting.T) {
 }
 
 func (s *filterTestSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
-	query.run(s.cfg.client)
+	query.run(s.cfg)
 	if query.Err != nil {
-		if !errIsPrunedHistory(query.Err) {
-			t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
-		}
+		t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
 		return
 	}
 	if *query.ResultHash != query.calculateHash() {
@@ -127,11 +125,9 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 		Address:   query.Address,
 		Topics:    query.Topics,
 	}
-	frQuery.run(s.cfg.client)
+	frQuery.run(s.cfg)
 	if frQuery.Err != nil {
-		if !errIsPrunedHistory(frQuery.Err) {
-			t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
-		}
+		t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
 		return
 	}
 	// filter out results outside the original query range
@@ -201,10 +197,10 @@ func (fq *filterQuery) calculateHash() common.Hash {
 	return crypto.Keccak256Hash(enc)
 }
 
-func (fq *filterQuery) run(client *client) {
+func (fq *filterQuery) run(cfg testConfig) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
-	logs, err := client.Eth.FilterLogs(ctx, ethereum.FilterQuery{
+	logs, err := cfg.client.Eth.FilterLogs(ctx, ethereum.FilterQuery{
 		FromBlock: big.NewInt(fq.FromBlock),
 		ToBlock:   big.NewInt(fq.ToBlock),
 		Addresses: fq.Address,
@@ -212,12 +208,12 @@ func (fq *filterQuery) run(client *client) {
 	})
 	if err != nil {
 		fq.Err = err
-		if errIsPrunedHistory(err) {
+		err := validateHistoryPruneErr(fq.Err, uint64(fq.FromBlock), cfg)
+		if err != nil {
+			fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
+				fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, err)
 			return
 		}
-		fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
-			fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, err)
-		return
 	}
 	fq.results = logs
 }

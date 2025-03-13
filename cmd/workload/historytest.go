@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // historyTest is the content of a history test.
@@ -41,17 +40,6 @@ type historyTest struct {
 type historyTestSuite struct {
 	cfg   testConfig
 	tests historyTest
-}
-
-// errIsPrunedHistory returns true if an error is an rpc.Error with an error
-// code of 4444.
-func errIsPrunedHistory(err error) bool {
-	if err != nil {
-		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == 4444 {
-			return true
-		}
-	}
-	return false
 }
 
 func newHistoryTestSuite(cfg testConfig) *historyTestSuite {
@@ -121,7 +109,8 @@ func (s *historyTestSuite) testGetBlockByHash(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByHash(ctx, bhash, false)
 		if err != nil {
-			if errIsPrunedHistory(err) {
+			err = validateHistoryPruneErr(err, num, s.cfg)
+			if err != nil {
 				continue
 			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
@@ -143,7 +132,8 @@ func (s *historyTestSuite) testGetBlockByNumber(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByNumber(ctx, num, false)
 		if err != nil {
-			if errIsPrunedHistory(err) {
+			err = validateHistoryPruneErr(err, num, s.cfg)
+			if err != nil {
 				continue
 			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
@@ -165,7 +155,8 @@ func (s *historyTestSuite) testGetBlockTransactionCountByHash(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByHash(ctx, bhash)
 		if err != nil {
-			if errIsPrunedHistory(err) {
+			err = validateHistoryPruneErr(err, num, s.cfg)
+			if err != nil {
 				continue
 			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
@@ -184,7 +175,8 @@ func (s *historyTestSuite) testGetBlockTransactionCountByNumber(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByNumber(ctx, num)
 		if err != nil {
-			if errIsPrunedHistory(err) {
+			err = validateHistoryPruneErr(err, num, s.cfg)
+			if err != nil {
 				continue
 			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
@@ -203,7 +195,8 @@ func (s *historyTestSuite) testGetBlockReceiptsByHash(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, bhash)
 		if err != nil {
-			if errIsPrunedHistory(err) {
+			err = validateHistoryPruneErr(err, num, s.cfg)
+			if err != nil {
 				continue
 			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
@@ -223,7 +216,8 @@ func (s *historyTestSuite) testGetBlockReceiptsByNumber(t *utesting.T) {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, hexutil.Uint64(num))
 		if err != nil {
-			if errIsPrunedHistory(err) {
+			err = validateHistoryPruneErr(err, num, s.cfg)
+			if err != nil {
 				continue
 			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
@@ -249,7 +243,8 @@ func (s *historyTestSuite) testGetTransactionByBlockHashAndIndex(t *utesting.T) 
 
 		tx, err := s.cfg.client.getTransactionByBlockHashAndIndex(ctx, bhash, uint64(txIndex))
 		if err != nil {
-			if errIsPrunedHistory(err) {
+			err = validateHistoryPruneErr(err, num, s.cfg)
+			if err != nil {
 				continue
 			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
@@ -277,7 +272,8 @@ func (s *historyTestSuite) testGetTransactionByBlockNumberAndIndex(t *utesting.T
 
 		tx, err := s.cfg.client.getTransactionByBlockNumberAndIndex(ctx, num, uint64(txIndex))
 		if err != nil {
-			if errIsPrunedHistory(err) {
+			err = validateHistoryPruneErr(err, num, s.cfg)
+			if err != nil {
 				continue
 			}
 			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
