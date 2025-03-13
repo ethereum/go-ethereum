@@ -168,8 +168,8 @@ type lastBlockOfMap struct {
 
 // Config contains the configuration options for NewFilterMaps.
 type Config struct {
-	History   uint64 // number of historical blocks to index
-	NoHistory bool   // disables indexing completely
+	History  uint64 // number of historical blocks to index
+	Disabled bool   // disables indexing completely
 
 	// This option enables the checkpoint JSON file generator.
 	// If set, the given file will be updated with checkpoint information.
@@ -191,7 +191,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, c
 		finalBlockCh:      make(chan uint64, 1),
 		blockProcessingCh: make(chan bool, 1),
 		history:           config.History,
-		noHistory:         config.NoHistory,
+		noHistory:         config.Disabled,
 		exportFileName:    config.ExportFileName,
 		Params:            params,
 		indexedRange: filterMapsRange{
