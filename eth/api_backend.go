@@ -91,7 +91,13 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 		}
 		return block, nil
 	}
-	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
+	var bn uint64
+	if number == rpc.EarliestBlockNumber {
+		bn = b.eth.blockchain.HistoryCutoff()
+	} else {
+		bn = uint64(number)
+	}
+	return b.eth.blockchain.GetHeaderByNumber(bn), nil
 }
 
 func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
