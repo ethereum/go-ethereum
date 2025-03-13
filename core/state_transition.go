@@ -135,11 +135,11 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		}
 	}
 	// Fill in intrinsic gas.
-	gas, err := tx.IntrinsicGas(rules)
+	intrinsicGas, err := tx.IntrinsicGas(rules)
 	if err != nil {
 		return nil, err
 	}
-	msg.IntrinsicGas = gas
+	msg.IntrinsicGas = intrinsicGas
 
 	// Recover sender.
 	msg.From, err = types.Sender(s, tx)

@@ -693,7 +693,7 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if err := args.CallDefaults(gp.Gas(), blockContext.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
-	rules := b.ChainConfig().Rules(header.Number, header.Difficulty.BitLen() == 0, header.Time)
+	rules := b.ChainConfig().Rules(header.Number, blockContext.Random != nil, header.Time)
 	msg := args.ToMessage(&rules, header.BaseFee, skipChecks, skipChecks)
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
@@ -838,7 +838,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return 0, err
 	}
-	rules := b.ChainConfig().Rules(header.Number, header.Difficulty.BitLen() == 0, header.Time)
+	rules := b.ChainConfig().Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
 	call := args.ToMessage(&rules, header.BaseFee, true, true)
 
 	// Run the gas estimation and wrap any revertals into a custom return

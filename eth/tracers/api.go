@@ -269,7 +269,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				var (
 					signer   = types.MakeSigner(api.backend.ChainConfig(), task.block.Number(), task.block.Time())
 					blockCtx = core.NewEVMBlockContext(task.block.Header(), api.chainContext(ctx), nil)
-					rules    = api.backend.ChainConfig().Rules(task.block.Number(), task.block.Difficulty().BitLen() == 0, task.block.Time())
+					rules    = api.backend.ChainConfig().Rules(task.block.Number(), blockCtx.Random != nil, task.block.Time())
 				)
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
@@ -657,7 +657,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*txTraceResult, len(txs))
 		pend      sync.WaitGroup
-		rules     = api.backend.ChainConfig().Rules(block.Number(), block.Difficulty().BitLen() == 0, block.Time())
+		rules     = api.backend.ChainConfig().Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())
 	)
 	threads := runtime.NumCPU()
 	if threads > len(txs) {
@@ -892,7 +892,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		return nil, err
 	}
 	defer release()
-	rules := api.backend.ChainConfig().Rules(block.Number(), block.Difficulty().BitLen() == 0, block.Time())
+	rules := api.backend.ChainConfig().Rules(block.Number(), vmctx.Random != nil, block.Time())
 	msg, err := core.TransactionToMessage(tx, types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time()), block.BaseFee(), &rules)
 	if err != nil {
 		return nil, err
@@ -973,7 +973,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		return nil, err
 	}
 	var (
-		rules       = api.backend.ChainConfig().Rules(block.Number(), block.Difficulty().BitLen() == 0, block.Time())
+		rules       = api.backend.ChainConfig().Rules(block.Number(), vmctx.Random != nil, block.Time())
 		msg         = args.ToMessage(&rules, vmctx.BaseFee, true, true)
 		tx          = args.ToTransaction(types.LegacyTxType)
 		traceConfig *TraceConfig

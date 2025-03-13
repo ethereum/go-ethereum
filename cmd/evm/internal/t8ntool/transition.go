@@ -245,7 +245,7 @@ func applyMergeChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	switch {
 	case env.Random == nil:
 		return NewError(ErrorConfig, errors.New("post-merge requires currentRandom to be defined in env"))
-	case env.Difficulty != nil && env.Difficulty.BitLen() != 0:
+	case env.Difficulty != nil && env.Difficulty.Sign() != 0:
 		return NewError(ErrorConfig, errors.New("post-merge difficulty must be zero (or omitted) in env"))
 	}
 	env.Difficulty = nil
