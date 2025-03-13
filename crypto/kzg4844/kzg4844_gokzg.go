@@ -97,11 +97,11 @@ func gokzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error 
 	return context.VerifyBlobKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), (gokzg4844.KZGProof)(proof))
 }
 
-// gokzgComputeCells returns the KZG cell proofs that are used to verify the blob against
+// gokzgComputeCellProofs returns the KZG cell proofs that are used to verify the blob against
 // the commitment.
 //
 // This method does not verify that the commitment is correct with respect to blob.
-func gokzgComputeCells(blob *Blob) ([]Proof, error) {
+func gokzgComputeCellProofs(blob *Blob) ([]Proof, error) {
 	gokzgIniter.Do(gokzgInit)
 
 	_, proofs, err := context.ComputeCellsAndKZGProofs((*gokzg4844.Blob)(blob), 0)
