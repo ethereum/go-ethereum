@@ -187,5 +187,3 @@ func WriteTransitionStatus(db ethdb.KeyValueWriter, data []byte) {
 		log.Crit("Failed to store the eth2 transition status", "err", err)
 	}
 }
-
-// ReadHistoryTail retrieves the first
