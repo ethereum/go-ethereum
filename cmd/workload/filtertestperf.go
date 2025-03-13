@@ -70,7 +70,7 @@ func filterPerfCmd(ctx *cli.Context) error {
 			queries[pick] = queries[len(queries)-1]
 			queries = queries[:len(queries)-1]
 			start := time.Now()
-			qt.query.run(cfg.client)
+			qt.query.run(cfg.client, cfg.historyPruneBlock)
 			qt.runtime = append(qt.runtime, time.Since(start))
 			slices.Sort(qt.runtime)
 			qt.medianTime = qt.runtime[len(qt.runtime)/2]
