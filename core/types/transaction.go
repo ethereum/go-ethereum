@@ -483,15 +483,23 @@ func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
 	return setcodetx.AuthList
 }
 
-// SetCodeAuthorities returns a list of each authorization's corresponding authority.
+// SetCodeAuthorities returns a list of unique authorities from the
+// authorization list.
 func (tx *Transaction) SetCodeAuthorities() []common.Address {
 	setcodetx, ok := tx.inner.(*SetCodeTx)
 	if !ok {
 		return nil
 	}
-	auths := make([]common.Address, 0, len(setcodetx.AuthList))
+	var (
+		marks = make(map[common.Address]bool)
+		auths = make([]common.Address, 0, len(setcodetx.AuthList))
+	)
 	for _, auth := range setcodetx.AuthList {
 		if addr, err := auth.Authority(); err == nil {
+			if marks[addr] {
+				continue
+			}
+			marks[addr] = true
 			auths = append(auths, addr)
 		}
 	}

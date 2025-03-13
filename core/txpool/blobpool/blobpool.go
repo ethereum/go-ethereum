@@ -1085,19 +1085,24 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 	p.updateStorageMetrics()
 }
 
-// validateTx checks whether a transaction is valid according to the consensus
-// rules and adheres to some heuristic limits of the local node (price and size).
-func (p *BlobPool) validateTx(tx *types.Transaction) error {
-	// Ensure the transaction adheres to basic pool filters (type, size, tip) and
-	// consensus rules
-	baseOpts := &txpool.ValidationOptions{
+// ValidateTxBasics checks whether a transaction is valid according to the consensus
+// rules, but does not check state-dependent validation such as sufficient balance.
+// This check is meant as an early check which only needs to be performed once,
+// and does not require the pool mutex to be held.
+func (p *BlobPool) ValidateTxBasics(tx *types.Transaction) error {
+	opts := &txpool.ValidationOptions{
 		Config:  p.chain.Config(),
 		Accept:  1 << types.BlobTxType,
 		MaxSize: txMaxSize,
 		MinTip:  p.gasTip.ToBig(),
 	}
+	return txpool.ValidateTransaction(tx, p.head, p.signer, opts)
+}
 
-	if err := p.txValidationFn(tx, p.head, p.signer, baseOpts); err != nil {
+// validateTx checks whether a transaction is valid according to the consensus
+// rules and adheres to some heuristic limits of the local node (price and size).
+func (p *BlobPool) validateTx(tx *types.Transaction) error {
+	if err := p.ValidateTxBasics(tx); err != nil {
 		return err
 	}
 	// Ensure the transaction adheres to the stateful pool filters (nonce, balance)

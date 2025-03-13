@@ -19,6 +19,7 @@ package legacypool
 
 import (
 	"errors"
+	"maps"
 	"math"
 	"math/big"
 	"slices"
@@ -40,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -61,6 +61,19 @@ var (
 	// ErrTxPoolOverflow is returned if the transaction pool is full and can't accept
 	// another remote transaction.
 	ErrTxPoolOverflow = errors.New("txpool is full")
+
+	// ErrInflightTxLimitReached is returned when the maximum number of in-flight
+	// transactions is reached for specific accounts.
+	ErrInflightTxLimitReached = errors.New("in-flight transaction limit reached for delegated accounts")
+
+	// ErrAuthorityReserved is returned if a transaction has an authorization
+	// signed by an address which already has in-flight transactions known to the
+	// pool.
+	ErrAuthorityReserved = errors.New("authority already reserved")
+
+	// ErrFutureReplacePending is returned if a future transaction replaces a pending
+	// one. Future transactions should only be able to replace other future transactions.
+	ErrFutureReplacePending = errors.New("future transaction tries to replace pending")
 )
 
 var (
@@ -545,11 +558,11 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) map[common.Address]
 	return pending
 }
 
-// validateTxBasics checks whether a transaction is valid according to the consensus
+// ValidateTxBasics checks whether a transaction is valid according to the consensus
 // rules, but does not check state-dependent validation such as sufficient balance.
 // This check is meant as an early check which only needs to be performed once,
 // and does not require the pool mutex to be held.
-func (pool *LegacyPool) validateTxBasics(tx *types.Transaction) error {
+func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 	opts := &txpool.ValidationOptions{
 		Config: pool.chainconfig,
 		Accept: 0 |
@@ -560,10 +573,7 @@ func (pool *LegacyPool) validateTxBasics(tx *types.Transaction) error {
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load().ToBig(),
 	}
-	if err := txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts); err != nil {
-		return err
-	}
-	return nil
+	return txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts)
 }
 
 // validateTx checks whether a transaction is valid according to the consensus
@@ -572,22 +582,8 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 	opts := &txpool.ValidationOptionsWithState{
 		State: pool.currentState,
 
-		FirstNonceGap: nil, // Pool allows arbitrary arrival order, don't invalidate nonce gaps
-		UsedAndLeftSlots: func(addr common.Address) (int, int) {
-			var have int
-			if list := pool.pending[addr]; list != nil {
-				have += list.Len()
-			}
-			if list := pool.queue[addr]; list != nil {
-				have += list.Len()
-			}
-			if pool.currentState.GetCodeHash(addr) != types.EmptyCodeHash || len(pool.all.auths[addr]) != 0 {
-				// Allow at most one in-flight tx for delegated accounts or those with
-				// a pending authorization.
-				return have, max(0, 1-have)
-			}
-			return have, math.MaxInt
-		},
+		FirstNonceGap:    nil, // Pool allows arbitrary arrival order, don't invalidate nonce gaps
+		UsedAndLeftSlots: nil, // Pool has own mechanism to limit the number of transactions
 		ExistingExpenditure: func(addr common.Address) *big.Int {
 			if list := pool.pending[addr]; list != nil {
 				return list.totalcost.ToBig()
@@ -602,21 +598,48 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 			}
 			return nil
 		},
-		KnownConflicts: func(from common.Address, auths []common.Address) []common.Address {
-			var conflicts []common.Address
-			// Authorities cannot conflict with any pending or queued transactions.
-			for _, addr := range auths {
-				if list := pool.pending[addr]; list != nil {
-					conflicts = append(conflicts, addr)
-				} else if list := pool.queue[addr]; list != nil {
-					conflicts = append(conflicts, addr)
-				}
-			}
-			return conflicts
-		},
 	}
 	if err := txpool.ValidateTransactionWithState(tx, pool.signer, opts); err != nil {
 		return err
+	}
+	return pool.validateAuth(tx)
+}
+
+// validateAuth verifies that the transaction complies with code authorization
+// restrictions brought by SetCode transaction type.
+func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
+	from, _ := types.Sender(pool.signer, tx) // validated
+
+	// Allow at most one in-flight tx for delegated accounts or those with a
+	// pending authorization.
+	if pool.currentState.GetCodeHash(from) != types.EmptyCodeHash || len(pool.all.auths[from]) != 0 {
+		var (
+			count  int
+			exists bool
+		)
+		pending := pool.pending[from]
+		if pending != nil {
+			count += pending.Len()
+			exists = pending.Contains(tx.Nonce())
+		}
+		queue := pool.queue[from]
+		if queue != nil {
+			count += queue.Len()
+			exists = exists || queue.Contains(tx.Nonce())
+		}
+		// Replace the existing in-flight transaction for delegated accounts
+		// are still supported
+		if count >= 1 && !exists {
+			return ErrInflightTxLimitReached
+		}
+	}
+	// Authorities cannot conflict with any pending or queued transactions.
+	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
+		for _, auth := range auths {
+			if pool.pending[auth] != nil || pool.queue[auth] != nil {
+				return ErrAuthorityReserved
+			}
+		}
 	}
 	return nil
 }
@@ -709,7 +732,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 					pool.priced.Put(dropTx)
 				}
 				log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
-				return false, txpool.ErrFutureReplacePending
+				return false, ErrFutureReplacePending
 			}
 		}
 
@@ -903,7 +926,7 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 		// Exclude transactions with basic errors, e.g invalid signatures and
 		// insufficient intrinsic gas as soon as possible and cache senders
 		// in transactions before obtaining lock
-		if err := pool.validateTxBasics(tx); err != nil {
+		if err := pool.ValidateTxBasics(tx); err != nil {
 			errs[i] = err
 			log.Trace("Discarding invalid transaction", "hash", tx.Hash(), "err", err)
 			invalidTxMeter.Mark(1)
@@ -1581,7 +1604,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 			gapped := list.Cap(0)
 			for _, tx := range gapped {
 				hash := tx.Hash()
-				log.Error("Demoting invalidated transaction", "hash", hash)
+				log.Warn("Demoting invalidated transaction", "hash", hash)
 
 				// Internal shuffle shouldn't touch the lookup set.
 				pool.enqueueTx(hash, tx, false)
@@ -1648,7 +1671,7 @@ func (as *accountSet) addTx(tx *types.Transaction) {
 // reuse. The returned slice should not be changed!
 func (as *accountSet) flatten() []common.Address {
 	if as.cache == nil {
-		as.cache = maps.Keys(as.accounts)
+		as.cache = slices.Collect(maps.Keys(as.accounts))
 	}
 	return as.cache
 }
@@ -1739,12 +1762,12 @@ func (t *lookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.removeAuthorities(hash)
 	tx, ok := t.txs[hash]
 	if !ok {
 		log.Error("No transaction found to be deleted", "hash", hash)
 		return
 	}
+	t.removeAuthorities(tx)
 	t.slots -= numSlots(tx)
 	slotsGauge.Update(int64(t.slots))
 
@@ -1782,8 +1805,9 @@ func (t *lookup) addAuthorities(tx *types.Transaction) {
 
 // removeAuthorities stops tracking the supplied tx in relation to its
 // authorities.
-func (t *lookup) removeAuthorities(hash common.Hash) {
-	for addr := range t.auths {
+func (t *lookup) removeAuthorities(tx *types.Transaction) {
+	hash := tx.Hash()
+	for _, addr := range tx.SetCodeAuthorities() {
 		list := t.auths[addr]
 		// Remove tx from tracker.
 		if i := slices.Index(list, hash); i >= 0 {

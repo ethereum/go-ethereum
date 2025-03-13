@@ -256,7 +256,7 @@ func (e *GenesisMismatchError) Error() string {
 
 // ChainOverrides contains the changes to chain config.
 type ChainOverrides struct {
-	OverrideCancun *uint64
+	OverridePrague *uint64
 	OverrideVerkle *uint64
 }
 
@@ -265,8 +265,8 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	if o == nil || cfg == nil {
 		return nil
 	}
-	if o.OverrideCancun != nil {
-		cfg.CancunTime = o.OverrideCancun
+	if o.OverridePrague != nil {
+		cfg.PragueTime = o.OverridePrague
 	}
 	if o.OverrideVerkle != nil {
 		cfg.VerkleTime = o.OverrideVerkle
@@ -386,7 +386,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 
 // LoadChainConfig loads the stored chain config if it is already present in
 // database, otherwise, return the config in the provided genesis specification.
-func LoadChainConfig(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, error) {
+func LoadChainConfig(db ethdb.Database, genesis *Genesis) (cfg *params.ChainConfig, ghash common.Hash, err error) {
 	// Load the stored chain config from the database. It can be nil
 	// in case the database is empty. Notably, we only care about the
 	// chain config corresponds to the canonical chain.
@@ -394,27 +394,28 @@ func LoadChainConfig(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, 
 	if stored != (common.Hash{}) {
 		storedcfg := rawdb.ReadChainConfig(db, stored)
 		if storedcfg != nil {
-			return storedcfg, nil
+			return storedcfg, stored, nil
 		}
 	}
 	// Load the config from the provided genesis specification
 	if genesis != nil {
 		// Reject invalid genesis spec without valid chain config
 		if genesis.Config == nil {
-			return nil, errGenesisNoConfig
+			return nil, common.Hash{}, errGenesisNoConfig
 		}
 		// If the canonical genesis header is present, but the chain
 		// config is missing(initialize the empty leveldb with an
 		// external ancient chain segment), ensure the provided genesis
 		// is matched.
-		if stored != (common.Hash{}) && genesis.ToBlock().Hash() != stored {
-			return nil, &GenesisMismatchError{stored, genesis.ToBlock().Hash()}
+		ghash := genesis.ToBlock().Hash()
+		if stored != (common.Hash{}) && ghash != stored {
+			return nil, ghash, &GenesisMismatchError{stored, ghash}
 		}
-		return genesis.Config, nil
+		return genesis.Config, ghash, nil
 	}
 	// There is no stored chain config and no new config provided,
 	// In this case the default chain config(mainnet) will be used
-	return params.MainnetChainConfig, nil
+	return params.MainnetChainConfig, params.MainnetGenesisHash, nil
 }
 
 // chainConfigOrDefault retrieves the attached chain configuration. If the genesis
@@ -636,15 +637,23 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(0),
 		Alloc: map[common.Address]types.Account{
-			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
-			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
-			common.BytesToAddress([]byte{3}): {Balance: big.NewInt(1)}, // RIPEMD
-			common.BytesToAddress([]byte{4}): {Balance: big.NewInt(1)}, // Identity
-			common.BytesToAddress([]byte{5}): {Balance: big.NewInt(1)}, // ModExp
-			common.BytesToAddress([]byte{6}): {Balance: big.NewInt(1)}, // ECAdd
-			common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
-			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
-			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
+			common.BytesToAddress([]byte{0x01}): {Balance: big.NewInt(1)}, // ECRecover
+			common.BytesToAddress([]byte{0x02}): {Balance: big.NewInt(1)}, // SHA256
+			common.BytesToAddress([]byte{0x03}): {Balance: big.NewInt(1)}, // RIPEMD
+			common.BytesToAddress([]byte{0x04}): {Balance: big.NewInt(1)}, // Identity
+			common.BytesToAddress([]byte{0x05}): {Balance: big.NewInt(1)}, // ModExp
+			common.BytesToAddress([]byte{0x06}): {Balance: big.NewInt(1)}, // ECAdd
+			common.BytesToAddress([]byte{0x07}): {Balance: big.NewInt(1)}, // ECScalarMul
+			common.BytesToAddress([]byte{0x08}): {Balance: big.NewInt(1)}, // ECPairing
+			common.BytesToAddress([]byte{0x09}): {Balance: big.NewInt(1)}, // BLAKE2b
+			common.BytesToAddress([]byte{0x0a}): {Balance: big.NewInt(1)}, // KZGPointEval
+			common.BytesToAddress([]byte{0x0b}): {Balance: big.NewInt(1)}, // BLSG1Add
+			common.BytesToAddress([]byte{0x0c}): {Balance: big.NewInt(1)}, // BLSG1MultiExp
+			common.BytesToAddress([]byte{0x0d}): {Balance: big.NewInt(1)}, // BLSG2Add
+			common.BytesToAddress([]byte{0x0e}): {Balance: big.NewInt(1)}, // BLSG2MultiExp
+			common.BytesToAddress([]byte{0x0f}): {Balance: big.NewInt(1)}, // BLSG1Pairing
+			common.BytesToAddress([]byte{0x10}): {Balance: big.NewInt(1)}, // BLSG1MapG1
+			common.BytesToAddress([]byte{0x11}): {Balance: big.NewInt(1)}, // BLSG2MapG2
 			// Pre-deploy system contracts
 			params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
 			params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
