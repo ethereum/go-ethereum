@@ -200,12 +200,6 @@ func (t *UDPv5) Close() {
 	})
 }
 
-// Ping sends a ping message to the given node.
-func (t *UDPv5) Ping(n *enode.Node) error {
-	_, err := t.ping(n)
-	return err
-}
-
 // Resolve searches for a specific node with the given ID and tries to get the most recent
 // version of the node record for it. It returns n if the node could not be resolved.
 func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
@@ -226,6 +220,36 @@ func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
 	return n
 }
 
+// ResolveNodeId searches for a specific Node with the given ID.
+// It returns nil if the nodeId could not be resolved.
+func (t *UDPv5) ResolveNodeId(id enode.ID) *enode.Node {
+	if id == t.Self().ID() {
+		return t.Self()
+	}
+
+	n := t.tab.getNode(id)
+	if n != nil {
+		// Try asking directly. This works if the Node is still responding on the endpoint we have.
+		if resp, err := t.RequestENR(n); err == nil {
+			return resp
+		}
+	}
+
+	// Otherwise do a network lookup.
+	result := t.Lookup(id)
+	for _, rn := range result {
+		if rn.ID() == id {
+			if n != nil && rn.Seq() <= n.Seq() {
+				return n
+			} else {
+				return rn
+			}
+		}
+	}
+
+	return n
+}
+
 // AllNodes returns all the nodes stored in the local table.
 func (t *UDPv5) AllNodes() []*enode.Node {
 	t.tab.mutex.Lock()
@@ -240,7 +264,18 @@ func (t *UDPv5) AllNodes() []*enode.Node {
 	return nodes
 }
 
-// LocalNode returns the current local node running the
+// AddKnownNode adds a node to the routing table.
+// The function should be used for testing only.
+func (t *UDPv5) AddKnownNode(n *enode.Node) bool {
+	return t.tab.addFoundNode(n, true)
+}
+
+// DeleteNode removes a node from the routing table. Used for Portal discv5 DeleteEnr API.
+func (t *UDPv5) DeleteNode(n *enode.Node) {
+	t.tab.deleteNode(n)
+}
+
+// LocalNode returns the current local Node running the
 // protocol.
 func (t *UDPv5) LocalNode() *enode.LocalNode {
 	return t.localNode
@@ -328,7 +363,7 @@ func (t *UDPv5) lookupWorker(destNode *enode.Node, target enode.ID) ([]*enode.No
 		err   error
 	)
 	var r []*enode.Node
-	r, err = t.findnode(destNode, dists)
+	r, err = t.Findnode(destNode, dists)
 	if errors.Is(err, errClosed) {
 		return nil, err
 	}
@@ -359,21 +394,31 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 
 // ping calls PING on a node and waits for a PONG response.
 func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
+	pong, err := t.Ping(n)
+	if err != nil {
+		return 0, err
+	}
+
+	return pong.ENRSeq, nil
+}
+
+// Ping calls PING on a node and waits for a PONG response.
+func (t *UDPv5) Ping(n *enode.Node) (*v5wire.Pong, error) {
 	req := &v5wire.Ping{ENRSeq: t.localNode.Node().Seq()}
 	resp := t.callToNode(n, v5wire.PongMsg, req)
 	defer t.callDone(resp)
 
 	select {
 	case pong := <-resp.ch:
-		return pong.(*v5wire.Pong).ENRSeq, nil
+		return pong.(*v5wire.Pong), nil
 	case err := <-resp.err:
-		return 0, err
+		return nil, err
 	}
 }
 
 // RequestENR requests n's record.
 func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
-	nodes, err := t.findnode(n, []uint{0})
+	nodes, err := t.Findnode(n, []uint{0})
 	if err != nil {
 		return nil, err
 	}
@@ -383,8 +428,8 @@ func (t *UDPv5) RequestENR(n *enode.Node) (*enode.Node, error) {
 	return nodes[0], nil
 }
 
-// findnode calls FINDNODE on a node and waits for responses.
-func (t *UDPv5) findnode(n *enode.Node, distances []uint) ([]*enode.Node, error) {
+// Findnode calls FINDNODE on a node and waits for responses.
+func (t *UDPv5) Findnode(n *enode.Node, distances []uint) ([]*enode.Node, error) {
 	resp := t.callToNode(n, v5wire.NodesMsg, &v5wire.Findnode{Distances: distances})
 	return t.waitForNodes(resp, distances)
 }
@@ -736,8 +781,8 @@ func (t *UDPv5) handleCallResponse(fromID enode.ID, fromAddr netip.AddrPort, p v
 	return true
 }
 
-// getNode looks for a node record in table and database.
-func (t *UDPv5) getNode(id enode.ID) *enode.Node {
+// GetNode looks for a node record in table and database.
+func (t *UDPv5) GetNode(id enode.ID) *enode.Node {
 	if n := t.tab.getNode(id); n != nil {
 		return n
 	}
@@ -745,6 +790,11 @@ func (t *UDPv5) getNode(id enode.ID) *enode.Node {
 		return n
 	}
 	return nil
+}
+
+// Nodes returns the nodes in the routing table.
+func (t *UDPv5) Nodes() [][]BucketNode {
+	return t.tab.Nodes()
 }
 
 // handle processes incoming packets according to their message type.
@@ -776,7 +826,7 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort
 func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr netip.AddrPort) {
 	challenge := &v5wire.Whoareyou{Nonce: p.Nonce}
 	crand.Read(challenge.IDNonce[:])
-	if n := t.getNode(fromID); n != nil {
+	if n := t.GetNode(fromID); n != nil {
 		challenge.Node = n
 		challenge.RecordSeq = n.Seq()
 	}
