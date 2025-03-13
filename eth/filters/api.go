@@ -358,7 +358,7 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		if begin > 0 && end > 0 && begin > end {
 			return nil, errInvalidBlockRange
 		}
-		if begin < int64(api.events.backend.HistoryCutoff()) {
+		if begin < int64(api.events.backend.HistoryPruningCutoff()) {
 			return nil, &prunedHistoryError{}
 		}
 		// Construct the range filter
@@ -406,7 +406,7 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 		if err != nil {
 			return nil, err
 		}
-		if header.Number.Uint64() < api.events.backend.HistoryCutoff() {
+		if header.Number.Uint64() < api.events.backend.HistoryPruningCutoff() {
 			return nil, &prunedHistoryError{}
 		}
 		// Block filter requested, construct a single-shot filter

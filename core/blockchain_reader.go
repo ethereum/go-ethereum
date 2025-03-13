@@ -442,10 +442,3 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
 }
-
-// HistoryCutoff returns the tail of the block history.
-func (bc *BlockChain) HistoryCutoff() uint64 {
-	// Only nofreezedb returns an error.
-	tail, _ := bc.db.Tail()
-	return tail
-}

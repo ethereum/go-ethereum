@@ -64,7 +64,7 @@ type Backend interface {
 
 	CurrentHeader() *types.Header
 	ChainConfig() *params.ChainConfig
-	HistoryCutoff() uint64
+	HistoryPruningCutoff() uint64
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription

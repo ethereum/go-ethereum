@@ -623,7 +623,7 @@ func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("implement me")
 }
 
-func (b testBackend) HistoryCutoff() uint64 { return b.chain.HistoryCutoff() }
+func (b testBackend) HistoryPruningCutoff() uint64 { return b.chain.HistoryPruningCutoff() }
 
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
