@@ -323,11 +323,6 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 			}
 			waitCnt = 0
 		}
-		r.currentMap.lastBlock = r.iterator.blockNumber
-		if r.iterator.delimiter {
-			r.currentMap.lastBlock++
-			r.currentMap.blockLvPtrs = append(r.currentMap.blockLvPtrs, r.iterator.lvIndex+1)
-		}
 		if logValue := r.iterator.getValueHash(); logValue != (common.Hash{}) {
 			lvp, cached := rowMappingCache.Get(logValue)
 			if !cached {
@@ -346,9 +341,15 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 		if err := r.iterator.next(); err != nil {
 			return false, fmt.Errorf("failed to advance log iterator at %d while rendering map %d: %v", r.iterator.lvIndex, r.currentMap.mapIndex, err)
 		}
-		if !r.f.testDisableSnapshots && r.afterLastMap >= r.f.indexedRange.afterLastRenderedMap &&
-			(r.iterator.delimiter || r.iterator.finished) {
-			r.makeSnapshot()
+		if !r.iterator.skipToBoundary {
+			r.currentMap.lastBlock = r.iterator.blockNumber
+			if r.iterator.blockStart {
+				r.currentMap.blockLvPtrs = append(r.currentMap.blockLvPtrs, r.iterator.lvIndex)
+			}
+			if !r.f.testDisableSnapshots && r.afterLastMap >= r.f.indexedRange.afterLastRenderedMap &&
+				(r.iterator.delimiter || r.iterator.finished) {
+				r.makeSnapshot()
+			}
 		}
 	}
 	if r.iterator.finished {
@@ -624,12 +625,13 @@ func (fmr *filterMapsRange) addRenderedRange(firstRendered, afterLastRendered, a
 
 // logIterator iterates on the linear log value index range.
 type logIterator struct {
-	chainView                       *ChainView
-	blockNumber                     uint64
-	receipts                        types.Receipts
-	blockStart, delimiter, finished bool
-	txIndex, logIndex, topicIndex   int
-	lvIndex                         uint64
+	params                                          *Params
+	chainView                                       *ChainView
+	blockNumber                                     uint64
+	receipts                                        types.Receipts
+	blockStart, delimiter, skipToBoundary, finished bool
+	txIndex, logIndex, topicIndex                   int
+	lvIndex                                         uint64
 }
 
 var errUnindexedRange = errors.New("unindexed range")
@@ -656,13 +658,16 @@ func (f *FilterMaps) newLogIteratorFromBlockDelimiter(blockNumber uint64) (*logI
 		lvIndex--
 	}
 	finished := blockNumber == f.targetView.headNumber
-	return &logIterator{
+	l := &logIterator{
 		chainView:   f.targetView,
+		params:      &f.Params,
 		blockNumber: blockNumber,
 		finished:    finished,
 		delimiter:   !finished,
 		lvIndex:     lvIndex,
-	}, nil
+	}
+	l.enforceValidState()
+	return l, nil
 }
 
 // newLogIteratorFromMapBoundary creates a logIterator starting at the given
@@ -679,12 +684,13 @@ func (f *FilterMaps) newLogIteratorFromMapBoundary(mapIndex uint32, startBlock, 
 	// initialize iterator at block start
 	l := &logIterator{
 		chainView:   f.targetView,
+		params:      &f.Params,
 		blockNumber: startBlock,
 		receipts:    receipts,
 		blockStart:  true,
 		lvIndex:     startLvPtr,
 	}
-	l.nextValid()
+	l.enforceValidState()
 	targetIndex := uint64(mapIndex) << f.logValuesPerMap
 	if l.lvIndex > targetIndex {
 		return nil, fmt.Errorf("log value pointer %d of last block of map is after map boundary %d", l.lvIndex, targetIndex)
@@ -713,7 +719,7 @@ func (l *logIterator) updateChainView(cv *ChainView) bool {
 
 // getValueHash returns the log value hash at the current position.
 func (l *logIterator) getValueHash() common.Hash {
-	if l.delimiter || l.finished {
+	if l.delimiter || l.finished || l.skipToBoundary {
 		return common.Hash{}
 	}
 	log := l.receipts[l.txIndex].Logs[l.logIndex]
@@ -725,6 +731,14 @@ func (l *logIterator) getValueHash() common.Hash {
 
 // next moves the iterator to the next log value index.
 func (l *logIterator) next() error {
+	if l.skipToBoundary {
+		l.lvIndex++
+		if l.lvIndex%l.params.valuesPerMap == 0 {
+			l.skipToBoundary = false
+		}
+		return nil
+
+	}
 	if l.finished {
 		return nil
 	}
@@ -741,18 +755,26 @@ func (l *logIterator) next() error {
 		l.blockStart = false
 	}
 	l.lvIndex++
-	l.nextValid()
+	l.enforceValidState()
 	return nil
 }
 
-// nextValid updates the internal transaction, log and topic index pointers
+// enforceValidState updates the internal transaction, log and topic index pointers
 // to the next existing log value of the given block if necessary.
-// Note that nextValid does not advance the log value index pointer.
-func (l *logIterator) nextValid() {
+// Note that enforceValidState does not advance the log value index pointer.
+func (l *logIterator) enforceValidState() {
+	if l.delimiter || l.finished || l.skipToBoundary {
+		return
+	}
 	for ; l.txIndex < len(l.receipts); l.txIndex++ {
 		receipt := l.receipts[l.txIndex]
 		for ; l.logIndex < len(receipt.Logs); l.logIndex++ {
 			log := receipt.Logs[l.logIndex]
+			if l.topicIndex == 0 && uint64(len(log.Topics)+1) > l.params.valuesPerMap-l.lvIndex%l.params.valuesPerMap {
+				// next log would be split by map boundary; skip to boundary
+				l.skipToBoundary = true
+				return
+			}
 			if l.topicIndex <= len(log.Topics) {
 				return
 			}
