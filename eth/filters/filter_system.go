@@ -310,6 +310,14 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		return nil, errPendingLogsUnsupported
 	}
 
+	if from == rpc.EarliestBlockNumber {
+		from = rpc.BlockNumber(es.backend.HistoryPruningCutoff())
+	}
+	// Queries beyond the pruning cutoff are not supported.
+	if uint64(from) < es.backend.HistoryPruningCutoff() {
+		return nil, &prunedHistoryError{}
+	}
+
 	// only interested in new mined logs
 	if from == rpc.LatestBlockNumber && to == rpc.LatestBlockNumber {
 		return es.subscribeLogs(crit, logs), nil

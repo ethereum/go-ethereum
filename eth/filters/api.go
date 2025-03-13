@@ -342,7 +342,6 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 	}
 	var filter *Filter
 	if crit.BlockHash != nil {
-		// TODO: return pruned history error here where it would apply
 		// Block filter requested, construct a single-shot filter
 		filter = api.sys.NewBlockFilter(*crit.BlockHash, crit.Addresses, crit.Topics)
 	} else {
@@ -355,10 +354,11 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
 		}
+		// Block numbers below 0 are special cases.
 		if begin > 0 && end > 0 && begin > end {
 			return nil, errInvalidBlockRange
 		}
-		if begin < int64(api.events.backend.HistoryPruningCutoff()) {
+		if begin > 0 && begin < int64(api.events.backend.HistoryPruningCutoff()) {
 			return nil, &prunedHistoryError{}
 		}
 		// Construct the range filter
