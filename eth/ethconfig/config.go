@@ -48,6 +48,7 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
+	HistoryMode:        AllHistory,
 	SyncMode:           SnapSync,
 	NetworkId:          0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:      2350000,
@@ -80,6 +81,9 @@ type Config struct {
 	// zero, the chain ID is used as network ID.
 	NetworkId uint64
 	SyncMode  SyncMode
+
+	// HistoryMode configures chain history retention.
+	HistoryMode HistoryMode
 
 	// This can be set to list of enrtree:// URLs which will be queried for
 	// nodes to connect to.
