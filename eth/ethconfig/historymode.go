@@ -76,6 +76,8 @@ type HistoryPrunePoint struct {
 }
 
 // HistoryPrunePoints contains the pre-defined history pruning cutoff blocks for known networks.
+// They point to the first post-merge block. Any pruning should truncate *up to* but excluding
+// given block.
 var HistoryPrunePoints = map[common.Hash]*HistoryPrunePoint{
 	// mainnet
 	params.MainnetGenesisHash: {
