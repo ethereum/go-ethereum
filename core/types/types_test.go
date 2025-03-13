@@ -22,7 +22,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 type devnull struct{ len int }
@@ -43,7 +45,7 @@ func BenchmarkDecodeRLP(b *testing.B) {
 func benchRLP(b *testing.B, encode bool) {
 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	to := common.HexToAddress("0x00000000000000000000000000000000deadbeef")
-	signer := NewLondonSigner(big.NewInt(1337))
+	signer := NewCancunSigner(big.NewInt(1337))
 	for _, tc := range []struct {
 		name string
 		obj  interface{}
@@ -120,6 +122,32 @@ func benchRLP(b *testing.B, encode bool) {
 					GasTipCap: big.NewInt(500),
 					GasFeeCap: big.NewInt(500),
 				}),
+		},
+		{
+			"blob-transaction",
+			MustSignNewTx(key, signer,
+				&BlobTx{
+					Nonce:      1,
+					Gas:        1000000,
+					To:         to,
+					Value:      uint256.NewInt(1),
+					GasTipCap:  uint256.NewInt(500),
+					GasFeeCap:  uint256.NewInt(500),
+					BlobFeeCap: uint256.NewInt(500),
+					BlobHashes: make([]common.Hash, 6),
+				}),
+		},
+		{
+			"blob-sidecar",
+			&BlobTxSidecar{
+				Blobs:       make([]kzg4844.Blob, 6),
+				Commitments: make([]kzg4844.Commitment, 6),
+				Proofs:      make([]kzg4844.Proof, 6),
+			},
+		},
+		{
+			"full-block",
+			makeBenchBlock(),
 		},
 	} {
 		if encode {

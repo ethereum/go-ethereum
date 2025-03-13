@@ -29,6 +29,8 @@ import (
 	"github.com/holiman/uint256"
 )
 
+//go:generate go run ../../rlp/rlpgen -type SetCodeTx -out gen_setcode_tx_rlp.go
+
 // DelegationPrefix is used by code to denote the account is delegating to
 // another account.
 var DelegationPrefix = []byte{0xef, 0x01, 0x00}

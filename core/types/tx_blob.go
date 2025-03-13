@@ -29,6 +29,8 @@ import (
 	"github.com/holiman/uint256"
 )
 
+//go:generate go run ../../rlp/rlpgen -type BlobTx -out gen_blob_tx_rlp.go
+
 // BlobTx represents an EIP-4844 transaction.
 type BlobTx struct {
 	ChainID    *uint256.Int

@@ -220,7 +220,7 @@ func BenchmarkEncodeBlock(b *testing.B) {
 func makeBenchBlock() *Block {
 	var (
 		key, _   = crypto.GenerateKey()
-		txs      = make([]*Transaction, 70)
+		txs      = make([]*Transaction, 200)
 		receipts = make([]*Receipt, len(txs))
 		signer   = LatestSigner(params.TestChainConfig)
 		uncles   = make([]*Header, 3)
@@ -237,7 +237,15 @@ func makeBenchBlock() *Block {
 		amount := math.BigPow(2, int64(i))
 		price := big.NewInt(300000)
 		data := make([]byte, 100)
-		tx := NewTransaction(uint64(i), common.Address{}, amount, 123457, price, data)
+		tx := NewTx(&DynamicFeeTx{
+			ChainID:    big.NewInt(0),
+			Nonce:      uint64(i),
+			To:         &common.Address{},
+			Value:      amount,
+			Gas:        price.Uint64(),
+			Data:       data,
+			AccessList: make(AccessList, 0),
+		})
 		signedTx, err := SignTx(tx, signer, key)
 		if err != nil {
 			panic(err)
