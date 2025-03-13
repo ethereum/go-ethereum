@@ -56,10 +56,10 @@ type FilterMaps struct {
 	// case logic in eth/filters.
 	disabled bool
 
-	closeCh               chan struct{}
-	closeWg               sync.WaitGroup
-	history, unindexLimit uint64
-	exportFileName        string
+	closeCh        chan struct{}
+	closeWg        sync.WaitGroup
+	history        uint64
+	exportFileName string
 	Params
 
 	db ethdb.KeyValueStore
