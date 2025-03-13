@@ -108,7 +108,7 @@ func (s *filterTestSuite) filterFullRange(t *utesting.T) {
 }
 
 func (s *filterTestSuite) queryAndCheck(t *utesting.T, query *filterQuery) {
-	query.run(s.cfg.client)
+	query.run(s.cfg.client, s.cfg.historyPruneBlock)
 	if query.Err != nil {
 		t.Errorf("Filter query failed (fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v)", query.FromBlock, query.ToBlock, query.Address, query.Topics, query.Err)
 		return
@@ -125,7 +125,7 @@ func (s *filterTestSuite) fullRangeQueryAndCheck(t *utesting.T, query *filterQue
 		Address:   query.Address,
 		Topics:    query.Topics,
 	}
-	frQuery.run(s.cfg.client)
+	frQuery.run(s.cfg.client, s.cfg.historyPruneBlock)
 	if frQuery.Err != nil {
 		t.Errorf("Full range filter query failed (addresses: %v topics: %v error: %v)", frQuery.Address, frQuery.Topics, frQuery.Err)
 		return
@@ -197,7 +197,7 @@ func (fq *filterQuery) calculateHash() common.Hash {
 	return crypto.Keccak256Hash(enc)
 }
 
-func (fq *filterQuery) run(client *client) {
+func (fq *filterQuery) run(client *client, historyPruneBlock *uint64) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 	logs, err := client.Eth.FilterLogs(ctx, ethereum.FilterQuery{
@@ -207,10 +207,13 @@ func (fq *filterQuery) run(client *client) {
 		Topics:    fq.Topics,
 	})
 	if err != nil {
+		if err = validateHistoryPruneErr(fq.Err, uint64(fq.FromBlock), historyPruneBlock); err == errPrunedHistory {
+			return
+		} else if err != nil {
+			fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
+				fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, err)
+		}
 		fq.Err = err
-		fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
-			fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, err)
-		return
 	}
 	fq.results = logs
 }

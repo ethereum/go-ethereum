@@ -108,8 +108,11 @@ func (s *historyTestSuite) testGetBlockByHash(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByHash(ctx, bhash, false)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		if b == nil {
 			t.Errorf("block %d (hash %v): not found", num, bhash)
@@ -127,8 +130,11 @@ func (s *historyTestSuite) testGetBlockByNumber(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		b, err := s.cfg.client.getBlockByNumber(ctx, num, false)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		if b == nil {
 			t.Errorf("block %d (hash %v): not found", num, bhash)
@@ -146,8 +152,11 @@ func (s *historyTestSuite) testGetBlockTransactionCountByHash(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByHash(ctx, bhash)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		expectedCount := uint64(s.tests.TxCounts[i])
 		if count != expectedCount {
@@ -162,8 +171,11 @@ func (s *historyTestSuite) testGetBlockTransactionCountByNumber(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		count, err := s.cfg.client.getBlockTransactionCountByNumber(ctx, num)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		expectedCount := uint64(s.tests.TxCounts[i])
 		if count != expectedCount {
@@ -178,8 +190,11 @@ func (s *historyTestSuite) testGetBlockReceiptsByHash(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, bhash)
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		hash := calcReceiptsHash(receipts)
 		expectedHash := s.tests.ReceiptsHashes[i]
@@ -195,8 +210,11 @@ func (s *historyTestSuite) testGetBlockReceiptsByNumber(t *utesting.T) {
 	for i, num := range s.tests.BlockNumbers {
 		bhash := s.tests.BlockHashes[i]
 		receipts, err := s.cfg.client.getBlockReceipts(ctx, hexutil.Uint64(num))
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		hash := calcReceiptsHash(receipts)
 		expectedHash := s.tests.ReceiptsHashes[i]
@@ -218,8 +236,11 @@ func (s *historyTestSuite) testGetTransactionByBlockHashAndIndex(t *utesting.T) 
 		}
 
 		tx, err := s.cfg.client.getTransactionByBlockHashAndIndex(ctx, bhash, uint64(txIndex))
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		if tx == nil {
 			t.Errorf("block %d (hash %v): txIndex %d not found", num, bhash, txIndex)
@@ -243,8 +264,11 @@ func (s *historyTestSuite) testGetTransactionByBlockNumberAndIndex(t *utesting.T
 		}
 
 		tx, err := s.cfg.client.getTransactionByBlockNumberAndIndex(ctx, num, uint64(txIndex))
-		if err != nil {
-			t.Fatalf("block %d (hash %v): error %v", num, bhash, err)
+		if err = validateHistoryPruneErr(err, num, s.cfg.historyPruneBlock); err == errPrunedHistory {
+			continue
+		} else if err != nil {
+			t.Errorf("block %d (hash %v): error %v", num, bhash, err)
+			continue
 		}
 		if tx == nil {
 			t.Errorf("block %d (hash %v): txIndex %d not found", num, bhash, txIndex)
