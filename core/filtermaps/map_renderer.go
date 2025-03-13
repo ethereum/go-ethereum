@@ -562,6 +562,11 @@ func (fmr *filterMapsRange) addRenderedRange(firstRendered, afterLastRendered, a
 	if !fmr.initialized {
 		return errors.New("log index not initialized")
 	}
+
+	// Here we create a slice of endpoints for the rendered sections. There are two endpoints
+	// for each section: the index of the first map, and the index after the last map in the
+	// section. We then iterate the endpoints -- adding d values -- to determine whether the
+	// sections are contiguous or whether they have a gap.
 	type endpoint struct {
 		m uint32
 		d int
@@ -586,28 +591,35 @@ func (fmr *filterMapsRange) addRenderedRange(firstRendered, afterLastRendered, a
 			last = !last
 		}
 	}
-	if len(merged) == 0 {
+
+	switch len(merged) {
+	case 0:
+		// Initialized database, but no finished maps yet.
 		fmr.tailPartialEpoch = 0
 		fmr.firstRenderedMap = firstRendered
 		fmr.afterLastRenderedMap = firstRendered
-		return nil
-	}
-	if len(merged) == 2 {
+
+	case 2:
+		// One rendered section (no partial tail epoch).
 		fmr.tailPartialEpoch = 0
 		fmr.firstRenderedMap = merged[0]
 		fmr.afterLastRenderedMap = merged[1]
-		return nil
-	}
-	if len(merged) == 4 {
+
+	case 4:
+		// Two rendered sections (with a gap).
+		// First section (merged[0]-merged[1]) is for the partial tail epoch,
+		// and it has to start exactly one epoch before the main section.
 		if merged[2] != merged[0]+mapsPerEpoch {
 			return fmt.Errorf("invalid tail partial epoch: %v", merged)
 		}
 		fmr.tailPartialEpoch = merged[1] - merged[0]
 		fmr.firstRenderedMap = merged[2]
 		fmr.afterLastRenderedMap = merged[3]
-		return nil
+
+	default:
+		return fmt.Errorf("invalid number of rendered sections: %v", merged)
 	}
-	return fmt.Errorf("invalid number of rendered sections: %v", merged)
+	return nil
 }
 
 // logIterator iterates on the linear log value index range.
