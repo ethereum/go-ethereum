@@ -400,15 +400,6 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 
 	var filter *Filter
 	if f.crit.BlockHash != nil {
-		// ensure the filter criteria does not specify block hash below the
-		// history prune point
-		header, err := api.sys.backend.HeaderByHash(ctx, *f.crit.BlockHash)
-		if err != nil {
-			return nil, err
-		}
-		if header.Number.Uint64() < api.events.backend.HistoryPruningCutoff() {
-			return nil, &prunedHistoryError{}
-		}
 		// Block filter requested, construct a single-shot filter
 		filter = api.sys.NewBlockFilter(*f.crit.BlockHash, f.crit.Addresses, f.crit.Topics)
 	} else {
