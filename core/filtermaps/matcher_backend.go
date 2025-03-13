@@ -155,7 +155,7 @@ func (fm *FilterMapsMatcherBackend) synced() {
 // range that has not been changed and has been consistent with all states of the
 // chain since the previous SyncLogIndex or the creation of the matcher backend.
 func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange, error) {
-	if fm.f.noHistory {
+	if fm.f.disabled {
 		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
 	}
 

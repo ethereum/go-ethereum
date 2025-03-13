@@ -34,7 +34,7 @@ const (
 func (f *FilterMaps) indexerLoop() {
 	defer f.closeWg.Done()
 
-	if f.noHistory {
+	if f.disabled {
 		f.reset()
 		return
 	}
@@ -109,7 +109,7 @@ func (f *FilterMaps) SetBlockProcessing(blockProcessing bool) {
 // WaitIdle blocks until the indexer is in an idle state while synced up to the
 // latest targetView.
 func (f *FilterMaps) WaitIdle() {
-	if f.noHistory {
+	if f.disabled {
 		f.closeWg.Wait()
 		return
 	}

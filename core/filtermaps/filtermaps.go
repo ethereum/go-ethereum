@@ -45,14 +45,20 @@ const (
 // FilterMaps is the in-memory representation of the log index structure that is
 // responsible for building and updating the index according to the canonical
 // chain.
+//
 // Note that FilterMaps implements the same data structure as proposed in EIP-7745
 // without the tree hashing and consensus changes:
 // https://eips.ethereum.org/EIPS/eip-7745
 type FilterMaps struct {
+	// If disabled is set, log indexing is fully disabled.
+	// This is configured by the --history.logs.disable Geth flag.
+	// We chose to implement disabling this way because it requires less special
+	// case logic in eth/filters.
+	disabled bool
+
 	closeCh               chan struct{}
 	closeWg               sync.WaitGroup
 	history, unindexLimit uint64
-	noHistory             bool
 	exportFileName        string
 	Params
 
@@ -191,7 +197,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, c
 		finalBlockCh:      make(chan uint64, 1),
 		blockProcessingCh: make(chan bool, 1),
 		history:           config.History,
-		noHistory:         config.Disabled,
+		disabled:          config.Disabled,
 		exportFileName:    config.ExportFileName,
 		Params:            params,
 		indexedRange: filterMapsRange{
