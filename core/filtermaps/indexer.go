@@ -69,6 +69,9 @@ func (f *FilterMaps) indexerLoop() {
 // SetTargetView sets a new target chain view for the indexer to render.
 // Note that SetTargetView never blocks.
 func (f *FilterMaps) SetTargetView(targetView *ChainView) {
+	if targetView == nil {
+		panic("nil targetView")
+	}
 	for {
 		select {
 		case <-f.targetViewCh:
@@ -175,18 +178,12 @@ func (f *FilterMaps) processSingleEvent(blocking bool) bool {
 
 // setTargetView updates the target chain view of the iterator.
 func (f *FilterMaps) setTargetView(targetView *ChainView) {
-	if equalViews(f.targetView, targetView) {
-		return
-	}
 	f.targetView = targetView
 }
 
 // tryIndexHead tries to render head maps according to the current targetView
 // and returns true if successful.
 func (f *FilterMaps) tryIndexHead() bool {
-	if f.targetView == nil {
-		return false
-	}
 	headRenderer, err := f.renderMapsBefore(math.MaxUint32)
 	if err != nil {
 		log.Error("Error creating log index head renderer", "error", err)

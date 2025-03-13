@@ -18,7 +18,6 @@ package filtermaps
 
 import (
 	"context"
-	"errors"
 
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -26,6 +25,7 @@ import (
 // FilterMapsMatcherBackend implements MatcherBackend.
 type FilterMapsMatcherBackend struct {
 	f *FilterMaps
+
 	// these fields should be accessed under f.matchersLock mutex.
 	valid                 bool
 	firstValid, lastValid uint64
@@ -156,11 +156,9 @@ func (fm *FilterMapsMatcherBackend) synced() {
 // chain since the previous SyncLogIndex or the creation of the matcher backend.
 func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange, error) {
 	if fm.f.noHistory {
-		if fm.f.targetView == nil {
-			return SyncRange{}, errors.New("canonical chain head not available")
-		}
 		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
 	}
+
 	syncCh := make(chan SyncRange, 1)
 	fm.f.matchersLock.Lock()
 	fm.syncCh = syncCh

@@ -212,6 +212,8 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, c
 		baseRowsCache:   lru.NewCache[uint64, [][]uint32](cachedBaseRows),
 		renderSnapshots: lru.NewCache[uint64, *renderedMap](cachedRenderSnapshots),
 	}
+
+	// Set initial indexer target.
 	f.targetView = initView
 	if f.indexedRange.initialized {
 		f.indexedView = f.initChainView(f.targetView)
@@ -314,7 +316,7 @@ func (f *FilterMaps) init() error {
 		}
 	}
 	batch := f.db.NewBatch()
-	for epoch := 0; epoch < bestLen; epoch++ {
+	for epoch := range bestLen {
 		cp := checkpoints[bestIdx][epoch]
 		f.storeLastBlockOfMap(batch, (uint32(epoch+1)<<f.logMapsPerEpoch)-1, cp.BlockNumber, cp.BlockId)
 		f.storeBlockLvPointer(batch, cp.BlockNumber, cp.FirstIndex)
