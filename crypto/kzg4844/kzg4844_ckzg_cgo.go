@@ -132,11 +132,11 @@ func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	return nil
 }
 
-// ckzgComputeCells returns the KZG cell proofs that are used to verify the blob against
+// ckzgComputeCellProofs returns the KZG cell proofs that are used to verify the blob against
 // the commitment.
 //
 // This method does not verify that the commitment is correct with respect to blob.
-func ckzgComputeCells(blob *Blob) ([]Proof, error) {
+func ckzgComputeCellProofs(blob *Blob) ([]Proof, error) {
 	ckzgIniter.Do(ckzgInit)
 
 	_, proofs, err := ckzg4844.ComputeCellsAndKZGProofs((*ckzg4844.Blob)(blob))
