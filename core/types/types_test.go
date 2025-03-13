@@ -149,6 +149,15 @@ func benchRLP(b *testing.B, encode bool) {
 			"full-block",
 			makeBenchBlock(),
 		},
+		{
+			"state-account",
+			&StateAccount{
+				Nonce:    0,
+				Balance:  uint256.NewInt(0),
+				Root:     common.Hash{},
+				CodeHash: make([]byte, 32),
+			},
+		},
 	} {
 		if encode {
 			b.Run(tc.name, func(b *testing.B) {

@@ -2,9 +2,7 @@
 
 package types
 
-import "github.com/ethereum/go-ethereum/common"
 import "github.com/ethereum/go-ethereum/rlp"
-import "github.com/holiman/uint256"
 import "io"
 
 func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
@@ -20,42 +18,4 @@ func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.CodeHash)
 	w.ListEnd(_tmp0)
 	return w.Flush()
-}
-
-func (obj *StateAccount) DecodeRLP(dec *rlp.Stream) error {
-	var _tmp0 StateAccount
-	{
-		if _, err := dec.List(); err != nil {
-			return err
-		}
-		// Nonce:
-		_tmp1, err := dec.Uint64()
-		if err != nil {
-			return err
-		}
-		_tmp0.Nonce = _tmp1
-		// Balance:
-		var _tmp2 uint256.Int
-		if err := dec.ReadUint256(&_tmp2); err != nil {
-			return err
-		}
-		_tmp0.Balance = &_tmp2
-		// Root:
-		var _tmp3 common.Hash
-		if err := dec.ReadBytes(_tmp3[:]); err != nil {
-			return err
-		}
-		_tmp0.Root = _tmp3
-		// CodeHash:
-		_tmp4, err := dec.Bytes()
-		if err != nil {
-			return err
-		}
-		_tmp0.CodeHash = _tmp4
-		if err := dec.ListEnd(); err != nil {
-			return err
-		}
-	}
-	*obj = _tmp0
-	return nil
 }

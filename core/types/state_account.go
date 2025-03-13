@@ -24,7 +24,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-//go:generate go run ../../rlp/rlpgen -type StateAccount -out gen_account_rlp.go
+//go:generate go run ../../rlp/rlpgen -type StateAccount -decoder=false -out gen_account_rlp.go
 
 // StateAccount is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
@@ -33,6 +33,37 @@ type StateAccount struct {
 	Balance  *uint256.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
+}
+
+func (obj *StateAccount) DecodeRLP(dec *rlp.Stream) error {
+	var err error
+	{
+		if _, err := dec.List(); err != nil {
+			return err
+		}
+		// Nonce:
+		obj.Nonce, err = dec.Uint64()
+		if err != nil {
+			return err
+		}
+		// Balance:
+		if err := dec.ReadUint256(obj.Balance); err != nil {
+			return err
+		}
+		// Root:
+		if err := dec.ReadBytes(obj.Root[:]); err != nil {
+			return err
+		}
+		// CodeHash:
+		obj.CodeHash, err = dec.Bytes()
+		if err != nil {
+			return err
+		}
+		if err := dec.ListEnd(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NewEmptyStateAccount constructs an empty state account.

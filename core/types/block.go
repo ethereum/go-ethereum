@@ -555,88 +555,88 @@ func HeaderParentHashFromRLP(header []byte) common.Hash {
 	return common.BytesToHash(parentHash)
 }
 
-func (obj *Header) DecodeRLP(dec *rlp.Stream) error {
+func (h *Header) DecodeRLP(dec *rlp.Stream) error {
 	var err error
 	{
 		if _, err := dec.List(); err != nil {
 			return err
 		}
 		// ParentHash:
-		if err := dec.ReadBytes(obj.ParentHash[:]); err != nil {
+		if err := dec.ReadBytes(h.ParentHash[:]); err != nil {
 			return err
 		}
 		// UncleHash:
-		if err := dec.ReadBytes(obj.UncleHash[:]); err != nil {
+		if err := dec.ReadBytes(h.UncleHash[:]); err != nil {
 			return err
 		}
 		// Coinbase:
-		if err := dec.ReadBytes(obj.Coinbase[:]); err != nil {
+		if err := dec.ReadBytes(h.Coinbase[:]); err != nil {
 			return err
 		}
 		// Root:
-		if err := dec.ReadBytes(obj.Root[:]); err != nil {
+		if err := dec.ReadBytes(h.Root[:]); err != nil {
 			return err
 		}
 		// TxHash:
-		if err := dec.ReadBytes(obj.TxHash[:]); err != nil {
+		if err := dec.ReadBytes(h.TxHash[:]); err != nil {
 			return err
 		}
 		// ReceiptHash:
-		if err := dec.ReadBytes(obj.ReceiptHash[:]); err != nil {
+		if err := dec.ReadBytes(h.ReceiptHash[:]); err != nil {
 			return err
 		}
 		// Bloom:
-		if err := dec.ReadBytes(obj.Bloom[:]); err != nil {
+		if err := dec.ReadBytes(h.Bloom[:]); err != nil {
 			return err
 		}
 		// Difficulty:
-		obj.Difficulty, err = dec.BigInt()
+		h.Difficulty, err = dec.BigInt()
 		if err != nil {
 			return err
 		}
 		// Number:
-		obj.Number, err = dec.BigInt()
+		h.Number, err = dec.BigInt()
 		if err != nil {
 			return err
 		}
 		var err error
 		// GasLimit:
-		obj.GasLimit, err = dec.Uint64()
+		h.GasLimit, err = dec.Uint64()
 		if err != nil {
 			return err
 		}
 		// GasUsed:
-		obj.GasUsed, err = dec.Uint64()
+		h.GasUsed, err = dec.Uint64()
 		if err != nil {
 			return err
 		}
 		// Time:
-		obj.Time, err = dec.Uint64()
+		h.Time, err = dec.Uint64()
 		if err != nil {
 			return err
 		}
 		// Extra:
-		obj.Extra, err = dec.Bytes()
+		h.Extra, err = dec.Bytes()
 		if err != nil {
 			return err
 		}
 		// MixDigest:
-		if err := dec.ReadBytes(obj.MixDigest[:]); err != nil {
+		if err := dec.ReadBytes(h.MixDigest[:]); err != nil {
 			return err
 		}
 		// Nonce:
-		if err := dec.ReadBytes(obj.Nonce[:]); err != nil {
+		if err := dec.ReadBytes(h.Nonce[:]); err != nil {
 			return err
 		}
 		// BaseFee:
 		if dec.MoreDataInList() {
-			obj.BaseFee, err = dec.BigInt()
+			h.BaseFee, err = dec.BigInt()
 			if err != nil {
 				return err
 			}
 			// WithdrawalsHash:
 			if dec.MoreDataInList() {
-				if err := dec.ReadBytes(obj.WithdrawalsHash[:]); err != nil {
+				if err := dec.ReadBytes(h.WithdrawalsHash[:]); err != nil {
 					return err
 				}
 				// BlobGasUsed:
@@ -645,22 +645,22 @@ func (obj *Header) DecodeRLP(dec *rlp.Stream) error {
 					if err != nil {
 						return err
 					}
-					obj.BlobGasUsed = &_tmp18
+					h.BlobGasUsed = &_tmp18
 					// ExcessBlobGas:
 					if dec.MoreDataInList() {
 						_tmp19, err := dec.Uint64()
 						if err != nil {
 							return err
 						}
-						obj.ExcessBlobGas = &_tmp19
+						h.ExcessBlobGas = &_tmp19
 						// ParentBeaconRoot:
 						if dec.MoreDataInList() {
-							if err := dec.ReadBytes(obj.ParentBeaconRoot[:]); err != nil {
+							if err := dec.ReadBytes(h.ParentBeaconRoot[:]); err != nil {
 								return err
 							}
 							// RequestsHash:
 							if dec.MoreDataInList() {
-								if err := dec.ReadBytes(obj.RequestsHash[:]); err != nil {
+								if err := dec.ReadBytes(h.RequestsHash[:]); err != nil {
 									return err
 								}
 							}
