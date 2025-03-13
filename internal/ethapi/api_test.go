@@ -624,7 +624,7 @@ func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.Match
 	panic("implement me")
 }
 
-func (b testBackend) HistoryCutoff() uint64 { return b.chain.HistoryCutoff() }
+func (b testBackend) HistoryPruningCutoff() uint64 { return b.chain.HistoryPruningCutoff() }
 
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()

@@ -96,7 +96,7 @@ type Backend interface {
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 
-	HistoryCutoff() uint64
+	HistoryPruningCutoff() uint64
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

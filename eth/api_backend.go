@@ -93,7 +93,7 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	}
 	var bn uint64
 	if number == rpc.EarliestBlockNumber {
-		bn = b.eth.blockchain.HistoryCutoff()
+		bn = b.eth.blockchain.HistoryPruningCutoff()
 	} else {
 		bn = uint64(number)
 	}
@@ -151,9 +151,9 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	}
 	bn := uint64(number)
 	if number == rpc.EarliestBlockNumber {
-		bn = b.eth.blockchain.HistoryCutoff()
+		bn = b.eth.blockchain.HistoryPruningCutoff()
 	}
-	if bn < b.eth.blockchain.HistoryCutoff() {
+	if bn < b.eth.blockchain.HistoryPruningCutoff() {
 		return nil, &prunedHistoryError{}
 	}
 	return b.eth.blockchain.GetBlockByNumber(bn), nil
@@ -164,7 +164,7 @@ func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 	if number == nil {
 		return nil, nil
 	}
-	if *number < b.eth.blockchain.HistoryCutoff() {
+	if *number < b.eth.blockchain.HistoryPruningCutoff() {
 		return nil, &prunedHistoryError{}
 	}
 	return b.eth.blockchain.GetBlock(hash, *number), nil
@@ -193,7 +193,7 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
 		}
-		if header.Number.Uint64() < b.eth.blockchain.HistoryCutoff() {
+		if header.Number.Uint64() < b.eth.blockchain.HistoryPruningCutoff() {
 			return nil, &prunedHistoryError{}
 		}
 		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
@@ -257,8 +257,8 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
 }
 
-func (b *EthAPIBackend) HistoryCutoff() uint64 {
-	return b.eth.blockchain.HistoryCutoff()
+func (b *EthAPIBackend) HistoryPruningCutoff() uint64 {
+	return b.eth.blockchain.HistoryPruningCutoff()
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {

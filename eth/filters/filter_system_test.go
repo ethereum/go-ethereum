@@ -173,7 +173,7 @@ func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {
 	b.pendingReceipts = receipts
 }
 
-func (b *testBackend) HistoryCutoff() uint64 {
+func (b *testBackend) HistoryPruningCutoff() uint64 {
 	return 0
 }
 
