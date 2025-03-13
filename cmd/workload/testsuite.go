@@ -19,14 +19,16 @@ package main
 import (
 	"embed"
 	"fmt"
-	"github.com/ethereum/go-ethereum/rpc"
 	"io/fs"
 	"os"
 	"slices"
 
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -77,11 +79,6 @@ var (
 	}
 )
 
-const (
-	sepoliaMergeBlock uint64 = 1450409
-	mainnetMergeBlock uint64 = 15537393
-)
-
 // testConfig holds the parameters for testing.
 type testConfig struct {
 	client            *client
@@ -124,13 +121,13 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
 		cfg.historyTestFile = "queries/history_mainnet.json"
 		cfg.historyPruneBlock = new(uint64)
-		*cfg.historyPruneBlock = mainnetMergeBlock
+		*cfg.historyPruneBlock = ethconfig.HistoryPrunePoints[params.MainnetGenesisHash].BlockNumber
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
 		cfg.historyTestFile = "queries/history_sepolia.json"
 		cfg.historyPruneBlock = new(uint64)
-		*cfg.historyPruneBlock = sepoliaMergeBlock
+		*cfg.historyPruneBlock = ethconfig.HistoryPrunePoints[params.SepoliaGenesisHash].BlockNumber
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
