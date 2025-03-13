@@ -88,18 +88,21 @@ type testConfig struct {
 	historyPruneBlock *uint64
 }
 
+var errPrunedHistory = fmt.Errorf("attempt to access pruned history")
+
 // validateHistoryPruneErr checks whether the given error is caused by access
 // to history before the pruning threshold block (it is an rpc.Error with code 4444).
-// If the error is of a different type, it is returned.  If the error is a pruned
-// history error occurring past the pruning threshold, an error is returned.
-// Otherwise, nil is returned.
-func validateHistoryPruneErr(err error, blockNum uint64, cfg testConfig) error {
+// In this case, errPrunedHistory is returned.
+// If the error is a pruned history error that occurs when accessing a block past the
+// historyPrune block, an error is returned.
+// Otherwise, the original value of err is returned.
+func validateHistoryPruneErr(err error, blockNum uint64, historyPruneBlock *uint64) error {
 	if err != nil {
 		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == 4444 {
-			if cfg.historyPruneBlock != nil && blockNum > *cfg.historyPruneBlock {
+			if historyPruneBlock != nil && blockNum > *historyPruneBlock {
 				return fmt.Errorf("pruned history error returned after pruning threshold")
 			}
-			return nil
+			return errPrunedHistory
 		}
 	}
 	return err
