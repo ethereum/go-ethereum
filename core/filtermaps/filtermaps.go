@@ -166,8 +166,18 @@ type lastBlockOfMap struct {
 	id     common.Hash
 }
 
+// Config contains the configuration options for NewFilterMaps.
+type Config struct {
+	History   uint64 // number of historical blocks to index
+	NoHistory bool   // disables indexing completely
+
+	// This option enables the checkpoint JSON file generator.
+	// If set, the given file will be updated with checkpoint information.
+	ExportFileName string
+}
+
 // NewFilterMaps creates a new FilterMaps and starts the indexer.
-func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, history, unindexLimit uint64, noHistory bool, exportFileName string) *FilterMaps {
+func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, config Config) *FilterMaps {
 	rs, initialized, err := rawdb.ReadFilterMapsRange(db)
 	if err != nil {
 		log.Error("Error reading log index range", "error", err)
@@ -180,10 +190,9 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, h
 		targetViewCh:      make(chan *ChainView, 1),
 		finalBlockCh:      make(chan uint64, 1),
 		blockProcessingCh: make(chan bool, 1),
-		history:           history,
-		noHistory:         noHistory,
-		unindexLimit:      unindexLimit,
-		exportFileName:    exportFileName,
+		history:           config.History,
+		noHistory:         config.NoHistory,
+		exportFileName:    config.ExportFileName,
 		Params:            params,
 		indexedRange: filterMapsRange{
 			initialized:           initialized,
