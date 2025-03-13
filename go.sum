@@ -396,8 +396,8 @@ github.com/rogpeppe/go-internal v1.10.0/go.mod h1:UQnix2H7Ngw/k4C5ijL5+65zddjncj
 github.com/rs/cors v1.7.0 h1:+88SsELBHx5r+hZ8TCkggzSstaWNbDvThkVK8H6f9ik=
 github.com/rs/cors v1.7.0/go.mod h1:gFx+x8UowdsKA9AchylcLynDq+nNFfI8FkUZdN/jGCU=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/scroll-tech/da-codec v0.1.3-0.20250226072559-f8a8d3898f54 h1:qVpsVu1J91opTn6HYeuzWcBRVhQmPR8g05i+PlOjlI4=
-github.com/scroll-tech/da-codec v0.1.3-0.20250226072559-f8a8d3898f54/go.mod h1:xECEHZLVzbdUn+tNbRJhRIjLGTOTmnFQuTgUTeVLX58=
+github.com/scroll-tech/da-codec v0.1.3-0.20250313120912-344f2d5e33e1 h1:Dhd58LE1D+dnoxpgLVeQBMF9uweL/fhQfZHWtWSiOlE=
+github.com/scroll-tech/da-codec v0.1.3-0.20250313120912-344f2d5e33e1/go.mod h1:yhTS9OVC0xQGhg7DN5iV5KZJvnSIlFWAxDdp+6jxQtY=
 github.com/scroll-tech/zktrie v0.8.4 h1:UagmnZ4Z3ITCk+aUq9NQZJNAwnWl4gSxsLb2Nl7IgRE=
 github.com/scroll-tech/zktrie v0.8.4/go.mod h1:XvNo7vAk8yxNyTjBDj5WIiFzYW4bx/gJ78+NK6Zn6Uk=
 github.com/segmentio/kafka-go v0.1.0/go.mod h1:X6itGqS9L4jDletMsxZ7Dz+JFWxM6JHfPOCvTvk+EJo=
