@@ -129,6 +129,15 @@ func (db *Database) StateReader(blockRoot common.Hash) (database.StateReader, er
 	return db.backend.StateReader(blockRoot)
 }
 
+// HistoricReader constructs a reader for accessing the requested historic state.
+func (db *Database) HistoricReader(root common.Hash) (*pathdb.HistoricalStateReader, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.HistoricReader(root)
+}
+
 // Update performs a state transition by committing dirty nodes contained in the
 // given set in order to update state from the specified parent to the specified
 // root. The held pre-images accumulated up to this point will be flushed in case
@@ -310,6 +319,26 @@ func (db *Database) Journal(root common.Hash) error {
 		return errors.New("not supported")
 	}
 	return pdb.Journal(root)
+}
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (pathdb.AccountIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.AccountIterator(root, seek)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be move to the specific start position.
+func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (pathdb.StorageIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.StorageIterator(root, account, seek)
 }
 
 // IsVerkle returns the indicator if the database is holding a verkle tree.

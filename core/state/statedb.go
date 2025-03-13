@@ -79,7 +79,7 @@ func (m *mutation) isDelete() bool {
 type StateDB struct {
 	db         Database
 	prefetcher *triePrefetcher
-	trie       Trie
+	trie       Trie // trie is only resolved when it's accessed
 	reader     Reader
 
 	// originalRoot is the pre-state root, before any changes were made.
@@ -159,17 +159,12 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database) (*StateDB, error) {
-	tr, err := db.OpenTrie(root)
-	if err != nil {
-		return nil, err
-	}
 	reader, err := db.Reader(root)
 	if err != nil {
 		return nil, err
 	}
 	sdb := &StateDB{
 		db:                   db,
-		trie:                 tr,
 		originalRoot:         root,
 		reader:               reader,
 		stateObjects:         make(map[common.Address]*stateObject),
@@ -654,7 +649,6 @@ func (s *StateDB) Copy() *StateDB {
 	reader, _ := s.db.Reader(s.originalRoot) // impossible to fail
 	state := &StateDB{
 		db:                   s.db,
-		trie:                 mustCopyTrie(s.trie),
 		reader:               reader,
 		originalRoot:         s.originalRoot,
 		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
@@ -677,6 +671,9 @@ func (s *StateDB) Copy() *StateDB {
 		accessList:       s.accessList.Copy(),
 		transientStorage: s.transientStorage.Copy(),
 		journal:          s.journal.copy(),
+	}
+	if s.trie != nil {
+		state.trie = mustCopyTrie(s.trie)
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
@@ -773,6 +770,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
+	// Initialize the trie if it's not constructed yet
+	if s.trie == nil {
+		tr, err := s.db.OpenTrie(s.originalRoot)
+		if err != nil {
+			s.setError(err)
+			return common.Hash{}
+		}
+		s.trie = tr
+	}
 	// If there was a trie prefetcher operating, terminate it async so that the
 	// individual storage tries can be updated as soon as the disk load finishes.
 	if s.prefetcher != nil {
