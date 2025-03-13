@@ -7,6 +7,7 @@
     "eip155Block": 3,
     "eip158Block": 3,
     "byzantiumBlock": 4,
+    "eip1559Block": 71550000,
     "XDPoS": {
       "period": 2,
       "epoch": 900,
