@@ -43,7 +43,6 @@ var (
 )
 
 type CommitteeUpdate struct {
-	Version           string
 	Update            types.LightClientUpdate
 	NextSyncCommittee types.SerializedSyncCommittee
 }
@@ -81,9 +80,9 @@ func (u *CommitteeUpdate) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	u.Version = dec.Version
 	u.NextSyncCommittee = dec.Data.NextSyncCommittee
 	u.Update = types.LightClientUpdate{
+		Version: dec.Version,
 		AttestedHeader: types.SignedHeader{
 			Header:        dec.Data.Header.Beacon,
 			Signature:     dec.Data.SyncAggregate,
@@ -206,7 +205,7 @@ func (api *BeaconLightApi) GetOptimisticUpdate() (types.OptimisticUpdate, error)
 
 func decodeOptimisticUpdate(enc []byte) (types.OptimisticUpdate, error) {
 	var data struct {
-		Version string
+		Version string `json:"version"`
 		Data    struct {
 			Attested      jsonHeaderWithExecProof `json:"attested_header"`
 			Aggregate     types.SyncAggregate     `json:"sync_aggregate"`
@@ -259,7 +258,7 @@ func (api *BeaconLightApi) GetFinalityUpdate() (types.FinalityUpdate, error) {
 
 func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	var data struct {
-		Version string
+		Version string `json:"version"`
 		Data    struct {
 			Attested       jsonHeaderWithExecProof `json:"attested_header"`
 			Finalized      jsonHeaderWithExecProof `json:"finalized_header"`
@@ -289,6 +288,7 @@ func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	}
 
 	return types.FinalityUpdate{
+		Version: data.Version,
 		Attested: types.HeaderWithExecProof{
 			Header:        data.Data.Attested.Beacon,
 			PayloadHeader: attestedExecHeader,
@@ -355,7 +355,8 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 	// See data structure definition here:
 	// https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientbootstrap
 	type bootstrapData struct {
-		Data struct {
+		Version string `json:"version"`
+		Data    struct {
 			Header          jsonBeaconHeader               `json:"header"`
 			Committee       *types.SerializedSyncCommittee `json:"current_sync_committee"`
 			CommitteeBranch merkle.Values                  `json:"current_sync_committee_branch"`
@@ -374,6 +375,7 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 		return nil, fmt.Errorf("invalid checkpoint block header, have %v want %v", header.Hash(), checkpointHash)
 	}
 	checkpoint := &types.BootstrapData{
+		Version:         data.Version,
 		Header:          header,
 		CommitteeBranch: data.Data.CommitteeBranch,
 		CommitteeRoot:   data.Data.Committee.Root(),
@@ -395,7 +397,7 @@ func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconB
 	}
 
 	var beaconBlockMessage struct {
-		Version string
+		Version string `json:"version"`
 		Data    struct {
 			Message json.RawMessage `json:"message"`
 		}

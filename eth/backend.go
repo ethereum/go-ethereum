@@ -110,6 +110,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
+	if !config.HistoryMode.IsValid() {
+		return nil, fmt.Errorf("invalid history mode %d", config.HistoryMode)
+	}
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Sign() <= 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
@@ -125,7 +128,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
-	// Assemble the Ethereum object
 	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
 	if err != nil {
 		return nil, err
@@ -140,8 +142,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			log.Error("Failed to recover state", "error", err)
 		}
 	}
-	// Transfer mining-related config to the ethash config.
-	chainConfig, err := core.LoadChainConfig(chainDb, config.Genesis)
+
+	// Here we determine genesis hash and active ChainConfig.
+	// We need these to figure out the consensus parameters and to set up history pruning.
+	chainConfig, genesisHash, err := core.LoadChainConfig(chainDb, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
@@ -149,10 +153,24 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Validate history pruning configuration.
+	var historyPruningCutoff uint64
+	if config.HistoryMode == ethconfig.PostMergeHistory {
+		prunecfg, ok := ethconfig.HistoryPrunePoints[genesisHash]
+		if !ok {
+			return nil, fmt.Errorf("no history pruning point is defined for genesis %x", genesisHash)
+		}
+		historyPruningCutoff = prunecfg.BlockNumber
+	}
+
+	// Set networkID to chainID by default.
 	networkID := config.NetworkId
 	if networkID == 0 {
 		networkID = chainConfig.ChainID.Uint64()
 	}
+
+	// Assemble the Ethereum object.
 	eth := &Ethereum{
 		config:            config,
 		chainDb:           chainDb,
@@ -190,15 +208,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			EnablePreimageRecording: config.EnablePreimageRecording,
 		}
 		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:      config.TrieCleanCache,
-			TrieCleanNoPrefetch: config.NoPrefetch,
-			TrieDirtyLimit:      config.TrieDirtyCache,
-			TrieDirtyDisabled:   config.NoPruning,
-			TrieTimeLimit:       config.TrieTimeout,
-			SnapshotLimit:       config.SnapshotCache,
-			Preimages:           config.Preimages,
-			StateHistory:        config.StateHistory,
-			StateScheme:         scheme,
+			TrieCleanLimit:       config.TrieCleanCache,
+			TrieCleanNoPrefetch:  config.NoPrefetch,
+			TrieDirtyLimit:       config.TrieDirtyCache,
+			TrieDirtyDisabled:    config.NoPruning,
+			TrieTimeLimit:        config.TrieTimeout,
+			SnapshotLimit:        config.SnapshotCache,
+			Preimages:            config.Preimages,
+			StateHistory:         config.StateHistory,
+			StateScheme:          scheme,
+			HistoryPruningCutoff: historyPruningCutoff,
 		}
 	)
 	if config.VMTrace != "" {

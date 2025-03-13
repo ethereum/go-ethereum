@@ -272,6 +272,12 @@ var (
 		Value:    ethconfig.Defaults.TransactionHistory,
 		Category: flags.StateCategory,
 	}
+	ChainHistoryFlag = &cli.StringFlag{
+		Name:     "history.chain",
+		Usage:    `Blockchain history retention ("all" or "postmerge")`,
+		Value:    ethconfig.Defaults.HistoryMode.String(),
+		Category: flags.StateCategory,
+	}
 	// Beacon client light sync settings
 	BeaconApiFlag = &cli.StringSliceFlag{
 		Name:     "beacon.api",
@@ -1566,10 +1572,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(SyncTargetFlag.Name) {
 		cfg.SyncMode = ethconfig.FullSync // dev sync target forces full sync
 	} else if ctx.IsSet(SyncModeFlag.Name) {
-		if err = cfg.SyncMode.UnmarshalText([]byte(ctx.String(SyncModeFlag.Name))); err != nil {
-			Fatalf("invalid --syncmode flag: %v", err)
+		value := ctx.String(SyncModeFlag.Name)
+		if err = cfg.SyncMode.UnmarshalText([]byte(value)); err != nil {
+			Fatalf("--%v: %v", SyncModeFlag.Name, err)
 		}
 	}
+
+	if ctx.IsSet(ChainHistoryFlag.Name) {
+		value := ctx.String(ChainHistoryFlag.Name)
+		if err = cfg.HistoryMode.UnmarshalText([]byte(value)); err != nil {
+			Fatalf("--%s: %v", ChainHistoryFlag.Name, err)
+		}
+	}
+
 	if ctx.IsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)
 	}
@@ -2086,7 +2101,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		gspec   = MakeGenesis(ctx)
 		chainDb = MakeChainDatabase(ctx, stack, readonly)
 	)
-	config, err := core.LoadChainConfig(chainDb, gspec)
+	config, _, err := core.LoadChainConfig(chainDb, gspec)
 	if err != nil {
 		Fatalf("%v", err)
 	}

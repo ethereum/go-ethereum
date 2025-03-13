@@ -55,6 +55,9 @@ const (
 	importBatchSize = 2500
 )
 
+// ErrImportInterrupted is returned when the user interrupts the import process.
+var ErrImportInterrupted = errors.New("interrupted")
+
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
@@ -191,7 +194,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
 		if checkInterrupt() {
-			return errors.New("interrupted")
+			return ErrImportInterrupted
 		}
 		i := 0
 		for ; i < importBatchSize; i++ {
