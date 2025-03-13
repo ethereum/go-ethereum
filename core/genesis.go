@@ -213,6 +213,10 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
+
+	// Notice: Eip1559Block affects the block hash, we must set:
+	//   1. g.Config.Eip1559Block
+	//   2. or common.Eip1559Block
 	if g.Config != nil && g.Config.IsEIP1559(common.Big0) {
 		if g.BaseFee != nil {
 			head.BaseFee = g.BaseFee
@@ -220,6 +224,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
+
 	statedb.Commit(false)
 	statedb.Database().TrieDB().Commit(root, true)
 
