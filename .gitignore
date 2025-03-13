@@ -42,4 +42,7 @@ profile.cov
 # VS Code
 .vscode
 
+pkg
+pkg/*
+
 tests/spec-tests/
