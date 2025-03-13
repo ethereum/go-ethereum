@@ -155,48 +155,30 @@ Use "ethereum dump 0" to dump the genesis block.`,
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
 func initGenesis(ctx *cli.Context) error {
-	utils.CheckExclusive(ctx, utils.MainnetFlag, utils.TestnetFlag, utils.DevnetFlag)
+	if ctx.Args().Len() != 1 {
+		utils.Fatalf("need the genesis.json file or the network name [ mainnet | testnet | devnet ] as the only argument")
+	}
 
 	var err error
 	genesis := new(core.Genesis)
-	if ctx.Bool(utils.MainnetFlag.Name) {
-		if ctx.Args().Len() > 0 {
-			utils.Fatalf("The mainnet flag and genesis file can't be used at the same time")
-		}
-		err = json.Unmarshal(xdc_genesis.TestnetGenesis, &genesis)
-	} else if ctx.Bool(utils.TestnetFlag.Name) {
-		if ctx.Args().Len() > 0 {
-			utils.Fatalf("The testnet flag and genesis file can't be used at the same time")
-		}
-		err = json.Unmarshal(xdc_genesis.TestnetGenesis, &genesis)
-	} else if ctx.Bool(utils.DevnetFlag.Name) {
-		if ctx.Args().Len() > 0 {
-			utils.Fatalf("The devnet flag and genesis file can't be used at the same time")
-		}
-		err = json.Unmarshal(xdc_genesis.TestnetGenesis, &genesis)
+	genesisPath := ctx.Args().First()
+	if genesisPath == "mainnet" || genesisPath == "xinfin" {
+		err = json.Unmarshal(xdc_genesis.MainnetGenesis, genesis)
+	} else if genesisPath == "testnet" || genesisPath == "apothem" {
+		err = json.Unmarshal(xdc_genesis.TestnetGenesis, genesis)
+	} else if genesisPath == "devnet" {
+		err = json.Unmarshal(xdc_genesis.DevnetGenesis, genesis)
 	} else {
-		if ctx.Args().Len() != 1 {
-			utils.Fatalf("need the genesis.json file or the network name [ mainnet | testnet | devnet ] as the only argument")
+		if len(genesisPath) == 0 {
+			utils.Fatalf("invalid path to genesis file")
 		}
-		genesisPath := ctx.Args().First()
-		if genesisPath == "mainnet" || genesisPath == "xinfin" {
-			err = json.Unmarshal(xdc_genesis.MainnetGenesis, &genesis)
-		} else if genesisPath == "testnet" || genesisPath == "apothem" {
-			err = json.Unmarshal(xdc_genesis.TestnetGenesis, &genesis)
-		} else if genesisPath == "devnet" {
-			err = json.Unmarshal(xdc_genesis.DevnetGenesis, &genesis)
-		} else {
-			if len(genesisPath) == 0 {
-				utils.Fatalf("invalid path to genesis file")
-			}
-			var file *os.File
-			file, err = os.Open(genesisPath)
-			if err != nil {
-				utils.Fatalf("Failed to read genesis file: %v", err)
-			}
-			defer file.Close()
-			err = json.NewDecoder(file).Decode(genesis)
+		var file *os.File
+		file, err = os.Open(genesisPath)
+		if err != nil {
+			utils.Fatalf("Failed to read genesis file: %v", err)
 		}
+		defer file.Close()
+		err = json.NewDecoder(file).Decode(genesis)
 	}
 	if err != nil {
 		utils.Fatalf("invalid genesis json: %v", err)
