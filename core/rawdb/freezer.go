@@ -301,9 +301,10 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 	return oitems, nil
 }
 
-// TruncateTailBlocks discards any recent data below the provided threshold number.
-// Only truncates blocks and receipts.
-func (f *Freezer) TruncateTailBlocks(tail uint64) (uint64, error) {
+// TruncateTailBlocks discards all data below the provided threshold block number.
+// This is intended to be used with the chain freezer. Unlike TruncateTail, it
+// only truncates blocks and receipts, leaving the header table where it is.
+func (f *Freezer) TruncateTailBlocks(tailBlock uint64) (uint64, error) {
 	if f.readonly {
 		return 0, errReadOnly
 	}
@@ -311,21 +312,21 @@ func (f *Freezer) TruncateTailBlocks(tail uint64) (uint64, error) {
 	defer f.writeLock.Unlock()
 
 	old := f.tail.Load()
-	if old >= tail {
+	if old >= tailBlock {
 		return old, nil
 	}
 	for kind, table := range f.tables {
 		if kind == ChainFreezerBodiesTable || kind == ChainFreezerReceiptTable {
-			if err := table.truncateTail(tail); err != nil {
+			if err := table.truncateTail(tailBlock); err != nil {
 				return 0, err
 			}
 		}
 	}
-	f.tail.Store(tail)
+	f.tail.Store(tailBlock)
 	return old, nil
 }
 
-// TruncateTail discards any recent data below the provided threshold number.
+// TruncateTail discards all data below the provided threshold number.
 func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	if f.readonly {
 		return 0, errReadOnly
