@@ -170,19 +170,15 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 	if syncRange.IndexedBlocks.IsEmpty() {
 		// fallback to completely unindexed search
 		headNum := syncRange.HeadNumber
-		if firstBlock > headNum {
-			firstBlock = headNum
-		}
-		if lastBlock > headNum {
-			lastBlock = headNum
-		}
+		firstBlock = min(firstBlock, headNum)
+		lastBlock = min(lastBlock, headNum)
 		if f.rangeLogsTestHook != nil {
 			f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestUnindexed, firstBlock, lastBlock}
 		}
 		return f.unindexedLogs(ctx, firstBlock, lastBlock)
 	}
 
-	headBlock := syncRange.HeadNumber // Head is guaranteed != nil
+	headBlock := syncRange.HeadNumber
 	// if haveMatches == true then matches correspond to the block number range
 	// between matchFirst and matchLast
 	var (
@@ -216,15 +212,11 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 		// determine range to be searched; for simplicity we only extend the most
 		// recent end of the existing match set by matching between searchFirst
 		// and searchLast.
-		searchFirst, searchLast := firstBlock, lastBlock
-		if searchFirst > headBlock {
-			searchFirst = headBlock
-		}
-		if searchLast > headBlock {
-			searchLast = headBlock
-		}
+		searchFirst := min(firstBlock, headBlock)
+		searchLast := min(lastBlock, headBlock)
 		trimMatches(searchFirst, searchLast)
 		if haveMatches && matchFirst == searchFirst && matchLast == searchLast {
+			// The entire search range was explored.
 			return matches, nil
 		}
 		var trimTailIfNotValid uint64
@@ -254,12 +246,8 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 				forceUnindexed = true
 			}
 			if !forceUnindexed {
-				if syncRange.IndexedBlocks.First() > searchFirst {
-					searchFirst = syncRange.IndexedBlocks.First()
-				}
-				if syncRange.IndexedBlocks.Last() < searchLast {
-					searchLast = syncRange.IndexedBlocks.Last()
-				}
+				searchFirst = max(searchFirst, syncRange.IndexedBlocks.First())
+				searchLast = min(searchLast, syncRange.IndexedBlocks.Last())
 				if f.rangeLogsTestHook != nil {
 					f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestIndexed, searchFirst, searchLast}
 				}
