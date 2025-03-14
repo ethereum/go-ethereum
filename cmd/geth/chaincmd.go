@@ -621,12 +621,6 @@ func pruneHistory(ctx *cli.Context) error {
 	defer chaindb.Close()
 	defer chain.Stop()
 
-	// Pruning only supported for mainnet and sepolia.
-	if chain.Config().ChainID.Cmp(params.MainnetChainConfig.ChainID) != 0 && chain.Config().ChainID.Cmp(params.SepoliaChainConfig.ChainID) != 0 {
-		log.Info("Chain pruning not supported for this network")
-		return nil
-	}
-
 	// Determine the prune point. This will be the first PoS block.
 	prunePoint, ok := ethconfig.HistoryPrunePoints[chain.Genesis().Hash()]
 	if !ok || prunePoint == nil {
