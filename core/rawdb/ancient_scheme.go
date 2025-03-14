@@ -47,8 +47,8 @@ var chainFreezerTableConfigs = map[string]freezerTableConfig{
 }
 
 type freezerTableConfig struct {
-	snappy   bool
-	prunable bool
+	snappy   bool // enables item compression
+	prunable bool // true for tables that can be truncated by TruncateTailBlocks
 }
 
 const (
