@@ -251,7 +251,7 @@ type GetReceiptsPacket struct {
 }
 
 // ReceiptsResponse is the network packet for block receipts distribution.
-type ReceiptsResponse [][]*types.Receipt
+type ReceiptsResponse []types.Receipts
 
 // ReceiptsPacket is the network packet for block receipts distribution with
 // request ID wrapping.
@@ -350,3 +350,6 @@ func (*GetReceiptsRequest) Kind() byte   { return GetReceiptsMsg }
 
 func (*ReceiptsResponse) Name() string { return "Receipts" }
 func (*ReceiptsResponse) Kind() byte   { return ReceiptsMsg }
+
+func (*ReceiptsRLPResponse) Name() string { return "Receipts" }
+func (*ReceiptsRLPResponse) Kind() byte   { return ReceiptsMsg }

@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -375,4 +376,20 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 		rs[i].Bloom = CreateBloom(rs[i])
 	}
 	return nil
+}
+
+func ReceiptsToRLP(receipts []Receipts) []rlp.RawValue {
+	result := make([]rlp.RawValue, 0)
+	for _, receipt := range receipts {
+		storageReceipts := make([]*ReceiptForStorage, len(receipt))
+		for i, r := range receipt {
+			storageReceipts[i] = (*ReceiptForStorage)(r)
+		}
+		bytes, err := rlp.EncodeToBytes(storageReceipts)
+		if err != nil {
+			log.Crit("Failed to encode block receipts", "err", err)
+		}
+		result = append(result, bytes)
+	}
+	return result
 }
