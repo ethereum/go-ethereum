@@ -161,7 +161,6 @@ var receiptsOnce sync.Once
 var testReceipts Receipts
 
 func getTestReceipts() Receipts {
-
 	// Compute the blooms only once
 	receiptsOnce.Do(func() {
 		// Create the corresponding receipts
