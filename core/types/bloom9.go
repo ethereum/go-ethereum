@@ -106,12 +106,12 @@ func (b *Bloom) UnmarshalText(input []byte) error {
 func CreateBloom(receipt *Receipt) Bloom {
 	var (
 		bin Bloom
-		buf = make([]byte, 6)
+		buf [6]byte
 	)
 	for _, log := range receipt.Logs {
-		bin.AddWithBuffer(log.Address.Bytes(), buf)
+		bin.AddWithBuffer(log.Address.Bytes(), &buf)
 		for _, b := range log.Topics {
-			bin.AddWithBuffer(b[:], buf)
+			bin.AddWithBuffer(b[:], &buf)
 		}
 	}
 	return bin
