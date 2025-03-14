@@ -218,7 +218,7 @@ type MemoryFreezer struct {
 }
 
 // NewMemoryFreezer initializes an in-memory freezer instance.
-func NewMemoryFreezer(readonly bool, tableName map[string]bool) *MemoryFreezer {
+func NewMemoryFreezer(readonly bool, tableName map[string]freezerTableConfig) *MemoryFreezer {
 	tables := make(map[string]*memoryTable)
 	for name := range tableName {
 		tables[name] = newMemoryTable(name)

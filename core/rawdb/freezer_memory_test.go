@@ -25,16 +25,16 @@ import (
 
 func TestMemoryFreezer(t *testing.T) {
 	ancienttest.TestAncientSuite(t, func(kinds []string) ethdb.AncientStore {
-		tables := make(map[string]bool)
+		tables := make(map[string]freezerTableConfig)
 		for _, kind := range kinds {
-			tables[kind] = true
+			tables[kind] = freezerTableConfig{snappy: true}
 		}
 		return NewMemoryFreezer(false, tables)
 	})
 	ancienttest.TestResettableAncientSuite(t, func(kinds []string) ethdb.ResettableAncientStore {
-		tables := make(map[string]bool)
+		tables := make(map[string]freezerTableConfig)
 		for _, kind := range kinds {
-			tables[kind] = true
+			tables[kind] = freezerTableConfig{snappy: true}
 		}
 		return NewMemoryFreezer(false, tables)
 	})

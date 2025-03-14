@@ -39,11 +39,16 @@ const (
 
 // chainFreezerNoSnappy configures whether compression is disabled for the ancient-tables.
 // Hashes and difficulties don't compress well.
-var chainFreezerNoSnappy = map[string]bool{
-	ChainFreezerHeaderTable:  false,
-	ChainFreezerHashTable:    true,
-	ChainFreezerBodiesTable:  false,
-	ChainFreezerReceiptTable: false,
+var chainFreezerNoSnappy = map[string]freezerTableConfig{
+	ChainFreezerHeaderTable:  freezerTableConfig{snappy: false, prunable: false},
+	ChainFreezerHashTable:    freezerTableConfig{snappy: true, prunable: false},
+	ChainFreezerBodiesTable:  freezerTableConfig{snappy: false, prunable: true},
+	ChainFreezerReceiptTable: freezerTableConfig{snappy: false, prunable: true},
+}
+
+type freezerTableConfig struct {
+	snappy   bool
+	prunable bool
 }
 
 const (
@@ -59,12 +64,12 @@ const (
 )
 
 // stateFreezerNoSnappy configures whether compression is disabled for the state freezer.
-var stateFreezerNoSnappy = map[string]bool{
-	stateHistoryMeta:         true,
-	stateHistoryAccountIndex: false,
-	stateHistoryStorageIndex: false,
-	stateHistoryAccountData:  false,
-	stateHistoryStorageData:  false,
+var stateFreezerNoSnappy = map[string]freezerTableConfig{
+	stateHistoryMeta:         freezerTableConfig{snappy: true, prunable: false},
+	stateHistoryAccountIndex: freezerTableConfig{snappy: false, prunable: false},
+	stateHistoryStorageIndex: freezerTableConfig{snappy: false, prunable: false},
+	stateHistoryAccountData:  freezerTableConfig{snappy: false, prunable: false},
+	stateHistoryStorageData:  freezerTableConfig{snappy: false, prunable: false},
 }
 
 // The list of identifiers of ancient stores.
