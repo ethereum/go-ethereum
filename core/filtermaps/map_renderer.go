@@ -737,7 +737,6 @@ func (l *logIterator) next() error {
 			l.skipToBoundary = false
 		}
 		return nil
-
 	}
 	if l.finished {
 		return nil

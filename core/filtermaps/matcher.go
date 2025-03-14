@@ -75,7 +75,6 @@ type SyncRange struct {
 // Also note that the returned list may contain false positives.
 func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, error) {
 	params := backend.GetParams()
-	var getLogStats runtimeStats
 	// find the log value index range to search
 	firstIndex, err := backend.GetBlockLvPointer(ctx, firstBlock)
 	if err != nil {
@@ -88,8 +87,6 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	if lastIndex > 0 {
 		lastIndex--
 	}
-	firstMap, lastMap := uint32(firstIndex>>params.logValuesPerMap), uint32(lastIndex>>params.logValuesPerMap)
-	firstEpoch, lastEpoch := firstMap>>params.logMapsPerEpoch, lastMap>>params.logMapsPerEpoch
 
 	// build matcher according to the given filter criteria
 	matchers := make([]matcher, len(topics)+1)
@@ -117,45 +114,45 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	// matchers signal a match for consecutive log value indices.
 	matcher := newMatchSequence(params, matchers)
 
-	// processEpoch returns the potentially matching logs from the given epoch.
-	processEpoch := func(epochIndex uint32) ([]*types.Log, error) {
-		var logs []*types.Log
-		// create a list of map indices to process
-		fm, lm := epochIndex<<params.logMapsPerEpoch, (epochIndex+1)<<params.logMapsPerEpoch-1
-		if fm < firstMap {
-			fm = firstMap
-		}
-		if lm > lastMap {
-			lm = lastMap
-		}
-		//
-		mapIndices := make([]uint32, lm+1-fm)
-		for i := range mapIndices {
-			mapIndices[i] = fm + uint32(i)
-		}
-		// find potential matches
-		matches, err := getAllMatches(ctx, matcher, mapIndices)
-		if err != nil {
-			return logs, err
-		}
-		// get the actual logs located at the matching log value indices
-		var st int
-		getLogStats.setState(&st, stGetLog)
-		defer getLogStats.setState(&st, stNone)
-		for _, m := range matches {
-			if m == nil {
-				return nil, ErrMatchAll
-			}
-			mlogs, err := getLogsFromMatches(ctx, backend, firstIndex, lastIndex, m)
-			if err != nil {
-				return logs, err
-			}
-			logs = append(logs, mlogs...)
-		}
-		getLogStats.addAmount(st, int64(len(logs)))
-		return logs, nil
+	m := &matcherEnv{
+		ctx:        ctx,
+		backend:    backend,
+		params:     params,
+		matcher:    matcher,
+		firstIndex: firstIndex,
+		lastIndex:  lastIndex,
+		firstMap:   uint32(firstIndex >> params.logValuesPerMap),
+		lastMap:    uint32(lastIndex >> params.logValuesPerMap),
 	}
 
+	start := time.Now()
+	res, err := m.process()
+
+	if doRuntimeStats {
+		log.Info("Log search finished", "elapsed", time.Since(start))
+		for i, ma := range matchers {
+			for j, m := range ma.(matchAny) {
+				log.Info("Single matcher stats", "matchSequence", i, "matchAny", j)
+				m.(*singleMatcher).stats.print()
+			}
+		}
+		log.Info("Get log stats")
+		m.getLogStats.print()
+	}
+	return res, err
+}
+
+type matcherEnv struct {
+	ctx                   context.Context
+	backend               MatcherBackend
+	params                *Params
+	matcher               matcher
+	getLogStats           runtimeStats
+	firstIndex, lastIndex uint64
+	firstMap, lastMap     uint32
+}
+
+func (m *matcherEnv) process() ([]*types.Log, error) {
 	type task struct {
 		epochIndex uint32
 		logs       []*types.Log
@@ -175,18 +172,18 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 			if task == nil {
 				break
 			}
-			task.logs, task.err = processEpoch(task.epochIndex)
+			task.logs, task.err = m.processEpoch(task.epochIndex)
 			close(task.done)
 		}
 		wg.Done()
 	}
 
-	start := time.Now()
 	for i := 0; i < 4; i++ {
 		wg.Add(1)
 		go worker()
 	}
 
+	firstEpoch, lastEpoch := m.firstMap>>m.params.logMapsPerEpoch, m.lastMap>>m.params.logMapsPerEpoch
 	var logs []*types.Log
 	// startEpoch is the next task to send whenever a worker can accept it.
 	// waitEpoch is the next task we are waiting for to finish in order to append
@@ -220,30 +217,58 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 			}
 		}
 	}
-	if doRuntimeStats {
-		log.Info("Log search finished", "elapsed", time.Since(start))
-		for i, ma := range matchers {
-			for j, m := range ma.(matchAny) {
-				log.Info("Single matcher stats", "matchSequence", i, "matchAny", j)
-				m.(*singleMatcher).stats.print()
-			}
-		}
-		log.Info("Get log stats")
-		getLogStats.print()
+	return logs, nil
+}
+
+// processEpoch returns the potentially matching logs from the given epoch.
+func (m *matcherEnv) processEpoch(epochIndex uint32) ([]*types.Log, error) {
+	var logs []*types.Log
+	// create a list of map indices to process
+	fm, lm := epochIndex<<m.params.logMapsPerEpoch, (epochIndex+1)<<m.params.logMapsPerEpoch-1
+	if fm < m.firstMap {
+		fm = m.firstMap
 	}
+	if lm > m.lastMap {
+		lm = m.lastMap
+	}
+	//
+	mapIndices := make([]uint32, lm+1-fm)
+	for i := range mapIndices {
+		mapIndices[i] = fm + uint32(i)
+	}
+	// find potential matches
+	matches, err := m.getAllMatches(mapIndices)
+	if err != nil {
+		return logs, err
+	}
+	// get the actual logs located at the matching log value indices
+	var st int
+	m.getLogStats.setState(&st, stGetLog)
+	defer m.getLogStats.setState(&st, stNone)
+	for _, match := range matches {
+		if match == nil {
+			return nil, ErrMatchAll
+		}
+		mlogs, err := m.getLogsFromMatches(match)
+		if err != nil {
+			return logs, err
+		}
+		logs = append(logs, mlogs...)
+	}
+	m.getLogStats.addAmount(st, int64(len(logs)))
 	return logs, nil
 }
 
 // getLogsFromMatches returns the list of potentially matching logs located at
 // the given list of matching log indices. Matches outside the firstIndex to
 // lastIndex range are not returned.
-func getLogsFromMatches(ctx context.Context, backend MatcherBackend, firstIndex, lastIndex uint64, matches potentialMatches) ([]*types.Log, error) {
+func (m *matcherEnv) getLogsFromMatches(matches potentialMatches) ([]*types.Log, error) {
 	var logs []*types.Log
 	for _, match := range matches {
-		if match < firstIndex || match > lastIndex {
+		if match < m.firstIndex || match > m.lastIndex {
 			continue
 		}
-		log, err := backend.GetLogByLvIndex(ctx, match)
+		log, err := m.backend.GetLogByLvIndex(m.ctx, match)
 		if err != nil {
 			return logs, fmt.Errorf("failed to retrieve log at index %d: %v", match, err)
 		}
@@ -252,6 +277,28 @@ func getLogsFromMatches(ctx context.Context, backend MatcherBackend, firstIndex,
 		}
 	}
 	return logs, nil
+}
+
+// getAllMatches creates an instance for a given matcher and set of map indices,
+// iterates through mapping layers and collects all results, then returns all
+// results in the same order as the map indices were specified.
+func (m *matcherEnv) getAllMatches(mapIndices []uint32) ([]potentialMatches, error) {
+	instance := m.matcher.newInstance(mapIndices)
+	resultsMap := make(map[uint32]potentialMatches)
+	for layerIndex := uint32(0); len(resultsMap) < len(mapIndices); layerIndex++ {
+		results, err := instance.getMatchesForLayer(m.ctx, layerIndex)
+		if err != nil {
+			return nil, err
+		}
+		for _, result := range results {
+			resultsMap[result.mapIndex] = result.matches
+		}
+	}
+	matches := make([]potentialMatches, len(mapIndices))
+	for i, mapIndex := range mapIndices {
+		matches[i] = resultsMap[mapIndex]
+	}
+	return matches, nil
 }
 
 // matcher defines a general abstraction for any matcher configuration that
@@ -279,28 +326,6 @@ type matcherInstance interface {
 type matcherResult struct {
 	mapIndex uint32
 	matches  potentialMatches
-}
-
-// getAllMatches creates an instance for a given matcher and set of map indices,
-// iterates through mapping layers and collects all results, then returns all
-// results in the same order as the map indices were specified.
-func getAllMatches(ctx context.Context, matcher matcher, mapIndices []uint32) ([]potentialMatches, error) {
-	instance := matcher.newInstance(mapIndices)
-	resultsMap := make(map[uint32]potentialMatches)
-	for layerIndex := uint32(0); len(resultsMap) < len(mapIndices); layerIndex++ {
-		results, err := instance.getMatchesForLayer(ctx, layerIndex)
-		if err != nil {
-			return nil, err
-		}
-		for _, result := range results {
-			resultsMap[result.mapIndex] = result.matches
-		}
-	}
-	matches := make([]potentialMatches, len(mapIndices))
-	for i, mapIndex := range mapIndices {
-		matches[i] = resultsMap[mapIndex]
-	}
-	return matches, nil
 }
 
 // singleMatcher implements matcher by returning matches for a single log value hash.
