@@ -235,7 +235,7 @@ func (ts *testSetup) setHistory(history uint64, noHistory bool) {
 		History:  history,
 		Disabled: noHistory,
 	}
-	ts.fm = NewFilterMaps(ts.db, view, ts.params, config)
+	ts.fm = NewFilterMaps(ts.db, view, 0, 0, ts.params, config)
 	ts.fm.testDisableSnapshots = ts.testDisableSnapshots
 	ts.fm.Start()
 }
@@ -420,7 +420,7 @@ func (tc *testChain) setTargetHead() {
 	if tc.ts.fm != nil {
 		if !tc.ts.fm.disabled {
 			//tc.ts.fm.targetViewCh <- NewChainView(tc, head.Number.Uint64(), head.Hash())
-			tc.ts.fm.SetTargetView(NewChainView(tc, head.Number.Uint64(), head.Hash()))
+			tc.ts.fm.SetTarget(NewChainView(tc, head.Number.Uint64(), head.Hash()), 0, 0)
 		}
 	}
 }

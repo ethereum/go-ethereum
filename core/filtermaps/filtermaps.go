@@ -95,11 +95,11 @@ type FilterMaps struct {
 
 	targetView            *ChainView
 	matcherSyncRequest    *FilterMapsMatcherBackend
+	historyCutoff         uint64
 	finalBlock, lastFinal uint64
 	lastFinalEpoch        uint32
 	stop                  bool
-	targetViewCh          chan *ChainView
-	finalBlockCh          chan uint64
+	targetCh              chan targetUpdate
 	blockProcessingCh     chan bool
 	blockProcessing       bool
 	matcherSyncCh         chan *FilterMapsMatcherBackend
@@ -183,7 +183,7 @@ type Config struct {
 }
 
 // NewFilterMaps creates a new FilterMaps and starts the indexer.
-func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, config Config) *FilterMaps {
+func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, finalBlock uint64, params Params, config Config) *FilterMaps {
 	rs, initialized, err := rawdb.ReadFilterMapsRange(db)
 	if err != nil {
 		log.Error("Error reading log index range", "error", err)
@@ -193,8 +193,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, c
 		db:                db,
 		closeCh:           make(chan struct{}),
 		waitIdleCh:        make(chan chan bool),
-		targetViewCh:      make(chan *ChainView, 1),
-		finalBlockCh:      make(chan uint64, 1),
+		targetCh:          make(chan targetUpdate, 1),
 		blockProcessingCh: make(chan bool, 1),
 		history:           config.History,
 		disabled:          config.Disabled,
