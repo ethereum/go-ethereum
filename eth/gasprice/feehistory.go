@@ -124,7 +124,11 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 			txIndex++
 			sumGasUsed += sorter[txIndex].gasUsed
 		}
-		bf.results.reward[i] = sorter[txIndex].reward
+		if sorter[txIndex].reward.Sign() >= 0 {
+			bf.results.reward[i] = sorter[txIndex].reward
+		} else {
+			bf.results.reward[i] = new(big.Int)
+		}
 	}
 }
 
