@@ -76,7 +76,7 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 // run executes the scheduled indexing/unindexing task in a separate thread.
 // If the stop channel is closed, the task should be terminated as soon as
 // possible, the done channel will be closed once the task is finished.
-func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, done chan struct{}) {
+func (indexer *txIndexer) run(tail *uint64, head uint64, cutoff uint64, stop chan struct{}, done chan struct{}) {
 	defer func() { close(done) }()
 
 	// Short circuit if chain is empty and nothing to index.
@@ -91,11 +91,21 @@ func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, don
 		if indexer.limit != 0 && head >= indexer.limit {
 			from = head - indexer.limit + 1
 		}
+		// Respect cutoff point.
+		from = max(from, cutoff)
 		rawdb.IndexTransactions(indexer.db, from, head+1, stop, true)
 		return
 	}
 	// The tail flag is existent (which means indexes in [tail, head] should be
 	// present), while the whole chain are requested for indexing.
+	// In case of a pruned node, it is assumed the transaction index was pruned
+	// along with the block data.
+	if *tail < cutoff {
+		log.Warn("Transaction index hasn't been pruned. Disabling indexer.", "tail", *tail, "cutoff", cutoff)
+		// TODO(s1na): repair the index by iterating whole index and removing < cutoff.
+		indexer.close()
+		return
+	}
 	if indexer.limit == 0 || head < indexer.limit {
 		if *tail > 0 {
 			// It can happen when chain is rewound to a historical point which
@@ -105,18 +115,20 @@ func (indexer *txIndexer) run(tail *uint64, head uint64, stop chan struct{}, don
 			if end > head+1 {
 				end = head + 1
 			}
-			rawdb.IndexTransactions(indexer.db, 0, end, stop, true)
+			rawdb.IndexTransactions(indexer.db, cutoff, end, stop, true)
 		}
 		return
 	}
 	// The tail flag is existent, adjust the index range according to configured
 	// limit and the latest chain head.
-	if head-indexer.limit+1 < *tail {
+	from := head - indexer.limit + 1
+	from = max(from, cutoff)
+	if from < *tail {
 		// Reindex a part of missing indices and rewind index tail to HEAD-limit
-		rawdb.IndexTransactions(indexer.db, head-indexer.limit+1, *tail, stop, true)
+		rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
 	} else {
 		// Unindex a part of stale indices and forward index tail to HEAD-limit
-		rawdb.UnindexTransactions(indexer.db, *tail, head-indexer.limit+1, stop, false)
+		rawdb.UnindexTransactions(indexer.db, *tail, from, stop, false)
 	}
 }
 
@@ -127,23 +139,35 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
-		stop     chan struct{}                       // Non-nil if background routine is active.
-		done     chan struct{}                       // Non-nil if background routine is active.
-		lastHead uint64                              // The latest announced chain head (whose tx indexes are assumed created)
-		lastTail = rawdb.ReadTxIndexTail(indexer.db) // The oldest indexed block, nil means nothing indexed
+		stop          chan struct{}                       // Non-nil if background routine is active.
+		done          chan struct{}                       // Non-nil if background routine is active.
+		lastHead      uint64                              // The latest announced chain head (whose tx indexes are assumed created)
+		lastTail      = rawdb.ReadTxIndexTail(indexer.db) // The oldest indexed block, nil means nothing indexed
+		historyCutoff = chain.HistoryPruningCutoff()      // Blocks prior to this have been pruned. Defaults to 0.
 
 		headCh = make(chan ChainHeadEvent)
 		sub    = chain.SubscribeChainHeadEvent(headCh)
 	)
 	defer sub.Unsubscribe()
 
+	head := rawdb.ReadHeadBlock(indexer.db)
+	cutoff := chain.HistoryPruningCutoff()
+	if head.NumberU64() <= cutoff {
+		// It is possible to reset the chain to a pruned block.
+		log.Error("Transaction indexing cutoff point is higher than the chain head", "cutoff", cutoff, "head", head)
+		return
+	}
+	if indexer.limit == 0 && cutoff > 0 {
+		// The chain is pruned and the entire chain is requested to be indexed.
+		log.Warn(fmt.Sprintf("History has been pruned to block %d, transaction indexing limited to available history", head.NumberU64()))
+	}
 	// Launch the initial processing if chain is not empty (head != genesis).
 	// This step is useful in these scenarios that chain has no progress.
-	if head := rawdb.ReadHeadBlock(indexer.db); head != nil && head.Number().Uint64() != 0 {
+	if head != nil && head.Number().Uint64() != 0 {
 		stop = make(chan struct{})
 		done = make(chan struct{})
 		lastHead = head.Number().Uint64()
-		go indexer.run(rawdb.ReadTxIndexTail(indexer.db), head.NumberU64(), stop, done)
+		go indexer.run(rawdb.ReadTxIndexTail(indexer.db), head.NumberU64(), historyCutoff, stop, done)
 	}
 	for {
 		select {
@@ -151,7 +175,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			if done == nil {
 				stop = make(chan struct{})
 				done = make(chan struct{})
-				go indexer.run(rawdb.ReadTxIndexTail(indexer.db), head.Header.Number.Uint64(), stop, done)
+				go indexer.run(rawdb.ReadTxIndexTail(indexer.db), head.Header.Number.Uint64(), historyCutoff, stop, done)
 			}
 			lastHead = head.Header.Number.Uint64()
 		case <-done:
