@@ -167,7 +167,7 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 	if err != nil {
 		return nil, err
 	}
-	if !syncRange.Indexed {
+	if syncRange.IndexedBlocks.IsEmpty() {
 		// fallback to completely unindexed search
 		headNum := syncRange.HeadNumber
 		if firstBlock > headNum {
@@ -245,20 +245,20 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 			// if we have matches, they start at searchFirst
 			if haveMatches {
 				searchFirst = matchLast + 1
-				if !syncRange.Indexed || syncRange.FirstIndexed > searchFirst {
+				if syncRange.IndexedBlocks.IsEmpty() || syncRange.IndexedBlocks.First() > searchFirst {
 					forceUnindexed = true
 				}
 			}
 			var newMatches []*types.Log
-			if !syncRange.Indexed || syncRange.FirstIndexed > searchLast || syncRange.LastIndexed < searchFirst {
+			if syncRange.IndexedBlocks.IsEmpty() || syncRange.IndexedBlocks.First() > searchLast || syncRange.IndexedBlocks.Last() < searchFirst {
 				forceUnindexed = true
 			}
 			if !forceUnindexed {
-				if syncRange.FirstIndexed > searchFirst {
-					searchFirst = syncRange.FirstIndexed
+				if syncRange.IndexedBlocks.First() > searchFirst {
+					searchFirst = syncRange.IndexedBlocks.First()
 				}
-				if syncRange.LastIndexed < searchLast {
-					searchLast = syncRange.LastIndexed
+				if syncRange.IndexedBlocks.Last() < searchLast {
+					searchLast = syncRange.IndexedBlocks.Last()
 				}
 				if f.rangeLogsTestHook != nil {
 					f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestIndexed, searchFirst, searchLast}
@@ -300,13 +300,13 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 			return matches, err
 		}
 		headBlock = syncRange.HeadNumber // Head is guaranteed != nil
-		if !syncRange.Valid {
+		if syncRange.ValidBlocks.IsEmpty() {
 			matches, haveMatches, matchFirst, matchLast = nil, false, 0, 0
 		} else {
-			if syncRange.FirstValid > trimTailIfNotValid {
-				trimMatches(syncRange.FirstValid, syncRange.LastValid)
+			if syncRange.ValidBlocks.First() > trimTailIfNotValid {
+				trimMatches(syncRange.ValidBlocks.First(), syncRange.ValidBlocks.Last())
 			} else {
-				trimMatches(0, syncRange.LastValid)
+				trimMatches(0, syncRange.ValidBlocks.Last())
 			}
 		}
 		if f.rangeLogsTestHook != nil {
