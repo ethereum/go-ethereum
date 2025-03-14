@@ -399,10 +399,11 @@ func handleReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 		}
 		return hashes
 	}
+	encoded := types.ReceiptsToRLP(res.ReceiptsResponse)
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
 		code: ReceiptsMsg,
-		Res:  &res.ReceiptsResponse,
+		Res:  &encoded,
 	}, metadata)
 }
 
@@ -412,10 +413,10 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+	// only use one buffer
 	buffers := new(receiptListBuffers)
 	for _, rl := range res.List {
 		rl.buf = buffers
-		// WIP
 	}
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)

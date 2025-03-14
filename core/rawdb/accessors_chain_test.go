@@ -443,7 +443,7 @@ func TestAncientStorage(t *testing.T) {
 	}
 
 	// Write and verify the header in the database
-	WriteAncientBlocks(db, []*types.Block{block}, []types.Receipts{nil})
+	WriteAncientBlocks(db, []*types.Block{block}, types.ReceiptsToRLP([]types.Receipts{nil}))
 
 	if blob := ReadHeaderRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no header returned")
@@ -613,7 +613,7 @@ func BenchmarkWriteAncientBlocks(b *testing.B) {
 
 		blocks := allBlocks[i : i+length]
 		receipts := batchReceipts[:length]
-		writeSize, err := WriteAncientBlocks(db, blocks, receipts)
+		writeSize, err := WriteAncientBlocks(db, blocks, types.ReceiptsToRLP(receipts))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -913,7 +913,7 @@ func TestHeadersRLPStorage(t *testing.T) {
 	}
 	receipts := make([]types.Receipts, 100)
 	// Write first half to ancients
-	WriteAncientBlocks(db, chain[:50], receipts[:50])
+	WriteAncientBlocks(db, chain[:50], types.ReceiptsToRLP(receipts[:50]))
 	// Write second half to db
 	for i := 50; i < 100; i++ {
 		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
