@@ -234,7 +234,7 @@ func (f *FilterMaps) tryIndexTail() bool {
 	for {
 		firstEpoch := f.indexedRange.firstRenderedMap >> f.logMapsPerEpoch
 		if firstEpoch == 0 || !f.needTailEpoch(firstEpoch-1) {
-			return true
+			break
 		}
 		f.processEvents()
 		if f.stop || !f.targetHeadIndexed() {
@@ -255,7 +255,7 @@ func (f *FilterMaps) tryIndexTail() bool {
 			}
 		}
 		if tailRenderer == nil {
-			return true
+			break
 		}
 		if !f.startedTailIndex {
 			f.lastLogTailIndex = time.Now()
