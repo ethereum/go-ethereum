@@ -529,7 +529,7 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 	// Collect the hashes to request, and the response to expect
 	var (
 		hashes   []common.Hash
-		receipts [][]*types.Receipt
+		receipts []types.Receipts
 	)
 	for i := uint64(0); i <= backend.chain.CurrentBlock().Number.Uint64(); i++ {
 		block := backend.chain.GetBlockByNumber(i)
