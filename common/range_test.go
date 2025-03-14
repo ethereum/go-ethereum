@@ -22,20 +22,14 @@ import (
 )
 
 func TestRangeIter(t *testing.T) {
-	var values []uint32
 	r := NewRange[uint32](1, 7)
-	for i := range r.Iter() {
-		values = append(values, i)
-	}
+	values := slices.Collect(r.Iter())
 	if !slices.Equal(values, []uint32{1, 2, 3, 4, 5, 6, 7}) {
 		t.Fatalf("wrong iter values: %v", values)
 	}
 
-	values = nil
 	empty := NewRange[uint32](1, 0)
-	for i := range empty.Iter() {
-		values = append(values, i)
-	}
+	values = slices.Collect(empty.Iter())
 	if !slices.Equal(values, []uint32{}) {
 		t.Fatalf("wrong iter values: %v", values)
 	}
