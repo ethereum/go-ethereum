@@ -144,16 +144,16 @@ func TestIndexerRandomRange(t *testing.T) {
 				expTailBlock++
 			}
 		}
-		if ts.fm.indexedRange.afterLastIndexedBlock != uint64(head+1) {
-			ts.t.Fatalf("Invalid index head (expected #%d, got #%d)", head, ts.fm.indexedRange.afterLastIndexedBlock-1)
+		if ts.fm.indexedRange.blocks.Last() != uint64(head) {
+			ts.t.Fatalf("Invalid index head (expected #%d, got #%d)", head, ts.fm.indexedRange.blocks.Last())
 		}
 		expHeadDelimiter := expdpos(uint64(head))
-		if ts.fm.indexedRange.headBlockDelimiter != expHeadDelimiter {
-			ts.t.Fatalf("Invalid index head delimiter pointer (expected %d, got %d)", expHeadDelimiter, ts.fm.indexedRange.headBlockDelimiter)
+		if ts.fm.indexedRange.headDelimiter != expHeadDelimiter {
+			ts.t.Fatalf("Invalid index head delimiter pointer (expected %d, got %d)", expHeadDelimiter, ts.fm.indexedRange.headDelimiter)
 		}
 
-		if ts.fm.indexedRange.firstIndexedBlock != expTailBlock {
-			ts.t.Fatalf("Invalid index tail block (expected #%d, got #%d)", expTailBlock, ts.fm.indexedRange.firstIndexedBlock)
+		if ts.fm.indexedRange.blocks.First() != expTailBlock {
+			ts.t.Fatalf("Invalid index tail block (expected #%d, got #%d)", expTailBlock, ts.fm.indexedRange.blocks.First())
 		}
 	}
 }

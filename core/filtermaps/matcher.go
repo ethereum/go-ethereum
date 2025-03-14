@@ -61,11 +61,9 @@ type SyncRange struct {
 	// block range where the index has not changed since the last matcher sync
 	// and therefore the set of matches found in this region is guaranteed to
 	// be valid and complete.
-	Valid                 bool
-	FirstValid, LastValid uint64
+	ValidBlocks common.Range[uint64]
 	// block range indexed according to the given chain head.
-	Indexed                   bool
-	FirstIndexed, LastIndexed uint64
+	IndexedBlocks common.Range[uint64]
 }
 
 // GetPotentialMatches returns a list of logs that are potential matches for the
@@ -143,11 +141,11 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 }
 
 type matcherEnv struct {
+	getLogStats           runtimeStats // 64 bit aligned
 	ctx                   context.Context
 	backend               MatcherBackend
 	params                *Params
 	matcher               matcher
-	getLogStats           runtimeStats
 	firstIndex, lastIndex uint64
 	firstMap, lastMap     uint32
 }
