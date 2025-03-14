@@ -401,7 +401,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 			mapIndices []uint32
 			rows       []FilterRow
 		)
-		for mapIndex := r.finished.First(); mapIndex < r.finished.AfterLast(); mapIndex++ {
+		for mapIndex := range r.finished.Iter() {
 			row := r.finishedMaps[mapIndex].filterMap[rowIndex]
 			if fm, _ := r.f.filterMapCache.Get(mapIndex); fm != nil && row.Equal(fm[rowIndex]) {
 				continue
@@ -426,7 +426,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	// update filter map cache
 	if newRange.maps.AfterLast() == r.finished.AfterLast() {
 		// head updated; cache new head maps and remove future entries
-		for mapIndex := r.finished.First(); mapIndex < r.finished.AfterLast(); mapIndex++ {
+		for mapIndex := range r.finished.Iter() {
 			r.f.filterMapCache.Add(mapIndex, r.finishedMaps[mapIndex].filterMap)
 		}
 		for mapIndex := r.finished.AfterLast(); mapIndex < oldRange.maps.AfterLast(); mapIndex++ {
@@ -435,13 +435,13 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	} else {
 		// head not updated; do not cache maps during tail rendering because we
 		// need head maps to be available in the cache
-		for mapIndex := r.finished.First(); mapIndex < r.finished.AfterLast(); mapIndex++ {
+		for mapIndex := range r.finished.Iter() {
 			r.f.filterMapCache.Remove(mapIndex)
 		}
 	}
 	// add or update block pointers
 	blockNumber := r.finishedMaps[r.finished.First()].firstBlock()
-	for mapIndex := r.finished.First(); mapIndex < r.finished.AfterLast(); mapIndex++ {
+	for mapIndex := range r.finished.Iter() {
 		renderedMap := r.finishedMaps[mapIndex]
 		r.f.storeLastBlockOfMap(batch, mapIndex, renderedMap.lastBlock, renderedMap.lastBlockId)
 		checkWriteCnt()
