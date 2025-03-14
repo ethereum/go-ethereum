@@ -26,6 +26,9 @@ import (
 )
 
 func TestTransformReceipts(t *testing.T) {
+	logs := []*types.Log{{Address: common.Address{1}, Topics: []common.Hash{{1}}}}
+	encLogs, _ := rlp.EncodeToBytes(logs)
+
 	tests := []struct {
 		input  []types.ReceiptForStorage
 		txs    []*types.Transaction
@@ -34,22 +37,22 @@ func TestTransformReceipts(t *testing.T) {
 		{
 			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
 			txs:    []*types.Transaction{types.NewTx(&types.LegacyTx{})},
-			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: nil}},
+			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: rlp.EmptyList}},
 		},
 		{
 			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
 			txs:    []*types.Transaction{types.NewTx(&types.DynamicFeeTx{})},
-			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: nil, TxType: 2}},
+			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: rlp.EmptyList, TxType: 2}},
 		},
 		{
 			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
 			txs:    []*types.Transaction{types.NewTx(&types.AccessListTx{})},
-			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: nil, TxType: 1}},
+			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: rlp.EmptyList, TxType: 1}},
 		},
 		{
-			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: []*types.Log{{Address: common.Address{1}, Topics: []common.Hash{{1}}}}}},
+			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: logs}},
 			txs:    []*types.Transaction{types.NewTx(&types.AccessListTx{})},
-			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: []*types.Log{{Address: common.Address{1}, Topics: []common.Hash{{1}}}}, Type: 1}},
+			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: encLogs, TxType: 1}},
 		},
 	}
 
@@ -58,7 +61,7 @@ func TestTransformReceipts(t *testing.T) {
 		have := blockReceiptsToNetwork(in, test.txs)
 		out, _ := rlp.EncodeToBytes(test.output)
 		if !bytes.Equal(have, out) {
-			t.Fatalf("transforming receipt mismatch, test %v: want %v have %v", i, out, have)
+			t.Fatalf("transforming receipt mismatch, test %v: want %v have %v, in %v", i, out, have, in)
 		}
 	}
 }

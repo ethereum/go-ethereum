@@ -155,35 +155,39 @@ func (rl *ReceiptList69) EncodeForDatabase() []byte {
 	if rl.buf == nil {
 		rl.buf = new(receiptListBuffers)
 	}
-
-	var (
-		r     = &rl.items[i]
-		bloom = r.bloom(&rl.buf.bloom)
-		w     = &rl.buf.enc
-	)
-	// encode receipt list: [postStateOrStatus, gasUsed, bloom, logs]
-	w.Reset(b)
-	l := w.List()
-	w.WriteBytes(r.PostStateOrStatus)
-	w.WriteUint64(r.GasUsed)
-	w.WriteBytes(bloom[:])
-	w.Write(r.Logs)
-	w.ListEnd(l)
-	if err := w.Flush(); err != nil {
-		return
+	// TODO this is probably wrong
+	var result []byte
+	var b = new(bytes.Buffer)
+	for _, r := range rl.items {
+		var (
+			bloom = r.bloom(&rl.buf.bloom)
+			w     = &rl.buf.enc
+		)
+		// encode receipt list: [postStateOrStatus, gasUsed, bloom, logs]
+		w.Reset(b)
+		l := w.List()
+		w.WriteBytes(r.PostStateOrStatus)
+		w.WriteUint64(r.GasUsed)
+		w.WriteBytes(bloom[:])
+		w.Write(r.Logs)
+		w.ListEnd(l)
+		if err := w.Flush(); err != nil {
+			return []byte{}
+		}
+		// if this is a legacy transaction receipt, we are done.
+		if r.TxType == 0 {
+			continue
+		}
+		// Otherwise it's a typed transaction receipt, which has the type prefix and
+		// the inner list as a byte-array: tx-type || rlp(list).
+		// Since b contains the correct inner list, we can reuse its content.
+		w.Reset(b)
+		w.WriteUint64(uint64(r.TxType))
+		w.WriteBytes(b.Bytes())
+		w.Flush()
+		result = append(result, b.Bytes()...)
 	}
-	// if this is a legacy transaction receipt, we are done.
-	if r.TxType == 0 {
-		return
-	}
-	// Otherwise it's a typed transaction receipt, which has the type prefix and
-	// the inner list as a byte-array: tx-type || rlp(list).
-	// Since b contains the correct inner list, we can reuse its content.
-	w.Reset(b)
-	w.WriteUint64(uint64(r.TxType))
-	w.WriteBytes(b.Bytes())
-	w.Flush()
-
+	return result
 }
 
 func (rl *ReceiptList69) toReceipts() []*types.Receipt {
@@ -202,7 +206,7 @@ func (rl *ReceiptList69) toReceipts() []*types.Receipt {
 // blockReceiptsToNetwork takes a slice of rlp-encoded receipts, and transactions,
 // and applies the type-encoding on the receipts (for non-legacy receipts).
 // e.g. for non-legacy receipts: receipt-data -> {tx-type || receipt-data}
-func blockReceiptsToNetwork(blockReceipts []byte, txs []*types.Transaction) []byte {
+func blockReceiptsToNetwork(blockReceipts rlp.RawValue, txs []*types.Transaction) []byte {
 	var (
 		out   bytes.Buffer
 		enc   = rlp.NewEncoderBuffer(&out)
@@ -212,7 +216,7 @@ func blockReceiptsToNetwork(blockReceipts []byte, txs []*types.Transaction) []by
 	for i := 0; it.Next(); i++ {
 		content, _, _ := rlp.SplitList(it.Value())
 		receiptList := enc.List()
-		enc.Write([]byte{txs[i].Type()})
+		enc.WriteUint64(uint64(txs[i].Type()))
 		enc.Write(content)
 		enc.ListEnd(receiptList)
 	}
