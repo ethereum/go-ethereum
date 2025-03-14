@@ -31,6 +31,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func BenchmarkUnpack(b *testing.B) {
+	testCases := []struct {
+		def    string
+		packed string
+	}{
+		{
+			def:    `[{"type": "uint32"}]`,
+			packed: "0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			def: `[{"type": "uint32[]"}]`,
+			packed: "0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000002" +
+				"0000000000000000000000000000000000000000000000000000000000000001" +
+				"0000000000000000000000000000000000000000000000000000000000000002",
+		},
+	}
+	for i, test := range testCases {
+		b.Run(strconv.Itoa(i), func(b *testing.B) {
+			def := fmt.Sprintf(`[{ "name" : "method", "type": "function", "outputs": %s}]`, test.def)
+			abi, err := JSON(strings.NewReader(def))
+			if err != nil {
+				b.Fatalf("invalid ABI definition %s: %v", def, err)
+			}
+			encb, err := hex.DecodeString(test.packed)
+			if err != nil {
+				b.Fatalf("invalid hex %s: %v", test.packed, err)
+			}
+
+			b.ResetTimer()
+
+			var result any
+			for range b.N {
+				result, _ = abi.Unpack("method", encb)
+			}
+			_ = result
+		})
+	}
+}
+
 // TestUnpack tests the general pack/unpack tests in packing_test.go
 func TestUnpack(t *testing.T) {
 	t.Parallel()
