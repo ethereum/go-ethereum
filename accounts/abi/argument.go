@@ -182,17 +182,12 @@ func (arguments Arguments) copyTuple(v interface{}, marshalledValues []interface
 // without supplying a struct to unpack into. Instead, this method returns a list containing the
 // values. An atomic argument will be a list with one element.
 func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
-	size := 0
-	for _, arg := range arguments {
-		if arg.Indexed {
-			continue
-		}
-		size++
-	}
+	var (
+		retval      = make([]interface{}, 0)
+		virtualArgs = 0
+		index       = 0
+	)
 
-	retval := make([]interface{}, 0, size)
-	virtualArgs := 0
-	index := 0
 	for _, arg := range arguments {
 		if arg.Indexed {
 			continue
