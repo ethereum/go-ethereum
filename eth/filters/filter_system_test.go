@@ -158,9 +158,15 @@ func (b *testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	return b.fm.NewMatcherBackend()
 }
 
-func (b *testBackend) startFilterMaps(history uint64, noHistory bool, params filtermaps.Params) {
+func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filtermaps.Params) {
 	head := b.CurrentBlock()
-	b.fm = filtermaps.NewFilterMaps(b.db, filtermaps.NewChainView(b, head.Number.Uint64(), head.Hash()), params, history, 1, noHistory, "")
+	chainView := filtermaps.NewChainView(b, head.Number.Uint64(), head.Hash())
+	config := filtermaps.Config{
+		History:        history,
+		Disabled:       disabled,
+		ExportFileName: "",
+	}
+	b.fm = filtermaps.NewFilterMaps(b.db, chainView, 0, 0, params, config)
 	b.fm.Start()
 	b.fm.WaitIdle()
 }

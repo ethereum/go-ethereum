@@ -248,7 +248,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 	eth.bloomIndexer.Start(eth.blockchain)
-	eth.filterMaps = filtermaps.NewFilterMaps(chainDb, eth.newChainView(eth.blockchain.CurrentBlock()), filtermaps.DefaultParams, config.LogHistory, 1000, config.LogNoHistory, config.LogExportCheckpoints)
+	fmConfig := filtermaps.Config{History: config.LogHistory, Disabled: config.LogNoHistory, ExportFileName: config.LogExportCheckpoints}
+	chainView := eth.newChainView(eth.blockchain.CurrentBlock())
+	eth.filterMaps = filtermaps.NewFilterMaps(chainDb, chainView, 0, 0, filtermaps.DefaultParams, fmConfig)
 	eth.closeFilterMaps = make(chan chan struct{})
 
 	if config.BlobPool.Datadir != "" {
@@ -436,25 +438,23 @@ func (s *Ethereum) updateFilterMapsHeads() {
 		}
 	}()
 
-	head := s.blockchain.CurrentBlock()
-	s.filterMaps.SetTargetView(s.newChainView(head))
-	var lastFinalBlock uint64
-
+	var head *types.Header
 	setHead := func(newHead *types.Header) {
 		if newHead == nil {
 			return
 		}
 		if head == nil || newHead.Hash() != head.Hash() {
 			head = newHead
-			s.filterMaps.SetTargetView(s.newChainView(head))
-		}
-		if fb := s.blockchain.CurrentFinalBlock(); fb != nil {
-			if finalBlock := fb.Number.Uint64(); finalBlock != lastFinalBlock {
-				s.filterMaps.SetFinalBlock(finalBlock)
-				lastFinalBlock = finalBlock
+			chainView := s.newChainView(head)
+			historyCutoff := s.blockchain.HistoryPruningCutoff()
+			var finalBlock uint64
+			if fb := s.blockchain.CurrentFinalBlock(); fb != nil {
+				finalBlock = fb.Number.Uint64()
 			}
+			s.filterMaps.SetTarget(chainView, historyCutoff, finalBlock)
 		}
 	}
+	setHead(s.blockchain.CurrentBlock())
 
 	for {
 		select {
