@@ -48,16 +48,35 @@ func TestIndexerRandomRange(t *testing.T) {
 	defer ts.close()
 
 	forks := make([][]common.Hash, 10)
-	ts.chain.addBlocks(1000, 5, 2, 4, false) // 51 log values per block
+	ts.chain.addBlocks(1000, 5, 2, 4, false)
 	for i := range forks {
 		if i != 0 {
 			forkBlock := rand.Intn(1000)
 			ts.chain.setHead(forkBlock)
-			ts.chain.addBlocks(1000-forkBlock, 5, 2, 4, false) // 51 log values per block
+			ts.chain.addBlocks(1000-forkBlock, 5, 2, 4, false)
 		}
 		forks[i] = ts.chain.getCanonicalChain()
 	}
-	lvPerBlock := uint64(51)
+	expspos := func(block uint64) uint64 { // expected position of block start
+		if block == 0 {
+			return 0
+		}
+		logCount := (block - 1) * 5 * 2
+		mapIndex := logCount / 3
+		spos := mapIndex*16 + (logCount%3)*5
+		if mapIndex == 0 || logCount%3 != 0 {
+			spos++
+		}
+		return spos
+	}
+	expdpos := func(block uint64) uint64 { // expected position of delimiter
+		if block == 0 {
+			return 0
+		}
+		logCount := block * 5 * 2
+		mapIndex := (logCount - 1) / 3
+		return mapIndex*16 + (logCount-mapIndex*3)*5
+	}
 	ts.setHistory(0, false)
 	var (
 		history       int
@@ -115,21 +134,24 @@ func TestIndexerRandomRange(t *testing.T) {
 		}
 		var tailEpoch uint32
 		if tailBlock > 0 {
-			tailLvPtr := (tailBlock - 1) * lvPerBlock // no logs in genesis block, only delimiter
+			tailLvPtr := expspos(tailBlock) - 1
 			tailEpoch = uint32(tailLvPtr >> (testParams.logValuesPerMap + testParams.logMapsPerEpoch))
 		}
+		tailLvPtr := uint64(tailEpoch) << (testParams.logValuesPerMap + testParams.logMapsPerEpoch) // first available lv ptr
 		var expTailBlock uint64
 		if tailEpoch > 0 {
-			tailLvPtr := uint64(tailEpoch) << (testParams.logValuesPerMap + testParams.logMapsPerEpoch) // first available lv ptr
-			// (expTailBlock-1)*lvPerBlock >= tailLvPtr
-			expTailBlock = (tailLvPtr + lvPerBlock*2 - 1) / lvPerBlock
+			for expspos(expTailBlock) <= tailLvPtr {
+				expTailBlock++
+			}
 		}
 		if ts.fm.indexedRange.afterLastIndexedBlock != uint64(head+1) {
 			ts.t.Fatalf("Invalid index head (expected #%d, got #%d)", head, ts.fm.indexedRange.afterLastIndexedBlock-1)
 		}
-		if ts.fm.indexedRange.headBlockDelimiter != uint64(head)*lvPerBlock {
-			ts.t.Fatalf("Invalid index head delimiter pointer (expected %d, got %d)", uint64(head)*lvPerBlock, ts.fm.indexedRange.headBlockDelimiter)
+		expHeadDelimiter := expdpos(uint64(head))
+		if ts.fm.indexedRange.headBlockDelimiter != expHeadDelimiter {
+			ts.t.Fatalf("Invalid index head delimiter pointer (expected %d, got %d)", expHeadDelimiter, ts.fm.indexedRange.headBlockDelimiter)
 		}
+
 		if ts.fm.indexedRange.firstIndexedBlock != expTailBlock {
 			ts.t.Fatalf("Invalid index tail block (expected #%d, got #%d)", expTailBlock, ts.fm.indexedRange.firstIndexedBlock)
 		}
