@@ -37,11 +37,11 @@ import (
 )
 
 const (
-	// ChainDbName is the name of the chain database
-	ChainDbName = "chaindata"
+	// DatabaseName is the name of the chain database
+	DatabaseName = "chaindata"
 
-	// ChainDbNamespace is the namespace for the chain database
-	ChainDbNamespace = "eth/db/chaindata/"
+	// DatabaseNamespace is the namespace for the chain database
+	DatabaseNamespace = "eth/db/chaindata/"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.
