@@ -3,6 +3,8 @@ title: Go Contract Bindings
 description: Introduction to generating bindings for using Geth features in Go native applications
 ---
 
+**Note:** This page refers to an old version of the contract binding generator.  For the latest version, see the Go Contract Bindings (v2) [page](docs/developers/dapp-developer/native-bindings-v2).
+
 This page introduces the concept of server-side native dapps. Geth provides the tools required to generate [Go](https://github.com/golang/go/wiki#getting-started-with-go) language bindings to any Ethereum contract that is compile-time type-safe, highly performant, and can be generated completely automatically from a compiled contract.
 
 Interacting with a contract on the Ethereum blockchain from Go is already possible via the RPC interfaces exposed by Ethereum clients. However, writing the boilerplate code that translates Go language constructs into RPC calls and back is time-consuming and brittle - implementation bugs can only be detected during runtime, and it's almost impossible to evolve a contract as even a tiny change in Solidity is awkward to port over to Go. Therefore, Geth provides tools for easily converting contract code into Go code that can be used directly in Go applications.
