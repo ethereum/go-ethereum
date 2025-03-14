@@ -361,22 +361,6 @@ func (f *Freezer) Sync() error {
 	return nil
 }
 
-// splitTables splits tables in header and non-header tables
-func splitTables(tables map[string]*freezerTable) (map[string]*freezerTable, map[string]*freezerTable) {
-	var (
-		headTables  = make(map[string]*freezerTable)
-		otherTables = make(map[string]*freezerTable)
-	)
-	for kind, table := range tables {
-		if kind == ChainFreezerHeaderTable || kind == ChainFreezerHashTable {
-			headTables[kind] = table
-		} else {
-			otherTables[kind] = table
-		}
-	}
-	return headTables, otherTables
-}
-
 // validate checks that every table has the same boundary.
 // Used instead of `repair` in readonly mode.
 func (f *Freezer) validate() error {
