@@ -13,6 +13,7 @@ on:
       - ready_for_review
 name: CI
 jobs:
+
   build-mock-ccc-geth: # build geth with mock circuit capacity checker
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -21,11 +22,14 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.21.x
+
     - name: Checkout code
       uses: actions/checkout@v2
+
     - name: Build
       run: |
         make nccc_geth
+
   build-geth: # build geth with circuit capacity checker
     if: github.event_name == 'push' # will only be triggered when pushing to main & staging & develop & alpha
     runs-on: ubuntu-latest
@@ -34,19 +38,23 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.21.x
+
     - name: Install rust
-      uses: actions-rs/toolchain@v1
+      uses: actions-rust-lang/setup-rust-toolchain@9399c7bb15d4c7d47b27263d024f0a4978346ba4 # v1.11.0
       with:
         toolchain: nightly-2023-12-03
         override: true
         components: rustfmt, clippy
+
     - name: Checkout code
       uses: actions/checkout@v2
+
     - name: Build
       run: |
         make libzkp
         sudo cp ./rollup/ccc/libzkp/libzkp.so /usr/local/lib/
         make geth
+
   check:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -55,12 +63,15 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.21.x
+
     - name: Checkout code
       uses: actions/checkout@v2
+
     - name: Lint
       run: |
         rm -rf $HOME/.cache/golangci-lint
         make lint
+
   goimports-lint:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -69,17 +80,22 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.18.x
+
     - name: Install goimports
       run: go install golang.org/x/tools/cmd/goimports@v0.24.0
+
     - name: Checkout code
       uses: actions/checkout@v2
+
     - run: goimports -local github.com/scroll-tech/go-ethereum/ -w .
+
     # If there are any diffs from goimports, fail.
     - name: Verify no changes from goimports
       run: |
         if [ -n "$(git status --porcelain)" ]; then
           exit 1
         fi
+
   go-mod-tidy-lint:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -88,15 +104,19 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.21.x
+
     - name: Checkout code
       uses: actions/checkout@v2
+
     - run: go mod tidy
+
     # If there are any diffs from go mod tidy, fail.
     - name: Verify no changes from go mod tidy
       run: |
         if [ -n "$(git status --porcelain)" ]; then
           exit 1
         fi
+
   test:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -105,10 +125,13 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.21.x
+
     - name: Checkout code
       uses: actions/checkout@v2
+
     - name: Test
       run: |
         make test
+
     - name: Upload coverage report
       run: bash <(curl -s https://codecov.io/bash)
