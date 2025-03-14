@@ -82,7 +82,7 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 	for _, freezer := range freezers {
 		switch freezer {
 		case ChainFreezerName:
-			info, err := inspect(ChainFreezerName, chainFreezerNoSnappy, db)
+			info, err := inspect(ChainFreezerName, chainFreezerTableConfigs, db)
 			if err != nil {
 				return nil, err
 			}
@@ -99,7 +99,7 @@ func inspectFreezers(db ethdb.Database) ([]freezerInfo, error) {
 			}
 			defer f.Close()
 
-			info, err := inspect(freezer, stateFreezerNoSnappy, f)
+			info, err := inspect(freezer, stateFreezerTableConfigs, f)
 			if err != nil {
 				return nil, err
 			}
@@ -123,9 +123,9 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 	)
 	switch freezerName {
 	case ChainFreezerName:
-		path, tables = resolveChainFreezerDir(ancient), chainFreezerNoSnappy
+		path, tables = resolveChainFreezerDir(ancient), chainFreezerTableConfigs
 	case MerkleStateFreezerName, VerkleStateFreezerName:
-		path, tables = filepath.Join(ancient, freezerName), stateFreezerNoSnappy
+		path, tables = filepath.Join(ancient, freezerName), stateFreezerTableConfigs
 	default:
 		return fmt.Errorf("unknown freezer, supported ones: %v", freezers)
 	}

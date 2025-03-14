@@ -37,13 +37,13 @@ const (
 	ChainFreezerReceiptTable = "receipts"
 )
 
-// chainFreezerNoSnappy configures whether compression is disabled for the ancient-tables.
+// chainFreezerTableConfigs configures whether compression is disabled for the ancient-tables.
 // Hashes and difficulties don't compress well.
-var chainFreezerNoSnappy = map[string]freezerTableConfig{
-	ChainFreezerHeaderTable:  freezerTableConfig{snappy: false, prunable: false},
-	ChainFreezerHashTable:    freezerTableConfig{snappy: true, prunable: false},
-	ChainFreezerBodiesTable:  freezerTableConfig{snappy: false, prunable: true},
-	ChainFreezerReceiptTable: freezerTableConfig{snappy: false, prunable: true},
+var chainFreezerTableConfigs = map[string]freezerTableConfig{
+	ChainFreezerHeaderTable:  {snappy: false, prunable: false},
+	ChainFreezerHashTable:    {snappy: true, prunable: false},
+	ChainFreezerBodiesTable:  {snappy: false, prunable: true},
+	ChainFreezerReceiptTable: {snappy: false, prunable: true},
 }
 
 type freezerTableConfig struct {
@@ -63,13 +63,13 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
-// stateFreezerNoSnappy configures whether compression is disabled for the state freezer.
-var stateFreezerNoSnappy = map[string]freezerTableConfig{
-	stateHistoryMeta:         freezerTableConfig{snappy: true, prunable: false},
-	stateHistoryAccountIndex: freezerTableConfig{snappy: false, prunable: false},
-	stateHistoryStorageIndex: freezerTableConfig{snappy: false, prunable: false},
-	stateHistoryAccountData:  freezerTableConfig{snappy: false, prunable: false},
-	stateHistoryStorageData:  freezerTableConfig{snappy: false, prunable: false},
+// stateFreezerTableConfigs configures whether compression is disabled for the state freezer.
+var stateFreezerTableConfigs = map[string]freezerTableConfig{
+	stateHistoryMeta:         {snappy: true, prunable: false},
+	stateHistoryAccountIndex: {snappy: false, prunable: false},
+	stateHistoryStorageIndex: {snappy: false, prunable: false},
+	stateHistoryAccountData:  {snappy: false, prunable: false},
+	stateHistoryStorageData:  {snappy: false, prunable: false},
 }
 
 // The list of identifiers of ancient stores.
@@ -90,7 +90,7 @@ var freezers = []string{ChainFreezerName, MerkleStateFreezerName, VerkleStateFre
 //     state freezer.
 func NewStateFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.ResettableAncientStore, error) {
 	if ancientDir == "" {
-		return NewMemoryFreezer(readOnly, stateFreezerNoSnappy), nil
+		return NewMemoryFreezer(readOnly, stateFreezerTableConfigs), nil
 	}
 	var name string
 	if verkle {
@@ -98,5 +98,5 @@ func NewStateFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.Reset
 	} else {
 		name = filepath.Join(ancientDir, MerkleStateFreezerName)
 	}
-	return newResettableFreezer(name, "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerNoSnappy)
+	return newResettableFreezer(name, "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerTableConfigs)
 }
