@@ -19,6 +19,8 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
+          persist-credentials: false
+
       - name: check diff
         id: check_diff
         run: |
@@ -45,11 +47,13 @@ jobs:
             echo '> yes'
             echo "result=bump" >> "$GITHUB_OUTPUT"
           fi
+
       - name: Install Node.js 16
         if: steps.check_diff.outputs.result == 'bump'
         uses: actions/setup-node@v3
         with:
           node-version: 16
+
       - name: bump version in params/version.go
         if: steps.check_diff.outputs.result == 'bump'
         run: node .github/scripts/bump_version_dot_go.mjs

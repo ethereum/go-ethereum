@@ -21,4 +21,6 @@ jobs:
       image: returntocorp/semgrep
     steps:
     - uses: actions/checkout@v3
+      with:
+        persist-credentials: false
     - run: semgrep ci

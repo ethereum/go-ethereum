@@ -25,6 +25,8 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        persist-credentials: false
 
     - name: Build
       run: |
@@ -48,6 +50,8 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        persist-credentials: false
 
     - name: Build
       run: |
@@ -66,6 +70,8 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        persist-credentials: false
 
     - name: Lint
       run: |
@@ -86,6 +92,8 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        persist-credentials: false
 
     - run: goimports -local github.com/scroll-tech/go-ethereum/ -w .
 
@@ -107,6 +115,8 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        persist-credentials: false
 
     - run: go mod tidy
 
@@ -128,6 +138,8 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        persist-credentials: false
 
     - name: Test
       run: |
