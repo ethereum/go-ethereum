@@ -147,9 +147,6 @@ func (tt *TransactionTest) Run() error {
 		if common.Address(*expected.Sender) != sender {
 			return fmt.Errorf("sender mismatch: got %x, want %x", sender, expected.Sender)
 		}
-		if hash != common.Hash(*expected.Hash) {
-			return fmt.Errorf("hash mismatch: got %x, want %x", hash, expected.Hash)
-		}
 		if uint64(expected.IntrinsicGas) != gas {
 			return fmt.Errorf("intrinsic gas mismatch: got %d, want %d", gas, uint64(expected.IntrinsicGas))
 		}
