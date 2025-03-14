@@ -2081,8 +2081,8 @@ func TestBindings(t *testing.T) {
 	}
 
 	// Create a temporary workspace for the test suite
-	ws, _ := os.MkdirTemp("", "abigen")
-	pkg := filepath.Join(ws, "bindtest")
+	path := t.TempDir()
+	pkg := filepath.Join(path, "bindtest")
 	if err := os.MkdirAll(pkg, 0700); err != nil {
 		t.Fatalf("failed to create package: %v", err)
 	}
