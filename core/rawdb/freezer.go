@@ -315,8 +315,8 @@ func (f *Freezer) TruncateTailBlocks(tailBlock uint64) (uint64, error) {
 	if old >= tailBlock {
 		return old, nil
 	}
-	for kind, table := range f.tables {
-		if kind == ChainFreezerBodiesTable || kind == ChainFreezerReceiptTable {
+	for _, table := range f.tables {
+		if table.config.prunable {
 			if err := table.truncateTail(tailBlock); err != nil {
 				return 0, err
 			}
@@ -372,12 +372,11 @@ func (f *Freezer) validate() error {
 		head       uint64
 		prunedTail *uint64
 	)
-	// hack to get the head
+	// get any head value
 	for _, table := range f.tables {
 		head = table.items.Load()
 		break
 	}
-
 	for kind, table := range f.tables {
 		// all tables have to have the same head
 		if head != table.items.Load() {
