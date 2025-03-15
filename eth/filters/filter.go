@@ -146,6 +146,173 @@ type rangeLogsTestEvent struct {
 	begin, end uint64
 }
 
+type searchSession struct {
+	ctx                   context.Context
+	filter                *Filter
+	mb                    filtermaps.MatcherBackend
+	syncRange             filtermaps.SyncRange // latest synchronized state with the matcher
+	firstBlock, lastBlock uint64               // specified search range; each can be MaxUint64
+	searchRange           common.Range[uint64] // actual search range; end trimmed to latest head
+	matchRange            common.Range[uint64] // range in which we have results (subset of searchRange)
+	matches               []*types.Log         // valid set of matches in matchRange
+	forceUnindexed        bool                 // revert to unindexed search
+}
+
+func newSearchSession(ctx context.Context, filter *Filter, mb filtermaps.MatcherBackend, firstBlock, lastBlock uint64) (*searchSession, error) {
+	s := &searchSession{
+		ctx:        ctx,
+		filter:     filter,
+		mb:         mb,
+		firstBlock: firstBlock,
+		lastBlock:  lastBlock,
+	}
+	// enforce a consistent state before starting the search in order to be able
+	// to determine valid range later
+	if err := s.syncMatcher(0); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func (s *searchSession) syncMatcher(trimTailThreshold uint64) error {
+	if s.filter.rangeLogsTestHook != nil && !s.matchRange.IsEmpty() {
+		s.filter.rangeLogsTestHook <- rangeLogsTestEvent{event: rangeLogsTestSync, begin: s.matchRange.First(), end: s.matchRange.Last()}
+	}
+	var err error
+	s.syncRange, err = s.mb.SyncLogIndex(s.ctx)
+	if err != nil {
+		return err
+	}
+	// update actual search range based on current head number
+	first := min(s.firstBlock, s.syncRange.HeadNumber)
+	last := min(s.lastBlock, s.syncRange.HeadNumber)
+	s.searchRange = common.NewRange[uint64](first, last+1-first)
+	// discard everything that is not needed or might be invalid
+	trimRange := s.syncRange.ValidBlocks
+	if trimRange.First() <= trimTailThreshold {
+		// everything before this point is already known to be valid; if this is
+		// valid then keep everything before
+		trimRange.SetFirst(0)
+	}
+	trimRange = trimRange.Intersection(s.searchRange)
+	s.trimMatches(trimRange)
+	if s.filter.rangeLogsTestHook != nil {
+		if !s.matchRange.IsEmpty() {
+			s.filter.rangeLogsTestHook <- rangeLogsTestEvent{event: rangeLogsTestTrimmed, begin: s.matchRange.First(), end: s.matchRange.Last()}
+		} else {
+			s.filter.rangeLogsTestHook <- rangeLogsTestEvent{event: rangeLogsTestTrimmed, begin: 0, end: 0}
+		}
+	}
+	return nil
+}
+
+func (s *searchSession) trimMatches(trimRange common.Range[uint64]) {
+	s.matchRange = s.matchRange.Intersection(trimRange)
+	if s.matchRange.IsEmpty() {
+		s.matches = nil
+		return
+	}
+	for len(s.matches) > 0 && s.matches[0].BlockNumber < s.matchRange.First() {
+		s.matches = s.matches[1:]
+	}
+	for len(s.matches) > 0 && s.matches[len(s.matches)-1].BlockNumber > s.matchRange.Last() {
+		s.matches = s.matches[:len(s.matches)-1]
+	}
+}
+
+func (s *searchSession) searchInRange(r common.Range[uint64], indexed bool) ([]*types.Log, error) {
+	first, last := r.First(), r.Last()
+	if indexed {
+		if s.filter.rangeLogsTestHook != nil {
+			s.filter.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestIndexed, first, last}
+		}
+		results, err := s.filter.indexedLogs(s.ctx, s.mb, first, last)
+		if err != filtermaps.ErrMatchAll {
+			return results, err
+		}
+		// "match all" filters are not supported by filtermaps; fall back to
+		// unindexed search which is the most efficient in this case
+		s.forceUnindexed = true
+		// fall through to unindexed case
+	}
+	if s.filter.rangeLogsTestHook != nil {
+		s.filter.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestUnindexed, first, last}
+	}
+	return s.filter.unindexedLogs(s.ctx, first, last)
+}
+
+func (s *searchSession) doSearchIteration() error {
+	switch {
+	case s.syncRange.IndexedBlocks.IsEmpty():
+		// indexer is not ready; fallback to completely unindexed search, do not check valid range
+		var err error
+		s.matchRange = s.searchRange
+		s.matches, err = s.searchInRange(s.searchRange, false)
+		return err
+
+	case s.matchRange.IsEmpty():
+		// no results yet; try search in entire range
+		indexedSearchRange := s.searchRange.Intersection(s.syncRange.IndexedBlocks)
+		var err error
+		if s.forceUnindexed = indexedSearchRange.IsEmpty(); !s.forceUnindexed {
+			// indexed search on the intersection of indexed and searched range
+			s.matchRange = indexedSearchRange
+			s.matches, err = s.searchInRange(indexedSearchRange, true)
+			if err != nil {
+				return err
+			}
+			return s.syncMatcher(0) // trim everything that the matcher considers potentially invalid
+		} else {
+			// no intersection of indexed and searched range; unindexed search on the whole searched range
+			s.matchRange = s.searchRange
+			s.matches, err = s.searchInRange(s.searchRange, false)
+			if err != nil {
+				return err
+			}
+			return s.syncMatcher(math.MaxUint64) // unindexed search is not affected by the tail of valid range
+		}
+
+	case !s.matchRange.IsEmpty() && s.matchRange.First() > s.searchRange.First():
+		// we have results but tail section is missing; do unindexed search for
+		// the tail part but still allow indexed search for missing head section
+		tailRange := common.NewRange[uint64](s.searchRange.First(), s.matchRange.First()-s.searchRange.First())
+		tailMatches, err := s.searchInRange(tailRange, false)
+		if err != nil {
+			return err
+		}
+		s.matches = append(tailMatches, s.matches...)
+		s.matchRange = tailRange.Union(s.matchRange)
+		return s.syncMatcher(math.MaxUint64) // unindexed search is not affected by the tail of valid range
+
+	case !s.matchRange.IsEmpty() && s.matchRange.First() == s.searchRange.First() && s.searchRange.AfterLast() > s.matchRange.AfterLast():
+		// we have results but head section is missing
+		headRange := common.NewRange[uint64](s.matchRange.AfterLast(), s.searchRange.AfterLast()-s.matchRange.AfterLast())
+		if !s.forceUnindexed {
+			indexedHeadRange := headRange.Intersection(s.syncRange.IndexedBlocks)
+			if !indexedHeadRange.IsEmpty() && indexedHeadRange.First() == headRange.First() {
+				// indexed head range search is possible
+				headRange = indexedHeadRange
+			} else {
+				s.forceUnindexed = true
+			}
+		}
+		headMatches, err := s.searchInRange(headRange, !s.forceUnindexed)
+		if err != nil {
+			return err
+		}
+		s.matches = append(s.matches, headMatches...)
+		s.matchRange = s.matchRange.Union(headRange)
+		if s.forceUnindexed {
+			return s.syncMatcher(math.MaxUint64) // unindexed search is not affected by the tail of valid range
+		} else {
+			return s.syncMatcher(headRange.First()) // trim if the tail of latest head search results might be invalid
+		}
+
+	default:
+		panic("invalid search session state")
+	}
+}
+
 func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([]*types.Log, error) {
 	if f.rangeLogsTestHook != nil {
 		defer func() {
@@ -157,150 +324,19 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 	if firstBlock > lastBlock {
 		return nil, nil
 	}
-
 	mb := f.sys.backend.NewMatcherBackend()
 	defer mb.Close()
 
-	// enforce a consistent state before starting the search in order to be able
-	// to determine valid range later
-	syncRange, err := mb.SyncLogIndex(ctx)
+	session, err := newSearchSession(ctx, f, mb, firstBlock, lastBlock)
 	if err != nil {
 		return nil, err
 	}
-	if syncRange.IndexedBlocks.IsEmpty() {
-		// fallback to completely unindexed search
-		headNum := syncRange.HeadNumber
-		firstBlock = min(firstBlock, headNum)
-		lastBlock = min(lastBlock, headNum)
-		if f.rangeLogsTestHook != nil {
-			f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestUnindexed, firstBlock, lastBlock}
-		}
-		return f.unindexedLogs(ctx, firstBlock, lastBlock)
-	}
-
-	headBlock := syncRange.HeadNumber
-	// if haveMatches == true then matches correspond to the block number range
-	// between matchFirst and matchLast
-	var (
-		matches                     []*types.Log
-		haveMatches, forceUnindexed bool
-		matchFirst, matchLast       uint64
-	)
-	trimMatches := func(trimFirst, trimLast uint64) {
-		if !haveMatches {
-			return
-		}
-		if trimLast < matchFirst || trimFirst > matchLast {
-			matches, haveMatches, matchFirst, matchLast = nil, false, 0, 0
-			return
-		}
-		if trimFirst > matchFirst {
-			for len(matches) > 0 && matches[0].BlockNumber < trimFirst {
-				matches = matches[1:]
-			}
-			matchFirst = trimFirst
-		}
-		if trimLast < matchLast {
-			for len(matches) > 0 && matches[len(matches)-1].BlockNumber > trimLast {
-				matches = matches[:len(matches)-1]
-			}
-			matchLast = trimLast
+	for session.searchRange != session.matchRange {
+		if err := session.doSearchIteration(); err != nil {
+			return session.matches, err
 		}
 	}
-
-	for {
-		// determine range to be searched; for simplicity we only extend the most
-		// recent end of the existing match set by matching between searchFirst
-		// and searchLast.
-		searchFirst := min(firstBlock, headBlock)
-		searchLast := min(lastBlock, headBlock)
-		trimMatches(searchFirst, searchLast)
-		if haveMatches && matchFirst == searchFirst && matchLast == searchLast {
-			// The entire search range was explored.
-			return matches, nil
-		}
-		var trimTailIfNotValid uint64
-		if haveMatches && matchFirst > searchFirst {
-			// missing tail section; do unindexed search
-			if f.rangeLogsTestHook != nil {
-				f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestUnindexed, searchFirst, matchFirst - 1}
-			}
-			tailMatches, err := f.unindexedLogs(ctx, searchFirst, matchFirst-1)
-			if err != nil {
-				return matches, err
-			}
-			matches = append(tailMatches, matches...)
-			matchFirst = searchFirst
-			// unindexed results are not affected by valid tail; do not trim tail
-			trimTailIfNotValid = math.MaxUint64
-		} else {
-			// if we have matches, they start at searchFirst
-			if haveMatches {
-				searchFirst = matchLast + 1
-				if syncRange.IndexedBlocks.IsEmpty() || syncRange.IndexedBlocks.First() > searchFirst {
-					forceUnindexed = true
-				}
-			}
-			var newMatches []*types.Log
-			if syncRange.IndexedBlocks.IsEmpty() || syncRange.IndexedBlocks.First() > searchLast || syncRange.IndexedBlocks.Last() < searchFirst {
-				forceUnindexed = true
-			}
-			if !forceUnindexed {
-				searchFirst = max(searchFirst, syncRange.IndexedBlocks.First())
-				searchLast = min(searchLast, syncRange.IndexedBlocks.Last())
-				if f.rangeLogsTestHook != nil {
-					f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestIndexed, searchFirst, searchLast}
-				}
-				newMatches, err = f.indexedLogs(ctx, mb, searchFirst, searchLast)
-				// trim tail if it affects the indexed search range
-				trimTailIfNotValid = searchFirst
-				if err == filtermaps.ErrMatchAll {
-					// "match all" filters are not supported by filtermaps; fall back
-					// to unindexed search which is the most efficient in this case
-					forceUnindexed = true
-				}
-			}
-			if forceUnindexed {
-				if f.rangeLogsTestHook != nil {
-					f.rangeLogsTestHook <- rangeLogsTestEvent{rangeLogsTestUnindexed, searchFirst, searchLast}
-				}
-				newMatches, err = f.unindexedLogs(ctx, searchFirst, searchLast)
-				// unindexed results are not affected by valid tail; do not trim tail
-				trimTailIfNotValid = math.MaxUint64
-			}
-			if err != nil {
-				return matches, err
-			}
-			if !haveMatches {
-				matches = newMatches
-				haveMatches, matchFirst, matchLast = true, searchFirst, searchLast
-			} else {
-				matches = append(matches, newMatches...)
-				matchLast = searchLast
-			}
-		}
-
-		if f.rangeLogsTestHook != nil {
-			f.rangeLogsTestHook <- rangeLogsTestEvent{event: rangeLogsTestSync, begin: matchFirst, end: matchLast}
-		}
-		syncRange, err = mb.SyncLogIndex(ctx)
-		if err != nil {
-			return matches, err
-		}
-		headBlock = syncRange.HeadNumber // Head is guaranteed != nil
-		if syncRange.ValidBlocks.IsEmpty() {
-			matches, haveMatches, matchFirst, matchLast = nil, false, 0, 0
-		} else {
-			if syncRange.ValidBlocks.First() > trimTailIfNotValid {
-				trimMatches(syncRange.ValidBlocks.First(), syncRange.ValidBlocks.Last())
-			} else {
-				trimMatches(0, syncRange.ValidBlocks.Last())
-			}
-		}
-		if f.rangeLogsTestHook != nil {
-			f.rangeLogsTestHook <- rangeLogsTestEvent{event: rangeLogsTestTrimmed, begin: matchFirst, end: matchLast}
-		}
-	}
+	return session.matches, nil
 }
 
 func (f *Filter) indexedLogs(ctx context.Context, mb filtermaps.MatcherBackend, begin, end uint64) ([]*types.Log, error) {

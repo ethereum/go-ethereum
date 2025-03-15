@@ -453,6 +453,14 @@ func TestRangeLogs(t *testing.T) {
 		addresses       = []common.Address{common.Address{}}
 	)
 
+	expEvent := func(exp rangeLogsTestEvent) {
+		event++
+		ev := <-filter.rangeLogsTestHook
+		if ev != exp {
+			t.Fatalf("Test case #%d: wrong test event #%d received (got %v, expected %v)", testCase, event, ev, exp)
+		}
+	}
+
 	newFilter := func(begin, end int64) {
 		testCase++
 		event = 0
@@ -464,14 +472,7 @@ func TestRangeLogs(t *testing.T) {
 			for range filter.rangeLogsTestHook {
 			}
 		}(filter)
-	}
-
-	expEvent := func(exp rangeLogsTestEvent) {
-		event++
-		ev := <-filter.rangeLogsTestHook
-		if ev != exp {
-			t.Fatalf("Test case #%d: wrong test event #%d received (got %v, expected %v)", testCase, event, ev, exp)
-		}
+		expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 0, 0})
 	}
 
 	updateHead := func() {

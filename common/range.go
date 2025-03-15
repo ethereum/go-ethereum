@@ -92,16 +92,18 @@ func (r *Range[T]) SetLast(v T) {
 }
 
 func (r Range[T]) Intersection(q Range[T]) Range[T] {
-	if r.first > q.first {
-		q.first = r.first
-	}
-	if r.afterLast < q.afterLast {
-		q.afterLast = r.afterLast
-	}
-	if q.first > q.afterLast {
+	i := Range[T]{first: max(r.first, q.first), afterLast: min(r.afterLast, q.afterLast)}
+	if i.first > i.afterLast {
 		return Range[T]{}
 	}
-	return q
+	return i
+}
+
+func (r Range[T]) Union(q Range[T]) Range[T] {
+	if max(r.first, q.first) > min(r.afterLast, q.afterLast) {
+		panic("cannot create union; gap between ranges")
+	}
+	return Range[T]{first: min(r.first, q.first), afterLast: max(r.afterLast, q.afterLast)}
 }
 
 // Iter iterates all integers in the range.
