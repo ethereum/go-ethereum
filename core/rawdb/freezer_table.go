@@ -138,7 +138,7 @@ func newTable(path string, name string, readMeter, writeMeter *metrics.Meter, si
 		return nil, err
 	}
 	var idxName string
-	if config.snappy {
+	if config.noSnappy {
 		idxName = fmt.Sprintf("%s.ridx", name) // raw index file
 	} else {
 		idxName = fmt.Sprintf("%s.cidx", name) // compressed index file
@@ -871,7 +871,7 @@ func (t *freezerTable) openFile(num uint32, opener func(string) (*os.File, error
 	var exist bool
 	if f, exist = t.files[num]; !exist {
 		var name string
-		if t.config.snappy {
+		if t.config.noSnappy {
 			name = fmt.Sprintf("%s.%04d.rdat", t.name, num)
 		} else {
 			name = fmt.Sprintf("%s.%04d.cdat", t.name, num)
@@ -987,13 +987,13 @@ func (t *freezerTable) RetrieveItems(start, count, maxBytes uint64) ([][]byte, e
 		item := diskData[offset : offset+diskSize]
 		offset += diskSize
 		decompressedSize := diskSize
-		if !t.config.snappy {
+		if !t.config.noSnappy {
 			decompressedSize, _ = snappy.DecodedLen(item)
 		}
 		if i > 0 && maxBytes != 0 && uint64(outputSize+decompressedSize) > maxBytes {
 			break
 		}
-		if !t.config.snappy {
+		if !t.config.noSnappy {
 			data, err := snappy.Decode(nil, item)
 			if err != nil {
 				return nil, err
