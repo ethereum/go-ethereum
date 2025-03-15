@@ -145,8 +145,15 @@ var (
 	FixedCommitteeRootKey = []byte("fixedRoot-") // bigEndian64(syncPeriod) -> committee root hash
 	SyncCommitteeKey      = []byte("committee-") // bigEndian64(syncPeriod) -> serialized committee
 
-	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
-	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
+	FilterMapsPrefix         = "fm-"
+	filterMapsRangeKey       = []byte(FilterMapsPrefix + "R")
+	filterMapRowPrefix       = []byte(FilterMapsPrefix + "r") // filterMapRowPrefix + mapRowIndex (uint64 big endian) -> filter row
+	filterMapLastBlockPrefix = []byte(FilterMapsPrefix + "b") // filterMapLastBlockPrefix + mapIndex (uint32 big endian) -> block number (uint64 big endian)
+	filterMapBlockLVPrefix   = []byte(FilterMapsPrefix + "p") // filterMapBlockLVPrefix + num (uint64 big endian) -> log value pointer (uint64 big endian)
+
+	preimageCounter     = metrics.NewRegisteredCounter("db/preimage/total", nil)
+	preimageHitsCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
+	preimageMissCounter = metrics.NewRegisteredCounter("db/preimage/miss", nil)
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -340,4 +347,35 @@ func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 func IsStorageTrieNode(key []byte) bool {
 	ok, _, _ := ResolveStorageTrieNode(key)
 	return ok
+}
+
+// filterMapRowKey = filterMapRowPrefix + mapRowIndex (uint64 big endian)
+func filterMapRowKey(mapRowIndex uint64, base bool) []byte {
+	extLen := 8
+	if base {
+		extLen = 9
+	}
+	l := len(filterMapRowPrefix)
+	key := make([]byte, l+extLen)
+	copy(key[:l], filterMapRowPrefix)
+	binary.BigEndian.PutUint64(key[l:l+8], mapRowIndex)
+	return key
+}
+
+// filterMapLastBlockKey = filterMapLastBlockPrefix + mapIndex (uint32 big endian)
+func filterMapLastBlockKey(mapIndex uint32) []byte {
+	l := len(filterMapLastBlockPrefix)
+	key := make([]byte, l+4)
+	copy(key[:l], filterMapLastBlockPrefix)
+	binary.BigEndian.PutUint32(key[l:], mapIndex)
+	return key
+}
+
+// filterMapBlockLVKey = filterMapBlockLVPrefix + num (uint64 big endian)
+func filterMapBlockLVKey(number uint64) []byte {
+	l := len(filterMapBlockLVPrefix)
+	key := make([]byte, l+8)
+	copy(key[:l], filterMapBlockLVPrefix)
+	binary.BigEndian.PutUint64(key[l:], number)
+	return key
 }

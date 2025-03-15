@@ -62,7 +62,7 @@ var (
 		utils.NoUSBFlag, // deprecated
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
-		utils.OverrideCancun,
+		utils.OverridePrague,
 		utils.OverrideVerkle,
 		utils.EnablePersonal, // deprecated
 		utils.TxPoolLocalsFlag,
@@ -86,6 +86,7 @@ var (
 		utils.SnapshotFlag,
 		utils.TxLookupLimitFlag, // deprecated
 		utils.TransactionHistoryFlag,
+		utils.ChainHistoryFlag,
 		utils.StateHistoryFlag,
 		utils.LightServeFlag,    // deprecated
 		utils.LightIngressFlag,  // deprecated
