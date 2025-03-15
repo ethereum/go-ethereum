@@ -226,7 +226,7 @@ var (
 		XDPoS: &XDPoSConfig{
 			Period:              2,
 			Epoch:               900,
-			Reward:              5000,
+			Reward:              10,
 			RewardCheckpoint:    900,
 			Gap:                 450,
 			FoudationWalletAddr: common.HexToAddress("0xde5b54e8e7b585153add32f472e8d545e5d42a82"),

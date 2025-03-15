@@ -25,11 +25,12 @@ var DevnetConstant = constant{
 	mergeBlock:                    big.NewInt(0),
 	shanghaiBlock:                 big.NewInt(0),
 	blockNumberGas50x:             big.NewInt(0),
-	TIPV2SwitchBlock:              big.NewInt(1800),
+	TIPV2SwitchBlock:              big.NewInt(0),
 	tipXDCXMinerDisable:           big.NewInt(0),
 	tipXDCXReceiverDisable:        big.NewInt(0),
 	eip1559Block:                  big.NewInt(0),
 	cancunBlock:                   big.NewInt(1702800),
+	tipUpgradeReward:              big.NewInt(1773000),
 
 	trc21IssuerSMCTestNet: HexToAddress("0x0E2C88753131CE01c7551B726b28BFD04e44003F"),
 	trc21IssuerSMC:        HexToAddress("0x8c0faeb5C6bEd2129b8674F262Fd45c4e9468bee"),
