@@ -150,57 +150,18 @@ func (rl *ReceiptList69) EncodeIndex(i int, b *bytes.Buffer) {
 	w.Flush()
 }
 
-// EncodeForDatabase
-func (rl *ReceiptList69) EncodeForDatabase() []byte {
-	if rl.buf == nil {
-		rl.buf = new(receiptListBuffers)
+func (rl *ReceiptList69) toStorageReceiptsRLP() rlp.RawValue {
+	var (
+		out bytes.Buffer
+		enc = rlp.NewEncoderBuffer(&out)
+	)
+	outer := enc.List()
+	for _, receipts := range rl.items {
+		receipts.EncodeRLP(enc)
 	}
-	// TODO this is probably wrong
-	var result []byte
-	var b = new(bytes.Buffer)
-	for _, r := range rl.items {
-		var (
-			bloom = r.bloom(&rl.buf.bloom)
-			w     = &rl.buf.enc
-		)
-		// encode receipt list: [postStateOrStatus, gasUsed, bloom, logs]
-		w.Reset(b)
-		l := w.List()
-		w.WriteBytes(r.PostStateOrStatus)
-		w.WriteUint64(r.GasUsed)
-		w.WriteBytes(bloom[:])
-		w.Write(r.Logs)
-		w.ListEnd(l)
-		if err := w.Flush(); err != nil {
-			return []byte{}
-		}
-		// if this is a legacy transaction receipt, we are done.
-		if r.TxType == 0 {
-			continue
-		}
-		// Otherwise it's a typed transaction receipt, which has the type prefix and
-		// the inner list as a byte-array: tx-type || rlp(list).
-		// Since b contains the correct inner list, we can reuse its content.
-		w.Reset(b)
-		w.WriteUint64(uint64(r.TxType))
-		w.WriteBytes(b.Bytes())
-		w.Flush()
-		result = append(result, b.Bytes()...)
-	}
-	return result
-}
-
-func (rl *ReceiptList69) toReceipts() []*types.Receipt {
-	list := make([]*types.Receipt, len(rl.items))
-	for i, r := range rl.items {
-		list[i] = &types.Receipt{
-			Type:              r.TxType,
-			PostState:         r.PostStateOrStatus,
-			CumulativeGasUsed: r.GasUsed,
-		}
-		rlp.DecodeBytes(r.Logs, &list[i].Logs)
-	}
-	return list
+	enc.ListEnd(outer)
+	enc.Flush()
+	return out.Bytes()
 }
 
 // blockReceiptsToNetwork takes a slice of rlp-encoded receipts, and transactions,
