@@ -11,6 +11,8 @@ on:
 jobs:
   build-and-push-arm64-image:
     runs-on: ubuntu-latest
+    permissions: {}
+
     strategy:
       matrix:
         arch:
@@ -32,6 +34,7 @@ jobs:
         uses: docker/setup-buildx-action@885d1462b80bc1c1c7f0b00334ad271f09369c55 # v2.10.0
         with:
           cache-binary: false
+
       - name: Login to Docker Hub
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 #v3.3.0
         with:

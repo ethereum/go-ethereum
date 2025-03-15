@@ -1,3 +1,5 @@
+name: CI
+
 on:
   push:
     branches: # we keep this to avoid triggering `push` & `pull_request` every time we update a PR
@@ -11,12 +13,12 @@ on:
       - reopened
       - synchronize
       - ready_for_review
-name: CI
-jobs:
 
+jobs:
   build-mock-ccc-geth: # build geth with mock circuit capacity checker
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
     - name: Install Go
       uses: actions/setup-go@v2
@@ -35,6 +37,7 @@ jobs:
   build-geth: # build geth with circuit capacity checker
     if: github.event_name == 'push' # will only be triggered when pushing to main & staging & develop & alpha
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
     - name: Install Go
       uses: actions/setup-go@v2
@@ -62,6 +65,7 @@ jobs:
   check:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
     - name: Install Go
       uses: actions/setup-go@v2
@@ -81,6 +85,7 @@ jobs:
   goimports-lint:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
     - name: Install Go
       uses: actions/setup-go@v2
@@ -107,6 +112,7 @@ jobs:
   go-mod-tidy-lint:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
     - name: Install Go
       uses: actions/setup-go@v2
@@ -130,6 +136,7 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
     - name: Install Go
       uses: actions/setup-go@v2

@@ -14,12 +14,18 @@ jobs:
   try-to-bump:
     if: contains(github.event.pull_request.labels.*.name, 'bump-version')
     runs-on: ubuntu-latest
+    permissions:
+      # Give the default GITHUB_TOKEN write permission to commit and push the
+      # added or changed files to the repository.
+      contents: write
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
-          persist-credentials: false
+          # note: this is needed by git-auto-commit-action below
+          persist-credentials: true
 
       - name: check diff
         id: check_diff
@@ -29,7 +35,7 @@ jobs:
           # fetch develop branch so that we can diff against later
           git fetch origin develop
 
-          echo 'checking verion changes in diff...'
+          echo 'checking version changes in diff...'
 
           # check if version changed in version.go
           # note: the grep will fail if use \d instead of [0-9]
@@ -59,7 +65,7 @@ jobs:
         run: node .github/scripts/bump_version_dot_go.mjs
 
         # Commits made by this Action do not trigger new Workflow runs
-      - uses: stefanzweifel/git-auto-commit-action@3ea6ae190baf489ba007f7c92608f33ce20ef04a
+      - uses: stefanzweifel/git-auto-commit-action@e348103e9026cc0eee72ae06630dbe30c8bf7a79 # v5.1.0
         if: steps.check_diff.outputs.result == 'bump'
         with:
           skip_fetch: true # already did fetch in check diff
