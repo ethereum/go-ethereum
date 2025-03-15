@@ -28,10 +28,12 @@ type Range[T uint32 | uint64] struct {
 	first, afterLast T
 }
 
+// NewRange creates a new range based of first element and number of elements.
 func NewRange[T uint32 | uint64](first, count T) Range[T] {
 	return Range[T]{first, first + count}
 }
 
+// EncodeRLP implements rlp.Encoder.
 func (r *Range[T]) EncodeRLP(w io.Writer) error {
 	if err := rlp.Encode(w, &r.first); err != nil {
 		return err
@@ -39,6 +41,7 @@ func (r *Range[T]) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &r.afterLast)
 }
 
+// DecodeRLP implements rlp.Decoder.
 func (r *Range[T]) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&r.first); err != nil {
 		return err
@@ -46,10 +49,13 @@ func (r *Range[T]) DecodeRLP(s *rlp.Stream) error {
 	return s.Decode(&r.afterLast)
 }
 
+// First returns the first element of the range.
 func (r Range[T]) First() T {
 	return r.first
 }
 
+// Last returns the last element of the range. The function panics if the range
+// is empty.
 func (r Range[T]) Last() T {
 	if r.first == r.afterLast {
 		panic("last item of zero length range is not allowed")
@@ -57,22 +63,28 @@ func (r Range[T]) Last() T {
 	return r.afterLast - 1
 }
 
+// AfterLast returns the first element after the range. This allows obtaining
+// information about the end part of zero length ranges.
 func (r Range[T]) AfterLast() T {
 	return r.afterLast
 }
 
+// Count returns the number of elements in the range.
 func (r Range[T]) Count() T {
 	return r.afterLast - r.first
 }
 
+// IsEmpty returns true if the range is empty.
 func (r Range[T]) IsEmpty() bool {
 	return r.first == r.afterLast
 }
 
+// Includes returns true if the given element is inside the range.
 func (r Range[T]) Includes(v T) bool {
 	return v >= r.first && v < r.afterLast
 }
 
+// SetFirst updates the first element of the list.
 func (r *Range[T]) SetFirst(v T) {
 	r.first = v
 	if r.afterLast < r.first {
@@ -80,6 +92,8 @@ func (r *Range[T]) SetFirst(v T) {
 	}
 }
 
+// SetAfterLast updates the end of the range by specifying the first element
+// after the range. This allows setting zero length ranges.
 func (r *Range[T]) SetAfterLast(v T) {
 	r.afterLast = v
 	if r.afterLast < r.first {
@@ -87,10 +101,12 @@ func (r *Range[T]) SetAfterLast(v T) {
 	}
 }
 
+// SetLast updates last element of the range.
 func (r *Range[T]) SetLast(v T) {
 	r.SetAfterLast(v + 1)
 }
 
+// Intersection returns the intersection of two ranges.
 func (r Range[T]) Intersection(q Range[T]) Range[T] {
 	i := Range[T]{first: max(r.first, q.first), afterLast: min(r.afterLast, q.afterLast)}
 	if i.first > i.afterLast {
@@ -99,6 +115,8 @@ func (r Range[T]) Intersection(q Range[T]) Range[T] {
 	return i
 }
 
+// Union returns the union of two ranges. The function panics if there is a gap
+// between the ranges.
 func (r Range[T]) Union(q Range[T]) Range[T] {
 	if max(r.first, q.first) > min(r.afterLast, q.afterLast) {
 		panic("cannot create union; gap between ranges")

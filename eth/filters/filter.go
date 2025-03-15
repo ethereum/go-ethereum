@@ -146,6 +146,7 @@ type rangeLogsTestEvent struct {
 	begin, end uint64
 }
 
+// searchSession represents a single search session.
 type searchSession struct {
 	ctx                   context.Context
 	filter                *Filter
@@ -158,6 +159,7 @@ type searchSession struct {
 	forceUnindexed        bool                 // revert to unindexed search
 }
 
+// newSearchSession returns a new searchSession.
 func newSearchSession(ctx context.Context, filter *Filter, mb filtermaps.MatcherBackend, firstBlock, lastBlock uint64) (*searchSession, error) {
 	s := &searchSession{
 		ctx:        ctx,
@@ -174,6 +176,20 @@ func newSearchSession(ctx context.Context, filter *Filter, mb filtermaps.Matcher
 	return s, nil
 }
 
+// syncMatcher performs a synchronization step with the matcher. The resulting
+// syncRange structure holds information about the latest range of indexed blocks
+// and the guaranteed valid blocks whose log index have not been changed since
+// the previous synchronization.
+// The function also performs trimming of the match set in order to always keep
+// it consistent with the synced matcher state.
+// Tail trimming is only performed if the first block of the valid log index range
+// is higher than trimTailThreshold. This is useful because unindexed log search
+// is not affected by the valid tail (on the other hand, valid head is taken into
+// account in order to provide reorg safety, even though the log index is not used).
+// In case of indexed search the tail is only trimmed if the first part of the
+// recently obtained results might be invalid. If guaranteed valid new results
+// have been added at the head of previously validated results then there is no
+// need to discard those even if the index tail have been unindexed since that.
 func (s *searchSession) syncMatcher(trimTailThreshold uint64) error {
 	if s.filter.rangeLogsTestHook != nil && !s.matchRange.IsEmpty() {
 		s.filter.rangeLogsTestHook <- rangeLogsTestEvent{event: rangeLogsTestSync, begin: s.matchRange.First(), end: s.matchRange.Last()}
@@ -206,6 +222,8 @@ func (s *searchSession) syncMatcher(trimTailThreshold uint64) error {
 	return nil
 }
 
+// trimMatches removes any entries from the current set of matches that is outside
+// the given range.
 func (s *searchSession) trimMatches(trimRange common.Range[uint64]) {
 	s.matchRange = s.matchRange.Intersection(trimRange)
 	if s.matchRange.IsEmpty() {
@@ -220,6 +238,7 @@ func (s *searchSession) trimMatches(trimRange common.Range[uint64]) {
 	}
 }
 
+// searchInRange performs a single range search, either indexed or unindexed.
 func (s *searchSession) searchInRange(r common.Range[uint64], indexed bool) ([]*types.Log, error) {
 	first, last := r.First(), r.Last()
 	if indexed {
@@ -241,6 +260,8 @@ func (s *searchSession) searchInRange(r common.Range[uint64], indexed bool) ([]*
 	return s.filter.unindexedLogs(s.ctx, first, last)
 }
 
+// doSearchIteration performs a search on a range missing from an incomplete set
+// of results, adds the new section and removes invalidated entries.
 func (s *searchSession) doSearchIteration() error {
 	switch {
 	case s.syncRange.IndexedBlocks.IsEmpty():
