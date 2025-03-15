@@ -453,6 +453,12 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 				return valid(nil), engine.InvalidPayloadAttributes.With(err)
 			}
 
+			// L1Origin **MUST NOT** be nil, it's a required field in PayloadAttributesV1.
+			l1Origin := payloadAttributes.L1Origin
+
+			// Set the block hash before inserting the L1Origin into database.
+			l1Origin.L2BlockHash = block.Hash()
+
 			// Use the tx list hash as the beacon root.
 			txListHash := crypto.Keccak256Hash(payloadAttributes.BlockMetadata.TxList[:])
 			// Cache the mined block for later use.
@@ -469,6 +475,8 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			// If we already are busy generating this work, then we do not need
 			// to start a second process.
 			if api.localBlocks.has(id) {
+				// Write L1Origin even if the payload is already in the cache.
+				rawdb.WriteL1Origin(api.eth.ChainDb(), l1Origin.BlockID, l1Origin)
 				return valid(&id), nil
 			}
 			payload, err := api.eth.Miner().BuildPayload(args, false)
@@ -480,12 +488,6 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			payload.SetFullBlock(block, common.Big0)
 
 			api.localBlocks.put(id, payload)
-
-			// L1Origin **MUST NOT** be nil, it's a required field in PayloadAttributesV1.
-			l1Origin := payloadAttributes.L1Origin
-
-			// Set the block hash before inserting the L1Origin into database.
-			l1Origin.L2BlockHash = block.Hash()
 
 			// Write L1Origin.
 			rawdb.WriteL1Origin(api.eth.ChainDb(), l1Origin.BlockID, l1Origin)
