@@ -251,18 +251,18 @@ var (
 	// DevnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	DevnetChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(551),
-		HomesteadBlock: big.NewInt(1),
-		EIP150Block:    big.NewInt(2),
-		EIP155Block:    big.NewInt(3),
-		EIP158Block:    big.NewInt(3),
-		ByzantiumBlock: big.NewInt(4),
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
 		XDPoS: &XDPoSConfig{
 			Period:              2,
 			Epoch:               900,
 			Reward:              5000,
 			RewardCheckpoint:    900,
 			Gap:                 450,
-			FoudationWalletAddr: common.HexToAddress("0x746249c61f5832c5eed53172776b460491bdcd5c"),
+			FoudationWalletAddr: common.HexToAddress("0xde5b54e8e7b585153add32f472e8d545e5d42a82"),
 			V2: &V2{
 				SwitchEpoch:   common.DevnetConstant.TIPV2SwitchBlock.Uint64() / 900,
 				SwitchBlock:   common.DevnetConstant.TIPV2SwitchBlock,
