@@ -426,10 +426,15 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 		}
 		return hashes
 	}
+	// TODO this can probably be made 0-alloc.
+	var enc []rlp.RawValue
+	for _, blockReceipts := range res.List {
+		enc = append(enc, blockReceipts.toStorageReceiptsRLP())
+	}
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
 		code: ReceiptsMsg,
-		Res:  &res,
+		Res:  &enc,
 	}, metadata)
 }
 
