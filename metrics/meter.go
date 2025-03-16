@@ -11,6 +11,8 @@ import (
 // new Meter.
 // Be sure to unregister the meter from the registry once it is of no use to
 // allow for garbage collection.
+var MeterTickerInterval = time.Second * 5
+
 func GetOrRegisterMeter(name string, r Registry) *Meter {
 	if r == nil {
 		r = DefaultRegistry
@@ -18,7 +20,7 @@ func GetOrRegisterMeter(name string, r Registry) *Meter {
 	return r.GetOrRegister(name, NewMeter).(*Meter)
 }
 
-// NewMeter constructs a new Meter and launches a goroutine.
+// NewMeter constructs a new Meter
 // Be sure to call Stop() once the meter is of no use to allow for garbage collection.
 func NewMeter() *Meter {
 	m := newMeter()
@@ -94,7 +96,15 @@ func (m *Meter) Stop() {
 }
 
 // Mark records the occurrence of n events.
+// It launches an arbiter goroutine to update meters if not started.
 func (m *Meter) Mark(n int64) {
+	if !metricsEnabled {
+		return
+	}
+	if !arbiter.started {
+		arbiter.started = true
+		go arbiter.loop()
+	}
 	m.uncounted.Add(n)
 }
 
@@ -129,8 +139,7 @@ var arbiter = meterTicker{meters: make(map[*Meter]struct{})}
 // meterTicker ticks meters every 5s from a single goroutine.
 // meters are references in a set for future stopping.
 type meterTicker struct {
-	mu sync.RWMutex
-
+	mu      sync.RWMutex
 	started bool
 	meters  map[*Meter]struct{}
 }
@@ -140,10 +149,6 @@ func (ma *meterTicker) add(m *Meter) {
 	ma.mu.Lock()
 	defer ma.mu.Unlock()
 	ma.meters[m] = struct{}{}
-	if !ma.started {
-		ma.started = true
-		go ma.loop()
-	}
 }
 
 // remove removes a meter from the set of ticked meters.
@@ -153,12 +158,13 @@ func (ma *meterTicker) remove(m *Meter) {
 	ma.mu.Unlock()
 }
 
-// loop ticks meters on a 5 second interval.
+// loop ticks meters on a configured interval.
 func (ma *meterTicker) loop() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(MeterTickerInterval)
 	for range ticker.C {
-		if !metricsEnabled {
-			continue
+		if len(ma.meters) == 0 || !metricsEnabled {
+			ma.started = false
+			return
 		}
 		ma.mu.RLock()
 		for meter := range ma.meters {

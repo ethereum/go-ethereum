@@ -1,8 +1,11 @@
 package metrics
 
 import (
+	"runtime"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 )
 
 func BenchmarkMeter(b *testing.B) {
@@ -80,4 +83,28 @@ func TestMeterRepeat(t *testing.T) {
 	if count := m.Snapshot().Count(); count != 10100 {
 		t.Errorf("m.Count(): 10100 != %v\n", count)
 	}
+}
+
+func TestMeterLazyInitialization(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	// Removing all meters so that goroutine stops
+	for meter, _ := range arbiter.meters {
+		arbiter.remove(meter)
+	}
+	time.Sleep(MeterTickerInterval)
+	initialGoroutines := runtime.NumGoroutine()
+	m1 := NewMeter()
+	afterCreateGoroutines := runtime.NumGoroutine()
+	if afterCreateGoroutines != initialGoroutines {
+		t.Errorf("Expected no new goroutines after meter creation, got: before=%d, after=%d",
+			initialGoroutines, afterCreateGoroutines)
+	}
+	m1.Mark(1)
+	afterMarkGoroutines := runtime.NumGoroutine()
+	if afterMarkGoroutines != initialGoroutines+1 {
+		t.Errorf("Expected exactly one new goroutine after Mark(), got: before=%d, after=%d",
+			initialGoroutines, afterMarkGoroutines)
+	}
+	m1.Stop()
+	time.Sleep(MeterTickerInterval)
 }
