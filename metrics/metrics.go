@@ -30,6 +30,7 @@ func Enabled() bool {
 // the program, before any metrics collection will happen.
 func Enable() {
 	metricsEnabled = true
+	startMeterTickerLoop()
 }
 
 var threadCreateProfile = pprof.Lookup("threadcreate")
