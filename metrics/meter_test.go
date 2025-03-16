@@ -88,7 +88,7 @@ func TestMeterRepeat(t *testing.T) {
 func TestMeterLazyInitialization(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	// Removing all meters so that goroutine stops
-	for meter, _ := range arbiter.meters {
+	for meter := range arbiter.meters {
 		arbiter.remove(meter)
 	}
 	time.Sleep(MeterTickerInterval)
