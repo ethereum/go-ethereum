@@ -403,7 +403,10 @@ func TestFreezerSuite(t *testing.T) {
 	ancienttest.TestAncientSuite(t, func(kinds []string) ethdb.AncientStore {
 		tables := make(map[string]freezerTableConfig)
 		for _, kind := range kinds {
-			tables[kind] = freezerTableConfig{noSnappy: true}
+			tables[kind] = freezerTableConfig{
+				noSnappy: true,
+				prunable: true,
+			}
 		}
 		f, _ := newFreezerForTesting(t, tables)
 		return f
@@ -411,7 +414,10 @@ func TestFreezerSuite(t *testing.T) {
 	ancienttest.TestResettableAncientSuite(t, func(kinds []string) ethdb.ResettableAncientStore {
 		tables := make(map[string]freezerTableConfig)
 		for _, kind := range kinds {
-			tables[kind] = freezerTableConfig{noSnappy: true}
+			tables[kind] = freezerTableConfig{
+				noSnappy: true,
+				prunable: true,
+			}
 		}
 		f, _ := newResettableFreezer(t.TempDir(), "", false, 2048, tables)
 		return f

@@ -346,7 +346,6 @@ func (f *Freezer) validate() error {
 	if len(f.tables) == 0 {
 		return nil
 	}
-
 	var (
 		head       uint64
 		prunedTail *uint64
@@ -364,7 +363,7 @@ func (f *Freezer) validate() error {
 		if !table.config.prunable {
 			// non-prunable tables have to start at 0
 			if table.itemHidden.Load() != 0 {
-				return fmt.Errorf("freezer table %s has a differing head: %d != %d", kind, table.items.Load(), 0)
+				return fmt.Errorf("non-prunable freezer table '%s' has a non-zero tail: %d", kind, table.itemHidden.Load())
 			}
 		} else {
 			// prunable tables have to have the same length
@@ -408,7 +407,7 @@ func (f *Freezer) repair() error {
 		if !table.config.prunable {
 			// non-prunable tables have to start at 0
 			if table.itemHidden.Load() != 0 {
-				panic(fmt.Sprintf("freezer table %s has non-zero tail: %v", kind, table.itemHidden.Load()))
+				panic(fmt.Sprintf("non-prunable freezer table %s has non-zero tail: %v", kind, table.itemHidden.Load()))
 			}
 		} else {
 			// prunable tables have to have the same length
