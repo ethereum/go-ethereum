@@ -110,10 +110,6 @@ func (db *Database) TruncateTail(n uint64) (uint64, error) {
 	panic("not supported")
 }
 
-func (db *Database) TruncateTailBlocks(n uint64) (uint64, error) {
-	panic("not supported")
-}
-
 func (db *Database) Sync() error {
 	return nil
 }

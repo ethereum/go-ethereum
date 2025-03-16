@@ -128,12 +128,10 @@ type AncientWriter interface {
 	// is item_n(start from 0). The deleted items may not be removed from the ancient store
 	// immediately, but only when the accumulated deleted data reach the threshold then
 	// will be removed all together.
+	//
+	// Note this will only truncate 'prunable' tables. Block headers and canonical
+	// hashes cannot be truncated at this time.
 	TruncateTail(n uint64) (uint64, error)
-
-	// TruncateTailBlocks discards all blocks and receipts below the given number from the
-	// ancient store. Headers are left as-is. This is intended to be used with the chain
-	// freezer specifically.
-	TruncateTailBlocks(tailBlock uint64) (uint64, error)
 
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error

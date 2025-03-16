@@ -48,7 +48,7 @@ var chainFreezerTableConfigs = map[string]freezerTableConfig{
 
 type freezerTableConfig struct {
 	noSnappy bool // disables item compression
-	prunable bool // true for tables that can be truncated by TruncateTailBlocks
+	prunable bool // true for tables that can be pruned by TruncateTail
 }
 
 const (
@@ -65,11 +65,11 @@ const (
 
 // stateFreezerTableConfigs configures whether compression is disabled for the state freezer.
 var stateFreezerTableConfigs = map[string]freezerTableConfig{
-	stateHistoryMeta:         {noSnappy: true, prunable: false},
-	stateHistoryAccountIndex: {noSnappy: false, prunable: false},
-	stateHistoryStorageIndex: {noSnappy: false, prunable: false},
-	stateHistoryAccountData:  {noSnappy: false, prunable: false},
-	stateHistoryStorageData:  {noSnappy: false, prunable: false},
+	stateHistoryMeta:         {noSnappy: true, prunable: true},
+	stateHistoryAccountIndex: {noSnappy: false, prunable: true},
+	stateHistoryStorageIndex: {noSnappy: false, prunable: true},
+	stateHistoryAccountData:  {noSnappy: false, prunable: true},
+	stateHistoryStorageData:  {noSnappy: false, prunable: true},
 }
 
 // The list of identifiers of ancient stores.

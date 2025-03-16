@@ -370,30 +370,10 @@ func (f *MemoryFreezer) TruncateHead(items uint64) (uint64, error) {
 	return old, nil
 }
 
-// TruncateTail discards any recent data below the provided threshold number.
+// TruncateTail discards all data below the provided threshold number.
+// Note this will only truncate 'prunable' tables. Block headers and canonical
+// hashes cannot be truncated at this time.
 func (f *MemoryFreezer) TruncateTail(tail uint64) (uint64, error) {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	if f.readonly {
-		return 0, errReadOnly
-	}
-	old := f.tail
-	if old >= tail {
-		return old, nil
-	}
-	for _, table := range f.tables {
-		if err := table.truncateTail(tail); err != nil {
-			return 0, err
-		}
-	}
-	f.tail = tail
-	return old, nil
-}
-
-// TruncateTailBlocks discards all data below the provided block.
-// Only truncates blocks and receipts.
-func (f *MemoryFreezer) TruncateTailBlocks(tail uint64) (uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 

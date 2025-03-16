@@ -301,32 +301,9 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 	return oitems, nil
 }
 
-// TruncateTailBlocks discards all data below the provided threshold block number.
-// This is intended to be used with the chain freezer. Unlike TruncateTail, it
-// only truncates blocks and receipts, leaving the header table where it is.
-func (f *Freezer) TruncateTailBlocks(tailBlock uint64) (uint64, error) {
-	if f.readonly {
-		return 0, errReadOnly
-	}
-	f.writeLock.Lock()
-	defer f.writeLock.Unlock()
-
-	old := f.tail.Load()
-	if old >= tailBlock {
-		return old, nil
-	}
-	for _, table := range f.tables {
-		if table.config.prunable {
-			if err := table.truncateTail(tailBlock); err != nil {
-				return 0, err
-			}
-		}
-	}
-	f.tail.Store(tailBlock)
-	return old, nil
-}
-
-// TruncateTail discards all data below the provided threshold number.
+// TruncateTail discards all data below the provided threshold number
+// Note this will only truncate 'prunable' tables. Block headers and canonical
+// hashes cannot be truncated at this time.
 func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	if f.readonly {
 		return 0, errReadOnly
@@ -339,8 +316,10 @@ func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 		return old, nil
 	}
 	for _, table := range f.tables {
-		if err := table.truncateTail(tail); err != nil {
-			return 0, err
+		if table.config.prunable {
+			if err := table.truncateTail(tail); err != nil {
+				return 0, err
+			}
 		}
 	}
 	f.tail.Store(tail)
