@@ -129,8 +129,7 @@ type AncientWriter interface {
 	// immediately, but only when the accumulated deleted data reach the threshold then
 	// will be removed all together.
 	//
-	// Note this will only truncate 'prunable' tables. Block headers and canonical
-	// hashes cannot be truncated at this time.
+	// Note that data marked as non-prunable will still be retained and remain accessible.
 	TruncateTail(n uint64) (uint64, error)
 
 	// Sync flushes all in-memory ancient store data to disk.

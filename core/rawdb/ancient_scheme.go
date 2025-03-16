@@ -37,8 +37,10 @@ const (
 	ChainFreezerReceiptTable = "receipts"
 )
 
-// chainFreezerTableConfigs configures whether compression is disabled for the ancient-tables.
-// Hashes and difficulties don't compress well.
+// chainFreezerTableConfigs configures the settings for tables in the chain freezer.
+// Compression is disabled for hashes as they don't compress well. Additionally,
+// tail truncation is disabled for the header and hash tables, as these are intended
+// to be retained long-term.
 var chainFreezerTableConfigs = map[string]freezerTableConfig{
 	ChainFreezerHeaderTable:  {noSnappy: false, prunable: false},
 	ChainFreezerHashTable:    {noSnappy: true, prunable: false},
@@ -46,6 +48,7 @@ var chainFreezerTableConfigs = map[string]freezerTableConfig{
 	ChainFreezerReceiptTable: {noSnappy: false, prunable: true},
 }
 
+// freezerTableConfig contains the settings for a freezer table.
 type freezerTableConfig struct {
 	noSnappy bool // disables item compression
 	prunable bool // true for tables that can be pruned by TruncateTail
@@ -63,7 +66,7 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
-// stateFreezerTableConfigs configures whether compression is disabled for the state freezer.
+// stateFreezerTableConfigs configures the settings for tables in the state freezer.
 var stateFreezerTableConfigs = map[string]freezerTableConfig{
 	stateHistoryMeta:         {noSnappy: true, prunable: true},
 	stateHistoryAccountIndex: {noSnappy: false, prunable: true},

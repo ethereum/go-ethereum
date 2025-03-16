@@ -301,9 +301,8 @@ func (f *Freezer) TruncateHead(items uint64) (uint64, error) {
 	return oitems, nil
 }
 
-// TruncateTail discards all data below the provided threshold number
-// Note this will only truncate 'prunable' tables. Block headers and canonical
-// hashes cannot be truncated at this time.
+// TruncateTail discards all data below the specified threshold. Note that only
+// 'prunable' tables will be truncated.
 func (f *Freezer) TruncateTail(tail uint64) (uint64, error) {
 	if f.readonly {
 		return 0, errReadOnly
