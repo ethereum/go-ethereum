@@ -56,6 +56,8 @@ type codecV5 interface {
 	// Decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
 	// The *enode.Node return value is non-nil when the input contains a handshake response.
 	Decode([]byte, string) (enode.ID, *enode.Node, v5wire.Packet, error)
+
+	CurrentChallenge(enode.ID, string) *v5wire.Whoareyou
 }
 
 // UDPv5 is the implementation of protocol version 5.
@@ -863,6 +865,19 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort
 
 // handleUnknown initiates a handshake by responding with WHOAREYOU.
 func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr netip.AddrPort) {
+	currentChallenge := t.codec.CurrentChallenge(fromID, fromAddr.String())
+	if currentChallenge != nil {
+		// This case happens when the sender issues multiple concurrent requests.
+		// Since we only support one in-progress handshake at a time, we need to tell
+		// them which handshake attempt they need to complete. We tell them to use the
+		// existing handshake attempt since the response to that one might still be in
+		// transit.
+		t.log.Warn("Repeating discv5 handshake challenge", "id", fromID, "addr", fromAddr)
+		t.sendResponse(fromID, fromAddr, currentChallenge)
+		return
+	}
+
+	// Send a fresh challenge.
 	challenge := &v5wire.Whoareyou{Nonce: p.Nonce}
 	crand.Read(challenge.IDNonce[:])
 	if n := t.GetNode(fromID); n != nil {
