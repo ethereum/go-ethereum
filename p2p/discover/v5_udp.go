@@ -204,12 +204,6 @@ func (t *UDPv5) Close() {
 	})
 }
 
-// PingWithoutResp sends a ping message to the given node.
-func (t *UDPv5) PingWithoutResp(n *enode.Node) error {
-	_, err := t.ping(n)
-	return err
-}
-
 // Resolve searches for a specific node with the given ID and tries to get the most recent
 // version of the node record for it. It returns n if the node could not be resolved.
 func (t *UDPv5) Resolve(n *enode.Node) *enode.Node {
@@ -246,7 +240,7 @@ func (t *UDPv5) ResolveNodeId(id enode.ID) *enode.Node {
 	}
 
 	// Otherwise do a network lookup.
-	result := t.Lookup(n.ID())
+	result := t.Lookup(id)
 	for _, rn := range result {
 		if rn.ID() == id {
 			if n != nil && rn.Seq() <= n.Seq() {
@@ -262,15 +256,20 @@ func (t *UDPv5) ResolveNodeId(id enode.ID) *enode.Node {
 
 // AllNodes returns all the nodes stored in the local table.
 func (t *UDPv5) AllNodes() []*enode.Node {
-	return t.tab.nodeList()
+	t.tab.mutex.Lock()
+	defer t.tab.mutex.Unlock()
+	nodes := make([]*enode.Node, 0)
+
+	for _, b := range &t.tab.buckets {
+		for _, n := range b.entries {
+			nodes = append(nodes, n.Node)
+		}
+	}
+	return nodes
 }
 
-// RoutingTableInfo returns the routing table information. Used for Portal discv5 RoutingTableInfo API.
-func (t *UDPv5) RoutingTableInfo() [][]string {
-	return t.tab.nodeIds()
-}
-
-// AddKnownNode adds a node to the routing table. Used for Portal discv5 AddEnr API.
+// AddKnownNode adds a node to the routing table.
+// The function should be used for testing only.
 func (t *UDPv5) AddKnownNode(n *enode.Node) bool {
 	return t.tab.addFoundNode(n, true)
 }
@@ -278,11 +277,6 @@ func (t *UDPv5) AddKnownNode(n *enode.Node) bool {
 // DeleteNode removes a node from the routing table. Used for Portal discv5 DeleteEnr API.
 func (t *UDPv5) DeleteNode(n *enode.Node) {
 	t.tab.deleteNode(n)
-}
-
-// WaitInit waits for the routing table to be initialized.
-func (t *UDPv5) WaitInit() {
-	t.tab.waitInit()
 }
 
 // LocalNode returns the current local Node running the
@@ -404,7 +398,7 @@ func lookupDistances(target, dest enode.ID) (dists []uint) {
 
 // ping calls PING on a node and waits for a PONG response.
 func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
-	pong, err := t.PingWithResp(n)
+	pong, err := t.Ping(n)
 	if err != nil {
 		return 0, err
 	}
@@ -412,8 +406,8 @@ func (t *UDPv5) ping(n *enode.Node) (uint64, error) {
 	return pong.ENRSeq, nil
 }
 
-// PingWithResp calls PING on a node and waits for a PONG response.
-func (t *UDPv5) PingWithResp(n *enode.Node) (*v5wire.Pong, error) {
+// Ping calls PING on a node and waits for a PONG response.
+func (t *UDPv5) Ping(n *enode.Node) (*v5wire.Pong, error) {
 	req := &v5wire.Ping{ENRSeq: t.localNode.Node().Seq()}
 	resp := t.callToNode(n, v5wire.PongMsg, req)
 	defer t.callDone(resp)
@@ -835,6 +829,11 @@ func (t *UDPv5) GetNode(id enode.ID) *enode.Node {
 		return n
 	}
 	return nil
+}
+
+// Nodes returns the nodes in the routing table.
+func (t *UDPv5) Nodes() [][]BucketNode {
+	return t.tab.Nodes()
 }
 
 // handle processes incoming packets according to their message type.

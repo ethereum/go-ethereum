@@ -84,7 +84,8 @@ func discv5Ping(ctx *cli.Context) error {
 	disc, _ := startV5(ctx)
 	defer disc.Close()
 
-	fmt.Println(disc.PingWithoutResp(n))
+	_, err := disc.Ping(n)
+	fmt.Println(err)
 	return nil
 }
 

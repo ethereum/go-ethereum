@@ -695,44 +695,7 @@ func pushNode(list []*tableNode, n *tableNode, max int) ([]*tableNode, *tableNod
 	return list, removed
 }
 
-// waitInit waits until the table is initialized.
-func (tab *Table) waitInit() {
-	<-tab.initDone
-}
-
-// nodeList returns all nodes contained in the table.
-func (tab *Table) nodeList() []*enode.Node {
-	if !tab.isInitDone() {
-		return nil
-	}
-
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
-
-	var nodes []*enode.Node
-	for _, b := range &tab.buckets {
-		for _, n := range b.entries {
-			nodes = append(nodes, n.Node)
-		}
-	}
-	return nodes
-}
-
-// nodeIds returns the node IDs in the table.
-func (tab *Table) nodeIds() [][]string {
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
-	nodes := make([][]string, 0)
-	for _, b := range &tab.buckets {
-		bucketNodes := make([]string, 0)
-		for _, n := range b.entries {
-			bucketNodes = append(bucketNodes, "0x"+n.ID().String())
-		}
-		nodes = append(nodes, bucketNodes)
-	}
-	return nodes
-}
-
+// deleteNode removes a node from the table.
 func (tab *Table) deleteNode(n *enode.Node) {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
