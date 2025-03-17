@@ -202,8 +202,8 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 			initialized:      initialized,
 			headIndexed:      rs.HeadIndexed,
 			headDelimiter:    rs.HeadDelimiter,
-			blocks:           rs.Blocks,
-			maps:             rs.Maps,
+			blocks:           common.NewRange[uint64](rs.BlocksFirst, rs.BlocksAfterLast-rs.BlocksFirst),
+			maps:             common.NewRange[uint32](rs.MapsFirst, rs.MapsAfterLast-rs.MapsFirst),
 			tailPartialEpoch: rs.TailPartialEpoch,
 		},
 		matcherSyncCh:   make(chan *FilterMapsMatcherBackend),
@@ -381,8 +381,10 @@ func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, ne
 		rs := rawdb.FilterMapsRange{
 			HeadIndexed:      newRange.headIndexed,
 			HeadDelimiter:    newRange.headDelimiter,
-			Blocks:           newRange.blocks,
-			Maps:             newRange.maps,
+			BlocksFirst:      newRange.blocks.First(),
+			BlocksAfterLast:  newRange.blocks.AfterLast(),
+			MapsFirst:        newRange.maps.First(),
+			MapsAfterLast:    newRange.maps.AfterLast(),
 			TailPartialEpoch: newRange.tailPartialEpoch,
 		}
 		rawdb.WriteFilterMapsRange(batch, rs)

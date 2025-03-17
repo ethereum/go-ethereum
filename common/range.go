@@ -17,10 +17,7 @@
 package common
 
 import (
-	"io"
 	"iter"
-
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Range represents a range of integers.
@@ -31,22 +28,6 @@ type Range[T uint32 | uint64] struct {
 // NewRange creates a new range based of first element and number of elements.
 func NewRange[T uint32 | uint64](first, count T) Range[T] {
 	return Range[T]{first, first + count}
-}
-
-// EncodeRLP implements rlp.Encoder.
-func (r *Range[T]) EncodeRLP(w io.Writer) error {
-	if err := rlp.Encode(w, &r.first); err != nil {
-		return err
-	}
-	return rlp.Encode(w, &r.afterLast)
-}
-
-// DecodeRLP implements rlp.Decoder.
-func (r *Range[T]) DecodeRLP(s *rlp.Stream) error {
-	if err := s.Decode(&r.first); err != nil {
-		return err
-	}
-	return s.Decode(&r.afterLast)
 }
 
 // First returns the first element of the range.
