@@ -16,11 +16,9 @@
 
 package params
 
-import "fmt"
-
 const (
 	LibEVMVersionMajor = 0
-	LibEVMVersionMinor = 1
+	LibEVMVersionMinor = 2
 	LibEVMVersionPatch = 0
 
 	LibEVMReleaseType      ReleaseType = BetaRelease
@@ -50,23 +48,7 @@ const (
 // triplet.
 //
 // [semver v2]: https://semver.org/
-var LibEVMVersion = func() string {
-	v := libEVMSemver{
-		geth:   semverTriplet{VersionMajor, VersionMinor, VersionPatch},
-		libEVM: semverTriplet{LibEVMVersionMajor, LibEVMVersionMinor, LibEVMVersionPatch},
-		typ:    LibEVMReleaseType,
-		rc:     libEVMReleaseCandidate,
-	}
-	return v.String()
-}()
-
-type semverTriplet struct {
-	major, minor, patch uint
-}
-
-func (t semverTriplet) String() string {
-	return fmt.Sprintf("%d.%d.%d", t.major, t.minor, t.patch)
-}
+const LibEVMVersion = "1.13.14-0.2.0.beta"
 
 // A ReleaseType is a suffix for [LibEVMVersion].
 type ReleaseType string
@@ -85,18 +67,4 @@ const (
 // "ForDefaultBranch".
 func (t ReleaseType) ForReleaseBranch() bool {
 	return t == ReleaseCandidate || t == ProductionRelease
-}
-
-type libEVMSemver struct {
-	geth, libEVM semverTriplet
-	typ          ReleaseType
-	rc           uint
-}
-
-func (v libEVMSemver) String() string {
-	suffix := v.typ
-	if suffix == ReleaseCandidate {
-		suffix = ReleaseType(fmt.Sprintf("%s.%d", suffix, v.rc))
-	}
-	return fmt.Sprintf("%s-%s.%s", v.geth, v.libEVM, suffix)
 }
