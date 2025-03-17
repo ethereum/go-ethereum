@@ -94,6 +94,8 @@
           to: /docs/developers/dapp-developer/native-accounts
         - id: Go Contract Bindings
           to: /docs/developers/dapp-developer/native-bindings
+        - id: Go Contract Bindings (v2)
+          to: /docs/developers/dapp-developer/native-bindings-v2
         - id: Geth for Mobile
           to: /docs/developers/dapp-developer/mobile
     - id: EVM tracing
