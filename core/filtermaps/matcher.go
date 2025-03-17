@@ -61,11 +61,9 @@ type SyncRange struct {
 	// block range where the index has not changed since the last matcher sync
 	// and therefore the set of matches found in this region is guaranteed to
 	// be valid and complete.
-	Valid                 bool
-	FirstValid, LastValid uint64
+	ValidBlocks common.Range[uint64]
 	// block range indexed according to the given chain head.
-	Indexed                   bool
-	FirstIndexed, LastIndexed uint64
+	IndexedBlocks common.Range[uint64]
 }
 
 // GetPotentialMatches returns a list of logs that are potential matches for the
@@ -75,7 +73,6 @@ type SyncRange struct {
 // Also note that the returned list may contain false positives.
 func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, error) {
 	params := backend.GetParams()
-	var getLogStats runtimeStats
 	// find the log value index range to search
 	firstIndex, err := backend.GetBlockLvPointer(ctx, firstBlock)
 	if err != nil {
@@ -88,8 +85,6 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	if lastIndex > 0 {
 		lastIndex--
 	}
-	firstMap, lastMap := uint32(firstIndex>>params.logValuesPerMap), uint32(lastIndex>>params.logValuesPerMap)
-	firstEpoch, lastEpoch := firstMap>>params.logMapsPerEpoch, lastMap>>params.logMapsPerEpoch
 
 	// build matcher according to the given filter criteria
 	matchers := make([]matcher, len(topics)+1)
@@ -117,45 +112,45 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	// matchers signal a match for consecutive log value indices.
 	matcher := newMatchSequence(params, matchers)
 
-	// processEpoch returns the potentially matching logs from the given epoch.
-	processEpoch := func(epochIndex uint32) ([]*types.Log, error) {
-		var logs []*types.Log
-		// create a list of map indices to process
-		fm, lm := epochIndex<<params.logMapsPerEpoch, (epochIndex+1)<<params.logMapsPerEpoch-1
-		if fm < firstMap {
-			fm = firstMap
-		}
-		if lm > lastMap {
-			lm = lastMap
-		}
-		//
-		mapIndices := make([]uint32, lm+1-fm)
-		for i := range mapIndices {
-			mapIndices[i] = fm + uint32(i)
-		}
-		// find potential matches
-		matches, err := getAllMatches(ctx, matcher, mapIndices)
-		if err != nil {
-			return logs, err
-		}
-		// get the actual logs located at the matching log value indices
-		var st int
-		getLogStats.setState(&st, stGetLog)
-		defer getLogStats.setState(&st, stNone)
-		for _, m := range matches {
-			if m == nil {
-				return nil, ErrMatchAll
-			}
-			mlogs, err := getLogsFromMatches(ctx, backend, firstIndex, lastIndex, m)
-			if err != nil {
-				return logs, err
-			}
-			logs = append(logs, mlogs...)
-		}
-		getLogStats.addAmount(st, int64(len(logs)))
-		return logs, nil
+	m := &matcherEnv{
+		ctx:        ctx,
+		backend:    backend,
+		params:     params,
+		matcher:    matcher,
+		firstIndex: firstIndex,
+		lastIndex:  lastIndex,
+		firstMap:   uint32(firstIndex >> params.logValuesPerMap),
+		lastMap:    uint32(lastIndex >> params.logValuesPerMap),
 	}
 
+	start := time.Now()
+	res, err := m.process()
+
+	if doRuntimeStats {
+		log.Info("Log search finished", "elapsed", time.Since(start))
+		for i, ma := range matchers {
+			for j, m := range ma.(matchAny) {
+				log.Info("Single matcher stats", "matchSequence", i, "matchAny", j)
+				m.(*singleMatcher).stats.print()
+			}
+		}
+		log.Info("Get log stats")
+		m.getLogStats.print()
+	}
+	return res, err
+}
+
+type matcherEnv struct {
+	getLogStats           runtimeStats // 64 bit aligned
+	ctx                   context.Context
+	backend               MatcherBackend
+	params                *Params
+	matcher               matcher
+	firstIndex, lastIndex uint64
+	firstMap, lastMap     uint32
+}
+
+func (m *matcherEnv) process() ([]*types.Log, error) {
 	type task struct {
 		epochIndex uint32
 		logs       []*types.Log
@@ -175,18 +170,18 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 			if task == nil {
 				break
 			}
-			task.logs, task.err = processEpoch(task.epochIndex)
+			task.logs, task.err = m.processEpoch(task.epochIndex)
 			close(task.done)
 		}
 		wg.Done()
 	}
 
-	start := time.Now()
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		wg.Add(1)
 		go worker()
 	}
 
+	firstEpoch, lastEpoch := m.firstMap>>m.params.logMapsPerEpoch, m.lastMap>>m.params.logMapsPerEpoch
 	var logs []*types.Log
 	// startEpoch is the next task to send whenever a worker can accept it.
 	// waitEpoch is the next task we are waiting for to finish in order to append
@@ -220,30 +215,58 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 			}
 		}
 	}
-	if doRuntimeStats {
-		log.Info("Log search finished", "elapsed", time.Since(start))
-		for i, ma := range matchers {
-			for j, m := range ma.(matchAny) {
-				log.Info("Single matcher stats", "matchSequence", i, "matchAny", j)
-				m.(*singleMatcher).stats.print()
-			}
-		}
-		log.Info("Get log stats")
-		getLogStats.print()
+	return logs, nil
+}
+
+// processEpoch returns the potentially matching logs from the given epoch.
+func (m *matcherEnv) processEpoch(epochIndex uint32) ([]*types.Log, error) {
+	var logs []*types.Log
+	// create a list of map indices to process
+	fm, lm := epochIndex<<m.params.logMapsPerEpoch, (epochIndex+1)<<m.params.logMapsPerEpoch-1
+	if fm < m.firstMap {
+		fm = m.firstMap
 	}
+	if lm > m.lastMap {
+		lm = m.lastMap
+	}
+	//
+	mapIndices := make([]uint32, lm+1-fm)
+	for i := range mapIndices {
+		mapIndices[i] = fm + uint32(i)
+	}
+	// find potential matches
+	matches, err := m.getAllMatches(mapIndices)
+	if err != nil {
+		return logs, err
+	}
+	// get the actual logs located at the matching log value indices
+	var st int
+	m.getLogStats.setState(&st, stGetLog)
+	defer m.getLogStats.setState(&st, stNone)
+	for _, match := range matches {
+		if match == nil {
+			return nil, ErrMatchAll
+		}
+		mlogs, err := m.getLogsFromMatches(match)
+		if err != nil {
+			return logs, err
+		}
+		logs = append(logs, mlogs...)
+	}
+	m.getLogStats.addAmount(st, int64(len(logs)))
 	return logs, nil
 }
 
 // getLogsFromMatches returns the list of potentially matching logs located at
 // the given list of matching log indices. Matches outside the firstIndex to
 // lastIndex range are not returned.
-func getLogsFromMatches(ctx context.Context, backend MatcherBackend, firstIndex, lastIndex uint64, matches potentialMatches) ([]*types.Log, error) {
+func (m *matcherEnv) getLogsFromMatches(matches potentialMatches) ([]*types.Log, error) {
 	var logs []*types.Log
 	for _, match := range matches {
-		if match < firstIndex || match > lastIndex {
+		if match < m.firstIndex || match > m.lastIndex {
 			continue
 		}
-		log, err := backend.GetLogByLvIndex(ctx, match)
+		log, err := m.backend.GetLogByLvIndex(m.ctx, match)
 		if err != nil {
 			return logs, fmt.Errorf("failed to retrieve log at index %d: %v", match, err)
 		}
@@ -252,6 +275,28 @@ func getLogsFromMatches(ctx context.Context, backend MatcherBackend, firstIndex,
 		}
 	}
 	return logs, nil
+}
+
+// getAllMatches creates an instance for a given matcher and set of map indices,
+// iterates through mapping layers and collects all results, then returns all
+// results in the same order as the map indices were specified.
+func (m *matcherEnv) getAllMatches(mapIndices []uint32) ([]potentialMatches, error) {
+	instance := m.matcher.newInstance(mapIndices)
+	resultsMap := make(map[uint32]potentialMatches)
+	for layerIndex := uint32(0); len(resultsMap) < len(mapIndices); layerIndex++ {
+		results, err := instance.getMatchesForLayer(m.ctx, layerIndex)
+		if err != nil {
+			return nil, err
+		}
+		for _, result := range results {
+			resultsMap[result.mapIndex] = result.matches
+		}
+	}
+	matches := make([]potentialMatches, len(mapIndices))
+	for i, mapIndex := range mapIndices {
+		matches[i] = resultsMap[mapIndex]
+	}
+	return matches, nil
 }
 
 // matcher defines a general abstraction for any matcher configuration that
@@ -279,28 +324,6 @@ type matcherInstance interface {
 type matcherResult struct {
 	mapIndex uint32
 	matches  potentialMatches
-}
-
-// getAllMatches creates an instance for a given matcher and set of map indices,
-// iterates through mapping layers and collects all results, then returns all
-// results in the same order as the map indices were specified.
-func getAllMatches(ctx context.Context, matcher matcher, mapIndices []uint32) ([]potentialMatches, error) {
-	instance := matcher.newInstance(mapIndices)
-	resultsMap := make(map[uint32]potentialMatches)
-	for layerIndex := uint32(0); len(resultsMap) < len(mapIndices); layerIndex++ {
-		results, err := instance.getMatchesForLayer(ctx, layerIndex)
-		if err != nil {
-			return nil, err
-		}
-		for _, result := range results {
-			resultsMap[result.mapIndex] = result.matches
-		}
-	}
-	matches := make([]potentialMatches, len(mapIndices))
-	for i, mapIndex := range mapIndices {
-		matches[i] = resultsMap[mapIndex]
-	}
-	return matches, nil
 }
 
 // singleMatcher implements matcher by returning matches for a single log value hash.
@@ -550,24 +573,18 @@ type matchSequence struct {
 // newInstance creates a new instance of matchSequence.
 func (m *matchSequence) newInstance(mapIndices []uint32) matcherInstance {
 	// determine set of indices to request from next matcher
-	nextIndices := make([]uint32, 0, len(mapIndices)*3/2)
 	needMatched := make(map[uint32]struct{})
 	baseRequested := make(map[uint32]struct{})
 	nextRequested := make(map[uint32]struct{})
 	for _, mapIndex := range mapIndices {
 		needMatched[mapIndex] = struct{}{}
 		baseRequested[mapIndex] = struct{}{}
-		if _, ok := nextRequested[mapIndex]; !ok {
-			nextIndices = append(nextIndices, mapIndex)
-			nextRequested[mapIndex] = struct{}{}
-		}
-		nextIndices = append(nextIndices, mapIndex+1)
-		nextRequested[mapIndex+1] = struct{}{}
+		nextRequested[mapIndex] = struct{}{}
 	}
 	return &matchSequenceInstance{
 		matchSequence: m,
 		baseInstance:  m.base.newInstance(mapIndices),
-		nextInstance:  m.next.newInstance(nextIndices),
+		nextInstance:  m.next.newInstance(mapIndices),
 		needMatched:   needMatched,
 		baseRequested: baseRequested,
 		nextRequested: nextRequested,
@@ -687,12 +704,9 @@ func (m *matchSequenceInstance) getMatchesForLayer(ctx context.Context, layerInd
 		if _, ok := m.nextRequested[mapIndex]; ok {
 			continue
 		}
-		if _, ok := m.nextRequested[mapIndex+1]; ok {
-			continue
-		}
 		matchedResults = append(matchedResults, matcherResult{
 			mapIndex: mapIndex,
-			matches:  m.params.matchResults(mapIndex, m.offset, m.baseResults[mapIndex], m.nextResults[mapIndex], m.nextResults[mapIndex+1]),
+			matches:  m.params.matchResults(mapIndex, m.offset, m.baseResults[mapIndex], m.nextResults[mapIndex]),
 		})
 		delete(m.needMatched, mapIndex)
 	}
@@ -714,9 +728,6 @@ func (m *matchSequenceInstance) dropIndices(dropIndices []uint32) {
 	for _, mapIndex := range dropIndices {
 		if m.dropNext(mapIndex) {
 			dropNext = append(dropNext, mapIndex)
-		}
-		if m.dropNext(mapIndex + 1) {
-			dropNext = append(dropNext, mapIndex+1)
 		}
 	}
 	m.nextInstance.dropIndices(dropNext)
@@ -743,9 +754,6 @@ func (m *matchSequenceInstance) evalBase(ctx context.Context, layerIndex uint32)
 		if m.dropNext(r.mapIndex) {
 			dropIndices = append(dropIndices, r.mapIndex)
 		}
-		if m.dropNext(r.mapIndex + 1) {
-			dropIndices = append(dropIndices, r.mapIndex+1)
-		}
 	}
 	if len(dropIndices) > 0 {
 		m.nextInstance.dropIndices(dropIndices)
@@ -771,9 +779,6 @@ func (m *matchSequenceInstance) evalNext(ctx context.Context, layerIndex uint32)
 	}
 	m.mergeNextStats(stats)
 	for _, r := range results {
-		if r.mapIndex > 0 && m.dropBase(r.mapIndex-1) {
-			dropIndices = append(dropIndices, r.mapIndex-1)
-		}
 		if m.dropBase(r.mapIndex) {
 			dropIndices = append(dropIndices, r.mapIndex)
 		}
@@ -792,12 +797,7 @@ func (m *matchSequenceInstance) dropBase(mapIndex uint32) bool {
 		return false
 	}
 	if _, ok := m.needMatched[mapIndex]; ok {
-		if next := m.nextResults[mapIndex]; next == nil ||
-			(len(next) > 0 && next[len(next)-1] >= (uint64(mapIndex)<<m.params.logValuesPerMap)+m.offset) {
-			return false
-		}
-		if nextNext := m.nextResults[mapIndex+1]; nextNext == nil ||
-			(len(nextNext) > 0 && nextNext[0] < (uint64(mapIndex+1)<<m.params.logValuesPerMap)+m.offset) {
+		if next := m.nextResults[mapIndex]; next == nil || len(next) > 0 {
 			return false
 		}
 	}
@@ -812,15 +812,8 @@ func (m *matchSequenceInstance) dropNext(mapIndex uint32) bool {
 	if _, ok := m.nextRequested[mapIndex]; !ok {
 		return false
 	}
-	if _, ok := m.needMatched[mapIndex-1]; ok {
-		if prevBase := m.baseResults[mapIndex-1]; prevBase == nil ||
-			(len(prevBase) > 0 && prevBase[len(prevBase)-1]+m.offset >= (uint64(mapIndex)<<m.params.logValuesPerMap)) {
-			return false
-		}
-	}
 	if _, ok := m.needMatched[mapIndex]; ok {
-		if base := m.baseResults[mapIndex]; base == nil ||
-			(len(base) > 0 && base[0]+m.offset < (uint64(mapIndex+1)<<m.params.logValuesPerMap)) {
+		if base := m.baseResults[mapIndex]; base == nil || len(base) > 0 {
 			return false
 		}
 	}
@@ -833,59 +826,39 @@ func (m *matchSequenceInstance) dropNext(mapIndex uint32) bool {
 // results at mapIndex and mapIndex+1. Note that acquiring nextNextRes may be
 // skipped and it can be substituted with an empty list if baseRes has no potential
 // matches that could be sequence matched with anything that could be in nextNextRes.
-func (params *Params) matchResults(mapIndex uint32, offset uint64, baseRes, nextRes, nextNextRes potentialMatches) potentialMatches {
+func (params *Params) matchResults(mapIndex uint32, offset uint64, baseRes, nextRes potentialMatches) potentialMatches {
 	if nextRes == nil || (baseRes != nil && len(baseRes) == 0) {
 		// if nextRes is a wild card or baseRes is empty then the sequence matcher
 		// result equals baseRes.
 		return baseRes
 	}
-	if len(nextRes) > 0 {
-		// discard items from nextRes whose corresponding base matcher results
-		// with the negative offset applied would be located at mapIndex-1.
-		start := 0
-		for start < len(nextRes) && nextRes[start] < uint64(mapIndex)<<params.logValuesPerMap+offset {
-			start++
+	if baseRes == nil || len(nextRes) == 0 {
+		// if baseRes is a wild card or nextRes is empty then the sequence matcher
+		// result is the items of nextRes with a negative offset applied.
+		result := make(potentialMatches, 0, len(nextRes))
+		min := (uint64(mapIndex) << params.logValuesPerMap) + offset
+		for _, v := range nextRes {
+			if v >= min {
+				result = append(result, v-offset)
+			}
 		}
-		nextRes = nextRes[start:]
+		return result
 	}
-	if len(nextNextRes) > 0 {
-		// discard items from nextNextRes whose corresponding base matcher results
-		// with the negative offset applied would still be located at mapIndex+1.
-		stop := 0
-		for stop < len(nextNextRes) && nextNextRes[stop] < uint64(mapIndex+1)<<params.logValuesPerMap+offset {
-			stop++
-		}
-		nextNextRes = nextNextRes[:stop]
+	// iterate through baseRes and nextRes in parallel and collect matching results.
+	maxLen := len(baseRes)
+	if l := len(nextRes); l < maxLen {
+		maxLen = l
 	}
-	maxLen := len(nextRes) + len(nextNextRes)
-	if maxLen == 0 {
-		return nextRes
-	}
-	if len(baseRes) < maxLen {
-		maxLen = len(baseRes)
-	}
-	// iterate through baseRes, nextRes and nextNextRes and collect matching results.
 	matchedRes := make(potentialMatches, 0, maxLen)
-	for _, nextRes := range []potentialMatches{nextRes, nextNextRes} {
-		if baseRes != nil {
-			for len(nextRes) > 0 && len(baseRes) > 0 {
-				if nextRes[0] > baseRes[0]+offset {
-					baseRes = baseRes[1:]
-				} else if nextRes[0] < baseRes[0]+offset {
-					nextRes = nextRes[1:]
-				} else {
-					matchedRes = append(matchedRes, baseRes[0])
-					baseRes = baseRes[1:]
-					nextRes = nextRes[1:]
-				}
-			}
+	for len(nextRes) > 0 && len(baseRes) > 0 {
+		if nextRes[0] > baseRes[0]+offset {
+			baseRes = baseRes[1:]
+		} else if nextRes[0] < baseRes[0]+offset {
+			nextRes = nextRes[1:]
 		} else {
-			// baseRes is a wild card so just return next matcher results with
-			// negative offset.
-			for len(nextRes) > 0 {
-				matchedRes = append(matchedRes, nextRes[0]-offset)
-				nextRes = nextRes[1:]
-			}
+			matchedRes = append(matchedRes, baseRes[0])
+			baseRes = baseRes[1:]
+			nextRes = nextRes[1:]
 		}
 	}
 	return matchedRes
