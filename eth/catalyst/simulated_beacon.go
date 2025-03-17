@@ -124,6 +124,14 @@ func NewSimulatedBeacon(period uint64, feeRecipient common.Address, eth *eth.Eth
 			return nil, err
 		}
 	}
+
+	// cap the dev mode period to a reasonable maximum value to avoid overflowing the time.Duration (int64) that it will occupy
+	var maxPeriod uint64 = 9223372036 // math.Floor(math.MaxInt64 / 1000000000)
+	if period > maxPeriod {
+		log.Warn(fmt.Sprintf("period exceeds maximum possible value (have: %d, max: %d).  Sanitizing period to maximum possible value.", period, maxPeriod))
+		period = maxPeriod
+	}
+
 	return &SimulatedBeacon{
 		eth:                eth,
 		period:             period,
