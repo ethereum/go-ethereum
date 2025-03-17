@@ -54,6 +54,10 @@ all:
 test: all
 	go run build/ci.go test
 
+#? quick-test: Run the tests except time-consuming tests.
+quick-test: all
+	go run build/ci.go test --quick
+
 #? lint: Run certain pre-selected linters.
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint
