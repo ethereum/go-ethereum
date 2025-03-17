@@ -1256,8 +1256,28 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 	origin := s.originalRoot
 	s.originalRoot = root
 
+	// --- Start fork code ---
+	// Track the committed nodes
+	if s.witness != nil {
+		s.witness.AddCommitted(nodes)
+	}
+	// --- End fork code ---
+
 	return newStateUpdate(noStorageWiping, origin, root, deletes, updates, nodes), nil
 }
+
+// --- Start fork code ---
+// CommitWithoutFlush is a wrapper of commit which does not commit the state mutations
+// to the configured data stores.
+func (s *StateDB) CommitWithoutFlush(deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error) {
+	ret, err := s.commit(deleteEmptyObjects, noStorageWiping)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return ret.root, nil
+}
+
+// --- End fork code ---
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
 // to the configured data stores.
