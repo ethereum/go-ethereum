@@ -176,7 +176,7 @@ func (m *matcherEnv) process() ([]*types.Log, error) {
 		wg.Done()
 	}
 
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		wg.Add(1)
 		go worker()
 	}
