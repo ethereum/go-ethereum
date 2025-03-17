@@ -450,7 +450,7 @@ func TestRangeLogs(t *testing.T) {
 	var (
 		testCase, event int
 		filter          *Filter
-		addresses       = []common.Address{common.Address{}}
+		addresses       = []common.Address{{}}
 	)
 
 	expEvent := func(exp rangeLogsTestEvent) {
