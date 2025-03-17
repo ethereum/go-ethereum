@@ -202,8 +202,8 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 			initialized:      initialized,
 			headIndexed:      rs.HeadIndexed,
 			headDelimiter:    rs.HeadDelimiter,
-			blocks:           common.NewRange[uint64](rs.BlocksFirst, rs.BlocksAfterLast-rs.BlocksFirst),
-			maps:             common.NewRange[uint32](rs.MapsFirst, rs.MapsAfterLast-rs.MapsFirst),
+			blocks:           common.NewRange(rs.BlocksFirst, rs.BlocksAfterLast-rs.BlocksFirst),
+			maps:             common.NewRange(rs.MapsFirst, rs.MapsAfterLast-rs.MapsFirst),
 			tailPartialEpoch: rs.TailPartialEpoch,
 		},
 		matcherSyncCh:   make(chan *FilterMapsMatcherBackend),
@@ -327,8 +327,8 @@ func (f *FilterMaps) init() error {
 	}
 	if bestLen > 0 {
 		cp := checkpoints[bestIdx][bestLen-1]
-		fmr.blocks = common.NewRange[uint64](cp.BlockNumber+1, 0)
-		fmr.maps = common.NewRange[uint32](uint32(bestLen)<<f.logMapsPerEpoch, 0)
+		fmr.blocks = common.NewRange(cp.BlockNumber+1, 0)
+		fmr.maps = common.NewRange(uint32(bestLen)<<f.logMapsPerEpoch, 0)
 	}
 	f.setRange(batch, f.targetView, fmr)
 	return batch.Write()
@@ -669,15 +669,15 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) error {
 	f.setRange(f.db, f.indexedView, fmr)
 	first := f.mapRowIndex(firstMap, 0)
 	count := f.mapRowIndex(firstMap+f.mapsPerEpoch, 0) - first
-	rawdb.DeleteFilterMapRows(f.db, common.NewRange[uint64](first, count))
+	rawdb.DeleteFilterMapRows(f.db, common.NewRange(first, count))
 	for mapIndex := firstMap; mapIndex < firstMap+f.mapsPerEpoch; mapIndex++ {
 		f.filterMapCache.Remove(mapIndex)
 	}
-	rawdb.DeleteFilterMapLastBlocks(f.db, common.NewRange[uint32](firstMap, f.mapsPerEpoch-1)) // keep last enrty
+	rawdb.DeleteFilterMapLastBlocks(f.db, common.NewRange(firstMap, f.mapsPerEpoch-1)) // keep last enrty
 	for mapIndex := firstMap; mapIndex < firstMap+f.mapsPerEpoch-1; mapIndex++ {
 		f.lastBlockCache.Remove(mapIndex)
 	}
-	rawdb.DeleteBlockLvPointers(f.db, common.NewRange[uint64](firstBlock, lastBlock-firstBlock)) // keep last enrty
+	rawdb.DeleteBlockLvPointers(f.db, common.NewRange(firstBlock, lastBlock-firstBlock)) // keep last enrty
 	for blockNumber := firstBlock; blockNumber < lastBlock; blockNumber++ {
 		f.lvPointerCache.Remove(blockNumber)
 	}

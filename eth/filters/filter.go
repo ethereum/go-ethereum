@@ -202,7 +202,7 @@ func (s *searchSession) syncMatcher(trimTailThreshold uint64) error {
 	// update actual search range based on current head number
 	first := min(s.firstBlock, s.syncRange.HeadNumber)
 	last := min(s.lastBlock, s.syncRange.HeadNumber)
-	s.searchRange = common.NewRange[uint64](first, last+1-first)
+	s.searchRange = common.NewRange(first, last+1-first)
 	// discard everything that is not needed or might be invalid
 	trimRange := s.syncRange.ValidBlocks
 	if trimRange.First() <= trimTailThreshold {
@@ -296,7 +296,7 @@ func (s *searchSession) doSearchIteration() error {
 	case !s.matchRange.IsEmpty() && s.matchRange.First() > s.searchRange.First():
 		// we have results but tail section is missing; do unindexed search for
 		// the tail part but still allow indexed search for missing head section
-		tailRange := common.NewRange[uint64](s.searchRange.First(), s.matchRange.First()-s.searchRange.First())
+		tailRange := common.NewRange(s.searchRange.First(), s.matchRange.First()-s.searchRange.First())
 		tailMatches, err := s.searchInRange(tailRange, false)
 		if err != nil {
 			return err
@@ -307,7 +307,7 @@ func (s *searchSession) doSearchIteration() error {
 
 	case !s.matchRange.IsEmpty() && s.matchRange.First() == s.searchRange.First() && s.searchRange.AfterLast() > s.matchRange.AfterLast():
 		// we have results but head section is missing
-		headRange := common.NewRange[uint64](s.matchRange.AfterLast(), s.searchRange.AfterLast()-s.matchRange.AfterLast())
+		headRange := common.NewRange(s.matchRange.AfterLast(), s.searchRange.AfterLast()-s.matchRange.AfterLast())
 		if !s.forceUnindexed {
 			indexedHeadRange := headRange.Intersection(s.syncRange.IndexedBlocks)
 			if !indexedHeadRange.IsEmpty() && indexedHeadRange.First() == headRange.First() {
