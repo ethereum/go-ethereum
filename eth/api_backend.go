@@ -91,7 +91,13 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 		}
 		return block, nil
 	}
-	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
+	var bn uint64
+	if number == rpc.EarliestBlockNumber {
+		bn = b.eth.blockchain.HistoryPruningCutoff()
+	} else {
+		bn = uint64(number)
+	}
+	return b.eth.blockchain.GetHeaderByNumber(bn), nil
 }
 
 func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
@@ -143,11 +149,25 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		}
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
-	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
+	bn := uint64(number)
+	if number == rpc.EarliestBlockNumber {
+		bn = b.eth.blockchain.HistoryPruningCutoff()
+	}
+	if bn < b.eth.blockchain.HistoryPruningCutoff() {
+		return nil, &prunedHistoryError{}
+	}
+	return b.eth.blockchain.GetBlockByNumber(bn), nil
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(hash), nil
+	number := b.eth.blockchain.GetBlockNumber(hash)
+	if number == nil {
+		return nil, nil
+	}
+	if *number < b.eth.blockchain.HistoryPruningCutoff() {
+		return nil, &prunedHistoryError{}
+	}
+	return b.eth.blockchain.GetBlock(hash, *number), nil
 }
 
 // GetBody returns body of a block. It does not resolve special block numbers.
@@ -172,6 +192,9 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		}
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, errors.New("hash is not currently canonical")
+		}
+		if header.Number.Uint64() < b.eth.blockchain.HistoryPruningCutoff() {
+			return nil, &prunedHistoryError{}
 		}
 		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
 		if block == nil {
@@ -232,6 +255,10 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		return stateDb, header, nil
 	}
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (b *EthAPIBackend) HistoryPruningCutoff() uint64 {
+	return b.eth.blockchain.HistoryPruningCutoff()
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
@@ -428,3 +455,8 @@ func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }
+
+type prunedHistoryError struct{}
+
+func (e *prunedHistoryError) Error() string  { return "Pruned history unavailable" }
+func (e *prunedHistoryError) ErrorCode() int { return 4444 }

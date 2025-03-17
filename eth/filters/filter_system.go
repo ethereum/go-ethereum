@@ -71,6 +71,7 @@ type Backend interface {
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
+	HistoryPruningCutoff() uint64
 }
 
 // FilterSystem holds resources shared by all filters.
@@ -139,6 +140,11 @@ func (sys *FilterSystem) cachedGetBody(ctx context.Context, elem *logCacheElem, 
 	elem.body.Store(body)
 	return body, nil
 }
+
+type prunedHistoryError struct{}
+
+func (e *prunedHistoryError) Error() string  { return "Pruned history unavailable" }
+func (e *prunedHistoryError) ErrorCode() int { return 4444 }
 
 // Type determines the kind of filter and is used to put the filter in to
 // the correct bucket when added.
@@ -303,6 +309,14 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	// Pending logs are not supported anymore.
 	if from == rpc.PendingBlockNumber || to == rpc.PendingBlockNumber {
 		return nil, errPendingLogsUnsupported
+	}
+
+	if from == rpc.EarliestBlockNumber {
+		from = rpc.BlockNumber(es.backend.HistoryPruningCutoff())
+	}
+	// Queries beyond the pruning cutoff are not supported.
+	if uint64(from) < es.backend.HistoryPruningCutoff() {
+		return nil, &prunedHistoryError{}
 	}
 
 	// only interested in new mined logs
