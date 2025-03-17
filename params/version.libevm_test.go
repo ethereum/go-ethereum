@@ -38,39 +38,39 @@ func TestLibEVMVersioning(t *testing.T) {
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 0},
-			betaRelease,
+			BetaRelease,
 			0, // ignored
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 0},
-			releaseCandidate, 1,
+			ReleaseCandidate, 1,
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 0},
-			releaseCandidate, 2,
+			ReleaseCandidate, 2,
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 0},
-			productionRelease,
+			ProductionRelease,
 			0, // ignored,
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 1}, // bump takes precedence
-			betaRelease, 0,
+			BetaRelease, 0,
 		},
 		{
 			semverTriplet{1, 13, 14},
 			semverTriplet{0, 1, 1},
-			productionRelease, 0,
+			ProductionRelease, 0,
 		},
 		{
 			semverTriplet{1, 13, 15}, // bump takes precedence
 			semverTriplet{0, 1, 1},
-			betaRelease, 0,
+			BetaRelease, 0,
 		},
 	}
 
