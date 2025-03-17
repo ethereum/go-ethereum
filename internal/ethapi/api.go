@@ -1171,14 +1171,18 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		addressesToExclude[addr] = struct{}{}
 	}
 
-	for _, auth := range args.AuthorizationList {
-		// Duplicating stateTransition.validateAuthorization() logic
-		if (!auth.ChainID.IsZero() && auth.ChainID.CmpBig(b.ChainConfig().ChainID) != 0) || auth.Nonce+1 < auth.Nonce {
-			continue
-		}
+	// Prevent redundant operations if args contain more authorizations than EVM may handle
+	maxAuthorizations := uint64(*args.Gas) / params.TxAuthTupleGas
+	if uint64(len(args.AuthorizationList)) <= maxAuthorizations {
+		for _, auth := range args.AuthorizationList {
+			// Duplicating stateTransition.validateAuthorization() logic
+			if (!auth.ChainID.IsZero() && auth.ChainID.CmpBig(b.ChainConfig().ChainID) != 0) || auth.Nonce+1 < auth.Nonce {
+				continue
+			}
 
-		if authority, err := auth.Authority(); err == nil {
-			addressesToExclude[authority] = struct{}{}
+			if authority, err := auth.Authority(); err == nil {
+				addressesToExclude[authority] = struct{}{}
+			}
 		}
 	}
 
