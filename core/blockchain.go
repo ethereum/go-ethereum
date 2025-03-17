@@ -2539,3 +2539,26 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
 }
+
+// AddZeroFeeAddress adds an address to the zero fee address list in the VM configuration
+func (bc *BlockChain) AddZeroFeeAddress(address common.Address) {
+	// Check if the address is already in the list
+	for _, addr := range bc.vmConfig.ZeroFeeAddresses {
+		if addr == address {
+			return
+		}
+	}
+	// Add the address to the list
+	bc.vmConfig.ZeroFeeAddresses = append(bc.vmConfig.ZeroFeeAddresses, address)
+	log.Info("Added zero fee address", "address", address.String())
+}
+
+// GetZeroFeeAddresses returns the current list of zero fee addresses
+func (bc *BlockChain) GetZeroFeeAddresses() []common.Address {
+	return bc.vmConfig.ZeroFeeAddresses
+}
+
+// VMConfig returns the current VM configuration
+func (bc *BlockChain) VMConfig() vm.Config {
+	return bc.vmConfig
+}

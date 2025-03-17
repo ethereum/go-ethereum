@@ -153,6 +153,9 @@ type Config struct {
 
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
+
+	// ZeroFeeAddresses is a list of addresses that are exempt from the zero fee policy.
+	ZeroFeeAddresses []common.Address `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

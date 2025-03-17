@@ -798,12 +798,15 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		workers.SetLimit(1)
 	}
 	for addr, op := range s.mutations {
+		// Log the operation and address for debugging purposes
+		log.Info("Processing state mutation", "operation", op.typ, "address", addr.Hex())
 		if op.applied || op.isDelete() {
 			continue
 		}
 		obj := s.stateObjects[addr] // closure for the task runner below
 		workers.Go(func() error {
 			if s.db.TrieDB().IsVerkle() {
+				log.Warn("Updating Verkle trie", "addr", addr.Hex())
 				obj.updateTrie()
 			} else {
 				obj.updateRoot()

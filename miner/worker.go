@@ -250,6 +250,22 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		}
 		state.StartPrefetcher("miner", bundle)
 	}
+
+	// Get the VM configuration from the blockchain to ensure consistency
+	vmConfig := miner.chain.VMConfig()
+
+	// Add debug logging about VM configuration
+	log.Debug("Making mining environment with VM config",
+		"zero_fee_addresses_count", len(vmConfig.ZeroFeeAddresses))
+
+	if len(vmConfig.ZeroFeeAddresses) > 0 {
+		for i, addr := range vmConfig.ZeroFeeAddresses {
+			log.Debug("Zero fee address in mining",
+				"index", i,
+				"address", addr.String())
+		}
+	}
+
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
@@ -257,7 +273,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		coinbase: coinbase,
 		header:   header,
 		witness:  state.Witness(),
-		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vmConfig),
 	}, nil
 }
 

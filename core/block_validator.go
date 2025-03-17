@@ -20,9 +20,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -155,6 +157,19 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+		// Add detailed debug logging for the state root mismatch
+		log.Error("State root mismatch during validation",
+			"block", header.Number,
+			"block_hash", header.Hash(),
+			"header_root", header.Root.String(),
+			"calculated_root", root.String(),
+			"error", statedb.Error())
+
+		// Log treasury account balance for debugging
+		treasuryAccount := common.HexToAddress("0xfA0B0f5d298d28EFE4d35641724141ef19C05684")
+		log.Error("Treasury account balance",
+			"balance", statedb.GetBalance(treasuryAccount))
+
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
 	}
 	return nil

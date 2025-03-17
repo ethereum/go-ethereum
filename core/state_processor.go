@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -81,6 +82,20 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	context = NewEVMBlockContext(header, p.chain, nil)
 	evm := vm.NewEVM(context, tracingStateDB, p.config, cfg)
+
+	// Add logging for VM configuration during block processing
+	log.Debug("Created EVM for block processing",
+		"block_number", header.Number,
+		"block_hash", block.Hash().String(),
+		"zero_fee_addresses_count", len(cfg.ZeroFeeAddresses))
+
+	if len(cfg.ZeroFeeAddresses) > 0 {
+		for i, addr := range cfg.ZeroFeeAddresses {
+			log.Debug("Zero fee address in block processing",
+				"index", i,
+				"address", addr.String())
+		}
+	}
 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
