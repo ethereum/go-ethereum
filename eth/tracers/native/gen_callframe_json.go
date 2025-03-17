@@ -11,11 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-var _ = (*callFrameMarshaling)(nil)
+var _ = (*CallFrameMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
-func (c callFrame) MarshalJSON() ([]byte, error) {
-	type callFrame0 struct {
+func (c CallFrame) MarshalJSON() ([]byte, error) {
+	type CallFrame0 struct {
 		Type         vm.OpCode       `json:"type"`
 		From         common.Address  `json:"from"`
 		Gas          hexutil.Uint64  `json:"gas"`
@@ -25,12 +25,12 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 		Output       hexutil.Bytes   `json:"output,omitempty" rlp:"optional"`
 		Error        string          `json:"error,omitempty" rlp:"optional"`
 		RevertReason string          `json:"revertReason,omitempty"`
-		Calls        []callFrame     `json:"calls,omitempty" rlp:"optional"`
-		Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
+		Calls        []CallFrame     `json:"calls,omitempty" rlp:"optional"`
+		Logs         []CallLog       `json:"logs,omitempty" rlp:"optional"`
 		Value        *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
 		TypeString   string          `json:"type"`
 	}
-	var enc callFrame0
+	var enc CallFrame0
 	enc.Type = c.Type
 	enc.From = c.From
 	enc.Gas = hexutil.Uint64(c.Gas)
@@ -48,8 +48,8 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON unmarshals from JSON.
-func (c *callFrame) UnmarshalJSON(input []byte) error {
-	type callFrame0 struct {
+func (c *CallFrame) UnmarshalJSON(input []byte) error {
+	type CallFrame0 struct {
 		Type         *vm.OpCode      `json:"type"`
 		From         *common.Address `json:"from"`
 		Gas          *hexutil.Uint64 `json:"gas"`
@@ -59,11 +59,11 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 		Output       *hexutil.Bytes  `json:"output,omitempty" rlp:"optional"`
 		Error        *string         `json:"error,omitempty" rlp:"optional"`
 		RevertReason *string         `json:"revertReason,omitempty"`
-		Calls        []callFrame     `json:"calls,omitempty" rlp:"optional"`
-		Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
+		Calls        []CallFrame     `json:"calls,omitempty" rlp:"optional"`
+		Logs         []CallLog       `json:"logs,omitempty" rlp:"optional"`
 		Value        *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
 	}
-	var dec callFrame0
+	var dec CallFrame0
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}

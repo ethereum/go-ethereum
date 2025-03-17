@@ -32,17 +32,13 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-//go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe_json.go
+//go:generate go run github.com/fjl/gencodec -type CallFrame -field-override CallFrameMarshaling -out gen_CallFrame_json.go
 
 func init() {
 	tracers.DefaultDirectory.Register("callTracer", newCallTracer, false)
 }
 
-type CallFrame struct {
-	callFrame
-}
-
-type callLog struct {
+type CallLog struct {
 	Address common.Address `json:"address"`
 	Topics  []common.Hash  `json:"topics"`
 	Data    hexutil.Bytes  `json:"data"`
@@ -51,7 +47,7 @@ type callLog struct {
 	Position hexutil.Uint `json:"position"`
 }
 
-type callFrame struct {
+type CallFrame struct {
 	Type         vm.OpCode       `json:"type"`
 	From         common.Address  `json:"from"`
 	Gas          uint64          `json:"gas"`
@@ -61,23 +57,23 @@ type callFrame struct {
 	Output       []byte          `json:"output,omitempty" rlp:"optional"`
 	Error        string          `json:"error,omitempty" rlp:"optional"`
 	RevertReason string          `json:"revertReason,omitempty"`
-	Calls        []callFrame     `json:"calls,omitempty" rlp:"optional"`
-	Logs         []callLog       `json:"logs,omitempty" rlp:"optional"`
+	Calls        []CallFrame     `json:"calls,omitempty" rlp:"optional"`
+	Logs         []CallLog       `json:"logs,omitempty" rlp:"optional"`
 	// Placed at end on purpose. The RLP will be decoded to 0 instead of
 	// nil if there are non-empty elements after in the struct.
 	Value            *big.Int `json:"value,omitempty" rlp:"optional"`
 	revertedSnapshot bool
 }
 
-func (f callFrame) TypeString() string {
+func (f CallFrame) TypeString() string {
 	return f.Type.String()
 }
 
-func (f callFrame) failed() bool {
+func (f CallFrame) failed() bool {
 	return len(f.Error) > 0 && f.revertedSnapshot
 }
 
-func (f *callFrame) processOutput(output []byte, err error, reverted bool) {
+func (f *CallFrame) processOutput(output []byte, err error, reverted bool) {
 	output = common.CopyBytes(output)
 	// Clear error if tx wasn't reverted. This happened
 	// for pre-homestead contract storage OOG.
@@ -105,7 +101,7 @@ func (f *callFrame) processOutput(output []byte, err error, reverted bool) {
 	}
 }
 
-type callFrameMarshaling struct {
+type CallFrameMarshaling struct {
 	TypeString string `json:"type"`
 	Gas        hexutil.Uint64
 	GasUsed    hexutil.Uint64
@@ -115,7 +111,7 @@ type callFrameMarshaling struct {
 }
 
 type callTracer struct {
-	callstack []callFrame
+	callstack []CallFrame
 	config    callTracerConfig
 	gasLimit  uint64
 	depth     int
@@ -153,9 +149,9 @@ func newCallTracerObject(ctx *tracers.Context, cfg json.RawMessage) (*callTracer
 	if err := json.Unmarshal(cfg, &config); err != nil {
 		return nil, err
 	}
-	// First callframe contains tx context info
+	// First CallFrame contains tx context info
 	// and is populated on start and end.
-	return &callTracer{callstack: make([]callFrame, 0, 1), config: config}, nil
+	return &callTracer{callstack: make([]CallFrame, 0, 1), config: config}, nil
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
@@ -170,7 +166,7 @@ func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common
 	}
 
 	toCopy := to
-	call := callFrame{
+	call := CallFrame{
 		Type:  vm.OpCode(typ),
 		From:  from,
 		To:    &toCopy,
@@ -250,7 +246,7 @@ func (t *callTracer) OnLog(log *types.Log) {
 	if t.interrupt.Load() {
 		return
 	}
-	l := callLog{
+	l := CallLog{
 		Address:  log.Address,
 		Topics:   log.Topics,
 		Data:     log.Data,
@@ -279,9 +275,9 @@ func (t *callTracer) Stop(err error) {
 	t.interrupt.Store(true)
 }
 
-// clearFailedLogs clears the logs of a callframe and all its children
+// clearFailedLogs clears the logs of a CallFrame and all its children
 // in case of execution failure.
-func clearFailedLogs(cf *callFrame, parentFailed bool) {
+func clearFailedLogs(cf *CallFrame, parentFailed bool) {
 	failed := cf.failed() || parentFailed
 	// Clear own logs
 	if failed {
