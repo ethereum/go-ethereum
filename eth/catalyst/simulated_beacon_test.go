@@ -119,6 +119,7 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 
 	includedTxs := make(map[common.Hash]struct{})
 	var includedWithdrawals []uint64
+	lastHeaderNumber := big.NewInt(0)
 
 	timer := time.NewTimer(12 * time.Second)
 	for {
@@ -131,12 +132,13 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 			for _, includedWithdrawal := range block.Withdrawals() {
 				includedWithdrawals = append(includedWithdrawals, includedWithdrawal.Index)
 			}
-			// ensure all withdrawals/txs included. this will take two blocks b/c number of withdrawals > 10
-			if len(includedTxs) == len(txs) && len(includedWithdrawals) == len(withdrawals) && ev.Header.Number.Cmp(big.NewInt(2)) == 0 {
+			lastHeaderNumber = ev.Header.Number
+			// ensure all withdrawals/txs included. this will take at least two blocks b/c number of withdrawals > 10
+			if len(includedTxs) == len(txs) && len(includedWithdrawals) == len(withdrawals) && ev.Header.Number.Cmp(big.NewInt(1)) == 1 {
 				return
 			}
 		case <-timer.C:
-			t.Fatal("timed out without including all withdrawals/txs")
+			t.Fatalf("timed out without including all withdrawals/txs, includedTxs len =  %d, includedWithdrawls = %d, lastHeaderNumber = %d", len(includedTxs), len(includedWithdrawals), lastHeaderNumber)
 		}
 	}
 }
