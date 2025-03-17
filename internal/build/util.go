@@ -136,9 +136,9 @@ func GoTool(tool string, args ...string) *exec.Cmd {
 	return exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
 }
 
-// ExpandPackagesNoVendor expands a cmd/go import path pattern, skipping
-// vendored packages.
-func ExpandPackagesNoVendor(patterns []string) []string {
+// ExpandPackages expands a cmd/go import path pattern, skip vendor
+// packages, and skip time-consuming tests according to quick flag.
+func ExpandPackages(patterns []string, quick bool) []string {
 	expand := false
 	for _, pkg := range patterns {
 		if strings.Contains(pkg, "...") {
@@ -153,9 +153,14 @@ func ExpandPackagesNoVendor(patterns []string) []string {
 		}
 		var packages []string
 		for _, line := range strings.Split(string(out), "\n") {
-			if !strings.Contains(line, "/vendor/") {
-				packages = append(packages, strings.TrimSpace(line))
+			if strings.Contains(line, "/vendor/") {
+				continue
 			}
+			if quick && strings.Contains(line, "/consensus/tests/engine_v2_tests") {
+				continue
+			}
+			packages = append(packages, strings.TrimSpace(line))
+
 		}
 		return packages
 	}
