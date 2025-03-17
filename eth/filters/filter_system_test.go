@@ -181,7 +181,7 @@ func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {
 	b.pendingReceipts = receipts
 }
 
-func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
+func newTestFilterSystem(db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
 	backend := &testBackend{db: db}
 	sys := NewFilterSystem(backend, cfg)
 	return backend, sys
@@ -197,7 +197,7 @@ func TestBlockSubscription(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		backend, sys = newTestFilterSystem(db, Config{})
 		api          = NewFilterAPI(sys)
 		genesis      = &core.Genesis{
 			Config:  params.TestChainConfig,
@@ -252,7 +252,7 @@ func TestPendingTxFilter(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		backend, sys = newTestFilterSystem(db, Config{})
 		api          = NewFilterAPI(sys)
 
 		transactions = []*types.Transaction{
@@ -308,7 +308,7 @@ func TestPendingTxFilterFullTx(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		backend, sys = newTestFilterSystem(db, Config{})
 		api          = NewFilterAPI(sys)
 
 		transactions = []*types.Transaction{
@@ -364,7 +364,7 @@ func TestPendingTxFilterFullTx(t *testing.T) {
 func TestLogFilterCreation(t *testing.T) {
 	var (
 		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
+		_, sys = newTestFilterSystem(db, Config{})
 		api    = NewFilterAPI(sys)
 
 		testCases = []struct {
@@ -411,7 +411,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 
 	var (
 		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
+		_, sys = newTestFilterSystem(db, Config{})
 		api    = NewFilterAPI(sys)
 	)
 
@@ -437,7 +437,7 @@ func TestInvalidGetLogsRequest(t *testing.T) {
 
 	var (
 		db        = rawdb.NewMemoryDatabase()
-		_, sys    = newTestFilterSystem(t, db, Config{})
+		_, sys    = newTestFilterSystem(db, Config{})
 		api       = NewFilterAPI(sys)
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
@@ -463,7 +463,7 @@ func TestInvalidGetRangeLogsRequest(t *testing.T) {
 
 	var (
 		db     = rawdb.NewMemoryDatabase()
-		_, sys = newTestFilterSystem(t, db, Config{})
+		_, sys = newTestFilterSystem(db, Config{})
 		api    = NewFilterAPI(sys)
 	)
 
@@ -478,7 +478,7 @@ func TestLogFilter(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{})
+		backend, sys = newTestFilterSystem(db, Config{})
 		api          = NewFilterAPI(sys)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -583,7 +583,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 
 	var (
 		db           = rawdb.NewMemoryDatabase()
-		backend, sys = newTestFilterSystem(t, db, Config{Timeout: timeout})
+		backend, sys = newTestFilterSystem(db, Config{Timeout: timeout})
 		api          = NewFilterAPI(sys)
 		done         = make(chan struct{})
 	)
