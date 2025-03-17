@@ -35,8 +35,7 @@ func (r Range[T]) First() T {
 	return r.first
 }
 
-// Last returns the last element of the range. The function panics if the range
-// is empty.
+// Last returns the last element of the range. This panics for empty ranges.
 func (r Range[T]) Last() T {
 	if r.first == r.afterLast {
 		panic("last item of zero length range is not allowed")
@@ -96,8 +95,7 @@ func (r Range[T]) Intersection(q Range[T]) Range[T] {
 	return i
 }
 
-// Union returns the union of two ranges. The function panics if there is a gap
-// between the ranges.
+// Union returns the union of two ranges. Panics for gapped ranges.
 func (r Range[T]) Union(q Range[T]) Range[T] {
 	if max(r.first, q.first) > min(r.afterLast, q.afterLast) {
 		panic("cannot create union; gap between ranges")
