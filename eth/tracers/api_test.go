@@ -954,6 +954,7 @@ func TestTracingWithOverrides(t *testing.T) {
 						Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether))),
 					},
 					ecRecoverAddress: override.OverrideAccount{
+						// The code below adds one to input
 						Code:             newRPCBytes(common.Hex2Bytes("60003560010160005260206000f3")),
 						MovePrecompileTo: &randomAccounts[2].addr,
 					},
@@ -965,7 +966,7 @@ func TestTracingWithOverrides(t *testing.T) {
 			blockNumber: rpc.LatestBlockNumber,
 			call: ethapi.TransactionArgs{
 				From: &randomAccounts[0].addr,
-				To:   &randomAccounts[2].addr,
+				To:   &randomAccounts[2].addr, // Moved EcRecover
 				Data: newRPCBytes(common.Hex2Bytes("82f3df49d3645876de6313df2bbe9fbce593f21341a7b03acdb9423bc171fcc9000000000000000000000000000000000000000000000000000000000000001cba13918f50da910f2d55a7ea64cf716ba31dad91856f45908dde900530377d8a112d60f36900d18eb8f9d3b4f85a697b545085614509e3520e4b762e35d0d6bd")),
 			},
 			config: &TraceCallConfig{
@@ -974,8 +975,9 @@ func TestTracingWithOverrides(t *testing.T) {
 						Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether))),
 					},
 					ecRecoverAddress: override.OverrideAccount{
+						// The code below adds one to input
 						Code:             newRPCBytes(common.Hex2Bytes("60003560010160005260206000f3")),
-						MovePrecompileTo: &randomAccounts[2].addr,
+						MovePrecompileTo: &randomAccounts[2].addr, // Move EcRecover to this address
 					},
 				},
 			},
