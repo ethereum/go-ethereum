@@ -108,7 +108,7 @@ func payloadVersion(config *params.ChainConfig, time uint64) engine.PayloadVersi
 }
 
 // NewSimulatedBeacon constructs a new simulated beacon chain.
-func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, error) {
+func NewSimulatedBeacon(period uint64, feeRecipient common.Address, eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	block := eth.BlockChain().CurrentBlock()
 	current := engine.ForkchoiceStateV1{
 		HeadBlockHash:      block.Hash(),
@@ -131,6 +131,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 		engineAPI:          engineAPI,
 		lastBlockTime:      block.Time,
 		curForkchoiceState: current,
+		feeRecipient:       feeRecipient,
 	}, nil
 }
 

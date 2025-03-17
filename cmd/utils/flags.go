@@ -1757,8 +1757,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		// the miner will fail to start.
 		cfg.Miner.PendingFeeRecipient = developer.Address
 
-		if err := ks.Unlock(developer, passphrase); err != nil {
-			Fatalf("Failed to unlock developer account: %v", err)
+		// try to unlock the first keystore account
+		if len(ks.Accounts()) > 0 {
+			if err := ks.Unlock(developer, passphrase); err != nil {
+				Fatalf("Failed to unlock developer account: %v", err)
+			}
 		}
 		log.Info("Using developer account", "address", developer.Address)
 
