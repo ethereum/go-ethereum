@@ -43,6 +43,11 @@ var (
 	// ErrNoCodeAfterDeploy is returned by WaitDeployed if contract creation leaves
 	// an empty contract behind.
 	ErrNoCodeAfterDeploy = errors.New("no contract code after deployment")
+
+	// ErrNoAddressInReceipt is returned by WaitDeployed when the receipt for the
+	// transaction hash does not contain a contract address. This error may indicate
+	// that the transaction hash was not a CREATE transaction.
+	ErrNoAddressInReceipt = errors.New("no contract address in receipt")
 )
 
 // ContractCaller defines the methods needed to allow operating with a contract on a read
@@ -117,4 +122,12 @@ type ContractBackend interface {
 	ContractCaller
 	ContractTransactor
 	ContractFilterer
+}
+
+// Backend combines all backend methods used in this package. This type is provided for
+// convenience. It is meant to be used when you need to hold a reference to a backend that
+// is used for both deployment and contract interaction.
+type Backend interface {
+	DeployBackend
+	ContractBackend
 }
