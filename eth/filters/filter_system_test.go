@@ -607,7 +607,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	// Create a bunch of filters that will
 	// timeout either in 100ms or 200ms
 	subs := make([]*Subscription, 20)
-	for i := 0; i < len(subs); i++ {
+	for i := range subs {
 		fid := api.NewPendingTransactionFilter(nil)
 		api.filtersMu.Lock()
 		f, ok := api.filters[fid]
