@@ -55,4 +55,17 @@ var (
 		AddFork("CAPELLA", 256, []byte{4, 1, 112, 0}).
 		AddFork("DENEB", 29696, []byte{5, 1, 112, 0}).
 		AddFork("ELECTRA", 115968, []byte{6, 1, 112, 0})
+
+	HoodiLightConfig = (&ChainConfig{
+		GenesisValidatorsRoot: common.HexToHash("0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"),
+		GenesisTime:           1742212800,
+		Checkpoint:            common.HexToHash(""),
+	}).
+		AddFork("GENESIS", 0, common.FromHex("0x10000910")).
+		AddFork("ALTAIR", 0, common.FromHex("0x20000910")).
+		AddFork("BELLATRIX", 0, common.FromHex("0x30000910")).
+		AddFork("CAPELLA", 0, common.FromHex("0x40000910")).
+		AddFork("DENEB", 0, common.FromHex("0x50000910")).
+		AddFork("ELECTRA", 2048, common.FromHex("0x60000910")).
+		AddFork("FULU", 18446744073709551615, common.FromHex("0x70000910"))
 )

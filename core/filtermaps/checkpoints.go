@@ -46,6 +46,9 @@ var checkpointsSepoliaJSON []byte
 //go:embed checkpoints_holesky.json
 var checkpointsHoleskyJSON []byte
 
+//go:embed checkpoints_hoodi.json
+var checkpointsHoodiJSON []byte
+
 // checkpoints lists sets of checkpoints for multiple chains. The matching
 // checkpoint set is autodetected by the indexer once the canonical chain is
 // known.
@@ -53,6 +56,7 @@ var checkpoints = []checkpointList{
 	decodeCheckpoints(checkpointsMainnetJSON),
 	decodeCheckpoints(checkpointsSepoliaJSON),
 	decodeCheckpoints(checkpointsHoleskyJSON),
+	decodeCheckpoints(checkpointsHoodiJSON),
 }
 
 func decodeCheckpoints(encoded []byte) (result checkpointList) {
