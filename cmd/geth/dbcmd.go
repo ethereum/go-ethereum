@@ -631,7 +631,6 @@ func importLDBdata(ctx *cli.Context) error {
 	start := 0
 	switch ctx.NArg() {
 	case 1:
-		break
 	case 2:
 		s, err := strconv.Atoi(ctx.Args().Get(1))
 		if err != nil {
