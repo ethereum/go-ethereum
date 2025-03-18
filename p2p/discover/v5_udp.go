@@ -833,7 +833,7 @@ func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr netip
 		// them which handshake attempt they need to complete. We tell them to use the
 		// existing handshake attempt since the response to that one might still be in
 		// transit.
-		t.log.Warn("Repeating discv5 handshake challenge", "id", fromID, "addr", fromAddr)
+		t.log.Debug("Repeating discv5 handshake challenge", "id", fromID, "addr", fromAddr)
 		t.sendResponse(fromID, fromAddr, currentChallenge)
 		return
 	}
