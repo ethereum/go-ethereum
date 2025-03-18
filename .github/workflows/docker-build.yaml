@@ -1,0 +1,29 @@
+name: Build and Push Docker image to my DockerHub repo
+
+on:
+  pull_request:
+    types:
+      - closed
+
+jobs:
+  build-and-push:
+    if: contains(github.event.pull_request.labels.*.name, 'CI:Build') && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Build Docker Image
+        run: |
+          docker build -t mtotovski/go-ethereum:latest .
+
+      - name: Push Docker Image
+        run: |
+          docker push mtotovski/go-ethereum:latest
