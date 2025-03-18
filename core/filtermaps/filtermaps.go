@@ -70,6 +70,7 @@ type FilterMaps struct {
 	indexLock    sync.RWMutex
 	indexedRange filterMapsRange
 	indexedView  *ChainView // always consistent with the log index
+	hasTempRange bool
 
 	// also accessed by indexer and matcher backend but no locking needed.
 	filterMapCache *lru.Cache[uint32, filterMap]
@@ -94,7 +95,7 @@ type FilterMaps struct {
 	ptrTailUnindexMap                                            uint32
 
 	targetView            *ChainView
-	matcherSyncRequest    *FilterMapsMatcherBackend
+	matcherSyncRequests   []*FilterMapsMatcherBackend
 	historyCutoff         uint64
 	finalBlock, lastFinal uint64
 	lastFinalEpoch        uint32
@@ -330,7 +331,7 @@ func (f *FilterMaps) init() error {
 		fmr.blocks = common.NewRange(cp.BlockNumber+1, 0)
 		fmr.maps = common.NewRange(uint32(bestLen)<<f.logMapsPerEpoch, 0)
 	}
-	f.setRange(batch, f.targetView, fmr)
+	f.setRange(batch, f.targetView, fmr, false)
 	return batch.Write()
 }
 
@@ -373,9 +374,10 @@ func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
 // setRange updates the indexed chain view and covered range and also adds the
 // changes to the given batch.
 // Note that this function assumes that the index write lock is being held.
-func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, newRange filterMapsRange) {
+func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, newRange filterMapsRange, isTempRange bool) {
 	f.indexedView = newView
 	f.indexedRange = newRange
+	f.hasTempRange = isTempRange
 	f.updateMatchersValidRange()
 	if newRange.initialized {
 		rs := rawdb.FilterMapsRange{
@@ -666,7 +668,7 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) error {
 	} else {
 		return errors.New("invalid tail epoch number")
 	}
-	f.setRange(f.db, f.indexedView, fmr)
+	f.setRange(f.db, f.indexedView, fmr, false)
 	first := f.mapRowIndex(firstMap, 0)
 	count := f.mapRowIndex(firstMap+f.mapsPerEpoch, 0) - first
 	rawdb.DeleteFilterMapRows(f.db, common.NewRange(first, count))
