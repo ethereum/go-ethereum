@@ -18,9 +18,11 @@ package enr
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +110,40 @@ func TestGetSetClientInfo(t *testing.T) {
 	assert.Equal(t, clientWithBuild, clientWithBuild2)
 }
 
+// This tests the decoding of an EIP-7636 compatible ENR
+func TestDecodingENRWith7636(t *testing.T) {
+	enr := "enr:-MO4QBn4OF-y-dqULg4WOIlc8gQAt-arldNFe0_YQ4HNX28jDtg41xjDyKfCXGfZaPN97I-MCfogeK91TyqmWTpb0_AChmNsaWVudNqKTmV0aGVybWluZIYxLjkuNTOHN2ZjYjU2N4JpZIJ2NIJpcIR_AAABg2lwNpAAAAAAAAAAAAAAAAAAAAABiXNlY3AyNTZrMaECn-TTdCwfZP4XgJyq8Lxoj-SgEoIFgDLVBEUqQk4HnAqDdWRwgiMshHVkcDaCIyw"
+	b, err := base64.RawURLEncoding.DecodeString(strings.Replace(enr, "enr:", "", 1))
+
+	if err != nil {
+		t.Error(err)
+		return;
+	}
+
+	record, _, err := decodeRecord(rlp.NewStream(bytes.NewReader(b), 0))
+	if err != nil {
+		t.Error(err)
+		return;
+	}
+
+	var client Client;
+	err = record.Load(&client);
+	if err != nil {
+		t.Error(err)
+		return;
+	}
+
+	if client[0] == nil || client[1] == nil || client[2] == nil {
+		t.Error("Client info is not decoded correctly")
+		return;
+	}
+
+	// Check that the client info is correct
+	assert.Equal(t, "Nethermind", *client[0])
+	assert.Equal(t, "1.9.53", *client[1])
+	assert.Equal(t, "7fcb567", *client[2])
+}
+
 func TestLoadErrors(t *testing.T) {
 	var r Record
 	ip4 := IPv4{127, 0, 0, 1}
@@ -134,6 +170,8 @@ func TestLoadErrors(t *testing.T) {
 		t.Error("IsNotFound should return false for decoding errors")
 	}
 }
+
+
 
 // TestSortedGetAndSet tests that Set produced a sorted pairs slice.
 func TestSortedGetAndSet(t *testing.T) {
