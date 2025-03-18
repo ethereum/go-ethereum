@@ -366,8 +366,8 @@ func unindexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, in
 
 // PruneTransactionIndex removes all tx index entries below a certain block number.
 func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
-	index := NewTable(db, string(txLookupPrefix))
-	iter := index.NewIterator(nil, nil)
+	db = NewTable(db, string(txLookupPrefix))
+	iter := db.NewIterator(nil, nil)
 	defer iter.Release()
 
 	for iter.Next() {
@@ -378,8 +378,7 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		}
 		bn := decodeNumber(v)
 		if bn < pruneBlock {
-			fmt.Println("found entry", iter.Key())
-			// db.Delete(iter.Key())
+			db.Delete(iter.Key())
 		}
 	}
 }
