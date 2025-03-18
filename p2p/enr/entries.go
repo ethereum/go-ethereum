@@ -153,6 +153,41 @@ func (v *IPv4) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// Client is the "client" key, which holds the EIP-7636 client info.
+type Client [3]*string;
+
+func (v Client) ENRKey() string { return "client" }
+
+// EncodeRLP implements rlp.Encoder.
+func (v Client) EncodeRLP(w io.Writer) error {
+	var list []string
+	for _, s := range v {
+		if s != nil {
+			list = append(list, *s)
+		}
+	}
+	if len(list) < 2 || len(list) > 3 {
+		return fmt.Errorf("invalid client info length: %d", len(list))
+	}
+	return rlp.Encode(w, list)
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (v *Client) DecodeRLP(s *rlp.Stream) error {
+	var list []string
+	if err := s.Decode(&list); err != nil {
+		return err
+	}
+	if len(list) < 2 || len(list) > 3 {
+		return fmt.Errorf("invalid client info length: %d", len(list))
+	}
+	for i := 0; i < len(list); i++ {
+		str := list[i]
+		v[i] = &str
+	}
+	return nil
+}
+
 // IPv6 is the "ip6" key, which holds the IP address of the node.
 type IPv6 net.IP
 

@@ -81,6 +81,33 @@ func TestGetSetUDP(t *testing.T) {
 	assert.Equal(t, port, port2)
 }
 
+// TestGetSetClientInfo tests encoding/decoding and setting/getting of the Client key.
+func TestGetSetClientInfo(t *testing.T) {
+	name := "go-ethereum"
+	ver := "1.0.0"
+	build := "build-example"
+
+	// Without build info
+
+	client := Client(Client{&name, &ver, nil})
+	var r Record
+	r.Set(client)
+
+	var client2 Client
+	require.NoError(t, r.Load(&client2))
+	assert.Equal(t, client, client2)
+
+	// With build info
+
+	clientWithBuild := Client(Client{&name, &ver, &build})
+	var r2 Record
+	r2.Set(clientWithBuild)
+
+	var clientWithBuild2 Client
+	require.NoError(t, r2.Load(&clientWithBuild2))
+	assert.Equal(t, clientWithBuild, clientWithBuild2)
+}
+
 func TestLoadErrors(t *testing.T) {
 	var r Record
 	ip4 := IPv4{127, 0, 0, 1}
