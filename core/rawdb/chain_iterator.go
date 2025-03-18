@@ -374,9 +374,9 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		return // index ends above pruneBlock
 	}
 
-	// There are transactions below pruneBlock in the index. Iterate the entire index to
-	// remove the entries. Note if this fails, the index is messed up, but tail still
-	// points to the old tail.
+	// There are blocks below pruneBlock in the index. Iterate the entire index to remove
+	// their entries. Note if this fails, the index is messed up, but tail still points to
+	// the old tail.
 	var (
 		iter    = db.NewIterator(txLookupPrefix, nil)
 		count   int
