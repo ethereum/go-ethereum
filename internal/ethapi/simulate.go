@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -93,6 +92,44 @@ type simOpts struct {
 	TraceTransfers         bool
 	Validation             bool
 	ReturnFullTransactions bool
+}
+
+// simChainHeadReader implements ChainHeaderReader which is needed as input for FinalizeAndAssemble.
+type simChainHeadReader struct {
+	context.Context
+	Backend
+}
+
+func (m *simChainHeadReader) Config() *params.ChainConfig {
+	return m.Backend.ChainConfig()
+}
+
+func (m *simChainHeadReader) CurrentHeader() *types.Header {
+	return m.Backend.CurrentHeader()
+}
+
+func (m *simChainHeadReader) GetHeader(hash common.Hash, number uint64) *types.Header {
+	header, err := m.Backend.HeaderByHash(m.Context, hash)
+	if err != nil {
+		return nil
+	}
+	return header
+}
+
+func (m *simChainHeadReader) GetHeaderByNumber(number uint64) *types.Header {
+	header, err := m.Backend.HeaderByNumber(m.Context, rpc.BlockNumber(number))
+	if err != nil {
+		return nil
+	}
+	return header
+}
+
+func (m *simChainHeadReader) GetHeaderByHash(hash common.Hash) *types.Header {
+	header, err := m.Backend.HeaderByHash(m.Context, hash)
+	if err != nil {
+		return nil
+	}
+	return header
 }
 
 // simulator is a stateful object that simulates a series of blocks.
@@ -278,22 +315,13 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		reqHash := types.CalcRequestsHash(requests)
 		header.RequestsHash = &reqHash
 	}
-	var withdrawals types.Withdrawals
-	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
-		if block.BlockOverrides.Withdrawals != nil {
-			withdrawals = *block.BlockOverrides.Withdrawals
-		} else {
-			withdrawals = make([]*types.Withdrawal, 0)
-		}
+
+	blockBody := &types.Body{Transactions: txes, Withdrawals: *block.BlockOverrides.Withdrawals}
+	chainHeadReader := &simChainHeadReader{ctx, sim.b}
+	b, err := sim.b.Engine().FinalizeAndAssemble(chainHeadReader, header, sim.state, blockBody, receipts)
+	if err != nil {
+		return nil, nil, err
 	}
-	blockBody := &types.Body{Transactions: txes, Withdrawals: withdrawals}
-	if block.BlockOverrides.Withdrawals != nil {
-		// We assume that if the user provides Withdrawals, we're operating on Beacon consensus
-		// which can have nil ChainHeadReader
-		sim.b.Engine().Finalize(nil, header, sim.state, blockBody)
-	}
-	header.Root = sim.state.IntermediateRoot(true)
-	b := types.NewBlock(header, blockBody, receipts, trie.NewStackTrie(nil))
 	repairLogs(callResults, b.Hash())
 	return b, callResults, nil
 }
