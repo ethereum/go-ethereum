@@ -392,7 +392,9 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 			}
 			// do not exit while in partially written state but do allow processing
 			// events and pausing while block processing is in progress
+			r.f.indexLock.Unlock()
 			pauseCb()
+			r.f.indexLock.Lock()
 			batch = r.f.db.NewBatch()
 		}
 	}
