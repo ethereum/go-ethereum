@@ -665,7 +665,7 @@ func pruneHistory(ctx *cli.Context) error {
 	// TODO(s1na): what if there is a crash between the two prune operations?
 
 	// Truncate everything up to merge block
-	if _, err := chaindb.TruncateTailBlocks(mergeBlock); err != nil {
+	if _, err := chaindb.TruncateTail(mergeBlock); err != nil {
 		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
 
