@@ -41,7 +41,7 @@ var (
 	}
 )
 
-const passCount = 1
+const passCount = 3
 
 func filterPerfCmd(ctx *cli.Context) error {
 	cfg := testConfigFromCLI(ctx)
@@ -61,7 +61,7 @@ func filterPerfCmd(ctx *cli.Context) error {
 	}
 
 	// Run test queries.
-	var failed, mismatch int
+	var failed, pruned, mismatch int
 	for i := 1; i <= passCount; i++ {
 		fmt.Println("Performance test pass", i, "/", passCount)
 		for len(queries) > 0 {
@@ -71,6 +71,10 @@ func filterPerfCmd(ctx *cli.Context) error {
 			queries = queries[:len(queries)-1]
 			start := time.Now()
 			qt.query.run(cfg.client, cfg.historyPruneBlock)
+			if qt.query.Err == errPrunedHistory {
+				pruned++
+				continue
+			}
 			qt.runtime = append(qt.runtime, time.Since(start))
 			slices.Sort(qt.runtime)
 			qt.medianTime = qt.runtime[len(qt.runtime)/2]
@@ -80,18 +84,19 @@ func filterPerfCmd(ctx *cli.Context) error {
 			}
 			if rhash := qt.query.calculateHash(); *qt.query.ResultHash != rhash {
 				fmt.Printf("Filter query result mismatch: fromBlock: %d toBlock: %d addresses: %v topics: %v expected hash: %064x calculated hash: %064x\n", qt.query.FromBlock, qt.query.ToBlock, qt.query.Address, qt.query.Topics, *qt.query.ResultHash, rhash)
+				mismatch++
 				continue
 			}
 			processed = append(processed, qt)
 			if len(processed)%50 == 0 {
-				fmt.Println(" processed:", len(processed), "remaining", len(queries), "failed:", failed, "result mismatch:", mismatch)
+				fmt.Println(" processed:", len(processed), "remaining", len(queries), "failed:", failed, "pruned:", pruned, "result mismatch:", mismatch)
 			}
 		}
 		queries, processed = processed, nil
 	}
 
 	// Show results and stats.
-	fmt.Println("Performance test finished; processed:", len(queries), "failed:", failed, "result mismatch:", mismatch)
+	fmt.Println("Performance test finished; processed:", len(queries), "failed:", failed, "pruned:", pruned, "result mismatch:", mismatch)
 	stats := make([]bucketStats, len(f.queries))
 	var wildcardStats bucketStats
 	for _, qt := range queries {
