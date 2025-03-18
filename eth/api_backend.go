@@ -78,7 +78,8 @@ func (b *EthApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNum
 	// Otherwise resolve and return the block
 	if blockNr == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock().Header(), nil
-	} else if blockNr == rpc.CommittedBlockNumber {
+	}
+	if blockNr == rpc.CommittedBlockNumber {
 		if b.eth.chainConfig.XDPoS == nil {
 			return nil, errors.New("PoW does not support confirmed block lookup")
 		}
@@ -131,7 +132,8 @@ func (b *EthApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumb
 	// Otherwise resolve and return the block
 	if blockNr == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock(), nil
-	} else if blockNr == rpc.CommittedBlockNumber {
+	}
+	if blockNr == rpc.CommittedBlockNumber {
 		if b.eth.chainConfig.XDPoS == nil {
 			return nil, errors.New("PoW does not support confirmed block lookup")
 		}

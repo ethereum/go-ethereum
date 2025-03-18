@@ -101,7 +101,7 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	case "pending":
 		*bn = PendingBlockNumber
 		return nil
-	case "committed":
+	case "committed", "finalized":
 		*bn = CommittedBlockNumber
 		return nil
 	}
@@ -181,7 +181,7 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 		bn := PendingBlockNumber
 		bnh.BlockNumber = &bn
 		return nil
-	case "committed":
+	case "committed", "finalized":
 		bn := CommittedBlockNumber
 		bnh.BlockNumber = &bn
 		return nil
