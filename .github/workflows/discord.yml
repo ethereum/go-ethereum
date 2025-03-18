@@ -1,0 +1,20 @@
+name: Discord Notifications
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened, merged]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: >
+            New **${{ github.event_name }}**: 
+            [#${{ github.event.issue.number || github.event.pull_request.number }} - ${{ github.event.issue.title || github.event.pull_request.title }}](${{ github.event.issue.html_url || github.event.pull_request.html_url }})
+            by **${{ github.actor }}**
