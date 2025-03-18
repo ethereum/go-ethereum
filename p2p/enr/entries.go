@@ -154,7 +154,7 @@ func (v *IPv4) DecodeRLP(s *rlp.Stream) error {
 }
 
 // Client is the "client" key, which holds the EIP-7636 client info.
-type Client [3]*string;
+type Client [3]*string
 
 func (v Client) ENRKey() string { return "client" }
 

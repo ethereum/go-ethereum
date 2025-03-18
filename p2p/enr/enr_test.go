@@ -91,7 +91,7 @@ func TestGetSetClientInfo(t *testing.T) {
 
 	// Without build info
 
-	client := Client(Client{&name, &ver, nil})
+	client := Client{&name, &ver, nil}
 	var r Record
 	r.Set(client)
 
@@ -101,7 +101,7 @@ func TestGetSetClientInfo(t *testing.T) {
 
 	// With build info
 
-	clientWithBuild := Client(Client{&name, &ver, &build})
+	clientWithBuild := Client{&name, &ver, &build}
 	var r2 Record
 	r2.Set(clientWithBuild)
 
@@ -117,7 +117,7 @@ func TestDecodingENRWith7636(t *testing.T) {
 
 	if err != nil {
 		t.Error(err)
-		return;
+		return
 	}
 
 	record, _, err := decodeRecord(rlp.NewStream(bytes.NewReader(b), 0))
