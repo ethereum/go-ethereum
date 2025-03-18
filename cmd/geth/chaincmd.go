@@ -647,8 +647,6 @@ func pruneHistory(ctx *cli.Context) error {
 		return fmt.Errorf("merge block hash mismatch: got %s, want %s", hash.Hex(), mergeBlockHash)
 	}
 
-	txlookupTail := rawdb.ReadTxIndexTail(chaindb)
-
 	log.Info("Starting chain pruning",
 		"currentHeight", currentHeader.Number,
 		"mergeBlock", mergeBlock,
@@ -656,11 +654,7 @@ func pruneHistory(ctx *cli.Context) error {
 
 	start := time.Now()
 
-	// First prune the transaction lookup index as
-	// it requires the block bodies.
-	if txlookupTail != nil && *txlookupTail < mergeBlock {
-		rawdb.UnindexTransactions(chaindb, *txlookupTail, mergeBlock, nil, false)
-	}
+	rawdb.PruneTransactionIndex(chaindb, mergeBlock)
 
 	// TODO(s1na): what if there is a crash between the two prune operations?
 
