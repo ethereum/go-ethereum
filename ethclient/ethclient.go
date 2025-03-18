@@ -580,9 +580,9 @@ func (ec *Client) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (uint64
 	return uint64(hex), nil
 }
 
-// EstimateGasAt is almost the same as EstimateGas except that it selects the block height
+// EstimateGasAtBlock is almost the same as EstimateGas except that it selects the block height
 // instead of using the remote RPC's default state for gas estimation.
-func (ec *Client) EstimateGasAt(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) (uint64, error) {
+func (ec *Client) EstimateGasAtBlock(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) (uint64, error) {
 	var hex hexutil.Uint64
 	err := ec.c.CallContext(ctx, &hex, "eth_estimateGas", toCallArg(msg), toBlockNumArg(blockNumber))
 	if err != nil {
@@ -591,9 +591,9 @@ func (ec *Client) EstimateGasAt(ctx context.Context, msg ethereum.CallMsg, block
 	return uint64(hex), nil
 }
 
-// EstimateGasAtHash is almost the same as EstimateGas except that it selects the block
+// EstimateGasAtBlockHash is almost the same as EstimateGas except that it selects the block
 // hash instead of using the remote RPC's default state for gas estimation.
-func (ec *Client) EstimateGasAtHash(ctx context.Context, msg ethereum.CallMsg, blockHash common.Hash) (uint64, error) {
+func (ec *Client) EstimateGasAtBlockHash(ctx context.Context, msg ethereum.CallMsg, blockHash common.Hash) (uint64, error) {
 	var hex hexutil.Uint64
 	err := ec.c.CallContext(ctx, &hex, "eth_estimateGas", toCallArg(msg), rpc.BlockNumberOrHashWithHash(blockHash, false))
 	if err != nil {
