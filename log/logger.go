@@ -52,7 +52,6 @@ func FromLegacyLevel(lvl int) slog.Level {
 	case legacyLevelTrace:
 		return LevelTrace
 	default:
-		break
 	}
 
 	// TODO: should we allow use of custom levels or force them to match existing max/min if they fall outside the range as I am doing here?
