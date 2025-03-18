@@ -185,27 +185,30 @@ func (f *FilterMaps) lastCanonicalMapBoundaryBefore(renderBefore uint32) (nextMa
 
 // lastMapBoundaryBefore returns the latest map boundary before the specified
 // map index.
-func (f *FilterMaps) lastMapBoundaryBefore(mapIndex uint32) (uint32, bool) {
-	if !f.indexedRange.initialized || f.indexedRange.maps.AfterLast() == 0 {
+func (f *FilterMaps) lastMapBoundaryBefore(renderBefore uint32) (uint32, bool) {
+	if !f.indexedRange.initialized || f.indexedRange.maps.AfterLast() == 0 || renderBefore == 0 {
 		return 0, false
 	}
-	if mapIndex > f.indexedRange.maps.AfterLast() {
-		mapIndex = f.indexedRange.maps.AfterLast()
+	afterLastFullMap := f.indexedRange.maps.AfterLast()
+	if afterLastFullMap > 0 && f.indexedRange.headIndexed {
+		afterLastFullMap-- // last map is not full
 	}
-	if mapIndex > f.indexedRange.maps.First() {
-		return mapIndex - 1, true
+	firstRendered := min(renderBefore-1, afterLastFullMap)
+	if firstRendered == 0 {
+		return 0, false
 	}
-	if mapIndex+f.mapsPerEpoch > f.indexedRange.maps.First() {
-		if mapIndex > f.indexedRange.maps.First()-f.mapsPerEpoch+f.indexedRange.tailPartialEpoch {
-			mapIndex = f.indexedRange.maps.First() - f.mapsPerEpoch + f.indexedRange.tailPartialEpoch
-		}
+	if firstRendered >= f.indexedRange.maps.First() {
+		return firstRendered - 1, true
+	}
+	if firstRendered+f.mapsPerEpoch > f.indexedRange.maps.First() {
+		firstRendered = min(firstRendered, f.indexedRange.maps.First()-f.mapsPerEpoch+f.indexedRange.tailPartialEpoch)
 	} else {
-		mapIndex = (mapIndex >> f.logMapsPerEpoch) << f.logMapsPerEpoch
+		firstRendered = (firstRendered >> f.logMapsPerEpoch) << f.logMapsPerEpoch
 	}
-	if mapIndex == 0 {
+	if firstRendered == 0 {
 		return 0, false
 	}
-	return mapIndex - 1, true
+	return firstRendered - 1, true
 }
 
 // emptyFilterMap returns an empty filter map.
