@@ -397,7 +397,7 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 			}
 			removed++
 		}
-		if count%1000000 == 0 {
+		if count%10000000 == 0 {
 			log.Info("Pruning tx index", "count", count, "removed", removed)
 		}
 	}
