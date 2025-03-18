@@ -378,7 +378,9 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 		}
 		bn := decodeNumber(v)
 		if bn < pruneBlock {
-			db.Delete(iter.Key())
+			if err := db.Delete(iter.Key()); err != nil {
+				log.Crit("Error deleting tx lookup entry", "hash", fmt.Sprintf("%x", iter.Key()))
+			}
 		}
 	}
 }
