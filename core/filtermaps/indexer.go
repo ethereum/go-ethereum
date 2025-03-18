@@ -346,6 +346,9 @@ func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
 	if epoch > firstEpoch {
 		return true
 	}
+	if (epoch+1)<<f.logMapsPerEpoch >= f.indexedRange.maps.AfterLast() {
+		return true
+	}
 	if epoch+1 < firstEpoch {
 		return false
 	}

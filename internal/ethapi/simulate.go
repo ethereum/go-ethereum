@@ -257,9 +257,13 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		if err := sim.sanitizeCall(&call, sim.state, header, blockContext, &gasUsed); err != nil {
 			return nil, nil, err
 		}
-		tx := call.ToTransaction(types.DynamicFeeTxType)
+		var (
+			tx     = call.ToTransaction(types.DynamicFeeTxType)
+			txHash = tx.Hash()
+		)
 		txes[i] = tx
-		tracer.reset(tx.Hash(), uint(i))
+		tracer.reset(txHash, uint(i))
+		sim.state.SetTxContext(txHash, i)
 		// EoA check is always skipped, even in validation mode.
 		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, sim.gp)
