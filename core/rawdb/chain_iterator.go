@@ -377,9 +377,14 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 	// There are transactions below pruneBlock in the index. Iterate the entire index to
 	// remove the entries. Note if this fails, the index is messed up, but tail still
 	// points to the old tail.
-	iter := db.NewIterator(txLookupPrefix, nil)
+	var (
+		iter    = db.NewIterator(txLookupPrefix, nil)
+		count   int
+		removed int
+	)
 	defer iter.Release()
 	for iter.Next() {
+		count++
 		v := iter.Value()
 		if len(v) > 8 {
 			log.Error("Skipping prune legacy tx index entry", "hash", fmt.Sprintf("%x", iter.Key()))
@@ -390,8 +395,16 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 			if err := db.Delete(iter.Key()); err != nil {
 				log.Crit("Error deleting tx lookup entry", "hash", fmt.Sprintf("%x", iter.Key()))
 			}
+			removed++
+		}
+		if count%10000 == 0 {
+			log.Info("Pruning tx index", "count", count, "removed", removed)
 		}
 	}
+	if iter.Error() != nil {
+		log.Error("Tx index pruning iterator error", "err", iter.Error())
+	}
+
 	WriteTxIndexTail(db, pruneBlock)
 }
 
