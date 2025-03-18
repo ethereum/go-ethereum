@@ -27,7 +27,7 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 	var hashes []common.Hash
 	for _, batch := range h.txpool.Pending(txpool.PendingFilter{OnlyPlainTxs: true}) {
 		for _, tx := range batch {
-			hashes = append(hashes, tx.Hash)
+			hashes = append(hashes, tx.Hash())
 		}
 	}
 	if len(hashes) == 0 {
