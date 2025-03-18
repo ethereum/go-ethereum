@@ -647,25 +647,15 @@ func pruneHistory(ctx *cli.Context) error {
 		return fmt.Errorf("merge block hash mismatch: got %s, want %s", hash.Hex(), mergeBlockHash)
 	}
 
-	log.Info("Starting chain pruning",
-		"currentHeight", currentHeader.Number,
-		"mergeBlock", mergeBlock,
-		"mergeBlockHash", mergeBlockHash)
-
+	log.Info("Starting history pruning", "head", currentHeader.Number, "tail", mergeBlock, "tailHash", mergeBlockHash)
 	start := time.Now()
-
 	rawdb.PruneTransactionIndex(chaindb, mergeBlock)
-
-	// TODO(s1na): what if there is a crash between the two prune operations?
-
-	// Truncate everything up to merge block
 	if _, err := chaindb.TruncateTail(mergeBlock); err != nil {
 		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
+	log.Info("History pruning completed", "tail", mergeBlock, "elapsed", common.PrettyDuration(time.Since(start)))
 
-	log.Info("Chain pruning completed",
-		"prunedUpTo", mergeBlock,
-		"elapsed", common.PrettyDuration(time.Since(start)))
+	// TODO(s1na): what if there is a crash between the two prune operations?
 
 	return nil
 }
