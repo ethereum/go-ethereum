@@ -373,7 +373,8 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 	for iter.Next() {
 		v := iter.Value()
 		if len(v) > 8 {
-			continue // legacy entry
+			log.Error("Skipping prune legacy tx index entry", "hash", fmt.Sprintf("%x", iter.Key()))
+			continue
 		}
 		bn := decodeNumber(v)
 		if bn < pruneBlock {
