@@ -356,9 +356,7 @@ func (wc *websocketCodec) pingLoop() {
 			return
 
 		case <-wc.pingReset:
-			if !pingTimer.Stop() {
-				<-pingTimer.C
-			}
+			pingTimer.Stop()
 			pingTimer.Reset(wsPingInterval)
 
 		case <-pingTimer.C:
