@@ -7,14 +7,27 @@ on:
     types: [opened, merged]
 
 jobs:
-  notify:
+  notify-discord:
     runs-on: ubuntu-latest
     steps:
-      - uses: Ilshidur/action-discord@master
+      - name: Notify Discord about Issues
+        if: github.event_name == 'issues'
+        uses: Ilshidur/action-discord@master
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_ISSUES_WEBHOOK }}
         with:
           args: >
-            New **${{ github.event_name }}**: 
-            [#${{ github.event.issue.number || github.event.pull_request.number }} - ${{ github.event.issue.title || github.event.pull_request.title }}](${{ github.event.issue.html_url || github.event.pull_request.html_url }})
+            **Issue** ${{ github.event.action }}:
+            [#${{ github.event.issue.number }} ${{ github.event.issue.title }}](${{ github.event.issue.html_url }})
+            by **${{ github.actor }}**
+
+      - name: Notify Discord about Pull Requests
+        if: github.event_name == 'pull_request'
+        uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_PRS_WEBHOOK }}
+        with:
+          args: >
+            **PR** ${{ github.event.action }}:
+            [#${{ github.event.pull_request.number }} ${{ github.event.pull_request.title }}](${{ github.event.pull_request.html_url }})
             by **${{ github.actor }}**
