@@ -1,7 +1,7 @@
 ---
 title: Go Contract Bindings (v2)
 description: Introduction to generating contract bindings with abigen v2
---
+---
 
 
 This page introduces the concept of server-side native dapps. Geth provides the tools required to generate [Go](https://github.com/golang/go/wiki#getting-started-with-go) language bindings to any Ethereum contract that is compile-time type-safe, highly performant, and can be generated completely automatically from a compiled contract.
