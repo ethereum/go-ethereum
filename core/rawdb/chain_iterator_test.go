@@ -242,10 +242,8 @@ func TestPruneTransactionIndex(t *testing.T) {
 	for _, block := range blocks {
 		for _, tx := range block.Transactions() {
 			num := ReadTxLookupEntry(chainDB, tx.Hash())
-			if block.NumberU64() < pruneBlock {
-				if num != nil {
-					t.Fatalf("TxLookup entry not removed: %x -> %v", tx.Hash(), num)
-				}
+			if block.NumberU64() < pruneBlock && num != nil {
+				t.Fatalf("TxLookup entry not removed: %x -> %v", tx.Hash(), num)
 			}
 		}
 	}
