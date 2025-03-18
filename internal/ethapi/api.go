@@ -1174,7 +1174,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	// Prevent redundant operations if args contain more authorizations than EVM may handle
 	maxAuthorizations := uint64(*args.Gas) / params.CallNewAccountGas
 	if uint64(len(args.AuthorizationList)) > maxAuthorizations {
-		return nil, 0, nil, fmt.Errorf("insufficient gas to process all authorizations")
+		return nil, 0, nil, errors.New("insufficient gas to process all authorizations")
 	}
 
 	for _, auth := range args.AuthorizationList {
