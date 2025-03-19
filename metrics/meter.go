@@ -124,46 +124,121 @@ func (m *Meter) tick() {
 	m.a15.tick()
 }
 
-var arbiter = meterTicker{meters: make(map[*Meter]struct{})}
+var arbiter = newMeterTicker()
 
 // meterTicker ticks meters every 5s from a single goroutine.
 // meters are references in a set for future stopping.
 type meterTicker struct {
-	mu sync.RWMutex
-
-	started bool
-	meters  map[*Meter]struct{}
+	mu       sync.RWMutex
+	quit     chan struct{}
+	started  bool
+	meters   map[*Meter]struct{}
+	running  bool
+	initOnce sync.Once
 }
 
-// add adds another *Meter ot the arbiter, and starts the arbiter ticker.
+// newMeterTicker creates a new meterTicker.
+func newMeterTicker() *meterTicker {
+	return &meterTicker{
+		meters: make(map[*Meter]struct{}),
+		quit:   make(chan struct{}),
+	}
+}
+
+// add adds another *Meter to the arbiter, and lazily starts the arbiter ticker
+// only when metrics are enabled and at least one meter is added.
 func (ma *meterTicker) add(m *Meter) {
 	ma.mu.Lock()
 	defer ma.mu.Unlock()
+
 	ma.meters[m] = struct{}{}
-	if !ma.started {
-		ma.started = true
-		go ma.loop()
+
+	// Only start the ticker if metrics are enabled and we haven't started yet
+	if metricsEnabled && !ma.started {
+		ma.initOnce.Do(func() {
+			ma.started = true
+			ma.running = true
+			go ma.loop()
+		})
 	}
 }
 
 // remove removes a meter from the set of ticked meters.
 func (ma *meterTicker) remove(m *Meter) {
 	ma.mu.Lock()
+	defer ma.mu.Unlock()
+
 	delete(ma.meters, m)
-	ma.mu.Unlock()
+
+	// If we have no more meters and the ticker is running, consider stopping
+	if len(ma.meters) == 0 && ma.running {
+		ma.stop()
+	}
+}
+
+// stop stops the ticker goroutine.
+func (ma *meterTicker) stop() {
+	if ma.running {
+		close(ma.quit)
+		ma.running = false
+		ma.started = false
+		// Create a new quit channel for future use
+		ma.quit = make(chan struct{})
+		// Reset the init once so we can start again if needed
+		ma.initOnce = sync.Once{}
+	}
+}
+
+// ensureStarted ensures the ticker is started if metrics are enabled
+// and there are meters to process.
+func (ma *meterTicker) ensureStarted() {
+	ma.mu.Lock()
+	defer ma.mu.Unlock()
+
+	if metricsEnabled && len(ma.meters) > 0 && !ma.started {
+		ma.initOnce.Do(func() {
+			ma.started = true
+			ma.running = true
+			go ma.loop()
+		})
+	}
 }
 
 // loop ticks meters on a 5 second interval.
 func (ma *meterTicker) loop() {
 	ticker := time.NewTicker(5 * time.Second)
-	for range ticker.C {
-		if !metricsEnabled {
-			continue
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Skip processing if metrics are disabled
+			if !metricsEnabled {
+				continue
+			}
+			ma.mu.RLock()
+			for meter := range ma.meters {
+				meter.tick()
+			}
+			ma.mu.RUnlock()
+		case <-ma.quit:
+			return
 		}
-		ma.mu.RLock()
-		for meter := range ma.meters {
-			meter.tick()
-		}
-		ma.mu.RUnlock()
+	}
+}
+
+// EnableMetricsTicking ensures that the metrics ticker is running
+// if metrics are enabled and meters exist.
+func EnableMetricsTicking() {
+	arbiter.ensureStarted()
+}
+
+// DisableMetricsTicking stops the metrics ticker.
+func DisableMetricsTicking() {
+	arbiter.mu.Lock()
+	defer arbiter.mu.Unlock()
+
+	if arbiter.running {
+		arbiter.stop()
 	}
 }
