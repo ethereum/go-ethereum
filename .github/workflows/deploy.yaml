@@ -13,8 +13,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v2
 
+      - name: Set up Docker
+        uses: docker/setup-qemu-action@v2
+        
       - name: Set up Docker Compose
-        run: docker-compose up -d
+        run: |
+          sudo apt-get install -y docker-compose
+          docker-compose up -d
 
       - name: Install Node.js
         uses: actions/setup-node@v2
