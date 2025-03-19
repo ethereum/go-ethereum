@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/params/forks"
 )
 
 var (
@@ -153,7 +155,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), maxBlobs)
 		}
 		// Ensure commitments, proofs and hashes are valid
-		if err := validateBlobSidecar(hashes, sidecar); err != nil {
+		if err := validateBlobSidecar(opts.Config, head.Time, hashes, sidecar); err != nil {
 			return err
 		}
 	}
@@ -165,23 +167,54 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	return nil
 }
 
-func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) error {
+func validateBlobSidecar(cfg *params.ChainConfig, time uint64, hashes []common.Hash, sidecar *types.BlobTxSidecar) error {
 	if len(sidecar.Blobs) != len(hashes) {
-		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
-	}
-	if len(sidecar.Proofs) != len(hashes) {
-		return fmt.Errorf("invalid number of %d blob proofs compared to %d blob hashes", len(sidecar.Proofs), len(hashes))
+		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", ErrInvalidBlobSidecar, len(sidecar.Blobs), len(hashes))
 	}
 	if err := sidecar.ValidateBlobCommitmentHashes(hashes); err != nil {
 		return err
 	}
-	// Blob commitments match with the hashes in the transaction, verify the
-	// blobs themselves via KZG
-	for i := range sidecar.Blobs {
-		if err := kzg4844.VerifyBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i], sidecar.Proofs[i]); err != nil {
-			return fmt.Errorf("invalid blob %d: %v", i, err)
+
+	fork := cfg.LatestFork(time)
+	if fork >= forks.Osaka {
+		if len(sidecar.Blobs)*gokzg4844.CellsPerExtBlob != len(sidecar.Proofs) {
+			return fmt.Errorf("invalid number of %d cell proofs compared to %d blobs", ErrInvalidBlobSidecar, len(sidecar.Proofs), len(sidecar.Blobs))
+		}
+
+		// Prepare cells and cell indices for each blob
+		totalCells := len(sidecar.Blobs) * gokzg4844.CellsPerExtBlob
+		cells := make([]kzg4844.Cell, totalCells)
+		cellIndices := make([]uint64, totalCells)
+		for i := range sidecar.Blobs {
+			// Compute cells for the currentblob
+			blobCells, err := kzg4844.ComputeCells(&sidecar.Blobs[i])
+			if err != nil {
+				return fmt.Errorf("failed to compute cells for blob %d: %v", ErrInvalidBlobSidecar, i, err)
+			}
+
+			cells = append(cells, blobCells...)
+			for j := uint64(0); j < gokzg4844.CellsPerExtBlob; j++ {
+				cellIndices = append(cellIndices, j)
+			}
+		}
+
+		if err := kzg4844.VerifyCellKZGProofBatch(sidecar.Commitments, cellIndices, cells, sidecar.Proofs); err != nil {
+			return fmt.Errorf("failed to verify cell proofs: %v", ErrInvalidBlobSidecar, err)
+		}
+	} else { // older folks
+		if len(sidecar.Proofs) != len(hashes) {
+			return fmt.Errorf("invalid number of %d blob proofs compared to %d blob hashes", ErrInvalidBlobSidecar, len(sidecar.Proofs), len(hashes))
+		}
+
+		// Blob commitments match with the hashes in the transaction, verify the
+		// blobs themselves via KZG
+		for i := range sidecar.Blobs {
+			if err := kzg4844.VerifyBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i], sidecar.Proofs[i]); err != nil {
+				return fmt.Errorf("invalid blob %d: %v", ErrInvalidBlobSidecar, i, err)
+			}
 		}
 	}
+
 	return nil
 }
 
