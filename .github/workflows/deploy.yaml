@@ -1,0 +1,42 @@
+name: Deploy Hardhat to Devnet
+
+on:
+  pull_request:
+    types: 
+      - closed
+
+jobs:
+  deploy:
+    if: contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Compose
+        run: docker-compose up -d
+
+      - name: Install Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+
+      - name: Set up Hardhat
+        run: |
+          cd hardhat
+          npm install
+
+      - name: Deploy Contracts
+        run: |
+          cd hardhat
+          npx hardhat run scripts/deploy.js --network localhost
+
+      - name: Commit and Push Docker Image
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PAT }}
+        run: |
+          docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+          id=$(docker ps -q -f "ancestor=mtotovski/go-ethereum")
+          docker commit $id mtotovski/go-ethereum:deployed
+          docker push mtotovski/go-ethereum:deployed
