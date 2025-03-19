@@ -411,7 +411,8 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 						Number:      (*hexutil.Big)(n),
 						Time:        (*hexutil.Uint64)(&t),
 						Withdrawals: &types.Withdrawals{},
-					}}
+					},
+				}
 				prevTimestamp = t
 				res = append(res, b)
 			}
