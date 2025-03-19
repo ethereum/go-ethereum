@@ -313,6 +313,7 @@ func NewEIP2930Signer(chainId *big.Int) Signer {
 
 // EIP155Signer implements Signer using the EIP-155 rules. This accepts transactions which
 // are replay-protected as well as unprotected homestead transactions.
+// Deprecated: always use the Signer interface type
 type EIP155Signer struct {
 	chainId, chainIdMul *big.Int
 }
@@ -374,8 +375,8 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 	return tx.inner.sigHash(s.chainId)
 }
 
-// HomesteadSigner implements Signer interface using the
-// homestead rules.
+// HomesteadSigner implements Signer using the homestead rules.
+// Deprecated: always use the Signer interface type
 type HomesteadSigner struct{ FrontierSigner }
 
 func (hs HomesteadSigner) ChainID() *big.Int {
@@ -401,8 +402,8 @@ func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
 	return recoverPlain(hs.Hash(tx), r, s, v, true)
 }
 
-// FrontierSigner implements Signer interface using the
-// frontier rules.
+// FrontierSigner implements Signer using the frontier rules.
+// Deprecated: always use the Signer interface type
 type FrontierSigner struct{}
 
 func (fs FrontierSigner) ChainID() *big.Int {
