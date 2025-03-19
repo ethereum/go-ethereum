@@ -180,6 +180,7 @@ type Signer interface {
 	Equal(Signer) bool
 }
 
+// modernSigner is the signer implementation that handles non-legacy transaction types.
 type modernSigner struct {
 	txtypes map[byte]struct{}
 	chainID *big.Int
@@ -196,12 +197,12 @@ func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
 	}
 	// configure legacy signer
 	switch {
-	case fork <= forks.FrontierThawing:
-		s.legacy = FrontierSigner{}
-	case fork <= forks.Homestead:
+	case fork >= forks.SpuriousDragon:
+		s.legacy = NewEIP155Signer(chainID)
+	case fork >= forks.Homestead:
 		s.legacy = HomesteadSigner{}
 	default:
-		s.legacy = NewEIP155Signer(chainID)
+		s.legacy = FrontierSigner{}
 	}
 	s.txtypes[LegacyTxType] = struct{}{}
 	// configure tx types
@@ -220,7 +221,7 @@ func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
 	return s
 }
 
-func (s *modernSigner) supports(txtype byte) bool {
+func (s *modernSigner) supportsType(txtype byte) bool {
 	_, ok := s.txtypes[txtype]
 	return ok
 }
@@ -236,7 +237,7 @@ func (s *modernSigner) Equal(s2 Signer) bool {
 
 func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
 	tt := tx.Type()
-	if !s.supports(tt) {
+	if !s.supportsType(tt) {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
 	if tt == LegacyTxType {
@@ -254,7 +255,7 @@ func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
 
 func (s *modernSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	tt := tx.Type()
-	if !s.supports(tt) {
+	if !s.supportsType(tt) {
 		return nil, nil, nil, ErrTxTypeNotSupported
 	}
 	if tt == LegacyTxType {
