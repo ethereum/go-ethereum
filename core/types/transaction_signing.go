@@ -375,8 +375,9 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 	return tx.inner.sigHash(s.chainId)
 }
 
-// HomesteadSigner implements Signer using the homestead rules.
-// Deprecated: always use the Signer interface type
+// HomesteadSigner implements Signer using the homestead rules. The only valid reason to
+// use this type is creating legacy transactions which are intentionally not
+// replay-protected.
 type HomesteadSigner struct{ FrontierSigner }
 
 func (hs HomesteadSigner) ChainID() *big.Int {
