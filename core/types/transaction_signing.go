@@ -189,8 +189,8 @@ type modernSigner struct {
 }
 
 func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
-	if chainID == nil {
-		panic("nil chainID")
+	if chainID == nil || chainID.Sign() <= 0 {
+		panic(fmt.Sprintf("invalid chainID %v", chainID))
 	}
 	s := &modernSigner{
 		chainID: chainID,
