@@ -319,13 +319,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		reqHash := types.CalcRequestsHash(requests)
 		header.RequestsHash = &reqHash
 	}
-	var withdrawals []*types.Withdrawal
-	if block.BlockOverrides.Withdrawals != nil {
-		withdrawals = *block.BlockOverrides.Withdrawals
-	} else {
-		withdrawals = []*types.Withdrawal{}
-	}
-	blockBody := &types.Body{Transactions: txes, Withdrawals: withdrawals}
+	blockBody := &types.Body{Transactions: txes, Withdrawals: *block.BlockOverrides.Withdrawals}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
 	b, err := sim.b.Engine().FinalizeAndAssemble(chainHeadReader, header, sim.state, blockBody, receipts)
 	if err != nil {
@@ -391,6 +385,10 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 		if block.BlockOverrides.Number == nil {
 			n := new(big.Int).Add(prevNumber, big.NewInt(1))
 			block.BlockOverrides.Number = (*hexutil.Big)(n)
+		}
+		if block.BlockOverrides.Withdrawals == nil {
+			var withdrawals types.Withdrawals
+			block.BlockOverrides.Withdrawals = &withdrawals
 		}
 		diff := new(big.Int).Sub(block.BlockOverrides.Number.ToInt(), prevNumber)
 		if diff.Cmp(common.Big0) <= 0 {
