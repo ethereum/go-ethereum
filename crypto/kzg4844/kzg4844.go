@@ -168,6 +168,14 @@ func ComputeCells(blob *Blob) ([]Cell, error) {
 	return gokzgComputeCells(blob)
 }
 
+// ComputeCellsAndKZGProofs computes the cells and KZG proofs for a given blob.
+func ComputeCellsAndKZGProofs(blob *Blob) ([]Cell, []Proof, error) {
+	if useCKZG.Load() {
+		return ckzgComputeCellsAndKZGProofs(blob)
+	}
+	return gokzgComputeCellsAndKZGProofs(blob)
+}
+
 // CalcBlobHashV1 calculates the 'versioned blob hash' of a commitment.
 // The given hasher must be a sha256 hash instance, otherwise the result will be invalid!
 func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {

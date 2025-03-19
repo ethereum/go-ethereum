@@ -236,6 +236,25 @@ func makeMultiBlobTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCa
 	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
 }
 
+func makeMultiBlobTxWithCellProofs(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, blobCount int, key *ecdsa.PrivateKey) *types.Transaction {
+	tx := makeMultiBlobTx(nonce, gasTipCap, gasFeeCap, blobFeeCap, blobCount, key)
+
+	proofs := make([]kzg4844.Proof, 0)
+	for i, blob := range tx.BlobTxSidecar().Blobs {
+		cps, err := kzg4844.ComputeCells(&blob)
+		if err != nil {
+			panic(err)
+		}
+		tx.BlobTxSidecar().Proofs = append(proofs, cps...)
+	}
+	tx.Sidecar.Proofs = make([]kzg4844.Proof, blobCount)
+	for i := 0; i < blobCount; i++ {
+		tx.Sidecar.Proofs[i] = testBlobProofs[i]
+	}
+
+	return tx
+}
+
 // makeUnsignedTx is a utility method to construct a random blob transaction
 // without signing it.
 func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64) *types.BlobTx {
@@ -1478,6 +1497,19 @@ func TestAdd(t *testing.T) {
 				{ // Same as above but blob fee cap equals minimum, should be accepted
 					from: "alice",
 					tx:   makeUnsignedTx(0, 1, 1, params.BlobTxMinBlobGasprice),
+					err:  nil,
+				},
+			},
+		},
+		// Testing blob transaction verification around Osaka fork boundary
+		{
+			seeds: map[string]seed{
+				"alice": {balance: 10000000},
+			},
+			adds: []addtx{
+				{ // New account, no previous txs, nonce 0, but blob fee cap too low
+					from: "alice",
+					tx:   makeUnsignedTxWithTestBlob(0, 1, 1, 1, 0),
 					err:  nil,
 				},
 			},
