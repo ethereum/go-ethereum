@@ -269,8 +269,21 @@ func (st *StateTransition) buyGas() error {
 }
 
 func (st *StateTransition) preCheck() error {
+	// Only check transactions that are not fake
+	if !st.msg.IsFake() {
+		// Make sure the sender is an EOA
+		code := st.state.GetCode(st.msg.From())
+		_, delegated := types.ParseDelegation(code)
+		if len(code) > 0 && !delegated {
+			// If the sender on L1 is a (delegated) EOA, then it must be a (delegated) EOA on L2, too.
+			// If the sender on L1 is a contract, then we apply address aliasing.
+			// The probability that the aliased address happens to be a smart contract on L2 is negligible.
+			return fmt.Errorf("%w: address %v, len(code): %d", ErrSenderNoEOA, st.msg.From().Hex(), len(code))
+		}
+	}
+
 	if st.msg.IsL1MessageTx() {
-		// No fee fields to check, no nonce to check, and no need to check if EOA (L1 already verified it for us)
+		// No fee fields to check, no nonce to check
 		// Gas is free, but no refunds!
 		st.gas += st.msg.Gas()
 		st.initialGas = st.msg.Gas()
@@ -290,12 +303,6 @@ func (st *StateTransition) preCheck() error {
 		} else if stNonce+1 < stNonce {
 			return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
 				st.msg.From().Hex(), stNonce)
-		}
-		// Make sure the sender is an EOA
-		code := st.state.GetCode(st.msg.From())
-		_, delegated := types.ParseDelegation(code)
-		if len(code) > 0 && !delegated {
-			return fmt.Errorf("%w: address %v, len(code): %d", ErrSenderNoEOA, st.msg.From().Hex(), len(code))
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
