@@ -1220,7 +1220,6 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	if len(data) == 0 {
 		return nil
 	}
-
 	item := new(types.Transaction)
 	if err := rlp.DecodeBytes(data, item); err != nil {
 		id, _ := p.lookup.storeidOfTx(hash)
@@ -1233,8 +1232,8 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 }
 
 // GetRLP returns a RLP-encoded transaction if it is contained in the pool.
-func (p *BlobPool) GetRLP(hash common.Hash) ([]byte, error) {
-	return p.getRLP(hash), nil
+func (p *BlobPool) GetRLP(hash common.Hash) []byte {
+	return p.getRLP(hash)
 }
 
 // GetBlobs returns a number of blobs are proofs for the given versioned hashes.

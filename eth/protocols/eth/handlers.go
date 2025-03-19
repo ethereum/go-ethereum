@@ -397,8 +397,8 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsReq
 			break
 		}
 		// Retrieve the requested transaction, skipping if unknown to us
-		encoded, err := backend.TxPool().GetRLP(hash)
-		if err != nil || len(encoded) == 0 {
+		encoded := backend.TxPool().GetRLP(hash)
+		if len(encoded) == 0 {
 			continue
 		}
 		hashes = append(hashes, hash)

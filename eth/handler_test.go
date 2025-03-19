@@ -81,15 +81,16 @@ func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
 
 // Get retrieves the transaction from local txpool with given
 // tx hash.
-func (p *testTxPool) GetRLP(hash common.Hash) ([]byte, error) {
+func (p *testTxPool) GetRLP(hash common.Hash) []byte {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	tx := p.pool[hash]
 	if tx != nil {
-		return rlp.EncodeToBytes(tx)
+		blob, _ := rlp.EncodeToBytes(tx)
+		return blob
 	}
-	return nil, nil
+	return nil
 }
 
 // Add appends a batch of transactions to the pool, and notifies any

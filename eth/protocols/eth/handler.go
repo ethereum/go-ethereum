@@ -89,7 +89,7 @@ type TxPool interface {
 
 	// GetRLP retrieves the RLP-encoded transaction from the local txpool with
 	// the given hash.
-	GetRLP(hash common.Hash) ([]byte, error)
+	GetRLP(hash common.Hash) []byte
 }
 
 // MakeProtocols constructs the P2P protocol definitions for `eth`.
