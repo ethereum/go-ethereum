@@ -245,7 +245,7 @@ func TestPruneTransactionIndex(t *testing.T) {
 			if block.NumberU64() < pruneBlock && num != nil {
 				t.Fatalf("TxLookup entry not removed: %x -> %v", tx.Hash(), num)
 			}
-			if block.NumberU64() > pruneBlock && (num == nil || *num != block.NumberU64()) {
+			if block.NumberU64() >= pruneBlock && (num == nil || *num != block.NumberU64()) {
 				t.Fatalf("wrong TxLookup entry after pruning: %x -> %v", tx.Hash(), num)
 			}
 		}
