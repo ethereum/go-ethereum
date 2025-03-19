@@ -376,7 +376,7 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	var stored uint64
 	for _, txs := range pool.index {
 		for _, tx := range txs {
-			stored += uint64(tx.size)
+			stored += uint64(tx.storageSize)
 		}
 	}
 	if pool.stored != stored {
@@ -1552,6 +1552,16 @@ func TestAdd(t *testing.T) {
 			signed, _ := types.SignNewTx(keys[add.from], types.LatestSigner(params.MainnetChainConfig), add.tx)
 			if err := pool.add(signed); !errors.Is(err, add.err) {
 				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, err, add.err)
+			}
+			if add.err == nil {
+				size, exist := pool.lookup.sizeOfTx(signed.Hash())
+				if !exist {
+					t.Errorf("test %d, tx %d: failed to lookup transaction's size", i, j)
+				}
+				if size != signed.Size() {
+					t.Errorf("test %d, tx %d: transaction's size mismatches: have %v, want %v",
+						i, j, size, signed.Size())
+				}
 			}
 			verifyPoolInternals(t, pool)
 		}
