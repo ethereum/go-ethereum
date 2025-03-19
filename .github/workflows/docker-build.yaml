@@ -24,5 +24,5 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
-          tags: YOUR_DOCKER_USERNAME/go-ethereum:latest
+          tags: mtotovski/go-ethereum:latest
           push: true
