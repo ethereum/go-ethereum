@@ -233,20 +233,7 @@ func (s pragueSigner) Hash(tx *Transaction) common.Hash {
 	if tx.Type() != SetCodeTxType {
 		return s.cancunSigner.Hash(tx)
 	}
-	return prefixedRlpHash(
-		tx.Type(),
-		[]interface{}{
-			s.chainId,
-			tx.Nonce(),
-			tx.GasTipCap(),
-			tx.GasFeeCap(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-			tx.SetCodeAuthorizations(),
-		})
+	return tx.inner.sigHash(s.chainId)
 }
 
 type cancunSigner struct{ londonSigner }
@@ -301,21 +288,7 @@ func (s cancunSigner) Hash(tx *Transaction) common.Hash {
 	if tx.Type() != BlobTxType {
 		return s.londonSigner.Hash(tx)
 	}
-	return prefixedRlpHash(
-		tx.Type(),
-		[]interface{}{
-			s.chainId,
-			tx.Nonce(),
-			tx.GasTipCap(),
-			tx.GasFeeCap(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-			tx.BlobGasFeeCap(),
-			tx.BlobHashes(),
-		})
+	return tx.inner.sigHash(s.chainId)
 }
 
 type londonSigner struct{ eip2930Signer }
@@ -369,19 +342,7 @@ func (s londonSigner) Hash(tx *Transaction) common.Hash {
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Hash(tx)
 	}
-	return prefixedRlpHash(
-		tx.Type(),
-		[]interface{}{
-			s.chainId,
-			tx.Nonce(),
-			tx.GasTipCap(),
-			tx.GasFeeCap(),
-			tx.Gas(),
-			tx.To(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-		})
+	return tx.inner.sigHash(s.chainId)
 }
 
 type eip2930Signer struct{ EIP155Signer }
@@ -444,18 +405,7 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 	case LegacyTxType:
 		return s.EIP155Signer.Hash(tx)
 	case AccessListTxType:
-		return prefixedRlpHash(
-			tx.Type(),
-			[]interface{}{
-				s.chainId,
-				tx.Nonce(),
-				tx.GasPrice(),
-				tx.Gas(),
-				tx.To(),
-				tx.Value(),
-				tx.Data(),
-				tx.AccessList(),
-			})
+		return tx.inner.sigHash(s.chainId)
 	default:
 		// This _should_ not happen, but in case someone sends in a bad
 		// json struct via RPC, it's probably more prudent to return an
@@ -525,15 +475,7 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
-	return rlpHash([]interface{}{
-		tx.Nonce(),
-		tx.GasPrice(),
-		tx.Gas(),
-		tx.To(),
-		tx.Value(),
-		tx.Data(),
-		s.chainId, uint(0), uint(0),
-	})
+	return tx.inner.sigHash(s.chainId)
 }
 
 // HomesteadSigner implements Signer interface using the
@@ -597,7 +539,7 @@ func (fs FrontierSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v *
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (fs FrontierSigner) Hash(tx *Transaction) common.Hash {
-	return rlpHash([]interface{}{
+	return rlpHash([]any{
 		tx.Nonce(),
 		tx.GasPrice(),
 		tx.Gas(),
