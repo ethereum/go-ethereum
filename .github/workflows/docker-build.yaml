@@ -1,4 +1,4 @@
-name: Build and Push Docker image to my DockerHub repo
+name: Docker image CI/CD
 
 on:
   pull_request:
@@ -20,10 +20,9 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      - name: Build Docker Image
-        run: |
-          docker build -t mtotovski/go-ethereum:latest .
-
-      - name: Push Docker Image
-        run: |
-          docker push mtotovski/go-ethereum:latest
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          tags: mtotovski/go-ethereum:latest
+          push: true
