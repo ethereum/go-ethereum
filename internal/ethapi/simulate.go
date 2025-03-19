@@ -390,8 +390,7 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 			block.BlockOverrides.Number = (*hexutil.Big)(n)
 		}
 		if block.BlockOverrides.Withdrawals == nil {
-			var withdrawals types.Withdrawals
-			block.BlockOverrides.Withdrawals = &withdrawals
+			block.BlockOverrides.Withdrawals = &types.Withdrawals{}
 		}
 		diff := new(big.Int).Sub(block.BlockOverrides.Number.ToInt(), prevNumber)
 		if diff.Cmp(common.Big0) <= 0 {
@@ -407,7 +406,12 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 			for i := uint64(0); i < gap.Uint64(); i++ {
 				n := new(big.Int).Add(prevNumber, big.NewInt(int64(i+1)))
 				t := prevTimestamp + timestampIncrement
-				b := simBlock{BlockOverrides: &override.BlockOverrides{Number: (*hexutil.Big)(n), Time: (*hexutil.Uint64)(&t)}}
+				b := simBlock{
+					BlockOverrides: &override.BlockOverrides{
+						Number:      (*hexutil.Big)(n),
+						Time:        (*hexutil.Uint64)(&t),
+						Withdrawals: &types.Withdrawals{},
+					}}
 				prevTimestamp = t
 				res = append(res, b)
 			}
