@@ -124,6 +124,9 @@ type SubPool interface {
 	// Get returns a transaction if it is contained in the pool, or nil otherwise.
 	Get(hash common.Hash) *types.Transaction
 
+	// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
+	GetRLP(hash common.Hash) []byte
+
 	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 	// This is a utility method for the engine API, enabling consensus clients to
 	// retrieve blobs from the pools directly instead of the network.
