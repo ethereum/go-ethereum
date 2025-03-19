@@ -249,7 +249,11 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 		}
 	}
 	// Extract the Ethereum signature and do a sanity validation
-	if len(response.GetSignatureR()) == 0 || len(response.GetSignatureS()) == 0 || response.GetSignatureV() == 0 {
+	if len(response.GetSignatureR()) == 0 || len(response.GetSignatureS()) == 0 {
+		return common.Address{}, nil, errors.New("reply lacks signature")
+	} else if response.GetSignatureV() == 0 && int(chainID.Int64()) < 2147483630 {
+		// for chainId >= 2147483630, Trezor returns signature bit only
+		// https://github.com/trezor/trezor-mcu/pull/399
 		return common.Address{}, nil, errors.New("reply lacks signature")
 	}
 	signature := append(append(response.GetSignatureR(), response.GetSignatureS()...), byte(response.GetSignatureV()))
@@ -261,7 +265,9 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 	} else {
 		// Trezor backend does not support typed transactions yet.
 		signer = types.NewEIP155Signer(chainID)
-		signature[64] -= byte(chainID.Uint64()*2 + 35)
+		if signature[64] > 1 {
+			signature[64] -= byte(chainID.Uint64()*2 + 35)
+		}
 	}
 
 	// Inject the final signature into the transaction and sanity check the sender
