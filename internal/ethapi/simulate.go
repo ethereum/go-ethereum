@@ -319,8 +319,13 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		reqHash := types.CalcRequestsHash(requests)
 		header.RequestsHash = &reqHash
 	}
-
-	blockBody := &types.Body{Transactions: txes, Withdrawals: *block.BlockOverrides.Withdrawals}
+	var withdrawals []*types.Withdrawal
+	if block.BlockOverrides.Withdrawals != nil {
+		withdrawals = *block.BlockOverrides.Withdrawals
+	} else {
+		withdrawals = []*types.Withdrawal{}
+	}
+	blockBody := &types.Body{Transactions: txes, Withdrawals: withdrawals}
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
 	b, err := sim.b.Engine().FinalizeAndAssemble(chainHeadReader, header, sim.state, blockBody, receipts)
 	if err != nil {
