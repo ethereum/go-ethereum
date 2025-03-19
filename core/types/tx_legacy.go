@@ -124,7 +124,7 @@ func (tx *LegacyTx) decode([]byte) error {
 	panic("decode called on LegacyTx)")
 }
 
-// OBS: This is the post-frontier hash, the pre-frontier does not contain a chainID
+// OBS: This is the post-EIP155 hash, the pre-EIP155 does not contain a chainID.
 func (tx *LegacyTx) sigHash(chainID *big.Int) common.Hash {
 	return rlpHash([]any{
 		tx.Nonce,
