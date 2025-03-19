@@ -72,10 +72,7 @@ func newTestBackend(blocks int) *testBackend {
 
 // newTestBackendWithGenerator creates a chain with a number of explicitly defined blocks and
 // wraps it into a mock backend.
-func newTestBackendWithGenerator(
-	blocks int, shanghai bool, cancun bool,
-	generator func(int, *core.BlockGen),
-) *testBackend {
+func newTestBackendWithGenerator(blocks int, shanghai bool, cancun bool, generator func(int, *core.BlockGen)) *testBackend {
 	var (
 		// Create a database pre-initialize with a genesis block
 		db     = rawdb.NewMemoryDatabase()
@@ -621,12 +618,11 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 	peer, _ := newTestPeer("peer", ETH68, backend)
 	defer peer.close()
 
-	signer := types.NewCancunSigner(params.TestChainConfig.ChainID)
 	var (
-		tx  *types.Transaction
-		err error
+		tx     *types.Transaction
+		err    error
+		signer = types.NewCancunSigner(params.TestChainConfig.ChainID)
 	)
-
 	if blobTx {
 		tx, err = types.SignNewTx(testKey, signer, &types.BlobTx{
 			ChainID:    uint256.MustFromBig(params.TestChainConfig.ChainID),
