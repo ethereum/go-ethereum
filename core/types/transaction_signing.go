@@ -221,11 +221,6 @@ func newModernSigner(chainID *big.Int, fork forks.Fork) Signer {
 	return s
 }
 
-func (s *modernSigner) supportsType(txtype byte) bool {
-	_, ok := s.txtypes[txtype]
-	return ok
-}
-
 func (s *modernSigner) ChainID() *big.Int {
 	return s.chainID
 }
@@ -233,6 +228,15 @@ func (s *modernSigner) ChainID() *big.Int {
 func (s *modernSigner) Equal(s2 Signer) bool {
 	other, ok := s2.(*modernSigner)
 	return ok && s.chainID.Cmp(other.chainID) == 0 && maps.Equal(s.txtypes, other.txtypes) && s.legacy.Equal(other.legacy)
+}
+
+func (s *modernSigner) Hash(tx *Transaction) common.Hash {
+	return tx.inner.sigHash(s.chainID)
+}
+
+func (s *modernSigner) supportsType(txtype byte) bool {
+	_, ok := s.txtypes[txtype]
+	return ok
 }
 
 func (s *modernSigner) Sender(tx *Transaction) (common.Address, error) {
@@ -269,10 +273,6 @@ func (s *modernSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 	R, S, _ = decodeSignature(sig)
 	V = big.NewInt(int64(sig[64]))
 	return R, S, V, nil
-}
-
-func (s *modernSigner) Hash(tx *Transaction) common.Hash {
-	return tx.inner.sigHash(s.chainID)
 }
 
 // NewPragueSigner returns a signer that accepts
