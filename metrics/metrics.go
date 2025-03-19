@@ -30,7 +30,15 @@ func Enabled() bool {
 // the program, before any metrics collection will happen.
 func Enable() {
 	metricsEnabled = true
-	startMeterTickerLoop()
+	// Ensure metrics ticker is started if there are any meters
+	EnableMetricsTicking()
+}
+
+// Disable disables the metrics system and stops any running metric tickers.
+func Disable() {
+	metricsEnabled = false
+	// Stop the metrics ticker
+	DisableMetricsTicking()
 }
 
 var threadCreateProfile = pprof.Lookup("threadcreate")

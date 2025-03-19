@@ -81,3 +81,59 @@ func TestMeterRepeat(t *testing.T) {
 		t.Errorf("m.Count(): 10100 != %v\n", count)
 	}
 }
+
+func TestMeterTickerLifecycle(t *testing.T) {
+	// Make sure metrics are disabled initially
+	oldEnabled := metricsEnabled
+	metricsEnabled = false
+	defer func() {
+		metricsEnabled = oldEnabled
+	}()
+
+	// Reset the arbiter
+	oldArbiter := arbiter
+	arbiter = newMeterTicker()
+	defer func() {
+		arbiter = oldArbiter
+	}()
+
+	// Create a new meter but metrics are disabled
+	// This should not start the ticker
+	m := NewMeter()
+	if arbiter.started || arbiter.running {
+		t.Error("Ticker started when metrics are disabled")
+	}
+
+	// Enable metrics, which should start the ticker
+	metricsEnabled = true
+	EnableMetricsTicking()
+
+	// Check if the ticker is started
+	arbiter.mu.RLock()
+	started := arbiter.started
+	running := arbiter.running
+	arbiter.mu.RUnlock()
+
+	if !started || !running {
+		t.Error("Ticker not started when metrics are enabled")
+	}
+
+	// Stop the meter
+	m.Stop()
+
+	// Ticker should be stopped as there are no more meters
+	arbiter.mu.RLock()
+	running = arbiter.running
+	arbiter.mu.RUnlock()
+
+	if running {
+		t.Error("Ticker still running after all meters are stopped")
+	}
+
+	// Disable metrics, which should stop the ticker
+	metricsEnabled = false
+	Disable()
+
+	// Checking for any goroutine leaks would require a more complex test
+	// with runtime.NumGoroutine() checks
+}
