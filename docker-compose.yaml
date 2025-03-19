@@ -1,17 +1,18 @@
 version: '3.8'
-
 services:
-  geth-node:
-    image: mtotovski/go-ethereum:latest
-    container_name: geth-devnet
+  geth:
+    image: your-docker-username/go-ethereum
     ports:
       - "8545:8545"
-      - "30303:30303"
+    networks:
+      - geth-net
     command: >
       --dev
       --http
       --http.addr 0.0.0.0
       --http.port 8545
-      --http.api eth,net,web3
-      --http.corsdomain "*"
-      --allow-insecure-unlock
+      --http.api personal,eth,net,web3
+
+networks:
+  geth-net:
+    driver: bridge
