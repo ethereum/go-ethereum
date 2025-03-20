@@ -788,6 +788,21 @@ var (
 	}
 )
 
+var (
+	// NetworkFlags is the flag group of all built-in supported networks.
+	NetworkFlags = []cli.Flag{
+		MainnetFlag,
+		TestnetFlag,
+		DevnetFlag,
+	}
+
+	// DatabaseFlags is the flag group of all database flags.
+	DatabaseFlags = []cli.Flag{
+		DataDirFlag,
+		XDCXDataDirFlag,
+	}
+)
+
 // MakeDataDir retrieves the currently requested data directory, terminating
 // if none (or the empty string) is specified. If the node is starting a testnet,
 // the a subdirectory of the specified datadir will be used.
