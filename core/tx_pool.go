@@ -79,10 +79,6 @@ var (
 	// with a different one without the required price bump.
 	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
 
-	// ErrAccountLimitExceeded is returned if a transaction would exceed the number
-	// allowed by a pool for a single account.
-	ErrAccountLimitExceeded = errors.New("account limit exceeded")
-
 	// ErrGasLimit is returned if a transaction's requested gas limit exceeds the
 	// maximum allowance of the current block.
 	ErrGasLimit = errors.New("exceeds block gas limit")
@@ -95,6 +91,10 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	// ErrInflightTxLimitReached is returned when the maximum number of in-flight
+	// transactions is reached for specific accounts.
+	ErrInflightTxLimitReached = errors.New("in-flight transaction limit reached for delegated accounts")
 
 	// ErrAuthorityReserved is returned if a transaction has an authorization
 	// signed by an address which already has in-flight transactions known to the
@@ -809,19 +809,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		return ErrInsufficientFunds
 	}
-	list := pool.pending[from]
-	if list == nil || !list.Overlaps(tx) {
-		// Transaction takes a new nonce value out of the pool. Ensure it doesn't
-		// overflow the number of permitted transactions from a single account
-		// (i.e. max cancellable via out-of-bound transaction).
-		if used, left := usedAndLeftSlots(pool, from); left <= 0 {
-			return fmt.Errorf("%w: pooled %d txs", ErrAccountLimitExceeded, used)
-		}
-		// Verify no authorizations will invalidate existing transactions known to
-		// the pool.
-		if conflicts := knownConflicts(pool, tx.SetCodeAuthorities()); len(conflicts) > 0 {
-			return fmt.Errorf("%w: authorization conflicts with other known tx", ErrAuthorityReserved)
-		}
+	if err := pool.validateAuth(from, tx); err != nil {
+		return err
 	}
 	if tx.Type() == types.SetCodeTxType {
 		if len(tx.SetCodeAuthorizations()) == 0 {
@@ -1895,6 +1884,43 @@ func (pool *TxPool) calculateTxsLifecycle(txs types.Transactions, t time.Time) {
 	}
 }
 
+// validateAuth verifies that the transaction complies with code authorization
+// restrictions brought by SetCode transaction type.
+func (pool *TxPool) validateAuth(from common.Address, tx *types.Transaction) error {
+	// Allow at most one in-flight tx for delegated accounts or those with a
+	// pending authorization.
+	if pool.currentState.GetKeccakCodeHash(from) != codehash.EmptyKeccakCodeHash || len(pool.all.auths[from]) != 0 {
+		var (
+			count  int
+			exists bool
+		)
+		pending := pool.pending[from]
+		if pending != nil {
+			count += pending.Len()
+			exists = pending.Overlaps(tx)
+		}
+		queue := pool.queue[from]
+		if queue != nil {
+			count += queue.Len()
+			exists = exists || queue.Overlaps(tx)
+		}
+		// Replace the existing in-flight transaction for delegated accounts
+		// are still supported
+		if count >= 1 && !exists {
+			return ErrInflightTxLimitReached
+		}
+	}
+	// Authorities cannot conflict with any pending or queued transactions.
+	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
+		for _, auth := range auths {
+			if pool.pending[auth] != nil || pool.queue[auth] != nil {
+				return ErrAuthorityReserved
+			}
+		}
+	}
+	return nil
+}
+
 // PauseReorgs stops any new reorg jobs to be started but doesn't interrupt any existing ones that are in flight
 // Keep in mind this function might block, although it is not expected to block for any significant amount of time
 func (pool *TxPool) PauseReorgs() {
@@ -2132,7 +2158,6 @@ func (t *txLookup) Remove(hash common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	t.removeAuthorities(hash)
 	tx, ok := t.locals[hash]
 	if !ok {
 		tx, ok = t.remotes[hash]
@@ -2141,6 +2166,7 @@ func (t *txLookup) Remove(hash common.Hash) {
 		log.Error("No transaction found to be deleted", "hash", hash)
 		return
 	}
+	t.removeAuthorities(tx)
 	t.slots -= numSlots(tx)
 	slotsGauge.Update(int64(t.slots))
 
@@ -2196,8 +2222,9 @@ func (t *txLookup) addAuthorities(tx *types.Transaction) {
 
 // removeAuthorities stops tracking the supplied tx in relation to its
 // authorities.
-func (t *txLookup) removeAuthorities(hash common.Hash) {
-	for addr := range t.auths {
+func (t *txLookup) removeAuthorities(tx *types.Transaction) {
+	hash := tx.Hash()
+	for _, addr := range tx.SetCodeAuthorities() {
 		list := t.auths[addr]
 		// Remove tx from tracker.
 		if i := slices.Index(list, hash); i >= 0 {
@@ -2217,35 +2244,4 @@ func (t *txLookup) removeAuthorities(hash common.Hash) {
 // numSlots calculates the number of slots needed for a single transaction.
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
-}
-
-// usedAndLeftSlots returns the number of slots used and left for the given address.
-func usedAndLeftSlots(pool *TxPool, addr common.Address) (int, int) {
-	var have int
-	if list := pool.pending[addr]; list != nil {
-		have += list.Len()
-	}
-	if list := pool.queue[addr]; list != nil {
-		have += list.Len()
-	}
-	if pool.currentState.GetKeccakCodeHash(addr) != codehash.EmptyKeccakCodeHash || len(pool.all.auths[addr]) != 0 {
-		// Allow at most one in-flight tx for delegated accounts or those with
-		// a pending authorization.
-		return have, max(0, 1-have)
-	}
-	return have, math.MaxInt
-}
-
-// knownConflicts returns a list of addresses that conflict with the given authorities.
-func knownConflicts(pool *TxPool, auths []common.Address) []common.Address {
-	var conflicts []common.Address
-	// Authorities cannot conflict with any pending or queued transactions.
-	for _, addr := range auths {
-		if list := pool.pending[addr]; list != nil {
-			conflicts = append(conflicts, addr)
-		} else if list := pool.queue[addr]; list != nil {
-			conflicts = append(conflicts, addr)
-		}
-	}
-	return conflicts
 }
