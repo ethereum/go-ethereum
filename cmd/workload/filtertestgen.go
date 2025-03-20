@@ -71,10 +71,8 @@ func filterGenCmd(ctx *cli.Context) error {
 		f.updateFinalizedBlock()
 		query := f.newQuery()
 		query.run(f.client, nil)
-		if query.Err == errPrunedHistory {
-			continue
-		}
 		if query.Err != nil {
+			query.printError()
 			f.errors = append(f.errors, query)
 			continue
 		}
@@ -85,9 +83,6 @@ func filterGenCmd(ctx *cli.Context) error {
 					break
 				}
 				extQuery.run(f.client, nil)
-				if extQuery.Err == errPrunedHistory {
-					break
-				}
 				if extQuery.Err == nil && len(extQuery.results) < len(query.results) {
 					extQuery.Err = fmt.Errorf("invalid result length; old range %d %d; old length %d; new range %d %d; new length %d; address %v; Topics %v",
 						query.FromBlock, query.ToBlock, len(query.results),
@@ -96,6 +91,7 @@ func filterGenCmd(ctx *cli.Context) error {
 					)
 				}
 				if extQuery.Err != nil {
+					extQuery.printError()
 					f.errors = append(f.errors, extQuery)
 					break
 				}

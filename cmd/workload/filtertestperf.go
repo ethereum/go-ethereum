@@ -79,6 +79,7 @@ func filterPerfCmd(ctx *cli.Context) error {
 			slices.Sort(qt.runtime)
 			qt.medianTime = qt.runtime[len(qt.runtime)/2]
 			if qt.query.Err != nil {
+				qt.query.printError()
 				failed++
 				continue
 			}
@@ -119,8 +120,10 @@ func filterPerfCmd(ctx *cli.Context) error {
 	sort.Slice(queries, func(i, j int) bool {
 		return queries[i].medianTime > queries[j].medianTime
 	})
-	for i := 0; i < 10; i++ {
-		q := queries[i]
+	for i, q := range queries {
+		if i >= 10 {
+			break
+		}
 		fmt.Printf("Most expensive query #%-2d   median runtime: %13v  max runtime: %13v  result count: %4d  fromBlock: %9d  toBlock: %9d  addresses: %v  topics: %v\n",
 			i+1, q.medianTime, q.runtime[len(q.runtime)-1], len(q.query.results), q.query.FromBlock, q.query.ToBlock, q.query.Address, q.query.Topics)
 	}

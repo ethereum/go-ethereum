@@ -214,8 +214,9 @@ func (fq *filterQuery) run(client *client, historyPruneBlock *uint64) {
 	})
 	fq.results = logs
 	fq.Err = validateHistoryPruneErr(err, uint64(fq.FromBlock), historyPruneBlock)
-	if fq.Err != nil && fq.Err != errPrunedHistory {
-		fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
-			fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, err)
-	}
+}
+
+func (fq *filterQuery) printError() {
+	fmt.Printf("Filter query failed: fromBlock: %d toBlock: %d addresses: %v topics: %v error: %v\n",
+		fq.FromBlock, fq.ToBlock, fq.Address, fq.Topics, fq.Err)
 }
