@@ -116,11 +116,13 @@ type BlobsBundleV1 struct {
 	Commitments []hexutil.Bytes `json:"commitments"`
 	Proofs      []hexutil.Bytes `json:"proofs"`
 	Blobs       []hexutil.Bytes `json:"blobs"`
+	CellProofs  []hexutil.Bytes `json:"cellProofs"` // Added in Osaka for 7594
 }
 
 type BlobAndProofV1 struct {
-	Blob  hexutil.Bytes `json:"blob"`
-	Proof hexutil.Bytes `json:"proof"`
+	Blob       hexutil.Bytes   `json:"blob"`
+	Proof      hexutil.Bytes   `json:"proof"`
+	CellProofs []hexutil.Bytes `json:"cellProofs"` // Added in Osaka for 7594
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.
@@ -326,6 +328,7 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Commitments: make([]hexutil.Bytes, 0),
 		Blobs:       make([]hexutil.Bytes, 0),
 		Proofs:      make([]hexutil.Bytes, 0),
+		CellProofs:  make([]hexutil.Bytes, 0),
 	}
 	for _, sidecar := range sidecars {
 		for j := range sidecar.Blobs {

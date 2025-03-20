@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
+
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -536,14 +538,31 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	res := make([]*engine.BlobAndProofV1, len(hashes))
 
 	blobs, proofs := api.eth.TxPool().GetBlobs(hashes)
-	for i := 0; i < len(blobs); i++ {
-		if blobs[i] != nil {
-			res[i] = &engine.BlobAndProofV1{
-				Blob:  (*blobs[i])[:],
-				Proof: (*proofs[i])[:],
+	// after Osaka, the proofs are returned as cell proofs.
+	if len(blobs) != len(proofs) {
+		for i := range blobs {
+			if blobs[i] != nil {
+				cellProofs := make([]hexutil.Bytes, gokzg4844.CellsPerExtBlob)
+				for j := range cellProofs {
+					cellProofs[j] = hexutil.Bytes((*proofs[i*gokzg4844.CellsPerExtBlob+j])[:])
+				}
+				res[i] = &engine.BlobAndProofV1{
+					Blob:       (*blobs[i])[:],
+					CellProofs: cellProofs,
+				}
+			}
+		}
+	} else {
+		for i := 0; i < len(blobs); i++ {
+			if blobs[i] != nil {
+				res[i] = &engine.BlobAndProofV1{
+					Blob:  (*blobs[i])[:],
+					Proof: (*proofs[i])[:],
+				}
 			}
 		}
 	}
+
 	return res, nil
 }
 
