@@ -350,8 +350,10 @@ func (f *FilterMaps) safeDeleteRange(removeFn func(ethdb.KeyValueRangeDeleter) e
 	var retry bool
 	for {
 		err := removeFn(f.db)
-		if retry && err == nil {
-			log.Info(action+" finished", "elapsed", time.Since(start))
+		if err == nil {
+			if retry {
+				log.Info(action+" finished", "elapsed", time.Since(start))
+			}
 			return true
 		}
 		if err != leveldb.ErrTooManyKeys {
