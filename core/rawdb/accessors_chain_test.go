@@ -464,6 +464,48 @@ func TestAncientStorage(t *testing.T) {
 	}
 }
 
+func TestWriteAncientHeaderChain(t *testing.T) {
+	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), t.TempDir(), "", false)
+	if err != nil {
+		t.Fatalf("failed to create database with ancient backend")
+	}
+	defer db.Close()
+
+	// Create a test block
+	var headers []*types.Header
+	headers = append(headers, &types.Header{
+		Number:      big.NewInt(0),
+		Extra:       []byte("test block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	headers = append(headers, &types.Header{
+		Number:      big.NewInt(1),
+		Extra:       []byte("test block"),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.EmptyTxsHash,
+		ReceiptHash: types.EmptyReceiptsHash,
+	})
+	// Write and verify the header in the database
+	WriteAncientHeaderChain(db, headers)
+
+	for _, header := range headers {
+		if blob := ReadHeaderRLP(db, header.Hash(), header.Number.Uint64()); len(blob) == 0 {
+			t.Fatalf("no header returned")
+		}
+		if h := ReadCanonicalHash(db, header.Number.Uint64()); h != header.Hash() {
+			t.Fatalf("no canonical hash returned")
+		}
+		if blob := ReadBodyRLP(db, header.Hash(), header.Number.Uint64()); len(blob) != 0 {
+			t.Fatalf("unexpected body returned")
+		}
+		if blob := ReadReceiptsRLP(db, header.Hash(), header.Number.Uint64()); len(blob) != 0 {
+			t.Fatalf("unexpected body returned")
+		}
+	}
+}
+
 func TestCanonicalHashIteration(t *testing.T) {
 	var cases = []struct {
 		from, to uint64

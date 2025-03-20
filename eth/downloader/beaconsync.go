@@ -17,7 +17,6 @@
 package downloader
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -308,7 +307,7 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 			}
 		}
 		if h == nil {
-			return errors.New("header at chain cutoff is not available")
+			return fmt.Errorf("header at chain cutoff is not available, cutoff: %d", d.chainCutoffNumber)
 		}
 		if h.Hash() != d.chainCutoffHash {
 			return fmt.Errorf("header at chain cutoff mismatched, want: %v, got: %v", d.chainCutoffHash, h.Hash())
