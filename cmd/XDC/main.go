@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -52,15 +53,15 @@ var (
 	gitCommit = ""
 	// The app that holds all commands and flags.
 	app = flags.NewApp(gitCommit, "the XDPoSChain command line interface")
-	// flags that configure the node
-	nodeFlags = []cli.Flag{
+
+	// The app that holds all commands and flags.
+	nodeFlags = slices.Concat([]cli.Flag{
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
 		utils.BootnodesV4Flag,
 		utils.BootnodesV5Flag,
-		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag, // deprecated
 		utils.USBFlag,
@@ -72,7 +73,6 @@ var (
 		//utils.EthashDatasetsInMemoryFlag,
 		//utils.EthashDatasetsOnDiskFlag,
 		utils.XDCXEnabledFlag,
-		utils.XDCXDataDirFlag,
 		utils.XDCXDBEngineFlag,
 		utils.XDCXDBConnectionUrlFlag,
 		utils.XDCXDBReplicaSetNameFlag,
@@ -115,9 +115,6 @@ var (
 		utils.NodeKeyHexFlag,
 		//utils.DeveloperFlag,
 		//utils.DeveloperPeriodFlag,
-		utils.MainnetFlag,
-		utils.TestnetFlag,
-		utils.DevnetFlag,
 		//utils.VMEnableDebugFlag,
 		utils.Enable0xPrefixFlag,
 		utils.EnableXDCPrefixFlag,
@@ -139,7 +136,7 @@ var (
 		utils.StoreRewardFlag,
 		utils.SetHeadFlag,
 		utils.XDCSlaveModeFlag,
-	}
+	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,
