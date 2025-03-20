@@ -22,7 +22,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose) (default: false)
 
-- ```chain```: Name of the chain to sync ('amoy', 'mumbai', 'mainnet') or path to a genesis file (default: mainnet)
+- ```chain```: Name of the chain to sync ('amoy', 'mainnet') or path to a genesis file (default: mainnet)
 
 - ```config```: Path to the TOML configuration file
 
@@ -241,6 +241,8 @@ The ```bor server``` command runs the Bor client.
 - ```port```: Network listening port (default: 30303)
 
 - ```txarrivalwait```: Maximum duration to wait for a transaction before explicitly requesting it (default: 500ms)
+
+- ```txannouncementonly```: Whether to only announce transactions to peers (default: false)
 
 - ```v4disc```: Enables the V4 discovery mechanism (default: true)
 

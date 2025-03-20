@@ -25,7 +25,7 @@ jobs:
         uses: actions/setup-go@master
         with:
           go-version: 1.23.6
-     # Variables
+      # Variables
       - name: Adding TAG to ENV
         run: echo "GIT_TAG=`echo $(git describe --tags --abbrev=0)`" >> $GITHUB_ENV
       - name: adding version
@@ -96,7 +96,6 @@ jobs:
           echo "Architecture: arm64" >> packaging/deb/bor/DEBIAN/control
           echo "Maintainer: devops@polygon.technology" >> packaging/deb/bor/DEBIAN/control
           echo "Description: bor binary package" >> packaging/deb/bor/DEBIAN/control
-          
 
       - name: Creating package for binary for bor ${{ env.ARCH }}
         run: cp -rp packaging/deb/bor packaging/deb/bor-${{ env.GIT_TAG }}-${{ env.ARCH }}

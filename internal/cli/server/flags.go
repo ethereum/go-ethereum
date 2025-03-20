@@ -812,6 +812,13 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Default: c.cliConfig.P2P.TxArrivalWait,
 		Group:   "P2P",
 	})
+	f.BoolFlag(&flagset.BoolFlag{
+		Name:    "txannouncementonly",
+		Usage:   "Whether to only announce transactions to peers",
+		Value:   &c.cliConfig.P2P.TxAnnouncementOnly,
+		Default: c.cliConfig.P2P.TxAnnouncementOnly,
+		Group:   "P2P",
+	})
 	f.SliceStringFlag(&flagset.SliceStringFlag{
 		Name:    "discovery.dns",
 		Usage:   "Comma separated list of enrtree:// URLs which will be queried for nodes to connect to",

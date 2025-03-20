@@ -172,6 +172,7 @@ var nameTagMap = map[string]string{
 	"maxpeers":                "maxpeers",
 	"maxpendpeers":            "maxpendpeers",
 	"txarrivalwait":           "txarrivalwait",
+	"txannouncementonly":      "txannouncementonly",
 	"nat":                     "nat",
 	"nodiscover":              "nodiscover",
 	"v5disc":                  "v5disc",
