@@ -30,13 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// ReadTxLookupEntry retrieves the positional metadata associated with a transaction
-// hash to allow retrieving the transaction or receipt by hash.
-func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
-	data, _ := db.Get(txLookupKey(hash))
-	if len(data) == 0 {
-		return nil
-	}
+// DecodeTxLookupEntry decodes the supplied tx lookup data.
+func DecodeTxLookupEntry(data []byte, db ethdb.Reader) *uint64 {
 	// Database v6 tx lookup just stores the block number
 	if len(data) < common.HashLength {
 		number := new(big.Int).SetBytes(data).Uint64()
@@ -49,10 +44,20 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	// Finally try database v3 tx lookup format
 	var entry LegacyTxLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
-		log.Error("Invalid transaction lookup entry RLP", "hash", hash, "blob", data, "err", err)
+		log.Error("Invalid transaction lookup entry RLP", "blob", data, "err", err)
 		return nil
 	}
 	return &entry.BlockIndex
+}
+
+// ReadTxLookupEntry retrieves the positional metadata associated with a transaction
+// hash to allow retrieving the transaction or receipt by hash.
+func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
+	data, _ := db.Get(txLookupKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	return DecodeTxLookupEntry(data, db)
 }
 
 // writeTxLookupEntry stores a positional metadata for a transaction,
@@ -92,6 +97,33 @@ func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
 func DeleteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash) {
 	for _, hash := range hashes {
 		DeleteTxLookupEntry(db, hash)
+	}
+}
+
+// DeleteAllTxLookupEntries purges all the transaction indexes in the database.
+// If condition is specified, only the entry with condition as True will be
+// removed; If condition is not specified, the entry is deleted.
+func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func([]byte) bool) {
+	iter := NewKeyLengthIterator(db.NewIterator(txLookupPrefix, nil), common.HashLength+len(txLookupPrefix))
+	defer iter.Release()
+
+	batch := db.NewBatch()
+	for iter.Next() {
+		if condition == nil || condition(iter.Value()) {
+			batch.Delete(iter.Key())
+		}
+		if batch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to delete transaction lookup entries", "err", err)
+			}
+			batch.Reset()
+		}
+	}
+	if batch.ValueSize() > 0 {
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to delete transaction lookup entries", "err", err)
+		}
+		batch.Reset()
 	}
 }
 
