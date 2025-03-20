@@ -40,7 +40,6 @@ var (
 		Action:    filterGenCmd,
 		Flags: []cli.Flag{
 			filterQueryFileFlag,
-			filterErrorFileFlag,
 		},
 	}
 	filterQueryFileFlag = &cli.StringFlag{
@@ -73,8 +72,7 @@ func filterGenCmd(ctx *cli.Context) error {
 		query.run(f.client, nil)
 		if query.Err != nil {
 			query.printError()
-			f.errors = append(f.errors, query)
-			continue
+			exit("filter query failed")
 		}
 		if len(query.results) > 0 && len(query.results) <= maxFilterResultSize {
 			for {
@@ -92,8 +90,7 @@ func filterGenCmd(ctx *cli.Context) error {
 				}
 				if extQuery.Err != nil {
 					extQuery.printError()
-					f.errors = append(f.errors, extQuery)
-					break
+					exit("filter query failed")
 				}
 				if len(extQuery.results) > maxFilterResultSize {
 					break
@@ -103,7 +100,6 @@ func filterGenCmd(ctx *cli.Context) error {
 			f.storeQuery(query)
 			if time.Since(lastWrite) > time.Second*10 {
 				f.writeQueries()
-				f.writeErrors()
 				lastWrite = time.Now()
 			}
 		}
@@ -114,18 +110,15 @@ func filterGenCmd(ctx *cli.Context) error {
 type filterTestGen struct {
 	client    *client
 	queryFile string
-	errorFile string
 
 	finalizedBlock int64
 	queries        [filterBuckets][]*filterQuery
-	errors         []*filterQuery
 }
 
 func newFilterTestGen(ctx *cli.Context) *filterTestGen {
 	return &filterTestGen{
 		client:    makeClient(ctx),
 		queryFile: ctx.String(filterQueryFileFlag.Name),
-		errorFile: ctx.String(filterErrorFileFlag.Name),
 	}
 }
 
@@ -360,17 +353,6 @@ func (s *filterTestGen) writeQueries() {
 	}
 	json.NewEncoder(file).Encode(&s.queries)
 	file.Close()
-}
-
-// writeQueries serializes the generated errors to the error file.
-func (s *filterTestGen) writeErrors() {
-	file, err := os.Create(s.errorFile)
-	if err != nil {
-		exit(fmt.Errorf("Error creating filter error file %s: %v", s.errorFile, err))
-		return
-	}
-	defer file.Close()
-	json.NewEncoder(file).Encode(s.errors)
 }
 
 func mustGetFinalizedBlock(client *client) int64 {
