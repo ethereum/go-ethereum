@@ -128,8 +128,8 @@ var (
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
 	genesisPrefix  = []byte("ethereum-genesis-") // genesis state prefix for the db
 
-	// BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
-	BloomBitsIndexPrefix = []byte("iB")
+	// bloomBitsIndexPrefix is the data table of a chain indexer to track its progress
+	bloomBitsIndexPrefix = []byte("iB")
 
 	ChtPrefix           = []byte("chtRootV2-") // ChtPrefix + chtNum (uint64 big endian) -> trie root hash
 	ChtTablePrefix      = []byte("cht-")
@@ -145,11 +145,11 @@ var (
 	FixedCommitteeRootKey = []byte("fixedRoot-") // bigEndian64(syncPeriod) -> committee root hash
 	SyncCommitteeKey      = []byte("committee-") // bigEndian64(syncPeriod) -> serialized committee
 
-	FilterMapsPrefix         = "fm-"
-	filterMapsRangeKey       = []byte(FilterMapsPrefix + "R")
-	filterMapRowPrefix       = []byte(FilterMapsPrefix + "r") // filterMapRowPrefix + mapRowIndex (uint64 big endian) -> filter row
-	filterMapLastBlockPrefix = []byte(FilterMapsPrefix + "b") // filterMapLastBlockPrefix + mapIndex (uint32 big endian) -> block number (uint64 big endian)
-	filterMapBlockLVPrefix   = []byte(FilterMapsPrefix + "p") // filterMapBlockLVPrefix + num (uint64 big endian) -> log value pointer (uint64 big endian)
+	filterMapsPrefix         = "fm-"
+	filterMapsRangeKey       = []byte(filterMapsPrefix + "R")
+	filterMapRowPrefix       = []byte(filterMapsPrefix + "r") // filterMapRowPrefix + mapRowIndex (uint64 big endian) -> filter row
+	filterMapLastBlockPrefix = []byte(filterMapsPrefix + "b") // filterMapLastBlockPrefix + mapIndex (uint32 big endian) -> block number (uint64 big endian)
+	filterMapBlockLVPrefix   = []byte(filterMapsPrefix + "p") // filterMapBlockLVPrefix + num (uint64 big endian) -> log value pointer (uint64 big endian)
 
 	preimageCounter     = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitsCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
@@ -223,16 +223,6 @@ func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
 // storageSnapshotsKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotsKey(accountHash common.Hash) []byte {
 	return append(SnapshotStoragePrefix, accountHash.Bytes()...)
-}
-
-// bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
-func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
-	key := append(append(bloomBitsPrefix, make([]byte, 10)...), hash.Bytes()...)
-
-	binary.BigEndian.PutUint16(key[1:], uint16(bit))
-	binary.BigEndian.PutUint64(key[3:], section)
-
-	return key
 }
 
 // skeletonHeaderKey = skeletonHeaderPrefix + num (uint64 big endian)

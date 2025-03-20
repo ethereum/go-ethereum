@@ -43,14 +43,27 @@ func (f *FilterMaps) indexerLoop() {
 	for !f.stop {
 		if !f.indexedRange.initialized {
 			if err := f.init(); err != nil {
+				if err == errHistoryCutoff {
+					log.Warn("History cutoff point beyond latest checkpoint; log index disabled")
+					f.disabled = true
+					f.reset()
+					return
+				}
 				log.Error("Error initializing log index", "error", err)
-				f.waitForEvent()
+				f.processSingleEvent(true) // avoid full speed spinning with the same error
 				continue
 			}
 		}
 		if !f.targetHeadIndexed() {
-			if !f.tryIndexHead() {
-				f.waitForEvent()
+			if done, err := f.tryIndexHead(); !done {
+				switch err {
+				case nil:
+				case errHistoryCutoff:
+					log.Warn("History cutoff point beyond rendered index head; resetting log index")
+					f.reset() // still attempt re-initializing; maybe there are more recent checkpoints
+				default:
+					f.processSingleEvent(true) // avoid full speed spinning with the same error
+				}
 			}
 		} else {
 			if f.finalBlock != f.lastFinal {
@@ -60,7 +73,7 @@ func (f *FilterMaps) indexerLoop() {
 				f.lastFinal = f.finalBlock
 			}
 			if f.tryIndexTail() && f.tryUnindexTail() {
-				f.waitForEvent()
+				f.waitForNewHead()
 			}
 		}
 	}
@@ -119,8 +132,9 @@ func (f *FilterMaps) WaitIdle() {
 	}
 }
 
-// waitForEvent blocks until an event happens that the indexer might react to.
-func (f *FilterMaps) waitForEvent() {
+// waitForNewHead blocks until there is a new target head to index and block
+// processing has been finished.
+func (f *FilterMaps) waitForNewHead() {
 	for !f.stop && (f.blockProcessing || f.targetHeadIndexed()) {
 		f.processSingleEvent(true)
 	}
@@ -129,13 +143,16 @@ func (f *FilterMaps) waitForEvent() {
 // processEvents processes all events, blocking only if a block processing is
 // happening and indexing should be suspended.
 func (f *FilterMaps) processEvents() {
-	for !f.stop && f.processSingleEvent(f.blockProcessing) {
+	for f.processSingleEvent(f.blockProcessing) {
 	}
 }
 
 // processSingleEvent processes a single event either in a blocking or
-// non-blocking manner.
+// non-blocking manner. It returns true if it did process an event.
 func (f *FilterMaps) processSingleEvent(blocking bool) bool {
+	if f.stop {
+		return false
+	}
 	if !f.hasTempRange {
 		for _, mb := range f.matcherSyncRequests {
 			mb.synced()
@@ -184,14 +201,14 @@ func (f *FilterMaps) setTarget(target targetUpdate) {
 
 // tryIndexHead tries to render head maps according to the current targetView
 // and returns true if successful.
-func (f *FilterMaps) tryIndexHead() bool {
+func (f *FilterMaps) tryIndexHead() (bool, error) {
 	headRenderer, err := f.renderMapsBefore(math.MaxUint32)
 	if err != nil {
 		log.Error("Error creating log index head renderer", "error", err)
-		return false
+		return false, err
 	}
 	if headRenderer == nil {
-		return true
+		return true, nil
 	}
 	if !f.startedHeadIndex {
 		f.lastLogHeadIndex = time.Now()
@@ -199,7 +216,7 @@ func (f *FilterMaps) tryIndexHead() bool {
 		f.startedHeadIndex = true
 		f.ptrHeadIndex = f.indexedRange.blocks.AfterLast()
 	}
-	if _, err := headRenderer.run(func() bool {
+	if done, err := headRenderer.run(func() bool {
 		f.processEvents()
 		return f.stop
 	}, func() {
@@ -215,9 +232,11 @@ func (f *FilterMaps) tryIndexHead() bool {
 			f.loggedHeadIndex = true
 			f.lastLogHeadIndex = time.Now()
 		}
-	}); err != nil {
-		log.Error("Log index head rendering failed", "error", err)
-		return false
+	}); !done {
+		if err != nil {
+			log.Error("Log index head rendering failed", "error", err)
+		}
+		return false, err
 	}
 	if f.loggedHeadIndex && f.indexedRange.hasIndexedBlocks() {
 		log.Info("Log index head rendering finished",
@@ -226,7 +245,7 @@ func (f *FilterMaps) tryIndexHead() bool {
 			"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
 	}
 	f.loggedHeadIndex, f.startedHeadIndex = false, false
-	return true
+	return true, nil
 }
 
 // tryIndexTail tries to render tail epochs until the tail target block is
@@ -356,15 +375,17 @@ func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
 	if epoch+1 < firstEpoch {
 		return false
 	}
+	var firstBlockOfEpoch uint64
 	if epoch > 0 {
-		lastBlockOfPrevEpoch, _, err := f.getLastBlockOfMap(epoch<<f.logMapsPerEpoch - 1)
+		var err error
+		firstBlockOfEpoch, _, err = f.getLastBlockOfMap(epoch<<f.logMapsPerEpoch - 1)
 		if err != nil {
 			log.Error("Could not get last block of previous epoch", "epoch", epoch-1, "error", err)
 			return epoch >= firstEpoch
 		}
-		if f.historyCutoff > lastBlockOfPrevEpoch {
-			return false
-		}
+	}
+	if f.historyCutoff > firstBlockOfEpoch {
+		return false
 	}
 	lastBlockOfEpoch, _, err := f.getLastBlockOfMap((epoch+1)<<f.logMapsPerEpoch - 1)
 	if err != nil {

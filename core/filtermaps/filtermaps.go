@@ -17,7 +17,6 @@
 package filtermaps
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -41,6 +40,8 @@ const (
 	cachedFilterMaps      = 3    // complete filter maps (cached by map renderer)
 	cachedRenderSnapshots = 8    // saved map renderer data at block boundaries
 )
+
+var errHistoryCutoff = errors.New("cannot start indexing before history cutoff point")
 
 // FilterMaps is the in-memory representation of the log index structure that is
 // responsible for building and updating the index according to the canonical
@@ -242,7 +243,8 @@ func (f *FilterMaps) Start() {
 			log.Error("Could not load head filter map snapshot", "error", err)
 		}
 	}
-	f.closeWg.Add(1)
+	f.closeWg.Add(2)
+	go f.removeBloomBits()
 	go f.indexerLoop()
 }
 
@@ -278,8 +280,13 @@ func (f *FilterMaps) initChainView(chainView *ChainView) *ChainView {
 }
 
 // reset un-initializes the FilterMaps structure and removes all related data from
-// the database. The function returns true if everything was successfully removed.
-func (f *FilterMaps) reset() bool {
+// the database.
+// Note that in case of leveldb database the fallback implementation of DeleteRange
+// might take a long time to finish and deleting the entire database may be
+// interrupted by a shutdown. Deleting the filterMapsRange entry first does
+// guarantee though that the next init() will not return successfully until the
+// entire database has been cleaned.
+func (f *FilterMaps) reset() {
 	f.indexLock.Lock()
 	f.indexedRange = filterMapsRange{}
 	f.indexedView = nil
@@ -292,11 +299,16 @@ func (f *FilterMaps) reset() bool {
 	// deleting the range first ensures that resetDb will be called again at next
 	// startup and any leftover data will be removed even if it cannot finish now.
 	rawdb.DeleteFilterMapsRange(f.db)
-	return f.removeDbWithPrefix([]byte(rawdb.FilterMapsPrefix), "Resetting log index database")
+	f.safeDeleteRange(rawdb.DeleteFilterMapsDb, "Resetting log index database")
 }
 
 // init initializes an empty log index according to the current targetView.
 func (f *FilterMaps) init() error {
+	// ensure that there is no remaining data in the filter maps key range
+	if !f.safeDeleteRange(rawdb.DeleteFilterMapsDb, "Resetting log index database") {
+		return errors.New("could not reset log index database")
+	}
+
 	f.indexLock.Lock()
 	defer f.indexLock.Unlock()
 
@@ -317,6 +329,13 @@ func (f *FilterMaps) init() error {
 			bestIdx, bestLen = idx, max
 		}
 	}
+	var initBlockNumber uint64
+	if bestLen > 0 {
+		initBlockNumber = checkpoints[bestIdx][bestLen-1].BlockNumber
+	}
+	if initBlockNumber < f.historyCutoff {
+		return errHistoryCutoff
+	}
 	batch := f.db.NewBatch()
 	for epoch := range bestLen {
 		cp := checkpoints[bestIdx][epoch]
@@ -335,24 +354,25 @@ func (f *FilterMaps) init() error {
 	return batch.Write()
 }
 
-// removeDbWithPrefix removes data with the given prefix from the database and
-// returns true if everything was successfully removed.
-func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
-	it := f.db.NewIterator(prefix, nil)
-	hasData := it.Next()
-	it.Release()
-	if !hasData {
-		return true
-	}
+// removeBloomBits removes old bloom bits data from the database.
+func (f *FilterMaps) removeBloomBits() {
+	f.safeDeleteRange(rawdb.DeleteBloomBitsDb, "Removing old bloom bits database")
+	f.closeWg.Done()
+}
 
-	end := bytes.Clone(prefix)
-	end[len(end)-1]++
+// safeDeleteRange calls the specified database range deleter function
+// repeatedly as long as it returns leveldb.ErrTooManyKeys.
+// This wrapper is necessary because of the leveldb fallback implementation
+// of DeleteRange.
+func (f *FilterMaps) safeDeleteRange(removeFn func(ethdb.KeyValueRangeDeleter) error, action string) bool {
 	start := time.Now()
 	var retry bool
 	for {
-		err := f.db.DeleteRange(prefix, end)
+		err := removeFn(f.db)
 		if err == nil {
-			log.Info(action+" finished", "elapsed", time.Since(start))
+			if retry {
+				log.Info(action+" finished", "elapsed", time.Since(start))
+			}
 			return true
 		}
 		if err != leveldb.ErrTooManyKeys {
@@ -365,7 +385,7 @@ func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
 		default:
 		}
 		if !retry {
-			log.Info(action + " in progress...")
+			log.Info(action+" in progress...", "elapsed", time.Since(start))
 			retry = true
 		}
 	}
