@@ -392,12 +392,16 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 			}
 			// do not exit while in partially written state but do allow processing
 			// events and pausing while block processing is in progress
+			r.f.indexLock.Unlock()
 			pauseCb()
+			r.f.indexLock.Lock()
 			batch = r.f.db.NewBatch()
 		}
 	}
 
-	r.f.setRange(batch, r.f.indexedView, tempRange)
+	if tempRange != r.f.indexedRange {
+		r.f.setRange(batch, r.f.indexedView, tempRange, true)
+	}
 	// add or update filter rows
 	for rowIndex := uint32(0); rowIndex < r.f.mapHeight; rowIndex++ {
 		var (
@@ -469,7 +473,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	}
 	r.finishedMaps = make(map[uint32]*renderedMap)
 	r.finished.SetFirst(r.finished.AfterLast())
-	r.f.setRange(batch, renderedView, newRange)
+	r.f.setRange(batch, renderedView, newRange, false)
 	if err := batch.Write(); err != nil {
 		log.Crit("Error writing log index update batch", "error", err)
 	}

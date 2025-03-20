@@ -136,15 +136,18 @@ func (f *FilterMaps) processEvents() {
 // processSingleEvent processes a single event either in a blocking or
 // non-blocking manner.
 func (f *FilterMaps) processSingleEvent(blocking bool) bool {
-	if f.matcherSyncRequest != nil && f.targetHeadIndexed() {
-		f.matcherSyncRequest.synced()
-		f.matcherSyncRequest = nil
+	if !f.hasTempRange {
+		for _, mb := range f.matcherSyncRequests {
+			mb.synced()
+		}
+		f.matcherSyncRequests = nil
 	}
 	if blocking {
 		select {
 		case target := <-f.targetCh:
 			f.setTarget(target)
-		case f.matcherSyncRequest = <-f.matcherSyncCh:
+		case mb := <-f.matcherSyncCh:
+			f.matcherSyncRequests = append(f.matcherSyncRequests, mb)
 		case f.blockProcessing = <-f.blockProcessingCh:
 		case <-f.closeCh:
 			f.stop = true
@@ -160,7 +163,8 @@ func (f *FilterMaps) processSingleEvent(blocking bool) bool {
 		select {
 		case target := <-f.targetCh:
 			f.setTarget(target)
-		case f.matcherSyncRequest = <-f.matcherSyncCh:
+		case mb := <-f.matcherSyncCh:
+			f.matcherSyncRequests = append(f.matcherSyncRequests, mb)
 		case f.blockProcessing = <-f.blockProcessingCh:
 		case <-f.closeCh:
 			f.stop = true
