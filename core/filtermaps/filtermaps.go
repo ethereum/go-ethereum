@@ -364,7 +364,7 @@ func (f *FilterMaps) safeDeleteRange(removeFn func(ethdb.KeyValueRangeDeleter) e
 		default:
 		}
 		if !retry {
-			log.Info(action + " in progress...", "elapsed", time.Since(start))
+			log.Info(action+" in progress...", "elapsed", time.Since(start))
 			retry = true
 		}
 	}
