@@ -416,6 +416,15 @@ func TestTxIndexerReport(t *testing.T) {
 			expIndexed:   62,
 			expRemaining: 1,
 		},
+		{
+			// head = 128, limit = 64, cutoff = 256 => index: [66, 128]
+			head:         chainHead,
+			limit:        0,
+			cutoff:       256,
+			tail:         nil,
+			expIndexed:   0,
+			expRemaining: 0,
+		},
 	}
 	for _, c := range cases {
 		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)

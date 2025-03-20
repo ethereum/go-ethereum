@@ -250,6 +250,14 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 
 // report returns the tx indexing progress.
 func (indexer *txIndexer) report(head uint64) TxIndexProgress {
+	// Special case if the head is even below the cutoff,
+	// nothing to index.
+	if head < indexer.cutoff {
+		return TxIndexProgress{
+			Indexed:   0,
+			Remaining: 0,
+		}
+	}
 	// Compute how many blocks are supposed to be indexed
 	total := indexer.limit
 	if indexer.limit == 0 || total > head {
@@ -259,7 +267,7 @@ func (indexer *txIndexer) report(head uint64) TxIndexProgress {
 	if total > length {
 		total = length
 	}
-	// Compute how many block have been indexed
+	// Compute how many blocks have been indexed
 	var indexed uint64
 	tail := rawdb.ReadTxIndexTail(indexer.db)
 	if tail != nil {
