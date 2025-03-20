@@ -48,6 +48,12 @@ func (f *FilterMaps) indexerLoop() {
 				continue
 			}
 			if err := f.init(); err != nil {
+				if err == errHistoryCutoff {
+					log.Warn("History cutoff point beyond latest checkpoint; log index disabled")
+					f.disabled = true
+					f.reset()
+					return
+				}
 				log.Error("Error initializing log index", "error", err)
 				// unexpected error; there is not a lot we can do here, maybe it
 				// recovers, maybe not. Calling event processing here ensures
@@ -57,10 +63,16 @@ func (f *FilterMaps) indexerLoop() {
 			}
 		}
 		if !f.targetHeadIndexed() {
-			if !f.tryIndexHead() {
-				// either shutdown or unexpected error; in the latter case ensure
-				// that proper shutdown is still possible.
-				f.processSingleEvent(true)
+			if _, err := f.tryIndexHead(); err != nil {
+				switch err {
+				case errHistoryCutoff:
+					log.Warn("History cutoff point beyond rendered index head; resetting log index")
+					f.reset() // still attempt re-initializing; maybe there are more recent checkpoints
+				default:
+					// unexpected error; ensure that we can still properly
+					// shutdown in case of an infinite loop.
+					f.processSingleEvent(true)
+				}
 			}
 		} else {
 			if f.finalBlock != f.lastFinal {
@@ -198,14 +210,14 @@ func (f *FilterMaps) setTarget(target targetUpdate) {
 
 // tryIndexHead tries to render head maps according to the current targetView
 // and returns true if successful.
-func (f *FilterMaps) tryIndexHead() bool {
+func (f *FilterMaps) tryIndexHead() (bool, error) {
 	headRenderer, err := f.renderMapsBefore(math.MaxUint32)
 	if err != nil {
 		log.Error("Error creating log index head renderer", "error", err)
-		return false
+		return false, err
 	}
 	if headRenderer == nil {
-		return true
+		return true, nil
 	}
 	if !f.startedHeadIndex {
 		f.lastLogHeadIndex = time.Now()
@@ -213,7 +225,7 @@ func (f *FilterMaps) tryIndexHead() bool {
 		f.startedHeadIndex = true
 		f.ptrHeadIndex = f.indexedRange.blocks.AfterLast()
 	}
-	if _, err := headRenderer.run(func() bool {
+	if done, err := headRenderer.run(func() bool {
 		f.processEvents()
 		return f.stop
 	}, func() {
@@ -229,9 +241,11 @@ func (f *FilterMaps) tryIndexHead() bool {
 			f.loggedHeadIndex = true
 			f.lastLogHeadIndex = time.Now()
 		}
-	}); err != nil {
-		log.Error("Log index head rendering failed", "error", err)
-		return false
+	}); !done {
+		if err != nil {
+			log.Error("Log index head rendering failed", "error", err)
+		}
+		return false, err
 	}
 	if f.loggedHeadIndex && f.indexedRange.hasIndexedBlocks() {
 		log.Info("Log index head rendering finished",
@@ -240,7 +254,7 @@ func (f *FilterMaps) tryIndexHead() bool {
 			"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
 	}
 	f.loggedHeadIndex, f.startedHeadIndex = false, false
-	return true
+	return true, nil
 }
 
 // tryIndexTail tries to render tail epochs until the tail target block is

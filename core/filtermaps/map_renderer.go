@@ -681,7 +681,7 @@ func (f *FilterMaps) newLogIteratorFromMapBoundary(mapIndex uint32, startBlock, 
 	// get block receipts
 	receipts := f.targetView.getReceipts(startBlock)
 	if receipts == nil {
-		return nil, fmt.Errorf("receipts not found for start block %d", startBlock)
+		return nil, errHistoryCutoff
 	}
 	// initialize iterator at block start
 	l := &logIterator{
@@ -748,7 +748,7 @@ func (l *logIterator) next() error {
 		l.blockNumber++
 		l.receipts = l.chainView.getReceipts(l.blockNumber)
 		if l.receipts == nil {
-			return fmt.Errorf("receipts not found for block %d", l.blockNumber)
+			return errHistoryCutoff
 		}
 		l.txIndex, l.logIndex, l.topicIndex, l.blockStart = 0, 0, 0, true
 	} else {
