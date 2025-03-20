@@ -237,6 +237,11 @@ func (*HandlerT) SetGCPercent(v int) int {
 	return debug.SetGCPercent(v)
 }
 
+// SetMemoryLimit sets the GOMEMLIMIT for the process. It returns the previous limit.
+func (*HandlerT) SetMemoryLimit(limit int64) int64 {
+	return debug.SetMemoryLimit(limit)
+}
+
 func writeProfile(name, file string) error {
 	p := pprof.Lookup(name)
 	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file)
