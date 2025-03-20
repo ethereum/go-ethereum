@@ -32,8 +32,11 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	forkBlock := big.NewInt(32)
 
 	// Generate a common prefix for both pro-forkers and non-forkers
+	gspec := &Genesis{
+		BaseFee: big.NewInt(params.InitialBaseFee),
+		Config:  params.TestChainConfig,
+	}
 	db := rawdb.NewMemoryDatabase()
-	gspec := &Genesis{BaseFee: big.NewInt(params.InitialBaseFee)}
 	genesis := gspec.MustCommit(db)
 	prefix, _ := GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), db, int(forkBlock.Int64()-1), func(i int, gen *BlockGen) {})
 
