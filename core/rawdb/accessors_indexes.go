@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"math/big"
@@ -448,4 +449,25 @@ func DeleteFilterMapsRange(db ethdb.KeyValueWriter) {
 	if err := db.Delete(filterMapsRangeKey); err != nil {
 		log.Crit("Failed to delete filter maps range", "err", err)
 	}
+}
+
+// deletePrefixRange deletes everything with the given prefix from the database.
+func deletePrefixRange(db ethdb.KeyValueRangeDeleter, prefix []byte) error {
+	end := bytes.Clone(prefix)
+	end[len(end)-1]++
+	return db.DeleteRange(prefix, end)
+}
+
+// DeleteFilterMapsDb removes the entire filter maps database
+func DeleteFilterMapsDb(db ethdb.KeyValueRangeDeleter) error {
+	return deletePrefixRange(db, []byte(filterMapsPrefix))
+}
+
+// DeleteFilterMapsDb removes the old bloombits database and the associated
+// chain indexer database.
+func DeleteBloomBitsDb(db ethdb.KeyValueRangeDeleter) error {
+	if err := deletePrefixRange(db, bloomBitsPrefix); err != nil {
+		return err
+	}
+	return deletePrefixRange(db, bloomBitsIndexPrefix)
 }
