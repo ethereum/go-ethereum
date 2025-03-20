@@ -962,7 +962,7 @@ func TestTracingWithOverrides(t *testing.T) {
 					},
 				},
 			},
-			want: `{"gas":21167,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000002"}`,
+			want: `{"gas":21167,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000002"}`,
 		},
 		{ // Call to ECREC Precompiled on a different address, expect the original behaviour of ECREC precompile
 			blockNumber: rpc.LatestBlockNumber,
@@ -983,7 +983,7 @@ func TestTracingWithOverrides(t *testing.T) {
 					},
 				},
 			},
-			want: `{"gas":25664,"failed":false,"returnValue":"000000000000000000000000c6e93f4c1920eaeaa1e699f76a7a8c18e3056074"}`,
+			want: `{"gas":25664,"failed":false,"returnValue":"0x000000000000000000000000c6e93f4c1920eaeaa1e699f76a7a8c18e3056074"}`,
 		},
 	}
 	for i, tc := range testSuite {
