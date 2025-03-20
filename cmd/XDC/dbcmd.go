@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
@@ -38,9 +39,7 @@ var (
 		Name:      "removedb",
 		Usage:     "Remove blockchain and state databases",
 		ArgsUsage: " ",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-		},
+		Flags:     utils.DatabaseFlags,
 		Description: `
 Remove blockchain and state databases`,
 	}
@@ -61,13 +60,9 @@ Remove blockchain and state databases`,
 		Action:    inspect,
 		Name:      "inspect",
 		ArgsUsage: "<prefix> <start>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.SyncModeFlag,
-			utils.MainnetFlag,
-			utils.TestnetFlag,
-			utils.DevnetFlag,
-		},
+		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
@@ -75,27 +70,19 @@ Remove blockchain and state databases`,
 		Action: dbStats,
 		Name:   "stats",
 		Usage:  "Print leveldb statistics",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.SyncModeFlag,
-			utils.MainnetFlag,
-			utils.TestnetFlag,
-			utils.DevnetFlag,
-		},
+		}, utils.NetworkFlags, utils.DatabaseFlags),
 	}
 	dbCompactCmd = &cli.Command{
 		Action: dbCompact,
 		Name:   "compact",
 		Usage:  "Compact leveldb database. WARNING: May take a very long time",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.SyncModeFlag,
-			utils.MainnetFlag,
-			utils.TestnetFlag,
-			utils.DevnetFlag,
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
-		},
+		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `This command performs a database compaction.
 WARNING: This operation may take a very long time to finish, and may cause database
 corruption if it is aborted during execution'!`,
@@ -105,13 +92,9 @@ corruption if it is aborted during execution'!`,
 		Name:      "get",
 		Usage:     "Show the value of a database key",
 		ArgsUsage: "<hex-encoded key>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.SyncModeFlag,
-			utils.MainnetFlag,
-			utils.TestnetFlag,
-			utils.DevnetFlag,
-		},
+		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command looks up the specified database key from the database.",
 	}
 	dbDeleteCmd = &cli.Command{
@@ -119,13 +102,9 @@ corruption if it is aborted during execution'!`,
 		Name:      "delete",
 		Usage:     "Delete a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.SyncModeFlag,
-			utils.MainnetFlag,
-			utils.TestnetFlag,
-			utils.DevnetFlag,
-		},
+		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `This command deletes the specified database key from the database.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
@@ -134,13 +113,9 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Name:      "put",
 		Usage:     "Set the value of a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key> <hex-encoded value>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.SyncModeFlag,
-			utils.MainnetFlag,
-			utils.TestnetFlag,
-			utils.DevnetFlag,
-		},
+		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `This command sets a given database key to the given value.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -41,13 +42,7 @@ var (
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.XDCXDataDirFlag,
-			utils.MainnetFlag,
-			utils.TestnetFlag,
-			utils.DevnetFlag,
-		},
+		Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
@@ -60,9 +55,7 @@ It expects the genesis file or the network name [ mainnet | testnet | devnet ] a
 		Name:      "import",
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.XDCXDataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
@@ -80,7 +73,7 @@ It expects the genesis file or the network name [ mainnet | testnet | devnet ] a
 			utils.MetricsInfluxDBTokenFlag,
 			utils.MetricsInfluxDBBucketFlag,
 			utils.MetricsInfluxDBOrganizationFlag,
-		},
+		}, utils.DatabaseFlags),
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
 with several RLP-encoded blocks, or several files can be used.
@@ -93,12 +86,10 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.XDCXDataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabaseFlags),
 		Description: `
 Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
@@ -110,12 +101,10 @@ if already existing.`,
 		Name:      "import-preimages",
 		Usage:     "Import the preimage database from an RLP stream",
 		ArgsUsage: "<datafile>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.XDCXDataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabaseFlags),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 	The import-preimages command imports hash preimages from an RLP encoded stream.`,
@@ -125,12 +114,10 @@ if already existing.`,
 		Name:      "export-preimages",
 		Usage:     "Export the preimage database into an RLP stream",
 		ArgsUsage: "<dumpfile>",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.XDCXDataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabaseFlags),
 		Description: `
 The export-preimages command export hash preimages to an RLP encoded stream`,
 	}
@@ -139,12 +126,10 @@ The export-preimages command export hash preimages to an RLP encoded stream`,
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
 		ArgsUsage: "[<blockHash> | <blockNum>]...",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.XDCXDataDirFlag,
+		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
-		},
+		}, utils.DatabaseFlags),
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The arguments are interpreted as block numbers or hashes.
