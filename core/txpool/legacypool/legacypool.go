@@ -609,9 +609,11 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 	return pool.validateAuth(tx)
 }
 
-// ensureDelegationLimit ensures the account with either delegation or pending
-// delegation can at most send one inflight **executable** transaction.
-func (pool *LegacyPool) ensureDelegationLimit(tx *types.Transaction) error {
+// checkDelegationLimit determines if the tx sender is delegated or has a
+// pending delegation, and if so, ensures they have at most one in-flight
+// **executable** transaction, e.g. disallow stacked and gapped transactions
+// from the account.
+func (pool *LegacyPool) checkDelegationLimit(tx *types.Transaction) error {
 	from, _ := types.Sender(pool.signer, tx) // validated
 
 	// Short circuit if the sender has neither delegation nor pending delegation.
@@ -638,7 +640,7 @@ func (pool *LegacyPool) ensureDelegationLimit(tx *types.Transaction) error {
 func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
 	// Allow at most one in-flight tx for delegated accounts or those with a
 	// pending authorization.
-	if err := pool.ensureDelegationLimit(tx); err != nil {
+	if err := pool.checkDelegationLimit(tx); err != nil {
 		return err
 	}
 	// Authorities cannot conflict with any pending or queued transactions.
