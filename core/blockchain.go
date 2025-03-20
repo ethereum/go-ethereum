@@ -53,6 +53,7 @@ var (
 	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
 	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
 	headTimeGapGauge   = metrics.NewRegisteredGauge("chain/head/timegap", nil)
+	headL1MessageGauge = metrics.NewRegisteredGauge("chain/head/l1msg", nil)
 
 	l2BaseFeeGauge = metrics.NewRegisteredGauge("chain/fees/l2basefee", nil)
 
@@ -1251,6 +1252,17 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		l2BaseFeeGauge.Update(block.BaseFee().Int64())
 	} else {
 		l2BaseFeeGauge.Update(0)
+	}
+
+	// Note the latest relayed L1 message queue index (if any)
+	for _, tx := range block.Transactions() {
+		if msg := tx.AsL1MessageTx(); msg != nil {
+			// Queue index is guaranteed to fit into int64.
+			headL1MessageGauge.Update(int64(msg.QueueIndex))
+		} else {
+			// No more L1 messages in this block.
+			break
+		}
 	}
 
 	parent := bc.GetHeaderByHash(block.ParentHash())
