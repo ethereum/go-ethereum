@@ -44,13 +44,18 @@ func (f *FilterMaps) indexerLoop() {
 		if !f.indexedRange.initialized {
 			if err := f.init(); err != nil {
 				log.Error("Error initializing log index", "error", err)
-				f.waitForEvent()
+				// unexpected error; there is not a lot we can do here, maybe it
+				// recovers, maybe not. Calling event processing here ensures
+				// that we can still properly shutdown in case of an infinite loop.
+				f.processSingleEvent(true)
 				continue
 			}
 		}
 		if !f.targetHeadIndexed() {
 			if !f.tryIndexHead() {
-				f.waitForEvent()
+				// either shutdown or unexpected error; in the latter case ensure
+				// that proper shutdown is still possible.
+				f.processSingleEvent(true)
 			}
 		} else {
 			if f.finalBlock != f.lastFinal {
@@ -60,7 +65,7 @@ func (f *FilterMaps) indexerLoop() {
 				f.lastFinal = f.finalBlock
 			}
 			if f.tryIndexTail() && f.tryUnindexTail() {
-				f.waitForEvent()
+				f.waitForNewHead()
 			}
 		}
 	}
@@ -119,8 +124,9 @@ func (f *FilterMaps) WaitIdle() {
 	}
 }
 
-// waitForEvent blocks until an event happens that the indexer might react to.
-func (f *FilterMaps) waitForEvent() {
+// waitForNewHead blocks until there is a new target head to index and block
+// processing has been finished.
+func (f *FilterMaps) waitForNewHead() {
 	for !f.stop && (f.blockProcessing || f.targetHeadIndexed()) {
 		f.processSingleEvent(true)
 	}
@@ -129,13 +135,16 @@ func (f *FilterMaps) waitForEvent() {
 // processEvents processes all events, blocking only if a block processing is
 // happening and indexing should be suspended.
 func (f *FilterMaps) processEvents() {
-	for !f.stop && f.processSingleEvent(f.blockProcessing) {
+	for f.processSingleEvent(f.blockProcessing) {
 	}
 }
 
 // processSingleEvent processes a single event either in a blocking or
-// non-blocking manner.
+// non-blocking manner. It returns true if it did process an event.
 func (f *FilterMaps) processSingleEvent(blocking bool) bool {
+	if f.stop {
+		return false
+	}
 	if !f.hasTempRange {
 		for _, mb := range f.matcherSyncRequests {
 			mb.synced()
