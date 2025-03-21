@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -186,7 +187,7 @@ func (indexer *txIndexer) repair(head uint64) {
 		// potentially leaving dangling indexes in the database.
 		// However, this is considered acceptable.
 		rawdb.WriteTxIndexTail(indexer.db, indexer.cutoff)
-		rawdb.DeleteAllTxLookupEntries(indexer.db, func(blob []byte) bool {
+		rawdb.DeleteAllTxLookupEntries(indexer.db, func(txhash common.Hash, blob []byte) bool {
 			n := rawdb.DecodeTxLookupEntry(blob, indexer.db)
 			return n != nil && *n < indexer.cutoff
 		})
