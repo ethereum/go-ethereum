@@ -800,9 +800,9 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 	})
 	f.BoolFlag(&flagset.BoolFlag{
 		Name:    "v5disc",
-		Usage:   "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
-		Value:   &c.cliConfig.P2P.Discovery.V5Enabled,
-		Default: c.cliConfig.P2P.Discovery.V5Enabled,
+		Usage:   "Enables the V5 discovery mechanism",
+		Value:   &c.cliConfig.P2P.Discovery.DiscoveryV5,
+		Default: c.cliConfig.P2P.Discovery.DiscoveryV5,
 		Group:   "P2P",
 	})
 	f.DurationFlag(&flagset.DurationFlag{

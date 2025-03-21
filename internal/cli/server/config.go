@@ -231,8 +231,9 @@ type P2PDiscovery struct {
 	// DiscoveryV4 specifies whether V4 discovery should be started.
 	DiscoveryV4 bool `hcl:"v4disc,optional" toml:"v4disc,optional"`
 
-	// V5Enabled is used to enable disc v5 discovery mode
-	V5Enabled bool `hcl:"v5disc,optional" toml:"v5disc,optional"`
+	// DiscoveryV5 specifies whether the new topic-discovery based V5 discovery
+	// protocol should be started or not.
+	DiscoveryV5 bool `hcl:"v5disc,optional" toml:"v5disc,optional"`
 
 	// Bootnodes is the list of initial bootnodes
 	Bootnodes []string `hcl:"bootnodes,optional" toml:"bootnodes,optional"`
@@ -639,7 +640,7 @@ func DefaultConfig() *Config {
 			TxAnnouncementOnly: false,
 			Discovery: &P2PDiscovery{
 				DiscoveryV4:  true,
-				V5Enabled:    false,
+				DiscoveryV5:  true,
 				Bootnodes:    []string{},
 				BootnodesV4:  []string{},
 				BootnodesV5:  []string{},
@@ -1351,7 +1352,7 @@ func (c *Config) buildNode() (*node.Config, error) {
 			MaxPendingPeers:    int(c.P2P.MaxPendPeers),
 			ListenAddr:         c.P2P.Bind + ":" + strconv.Itoa(int(c.P2P.Port)),
 			DiscoveryV4:        c.P2P.Discovery.DiscoveryV4,
-			DiscoveryV5:        c.P2P.Discovery.V5Enabled,
+			DiscoveryV5:        c.P2P.Discovery.DiscoveryV5,
 			TxArrivalWait:      c.P2P.TxArrivalWait,
 			TxAnnouncementOnly: c.P2P.TxAnnouncementOnly,
 		},
