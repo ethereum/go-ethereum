@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/taikoxyz/taiko-geth/compare/v1.13.0...v1.14.0) (2025-03-21)
+
+
+### Features
+
+* **taiko_genesis:** update `TaikoGenesisBlock` configs ([#400](https://github.com/taikoxyz/taiko-geth/issues/400)) ([139e562](https://github.com/taikoxyz/taiko-geth/commit/139e56205075ba5897c2a4ca707a52b096a3f200))
+
 ## [1.13.0](https://github.com/taikoxyz/taiko-geth/compare/v1.12.0...v1.13.0) (2025-03-15)
 
 
