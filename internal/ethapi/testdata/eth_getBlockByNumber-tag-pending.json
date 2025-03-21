@@ -15,7 +15,6 @@
   "size": "0x256",
   "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
   "timestamp": "0x2a",
-  "totalDifficulty": null,
   "transactions": [
     "0x4afee081df5dff7a025964032871f7d4ba4d21baf5f6376a2f4a9f79fc506298"
   ],
