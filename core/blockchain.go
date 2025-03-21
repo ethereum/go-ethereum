@@ -334,10 +334,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
 
 	genesisHeader := bc.GetHeaderByNumber(0)
-	bc.genesisBlock = types.NewBlockWithHeader(genesisHeader)
-	if bc.genesisBlock == nil {
+	if genesisHeader == nil {
 		return nil, ErrNoGenesis
 	}
+	bc.genesisBlock = types.NewBlockWithHeader(genesisHeader)
 
 	bc.currentBlock.Store(nil)
 	bc.currentSnapBlock.Store(nil)
