@@ -108,7 +108,6 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 			from = head - indexer.limit + 1
 		}
 		from = max(from, indexer.cutoff)
-
 		rawdb.IndexTransactions(indexer.db, from, head+1, stop, true)
 		return
 	}
@@ -116,7 +115,8 @@ func (indexer *txIndexer) run(head uint64, stop chan struct{}, done chan struct{
 	// present), while the whole chain are requested for indexing.
 	if indexer.limit == 0 || head < indexer.limit {
 		if *tail > 0 {
-			rawdb.IndexTransactions(indexer.db, max(uint64(0), indexer.cutoff), *tail, stop, true)
+			from := max(uint64(0), indexer.cutoff)
+			rawdb.IndexTransactions(indexer.db, from, *tail, stop, true)
 		}
 		return
 	}
