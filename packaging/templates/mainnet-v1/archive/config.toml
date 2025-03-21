@@ -38,7 +38,7 @@ gcmode = "archive"
     # txannouncementonly = false
     # [p2p.discovery]
         # v4disc = true
-        # v5disc = false
+        # v5disc = true
         # bootnodesv4 = []
         # bootnodesv5 = []
         bootnodes = [ "enode://e4fb013061eba9a2c6fb0a41bbd4149f4808f0fb7e88ec55d7163f19a6f02d64d0ce5ecc81528b769ba552a7068057432d44ab5e9e42842aff5b4709aa2c3f3b@34.89.75.187:30303", "enode://a49da6300403cf9b31e30502eb22c142ba4f77c9dda44990bccce9f2121c3152487ee95ee55c6b92d4cdce77845e40f59fd927da70ea91cf935b23e262236d75@34.142.43.249:30303" ]

@@ -45,7 +45,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   txannouncementonly = false  # Whether to only announce transactions to peers
   [p2p.discovery]
     v4disc = true       # Enables the V4 discovery mechanism
-    v5disc = false      # Enables the experimental RLPx V5 (Topic Discovery) mechanism
+    v5disc = true       # Enables the V5 discovery mechanism
     bootnodes = []      # Comma separated enode URLs for P2P discovery bootstrap
     bootnodesv4 = []    # List of initial v4 bootnodes
     bootnodesv5 = []    # List of initial v5 bootnodes
