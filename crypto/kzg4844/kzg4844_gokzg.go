@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
 )
 
 // context is the crypto primitive pre-seeded with the trusted setup parameters.
@@ -95,4 +95,65 @@ func gokzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error 
 	gokzgIniter.Do(gokzgInit)
 
 	return context.VerifyBlobKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), (gokzg4844.KZGProof)(proof))
+}
+
+// gokzgVerifyCellKZGProofBatch verifies a batch of KZG proofs for a set of cells.
+func gokzgVerifyCellKZGProofBatch(commitments []Commitment, cellIndicies []uint64, cells []Cell, proofs []Proof) error {
+	gokzgIniter.Do(gokzgInit)
+
+	comts := make([]gokzg4844.KZGCommitment, len(commitments))
+	for i, commitment := range commitments {
+		comts[i] = (gokzg4844.KZGCommitment)(commitment)
+	}
+
+	cellInputs := make([]*gokzg4844.Cell, len(cells))
+	for i := range cells {
+		cellInputs[i] = (*gokzg4844.Cell)(&cells[i])
+	}
+
+	proofsInput := make([]gokzg4844.KZGProof, len(proofs))
+	for i, proof := range proofs {
+		proofsInput[i] = (gokzg4844.KZGProof)(proof)
+	}
+
+	return context.VerifyCellKZGProofBatch(comts, cellIndicies, cellInputs, proofsInput)
+}
+
+// gokzgComputeCells computes the cells for a given blob.
+func gokzgComputeCells(blob *Blob) ([]Cell, error) {
+	gokzgIniter.Do(gokzgInit)
+
+	results, err := context.ComputeCells((*gokzg4844.Blob)(blob), 0)
+	if err != nil {
+		return nil, err
+	}
+
+	cells := make([]Cell, len(results))
+	for i, result := range results {
+		cells[i] = (Cell)(*result)
+	}
+
+	return cells, nil
+}
+
+// gokzgComputeCellsAndKZGProofs computes the cells and KZG proofs for a given blob.
+func gokzgComputeCellsAndKZGProofs(blob *Blob) ([]Cell, []Proof, error) {
+	gokzgIniter.Do(gokzgInit)
+
+	cellResults, proofResults, err := context.ComputeCellsAndKZGProofs((*gokzg4844.Blob)(blob), 0)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cells := make([]Cell, len(cellResults))
+	for i, cell := range cellResults {
+		cells[i] = (Cell)(*cell)
+	}
+
+	proofs := make([]Proof, len(proofResults))
+	for i, proof := range proofResults {
+		proofs[i] = (Proof)(proof)
+	}
+
+	return cells, proofs, nil
 }
