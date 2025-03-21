@@ -23,15 +23,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
 var waitDeployedTests = map[string]struct {
 	code        string
@@ -77,7 +75,7 @@ func TestWaitDeployed(t *testing.T) {
 			ctx     = context.Background()
 		)
 		go func() {
-			address, err = bind.WaitDeployed(ctx, backend.Client(), tx)
+			address, err = bind.WaitDeployed(ctx, backend.Client(), tx.Hash())
 			close(mined)
 		}()
 
@@ -122,9 +120,8 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 		t.Errorf("failed to send transaction: %q", err)
 	}
 	backend.Commit()
-	notContractCreation := errors.New("tx is not contract creation")
-	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != notContractCreation.Error() {
-		t.Errorf("error mismatch: want %q, got %q, ", notContractCreation, err)
+	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx.Hash()); err != bind.ErrNoAddressInReceipt {
+		t.Errorf("error mismatch: want %q, got %q, ", bind.ErrNoAddressInReceipt, err)
 	}
 
 	// Create a transaction that is not mined.
@@ -133,7 +130,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 
 	go func() {
 		contextCanceled := errors.New("context canceled")
-		if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != contextCanceled.Error() {
+		if _, err := bind.WaitDeployed(ctx, backend.Client(), tx.Hash()); err.Error() != contextCanceled.Error() {
 			t.Errorf("error mismatch: want %q, got %q, ", contextCanceled, err)
 		}
 	}()

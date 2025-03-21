@@ -1,0 +1,261 @@
+// Code generated via abigen V2 - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
+package bindtests
+
+import (
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var (
+	_ = bytes.Equal
+	_ = errors.New
+	_ = big.NewInt
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = abi.ConvertType
+)
+
+// EventCheckerMetaData contains all meta data concerning the EventChecker contract.
+var EventCheckerMetaData = bind.MetaData{
+	ABI: "[{\"type\":\"event\",\"name\":\"empty\",\"inputs\":[]},{\"type\":\"event\",\"name\":\"indexed\",\"inputs\":[{\"name\":\"addr\",\"type\":\"address\",\"indexed\":true},{\"name\":\"num\",\"type\":\"int256\",\"indexed\":true}]},{\"type\":\"event\",\"name\":\"mixed\",\"inputs\":[{\"name\":\"addr\",\"type\":\"address\",\"indexed\":true},{\"name\":\"num\",\"type\":\"int256\"}]},{\"type\":\"event\",\"name\":\"anonymous\",\"anonymous\":true,\"inputs\":[]},{\"type\":\"event\",\"name\":\"dynamic\",\"inputs\":[{\"name\":\"idxStr\",\"type\":\"string\",\"indexed\":true},{\"name\":\"idxDat\",\"type\":\"bytes\",\"indexed\":true},{\"name\":\"str\",\"type\":\"string\"},{\"name\":\"dat\",\"type\":\"bytes\"}]},{\"type\":\"event\",\"name\":\"unnamed\",\"inputs\":[{\"name\":\"\",\"type\":\"uint256\",\"indexed\":true},{\"name\":\"\",\"type\":\"uint256\",\"indexed\":true}]}]",
+	ID:  "253d421f98e29b25315bde79c1251ab27c",
+}
+
+// EventChecker is an auto generated Go binding around an Ethereum contract.
+type EventChecker struct {
+	abi abi.ABI
+}
+
+// NewEventChecker creates a new instance of EventChecker.
+func NewEventChecker() *EventChecker {
+	parsed, err := EventCheckerMetaData.ParseABI()
+	if err != nil {
+		panic(errors.New("invalid ABI: " + err.Error()))
+	}
+	return &EventChecker{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *EventChecker) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+}
+
+// EventCheckerDynamic represents a dynamic event raised by the EventChecker contract.
+type EventCheckerDynamic struct {
+	IdxStr common.Hash
+	IdxDat common.Hash
+	Str    string
+	Dat    []byte
+	Raw    *types.Log // Blockchain specific contextual infos
+}
+
+const EventCheckerDynamicEventName = "dynamic"
+
+// ContractEventName returns the user-defined event name.
+func (EventCheckerDynamic) ContractEventName() string {
+	return EventCheckerDynamicEventName
+}
+
+// UnpackDynamicEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event dynamic(string indexed idxStr, bytes indexed idxDat, string str, bytes dat)
+func (eventChecker *EventChecker) UnpackDynamicEvent(log *types.Log) (*EventCheckerDynamic, error) {
+	event := "dynamic"
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(EventCheckerDynamic)
+	if len(log.Data) > 0 {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}
+
+// EventCheckerEmpty represents a empty event raised by the EventChecker contract.
+type EventCheckerEmpty struct {
+	Raw *types.Log // Blockchain specific contextual infos
+}
+
+const EventCheckerEmptyEventName = "empty"
+
+// ContractEventName returns the user-defined event name.
+func (EventCheckerEmpty) ContractEventName() string {
+	return EventCheckerEmptyEventName
+}
+
+// UnpackEmptyEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event empty()
+func (eventChecker *EventChecker) UnpackEmptyEvent(log *types.Log) (*EventCheckerEmpty, error) {
+	event := "empty"
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(EventCheckerEmpty)
+	if len(log.Data) > 0 {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}
+
+// EventCheckerIndexed represents a indexed event raised by the EventChecker contract.
+type EventCheckerIndexed struct {
+	Addr common.Address
+	Num  *big.Int
+	Raw  *types.Log // Blockchain specific contextual infos
+}
+
+const EventCheckerIndexedEventName = "indexed"
+
+// ContractEventName returns the user-defined event name.
+func (EventCheckerIndexed) ContractEventName() string {
+	return EventCheckerIndexedEventName
+}
+
+// UnpackIndexedEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event indexed(address indexed addr, int256 indexed num)
+func (eventChecker *EventChecker) UnpackIndexedEvent(log *types.Log) (*EventCheckerIndexed, error) {
+	event := "indexed"
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(EventCheckerIndexed)
+	if len(log.Data) > 0 {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}
+
+// EventCheckerMixed represents a mixed event raised by the EventChecker contract.
+type EventCheckerMixed struct {
+	Addr common.Address
+	Num  *big.Int
+	Raw  *types.Log // Blockchain specific contextual infos
+}
+
+const EventCheckerMixedEventName = "mixed"
+
+// ContractEventName returns the user-defined event name.
+func (EventCheckerMixed) ContractEventName() string {
+	return EventCheckerMixedEventName
+}
+
+// UnpackMixedEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event mixed(address indexed addr, int256 num)
+func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventCheckerMixed, error) {
+	event := "mixed"
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(EventCheckerMixed)
+	if len(log.Data) > 0 {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}
+
+// EventCheckerUnnamed represents a unnamed event raised by the EventChecker contract.
+type EventCheckerUnnamed struct {
+	Arg0 *big.Int
+	Arg1 *big.Int
+	Raw  *types.Log // Blockchain specific contextual infos
+}
+
+const EventCheckerUnnamedEventName = "unnamed"
+
+// ContractEventName returns the user-defined event name.
+func (EventCheckerUnnamed) ContractEventName() string {
+	return EventCheckerUnnamedEventName
+}
+
+// UnpackUnnamedEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event unnamed(uint256 indexed arg0, uint256 indexed arg1)
+func (eventChecker *EventChecker) UnpackUnnamedEvent(log *types.Log) (*EventCheckerUnnamed, error) {
+	event := "unnamed"
+	if log.Topics[0] != eventChecker.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(EventCheckerUnnamed)
+	if len(log.Data) > 0 {
+		if err := eventChecker.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range eventChecker.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}

@@ -51,13 +51,20 @@ const (
 // encoding/decoding and with the handshake; the UDPv5 object handles higher-level concerns.
 type codecV5 interface {
 	// Encode encodes a packet.
-	Encode(enode.ID, string, v5wire.Packet, *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error)
+	//
+	// If the underlying type of 'p' is *v5wire.Whoareyou, a Whoareyou challenge packet is
+	// encoded. If the 'challenge' parameter is non-nil, the packet is encoded as a
+	// handshake message packet. Otherwise, the packet will be encoded as an ordinary
+	// message packet.
+	Encode(id enode.ID, addr string, p v5wire.Packet, challenge *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error)
 
 	// Decode decodes a packet. It returns a *v5wire.Unknown packet if decryption fails.
 	// The *enode.Node return value is non-nil when the input contains a handshake response.
-	Decode([]byte, string) (enode.ID, *enode.Node, v5wire.Packet, error)
+	Decode(b []byte, addr string) (enode.ID, *enode.Node, v5wire.Packet, error)
 
-	CurrentChallenge(enode.ID, string) *v5wire.Whoareyou
+	// CurrentChallenge returns the most recent WHOAREYOU challenge that was encoded to given node.
+	// This will return a non-nil value if there is an active handshake attempt with the node, and nil otherwise.
+	CurrentChallenge(id enode.ID, addr string) *v5wire.Whoareyou
 }
 
 // UDPv5 is the implementation of protocol version 5.
@@ -872,7 +879,7 @@ func (t *UDPv5) handleUnknown(p *v5wire.Unknown, fromID enode.ID, fromAddr netip
 		// them which handshake attempt they need to complete. We tell them to use the
 		// existing handshake attempt since the response to that one might still be in
 		// transit.
-		t.log.Warn("Repeating discv5 handshake challenge", "id", fromID, "addr", fromAddr)
+		t.log.Debug("Repeating discv5 handshake challenge", "id", fromID, "addr", fromAddr)
 		t.sendResponse(fromID, fromAddr, currentChallenge)
 		return
 	}

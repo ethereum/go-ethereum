@@ -70,6 +70,7 @@ type FilterMaps struct {
 	indexLock    sync.RWMutex
 	indexedRange filterMapsRange
 	indexedView  *ChainView // always consistent with the log index
+	hasTempRange bool
 
 	// also accessed by indexer and matcher backend but no locking needed.
 	filterMapCache *lru.Cache[uint32, filterMap]
@@ -94,12 +95,12 @@ type FilterMaps struct {
 	ptrTailUnindexMap                                            uint32
 
 	targetView            *ChainView
-	matcherSyncRequest    *FilterMapsMatcherBackend
+	matcherSyncRequests   []*FilterMapsMatcherBackend
+	historyCutoff         uint64
 	finalBlock, lastFinal uint64
 	lastFinalEpoch        uint32
 	stop                  bool
-	targetViewCh          chan *ChainView
-	finalBlockCh          chan uint64
+	targetCh              chan targetUpdate
 	blockProcessingCh     chan bool
 	blockProcessing       bool
 	matcherSyncCh         chan *FilterMapsMatcherBackend
@@ -145,24 +146,23 @@ func (a FilterRow) Equal(b FilterRow) bool {
 // filterMapsRange describes the rendered range of filter maps and the range
 // of fully rendered blocks.
 type filterMapsRange struct {
-	initialized        bool
-	headBlockIndexed   bool
-	headBlockDelimiter uint64 // zero if afterLastIndexedBlock != targetBlockNumber
-	// if initialized then all maps are rendered between firstRenderedMap and
-	// afterLastRenderedMap-1
-	firstRenderedMap, afterLastRenderedMap uint32
+	initialized   bool
+	headIndexed   bool
+	headDelimiter uint64 // zero if headIndexed is false
+	// if initialized then all maps are rendered in the maps range
+	maps common.Range[uint32]
 	// if tailPartialEpoch > 0 then maps between firstRenderedMap-mapsPerEpoch and
 	// firstRenderedMap-mapsPerEpoch+tailPartialEpoch-1 are rendered
 	tailPartialEpoch uint32
-	// if initialized then all log values belonging to blocks between
-	// firstIndexedBlock and afterLastIndexedBlock are fully rendered
-	// blockLvPointers are available between firstIndexedBlock and afterLastIndexedBlock-1
-	firstIndexedBlock, afterLastIndexedBlock uint64
+	// if initialized then all log values in the blocks range are fully
+	// rendered
+	// blockLvPointers are available in the blocks range
+	blocks common.Range[uint64]
 }
 
 // hasIndexedBlocks returns true if the range has at least one fully indexed block.
 func (fmr *filterMapsRange) hasIndexedBlocks() bool {
-	return fmr.initialized && fmr.afterLastIndexedBlock > fmr.firstIndexedBlock
+	return fmr.initialized && !fmr.blocks.IsEmpty() && !fmr.maps.IsEmpty()
 }
 
 // lastBlockOfMap is used for caching the (number, id) pairs belonging to the
@@ -183,7 +183,7 @@ type Config struct {
 }
 
 // NewFilterMaps creates a new FilterMaps and starts the indexer.
-func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, config Config) *FilterMaps {
+func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, finalBlock uint64, params Params, config Config) *FilterMaps {
 	rs, initialized, err := rawdb.ReadFilterMapsRange(db)
 	if err != nil {
 		log.Error("Error reading log index range", "error", err)
@@ -193,22 +193,19 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, c
 		db:                db,
 		closeCh:           make(chan struct{}),
 		waitIdleCh:        make(chan chan bool),
-		targetViewCh:      make(chan *ChainView, 1),
-		finalBlockCh:      make(chan uint64, 1),
+		targetCh:          make(chan targetUpdate, 1),
 		blockProcessingCh: make(chan bool, 1),
 		history:           config.History,
 		disabled:          config.Disabled,
 		exportFileName:    config.ExportFileName,
 		Params:            params,
 		indexedRange: filterMapsRange{
-			initialized:           initialized,
-			headBlockIndexed:      rs.HeadBlockIndexed,
-			headBlockDelimiter:    rs.HeadBlockDelimiter,
-			firstIndexedBlock:     rs.FirstIndexedBlock,
-			afterLastIndexedBlock: rs.AfterLastIndexedBlock,
-			firstRenderedMap:      rs.FirstRenderedMap,
-			afterLastRenderedMap:  rs.AfterLastRenderedMap,
-			tailPartialEpoch:      rs.TailPartialEpoch,
+			initialized:      initialized,
+			headIndexed:      rs.HeadIndexed,
+			headDelimiter:    rs.HeadDelimiter,
+			blocks:           common.NewRange(rs.BlocksFirst, rs.BlocksAfterLast-rs.BlocksFirst),
+			maps:             common.NewRange(rs.MapsFirst, rs.MapsAfterLast-rs.MapsFirst),
+			tailPartialEpoch: rs.TailPartialEpoch,
 		},
 		matcherSyncCh:   make(chan *FilterMapsMatcherBackend),
 		matchers:        make(map[*FilterMapsMatcherBackend]struct{}),
@@ -223,24 +220,23 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, params Params, c
 	f.targetView = initView
 	if f.indexedRange.initialized {
 		f.indexedView = f.initChainView(f.targetView)
-		f.indexedRange.headBlockIndexed = f.indexedRange.afterLastIndexedBlock == f.indexedView.headNumber+1
-		if !f.indexedRange.headBlockIndexed {
-			f.indexedRange.headBlockDelimiter = 0
+		f.indexedRange.headIndexed = f.indexedRange.blocks.AfterLast() == f.indexedView.headNumber+1
+		if !f.indexedRange.headIndexed {
+			f.indexedRange.headDelimiter = 0
 		}
 	}
 	if f.indexedRange.hasIndexedBlocks() {
 		log.Info("Initialized log indexer",
-			"first block", f.indexedRange.firstIndexedBlock, "last block", f.indexedRange.afterLastIndexedBlock-1,
-			"first map", f.indexedRange.firstRenderedMap, "last map", f.indexedRange.afterLastRenderedMap-1,
-			"head indexed", f.indexedRange.headBlockIndexed)
+			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
+			"first map", f.indexedRange.maps.First(), "last map", f.indexedRange.maps.Last(),
+			"head indexed", f.indexedRange.headIndexed)
 	}
 	return f
 }
 
 // Start starts the indexer.
 func (f *FilterMaps) Start() {
-	if !f.testDisableSnapshots && f.indexedRange.initialized && f.indexedRange.headBlockIndexed &&
-		f.indexedRange.firstRenderedMap < f.indexedRange.afterLastRenderedMap {
+	if !f.testDisableSnapshots && f.indexedRange.hasIndexedBlocks() && f.indexedRange.headIndexed {
 		// previous target head rendered; load last map as snapshot
 		if err := f.loadHeadSnapshot(); err != nil {
 			log.Error("Could not load head filter map snapshot", "error", err)
@@ -262,7 +258,7 @@ func (f *FilterMaps) Stop() {
 // Note that the returned view might be shorter than the existing index if
 // the latest maps are not consistent with targetView.
 func (f *FilterMaps) initChainView(chainView *ChainView) *ChainView {
-	mapIndex := f.indexedRange.afterLastRenderedMap
+	mapIndex := f.indexedRange.maps.AfterLast()
 	for {
 		var ok bool
 		mapIndex, ok = f.lastMapBoundaryBefore(mapIndex)
@@ -332,12 +328,10 @@ func (f *FilterMaps) init() error {
 	}
 	if bestLen > 0 {
 		cp := checkpoints[bestIdx][bestLen-1]
-		fmr.firstIndexedBlock = cp.BlockNumber + 1
-		fmr.afterLastIndexedBlock = cp.BlockNumber + 1
-		fmr.firstRenderedMap = uint32(bestLen) << f.logMapsPerEpoch
-		fmr.afterLastRenderedMap = uint32(bestLen) << f.logMapsPerEpoch
+		fmr.blocks = common.NewRange(cp.BlockNumber+1, 0)
+		fmr.maps = common.NewRange(uint32(bestLen)<<f.logMapsPerEpoch, 0)
 	}
-	f.setRange(batch, f.targetView, fmr)
+	f.setRange(batch, f.targetView, fmr, false)
 	return batch.Write()
 }
 
@@ -380,19 +374,20 @@ func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
 // setRange updates the indexed chain view and covered range and also adds the
 // changes to the given batch.
 // Note that this function assumes that the index write lock is being held.
-func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, newRange filterMapsRange) {
+func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, newRange filterMapsRange, isTempRange bool) {
 	f.indexedView = newView
 	f.indexedRange = newRange
+	f.hasTempRange = isTempRange
 	f.updateMatchersValidRange()
 	if newRange.initialized {
 		rs := rawdb.FilterMapsRange{
-			HeadBlockIndexed:      newRange.headBlockIndexed,
-			HeadBlockDelimiter:    newRange.headBlockDelimiter,
-			FirstIndexedBlock:     newRange.firstIndexedBlock,
-			AfterLastIndexedBlock: newRange.afterLastIndexedBlock,
-			FirstRenderedMap:      newRange.firstRenderedMap,
-			AfterLastRenderedMap:  newRange.afterLastRenderedMap,
-			TailPartialEpoch:      newRange.tailPartialEpoch,
+			HeadIndexed:      newRange.headIndexed,
+			HeadDelimiter:    newRange.headDelimiter,
+			BlocksFirst:      newRange.blocks.First(),
+			BlocksAfterLast:  newRange.blocks.AfterLast(),
+			MapsFirst:        newRange.maps.First(),
+			MapsAfterLast:    newRange.maps.AfterLast(),
+			TailPartialEpoch: newRange.tailPartialEpoch,
 		}
 		rawdb.WriteFilterMapsRange(batch, rs)
 	} else {
@@ -410,7 +405,7 @@ func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, ne
 // called from outside the indexerLoop goroutine.
 func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 	mapIndex := uint32(lvIndex >> f.logValuesPerMap)
-	if mapIndex < f.indexedRange.firstRenderedMap || mapIndex >= f.indexedRange.afterLastRenderedMap {
+	if !f.indexedRange.maps.Includes(mapIndex) {
 		return nil, nil
 	}
 	// find possible block range based on map to block pointers
@@ -425,8 +420,8 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 			return nil, fmt.Errorf("failed to retrieve last block of map %d before searched log value index %d: %v", mapIndex, lvIndex, err)
 		}
 	}
-	if firstBlockNumber < f.indexedRange.firstIndexedBlock {
-		firstBlockNumber = f.indexedRange.firstIndexedBlock
+	if firstBlockNumber < f.indexedRange.blocks.First() {
+		firstBlockNumber = f.indexedRange.blocks.First()
 	}
 	// find block with binary search based on block to log value index pointers
 	for firstBlockNumber < lastBlockNumber {
@@ -453,6 +448,11 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 	// iterate through receipts to find the exact log starting at lvIndex
 	for _, receipt := range receipts {
 		for _, log := range receipt.Logs {
+			l := uint64(len(log.Topics) + 1)
+			r := f.valuesPerMap - lvPointer%f.valuesPerMap
+			if l > r {
+				lvPointer += r // skip to map boundary
+			}
 			if lvPointer > lvIndex {
 				// lvIndex does not point to the first log value (address value)
 				// generated by a log as true matches should always do, so it
@@ -462,7 +462,7 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 			if lvPointer == lvIndex {
 				return log, nil // potential match
 			}
-			lvPointer += uint64(len(log.Topics) + 1)
+			lvPointer += l
 		}
 	}
 	return nil, nil
@@ -580,8 +580,8 @@ func (f *FilterMaps) mapRowIndex(mapIndex, rowIndex uint32) uint64 {
 // Note that this function assumes that the indexer read lock is being held when
 // called from outside the indexerLoop goroutine.
 func (f *FilterMaps) getBlockLvPointer(blockNumber uint64) (uint64, error) {
-	if blockNumber >= f.indexedRange.afterLastIndexedBlock && f.indexedRange.headBlockIndexed {
-		return f.indexedRange.headBlockDelimiter, nil
+	if blockNumber >= f.indexedRange.blocks.AfterLast() && f.indexedRange.headIndexed {
+		return f.indexedRange.headDelimiter, nil
 	}
 	if lvPointer, ok := f.lvPointerCache.Get(blockNumber); ok {
 		return lvPointer, nil
@@ -658,26 +658,28 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) error {
 		firstBlock++
 	}
 	fmr := f.indexedRange
-	if f.indexedRange.firstRenderedMap == firstMap &&
-		f.indexedRange.afterLastRenderedMap > firstMap+f.mapsPerEpoch &&
+	if f.indexedRange.maps.First() == firstMap &&
+		f.indexedRange.maps.AfterLast() > firstMap+f.mapsPerEpoch &&
 		f.indexedRange.tailPartialEpoch == 0 {
-		fmr.firstRenderedMap = firstMap + f.mapsPerEpoch
-		fmr.firstIndexedBlock = lastBlock + 1
-	} else if f.indexedRange.firstRenderedMap == firstMap+f.mapsPerEpoch {
+		fmr.maps.SetFirst(firstMap + f.mapsPerEpoch)
+		fmr.blocks.SetFirst(lastBlock + 1)
+	} else if f.indexedRange.maps.First() == firstMap+f.mapsPerEpoch {
 		fmr.tailPartialEpoch = 0
 	} else {
 		return errors.New("invalid tail epoch number")
 	}
-	f.setRange(f.db, f.indexedView, fmr)
-	rawdb.DeleteFilterMapRows(f.db, f.mapRowIndex(firstMap, 0), f.mapRowIndex(firstMap+f.mapsPerEpoch, 0))
+	f.setRange(f.db, f.indexedView, fmr, false)
+	first := f.mapRowIndex(firstMap, 0)
+	count := f.mapRowIndex(firstMap+f.mapsPerEpoch, 0) - first
+	rawdb.DeleteFilterMapRows(f.db, common.NewRange(first, count))
 	for mapIndex := firstMap; mapIndex < firstMap+f.mapsPerEpoch; mapIndex++ {
 		f.filterMapCache.Remove(mapIndex)
 	}
-	rawdb.DeleteFilterMapLastBlocks(f.db, firstMap, firstMap+f.mapsPerEpoch-1) // keep last enrty
+	rawdb.DeleteFilterMapLastBlocks(f.db, common.NewRange(firstMap, f.mapsPerEpoch-1)) // keep last enrty
 	for mapIndex := firstMap; mapIndex < firstMap+f.mapsPerEpoch-1; mapIndex++ {
 		f.lastBlockCache.Remove(mapIndex)
 	}
-	rawdb.DeleteBlockLvPointers(f.db, firstBlock, lastBlock) // keep last enrty
+	rawdb.DeleteBlockLvPointers(f.db, common.NewRange(firstBlock, lastBlock-firstBlock)) // keep last enrty
 	for blockNumber := firstBlock; blockNumber < lastBlock; blockNumber++ {
 		f.lvPointerCache.Remove(blockNumber)
 	}
