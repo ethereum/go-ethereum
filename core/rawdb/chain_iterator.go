@@ -18,7 +18,6 @@ package rawdb
 
 import (
 	"encoding/binary"
-	"fmt"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -370,38 +369,26 @@ func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
 	if tail == nil || *tail > pruneBlock {
 		return // no index, or index ends above pruneBlock
 	}
-
 	// There are blocks below pruneBlock in the index. Iterate the entire index to remove
 	// their entries. Note if this fails, the index is messed up, but tail still points to
 	// the old tail.
-	var (
-		iter    = db.NewIterator(txLookupPrefix, nil)
-		count   int
-		removed int
-	)
-	defer iter.Release()
-	for iter.Next() {
+	var count, removed int
+	DeleteAllTxLookupEntries(db, func(txhash common.Hash, v []byte) bool {
 		count++
-		v := iter.Value()
-		if len(v) > 8 {
-			log.Error("Skipping legacy tx index entry", "hash", fmt.Sprintf("%x", iter.Key()))
-			continue
-		}
-		bn := decodeNumber(v)
-		if bn < pruneBlock {
-			if err := db.Delete(iter.Key()); err != nil {
-				log.Crit("Error deleting tx index entry", "hash", fmt.Sprintf("%x", iter.Key()))
-			}
-			removed++
-		}
 		if count%10000000 == 0 {
 			log.Info("Pruning tx index", "count", count, "removed", removed)
 		}
-	}
-	if iter.Error() != nil {
-		log.Error("Tx index pruning iterator error", "err", iter.Error())
-	}
-
+		if len(v) > 8 {
+			log.Error("Skipping legacy tx index entry", "hash", txhash)
+			return false
+		}
+		bn := decodeNumber(v)
+		if bn < pruneBlock {
+			removed++
+			return true
+		}
+		return false
+	})
 	WriteTxIndexTail(db, pruneBlock)
 }
 
