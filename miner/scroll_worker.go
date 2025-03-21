@@ -400,6 +400,9 @@ func (w *worker) mainLoop() {
 			w.current.deadlineReached = true
 			if len(w.current.txs) > 0 {
 				_, err = w.commit()
+			} else if w.config.AllowEmpty {
+				log.Warn("Committing empty block", "number", w.current.header.Number)
+				_, err = w.commit()
 			}
 		case ev := <-w.txsCh:
 			idleTimer.UpdateSince(idleStart)

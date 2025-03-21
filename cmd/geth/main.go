@@ -133,6 +133,7 @@ var (
 		utils.MinerNoVerifyFlag,
 		utils.MinerStoreSkippedTxTracesFlag,
 		utils.MinerMaxAccountsNumFlag,
+		utils.MinerAllowEmptyFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,

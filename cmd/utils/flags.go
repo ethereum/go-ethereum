@@ -515,6 +515,10 @@ var (
 		Usage: "Maximum number of accounts that miner will fetch the pending transactions of when building a new block",
 		Value: math.MaxInt,
 	}
+	MinerAllowEmptyFlag = cli.BoolFlag{
+		Name:  "miner.allowempty",
+		Usage: "Allow sealing empty blocks",
+	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1619,6 +1623,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.GlobalIsSet(MinerMaxAccountsNumFlag.Name) {
 		cfg.MaxAccountsNum = ctx.GlobalInt(MinerMaxAccountsNumFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerAllowEmptyFlag.Name) {
+		cfg.AllowEmpty = ctx.GlobalBool(MinerAllowEmptyFlag.Name)
 	}
 	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
 		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")

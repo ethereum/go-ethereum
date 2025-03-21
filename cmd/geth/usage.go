@@ -197,6 +197,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.MinerNoVerifyFlag,
 			utils.MinerStoreSkippedTxTracesFlag,
 			utils.MinerMaxAccountsNumFlag,
+			utils.MinerAllowEmptyFlag,
 		},
 	},
 	{
