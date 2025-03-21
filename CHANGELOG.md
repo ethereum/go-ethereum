@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.1](https://github.com/taikoxyz/taiko-geth/compare/v1.14.0...v1.14.1) (2025-03-21)
+
+
+### Bug Fixes
+
+* **repo:** fix workflow to use configs ([#402](https://github.com/taikoxyz/taiko-geth/issues/402)) ([177750c](https://github.com/taikoxyz/taiko-geth/commit/177750c73ee40cb32f10b4e4d2276f1a3b0cad3b))
+* **taiko-client:** fix an issue in `encodeAndCompressTxList` ([#404](https://github.com/taikoxyz/taiko-geth/issues/404)) ([8d5d308](https://github.com/taikoxyz/taiko-geth/commit/8d5d308dfbc465d111e044b0c4f245e3b1ef5c3a))
+
 ## [1.14.0](https://github.com/taikoxyz/taiko-geth/compare/v1.13.0...v1.14.0) (2025-03-21)
 
 
