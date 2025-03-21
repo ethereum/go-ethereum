@@ -125,7 +125,7 @@ func (fm *FilterMapsMatcherBackend) synced() {
 		indexedBlocks.SetAfterLast(indexedBlocks.Last()) // remove partially indexed last block
 	}
 	fm.syncCh <- SyncRange{
-		HeadNumber:    fm.f.indexedView.headNumber,
+		HeadNumber:    fm.f.targetView.headNumber,
 		ValidBlocks:   fm.validBlocks,
 		IndexedBlocks: indexedBlocks,
 	}
