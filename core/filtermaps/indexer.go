@@ -356,15 +356,17 @@ func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
 	if epoch+1 < firstEpoch {
 		return false
 	}
+	var lastBlockOfPrevEpoch uint64
 	if epoch > 0 {
-		lastBlockOfPrevEpoch, _, err := f.getLastBlockOfMap(epoch<<f.logMapsPerEpoch - 1)
+		var err error
+		lastBlockOfPrevEpoch, _, err = f.getLastBlockOfMap(epoch<<f.logMapsPerEpoch - 1)
 		if err != nil {
 			log.Error("Could not get last block of previous epoch", "epoch", epoch-1, "error", err)
 			return epoch >= firstEpoch
 		}
-		if f.historyCutoff > lastBlockOfPrevEpoch {
-			return false
-		}
+	}
+	if f.historyCutoff > lastBlockOfPrevEpoch {
+		return false
 	}
 	lastBlockOfEpoch, _, err := f.getLastBlockOfMap((epoch+1)<<f.logMapsPerEpoch - 1)
 	if err != nil {
