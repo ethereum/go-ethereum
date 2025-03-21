@@ -372,7 +372,7 @@ func (f *Filter) indexedLogs(ctx context.Context, mb filtermaps.MatcherBackend, 
 // iteration and bloom matching.
 func (f *Filter) unindexedLogs(ctx context.Context, begin, end uint64) ([]*types.Log, error) {
 	start := time.Now()
-	log.Warn("Performing unindexed log search", "begin", begin, "end", end)
+	log.Debug("Performing unindexed log search", "begin", begin, "end", end)
 	var matches []*types.Log
 	for blockNumber := begin; blockNumber <= end; blockNumber++ {
 		select {
@@ -390,7 +390,7 @@ func (f *Filter) unindexedLogs(ctx context.Context, begin, end uint64) ([]*types
 		}
 		matches = append(matches, found...)
 	}
-	log.Trace("Performed unindexed log search", "begin", begin, "end", end, "matches", len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Performed unindexed log search", "begin", begin, "end", end, "matches", len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
 	return matches, nil
 }
 
