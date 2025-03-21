@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
@@ -84,10 +83,6 @@ type Ethereum struct {
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
-
-	bloomRequests     chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
-	bloomIndexer      *core.ChainIndexer             // Bloom indexer operating during block imports
-	closeBloomHandler chan struct{}
 
 	filterMaps      *filtermaps.FilterMaps
 	closeFilterMaps chan chan struct{}
@@ -176,19 +171,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Assemble the Ethereum object.
 	eth := &Ethereum{
-		config:            config,
-		chainDb:           chainDb,
-		eventMux:          stack.EventMux(),
-		accountManager:    stack.AccountManager(),
-		engine:            engine,
-		closeBloomHandler: make(chan struct{}),
-		networkID:         networkID,
-		gasPrice:          config.Miner.GasPrice,
-		bloomRequests:     make(chan chan *bloombits.Retrieval),
-		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
-		p2pServer:         stack.Server(),
-		discmix:           enode.NewFairMix(0),
-		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
+		config:          config,
+		chainDb:         chainDb,
+		eventMux:        stack.EventMux(),
+		accountManager:  stack.AccountManager(),
+		engine:          engine,
+		networkID:       networkID,
+		gasPrice:        config.Miner.GasPrice,
+		p2pServer:       stack.Server(),
+		discmix:         enode.NewFairMix(0),
+		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
 	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"
@@ -247,7 +239,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
-	eth.bloomIndexer.Start(eth.blockchain)
 	fmConfig := filtermaps.Config{History: config.LogHistory, Disabled: config.LogNoHistory, ExportFileName: config.LogExportCheckpoints}
 	chainView := eth.newChainView(eth.blockchain.CurrentBlock())
 	eth.filterMaps = filtermaps.NewFilterMaps(chainDb, chainView, 0, 0, filtermaps.DefaultParams, fmConfig)
@@ -379,7 +370,6 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downlo
 func (s *Ethereum) Synced() bool                       { return s.handler.synced.Load() }
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
-func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 
 // Protocols returns all the currently configured
 // network protocols to start.
@@ -397,9 +387,6 @@ func (s *Ethereum) Start() error {
 	if err := s.setupDiscovery(); err != nil {
 		return err
 	}
-
-	// Start the bloom bits servicing goroutines
-	s.startBloomHandlers(params.BloomBitsBlocks)
 
 	// Regularly update shutdown marker
 	s.shutdownTracker.Start()
@@ -511,8 +498,6 @@ func (s *Ethereum) Stop() error {
 	s.handler.Stop()
 
 	// Then stop everything else.
-	s.bloomIndexer.Close()
-	close(s.closeBloomHandler)
 	ch := make(chan struct{})
 	s.closeFilterMaps <- ch
 	<-ch

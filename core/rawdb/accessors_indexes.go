@@ -147,41 +147,6 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	return nil, common.Hash{}, 0, 0
 }
 
-// ReadBloomBits retrieves the compressed bloom bit vector belonging to the given
-// section and bit index from the.
-func ReadBloomBits(db ethdb.KeyValueReader, bit uint, section uint64, head common.Hash) ([]byte, error) {
-	return db.Get(bloomBitsKey(bit, section, head))
-}
-
-// WriteBloomBits stores the compressed bloom bits vector belonging to the given
-// section and bit index.
-func WriteBloomBits(db ethdb.KeyValueWriter, bit uint, section uint64, head common.Hash, bits []byte) {
-	if err := db.Put(bloomBitsKey(bit, section, head), bits); err != nil {
-		log.Crit("Failed to store bloom bits", "err", err)
-	}
-}
-
-// DeleteBloombits removes all compressed bloom bits vector belonging to the
-// given section range and bit index.
-func DeleteBloombits(db ethdb.Database, bit uint, from uint64, to uint64) {
-	start, end := bloomBitsKey(bit, from, common.Hash{}), bloomBitsKey(bit, to, common.Hash{})
-	it := db.NewIterator(nil, start)
-	defer it.Release()
-
-	for it.Next() {
-		if bytes.Compare(it.Key(), end) >= 0 {
-			break
-		}
-		if len(it.Key()) != len(bloomBitsPrefix)+2+8+32 {
-			continue
-		}
-		db.Delete(it.Key())
-	}
-	if it.Error() != nil {
-		log.Crit("Failed to delete bloom bits", "err", it.Error())
-	}
-}
-
 // ReadFilterMapRow retrieves a filter map row at the given mapRowIndex
 // (see filtermaps.mapRowIndex for the storage index encoding).
 // Note that zero length rows are not stored in the database and therefore all
@@ -484,4 +449,25 @@ func DeleteFilterMapsRange(db ethdb.KeyValueWriter) {
 	if err := db.Delete(filterMapsRangeKey); err != nil {
 		log.Crit("Failed to delete filter maps range", "err", err)
 	}
+}
+
+// deletePrefixRange deletes everything with the given prefix from the database.
+func deletePrefixRange(db ethdb.KeyValueRangeDeleter, prefix []byte) error {
+	end := bytes.Clone(prefix)
+	end[len(end)-1]++
+	return db.DeleteRange(prefix, end)
+}
+
+// DeleteFilterMapsDb removes the entire filter maps database
+func DeleteFilterMapsDb(db ethdb.KeyValueRangeDeleter) error {
+	return deletePrefixRange(db, []byte(filterMapsPrefix))
+}
+
+// DeleteFilterMapsDb removes the old bloombits database and the associated
+// chain indexer database.
+func DeleteBloomBitsDb(db ethdb.KeyValueRangeDeleter) error {
+	if err := deletePrefixRange(db, bloomBitsPrefix); err != nil {
+		return err
+	}
+	return deletePrefixRange(db, bloomBitsIndexPrefix)
 }
