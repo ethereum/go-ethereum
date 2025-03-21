@@ -103,13 +103,14 @@ func DeleteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash) {
 // DeleteAllTxLookupEntries purges all the transaction indexes in the database.
 // If condition is specified, only the entry with condition as True will be
 // removed; If condition is not specified, the entry is deleted.
-func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func([]byte) bool) {
+func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func(common.Hash, []byte) bool) {
 	iter := NewKeyLengthIterator(db.NewIterator(txLookupPrefix, nil), common.HashLength+len(txLookupPrefix))
 	defer iter.Release()
 
 	batch := db.NewBatch()
 	for iter.Next() {
-		if condition == nil || condition(iter.Value()) {
+		txhash := common.Hash(iter.Key()[1:])
+		if condition == nil || condition(txhash, iter.Value()) {
 			batch.Delete(iter.Key())
 		}
 		if batch.ValueSize() >= ethdb.IdealBatchSize {
