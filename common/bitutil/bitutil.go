@@ -27,10 +27,7 @@ func XORBytes(dst, a, b []byte) int {
 // fastXORBytes xors in bulk. It only works on architectures that support
 // unaligned read/writes.
 func fastXORBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 	w := n / wordSize
 	if w > 0 {
 		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
@@ -49,10 +46,7 @@ func fastXORBytes(dst, a, b []byte) int {
 // safeXORBytes xors one by one. It works on all architectures, independent if
 // it supports unaligned read/writes or not.
 func safeXORBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 	for i := 0; i < n; i++ {
 		dst[i] = a[i] ^ b[i]
 	}
@@ -71,10 +65,7 @@ func ANDBytes(dst, a, b []byte) int {
 // fastANDBytes ands in bulk. It only works on architectures that support
 // unaligned read/writes.
 func fastANDBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 	w := n / wordSize
 	if w > 0 {
 		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
@@ -93,10 +84,7 @@ func fastANDBytes(dst, a, b []byte) int {
 // safeANDBytes ands one by one. It works on all architectures, independent if
 // it supports unaligned read/writes or not.
 func safeANDBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 	for i := 0; i < n; i++ {
 		dst[i] = a[i] & b[i]
 	}
@@ -115,10 +103,7 @@ func ORBytes(dst, a, b []byte) int {
 // fastORBytes ors in bulk. It only works on architectures that support
 // unaligned read/writes.
 func fastORBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 	w := n / wordSize
 	if w > 0 {
 		dw := *(*[]uintptr)(unsafe.Pointer(&dst))
@@ -137,10 +122,7 @@ func fastORBytes(dst, a, b []byte) int {
 // safeORBytes ors one by one. It works on all architectures, independent if
 // it supports unaligned read/writes or not.
 func safeORBytes(dst, a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 	for i := 0; i < n; i++ {
 		dst[i] = a[i] | b[i]
 	}

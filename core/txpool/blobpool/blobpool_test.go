@@ -345,18 +345,12 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 				t.Errorf("addr %v, tx %d eviction execution tip mismatch: have %d, want %d", addr, i, txs[i].evictionExecTip, wantExecTip)
 			}
 
-			wantExecFeeJumps := txs[i-1].evictionExecFeeJumps
-			if wantExecFeeJumps > txs[i].basefeeJumps {
-				wantExecFeeJumps = txs[i].basefeeJumps
-			}
+			wantExecFeeJumps := min(txs[i-1].evictionExecFeeJumps, txs[i].basefeeJumps)
 			if math.Abs(txs[i].evictionExecFeeJumps-wantExecFeeJumps) > 0.001 {
 				t.Errorf("addr %v, tx %d eviction execution fee jumps mismatch: have %f, want %f", addr, i, txs[i].evictionExecFeeJumps, wantExecFeeJumps)
 			}
 
-			wantBlobFeeJumps := txs[i-1].evictionBlobFeeJumps
-			if wantBlobFeeJumps > txs[i].blobfeeJumps {
-				wantBlobFeeJumps = txs[i].blobfeeJumps
-			}
+			wantBlobFeeJumps := min(txs[i-1].evictionBlobFeeJumps, txs[i].blobfeeJumps)
 			if math.Abs(txs[i].evictionBlobFeeJumps-wantBlobFeeJumps) > 0.001 {
 				t.Errorf("addr %v, tx %d eviction blob fee jumps mismatch: have %f, want %f", addr, i, txs[i].evictionBlobFeeJumps, wantBlobFeeJumps)
 			}

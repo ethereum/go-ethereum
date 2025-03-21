@@ -676,10 +676,7 @@ func (d *Downloader) processHeaders(origin uint64) error {
 				default:
 				}
 				// Select the next chunk of headers to import
-				limit := maxHeadersProcess
-				if limit > len(headers) {
-					limit = len(headers)
-				}
+				limit := min(maxHeadersProcess, len(headers))
 				chunkHeaders := headers[:limit]
 				chunkHashes := hashes[:limit]
 
