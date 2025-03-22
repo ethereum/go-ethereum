@@ -568,6 +568,12 @@ web3._extend({
 			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
 		new web3._extend.Method({
+			name: 'createBatchAccessList',
+			call: 'eth_createBatchAccessList',
+			params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter],
+		}),
+		new web3._extend.Method({
 			name: 'feeHistory',
 			call: 'eth_feeHistory',
 			params: 3,

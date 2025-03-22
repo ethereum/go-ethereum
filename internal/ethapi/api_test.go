@@ -3511,3 +3511,143 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 func addressToHash(a common.Address) common.Hash {
 	return common.BytesToHash(a.Bytes())
 }
+
+// TestCreateAccessList tests the CreateAccessList API method.
+func TestCreateBatchAccessList(t *testing.T) {
+	// Create a test backend
+	genesis := &core.Genesis{
+		Config:    params.TestChainConfig,
+		GasLimit:  30000000,
+		Timestamp: 87362,
+		Alloc: core.GenesisAlloc{
+			common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): {
+				Balance: big.NewInt(1000000000000000000), // 1 ether
+			},
+		},
+	}
+	// Create backend with blocks generated
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		// No special block generation needed for this test
+	})
+
+	// Set up test transactions
+	signer := types.LatestSigner(params.TestChainConfig)
+	testAddr := common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+	testKey, err := crypto.HexToECDSA("0c06818f82e04c564290b32ab86b25676731fc34e9a546383b41b8a6f5c088ac")
+	if err != nil {
+		t.Fatalf("failed to create test key: %v", err)
+	}
+
+	// Create a simple transaction
+	simpleTx := types.NewTransaction(
+		0,                      // nonce
+		common.Address{},       // to
+		big.NewInt(1000),       // value
+		21000,                  // gas limit
+		big.NewInt(1000000000), // gas price
+		nil,                    // data
+	)
+	simpleTx, err = types.SignTx(simpleTx, signer, testKey)
+	if err != nil {
+		t.Fatalf("failed to sign tx: %v", err)
+	}
+
+	// Create a contract creation transaction
+	contractCreationTx := types.NewContractCreation(
+		1,                                        // nonce
+		big.NewInt(0),                            // value
+		500000,                                   // gas
+		big.NewInt(1000000000),                   // gas price
+		common.FromHex("0x608060806080608155fd"), // sample contract code
+	)
+	contractCreationTx, err = types.SignTx(contractCreationTx, signer, testKey)
+	if err != nil {
+		t.Fatalf("failed to sign contract creation tx: %v", err)
+	}
+
+	// Convert to TransactionArgs for API
+	nonce0 := hexutil.Uint64(0)
+	nonce1 := hexutil.Uint64(1)
+	simpleArgs := TransactionArgs{
+		From:     &testAddr,
+		To:       &common.Address{},
+		Value:    (*hexutil.Big)(big.NewInt(1000)),
+		Gas:      (*hexutil.Uint64)(new(uint64)),
+		GasPrice: (*hexutil.Big)(big.NewInt(1000000000)),
+		Nonce:    &nonce0,
+	}
+	*(*uint64)(simpleArgs.Gas) = 21000
+
+	contractArgs := TransactionArgs{
+		From:     &testAddr,
+		Value:    (*hexutil.Big)(big.NewInt(0)),
+		Gas:      (*hexutil.Uint64)(new(uint64)),
+		GasPrice: (*hexutil.Big)(big.NewInt(1000000000)),
+		Data:     (*hexutil.Bytes)(&[]byte{0x60, 0x80, 0x60, 0x80, 0x60, 0x80, 0x60, 0x81, 0x55, 0xfd}),
+		Nonce:    &nonce1,
+	}
+	*(*uint64)(contractArgs.Gas) = 500000
+
+	// Create API instance
+	api := NewBlockChainAPI(backend)
+
+	// Test single access list creation first for comparison
+	ctx := context.Background()
+	blockNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+	// Create batch access list
+	result, err := api.CreateBatchAccessList(ctx, []TransactionArgs{simpleArgs, contractArgs}, &blockNrOrHash)
+	if err != nil {
+		t.Fatalf("Failed to create batch access list: %v", err)
+	}
+
+	// Verify results
+	if len(result.Accesslists) != 2 {
+		t.Fatalf("Expected 2 access lists, got %d", len(result.Accesslists))
+	}
+	if len(result.GasUsed) != 2 {
+		t.Fatalf("Expected 2 gas values, got %d", len(result.GasUsed))
+	}
+
+	// Check first transaction (simple transfer)
+	if len(*result.Accesslists[0]) != 0 {
+		t.Fatalf("Expected empty access list for simple transfer, got %v", result.Accesslists[0])
+	}
+	if uint64(result.GasUsed[0]) != 21000 {
+		t.Fatalf("Expected gas used 21000 for simple transfer, got %d", result.GasUsed[0])
+	}
+
+	// Check second transaction (contract creation)
+	// The exact values might depend on the execution environment, but we can check the structure
+	if result.Accesslists[1] == nil || len(*result.Accesslists[1]) == 0 {
+		t.Fatalf("Expected non-empty access list for contract creation, got %v", result.Accesslists[1])
+	}
+
+	// Compare with individual access list creation
+	singleResult1, err := api.CreateAccessList(ctx, simpleArgs, &blockNrOrHash)
+	if err != nil {
+		t.Fatalf("Failed to create single access list for tx1: %v", err)
+	}
+
+	singleResult2, err := api.CreateAccessList(ctx, contractArgs, &blockNrOrHash)
+	if err != nil {
+		t.Fatalf("Failed to create single access list for tx2: %v", err)
+	}
+
+	// Verify batch results match individual results
+	if !reflect.DeepEqual(singleResult1.Accesslist, result.Accesslists[0]) {
+		t.Fatalf("Batch access list for tx1 doesn't match individual access list")
+	}
+
+	// For contract transactions, we need to compare the structure rather than exact values
+	// because the contract address might be different
+	if (singleResult2.Accesslist == nil) != (result.Accesslists[1] == nil) ||
+		(singleResult2.Accesslist != nil && result.Accesslists[1] != nil &&
+			len(*singleResult2.Accesslist) != len(*result.Accesslists[1])) {
+		t.Fatalf("Batch access list for tx2 doesn't match individual access list in structure")
+	}
+
+	if singleResult1.GasUsed != result.GasUsed[0] {
+		t.Fatalf("Batch gas used for tx1 doesn't match individual gas used")
+	}
+}

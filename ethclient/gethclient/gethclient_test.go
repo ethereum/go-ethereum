@@ -153,7 +153,12 @@ func TestGethClient(t *testing.T) {
 		{
 			"TestAccessList",
 			func(t *testing.T) { testAccessList(t, client) },
-		}, {
+		},
+		{
+			"TestBatchAccessList",
+			func(t *testing.T) { testBatchAccessList(t, client) },
+		},
+		{
 			"TestSetHead",
 			func(t *testing.T) { testSetHead(t, client) },
 		},
@@ -244,6 +249,138 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		if have, want := string(haveList), tc.wantAL; have != want {
 			t.Fatalf("test %d: access list wrong, have:\n%v\nwant:\n%v", i, have, want)
 		}
+	}
+}
+
+func testBatchAccessList(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+
+	testCases := []struct {
+		name      string
+		msgs      []ethereum.CallMsg
+		wantGas   []uint64
+		wantVMErr []string
+		wantALs   []string
+	}{
+		{
+			name: "Simple transfers",
+			msgs: []ethereum.CallMsg{
+				{
+					From:     testAddr,
+					To:       &common.Address{},
+					Gas:      21000,
+					GasPrice: big.NewInt(875000000),
+					Value:    big.NewInt(1),
+				},
+				{
+					From:     testAddr,
+					To:       &common.Address{},
+					Gas:      21000,
+					GasPrice: big.NewInt(875000000),
+					Value:    big.NewInt(2),
+				},
+			},
+			wantGas: []uint64{21000, 21000},
+			wantALs: []string{
+				`[]`,
+				`[]`,
+			},
+			wantVMErr: []string{"", ""},
+		},
+		{
+			name: "Contract creation and interaction",
+			msgs: []ethereum.CallMsg{
+				{
+					From:     testAddr,
+					To:       nil,
+					Gas:      100000,
+					GasPrice: big.NewInt(1000000000),
+					Value:    big.NewInt(0),
+					Data:     common.FromHex("0x608060806080608155fd"),
+				},
+				{
+					From:     testAddr,
+					To:       &common.Address{},
+					Gas:      21000,
+					GasPrice: big.NewInt(1000000000),
+					Value:    big.NewInt(1),
+				},
+			},
+			wantGas: []uint64{77496, 21000},
+			wantVMErr: []string{
+				"execution reverted",
+				"",
+			},
+			wantALs: []string{`[
+  {
+    "address": "0x3a220f351252089d385b29beca14e27f204c296a",
+    "storageKeys": [
+      "0x0000000000000000000000000000000000000000000000000000000000000081"
+    ]
+  }
+]`,
+				`[]`,
+			},
+		},
+		{
+			name: "Invalid gas price",
+			msgs: []ethereum.CallMsg{
+				{
+					From:     testAddr,
+					To:       &common.Address{},
+					Gas:      21000,
+					GasPrice: big.NewInt(1), // less than baseFee
+					Value:    big.NewInt(1),
+				},
+			},
+			wantVMErr: []string{
+				"max fee per gas less than block base fee",
+			},
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			als, gas, vmErrs, err := ec.CreateBatchAccessList(context.Background(), tc.msgs)
+			if len(tc.wantVMErr) > 0 {
+				for j, wantErr := range tc.wantVMErr {
+					if !strings.Contains(vmErrs[j], wantErr) {
+						t.Fatalf("test %d: expected error containing %q, got %v", i, wantErr, vmErrs[i])
+					}
+					return
+				}
+			} else if err != nil {
+				t.Fatalf("test %d: unexpected error: %v", i, err)
+			}
+
+			if len(gas) != len(tc.wantGas) {
+				t.Fatalf("test %d: wrong number of gas values, want %d got %d", i, len(tc.wantGas), len(gas))
+			}
+			for j, want := range tc.wantGas {
+				if have := gas[j]; have != want {
+					t.Errorf("test %d, msg %d: gas wrong, have %v want %v", i, j, have, want)
+				}
+			}
+
+			if len(vmErrs) != len(tc.wantVMErr) {
+				t.Fatalf("test %d: wrong number of vm errors, want %d got %d", i, len(tc.wantVMErr), len(vmErrs))
+			}
+			for j, want := range tc.wantVMErr {
+				if have := vmErrs[j]; have != want {
+					t.Errorf("test %d, msg %d: vm error wrong, have %v want %v", i, j, have, want)
+				}
+			}
+
+			if len(als) != len(tc.wantALs) {
+				t.Fatalf("test %d: wrong number of access lists, want %d got %d", i, len(tc.wantALs), len(als))
+			}
+			for j, want := range tc.wantALs {
+				haveList, _ := json.MarshalIndent(als[j], "", "  ")
+				if have := string(haveList); have != want {
+					t.Errorf("test %d, msg %d: access list wrong,\nhave:\n%v\nwant:\n%v", i, j, have, want)
+				}
+			}
+		})
 	}
 }
 
