@@ -120,7 +120,7 @@ func (p *TxPool) reserver(id int, subpool SubPool) AddressReserver {
 			// avoid subtle bugs in the long term.
 			if exists {
 				if owner == subpool {
-					log.Error("pool attempted to reserve already-owned address", "address", addr)
+					log.Warn("pool attempted to reserve already-owned address", "address", addr)
 					return nil // Ignore fault to give the pool a chance to recover while the bug gets fixed
 				}
 				return ErrAlreadyReserved
@@ -135,11 +135,11 @@ func (p *TxPool) reserver(id int, subpool SubPool) AddressReserver {
 		// Ensure subpools only attempt to unreserve their own owned addresses,
 		// otherwise flag as a programming error.
 		if !exists {
-			log.Error("pool attempted to unreserve non-reserved address", "address", addr)
+			log.Warn("pool attempted to unreserve non-reserved address", "address", addr)
 			return errors.New("address not reserved")
 		}
 		if subpool != owner {
-			log.Error("pool attempted to unreserve non-owned address", "address", addr)
+			log.Warn("pool attempted to unreserve non-owned address", "address", addr)
 			return errors.New("address not owned")
 		}
 		delete(p.reservations, addr)
