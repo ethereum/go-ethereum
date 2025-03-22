@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"runtime"
 	"runtime/debug"
@@ -54,7 +53,6 @@ func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*
 		Error      string            `json:"error,omitempty"`
 		GasUsed    hexutil.Uint64    `json:"gasUsed"`
 	}
-	log.Info("callArgs", "callArgs", toCallArg(msg))
 	var result accessListResult
 	if err := ec.c.CallContext(ctx, &result, "eth_createAccessList", toCallArg(msg)); err != nil {
 		return nil, 0, "", err
