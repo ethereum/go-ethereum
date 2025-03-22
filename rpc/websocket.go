@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -236,9 +237,7 @@ func newClientTransportWS(endpoint string, cfg *clientConfig) (reconnectFunc, er
 	if err != nil {
 		return nil, err
 	}
-	for key, values := range cfg.httpHeaders {
-		header[key] = values
-	}
+	maps.Copy(header, cfg.httpHeaders)
 
 	connect := func(ctx context.Context) (ServerCodec, error) {
 		header := header.Clone()
