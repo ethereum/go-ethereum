@@ -249,8 +249,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
 		core.ProcessParentBlockHash(header.ParentHash, evm)
 	}
-	if block.BlockOverrides.BeaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*block.BlockOverrides.BeaconRoot, evm)
+	if header.ParentBeaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, evm)
 	}
 	var allLogs []*types.Log
 	for i, call := range block.Calls {
@@ -457,6 +457,9 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 		var parentBeaconRoot *common.Hash
 		if sim.chainConfig.IsCancun(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
 			parentBeaconRoot = &common.Hash{}
+			if overrides.BeaconRoot != nil {
+				parentBeaconRoot = overrides.BeaconRoot
+			}
 		}
 		header = overrides.MakeHeader(&types.Header{
 			UncleHash:        types.EmptyUncleHash,
