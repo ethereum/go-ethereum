@@ -332,7 +332,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
 
-	bc.genesisBlock = bc.GetBlockByNumber(0)
+	genesisHeader := bc.GetHeaderByNumber(0)
+	bc.genesisBlock = types.NewBlockWithHeader(genesisHeader)
 	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
 	}
@@ -906,7 +907,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			rawdb.DeleteBody(db, hash, num)
 			rawdb.DeleteReceipts(db, hash, num)
 		}
-		// Todo(rjl493456442) txlookup, bloombits, etc
+		// Todo(rjl493456442) txlookup, log index, etc
 	}
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
