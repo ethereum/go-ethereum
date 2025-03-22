@@ -139,10 +139,10 @@ func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) error {
 		return nil
 	}
 	if o.BeaconRoot != nil {
-		return errors.New(`"beaconRoot" is not supported for this RPC method`)
+		return errors.New(`block override "beaconRoot" is not supported for this RPC method`)
 	}
 	if o.Withdrawals != nil {
-		return errors.New(`"withdrawals" is not supported for this RPC method`)
+		return errors.New(`block override "withdrawals" is not supported for this RPC method`)
 	}
 	if o.Number != nil {
 		blockCtx.BlockNumber = o.Number.ToInt()

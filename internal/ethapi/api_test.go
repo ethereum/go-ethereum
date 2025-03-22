@@ -1141,7 +1141,7 @@ func TestCall(t *testing.T) {
 			blockOverrides: override.BlockOverrides{
 				BeaconRoot: &common.Hash{0, 1, 2},
 			},
-			expectErr: errors.New(`"beaconRoot" is not supported for this RPC method`),
+			expectErr: errors.New(`block override "beaconRoot" is not supported for this RPC method`),
 		},
 		{
 			name:        "unsupported block override withdrawals",
@@ -1150,7 +1150,7 @@ func TestCall(t *testing.T) {
 			blockOverrides: override.BlockOverrides{
 				Withdrawals: &types.Withdrawals{},
 			},
-			expectErr: errors.New(`"withdrawals" is not supported for this RPC method`),
+			expectErr: errors.New(`block override "withdrawals" is not supported for this RPC method`),
 		},
 	}
 	for _, tc := range testSuite {
