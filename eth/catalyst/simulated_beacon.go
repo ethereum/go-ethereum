@@ -80,6 +80,17 @@ func (w *withdrawalQueue) subscribe(ch chan<- newWithdrawalsEvent) event.Subscri
 	return w.subs.Track(sub)
 }
 
+// errTxPoolTerminated is returned when the txpool is already terminated when
+// trying to seal a block.
+type errTxPoolTerminated struct {
+	error
+}
+
+// Error returns the message from the wrapped error.
+func (t *errTxPoolTerminated) Error() string {
+	return fmt.Errorf("failed to sync txpool: %w", t.error).Error()
+}
+
 // SimulatedBeacon drives an Ethereum instance as if it were a real beacon
 // client. It can run in period mode where it mines a new block every period
 // (seconds) or on every transaction via Commit, Fork and AdjustTime.
@@ -182,7 +193,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	// behavior, the pool will be explicitly blocked on its reset before
 	// continuing to the block production below.
 	if err := c.eth.APIBackend.TxPool().Sync(); err != nil {
-		return fmt.Errorf("failed to sync txpool: %w", err)
+		return &errTxPoolTerminated{err}
 	}
 
 	version := payloadVersion(c.eth.BlockChain().Config(), timestamp)
@@ -303,11 +314,18 @@ func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
 
 // Commit seals a block on demand.
 func (c *SimulatedBeacon) Commit() common.Hash {
+	hash, _ := c.commit()
+	return hash
+}
+
+// commit attempts to seal a block on demand, but may return an error.
+func (c *SimulatedBeacon) commit() (common.Hash, error) {
 	withdrawals := c.withdrawals.pop(10)
 	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 		log.Warn("Error performing sealing work", "err", err)
+		return common.Hash{}, err
 	}
-	return c.eth.BlockChain().CurrentBlock().Hash()
+	return c.eth.BlockChain().CurrentBlock().Hash(), nil
 }
 
 // Rollback un-sends previously added transactions.
