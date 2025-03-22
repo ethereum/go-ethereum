@@ -369,7 +369,7 @@ func sign(typedData apitypes.TypedData) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
+	rawData := fmt.Appendf(nil, "\x19\x01%s%s", string(domainSeparator), string(typedDataHash))
 	sighash := crypto.Keccak256(rawData)
 	return typedDataHash, sighash, nil
 }
