@@ -60,6 +60,35 @@ func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*
 	return result.Accesslist, uint64(result.GasUsed), result.Error, nil
 }
 
+// CreateBatchAccessList tries to create access lists for a sequence of transactions where
+// each transaction's state changes affect subsequent transactions.
+func (ec *Client) CreateBatchAccessList(ctx context.Context, msgs []ethereum.CallMsg) ([]*types.AccessList, []uint64, []string, error) {
+	type batchAccessListResult struct {
+		Accesslists []*types.AccessList `json:"accessLists"`
+		Errors      []string            `json:"errors,omitempty"`
+		GasUsed     []hexutil.Uint64    `json:"gasUsed"`
+	}
+
+	// Convert all messages to call args
+	callArgs := make([]interface{}, len(msgs))
+	for i, msg := range msgs {
+		callArgs[i] = toCallArg(msg)
+	}
+
+	var result batchAccessListResult
+	if err := ec.c.CallContext(ctx, &result, "eth_createBatchAccessList", []interface{}{callArgs}); err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Convert results to expected return types
+	gasUsed := make([]uint64, len(result.GasUsed))
+	for i, gas := range result.GasUsed {
+		gasUsed[i] = uint64(gas)
+	}
+
+	return result.Accesslists, gasUsed, result.Errors, nil
+}
+
 // AccountResult is the result of a GetProof operation.
 type AccountResult struct {
 	Address      common.Address  `json:"address"`

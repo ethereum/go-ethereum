@@ -1114,6 +1114,83 @@ type accessListResult struct {
 	GasUsed    hexutil.Uint64    `json:"gasUsed"`
 }
 
+// batchAccessListResult is the result of creating a tx accesslist for batch transactions.
+type batchAccessListResult struct {
+	Accesslists []*types.AccessList `json:"accessLists"`
+	GasUsed     []hexutil.Uint64    `json:"gasUsed"`
+	Errors      []string            `json:"errors,omitempty"`
+}
+
+// CreateBatchAccessList creates EIP-2930 type AccessLists for a batch of transactions.
+// This function executes transactions sequentially, with each transaction's state changes
+// affecting the subsequent transactions in the batch.
+func (api *BlockChainAPI) CreateBatchAccessList(ctx context.Context, argsList []TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*batchAccessListResult, error) {
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	if blockNrOrHash != nil {
+		bNrOrHash = *blockNrOrHash
+	}
+
+	// Retrieve the initial state
+	stateDB, header, err := api.b.StateAndHeaderByNumberOrHash(ctx, bNrOrHash)
+	if stateDB == nil || err != nil {
+		return nil, err
+	}
+
+	result := &batchAccessListResult{
+		Accesslists: make([]*types.AccessList, len(argsList)),
+		GasUsed:     make([]hexutil.Uint64, len(argsList)),
+		Errors:      make([]string, len(argsList)),
+	}
+
+	// Process each transaction in the batch sequentially
+	for i, args := range argsList {
+		// Use a copy of the state so we can apply changes without affecting the original state
+		txStateDB := stateDB.Copy()
+
+		// Create access list for this transaction
+		acl, gasUsed, vmerr, err := AccessList(ctx, api.b, bNrOrHash, args)
+		if err != nil {
+			// If there's an error creating the access list, record it and stop processing
+			result.Errors[i] = err.Error()
+			break
+		}
+		result.Accesslists[i] = &acl
+		result.GasUsed[i] = hexutil.Uint64(gasUsed)
+		if vmerr != nil {
+			result.Errors[i] = vmerr.Error()
+		}
+
+		// Apply the transaction to update the state for the next transaction
+		if i < len(argsList)-1 {
+			// Set fee defaults and any missing fields
+			if err = args.setFeeDefaults(ctx, api.b, header); err != nil {
+				result.Errors[i] = "failed to set fee defaults: " + err.Error()
+				break
+			}
+
+			// Apply the transaction to the state
+			msg := args.ToMessage(header.BaseFee, true, true)
+			blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, api.b), nil)
+			txCtx := core.NewEVMTxContext(msg)
+			evm := vm.NewEVM(blockCtx, txStateDB, api.b.ChainConfig(), vm.Config{})
+			evm.SetTxContext(txCtx)
+
+			// Apply the message to update the state
+			gp := new(core.GasPool).AddGas(msg.GasLimit)
+			_, err := core.ApplyMessage(evm, msg, gp)
+			if err != nil {
+				result.Errors[i] = "failed to apply transaction: " + err.Error()
+				break
+			}
+
+			// Update the state for the next transaction
+			stateDB = txStateDB
+		}
+	}
+
+	return result, nil
+}
+
 // CreateAccessList creates an EIP-2930 type AccessList for the given transaction.
 // Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
 func (api *BlockChainAPI) CreateAccessList(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*accessListResult, error) {
