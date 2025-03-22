@@ -21,10 +21,12 @@ import (
 )
 
 // lookup maps blob versioned hashes to transaction hashes that include them,
-// and transaction hashes to billy entries that include them.
+// transaction hashes to billy entries that include them, transaction hashes
+// to the transaction size
 type lookup struct {
 	blobIndex map[common.Hash]map[common.Hash]struct{}
 	txIndex   map[common.Hash]uint64
+	txSize    map[common.Hash]uint64
 }
 
 // newLookup creates a new index for tracking blob to tx; and tx to billy mappings.
@@ -32,6 +34,7 @@ func newLookup() *lookup {
 	return &lookup{
 		blobIndex: make(map[common.Hash]map[common.Hash]struct{}),
 		txIndex:   make(map[common.Hash]uint64),
+		txSize:    make(map[common.Hash]uint64),
 	}
 }
 
@@ -61,6 +64,12 @@ func (l *lookup) storeidOfBlob(vhash common.Hash) (uint64, bool) {
 	return 0, false // Weird, don't choke
 }
 
+// sizeOfTx returns the RLP-encoded size of transaction
+func (l *lookup) sizeOfTx(txhash common.Hash) (uint64, bool) {
+	size, ok := l.txSize[txhash]
+	return size, ok
+}
+
 // track inserts a new set of mappings from blob versioned hashes to transaction
 // hashes; and from transaction hashes to datastore storage item ids.
 func (l *lookup) track(tx *blobTxMeta) {
@@ -73,6 +82,9 @@ func (l *lookup) track(tx *blobTxMeta) {
 	}
 	// Map the transaction hash to the datastore id
 	l.txIndex[tx.hash] = tx.id
+
+	// Map the transaction hash to RLP-encoded transaction size
+	l.txSize[tx.hash] = tx.size
 }
 
 // untrack removes a set of mappings from blob versioned hashes to transaction
@@ -80,6 +92,7 @@ func (l *lookup) track(tx *blobTxMeta) {
 func (l *lookup) untrack(tx *blobTxMeta) {
 	// Unmap the transaction hash from the datastore id
 	delete(l.txIndex, tx.hash)
+	delete(l.txSize, tx.hash)
 
 	// Unmap all the blobs from the transaction hash
 	for _, vhash := range tx.vhashes {
