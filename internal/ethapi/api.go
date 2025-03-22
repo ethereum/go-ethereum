@@ -1125,6 +1125,7 @@ type batchAccessListResult struct {
 // This function executes transactions sequentially, with each transaction's state changes
 // affecting the subsequent transactions in the batch.
 func (api *BlockChainAPI) CreateBatchAccessList(ctx context.Context, argsList []TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*batchAccessListResult, error) {
+	log.Error("CreateBatchAccessList", "blockNrOrHash", blockNrOrHash, "argsList", argsList)
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
@@ -1147,12 +1148,30 @@ func (api *BlockChainAPI) CreateBatchAccessList(ctx context.Context, argsList []
 		// Use a copy of the state so we can apply changes without affecting the original state
 		txStateDB := stateDB.Copy()
 
+		// Set fee defaults and any missing fields
+		if err = args.setFeeDefaults(ctx, api.b, header); err != nil {
+			result.Errors[i] = "failed to set fee defaults: " + err.Error()
+			continue
+		}
+
+		// Set nonce if not provided
+		if args.Nonce == nil {
+			nonce := hexutil.Uint64(txStateDB.GetNonce(args.from()))
+			args.Nonce = &nonce
+		}
+
+		// Set defaults for call
+		if err = args.CallDefaults(api.b.RPCGasCap(), header.BaseFee, api.b.ChainConfig().ChainID); err != nil {
+			result.Errors[i] = "failed to set call defaults: " + err.Error()
+			continue
+		}
+
 		// Create access list for this transaction
 		acl, gasUsed, vmerr, err := AccessList(ctx, api.b, bNrOrHash, args)
 		if err != nil {
 			// If there's an error creating the access list, record it and stop processing
 			result.Errors[i] = err.Error()
-			break
+			continue
 		}
 		result.Accesslists[i] = &acl
 		result.GasUsed[i] = hexutil.Uint64(gasUsed)
@@ -1162,12 +1181,6 @@ func (api *BlockChainAPI) CreateBatchAccessList(ctx context.Context, argsList []
 
 		// Apply the transaction to update the state for the next transaction
 		if i < len(argsList)-1 {
-			// Set fee defaults and any missing fields
-			if err = args.setFeeDefaults(ctx, api.b, header); err != nil {
-				result.Errors[i] = "failed to set fee defaults: " + err.Error()
-				break
-			}
-
 			// Apply the transaction to the state
 			msg := args.ToMessage(header.BaseFee, true, true)
 			blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, api.b), nil)

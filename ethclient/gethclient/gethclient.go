@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"runtime"
 	"runtime/debug"
@@ -53,6 +54,7 @@ func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*
 		Error      string            `json:"error,omitempty"`
 		GasUsed    hexutil.Uint64    `json:"gasUsed"`
 	}
+	log.Info("callArgs", "callArgs", toCallArg(msg))
 	var result accessListResult
 	if err := ec.c.CallContext(ctx, &result, "eth_createAccessList", toCallArg(msg)); err != nil {
 		return nil, 0, "", err
@@ -75,8 +77,10 @@ func (ec *Client) CreateBatchAccessList(ctx context.Context, msgs []ethereum.Cal
 		callArgs[i] = toCallArg(msg)
 	}
 
+	log.Info("callArgs", "callArgs", callArgs)
+
 	var result batchAccessListResult
-	if err := ec.c.CallContext(ctx, &result, "eth_createBatchAccessList", []interface{}{callArgs}); err != nil {
+	if err := ec.c.CallContext(ctx, &result, "eth_createBatchAccessList", callArgs); err != nil {
 		return nil, nil, nil, err
 	}
 
