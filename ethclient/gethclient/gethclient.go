@@ -77,8 +77,6 @@ func (ec *Client) CreateBatchAccessList(ctx context.Context, msgs []ethereum.Cal
 		callArgs[i] = toCallArg(msg)
 	}
 
-	log.Info("callArgs", "callArgs", callArgs)
-
 	var result batchAccessListResult
 	if err := ec.c.CallContext(ctx, &result, "eth_createBatchAccessList", callArgs); err != nil {
 		return nil, nil, nil, err
