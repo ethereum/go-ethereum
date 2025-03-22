@@ -17,6 +17,7 @@
 package override
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -133,9 +134,15 @@ type BlockOverrides struct {
 }
 
 // Apply overrides the given header fields into the given block context.
-func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
+func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) error {
 	if o == nil {
-		return
+		return nil
+	}
+	if o.BeaconRoot != nil {
+		return errors.New(`"beaconRoot" is not supported for this RPC method`)
+	}
+	if o.Withdrawals != nil {
+		return errors.New(`"withdrawals" is not supported for this RPC method`)
 	}
 	if o.Number != nil {
 		blockCtx.BlockNumber = o.Number.ToInt()
@@ -161,6 +168,7 @@ func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 	if o.BlobBaseFee != nil {
 		blockCtx.BlobBaseFee = o.BlobBaseFee.ToInt()
 	}
+	return nil
 }
 
 // MakeHeader returns a new header object with the overridden
