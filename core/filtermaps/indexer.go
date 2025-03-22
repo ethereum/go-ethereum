@@ -42,6 +42,11 @@ func (f *FilterMaps) indexerLoop() {
 
 	for !f.stop {
 		if !f.indexedRange.initialized {
+			if f.targetView.headNumber == 0 {
+				// initialize when chain head is available
+				f.processSingleEvent(true)
+				continue
+			}
 			if err := f.init(); err != nil {
 				log.Error("Error initializing log index", "error", err)
 				// unexpected error; there is not a lot we can do here, maybe it
