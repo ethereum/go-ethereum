@@ -82,7 +82,7 @@ func (n *upnp) ExternalIP() (addr net.IP, err error) {
 func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, lifetime time.Duration) (uint16, error) {
 	ip, err := n.internalAddress()
 	if err != nil {
-		return 0, nil // TODO: Shouldn't we return the error?
+		return 0, err
 	}
 	protocol = strings.ToUpper(protocol)
 	lifetimeS := uint32(lifetime / time.Second)
