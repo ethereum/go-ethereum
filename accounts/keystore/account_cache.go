@@ -136,7 +136,7 @@ func (ac *accountCache) deleteByFile(path string) {
 
 	if i < len(ac.all) && ac.all[i].URL.Path == path {
 		removed := ac.all[i]
-		ac.all = append(ac.all[:i], ac.all[i+1:]...)
+		ac.all = slices.Delete(ac.all, i, i+1)
 		if ba := removeAccount(ac.byAddr[removed.Address], removed); len(ba) == 0 {
 			delete(ac.byAddr, removed.Address)
 		} else {
@@ -156,7 +156,7 @@ func (ac *accountCache) watcherStarted() bool {
 func removeAccount(slice []accounts.Account, elem accounts.Account) []accounts.Account {
 	for i := range slice {
 		if slice[i] == elem {
-			return append(slice[:i], slice[i+1:]...)
+			return slices.Delete(slice, i, i+1)
 		}
 	}
 	return slice

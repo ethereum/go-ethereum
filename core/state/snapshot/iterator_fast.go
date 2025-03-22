@@ -216,7 +216,7 @@ func (fi *fastIterator) next(idx int) bool {
 	if it := fi.iterators[idx].it; !it.Next() {
 		it.Release()
 
-		fi.iterators = append(fi.iterators[:idx], fi.iterators[idx+1:]...)
+		fi.iterators = slices.Delete(fi.iterators, idx, idx+1)
 		return len(fi.iterators) > 0
 	}
 	// If there's no one left to cascade into, return

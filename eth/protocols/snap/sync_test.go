@@ -607,8 +607,8 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 		}
 		// And remove one item from the elements
 		if len(keys) > 2 {
-			keys = append(keys[:1], keys[2:]...)
-			vals = append(vals[:1], vals[2:]...)
+			keys = slices.Delete(keys, 1, 2)
+			vals = slices.Delete(vals, 1, 2)
 		}
 		if err := t.remote.OnAccounts(t, requestId, keys, vals, proof.List()); err != nil {
 			t.logger.Info("remote error on delivery (as expected)", "error", err)

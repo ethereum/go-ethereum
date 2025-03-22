@@ -84,7 +84,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 		return errors.New("non-ascending key order")
 	}
 	if t.last == nil {
-		t.last = append([]byte{}, k...) // allocate key slice
+		t.last = bytes.Clone(k) // allocate key slice
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
 	}

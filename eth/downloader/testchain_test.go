@@ -19,6 +19,7 @@ package downloader
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 	"time"
 
@@ -150,7 +151,7 @@ func (tc *testChain) copy(newlen int) *testChain {
 		newlen = len(tc.blocks)
 	}
 	cpy := &testChain{
-		blocks: append([]*types.Block{}, tc.blocks[:newlen]...),
+		blocks: slices.Clone(tc.blocks[:newlen]),
 	}
 	return cpy
 }

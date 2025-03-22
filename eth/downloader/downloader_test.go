@@ -19,6 +19,7 @@ package downloader
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -228,8 +229,8 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 	for i, body := range bodies {
 		hash := types.DeriveSha(types.Transactions(body.Transactions), hasher)
 		if _, ok := dlp.withholdBodies[hash]; ok {
-			txsHashes = append(txsHashes[:i], txsHashes[i+1:]...)
-			uncleHashes = append(uncleHashes[:i], uncleHashes[i+1:]...)
+			txsHashes = slices.Delete(txsHashes, i, i+1)
+			uncleHashes = slices.Delete(uncleHashes, i, i+1)
 			continue
 		}
 		txsHashes[i] = hash

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"slices"
 	"sync"
 	"time"
 
@@ -341,8 +342,8 @@ func (w *wallet) selfDerive() {
 			accs  []accounts.Account
 			paths []accounts.DerivationPath
 
-			nextPaths = append([]accounts.DerivationPath{}, w.deriveNextPaths...)
-			nextAddrs = append([]common.Address{}, w.deriveNextAddrs...)
+			nextPaths = slices.Clone(w.deriveNextPaths)
+			nextAddrs = slices.Clone(w.deriveNextAddrs)
 
 			context = context.Background()
 		)

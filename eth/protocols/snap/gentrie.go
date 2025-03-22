@@ -95,7 +95,7 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 			// Memorize the path of first committed node, which is regarded
 			// as left boundary. Deep-copy is necessary as the path given
 			// is volatile.
-			t.first = append([]byte{}, path...)
+			t.first = bytes.Clone(path)
 
 			// The left boundary can be uniquely determined by the first committed node
 			// from stackTrie (e.g., N_1), as the shared path prefix between the first
@@ -146,7 +146,7 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 
 	// Update the last flag. Deep-copy is necessary as the provided path is volatile.
 	if t.last == nil {
-		t.last = append([]byte{}, path...)
+		t.last = bytes.Clone(path)
 	} else {
 		t.last = append(t.last[:0], path...)
 	}
