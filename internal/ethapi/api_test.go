@@ -1134,6 +1134,24 @@ func TestCall(t *testing.T) {
 			},
 			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		},
+		{
+			name:        "unsupported block override beaconRoot",
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			blockOverrides: override.BlockOverrides{
+				BeaconRoot: &common.Hash{0, 1, 2},
+			},
+			expectErr: errors.New(`"beaconRoot" is not supported for this RPC method`),
+		},
+		{
+			name:        "unsupported block override withdrawals",
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			blockOverrides: override.BlockOverrides{
+				Withdrawals: &types.Withdrawals{},
+			},
+			expectErr: errors.New(`"withdrawals" is not supported for this RPC method`),
+		},
 	}
 	for _, tc := range testSuite {
 		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
