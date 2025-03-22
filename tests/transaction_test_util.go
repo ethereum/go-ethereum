@@ -153,35 +153,3 @@ func (tt *TransactionTest) Run() error {
 	}
 	return nil
 }
-
-func getRules(config *params.ChainConfig, fork string) (params.Rules, error) {
-	switch fork {
-	case "Frontier":
-		return config.Rules(new(big.Int), false, 0), nil
-	case "Homestead":
-		return config.Rules(config.HomesteadBlock, false, 0), nil
-	case "EIP150":
-		return config.Rules(config.EIP150Block, false, 0), nil
-	case "EIP158":
-		return config.Rules(config.EIP158Block, false, 0), nil
-	case "Byzantium":
-		return config.Rules(config.ByzantiumBlock, false, 0), nil
-	case "Constantinople":
-		return config.Rules(config.ConstantinopleBlock, false, 0), nil
-	case "Istanbul":
-		return config.Rules(config.IstanbulBlock, false, 0), nil
-	case "Berlin":
-		return config.Rules(config.BerlinBlock, false, 0), nil
-	case "London":
-		return config.Rules(config.LondonBlock, false, 0), nil
-	case "Paris":
-		return config.Rules(config.LondonBlock, true, 0), nil
-	case "Shanghai":
-		return config.Rules(config.LondonBlock, true, *config.ShanghaiTime), nil
-	case "Cancun":
-		return config.Rules(config.LondonBlock, true, *config.CancunTime), nil
-	case "Prague":
-		return config.Rules(config.LondonBlock, true, *config.PragueTime), nil
-	}
-	return params.Rules{}, UnsupportedForkError{Name: fork}
-}
