@@ -313,7 +313,7 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 				} else if status != core.CanonStatTy {
 					return fmt.Errorf("error inserting header %d, not canon: %v", it.Number(), status)
 				}
-				if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 2^64-1); err != nil {
+				if _, err := chain.InsertReceiptChain([]*types.Block{block}, types.ReceiptsToRLP([]types.Receipts{receipts}), 2^64-1); err != nil {
 					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
 				}
 				imported += 1
