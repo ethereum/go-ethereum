@@ -64,16 +64,10 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
 	filterSystem := filters.NewFilterSystem(ethservice.APIBackend, filters.Config{})
-	n.RegisterAPIs([]rpc.API{
-		{
-			Namespace: "eth",
-			Service:   filters.NewFilterAPI(filterSystem),
-		},
-		{
-			Namespace: "eth",
-			Service:   ethservice.APIBackend,
-		},
-	})
+	n.RegisterAPIs([]rpc.API{{
+		Namespace: "eth",
+		Service:   filters.NewFilterAPI(filterSystem),
+	}})
 
 	// Import the test chain.
 	if err := n.Start(); err != nil {
@@ -186,13 +180,11 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 	}{
 		{ // Test transfer
 			msg: ethereum.CallMsg{
-				From:      testAddr,
-				To:        &common.Address{},
-				Gas:       21000,
-				GasPrice:  big.NewInt(875000000),
-				Value:     big.NewInt(1),
-				GasFeeCap: nil,
-				GasTipCap: nil,
+				From:     testAddr,
+				To:       &common.Address{},
+				Gas:      21000,
+				GasPrice: big.NewInt(875000000),
+				Value:    big.NewInt(1),
 			},
 			wantGas: 21000,
 			wantAL:  `[]`,
