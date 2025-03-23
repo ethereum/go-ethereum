@@ -36,6 +36,7 @@ func (f *FilterMaps) indexerLoop() {
 
 	if f.disabled {
 		f.reset()
+		close(f.disabledCh)
 		return
 	}
 	log.Info("Started log indexer")
@@ -48,12 +49,11 @@ func (f *FilterMaps) indexerLoop() {
 				continue
 			}
 			if err := f.init(); err != nil {
-				log.Error("Error initializing log index", "error", err)
-				// unexpected error; there is not a lot we can do here, maybe it
-				// recovers, maybe not. Calling event processing here ensures
-				// that we can still properly shutdown in case of an infinite loop.
-				f.processSingleEvent(true)
-				continue
+				log.Error("Error initializing log index; reverting to unindexed mode", "error", err)
+				f.reset()
+				f.disabled = true
+				close(f.disabledCh)
+				return
 			}
 		}
 		if !f.targetHeadIndexed() {
