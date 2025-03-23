@@ -377,6 +377,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		preimages          stat
 		beaconHeaders      stat
 		cliqueSnaps        stat
+		bloomBits          stat
 		filterMapRows      stat
 		filterMapLastBlock stat
 		filterMapBlockLV   stat
@@ -442,6 +443,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			beaconHeaders.Add(size)
 		case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
 			cliqueSnaps.Add(size)
+
+		// new log index
 		case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) == len(filterMapRowPrefix)+8:
 			filterMapRows.Add(size)
 		case bytes.HasPrefix(key, filterMapLastBlockPrefix) && len(key) == len(filterMapLastBlockPrefix)+4:
@@ -449,7 +452,13 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		case bytes.HasPrefix(key, filterMapBlockLVPrefix) && len(key) == len(filterMapBlockLVPrefix)+8:
 			filterMapBlockLV.Add(size)
 
-		// LES indexes
+		// old log index (deprecated)
+		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
+			bloomBits.Add(size)
+		case bytes.HasPrefix(key, bloomBitsMetaPrefix) && len(key) < len(bloomBitsMetaPrefix)+8:
+			bloomBits.Add(size)
+
+		// LES indexes (deprecated)
 		case bytes.HasPrefix(key, chtTablePrefix) ||
 			bytes.HasPrefix(key, chtIndexTablePrefix) ||
 			bytes.HasPrefix(key, chtPrefix): // Canonical hash trie
@@ -514,6 +523,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Log index filter-map rows", filterMapRows.Size(), filterMapRows.Count()},
 		{"Key-Value store", "Log index last-block-of-map", filterMapLastBlock.Size(), filterMapLastBlock.Count()},
 		{"Key-Value store", "Log index block-lv", filterMapBlockLV.Size(), filterMapBlockLV.Count()},
+		{"Key-Value store", "Log index bloombits (deprecated)", bloomBits.Size(), bloomBits.Count()},
 		{"Key-Value store", "Contract codes", codes.Size(), codes.Count()},
 		{"Key-Value store", "Hash trie nodes", legacyTries.Size(), legacyTries.Count()},
 		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
