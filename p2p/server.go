@@ -97,6 +97,7 @@ type Server struct {
 	discv5    *discover.UDPv5
 	discmix   *enode.FairMix
 	dialsched *dialScheduler
+	connman   *connManager
 
 	// This is read by the NAT port mapping loop.
 	portMappingRegister chan *portMapping
@@ -411,6 +412,8 @@ func (srv *Server) Start() (err error) {
 	}
 	srv.setupDialScheduler()
 
+	srv.setupConnManager()
+
 	srv.loopWG.Add(1)
 	go srv.run()
 	return nil
@@ -525,6 +528,11 @@ func (srv *Server) setupDialScheduler() {
 	for _, n := range srv.StaticNodes {
 		srv.dialsched.addStatic(n)
 	}
+}
+
+func (srv *Server) setupConnManager() {
+	config := connmanConfig{maxDialPeers: srv.maxDialedConns()}
+	srv.connman = newConnManager(config, srv.Peers)
 }
 
 func (srv *Server) maxInboundConns() int {
@@ -681,6 +689,7 @@ running:
 				peers[c.node.ID()] = p
 				srv.log.Debug("Adding p2p peer", "peercount", len(peers), "id", p.ID(), "conn", c.flags, "addr", p.RemoteAddr(), "name", p.Name())
 				srv.dialsched.peerAdded(c)
+				srv.connman.peerAdded(c)
 				if p.Inbound() {
 					inboundCount++
 					serveSuccessMeter.Mark(1)
@@ -699,6 +708,7 @@ running:
 			delete(peers, pd.ID())
 			srv.log.Debug("Removing p2p peer", "peercount", len(peers), "id", pd.ID(), "duration", d, "req", pd.requested, "err", pd.err)
 			srv.dialsched.peerRemoved(pd.rw)
+			srv.connman.peerRemoved(pd.rw)
 			if pd.Inbound() {
 				inboundCount--
 				activeInboundPeerGauge.Dec(1)

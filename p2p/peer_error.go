@@ -69,6 +69,7 @@ const (
 	DiscUnexpectedIdentity
 	DiscSelf
 	DiscReadTimeout
+	DiscDropped
 	DiscSubprotocolError = DiscReason(0x10)
 
 	DiscInvalid = 0xff
@@ -87,6 +88,7 @@ var discReasonToString = [...]string{
 	DiscUnexpectedIdentity:  "unexpected identity",
 	DiscSelf:                "connected to self",
 	DiscReadTimeout:         "read timeout",
+	DiscDropped:             "dropped to make space for others",
 	DiscSubprotocolError:    "subprotocol error",
 	DiscInvalid:             "invalid disconnect reason",
 }
