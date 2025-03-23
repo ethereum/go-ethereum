@@ -70,6 +70,7 @@ type Miner struct {
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
 	txpool      *txpool.TxPool
+	prio        []common.Address // A list of senders to prioritize
 	chain       *core.BlockChain
 	pending     *pending
 	pendingMu   sync.Mutex // Lock protects the pending block
@@ -107,6 +108,13 @@ func (miner *Miner) SetExtra(extra []byte) error {
 	miner.config.ExtraData = extra
 	miner.confMu.Unlock()
 	return nil
+}
+
+// SetPrioAddresses sets a list of addresses to prioritize for transaction inclusion.
+func (miner *Miner) SetPrioAddresses(prio []common.Address) {
+	miner.confMu.Lock()
+	miner.prio = prio
+	miner.confMu.Unlock()
 }
 
 // SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.

@@ -19,6 +19,7 @@ package rawdb
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/golang/snappy"
@@ -95,7 +96,7 @@ type freezerTableBatch struct {
 // newBatch creates a new batch for the freezer table.
 func (t *freezerTable) newBatch() *freezerTableBatch {
 	batch := &freezerTableBatch{t: t}
-	if !t.noCompression {
+	if !t.config.noSnappy {
 		batch.sb = new(snappyBuffer)
 	}
 	batch.reset()
@@ -188,9 +189,6 @@ func (batch *freezerTableBatch) commit() error {
 	if err != nil {
 		return err
 	}
-	if err := batch.t.head.Sync(); err != nil {
-		return err
-	}
 	dataSize := int64(len(batch.dataBuffer))
 	batch.dataBuffer = batch.dataBuffer[:0]
 
@@ -208,6 +206,12 @@ func (batch *freezerTableBatch) commit() error {
 	// Update metrics.
 	batch.t.sizeGauge.Inc(dataSize + indexSize)
 	batch.t.writeMeter.Mark(dataSize + indexSize)
+
+	// Periodically sync the table, todo (rjl493456442) make it configurable?
+	if time.Since(batch.t.lastSync) > 30*time.Second {
+		batch.t.lastSync = time.Now()
+		return batch.t.Sync()
+	}
 	return nil
 }
 

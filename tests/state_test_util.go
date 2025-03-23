@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -275,13 +276,14 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		return st, common.Hash{}, 0, err
 	}
 
-	{ // Blob transactions may be present after the Cancun fork.
-		// In production,
-		// - the header is verified against the max in eip4844.go:VerifyEIP4844Header
-		// - the block body is verified against the header in block_validator.go:ValidateBody
-		// Here, we just do this shortcut smaller fix, since state tests do not
-		// utilize those codepaths
-		if len(msg.BlobHashes)*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
+	// Blob transactions may be present after the Cancun fork.
+	// In production,
+	// - the header is verified against the max in eip4844.go:VerifyEIP4844Header
+	// - the block body is verified against the header in block_validator.go:ValidateBody
+	// Here, we just do this shortcut smaller fix, since state tests do not
+	// utilize those codepaths.
+	if config.IsCancun(new(big.Int), block.Time()) {
+		if len(msg.BlobHashes) > eip4844.MaxBlobsPerBlock(config, block.Time()) {
 			return st, common.Hash{}, 0, errors.New("blob gas exceeds maximum")
 		}
 	}
@@ -299,7 +301,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	}
 
 	// Prepare the EVM.
-	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
+	context := core.NewEVMBlockContext(block.Header(), &dummyChain{config: config}, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
 	context.Random = nil
@@ -312,8 +314,13 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		context.Difficulty = big.NewInt(0)
 	}
 	if config.IsCancun(new(big.Int), block.Time()) && t.json.Env.ExcessBlobGas != nil {
-		context.BlobBaseFee = eip4844.CalcBlobFee(*t.json.Env.ExcessBlobGas)
+		header := &types.Header{
+			Time:          block.Time(),
+			ExcessBlobGas: t.json.Env.ExcessBlobGas,
+		}
+		context.BlobBaseFee = eip4844.CalcBlobFee(config, header)
 	}
+
 	evm := vm.NewEVM(context, st.StateDB, config, vmconfig)
 
 	if tracer := vmconfig.Tracer; tracer != nil && tracer.OnTxStart != nil {
@@ -505,7 +512,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
-		statedb.SetNonce(addr, a.Nonce)
+		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeUnspecified)
 		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceChangeUnspecified)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
@@ -543,3 +550,12 @@ func (st *StateTestState) Close() {
 		st.Snapshots = nil
 	}
 }
+
+// dummyChain implements the core.ChainContext interface.
+type dummyChain struct {
+	config *params.ChainConfig
+}
+
+func (d *dummyChain) Engine() consensus.Engine                        { return nil }
+func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header { return nil }
+func (d *dummyChain) Config() *params.ChainConfig                     { return d.config }

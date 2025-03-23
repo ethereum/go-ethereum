@@ -1,4 +1,4 @@
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/exp/maps"
 )
 
 // State history records the state changes involved in executing a block. The
@@ -250,15 +250,11 @@ type history struct {
 // newHistory constructs the state history object with provided state change set.
 func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte, rawStorageKey bool) *history {
 	var (
-		accountList = maps.Keys(accounts)
+		accountList = slices.SortedFunc(maps.Keys(accounts), common.Address.Cmp)
 		storageList = make(map[common.Address][]common.Hash)
 	)
-	slices.SortFunc(accountList, common.Address.Cmp)
-
 	for addr, slots := range storages {
-		slist := maps.Keys(slots)
-		slices.SortFunc(slist, common.Hash.Cmp)
-		storageList[addr] = slist
+		storageList[addr] = slices.SortedFunc(maps.Keys(slots), common.Hash.Cmp)
 	}
 	version := historyVersion
 	if !rawStorageKey {

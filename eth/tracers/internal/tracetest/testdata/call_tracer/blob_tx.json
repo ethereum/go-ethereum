@@ -14,8 +14,6 @@
     "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "stateRoot": "0x577f42ab21ccfd946511c57869ace0bdf7c217c36f02b7cd3459df0ed1cffc1a",
     "timestamp": "1709626771",
-    "withdrawals": [],
-    "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
     "alloc": {
       "0x0000000000000000000000000000000000000000": {
         "balance": "0x272e0528"
@@ -41,7 +39,14 @@
       "grayGlacierBlock": 0,
       "shanghaiTime": 0,
       "cancunTime": 0,
-      "terminalTotalDifficulty": 0
+      "terminalTotalDifficulty": 0,
+      "blobSchedule": {
+        "cancun": {
+          "target": 3,
+          "max": 6,
+          "baseFeeUpdateFraction": 3338477
+        }
+      }
     }
   },
   "context": {

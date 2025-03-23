@@ -27,8 +27,8 @@ import (
 // diffLayer represents a collection of modifications made to the in-memory tries
 // along with associated state changes after running a block on top.
 //
-// The goal of a diff layer is to act as a journal, tracking recent modifications
-// made to the state, that have not yet graduated into a semi-immutable state.
+// The purpose of a diff layer is to serve as a journal, recording recent state modifications
+// that have not yet been committed to a more stable or semi-permanent state.
 type diffLayer struct {
 	// Immutables
 	root   common.Hash         // Root hash to which this layer diff belongs to

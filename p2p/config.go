@@ -13,10 +13,12 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package p2p
 
 import (
 	"crypto/ecdsa"
+	"encoding"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -132,6 +134,13 @@ type configMarshaling struct {
 
 type configNAT struct {
 	nat.Interface
+}
+
+func (w *configNAT) MarshalText() ([]byte, error) {
+	if tm, ok := w.Interface.(encoding.TextMarshaler); ok {
+		return tm.MarshalText()
+	}
+	return nil, fmt.Errorf("NAT specification %#v cannot be marshaled", w.Interface)
 }
 
 func (w *configNAT) UnmarshalText(input []byte) error {

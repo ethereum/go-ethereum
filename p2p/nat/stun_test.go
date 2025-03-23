@@ -18,16 +18,7 @@ package nat
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
-
-func TestNatStun(t *testing.T) {
-	nat, err := newSTUN("")
-	assert.NoError(t, err)
-	_, err = nat.ExternalIP()
-	assert.NoError(t, err)
-}
 
 func TestUnreachedNatServer(t *testing.T) {
 	stun := &stun{

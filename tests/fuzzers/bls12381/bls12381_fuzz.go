@@ -168,7 +168,7 @@ func fuzzCrossG2Add(data []byte) int {
 
 	bl3 := blst.P2AffinesAdd([]*blst.P2Affine{bl1, bl2})
 	if !(bytes.Equal(gp.Marshal(), bl3.Serialize())) {
-		panic("G1 point addition mismatch blst / geth ")
+		panic("G2 point addition mismatch blst / geth ")
 	}
 
 	return 1
@@ -346,7 +346,7 @@ func multiExpG1Gnark(gs []gnark.G1Affine, scalars []fr.Element) gnark.G1Affine {
 	return res
 }
 
-// multiExpG1Gnark is a naive implementation of G1 multi-exponentiation
+// multiExpG2Gnark is a naive implementation of G2 multi-exponentiation
 func multiExpG2Gnark(gs []gnark.G2Affine, scalars []fr.Element) gnark.G2Affine {
 	res := gnark.G2Affine{}
 	for i := 0; i < len(gs); i++ {

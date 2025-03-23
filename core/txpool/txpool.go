@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -309,6 +309,17 @@ func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 	return nil
 }
 
+// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
+func (p *TxPool) GetRLP(hash common.Hash) []byte {
+	for _, subpool := range p.subpools {
+		encoded := subpool.GetRLP(hash)
+		if len(encoded) != 0 {
+			return encoded
+		}
+	}
+	return nil
+}
+
 // GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
@@ -325,10 +336,21 @@ func (p *TxPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Pr
 	return nil, nil
 }
 
+// ValidateTxBasics checks whether a transaction is valid according to the consensus
+// rules, but does not check state-dependent validation such as sufficient balance.
+func (p *TxPool) ValidateTxBasics(tx *types.Transaction) error {
+	for _, subpool := range p.subpools {
+		if subpool.Filter(tx) {
+			return subpool.ValidateTxBasics(tx)
+		}
+	}
+	return fmt.Errorf("%w: received type %d", core.ErrTxTypeNotSupported, tx.Type())
+}
+
 // Add enqueues a batch of transactions into the pool if they are valid. Due
 // to the large transaction churn, add may postpone fully integrating the tx
 // to a later point to batch multiple ones together.
-func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
+func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 	// Split the input transactions between the subpools. It shouldn't really
 	// happen that we receive merged batches, but better graceful than strange
 	// errors.
@@ -355,7 +377,7 @@ func (p *TxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 	// back the errors into the original sort order.
 	errsets := make([][]error, len(p.subpools))
 	for i := 0; i < len(p.subpools); i++ {
-		errsets[i] = p.subpools[i].Add(txsets[i], local, sync)
+		errsets[i] = p.subpools[i].Add(txsets[i], sync)
 	}
 	errs := make([]error, len(txs))
 	for i, split := range splits {
@@ -454,23 +476,6 @@ func (p *TxPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*type
 		}
 	}
 	return []*types.Transaction{}, []*types.Transaction{}
-}
-
-// Locals retrieves the accounts currently considered local by the pool.
-func (p *TxPool) Locals() []common.Address {
-	// Retrieve the locals from each subpool and deduplicate them
-	locals := make(map[common.Address]struct{})
-	for _, subpool := range p.subpools {
-		for _, local := range subpool.Locals() {
-			locals[local] = struct{}{}
-		}
-	}
-	// Flatten and return the deduplicated local set
-	flat := make([]common.Address, 0, len(locals))
-	for local := range locals {
-		flat = append(flat, local)
-	}
-	return flat
 }
 
 // Status returns the known status (unknown/pending/queued) of a transaction
