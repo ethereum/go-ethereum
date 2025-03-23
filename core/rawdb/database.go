@@ -492,17 +492,17 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			default:
 				unaccounted.Add(size)
 			}
+
+		// Metadata keys
+		case slices.ContainsFunc(knownMetadataKeys, func(x []byte) bool { return bytes.Equal(x, key) }):
+			metadata.Add(size)
+
 		default:
-			if slices.ContainsFunc(knownMetadataKeys, func(x []byte) bool { return bytes.Equal(x, key) }) {
-				metadata.Add(size)
-			} else {
-				unaccounted.Add(size)
-				// track unaccounted key examples:
-				if len(key) >= 2 {
-					prefix := [2]byte(key[:2])
-					if _, ok := unaccountedKeys[prefix]; !ok {
-						unaccountedKeys[prefix] = bytes.Clone(key)
-					}
+			unaccounted.Add(size)
+			if len(key) >= 2 {
+				prefix := [2]byte(key[:2])
+				if _, ok := unaccountedKeys[prefix]; !ok {
+					unaccountedKeys[prefix] = bytes.Clone(key)
 				}
 			}
 		}
