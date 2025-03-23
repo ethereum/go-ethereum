@@ -375,7 +375,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		accountSnaps       stat
 		storageSnaps       stat
 		preimages          stat
-		filterMaps         stat
 		beaconHeaders      stat
 		cliqueSnaps        stat
 		filterMapRows      stat
@@ -439,8 +438,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			metadata.Add(size)
 		case bytes.HasPrefix(key, genesisPrefix) && len(key) == (len(genesisPrefix)+common.HashLength):
 			metadata.Add(size)
-		case bytes.HasPrefix(key, []byte(filterMapsPrefix)):
-			filterMaps.Add(size)
 		case bytes.HasPrefix(key, skeletonHeaderPrefix) && len(key) == (len(skeletonHeaderPrefix)+8):
 			beaconHeaders.Add(size)
 		case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
@@ -514,7 +511,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count()},
 		{"Key-Value store", "Transaction index", txLookups.Size(), txLookups.Count()},
-		{"Key-Value store", "Log search index", filterMaps.Size(), filterMaps.Count()},
+		{"Key-Value store", "Log index filter-map rows", filterMapRows.Size(), filterMapRows.Count()},
+		{"Key-Value store", "Log index last-block-of-map", filterMapLastBlock.Size(), filterMapLastBlock.Count()},
+		{"Key-Value store", "Log index block-lv", filterMapBlockLV.Size(), filterMapBlockLV.Count()},
 		{"Key-Value store", "Contract codes", codes.Size(), codes.Count()},
 		{"Key-Value store", "Hash trie nodes", legacyTries.Size(), legacyTries.Count()},
 		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
