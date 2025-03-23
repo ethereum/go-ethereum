@@ -360,24 +360,27 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		logged = time.Now()
 
 		// Key-value store statistics
-		headers         stat
-		bodies          stat
-		receipts        stat
-		tds             stat
-		numHashPairings stat
-		hashNumPairings stat
-		legacyTries     stat
-		stateLookups    stat
-		accountTries    stat
-		storageTries    stat
-		codes           stat
-		txLookups       stat
-		accountSnaps    stat
-		storageSnaps    stat
-		preimages       stat
-		filterMaps      stat
-		beaconHeaders   stat
-		cliqueSnaps     stat
+		headers            stat
+		bodies             stat
+		receipts           stat
+		tds                stat
+		numHashPairings    stat
+		hashNumPairings    stat
+		legacyTries        stat
+		stateLookups       stat
+		accountTries       stat
+		storageTries       stat
+		codes              stat
+		txLookups          stat
+		accountSnaps       stat
+		storageSnaps       stat
+		preimages          stat
+		filterMaps         stat
+		beaconHeaders      stat
+		cliqueSnaps        stat
+		filterMapRows      stat
+		filterMapLastBlock stat
+		filterMapBlockLV   stat
 
 		// Verkle statistics
 		verkleTries        stat
@@ -442,13 +445,21 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			beaconHeaders.Add(size)
 		case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
 			cliqueSnaps.Add(size)
-		case bytes.HasPrefix(key, ChtTablePrefix) ||
-			bytes.HasPrefix(key, ChtIndexTablePrefix) ||
-			bytes.HasPrefix(key, ChtPrefix): // Canonical hash trie
+		case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) == len(filterMapRowPrefix)+8:
+			filterMapRows.Add(size)
+		case bytes.HasPrefix(key, filterMapLastBlockPrefix) && len(key) == len(filterMapLastBlockPrefix)+4:
+			filterMapLastBlock.Add(size)
+		case bytes.HasPrefix(key, filterMapBlockLVPrefix) && len(key) == len(filterMapBlockLVPrefix)+8:
+			filterMapBlockLV.Add(size)
+
+		// LES indexes
+		case bytes.HasPrefix(key, chtTablePrefix) ||
+			bytes.HasPrefix(key, chtIndexTablePrefix) ||
+			bytes.HasPrefix(key, chtPrefix): // Canonical hash trie
 			chtTrieNodes.Add(size)
-		case bytes.HasPrefix(key, BloomTrieTablePrefix) ||
-			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
-			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
+		case bytes.HasPrefix(key, bloomTrieTablePrefix) ||
+			bytes.HasPrefix(key, bloomTrieIndexPrefix) ||
+			bytes.HasPrefix(key, bloomTriePrefix): // Bloomtrie sub
 			bloomTrieNodes.Add(size)
 
 		// Verkle trie data is detected, determine the sub-category
@@ -476,6 +487,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
 				uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
 				persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
+				filterMapsRangeKey,
 			} {
 				if bytes.Equal(key, meta) {
 					metadata.Add(size)
@@ -566,6 +578,7 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		}
 		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
+
 	data := [][]string{
 		{"databaseVersion", pp(ReadDatabaseVersion(db))},
 		{"headBlockHash", fmt.Sprintf("%v", ReadHeadBlockHash(db))},
@@ -581,6 +594,9 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 	}
 	if b := ReadSkeletonSyncStatus(db); b != nil {
 		data = append(data, []string{"SkeletonSyncStatus", string(b)})
+	}
+	if fmr, ok, _ := ReadFilterMapsRange(db); ok {
+		data = append(data, []string{"filterMapsRange", fmt.Sprintf("%+v", fmr)})
 	}
 	return data
 }
