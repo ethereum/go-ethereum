@@ -103,18 +103,12 @@ func (f *callFrameWithOpcodes) processOutput(output []byte, err error, reverted 
 }
 
 type callFrameWithOpcodesMarshaling struct {
-	TypeString        string `json:"type"`
-	Gas               hexutil.Uint64
-	GasUsed           hexutil.Uint64
-	Value             *hexutil.Big
-	Input             hexutil.Bytes
-	Output            hexutil.Bytes
-	AccessedSlots     accessedSlots                              `json:"accessedSlots"`
-	ExtCodeAccessInfo []common.Address                           `json:"extCodeAccessInfo"`
-	UsedOpcodes       map[vm.OpCode]uint64                       `json:"usedOpcodes"`
-	ContractSize      map[common.Address]*contractSizeWithOpcode `json:"contractSize"`
-	OutOfGas          bool                                       `json:"outOfGas"`
-	Calls             []callFrameWithOpcodes                     `json:"calls,omitempty"`
+	TypeString string `json:"type"`
+	Gas        hexutil.Uint64
+	GasUsed    hexutil.Uint64
+	Value      *hexutil.Big
+	Input      hexutil.Bytes
+	Output     hexutil.Bytes
 }
 
 type accessedSlots struct {
