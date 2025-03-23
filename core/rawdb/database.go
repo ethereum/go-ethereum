@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -396,6 +398,11 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 
 		// Totals
 		total common.StorageSize
+
+		// This map tracks example keys for unaccounted data.
+		// For each unique two-byte prefix, the first unaccounted key encountered
+		// by the iterator will be stored.
+		unaccountedKeys = make(map[[2]byte][]byte)
 	)
 	// Inspect key-value database first.
 	for it.Next() {
@@ -486,23 +493,17 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 				unaccounted.Add(size)
 			}
 		default:
-			var accounted bool
-			for _, meta := range [][]byte{
-				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
-				lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
-				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
-				persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
-				filterMapsRangeKey,
-			} {
-				if bytes.Equal(key, meta) {
-					metadata.Add(size)
-					accounted = true
-					break
-				}
-			}
-			if !accounted {
+			if slices.ContainsFunc(knownMetadataKeys, func(x []byte) bool { return bytes.Equal(x, key) }) {
+				metadata.Add(size)
+			} else {
 				unaccounted.Add(size)
+				// track unaccounted key examples:
+				if len(key) >= 2 {
+					prefix := [2]byte(key[:2])
+					if _, ok := unaccountedKeys[prefix]; !ok {
+						unaccountedKeys[prefix] = bytes.Clone(key)
+					}
+				}
 			}
 		}
 		count++
@@ -564,8 +565,21 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 
 	if unaccounted.size > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
+		for _, e := range slices.SortedFunc(maps.Values(unaccountedKeys), bytes.Compare) {
+			log.Error(fmt.Sprintf("   example key: %x", e))
+		}
 	}
 	return nil
+}
+
+// This is the list of known 'metadata' keys stored in the databasse.
+var knownMetadataKeys = [][]byte{
+	databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
+	lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
+	snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
+	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
+	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
+	filterMapsRangeKey,
 }
 
 // printChainMetadata prints out chain metadata to stderr.
