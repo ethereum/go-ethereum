@@ -452,7 +452,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			cliqueSnaps.Add(size)
 
 		// new log index
-		case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) == len(filterMapRowPrefix)+8:
+		case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) <= len(filterMapRowPrefix)+9:
 			filterMapRows.Add(size)
 		case bytes.HasPrefix(key, filterMapLastBlockPrefix) && len(key) == len(filterMapLastBlockPrefix)+4:
 			filterMapLastBlock.Add(size)
