@@ -18,10 +18,12 @@ package tracetest
 
 import (
 	"encoding/json"
-	"github.com/holiman/uint256"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -42,12 +44,6 @@ type accessedSlots struct {
 	TransientReads  map[string]uint64   `json:"transientReads"`
 	TransientWrites map[string]uint64   `json:"transientWrites"`
 }
-
-type opcodeWithPartialStack struct {
-	Opcode        vm.OpCode
-	StackTopItems []uint256.Int
-}
-
 type contractSizeWithOpcode struct {
 	ContractSize int       `json:"contractSize"`
 	Opcode       vm.OpCode `json:"opcode"`
@@ -72,7 +68,7 @@ type erc7562Trace struct {
 	ContractSize      map[common.Address]*contractSizeWithOpcode `json:"contractSize"`
 	OutOfGas          bool                                       `json:"outOfGas"`
 	Calls             []erc7562Trace                             `json:"calls,omitempty" rlp:"optional"`
-	Keccak            []hexutil.Bytes                            `json:"keccak"`
+	Keccak            []hexutil.Bytes                            `json:"keccak,omitempty"`
 	Type              string                                     `json:"type"`
 }
 
@@ -149,21 +145,21 @@ func TestErc7562Tracer(t *testing.T) {
 				t.Fatalf("failed to marshal test: %v", err)
 			}
 
-			if string(want) != string(res) {
-				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
-			}
-
 			// Compare JSON ignoring key order by unmarshalling both into interfaces.
-			//var got, expected interface{}
-			//if err := json.Unmarshal(res, &got); err != nil {
-			//	t.Fatalf("failed to unmarshal result: %v", err)
-			//}
-			//if err := json.Unmarshal(want, &expected); err != nil {
-			//	t.Fatalf("failed to unmarshal expected result: %v", err)
-			//}
-			//if !reflect.DeepEqual(got, expected) {
-			//	t.Fatalf("trace mismatch\n have: %v\n want: %v\n", got, expected)
-			//}
+			var got, expected interface{}
+
+			if err := json.Unmarshal(res, &got); err != nil {
+				t.Fatalf("failed to unmarshal result: %v", err)
+			}
+			if err := json.Unmarshal(want, &expected); err != nil {
+				t.Fatalf("failed to unmarshal expected result: %v", err)
+			}
+			got = sortKeccakArrays(got)
+			expected = sortKeccakArrays(expected)
+			if !reflect.DeepEqual(got, expected) {
+				diff(got, expected, "root")
+				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", got, expected)
+			}
 
 			// Sanity check: compare top call's gas used against vm result
 			type simpleResult struct {
@@ -177,5 +173,92 @@ func TestErc7562Tracer(t *testing.T) {
 				t.Fatalf("top call has invalid gasUsed. have: %d want: %d", topCall.GasUsed, vmRet.UsedGas)
 			}
 		})
+	}
+}
+
+func diff(a, b interface{}, path string) {
+	// If both values are deeply equal, nothing to report.
+	if reflect.DeepEqual(a, b) {
+		return
+	}
+
+	// If the types differ, print the mismatch and return.
+	if reflect.TypeOf(a) != reflect.TypeOf(b) {
+		fmt.Printf("Type mismatch at %s: %T vs %T\n", path, a, b)
+		return
+	}
+
+	switch aVal := a.(type) {
+	case map[string]interface{}:
+		bVal := b.(map[string]interface{})
+		// Check keys present in aVal.
+		for k, va := range aVal {
+			newPath := fmt.Sprintf("%s.%s", path, k)
+			vb, exists := bVal[k]
+			if !exists {
+				fmt.Printf("Key %s present in a but missing in b: %v\n", newPath, va)
+			} else {
+				diff(va, vb, newPath)
+			}
+		}
+		// Check keys present in bVal but missing in aVal.
+		for k, vb := range bVal {
+			newPath := fmt.Sprintf("%s.%s", path, k)
+			if _, exists := aVal[k]; !exists {
+				fmt.Printf("Key %s present in b but missing in a: %v\n", newPath, vb)
+			}
+		}
+	case []interface{}:
+		bVal := b.([]interface{})
+		if len(aVal) != len(bVal) {
+			fmt.Printf("Length mismatch at %s: %d vs %d\n", path, len(aVal), len(bVal))
+		}
+		// Compare each element.
+		min := len(aVal)
+		if len(bVal) < min {
+			min = len(bVal)
+		}
+		for i := 0; i < min; i++ {
+			diff(aVal[i], bVal[i], fmt.Sprintf("%s[%d]", path, i))
+		}
+	default:
+		// For other types, just print the difference.
+		fmt.Printf("Value mismatch at %s: %v vs %v\n", path, a, b)
+	}
+}
+
+// sortKeccakArrays recursively traverses the JSON object and sorts any array found under the "keccak" key.
+func sortKeccakArrays(v interface{}) interface{} {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		for k, child := range val {
+			if k == "keccak" {
+				if arr, ok := child.([]interface{}); ok {
+					// Convert each element to a string.
+					strs := make([]string, len(arr))
+					for i, elem := range arr {
+						strs[i] = fmt.Sprintf("%v", elem)
+					}
+					// Sort the strings.
+					sort.Strings(strs)
+					// Replace with sorted values.
+					sortedArr := make([]interface{}, len(strs))
+					for i, s := range strs {
+						sortedArr[i] = s
+					}
+					val[k] = sortedArr
+				}
+			} else {
+				val[k] = sortKeccakArrays(child)
+			}
+		}
+		return val
+	case []interface{}:
+		for i, elem := range val {
+			val[i] = sortKeccakArrays(elem)
+		}
+		return val
+	default:
+		return v
 	}
 }
