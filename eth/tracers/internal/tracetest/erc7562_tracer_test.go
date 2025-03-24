@@ -53,35 +53,36 @@ type contractSizeWithOpcode struct {
 	Opcode       vm.OpCode `json:"opcode"`
 }
 
-// callFrameWithOpcodes is the result of a erc7562Tracer run.
-type callFrameWithOpcodes struct {
-	From             common.Address  `json:"from"`
-	Gas              uint64          `json:"gas"`
-	GasUsed          uint64          `json:"gasUsed"`
-	To               *common.Address `json:"to,omitempty" rlp:"optional"`
-	Input            []byte          `json:"input" rlp:"optional"`
-	Output           []byte          `json:"output,omitempty" rlp:"optional"`
-	Error            string          `json:"error,omitempty" rlp:"optional"`
-	RevertReason     string          `json:"revertReason,omitempty"`
-	Logs             []callLog       `json:"logs,omitempty" rlp:"optional"`
-	Value            *big.Int        `json:"value,omitempty" rlp:"optional"`
-	revertedSnapshot bool
-
+// erc7562Trace is the result of a erc7562Tracer run.
+type erc7562Trace struct {
+	From              common.Address  `json:"from"`
+	Gas               *hexutil.Uint64 `json:"gas"`
+	GasUsed           *hexutil.Uint64 `json:"gasUsed"`
+	To                *common.Address `json:"to,omitempty" rlp:"optional"`
+	Input             hexutil.Bytes   `json:"input" rlp:"optional"`
+	Output            hexutil.Bytes   `json:"output,omitempty" rlp:"optional"`
+	Error             string          `json:"error,omitempty" rlp:"optional"`
+	RevertReason      string          `json:"revertReason,omitempty"`
+	Logs              []callLog       `json:"logs,omitempty" rlp:"optional"`
+	Value             *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
+	revertedSnapshot  bool
 	AccessedSlots     accessedSlots                              `json:"accessedSlots"`
 	ExtCodeAccessInfo []common.Address                           `json:"extCodeAccessInfo"`
 	UsedOpcodes       map[vm.OpCode]uint64                       `json:"usedOpcodes"`
 	ContractSize      map[common.Address]*contractSizeWithOpcode `json:"contractSize"`
 	OutOfGas          bool                                       `json:"outOfGas"`
-	Calls             []callFrameWithOpcodes                     `json:"calls,omitempty" rlp:"optional"`
+	Calls             []erc7562Trace                             `json:"calls,omitempty" rlp:"optional"`
+	Keccak            []hexutil.Bytes                            `json:"keccak"`
+	Type              string                                     `json:"type"`
 }
 
 // erc7562TracerTest defines a single test to check the erc7562 tracer against.
 type erc7562TracerTest struct {
-	Genesis      *core.Genesis         `json:"genesis"`
-	Context      *callContext          `json:"context"`
-	Input        string                `json:"input"`
-	TracerConfig json.RawMessage       `json:"tracerConfig"`
-	Result       *callFrameWithOpcodes `json:"result"`
+	Genesis      *core.Genesis   `json:"genesis"`
+	Context      *callContext    `json:"context"`
+	Input        string          `json:"input"`
+	TracerConfig json.RawMessage `json:"tracerConfig"`
+	Result       *erc7562Trace   `json:"result"`
 }
 
 func TestErc7562Tracer(t *testing.T) {
@@ -147,9 +148,23 @@ func TestErc7562Tracer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to marshal test: %v", err)
 			}
+
 			if string(want) != string(res) {
 				t.Fatalf("trace mismatch\n have: %v\n want: %v\n", string(res), string(want))
 			}
+
+			// Compare JSON ignoring key order by unmarshalling both into interfaces.
+			//var got, expected interface{}
+			//if err := json.Unmarshal(res, &got); err != nil {
+			//	t.Fatalf("failed to unmarshal result: %v", err)
+			//}
+			//if err := json.Unmarshal(want, &expected); err != nil {
+			//	t.Fatalf("failed to unmarshal expected result: %v", err)
+			//}
+			//if !reflect.DeepEqual(got, expected) {
+			//	t.Fatalf("trace mismatch\n have: %v\n want: %v\n", got, expected)
+			//}
+
 			// Sanity check: compare top call's gas used against vm result
 			type simpleResult struct {
 				GasUsed hexutil.Uint64
