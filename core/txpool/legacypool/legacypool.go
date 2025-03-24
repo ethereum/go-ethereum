@@ -19,17 +19,6 @@ package legacypool
 
 import (
 	"errors"
-	"maps"
-	"math"
-	"math/big"
-	"slices"
-	"sort"
-	"sync"
-	"sync/atomic"
-	"time"
-
-	"github.com/holiman/uint256"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -43,6 +32,15 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
+	"maps"
+	"math"
+	"math/big"
+	"slices"
+	"sort"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 const (
@@ -1850,7 +1848,7 @@ func (t *lookup) removeAuthorities(tx *types.Transaction) {
 	}
 }
 
-// delegationTxsCount return the txs which set auth to addr
+// delegationTxsCount returns the number of pending authorizations for the specified address.
 func (t *lookup) delegationTxsCount(addr common.Address) int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
