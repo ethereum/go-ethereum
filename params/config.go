@@ -378,9 +378,16 @@ var (
 		CurieBlock:          big.NewInt(7096836),
 		DarwinTime:          newUint64(1724227200),
 		DarwinV2Time:        newUint64(1725264000),
+		EuclidTime:          newUint64(1744815600),
+		EuclidV2Time:        newUint64(1745305200),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
+		},
+		SystemContract: &SystemContractConfig{
+			Period:                3,
+			SystemContractAddress: common.HexToAddress("0x8432728A257646449245558B8b7Dbe51A16c7a4D"),
+			SystemContractSlot:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000067"),
 		},
 		Scroll: ScrollConfig{
 			UseZktrie:                 true,
@@ -388,10 +395,12 @@ var (
 			MaxTxPayloadBytesPerBlock: &ScrollMaxTxPayloadBytesPerBlock,
 			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
 			L1Config: &L1Config{
-				L1ChainId:             1,
-				L1MessageQueueAddress: common.HexToAddress("0x0d7E906BD9cAFa154b048cFa766Cc1E54E39AF9B"),
-				NumL1MessagesPerBlock: 10,
-				ScrollChainAddress:    common.HexToAddress("0xa13BAF47339d63B743e7Da8741db5456DAc1E556"),
+				L1ChainId:                       1,
+				L1MessageQueueAddress:           common.HexToAddress("0x0d7E906BD9cAFa154b048cFa766Cc1E54E39AF9B"),
+				L1MessageQueueV2Address:         common.HexToAddress("0x56971da63A3C0205184FEF096E9ddFc7A8C2D18a"),
+				L1MessageQueueV2DeploymentBlock: 22088276,
+				NumL1MessagesPerBlock:           10,
+				ScrollChainAddress:              common.HexToAddress("0xa13BAF47339d63B743e7Da8741db5456DAc1E556"),
 			},
 			GenesisStateRoot: &ScrollMainnetGenesisState,
 		},
