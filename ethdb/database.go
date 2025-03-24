@@ -128,6 +128,8 @@ type AncientWriter interface {
 	// is item_n(start from 0). The deleted items may not be removed from the ancient store
 	// immediately, but only when the accumulated deleted data reach the threshold then
 	// will be removed all together.
+	//
+	// Note that data marked as non-prunable will still be retained and remain accessible.
 	TruncateTail(n uint64) (uint64, error)
 
 	// Sync flushes all in-memory ancient store data to disk.

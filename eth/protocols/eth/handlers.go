@@ -397,18 +397,13 @@ func answerGetPooledTransactions(backend Backend, query GetPooledTransactionsReq
 			break
 		}
 		// Retrieve the requested transaction, skipping if unknown to us
-		tx := backend.TxPool().Get(hash)
-		if tx == nil {
+		encoded := backend.TxPool().GetRLP(hash)
+		if len(encoded) == 0 {
 			continue
 		}
-		// If known, encode and queue for response packet
-		if encoded, err := rlp.EncodeToBytes(tx); err != nil {
-			log.Error("Failed to encode transaction", "err", err)
-		} else {
-			hashes = append(hashes, hash)
-			txs = append(txs, encoded)
-			bytes += len(encoded)
-		}
+		hashes = append(hashes, hash)
+		txs = append(txs, encoded)
+		bytes += len(encoded)
 	}
 	return hashes, txs
 }

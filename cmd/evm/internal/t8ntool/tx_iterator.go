@@ -102,7 +102,7 @@ func signUnsignedTransactions(txs []*txWithKey, signer types.Signer) (types.Tran
 		if tx.protected {
 			signed, err = types.SignTx(tx.tx, signer, tx.key)
 		} else {
-			signed, err = types.SignTx(tx.tx, types.FrontierSigner{}, tx.key)
+			signed, err = types.SignTx(tx.tx, types.HomesteadSigner{}, tx.key)
 		}
 		if err != nil {
 			return nil, NewError(ErrorJson, fmt.Errorf("tx %d: failed to sign tx: %v", i, err))

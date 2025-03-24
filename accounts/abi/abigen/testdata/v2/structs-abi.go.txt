@@ -1,0 +1,116 @@
+// Code generated via abigen V2 - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
+package v1bindtests
+
+import (
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var (
+	_ = bytes.Equal
+	_ = errors.New
+	_ = big.NewInt
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = abi.ConvertType
+)
+
+// Struct0 is an auto generated low-level Go binding around an user-defined struct.
+type Struct0 struct {
+	B [32]byte
+}
+
+// StructsMetaData contains all meta data concerning the Structs contract.
+var StructsMetaData = bind.MetaData{
+	ABI: "[{\"inputs\":[],\"name\":\"F\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"B\",\"type\":\"bytes32\"}],\"internalType\":\"structStructs.A[]\",\"name\":\"a\",\"type\":\"tuple[]\"},{\"internalType\":\"uint256[]\",\"name\":\"c\",\"type\":\"uint256[]\"},{\"internalType\":\"bool[]\",\"name\":\"d\",\"type\":\"bool[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"G\",\"outputs\":[{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"B\",\"type\":\"bytes32\"}],\"internalType\":\"structStructs.A[]\",\"name\":\"a\",\"type\":\"tuple[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
+	ID:  "Structs",
+}
+
+// Structs is an auto generated Go binding around an Ethereum contract.
+type Structs struct {
+	abi abi.ABI
+}
+
+// NewStructs creates a new instance of Structs.
+func NewStructs() *Structs {
+	parsed, err := StructsMetaData.ParseABI()
+	if err != nil {
+		panic(errors.New("invalid ABI: " + err.Error()))
+	}
+	return &Structs{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+<<<<<<< HEAD
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *Structs) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+=======
+// Use this to create the instance object passed to abigen v2 library functions Call,
+// Transact, etc.
+func (c *Structs) Instance(backend bind.ContractBackend, addr common.Address) bind.BoundContract {
+	return bind.NewBoundContract(backend, addr, c.abi)
+>>>>>>> 854c25e086 (accounts/abi/abigen: improve v2 template)
+}
+
+// F is the Go binding used to pack the parameters required for calling
+// the contract method 0x28811f59.
+//
+// Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
+func (structs *Structs) PackF() ([]byte, error) {
+	return structs.abi.Pack("F")
+}
+
+// FOutput serves as a container for the return parameters of contract
+// method F.
+type FOutput struct {
+	A []Struct0
+	C []*big.Int
+	D []bool
+}
+
+// UnpackF is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x28811f59.
+//
+// Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
+func (structs *Structs) UnpackF(data []byte) (*FOutput, error) {
+	out, err := structs.abi.Unpack("F", data)
+	if err != nil {
+		return nil, err
+	}
+	ret := new(FOutput)
+	ret.A = *abi.ConvertType(out[0], new([]Struct0)).(*[]Struct0)
+	ret.C = *abi.ConvertType(out[1], new([]*big.Int)).(*[]*big.Int)
+	ret.D = *abi.ConvertType(out[2], new([]bool)).(*[]bool)
+	return ret, nil
+}
+
+// G is the Go binding used to pack the parameters required for calling
+// the contract method 0x6fecb623.
+//
+// Solidity: function G() view returns((bytes32)[] a)
+func (structs *Structs) PackG() ([]byte, error) {
+	return structs.abi.Pack("G")
+}
+
+// UnpackG is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x6fecb623.
+//
+// Solidity: function G() view returns((bytes32)[] a)
+func (structs *Structs) UnpackG(data []byte) (*[]Struct0, error) {
+	out, err := structs.abi.Unpack("G", data)
+	if err != nil {
+		return nil, err
+	}
+	out0 := *abi.ConvertType(out[0], new([]Struct0)).(*[]Struct0)
+	return &out0, nil
+}

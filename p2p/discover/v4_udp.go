@@ -210,12 +210,6 @@ func (t *UDPv4) ourEndpoint() v4wire.Endpoint {
 	return v4wire.NewEndpoint(addr, uint16(node.TCP()))
 }
 
-// Ping sends a ping message to the given node.
-func (t *UDPv4) Ping(n *enode.Node) error {
-	_, err := t.ping(n)
-	return err
-}
-
 // ping sends a ping message to the given node and waits for a reply.
 func (t *UDPv4) ping(n *enode.Node) (seq uint64, err error) {
 	addr, ok := n.UDPEndpoint()
@@ -227,6 +221,19 @@ func (t *UDPv4) ping(n *enode.Node) (seq uint64, err error) {
 		seq = rm.reply.(*v4wire.Pong).ENRSeq
 	}
 	return seq, err
+}
+
+// Ping calls PING on a node and waits for a PONG response.
+func (t *UDPv4) Ping(n *enode.Node) (pong *v4wire.Pong, err error) {
+	addr, ok := n.UDPEndpoint()
+	if !ok {
+		return nil, errNoUDPEndpoint
+	}
+	rm := t.sendPing(n.ID(), addr, nil)
+	if err = <-rm.errc; err == nil {
+		pong = rm.reply.(*v4wire.Pong)
+	}
+	return pong, err
 }
 
 // sendPing sends a ping message to the given node and invokes the callback

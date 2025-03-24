@@ -245,6 +245,12 @@ func (c *Codec) EncodeRaw(id enode.ID, head Header, msgdata []byte) ([]byte, err
 	return c.buf.Bytes(), nil
 }
 
+// CurrentChallenge returns the latest challenge sent to the given node.
+// This will return non-nil while a handshake is in progress.
+func (c *Codec) CurrentChallenge(id enode.ID, addr string) *Whoareyou {
+	return c.sc.getHandshake(id, addr)
+}
+
 func (c *Codec) writeHeaders(head *Header) {
 	c.buf.Reset()
 	c.buf.Write(head.IV[:])

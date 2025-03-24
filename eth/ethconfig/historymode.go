@@ -76,15 +76,17 @@ type HistoryPrunePoint struct {
 }
 
 // HistoryPrunePoints contains the pre-defined history pruning cutoff blocks for known networks.
+// They point to the first post-merge block. Any pruning should truncate *up to* but excluding
+// given block.
 var HistoryPrunePoints = map[common.Hash]*HistoryPrunePoint{
 	// mainnet
 	params.MainnetGenesisHash: {
-		BlockNumber: 15537394,
-		BlockHash:   common.HexToHash("0x56a9bb0302da44b8c0b3df540781424684c3af04d0b7a38d72842b762076a664"),
+		BlockNumber: 15537393,
+		BlockHash:   common.HexToHash("0x55b11b918355b1ef9c5db810302ebad0bf2544255b530cdce90674d5887bb286"),
 	},
 	// sepolia
 	params.SepoliaGenesisHash: {
-		BlockNumber: 1735371,
-		BlockHash:   common.HexToHash("0x36fb89fba5b7857cf0ca78b5a9625b4043ff4555dfce9b7bcdcdd758a11eb946"),
+		BlockNumber: 1450409,
+		BlockHash:   common.HexToHash("0x229f6b18ca1552f1d5146deceb5387333f40dc6275aebee3f2c5c4ece07d02db"),
 	},
 }

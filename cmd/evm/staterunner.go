@@ -53,7 +53,9 @@ var stateTestCommand = &cli.Command{
 	Flags: slices.Concat([]cli.Flag{
 		BenchFlag,
 		DumpFlag,
+		forkFlag,
 		HumanReadableFlag,
+		idxFlag,
 		RunFlag,
 	}, traceFlags),
 }

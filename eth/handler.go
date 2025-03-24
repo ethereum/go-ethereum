@@ -67,6 +67,10 @@ type txPool interface {
 	// tx hash.
 	Get(hash common.Hash) *types.Transaction
 
+	// GetRLP retrieves the RLP-encoded transaction from local txpool
+	// with given tx hash.
+	GetRLP(hash common.Hash) []byte
+
 	// Add should add the given transactions to the pool.
 	Add(txs []*types.Transaction, sync bool) []error
 

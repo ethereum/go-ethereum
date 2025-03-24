@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -360,24 +362,27 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		logged = time.Now()
 
 		// Key-value store statistics
-		headers         stat
-		bodies          stat
-		receipts        stat
-		tds             stat
-		numHashPairings stat
-		hashNumPairings stat
-		legacyTries     stat
-		stateLookups    stat
-		accountTries    stat
-		storageTries    stat
-		codes           stat
-		txLookups       stat
-		accountSnaps    stat
-		storageSnaps    stat
-		preimages       stat
-		bloomBits       stat
-		beaconHeaders   stat
-		cliqueSnaps     stat
+		headers            stat
+		bodies             stat
+		receipts           stat
+		tds                stat
+		numHashPairings    stat
+		hashNumPairings    stat
+		legacyTries        stat
+		stateLookups       stat
+		accountTries       stat
+		storageTries       stat
+		codes              stat
+		txLookups          stat
+		accountSnaps       stat
+		storageSnaps       stat
+		preimages          stat
+		beaconHeaders      stat
+		cliqueSnaps        stat
+		bloomBits          stat
+		filterMapRows      stat
+		filterMapLastBlock stat
+		filterMapBlockLV   stat
 
 		// Verkle statistics
 		verkleTries        stat
@@ -393,6 +398,11 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 
 		// Totals
 		total common.StorageSize
+
+		// This map tracks example keys for unaccounted data.
+		// For each unique two-byte prefix, the first unaccounted key encountered
+		// by the iterator will be stored.
+		unaccountedKeys = make(map[[2]byte][]byte)
 	)
 	// Inspect key-value database first.
 	for it.Next() {
@@ -436,21 +446,33 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			metadata.Add(size)
 		case bytes.HasPrefix(key, genesisPrefix) && len(key) == (len(genesisPrefix)+common.HashLength):
 			metadata.Add(size)
-		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
-			bloomBits.Add(size)
-		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
-			bloomBits.Add(size)
 		case bytes.HasPrefix(key, skeletonHeaderPrefix) && len(key) == (len(skeletonHeaderPrefix)+8):
 			beaconHeaders.Add(size)
 		case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
 			cliqueSnaps.Add(size)
-		case bytes.HasPrefix(key, ChtTablePrefix) ||
-			bytes.HasPrefix(key, ChtIndexTablePrefix) ||
-			bytes.HasPrefix(key, ChtPrefix): // Canonical hash trie
+
+		// new log index
+		case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) <= len(filterMapRowPrefix)+9:
+			filterMapRows.Add(size)
+		case bytes.HasPrefix(key, filterMapLastBlockPrefix) && len(key) == len(filterMapLastBlockPrefix)+4:
+			filterMapLastBlock.Add(size)
+		case bytes.HasPrefix(key, filterMapBlockLVPrefix) && len(key) == len(filterMapBlockLVPrefix)+8:
+			filterMapBlockLV.Add(size)
+
+		// old log index (deprecated)
+		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
+			bloomBits.Add(size)
+		case bytes.HasPrefix(key, bloomBitsMetaPrefix) && len(key) < len(bloomBitsMetaPrefix)+8:
+			bloomBits.Add(size)
+
+		// LES indexes (deprecated)
+		case bytes.HasPrefix(key, chtTablePrefix) ||
+			bytes.HasPrefix(key, chtIndexTablePrefix) ||
+			bytes.HasPrefix(key, chtPrefix): // Canonical hash trie
 			chtTrieNodes.Add(size)
-		case bytes.HasPrefix(key, BloomTrieTablePrefix) ||
-			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
-			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
+		case bytes.HasPrefix(key, bloomTrieTablePrefix) ||
+			bytes.HasPrefix(key, bloomTrieIndexPrefix) ||
+			bytes.HasPrefix(key, bloomTriePrefix): // Bloomtrie sub
 			bloomTrieNodes.Add(size)
 
 		// Verkle trie data is detected, determine the sub-category
@@ -470,23 +492,18 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			default:
 				unaccounted.Add(size)
 			}
+
+		// Metadata keys
+		case slices.ContainsFunc(knownMetadataKeys, func(x []byte) bool { return bytes.Equal(x, key) }):
+			metadata.Add(size)
+
 		default:
-			var accounted bool
-			for _, meta := range [][]byte{
-				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
-				lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
-				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
-				persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
-			} {
-				if bytes.Equal(key, meta) {
-					metadata.Add(size)
-					accounted = true
-					break
+			unaccounted.Add(size)
+			if len(key) >= 2 {
+				prefix := [2]byte(key[:2])
+				if _, ok := unaccountedKeys[prefix]; !ok {
+					unaccountedKeys[prefix] = bytes.Clone(key)
 				}
-			}
-			if !accounted {
-				unaccounted.Add(size)
 			}
 		}
 		count++
@@ -504,7 +521,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count()},
 		{"Key-Value store", "Transaction index", txLookups.Size(), txLookups.Count()},
-		{"Key-Value store", "Bloombit index", bloomBits.Size(), bloomBits.Count()},
+		{"Key-Value store", "Log index filter-map rows", filterMapRows.Size(), filterMapRows.Count()},
+		{"Key-Value store", "Log index last-block-of-map", filterMapLastBlock.Size(), filterMapLastBlock.Count()},
+		{"Key-Value store", "Log index block-lv", filterMapBlockLV.Size(), filterMapBlockLV.Count()},
+		{"Key-Value store", "Log bloombits (deprecated)", bloomBits.Size(), bloomBits.Count()},
 		{"Key-Value store", "Contract codes", codes.Size(), codes.Count()},
 		{"Key-Value store", "Hash trie nodes", legacyTries.Size(), legacyTries.Count()},
 		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
@@ -545,8 +565,21 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 
 	if unaccounted.size > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
+		for _, e := range slices.SortedFunc(maps.Values(unaccountedKeys), bytes.Compare) {
+			log.Error(fmt.Sprintf("   example key: %x", e))
+		}
 	}
 	return nil
+}
+
+// This is the list of known 'metadata' keys stored in the databasse.
+var knownMetadataKeys = [][]byte{
+	databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
+	lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
+	snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
+	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
+	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
+	filterMapsRangeKey,
 }
 
 // printChainMetadata prints out chain metadata to stderr.
@@ -568,6 +601,7 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		}
 		return fmt.Sprintf("%d (%#x)", *val, *val)
 	}
+
 	data := [][]string{
 		{"databaseVersion", pp(ReadDatabaseVersion(db))},
 		{"headBlockHash", fmt.Sprintf("%v", ReadHeadBlockHash(db))},
@@ -583,6 +617,9 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 	}
 	if b := ReadSkeletonSyncStatus(db); b != nil {
 		data = append(data, []string{"SkeletonSyncStatus", string(b)})
+	}
+	if fmr, ok, _ := ReadFilterMapsRange(db); ok {
+		data = append(data, []string{"filterMapsRange", fmt.Sprintf("%+v", fmr)})
 	}
 	return data
 }
