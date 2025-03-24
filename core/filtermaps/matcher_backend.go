@@ -141,10 +141,6 @@ func (fm *FilterMapsMatcherBackend) synced() {
 // range that has not been changed and has been consistent with all states of the
 // chain since the previous SyncLogIndex or the creation of the matcher backend.
 func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange, error) {
-	if fm.f.disabled {
-		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
-	}
-
 	syncCh := make(chan SyncRange, 1)
 	fm.f.matchersLock.Lock()
 	fm.syncCh = syncCh
@@ -154,12 +150,16 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 	case fm.f.matcherSyncCh <- fm:
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
+	case <-fm.f.disabledCh:
+		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
 	}
 	select {
 	case vr := <-syncCh:
 		return vr, nil
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
+	case <-fm.f.disabledCh:
+		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
 	}
 }
 

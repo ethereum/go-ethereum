@@ -53,7 +53,8 @@ type FilterMaps struct {
 	// This is configured by the --history.logs.disable Geth flag.
 	// We chose to implement disabling this way because it requires less special
 	// case logic in eth/filters.
-	disabled bool
+	disabled   bool
+	disabledCh chan struct{} // closed by indexer if disabled
 
 	closeCh        chan struct{}
 	closeWg        sync.WaitGroup
@@ -196,6 +197,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 		blockProcessingCh: make(chan bool, 1),
 		history:           config.History,
 		disabled:          config.Disabled,
+		disabledCh:        make(chan struct{}),
 		exportFileName:    config.ExportFileName,
 		Params:            params,
 		indexedRange: filterMapsRange{
@@ -206,6 +208,8 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 			maps:             common.NewRange(rs.MapsFirst, rs.MapsAfterLast-rs.MapsFirst),
 			tailPartialEpoch: rs.TailPartialEpoch,
 		},
+		historyCutoff:   historyCutoff,
+		finalBlock:      finalBlock,
 		matcherSyncCh:   make(chan *FilterMapsMatcherBackend),
 		matchers:        make(map[*FilterMapsMatcherBackend]struct{}),
 		filterMapCache:  lru.NewCache[uint32, filterMap](cachedFilterMaps),
@@ -278,8 +282,13 @@ func (f *FilterMaps) initChainView(chainView *ChainView) *ChainView {
 }
 
 // reset un-initializes the FilterMaps structure and removes all related data from
-// the database. The function returns true if everything was successfully removed.
-func (f *FilterMaps) reset() bool {
+// the database.
+// Note that in case of leveldb database the fallback implementation of DeleteRange
+// might take a long time to finish and deleting the entire database may be
+// interrupted by a shutdown. Deleting the filterMapsRange entry first does
+// guarantee though that the next init() will not return successfully until the
+// entire database has been cleaned.
+func (f *FilterMaps) reset() {
 	f.indexLock.Lock()
 	f.indexedRange = filterMapsRange{}
 	f.indexedView = nil
@@ -292,11 +301,16 @@ func (f *FilterMaps) reset() bool {
 	// deleting the range first ensures that resetDb will be called again at next
 	// startup and any leftover data will be removed even if it cannot finish now.
 	rawdb.DeleteFilterMapsRange(f.db)
-	return f.safeDeleteRange(rawdb.DeleteFilterMapsDb, "Resetting log index database")
+	f.safeDeleteRange(rawdb.DeleteFilterMapsDb, "Resetting log index database")
 }
 
 // init initializes an empty log index according to the current targetView.
 func (f *FilterMaps) init() error {
+	// ensure that there is no remaining data in the filter maps key range
+	if !f.safeDeleteRange(rawdb.DeleteFilterMapsDb, "Resetting log index database") {
+		return errors.New("could not reset log index database")
+	}
+
 	f.indexLock.Lock()
 	defer f.indexLock.Unlock()
 
@@ -316,6 +330,13 @@ func (f *FilterMaps) init() error {
 		if max > bestLen {
 			bestIdx, bestLen = idx, max
 		}
+	}
+	var initBlockNumber uint64
+	if bestLen > 0 {
+		initBlockNumber = checkpoints[bestIdx][bestLen-1].BlockNumber
+	}
+	if initBlockNumber < f.historyCutoff {
+		return errors.New("cannot start indexing before history cutoff point")
 	}
 	batch := f.db.NewBatch()
 	for epoch := range bestLen {
