@@ -43,6 +43,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 	mapset "github.com/deckarep/golang-set/v2"
 )
 
@@ -536,6 +537,7 @@ func (w *worker) updateSnapshot() {
 		w.current.txs,
 		nil,
 		w.current.receipts,
+		new(trie.Trie),
 	)
 	w.snapshotReceipts = copyReceipts(w.current.receipts)
 	w.snapshotState = w.current.state.Copy()

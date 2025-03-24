@@ -467,14 +467,12 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 	}(time.Now())
 
 	// Iterate over all the delivered data and inject one-by-one into the trie
-	progress := false
 	for _, blob := range req.response {
-		prog, hash, err := s.processNodeData(blob)
+		hash, err := s.processNodeData(blob)
 		switch err {
 		case nil:
 			s.numUncommitted++
 			s.bytesUncommitted += len(blob)
-			progress = progress || prog
 			successful++
 		case trie.ErrNotRequested:
 			unexpected++
@@ -508,13 +506,13 @@ func (s *stateSync) process(req *stateReq) (int, error) {
 // processNodeData tries to inject a trie node data blob delivered from a remote
 // peer into the state trie, returning whether anything useful was written or any
 // error occurred.
-func (s *stateSync) processNodeData(blob []byte) (bool, common.Hash, error) {
+func (s *stateSync) processNodeData(blob []byte) (common.Hash, error) {
 	res := trie.SyncResult{Data: blob}
 	s.keccak.Reset()
 	s.keccak.Write(blob)
 	s.keccak.Sum(res.Hash[:0])
-	committed, _, err := s.sched.Process([]trie.SyncResult{res})
-	return committed, res.Hash, err
+	err := s.sched.Process(res)
+	return res.Hash, err
 }
 
 // updateStats bumps the various state sync progress counters and displays a log

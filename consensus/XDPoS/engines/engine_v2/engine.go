@@ -22,6 +22,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 )
 
 type XDPoS_v2 struct {
@@ -414,7 +415,7 @@ func (x *XDPoS_v2) Finalize(chain consensus.ChainReader, header *types.Header, s
 	header.UncleHash = types.CalcUncleHash(nil)
 
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), nil
+	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks with.

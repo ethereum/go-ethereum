@@ -40,6 +40,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -588,7 +589,7 @@ func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, sta
 	header.UncleHash = types.CalcUncleHash(nil)
 
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), nil
+	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks
