@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm/precompiles"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -40,7 +41,7 @@ type (
 	GetHashFunc func(uint64) common.Hash
 )
 
-func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
+func (evm *EVM) precompile(addr common.Address) (precompiles.PrecompiledContract, bool) {
 	p, ok := evm.precompiles[addr]
 	return p, ok
 }
@@ -120,7 +121,7 @@ type EVM struct {
 	callGasTemp uint64
 
 	// precompiles holds the precompiled contracts for the current epoch
-	precompiles map[common.Address]PrecompiledContract
+	precompiles map[common.Address]precompiles.PrecompiledContract
 
 	// jumpDests is the aggregated result of JUMPDEST analysis made through
 	// the life cycle of EVM.
@@ -148,7 +149,7 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 // SetPrecompiles sets the precompiled contracts for the EVM.
 // This method is only used through RPC calls.
 // It is not thread-safe.
-func (evm *EVM) SetPrecompiles(precompiles PrecompiledContracts) {
+func (evm *EVM) SetPrecompiles(precompiles precompiles.PrecompiledContracts) {
 	evm.precompiles = precompiles
 }
 

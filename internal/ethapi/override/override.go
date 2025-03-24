@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm/precompiles"
 	"github.com/holiman/uint256"
 )
 
@@ -53,7 +54,7 @@ func (diff *StateOverride) has(address common.Address) bool {
 }
 
 // Apply overrides the fields of specified accounts into the given state.
-func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.PrecompiledContracts) error {
+func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles precompiles.PrecompiledContracts) error {
 	if diff == nil {
 		return nil
 	}
