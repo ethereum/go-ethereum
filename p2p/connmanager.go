@@ -29,13 +29,13 @@ import (
 
 const (
 	// Interval between peer drop events
-	peerDropInterval = 30 * time.Second
+	peerDropInterval = 5 * time.Minute
 	// Avoid dropping peers for some time after connection
 	doNotDropBefore = 2 * peerDropInterval
 	// How close to max should we initiate the drop timer. O should be fine,
 	// dropping when no more peers can be added. Larger numbers result in more
 	// aggressive drop behavior.
-	peerDropThreshold = 5
+	peerDropThreshold = 0
 )
 
 // connManager monitors the state of the peer pool and makes changes as follows:
