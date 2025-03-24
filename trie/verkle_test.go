@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
@@ -87,5 +88,86 @@ func TestVerkleTreeReadWrite(t *testing.T) {
 				t.Fatal("storage is not matched")
 			}
 		}
+	}
+}
+
+func TestVerkleRollBack(t *testing.T) {
+	db := newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.PathScheme)
+	tr, _ := NewVerkleTrie(types.EmptyVerkleHash, db, utils.NewPointCache(100))
+
+	for addr, acct := range accounts {
+		if err := tr.UpdateAccount(addr, acct); err != nil {
+			t.Fatalf("Failed to update account, %v", err)
+		}
+		for key, val := range storages[addr] {
+			if err := tr.UpdateStorage(addr, key.Bytes(), val); err != nil {
+				t.Fatalf("Failed to update account, %v", err)
+			}
+		}
+		// create more than 128 chunks of code
+		code := make([]byte, 129*32)
+		for i := 0; i < len(code); i += 2 {
+			code[i] = 0x60
+			code[i+1] = byte(i % 256)
+		}
+		hash := crypto.Keccak256Hash(code)
+		if err := tr.UpdateContractCode(addr, hash, code); err != nil {
+			t.Fatalf("Failed to update contract, %v", err)
+		}
+	}
+
+	// Check that things were created
+	for addr, acct := range accounts {
+		stored, err := tr.GetAccount(addr)
+		if err != nil {
+			t.Fatalf("Failed to get account, %v", err)
+		}
+		if !reflect.DeepEqual(stored, acct) {
+			t.Fatal("account is not matched")
+		}
+		for key, val := range storages[addr] {
+			stored, err := tr.GetStorage(addr, key.Bytes())
+			if err != nil {
+				t.Fatalf("Failed to get storage, %v", err)
+			}
+			if !bytes.Equal(stored, val) {
+				t.Fatal("storage is not matched")
+			}
+		}
+	}
+
+	// ensure there is some code in the 2nd group
+	keyOf2ndGroup := []byte{141, 124, 185, 236, 50, 22, 185, 39, 244, 47, 97, 209, 96, 235, 22, 13, 205, 38, 18, 201, 128, 223, 0, 59, 146, 199, 222, 119, 133, 13, 91, 0}
+	chunk, err := tr.root.Get(keyOf2ndGroup, nil)
+	if err != nil {
+		t.Fatalf("Failed to get account, %v", err)
+	}
+	if len(chunk) == 0 {
+		t.Fatal("account was not created ")
+	}
+
+	// Rollback first account and check that it is gone
+	addr1 := common.Address{1}
+	err = tr.RollBackAccount(addr1)
+	if err != nil {
+		t.Fatalf("error rolling back address 1: %v", err)
+	}
+
+	// ensure the account is gone
+	stored, err := tr.GetAccount(addr1)
+	if err != nil {
+		t.Fatalf("Failed to get account, %v", err)
+	}
+	if stored != nil {
+		t.Fatal("account was not deleted")
+	}
+
+	// ensure that the last code chunk is also gone from the tree
+	chunk, err = tr.root.Get(keyOf2ndGroup, nil)
+	if err != nil {
+		t.Fatalf("Failed to get account, %v", err)
+	}
+	if len(chunk) != 0 {
+		t.Fatal("account was not deleted")
 	}
 }

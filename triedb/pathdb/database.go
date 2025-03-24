@@ -152,6 +152,14 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	}
 	config = config.sanitize()
 
+	// Establish a dedicated database namespace tailored for verkle-specific
+	// data, ensuring the isolation of both verkle and merkle tree data. It's
+	// important to note that the introduction of a prefix won't lead to
+	// substantial storage overhead, as the underlying database will efficiently
+	// compress the shared key prefix.
+	if isVerkle {
+		diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
+	}
 	db := &Database{
 		readOnly:   config.ReadOnly,
 		isVerkle:   isVerkle,
@@ -190,7 +198,7 @@ func (db *Database) repairHistory() error {
 		// all of them. Fix the tests first.
 		return nil
 	}
-	freezer, err := rawdb.NewStateFreezer(ancient, db.readOnly)
+	freezer, err := rawdb.NewStateFreezer(ancient, db.isVerkle, db.readOnly)
 	if err != nil {
 		log.Crit("Failed to open state history freezer", "err", err)
 	}

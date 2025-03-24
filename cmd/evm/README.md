@@ -16,7 +16,7 @@ which can
 1. Take a prestate, including
    - Accounts,
    - Block context information,
-   - Previous blockshashes (*optional)
+   - Previous blocks hashes (*optional)
 2. Apply a set of transactions,
 3. Apply a mining-reward (*optional),
 4. And generate a post-state, including
@@ -26,7 +26,7 @@ which can
 
 ### Specification
 
-The idea is to specify the behaviour of this binary very _strict_, so that other
+The idea is to specify the behavior of this binary very _strict_, so that other
 node implementors can build replicas based on their own state-machines, and the
 state generators can swap between a \`geth\`-based implementation and a \`parityvm\`-based
 implementation.
@@ -59,7 +59,7 @@ following object definitions are required.
 
 ##### `alloc`
 
-The `alloc` object defines the prestate that transition will begin with.
+The `alloc` object defines the prestate that the transition will begin with.
 
 ```go
 // Map of address to account definition.
@@ -195,12 +195,12 @@ There are a few (not many) errors that can occur, those are defined below.
 - Other EVM error. Exit code `2`
 - Failed configuration: when a non-supported or invalid fork was specified. Exit code `3`.
 - Block history is not supplied, but needed for a `BLOCKHASH` operation. If `BLOCKHASH`
-  is invoked targeting a block which history has not been provided for, the program will
+  is invoked targeting a block whose history has not been provided for, the program will
   exit with code `4`.
 
 ##### IO errors (`10`-`20`)
 
-- Invalid input json: the supplied data could not be marshalled.
+- Invalid input json: the supplied data could not be marshaled.
   The program will exit with code `10`
 - IO problems: failure to load or save files, the program will exit with code `11`
 
@@ -620,7 +620,7 @@ of encoding should always be accepted.
 
 There are many test cases in the [`cmd/evm/testdata`](./testdata) directory.
 These fixtures are used to power the `t8n` tests in
-[`t8n_test.go`](./t8n_test.go). The best way to verify correctness of new `evm`
+[`t8n_test.go`](./t8n_test.go). The best way to verify the correctness of new `evm`
 implementations is to execute these and verify the output and error codes match
 the expected values.
 

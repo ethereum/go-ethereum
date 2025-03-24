@@ -296,21 +296,6 @@ func (mr *MockDatabaseMockRecorder) NewIterator(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewIterator", reflect.TypeOf((*MockDatabase)(nil).NewIterator), arg0, arg1)
 }
 
-// NewSnapshot mocks base method.
-func (m *MockDatabase) NewSnapshot() (ethdb.Snapshot, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewSnapshot")
-	ret0, _ := ret[0].(ethdb.Snapshot)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// NewSnapshot indicates an expected call of NewSnapshot.
-func (mr *MockDatabaseMockRecorder) NewSnapshot() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewSnapshot", reflect.TypeOf((*MockDatabase)(nil).NewSnapshot))
-}
-
 // Put mocks base method.
 func (m *MockDatabase) Put(arg0, arg1 []byte) error {
 	m.ctrl.T.Helper()
