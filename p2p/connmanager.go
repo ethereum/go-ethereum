@@ -30,6 +30,8 @@ import (
 const (
 	// Interval between peer drop events
 	peerDropInterval = 30 * time.Second
+	// Avoid dropping peers for some time after connection
+	doNotDropBefore = 2 * peerDropInterval
 	// How close to max should we initiate the drop timer. O should be fine,
 	// dropping when no more peers can be added. Larger numbers result in more
 	// aggressive drop behavior.
@@ -133,8 +135,10 @@ func (cm *connManager) dropRandomPeer() bool {
 	peers := cm.peersFunc()
 
 	// Only drop from dyndialed peers. Avoid dropping trusted peers.
+	// Give some time to peers before considering them for a drop.
 	selectDroppable := func(p *Peer) bool {
-		return p.rw.is(dynDialedConn) && !p.rw.is(trustedConn)
+		return p.rw.is(dynDialedConn) && !p.rw.is(trustedConn) &&
+			mclock.Now()-p.created >= mclock.AbsTime(doNotDropBefore)
 	}
 	droppable := filter(peers, selectDroppable)
 	if len(droppable) > 0 {
