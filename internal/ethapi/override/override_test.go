@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm/precompiles"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -37,7 +37,9 @@ func (precompileContract) Address() common.Address {
 
 func (p *precompileContract) RequiredGas(input []byte) uint64 { return 0 }
 
-func (p *precompileContract) Run(input []byte) ([]byte, error) { return nil, nil }
+func (p *precompileContract) Run(evm *vm.EVM, contract *vm.Contract, readonly bool) ([]byte, error) {
+	return nil, nil
+}
 
 func TestStateOverrideMovePrecompile(t *testing.T) {
 	db := state.NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
@@ -45,7 +47,7 @@ func TestStateOverrideMovePrecompile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create statedb: %v", err)
 	}
-	precompiles := map[common.Address]precompiles.PrecompiledContract{
+	precompiles := map[common.Address]vm.PrecompiledContract{
 		common.BytesToAddress([]byte{0x1}): &precompileContract{},
 		common.BytesToAddress([]byte{0x2}): &precompileContract{},
 	}

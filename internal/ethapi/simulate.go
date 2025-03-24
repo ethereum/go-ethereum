@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/core/vm/precompiles"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -316,7 +315,7 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, head
 	return nil
 }
 
-func (sim *simulator) activePrecompiles(base *types.Header) precompiles.PrecompiledContracts {
+func (sim *simulator) activePrecompiles(base *types.Header) vm.PrecompiledContracts {
 	var (
 		isMerge = (base.Difficulty.Sign() == 0)
 		rules   = sim.chainConfig.Rules(base.Number, isMerge, base.Time)
