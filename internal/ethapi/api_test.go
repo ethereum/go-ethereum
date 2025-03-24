@@ -414,7 +414,7 @@ func allBlobTxs(addr common.Address, config *params.ChainConfig) []txData {
 func newTestAccountManager(t *testing.T) (*accounts.Manager, accounts.Account) {
 	var (
 		dir        = t.TempDir()
-		am         = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: true})
+		am         = accounts.NewManager(nil)
 		b          = keystore.NewKeyStore(dir, 2, 1)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	)
@@ -583,9 +583,6 @@ func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscr
 	panic("implement me")
 }
 func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	panic("implement me")
-}
-func (b testBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	panic("implement me")
 }
 func (b testBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
@@ -2490,6 +2487,7 @@ func TestSimulateV1(t *testing.T) {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
 			if !reflect.DeepEqual(have, tc.want) {
+				t.Log(string(resBytes))
 				t.Errorf("test %s, result mismatch, have\n%v\n, want\n%v\n", tc.name, have, tc.want)
 			}
 		})

@@ -17,14 +17,13 @@
 package params
 
 import (
+	"math"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
-	"gotest.tools/assert"
-
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCheckCompatible(t *testing.T) {

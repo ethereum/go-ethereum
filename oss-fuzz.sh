@@ -161,6 +161,10 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+  FuzzCrossG1Mul fuzz_cross_g1_mul\
+  $repo/tests/fuzzers/bls12381/bls12381_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   FuzzG1Mul fuzz_g1_mul\
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
@@ -170,6 +174,10 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   FuzzG2Add fuzz_g2_add \
+  $repo/tests/fuzzers/bls12381/bls12381_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+  FuzzCrossG2Mul fuzz_cross_g2_mul\
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
@@ -205,6 +213,10 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+  FuzzCrossG2MultiExp fuzz_cross_g2_multiexp \
+  $repo/tests/fuzzers/bls12381/bls12381_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   FuzzCrossPairing fuzz_cross_pairing\
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
@@ -219,6 +231,10 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/secp256k1 \
   Fuzz fuzzSecp256k1\
   $repo/tests/fuzzers/secp256k1/secp_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/eth \
+  FuzzEthProtocolHandlers fuzz_eth_protocol_handlers \
+  $repo/eth/protocols/eth/handler_test.go
 
 
 #compile_fuzzer tests/fuzzers/vflux      FuzzClientPool fuzzClientPool

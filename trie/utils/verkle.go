@@ -156,10 +156,6 @@ func GetTreeKey(address []byte, treeIndex *uint256.Int, subIndex byte) []byte {
 func GetTreeKeyWithEvaluatedAddress(evaluated *verkle.Point, treeIndex *uint256.Int, subIndex byte) []byte {
 	var poly [5]fr.Element
 
-	poly[0].SetZero()
-	poly[1].SetZero()
-	poly[2].SetZero()
-
 	// little-endian, 32-byte aligned treeIndex
 	var index [32]byte
 	for i := 0; i < len(treeIndex); i++ {
@@ -204,10 +200,10 @@ func CodeChunkKey(address []byte, chunk *uint256.Int) []byte {
 	return GetTreeKey(address, treeIndex, subIndex)
 }
 
-func StorageIndex(bytes []byte) (*uint256.Int, byte) {
+func StorageIndex(storageKey []byte) (*uint256.Int, byte) {
 	// If the storage slot is in the header, we need to add the header offset.
 	var key uint256.Int
-	key.SetBytes(bytes)
+	key.SetBytes(storageKey)
 	if key.Cmp(codeStorageDelta) < 0 {
 		// This addition is always safe; it can't ever overflow since pos<codeStorageDelta.
 		key.Add(headerStorageOffset, &key)
@@ -216,6 +212,18 @@ func StorageIndex(bytes []byte) (*uint256.Int, byte) {
 		// and the sub-index is the LSB of the modified storage key.
 		return zero, byte(key[0] & 0xFF)
 	}
+	// If the storage slot is in the main storage, we need to add the main storage offset.
+
+	// The first MAIN_STORAGE_OFFSET group will see its
+	// first 64 slots unreachable. This is either a typo in the
+	// spec or intended to conserve the 256-u256
+	// aligment. If we decide to ever access these 64
+	// slots, uncomment this.
+	// // Get the new offset since we now know that we are above 64.
+	// pos.Sub(&pos, codeStorageDelta)
+	// suffix := byte(pos[0] & 0xFF)
+	suffix := storageKey[len(storageKey)-1]
+
 	// We first divide by VerkleNodeWidth to create room to avoid an overflow next.
 	key.Rsh(&key, uint(verkleNodeWidthLog2))
 
@@ -224,7 +232,7 @@ func StorageIndex(bytes []byte) (*uint256.Int, byte) {
 
 	// The sub-index is the LSB of the original storage key, since mainStorageOffset
 	// doesn't affect this byte, so we can avoid masks or shifts.
-	return &key, byte(key[0] & 0xFF)
+	return &key, suffix
 }
 
 // StorageSlotKey returns the verkle tree key of the storage slot for the
@@ -284,8 +292,6 @@ func evaluateAddressPoint(address []byte) *verkle.Point {
 		address = append(aligned[:32-len(address)], address...)
 	}
 	var poly [3]fr.Element
-
-	poly[0].SetZero()
 
 	// 32-byte address, interpreted as two little endian
 	// 16-byte numbers.

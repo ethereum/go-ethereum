@@ -382,7 +382,6 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 			txsHashes        = make([]common.Hash, len(res.BlockBodiesResponse))
 			uncleHashes      = make([]common.Hash, len(res.BlockBodiesResponse))
 			withdrawalHashes = make([]common.Hash, len(res.BlockBodiesResponse))
-			requestsHashes   = make([]common.Hash, len(res.BlockBodiesResponse))
 		)
 
 		hasher := trie.NewStackTrie(nil)
@@ -393,11 +392,8 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 			if body.Withdrawals != nil {
 				withdrawalHashes[i] = types.DeriveSha(types.Withdrawals(body.Withdrawals), hasher)
 			}
-			if body.Requests != nil {
-				requestsHashes[i] = types.DeriveSha(types.Requests(body.Requests), hasher)
-			}
 		}
-		return [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes, requestsHashes}
+		return [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes}
 	}
 
 	return peer.dispatchResponse(&Response{

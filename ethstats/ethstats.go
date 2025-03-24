@@ -250,10 +250,9 @@ func (s *Service) Stop() error {
 func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chain2HeadCh chan core.Chain2HeadEvent, txEventCh chan core.NewTxsEvent) {
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
-		quitCh  = make(chan struct{})
-		headCh  = make(chan *types.Block, 1)
-		txCh    = make(chan struct{}, 1)
-		head2Ch = make(chan core.Chain2HeadEvent, 100)
+		quitCh = make(chan struct{})
+		headCh = make(chan *types.Header, 1)
+		txCh   = make(chan struct{}, 1)
 	)
 
 	go func() {
@@ -265,7 +264,7 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chain2HeadCh chan c
 			// Notify of chain head events, but drop if too frequent
 			case head := <-chainHeadCh:
 				select {
-				case headCh <- head.Block:
+				case headCh <- head.Header:
 				default:
 				}
 
@@ -680,9 +679,9 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 }
 
 // reportBlock retrieves the current chain head and reports it to the stats server.
-func (s *Service) reportBlock(conn *connWrapper, block *types.Block) error {
+func (s *Service) reportBlock(conn *connWrapper, header *types.Header) error {
 	// Gather the block details from the header or block chain
-	details := s.assembleBlockStats(block)
+	details := s.assembleBlockStats(header)
 
 	// Short circuit if the block detail is not available.
 	if details == nil {
@@ -705,10 +704,9 @@ func (s *Service) reportBlock(conn *connWrapper, block *types.Block) error {
 
 // assembleBlockStats retrieves any required metadata to report a single block
 // and assembles the block stats. If block is nil, the current head is processed.
-func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
+func (s *Service) assembleBlockStats(header *types.Header) *blockStats {
 	// Gather the block infos from the local blockchain
 	var (
-		header *types.Header
 		td     *big.Int
 		txs    []txStats
 		uncles []*types.Header
@@ -718,22 +716,14 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	// check if backend is a full node
 	fullBackend, ok := s.backend.(fullNodeBackend)
 	if ok {
-		if block == nil {
-			head := fullBackend.CurrentBlock()
-			block, err = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(head.Number.Uint64()))
-			// Short circuit if no block is available. It might happen when
-			// the blockchain is reorging.
-			if err != nil {
-				log.Error("Failed to retrieve block by number", "err", err)
-				return nil
-			}
+		// Retrieve current chain head if no block is given.
+		if header == nil {
+			header = fullBackend.CurrentBlock()
 		}
-
+		block, _ := fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(header.Number.Uint64()))
 		if block == nil {
 			return nil
 		}
-
-		header = block.Header()
 		td = fullBackend.GetTd(context.Background(), header.Hash())
 
 		txs = make([]txStats, len(block.Transactions()))
@@ -744,16 +734,13 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		uncles = block.Uncles()
 	} else {
 		// Light nodes would need on-demand lookups for transactions/uncles, skip
-		if block != nil {
-			header = block.Header()
-		} else {
+		if header == nil {
 			header = s.backend.CurrentHeader()
 		}
 
 		td = s.backend.GetTd(context.Background(), header.Hash())
 		txs = []txStats{}
 	}
-
 	// Assemble and return the block stats
 	author, _ := s.engine.Author(header)
 
@@ -799,23 +786,10 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 	history := make([]*blockStats, len(indexes))
 
 	for i, number := range indexes {
-		fullBackend, ok := s.backend.(fullNodeBackend)
 		// Retrieve the next block if it's known to us
-		var block *types.Block
-		var err error
-		if ok {
-			block, err = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
-			if err != nil {
-				log.Error("Failed to retrieve block by number", "err", err)
-			}
-		} else {
-			if header, _ := s.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(number)); header != nil {
-				block = types.NewBlockWithHeader(header)
-			}
-		}
-		// If we do have the block, add to the history and continue
-		if block != nil {
-			history[len(history)-1-i] = s.assembleBlockStats(block)
+		header, _ := s.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(number))
+		if header != nil {
+			history[len(history)-1-i] = s.assembleBlockStats(header)
 			continue
 		}
 		// Ran out of blocks, cut the report short and send

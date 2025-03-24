@@ -19,11 +19,11 @@ package rawdb
 import (
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -437,4 +437,10 @@ func (f *MemoryFreezer) Reset() error {
 	f.tables = tables
 	f.items, f.tail = 0, 0
 	return nil
+}
+
+// AncientDatadir returns the path of the ancient store.
+// Since the memory freezer is ephemeral, an empty string is returned.
+func (f *MemoryFreezer) AncientDatadir() (string, error) {
+	return "", nil
 }
