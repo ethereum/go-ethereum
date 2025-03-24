@@ -149,6 +149,18 @@ var defaultCacheConfig = &CacheConfig{
 	SnapshotWait:   true,
 }
 
+func updateHeadL1msgGauge(block *types.Block) {
+	for _, tx := range block.Transactions() {
+		if msg := tx.AsL1MessageTx(); msg != nil {
+			// Queue index is guaranteed to fit into int64.
+			headL1MessageGauge.Update(int64(msg.QueueIndex))
+		} else {
+			// No more L1 messages in this block.
+			break
+		}
+	}
+}
+
 // BlockChain represents the canonical chain given a database with a genesis
 // block. The Blockchain manages chain imports, reverts, chain reorganisations.
 //
@@ -423,6 +435,9 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			triedb.SaveCachePeriodically(bc.cacheConfig.TrieCleanJournal, bc.cacheConfig.TrieCleanRejournal, bc.quit)
 		}()
 	}
+
+	updateHeadL1msgGauge(bc.CurrentBlock())
+
 	return bc, nil
 }
 
@@ -1255,15 +1270,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 
 	// Note the latest relayed L1 message queue index (if any)
-	for _, tx := range block.Transactions() {
-		if msg := tx.AsL1MessageTx(); msg != nil {
-			// Queue index is guaranteed to fit into int64.
-			headL1MessageGauge.Update(int64(msg.QueueIndex))
-		} else {
-			// No more L1 messages in this block.
-			break
-		}
-	}
+	updateHeadL1msgGauge(block)
 
 	parent := bc.GetHeaderByHash(block.ParentHash())
 	// block.Time is guaranteed to be larger than parent.Time,
