@@ -224,21 +224,21 @@ func TestHookRewardAfterUpgrade(t *testing.T) {
 	assert.Nil(t, err)
 	result := reward["rewards"].(map[common.Address]interface{})
 	assert.Equal(t, 2, len(result))
-	// two signing account, 3 txs, reward is split by 1:2 (total reward is 250...000)
+	// two signing account, both get fixed reward
 	for addr, x := range result {
 		if addr == acc1Addr {
 			r := x.(map[common.Address]*big.Int)
 			owner := state.GetCandidateOwner(parentState, addr)
-			a, _ := big.NewInt(0).SetString("299999999999999999998", 10)
+			a, _ := big.NewInt(0).SetString("450000000000000000000", 10)
 			assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
-			b, _ := big.NewInt(0).SetString("33333333333333333333", 10)
+			b, _ := big.NewInt(0).SetString("50000000000000000000", 10)
 			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
 		} else if addr == signer {
 			r := x.(map[common.Address]*big.Int)
 			owner := state.GetCandidateOwner(parentState, addr)
-			a, _ := big.NewInt(0).SetString("149999999999999999999", 10)
+			a, _ := big.NewInt(0).SetString("450000000000000000000", 10)
 			assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
-			b, _ := big.NewInt(0).SetString("16666666666666666666", 10)
+			b, _ := big.NewInt(0).SetString("50000000000000000000", 10)
 			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
 		} else {
 			assert.Fail(t, "wrong reward")
@@ -262,22 +262,22 @@ func TestHookRewardAfterUpgrade(t *testing.T) {
 	// only protector1 and 2 has signingtx.
 
 	resultProtector := reward["rewardsProtector"].(map[common.Address]interface{})
-	// 2 protector and split by 1:2
+	// 2 protector both get fixed reward
 	assert.Equal(t, 2, len(resultProtector))
 	for addr, x := range resultProtector {
 		if addr == protector1Addr {
 			r := x.(map[common.Address]*big.Int)
 			owner := state.GetCandidateOwner(parentState, addr)
-			a, _ := big.NewInt(0).SetString("119999999999999999999", 10)
+			a, _ := big.NewInt(0).SetString("360000000000000000000", 10)
 			assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
-			b, _ := big.NewInt(0).SetString("13333333333333333333", 10)
+			b, _ := big.NewInt(0).SetString("40000000000000000000", 10)
 			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
 		} else if addr == protector2Addr {
 			r := x.(map[common.Address]*big.Int)
 			owner := state.GetCandidateOwner(parentState, addr)
-			a, _ := big.NewInt(0).SetString("239999999999999999999", 10)
+			a, _ := big.NewInt(0).SetString("360000000000000000000", 10)
 			assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
-			b, _ := big.NewInt(0).SetString("26666666666666666666", 10)
+			b, _ := big.NewInt(0).SetString("40000000000000000000", 10)
 			assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
 		} else {
 			assert.Fail(t, "wrong reward")

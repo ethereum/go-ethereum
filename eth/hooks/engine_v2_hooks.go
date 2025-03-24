@@ -215,7 +215,7 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 				return nil, err
 			}
 			// Add reward for coin holders.
-			voterResults := make(map[common.Address]interface{})
+			rewardResults := make(map[common.Address]interface{})
 			for signer, calcReward := range rewardSigners {
 				rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
 				if err != nil {
@@ -227,13 +227,12 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 						stateBlock.AddBalance(holder, reward)
 					}
 				}
-				voterResults[signer] = rewards
+				rewardResults[signer] = rewards
 			}
-			rewardsMap["rewards"] = voterResults
+			rewardsMap["rewards"] = rewardResults
 		} else {
 			rewardsMap["signersProtector"] = signers[ProtectorNodeBeneficiary]
 			rewardsMap["signersObserver"] = signers[ObserverNodeBeneficiary]
-			epochRewardTotal := new(big.Int).SetUint64(currentConfig.MasternodeReward + currentConfig.ProtectorReward + currentConfig.ObserverReward)
 			type rewardWithType struct {
 				r   uint64
 				t   Beneficiary
@@ -245,25 +244,14 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 				{currentConfig.ObserverReward, ObserverNodeBeneficiary, "rewardsObserver"},
 			} {
 				originalReward := new(big.Int).Mul(new(big.Int).SetUint64(rwt.r), new(big.Int).SetUint64(params.Ether))
-				chainReward := new(big.Int)
-				if !chain.Config().IsTIPEpochHalving(header.Number) {
-					chainReward = util.RewardInflation(chain, originalReward, number, common.BlocksPerYear)
-				} else {
-					halvingSupply := big.NewInt(9000000000) // TODO use config.halvingSupply
-					_, epochNum, err := adaptor.EngineV2.IsEpochSwitch(header)
-					if err != nil {
-						return nil, err
-					}
-					epochSinceHalving := epochNum // TODO Minus config.epochHalvingOnset
-					chainReward = util.RewardHalving(originalReward, epochRewardTotal, halvingSupply, epochSinceHalving)
-				}
-				rewardSigners, err := CalculateRewardForSigner(chainReward, signers[rwt.t])
+				chainReward := util.RewardInflation(chain, originalReward, number, common.BlocksPerYear)
+				rewardSigners, err := CalculateRewardForSignerFixed(chainReward, signers[rwt.t])
 				if err != nil {
 					log.Error("[HookReward] Fail to calculate reward type 0 for masternode, 1 for protector, 2 for observer", "error", err, "type", rwt.t)
 					return nil, err
 				}
 				// Add reward for coin holders.
-				voterResults := make(map[common.Address]interface{})
+				rewardResults := make(map[common.Address]interface{})
 				for signer, calcReward := range rewardSigners {
 					rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
 					if err != nil {
@@ -275,9 +263,9 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 							stateBlock.AddBalance(holder, reward)
 						}
 					}
-					voterResults[signer] = rewards
+					rewardResults[signer] = rewards
 				}
-				rewardsMap[rwt.key] = voterResults
+				rewardsMap[rwt.key] = rewardResults
 			}
 		}
 		log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
@@ -356,7 +344,7 @@ func GetSigningTxCount(c *XDPoS.XDPoS, chain consensus.ChainReader, header *type
 						}
 						if len(protector) < currentConfig.MaxProtectorNodes {
 							protector = append(protector, node.Address)
-						} else {
+						} else if len(observer) < currentConfig.MaxObverserNodes {
 							observer = append(observer, node.Address)
 						}
 					}
@@ -457,29 +445,21 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 	return resultSigners, nil
 }
 
-// func TestRewardBeZero(t *testing.T) {
-// 	billion := big.NewInt(1000000000)
-// 	epochRewardTotal := big.NewInt(16000)
-// 	epochRewardTotal.Mul(epochRewardTotal, billion)
-// 	epochReward1 := big.NewInt(10000)
-// 	epochReward1.Mul(epochReward1, billion)
-// 	epochReward2 := big.NewInt(4000)
-// 	epochReward2.Mul(epochReward2, billion)
-// 	epochReward3 := big.NewInt(2000)
-// 	epochReward3.Mul(epochReward3, billion)
-// 	// 45 Billion - 39 Billion XDC (1 XDC = 10^9 wei)
-// 	halvingSupply := big.NewInt(6000000000)
-// 	halvingSupply.Mul(halvingSupply, billion)
-// 	sum := big.NewInt(0)
-// 	for i := uint64(0); i < 30000000; i++ {
-// 		r := new(big.Int).Add(RewardHalving(epochReward1, epochRewardTotal, halvingSupply, i), RewardHalving(epochReward2, epochRewardTotal, halvingSupply, i))
-// 		r.Add(r, RewardHalving(epochReward3, epochRewardTotal, halvingSupply, i))
-// 		if r.BitLen() == 0 {
-// 			t.Log("reward be 0 at i=", i) // reward be 0 at i= 11225088, wich is more than 200 years in the future
-// 			break
-// 		}
-// 		sum.Add(sum, r)
-// 	}
-// 	t.Log("sum", sum) // sum 5999999999982635022, which is less than total, and never reach totoal
-// 	assert.True(t, sum.Cmp(halvingSupply) < 0)
-// }
+// Calculate reward for signers with fixed reward.
+func CalculateRewardForSignerFixed(chainReward *big.Int, signers map[common.Address]*RewardLog) (map[common.Address]*big.Int, error) {
+	resultSigners := make(map[common.Address]*big.Int)
+	// Add reward for signers.
+	for signer, rLog := range signers {
+		// Add reward for signer.
+		calcReward := new(big.Int).SetBytes(chainReward.Bytes())
+		rLog.Reward = calcReward
+		resultSigners[signer] = calcReward
+	}
+
+	log.Info("Signers data", "percapitaReward", chainReward)
+	for addr, signer := range signers {
+		log.Debug("Signer reward", "signer", addr, "sign", signer.Sign, "reward", signer.Reward)
+	}
+
+	return resultSigners, nil
+}
