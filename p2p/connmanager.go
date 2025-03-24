@@ -131,7 +131,10 @@ func (cm *connManager) numPeers() (int, int, int) {
 // dropRandomPeer selects one of the peers randomly and drops it from the peer pool.
 func (cm *connManager) dropRandomPeer() bool {
 	peers := cm.peersFunc()
-	droppable := peers
+
+	// only drop from dialed peers
+	selectDroppable := func(p *Peer) bool { return !p.rw.is(inboundConn) }
+	droppable := filter(peers, selectDroppable)
 	if len(droppable) > 0 {
 		p := droppable[cm.rand.Intn(len(droppable))]
 		cm.log.Trace("dropping random peer", "id", p.ID(), "duration", common.PrettyDuration(mclock.Now()-p.created), "peercountbefore", len(peers))
