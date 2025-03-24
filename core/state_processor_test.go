@@ -28,6 +28,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -286,5 +287,5 @@ func GenerateBadBlock(t *testing.T, parent *types.Block, engine consensus.Engine
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts)
+	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie))
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -709,7 +710,7 @@ func createBlockFromHeader(bc *core.BlockChain, customHeader *types.Header, txs 
 		header.Coinbase = signerAddress
 		sealHeader(bc, &header, signerAddress, signerFunction)
 
-		block = types.NewBlock(&header, txs, nil, receipts)
+		block = types.NewBlock(&header, txs, nil, receipts, new(trie.Trie))
 	}
 
 	return block, nil

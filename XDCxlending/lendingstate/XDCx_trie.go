@@ -18,6 +18,7 @@ package lendingstate
 
 import (
 	"fmt"
+
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/trie"
 
@@ -142,8 +143,7 @@ func (t *XDCXTrie) GetKey(shaKey []byte) []byte {
 	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
 		return key
 	}
-	key, _ := t.trie.Db.Preimage(common.BytesToHash(shaKey))
-	return key
+	return t.trie.Db.Preimage(common.BytesToHash(shaKey))
 }
 
 // Commit writes all nodes and the secure hash pre-images to the trie's database.
