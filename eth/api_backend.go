@@ -42,6 +42,12 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// ErrorPrunedHistory is returned when the requested history is pruned.
+type ErrorPrunedHistory struct{}
+
+func (e *ErrorPrunedHistory) Error() string  { return "Pruned history unavailable" }
+func (e *ErrorPrunedHistory) ErrorCode() int { return 4444 }
+
 // EthAPIBackend implements ethapi.Backend and tracers.Backend for full nodes
 type EthAPIBackend struct {
 	extRPCEnabled       bool
@@ -154,7 +160,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		bn = b.eth.blockchain.HistoryPruningCutoff()
 	}
 	if bn < b.eth.blockchain.HistoryPruningCutoff() {
-		return nil, &prunedHistoryError{}
+		return nil, &ErrorPrunedHistory{}
 	}
 	return b.eth.blockchain.GetBlockByNumber(bn), nil
 }
@@ -165,7 +171,7 @@ func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 		return nil, nil
 	}
 	if *number < b.eth.blockchain.HistoryPruningCutoff() {
-		return nil, &prunedHistoryError{}
+		return nil, &ErrorPrunedHistory{}
 	}
 	return b.eth.blockchain.GetBlock(hash, *number), nil
 }
@@ -194,7 +200,7 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 			return nil, errors.New("hash is not currently canonical")
 		}
 		if header.Number.Uint64() < b.eth.blockchain.HistoryPruningCutoff() {
-			return nil, &prunedHistoryError{}
+			return nil, &ErrorPrunedHistory{}
 		}
 		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
 		if block == nil {
@@ -448,8 +454,3 @@ func (b *EthAPIBackend) StateAtBlock(ctx context.Context, block *types.Block, re
 func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	return b.eth.stateAtTransaction(ctx, block, txIndex, reexec)
 }
-
-type prunedHistoryError struct{}
-
-func (e *prunedHistoryError) Error() string  { return "Pruned history unavailable" }
-func (e *prunedHistoryError) ErrorCode() int { return 4444 }

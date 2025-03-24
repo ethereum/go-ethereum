@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -139,11 +140,6 @@ func (sys *FilterSystem) cachedGetBody(ctx context.Context, elem *logCacheElem, 
 	elem.body.Store(body)
 	return body, nil
 }
-
-type prunedHistoryError struct{}
-
-func (e *prunedHistoryError) Error() string  { return "Pruned history unavailable" }
-func (e *prunedHistoryError) ErrorCode() int { return 4444 }
 
 // Type determines the kind of filter and is used to put the filter in to
 // the correct bucket when added.
@@ -315,7 +311,7 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	}
 	// Queries beyond the pruning cutoff are not supported.
 	if uint64(from) < es.backend.HistoryPruningCutoff() {
-		return nil, &prunedHistoryError{}
+		return nil, &eth.ErrorPrunedHistory{}
 	}
 
 	// only interested in new mined logs
