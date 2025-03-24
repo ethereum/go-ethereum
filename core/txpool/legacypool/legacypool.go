@@ -19,6 +19,15 @@ package legacypool
 
 import (
 	"errors"
+	"maps"
+	"math"
+	"math/big"
+	"slices"
+	"sort"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -33,14 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
-	"maps"
-	"math"
-	"math/big"
-	"slices"
-	"sort"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 const (
