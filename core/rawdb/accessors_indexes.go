@@ -502,5 +502,5 @@ func DeleteBloomBitsDb(db ethdb.KeyValueRangeDeleter) error {
 	if err := deletePrefixRange(db, bloomBitsPrefix); err != nil {
 		return err
 	}
-	return deletePrefixRange(db, bloomBitsIndexPrefix)
+	return deletePrefixRange(db, bloomBitsMetaPrefix)
 }
