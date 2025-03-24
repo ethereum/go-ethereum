@@ -2403,6 +2403,63 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 	require.Equal(t, block2.Hash().Bytes(), []byte(results[2].Calls[1].ReturnValue), "returned blockhash for block2 does not match")
 }
 
+func TestSimulateV1TxSender(t *testing.T) {
+	var (
+		sender    = common.Address{0xaa, 0xaa}
+		recipient = common.Address{0xbb, 0xbb}
+		gspec     = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				sender: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+		ctx = context.Background()
+	)
+	backend := newTestBackend(t, 0, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+	stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("failed to get state and header: %v", err)
+	}
+
+	sim := &simulator{
+		b:              backend,
+		state:          stateDB,
+		base:           baseHeader,
+		chainConfig:    backend.ChainConfig(),
+		gp:             new(core.GasPool).AddGas(math.MaxUint64),
+		traceTransfers: false,
+		validate:       false,
+		fullTx:         true,
+	}
+
+	results, err := sim.execute(ctx, []simBlock{
+		{Calls: []TransactionArgs{
+			{From: &sender, To: &recipient, Value: (*hexutil.Big)(big.NewInt(1000))},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("simulation execution failed: %v", err)
+	}
+	require.Len(t, results, 1, "expected 1 simulated blocks")
+	require.Len(t, results[0].Block.Transactions(), 1, "expected 1 transaction in simulated block")
+	enc, err := json.Marshal(results)
+	if err != nil {
+		t.Fatalf("failed to marshal results: %v", err)
+	}
+	type resultType struct {
+		Transactions []struct {
+			From common.Address `json:"from"`
+		}
+	}
+	var summary []resultType
+	if err := json.Unmarshal(enc, &summary); err != nil {
+		t.Fatalf("failed to unmarshal results: %v", err)
+	}
+	require.Len(t, summary, 1, "expected 1 transaction in simulated block")
+	require.Len(t, summary[0].Transactions, 1, "expected 1 transaction in simulated block")
+	require.Equal(t, sender, summary[0].Transactions[0].From, "sender address mismatch")
+}
+
 func TestSignTransaction(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
