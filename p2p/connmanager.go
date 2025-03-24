@@ -132,8 +132,10 @@ func (cm *connManager) numPeers() (int, int, int) {
 func (cm *connManager) dropRandomPeer() bool {
 	peers := cm.peersFunc()
 
-	// only drop from dialed peers
-	selectDroppable := func(p *Peer) bool { return !p.rw.is(inboundConn) }
+	// Only drop from dyndialed peers. Avoid dropping trusted peers.
+	selectDroppable := func(p *Peer) bool {
+		return p.rw.is(dynDialedConn) && !p.rw.is(trustedConn)
+	}
 	droppable := filter(peers, selectDroppable)
 	if len(droppable) > 0 {
 		p := droppable[cm.rand.Intn(len(droppable))]
