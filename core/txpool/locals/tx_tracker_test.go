@@ -67,16 +67,24 @@ func newTestEnv(t *testing.T, n int, gasTip uint64, journal string) *testEnv {
 
 	db := rawdb.NewMemoryDatabase()
 	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+
+	ch := make(chan core.ChainHeadEvent, 1)
+	sub := chain.SubscribeChainHeadEvent(ch)
+	defer sub.Unsubscribe()
+
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
+	}
+	for ev := range ch {
+		if ev.Header.Number.Uint64() == blocks[len(blocks)-1].NumberU64() {
+			break
+		}
 	}
 	legacyPool := legacypool.New(legacypool.DefaultConfig, chain)
 	pool, err := txpool.New(gasTip, chain, []txpool.SubPool{legacyPool})
 	if err != nil {
 		t.Fatalf("Failed to create tx pool: %v", err)
 	}
-	time.Sleep(time.Second) // hack, make sure txpool initialization is done
-
 	return &testEnv{
 		chain:   chain,
 		pool:    pool,
@@ -107,6 +115,10 @@ func (env *testEnv) makeTx(nonce uint64, gasPrice *big.Int) *types.Transaction {
 }
 
 func (env *testEnv) commit() {
+	ch := make(chan core.ChainHeadEvent, 1)
+	sub := env.chain.SubscribeChainHeadEvent(ch)
+	defer sub.Unsubscribe()
+
 	head := env.chain.CurrentBlock()
 	block := env.chain.GetBlock(head.Hash(), head.Number.Uint64())
 	blocks, _ := core.GenerateChain(env.chain.Config(), block, ethash.NewFaker(), env.genDb, 1, func(i int, gen *core.BlockGen) {
@@ -117,6 +129,12 @@ func (env *testEnv) commit() {
 		gen.AddTx(tx)
 	})
 	env.chain.InsertChain(blocks)
+
+	for ev := range ch {
+		if ev.Header.Number.Uint64() == blocks[len(blocks)-1].NumberU64() {
+			break
+		}
+	}
 }
 
 func TestRejectInvalids(t *testing.T) {
@@ -127,7 +145,7 @@ func TestRejectInvalids(t *testing.T) {
 		gasTip uint64
 		tx     *types.Transaction
 		expErr error
-		op     func()
+		commit bool
 	}{
 		{
 			tx:     env.makeTx(5, nil), // stale
@@ -147,9 +165,7 @@ func TestRejectInvalids(t *testing.T) {
 			expErr: types.ErrInvalidSig,
 		},
 		{
-			op: func() {
-				env.commit()
-			},
+			commit: true,
 			tx:     env.makeTx(10, nil), // stale
 			expErr: core.ErrNonceTooLow,
 		},
@@ -162,8 +178,8 @@ func TestRejectInvalids(t *testing.T) {
 		if c.gasTip != 0 {
 			env.setGasTip(c.gasTip)
 		}
-		if c.op != nil {
-			c.op()
+		if c.commit {
+			env.commit()
 		}
 		gotErr := env.tracker.Track(c.tx)
 		if c.expErr == nil && gotErr != nil {
