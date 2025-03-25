@@ -1791,6 +1791,9 @@ func (f *Firehose) isChainOneOf(chainIDs ...*big.Int) bool {
 }
 
 func isChainIDOneOf(actualChainID *big.Int, chainIDs ...*big.Int) bool {
+	if actualChainID == nil {
+		return false
+	}
 	for _, chainID := range chainIDs {
 		if actualChainID.Cmp(chainID) == 0 {
 			return true
