@@ -290,21 +290,21 @@ func (s *Sync) schedule(req *request) {
 
 // children retrieves all the missing children of a state trie entry for future
 // retrieval scheduling.
-func (s *Sync) children(req *request, object Node) ([]*request, error) {
+func (s *Sync) children(req *request, object node) ([]*request, error) {
 	// Gather all the children of the Node, irrelevant whether known or not
 	type child struct {
-		node  Node
+		node  node
 		depth int
 	}
 	var children []child
 
 	switch node := (object).(type) {
-	case *ShortNode:
+	case *shortNode:
 		children = []child{{
 			node:  node.Val,
 			depth: req.depth + len(node.Key),
 		}}
-	case *FullNode:
+	case *fullNode:
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
 				children = append(children, child{
@@ -321,14 +321,14 @@ func (s *Sync) children(req *request, object Node) ([]*request, error) {
 	for _, child := range children {
 		// Notify any external watcher of a new key/value Node
 		if req.callback != nil {
-			if node, ok := (child.node).(ValueNode); ok {
+			if node, ok := (child.node).(valueNode); ok {
 				if err := req.callback(node, req.hash); err != nil {
 					return nil, err
 				}
 			}
 		}
 		// If the child references another Node, resolve or schedule
-		if node, ok := (child.node).(HashNode); ok {
+		if node, ok := (child.node).(hashNode); ok {
 			// Try to resolve the Node from the local database
 			hash := common.BytesToHash(node)
 			if s.membatch.hasNode(hash) {

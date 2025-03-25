@@ -108,7 +108,7 @@ type NodeIterator interface {
 // trie, which can be resumed at a later invocation.
 type nodeIteratorState struct {
 	hash    common.Hash // Hash of the Node being iterated (nil if not standalone)
-	node    Node        // Trie Node being iterated
+	node    node        // Trie Node being iterated
 	parent  common.Hash // Hash of the first full ancestor Node (nil if current is the root)
 	index   int         // Child to be processed next
 	pathlen int         // Length of the path to this Node
@@ -163,7 +163,7 @@ func (it *nodeIterator) Leaf() bool {
 
 func (it *nodeIterator) LeafKey() []byte {
 	if len(it.stack) > 0 {
-		if _, ok := it.stack[len(it.stack)-1].node.(ValueNode); ok {
+		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
 			return hexToKeybytes(it.path)
 		}
 	}
@@ -172,7 +172,7 @@ func (it *nodeIterator) LeafKey() []byte {
 
 func (it *nodeIterator) LeafBlob() []byte {
 	if len(it.stack) > 0 {
-		if node, ok := it.stack[len(it.stack)-1].node.(ValueNode); ok {
+		if node, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
 			return []byte(node)
 		}
 	}
@@ -181,7 +181,7 @@ func (it *nodeIterator) LeafBlob() []byte {
 
 func (it *nodeIterator) LeafProof() [][]byte {
 	if len(it.stack) > 0 {
-		if _, ok := it.stack[len(it.stack)-1].node.(ValueNode); ok {
+		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
 			hasher := newHasher(false)
 			defer returnHasherToPool(hasher)
 			proofs := make([][]byte, 0, len(it.stack))
@@ -189,7 +189,7 @@ func (it *nodeIterator) LeafProof() [][]byte {
 			for i, item := range it.stack[:len(it.stack)-1] {
 				// Gather nodes that end up as hash nodes (or the root)
 				node, hashed := hasher.proofHash(item.node)
-				if _, ok := hashed.(HashNode); ok || i == 0 {
+				if _, ok := hashed.(hashNode); ok || i == 0 {
 					enc, _ := rlp.EncodeToBytes(node)
 					proofs = append(proofs, enc)
 				}
@@ -293,7 +293,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 }
 
 func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
-	if hash, ok := st.node.(HashNode); ok {
+	if hash, ok := st.node.(hashNode); ok {
 		resolved, err := tr.resolveHash(hash, path)
 		if err != nil {
 			return err
@@ -306,12 +306,12 @@ func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
 
 func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor common.Hash) (*nodeIteratorState, []byte, bool) {
 	switch node := parent.node.(type) {
-	case *FullNode:
+	case *fullNode:
 		// Full Node, move to the first non-nil child.
 		for i := parent.index + 1; i < len(node.Children); i++ {
 			child := node.Children[i]
 			if child != nil {
-				hash, _ := child.Cache()
+				hash, _ := child.cache()
 				state := &nodeIteratorState{
 					hash:    common.BytesToHash(hash),
 					node:    child,
@@ -324,10 +324,10 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor common.Has
 				return state, path, true
 			}
 		}
-	case *ShortNode:
+	case *shortNode:
 		// Short Node, return the pointer singleton child
 		if parent.index < 0 {
-			hash, _ := node.Val.Cache()
+			hash, _ := node.Val.cache()
 			state := &nodeIteratorState{
 				hash:    common.BytesToHash(hash),
 				node:    node.Val,

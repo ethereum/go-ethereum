@@ -35,7 +35,7 @@ const leafChanSize = 200
 type leaf struct {
 	size   int         // size of the rlp data (estimate)
 	hash   common.Hash // hash of rlp data
-	node   Node        // the Node to commit
+	node   node        // the Node to commit
 	vnodes bool        // set to true if the Node (possibly) contains a ValueNode
 }
 
@@ -75,13 +75,13 @@ func returnCommitterToPool(h *committer) {
 }
 
 // commitNeeded returns 'false' if the given Node is already in sync with Db
-func (c *committer) commitNeeded(n Node) bool {
-	hash, dirty := n.Cache()
+func (c *committer) commitNeeded(n node) bool {
+	hash, dirty := n.cache()
 	return hash == nil || dirty
 }
 
 // commit collapses a Node down into a hash Node and inserts it into the database
-func (c *committer) Commit(n Node, db *Database) (HashNode, error) {
+func (c *committer) Commit(n node, db *Database) (hashNode, error) {
 	if db == nil {
 		return nil, errors.New("no Db provided")
 	}
@@ -89,22 +89,22 @@ func (c *committer) Commit(n Node, db *Database) (HashNode, error) {
 	if err != nil {
 		return nil, err
 	}
-	return h.(HashNode), nil
+	return h.(hashNode), nil
 }
 
 // commit collapses a Node down into a hash Node and inserts it into the database
-func (c *committer) commit(n Node, db *Database, force bool) (Node, error) {
+func (c *committer) commit(n node, db *Database, force bool) (node, error) {
 	// if this path is clean, use available cached data
-	hash, dirty := n.Cache()
+	hash, dirty := n.cache()
 	if hash != nil && !dirty {
 		return hash, nil
 	}
 	// Commit children, then parent, and remove remove the dirty flag.
 	switch cn := n.(type) {
-	case *ShortNode:
+	case *shortNode:
 		// Commit child
 		collapsed := cn.copy()
-		if _, ok := cn.Val.(ValueNode); !ok {
+		if _, ok := cn.Val.(valueNode); !ok {
 			if childV, err := c.commit(cn.Val, db, false); err != nil {
 				return nil, err
 			} else {
@@ -114,12 +114,12 @@ func (c *committer) commit(n Node, db *Database, force bool) (Node, error) {
 		// The key needs to be copied, since we're delivering it to database
 		collapsed.Key = hexToCompact(cn.Key)
 		hashedNode := c.store(collapsed, db, force, true)
-		if hn, ok := hashedNode.(HashNode); ok {
+		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
 		} else {
 			return collapsed, nil
 		}
-	case *FullNode:
+	case *fullNode:
 		hashedKids, hasVnodes, err := c.commitChildren(cn, db, force)
 		if err != nil {
 			return nil, err
@@ -128,23 +128,23 @@ func (c *committer) commit(n Node, db *Database, force bool) (Node, error) {
 		collapsed.Children = hashedKids
 
 		hashedNode := c.store(collapsed, db, force, hasVnodes)
-		if hn, ok := hashedNode.(HashNode); ok {
+		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
 		} else {
 			return collapsed, nil
 		}
-	case ValueNode:
+	case valueNode:
 		return c.store(cn, db, force, false), nil
 	// hashnodes aren't stored
-	case HashNode:
+	case hashNode:
 		return cn, nil
 	}
 	return hash, nil
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(n *FullNode, db *Database, force bool) ([17]Node, bool, error) {
-	var children [17]Node
+func (c *committer) commitChildren(n *fullNode, db *Database, force bool) ([17]node, bool, error) {
+	var children [17]node
 	var hasValueNodeChildren = false
 	for i, child := range n.Children {
 		if child == nil {
@@ -155,7 +155,7 @@ func (c *committer) commitChildren(n *FullNode, db *Database, force bool) ([17]N
 			return children, false, err
 		}
 		children[i] = hnode
-		if _, ok := hnode.(ValueNode); ok {
+		if _, ok := hnode.(valueNode); ok {
 			hasValueNodeChildren = true
 		}
 	}
@@ -165,14 +165,14 @@ func (c *committer) commitChildren(n *FullNode, db *Database, force bool) ([17]N
 // store hashes the Node n and if we have a storage layer specified, it writes
 // the key/value pair to it and tracks any Node->child references as well as any
 // Node->external trie references.
-func (c *committer) store(n Node, db *Database, force bool, hasVnodeChildren bool) Node {
+func (c *committer) store(n node, db *Database, force bool, hasVnodeChildren bool) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var (
-		hash, _ = n.Cache()
+		hash, _ = n.cache()
 		size    int
 	)
 	if hash == nil {
-		if vn, ok := n.(ValueNode); ok {
+		if vn, ok := n.(valueNode); ok {
 			c.tmp.Reset()
 			if err := rlp.Encode(&c.tmp, vn); err != nil {
 				panic("encode error: " + err.Error())
@@ -226,13 +226,13 @@ func (c *committer) commitLoop(db *Database) {
 		db.Lock.Unlock()
 		if c.onleaf != nil && hasVnodes {
 			switch n := n.(type) {
-			case *ShortNode:
-				if child, ok := n.Val.(ValueNode); ok {
+			case *shortNode:
+				if child, ok := n.Val.(valueNode); ok {
 					c.onleaf(child, hash)
 				}
-			case *FullNode:
+			case *fullNode:
 				for i := 0; i < 16; i++ {
-					if child, ok := n.Children[i].(ValueNode); ok {
+					if child, ok := n.Children[i].(valueNode); ok {
 						c.onleaf(child, hash)
 					}
 				}
@@ -241,8 +241,8 @@ func (c *committer) commitLoop(db *Database) {
 	}
 }
 
-func (c *committer) makeHashNode(data []byte) HashNode {
-	n := make(HashNode, c.sha.Size())
+func (c *committer) makeHashNode(data []byte) hashNode {
+	n := make(hashNode, c.sha.Size())
 	c.sha.Reset()
 	c.sha.Write(data)
 	c.sha.Read(n)
@@ -253,12 +253,12 @@ func (c *committer) makeHashNode(data []byte) HashNode {
 // rlp-encoding it (zero allocs). This method has been experimentally tried, and with a trie
 // with 1000 leafs, the only errors above 1% are on small shortnodes, where this
 // method overestimates by 2 or 3 bytes (e.g. 37 instead of 35)
-func estimateSize(n Node) int {
+func estimateSize(n node) int {
 	switch n := n.(type) {
-	case *ShortNode:
+	case *shortNode:
 		// A short Node contains a compacted key, and a value.
 		return 3 + len(n.Key) + estimateSize(n.Val)
-	case *FullNode:
+	case *fullNode:
 		// A full Node contains up to 16 hashes (some nils), and a key
 		s := 3
 		for i := 0; i < 16; i++ {
@@ -269,9 +269,9 @@ func estimateSize(n Node) int {
 			}
 		}
 		return s
-	case ValueNode:
+	case valueNode:
 		return 1 + len(n)
-	case HashNode:
+	case hashNode:
 		return 1 + len(n)
 	default:
 		panic(fmt.Sprintf("Node type %T", n))
