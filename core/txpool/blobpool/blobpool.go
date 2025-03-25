@@ -106,23 +106,30 @@ type blobTxMeta struct {
 	evictionExecTip      *uint256.Int // Worst gas tip across all previous nonces
 	evictionExecFeeJumps float64      // Worst base fee (converted to fee jumps) across all previous nonces
 	evictionBlobFeeJumps float64      // Worse blob fee (converted to fee jumps) across all previous nonces
+
+	proofVersion uint64 // Version of the proof to use for this transaction
 }
 
 // newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
 // and assembles a helper struct to track in memory.
 func newBlobTxMeta(id uint64, size uint32, tx *types.Transaction) *blobTxMeta {
+	proofVersion := uint64(0)
+	if len(tx.BlobTxSidecar().Blobs) != len(tx.BlobTxSidecar().Proofs) {
+		proofVersion = 1 // cell proofs
+	}
 	meta := &blobTxMeta{
-		hash:       tx.Hash(),
-		vhashes:    tx.BlobHashes(),
-		id:         id,
-		size:       size,
-		nonce:      tx.Nonce(),
-		costCap:    uint256.MustFromBig(tx.Cost()),
-		execTipCap: uint256.MustFromBig(tx.GasTipCap()),
-		execFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
-		blobFeeCap: uint256.MustFromBig(tx.BlobGasFeeCap()),
-		execGas:    tx.Gas(),
-		blobGas:    tx.BlobGas(),
+		hash:         tx.Hash(),
+		vhashes:      tx.BlobHashes(),
+		id:           id,
+		size:         size,
+		nonce:        tx.Nonce(),
+		costCap:      uint256.MustFromBig(tx.Cost()),
+		execTipCap:   uint256.MustFromBig(tx.GasTipCap()),
+		execFeeCap:   uint256.MustFromBig(tx.GasFeeCap()),
+		blobFeeCap:   uint256.MustFromBig(tx.BlobGasFeeCap()),
+		execGas:      tx.Gas(),
+		blobGas:      tx.BlobGas(),
+		proofVersion: proofVersion,
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
@@ -1639,6 +1646,11 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 					break // blobfee too low, cannot be included, discard rest of txs from the account
 				}
 			}
+
+			if filter.OnlyBlobTxWithCellProofs && tx.proofVersion == 0 {
+				continue // not a blob tx with cell proofs, skip
+			}
+
 			// Transaction was accepted according to the filter, append to the pending list
 			lazies = append(lazies, &txpool.LazyTransaction{
 				Pool:      p,
