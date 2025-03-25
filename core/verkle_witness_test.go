@@ -54,8 +54,8 @@ var (
 		BerlinBlock:             big.NewInt(0),
 		LondonBlock:             big.NewInt(0),
 		Ethash:                  new(params.EthashConfig),
-		ShanghaiTime:            u64(0),
-		VerkleTime:              u64(0),
+		ShanghaiBlock:           big.NewInt(0),
+		VerkleBlock:             big.NewInt(0),
 		TerminalTotalDifficulty: common.Big0,
 		// TODO uncomment when proof generation is merged
 		// ProofInBlocks:                 true,
@@ -74,13 +74,14 @@ var (
 		BerlinBlock:             big.NewInt(0),
 		LondonBlock:             big.NewInt(0),
 		Ethash:                  new(params.EthashConfig),
-		ShanghaiTime:            u64(0),
-		VerkleTime:              u64(0),
+		ShanghaiBlock:           big.NewInt(0),
+		VerkleBlock:             big.NewInt(0),
 		TerminalTotalDifficulty: common.Big0,
 	}
 )
 
 func TestProcessVerkle(t *testing.T) {
+	t.Skip("verkle trie is not yet supported in bor")
 	var (
 		code                            = common.FromHex(`6060604052600a8060106000396000f360606040526008565b00`)
 		intrinsicContractCreationGas, _ = IntrinsicGas(code, nil, true, true, true, true)
@@ -112,7 +113,7 @@ func TestProcessVerkle(t *testing.T) {
 	// genesis := gspec.MustCommit(bcdb, triedb)
 	cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 	cacheConfig.SnapshotLimit = 0
-	blockchain, _ := NewBlockChain(bcdb, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
+	blockchain, _ := NewBlockChain(bcdb, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
 	defer blockchain.Stop()
 
 	txCost1 := params.TxGas

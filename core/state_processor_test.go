@@ -60,8 +60,8 @@ func TestStateProcessorErrors(t *testing.T) {
 			LondonBlock:             big.NewInt(0),
 			Ethash:                  new(params.EthashConfig),
 			TerminalTotalDifficulty: big.NewInt(0),
-			ShanghaiTime:            new(uint64),
-			CancunTime:              new(uint64),
+			ShanghaiBlock:           big.NewInt(0),
+			CancunBlock:             big.NewInt(0),
 			Bor:                     &params.BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 		}
 		signer  = types.LatestSigner(config)

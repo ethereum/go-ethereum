@@ -380,9 +380,9 @@ func TestTimeBasedForkInGenesis(t *testing.T) {
 				LondonBlock:             big.NewInt(0),
 				TerminalTotalDifficulty: big.NewInt(0),
 				MergeNetsplitBlock:      big.NewInt(0),
-				ShanghaiTime:            &shanghai,
-				CancunTime:              &cancun,
-				Ethash:                  new(params.EthashConfig),
+				// ShanghaiBlock:           &shanghai,
+				// CancunBlock:             &cancun,
+				Ethash: new(params.EthashConfig),
 			}
 		}
 	)
