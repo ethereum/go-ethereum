@@ -80,7 +80,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	context = NewEVMBlockContext(header, p.chain, nil)
 
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
-	// TODO(manav): Find out why this is needed
 	var tracingStateDB = vm.StateDB(statedb)
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)
