@@ -49,6 +49,7 @@ type connManager struct {
 	connmanConfig
 	srv       *p2p.Server
 	peersFunc getPeersFunc
+	syncFunc  getSyncFunc
 
 	// the peerDrop timer introduces churn if we are close to limit capacity
 	peerDropTimer *mclock.Alarm
@@ -61,6 +62,9 @@ type connManager struct {
 
 // callback type to get the list of connected peers.
 type getPeersFunc func() []*p2p.Peer
+
+// callback type to get sync status.
+type getSyncFunc func() bool
 
 type connmanConfig struct {
 	maxDialPeers int // maximum number of dialed peers
@@ -97,10 +101,11 @@ func newConnManager(config *connmanConfig) *connManager {
 	return cm
 }
 
-func (cm *connManager) Start(srv *p2p.Server) {
+func (cm *connManager) Start(srv *p2p.Server, syncFunc getSyncFunc) {
 	cm.wg.Add(1)
 	cm.srv = srv
 	cm.peersFunc = srv.Peers
+	cm.syncFunc = syncFunc
 	cm.sub = srv.SubscribeEvents(cm.peerEventCh)
 	go cm.loop()
 }
