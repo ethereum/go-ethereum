@@ -68,22 +68,16 @@ func newTestEnv(t *testing.T, n int, gasTip uint64, journal string) *testEnv {
 	db := rawdb.NewMemoryDatabase()
 	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
 
-	ch := make(chan core.ChainHeadEvent, 1)
-	sub := chain.SubscribeChainHeadEvent(ch)
-	defer sub.Unsubscribe()
-
-	if n, err := chain.InsertChain(blocks); err != nil {
-		t.Fatalf("failed to process block %d: %v", n, err)
-	}
-	for ev := range ch {
-		if ev.Header.Number.Uint64() == blocks[len(blocks)-1].NumberU64() {
-			break
-		}
-	}
 	legacyPool := legacypool.New(legacypool.DefaultConfig, chain)
 	pool, err := txpool.New(gasTip, chain, []txpool.SubPool{legacyPool})
 	if err != nil {
 		t.Fatalf("Failed to create tx pool: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("Failed to process block %d: %v", n, err)
+	}
+	if err := pool.Sync(); err != nil {
+		t.Fatalf("Failed to sync the txpool, %v", err)
 	}
 	return &testEnv{
 		chain:   chain,
@@ -115,10 +109,6 @@ func (env *testEnv) makeTx(nonce uint64, gasPrice *big.Int) *types.Transaction {
 }
 
 func (env *testEnv) commit() {
-	ch := make(chan core.ChainHeadEvent, 1)
-	sub := env.chain.SubscribeChainHeadEvent(ch)
-	defer sub.Unsubscribe()
-
 	head := env.chain.CurrentBlock()
 	block := env.chain.GetBlock(head.Hash(), head.Number.Uint64())
 	blocks, _ := core.GenerateChain(env.chain.Config(), block, ethash.NewFaker(), env.genDb, 1, func(i int, gen *core.BlockGen) {
@@ -129,11 +119,8 @@ func (env *testEnv) commit() {
 		gen.AddTx(tx)
 	})
 	env.chain.InsertChain(blocks)
-
-	for ev := range ch {
-		if ev.Header.Number.Uint64() == blocks[len(blocks)-1].NumberU64() {
-			break
-		}
+	if err := env.pool.Sync(); err != nil {
+		panic(err)
 	}
 }
 
@@ -174,7 +161,7 @@ func TestRejectInvalids(t *testing.T) {
 			expErr: nil,
 		},
 	}
-	for _, c := range cases {
+	for i, c := range cases {
 		if c.gasTip != 0 {
 			env.setGasTip(c.gasTip)
 		}
@@ -183,10 +170,10 @@ func TestRejectInvalids(t *testing.T) {
 		}
 		gotErr := env.tracker.Track(c.tx)
 		if c.expErr == nil && gotErr != nil {
-			t.Fatalf("Unexpected error: %v", gotErr)
+			t.Fatalf("%d, unexpected error: %v", i, gotErr)
 		}
 		if c.expErr != nil && !errors.Is(gotErr, c.expErr) {
-			t.Fatalf("Unexpected error, want: %v, got: %v", c.expErr, gotErr)
+			t.Fatalf("%d, unexpected error, want: %v, got: %v", i, c.expErr, gotErr)
 		}
 	}
 }
