@@ -300,11 +300,17 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		metadata = true
 	}
 
-	// TODO(manav): Use `p.chain` instead of `p.bc`
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	context := NewEVMBlockContext(header, p.bc.hc, nil)
-	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 
+	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
+	var tracingStateDB = vm.StateDB(statedb)
+	if hooks := cfg.Tracer; hooks != nil {
+		tracingStateDB = state.NewHookedState(statedb, hooks)
+	}
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		ProcessBeaconBlockRoot(*beaconRoot, vmenv, tracingStateDB)
+	}
 	if p.config.IsPrague(block.Number()) {
 		ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
@@ -412,7 +418,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		requests = append(requests, consolidationRequests)
 	}
 
-	// TODO(manav): Use `p.chain` instead of `p.bc` param (check consensus interface)
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Body())
 
