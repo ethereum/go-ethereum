@@ -38,11 +38,11 @@ import (
 func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
 	// Collect all nodes on the path to key.
 	key = keybytesToHex(key)
-	var nodes []Node
+	var nodes []node
 	tn := t.root
 	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
-		case *ShortNode:
+		case *shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				// The trie doesn't contain the key.
 				tn = nil
@@ -51,11 +51,11 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 				key = key[len(n.Key):]
 			}
 			nodes = append(nodes, n)
-		case *FullNode:
+		case *fullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
 			nodes = append(nodes, n)
-		case HashNode:
+		case hashNode:
 			var err error
 			tn, err = t.resolveHash(n, nil)
 			if err != nil {
@@ -74,9 +74,9 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 			fromLevel--
 			continue
 		}
-		var hn Node
+		var hn node
 		n, hn = hasher.proofHash(n)
-		if hash, ok := hn.(HashNode); ok || i == 0 {
+		if hash, ok := hn.(hashNode); ok || i == 0 {
 			// If the Node's database encoding is a hash (or is the
 			// root Node), it becomes a proof element.
 			enc, _ := rlp.EncodeToBytes(n)
@@ -120,10 +120,10 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader)
 		case nil:
 			// The trie doesn't contain the key.
 			return nil, nil
-		case HashNode:
+		case hashNode:
 			key = keyrest
 			copy(wantHash[:], cld)
-		case ValueNode:
+		case valueNode:
 			return cld, nil
 		}
 	}
@@ -133,9 +133,9 @@ func VerifyProof(rootHash common.Hash, key []byte, proofDb ethdb.KeyValueReader)
 // The main purpose of this function is recovering a Node
 // path from the merkle proof stream. All necessary nodes
 // will be resolved and leave the remaining as hashnode.
-func proofToPath(rootHash common.Hash, root Node, key []byte, proofDb ethdb.KeyValueReader, allowNonExistent bool) (Node, []byte, error) {
+func proofToPath(rootHash common.Hash, root node, key []byte, proofDb ethdb.KeyValueReader, allowNonExistent bool) (node, []byte, error) {
 	// resolveNode retrieves and resolves trie Node from merkle proof stream
-	resolveNode := func(hash common.Hash) (Node, error) {
+	resolveNode := func(hash common.Hash) (node, error) {
 		buf, _ := proofDb.Get(hash[:])
 		if buf == nil {
 			return nil, fmt.Errorf("proof Node (hash %064x) missing", hash)
@@ -157,7 +157,7 @@ func proofToPath(rootHash common.Hash, root Node, key []byte, proofDb ethdb.KeyV
 	}
 	var (
 		err           error
-		child, parent Node
+		child, parent node
 		keyrest       []byte
 		valnode       []byte
 	)
@@ -174,25 +174,25 @@ func proofToPath(rootHash common.Hash, root Node, key []byte, proofDb ethdb.KeyV
 				return root, nil, nil
 			}
 			return nil, nil, errors.New("the Node is not contained in trie")
-		case *ShortNode:
+		case *shortNode:
 			key, parent = keyrest, child // Already resolved
 			continue
-		case *FullNode:
+		case *fullNode:
 			key, parent = keyrest, child // Already resolved
 			continue
-		case HashNode:
+		case hashNode:
 			child, err = resolveNode(common.BytesToHash(cld))
 			if err != nil {
 				return nil, nil, err
 			}
-		case ValueNode:
+		case valueNode:
 			valnode = cld
 		}
 		// Link the parent and child.
 		switch pnode := parent.(type) {
-		case *ShortNode:
+		case *shortNode:
 			pnode.Val = child
-		case *FullNode:
+		case *fullNode:
 			pnode.Children[key[0]] = child
 		default:
 			panic(fmt.Sprintf("%T: invalid Node: %v", pnode, pnode))
@@ -212,7 +212,7 @@ func proofToPath(rootHash common.Hash, root Node, key []byte, proofDb ethdb.KeyV
 // since the Node content might be modified. Besides it can happen that some
 // fullnodes only have one child which is disallowed. But if the proof is valid,
 // the missing children will be filled, otherwise it will be thrown anyway.
-func unsetInternal(n Node, left []byte, right []byte) error {
+func unsetInternal(n node, left []byte, right []byte) error {
 	left, right = keybytesToHex(left), keybytesToHex(right)
 
 	// todo(rjl493456442) different length edge keys should be supported
@@ -226,12 +226,12 @@ func unsetInternal(n Node, left []byte, right []byte) error {
 	//   existent key or not.
 	var (
 		pos    = 0
-		parent Node
+		parent node
 	)
 findFork:
 	for {
 		switch rn := (n).(type) {
-		case *ShortNode:
+		case *shortNode:
 			// The right proof must point to an existent key.
 			if len(right)-pos < len(rn.Key) || !bytes.Equal(rn.Key, right[pos:pos+len(rn.Key)]) {
 				return errors.New("invalid edge path")
@@ -245,7 +245,7 @@ findFork:
 			}
 			parent = n
 			n, pos = rn.Val, pos+len(rn.Key)
-		case *FullNode:
+		case *fullNode:
 			leftnode, rightnode := rn.Children[left[pos]], rn.Children[right[pos]]
 			// The right proof must point to an existent key.
 			if rightnode == nil {
@@ -262,13 +262,13 @@ findFork:
 		}
 	}
 	switch rn := n.(type) {
-	case *ShortNode:
-		if _, ok := rn.Val.(ValueNode); ok {
-			parent.(*FullNode).Children[right[pos-1]] = nil
+	case *shortNode:
+		if _, ok := rn.Val.(valueNode); ok {
+			parent.(*fullNode).Children[right[pos-1]] = nil
 			return nil
 		}
 		return unset(rn, rn.Val, right[pos:], len(rn.Key), true)
-	case *FullNode:
+	case *fullNode:
 		for i := left[pos] + 1; i < right[pos]; i++ {
 			rn.Children[i] = nil
 		}
@@ -298,9 +298,9 @@ findFork:
 //
 // If we try to unset all left most references, then the given path should
 // be existent.
-func unset(parent Node, child Node, key []byte, pos int, removeLeft bool) error {
+func unset(parent node, child node, key []byte, pos int, removeLeft bool) error {
 	switch cld := child.(type) {
-	case *FullNode:
+	case *fullNode:
 		if removeLeft {
 			for i := 0; i < int(key[pos]); i++ {
 				cld.Children[i] = nil
@@ -313,7 +313,7 @@ func unset(parent Node, child Node, key []byte, pos int, removeLeft bool) error 
 			cld.flags = NodeFlag{dirty: true}
 		}
 		return unset(cld, cld.Children[key[pos]], key, pos+1, removeLeft)
-	case *ShortNode:
+	case *shortNode:
 		if len(key[pos:]) < len(cld.Key) || !bytes.Equal(cld.Key, key[pos:pos+len(cld.Key)]) {
 			// Find the fork point, it's an non-existent branch.
 			if removeLeft {
@@ -323,7 +323,7 @@ func unset(parent Node, child Node, key []byte, pos int, removeLeft bool) error 
 				// The key of fork shortnode is greater than the
 				// path(it belongs to the range), unset the entrie
 				// branch. The parent must be a fullnode.
-				fn := parent.(*FullNode)
+				fn := parent.(*fullNode)
 				fn.Children[key[pos-1]] = nil
 			} else {
 				// The key of fork shortnode is less than the
@@ -332,8 +332,8 @@ func unset(parent Node, child Node, key []byte, pos int, removeLeft bool) error 
 			}
 			return nil
 		}
-		if _, ok := cld.Val.(ValueNode); ok {
-			fn := parent.(*FullNode)
+		if _, ok := cld.Val.(valueNode); ok {
+			fn := parent.(*fullNode)
 			fn.Children[key[pos-1]] = nil
 			return nil
 		}
@@ -355,23 +355,23 @@ func unset(parent Node, child Node, key []byte, pos int, removeLeft bool) error 
 // in the right side of the given path. The given path can point to an existent
 // key or a non-existent one. This function has the assumption that the whole
 // path should already be resolved.
-func hasRightElement(node Node, key []byte) bool {
+func hasRightElement(node node, key []byte) bool {
 	pos, key := 0, keybytesToHex(key)
 	for node != nil {
 		switch rn := node.(type) {
-		case *FullNode:
+		case *fullNode:
 			for i := key[pos] + 1; i < 16; i++ {
 				if rn.Children[i] != nil {
 					return true
 				}
 			}
 			node, pos = rn.Children[key[pos]], pos+1
-		case *ShortNode:
+		case *shortNode:
 			if len(key)-pos < len(rn.Key) || !bytes.Equal(rn.Key, key[pos:pos+len(rn.Key)]) {
 				return bytes.Compare(rn.Key, key[pos:]) > 0
 			}
 			node, pos = rn.Val, pos+len(rn.Key)
-		case ValueNode:
+		case valueNode:
 			return false // We have resolved the whole path
 		default:
 			panic(fmt.Sprintf("%T: invalid Node: %v", node, node)) // hashnode
@@ -479,10 +479,10 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 //
 // There is an additional flag `skipResolved`. If it's set then
 // all resolved nodes won't be returned.
-func get(tn Node, key []byte, skipResolved bool) ([]byte, Node) {
+func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 	for {
 		switch n := tn.(type) {
-		case *ShortNode:
+		case *shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				return nil, nil
 			}
@@ -491,17 +491,17 @@ func get(tn Node, key []byte, skipResolved bool) ([]byte, Node) {
 			if !skipResolved {
 				return key, tn
 			}
-		case *FullNode:
+		case *fullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
 			if !skipResolved {
 				return key, tn
 			}
-		case HashNode:
+		case hashNode:
 			return key, n
 		case nil:
 			return key, nil
-		case ValueNode:
+		case valueNode:
 			return nil, n
 		default:
 			panic(fmt.Sprintf("%T: invalid Node: %v", tn, tn))
