@@ -28,7 +28,7 @@ import (
 
 func TestDBOverride(t *testing.T) {
 	config := &Config{
-		DBOverride: func(d ethdb.Database, c *Config) DBOverride {
+		DBOverride: func(d ethdb.Database) DBOverride {
 			return override{}
 		},
 	}

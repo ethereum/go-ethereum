@@ -42,7 +42,7 @@ type ReaderProvider interface {
 }
 
 // A DBConstructor constructs alternative backend-database implementations.
-type DBConstructor func(ethdb.Database, *Config) DBOverride
+type DBConstructor func(ethdb.Database) DBOverride
 
 // A DBOverride is an arbitrary implementation of a [Database] backend. It MUST
 // be either a [HashDB] or a [PathDB].
@@ -59,7 +59,7 @@ func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) bool 
 		log.Crit("Database override provided when 'hash' or 'path' mode are configured")
 	}
 
-	db.backend = config.DBOverride(diskdb, config)
+	db.backend = config.DBOverride(diskdb)
 	switch db.backend.(type) {
 	case HashDB:
 	case PathDB:
