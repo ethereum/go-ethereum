@@ -76,6 +76,7 @@ type Ethereum struct {
 
 	handler *handler
 	discmix *enode.FairMix
+	connman *connManager
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -289,6 +290,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
+	eth.connman = newConnManager(&connmanConfig{
+		maxDialPeers: eth.p2pServer.MaxDialedConns(),
+	})
+
 	eth.miner = miner.New(eth, config.Miner, eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 	eth.miner.SetPrioAddresses(config.TxPool.Locals)
@@ -399,6 +404,9 @@ func (s *Ethereum) Start() error {
 	// Start the networking layer
 	s.handler.Start(s.p2pServer.MaxPeers)
 
+	// Start the connection manager
+	s.connman.Start(s.p2pServer)
+
 	// start log indexer
 	s.filterMaps.Start()
 	go s.updateFilterMapsHeads()
@@ -500,6 +508,7 @@ func (s *Ethereum) setupDiscovery() error {
 func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.discmix.Close()
+	s.connman.Stop()
 	s.handler.Stop()
 
 	// Then stop everything else.
