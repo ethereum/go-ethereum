@@ -89,7 +89,7 @@ type blobTxMeta struct {
 
 	id          uint64 // Storage ID in the pool's persistent store
 	storageSize uint32 // Byte size in the pool's persistent store
-	size        uint64 // RLP-encoded size of transaction
+	size        uint64 // RLP-encoded size of transaction including the attached blob
 
 	nonce      uint64       // Needed to prioritize inclusion order within an account
 	costCap    *uint256.Int // Needed to validate cumulative balance sufficiency
@@ -1238,14 +1238,16 @@ func (p *BlobPool) GetRLP(hash common.Hash) []byte {
 	return p.getRLP(hash)
 }
 
-// GetMetadata returns the transaction type and transaction size with the given
-// hash.
+// GetMetadata returns the transaction type and transaction size with the
+// given transaction hash.
+//
+// The size refers the length of the 'rlp encoding' of a blob transaction
+// including the attached blobs.
 func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	size, ok := p.lookup.sizeOfTx(hash)
 	if !ok {
 		return nil
 	}
-
 	return &txpool.TxMetadata{
 		Type: types.BlobTxType,
 		Size: size,

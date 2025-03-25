@@ -92,8 +92,8 @@ type TxPool interface {
 	// the given hash.
 	GetRLP(hash common.Hash) []byte
 
-	// GetMetadata returns the transaction type and transaction size with the given
-	// hash.
+	// GetMetadata returns the transaction type and transaction size with the
+	// given transaction hash.
 	GetMetadata(hash common.Hash) *txpool.TxMetadata
 }
 
