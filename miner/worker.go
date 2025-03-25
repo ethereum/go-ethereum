@@ -537,7 +537,7 @@ func (w *worker) updateSnapshot() {
 		w.current.txs,
 		nil,
 		w.current.receipts,
-		new(trie.Trie),
+		trie.NewStackTrie(nil),
 	)
 	w.snapshotReceipts = copyReceipts(w.current.receipts)
 	w.snapshotState = w.current.state.Copy()
