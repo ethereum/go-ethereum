@@ -94,7 +94,6 @@ type StateDB interface {
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)
 
-	Finalise(bool)
 	Witness() *stateless.Witness
 
 	// Finalise must be invoked at the end of a transaction
