@@ -58,9 +58,10 @@ type txIndexer struct {
 
 // newTxIndexer initializes the transaction indexer.
 func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
+	cutoff, _ := chain.HistoryPruningCutoff()
 	indexer := &txIndexer{
 		limit:    limit,
-		cutoff:   chain.HistoryPruningCutoff(),
+		cutoff:   cutoff,
 		db:       chain.db,
 		progress: make(chan chan TxIndexProgress),
 		term:     make(chan chan struct{}),

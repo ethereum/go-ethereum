@@ -247,7 +247,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	fmConfig := filtermaps.Config{History: config.LogHistory, Disabled: config.LogNoHistory, ExportFileName: config.LogExportCheckpoints}
 	chainView := eth.newChainView(eth.blockchain.CurrentBlock())
-	historyCutoff := eth.blockchain.HistoryPruningCutoff()
+	historyCutoff, _ := eth.blockchain.HistoryPruningCutoff()
 	var finalBlock uint64
 	if fb := eth.blockchain.CurrentFinalBlock(); fb != nil {
 		finalBlock = fb.Number.Uint64()
