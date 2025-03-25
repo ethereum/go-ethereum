@@ -3376,7 +3376,6 @@ func setupTransactionsToApiTest(t *testing.T) (*TransactionAPI, []common.Hash, [
 
 	// Set the terminal total difficulty in the config
 	genesis.Config.TerminalTotalDifficulty = big.NewInt(0)
-	genesis.Config.TerminalTotalDifficultyPassed = true
 
 	backend := newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		var (
