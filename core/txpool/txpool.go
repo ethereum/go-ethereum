@@ -570,7 +570,7 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 		// If the miner requests tip enforcement, cap the lists now
 		if enforceTips && !pool.locals.contains(addr) {
 			for i, tx := range txs {
-				if !tx.IsSpecialTransaction() && tx.EffectiveGasTipIntCmp(pool.gasPrice, pool.priced.urgent.baseFee) < 0 {
+				if !tx.IsSpecialTransaction() && tx.GasPrice().Cmp(pool.priced.urgent.baseFee) < 0 {
 					txs = txs[:i]
 					break
 				}
