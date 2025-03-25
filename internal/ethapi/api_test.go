@@ -46,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -615,11 +615,9 @@ func (b testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) 
 func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
-func (b testBackend) BloomStatus() (uint64, uint64) { panic("implement me") }
-func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
+func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("implement me")
 }
-
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
@@ -1135,6 +1133,24 @@ func TestCall(t *testing.T) {
 				},
 			},
 			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:        "unsupported block override beaconRoot",
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			blockOverrides: override.BlockOverrides{
+				BeaconRoot: &common.Hash{0, 1, 2},
+			},
+			expectErr: errors.New(`block override "beaconRoot" is not supported for this RPC method`),
+		},
+		{
+			name:        "unsupported block override withdrawals",
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			blockOverrides: override.BlockOverrides{
+				Withdrawals: &types.Withdrawals{},
+			},
+			expectErr: errors.New(`block override "withdrawals" is not supported for this RPC method`),
 		},
 	}
 	for _, tc := range testSuite {

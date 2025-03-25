@@ -30,17 +30,19 @@ import (
 
 // memoryTable is used to store a list of sequential items in memory.
 type memoryTable struct {
-	name   string   // Table name
 	items  uint64   // Number of stored items in the table, including the deleted ones
 	offset uint64   // Number of deleted items from the table
 	data   [][]byte // List of rlp-encoded items, sort in order
 	size   uint64   // Total memory size occupied by the table
 	lock   sync.RWMutex
+
+	name   string
+	config freezerTableConfig
 }
 
 // newMemoryTable initializes the memory table.
-func newMemoryTable(name string) *memoryTable {
-	return &memoryTable{name: name}
+func newMemoryTable(name string, config freezerTableConfig) *memoryTable {
+	return &memoryTable{name: name, config: config}
 }
 
 // has returns an indicator whether the specified data exists.
@@ -218,10 +220,10 @@ type MemoryFreezer struct {
 }
 
 // NewMemoryFreezer initializes an in-memory freezer instance.
-func NewMemoryFreezer(readonly bool, tableName map[string]bool) *MemoryFreezer {
+func NewMemoryFreezer(readonly bool, tableName map[string]freezerTableConfig) *MemoryFreezer {
 	tables := make(map[string]*memoryTable)
-	for name := range tableName {
-		tables[name] = newMemoryTable(name)
+	for name, cfg := range tableName {
+		tables[name] = newMemoryTable(name, cfg)
 	}
 	return &MemoryFreezer{
 		writeBatch: newMemoryBatch(),
@@ -368,7 +370,9 @@ func (f *MemoryFreezer) TruncateHead(items uint64) (uint64, error) {
 	return old, nil
 }
 
-// TruncateTail discards any recent data below the provided threshold number.
+// TruncateTail discards all data below the provided threshold number.
+// Note this will only truncate 'prunable' tables. Block headers and canonical
+// hashes cannot be truncated at this time.
 func (f *MemoryFreezer) TruncateTail(tail uint64) (uint64, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -381,8 +385,10 @@ func (f *MemoryFreezer) TruncateTail(tail uint64) (uint64, error) {
 		return old, nil
 	}
 	for _, table := range f.tables {
-		if err := table.truncateTail(tail); err != nil {
-			return 0, err
+		if table.config.prunable {
+			if err := table.truncateTail(tail); err != nil {
+				return 0, err
+			}
 		}
 	}
 	f.tail = tail
@@ -412,8 +418,8 @@ func (f *MemoryFreezer) Reset() error {
 	defer f.lock.Unlock()
 
 	tables := make(map[string]*memoryTable)
-	for name := range f.tables {
-		tables[name] = newMemoryTable(name)
+	for name, table := range f.tables {
+		tables[name] = newMemoryTable(name, table.config)
 	}
 	f.tables = tables
 	f.items, f.tail = 0, 0

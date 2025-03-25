@@ -660,7 +660,9 @@ func (context *ChainContext) Config() *params.ChainConfig {
 func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if blockOverrides != nil {
-		blockOverrides.Apply(&blockCtx)
+		if err := blockOverrides.Apply(&blockCtx); err != nil {
+			return nil, err
+		}
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
@@ -761,8 +763,7 @@ func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockN
 	if err != nil {
 		return nil, err
 	}
-	// If the result contains a revert reason, try to unpack and return it.
-	if len(result.Revert()) > 0 {
+	if errors.Is(result.Err, vm.ErrExecutionReverted) {
 		return nil, newRevertError(result.Revert())
 	}
 	return result.Return(), result.Err
@@ -842,7 +843,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Run the gas estimation and wrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
 	if err != nil {
-		if len(revert) > 0 {
+		if errors.Is(err, vm.ErrExecutionReverted) {
 			return 0, newRevertError(revert)
 		}
 		return 0, err
