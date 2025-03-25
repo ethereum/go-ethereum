@@ -20,6 +20,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	mrand "math/rand"
+	"slices"
 	"sync"
 	"time"
 
@@ -112,27 +113,15 @@ func (cm *connManager) Stop() {
 	cm.wg.Wait()
 }
 
-// filter is a helper function to filter the peerset.
-func filter[T any](s []T, test func(T) bool) (filtered []T) {
-	for _, a := range s {
-		if test(a) {
-			filtered = append(filtered, a)
-		}
-	}
-	return
-}
-
 // numDialPeers returns the current number of peers dialed (not inbound).
 func (cm *connManager) numDialPeers() int {
-	selectDialed := func(p *p2p.Peer) bool { return !p.Inbound() }
-	dialed := filter(cm.peersFunc(), selectDialed)
+	dialed := slices.DeleteFunc(cm.peersFunc(), (*p2p.Peer).Inbound)
 	return len(dialed)
 }
 
 func (cm *connManager) numPeers() (int, int, int) {
-	selectDialed := func(p *p2p.Peer) bool { return !p.Inbound() }
 	peers := cm.peersFunc()
-	dialed := filter(peers, selectDialed)
+	dialed := slices.DeleteFunc(peers, (*p2p.Peer).Inbound)
 	return len(peers), len(dialed), len(peers) - len(dialed)
 }
 
@@ -142,11 +131,12 @@ func (cm *connManager) dropRandomPeer() bool {
 
 	// Only drop from dyndialed peers. Avoid dropping trusted peers.
 	// Give some time to peers before considering them for a drop.
-	selectDroppable := func(p *p2p.Peer) bool {
-		return p.DynDialed() && !p.Trusted() &&
-			p.Lifetime() >= mclock.AbsTime(doNotDropBefore)
+	selectDoNotDrop := func(p *p2p.Peer) bool {
+		return !p.DynDialed() ||
+			p.Trusted() ||
+			p.Lifetime() < mclock.AbsTime(doNotDropBefore)
 	}
-	droppable := filter(peers, selectDroppable)
+	droppable := slices.DeleteFunc(peers, selectDoNotDrop)
 	if len(droppable) > 0 {
 		p := droppable[cm.rand.Intn(len(droppable))]
 		cm.log.Info("dropping random peer", "id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()), "peercountbefore", len(peers))
