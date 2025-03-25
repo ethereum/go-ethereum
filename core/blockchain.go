@@ -293,6 +293,7 @@ type BlockChain struct {
 	stateSyncData    []*types.StateSyncData                  // State sync data
 	stateSyncFeed    event.Feed                              // State sync feed
 	chain2HeadFeed   event.Feed                              // Reorg/NewHead/Fork data feed
+	chainSideFeed    event.Feed                              // Side chain data feed (removed from geth but needed in bor)
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -621,7 +622,9 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		if err != nil {
 			return nil, nil, 0, nil, 0, err
 		}
-		parallelStatedb.SetLogger(bc.logger)
+		// TODO(manav): confirm if not setting logger here affects block-stm or not as it's removed
+		// from upstream
+		// parallelStatedb.SetLogger(bc.logger)
 
 		processorCount++
 
@@ -647,7 +650,6 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		if err != nil {
 			return nil, nil, 0, nil, 0, err
 		}
-		statedb.SetLogger(bc.logger)
 
 		processorCount++
 
@@ -1995,7 +1997,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 
 		bc.chain2HeadFeed.Send(Chain2HeadEvent{
 			Type:     Chain2HeadForkEvent,
-			NewChain: []*types.Block{block},
+			NewChain: []*types.Header{block.Header()},
 		})
 	}
 
@@ -2242,9 +2244,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 			return
 		}
 
+		headers := make([]*types.Header, size)
+		for i, block := range canonAccum {
+			headers[i] = block.Header()
+		}
 		bc.chain2HeadFeed.Send(Chain2HeadEvent{
 			Type:     Chain2HeadCanonicalEvent,
-			NewChain: canonAccum,
+			NewChain: headers,
 		})
 
 		canonAccum = canonAccum[:0]
