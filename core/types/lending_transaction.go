@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"container/heap"
 	"errors"
 	"io"
@@ -295,13 +296,9 @@ type LendingTransactions []*LendingTransaction
 // Len returns the length of s.
 func (s LendingTransactions) Len() int { return len(s) }
 
-// Swap swaps the i'th and the j'th element in s.
-func (s LendingTransactions) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
-// GetRlp implements Rlpable and returns the i'th element of s in rlp.
-func (s LendingTransactions) GetRlp(i int) []byte {
-	enc, _ := rlp.EncodeToBytes(s[i])
-	return enc
+// EncodeIndex encodes the i'th element of s to w.
+func (s LendingTransactions) EncodeIndex(i int, w *bytes.Buffer) {
+	rlp.Encode(w, s[i])
 }
 
 // LendingTxDifference returns a new set t which is the difference between a to b.

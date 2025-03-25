@@ -3,6 +3,7 @@ package ethapi
 import (
 	"bytes"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
@@ -28,12 +29,16 @@ func (n *proofPairList) Delete(key []byte) error {
 
 // modified from core/types/derive_sha.go
 func deriveTrie(list types.DerivableList) *trie.Trie {
-	keybuf := new(bytes.Buffer)
+	buf := new(bytes.Buffer)
 	trie := new(trie.Trie)
-	for i := 0; i < list.Len(); i++ {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(i))
-		trie.Update(keybuf.Bytes(), list.GetRlp(i))
+	for i := range list.Len() {
+		buf.Reset()
+		rlp.Encode(buf, uint(i))
+		key := common.CopyBytes(buf.Bytes())
+		buf.Reset()
+		list.EncodeIndex(i, buf)
+		value := common.CopyBytes(buf.Bytes())
+		trie.Update(key, value)
 	}
 	return trie
 }
