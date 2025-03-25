@@ -300,6 +300,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		metadata = true
 	}
 
+	// TODO(manav): Use `p.chain` instead of `p.bc`
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	context := NewEVMBlockContext(header, p.bc.hc, nil)
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
@@ -395,14 +396,23 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	}
 
 	// Read requests if Prague is enabled.
-	var requests types.Requests
-	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {
-		requests, err = ParseDepositLogs(allLogs, p.config)
+	var requests [][]byte
+	if p.config.IsPrague(block.Number()) {
+		// EIP-6110 deposits
+		depositRequests, err := ParseDepositLogs(allLogs, p.config)
 		if err != nil {
 			return nil, err
 		}
+		requests = append(requests, depositRequests)
+		// EIP-7002 withdrawals
+		withdrawalRequests := ProcessWithdrawalQueue(vmenv, tracingStateDB)
+		requests = append(requests, withdrawalRequests)
+		// EIP-7251 consolidations
+		consolidationRequests := ProcessConsolidationQueue(vmenv, tracingStateDB)
+		requests = append(requests, consolidationRequests)
 	}
 
+	// TODO(manav): Use `p.chain` instead of `p.bc` param (check consensus interface)
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Body())
 

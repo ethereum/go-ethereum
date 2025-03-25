@@ -812,7 +812,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
-	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
+	if api.backend.ChainConfig().IsPrague(block.Number()) {
 		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
 		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}

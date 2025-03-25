@@ -360,7 +360,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		var requests [][]byte
-		if config.IsPrague(b.header.Number, b.header.Time) {
+		if config.IsPrague(b.header.Number) {
 			// EIP-6110 deposits
 			var blockLogs []*types.Log
 			for _, r := range b.receipts {
@@ -478,7 +478,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		// preState := statedb.Copy()
 
 		// Pre-execution system calls.
-		if config.IsPrague(b.header.Number, b.header.Time) {
+		if config.IsPrague(b.header.Number) {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})

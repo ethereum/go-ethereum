@@ -377,7 +377,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 	// Gather the execution-layer triggered requests.
 	var requests [][]byte
-	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
+	if chainConfig.IsPrague(vmContext.BlockNumber) {
 		// EIP-6110 deposits
 		var allLogs []*types.Log
 		for _, receipt := range receipts {

@@ -511,7 +511,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 				head.BlobGasUsed = new(uint64)
 			}
 		}
-		if conf.IsPrague(num, g.Timestamp) {
+		if conf.IsPrague(num) {
 			emptyRequests := [][]byte{{0x00}, {0x01}, {0x02}}
 			rhash := types.CalcRequestsHash(emptyRequests)
 			head.RequestsHash = &rhash
