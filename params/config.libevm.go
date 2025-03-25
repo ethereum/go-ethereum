@@ -216,3 +216,10 @@ func (r *Rules) extraPayload() *pseudo.Type {
 	}
 	return r.extra
 }
+
+// NewTimestampCompatError returns a new config-compatibility error indicating an incompatible timestamp.
+func NewTimestampCompatError(what string, storedTime, newTime *uint64) *ConfigCompatError {
+	// If this breaks when merging a new version of `geth`, the wrapping function's signature MUST be
+	// changed to match as it exists only to export the function.
+	return newTimestampCompatError(what, storedTime, newTime)
+}
