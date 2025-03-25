@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	gomath "math"
 	"math/big"
 	"sync"
 	"time"
@@ -35,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -672,7 +672,10 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			call.GasPrice = new(big.Int)
 			if call.GasFeeCap.BitLen() > 0 || call.GasTipCap.BitLen() > 0 {
-				call.GasPrice = math.BigMin(new(big.Int).Add(call.GasTipCap, header.BaseFee), call.GasFeeCap)
+				call.GasPrice = new(big.Int).Add(call.GasTipCap, header.BaseFee)
+				if call.GasPrice.Cmp(call.GasFeeCap) > 0 {
+					call.GasPrice = call.GasFeeCap
+				}
 			}
 		}
 	}
@@ -686,7 +689,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 
 	// Set infinite balance to the fake caller account.
 	from := stateDB.GetOrNewStateObject(call.From)
-	from.SetBalance(math.BigIntToUint256Int(math.MaxBig256), tracing.BalanceChangeUnspecified)
+	from.SetBalance(math.BigIntToUint256Int(math.MaxBig256))
 
 	// Execute the call.
 	msg := &core.Message{
@@ -707,7 +710,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	txContext := core.NewEVMTxContext(msg)
 	evmContext := core.NewEVMBlockContext(header, b.blockchain, nil)
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
-	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
+	gasPool := new(core.GasPool).AddGas(gomath.MaxUint64)
 
 	return core.ApplyMessage(vmEnv, msg, gasPool, context.Background())
 }
