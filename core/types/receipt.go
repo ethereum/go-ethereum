@@ -379,13 +379,23 @@ type Receipts []*Receipt
 // Len returns the number of receipts in this list.
 func (rs Receipts) Len() int { return len(rs) }
 
-// GetRlp returns the RLP encoding of one receipt from the list.
-func (rs Receipts) GetRlp(i int) []byte {
-	bytes, err := rlp.EncodeToBytes(rs[i])
-	if err != nil {
-		panic(err)
+// EncodeIndex encodes the i'th receipt to w.
+func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
+	r := rs[i]
+	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+	if r.Type == LegacyTxType {
+		rlp.Encode(w, data)
+		return
 	}
-	return bytes
+	w.WriteByte(r.Type)
+	switch r.Type {
+	case AccessListTxType, DynamicFeeTxType:
+		rlp.Encode(w, data)
+	default:
+		// For unsupported types, write nothing. Since this is for
+		// DeriveSha, the error will be caught matching the derived hash
+		// to the block.
+	}
 }
 
 // DeriveFields fills the receipts with their computed fields based on consensus
