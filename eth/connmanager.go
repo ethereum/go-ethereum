@@ -139,7 +139,7 @@ func (cm *connManager) dropRandomPeer() bool {
 	droppable := slices.DeleteFunc(peers, selectDoNotDrop)
 	if len(droppable) > 0 {
 		p := droppable[cm.rand.Intn(len(droppable))]
-		cm.log.Info("dropping random peer", "id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()), "peercountbefore", len(peers))
+		cm.log.Debug("dropping random peer", "id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()), "peercountbefore", len(peers))
 		p.Disconnect(p2p.DiscTooManyPeers)
 		return true
 	}
@@ -158,7 +158,7 @@ func (cm *connManager) loop() {
 				// check and start timer for peer drop
 				// If a drop was already scheduled, Schedule does nothing.
 				numpeers, out, in := cm.numPeers()
-				cm.log.Info("addPeerCh", "peers", numpeers, "out", out, "in", in, "maxout", cm.maxDialPeers)
+				cm.log.Trace("addPeerCh", "peers", numpeers, "out", out, "in", in, "maxout", cm.maxDialPeers)
 				if cm.maxDialPeers-cm.numDialPeers() <= peerDropThreshold {
 					cm.peerDropTimer.Schedule(cm.clock.Now().Add(peerDropInterval))
 				}
@@ -166,7 +166,7 @@ func (cm *connManager) loop() {
 			case p2p.PeerEventTypeDrop:
 				// check and stop timer for peer drop
 				numpeers, out, in := cm.numPeers()
-				cm.log.Info("remPeerCh", "peers", numpeers, "out", out, "in", in, "maxout", cm.maxDialPeers)
+				cm.log.Trace("remPeerCh", "peers", numpeers, "out", out, "in", in, "maxout", cm.maxDialPeers)
 				if cm.maxDialPeers-cm.numDialPeers() > peerDropThreshold {
 					cm.peerDropTimer.Stop()
 				}
