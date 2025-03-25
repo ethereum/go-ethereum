@@ -20,6 +20,8 @@ package math
 import (
 	"fmt"
 	"math/big"
+
+	"github.com/holiman/uint256"
 )
 
 // Various big integer limit values.
@@ -193,4 +195,10 @@ func U256(x *big.Int) *big.Int {
 // This operation is destructive.
 func U256Bytes(n *big.Int) []byte {
 	return PaddedBigBytes(U256(n), 32)
+}
+
+// BigIntToUint256Int converts big Int to uint256 Int by setting bytes representing
+// big-endian unsigned integer.
+func BigIntToUint256Int(x *big.Int) *uint256.Int {
+	return new(uint256.Int).SetBytes(x.Bytes())
 }
