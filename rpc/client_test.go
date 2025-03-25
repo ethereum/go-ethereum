@@ -609,7 +609,7 @@ func (b *unsubscribeBlocker) readBatch() ([]*jsonrpcMessage, bool, error) {
 func TestUnsubscribeTimeout(t *testing.T) {
 	t.Parallel()
 
-	srv := NewServer()
+	srv := NewServer("", 1, time.Second)
 	srv.RegisterName("nftest", new(notificationTestService))
 
 	// Setup middleware to block on unsubscribe.

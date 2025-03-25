@@ -31,7 +31,7 @@ import (
 func TestServerRegisterName(t *testing.T) {
 	t.Parallel()
 
-	server := NewServer()
+	server := NewServer("", 1, time.Second)
 	service := new(testService)
 
 	svcName := "test"
