@@ -47,7 +47,6 @@ const (
 //     peerDropInterval to make space for new peers
 type connManager struct {
 	connmanConfig
-	srv       *p2p.Server
 	peersFunc getPeersFunc
 	syncFunc  getSyncFunc
 
@@ -103,7 +102,6 @@ func newConnManager(config *connmanConfig) *connManager {
 
 func (cm *connManager) Start(srv *p2p.Server, syncFunc getSyncFunc) {
 	cm.wg.Add(1)
-	cm.srv = srv
 	cm.peersFunc = srv.Peers
 	cm.syncFunc = syncFunc
 	cm.sub = srv.SubscribeEvents(cm.peerEventCh)
