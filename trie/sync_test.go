@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 )
 
@@ -28,7 +29,7 @@ import (
 func makeTestTrie() (*Database, *Trie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(memorydb.New())
-	trie, _ := New(emptyRoot, triedb)
+	trie, _ := New(types.EmptyRootHash, triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -90,8 +91,8 @@ func checkTrieConsistency(db *Database, root common.Hash) error {
 func TestEmptySync(t *testing.T) {
 	dbA := NewDatabase(memorydb.New())
 	dbB := NewDatabase(memorydb.New())
-	emptyA, _ := New(emptyRoot, dbA)
-	emptyB, _ := New(emptyRoot, dbB)
+	emptyA, _ := New(types.EmptyRootHash, dbA)
+	emptyB, _ := New(types.EmptyRootHash, dbB)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		if req := NewSync(trie.Hash(), memorydb.New(), nil, NewSyncBloom(1, memorydb.New())).Missing(1); len(req) != 0 {

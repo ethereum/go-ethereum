@@ -22,6 +22,7 @@ import (
 	"errors"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 )
 
 // Iterator is a key-value trie iterator that traverses a Trie.
@@ -134,7 +135,7 @@ func (e seekError) Error() string {
 }
 
 func newNodeIterator(trie *Trie, start []byte) NodeIterator {
-	if trie.Hash() == emptyState {
+	if trie.Hash() == types.EmptyCodeHash {
 		return new(nodeIterator)
 	}
 	it := &nodeIterator{trie: trie}
@@ -259,7 +260,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		// Initialize the iterator if we've just started.
 		root := it.trie.Hash()
 		state := &nodeIteratorState{node: it.trie.root, index: -1}
-		if root != emptyRoot {
+		if root != types.EmptyRootHash {
 			state.hash = root
 		}
 		err := state.resolve(it.trie, nil)

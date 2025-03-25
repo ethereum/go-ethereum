@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
@@ -383,7 +384,7 @@ func (st *StackTrie) hashRec(hasher *hasher) {
 		return
 
 	case emptyNode:
-		st.val = emptyRoot.Bytes()
+		st.val = types.EmptyRootHash.Bytes()
 		st.key = st.key[:0]
 		st.nodeType = hashedNode
 		return

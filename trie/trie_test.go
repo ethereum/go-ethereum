@@ -29,6 +29,7 @@ import (
 	"testing/quick"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
@@ -51,7 +52,7 @@ func newEmpty() *Trie {
 func TestEmptyTrie(t *testing.T) {
 	var trie Trie
 	res := trie.Hash()
-	exp := emptyRoot
+	exp := types.EmptyRootHash
 	if res != exp {
 		t.Errorf("expected %x got %x", exp, res)
 	}
@@ -503,7 +504,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		var (
 			nonce   = uint64(random.Int63())
 			balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
-			root    = emptyRoot
+			root    = types.EmptyRootHash
 			code    = crypto.Keccak256(nil)
 		)
 		accounts[i], _ = rlp.EncodeToBytes(&account{nonce, balance, root, code})
