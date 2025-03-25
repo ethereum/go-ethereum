@@ -35,6 +35,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 )
 
 var (
@@ -82,7 +83,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Block {
 	return types.NewBlock(&types.Header{
 		Root:     types.EmptyRootHash,
 		GasLimit: atomic.LoadUint64(&bc.gasLimit),
-	}, nil, nil, nil)
+	}, nil, nil, nil, new(trie.Trie))
 }
 
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {

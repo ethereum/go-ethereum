@@ -42,7 +42,10 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	}
 	// Cross check the iterated hashes and the database/nodepool content
 	for hash := range hashes {
-		if _, err := db.TrieDB().Node(hash); err != nil {
+		if _, err = db.TrieDB().Node(hash); err != nil {
+			_, err = db.ContractCode(common.Hash{}, hash)
+		}
+		if err != nil {
 			t.Errorf("failed to retrieve reported node %x", hash)
 		}
 	}

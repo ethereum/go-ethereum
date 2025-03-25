@@ -579,7 +579,7 @@ func (t *Trie) resolveHash(n HashNode, prefix []byte) (Node, error) {
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() common.Hash {
-	hash, cached, _ := t.hashRoot(nil)
+	hash, cached, _ := t.hashRoot()
 	t.root = cached
 	return common.BytesToHash(hash.(HashNode))
 }
@@ -630,7 +630,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 }
 
 // hashRoot calculates the root hash of the given trie
-func (t *Trie) hashRoot(db *Database) (Node, Node, error) {
+func (t *Trie) hashRoot() (Node, Node, error) {
 	if t.root == nil {
 		return HashNode(emptyRoot.Bytes()), nil, nil
 	}
@@ -640,4 +640,10 @@ func (t *Trie) hashRoot(db *Database) (Node, Node, error) {
 	hashed, cached := h.hash(t.root, true)
 	t.unhashed = 0
 	return hashed, cached, nil
+}
+
+// Reset drops the referenced root node and cleans all internal state.
+func (t *Trie) Reset() {
+	t.root = nil
+	t.unhashed = 0
 }

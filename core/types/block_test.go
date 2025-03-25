@@ -211,5 +211,5 @@ func makeBenchBlock() *Block {
 			Extra:      []byte("benchmark uncle"),
 		}
 	}
-	return NewBlock(header, txs, uncles, receipts)
+	return NewBlock(header, txs, uncles, receipts, newHasher())
 }

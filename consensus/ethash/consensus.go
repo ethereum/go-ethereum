@@ -32,6 +32,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/trie"
 	mapset "github.com/deckarep/golang-set/v2"
 )
 
@@ -523,7 +524,7 @@ func (ethash *Ethash) Finalize(chain consensus.ChainReader, header *types.Header
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Header seems complete, assemble into a block and return
-	return types.NewBlock(header, txs, uncles, receipts), nil
+	return types.NewBlock(header, txs, uncles, receipts, new(trie.Trie)), nil
 }
 
 // Some weird constants to avoid constant memory allocs for them.

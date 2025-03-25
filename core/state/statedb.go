@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -562,7 +563,10 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	newobj.created = true
 
 	s.setStateObject(newobj)
-	return newobj, prev
+	if prev != nil && !prev.deleted {
+		return newobj, prev
+	}
+	return newobj, nil
 }
 
 // CreateAccount explicitly creates a state object. If a state object with the address
@@ -755,27 +759,33 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 	defer s.clearJournalAndRefund()
 
 	// Commit objects to the trie, measuring the elapsed time
-	for addr, stateObject := range s.stateObjects {
+	codeWriter := s.db.TrieDB().DiskDB().NewBatch()
+	for addr, obj := range s.stateObjects {
 		_, isDirty := s.stateObjectsDirty[addr]
 		switch {
-		case stateObject.selfDestructed || (isDirty && deleteEmptyObjects && stateObject.empty()):
+		case obj.selfDestructed || (isDirty && deleteEmptyObjects && obj.empty()):
 			// If the object has been removed, don't bother syncing it
 			// and just mark it for deletion in the trie.
-			s.deleteStateObject(stateObject)
+			s.deleteStateObject(obj)
 		case isDirty:
 			// Write any contract code associated with the state object
-			if stateObject.code != nil && stateObject.dirtyCode {
-				s.db.TrieDB().InsertBlob(common.BytesToHash(stateObject.CodeHash()), stateObject.code)
-				stateObject.dirtyCode = false
+			if obj.code != nil && obj.dirtyCode {
+				rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
+				obj.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie.
-			if err := stateObject.CommitTrie(s.db); err != nil {
+			if err := obj.CommitTrie(s.db); err != nil {
 				return common.Hash{}, err
 			}
 			// Update the object in the main account trie.
-			s.updateStateObject(stateObject)
+			s.updateStateObject(obj)
 		}
 		delete(s.stateObjectsDirty, addr)
+	}
+	if codeWriter.ValueSize() > 0 {
+		if err := codeWriter.Write(); err != nil {
+			log.Crit("Failed to commit dirty codes", "error", err)
+		}
 	}
 	// Write the account trie changes, measuing the amount of wasted time
 	defer func(start time.Time) { s.AccountCommits += time.Since(start) }(time.Now())
@@ -787,10 +797,6 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		if account.Root != types.EmptyRootHash {
 			s.db.TrieDB().Reference(account.Root, parent)
-		}
-		code := common.BytesToHash(account.CodeHash)
-		if code != types.EmptyCodeHash {
-			s.db.TrieDB().Reference(code, parent)
 		}
 		return nil
 	})

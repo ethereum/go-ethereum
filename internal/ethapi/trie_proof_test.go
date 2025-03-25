@@ -49,7 +49,7 @@ func TestTransactionProof(t *testing.T) {
 	transactions := types.Transactions([]*types.Transaction{t1, t2, t3, t4})
 	tr := deriveTrie(transactions)
 	// for verifying the proof
-	root := types.DeriveSha(transactions)
+	root := types.DeriveSha(transactions, new(trie.Trie))
 	for i := 0; i < transactions.Len(); i++ {
 		var proof proofPairList
 		keybuf := new(bytes.Buffer)
@@ -82,7 +82,7 @@ func TestReceiptProof(t *testing.T) {
 	receipts := types.Receipts([]*types.Receipt{r1, r2, r3, r4})
 	tr := deriveTrie(receipts)
 	// for verifying the proof
-	root := types.DeriveSha(receipts)
+	root := types.DeriveSha(receipts, new(trie.Trie))
 	for i := 0; i < receipts.Len(); i++ {
 		var proof proofPairList
 		keybuf := new(bytes.Buffer)
