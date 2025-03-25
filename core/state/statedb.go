@@ -1213,7 +1213,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 		// Run the storage updates concurrently to one another
 		workers.Go(func() error {
 			// Write any storage changes in the state object to its storage trie
-			update, set, err := obj.commit()
+			update, set, err := obj.commit(noStorageWiping)
 			if err != nil {
 				return err
 			}

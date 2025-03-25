@@ -375,7 +375,7 @@ func (s *stateObject) updateRoot() {
 
 // commitStorage overwrites the clean storage with the storage changes and
 // fulfills the storage diffs into the given accountUpdate struct.
-func (s *stateObject) commitStorage(op *accountUpdate) {
+func (s *stateObject) commitStorage(op *accountUpdate, rawStorageKey bool) {
 	var (
 		buf    = crypto.NewKeccakState()
 		encode = func(val common.Hash) []byte {
@@ -400,15 +400,15 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 		}
 		op.storages[hash] = encode(val)
 
-		if op.storagesOriginByKey == nil {
-			op.storagesOriginByKey = make(map[common.Hash][]byte)
-		}
-		if op.storagesOriginByHash == nil {
-			op.storagesOriginByHash = make(map[common.Hash][]byte)
+		if op.storagesOrigin == nil {
+			op.storagesOrigin = make(map[common.Hash][]byte)
 		}
 		origin := encode(s.originStorage[key])
-		op.storagesOriginByKey[key] = origin
-		op.storagesOriginByHash[hash] = origin
+		if rawStorageKey {
+			op.storagesOrigin[key] = origin
+		} else {
+			op.storagesOrigin[hash] = origin
+		}
 
 		// Overwrite the clean value of storage slots
 		s.originStorage[key] = val
@@ -421,7 +421,7 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 //
 // Note, commit may run concurrently across all the state objects. Do not assume
 // thread-safe access to the statedb.
-func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
+func (s *stateObject) commit(rawStorageKey bool) (*accountUpdate, *trienode.NodeSet, error) {
 	// commit the account metadata changes
 	op := &accountUpdate{
 		address: s.address,
@@ -439,7 +439,7 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 		s.dirtyCode = false // reset the dirty flag
 	}
 	// Commit storage changes and the associated storage trie
-	s.commitStorage(op)
+	s.commitStorage(op, rawStorageKey)
 	if len(op.storages) == 0 {
 		// nothing changed, don't bother to commit the trie
 		s.origin = s.data.Copy()

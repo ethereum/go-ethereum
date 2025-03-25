@@ -46,18 +46,19 @@ type accountDelete struct {
 
 // accountUpdate represents an operation for updating an Ethereum account.
 type accountUpdate struct {
-	address  common.Address         // address is the unique account identifier
-	data     []byte                 // data is the slim-RLP encoded account data.
-	origin   []byte                 // origin is the original value of account data in slim-RLP encoding.
-	code     *contractCode          // code represents mutated contract code; nil means it's not modified.
-	storages map[common.Hash][]byte // storages stores mutated slots in prefix-zero-trimmed RLP format.
+	address common.Address // address is the unique account identifier
+	data    []byte         // data is the slim-RLP encoded account data.
+	origin  []byte         // origin is the original value of account data in slim-RLP encoding.
+	code    *contractCode  // code represents mutated contract code; nil means it's not modified.
 
-	// storagesOriginByKey and storagesOriginByHash both store the original values
-	// of mutated slots in prefix-zero-trimmed RLP format. The difference is that
-	// storagesOriginByKey uses the **raw** storage slot key as the map ID, while
-	// storagesOriginByHash uses the **hash** of the storage slot key instead.
-	storagesOriginByKey  map[common.Hash][]byte
-	storagesOriginByHash map[common.Hash][]byte
+	// storages stores mutated slots in prefix-zero-trimmed RLP format,
+	// The map key refers to the **HASH** of the raw storage slot key.
+	storages map[common.Hash][]byte
+
+	// storagesOrigin store the original values of mutated slots in prefix-zero-trimmed RLP format.
+	// if `rawStorageKey` is true, the map key refers to the **RAW** storage slot key,
+	// else the **HASH** of the raw storage slot key.
+	storagesOrigin map[common.Hash][]byte
 }
 
 // stateUpdate represents the difference between two states resulting from state
@@ -144,10 +145,7 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 		}
 		// Aggregate the storage original values. If the slot is already present
 		// in aggregated storagesOrigin set, skip it.
-		storageOriginSet := op.storagesOriginByHash
-		if rawStorageKey {
-			storageOriginSet = op.storagesOriginByKey
-		}
+		storageOriginSet := op.storagesOrigin
 		if len(storageOriginSet) > 0 {
 			origin, exist := storagesOrigin[addr]
 			if !exist {
