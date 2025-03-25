@@ -106,21 +106,13 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 		})
 		// Get the average execution time from the benchmarking result.
 		// There are other useful stats here that could be reported.
-		stats.time = time.Duration(result.NsPerOp())
-		stats.allocs = result.AllocsPerOp()
-		stats.bytesAllocated = result.AllocedBytesPerOp()
-	} else {
-		var memStatsBefore, memStatsAfter goruntime.MemStats
-
-		goruntime.ReadMemStats(&memStatsBefore)
-
-		startTime := time.Now()
-		output, gasLeft, err = execFunc()
-		stats.time = time.Since(startTime)
-
-		goruntime.ReadMemStats(&memStatsAfter)
-		stats.allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
-		stats.bytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
+		stats := execStats{
+			Time:           time.Duration(result.NsPerOp()),
+			Allocs:         result.AllocsPerOp(),
+			BytesAllocated: result.AllocedBytesPerOp(),
+			GasUsed:        gasUsed,
+		}
+		return output, stats, err
 	}
 	var memStatsBefore, memStatsAfter goruntime.MemStats
 	goruntime.ReadMemStats(&memStatsBefore)
