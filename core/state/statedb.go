@@ -486,11 +486,6 @@ func (s *StateDB) AddEmptyMVHashMap() {
 	s.mvHashmap = mvh
 }
 
-// SetLogger sets the logger for account update hooks.
-func (s *StateDB) SetLogger(l *tracing.Hooks) {
-	s.logger = l
-}
-
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
@@ -670,16 +665,6 @@ func (s *StateDB) Version() blockstm.Version {
 }
 
 func (s *StateDB) GetCode(addr common.Address) []byte {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		if s.witness != nil {
-			s.witness.AddCode(stateObject.Code())
-		}
-		return stateObject.Code()
-	}
-}
-
-func (s *StateDB) GetCode(addr common.Address) []byte {
 	return MVRead(s, blockstm.NewSubpathKey(addr, CodePath), nil, func(s *StateDB) []byte {
 		stateObject := s.getStateObject(addr)
 		if stateObject != nil {
@@ -791,11 +776,8 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tr
 		s.GetBalance(addr)
 	}
 
-	if stateObject != nil {
-		stateObject = s.mvRecordWritten(stateObject)
-		stateObject.AddBalance(amount, reason)
-		MVWrite(s, blockstm.NewSubpathKey(addr, BalancePath))
-	}
+	stateObject = s.mvRecordWritten(stateObject)
+	MVWrite(s, blockstm.NewSubpathKey(addr, BalancePath))
 	return stateObject.AddBalance(amount)
 }
 
@@ -811,11 +793,10 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tr
 		s.GetBalance(addr)
 	}
 
-	if stateObject != nil {
-		stateObject = s.mvRecordWritten(stateObject)
-		stateObject.SubBalance(amount, reason)
-		MVWrite(s, blockstm.NewSubpathKey(addr, BalancePath))
-	}
+	// TODO(manav): Confirm if we need to record if amount is zero
+	stateObject = s.mvRecordWritten(stateObject)
+	MVWrite(s, blockstm.NewSubpathKey(addr, BalancePath))
+
 	if amount.IsZero() {
 		return *(stateObject.Balance())
 	}
@@ -826,7 +807,7 @@ func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int, reason tr
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject = s.mvRecordWritten(stateObject)
-		stateObject.SetBalance(amount, reason)
+		stateObject.SetBalance(amount)
 		MVWrite(s, blockstm.NewSubpathKey(addr, BalancePath))
 	}
 }
@@ -849,12 +830,12 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	}
 }
 
-func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
+func (s *StateDB) SetState(addr common.Address, key, value common.Hash) common.Hash {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject = s.mvRecordWritten(stateObject)
-		stateObject.SetState(key, value)
 		MVWrite(s, blockstm.NewStateKey(addr, key))
+		return stateObject.SetState(key, value)
 	}
 	return common.Hash{}
 }
