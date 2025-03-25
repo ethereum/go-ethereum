@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -418,7 +419,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 	// Special case, there is no edge proof at all. The given range is expected
 	// to be the whole leaf-set in the trie.
 	if firstProof == nil && lastProof == nil {
-		emptytrie, err := New(emptyRoot, NewDatabase(memorydb.New()))
+		emptytrie, err := New(types.EmptyRootHash, NewDatabase(memorydb.New()))
 		if err != nil {
 			return err, false
 		}

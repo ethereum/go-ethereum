@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 )
 
@@ -295,7 +296,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	diskdb := memorydb.New()
 	triedb := NewDatabase(diskdb)
 
-	tr, _ := New(emptyRoot, triedb)
+	tr, _ := New(types.EmptyRootHash, triedb)
 	for _, val := range testdata1 {
 		tr.Update([]byte(val.k), []byte(val.v))
 	}
@@ -386,7 +387,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	diskdb := memorydb.New()
 	triedb := NewDatabase(diskdb)
 
-	ctr, _ := New(emptyRoot, triedb)
+	ctr, _ := New(types.EmptyRootHash, triedb)
 	for _, val := range testdata1 {
 		ctr.Update([]byte(val.k), []byte(val.v))
 	}

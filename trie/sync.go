@@ -23,6 +23,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/prque"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 )
 
@@ -109,7 +110,7 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 // AddSubTrie registers a new trie to the sync code, rooted at the designated parent.
 func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback LeafCallback) {
 	// Short circuit if the trie is empty or already known
-	if root == emptyRoot {
+	if root == types.EmptyRootHash {
 		return
 	}
 	if s.membatch.hasNode(root) {
@@ -149,7 +150,7 @@ func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callb
 // as is.
 func (s *Sync) AddCodeEntry(hash common.Hash, depth int, parent common.Hash) {
 	// Short circuit if the entry is empty or already known
-	if hash == emptyState {
+	if hash == types.EmptyCodeHash {
 		return
 	}
 	if s.membatch.hasCode(hash) {

@@ -23,20 +23,8 @@ import (
 	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
-)
-
-var (
-	// TODO(daniel):
-	// 1. remove file core/types/derive_sha.go, Ref: #21502
-	// 2. then replace emptyRoot, emptyState with types.EmptyRootHash, types.EmptyCodeHash, Ref: #26718
-
-	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-
-	// emptyState is the known hash of an empty state trie entry.
-	emptyState = crypto.Keccak256Hash(nil)
 )
 
 // LeafCallback is a callback type invoked when a trie operation reaches a leaf
@@ -76,7 +64,7 @@ func New(root common.Hash, db *Database) (*Trie, error) {
 	trie := &Trie{
 		Db: db,
 	}
-	if root != (common.Hash{}) && root != emptyRoot {
+	if root != (common.Hash{}) && root != types.EmptyRootHash {
 		rootnode, err := trie.resolveHash(root[:], nil)
 		if err != nil {
 			return nil, err
@@ -591,7 +579,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 		panic("commit called on trie with nil database")
 	}
 	if t.root == nil {
-		return emptyRoot, nil
+		return types.EmptyRootHash, nil
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
@@ -635,7 +623,7 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error) {
 // hashRoot calculates the root hash of the given trie
 func (t *Trie) hashRoot() (node, node, error) {
 	if t.root == nil {
-		return hashNode(emptyRoot.Bytes()), nil, nil
+		return hashNode(types.EmptyRootHash.Bytes()), nil, nil
 	}
 	// If the number of changes is below 100, we let one thread handle it
 	h := newHasher(t.unhashed >= 100)
