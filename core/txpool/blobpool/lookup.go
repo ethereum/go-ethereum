@@ -50,7 +50,10 @@ func (l *lookup) exists(txhash common.Hash) bool {
 // storeidOfTx returns the datastore storage item id of a transaction.
 func (l *lookup) storeidOfTx(txhash common.Hash) (uint64, bool) {
 	meta, ok := l.txIndex[txhash]
-	return meta.id, ok
+	if !ok {
+		return 0, false
+	}
+	return meta.id, true
 }
 
 // storeidOfBlob returns the datastore storage item id of a blob.
@@ -70,7 +73,10 @@ func (l *lookup) storeidOfBlob(vhash common.Hash) (uint64, bool) {
 // sizeOfTx returns the RLP-encoded size of transaction
 func (l *lookup) sizeOfTx(txhash common.Hash) (uint64, bool) {
 	meta, ok := l.txIndex[txhash]
-	return meta.size, ok
+	if !ok {
+		return 0, false
+	}
+	return meta.size, true
 }
 
 // track inserts a new set of mappings from blob versioned hashes to transaction
