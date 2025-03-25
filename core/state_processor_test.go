@@ -287,5 +287,5 @@ func GenerateBadBlock(t *testing.T, parent *types.Block, engine consensus.Engine
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie))
+	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
 }

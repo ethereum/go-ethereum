@@ -383,7 +383,7 @@ func createBlockFromHeader(bc *core.BlockChain, customHeader *types.Header, txs 
 		}
 
 		header.GasUsed = *gasUsed
-		block = types.NewBlock(&header, txs, nil, receipts, new(trie.Trie))
+		block = types.NewBlock(&header, txs, nil, receipts, trie.NewStackTrie(nil))
 	}
 
 	return block, nil

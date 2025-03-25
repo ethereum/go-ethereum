@@ -858,7 +858,7 @@ func createBlockFromHeader(bc *core.BlockChain, customHeader *types.Header, txs 
 		header.Coinbase = signerAddress
 		sealHeader(bc, &header, signerAddress, signerFunction)
 
-		block = types.NewBlock(&header, txs, nil, receipts, new(trie.Trie))
+		block = types.NewBlock(&header, txs, nil, receipts, trie.NewStackTrie(nil))
 	}
 
 	return block, nil
