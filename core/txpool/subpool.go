@@ -86,9 +86,10 @@ type PendingFilter struct {
 	OnlyBlobTxs  bool // Return only blob transactions (block blob-space filling)
 }
 
+// TxMetadata denotes the metadata of a transaction.
 type TxMetadata struct {
-	Type uint8
-	Size uint64
+	Type uint8  // The type of the transaction
+	Size uint64 // The length of the 'rlp encoding' of a transaction
 }
 
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
@@ -132,8 +133,8 @@ type SubPool interface {
 	// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
 	GetRLP(hash common.Hash) []byte
 
-	// GetMetadata returns the transaction type and transaction size with the given
-	// hash.
+	// GetMetadata returns the transaction type and transaction size with the
+	// given transaction hash.
 	GetMetadata(hash common.Hash) *TxMetadata
 
 	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.

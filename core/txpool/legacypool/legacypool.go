@@ -1035,14 +1035,13 @@ func (pool *LegacyPool) GetRLP(hash common.Hash) []byte {
 	return encoded
 }
 
-// GetMetadata returns the transaction type and transaction size with the given
-// hash.
+// GetMetadata returns the transaction type and transaction size with the
+// given transaction hash.
 func (pool *LegacyPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 	tx := pool.all.Get(hash)
 	if tx == nil {
 		return nil
 	}
-
 	return &txpool.TxMetadata{
 		Type: tx.Type(),
 		Size: tx.Size(),

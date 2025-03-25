@@ -71,8 +71,8 @@ type txPool interface {
 	// with given tx hash.
 	GetRLP(hash common.Hash) []byte
 
-	// GetMetadata returns the transaction type and transaction size with the given
-	// hash.
+	// GetMetadata returns the transaction type and transaction size with the
+	// given transaction hash.
 	GetMetadata(hash common.Hash) *txpool.TxMetadata
 
 	// Add should add the given transactions to the pool.
