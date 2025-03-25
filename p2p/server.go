@@ -511,7 +511,7 @@ func (srv *Server) setupDiscovery() error {
 func (srv *Server) setupDialScheduler() {
 	config := dialConfig{
 		self:           srv.localnode.ID(),
-		maxDialPeers:   srv.maxDialedConns(),
+		maxDialPeers:   srv.MaxDialedConns(),
 		maxActiveDials: srv.MaxPendingPeers,
 		log:            srv.Logger,
 		netRestrict:    srv.NetRestrict,
@@ -535,11 +535,11 @@ func (srv *Server) setupConnManager() {
 	srv.connman = newConnManager(config, srv.Peers)
 }
 
-func (srv *Server) maxInboundConns() int {
-	return srv.MaxPeers - srv.maxDialedConns()
+func (srv *Server) MaxInboundConns() int {
+	return srv.MaxPeers - srv.MaxDialedConns()
 }
 
-func (srv *Server) maxDialedConns() (limit int) {
+func (srv *Server) MaxDialedConns() (limit int) {
 	if srv.NoDial || srv.MaxPeers == 0 {
 		return 0
 	}
@@ -746,7 +746,7 @@ func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount in
 	switch {
 	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
-	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
+	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.MaxInboundConns():
 		return DiscTooManyPeers
 	case peers[c.node.ID()] != nil:
 		return DiscAlreadyConnected
