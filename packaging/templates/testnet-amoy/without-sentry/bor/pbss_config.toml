@@ -38,7 +38,7 @@ syncmode = "full"
     # txarrivalwait = "500ms"
     # txannouncementonly = false
     [p2p.discovery]
-        # v5disc = false
+        # v5disc = true
         # bootnodesv5 = []
         # bootnodesv4 = []
         bootnodes = [ "enode://0ef8758cafc0063405f3f31fe22f2a3b566aa871bd7cd405e35954ec8aa7237c21e1ccc1f65f1b6099ab36db029362bc2fecf001a771b3d9803bbf1968508cef@35.197.249.21:30303", "enode://c9c8c18cde48b41d46ced0c564496aef721a9b58f8724025a0b1f3f26f1b826f31786f890f8f8781e18b16dbb3c7bff805c7304d1273ac11630ed25a3f0dc41c@34.89.39.114:30303" ]

@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
 )
 
-//go:generate mockgen -destination=../../tests/bor/mocks/IHeimdallClient.go -package=mocks . IHeimdallClient
+//go:generate mockgen -source=heimdall.go -destination=../../tests/bor/mocks/IHeimdallClient.go -package=mocks
 type IHeimdallClient interface {
 	StateSyncEvents(ctx context.Context, fromID uint64, to int64) ([]*clerk.EventRecordWithTime, error)
 	Span(ctx context.Context, spanID uint64) (*span.HeimdallSpan, error)

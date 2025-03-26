@@ -8,9 +8,9 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.heimdall```: URL of Heimdall service (default: http://localhost:1317)
 
-- ```bor.heimdalltimeout```: Timeout of Heimdall service (default: 5s)
-
 - ```bor.heimdallgRPC```: Address of Heimdall gRPC service
+
+- ```bor.heimdalltimeout```: Timeout period for bor's outgoing requests to heimdall (default: 5s)
 
 - ```bor.logs```: Enables bor log retrieval (default: false)
 
@@ -22,7 +22,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose) (default: false)
 
-- ```chain```: Name of the chain to sync ('amoy', 'mainnet') or path to a genesis file (default: mainnet)
+- ```chain```: Name of the chain to sync ('amoy', 'mumbai', 'mainnet') or path to a genesis file (default: mainnet)
 
 - ```config```: Path to the TOML configuration file
 
@@ -240,13 +240,13 @@ The ```bor server``` command runs the Bor client.
 
 - ```port```: Network listening port (default: 30303)
 
-- ```txarrivalwait```: Maximum duration to wait for a transaction before explicitly requesting it (default: 500ms)
-
 - ```txannouncementonly```: Whether to only announce transactions to peers (default: false)
+
+- ```txarrivalwait```: Maximum duration to wait for a transaction before explicitly requesting it (default: 500ms)
 
 - ```v4disc```: Enables the V4 discovery mechanism (default: true)
 
-- ```v5disc```: Enables the experimental RLPx V5 (Topic Discovery) mechanism (default: false)
+- ```v5disc```: Enables the V5 discovery mechanism (default: true)
 
 ### Sealer Options
 
