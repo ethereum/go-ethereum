@@ -473,8 +473,10 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 		gspec.Config.TerminalTotalDifficulty = common.Big0
 		// GenerateChain will increment timestamps by 10.
 		// Shanghai upgrade at block 1.
-		shanghaiTime := uint64(5)
-		gspec.Config.ShanghaiTime = &shanghaiTime
+		// shanghaiTime := uint64(5)
+		// gspec.Config.ShanghaiTime = &shanghaiTime
+		// Using block 1 instead as bor doesn't allow timestamp based hardforks
+		gspec.Config.ShanghaiBlock = big.NewInt(1)
 	} else {
 		// set an arbitrary large ttd as chains are required to be known to be merged
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(math.MaxInt64)
