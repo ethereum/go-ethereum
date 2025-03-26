@@ -35,6 +35,7 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 		BlobGasUsed      *hexutil.Uint64         `json:"blobGasUsed"`
 		ExcessBlobGas    *hexutil.Uint64         `json:"excessBlobGas"`
 		ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
+		ProofVersion     *uint8                  `json:"proofVersion"`
 	}
 	var enc ExecutableData
 	enc.ParentHash = e.ParentHash
@@ -60,6 +61,7 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 	enc.BlobGasUsed = (*hexutil.Uint64)(e.BlobGasUsed)
 	enc.ExcessBlobGas = (*hexutil.Uint64)(e.ExcessBlobGas)
 	enc.ExecutionWitness = e.ExecutionWitness
+	enc.ProofVersion = e.ProofVersion
 	return json.Marshal(&enc)
 }
 
@@ -84,6 +86,7 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 		BlobGasUsed      *hexutil.Uint64         `json:"blobGasUsed"`
 		ExcessBlobGas    *hexutil.Uint64         `json:"excessBlobGas"`
 		ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
+		ProofVersion     *uint8                  `json:"proofVersion"`
 	}
 	var dec ExecutableData
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -159,6 +162,9 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ExecutionWitness != nil {
 		e.ExecutionWitness = dec.ExecutionWitness
+	}
+	if dec.ProofVersion != nil {
+		e.ProofVersion = dec.ProofVersion
 	}
 	return nil
 }
