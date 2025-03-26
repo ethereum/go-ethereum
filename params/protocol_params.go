@@ -229,6 +229,10 @@ var (
 )
 
 func BaseFeeChangeDenominator(borConfig *BorConfig, number *big.Int) uint64 {
+	// Handle cases where bor consensus isn't available to avoid panic
+	if borConfig == nil {
+		return DefaultBaseFeeChangeDenominator
+	}
 	if borConfig.IsDelhi(number) {
 		return BaseFeeChangeDenominatorPostDelhi
 	} else {
