@@ -4339,6 +4339,13 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64)
 		if header.Hash() != hash {
 			t.Errorf("block #%d: header mismatch: want: %v, got: %v", num, hash, header.Hash())
 		}
+		tail, err := db.Tail()
+		if err != nil {
+			t.Fatalf("Failed to get chain tail, %v", err)
+		}
+		if tail != cutoffBlock.NumberU64() {
+			t.Fatalf("Unexpected chain tail, want: %d, got: %d", cutoffBlock.NumberU64(), tail)
+		}
 		// Block bodies and receipts before the cutoff should be non-existent
 		if num < cutoffBlock.NumberU64() {
 			body := chain.GetBody(hash)

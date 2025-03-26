@@ -1133,9 +1133,19 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 		header = d.blockchain.CurrentHeader()
 		block  = d.blockchain.CurrentSnapBlock()
 	)
-	syncedBlocks := block.Number.Uint64() - d.syncStartBlock
-	if syncedBlocks == 0 {
+	// Prevent reporting if nothing has been synchronized yet
+	if block.Number.Uint64() <= d.syncStartBlock {
 		return
+	}
+	// Prevent reporting noise if the actual chain synchronization (headers
+	// and bodies) hasn't started yet. Inserting the ancient header chain is
+	// fast enough and would introduce significant bias if included in the count.
+	if d.chainCutoffNumber != 0 && block.Number.Uint64() < d.chainCutoffNumber {
+		return
+	}
+	fetchedBlocks := block.Number.Uint64() - d.syncStartBlock
+	if d.chainCutoffNumber != 0 {
+		fetchedBlocks = block.Number.Uint64() - d.chainCutoffNumber
 	}
 	// Retrieve the current chain head and calculate the ETA
 	latest, _, _, err := d.skeleton.Bounds()
@@ -1151,9 +1161,7 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 	}
 	var (
 		left = latest.Number.Uint64() - block.Number.Uint64()
-
-		// TODO(rjl493456442) fix the ETA in the pruning mode.
-		eta = time.Since(d.syncStartTime) / time.Duration(syncedBlocks) * time.Duration(left)
+		eta  = time.Since(d.syncStartTime) / time.Duration(fetchedBlocks) * time.Duration(left)
 
 		progress = fmt.Sprintf("%.2f%%", float64(block.Number.Uint64())*100/float64(latest.Number.Uint64()))
 		headers  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(header.Number.Uint64()), common.StorageSize(headerBytes).TerminalString())
