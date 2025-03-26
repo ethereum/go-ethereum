@@ -78,8 +78,6 @@ func TestRuntimeHistogramStats(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		i, test := i, test
-
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			s := RuntimeHistogramFromData(1.0, &test.h).Snapshot()
 

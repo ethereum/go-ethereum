@@ -1442,7 +1442,9 @@ func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadR
 		block:    block,
 		fees:     totalFees(block, work.receipts),
 		sidecars: work.sidecars,
-		witness:  work.witness,
+		stateDB:  work.state,
+		receipts: work.receipts,
+		requests: requests,
 	}
 }
 

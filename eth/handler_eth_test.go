@@ -619,7 +619,6 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 	done := make(chan struct{}, peers)
 
 	for _, ch := range blockChs {
-		ch := ch
 		go func() {
 			<-ch
 			done <- struct{}{}
