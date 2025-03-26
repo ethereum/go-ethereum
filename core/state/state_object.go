@@ -328,11 +328,11 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		// Skip noop changes, persist actual changes
 		value, exist := s.pendingStorage[key]
 		if value == origin {
-			log.Error("Storage update was noop", "address", s.address, "slot", key)
+			log.Warn("Storage update was noop", "address", s.address, "slot", key)
 			continue
 		}
 		if !exist {
-			log.Error("Storage slot is not found in pending area", s.address, "slot", key)
+			log.Warn("Storage slot is not found in pending area", s.address, "slot", key)
 			continue
 		}
 		if (value != common.Hash{}) {
