@@ -16,7 +16,6 @@
 package validator
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -36,7 +35,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 var (
@@ -300,12 +298,7 @@ func TestStatedbUtils(t *testing.T) {
 	code, _ := contractBackend.CodeAt(ctx, validatorAddress, nil)
 	storage := make(map[common.Hash]common.Hash)
 	f := func(key, val common.Hash) bool {
-		decode := []byte{}
-		trim := bytes.TrimLeft(val.Bytes(), "\x00")
-		rlp.DecodeBytes(trim, &decode)
-		storage[key] = common.BytesToHash(decode)
-		// t.Log("DecodeBytes", "value", val.String(), "decode", storage[key].String())
-		// t.Log("key", key.String(), "value", storage[key].String())
+		storage[key] = val
 		return true
 	}
 	contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)

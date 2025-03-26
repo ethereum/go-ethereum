@@ -28,7 +28,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
 	"github.com/stretchr/testify/assert"
 )
@@ -178,14 +177,7 @@ func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.S
 	code, _ := contractBackendForSC.CodeAt(ctx, validatorSCAddr, nil)
 	storage := make(map[common.Hash]common.Hash)
 	f := func(key, val common.Hash) bool {
-		decode := []byte{}
-		trim := bytes.TrimLeft(val.Bytes(), "\x00")
-		err := rlp.DecodeBytes(trim, &decode)
-		if err != nil {
-			t.Fatalf("Failed while decode byte")
-		}
-		storage[key] = common.BytesToHash(decode)
-		log.Info("DecodeBytes", "value", val.String(), "decode", storage[key].String())
+		storage[key] = val
 		return true
 	}
 	err = contractBackendForSC.ForEachStorageAt(ctx, validatorSCAddr, nil, f)
@@ -262,14 +254,7 @@ func getMultiCandidatesBackend(t *testing.T, chainConfig *params.ChainConfig, n 
 	code, _ := contractBackendForSC.CodeAt(ctx, validatorSCAddr, nil)
 	storage := make(map[common.Hash]common.Hash)
 	f := func(key, val common.Hash) bool {
-		decode := []byte{}
-		trim := bytes.TrimLeft(val.Bytes(), "\x00")
-		err := rlp.DecodeBytes(trim, &decode)
-		if err != nil {
-			t.Fatalf("Failed while decode byte")
-		}
-		storage[key] = common.BytesToHash(decode)
-		log.Info("DecodeBytes", "value", val.String(), "decode", storage[key].String())
+		storage[key] = val
 		return true
 	}
 	err = contractBackendForSC.ForEachStorageAt(ctx, validatorSCAddr, nil, f)
@@ -347,14 +332,7 @@ func getProtectorObserverBackend(t *testing.T, chainConfig *params.ChainConfig) 
 	code, _ := contractBackendForSC.CodeAt(ctx, validatorSCAddr, nil)
 	storage := make(map[common.Hash]common.Hash)
 	f := func(key, val common.Hash) bool {
-		decode := []byte{}
-		trim := bytes.TrimLeft(val.Bytes(), "\x00")
-		err := rlp.DecodeBytes(trim, &decode)
-		if err != nil {
-			t.Fatalf("Failed while decode byte")
-		}
-		storage[key] = common.BytesToHash(decode)
-		log.Info("DecodeBytes", "value", val.String(), "decode", storage[key].String())
+		storage[key] = val
 		return true
 	}
 	err = contractBackendForSC.ForEachStorageAt(ctx, validatorSCAddr, nil, f)
