@@ -146,17 +146,6 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
 		return nil // Sync already running
 	}
-	// If a beacon client once took over control, disable the entire legacy sync
-	// path from here on end. Note, there is a slight "race" between reaching TTD
-	// and the beacon client taking over. The downloader will enforce that nothing
-	// above the first TTD will be delivered to the chain for import.
-	//
-	// An alternative would be to check the local chain for exceeding the TTD and
-	// avoid triggering a sync in that case, but that could also miss sibling or
-	// other family TTD block being accepted.
-	if cs.handler.chain.Config().TerminalTotalDifficultyPassed {
-		return nil
-	}
 	// Ensure we're at minimum peer count.
 	minPeers := defaultMinSyncPeers
 	if cs.forced {
