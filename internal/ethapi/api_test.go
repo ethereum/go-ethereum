@@ -2583,7 +2583,6 @@ func TestFillBlobTransaction(t *testing.T) {
 				Value:       (*hexutil.Big)(big.NewInt(1)),
 				Blobs:       []kzg4844.Blob{{}},
 				Commitments: []kzg4844.Commitment{{}, {}},
-				Proofs:      []kzg4844.Proof{{}, {}},
 			},
 			err: `number of blobs and commitments mismatch (have=2, want=1)`,
 		},
@@ -3543,25 +3542,52 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	// Create a new BlockChainAPI instance
 	api := NewBlockChainAPI(backend)
 
-	// Create test contract code
-	contractCode := common.Hex2Bytes("608060405234801561001057600080fd5b506004361061002b5760003560e01c806360fe47b114610030575b600080fd5b61004a6004803603810190610045919061009d565b61004c565b005b8060008190555050565b600080fd5b6000819050919050565b61007a81610067565b811461008557600080fd5b50565b60008135905061009781610071565b92915050565b6000602082840312156100b3576100b2610062565b5b60006100c184828501610088565b9150509291505056")
+	// Create test contract code - a simple storage contract
+	//
+	// SPDX-License-Identifier: MIT
+	// pragma solidity ^0.8.0;
+	//
+	// contract SimpleStorage {
+	//     uint256 private value;
+	//
+	//     function retrieve() public view returns (uint256) {
+	//         return value;
+	//     }
+	// }
+	contractCode := common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80632e64cec114602d575b600080fd5b60336047565b604051603e91906067565b60405180910390f35b60008054905090565b6000819050919050565b6061816050565b82525050565b6000602082019050607a6000830184605a565b9291505056")
 	codeBytes := hexutil.Bytes(contractCode)
 
-	// Create state overrides
+	// Create state overrides with more complete state
+	contractAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
+	balance := (*hexutil.Big)(big.NewInt(1000000000000000000))
+	nonce := hexutil.Uint64(1)
+
+	// Add initial storage values
+	storage := map[common.Hash]common.Hash{
+		common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"): common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000002a"),
+	}
+
 	overrides := &override.StateOverride{
-		common.HexToAddress("0x1234567890123456789012345678901234567890"): override.OverrideAccount{
-			Code: &codeBytes,
+		contractAddr: override.OverrideAccount{
+			Code:    &codeBytes,
+			Balance: balance,
+			Nonce:   &nonce,
+			State:   storage,
 		},
 	}
 
-	// Create transaction arguments
+	// Create transaction arguments with gas and value
 	from := common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7")
-	to := common.HexToAddress("0x1234567890123456789012345678901234567890")
-	data := hexutil.Bytes(common.Hex2Bytes("60fe47b1000000000000000000000000000000000000000000000000000000000000002a")) // set(42)
+	to := contractAddr
+	data := hexutil.Bytes(common.Hex2Bytes("2e64cec1")) // retrieve()
+	gas := hexutil.Uint64(100000)
+	value := (*hexutil.Big)(big.NewInt(0))
 	args := TransactionArgs{
-		From: &from,
-		To:   &to,
-		Data: &data,
+		From:  &from,
+		To:    &to,
+		Data:  &data,
+		Gas:   &gas,
+		Value: value,
 	}
 
 	// Call CreateAccessList
@@ -3581,15 +3607,25 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 		t.Fatal("Expected non-zero gas used")
 	}
 
-	// Verify access list contains the overridden contract address
-	found := false
+	// Verify access list contains the contract address and storage slot
+	foundAddr := false
+	foundSlot := false
 	for _, tuple := range *result.Accesslist {
-		if tuple.Address == common.HexToAddress("0x1234567890123456789012345678901234567890") {
-			found = true
+		if tuple.Address == contractAddr {
+			foundAddr = true
+			for _, slot := range tuple.StorageKeys {
+				if slot == common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000") {
+					foundSlot = true
+					break
+				}
+			}
 			break
 		}
 	}
-	if !found {
-		t.Fatal("Access list should contain the overridden contract address")
+	if !foundAddr {
+		t.Fatal("Access list should contain the contract address")
+	}
+	if !foundSlot {
+		t.Fatal("Access list should contain the storage slot")
 	}
 }
