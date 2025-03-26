@@ -1144,6 +1144,15 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		return nil, 0, nil, err
 	}
 
+	// Apply state overrides immediately after StateAndHeaderByNumberOrHash.
+	// If not applied here, there could be cases where user-specified overrides (e.g., nonce)
+	// may conflict with default values from the database, leading to inconsistencies.
+	if stateOverrides != nil {
+		if err := stateOverrides.Apply(db, nil); err != nil {
+			return nil, 0, nil, err
+		}
+	}
+
 	// Ensure any missing fields are filled, extract the recipient and input data
 	if err = args.setFeeDefaults(ctx, b, header); err != nil {
 		return nil, 0, nil, err
@@ -1155,13 +1164,6 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if err = args.CallDefaults(b.RPCGasCap(), blockCtx.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, 0, nil, err
-	}
-
-	// Apply state overrides if provided
-	if stateOverrides != nil {
-		if err := stateOverrides.Apply(db, nil); err != nil {
-			return nil, 0, nil, err
-		}
 	}
 
 	var to common.Address
