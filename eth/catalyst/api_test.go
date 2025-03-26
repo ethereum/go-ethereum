@@ -43,12 +43,14 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/mattn/go-colorable"
 )
 
 var (
@@ -1686,13 +1688,15 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 }
 
 func TestWitnessCreationAndConsumption(t *testing.T) {
+	t.Skip("This test is not compatible with bor")
+
 	genesis, blocks := generateMergeChain(10, true)
 
+	// Bor doesn't allow timebased hardforks
 	// Set cancun time to semi-last block + 5 seconds
-	timestamp := blocks[len(blocks)-2].Time() + 5
-	genesis.Config.ShanghaiTime = &timestamp
-	genesis.Config.CancunTime = &timestamp
-	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
+	// timestamp := blocks[len(blocks)-2].Time() + 5
+	// genesis.Config.ShanghaiTime = &timestamp
+	// genesis.Config.CancunTime = &timestamp
 
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
@@ -1702,7 +1706,7 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 	// Put the 10th block's tx in the pool and produce a new block
 	txs := blocks[9].Transactions()
 
-	ethservice.TxPool().Add(txs, true)
+	ethservice.TxPool().Add(txs, true, true)
 	blockParams := engine.PayloadAttributes{
 		Timestamp:   blocks[8].Time() + 5,
 		Withdrawals: make([]*types.Withdrawal, 0),

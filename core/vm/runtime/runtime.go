@@ -75,8 +75,8 @@ func setDefaults(cfg *Config) {
 			GrayGlacierBlock:        nil,
 			TerminalTotalDifficulty: big.NewInt(0),
 			MergeNetsplitBlock:      nil,
-			ShanghaiTime:            &shanghaiTime,
-			CancunTime:              &cancunTime}
+			ShanghaiBlock:           new(big.Int),
+			CancunBlock:             new(big.Int)}
 	}
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
