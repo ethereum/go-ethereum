@@ -1117,12 +1117,13 @@ type accessListResult struct {
 
 // CreateAccessList creates an EIP-2930 type AccessList for the given transaction.
 // Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
-func (api *BlockChainAPI) CreateAccessList(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*accessListResult, error) {
+// StateOverrides can be used to create the accessList while taking into account state changes from previous transactions.
+func (api *BlockChainAPI) CreateAccessList(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, stateOverrides *override.StateOverride) (*accessListResult, error) {
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	acl, gasUsed, vmerr, err := AccessList(ctx, api.b, bNrOrHash, args)
+	acl, gasUsed, vmerr, err := AccessList(ctx, api.b, bNrOrHash, args, stateOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -1136,7 +1137,7 @@ func (api *BlockChainAPI) CreateAccessList(ctx context.Context, args Transaction
 // AccessList creates an access list for the given transaction.
 // If the accesslist creation fails an error is returned.
 // If the transaction itself fails, an vmErr is returned.
-func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args TransactionArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
+func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args TransactionArgs, stateOverrides *override.StateOverride) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
 	// Retrieve the execution context
 	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if db == nil || err != nil {
@@ -1154,6 +1155,13 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
 	if err = args.CallDefaults(b.RPCGasCap(), blockCtx.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return nil, 0, nil, err
+	}
+
+	// Apply state overrides if provided
+	if stateOverrides != nil {
+		if err := stateOverrides.Apply(db, nil); err != nil {
+			return nil, 0, nil, err
+		}
 	}
 
 	var to common.Address
