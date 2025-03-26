@@ -119,9 +119,9 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 			// Configure a blockchain with the given prestate
 			var (
-				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-				context = test.Context.toBlockContext(test.Genesis)
-				st      = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+				signer       = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
+				blockContext = test.Context.toBlockContext(test.Genesis)
+				st           = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
 			st.Close()
 
@@ -133,11 +133,11 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if tracer.Hooks != nil {
 				logState = state.NewHookedState(st.StateDB, tracer.Hooks)
 			}
-			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
+			msg, err := core.TransactionToMessage(tx, signer, blockContext.BaseFee)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			evm := vm.NewEVM(blockContext, core.NewEVMTxContext(msg), logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()), context.Background())
 			if err != nil {
@@ -224,8 +224,8 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		Origin:   origin,
 		GasPrice: tx.GasPrice(),
 	}
-	context := test.Context.toBlockContext(test.Genesis)
-	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
+	blockContext := test.Context.toBlockContext(test.Genesis)
+	msg, err := core.TransactionToMessage(tx, signer, blockContext.BaseFee)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
@@ -396,7 +396,7 @@ func TestInternals(t *testing.T) {
 				Origin:   origin,
 				GasPrice: tx.GasPrice(),
 			}
-			evm := vm.NewEVM(context, txContext, logState, config, vm.Config{Tracer: tc.tracer.Hooks})
+			evm := vm.NewEVM(blockContext, txContext, logState, config, vm.Config{Tracer: tc.tracer.Hooks})
 			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0))
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
