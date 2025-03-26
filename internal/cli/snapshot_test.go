@@ -65,10 +65,10 @@ func testOfflineBlockPruneWithAmountReserved(t *testing.T, amountReserved uint64
 	oldAncientPath := filepath.Join(chaindbPath, "ancient")
 	newAncientPath := filepath.Join(chaindbPath, "ancient_back")
 
-	_, _, blockList, receiptsList, externTdList, startBlockNumber, _ := BlockchainCreator(t, chaindbPath, oldAncientPath, amountReserved)
-
 	node := startEthService(t, chaindbPath)
 	defer node.Close()
+
+	_, _, blockList, receiptsList, externTdList, startBlockNumber, _ := BlockchainCreator(t, node, chaindbPath, oldAncientPath, amountReserved)
 
 	// Initialize a block pruner for pruning, only remain amountReserved blocks backward.
 	testBlockPruner := pruner.NewBlockPruner(node, oldAncientPath, newAncientPath, amountReserved)
@@ -78,17 +78,7 @@ func testOfflineBlockPruneWithAmountReserved(t *testing.T, amountReserved uint64
 	err = testBlockPruner.BlockPruneBackup(chaindbPath, 512, dbHandles, "", false, false)
 	require.NoError(t, err, "failed to backup block")
 
-	dbBack, err := rawdb.Open(rawdb.OpenOptions{
-		Type:              node.Config().DBEngine,
-		Directory:         chaindbPath,
-		AncientsDirectory: newAncientPath,
-		Namespace:         "",
-		Cache:             0,
-		Handles:           0,
-		ReadOnly:          false,
-		DisableFreeze:     true,
-		IsLastOffset:      false,
-	})
+	dbBack, err := node.OpenDatabaseWithFreezer(chaindbPath, 0, 0, newAncientPath, "", false, true, false)
 	require.NoError(t, err, "failed to create db with ancient backend")
 
 	defer dbBack.Close()
@@ -138,20 +128,11 @@ func testOfflineBlockPruneWithAmountReserved(t *testing.T, amountReserved uint64
 	require.NoError(t, err, "failed to replace ancientDb")
 }
 
-func BlockchainCreator(t *testing.T, chaindbPath, AncientPath string, blockRemain uint64) (ethdb.Database, []*types.Block, []*types.Block, []types.Receipts, []*big.Int, uint64, *core.BlockChain) {
+func BlockchainCreator(t *testing.T, node *node.Node, chaindbPath, AncientPath string, blockRemain uint64) (ethdb.Database, []*types.Block, []*types.Block, []types.Receipts, []*big.Int, uint64, *core.BlockChain) {
 	t.Helper()
 
-	// Create a database with ancient freezer
-	db, err := rawdb.Open(rawdb.OpenOptions{
-		Directory:         chaindbPath,
-		AncientsDirectory: AncientPath,
-		Namespace:         "",
-		Cache:             0,
-		Handles:           0,
-		ReadOnly:          false,
-		DisableFreeze:     false,
-		IsLastOffset:      false,
-	})
+	// Create a database with ancient freezer.
+	db, err := node.OpenDatabaseWithFreezer(chaindbPath, 0, 0, AncientPath, "", false, false, false)
 	require.NoError(t, err, "failed to create db with ancient backend")
 
 	defer db.Close()
