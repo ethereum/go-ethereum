@@ -182,6 +182,7 @@ func testReleaseBranch(t *testing.T, targetBranch string) {
 		require.NoErrorf(t, err, "%T.Head()", repo)
 
 		head := commitFromRef(t, repo, headRef)
+		t.Logf("HEAD is %v (%s)", head.Hash, commitMsgFirstLine(head))
 		main := commitFromBranchName(t, repo, defaultBranch)
 
 		closestCommonAncestors, err := head.MergeBase(main)
