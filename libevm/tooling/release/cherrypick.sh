@@ -27,7 +27,7 @@ set -o pipefail;
 
 SELF_DIR=$(dirname "${0}")
 # The format of the `cherrypicks` file is guaranteed by a test so we can use simple parsing here.
-CHERRY_PICKS=$(< "${SELF_DIR}/cherrypicks" grep -Pv "^#" | awk '{print $1}')
+CHERRY_PICKS=$(< "${SELF_DIR}/cherrypicks" grep -Ev "^#" | awk '{print $1}')
 
 commits=()
 for commit in ${CHERRY_PICKS}; do
@@ -44,4 +44,4 @@ if [[ -z "${commits[*]// }" ]]; then # $x// removes whitespace
     exit 0;
 fi
 
-git cherry-pick "${commits[@]}";
+git cherry-pick -S "${commits[@]}";
