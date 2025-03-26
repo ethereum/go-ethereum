@@ -405,7 +405,7 @@ func (s *Ethereum) Start() error {
 	s.handler.Start(s.p2pServer.MaxPeers)
 
 	// Start the connection manager
-	s.connman.Start(s.p2pServer, s.Synced)
+	s.connman.Start(s.p2pServer, func() bool { return !s.Synced() })
 
 	// start log indexer
 	s.filterMaps.Start()
