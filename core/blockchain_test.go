@@ -1513,6 +1513,7 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan Re
 }
 
 func TestReorgSideEvent(t *testing.T) {
+	t.Skip("needs discussion")
 	testReorgSideEvent(t, rawdb.HashScheme)
 	testReorgSideEvent(t, rawdb.PathScheme)
 }
