@@ -3597,10 +3597,8 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 
 	// Verify access list contains the contract address and storage slot
 	expected := &types.AccessList{{
-		Address: contractAddr,
-		StorageKeys: []common.Hash{
-			common.Hash{},
-		},
+		Address:     contractAddr,
+		StorageKeys: []common.Hash{{}},
 	}}
 	require.Equal(t, expected, result.Accesslist)
 }
