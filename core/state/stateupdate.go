@@ -55,9 +55,10 @@ type accountUpdate struct {
 	// The map key refers to the **HASH** of the raw storage slot key.
 	storages map[common.Hash][]byte
 
-	// storagesOrigin store the original values of mutated slots in prefix-zero-trimmed RLP format.
-	// if `rawStorageKey` is true, the map key refers to the **RAW** storage slot key,
-	// else the **HASH** of the raw storage slot key.
+	// storagesOrigin store the original values of mutated slots in
+	// prefix-zero-trimmed RLP format.
+	// - the map key refers to the **RAW** slot key if `rawStorageKey` is true
+	// - the map key refers to the **HASH** of slot key if `rawStorageKey` is false
 	storagesOrigin map[common.Hash][]byte
 }
 
