@@ -3534,7 +3534,7 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	// Initialize test backend
 	genesis := &core.Genesis{
 		Config: params.TestChainConfig,
-		Alloc: core.GenesisAlloc{
+		Alloc: types.GenesisAlloc{
 			common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7"): {Balance: big.NewInt(1000000000000000000)},
 		},
 	}
@@ -3555,78 +3555,52 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	//         return value;
 	//     }
 	// }
-	contractCode := common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80632e64cec114602d575b600080fd5b60336047565b604051603e91906067565b60405180910390f35b60008054905090565b6000819050919050565b6061816050565b82525050565b6000602082019050607a6000830184605a565b9291505056")
-	codeBytes := hexutil.Bytes(contractCode)
-
-	// Create state overrides with more complete state
-	contractAddr := common.HexToAddress("0x1234567890123456789012345678901234567890")
-	balance := (*hexutil.Big)(big.NewInt(1000000000000000000))
-	nonce := hexutil.Uint64(1)
-
-	// Add initial storage values
-	storage := map[common.Hash]common.Hash{
-		common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"): common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000002a"),
-	}
-
-	overrides := &override.StateOverride{
-		contractAddr: override.OverrideAccount{
-			Code:    &codeBytes,
-			Balance: balance,
-			Nonce:   &nonce,
-			State:   storage,
-		},
-	}
+	var (
+		contractCode = hexutil.Bytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80632e64cec114602d575b600080fd5b60336047565b604051603e91906067565b60405180910390f35b60008054905090565b6000819050919050565b6061816050565b82525050565b6000602082019050607a6000830184605a565b9291505056"))
+		// Create state overrides with more complete state
+		contractAddr = common.HexToAddress("0x1234567890123456789012345678901234567890")
+		nonce        = hexutil.Uint64(1)
+		overrides    = &override.StateOverride{
+			contractAddr: override.OverrideAccount{
+				Code:    &contractCode,
+				Balance: (*hexutil.Big)(big.NewInt(1000000000000000000)),
+				Nonce:   &nonce,
+				State: map[common.Hash]common.Hash{
+					common.Hash{}: common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000002a"),
+				},
+			},
+		}
+	)
 
 	// Create transaction arguments with gas and value
-	from := common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7")
-	to := contractAddr
-	data := hexutil.Bytes(common.Hex2Bytes("2e64cec1")) // retrieve()
-	gas := hexutil.Uint64(100000)
-	value := (*hexutil.Big)(big.NewInt(0))
-	args := TransactionArgs{
-		From:  &from,
-		To:    &to,
-		Data:  &data,
-		Gas:   &gas,
-		Value: value,
-	}
-
+	var (
+		from = common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7")
+		data = hexutil.Bytes(common.Hex2Bytes("2e64cec1")) // retrieve()
+		gas  = hexutil.Uint64(100000)
+		args = TransactionArgs{
+			From:  &from,
+			To:    &contractAddr,
+			Data:  &data,
+			Gas:   &gas,
+			Value: new(hexutil.Big),
+		}
+	)
 	// Call CreateAccessList
 	result, err := api.CreateAccessList(context.Background(), args, nil, overrides)
 	if err != nil {
 		t.Fatalf("Failed to create access list: %v", err)
 	}
-
-	// Verify the result
-	if result == nil {
-		t.Fatal("Expected non-nil result")
+	if err != nil || result == nil {
+		t.Fatalf("Failed to create access list: %v", err)
 	}
-	if result.Accesslist == nil {
-		t.Fatal("Expected non-nil access list")
-	}
-	if result.GasUsed == 0 {
-		t.Fatal("Expected non-zero gas used")
-	}
+	require.NotNil(t, result.Accesslist)
 
 	// Verify access list contains the contract address and storage slot
-	foundAddr := false
-	foundSlot := false
-	for _, tuple := range *result.Accesslist {
-		if tuple.Address == contractAddr {
-			foundAddr = true
-			for _, slot := range tuple.StorageKeys {
-				if slot == common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000") {
-					foundSlot = true
-					break
-				}
-			}
-			break
-		}
-	}
-	if !foundAddr {
-		t.Fatal("Access list should contain the contract address")
-	}
-	if !foundSlot {
-		t.Fatal("Access list should contain the storage slot")
-	}
+	expected := &types.AccessList{{
+		Address: contractAddr,
+		StorageKeys: []common.Hash{
+			common.Hash{},
+		},
+	}}
+	require.Equal(t, expected, result.Accesslist)
 }
