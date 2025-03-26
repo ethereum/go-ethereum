@@ -261,6 +261,7 @@ func getContractStoredBlockHash(statedb *state.StateDB, number uint64) common.Ha
 
 // TestProcessVerkleInvalidContractCreation checks for several modes of contract creation failures
 func TestProcessVerkleInvalidContractCreation(t *testing.T) {
+	t.Skip("verkle trie is not yet supported in bor")
 	var (
 		account1 = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
 		account2 = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
