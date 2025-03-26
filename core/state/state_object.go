@@ -77,7 +77,7 @@ type stateObject struct {
 	trie Trie // storage trie, which becomes non-nil on first access
 	code Code // contract bytecode, which gets set when code is loaded
 
-	cachedStorage Storage // Storage entry cache to avoid duplicate reads
+	originStorage Storage // Storage cache of original entries to dedup rewrites, reset for every transaction
 	dirtyStorage  Storage // Storage entries that need to be flushed to disk
 	fakeStorage   Storage // Fake storage which constructed by caller for debugging purpose.
 
@@ -128,7 +128,7 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 		address:       address,
 		addrHash:      crypto.Keccak256Hash(address[:]),
 		data:          data,
-		cachedStorage: make(Storage),
+		originStorage: make(Storage),
 		dirtyStorage:  make(Storage),
 		onDirty:       onDirty,
 	}
@@ -179,40 +179,34 @@ func (s *stateObject) getTrie(db Database) Trie {
 	return s.trie
 }
 
-func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
-	// If the fake storage is set, only lookup the state here(in the debugging mode)
-	if s.fakeStorage != nil {
-		return s.fakeStorage[key]
-	}
-	// Track the amount of time wasted on reading the storage trie
-	defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
-	value := common.Hash{}
-	// Load from DB in case it is missing.
-	enc, err := s.getTrie(db).TryGet(key[:])
-	if err != nil {
-		s.setError(err)
-		return common.Hash{}
-	}
-	if len(enc) > 0 {
-		_, content, _, err := rlp.Split(enc)
-		if err != nil {
-			s.setError(err)
-		}
-		value.SetBytes(content)
-	}
-	return value
-}
-
+// GetState retrieves a value from the account storage trie.
 func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 	// If the fake storage is set, only lookup the state here(in the debugging mode)
 	if s.fakeStorage != nil {
 		return s.fakeStorage[key]
 	}
-	value, exists := s.cachedStorage[key]
-	if exists {
+	// If we have a dirty value for this state entry, return it
+	value, dirty := s.dirtyStorage[key]
+	if dirty {
 		return value
 	}
-	// Load from DB in case it is missing.
+	// Otherwise return the entry's original value
+	return s.GetCommittedState(db, key)
+}
+
+func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
+	// If the fake storage is set, only lookup the state here(in the debugging mode)
+	if s.fakeStorage != nil {
+		return s.fakeStorage[key]
+	}
+	// If we have the original value cached, return that
+	value, cached := s.originStorage[key]
+	if cached {
+		return value
+	}
+	// Track the amount of time wasted on reading the storage trie
+	defer func(start time.Time) { s.db.StorageReads += time.Since(start) }(time.Now())
+	// Otherwise load the value from the database
 	enc, err := s.getTrie(db).TryGet(key[:])
 	if err != nil {
 		s.setError(err)
@@ -225,9 +219,7 @@ func (s *stateObject) GetState(db Database, key common.Hash) common.Hash {
 		}
 		value.SetBytes(content)
 	}
-	if (value != common.Hash{}) {
-		s.cachedStorage[key] = value
-	}
+	s.originStorage[key] = value
 	return value
 }
 
@@ -271,7 +263,6 @@ func (s *stateObject) SetStorage(storage map[common.Hash]common.Hash) {
 }
 
 func (s *stateObject) setState(key, value common.Hash) {
-	s.cachedStorage[key] = value
 	s.dirtyStorage[key] = value
 
 	if s.onDirty != nil {
@@ -287,6 +278,13 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	tr := s.getTrie(db)
 	for key, value := range s.dirtyStorage {
 		delete(s.dirtyStorage, key)
+
+		// Skip noop changes, persist actual changes
+		if value == s.originStorage[key] {
+			continue
+		}
+		s.originStorage[key] = value
+
 		if (value == common.Hash{}) {
 			s.setError(tr.TryDelete(key[:]))
 			continue
@@ -372,7 +370,7 @@ func (s *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)) *
 	}
 	stateObject.code = s.code
 	stateObject.dirtyStorage = s.dirtyStorage.Copy()
-	stateObject.cachedStorage = s.dirtyStorage.Copy()
+	stateObject.originStorage = s.originStorage.Copy()
 	stateObject.selfDestructed = s.selfDestructed
 	stateObject.dirtyCode = s.dirtyCode
 	stateObject.deleted = s.deleted
