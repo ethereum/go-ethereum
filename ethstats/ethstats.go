@@ -250,9 +250,10 @@ func (s *Service) Stop() error {
 func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, chain2HeadCh chan core.Chain2HeadEvent, txEventCh chan core.NewTxsEvent) {
 	// Start a goroutine that exhausts the subscriptions to avoid events piling up
 	var (
-		quitCh = make(chan struct{})
-		headCh = make(chan *types.Header, 1)
-		txCh   = make(chan struct{}, 1)
+		quitCh  = make(chan struct{})
+		headCh  = make(chan *types.Header, 1)
+		txCh    = make(chan struct{}, 1)
+		head2Ch = make(chan core.Chain2HeadEvent, 100)
 	)
 
 	go func() {
@@ -710,7 +711,6 @@ func (s *Service) assembleBlockStats(header *types.Header) *blockStats {
 		td     *big.Int
 		txs    []txStats
 		uncles []*types.Header
-		err    error
 	)
 
 	// check if backend is a full node
@@ -847,11 +847,11 @@ type blockStub struct {
 	ParentHash string `json:"parent_hash"`
 }
 
-func createStub(b *types.Block) *blockStub {
+func createStub(h *types.Header) *blockStub {
 	s := &blockStub{
-		Hash:       b.Hash().String(),
-		ParentHash: b.ParentHash().String(),
-		Number:     b.NumberU64(),
+		Hash:       h.Hash().String(),
+		ParentHash: h.ParentHash.String(),
+		Number:     h.Number.Uint64(),
 	}
 
 	return s
@@ -868,12 +868,12 @@ func (s *Service) reportChain2Head(conn *connWrapper, chain2HeadData *core.Chain
 	chainHeadEvent := ChainHeadEvent{
 		Type: chain2HeadData.Type,
 	}
-	for _, block := range chain2HeadData.NewChain {
-		chainHeadEvent.NewChain = append(chainHeadEvent.NewChain, createStub(block))
+	for _, header := range chain2HeadData.NewChain {
+		chainHeadEvent.NewChain = append(chainHeadEvent.NewChain, createStub(header))
 	}
 
-	for _, block := range chain2HeadData.OldChain {
-		chainHeadEvent.OldChain = append(chainHeadEvent.OldChain, createStub(block))
+	for _, header := range chain2HeadData.OldChain {
+		chainHeadEvent.OldChain = append(chainHeadEvent.OldChain, createStub(header))
 	}
 
 	stats := map[string]interface{}{
