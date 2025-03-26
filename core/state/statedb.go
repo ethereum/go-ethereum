@@ -102,23 +102,6 @@ type AccountInfo struct {
 	StorageHash common.Hash
 }
 
-func (s *StateDB) SubRefund(gas uint64) {
-	s.journal = append(s.journal, refundChange{
-		prev: s.refund})
-	if gas > s.refund {
-		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
-	}
-	s.refund -= gas
-}
-
-func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.GetCommittedState(s.db, hash)
-	}
-	return common.Hash{}
-}
-
 // Create a new state from a given trie.
 func New(root common.Hash, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
@@ -209,9 +192,21 @@ func (s *StateDB) Preimages() map[common.Hash][]byte {
 	return s.preimages
 }
 
+// AddRefund adds gas to the refund counter
 func (s *StateDB) AddRefund(gas uint64) {
 	s.journal = append(s.journal, refundChange{prev: s.refund})
 	s.refund += gas
+}
+
+// SubRefund removes gas from the refund counter.
+// This method will panic if the refund counter goes below zero
+func (s *StateDB) SubRefund(gas uint64) {
+	s.journal = append(s.journal, refundChange{
+		prev: s.refund})
+	if gas > s.refund {
+		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
+	}
+	s.refund -= gas
 }
 
 // Exist reports whether the given account address exists in the state.
@@ -313,10 +308,20 @@ func (s *StateDB) GetAccountInfo(addr common.Address) *AccountInfo {
 	return &result
 }
 
-func (s *StateDB) GetState(addr common.Address, bhash common.Hash) common.Hash {
+// GetState retrieves a value from the given account's storage trie.
+func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetState(s.db, bhash)
+		return stateObject.GetState(s.db, hash)
+	}
+	return common.Hash{}
+}
+
+// GetCommittedState retrieves a value from the given account's committed storage trie.
+func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.GetCommittedState(s.db, hash)
 	}
 	return common.Hash{}
 }
@@ -591,19 +596,14 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 	if so == nil {
 		return nil
 	}
-
-	// When iterating over the storage check the cache first
-	for h, value := range so.cachedStorage {
-		cb(h, value)
-	}
-
 	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
 	for it.Next() {
-		// ignore cached values
 		key := common.BytesToHash(db.trie.GetKey(it.Key))
-		if _, ok := so.cachedStorage[key]; !ok {
-			cb(key, common.BytesToHash(it.Value))
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			cb(key, value)
+			continue
 		}
+		cb(key, common.BytesToHash(it.Value))
 	}
 	return nil
 }
