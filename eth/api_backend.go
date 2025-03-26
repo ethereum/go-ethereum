@@ -327,7 +327,7 @@ func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) 
 }
 
 func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	return b.eth.txPool.Nonce(addr), nil
+	return b.eth.txPool.PoolNonce(addr), nil
 }
 
 func (b *EthAPIBackend) Stats() (runnable int, blocked int) {
