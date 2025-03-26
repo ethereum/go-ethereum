@@ -287,6 +287,8 @@ require (
 	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect
 )
 
+replace github.com/maticnetwork/heimdall v1.0.7 => github.com/maticnetwork/heimdall v1.0.8-0.20250325213730-4a5cc6b5f864
+
 replace github.com/cosmos/cosmos-sdk => github.com/maticnetwork/cosmos-sdk v0.38.4
 
 replace github.com/tendermint/tendermint => github.com/maticnetwork/tendermint v0.33.0
