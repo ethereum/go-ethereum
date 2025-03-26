@@ -600,7 +600,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	// Insert into the live set
 	obj := newObject(s, addr, acct)
 	s.setStateObject(obj)
-	s.AccountLoaded++
 	return obj
 }
 
