@@ -1140,11 +1140,11 @@ func (d *Downloader) reportSnapSyncProgress(force bool) {
 	// Prevent reporting noise if the actual chain synchronization (headers
 	// and bodies) hasn't started yet. Inserting the ancient header chain is
 	// fast enough and would introduce significant bias if included in the count.
-	if d.chainCutoffNumber != 0 && block.Number.Uint64() < d.chainCutoffNumber {
+	if d.chainCutoffNumber != 0 && block.Number.Uint64() <= d.chainCutoffNumber {
 		return
 	}
 	fetchedBlocks := block.Number.Uint64() - d.syncStartBlock
-	if d.chainCutoffNumber != 0 {
+	if d.chainCutoffNumber != 0 && d.chainCutoffNumber > d.syncStartBlock {
 		fetchedBlocks = block.Number.Uint64() - d.chainCutoffNumber
 	}
 	// Retrieve the current chain head and calculate the ETA
