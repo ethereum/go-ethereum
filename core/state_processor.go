@@ -37,15 +37,17 @@ import (
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	config *params.ChainConfig // Chain configuration options
-	chain  *HeaderChain        // Canonical header chain
+	config     *params.ChainConfig // Chain configuration options
+	chain      *HeaderChain        // Canonical header chain
+	blockchain *BlockChain
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, chain *HeaderChain) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, chain *HeaderChain, blockchain *BlockChain) *StateProcessor {
 	return &StateProcessor{
-		config: config,
-		chain:  chain,
+		config:     config,
+		chain:      chain,
+		blockchain: blockchain,
 	}
 }
 
@@ -133,7 +135,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
+	// Note that we specifically need `Blockchain` for `ChainHeaderReader` interface as it's
+	// typecasted in bor consensus for setting state-sync events.
+	p.chain.engine.Finalize(p.blockchain, header, tracingStateDB, block.Body())
 
 	return &ProcessResult{
 		Receipts: receipts,
