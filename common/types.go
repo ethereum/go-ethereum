@@ -19,6 +19,7 @@ package common
 import (
 	"bytes"
 	"database/sql/driver"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -485,4 +486,10 @@ func (b PrettyBytes) TerminalString() string {
 		return fmt.Sprintf("%x", b)
 	}
 	return fmt.Sprintf("%#x...%x (%dB)", b[:3], b[len(b)-3:], len(b))
+}
+
+func Uint64ToBytes(i uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, i)
+	return b
 }

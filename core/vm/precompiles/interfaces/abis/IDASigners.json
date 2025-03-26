@@ -1,0 +1,475 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "signer",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "X",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "Y",
+            "type": "uint256"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct BN254.G1Point",
+        "name": "pkG1",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256[2]",
+            "name": "X",
+            "type": "uint256[2]"
+          },
+          {
+            "internalType": "uint256[2]",
+            "name": "Y",
+            "type": "uint256[2]"
+          }
+        ],
+        "indexed": false,
+        "internalType": "struct BN254.G2Point",
+        "name": "pkG2",
+        "type": "tuple"
+      }
+    ],
+    "name": "NewSigner",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "signer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "socket",
+        "type": "string"
+      }
+    ],
+    "name": "SocketUpdated",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "epochNumber",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_epoch",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_quorumId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "_quorumBitmap",
+        "type": "bytes"
+      }
+    ],
+    "name": "getAggPkG1",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "X",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "Y",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct BN254.G1Point",
+        "name": "aggPkG1",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint256",
+        "name": "total",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "hit",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_epoch",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_quorumId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getQuorum",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "",
+        "type": "address[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_epoch",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_quorumId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint32",
+        "name": "_rowIndex",
+        "type": "uint32"
+      }
+    ],
+    "name": "getQuorumRow",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address[]",
+        "name": "_account",
+        "type": "address[]"
+      }
+    ],
+    "name": "getSigner",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "signer",
+            "type": "address"
+          },
+          {
+            "internalType": "string",
+            "name": "socket",
+            "type": "string"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "X",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "Y",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct BN254.G1Point",
+            "name": "pkG1",
+            "type": "tuple"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256[2]",
+                "name": "X",
+                "type": "uint256[2]"
+              },
+              {
+                "internalType": "uint256[2]",
+                "name": "Y",
+                "type": "uint256[2]"
+              }
+            ],
+            "internalType": "struct BN254.G2Point",
+            "name": "pkG2",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct IDASigners.SignerDetail[]",
+        "name": "",
+        "type": "tuple[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
+      }
+    ],
+    "name": "isSigner",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "makeEpoch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "params",
+    "outputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "tokensPerVote",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "maxVotesPerSigner",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "maxQuorums",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "epochBlocks",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "encodedSlices",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IDASigners.Params",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_epoch",
+        "type": "uint256"
+      }
+    ],
+    "name": "quorumCount",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "X",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "Y",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct BN254.G1Point",
+        "name": "_signature",
+        "type": "tuple"
+      }
+    ],
+    "name": "registerNextEpoch",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "signer",
+            "type": "address"
+          },
+          {
+            "internalType": "string",
+            "name": "socket",
+            "type": "string"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256",
+                "name": "X",
+                "type": "uint256"
+              },
+              {
+                "internalType": "uint256",
+                "name": "Y",
+                "type": "uint256"
+              }
+            ],
+            "internalType": "struct BN254.G1Point",
+            "name": "pkG1",
+            "type": "tuple"
+          },
+          {
+            "components": [
+              {
+                "internalType": "uint256[2]",
+                "name": "X",
+                "type": "uint256[2]"
+              },
+              {
+                "internalType": "uint256[2]",
+                "name": "Y",
+                "type": "uint256[2]"
+              }
+            ],
+            "internalType": "struct BN254.G2Point",
+            "name": "pkG2",
+            "type": "tuple"
+          }
+        ],
+        "internalType": "struct IDASigners.SignerDetail",
+        "name": "_signer",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "X",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "Y",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct BN254.G1Point",
+        "name": "_signature",
+        "type": "tuple"
+      }
+    ],
+    "name": "registerSigner",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_account",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_epoch",
+        "type": "uint256"
+      }
+    ],
+    "name": "registeredEpoch",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_socket",
+        "type": "string"
+      }
+    ],
+    "name": "updateSocket",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

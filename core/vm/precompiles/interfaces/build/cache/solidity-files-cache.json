@@ -1,0 +1,78 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "/Users/wangfan/Project/0g-geth/core/vm/precompiles/interfaces/contracts/IDASigners.sol": {
+      "lastModificationDate": 1743021984706,
+      "contentHash": "dbe903452c6de71caa950fdb306027b3",
+      "sourceName": "contracts/IDASigners.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "evmVersion": "istanbul",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.8.0"
+      ],
+      "artifacts": [
+        "BN254",
+        "IDASigners"
+      ]
+    },
+    "/Users/wangfan/Project/0g-geth/core/vm/precompiles/interfaces/contracts/IWrappedA0GIBase.sol": {
+      "lastModificationDate": 1743006728499,
+      "contentHash": "1d44f536ff2a527d2afe8a4ef85adc7b",
+      "sourceName": "contracts/IWrappedA0GIBase.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "evmVersion": "istanbul",
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.8.0"
+      ],
+      "artifacts": [
+        "IWrappedA0GIBase"
+      ]
+    }
+  }
+}

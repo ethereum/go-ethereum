@@ -29,6 +29,7 @@ import (
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -66,6 +67,43 @@ func WithCustomPrecompiles(base PrecompiledContracts) PrecompiledContracts {
 		}
 	}
 	return result
+}
+
+// PrecompiledContract is the basic interface for custom precompile contracts.
+type StatefulPrecompiledContract interface {
+	PrecompiledContract
+	Abi() *abi.ABI
+	IsTx(string) bool
+}
+
+func InitializeStatefulPrecompileCall(
+	p StatefulPrecompiledContract,
+	evm *EVM,
+	contract *Contract,
+	readonly bool,
+) (
+	method *abi.Method,
+	args []interface{},
+	err error,
+) {
+	// parse input
+	if len(contract.Input) < 4 {
+		return nil, nil, ErrExecutionReverted
+	}
+	method, err = p.Abi().MethodById(contract.Input[:4])
+	if err != nil {
+		return nil, nil, ErrExecutionReverted
+	}
+	args, err = method.Inputs.Unpack(contract.Input[4:])
+	if err != nil {
+		return nil, nil, ErrExecutionReverted
+	}
+	// readonly check
+	if readonly && p.IsTx(method.Name) {
+		return nil, nil, ErrExecutionReverted
+	}
+
+	return method, args, nil
 }
 
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
