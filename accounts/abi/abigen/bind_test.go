@@ -1806,7 +1806,9 @@ var bindTests = []struct {
 		[]string{"608060405234801561001057600080fd5b50610113806100206000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806324ec1d3f14602d575b600080fd5b60336035565b005b7fb4b2ff75e30cb4317eaae16dd8a187dd89978df17565104caa6c2797caae27d460405180604001604052806001815260200160028152506040516078919060ba565b60405180910390a1565b6040820160008201516096600085018260ad565b50602082015160a7602085018260ad565b50505050565b60b48160d3565b82525050565b600060408201905060cd60008301846082565b92915050565b600081905091905056fea26469706673582212208823628796125bf9941ce4eda18da1be3cf2931b231708ab848e1bd7151c0c9a64736f6c63430008070033"},
 		[]string{`[{"anonymous":false,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"}],"indexed":false,"internalType":"struct Test.MyStruct","name":"s","type":"tuple"}],"name":"StructEvent","type":"event"},{"inputs":[],"name":"TestEvent","outputs":[],"stateMutability":"nonpayable","type":"function"}]`},
 		`
+			"context"
 			"math/big"
+			"time"
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
@@ -1828,11 +1830,22 @@ var bindTests = []struct {
 			}
 			sim.Commit()
 
-			_, err = d.TestEvent(user)
+			tx, err = d.TestEvent(user)
 			if err != nil {
 				t.Fatalf("Failed to call contract %v", err)
 			}
 			sim.Commit()
+
+			// Wait for the transaction to be mined
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			receipt, err := bind.WaitMined(ctx, sim, tx)
+			if err != nil {
+				t.Fatalf("Failed to wait for tx to be mined: %v", err)
+			}
+			if receipt.Status != types.ReceiptStatusSuccessful {
+				t.Fatal("Transaction failed")
+			}
 
 			it, err := d.FilterStructEvent(nil)
 			if err != nil {
