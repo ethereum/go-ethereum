@@ -2583,6 +2583,7 @@ func TestFillBlobTransaction(t *testing.T) {
 				Value:       (*hexutil.Big)(big.NewInt(1)),
 				Blobs:       []kzg4844.Blob{{}},
 				Commitments: []kzg4844.Commitment{{}, {}},
+				Proofs:      []kzg4844.Proof{{}, {}},
 			},
 			err: `number of blobs and commitments mismatch (have=2, want=1)`,
 		},
