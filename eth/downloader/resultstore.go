@@ -59,6 +59,8 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
+	fmt.Printf("set throttle threshold: %d\n", threshold)
+
 	limit := uint64(len(r.items))
 	if threshold >= limit {
 		threshold = limit
