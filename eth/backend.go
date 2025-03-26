@@ -291,7 +291,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	eth.connman = newConnManager(&connmanConfig{
-		maxDialPeers: eth.p2pServer.MaxDialedConns(),
+		maxDialPeers:    eth.p2pServer.MaxDialedConns(),
+		maxInboundPeers: eth.p2pServer.MaxInboundConns(),
 	})
 
 	eth.miner = miner.New(eth, config.Miner, eth.engine)
