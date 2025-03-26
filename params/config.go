@@ -208,8 +208,6 @@ var (
 				"0": "0x00000000000000000000000000000000000000000",
 			},
 		},
-		ShanghaiBlock: big.NewInt(0),
-		CancunBlock:   big.NewInt(0),
 	}
 
 	// MumbaiChainConfig contains the chain parameters to run a node on the Mumbai test network.
