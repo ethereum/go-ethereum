@@ -158,11 +158,11 @@ func (oracle *Oracle) ProcessCache() {
 	go func() {
 		var lastHead common.Hash
 		for ev := range headEvent {
-			if ev.Block.ParentHash() != lastHead {
+			if ev.Header.ParentHash != lastHead {
 				oracle.historyCache.Purge()
 			}
 
-			lastHead = ev.Block.Hash()
+			lastHead = ev.Header.Hash()
 		}
 	}()
 }
