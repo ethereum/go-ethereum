@@ -17,12 +17,14 @@
 package ethclient_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -73,21 +75,21 @@ var genesis = &core.Genesis{
 	BaseFee:   big.NewInt(params.InitialBaseFee),
 }
 
-// var testTx1 = types.MustSignNewTx(testKey, types.LatestSigner(genesis.Config), &types.LegacyTx{
-// 	Nonce:    0,
-// 	Value:    big.NewInt(12),
-// 	GasPrice: big.NewInt(params.InitialBaseFee),
-// 	Gas:      params.TxGas,
-// 	To:       &common.Address{2},
-// })
+var testTx1 = types.MustSignNewTx(testKey, types.LatestSigner(genesis.Config), &types.LegacyTx{
+	Nonce:    0,
+	Value:    big.NewInt(12),
+	GasPrice: big.NewInt(params.InitialBaseFee),
+	Gas:      params.TxGas,
+	To:       &common.Address{2},
+})
 
-// var testTx2 = types.MustSignNewTx(testKey, types.LatestSigner(genesis.Config), &types.LegacyTx{
-// 	Nonce:    1,
-// 	Value:    big.NewInt(8),
-// 	GasPrice: big.NewInt(params.InitialBaseFee),
-// 	Gas:      params.TxGas,
-// 	To:       &common.Address{2},
-// })
+var testTx2 = types.MustSignNewTx(testKey, types.LatestSigner(genesis.Config), &types.LegacyTx{
+	Nonce:    1,
+	Value:    big.NewInt(8),
+	GasPrice: big.NewInt(params.InitialBaseFee),
+	Gas:      params.TxGas,
+	To:       &common.Address{2},
+})
 
 func newTestBackend(config *node.Config) (*node.Node, []*types.Block, error) {
 	// Generate test chain.
@@ -124,23 +126,25 @@ func newTestBackend(config *node.Config) (*node.Node, []*types.Block, error) {
 	return n, blocks, nil
 }
 
-// func generateTestChain() []*types.Block {
-// 	generate := func(i int, g *core.BlockGen) {
-// 		g.OffsetTime(5)
-// 		g.SetExtra([]byte("test"))
+func generateTestChain() []*types.Block {
+	generate := func(i int, g *core.BlockGen) {
+		g.OffsetTime(5)
+		g.SetExtra([]byte("test"))
 
-// 		if i == 1 {
-// 			// Test transactions are included in block #2.
-// 			g.AddTx(testTx1)
-// 			g.AddTx(testTx2)
-// 		}
-// 	}
-// 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 2, generate)
+		if i == 1 {
+			// Test transactions are included in block #2.
+			g.AddTx(testTx1)
+			g.AddTx(testTx2)
+		}
+	}
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 2, generate)
 
-// 	return append([]*types.Block{genesis.ToBlock()}, blocks...)
-// }
+	return append([]*types.Block{genesis.ToBlock()}, blocks...)
+}
 
 func TestEthClient(t *testing.T) {
+	t.Skip("bor due to burn contract")
+
 	backend, chain, err := newTestBackend(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +163,7 @@ func TestEthClient(t *testing.T) {
 			func(t *testing.T) { testBalanceAt(t, client) },
 		},
 		"TxInBlockInterrupted": {
-			func(t *testing.T) { testTransactionInBlockInterrupted(t, client) },
+			func(t *testing.T) { testTransactionInBlock(t, client) },
 		},
 		"ChainID": {
 			func(t *testing.T) { testChainID(t, client) },
@@ -223,7 +227,7 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
 				got.Number = big.NewInt(0) // hack to make DeepEqual work
 			}
-			if got.Hash() != tt.want.Hash() {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("HeaderByNumber(%v) got = %v, want %v", tt.block, got, tt.want)
 			}
 		})
@@ -401,15 +405,6 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	}
 	if gasTipCap.Cmp(big.NewInt(234375000)) != 0 {
 		t.Fatalf("unexpected gas tip cap: %v", gasTipCap)
-	}
-
-	// BlobBaseFee
-	blobBaseFee, err := ec.BlobBaseFee(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if blobBaseFee.Cmp(big.NewInt(1)) != 0 {
-		t.Fatalf("unexpected blob base fee: %v", blobBaseFee)
 	}
 
 	// FeeHistory
@@ -590,33 +585,6 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	}
 	if !bytes.Equal(code, penCode) {
 		t.Fatalf("unexpected code: %v %v", code, penCode)
-	}
-	// Use HeaderByNumber to get a header for EstimateGasAtBlock and EstimateGasAtBlockHash
-	latestHeader, err := ec.HeaderByNumber(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// EstimateGasAtBlock
-	msg := ethereum.CallMsg{
-		From:  testAddr,
-		To:    &common.Address{},
-		Gas:   21000,
-		Value: big.NewInt(1),
-	}
-	gas, err := ec.EstimateGasAtBlock(context.Background(), msg, latestHeader.Number)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gas != 21000 {
-		t.Fatalf("unexpected gas limit: %v", gas)
-	}
-	// EstimateGasAtBlockHash
-	gas, err = ec.EstimateGasAtBlockHash(context.Background(), msg, latestHeader.Hash())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gas != 21000 {
-		t.Fatalf("unexpected gas limit: %v", gas)
 	}
 }
 

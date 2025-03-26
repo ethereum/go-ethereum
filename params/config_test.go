@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"gotest.tools/assert"
 )
 
 func TestCheckCompatible(t *testing.T) {
