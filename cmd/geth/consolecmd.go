@@ -18,13 +18,14 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/urfave/cli/v2"
-
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/urfave/cli/v2"
 )
 
