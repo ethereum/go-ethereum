@@ -51,7 +51,18 @@ var (
 	testBlobVHashes [][32]byte
 )
 
+var testChainConfig *params.ChainConfig
+
 func init() {
+	testChainConfig = new(params.ChainConfig)
+	*testChainConfig = *params.TestChainConfig
+
+	testChainConfig.ShanghaiBlock = big.NewInt(0)
+	*testChainConfig.ShanghaiBlock = *big.NewInt(0)
+
+	testChainConfig.CancunBlock = big.NewInt(0)
+	*testChainConfig.CancunBlock = *big.NewInt(0)
+
 	for i := 0; i < 10; i++ {
 		testBlob := &kzg4844.Blob{byte(i)}
 		testBlobs = append(testBlobs, testBlob)
