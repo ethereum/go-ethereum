@@ -435,6 +435,7 @@ func verkleTestGenesis(config *params.ChainConfig) *Genesis {
 // TestProcessVerkleContractWithEmptyCode checks that the witness contains all valid
 // entries, if the initcode returns an empty code.
 func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
+	t.Skip("verkle trie is not yet supported in bor")
 	// The test txs were taken from a secondary testnet with chain id 69421
 	config := *testKaustinenLikeChainConfig
 	config.ChainID.SetUint64(69421)
