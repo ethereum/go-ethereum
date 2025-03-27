@@ -86,7 +86,7 @@ func TestSupplyOmittedFields(t *testing.T) {
 
 	expected := supplyInfo{
 		Number:     0,
-		Hash:       common.HexToHash("0xc02ee8ee5b54a40e43f0fa827d431e1bd4f217e941790dda10b2521d1925a20b"),
+		Hash:       common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 	actual := out[expected.Number]
