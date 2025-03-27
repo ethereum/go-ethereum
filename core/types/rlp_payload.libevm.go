@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/libevm/pseudo"
 	"github.com/ava-labs/libevm/libevm/register"
 	"github.com/ava-labs/libevm/libevm/testonly"
@@ -364,4 +365,9 @@ func (e *StateAccountExtra) Format(s fmt.State, verb rune) {
 		return
 	}
 	_, _ = s.Write([]byte(out))
+}
+
+// RLPHash returns the hash of the RLP encoding of `x`.
+func RLPHash(x any) common.Hash {
+	return rlpHash(x)
 }
