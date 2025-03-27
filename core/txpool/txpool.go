@@ -556,6 +556,9 @@ func (p *TxPool) Sync() error {
 
 // Clear removes all tracked txs from the subpools.
 func (p *TxPool) Clear() {
+	// Invoke Sync to ensure that txs pending addition don't get added to the pool after
+	// the subpools are subsequently cleared
+	p.Sync()
 	for _, subpool := range p.subpools {
 		subpool.Clear()
 	}
