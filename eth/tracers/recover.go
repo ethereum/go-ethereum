@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"runtime/debug"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -89,7 +90,8 @@ func (rt *recoverTracer) safeCall(name string, shutdown bool, fn func()) {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprintf("panic in child tracer during %s: %v", name, r))
 			if shutdown {
-				rt.node.Close()
+				debug.PrintStack()
+				go rt.node.Close()
 			}
 		}
 	}()
