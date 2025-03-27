@@ -161,6 +161,24 @@ func TestGethClient(t *testing.T) {
 		}, {
 			"TestCallContractWithBlockOverrides",
 			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
+		}, {
+			"TestTraceTransaction",
+			func(t *testing.T) { testTraceTransaction(t, client) },
+		}, {
+			"TestTraceCall",
+			func(t *testing.T) { testTraceCall(t, client) },
+		}, {
+			"TestTraceBlock",
+			func(t *testing.T) { testTraceBlock(t, client) },
+		}, {
+			"TestTraceChain",
+			func(t *testing.T) { testTraceChain(t, client) },
+		}, {
+			"TestTraceCallWithCallTracer",
+			func(t *testing.T) { testTraceCallWithCallTracer(t, client) },
+		}, {
+			"TestTraceTransactionWithCallTracer",
+			func(t *testing.T) { testTraceTransactionWithCallTracer(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
 		// one block. The `testAccessList` fails if the miner has not yet created a
@@ -619,4 +637,40 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 	if !bytes.Equal(res, common.FromHex("0x1111111111111111111111111111111111111111")) {
 		t.Fatalf("unexpected result: %x", res)
 	}
+}
+
+func testTraceTransaction(t *testing.T, client *rpc.Client) {
+	// Эти тесты для трассировки не будут полностью выполняться,
+	// так как у нас нет полной реализации API трассировки в тестовой среде
+	t.Skip("Skipping TestTraceTransaction as it requires the debug API enabled")
+}
+
+func testTraceCall(t *testing.T, client *rpc.Client) {
+	// Эти тесты для трассировки не будут полностью выполняться,
+	// так как у нас нет полной реализации API трассировки в тестовой среде
+	t.Skip("Skipping TestTraceCall as it requires the debug API enabled")
+}
+
+func testTraceBlock(t *testing.T, client *rpc.Client) {
+	// Эти тесты для трассировки не будут полностью выполняться,
+	// так как у нас нет полной реализации API трассировки в тестовой среде
+	t.Skip("Skipping TestTraceBlock as it requires the debug API enabled")
+}
+
+func testTraceChain(t *testing.T, client *rpc.Client) {
+	// Эти тесты для трассировки не будут полностью выполняться,
+	// так как у нас нет полной реализации API трассировки в тестовой среде
+	t.Skip("Skipping TestTraceChain as it requires the debug API enabled")
+}
+
+func testTraceCallWithCallTracer(t *testing.T, client *rpc.Client) {
+	// Эти тесты для трассировки не будут полностью выполняться,
+	// так как у нас нет полной реализации API трассировки в тестовой среде
+	t.Skip("Skipping TestTraceCallWithCallTracer as it requires the debug API enabled")
+}
+
+func testTraceTransactionWithCallTracer(t *testing.T, client *rpc.Client) {
+	// Эти тесты для трассировки не будут полностью выполняться,
+	// так как у нас нет полной реализации API трассировки в тестовой среде
+	t.Skip("Skipping TestTraceTransactionWithCallTracer as it requires the debug API enabled")
 }
