@@ -77,7 +77,6 @@ type ExecutableData struct {
 	BlobGasUsed      *uint64                 `json:"blobGasUsed"`
 	ExcessBlobGas    *uint64                 `json:"excessBlobGas"`
 	ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
-	ProofVersion     *uint8                  `json:"proofVersion"`
 }
 
 // JSON type overrides for executableData.
@@ -307,11 +306,6 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 // BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
 func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar, requests [][]byte) *ExecutionPayloadEnvelope {
-	proofVersion := uint8(0)
-	// TODO: could be more strict
-	if len(sidecars) > 0 && len(sidecars[0].Proofs) != len(sidecars[0].Blobs) {
-		proofVersion = 1
-	}
 	data := &ExecutableData{
 		BlockHash:        block.Hash(),
 		ParentHash:       block.ParentHash(),
@@ -331,7 +325,6 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		BlobGasUsed:      block.BlobGasUsed(),
 		ExcessBlobGas:    block.ExcessBlobGas(),
 		ExecutionWitness: block.ExecutionWitness(),
-		ProofVersion:     &proofVersion,
 	}
 
 	// Add blobs.

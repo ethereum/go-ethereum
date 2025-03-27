@@ -107,7 +107,7 @@ type blobTxMeta struct {
 	evictionExecFeeJumps float64      // Worst base fee (converted to fee jumps) across all previous nonces
 	evictionBlobFeeJumps float64      // Worse blob fee (converted to fee jumps) across all previous nonces
 
-	proofVersion uint64 // Version of the proof to use for this transaction
+	proofVersion uint64 // proof version of the transaction, 0 for legacy, 1 for cell proofs
 }
 
 // newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
