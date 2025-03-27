@@ -1,0 +1,197 @@
+// Copyright 2025 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"math/big"
+	"reflect"
+	"slices"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/urfave/cli/v2"
+)
+
+const maxFilterRangeForTestFuzz = 300
+
+var (
+	filterFuzzCommand = &cli.Command{
+		Name:      "filterfuzz",
+		Usage:     "Generates queries and compares results against matches derived from receipts",
+		ArgsUsage: "<RPC endpoint URL>",
+		Action:    filterFuzzCmd,
+		Flags:     []cli.Flag{},
+	}
+)
+
+// filterFuzzCmd is the main function of the filter fuzzer.
+func filterFuzzCmd(ctx *cli.Context) error {
+	f := newFilterTestGen(ctx, maxFilterRangeForTestFuzz)
+	var lastHead common.Hash
+mainLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		header, err := getLatestHeader(f.client)
+		if err != nil {
+			fmt.Println("Could not fetch head block", err)
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(time.Second):
+			}
+			continue mainLoop
+		}
+		var query *filterQuery
+		if header.Hash() == lastHead {
+			query = f.newQuery()
+		} else {
+			f.blockLimit = header.Number.Int64()
+			fmt.Println("new head", f.blockLimit)
+			query = f.newHeadSeedQuery(f.blockLimit)
+			lastHead = header.Hash()
+		}
+		query.run(f.client, nil)
+		if query.Err != nil {
+			query.printError()
+			continue
+		}
+		fmt.Println("New query  from:", query.FromBlock, "to:", query.ToBlock, "results:", len(query.results))
+		if len(query.results) > 0 && len(query.results) <= maxFilterResultSize {
+			for {
+				extQuery := f.extendRange(query)
+				if extQuery == nil {
+					break
+				}
+				extQuery.checkLastBlockHash(f.client)
+				extQuery.run(f.client, nil)
+				if extQuery.Err == nil && len(extQuery.results) == 0 {
+					// query is useless now due to major reorg; abandon and continue
+					fmt.Println("Zero length results")
+					continue mainLoop
+				}
+				if extQuery.Err != nil {
+					extQuery.printError()
+					continue mainLoop
+				}
+				if len(extQuery.results) > maxFilterResultSize {
+					break
+				}
+				query = extQuery
+			}
+			if !query.checkLastBlockHash(f.client) {
+				fmt.Println("Reorg during search")
+				continue mainLoop
+			}
+			// now we have a new query; check results
+			results, err := query.getResultsFromReceipts(f.client)
+			if err != nil {
+				fmt.Println("Could not fetch results from receipts", err)
+				continue mainLoop
+			}
+			if !query.checkLastBlockHash(f.client) {
+				fmt.Println("Reorg during search")
+				continue mainLoop
+			}
+			if !reflect.DeepEqual(query.results, results) {
+				fmt.Println("Results mismatch  from:", query.FromBlock, "to:", query.ToBlock, "addresses:", query.Address, "topics:", query.Topics)
+				fmt.Println(" getLogs:", query.results)
+				fmt.Println(" receipts:", results)
+				continue mainLoop
+			}
+			fmt.Println("Successful query  from:", query.FromBlock, "to:", query.ToBlock, "results:", len(query.results))
+			f.storeQuery(query)
+		}
+	}
+}
+
+func getLatestHeader(client *client) (*types.Header, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	return client.Eth.HeaderByNumber(ctx, big.NewInt(int64(rpc.LatestBlockNumber)))
+}
+
+// newHeadSeedQuery creates a query that gets all logs from the latest head.
+func (s *filterTestGen) newHeadSeedQuery(head int64) *filterQuery {
+	return &filterQuery{
+		FromBlock: head,
+		ToBlock:   head,
+	}
+}
+
+func (fq *filterQuery) checkLastBlockHash(client *client) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	header, err := client.Eth.HeaderByNumber(ctx, big.NewInt(fq.ToBlock))
+	if err != nil {
+		fq.lastBlockHash = common.Hash{}
+		return false
+	}
+	hash := header.Hash()
+	match := fq.lastBlockHash == hash
+	fq.lastBlockHash = hash
+	return match
+}
+
+func (fq *filterQuery) filterLog(log *types.Log) bool {
+	if len(fq.Address) > 0 && !slices.Contains(fq.Address, log.Address) {
+		return false
+	}
+	// If the to filtered topics is greater than the amount of topics in logs, skip.
+	if len(fq.Topics) > len(log.Topics) {
+		return false
+	}
+	for i, sub := range fq.Topics {
+		if len(sub) == 0 {
+			continue // empty rule set == wildcard
+		}
+		if !slices.Contains(sub, log.Topics[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (fq *filterQuery) getResultsFromReceipts(client *client) ([]types.Log, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	var results []types.Log
+	for blockNumber := fq.FromBlock; blockNumber <= fq.ToBlock; blockNumber++ {
+		receipts, err := client.Eth.BlockReceipts(ctx, rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(blockNumber)))
+		if err != nil {
+			return nil, err
+		}
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				if fq.filterLog(log) {
+					results = append(results, *log)
+				}
+			}
+		}
+	}
+	return results, nil
+}
