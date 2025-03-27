@@ -89,7 +89,7 @@ Remove blockchain and state databases`,
 		Action:      inspect,
 		Name:        "inspect",
 		ArgsUsage:   "<prefix> <start>",
-		Flags:       utils.DatabaseFlags,
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Usage:       "Inspect the storage size for each type of data in the database",
 		Description: `This commands iterates the entire database. If the optional 'prefix' and 'start' arguments are provided, then the iteration is limited to the given subset of data.`,
 	}
@@ -97,7 +97,7 @@ Remove blockchain and state databases`,
 		Action:    checkStateContent,
 		Name:      "check-state-content",
 		ArgsUsage: "<start (optional)>",
-		Flags:     utils.DatabaseFlags,
+		Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Usage:     "Verify that state data is cryptographically correct",
 		Description: `This command iterates the entire database for 32-byte keys, looking for rlp-encoded trie nodes.
 For each trie node encountered, it checks that the key corresponds to the keccak256(value). If this is not true, this indicates
@@ -107,7 +107,7 @@ a data corruption.`,
 		Action: dbStats,
 		Name:   "stats",
 		Usage:  "Print leveldb statistics",
-		Flags:  utils.DatabaseFlags,
+		Flags:  slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 	}
 	dbCompactCmd = &cli.Command{
 		Action: dbCompact,
@@ -116,7 +116,7 @@ a data corruption.`,
 		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
-		}, utils.DatabaseFlags),
+		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `This command performs a database compaction.
 WARNING: This operation may take a very long time to finish, and may cause database
 corruption if it is aborted during execution'!`,
@@ -126,7 +126,7 @@ corruption if it is aborted during execution'!`,
 		Name:        "get",
 		Usage:       "Show the value of a database key",
 		ArgsUsage:   "<hex-encoded key>",
-		Flags:       utils.DatabaseFlags,
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command looks up the specified database key from the database.",
 	}
 	dbDeleteCmd = &cli.Command{
@@ -134,7 +134,7 @@ corruption if it is aborted during execution'!`,
 		Name:      "delete",
 		Usage:     "Delete a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key>",
-		Flags:     utils.DatabaseFlags,
+		Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `This command deletes the specified database key from the database.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
@@ -143,7 +143,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Name:      "put",
 		Usage:     "Set the value of a database key (WARNING: may corrupt your database)",
 		ArgsUsage: "<hex-encoded key> <hex-encoded value>",
-		Flags:     utils.DatabaseFlags,
+		Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: `This command sets a given database key to the given value.
 WARNING: This is a low-level operation which may cause database corruption!`,
 	}
@@ -152,7 +152,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Name:        "dumptrie",
 		Usage:       "Show the storage key/values of a given storage trie",
 		ArgsUsage:   "<hex-encoded state root> <hex-encoded account hash> <hex-encoded storage trie root> <hex-encoded start (optional)> <int max elements (optional)>",
-		Flags:       utils.DatabaseFlags,
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command looks up the specified database key from the database.",
 	}
 	dbDumpFreezerIndex = &cli.Command{
@@ -160,7 +160,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Name:        "freezer-index",
 		Usage:       "Dump out the index of a specific freezer table",
 		ArgsUsage:   "<freezer-type> <table-type> <start (int)> <end (int)>",
-		Flags:       utils.DatabaseFlags,
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command displays information about the freezer index.",
 	}
 	dbImportCmd = &cli.Command{
@@ -168,7 +168,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Name:        "import",
 		Usage:       "Imports leveldb-data from an exported RLP dump.",
 		ArgsUsage:   "<dumpfile> <start (optional)",
-		Flags:       utils.DatabaseFlags,
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "The import command imports the specific chain data from an RLP encoded stream.",
 	}
 	dbExportCmd = &cli.Command{
@@ -176,14 +176,14 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 		Name:        "export",
 		Usage:       "Exports the chain data into an RLP dump. If the <dumpfile> has .gz suffix, gzip compression will be used.",
 		ArgsUsage:   "<type> <dumpfile>",
-		Flags:       utils.DatabaseFlags,
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "Exports the specified chain data to an RLP encoded stream, optionally gzip-compressed.",
 	}
 	dbMetadataCmd = &cli.Command{
 		Action:      showMetaData,
 		Name:        "metadata",
 		Usage:       "Shows metadata about the chain status.",
-		Flags:       utils.DatabaseFlags,
+		Flags:       slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "Shows metadata about the chain status.",
 	}
 	dbInspectHistoryCmd = &cli.Command{
@@ -204,7 +204,7 @@ WARNING: This is a low-level operation which may cause database corruption!`,
 				Name:  "raw",
 				Usage: "display the decoded raw state value (otherwise shows rlp-encoded value)",
 			},
-		}, utils.DatabaseFlags),
+		}, utils.NetworkFlags, utils.DatabaseFlags),
 		Description: "This command queries the history of the account or storage slot within the specified block range",
 	}
 )
