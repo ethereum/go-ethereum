@@ -640,37 +640,37 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 }
 
 func testTraceTransaction(t *testing.T, client *rpc.Client) {
-	// Эти тесты для трассировки не будут полностью выполняться,
-	// так как у нас нет полной реализации API трассировки в тестовой среде
+	// These tests for tracing cannot be fully executed
+	// as they require the debug API to be enabled in the test environment
 	t.Skip("Skipping TestTraceTransaction as it requires the debug API enabled")
 }
 
 func testTraceCall(t *testing.T, client *rpc.Client) {
-	// Эти тесты для трассировки не будут полностью выполняться,
-	// так как у нас нет полной реализации API трассировки в тестовой среде
+	// These tests for tracing cannot be fully executed
+	// as they require the debug API to be enabled in the test environment
 	t.Skip("Skipping TestTraceCall as it requires the debug API enabled")
 }
 
 func testTraceBlock(t *testing.T, client *rpc.Client) {
-	// Эти тесты для трассировки не будут полностью выполняться,
-	// так как у нас нет полной реализации API трассировки в тестовой среде
+	// These tests for tracing cannot be fully executed
+	// as they require the debug API to be enabled in the test environment
 	t.Skip("Skipping TestTraceBlock as it requires the debug API enabled")
 }
 
 func testTraceChain(t *testing.T, client *rpc.Client) {
-	// Эти тесты для трассировки не будут полностью выполняться,
-	// так как у нас нет полной реализации API трассировки в тестовой среде
+	// These tests for tracing cannot be fully executed
+	// as they require the debug API to be enabled in the test environment
 	t.Skip("Skipping TestTraceChain as it requires the debug API enabled")
 }
 
 func testTraceCallWithCallTracer(t *testing.T, client *rpc.Client) {
-	// Эти тесты для трассировки не будут полностью выполняться,
-	// так как у нас нет полной реализации API трассировки в тестовой среде
+	// These tests for tracing cannot be fully executed
+	// as they require the debug API to be enabled in the test environment
 	t.Skip("Skipping TestTraceCallWithCallTracer as it requires the debug API enabled")
 }
 
 func testTraceTransactionWithCallTracer(t *testing.T, client *rpc.Client) {
-	// Эти тесты для трассировки не будут полностью выполняться,
-	// так как у нас нет полной реализации API трассировки в тестовой среде
+	// These tests for tracing cannot be fully executed
+	// as they require the debug API to be enabled in the test environment
 	t.Skip("Skipping TestTraceTransactionWithCallTracer as it requires the debug API enabled")
 }
