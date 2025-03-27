@@ -501,6 +501,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 		}
 		peer.markTransaction(tx.Hash())
 	}
+	peer.meters.txReceived.Mark(int64(len(txs)))
 	return backend.Handle(peer, &txs)
 }
 

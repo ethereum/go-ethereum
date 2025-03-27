@@ -310,6 +310,7 @@ func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
 // direct request replies. The differentiation is important so the fetcher can
 // re-schedule missing transactions as soon as possible.
 func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
+	// TODO: add peer metrics here
 	var (
 		inMeter          = txReplyInMeter
 		knownMeter       = txReplyKnownMeter

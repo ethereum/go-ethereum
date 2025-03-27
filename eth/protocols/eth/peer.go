@@ -59,6 +59,8 @@ type Peer struct {
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
+	meters *peerMeters // Peer-specific metrics for diagnositics and to use in decision logic
+
 	term chan struct{} // Termination channel to stop the broadcasters
 }
 
@@ -77,6 +79,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		reqCancel:   make(chan *cancel),
 		resDispatch: make(chan *response),
 		txpool:      txpool,
+		meters:      newPeerMeters("peers/"+p.ID().String(), nil),
 		term:        make(chan struct{}),
 	}
 	// Start up all the broadcasters
