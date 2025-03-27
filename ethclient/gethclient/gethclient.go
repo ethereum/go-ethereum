@@ -411,7 +411,7 @@ func (o BlockOverrides) MarshalJSON() ([]byte, error) {
 	return json.Marshal(output)
 }
 
-// CallTracerResult представляет результат трассировки вызовов для транзакций или calldata.
+// CallTracerResult represents the result of a call trace for transactions or calldata.
 type CallTracerResult struct {
 	Type    string             `json:"type"`
 	From    common.Address     `json:"from"`
@@ -425,8 +425,8 @@ type CallTracerResult struct {
 	Calls   []CallTracerResult `json:"calls,omitempty"`
 }
 
-// TraceCallWithCallTracer выполняет трассировку вызова с использованием специального
-// call tracer, который предоставляет подробную информацию о вложенных вызовах.
+// TraceCallWithCallTracer performs a call trace using the specialized
+// call tracer, which provides detailed information about nested calls.
 func (ec *Client) TraceCallWithCallTracer(ctx context.Context, msg ethereum.CallMsg, blockNrOrHash rpc.BlockNumberOrHash) (*CallTracerResult, error) {
 	callTracer := "callTracer"
 	config := &tracers.TraceCallConfig{
@@ -440,8 +440,8 @@ func (ec *Client) TraceCallWithCallTracer(ctx context.Context, msg ethereum.Call
 	return &result, err
 }
 
-// TraceTransactionWithCallTracer выполняет трассировку транзакции с использованием специального
-// call tracer, который предоставляет подробную информацию о вложенных вызовах.
+// TraceTransactionWithCallTracer performs a transaction trace using the specialized
+// call tracer, which provides detailed information about nested calls.
 func (ec *Client) TraceTransactionWithCallTracer(ctx context.Context, txHash common.Hash) (*CallTracerResult, error) {
 	callTracer := "callTracer"
 	config := &tracers.TraceConfig{
