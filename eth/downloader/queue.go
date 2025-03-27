@@ -373,26 +373,16 @@ func (q *queue) Results(block bool) []*fetchResult {
 		q.lock.Unlock()
 	}
 	// Regardless if closed or not, we can still deliver whatever we have
+
 	results := q.resultCache.GetCompleted(maxResultsProcess)
-	for _, result := range results {
-		// Recalculate the result item weights to prevent memory exhaustion
-		size := result.Header.Size()
-		for _, uncle := range result.Uncles {
-			size += uncle.Size()
-		}
-		for _, receipt := range result.Receipts {
-			size += receipt.Size()
-		}
-		for _, tx := range result.Transactions {
-			size += common.StorageSize(tx.Size())
-		}
-		size += common.StorageSize(result.Withdrawals.Size())
-		q.resultSize = common.StorageSize(blockCacheSizeWeight)*size +
-			(1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
+
+	// set a throttle threshhold based on estimated worst-sized block that can be created for a given gas limit.
+	targetSize := uint64(256_000_000)
+	gasLimit := results[0].Header.GasLimit
+	if gasLimit == 0 {
+		gasLimit = 1
 	}
-	// Using the newly calibrated resultsize, figure out the new throttle limit
-	// on the result cache
-	throttleThreshold := uint64((common.StorageSize(blockCacheMemory) + q.resultSize - 1) / q.resultSize)
+	throttleThreshold := min(targetSize/(gasLimit/10), 2048)
 	throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
 
 	// With results removed from the cache, wake throttled fetchers
