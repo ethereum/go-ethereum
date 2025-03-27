@@ -375,10 +375,12 @@ func (q *queue) Results(block bool) []*fetchResult {
 
 	results := q.resultCache.GetCompleted(maxResultsProcess)
 
-	// set a throttle threshhold based on estimated worst-sized block that can be created for a given gas limit.
-	gasLimit := max(results[0].Header.GasLimit, 1)
-	throttleThreshold := min(uint64(blockCacheMemory)/(gasLimit/10), 2048)
-	throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
+	if len(results) > 0 {
+		// set a throttle threshhold based on estimated worst-sized block that can be created for a given gas limit.
+		gasLimit := max(results[0].Header.GasLimit, 10)
+		throttleThreshold := min(uint64(blockCacheMemory)/(gasLimit/10), 2048)
+		throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
+	}
 
 	// With results removed from the cache, wake throttled fetchers
 	for _, ch := range []chan bool{q.blockWakeCh, q.receiptWakeCh} {
