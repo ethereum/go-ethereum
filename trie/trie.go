@@ -759,7 +759,10 @@ func (t *Trie) Reset() {
 	t.owner = common.Hash{}
 	t.unhashed = 0
 	t.uncommitted = 0
+
+	t.tracerMutex.Lock()
 	t.tracer.reset()
-	t.committed = false
 	t.tracerMutex.Unlock()
+
+	t.committed = false
 }
