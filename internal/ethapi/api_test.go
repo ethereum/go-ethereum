@@ -3529,3 +3529,76 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 func addressToHash(a common.Address) common.Hash {
 	return common.BytesToHash(a.Bytes())
 }
+
+func TestCreateAccessListWithStateOverrides(t *testing.T) {
+	// Initialize test backend
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7"): {Balance: big.NewInt(1000000000000000000)},
+		},
+	}
+	backend := newTestBackend(t, 1, genesis, ethash.NewFaker(), nil)
+
+	// Create a new BlockChainAPI instance
+	api := NewBlockChainAPI(backend)
+
+	// Create test contract code - a simple storage contract
+	//
+	// SPDX-License-Identifier: MIT
+	// pragma solidity ^0.8.0;
+	//
+	// contract SimpleStorage {
+	//     uint256 private value;
+	//
+	//     function retrieve() public view returns (uint256) {
+	//         return value;
+	//     }
+	// }
+	var (
+		contractCode = hexutil.Bytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80632e64cec114602d575b600080fd5b60336047565b604051603e91906067565b60405180910390f35b60008054905090565b6000819050919050565b6061816050565b82525050565b6000602082019050607a6000830184605a565b9291505056"))
+		// Create state overrides with more complete state
+		contractAddr = common.HexToAddress("0x1234567890123456789012345678901234567890")
+		nonce        = hexutil.Uint64(1)
+		overrides    = &override.StateOverride{
+			contractAddr: override.OverrideAccount{
+				Code:    &contractCode,
+				Balance: (*hexutil.Big)(big.NewInt(1000000000000000000)),
+				Nonce:   &nonce,
+				State: map[common.Hash]common.Hash{
+					common.Hash{}: common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000002a"),
+				},
+			},
+		}
+	)
+
+	// Create transaction arguments with gas and value
+	var (
+		from = common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7")
+		data = hexutil.Bytes(common.Hex2Bytes("2e64cec1")) // retrieve()
+		gas  = hexutil.Uint64(100000)
+		args = TransactionArgs{
+			From:  &from,
+			To:    &contractAddr,
+			Data:  &data,
+			Gas:   &gas,
+			Value: new(hexutil.Big),
+		}
+	)
+	// Call CreateAccessList
+	result, err := api.CreateAccessList(context.Background(), args, nil, overrides)
+	if err != nil {
+		t.Fatalf("Failed to create access list: %v", err)
+	}
+	if err != nil || result == nil {
+		t.Fatalf("Failed to create access list: %v", err)
+	}
+	require.NotNil(t, result.Accesslist)
+
+	// Verify access list contains the contract address and storage slot
+	expected := &types.AccessList{{
+		Address:     contractAddr,
+		StorageKeys: []common.Hash{{}},
+	}}
+	require.Equal(t, expected, result.Accesslist)
+}
