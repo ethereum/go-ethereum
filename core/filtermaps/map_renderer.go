@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -301,6 +302,11 @@ func (r *mapRenderer) run(stopCb func() bool, writeCb func()) (bool, error) {
 
 // renderCurrentMap renders a single map.
 func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
+	var (
+		totalTime                           time.Duration
+		logValuesProcessed, blocksProcessed int64
+	)
+	start := time.Now()
 	if !r.iterator.updateChainView(r.f.targetView) {
 		return false, errChainUpdate
 	}
@@ -316,9 +322,11 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 	for r.iterator.lvIndex < uint64(r.currentMap.mapIndex+1)<<r.f.logValuesPerMap && !r.iterator.finished {
 		waitCnt++
 		if waitCnt >= valuesPerCallback {
+			totalTime += time.Since(start)
 			if stopCb() {
 				return false, nil
 			}
+			start = time.Now()
 			if !r.iterator.updateChainView(r.f.targetView) {
 				return false, errChainUpdate
 			}
@@ -343,8 +351,10 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 			return false, fmt.Errorf("failed to advance log iterator at %d while rendering map %d: %v", r.iterator.lvIndex, r.currentMap.mapIndex, err)
 		}
 		if !r.iterator.skipToBoundary {
+			logValuesProcessed++
 			r.currentMap.lastBlock = r.iterator.blockNumber
 			if r.iterator.blockStart {
+				blocksProcessed++
 				r.currentMap.blockLvPtrs = append(r.currentMap.blockLvPtrs, r.iterator.lvIndex)
 			}
 			if !r.f.testDisableSnapshots && r.renderBefore >= r.f.indexedRange.maps.AfterLast() &&
@@ -358,12 +368,18 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 		r.currentMap.headDelimiter = r.iterator.lvIndex
 	}
 	r.currentMap.lastBlockId = r.f.targetView.getBlockId(r.currentMap.lastBlock)
+	totalTime += time.Since(start)
+	mapRenderTimer.Update(totalTime)
+	mapLogValueMeter.Mark(logValuesProcessed)
+	mapBlockMeter.Mark(blocksProcessed)
 	return true, nil
 }
 
 // writeFinishedMaps writes rendered maps to the database and updates
 // filterMapsRange and indexedView accordingly.
 func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
+	var totalTime time.Duration
+	start := time.Now()
 	if len(r.finishedMaps) == 0 {
 		return nil
 	}
@@ -379,7 +395,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to get updated rendered range: %v", err)
 	}
-	renderedView := r.f.targetView // stopCb callback might still change targetView while writing finished maps
+	renderedView := r.f.targetView // pauseCb callback might still change targetView while writing finished maps
 
 	batch := r.f.db.NewBatch()
 	var writeCnt int
@@ -393,7 +409,9 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 			// do not exit while in partially written state but do allow processing
 			// events and pausing while block processing is in progress
 			r.f.indexLock.Unlock()
+			totalTime += time.Since(start)
 			pauseCb()
+			start = time.Now()
 			r.f.indexLock.Lock()
 			batch = r.f.db.NewBatch()
 		}
@@ -477,6 +495,8 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 	if err := batch.Write(); err != nil {
 		log.Crit("Error writing log index update batch", "error", err)
 	}
+	totalTime += time.Since(start)
+	mapWriteTimer.Update(totalTime)
 	return nil
 }
 
