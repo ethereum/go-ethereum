@@ -307,6 +307,12 @@ func testTransactionInBlock(t *testing.T, client *rpc.Client) {
 	if tx.Hash() != testTx2.Hash() {
 		t.Fatalf("unexpected transaction: %v", tx)
 	}
+
+	// Test pending block
+	_, err = ec.BlockByNumber(context.Background(), big.NewInt(int64(rpc.PendingBlockNumber)))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func testChainID(t *testing.T, client *rpc.Client) {
