@@ -165,6 +165,20 @@ func (mr *MockDatabaseMockRecorder) Delete(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockDatabase)(nil).Delete), arg0)
 }
 
+// DeleteRange mocks base method.
+func (m *MockDatabase) DeleteRange(arg0, arg1 []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteRange", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteRange indicates an expected call of DeleteRange.
+func (mr *MockDatabaseMockRecorder) DeleteRange(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRange", reflect.TypeOf((*MockDatabase)(nil).DeleteRange), arg0, arg1)
+}
+
 // Get mocks base method.
 func (m *MockDatabase) Get(arg0 []byte) ([]byte, error) {
 	m.ctrl.T.Helper()
