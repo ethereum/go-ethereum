@@ -56,7 +56,7 @@ func (f *FilterMaps) indexerLoop() {
 			}
 		}
 		if !f.targetHeadIndexed() {
-			if err := f.tryIndexHead(); err != nil {
+			if err := f.tryIndexHead(); err != nil && err != errChainUpdate {
 				f.disableForError("head rendering", err)
 				return
 			}
