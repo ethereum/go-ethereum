@@ -108,6 +108,19 @@ func (env *testEnv) makeTx(nonce uint64, gasPrice *big.Int) *types.Transaction {
 	return tx
 }
 
+func (env *testEnv) makeTxs(n int) []*types.Transaction {
+	head := env.chain.CurrentHeader()
+	state, _ := env.chain.StateAt(head.Root)
+	nonce := state.GetNonce(address)
+
+	var txs []*types.Transaction
+	for i := 0; i < n; i++ {
+		tx, _ := types.SignTx(types.NewTransaction(nonce+uint64(i), common.Address{0x00}, big.NewInt(1000), params.TxGas, big.NewInt(params.GWei), nil), signer, key)
+		txs = append(txs, tx)
+	}
+	return txs
+}
+
 func (env *testEnv) commit() {
 	head := env.chain.CurrentBlock()
 	block := env.chain.GetBlock(head.Hash(), head.Number.Uint64())
@@ -175,5 +188,31 @@ func TestRejectInvalids(t *testing.T) {
 		if c.expErr != nil && !errors.Is(gotErr, c.expErr) {
 			t.Fatalf("%d, unexpected error, want: %v, got: %v", i, c.expErr, gotErr)
 		}
+	}
+}
+
+func TestResubmit(t *testing.T) {
+	env := newTestEnv(t, 10, 0, "")
+	defer env.close()
+
+	txs := env.makeTxs(10)
+	txsA := txs[:len(txs)/2]
+	txsB := txs[len(txs)/2:]
+	env.pool.Add(txsA, true)
+	pending, queued := env.pool.ContentFrom(address)
+	if len(pending) != len(txsA) || len(queued) != 0 {
+		t.Fatalf("Unexpected txpool content: %d, %d", len(pending), len(queued))
+	}
+	env.tracker.TrackAll(txs)
+
+	resubmit, all := env.tracker.recheck(true)
+	if len(resubmit) != len(txsB) {
+		t.Fatalf("Unexpected transactions to resubmit, got: %d, want: %d", len(resubmit), len(txsB))
+	}
+	if len(all) == 0 || len(all[address]) == 0 {
+		t.Fatalf("Unexpected transactions being tracked, got: %d, want: %d", 0, len(txs))
+	}
+	if len(all[address]) != len(txs) {
+		t.Fatalf("Unexpected transactions being tracked, got: %d, want: %d", len(all[address]), len(txs))
 	}
 }
