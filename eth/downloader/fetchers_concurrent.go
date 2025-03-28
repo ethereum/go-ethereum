@@ -254,7 +254,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			// timeout firing for a non-existent event.
 			req, exp := timeouts.Peek()
 			if now, at := time.Now(), time.Unix(0, -exp); now.Before(at) {
-				log.Error("Timeout triggered but not reached", "left", at.Sub(now))
+				log.Warn("Timeout triggered but not reached", "left", at.Sub(now))
 				timeout.Reset(at.Sub(now))
 				continue
 			}
