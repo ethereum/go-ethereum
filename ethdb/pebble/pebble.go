@@ -28,6 +28,7 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -338,15 +339,46 @@ func (d *Database) Delete(key []byte) error {
 	return d.db.Delete(key, d.writeOptions)
 }
 
-// DeleteRange deletes all of the keys (and values) in the range [start,end)
-// (inclusive on start, exclusive on end).
+// DeleteRange removes all keys and values within the range [start, end)
+// (inclusive on start, exclusive on end). Although Pebble provides native
+// range deletion support, it is not used here because it may accidentally
+// remove hash scheme trie nodes due to improper prefixing. This workaround
+// should remain in place until the hash mode is fully deprecated.
+//
+// If only a partial deletion occurs, ErrTooManyKeys is returned.
+// The caller should retry until the deletion is fully completed.
 func (d *Database) DeleteRange(start, end []byte) error {
 	d.quitLock.RLock()
 	defer d.quitLock.RUnlock()
+
 	if d.closed {
 		return pebble.ErrClosed
 	}
-	return d.db.DeleteRange(start, end, d.writeOptions)
+	batch := d.NewBatch()
+	it := d.NewIterator(nil, start)
+	defer it.Release()
+
+	var (
+		count int
+		buff  = crypto.NewKeccakState()
+	)
+	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+		// Prevent deletion for trie nodes in hash mode
+		if h := crypto.HashData(buff, it.Value()); h == common.BytesToHash(it.Key()) {
+			continue
+		}
+		count++
+		if count > 10000 { // should not block for more than a second
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			return ethdb.ErrTooManyKeys
+		}
+		if err := batch.Delete(it.Key()); err != nil {
+			return err
+		}
+	}
+	return batch.Write()
 }
 
 // NewBatch creates a write-only key-value store that buffers changes to its host

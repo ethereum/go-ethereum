@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -377,7 +376,7 @@ func (f *FilterMaps) safeDeleteRange(removeFn func(ethdb.KeyValueRangeDeleter) e
 			}
 			return true
 		}
-		if err != leveldb.ErrTooManyKeys {
+		if errors.Is(err, ethdb.ErrTooManyKeys) {
 			log.Error(action+" failed", "error", err)
 			return false
 		}
