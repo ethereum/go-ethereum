@@ -167,7 +167,6 @@ func (cm *connManager) dropRandomPeer(dialed bool) bool {
 
 // updatePeerDropTimers checks and starts/stops the timer for peer drop.
 func (cm *connManager) updatePeerDropTimers(syncing bool) {
-
 	numPeers, numDialed, numInbound := cm.numPeers()
 	cm.log.Trace("ConnManager status", "syncing", syncing,
 		"peers", numPeers, "out", numDialed, "in", numInbound,
@@ -195,7 +194,6 @@ func (cm *connManager) updatePeerDropTimers(syncing bool) {
 
 // loop is the main loop of the connection manager.
 func (cm *connManager) loop() {
-
 	defer cm.wg.Done()
 
 	// Set up periodic timer to pull syncing status.
