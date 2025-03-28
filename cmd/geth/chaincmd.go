@@ -37,7 +37,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/era"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
@@ -66,7 +68,7 @@ It expects the genesis file as argument.`,
 		Name:      "dumpgenesis",
 		Usage:     "Dumps genesis block JSON configuration to stdout",
 		ArgsUsage: "",
-		Flags:     append([]cli.Flag{utils.DataDirFlag}, utils.NetworkFlags...),
+		Flags:     slices.Concat([]cli.Flag{utils.DataDirFlag}, utils.NetworkFlags),
 		Description: `
 The dumpgenesis command prints the genesis configuration of the network preset
 if one is set.  Otherwise it prints the genesis from the datadir.`,
@@ -78,11 +80,11 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
 		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
-			utils.SyncModeFlag,
 			utils.GCModeFlag,
 			utils.SnapshotFlag,
 			utils.CacheDatabaseFlag,
 			utils.CacheGCFlag,
+			utils.NoCompactionFlag,
 			utils.MetricsEnabledFlag,
 			utils.MetricsEnabledExpensiveFlag,
 			utils.MetricsHTTPFlag,
@@ -105,7 +107,11 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.LogNoHistoryFlag,
 			utils.LogExportCheckpointsFlag,
 			utils.StateHistoryFlag,
-		}, utils.DatabaseFlags),
+		}, utils.DatabaseFlags, debug.Flags),
+		Before: func(ctx *cli.Context) error {
+			flags.MigrateGlobalFlags(ctx)
+			return debug.Setup(ctx)
+		},
 		Description: `
 The import command allows the import of blocks from an RLP-encoded format. This format can be a single file
 containing multiple RLP-encoded blocks, or multiple files can be given.
@@ -119,10 +125,7 @@ to import successfully.`,
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
-		Flags: slices.Concat([]cli.Flag{
-			utils.CacheFlag,
-			utils.SyncModeFlag,
-		}, utils.DatabaseFlags),
+		Flags:     slices.Concat([]cli.Flag{utils.CacheFlag}, utils.DatabaseFlags),
 		Description: `
 Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
@@ -135,12 +138,7 @@ be gzipped.`,
 		Name:      "import-history",
 		Usage:     "Import an Era archive",
 		ArgsUsage: "<dir>",
-		Flags: slices.Concat([]cli.Flag{
-			utils.TxLookupLimitFlag,
-		},
-			utils.DatabaseFlags,
-			utils.NetworkFlags,
-		),
+		Flags:     slices.Concat([]cli.Flag{utils.TxLookupLimitFlag, utils.TransactionHistoryFlag}, utils.DatabaseFlags, utils.NetworkFlags),
 		Description: `
 The import-history command will import blocks and their corresponding receipts
 from Era archives.
@@ -151,7 +149,7 @@ from Era archives.
 		Name:      "export-history",
 		Usage:     "Export blockchain history to Era archives",
 		ArgsUsage: "<dir> <first> <last>",
-		Flags:     slices.Concat(utils.DatabaseFlags),
+		Flags:     utils.DatabaseFlags,
 		Description: `
 The export-history command will export blocks and their corresponding receipts
 into Era archives. Eras are typically packaged in steps of 8192 blocks.
@@ -162,10 +160,7 @@ into Era archives. Eras are typically packaged in steps of 8192 blocks.
 		Name:      "import-preimages",
 		Usage:     "Import the preimage database from an RLP stream",
 		ArgsUsage: "<datafile>",
-		Flags: slices.Concat([]cli.Flag{
-			utils.CacheFlag,
-			utils.SyncModeFlag,
-		}, utils.DatabaseFlags),
+		Flags:     slices.Concat([]cli.Flag{utils.CacheFlag}, utils.DatabaseFlags),
 		Description: `
 The import-preimages command imports hash preimages from an RLP encoded stream.
 It's deprecated, please use "geth db import" instead.
@@ -435,6 +430,10 @@ func importHistory(ctx *cli.Context) error {
 			network = "mainnet"
 		case ctx.Bool(utils.SepoliaFlag.Name):
 			network = "sepolia"
+		case ctx.Bool(utils.HoleskyFlag.Name):
+			network = "holesky"
+		case ctx.Bool(utils.HoodiFlag.Name):
+			network = "hoodi"
 		}
 	} else {
 		// No network flag set, try to determine network based on files
