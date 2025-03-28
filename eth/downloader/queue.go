@@ -42,10 +42,9 @@ const (
 )
 
 var (
-	blockCacheMaxItems     = 8192              // Maximum number of blocks to cache before throttling the download
-	blockCacheInitialItems = 2048              // Initial number of blocks to start fetching, before we know the sizes of the blocks
-	blockCacheMemory       = 256 * 1024 * 1024 // Maximum amount of memory to use for block caching
-	blockCacheSizeWeight   = 0.1               // Multiplier to approximate the average block size based on past ones
+	blockCacheMaxItems     = 8192               // Maximum number of blocks to cache before throttling the download
+	blockCacheInitialItems = 16                 // Initial number of blocks to start fetching, before we know the sizes of the blocks
+	blockCacheMemory       = 1024 * 1024 * 1024 // Maximum amount of memory to use for block caching
 )
 
 var (
@@ -373,27 +372,16 @@ func (q *queue) Results(block bool) []*fetchResult {
 		q.lock.Unlock()
 	}
 	// Regardless if closed or not, we can still deliver whatever we have
+
 	results := q.resultCache.GetCompleted(maxResultsProcess)
-	for _, result := range results {
-		// Recalculate the result item weights to prevent memory exhaustion
-		size := result.Header.Size()
-		for _, uncle := range result.Uncles {
-			size += uncle.Size()
-		}
-		for _, receipt := range result.Receipts {
-			size += receipt.Size()
-		}
-		for _, tx := range result.Transactions {
-			size += common.StorageSize(tx.Size())
-		}
-		size += common.StorageSize(result.Withdrawals.Size())
-		q.resultSize = common.StorageSize(blockCacheSizeWeight)*size +
-			(1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
+
+	var throttleThreshold uint64
+	if len(results) > 0 {
+		// set a throttle threshhold based on estimated worst-sized block that can be created for a given gas limit.
+		gasLimit := max(results[0].Header.GasLimit, 10)
+		throttleThreshold = min(uint64(blockCacheMemory)/(gasLimit/10), 2048)
+		throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
 	}
-	// Using the newly calibrated resultsize, figure out the new throttle limit
-	// on the result cache
-	throttleThreshold := uint64((common.StorageSize(blockCacheMemory) + q.resultSize - 1) / q.resultSize)
-	throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
 
 	// With results removed from the cache, wake throttled fetchers
 	for _, ch := range []chan bool{q.blockWakeCh, q.receiptWakeCh} {
