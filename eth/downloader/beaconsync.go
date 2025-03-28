@@ -273,8 +273,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 // fetchHeaders feeds skeleton headers to the downloader queue for scheduling
 // until sync errors or is finished.
 func (d *Downloader) fetchHeaders(from uint64) error {
-	var head *types.Header
-	_, tail, _, err := d.skeleton.Bounds()
+	head, tail, _, err := d.skeleton.Bounds()
 	if err != nil {
 		return err
 	}
@@ -293,6 +292,27 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 	}
 	fsHeaderContCheckTimer := time.NewTimer(fsHeaderContCheck)
 	defer fsHeaderContCheckTimer.Stop()
+
+	// Verify the header at configured chain cutoff, ensuring it's matched with
+	// the configured hash. Skip the check if the configured cutoff is even higher
+	// than the sync target, which is definitely not a common case.
+	if d.chainCutoffNumber != 0 && d.chainCutoffNumber >= from && d.chainCutoffNumber <= head.Number.Uint64() {
+		h := d.skeleton.Header(d.chainCutoffNumber)
+		if h == nil {
+			if d.chainCutoffNumber < tail.Number.Uint64() {
+				dist := tail.Number.Uint64() - d.chainCutoffNumber
+				if len(localHeaders) >= int(dist) {
+					h = localHeaders[dist-1]
+				}
+			}
+		}
+		if h == nil {
+			return fmt.Errorf("header at chain cutoff is not available, cutoff: %d", d.chainCutoffNumber)
+		}
+		if h.Hash() != d.chainCutoffHash {
+			return fmt.Errorf("header at chain cutoff mismatched, want: %v, got: %v", d.chainCutoffHash, h.Hash())
+		}
+	}
 
 	for {
 		// Some beacon headers might have appeared since the last cycle, make
