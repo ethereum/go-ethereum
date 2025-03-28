@@ -50,20 +50,14 @@ func (f *FilterMaps) indexerLoop() {
 				continue
 			}
 			if err := f.init(); err != nil {
-				log.Error("Error initializing log index; reverting to unindexed mode", "error", err)
-				f.reset()
-				f.disabled = true
-				close(f.disabledCh)
+				f.disableForError("initialization", err)
+				f.reset() // remove broken index from DB
 				return
 			}
 		}
 		if !f.targetHeadIndexed() {
 			if err := f.tryIndexHead(); err != nil {
-				log.Error("Log index head rendering failed; reverting to unindexed mode", "error", err)
-				// disable indexer without resetting database; maybe a client
-				// update can fix the issue without reindexing
-				f.disabled = true
-				close(f.disabledCh)
+				f.disableForError("head rendering", err)
 				return
 			}
 		} else {
@@ -74,17 +68,13 @@ func (f *FilterMaps) indexerLoop() {
 				f.lastFinal = f.finalBlock
 			}
 			if done, err := f.tryIndexTail(); err != nil {
-				log.Error("Log index tail rendering failed; reverting to unindexed mode", "error", err)
-				f.disabled = true
-				close(f.disabledCh)
+				f.disableForError("tail rendering", err)
 				return
 			} else if !done {
 				continue
 			}
 			if done, err := f.tryUnindexTail(); err != nil {
-				log.Error("Log index tail unindexing failed; reverting to unindexed mode", "error", err)
-				f.disabled = true
-				close(f.disabledCh)
+				f.disableForError("tail unindexing", err)
 				return
 			} else if !done {
 				continue
@@ -94,6 +84,17 @@ func (f *FilterMaps) indexerLoop() {
 			f.waitForNewHead()
 		}
 	}
+}
+
+// disableForError is called when the indexer encounters a database error, for example a
+// missing receipt. We can't continue operating when the database is broken, so the
+// indexer goes into disabled state.
+// Note that the partial index is left in disk; maybe a client update can fix the
+// issue without reindexing.
+func (f *FilterMaps) disableForError(op string, err error) {
+	log.Error("Log index "+op+" failed, reverting to unindexed mode", "error", err)
+	f.disabled = true
+	close(f.disabledCh)
 }
 
 type targetUpdate struct {
