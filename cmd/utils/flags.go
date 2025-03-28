@@ -342,6 +342,11 @@ var (
 		Usage:    "Beacon chain weak subjectivity checkpoint block hash",
 		Category: flags.BeaconCategory,
 	}
+	BeaconCheckpointFileFlag = &cli.StringFlag{
+		Name:     "beacon.checkpoint.file",
+		Usage:    "Beacon chain weak subjectivity checkpoint import/export file",
+		Category: flags.BeaconCategory,
+	}
 	BlsyncApiFlag = &cli.StringFlag{
 		Name:     "blsync.engine.api",
 		Usage:    "Target EL engine API URL",
@@ -1890,7 +1895,7 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 		if !ctx.IsSet(BeaconGenesisTimeFlag.Name) {
 			Fatalf("Custom beacon chain config is specified but genesis time is missing")
 		}
-		if !ctx.IsSet(BeaconCheckpointFlag.Name) {
+		if !ctx.IsSet(BeaconCheckpointFlag.Name) && !ctx.IsSet(BeaconCheckpointFileFlag.Name) {
 			Fatalf("Custom beacon chain config is specified but checkpoint is missing")
 		}
 		config.ChainConfig = bparams.ChainConfig{
@@ -1915,12 +1920,27 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 		}
 	}
 	// Checkpoint is required with custom chain config and is optional with pre-defined config
-	if ctx.IsSet(BeaconCheckpointFlag.Name) {
-		if c, err := hexutil.Decode(ctx.String(BeaconCheckpointFlag.Name)); err == nil && len(c) <= 32 {
-			copy(config.Checkpoint[:len(c)], c)
-		} else {
-			Fatalf("Invalid hex string", "beacon.checkpoint", ctx.String(BeaconCheckpointFlag.Name), "error", err)
+	// If both checkpoint block hash and checkpoint file are specified then the
+	// client is initialized with the specified block hash and new checkpoints
+	// are saved to the specified file.
+	if ctx.IsSet(BeaconCheckpointFileFlag.Name) {
+		if _, err := config.SetCheckpointFile(ctx.String(BeaconCheckpointFileFlag.Name)); err != nil {
+			Fatalf("Could not load beacon checkpoint file", "beacon.checkpoint.file", ctx.String(BeaconCheckpointFileFlag.Name), "error", err)
 		}
+	}
+	if ctx.IsSet(BeaconCheckpointFlag.Name) {
+		hex := ctx.String(BeaconCheckpointFlag.Name)
+		c, err := hexutil.Decode(hex)
+		if err != nil {
+			Fatalf("Invalid hex string", "beacon.checkpoint", hex, "error", err)
+		}
+		if len(c) != 32 {
+			Fatalf("Invalid hex string length", "beacon.checkpoint", hex, "length", len(c))
+		}
+		copy(config.Checkpoint[:len(c)], c)
+	}
+	if config.Checkpoint == (common.Hash{}) {
+		Fatalf("Beacon checkpoint not specified")
 	}
 	config.Apis = ctx.StringSlice(BeaconApiFlag.Name)
 	if config.Apis == nil {
