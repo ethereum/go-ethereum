@@ -432,6 +432,9 @@ type ChainConfig struct {
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
 	Clique             *CliqueConfig       `json:"clique,omitempty"`
 	BlobScheduleConfig *BlobScheduleConfig `json:"blobSchedule,omitempty"`
+
+	// Stateless transition conversion rules
+	OverlayStride uint64 `json:"overlayStride,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

@@ -22,11 +22,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -120,6 +122,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
+
+	if p.chain.Config().IsVerkle(header.Number, header.Time) {
+		parent := p.chain.GetHeaderByHash(header.ParentHash)
+		if err := overlay.OverlayVerkleTransition(statedb, parent.Root, p.chain.Config().OverlayStride); err != nil {
+			log.Error("error performing the transition", "err", err)
+			panic(fmt.Sprintf("error performing the transition: %s", err))
+		}
+	}
 
 	return &ProcessResult{
 		Receipts: receipts,

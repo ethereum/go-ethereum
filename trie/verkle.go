@@ -428,3 +428,7 @@ func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
 func (t *VerkleTrie) Witness() map[string]struct{} {
 	panic("not implemented")
 }
+
+func (trie *VerkleTrie) InsertMigratedLeaves(leaves []verkle.LeafNode) error {
+	return trie.root.(*verkle.InternalNode).InsertMigratedLeaves(leaves, trie.FlatdbNodeResolver)
+}
