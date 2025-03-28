@@ -304,7 +304,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 				backend.chain.GetBlockByNumber(1).Hash(),
 			},
 		},
-		// Check a corner case where skipping causes overflow with reverse=false
+		// Check a corner case where skipping causes overflow with reverse=true
 		{
 			&GetBlockHeadersRequest{Origin: HashOrNumber{Number: 1}, Amount: 2, Reverse: true, Skip: math.MaxUint64 - 1},
 			[]common.Hash{
@@ -318,7 +318,7 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 				backend.chain.GetBlockByNumber(1).Hash(),
 			},
 		},
-		// Check another corner case where skipping causes overflow with reverse=false
+		// Check another corner case where skipping causes overflow with reverse=true
 		{
 			&GetBlockHeadersRequest{Origin: HashOrNumber{Number: 1}, Amount: 2, Reverse: true, Skip: math.MaxUint64},
 			[]common.Hash{
