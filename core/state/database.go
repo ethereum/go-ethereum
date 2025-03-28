@@ -34,10 +34,10 @@ import (
 
 const (
 	// Number of codehash->size associations to keep.
-	codeSizeCacheSize = 100000
+	codeSizeCacheSize = 1000_000 // 4 megabytes in total
 
 	// Cache size granted for caching clean code.
-	codeCacheSize = 64 * 1024 * 1024
+	codeCacheSize = 256 * 1024 * 1024
 
 	// Number of address->curve point associations to keep.
 	pointCacheSize = 4096
@@ -206,6 +206,15 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 		return nil, err
 	}
 	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
+}
+
+// ReaderWithCache creates a state reader with internal local cache.
+func (db *CachingDB) ReaderWithCache(stateRoot common.Hash) (Reader, error) {
+	reader, err := db.Reader(stateRoot)
+	if err != nil {
+		return nil, err
+	}
+	return newReaderWithCache(reader), nil
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
