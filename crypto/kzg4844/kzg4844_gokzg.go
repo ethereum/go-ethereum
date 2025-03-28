@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
 )
 
 // context is the crypto primitive pre-seeded with the trusted setup parameters.
@@ -95,4 +95,22 @@ func gokzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error 
 	gokzgIniter.Do(gokzgInit)
 
 	return context.VerifyBlobKZGProof((*gokzg4844.Blob)(blob), (gokzg4844.KZGCommitment)(commitment), (gokzg4844.KZGProof)(proof))
+}
+
+// gokzgComputeCellProofs returns the KZG cell proofs that are used to verify the blob against
+// the commitment.
+//
+// This method does not verify that the commitment is correct with respect to blob.
+func gokzgComputeCellProofs(blob *Blob) ([]Proof, error) {
+	gokzgIniter.Do(gokzgInit)
+
+	_, proofs, err := context.ComputeCellsAndKZGProofs((*gokzg4844.Blob)(blob), 0)
+	if err != nil {
+		return []Proof{}, err
+	}
+	var p []Proof
+	for _, proof := range proofs {
+		p = append(p, (Proof)(proof))
+	}
+	return p, nil
 }
