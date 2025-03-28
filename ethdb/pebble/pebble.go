@@ -370,7 +370,7 @@ func (d *Database) DeleteRange(start, end []byte) error {
 	}()
 	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
 		// Prevent deletion for trie nodes in hash mode
-		if h := crypto.HashData(buff, it.Value()); h == common.BytesToHash(it.Key()) {
+		if len(it.Key()) == 32 && crypto.HashData(buff, it.Value()) == common.BytesToHash(it.Key()) {
 			ignored++
 			continue
 		}
