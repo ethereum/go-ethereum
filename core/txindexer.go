@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -54,6 +55,8 @@ type txIndexer struct {
 	progress chan chan TxIndexProgress
 	term     chan chan struct{}
 	closed   chan struct{}
+
+	wg sync.WaitGroup
 }
 
 // newTxIndexer initializes the transaction indexer.
@@ -66,6 +69,7 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 		term:     make(chan chan struct{}),
 		closed:   make(chan struct{}),
 	}
+	indexer.wg.Add(1)
 	go indexer.loop(chain)
 
 	var msg string
@@ -199,6 +203,7 @@ func (indexer *txIndexer) repair(head uint64) {
 // on the received chain event.
 func (indexer *txIndexer) loop(chain *BlockChain) {
 	defer close(indexer.closed)
+	defer indexer.wg.Done()
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
@@ -306,4 +311,6 @@ func (indexer *txIndexer) close() {
 		<-ch
 	case <-indexer.closed:
 	}
+
+	indexer.wg.Wait()
 }
