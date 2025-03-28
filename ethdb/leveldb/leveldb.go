@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -207,8 +208,6 @@ func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
-var ErrTooManyKeys = errors.New("too many keys in deleted range")
-
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
 // (inclusive on start, exclusive on end).
 // Note that this is a fallback implementation as leveldb does not natively
@@ -221,14 +220,28 @@ func (db *Database) DeleteRange(start, end []byte) error {
 	it := db.NewIterator(nil, start)
 	defer it.Release()
 
-	var count int
+	var (
+		count   int
+		ignored int
+		buff    = crypto.NewKeccakState()
+	)
+	defer func() {
+		if ignored > 0 {
+			log.Info("Skipped entries from deletion", "number", ignored)
+		}
+	}()
 	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+		// Prevent deletion for trie nodes in hash mode
+		if len(it.Key()) == 32 && crypto.HashData(buff, it.Value()) == common.BytesToHash(it.Key()) {
+			ignored++
+			continue
+		}
 		count++
 		if count > 10000 { // should not block for more than a second
 			if err := batch.Write(); err != nil {
 				return err
 			}
-			return ErrTooManyKeys
+			return ethdb.ErrTooManyKeys
 		}
 		if err := batch.Delete(it.Key()); err != nil {
 			return err
