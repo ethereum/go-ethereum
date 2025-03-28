@@ -128,15 +128,26 @@ func serviceNonContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBloc
 			}
 		case query.Reverse:
 			// Number based traversal towards the genesis block
-			if query.Origin.Number >= query.Skip+1 {
-				query.Origin.Number -= query.Skip + 1
-			} else {
+			current := query.Origin.Number
+			ancestor := current - (query.Skip + 1)
+			if ancestor >= current { // check for underflow
+				infos, _ := json.MarshalIndent(peer.Peer.Info(), "", "  ")
+				peer.Log().Warn("GetBlockHeaders skip underflow attack", "current", current, "skip", query.Skip, "ancestor", ancestor, "attacker", infos)
 				unknown = true
+			} else {
+				query.Origin.Number = ancestor
 			}
 
 		case !query.Reverse:
-			// Number based traversal towards the leaf block
-			query.Origin.Number += query.Skip + 1
+			current := query.Origin.Number
+			next := current + query.Skip + 1
+			if next <= current { // check for overflow
+				infos, _ := json.MarshalIndent(peer.Peer.Info(), "", "  ")
+				peer.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
+				unknown = true
+			} else {
+				query.Origin.Number = next
+			}
 		}
 	}
 	return headers
