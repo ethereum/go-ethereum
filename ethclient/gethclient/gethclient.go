@@ -29,6 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -347,4 +349,43 @@ func (o BlockOverrides) MarshalJSON() ([]byte, error) {
 		output.Random = &o.Random
 	}
 	return json.Marshal(output)
+}
+
+// geth debug module
+
+// TraceTransactionWithCallTracer trace a transaction with call tracer
+func (c *Client) TraceTransactionWithCallTracer(ctx context.Context, txHash common.Hash, config *tracers.TraceCallConfig) (*native.CallFrame, error) {
+	// var result interface{}
+	var result native.CallFrame
+	tracer := "callTracer"
+	if config == nil {
+		config = &tracers.TraceCallConfig{
+			TraceConfig: tracers.TraceConfig{
+				Tracer: &tracer,
+			},
+		}
+	}
+	err := c.c.CallContext(ctx, &result, "debug_traceTransaction", txHash, config)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// TraceCallWithCallTracer trace a call with call tracer
+func (c *Client) TraceCallWithCallTracer(ctx context.Context, args ethereum.CallMsg, config *tracers.TraceCallConfig, blockNumber *big.Int) (*native.CallFrame, error) {
+	var result native.CallFrame
+	if config == nil {
+		tracer := "callTracer"
+		config = &tracers.TraceCallConfig{
+			TraceConfig: tracers.TraceConfig{
+				Tracer: &tracer,
+			},
+		}
+	}
+	err := c.c.CallContext(ctx, &result, "debug_traceCall", toCallArg(args), toBlockNumArg(blockNumber), config)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
