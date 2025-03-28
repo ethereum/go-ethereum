@@ -131,8 +131,6 @@ func serviceNonContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBloc
 			current := query.Origin.Number
 			ancestor := current - (query.Skip + 1)
 			if ancestor >= current { // check for underflow
-				infos, _ := json.MarshalIndent(peer.Peer.Info(), "", "  ")
-				peer.Log().Warn("GetBlockHeaders skip underflow attack", "current", current, "skip", query.Skip, "ancestor", ancestor, "attacker", infos)
 				unknown = true
 			} else {
 				query.Origin.Number = ancestor
@@ -142,8 +140,6 @@ func serviceNonContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBloc
 			current := query.Origin.Number
 			next := current + query.Skip + 1
 			if next <= current { // check for overflow
-				infos, _ := json.MarshalIndent(peer.Peer.Info(), "", "  ")
-				peer.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
 				unknown = true
 			} else {
 				query.Origin.Number = next
