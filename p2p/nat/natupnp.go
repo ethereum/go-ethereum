@@ -95,13 +95,19 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 		return uint16(extport), nil
 	}
 
-	return uint16(extport), n.withRateLimit(func() error {
+	var newExtport uint16
+	err = n.withRateLimit(func() error {
 		p, err := n.addAnyPortMapping(protocol, extport, intport, ip, desc, lifetimeS)
 		if err == nil {
-			extport = int(p)
+			newExtport = p
 		}
 		return err
 	})
+
+	if err != nil {
+		return uint16(extport), err
+	}
+	return newExtport, nil
 }
 
 func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.IP, desc string, lifetimeS uint32) (uint16, error) {
