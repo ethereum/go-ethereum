@@ -401,9 +401,9 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		return nil, err
 	}
 
-	// Read requests if Prague is enabled.
+	// Read requests if Prague is enabled and bor consensus is not active.
 	var requests [][]byte
-	if p.config.IsPrague(block.Number()) {
+	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {
 		// EIP-6110 deposits
 		depositRequests, err := ParseDepositLogs(allLogs, p.config)
 		if err != nil {

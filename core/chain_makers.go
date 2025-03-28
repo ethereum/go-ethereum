@@ -360,7 +360,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		var requests [][]byte
-		if config.IsPrague(b.header.Number) {
+		if config.IsPrague(b.header.Number) && config.Bor == nil {
 			// EIP-6110 deposits
 			var blockLogs []*types.Log
 			for _, r := range b.receipts {

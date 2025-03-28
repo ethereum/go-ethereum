@@ -1410,9 +1410,9 @@ func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadR
 	for _, r := range work.receipts {
 		allLogs = append(allLogs, r.Logs...)
 	}
-	// Collect consensus-layer requests if Prague is enabled.
+	// Collect consensus-layer requests if Prague is enabled and bor consensus is not active.
 	var requests [][]byte
-	if w.chainConfig.IsPrague(work.header.Number) {
+	if w.chainConfig.IsPrague(work.header.Number) && w.chainConfig.Bor == nil {
 		// EIP-6110 deposits
 		depositRequests, err := core.ParseDepositLogs(allLogs, w.chainConfig)
 		if err != nil {
