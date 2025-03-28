@@ -112,6 +112,7 @@ type ExecutionPayloadEnvelope struct {
 	Witness          *hexutil.Bytes  `json:"witness,omitempty"`
 }
 
+// Don't necessarily have to change to V2 (since it has the same fields as V1) in this PoC implementation.
 type BlobsBundleV1 struct {
 	Commitments []hexutil.Bytes `json:"commitments"`
 	Proofs      []hexutil.Bytes `json:"proofs"`
@@ -121,6 +122,11 @@ type BlobsBundleV1 struct {
 type BlobAndProofV1 struct {
 	Blob  hexutil.Bytes `json:"blob"`
 	Proof hexutil.Bytes `json:"proof"`
+}
+
+type BlobAndProofV2 struct {
+	Blob   hexutil.Bytes   `json:"blob"`
+	Proofs []hexutil.Bytes `json:"proofs"`
 }
 
 // JSON type overrides for ExecutionPayloadEnvelope.

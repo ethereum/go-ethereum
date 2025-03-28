@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"sync/atomic"
 
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -38,6 +39,9 @@ var (
 
 // Blob represents a 4844 data blob.
 type Blob [131072]byte
+
+// Cell represents a 7594 data cell.
+type Cell [gokzg4844.BytesPerCell]byte
 
 // UnmarshalJSON parses a blob in hex syntax.
 func (b *Blob) UnmarshalJSON(input []byte) error {
@@ -147,6 +151,30 @@ func VerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 		return ckzgVerifyBlobProof(blob, commitment, proof)
 	}
 	return gokzgVerifyBlobProof(blob, commitment, proof)
+}
+
+// VerifyCellKZGProofBatch verifies a batch of KZG proofs for a set of cells.
+func VerifyCellKZGProofBatch(commitments []Commitment, cellIndicies []uint64, cells []Cell, proofs []Proof) error {
+	if useCKZG.Load() {
+		return ckzgVerifyCellKZGProofBatch(commitments, cellIndicies, cells, proofs)
+	}
+	return gokzgVerifyCellKZGProofBatch(commitments, cellIndicies, cells, proofs)
+}
+
+// ComputeCells computes the cells for a given blob.
+func ComputeCells(blob *Blob) ([]Cell, error) {
+	if useCKZG.Load() {
+		return ckzgComputeCells(blob)
+	}
+	return gokzgComputeCells(blob)
+}
+
+// ComputeCellsAndKZGProofs computes the cells and KZG proofs for a given blob.
+func ComputeCellsAndKZGProofs(blob *Blob) ([]Cell, []Proof, error) {
+	if useCKZG.Load() {
+		return ckzgComputeCellsAndKZGProofs(blob)
+	}
+	return gokzgComputeCellsAndKZGProofs(blob)
 }
 
 // CalcBlobHashV1 calculates the 'versioned blob hash' of a commitment.

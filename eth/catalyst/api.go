@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
+
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -519,6 +521,14 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 	return api.getPayload(payloadID, false)
 }
 
+// GetPayloadV5 returns a cached payload by id.
+func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
+	if !payloadID.Is(engine.PayloadV3) {
+		return nil, engine.UnsupportedFork
+	}
+	return api.getPayload(payloadID, false)
+}
+
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID, full)
@@ -544,6 +554,30 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 			}
 		}
 	}
+
+	return res, nil
+}
+
+func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProofV2, error) {
+	if len(hashes) > 128 {
+		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
+	}
+	res := make([]*engine.BlobAndProofV2, len(hashes))
+
+	blobs, proofs := api.eth.TxPool().GetBlobs(hashes)
+	for i := 0; i < len(blobs); i++ {
+		if blobs[i] != nil {
+			res[i] = &engine.BlobAndProofV2{
+				Blob:   (*blobs[i])[:],
+				Proofs: make([]hexutil.Bytes, gokzg4844.CellsPerExtBlob),
+			}
+
+			for j := 0; j < gokzg4844.CellsPerExtBlob; j++ {
+				res[i].Proofs[j] = hexutil.Bytes((*proofs[i*gokzg4844.CellsPerExtBlob+j])[:])
+			}
+		}
+	}
+
 	return res, nil
 }
 

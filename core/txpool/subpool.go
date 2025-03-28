@@ -82,8 +82,9 @@ type PendingFilter struct {
 	BaseFee *uint256.Int // Minimum 1559 basefee needed to include a transaction
 	BlobFee *uint256.Int // Minimum 4844 blobfee needed to include a blob transaction
 
-	OnlyPlainTxs bool // Return only plain EVM transactions (peer-join announces, block space filling)
-	OnlyBlobTxs  bool // Return only blob transactions (block blob-space filling)
+	OnlyPlainTxs             bool // Return only plain EVM transactions (peer-join announces, block space filling)
+	OnlyBlobTxs              bool // Return only blob transactions (block blob-space filling)
+	OnlyBlobTxWithCellProofs bool // Return only blob transactions with cell proofs
 }
 
 // SubPool represents a specialized transaction pool that lives on its own (e.g.

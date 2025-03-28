@@ -425,6 +425,8 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) error {
+	miner.Pending()
+
 	miner.confMu.RLock()
 	tip := miner.config.GasPrice
 	prio := miner.prio
@@ -444,6 +446,9 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	pendingPlainTxs := miner.txpool.Pending(filter)
 
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
+	if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+		filter.OnlyBlobTxWithCellProofs = true
+	}
 	pendingBlobTxs := miner.txpool.Pending(filter)
 
 	// Split the pending transactions into locals and remotes.

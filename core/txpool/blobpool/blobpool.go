@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -104,23 +106,30 @@ type blobTxMeta struct {
 	evictionExecTip      *uint256.Int // Worst gas tip across all previous nonces
 	evictionExecFeeJumps float64      // Worst base fee (converted to fee jumps) across all previous nonces
 	evictionBlobFeeJumps float64      // Worse blob fee (converted to fee jumps) across all previous nonces
+
+	proofVersion uint64 // proof version of the transaction, 0 for legacy, 1 for cell proofs
 }
 
 // newBlobTxMeta retrieves the indexed metadata fields from a blob transaction
 // and assembles a helper struct to track in memory.
 func newBlobTxMeta(id uint64, size uint32, tx *types.Transaction) *blobTxMeta {
+	proofVersion := uint64(0)
+	if len(tx.BlobTxSidecar().Blobs) != len(tx.BlobTxSidecar().Proofs) {
+		proofVersion = 1 // cell proofs
+	}
 	meta := &blobTxMeta{
-		hash:       tx.Hash(),
-		vhashes:    tx.BlobHashes(),
-		id:         id,
-		size:       size,
-		nonce:      tx.Nonce(),
-		costCap:    uint256.MustFromBig(tx.Cost()),
-		execTipCap: uint256.MustFromBig(tx.GasTipCap()),
-		execFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
-		blobFeeCap: uint256.MustFromBig(tx.BlobGasFeeCap()),
-		execGas:    tx.Gas(),
-		blobGas:    tx.BlobGas(),
+		hash:         tx.Hash(),
+		vhashes:      tx.BlobHashes(),
+		id:           id,
+		size:         size,
+		nonce:        tx.Nonce(),
+		costCap:      uint256.MustFromBig(tx.Cost()),
+		execTipCap:   uint256.MustFromBig(tx.GasTipCap()),
+		execFeeCap:   uint256.MustFromBig(tx.GasFeeCap()),
+		blobFeeCap:   uint256.MustFromBig(tx.BlobGasFeeCap()),
+		execGas:      tx.Gas(),
+		blobGas:      tx.BlobGas(),
+		proofVersion: proofVersion,
 	}
 	meta.basefeeJumps = dynamicFeeJumps(meta.execFeeCap)
 	meta.blobfeeJumps = dynamicFeeJumps(meta.blobFeeCap)
@@ -1239,7 +1248,12 @@ func (p *BlobPool) GetRLP(hash common.Hash) []byte {
 // GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
+// After Osaka, the proofs are returned as cell proofs.
 func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
+	if p.chain.Config().IsOsaka(p.head.Number, p.head.Time) {
+		return p.GetBlobsWithCellProofs(vhashes)
+	}
+
 	// Create a map of the blob hash to indices for faster fills
 	var (
 		blobs  = make([]*kzg4844.Blob, len(vhashes))
@@ -1285,6 +1299,64 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.
 			}
 		}
 	}
+
+	return blobs, proofs
+}
+
+// GetBlobsWithCellProofs returns a number of blobs and cell proofs for the given versioned hashes after Osaka.
+func (p *BlobPool) GetBlobsWithCellProofs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
+	var (
+		blobs  = make([]*kzg4844.Blob, len(vhashes))
+		proofs = make([]*kzg4844.Proof, len(vhashes)*gokzg4844.CellsPerExtBlob)
+	)
+
+	index := make(map[common.Hash]int)
+	for i, vhash := range vhashes {
+		index[vhash] = i
+	}
+
+	for i, vhash := range vhashes {
+		if blobs[i] != nil {
+			continue
+		}
+
+		p.lock.RLock()
+		id, exists := p.lookup.storeidOfBlob(vhash)
+		if !exists {
+			p.lock.RUnlock()
+			continue
+		}
+		data, err := p.store.Get(id)
+		p.lock.RUnlock()
+
+		if err != nil {
+			log.Error("Tracked blob transaction missing from store", "id", id, "err", err)
+			continue
+		}
+		item := new(types.Transaction)
+		if err = rlp.DecodeBytes(data, item); err != nil {
+			log.Error("Blobs corrupted for traced transaction", "id", id, "err", err)
+			continue
+		}
+		sidecar := item.BlobTxSidecar()
+		if len(sidecar.Blobs)*gokzg4844.CellsPerExtBlob != len(sidecar.Proofs) {
+			log.Warn("potentially old blob tx with blob proofs, dropping it")
+			//TODO: implement dropping of blob txs
+			continue
+		}
+		for j, blobhash := range item.BlobHashes() {
+			if idx, ok := index[blobhash]; ok {
+				blobs[idx] = &sidecar.Blobs[j]
+
+				proofStart := idx * gokzg4844.CellsPerExtBlob
+				sidecarStart := j * gokzg4844.CellsPerExtBlob
+				for k := 0; k < gokzg4844.CellsPerExtBlob; k++ {
+					proofs[proofStart+k] = &sidecar.Proofs[sidecarStart+k]
+				}
+			}
+		}
+	}
+
 	return blobs, proofs
 }
 
@@ -1574,6 +1646,11 @@ func (p *BlobPool) Pending(filter txpool.PendingFilter) map[common.Address][]*tx
 					break // blobfee too low, cannot be included, discard rest of txs from the account
 				}
 			}
+
+			if filter.OnlyBlobTxWithCellProofs && tx.proofVersion == 0 {
+				continue // not a blob tx with cell proofs, skip
+			}
+
 			// Transaction was accepted according to the filter, append to the pending list
 			lazies = append(lazies, &txpool.LazyTransaction{
 				Pool:      p,
