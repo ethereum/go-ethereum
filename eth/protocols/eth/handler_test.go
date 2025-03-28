@@ -135,7 +135,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, cancun bool, generat
 	storage, _ := os.MkdirTemp("", "blobpool-")
 	defer os.RemoveAll(storage)
 
-	blobPool := blobpool.New(blobpool.Config{Datadir: storage}, chain)
+	blobPool := blobpool.New(blobpool.Config{Datadir: storage}, chain, nil)
 	legacyPool := legacypool.New(txconfig, chain)
 	txpool, _ := txpool.New(txconfig.PriceLimit, chain, []txpool.SubPool{legacyPool, blobPool})
 
