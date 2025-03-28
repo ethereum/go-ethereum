@@ -56,7 +56,7 @@ var (
 		Usage:     "Creates an enode URL from a node key file",
 		ArgsUsage: "keyfile",
 		Action:    keyToURL,
-		Flags:     []cli.Flag{hostFlag, tcpPortFlag, udpPortFlag},
+		Flags:     []cli.Flag{domainFlag, hostFlag, tcpPortFlag, udpPortFlag},
 	}
 	keyToRecordCommand = &cli.Command{
 		Name:      "to-enr",
@@ -68,6 +68,10 @@ var (
 )
 
 var (
+	domainFlag = &cli.StringFlag{
+		Name:  "domain",
+		Usage: "Public domain of the node",
+	}
 	hostFlag = &cli.StringFlag{
 		Name:  "ip",
 		Usage: "IP address of the node",
@@ -112,6 +116,7 @@ func keyToURL(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	n = n.WithHostname(ctx.String(domainFlag.Name))
 	fmt.Println(n.URLv4())
 	return nil
 }
