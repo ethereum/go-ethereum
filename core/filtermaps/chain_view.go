@@ -83,7 +83,11 @@ func (cv *ChainView) getReceipts(number uint64) types.Receipts {
 	if number > cv.headNumber {
 		panic("invalid block number")
 	}
-	return cv.chain.GetReceiptsByHash(cv.blockHash(number))
+	blockHash := cv.blockHash(number)
+	if blockHash == (common.Hash{}) {
+		log.Error("Chain view: block hash unavailable", "number", number, "head", cv.headNumber)
+	}
+	return cv.chain.GetReceiptsByHash(blockHash)
 }
 
 // limitedView returns a new chain view that is a truncated version of the parent view.
