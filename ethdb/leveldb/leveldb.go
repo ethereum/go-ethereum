@@ -23,11 +23,11 @@ package leveldb
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -221,12 +221,19 @@ func (db *Database) DeleteRange(start, end []byte) error {
 	defer it.Release()
 
 	var (
-		count int
-		buff  = crypto.NewKeccakState()
+		count   int
+		ignored int
+		buff    = crypto.NewKeccakState()
 	)
+	defer func() {
+		if ignored > 0 {
+			log.Info("Skipped entries from deletion", "number", ignored)
+		}
+	}()
 	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
 		// Prevent deletion for trie nodes in hash mode
 		if h := crypto.HashData(buff, it.Value()); h == common.BytesToHash(it.Key()) {
+			ignored++
 			continue
 		}
 		count++
