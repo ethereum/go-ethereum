@@ -181,6 +181,10 @@ func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {
 	b.pendingReceipts = receipts
 }
 
+func (b *testBackend) HistoryPruningCutoff() uint64 {
+	return 0
+}
+
 func newTestFilterSystem(db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
 	backend := &testBackend{db: db}
 	sys := NewFilterSystem(backend, cfg)

@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -86,6 +87,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		if header == nil {
 			return nil, errors.New("unknown block")
 		}
+		if header.Number.Uint64() < f.sys.backend.HistoryPruningCutoff() {
+			return nil, &eth.ErrorPrunedHistory{}
+		}
 		return f.blockLogs(ctx, header)
 	}
 
@@ -112,6 +116,13 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
 			if hdr == nil {
 				return 0, errors.New("safe header not found")
+			}
+			return hdr.Number.Uint64(), nil
+		case rpc.EarliestBlockNumber.Int64():
+			earliest := f.sys.backend.HistoryPruningCutoff()
+			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(earliest))
+			if hdr == nil {
+				return 0, errors.New("earliest header not found")
 			}
 			return hdr.Number.Uint64(), nil
 		}

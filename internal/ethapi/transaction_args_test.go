@@ -399,6 +399,7 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 	return nil
 }
 
-func (b *backendMock) Engine() consensus.Engine { return nil }
+func (b *backendMock) Engine() consensus.Engine     { return nil }
+func (b *backendMock) HistoryPruningCutoff() uint64 { return 0 }
 
 func (b *backendMock) NewMatcherBackend() filtermaps.MatcherBackend { return nil }
