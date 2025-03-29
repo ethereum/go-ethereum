@@ -20,3 +20,34 @@ func RewardInflation(chain consensus.ChainReader, chainReward *big.Int, number u
 
 	return chainReward
 }
+
+// RewardHalving computes the reward for Masternode/Protector/Observer based on epoch total reward, supply after halving is enabled, and epoch after halving is enabled
+// The sequence is a geometric sequence in order to make supply be limited
+func RewardHalving(epochRewardSingle *big.Int, epochRewardTotal *big.Int, halvingSupply *big.Int, epochSinceHalving uint64) *big.Int {
+	rt := new(big.Float).SetInt(epochRewardTotal)
+	hs := new(big.Float).SetInt(halvingSupply)
+	// zero cause Quo panic so return early
+	// or epoch reward > halving supply, return early
+	if halvingSupply.BitLen() == 0 || epochRewardTotal.Cmp(halvingSupply) > 0 {
+		return big.NewInt(0)
+	}
+	quo := new(big.Float).Quo(rt, hs)
+	// base = 1- reward/supply
+	base := new(big.Float).Sub(big.NewFloat(1), quo)
+	r := new(big.Float).SetInt(epochRewardSingle)
+	result := new(big.Float).Mul(r, FloatPower(base, epochSinceHalving))
+	resultInt, _ := result.Int(nil)
+	return resultInt
+}
+
+func FloatPower(base *big.Float, exp uint64) *big.Float {
+	result := big.NewFloat(1)
+	for exp > 0 {
+		if exp%2 == 1 {
+			result.Mul(result, base)
+		}
+		base.Mul(base, base)
+		exp >>= 1 // same as: exp = exp / 2
+	}
+	return result
+}

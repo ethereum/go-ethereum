@@ -171,6 +171,7 @@ var (
 		900: {
 			MaxMasternodes:       20,
 			MaxProtectorNodes:    17,
+			MaxObverserNodes:     1,
 			SwitchRound:          900,
 			CertThreshold:        0.667,
 			TimeoutSyncThreshold: 4,
@@ -454,15 +455,16 @@ type V2 struct {
 type V2Config struct {
 	MaxMasternodes       int     `json:"maxMasternodes"`       // v2 max masternodes
 	MaxProtectorNodes    int     `json:"maxProtectorNodes"`    // v2 max ProtectorNodes
+	MaxObverserNodes     int     `json:"maxObserverNodes"`     // v2 max ObserverNodes
 	SwitchRound          uint64  `json:"switchRound"`          // v1 to v2 switch block number
 	MinePeriod           int     `json:"minePeriod"`           // Miner mine period to mine a block
 	TimeoutSyncThreshold int     `json:"timeoutSyncThreshold"` // send syncInfo after number of timeout
 	TimeoutPeriod        int     `json:"timeoutPeriod"`        // Duration in ms
 	CertThreshold        float64 `json:"certificateThreshold"` // Necessary number of messages from master nodes to form a certificate
 
-	MasternodeReward uint64 `json:"masternodeReward"` // Block reward for master nodes (core validators) - unit Ether
-	ProtectorReward  uint64 `json:"protectorReward"`  // Block reward for protectors - unit Ether
-	ObserverReward   uint64 `json:"observerReward"`   // Block reward for observer - unit Ether
+	MasternodeReward uint64 `json:"masternodeReward"` // Block reward per master node (core validator) - unit Ether
+	ProtectorReward  uint64 `json:"protectorReward"`  // Block reward per protector - unit Ether
+	ObserverReward   uint64 `json:"observerReward"`   // Block reward per observer - unit Ether
 
 	ExpTimeoutConfig ExpTimeoutConfig `json:"expTimeoutConfig"`
 }
@@ -762,6 +764,10 @@ func (c *ChainConfig) IsTIPXDCXCancellationFee(num *big.Int) bool {
 
 func (c *ChainConfig) IsTIPUpgradeReward(num *big.Int) bool {
 	return isForked(common.TIPUpgradeReward, num)
+}
+
+func (c *ChainConfig) IsTIPEpochHalving(num *big.Int) bool {
+	return isForked(common.TIPEpochHalving, num)
 }
 
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
