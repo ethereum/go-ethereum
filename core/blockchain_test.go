@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	gomath "math"
 	"math/big"
 	"math/rand"
@@ -3062,9 +3063,7 @@ func testDeleteRecreateSlotsAcrossManyBlocks(t *testing.T, scheme string) {
 		var exp = new(expectation)
 		exp.blocknum = i + 1
 		exp.values = make(map[int]int)
-		for k, v := range current.values {
-			exp.values[k] = v
-		}
+		maps.Copy(exp.values, current.values)
 		exp.exist = current.exist
 
 		b.SetCoinbase(common.Address{1})

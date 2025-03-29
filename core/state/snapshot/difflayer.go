@@ -388,9 +388,7 @@ func (dl *diffLayer) flatten() snapshot {
 	if parent.stale.Swap(true) {
 		panic("parent diff layer is stale") // we've flattened into the same parent from two children, boo
 	}
-	for hash, data := range dl.accountData {
-		parent.accountData[hash] = data
-	}
+	maps.Copy(parent.accountData, dl.accountData)
 	// Overwrite all the updated storage slots (individually)
 	for accountHash, storage := range dl.storageData {
 		// If storage didn't exist (or was deleted) in the parent, overwrite blindly

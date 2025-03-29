@@ -19,6 +19,7 @@ package clique
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -99,9 +100,7 @@ func (api *API) Proposals() map[common.Address]bool {
 	defer api.clique.lock.RUnlock()
 
 	proposals := make(map[common.Address]bool)
-	for address, auth := range api.clique.proposals {
-		proposals[address] = auth
-	}
+	maps.Copy(proposals, api.clique.proposals)
 	return proposals
 }
 
