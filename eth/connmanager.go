@@ -32,10 +32,12 @@ import (
 )
 
 const (
-	// Interval between peer drop events
-	peerDropInterval = 5 * time.Minute
+	// Interval between peer drop events (uniform between min and max)
+	peerDropIntervalMin = 3 * time.Minute
+	// Interval between peer drop events (uniform between min and max)
+	peerDropIntervalMax = 7 * time.Minute
 	// Avoid dropping peers for some time after connection
-	doNotDropBefore = 2 * peerDropInterval
+	doNotDropBefore = 2 * peerDropIntervalMax
 	// How close to max should we initiate the drop timer. O should be fine,
 	// dropping when no more peers can be added. Larger numbers result in more
 	// aggressive drop behavior.
@@ -106,7 +108,11 @@ func newConnManager(config *connmanConfig) *connManager {
 		peerEventCh:          make(chan *p2p.PeerEvent),
 		shutdownCh:           make(chan struct{}),
 	}
-	cm.log.Info("New Connection Manager", "maxDialPeers", cm.maxDialPeers, "threshold", peerDropThreshold, "interval", peerDropInterval)
+	if peerDropIntervalMin > peerDropIntervalMax {
+		panic("peerDropIntervalMin duration must be less than or equal to peerDropIntervalMax duration")
+	}
+	cm.log.Info("New Connection Manager", "maxDialPeers", cm.maxDialPeers, "threshold", peerDropThreshold,
+		"intervalMin", peerDropIntervalMin, "intervalMax", peerDropIntervalMax)
 	return cm
 }
 
@@ -165,6 +171,17 @@ func (cm *connManager) dropRandomPeer(dialed bool) bool {
 	return false
 }
 
+// randomDuration generates a random duration between min and max.
+// TODO: maybe we should move this to a common utlity package.
+// TODO: panic might be too harsh, maybe return an error.
+func randomDuration(rand *mrand.Rand, min, max time.Duration) time.Duration {
+	if min > max {
+		panic("min duration must be less than or equal to max duration")
+	}
+	nanos := rand.Int63n(max.Nanoseconds()-min.Nanoseconds()) + min.Nanoseconds()
+	return time.Duration(nanos)
+}
+
 // updatePeerDropTimers checks and starts/stops the timer for peer drop.
 func (cm *connManager) updatePeerDropTimers(syncing bool) {
 	numPeers, numDialed, numInbound := cm.numPeers()
@@ -175,13 +192,15 @@ func (cm *connManager) updatePeerDropTimers(syncing bool) {
 	if !syncing {
 		// If a drop was already scheduled, Schedule does nothing.
 		if cm.maxDialPeers-numDialed <= peerDropThreshold {
-			cm.peerDropDialedTimer.Schedule(cm.clock.Now().Add(peerDropInterval))
+			interval := randomDuration(cm.rand, peerDropIntervalMin, peerDropIntervalMax)
+			cm.peerDropDialedTimer.Schedule(cm.clock.Now().Add(interval))
 		} else {
 			cm.peerDropDialedTimer.Stop()
 		}
 
 		if cm.maxInboundPeers-numInbound <= peerDropThreshold {
-			cm.peerDropInboundTimer.Schedule(cm.clock.Now().Add(peerDropInterval))
+			interval := randomDuration(cm.rand, peerDropIntervalMin, peerDropIntervalMax)
+			cm.peerDropInboundTimer.Schedule(cm.clock.Now().Add(interval))
 		} else {
 			cm.peerDropInboundTimer.Stop()
 		}
