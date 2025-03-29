@@ -667,9 +667,14 @@ func TestColdAccountAccessCost(t *testing.T) {
 		Execute(tc.code, nil, &Config{
 			EVMConfig: vm.Config{
 				Tracer: &tracing.Hooks{
-					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, isCancun bool, err error) {
 						// Uncomment to investigate failures:
-						//t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
+						// opString := vm.OpCode(op).String()
+						// Use hex string if Cancun is inactive but the opcode is invalid before Cancun fork
+						// if !isCancun &&  vm.OpCode(op).IsCancunOpcode() {
+						// 	opString = fmt.Sprintf("0x%x", byte(vm.OpCode(op)))
+						// }
+						//t.Logf("%d: %v %d", step, opString, cost)
 						if step == tc.step {
 							have = cost
 						}
@@ -921,9 +926,14 @@ func TestDelegatedAccountAccessCost(t *testing.T) {
 			State:       statedb,
 			EVMConfig: vm.Config{
 				Tracer: &tracing.Hooks{
-					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, isCancun bool, err error) {
 						// Uncomment to investigate failures:
-						t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
+						opString := vm.OpCode(op).String()
+						// Use hex string if Cancun is inactive but the opcode is invalid before Cancun fork
+						if !isCancun && vm.OpCode(op).IsCancunOpcode() {
+							opString = fmt.Sprintf("0x%x", byte(vm.OpCode(op)))
+						}
+						t.Logf("%d: %v %d", step, opString, cost)
 						if step == tc.step {
 							have = cost
 						}
