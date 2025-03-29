@@ -740,7 +740,7 @@ func testFastVsFullChains(t *testing.T, scheme string) {
 	if n, err := fast.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-	if n, err := fast.InsertReceiptChain(blocks, receipts, 0); err != nil {
+	if n, err := fast.InsertReceiptChain(blocks, types.ReceiptsToRLP(receipts), 0); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 	// Freezer style fast import the chain.
@@ -756,7 +756,7 @@ func testFastVsFullChains(t *testing.T, scheme string) {
 	if n, err := ancient.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(len(blocks)/2)); err != nil {
+	if n, err := ancient.InsertReceiptChain(blocks, types.ReceiptsToRLP(receipts), uint64(len(blocks)/2)); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 
@@ -887,7 +887,7 @@ func testLightVsFastVsFullChainHeads(t *testing.T, scheme string) {
 	if n, err := fast.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-	if n, err := fast.InsertReceiptChain(blocks, receipts, 0); err != nil {
+	if n, err := fast.InsertReceiptChain(blocks, types.ReceiptsToRLP(receipts), 0); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 	assert(t, "fast", fast, height, height, 0)
@@ -903,7 +903,7 @@ func testLightVsFastVsFullChainHeads(t *testing.T, scheme string) {
 	if n, err := ancient.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(3*len(blocks)/4)); err != nil {
+	if n, err := ancient.InsertReceiptChain(blocks, types.ReceiptsToRLP(receipts), uint64(3*len(blocks)/4)); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 	assert(t, "ancient", ancient, height, height, 0)
@@ -1717,7 +1717,7 @@ func testBlockchainRecovery(t *testing.T, scheme string) {
 	if n, err := ancient.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(3*len(blocks)/4)); err != nil {
+	if n, err := ancient.InsertReceiptChain(blocks, types.ReceiptsToRLP(receipts), uint64(3*len(blocks)/4)); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 	rawdb.WriteLastPivotNumber(ancientDb, blocks[len(blocks)-1].NumberU64()) // Force fast sync behavior
@@ -1793,7 +1793,7 @@ func testInsertReceiptChainRollback(t *testing.T, scheme string) {
 	}
 
 	// Try to insert blocks/receipts of the side chain.
-	_, err = ancientChain.InsertReceiptChain(sideblocks, sidechainReceipts, uint64(len(sideblocks)))
+	_, err = ancientChain.InsertReceiptChain(sideblocks, types.ReceiptsToRLP(sidechainReceipts), uint64(len(sideblocks)))
 	if err == nil {
 		t.Fatal("expected error from InsertReceiptChain.")
 	}
@@ -1805,7 +1805,7 @@ func testInsertReceiptChainRollback(t *testing.T, scheme string) {
 	}
 
 	// Insert blocks/receipts of the canonical chain.
-	_, err = ancientChain.InsertReceiptChain(canonblocks, canonReceipts, uint64(len(canonblocks)))
+	_, err = ancientChain.InsertReceiptChain(canonblocks, types.ReceiptsToRLP(canonReceipts), uint64(len(canonblocks)))
 	if err != nil {
 		t.Fatalf("can't import canon chain receipts: %v", err)
 	}
@@ -2096,7 +2096,7 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 			if err != nil {
 				return err
 			}
-			_, err = chain.InsertReceiptChain(blocks, receipts, 0)
+			_, err = chain.InsertReceiptChain(blocks, types.ReceiptsToRLP(receipts), 0)
 			return err
 		}
 		asserter = func(t *testing.T, block *types.Block) {
@@ -2270,7 +2270,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			if err != nil {
 				return fmt.Errorf("index %d: %w", i, err)
 			}
-			_, err = chain.InsertReceiptChain(blocks, receipts, 0)
+			_, err = chain.InsertReceiptChain(blocks, types.ReceiptsToRLP(receipts), 0)
 			return err
 		}
 		asserter = func(t *testing.T, block *types.Block) {
