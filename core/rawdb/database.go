@@ -28,11 +28,15 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
 )
+
+var ErrDeleteRangeInterrupted = errors.New("safe delete range operation interrupted")
 
 // freezerdb is a database wrapper that enables ancient chain segment freezing.
 type freezerdb struct {
@@ -606,4 +610,72 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		data = append(data, []string{"filterMapsRange", fmt.Sprintf("%+v", fmr)})
 	}
 	return data
+}
+
+// SafeDeleteRange deletes all of the keys (and values) in the range
+// [start,end) (inclusive on start, exclusive on end).
+// If hashDbSafe is true then it always uses an iterator and skips hashdb trie
+// node entries. If it is false and the backing db is pebble db then it uses
+// the fast native range delete.
+// In case of fallback mode (hashdb or leveldb) the range deletion might be
+// very slow depending on the number of entries. In this case stopCallback
+// is periodically called and if it returns an error then SafeDeleteRange
+// stops and also returns that error. The callback is not called if native
+// range delete is used or there are a small number of keys only.
+func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashDbSafe bool, stopCallback func() bool) error {
+	if !hashDbSafe {
+		// delete entire range; use fast native range delete on pebble db
+		for {
+			switch err := db.DeleteRange(start, end); err {
+			case nil:
+				return nil
+			case leveldb.ErrTooManyKeys:
+				if stopCallback() {
+					return ErrDeleteRangeInterrupted
+				}
+			default:
+				return err
+			}
+		}
+	}
+
+	var (
+		count, deleted, skipped int
+		buff                    = crypto.NewKeccakState()
+		startTime               = time.Now()
+	)
+
+	batch := db.NewBatch()
+	it := db.NewIterator(nil, start)
+	defer func() {
+		it.Release() // it might be replaced during the process
+		log.Debug("SafeDeleteRange finished", "deleted", deleted, "skipped", skipped, "elapsed", time.Since(startTime))
+	}()
+
+	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+		// Prevent deletion for trie nodes in hash mode
+		if len(it.Key()) != 32 || crypto.HashData(buff, it.Value()) != common.BytesToHash(it.Key()) {
+			if err := batch.Delete(it.Key()); err != nil {
+				return err
+			}
+			deleted++
+		} else {
+			skipped++
+		}
+		count++
+		if count > 10000 { // should not block for more than a second
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			if stopCallback() {
+				return ErrDeleteRangeInterrupted
+			}
+			start = append(bytes.Clone(it.Key()), 0)
+			it.Release()
+			batch = db.NewBatch()
+			it = db.NewIterator(nil, start)
+			count = 0
+		}
+	}
+	return batch.Write()
 }

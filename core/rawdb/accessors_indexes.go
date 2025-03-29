@@ -354,10 +354,8 @@ func WriteFilterMapBaseRows(db ethdb.KeyValueWriter, mapRowIndex uint64, rows []
 	}
 }
 
-func DeleteFilterMapRows(db ethdb.KeyValueRangeDeleter, mapRows common.Range[uint64]) {
-	if err := db.DeleteRange(filterMapRowKey(mapRows.First(), false), filterMapRowKey(mapRows.AfterLast(), false)); err != nil {
-		log.Crit("Failed to delete range of filter map rows", "err", err)
-	}
+func DeleteFilterMapRows(db ethdb.KeyValueStore, mapRows common.Range[uint64], hashDbSafe bool, stopCallback func() bool) error {
+	return SafeDeleteRange(db, filterMapRowKey(mapRows.First(), false), filterMapRowKey(mapRows.AfterLast(), false), hashDbSafe, stopCallback)
 }
 
 // ReadFilterMapLastBlock retrieves the number of the block that generated the
@@ -394,10 +392,8 @@ func DeleteFilterMapLastBlock(db ethdb.KeyValueWriter, mapIndex uint32) {
 	}
 }
 
-func DeleteFilterMapLastBlocks(db ethdb.KeyValueRangeDeleter, maps common.Range[uint32]) {
-	if err := db.DeleteRange(filterMapLastBlockKey(maps.First()), filterMapLastBlockKey(maps.AfterLast())); err != nil {
-		log.Crit("Failed to delete range of filter map last block pointers", "err", err)
-	}
+func DeleteFilterMapLastBlocks(db ethdb.KeyValueStore, maps common.Range[uint32], hashDbSafe bool, stopCallback func() bool) error {
+	return SafeDeleteRange(db, filterMapLastBlockKey(maps.First()), filterMapLastBlockKey(maps.AfterLast()), hashDbSafe, stopCallback)
 }
 
 // ReadBlockLvPointer retrieves the starting log value index where the log values
@@ -431,10 +427,8 @@ func DeleteBlockLvPointer(db ethdb.KeyValueWriter, blockNumber uint64) {
 	}
 }
 
-func DeleteBlockLvPointers(db ethdb.KeyValueRangeDeleter, blocks common.Range[uint64]) {
-	if err := db.DeleteRange(filterMapBlockLVKey(blocks.First()), filterMapBlockLVKey(blocks.AfterLast())); err != nil {
-		log.Crit("Failed to delete range of block log value pointers", "err", err)
-	}
+func DeleteBlockLvPointers(db ethdb.KeyValueStore, blocks common.Range[uint64], hashDbSafe bool, stopCallback func() bool) error {
+	return SafeDeleteRange(db, filterMapBlockLVKey(blocks.First()), filterMapBlockLVKey(blocks.AfterLast()), hashDbSafe, stopCallback)
 }
 
 // FilterMapsRange is a storage representation of the block range covered by the
@@ -485,22 +479,22 @@ func DeleteFilterMapsRange(db ethdb.KeyValueWriter) {
 }
 
 // deletePrefixRange deletes everything with the given prefix from the database.
-func deletePrefixRange(db ethdb.KeyValueRangeDeleter, prefix []byte) error {
+func deletePrefixRange(db ethdb.KeyValueStore, prefix []byte, hashDbSafe bool, stopCallback func() bool) error {
 	end := bytes.Clone(prefix)
 	end[len(end)-1]++
-	return db.DeleteRange(prefix, end)
+	return SafeDeleteRange(db, prefix, end, hashDbSafe, stopCallback)
 }
 
 // DeleteFilterMapsDb removes the entire filter maps database
-func DeleteFilterMapsDb(db ethdb.KeyValueRangeDeleter) error {
-	return deletePrefixRange(db, []byte(filterMapsPrefix))
+func DeleteFilterMapsDb(db ethdb.KeyValueStore, hashDbSafe bool, stopCallback func() bool) error {
+	return deletePrefixRange(db, []byte(filterMapsPrefix), hashDbSafe, stopCallback)
 }
 
 // DeleteFilterMapsDb removes the old bloombits database and the associated
 // chain indexer database.
-func DeleteBloomBitsDb(db ethdb.KeyValueRangeDeleter) error {
-	if err := deletePrefixRange(db, bloomBitsPrefix); err != nil {
+func DeleteBloomBitsDb(db ethdb.KeyValueStore, hashDbSafe bool, stopCallback func() bool) error {
+	if err := deletePrefixRange(db, bloomBitsPrefix, hashDbSafe, stopCallback); err != nil {
 		return err
 	}
-	return deletePrefixRange(db, bloomBitsMetaPrefix)
+	return deletePrefixRange(db, bloomBitsMetaPrefix, hashDbSafe, stopCallback)
 }
