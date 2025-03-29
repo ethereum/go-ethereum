@@ -30,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
@@ -65,22 +64,24 @@ type codecV5 interface {
 	// CurrentChallenge returns the most recent WHOAREYOU challenge that was encoded to given node.
 	// This will return a non-nil value if there is an active handshake attempt with the node, and nil otherwise.
 	CurrentChallenge(id enode.ID, addr string) *v5wire.Whoareyou
+
+	// SessionNode returns a node that has completed the handshake.
+	SessionNode(enode.ID, string) *enode.Node
 }
 
 // UDPv5 is the implementation of protocol version 5.
 type UDPv5 struct {
 	// static fields
-	conn           UDPConn
-	tab            *Table
-	cachedAddrNode *lru.Cache[string, *enode.Node]
-	netrestrict    *netutil.Netlist
-	priv           *ecdsa.PrivateKey
-	localNode      *enode.LocalNode
-	db             *enode.DB
-	log            log.Logger
-	clock          mclock.Clock
-	validSchemes   enr.IdentityScheme
-	respTimeout    time.Duration
+	conn         UDPConn
+	tab          *Table
+	netrestrict  *netutil.Netlist
+	priv         *ecdsa.PrivateKey
+	localNode    *enode.LocalNode
+	db           *enode.DB
+	log          log.Logger
+	clock        mclock.Clock
+	validSchemes enr.IdentityScheme
+	respTimeout  time.Duration
 
 	// misc buffers used during message handling
 	logcontext []interface{}
@@ -95,12 +96,14 @@ type UDPv5 struct {
 	callDoneCh    chan *callV5
 	respTimeoutCh chan *callTimeout
 	sendCh        chan sendRequest
+	sendNoRespCh  chan *sendNoRespRequest
 	unhandled     chan<- ReadPacket
 
 	// state of dispatch
 	codec            codecV5
 	activeCallByNode map[enode.ID]*callV5
 	activeCallByAuth map[v5wire.Nonce]*callV5
+	noRespCallByAuth map[v5wire.Nonce]*callV5
 	callQueue        map[enode.ID][]*callV5
 
 	// shutdown stuff
@@ -112,6 +115,11 @@ type UDPv5 struct {
 
 type sendRequest struct {
 	destID   enode.ID
+	destAddr netip.AddrPort
+	msg      v5wire.Packet
+}
+
+type sendNoRespRequest struct {
 	destNode *enode.Node
 	destAddr netip.AddrPort
 	msg      v5wire.Packet
@@ -161,28 +169,29 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	cfg = cfg.withDefaults()
 	t := &UDPv5{
 		// static fields
-		conn:           newMeteredConn(conn),
-		cachedAddrNode: lru.NewCache[string, *enode.Node](1024),
-		localNode:      ln,
-		db:             ln.Database(),
-		netrestrict:    cfg.NetRestrict,
-		priv:           cfg.PrivateKey,
-		log:            cfg.Log,
-		validSchemes:   cfg.ValidSchemes,
-		clock:          cfg.Clock,
-		respTimeout:    cfg.V5RespTimeout,
+		conn:         newMeteredConn(conn),
+		localNode:    ln,
+		db:           ln.Database(),
+		netrestrict:  cfg.NetRestrict,
+		priv:         cfg.PrivateKey,
+		log:          cfg.Log,
+		validSchemes: cfg.ValidSchemes,
+		clock:        cfg.Clock,
+		respTimeout:  cfg.V5RespTimeout,
 		// channels into dispatch
 		packetInCh:    make(chan ReadPacket, 1),
 		readNextCh:    make(chan struct{}, 1),
 		callCh:        make(chan *callV5),
 		callDoneCh:    make(chan *callV5),
 		sendCh:        make(chan sendRequest),
+		sendNoRespCh:  make(chan *sendNoRespRequest),
 		respTimeoutCh: make(chan *callTimeout),
 		unhandled:     cfg.Unhandled,
 		// state of dispatch
 		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock, cfg.V5ProtocolID),
 		activeCallByNode: make(map[enode.ID]*callV5),
 		activeCallByAuth: make(map[v5wire.Nonce]*callV5),
+		noRespCallByAuth: make(map[v5wire.Nonce]*callV5),
 		callQueue:        make(map[enode.ID][]*callV5),
 		// shutdown
 		closeCtx:       closeCtx,
@@ -582,13 +591,17 @@ func (t *UDPv5) dispatch() {
 		case c := <-t.callCh:
 			t.callQueue[c.id] = append(t.callQueue[c.id], c)
 			t.sendNextCall(c.id)
+		case cnr := <-t.sendNoRespCh:
+			// send a TalkReq call but not waiting for TalkResp
+			// may more used by portal network
+			t.sendCallNotWaitResp(cnr)
 
 		case ct := <-t.respTimeoutCh:
 			active := t.activeCallByNode[ct.c.id]
 			if ct.c == active && ct.timer == active.timeout {
 				ct.c.err <- errTimeout
 			}
-			delete(t.activeCallByAuth, ct.c.nonce)
+			delete(t.noRespCallByAuth, ct.c.nonce)
 			ct.c.timeout.Stop()
 
 		case c := <-t.callDoneCh:
@@ -602,30 +615,8 @@ func (t *UDPv5) dispatch() {
 			t.sendNextCall(c.id)
 
 		case r := <-t.sendCh:
-			if _, ok := r.msg.(*v5wire.TalkResponse); ok {
-				// send a TalkResponse out
-				t.send(r.destID, r.destAddr, r.msg, nil)
-			} else {
-				// send out a TalkRequest that is a UTP packet for portal network
-				// request should be cached to handle WHOAREYOU
-				c := &callV5{id: r.destID, addr: r.destAddr}
-				c.node = r.destNode
-				c.packet = r.msg
-				c.reqid = make([]byte, 8)
-				c.ch = make(chan v5wire.Packet, 1)
-				c.err = make(chan error, 1)
-				// Assign request ID.
-				if tq, ok := r.msg.(*v5wire.TalkRequest); ok {
-					if len(tq.ReqID) == 0 {
-						crand.Read(c.reqid)
-						c.packet.SetRequestID(c.reqid)
-					}
-				}
-				nonce, _ := t.send(c.id, c.addr, c.packet, nil)
-				c.nonce = nonce
-				t.activeCallByAuth[nonce] = c
-				t.startResponseTimeout(c)
-			}
+			t.send(r.destID, r.destAddr, r.msg, nil)
+
 		case p := <-t.packetInCh:
 			t.handlePacket(p.Data, p.Addr)
 			// Arm next read.
@@ -643,6 +634,9 @@ func (t *UDPv5) dispatch() {
 				c.err <- errClosed
 				delete(t.activeCallByNode, id)
 				delete(t.activeCallByAuth, c.nonce)
+			}
+			for nonce := range t.noRespCallByAuth {
+				delete(t.activeCallByAuth, nonce)
 			}
 			return
 		}
@@ -667,6 +661,41 @@ func (t *UDPv5) startResponseTimeout(c *callV5) {
 	})
 	c.timeout = timer
 	close(done)
+}
+
+// sendCallNotWaitResp send a talk request contains utp packet by call, call will not insert into queue
+func (t *UDPv5) sendCallNotWaitResp(r *sendNoRespRequest) {
+	// send out a TalkRequest that is a UTP packet for portal network
+	// if a handshake has been done, the n will not be nil, and just send the data out
+	if n := t.codec.SessionNode(r.destNode.ID(), r.destAddr.String()); n != nil {
+		t.send(r.destNode.ID(), r.destAddr, r.msg, nil)
+		return
+	}
+
+	// request should be cached to handle WHOAREYOU
+	c := &callV5{id: r.destNode.ID(), addr: r.destAddr}
+	c.node = r.destNode
+	c.packet = r.msg
+	c.reqid = make([]byte, 8)
+	c.ch = make(chan v5wire.Packet, 1)
+	c.err = make(chan error, 1)
+	// Assign request ID.
+	crand.Read(c.reqid)
+	c.packet.SetRequestID(c.reqid)
+
+	nonce, _ := t.send(c.id, c.addr, c.packet, nil)
+	c.nonce = nonce
+	t.noRespCallByAuth[nonce] = c
+	t.startResponseTimeout(c)
+}
+
+// sendNoRespData send a data from a call of no wait resp.
+// The handshake has just been successful, could clear the info in the map
+func (t *UDPv5) sendNoRespData(c *callV5) {
+	// Just resend the data and not use call again
+	delete(t.noRespCallByAuth, c.nonce)
+	c.timeout.Stop()
+	t.send(c.node.ID(), c.addr, c.packet, nil)
 }
 
 // sendNextCall sends the next call in the call queue if there is no active call.
@@ -709,14 +738,15 @@ func (t *UDPv5) sendResponse(toID enode.ID, toAddr netip.AddrPort, packet v5wire
 
 func (t *UDPv5) sendFromAnotherThread(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet) {
 	select {
-	case t.sendCh <- sendRequest{toID, nil, toAddr, packet}:
+	case t.sendCh <- sendRequest{destID: toID, destAddr: toAddr, msg: packet}:
 	case <-t.closeCtx.Done():
 	}
 }
 
-func (t *UDPv5) SendFromAnotherThreadWithNode(node *enode.Node, toAddr netip.AddrPort, packet v5wire.Packet) {
+// SendNoResp Send a packet but will not wait for a response
+func (t *UDPv5) SendNoResp(n *enode.Node, toAddr netip.AddrPort, packet v5wire.Packet) {
 	select {
-	case t.sendCh <- sendRequest{node.ID(), node, toAddr, packet}:
+	case t.sendNoRespCh <- &sendNoRespRequest{n, toAddr, packet}:
 	case <-t.closeCtx.Done():
 	}
 }
@@ -732,9 +762,6 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 		t.logcontext = append(t.logcontext, "err", err)
 		t.log.Warn(">> "+packet.Name(), t.logcontext...)
 		return nonce, err
-	}
-	if c != nil && c.Node != nil {
-		t.putCache(toAddr.String(), c.Node)
 	}
 
 	_, err = t.conn.WriteToUDPAddrPort(enc, toAddr)
@@ -797,7 +824,6 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
 		t.tab.addInboundNode(fromNode)
-		t.putCache(fromAddr.String(), fromNode)
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.
@@ -913,17 +939,25 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr n
 		c.err <- errors.New("remote wants handshake, but call has no ENR")
 		return
 	}
-	// Resend the call that was answered by WHOAREYOU.
+
 	t.log.Trace("<< "+p.Name(), "id", c.node.ID(), "addr", fromAddr)
-	c.handshakeCount++
-	c.challenge = p
-	p.Node = c.node
-	t.sendCall(c)
+	if _, ok := t.noRespCallByAuth[p.Nonce]; !ok {
+		// Resend the call that was answered by WHOAREYOU.
+		c.handshakeCount++
+		c.challenge = p
+		p.Node = c.node
+		t.sendCall(c)
+	} else {
+		t.sendNoRespData(c)
+	}
 }
 
 // matchWithCall checks whether a handshake attempt matches the active call.
 func (t *UDPv5) matchWithCall(fromID enode.ID, nonce v5wire.Nonce) (*callV5, error) {
 	c := t.activeCallByAuth[nonce]
+	if c == nil {
+		c = t.noRespCallByAuth[nonce]
+	}
 	if c == nil {
 		return nil, errChallengeNoCall
 	}
@@ -1019,15 +1053,4 @@ func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
 		msg.RespCount = uint8(len(resp))
 	}
 	return resp
-}
-
-func (t *UDPv5) putCache(addr string, node *enode.Node) {
-	if n, ok := t.cachedAddrNode.Get(addr); ok {
-		t.log.Debug("Update cached node", "old", n.ID(), "new", node.ID())
-	}
-	t.cachedAddrNode.Add(addr, node)
-}
-
-func (t *UDPv5) GetCachedNode(addr string) (*enode.Node, bool) {
-	return t.cachedAddrNode.Get(addr)
 }
