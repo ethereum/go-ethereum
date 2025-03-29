@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"math/big"
 	"testing"
@@ -29,12 +30,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // testEthHandler is a mock event handler to listen for inbound network requests
@@ -367,10 +370,27 @@ func testSendTransactions(t *testing.T, protocol uint) {
 
 // Tests that transactions get propagated to all attached peers, either via direct
 // broadcasts or via announcements/retrievals.
-func TestTransactionPropagation68(t *testing.T) { testTransactionPropagation(t, eth.ETH68) }
+func TestTransactionPropagation(t *testing.T) {
+	t.Run("legacy-tx", func(t *testing.T) {
+		testTransactionPropagation(t, false)
+	})
 
-func testTransactionPropagation(t *testing.T, protocol uint) {
+	t.Run("blob-tx", func(t *testing.T) {
+		testTransactionPropagation(t, true)
+	})
+}
+
+func testTransactionPropagation(t *testing.T, blobTx bool) {
 	t.Parallel()
+
+	var (
+		emptyBlob               = kzg4844.Blob{}
+		emptyBlobs              = []kzg4844.Blob{emptyBlob}
+		emptyBlobCommit, _      = kzg4844.BlobToCommitment(&emptyBlob)
+		emptyBlobProof, _       = kzg4844.ComputeBlobProof(&emptyBlob, emptyBlobCommit)
+		emptyBlobHash           = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
+		protocol           uint = eth.ETH68
+	)
 
 	// Create a source handler to send transactions from and a number of sinks
 	// to receive them. We need multiple sinks since a one-to-one peering would
@@ -415,8 +435,36 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	// Fill the source pool with transactions and wait for them at the sinks
 	txs := make([]*types.Transaction, 1024)
 	for nonce := range txs {
-		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
-		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+		var (
+			tx     *types.Transaction
+			err    error
+			signer = types.NewCancunSigner(params.TestChainConfig.ChainID)
+		)
+
+		if blobTx {
+			tx, err = types.SignNewTx(testKey, signer, &types.BlobTx{
+				ChainID:    uint256.MustFromBig(params.TestChainConfig.ChainID),
+				Nonce:      uint64(nonce),
+				GasTipCap:  uint256.NewInt(20_000_000_000),
+				GasFeeCap:  uint256.NewInt(21_000_000_000),
+				Gas:        21000,
+				To:         testAddr,
+				BlobHashes: []common.Hash{emptyBlobHash},
+				BlobFeeCap: uint256.MustFromBig(common.Big1),
+				Sidecar: &types.BlobTxSidecar{
+					Blobs:       emptyBlobs,
+					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+					Proofs:      []kzg4844.Proof{emptyBlobProof},
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			tx = types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
+			tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+		}
+
 		txs[nonce] = tx
 	}
 	source.txpool.Add(txs, false)

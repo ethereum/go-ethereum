@@ -43,7 +43,7 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	defer empty.close()
 
 	// Create a full handler and ensure snap sync ends up disabled
-	full := newTestHandlerWithBlocks(1024)
+	full := newTestHandlerWithBlocks(1024, false)
 	if full.handler.snapSync.Load() {
 		t.Fatalf("snap sync not disabled on non-empty blockchain")
 	}
