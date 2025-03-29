@@ -52,6 +52,10 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 		OnlyWithAddresses: true,
 		Max:               AccountRangeMaxResults, // Sanity limit over RPC
 	}
+	// CHANGE(taiko): always use the latest block number for pending state.
+	if api.eth.blockchain.Config().Taiko && blockNr == rpc.PendingBlockNumber {
+		blockNr = rpc.LatestBlockNumber
+	}
 	if blockNr == rpc.PendingBlockNumber {
 		// If we're dumping the pending state, we need to request
 		// both the pending block as well as the pending state from
@@ -138,6 +142,10 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 	var err error
 
 	if number, ok := blockNrOrHash.Number(); ok {
+		// CHANGE(taiko): always use the latest block number for pending state.
+		if api.eth.blockchain.Config().Taiko && number == rpc.PendingBlockNumber {
+			number = rpc.LatestBlockNumber
+		}
 		if number == rpc.PendingBlockNumber {
 			// If we're dumping the pending state, we need to request
 			// both the pending block as well as the pending state from
