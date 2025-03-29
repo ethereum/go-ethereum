@@ -21,12 +21,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -40,6 +42,7 @@ var (
 	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
 	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
 	errVYParityMissing      = errors.New("missing 'yParity' or 'v' field in transaction")
+	ErrGasUintOverflow      = errors.New("gas uint64 overflow")
 )
 
 // Transaction types.
@@ -86,6 +89,7 @@ type TxData interface {
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
+	setCodeAuthorizations() []SetCodeAuthorization
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
@@ -479,11 +483,7 @@ func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
 
 // SetCodeAuthorizations returns the authorizations list of the transaction.
 func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
-	setcodetx, ok := tx.inner.(*SetCodeTx)
-	if !ok {
-		return nil
-	}
-	return setcodetx.AuthList
+	return tx.inner.setCodeAuthorizations()
 }
 
 // SetCodeAuthorities returns a list of unique authorities from the
@@ -579,6 +579,78 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 	cpy := tx.inner.copy()
 	cpy.setSignatureValues(signer.ChainID(), v, r, s)
 	return &Transaction{inner: cpy, time: tx.time}, nil
+}
+
+// IntrinsicGas returns the calculated intrinsic gas for the given transaction.
+func (tx *Transaction) IntrinsicGas(rules *params.Rules) (uint64, error) {
+	return calcIntrinsicGas(tx.inner, rules)
+}
+
+// IntrinsicGas returns the calculated intrinsic gas for the given transaction.
+func IntrinsicGas(txdata TxData, rules *params.Rules) uint64 {
+	gas, err := calcIntrinsicGas(txdata, rules)
+	if err != nil {
+		panic(err)
+	}
+	return gas
+}
+
+// calcIntrinsicGas is an internal function that drives exported versions of the function.
+func calcIntrinsicGas(txdata TxData, rules *params.Rules) (uint64, error) {
+	// Set the starting gas for the raw transaction
+	var gas uint64
+	if txdata.to() == nil && rules.IsHomestead {
+		gas = params.TxGasContractCreation
+	} else {
+		gas = params.TxGas
+	}
+	dataLen := uint64(len(txdata.data()))
+	// Bump the required gas by the amount of transactional data
+	if dataLen > 0 {
+		// Zero and non-zero bytes are priced differently
+		z := uint64(bytes.Count(txdata.data(), []byte{0}))
+		nz := dataLen - z
+
+		// Make sure we don't exceed uint64 for all data combinations
+		nonZeroGas := params.TxDataNonZeroGasFrontier
+		if rules.IsIstanbul {
+			nonZeroGas = params.TxDataNonZeroGasEIP2028
+		}
+		if (math.MaxUint64-gas)/nonZeroGas < nz {
+			return 0, ErrGasUintOverflow
+		}
+		gas += nz * nonZeroGas
+
+		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
+			return 0, ErrGasUintOverflow
+		}
+		gas += z * params.TxDataZeroGas
+
+		if txdata.to() == nil && rules.IsShanghai {
+			lenWords := toWordSize(dataLen)
+			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
+				return 0, ErrGasUintOverflow
+			}
+			gas += lenWords * params.InitCodeWordGas
+		}
+	}
+	if txdata.accessList() != nil {
+		gas += uint64(len(txdata.accessList())) * params.TxAccessListAddressGas
+		gas += uint64(txdata.accessList().StorageKeys()) * params.TxAccessListStorageKeyGas
+	}
+	if txdata.setCodeAuthorizations() != nil {
+		gas += uint64(len(txdata.setCodeAuthorizations())) * params.CallNewAccountGas
+	}
+	return gas, nil
+}
+
+// toWordSize returns the ceiled word size required for init code payment calculation.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
+	}
+
+	return (size + 31) / 32
 }
 
 // Transactions implements DerivableList for transactions.
