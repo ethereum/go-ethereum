@@ -22,6 +22,11 @@ import (
 	"github.com/holiman/uint256"
 )
 
+const (
+	TxListCompressionCheckInterval = 100
+	TxListCompressionPruneStep     = 10
+)
+
 // BuildTransactionsLists builds multiple transactions lists which satisfy all the given conditions
 // 1. All transactions should all be able to pay the given base fee.
 // 2. The total gas used should not exceed the given blockMaxGasLimit
@@ -46,7 +51,13 @@ func (w *Miner) buildTransactionsLists(
 	}
 
 	// Check if tx pool is empty at first.
-	if len(w.txpool.Pending(txpool.PendingFilter{MinTip: uint256.NewInt(minTip), BaseFee: uint256.MustFromBig(baseFee), OnlyPlainTxs: true})) == 0 {
+	if len(w.txpool.Pending(
+		txpool.PendingFilter{
+			MinTip:       uint256.NewInt(minTip),
+			BaseFee:      uint256.MustFromBig(baseFee),
+			OnlyPlainTxs: true,
+		},
+	)) == 0 {
 		return txsLists, nil
 	}
 
@@ -72,47 +83,46 @@ func (w *Miner) buildTransactionsLists(
 		localTxs, remoteTxs = w.getPendingTxs(localAccounts, baseFee)
 	)
 
-	commitTxs := func(firstTransaction *types.Transaction) (*types.Transaction, *PreBuiltTxList, error) {
+	commitTxs := func(pruningResult *txsPruningResult) (*txsPruningResult, *PreBuiltTxList, error) {
 		env.tcount = 0
 		env.txs = []*types.Transaction{}
-		env.gasPool = new(core.GasPool).AddGas(blockMaxGasLimit)
+		env.gasPool = new(core.GasPool).AddGas(blockMaxGasLimit - accumulateGasUsed(pruningResult.ReceiptsPruned))
 		env.header.GasLimit = blockMaxGasLimit
 
-		lastTransaction := w.commitL2Transactions(
+		result, err := w.commitL2Transactions(
 			env,
-			firstTransaction,
+			pruningResult.TxsPruned,
+			pruningResult.ReceiptsPruned,
 			newTransactionsByPriceAndNonce(signer, maps.Clone(localTxs), baseFee),
 			newTransactionsByPriceAndNonce(signer, maps.Clone(remoteTxs), baseFee),
 			maxBytesPerTxList,
 			minTip,
 		)
-
-		b, err := encodeAndCompressTxList(env.txs)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		return lastTransaction, &PreBuiltTxList{
-			TxList:           env.txs,
-			EstimatedGasUsed: env.header.GasLimit - env.gasPool.Gas(),
-			BytesLength:      uint64(len(b)),
+		return result, &PreBuiltTxList{
+			TxList:           result.TxsRemaining,
+			EstimatedGasUsed: accumulateGasUsed(result.ReceiptsRemaining),
+			BytesLength:      uint64(result.Size),
 		}, nil
 	}
 
 	var (
-		lastTx *types.Transaction
-		res    *PreBuiltTxList
+		pruningResult  = new(txsPruningResult)
+		preBuiltTxList *PreBuiltTxList
 	)
-	for i := 0; i < int(maxTransactionsLists); i++ {
-		if lastTx, res, err = commitTxs(lastTx); err != nil {
+	for range int(maxTransactionsLists) {
+		if pruningResult, preBuiltTxList, err = commitTxs(pruningResult); err != nil {
 			return nil, err
 		}
 
-		if len(res.TxList) == 0 {
+		if len(preBuiltTxList.TxList) == 0 {
 			break
 		}
 
-		txsLists = append(txsLists, res)
+		txsLists = append(txsLists, preBuiltTxList)
 	}
 
 	return txsLists, nil
@@ -133,7 +143,7 @@ func (w *Miner) sealBlockWith(
 	}
 
 	if len(txs) == 0 {
-		// A L2 block needs to have have at least one `TaikoL2.anchor` / `TaikoL2.anchorV2`.
+		// A L2 block needs to have have at least one `TaikoL2.anchor` / `TaikoL2.anchorV2` / `TaikoL2.anchorV3`.
 		return nil, fmt.Errorf("too less transactions in the block")
 	}
 
@@ -232,20 +242,24 @@ func (w *Miner) getPendingTxs(localAccounts []string, baseFee *big.Int) (
 // commitL2Transactions tries to commit the transactions into the given state.
 func (w *Miner) commitL2Transactions(
 	env *environment,
-	firstTransaction *types.Transaction,
+	presetTxs []*types.Transaction,
+	presetReceipts []*types.Receipt,
 	txsLocal *transactionsByPriceAndNonce,
 	txsRemote *transactionsByPriceAndNonce,
 	maxBytesPerTxList uint64,
 	minTip uint64,
-) *types.Transaction {
+) (*txsPruningResult, error) {
 	var (
-		txs             = txsLocal
-		isLocal         = true
-		lastTransaction *types.Transaction
+		txs           = txsLocal
+		isLocal       = true
+		pruningResult *txsPruningResult
+		err           error
 	)
 
-	if firstTransaction != nil {
-		env.txs = append(env.txs, firstTransaction)
+	if presetTxs != nil {
+		env.tcount = len(presetTxs)
+		env.txs = append(env.txs, presetTxs...)
+		env.receipts = append(env.receipts, presetReceipts...)
 	}
 
 loop:
@@ -306,23 +320,13 @@ loop:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			txs.Shift()
 
-			data, err := rlp.EncodeToBytes(env.txs)
-			if err != nil {
-				log.Trace("Failed to rlp encode the pending transaction %s: %w", tx.Hash(), err)
-				txs.Pop()
-				continue
-			}
-			if len(data) >= int(maxBytesPerTxList) {
-				// Encode and compress the txList, if the byte length is > maxBytesPerTxList, remove the latest tx and break.
-				b, err := compress(data)
-				if err != nil {
-					log.Trace("Failed to rlp encode and compress the pending transaction %s: %w", tx.Hash(), err)
-					txs.Pop()
-					continue
+			// Check the size of the compressed txList, if it exceeds the maxBytesPerTxList, break the loop.
+			if env.tcount%TxListCompressionCheckInterval == 0 {
+				if pruningResult, err = pruneTransactions(env.txs, env.receipts, maxBytesPerTxList); err != nil {
+					return nil, err
 				}
-				if len(b) > int(maxBytesPerTxList) {
-					lastTransaction = env.txs[env.tcount-1]
-					env.txs = env.txs[0 : env.tcount-1]
+				// If there are pruned transactions, break the loop.
+				if len(pruningResult.TxsPruned) > 0 {
 					break loop
 				}
 			}
@@ -335,7 +339,11 @@ loop:
 		}
 	}
 
-	return lastTransaction
+	if pruningResult, err = pruneTransactions(env.txs, env.receipts, maxBytesPerTxList); err != nil {
+		return nil, err
+	}
+
+	return pruningResult, nil
 }
 
 // encodeAndCompressTxList encodes and compresses the given transactions list.
@@ -363,4 +371,69 @@ func compress(txListBytes []byte) ([]byte, error) {
 	}
 
 	return b.Bytes(), nil
+}
+
+// txsPruningResult represents the result of a transactions list pruning.
+type txsPruningResult struct {
+	TxsPruned         []*types.Transaction
+	ReceiptsPruned    []*types.Receipt
+	TxsRemaining      []*types.Transaction
+	ReceiptsRemaining []*types.Receipt
+	Size              int
+}
+
+// pruneTransactions prunes the transactions from the given environment to fit the size limit.
+func pruneTransactions(
+	txs []*types.Transaction,
+	receipts []*types.Receipt,
+	sizeLimit uint64,
+) (*txsPruningResult, error) {
+	var (
+		prunedTxs      []*types.Transaction
+		prunedReceipts []*types.Receipt
+	)
+
+	for len(txs) > 0 {
+		b, err := encodeAndCompressTxList(txs)
+		if err != nil {
+			return nil, err
+		}
+		if len(b) <= int(sizeLimit) {
+			return &txsPruningResult{
+				TxsPruned:      prunedTxs,
+				ReceiptsPruned: prunedReceipts,
+				TxsRemaining:   txs,
+				Size:           len(b),
+			}, nil
+		}
+		if len(txs) < TxListCompressionPruneStep {
+			prunedTxs = append(txs, prunedTxs...)
+			prunedReceipts = append(receipts, prunedReceipts...)
+			txs = []*types.Transaction{}
+			receipts = []*types.Receipt{}
+			break
+		}
+		prunedTxs = append(txs[len(txs)-TxListCompressionPruneStep:], prunedTxs...)
+		prunedReceipts = append(receipts[len(receipts)-TxListCompressionPruneStep:], prunedReceipts...)
+		txs = txs[:len(txs)-TxListCompressionPruneStep]
+		receipts = receipts[:len(receipts)-TxListCompressionPruneStep]
+	}
+
+	// All transactions are pruned.
+	return &txsPruningResult{
+		TxsPruned:         prunedTxs,
+		ReceiptsPruned:    prunedReceipts,
+		TxsRemaining:      txs,
+		ReceiptsRemaining: receipts,
+		Size:              0,
+	}, nil
+}
+
+// accumulateGasUsed sums up the gas used from the receipts.
+func accumulateGasUsed(receipts []*types.Receipt) uint64 {
+	var gasUsed uint64
+	for _, receipt := range receipts {
+		gasUsed += receipt.GasUsed
+	}
+	return gasUsed
 }
