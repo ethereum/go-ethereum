@@ -1830,7 +1830,7 @@ var bindTests = []struct {
 			}
 			sim.Commit()
 
-			tx, err = d.TestEvent(user)
+			tx, err := d.TestEvent(user)
 			if err != nil {
 				t.Fatalf("Failed to call contract %v", err)
 			}
