@@ -19,6 +19,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"time"
 
@@ -274,18 +275,23 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	locals := b.eth.localTxTracker
 	if locals != nil {
+		// If tx tracker already has the tx, that indicates
+		// the transaction has been submitted once.
+		// So local tracker should make sure the transaction
+		// submitted in the end. Just return nil error to inform
+		// the rpc client that tx has been received.
+		if locals.HasTx(signedTx.Hash()) {
+			log.Trace("Tx tracker has transaction and no need to add it to tx-pool", "hash", signedTx.Hash().Hex())
+			return nil
+		}
+		// Transaction won't be tracked if tracker already has it
 		if err := locals.Track(signedTx); err != nil {
 			return err
 		}
 	}
-	// No error will be returned to user if the transaction fails stateful
-	// validation (e.g., no available slot), as the locally submitted transactions
-	// may be resubmitted later via the local tracker.
-	err := b.eth.txPool.Add([]*types.Transaction{signedTx}, false)[0]
-	if err != nil && locals == nil {
-		return err
-	}
-	return nil
+	// The rpc client needs to be informed if there is
+	// stateful validation problems.
+	return b.eth.txPool.Add([]*types.Transaction{signedTx}, false)[0]
 }
 
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
