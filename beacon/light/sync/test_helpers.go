@@ -233,12 +233,12 @@ func (ht *TestHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 func (ht *TestHeadTracker) ExpValidated(t *testing.T, tci int, expHeads []types.OptimisticUpdate) {
 	for i, expHead := range expHeads {
 		if i >= len(ht.validated) {
-			t.Errorf("Missing validated head in test case #%d index #%d (expected {slot %d blockRoot %x}, got none)", tci, i, expHead.Attested.Header.Slot, expHead.Attested.Header.Hash())
+			t.Errorf("Missing validated head in test case #%d index #%d (expected {slot %d blockRoot %x}, got none)", tci, i, expHead.Attested.Slot, expHead.Attested.Hash())
 			continue
 		}
 		if !reflect.DeepEqual(ht.validated[i], expHead) {
 			vhead := ht.validated[i].Attested.Header
-			t.Errorf("Wrong validated head in test case #%d index #%d (expected {slot %d blockRoot %x}, got {slot %d blockRoot %x})", tci, i, expHead.Attested.Header.Slot, expHead.Attested.Header.Hash(), vhead.Slot, vhead.Hash())
+			t.Errorf("Wrong validated head in test case #%d index #%d (expected {slot %d blockRoot %x}, got {slot %d blockRoot %x})", tci, i, expHead.Attested.Slot, expHead.Attested.Hash(), vhead.Slot, vhead.Hash())
 		}
 	}
 	for i := len(expHeads); i < len(ht.validated); i++ {

@@ -90,7 +90,7 @@ func (s *HeadSync) Process(requester request.Requester, events []request.Event) 
 			if epoch < s.reqFinalityEpoch[event.Server] {
 				continue
 			}
-			if finality, ok := s.headTracker.ValidatedFinality(); ok && finality.Attested.Header.Epoch() >= epoch {
+			if finality, ok := s.headTracker.ValidatedFinality(); ok && finality.Attested.Epoch() >= epoch {
 				continue
 			}
 			requester.Send(event.Server, ReqFinality{})

@@ -72,7 +72,7 @@ func TestDeploymentLibraries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err setting up test: %v", err)
 	}
-	defer bindBackend.Backend.Close()
+	defer bindBackend.Close()
 
 	c := nested_libraries.NewC1()
 	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
@@ -116,7 +116,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err setting up test: %v", err)
 	}
-	defer bindBackend.Backend.Close()
+	defer bindBackend.Close()
 
 	// deploy all the library dependencies of our target contract, but not the target contract itself.
 	deploymentParams := &bind.DeploymentParams{

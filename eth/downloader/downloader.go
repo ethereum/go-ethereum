@@ -531,13 +531,14 @@ func (d *Downloader) syncToHead() (err error) {
 		func() error { return d.fetchReceipts(origin + 1) }, // Receipts are retrieved during snap sync
 		func() error { return d.processHeaders(origin + 1) },
 	}
-	if mode == ethconfig.SnapSync {
+	switch mode {
+	case ethconfig.SnapSync:
 		d.pivotLock.Lock()
 		d.pivotHeader = pivot
 		d.pivotLock.Unlock()
 
 		fetchers = append(fetchers, func() error { return d.processSnapSyncContent() })
-	} else if mode == ethconfig.FullSync {
+	case ethconfig.FullSync:
 		fetchers = append(fetchers, func() error { return d.processFullSyncContent() })
 	}
 	return d.spawnSync(fetchers)

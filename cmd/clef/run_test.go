@@ -75,7 +75,7 @@ func runWithKeystore(t *testing.T, keystore string, args ...string) *testproc {
 }
 
 func (proc *testproc) input(text string) *testproc {
-	proc.TestCmd.InputLine(text)
+	proc.InputLine(text)
 	return proc
 }
 

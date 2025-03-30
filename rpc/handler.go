@@ -218,11 +218,9 @@ func (h *handler) handleBatch(msgs []*jsonrpcMessage) {
 		}
 
 		responseBytes := 0
-		for {
+		for cp.ctx.Err() == nil {
 			// No need to handle rest of calls if timed out.
-			if cp.ctx.Err() != nil {
-				break
-			}
+
 			msg := callBuffer.nextCall()
 			if msg == nil {
 				break

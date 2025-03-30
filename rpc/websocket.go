@@ -362,11 +362,11 @@ func (wc *websocketCodec) pingLoop() {
 			pingTimer.Reset(wsPingInterval)
 
 		case <-pingTimer.C:
-			wc.jsonCodec.encMu.Lock()
+			wc.encMu.Lock()
 			wc.conn.SetWriteDeadline(time.Now().Add(wsPingWriteTimeout))
 			wc.conn.WriteMessage(websocket.PingMessage, nil)
 			wc.conn.SetReadDeadline(time.Now().Add(wsPongTimeout))
-			wc.jsonCodec.encMu.Unlock()
+			wc.encMu.Unlock()
 			pingTimer.Reset(wsPingInterval)
 
 		case <-wc.pongReceived:

@@ -801,9 +801,10 @@ func DefaultConfigDir() string {
 	// Try to place the data folder in the user's home dir
 	home := flags.HomeDir()
 	if home != "" {
-		if runtime.GOOS == "darwin" {
+		switch runtime.GOOS {
+		case "darwin":
 			return filepath.Join(home, "Library", "Signer")
-		} else if runtime.GOOS == "windows" {
+		case "windows":
 			appdata := os.Getenv("APPDATA")
 			if appdata != "" {
 				return filepath.Join(appdata, "Signer")

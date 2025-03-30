@@ -109,17 +109,17 @@ func TestSharedKeyPadding(t *testing.T) {
 	y0, _ := new(big.Int).SetString("e040bd480b1deccc3bc40bd5b1fdcb7bfd352500b477cb9471366dbd4493f923", 16)
 	y1, _ := new(big.Int).SetString("8ad915f2b503a8be6facab6588731fefeb584fd2dfa9a77a5e0bba1ec439e4fa", 16)
 
-	if prv0.PublicKey.X.Cmp(x0) != 0 {
-		t.Errorf("mismatched prv0.X:\nhave: %x\nwant: %x\n", prv0.PublicKey.X.Bytes(), x0.Bytes())
+	if prv0.X.Cmp(x0) != 0 {
+		t.Errorf("mismatched prv0.X:\nhave: %x\nwant: %x\n", prv0.X.Bytes(), x0.Bytes())
 	}
-	if prv0.PublicKey.Y.Cmp(y0) != 0 {
-		t.Errorf("mismatched prv0.Y:\nhave: %x\nwant: %x\n", prv0.PublicKey.Y.Bytes(), y0.Bytes())
+	if prv0.Y.Cmp(y0) != 0 {
+		t.Errorf("mismatched prv0.Y:\nhave: %x\nwant: %x\n", prv0.Y.Bytes(), y0.Bytes())
 	}
-	if prv1.PublicKey.X.Cmp(x1) != 0 {
-		t.Errorf("mismatched prv1.X:\nhave: %x\nwant: %x\n", prv1.PublicKey.X.Bytes(), x1.Bytes())
+	if prv1.X.Cmp(x1) != 0 {
+		t.Errorf("mismatched prv1.X:\nhave: %x\nwant: %x\n", prv1.X.Bytes(), x1.Bytes())
 	}
-	if prv1.PublicKey.Y.Cmp(y1) != 0 {
-		t.Errorf("mismatched prv1.Y:\nhave: %x\nwant: %x\n", prv1.PublicKey.Y.Bytes(), y1.Bytes())
+	if prv1.Y.Cmp(y1) != 0 {
+		t.Errorf("mismatched prv1.Y:\nhave: %x\nwant: %x\n", prv1.Y.Bytes(), y1.Bytes())
 	}
 
 	// test shared secret generation

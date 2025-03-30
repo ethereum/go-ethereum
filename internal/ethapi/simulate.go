@@ -101,7 +101,7 @@ type simChainHeadReader struct {
 }
 
 func (m *simChainHeadReader) Config() *params.ChainConfig {
-	return m.Backend.ChainConfig()
+	return m.ChainConfig()
 }
 
 func (m *simChainHeadReader) CurrentHeader() *types.Header {
@@ -109,7 +109,7 @@ func (m *simChainHeadReader) CurrentHeader() *types.Header {
 }
 
 func (m *simChainHeadReader) GetHeader(hash common.Hash, number uint64) *types.Header {
-	header, err := m.Backend.HeaderByNumber(m.Context, rpc.BlockNumber(number))
+	header, err := m.HeaderByNumber(m.Context, rpc.BlockNumber(number))
 	if err != nil || header == nil {
 		return nil
 	}
@@ -120,7 +120,7 @@ func (m *simChainHeadReader) GetHeader(hash common.Hash, number uint64) *types.H
 }
 
 func (m *simChainHeadReader) GetHeaderByNumber(number uint64) *types.Header {
-	header, err := m.Backend.HeaderByNumber(m.Context, rpc.BlockNumber(number))
+	header, err := m.HeaderByNumber(m.Context, rpc.BlockNumber(number))
 	if err != nil {
 		return nil
 	}
@@ -128,7 +128,7 @@ func (m *simChainHeadReader) GetHeaderByNumber(number uint64) *types.Header {
 }
 
 func (m *simChainHeadReader) GetHeaderByHash(hash common.Hash) *types.Header {
-	header, err := m.Backend.HeaderByHash(m.Context, hash)
+	header, err := m.HeaderByHash(m.Context, hash)
 	if err != nil {
 		return nil
 	}

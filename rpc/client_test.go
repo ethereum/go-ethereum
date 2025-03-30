@@ -394,8 +394,8 @@ func testClientCancel(transport string, t *testing.T) {
 			// Now perform a call with the context.
 			// The key thing here is that no call will ever complete successfully.
 			err := client.CallContext(ctx, nil, "test_block")
-			switch {
-			case err == nil:
+			switch err {
+			case nil:
 				_, hasDeadline := ctx.Deadline()
 				t.Errorf("no error for call with %v wait time (deadline: %v)", timeout, hasDeadline)
 				// default:

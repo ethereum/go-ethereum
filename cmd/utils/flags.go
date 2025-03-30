@@ -1902,7 +1902,7 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 			Fatalf("Invalid hex string", "beacon.genesis.gvroot", ctx.String(BeaconGenesisRootFlag.Name), "error", err)
 		}
 		configFile := ctx.String(BeaconConfigFlag.Name)
-		if err := config.ChainConfig.LoadForks(configFile); err != nil {
+		if err := config.LoadForks(configFile); err != nil {
 			Fatalf("Could not load beacon chain config", "file", configFile, "error", err)
 		}
 		log.Info("Using custom beacon chain config", "file", configFile)
@@ -2093,10 +2093,8 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 func tryMakeReadOnlyDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	// If the database doesn't exist we need to open it in write-mode to allow
 	// the engine to create files.
-	readonly := true
-	if rawdb.PreexistingDatabase(stack.ResolvePath("chaindata")) == "" {
-		readonly = false
-	}
+	readonly := !(rawdb.PreexistingDatabase(stack.ResolvePath("chaindata")) == "")
+
 	return MakeChainDatabase(ctx, stack, readonly)
 }
 

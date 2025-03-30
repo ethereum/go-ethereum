@@ -129,7 +129,7 @@ func (s *beaconBlockSync) updateEventFeed() {
 	var finalizedHash common.Hash
 	if finality, ok := s.headTracker.ValidatedFinality(); ok {
 		he := optimistic.Attested.Epoch()
-		fe := finality.Attested.Header.Epoch()
+		fe := finality.Attested.Epoch()
 		switch {
 		case he == fe:
 			finalizedHash = finality.Finalized.PayloadHeader.BlockHash()

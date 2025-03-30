@@ -76,7 +76,7 @@ func testExport(t *testing.T, f string) {
 		if (i < 5 || i == 42) && err == nil {
 			t.Fatalf("expected no element at idx %d, got '%v'", i, string(v))
 		}
-		if !(i < 5 || i == 42) {
+		if i >= 5 && i != 42 {
 			if err != nil {
 				t.Fatalf("expected element idx %d: %v", i, err)
 			}
@@ -148,7 +148,7 @@ func testDeletion(t *testing.T, f string) {
 				t.Fatalf("have %v, want %v", have, want)
 			}
 		}
-		if !(i < 5 || i == 42) {
+		if i >= 5 && i != 42 {
 			if err == nil {
 				t.Fatalf("expected no element idx %d: %v", i, string(v))
 			}

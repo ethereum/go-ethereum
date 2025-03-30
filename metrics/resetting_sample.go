@@ -19,6 +19,6 @@ type resettingSample struct {
 // Snapshot returns a read-only copy of the sample with the original reset.
 func (rs *resettingSample) Snapshot() *sampleSnapshot {
 	s := rs.Sample.Snapshot()
-	rs.Sample.Clear()
+	rs.Clear()
 	return s
 }

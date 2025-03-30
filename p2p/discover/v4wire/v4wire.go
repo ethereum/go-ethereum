@@ -291,7 +291,7 @@ func DecodePubkey(curve elliptic.Curve, e Pubkey) (*ecdsa.PublicKey, error) {
 	half := len(e) / 2
 	p.X.SetBytes(e[:half])
 	p.Y.SetBytes(e[half:])
-	if !p.Curve.IsOnCurve(p.X, p.Y) {
+	if !p.IsOnCurve(p.X, p.Y) {
 		return nil, ErrBadPoint
 	}
 	return p, nil

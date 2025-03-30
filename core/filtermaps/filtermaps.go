@@ -743,7 +743,7 @@ func (f *FilterMaps) exportCheckpoints() {
 		if epoch == epochCount-1 {
 			comma = ""
 		}
-		w.WriteString(fmt.Sprintf("{\"blockNumber\": %d, \"blockId\": \"0x%064x\", \"firstIndex\": %d}%s\n", lastBlock, lastBlockId, lvPtr, comma))
+		fmt.Fprintf(w, "{\"blockNumber\": %d, \"blockId\": \"0x%064x\", \"firstIndex\": %d}%s\n", lastBlock, lastBlockId, lvPtr, comma)
 	}
 	w.WriteString("]\n")
 	f.lastFinalEpoch = epochCount

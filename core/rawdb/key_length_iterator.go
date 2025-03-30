@@ -37,7 +37,7 @@ func NewKeyLengthIterator(it ethdb.Iterator, keyLen int) ethdb.Iterator {
 func (it *KeyLengthIterator) Next() bool {
 	// Return true as soon as a key with the required key length is discovered
 	for it.Iterator.Next() {
-		if len(it.Iterator.Key()) == it.requiredKeyLength {
+		if len(it.Key()) == it.requiredKeyLength {
 			return true
 		}
 	}

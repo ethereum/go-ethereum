@@ -2072,7 +2072,8 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 		inserter func(blocks []*types.Block, receipts []types.Receipts) error
 		asserter func(t *testing.T, block *types.Block)
 	)
-	if typ == "headers" {
+	switch typ {
+	case "headers":
 		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
 			headers := make([]*types.Header, 0, len(blocks))
 			for _, block := range blocks {
@@ -2086,7 +2087,7 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 				t.Fatalf("current head header mismatch, have %v, want %v", chain.CurrentHeader().Hash().Hex(), block.Hash().Hex())
 			}
 		}
-	} else if typ == "receipts" {
+	case "receipts":
 		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
 			headers := make([]*types.Header, 0, len(blocks))
 			for _, block := range blocks {
@@ -2104,7 +2105,7 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 				t.Fatalf("current head fast block mismatch, have %v, want %v", chain.CurrentSnapBlock().Hash().Hex(), block.Hash().Hex())
 			}
 		}
-	} else {
+	default:
 		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
 			_, err := chain.InsertChain(blocks)
 			return err
@@ -2243,7 +2244,8 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 		inserter func(blocks []*types.Block, receipts []types.Receipts) error
 		asserter func(t *testing.T, block *types.Block)
 	)
-	if typ == "headers" {
+	switch typ {
+	case "headers":
 		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
 			headers := make([]*types.Header, 0, len(blocks))
 			for _, block := range blocks {
@@ -2260,7 +2262,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 				t.Fatalf("current head header mismatch, have %v, want %v", chain.CurrentHeader().Hash().Hex(), block.Hash().Hex())
 			}
 		}
-	} else if typ == "receipts" {
+	case "receipts":
 		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
 			headers := make([]*types.Header, 0, len(blocks))
 			for _, block := range blocks {
@@ -2278,7 +2280,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 				t.Fatalf("current head fast block mismatch, have %v, want %v", chain.CurrentSnapBlock().Hash().Hex(), block.Hash().Hex())
 			}
 		}
-	} else {
+	default:
 		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
 			i, err := chain.InsertChain(blocks)
 			if err != nil {

@@ -133,12 +133,12 @@ func New(conf *Config) (*Node, error) {
 	node.accman = accounts.NewManager(nil)
 
 	// Initialize the p2p server. This creates the node key and discovery databases.
-	node.server.Config.PrivateKey = node.config.NodeKey()
-	node.server.Config.Name = node.config.NodeName()
-	node.server.Config.Logger = node.log
+	node.server.PrivateKey = node.config.NodeKey()
+	node.server.Name = node.config.NodeName()
+	node.server.Logger = node.log
 	node.config.checkLegacyFiles()
-	if node.server.Config.NodeDatabase == "" {
-		node.server.Config.NodeDatabase = node.config.NodeDB()
+	if node.server.NodeDatabase == "" {
+		node.server.NodeDatabase = node.config.NodeDB()
 	}
 
 	// Check HTTP/WS prefixes are valid.

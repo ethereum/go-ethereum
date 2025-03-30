@@ -102,14 +102,14 @@ func GenerateKey(rand io.Reader, curve elliptic.Curve, params *ECIESParams) (prv
 		return
 	}
 	prv = new(PrivateKey)
-	prv.PublicKey.X = sk.X
-	prv.PublicKey.Y = sk.Y
-	prv.PublicKey.Curve = curve
+	prv.X = sk.X
+	prv.Y = sk.Y
+	prv.Curve = curve
 	prv.D = new(big.Int).Set(sk.D)
 	if params == nil {
 		params = ParamsFromCurve(curve)
 	}
-	prv.PublicKey.Params = params
+	prv.Params = params
 	return
 }
 
@@ -121,14 +121,14 @@ func MaxSharedKeyLength(pub *PublicKey) int {
 
 // GenerateShared ECDH key agreement method used to establish secret keys for encryption.
 func (prv *PrivateKey) GenerateShared(pub *PublicKey, skLen, macLen int) (sk []byte, err error) {
-	if prv.PublicKey.Curve != pub.Curve {
+	if prv.Curve != pub.Curve {
 		return nil, ErrInvalidCurve
 	}
 	if skLen+macLen > MaxSharedKeyLength(pub) {
 		return nil, ErrSharedKeyTooBig
 	}
 
-	x, _ := pub.Curve.ScalarMult(pub.X, pub.Y, prv.D.Bytes())
+	x, _ := pub.ScalarMult(pub.X, pub.Y, prv.D.Bytes())
 	if x == nil {
 		return nil, ErrSharedKeyIsPointAtInfinity
 	}
@@ -258,7 +258,7 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 	d := messageTag(params.Hash, Km, em, s2)
 
 	if curve, ok := pub.Curve.(crypto.EllipticCurve); ok {
-		Rb := curve.Marshal(R.PublicKey.X, R.PublicKey.Y)
+		Rb := curve.Marshal(R.X, R.Y)
 		ct = make([]byte, len(Rb)+len(em)+len(d))
 		copy(ct, Rb)
 		copy(ct[len(Rb):], em)
@@ -282,7 +282,7 @@ func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
 
 	var (
 		rLen   int
-		hLen   int = hash.Size()
+		hLen   = hash.Size()
 		mStart int
 		mEnd   int
 	)
@@ -301,7 +301,7 @@ func (prv *PrivateKey) Decrypt(c, s1, s2 []byte) (m []byte, err error) {
 	mEnd = len(c) - hLen
 
 	R := new(PublicKey)
-	R.Curve = prv.PublicKey.Curve
+	R.Curve = prv.Curve
 
 	if curve, ok := R.Curve.(crypto.EllipticCurve); ok {
 		R.X, R.Y = curve.Unmarshal(c[:rLen])

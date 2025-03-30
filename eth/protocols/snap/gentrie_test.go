@@ -469,10 +469,8 @@ func TestBoundSplit(t *testing.T) {
 
 			lastRightRoot []byte
 		)
-		for {
-			if next == len(entries) {
-				break
-			}
+		for next != len(entries) {
+
 			last = rand.Intn(len(entries)-next) + next
 
 			r := buildPartial(common.Hash{}, db, db.NewBatch(), entries, next, last)

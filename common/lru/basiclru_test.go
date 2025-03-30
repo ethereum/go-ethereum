@@ -251,5 +251,5 @@ func BenchmarkLRU(b *testing.B) {
 	//	}
 	// })
 
-	fmt.Fprintln(io.Discard, sink)
+	fmt.Fprintln(io.Discard, string(sink))
 }

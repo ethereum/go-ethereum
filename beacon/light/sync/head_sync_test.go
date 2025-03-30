@@ -48,7 +48,7 @@ func finality(opt types.OptimisticUpdate) types.FinalityUpdate {
 	return types.FinalityUpdate{
 		SignatureSlot: opt.SignatureSlot,
 		Attested:      opt.Attested,
-		Finalized:     types.HeaderWithExecProof{Header: types.Header{Slot: (opt.Attested.Header.Slot - 64) & uint64(0xffffffffffffffe0)}},
+		Finalized:     types.HeaderWithExecProof{Header: types.Header{Slot: (opt.Attested.Slot - 64) & uint64(0xffffffffffffffe0)}},
 	}
 }
 

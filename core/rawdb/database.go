@@ -73,7 +73,7 @@ func (frdb *freezerdb) Freeze() error {
 	}
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
-	frdb.chainFreezer.trigger <- trigger
+	frdb.trigger <- trigger
 	<-trigger
 	return nil
 }
