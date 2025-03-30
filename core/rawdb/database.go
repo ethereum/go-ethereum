@@ -614,7 +614,7 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 
 // SafeDeleteRange deletes all of the keys (and values) in the range
 // [start,end) (inclusive on start, exclusive on end).
-// If hashDbSafe is true then it always uses an iterator and skips hashdb trie
+// If hashScheme is true then it always uses an iterator and skips hashdb trie
 // node entries. If it is false and the backing db is pebble db then it uses
 // the fast native range delete.
 // In case of fallback mode (hashdb or leveldb) the range deletion might be
@@ -622,8 +622,8 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 // is periodically called and if it returns an error then SafeDeleteRange
 // stops and also returns that error. The callback is not called if native
 // range delete is used or there are a small number of keys only.
-func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashDbSafe bool, stopCallback func() bool) error {
-	if !hashDbSafe {
+func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool, stopCallback func() bool) error {
+	if !hashScheme {
 		// delete entire range; use fast native range delete on pebble db
 		for {
 			switch err := db.DeleteRange(start, end); err {
@@ -670,7 +670,7 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashDbSafe bool,
 			if stopCallback() {
 				return ErrDeleteRangeInterrupted
 			}
-			start = append(bytes.Clone(it.Key()), 0)
+			start = append(bytes.Clone(it.Key()), 0) // appending a zero gives us the next possible key
 			it.Release()
 			batch = db.NewBatch()
 			it = db.NewIterator(nil, start)

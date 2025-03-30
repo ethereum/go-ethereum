@@ -243,7 +243,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		History:        config.LogHistory,
 		Disabled:       config.LogNoHistory,
 		ExportFileName: config.LogExportCheckpoints,
-		HashDbSafe:     scheme == rawdb.HashScheme,
+		HashScheme:     scheme == rawdb.HashScheme,
 	}
 	chainView := eth.newChainView(eth.blockchain.CurrentBlock())
 	historyCutoff := eth.blockchain.HistoryPruningCutoff()

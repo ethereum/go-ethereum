@@ -58,7 +58,7 @@ type FilterMaps struct {
 	closeCh        chan struct{}
 	closeWg        sync.WaitGroup
 	history        uint64
-	hashDbSafe     bool // use hashdb-safe delete range method
+	hashScheme     bool // use hashdb-safe delete range method
 	exportFileName string
 	Params
 
@@ -181,7 +181,10 @@ type Config struct {
 	// This option enables the checkpoint JSON file generator.
 	// If set, the given file will be updated with checkpoint information.
 	ExportFileName string
-	HashDbSafe     bool
+
+	// expect trie nodes of hash based state scheme in the filtermaps key range;
+	// use safe iterator based implementation of DeleteRange that skips them
+	HashScheme bool
 }
 
 // NewFilterMaps creates a new FilterMaps and starts the indexer.
@@ -199,7 +202,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 		blockProcessingCh: make(chan bool, 1),
 		history:           config.History,
 		disabled:          config.Disabled,
-		hashDbSafe:        config.HashDbSafe,
+		hashScheme:        config.HashScheme,
 		disabledCh:        make(chan struct{}),
 		exportFileName:    config.ExportFileName,
 		Params:            params,
@@ -380,13 +383,13 @@ func (f *FilterMaps) removeBloomBits() {
 // safeDeleteWithLogs is a wrapper for a function that performs a safe range
 // delete operation using rawdb.SafeDeleteRange. It emits log messages if the
 // process takes long enough to call the stop callback.
-func (f *FilterMaps) safeDeleteWithLogs(deleteFn func(db ethdb.KeyValueStore, hashDbSafe bool, stopCb func() bool) error, action string, stopCb func() bool) error {
+func (f *FilterMaps) safeDeleteWithLogs(deleteFn func(db ethdb.KeyValueStore, hashScheme bool, stopCb func() bool) error, action string, stopCb func() bool) error {
 	var (
 		start          = time.Now()
 		logPrinted     bool
 		lastLogPrinted = start
 	)
-	switch err := deleteFn(f.db, f.hashDbSafe, func() bool {
+	switch err := deleteFn(f.db, f.hashScheme, func() bool {
 		if !logPrinted || time.Since(lastLogPrinted) > time.Second*10 {
 			log.Info(action+" in progress...", "elapsed", time.Since(start))
 			logPrinted, lastLogPrinted = true, time.Now()
@@ -720,22 +723,22 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 		return false, errors.New("invalid tail epoch number")
 	}
 	// remove index data
-	if err := f.safeDeleteWithLogs(func(db ethdb.KeyValueStore, hashDbSafe bool, stopCb func() bool) error {
+	if err := f.safeDeleteWithLogs(func(db ethdb.KeyValueStore, hashScheme bool, stopCb func() bool) error {
 		first := f.mapRowIndex(firstMap, 0)
 		count := f.mapRowIndex(firstMap+f.mapsPerEpoch, 0) - first
-		if err := rawdb.DeleteFilterMapRows(f.db, common.NewRange(first, count), hashDbSafe, stopCb); err != nil {
+		if err := rawdb.DeleteFilterMapRows(f.db, common.NewRange(first, count), hashScheme, stopCb); err != nil {
 			return err
 		}
 		for mapIndex := firstMap; mapIndex < firstMap+f.mapsPerEpoch; mapIndex++ {
 			f.filterMapCache.Remove(mapIndex)
 		}
-		if err := rawdb.DeleteFilterMapLastBlocks(f.db, common.NewRange(firstMap, f.mapsPerEpoch-1), hashDbSafe, stopCb); err != nil { // keep last enrty
+		if err := rawdb.DeleteFilterMapLastBlocks(f.db, common.NewRange(firstMap, f.mapsPerEpoch-1), hashScheme, stopCb); err != nil { // keep last enrty
 			return err
 		}
 		for mapIndex := firstMap; mapIndex < firstMap+f.mapsPerEpoch-1; mapIndex++ {
 			f.lastBlockCache.Remove(mapIndex)
 		}
-		if err := rawdb.DeleteBlockLvPointers(f.db, common.NewRange(firstBlock, lastBlock-firstBlock), hashDbSafe, stopCb); err != nil { // keep last enrty
+		if err := rawdb.DeleteBlockLvPointers(f.db, common.NewRange(firstBlock, lastBlock-firstBlock), hashScheme, stopCb); err != nil { // keep last enrty
 			return err
 		}
 		for blockNumber := firstBlock; blockNumber < lastBlock; blockNumber++ {
