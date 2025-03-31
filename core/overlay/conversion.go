@@ -146,7 +146,7 @@ func (kvm *keyValueMigrator) getOrInitLeafNodeData(bk branchKey) *verkle.BatchNe
 	return &kvm.leafData[bk].leafNodeData
 }
 
-func (kvm *keyValueMigrator) prepare() {
+func (kvm *keyValueMigrator) prepare(pointCache *utils.PointCache) {
 	// We fire a background routine to process the leafData and save the result in newLeaves.
 	// The background routine signals that it is done by closing processingReady.
 	go func() {
@@ -175,7 +175,7 @@ func (kvm *keyValueMigrator) prepare() {
 				for i := range batch {
 					if batch[i].branchKey.addr != currAddr || currAddr == (common.Address{}) {
 						currAddr = batch[i].branchKey.addr
-						currPoint = utils.EvaluateAddressPoint(currAddr[:])
+						currPoint = pointCache.Get(currAddr[:])
 					}
 					stem := utils.GetTreeKeyWithEvaluatedAddress(currPoint, &batch[i].branchKey.treeIndex, 0)
 					stem = stem[:verkle.StemSize]
@@ -227,7 +227,6 @@ func OverlayVerkleTransition(statedb *state.StateDB, root common.Hash, maxMovedC
 			now             = time.Now()
 			tt              = statedb.GetTrie().(*trie.TransitionTrie)
 			mpt             = tt.Base()
-			vkt             = tt.Overlay()
 			hasPreimagesBin = false
 			preimageSeek    = migrdb.GetCurrentPreimageOffset()
 			fpreimages      *bufio.Reader
@@ -247,7 +246,7 @@ func OverlayVerkleTransition(statedb *state.StateDB, root common.Hash, maxMovedC
 			hasPreimagesBin = true
 		}
 
-		accIt, err := statedb.Snaps().AccountIterator(mpt.Hash(), migrdb.GetCurrentAccountHash())
+		accIt, err := statedb.Database().Snapshot().AccountIterator(mpt.Hash(), migrdb.GetCurrentAccountHash())
 		if err != nil {
 			return err
 		}
@@ -262,7 +261,7 @@ func OverlayVerkleTransition(statedb *state.StateDB, root common.Hash, maxMovedC
 					return fmt.Errorf("reading preimage file: %s", err)
 				}
 			} else {
-				addr = common.BytesToAddress(rawdb.ReadPreimage(migrdb.DiskDB(), accIt.Hash()))
+				addr = common.BytesToAddress(rawdb.ReadPreimage(migrdb.TrieDB().Disk(), accIt.Hash()))
 				if len(addr) != 20 {
 					return fmt.Errorf("addr len is zero is not 32: %d", len(addr))
 				}
@@ -289,7 +288,6 @@ func OverlayVerkleTransition(statedb *state.StateDB, root common.Hash, maxMovedC
 				log.Error("Invalid account encountered during traversal", "error", err)
 				return err
 			}
-			vkt.SetStorageRootConversion(*migrdb.GetCurrentAccountAddress(), acc.Root)
 
 			// Start with processing the storage, because once the account is
 			// converted, the `stateRoot` field loses its meaning. Which means
@@ -301,7 +299,7 @@ func OverlayVerkleTransition(statedb *state.StateDB, root common.Hash, maxMovedC
 			// to during normal block execution. A mitigation strategy has been
 			// introduced with the `*StorageRootConversion` fields in VerkleDB.
 			if len(acc.Root) == 32 && acc.Root != types.EmptyRootHash {
-				stIt, err := statedb.Snaps().StorageIterator(mpt.Hash(), accIt.Hash(), migrdb.GetCurrentSlotHash())
+				stIt, err := statedb.Database().Snapshot().StorageIterator(mpt.Hash(), accIt.Hash(), migrdb.GetCurrentSlotHash())
 				if err != nil {
 					return err
 				}
@@ -337,7 +335,7 @@ func OverlayVerkleTransition(statedb *state.StateDB, root common.Hash, maxMovedC
 							return fmt.Errorf("reading preimage file: %s", err)
 						}
 					} else {
-						slotnr = rawdb.ReadPreimage(migrdb.DiskDB(), stIt.Hash())
+						slotnr = rawdb.ReadPreimage(migrdb.TrieDB().Disk(), stIt.Hash())
 						if len(slotnr) != 32 {
 							return fmt.Errorf("slotnr len is zero is not 32: %d", len(slotnr))
 						}
@@ -367,11 +365,10 @@ func OverlayVerkleTransition(statedb *state.StateDB, root common.Hash, maxMovedC
 				count++ // count increase for the account itself
 
 				mkv.addAccount(migrdb.GetCurrentAccountAddress().Bytes(), acc)
-				vkt.ClearStrorageRootConversion(*migrdb.GetCurrentAccountAddress())
 
 				// Store the account code if present
 				if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) {
-					code := rawdb.ReadCode(statedb.Database().DiskDB(), common.BytesToHash(acc.CodeHash))
+					code := rawdb.ReadCode(statedb.Database().TrieDB().Disk(), common.BytesToHash(acc.CodeHash))
 					chunks := trie.ChunkifyCode(code)
 
 					mkv.addAccountCode(migrdb.GetCurrentAccountAddress().Bytes(), uint64(len(code)), chunks)
@@ -391,7 +388,7 @@ func OverlayVerkleTransition(statedb *state.StateDB, root common.Hash, maxMovedC
 							return fmt.Errorf("reading preimage file: %s", err)
 						}
 					} else {
-						addr = common.BytesToAddress(rawdb.ReadPreimage(migrdb.DiskDB(), accIt.Hash()))
+						addr = common.BytesToAddress(rawdb.ReadPreimage(migrdb.TrieDB().Disk(), accIt.Hash()))
 						if len(addr) != 20 {
 							return fmt.Errorf("account address len is zero is not 20: %d", len(addr))
 						}
@@ -422,7 +419,7 @@ func OverlayVerkleTransition(statedb *state.StateDB, root common.Hash, maxMovedC
 		//       after we fix an existing bug, we can call prepare() before the block execution and
 		//       let it do the work in the background. After the block execution and finalization
 		//       finish, we can call migrateCollectedKeyValues() which should already find everything ready.
-		mkv.prepare()
+		mkv.prepare(statedb.PointCache())
 		now = time.Now()
 		if err := mkv.migrateCollectedKeyValues(tt.Overlay()); err != nil {
 			return fmt.Errorf("could not migrate key values: %w", err)

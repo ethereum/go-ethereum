@@ -69,18 +69,24 @@ type Database interface {
 	// Snapshot returns the underlying state snapshot.
 	Snapshot() *snapshot.Tree
 
+	// StartVerkleTransition marks the start of the verkle transition
 	StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, verkleTime *uint64, root common.Hash)
 
+	// EndVerkleTransition marks the end of the verkle transition
 	EndVerkleTransition()
 
+	// InTransition returns true if the verkle transition is currently ongoing
 	InTransition() bool
 
+	// Transitioned returns true if the verkle transition has ended
 	Transitioned() bool
 
 	InitTransitionStatus(bool, bool, common.Hash)
 
+	// SetCurrentSlotHash provides the next slot to be translated
 	SetCurrentSlotHash(common.Hash)
 
+	// GetCurrentAccountAddress returns the address of the account that is currently being translated
 	GetCurrentAccountAddress() *common.Address
 
 	SetCurrentAccountAddress(common.Address)
@@ -226,6 +232,7 @@ func (db *CachingDB) Transitioned() bool {
 	return db.CurrentTransitionState != nil && db.CurrentTransitionState.Ended
 }
 
+// StartVerkleTransition marks the start of the verkle transition
 func (db *CachingDB) StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, verkleTime *uint64, root common.Hash) {
 	db.CurrentTransitionState = &TransitionState{
 		Started: true,
@@ -317,7 +324,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	}
 	// Set up the trie reader, which is expected to always be available
 	// as the gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb, db.pointCache)
+	tr, err := newTrieReader(stateRoot, db.triedb, db.pointCache, db.InTransition(), db.Transitioned())
 	if err != nil {
 		return nil, err
 	}
@@ -338,24 +345,11 @@ func (db *CachingDB) openMPTTrie(root common.Hash) (Trie, error) {
 	return tr, nil
 }
 
-func (db *CachingDB) openVKTrie(_ common.Hash) (Trie, error) {
-	payload, err := db.DiskDB().Get(trie.FlatDBVerkleNodeKeyPrefix)
-	if err != nil {
-		return trie.NewVerkleTrie(verkle.New(), db.triedb, db.addrToPoint, db.CurrentTransitionState.Ended)
-	}
-
-	r, err := verkle.ParseNode(payload, 0)
-	if err != nil {
-		panic(err)
-	}
-	return trie.NewVerkleTrie(r, db.triedb, db.addrToPoint, db.CurrentTransitionState.Ended)
-}
-
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.InTransition() || db.Transitioned() {
 		// NOTE this is a kaustinen-only change, it will break replay
-		vkt, err := db.openVKTrie(root)
+		vkt, err := trie.NewVerkleTrie(root, db.triedb, db.addrToPoint)
 		if err != nil {
 			log.Error("failed to open the vkt", "err", err)
 			return nil, err
@@ -376,7 +370,7 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 			return nil, err
 		}
 
-		return trie.NewTransitionTree(mpt.(*trie.SecureTrie), vkt.(*trie.VerkleTrie), false), nil
+		return trie.NewTransitionTree(mpt.(*trie.SecureTrie), vkt, false), nil
 	}
 
 	log.Info("not in transition, opening mpt alone", "root", root)
@@ -509,7 +503,7 @@ func (db *CachingDB) SaveTransitionState(root common.Hash) {
 			// it has been saved.
 			db.TransitionStatePerRoot.Add(root, db.CurrentTransitionState.Copy())
 
-			rawdb.WriteVerkleTransitionState(db.DiskDB(), root, buf.Bytes())
+			rawdb.WriteVerkleTransitionState(db.TrieDB().Disk(), root, buf.Bytes())
 		}
 
 		log.Debug("saving transition state", "storage processed", db.CurrentTransitionState.StorageProcessed, "addr", db.CurrentTransitionState.CurrentAccountAddress, "slot hash", db.CurrentTransitionState.CurrentSlotHash, "root", root, "ended", db.CurrentTransitionState.Ended, "started", db.CurrentTransitionState.Started)
@@ -524,7 +518,7 @@ func (db *CachingDB) LoadTransitionState(root common.Hash) {
 	ts, ok := db.TransitionStatePerRoot.Get(root)
 	if !ok {
 		// Not in the cache, try getting it from the DB
-		data, err := rawdb.ReadVerkleTransitionState(db.DiskDB(), root)
+		data, err := rawdb.ReadVerkleTransitionState(db.TrieDB().Disk(), root)
 		if err != nil {
 			log.Error("failed to read transition state", "err", err)
 			return

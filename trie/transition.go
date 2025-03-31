@@ -82,9 +82,6 @@ func (t *TransitionTrie) GetAccount(address common.Address) (*types.StateAccount
 		return nil, err
 	}
 	if data != nil {
-		if t.overlay.db.HasStorageRootConversion(address) {
-			data.Root = t.overlay.db.StorageRootConversion(address)
-		}
 		return data, nil
 	}
 	// TODO also insert value into overlay
@@ -109,9 +106,6 @@ func (t *TransitionTrie) UpdateStorage(address common.Address, key []byte, value
 
 // UpdateAccount abstract an account write to the trie.
 func (t *TransitionTrie) UpdateAccount(addr common.Address, account *types.StateAccount, codeLen int) error {
-	if account.Root != (common.Hash{}) && account.Root != types.EmptyRootHash {
-		t.overlay.db.SetStorageRootConversion(addr, account.Root)
-	}
 	return t.overlay.UpdateAccount(addr, account, codeLen)
 }
 
@@ -191,4 +185,8 @@ func (t *TransitionTrie) Copy() *TransitionTrie {
 
 func (t *TransitionTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
 	return t.overlay.UpdateContractCode(addr, codeHash, code)
+}
+
+func (t *TransitionTrie) Witness() map[string]struct{} {
+	return t.overlay.Witness()
 }
