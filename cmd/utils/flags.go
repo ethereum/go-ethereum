@@ -520,7 +520,7 @@ var (
 		Name:     "vmtrace",
 		Usage:    "Name of tracer which should record internal VM operations (costly)",
 		Category: flags.VMCategory,
-		Value:    "firehose",
+		Value:    "",
 	}
 	VMTraceJsonConfigFlag = &cli.StringFlag{
 		Name:     "vmtrace.jsonconfig",
