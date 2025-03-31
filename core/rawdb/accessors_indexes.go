@@ -366,7 +366,7 @@ func ReadFilterMapLastBlock(db ethdb.KeyValueReader, mapIndex uint32) (uint64, c
 		return 0, common.Hash{}, err
 	}
 	if len(enc) != 40 {
-		return 0, common.Hash{}, errors.New("Invalid block number and id encoding")
+		return 0, common.Hash{}, errors.New("invalid block number and id encoding")
 	}
 	var id common.Hash
 	copy(id[:], enc[8:])
@@ -404,7 +404,7 @@ func ReadBlockLvPointer(db ethdb.KeyValueReader, blockNumber uint64) (uint64, er
 		return 0, err
 	}
 	if len(encPtr) != 8 {
-		return 0, errors.New("Invalid log value pointer encoding")
+		return 0, errors.New("invalid log value pointer encoding")
 	}
 	return binary.BigEndian.Uint64(encPtr), nil
 }
@@ -490,7 +490,7 @@ func DeleteFilterMapsDb(db ethdb.KeyValueStore, hashScheme bool, stopCallback fu
 	return deletePrefixRange(db, []byte(filterMapsPrefix), hashScheme, stopCallback)
 }
 
-// DeleteFilterMapsDb removes the old bloombits database and the associated
+// DeleteBloomBitsDb removes the old bloombits database and the associated
 // chain indexer database.
 func DeleteBloomBitsDb(db ethdb.KeyValueStore, hashScheme bool, stopCallback func(bool) bool) error {
 	if err := deletePrefixRange(db, bloomBitsPrefix, hashScheme, stopCallback); err != nil {

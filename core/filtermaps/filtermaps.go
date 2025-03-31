@@ -391,18 +391,18 @@ func (f *FilterMaps) safeDeleteWithLogs(deleteFn func(db ethdb.KeyValueStore, ha
 	)
 	switch err := deleteFn(f.db, f.hashScheme, func(deleted bool) bool {
 		if deleted && !logPrinted || time.Since(lastLogPrinted) > time.Second*10 {
-			log.Info(action+" in progress...", "elapsed", time.Since(start))
+			log.Info(action+" in progress...", "elapsed", common.PrettyDuration(time.Since(start)))
 			logPrinted, lastLogPrinted = true, time.Now()
 		}
 		return stopCb()
-	}); err {
-	case nil:
+	}); {
+	case err == nil:
 		if logPrinted {
-			log.Info(action+" finished", "elapsed", time.Since(start))
+			log.Info(action+" finished", "elapsed", common.PrettyDuration(time.Since(start)))
 		}
 		return nil
-	case rawdb.ErrDeleteRangeInterrupted:
-		log.Warn(action+" interrupted", "elapsed", time.Since(start))
+	case errors.Is(err, rawdb.ErrDeleteRangeInterrupted):
+		log.Warn(action+" interrupted", "elapsed", common.PrettyDuration(time.Since(start)))
 		return err
 	default:
 		log.Error(action+" failed", "error", err)
@@ -759,7 +759,7 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 		if f.cleanedEpochsBefore > epoch {
 			f.cleanedEpochsBefore = epoch
 		}
-		if err == rawdb.ErrDeleteRangeInterrupted {
+		if errors.Is(err, rawdb.ErrDeleteRangeInterrupted) {
 			return false, nil
 		}
 		return false, err

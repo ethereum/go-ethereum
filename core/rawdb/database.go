@@ -627,10 +627,10 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 	if !hashScheme {
 		// delete entire range; use fast native range delete on pebble db
 		for {
-			switch err := db.DeleteRange(start, end); err {
-			case nil:
+			switch err := db.DeleteRange(start, end); {
+			case err == nil:
 				return nil
-			case ethdb.ErrTooManyKeys:
+			case errors.Is(err, ethdb.ErrTooManyKeys):
 				if stopCallback(true) {
 					return ErrDeleteRangeInterrupted
 				}
@@ -650,7 +650,7 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 	it := db.NewIterator(nil, start)
 	defer func() {
 		it.Release() // it might be replaced during the process
-		log.Debug("SafeDeleteRange finished", "deleted", deleted, "skipped", skipped, "elapsed", time.Since(startTime))
+		log.Debug("SafeDeleteRange finished", "deleted", deleted, "skipped", skipped, "elapsed", common.PrettyDuration(time.Since(startTime)))
 	}()
 
 	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
