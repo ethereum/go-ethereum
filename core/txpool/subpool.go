@@ -136,7 +136,7 @@ type SubPool interface {
 	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 	// This is a utility method for the engine API, enabling consensus clients to
 	// retrieve blobs from the pools directly instead of the network.
-	GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof)
+	GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof, [][]kzg4844.Proof)
 
 	// ValidateTxBasics checks whether a transaction is valid according to the consensus
 	// rules, but does not check state-dependent validation such as sufficient balance.

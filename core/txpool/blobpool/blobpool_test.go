@@ -417,7 +417,7 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 	for i := range testBlobVHashes {
 		copy(hashes[i][:], testBlobVHashes[i][:])
 	}
-	blobs, proofs := pool.GetBlobs(hashes)
+	blobs, proofs, _ := pool.GetBlobs(hashes)
 
 	// Cross validate what we received vs what we wanted
 	if len(blobs) != len(hashes) || len(proofs) != len(hashes) {

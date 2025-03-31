@@ -58,6 +58,7 @@ type BlobTxSidecar struct {
 	Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
 	Commitments []kzg4844.Commitment // Commitments needed by the blob pool
 	Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
+	CellProofs  [][]kzg4844.Proof    // Cell proofs
 }
 
 // BlobHashes computes the blob hashes of the given blobs.
@@ -157,10 +158,15 @@ func (tx *BlobTx) copy() TxData {
 		cpy.S.Set(tx.S)
 	}
 	if tx.Sidecar != nil {
+		cellProofs := make([][]kzg4844.Proof, len(tx.Sidecar.CellProofs))
+		for i := range tx.Sidecar.CellProofs {
+			cellProofs[i] = append([]kzg4844.Proof(nil), tx.Sidecar.CellProofs[i]...)
+		}
 		cpy.Sidecar = &BlobTxSidecar{
 			Blobs:       append([]kzg4844.Blob(nil), tx.Sidecar.Blobs...),
 			Commitments: append([]kzg4844.Commitment(nil), tx.Sidecar.Commitments...),
 			Proofs:      append([]kzg4844.Proof(nil), tx.Sidecar.Proofs...),
+			CellProofs:  cellProofs,
 		}
 	}
 	return cpy
@@ -252,10 +258,20 @@ func (tx *BlobTx) decode(input []byte) error {
 		return err
 	}
 	*tx = *inner.BlobTx
+	// compute the cell proof
+	cellProofs := make([][]kzg4844.Proof, 0)
+	for i := range len(inner.Blobs) {
+		cellProof, err := kzg4844.ComputeCells(&inner.Blobs[i])
+		if err != nil {
+			return err
+		}
+		cellProofs = append(cellProofs, cellProof)
+	}
 	tx.Sidecar = &BlobTxSidecar{
 		Blobs:       inner.Blobs,
 		Commitments: inner.Commitments,
 		Proofs:      inner.Proofs,
+		CellProofs:  cellProofs,
 	}
 	return nil
 }

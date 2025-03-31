@@ -1065,8 +1065,8 @@ func (pool *LegacyPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 
 // GetBlobs is not supported by the legacy transaction pool, it is just here to
 // implement the txpool.SubPool interface.
-func (pool *LegacyPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
-	return nil, nil
+func (pool *LegacyPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof, [][]kzg4844.Proof) {
+	return nil, nil, nil
 }
 
 // Has returns an indicator whether txpool has a transaction cached with the
