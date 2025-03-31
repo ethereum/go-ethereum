@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
@@ -631,7 +630,7 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 			switch err := db.DeleteRange(start, end); err {
 			case nil:
 				return nil
-			case leveldb.ErrTooManyKeys:
+			case ethdb.ErrTooManyKeys:
 				if stopCallback(true) {
 					return ErrDeleteRangeInterrupted
 				}
