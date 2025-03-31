@@ -732,13 +732,15 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 		for mapIndex := firstMap; mapIndex < firstMap+f.mapsPerEpoch; mapIndex++ {
 			f.filterMapCache.Remove(mapIndex)
 		}
-		if err := rawdb.DeleteFilterMapLastBlocks(f.db, common.NewRange(firstMap, f.mapsPerEpoch-1), hashScheme, stopCb); err != nil { // keep last enrty
+		delMapRange := common.NewRange(firstMap, f.mapsPerEpoch-1) // keep last entry
+		if err := rawdb.DeleteFilterMapLastBlocks(f.db, delMapRange, hashScheme, stopCb); err != nil {
 			return err
 		}
 		for mapIndex := firstMap; mapIndex < firstMap+f.mapsPerEpoch-1; mapIndex++ {
 			f.lastBlockCache.Remove(mapIndex)
 		}
-		if err := rawdb.DeleteBlockLvPointers(f.db, common.NewRange(firstBlock, lastBlock-firstBlock), hashScheme, stopCb); err != nil { // keep last enrty
+		delBlockRange := common.NewRange(firstBlock, lastBlock-firstBlock) // keep last entry
+		if err := rawdb.DeleteBlockLvPointers(f.db, delBlockRange, hashScheme, stopCb); err != nil {
 			return err
 		}
 		for blockNumber := firstBlock; blockNumber < lastBlock; blockNumber++ {
