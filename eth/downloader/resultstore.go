@@ -100,7 +100,7 @@ func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, in
 	// estimate an average block size based on the worst case:
 	// a block filled with calldata containing all zeroes
 	// costing ~10 gas per byte of calldata.
-	avgEstimatedBlockSize := min((r.itemsGasUsed/(uint64(index)+1))/10, 524)
+	avgEstimatedBlockSize := max((r.itemsGasUsed/(uint64(index)+1))/10, 524)
 
 	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/avgEstimatedBlockSize)
 	throttle = index >= int(throttleThreshold)
