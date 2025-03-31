@@ -173,10 +173,13 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	results := make([]*fetchResult, limit)
 	copy(results, r.items[:limit])
 
+	for _, result := range results {
+		r.itemsGasUsed -= result.Header.GasUsed
+	}
+
 	// Delete the results from the cache and clear the tail.
 	copy(r.items, r.items[limit:])
 	for i := len(r.items) - limit; i < len(r.items); i++ {
-		r.itemsGasUsed -= r.items[i].Header.GasUsed
 		r.items[i] = nil
 	}
 	// Advance the expected block number of the first cache entry
