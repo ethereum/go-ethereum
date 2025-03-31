@@ -35,10 +35,9 @@ type resultStore struct {
 	// *important* : is not safe to use for indexing without checking against length
 	indexIncomplete atomic.Int32
 
-	// keep track of the total non-blob gas used in the headers we are scheduling.  when we
-	// exceed a threshold, we will throttle preventing additional requests until some current
-	// ones have completed.
-	// TODO: may want to incorporate blob gas into this
+	// keep track of the total non-blob gas used in the headers we are scheduling for retrieval.
+	// when we  exceed a threshold, we will throttle preventing additional requests until
+	// some current ones have completed.
 	itemsGasUsed uint64
 
 	lock sync.RWMutex
@@ -92,18 +91,26 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 	return res, stale, err
 }
 
+// throttleThreshold returns whether the given result index is throttled.
+// If the cumulative gas used of all scheduled headers before the given index
+// exceeds a threshold, then the index is throttled.
+// Cumulative gas used for a set of blocks is used as a proxy for the worst-case
+// size of the blocks.  Worst-case block size is estimated by assuming that the
+// blocks each contain a transaction filled with calldata that is all zeroes.
+// The size of a worst-case block is ~= gasUsed / 10
+func (r *resultStore) throttleThreshold(index int) bool {
+	// estimate the average block size of all scheduled blocks
+	estBlockSize := max((r.itemsGasUsed/(uint64(index)+1))/10, 524)
+
+	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/estBlockSize+1)
+	return index >= int(throttleThreshold)
+}
+
 // getFetchResult returns the fetchResult corresponding to the given item, and
 // the index where the result is stored.
 func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, index int, stale, throttle bool, err error) {
 	index = int(int64(headerNumber) - int64(r.resultOffset))
-
-	// estimate an average block size based on the worst case:
-	// a block filled with calldata containing all zeroes
-	// costing ~10 gas per byte of calldata.
-	avgEstimatedBlockSize := max((r.itemsGasUsed/(uint64(index)+1))/10, 524)
-
-	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/avgEstimatedBlockSize)
-	throttle = index >= int(throttleThreshold)
+	throttle = r.throttleThreshold(index)
 	stale = index < 0
 
 	if index >= len(r.items) {
