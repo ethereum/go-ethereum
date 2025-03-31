@@ -99,9 +99,9 @@ func TestFairMix(t *testing.T) {
 
 func testMixerFairness(t *testing.T) {
 	mix := NewFairMix(1 * time.Second)
-	mix.AddSource(&genIter{index: 1})
-	mix.AddSource(&genIter{index: 2})
-	mix.AddSource(&genIter{index: 3})
+	mix.AddSource(&genIter{index: 1}, "1")
+	mix.AddSource(&genIter{index: 2}, "2")
+	mix.AddSource(&genIter{index: 3}, "3")
 	defer mix.Close()
 
 	nodes := ReadNodes(mix, 500)

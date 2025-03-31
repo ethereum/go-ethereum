@@ -479,7 +479,7 @@ func (srv *Server) setupDiscovery() error {
 			return err
 		}
 		srv.discv4 = ntab
-		srv.discmix.AddSource(ntab.RandomNodes())
+		srv.discmix.AddSource(ntab.RandomNodes(), "DiscoveryV4")
 	}
 	if srv.Config.DiscoveryV5 {
 		cfg := discover.Config{
@@ -498,7 +498,7 @@ func (srv *Server) setupDiscovery() error {
 	added := make(map[string]bool)
 	for _, proto := range srv.Protocols {
 		if proto.DialCandidates != nil && !added[proto.Name] {
-			srv.discmix.AddSource(proto.DialCandidates)
+			srv.discmix.AddSource(proto.DialCandidates, "DialCandidates-"+proto.Name)
 			added[proto.Name] = true
 		}
 	}
