@@ -42,9 +42,9 @@ const (
 )
 
 var (
-	blockCacheMaxItems     = 8192               // Maximum number of blocks to cache before throttling the download
-	blockCacheInitialItems = 16                 // Initial number of blocks to start fetching, before we know the sizes of the blocks
-	blockCacheMemory       = 1024 * 1024 * 1024 // Maximum amount of memory to use for block caching
+	blockCacheMaxItems     = 8192              // Maximum number of blocks to cache before throttling the download
+	blockCacheInitialItems = 16                // Initial number of blocks to start fetching, before we know the sizes of the blocks
+	blockCacheMemory       = 256 * 1024 * 1024 // Maximum amount of memory to use for block caching
 )
 
 var (
@@ -194,7 +194,6 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.receiptPendPool = make(map[string]*fetchRequest)
 
 	q.resultCache = newResultStore(blockCacheLimit)
-	q.resultCache.SetThrottleThreshold(uint64(thresholdInitialSize))
 }
 
 // Close marks the end of the sync, unblocking Results.
@@ -375,14 +374,6 @@ func (q *queue) Results(block bool) []*fetchResult {
 
 	results := q.resultCache.GetCompleted(maxResultsProcess)
 
-	var throttleThreshold uint64
-	if len(results) > 0 {
-		// set a throttle threshhold based on estimated worst-sized block that can be created for a given gas limit.
-		gasLimit := max(results[0].Header.GasLimit, 10)
-		throttleThreshold = min(uint64(blockCacheMemory)/(gasLimit/10), 2048)
-		throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
-	}
-
 	// With results removed from the cache, wake throttled fetchers
 	for _, ch := range []chan bool{q.blockWakeCh, q.receiptWakeCh} {
 		select {
@@ -395,7 +386,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 		q.logTime = time.Now()
 
 		info := q.Stats()
-		info = append(info, "throttle", throttleThreshold)
+		info = append(info, "throttle", 0) // TODO: fix this...
 		log.Debug("Downloader queue stats", info...)
 	}
 	return results

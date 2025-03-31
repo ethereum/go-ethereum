@@ -35,33 +35,20 @@ type resultStore struct {
 	// *important* : is not safe to use for indexing without checking against length
 	indexIncomplete atomic.Int32
 
-	// throttleThreshold is the limit up to which we _want_ to fill the
-	// results. If blocks are large, we want to limit the results to less
-	// than the number of available slots, and maybe only fill 1024 out of
-	// 8192 possible places. The queue will, at certain times, recalibrate
-	// this index.
-	throttleThreshold uint64
+	// keep track of the total non-blob gas used in the headers we are scheduling.  when we
+	// exceed a threshold, we will throttle preventing additional requests until some current
+	// ones have completed.
+	// TODO: may want to incorporate blob gas into this
+	itemsGasUsed uint64
 
 	lock sync.RWMutex
 }
 
 func newResultStore(size int) *resultStore {
 	return &resultStore{
-		resultOffset:      0,
-		items:             make([]*fetchResult, size),
-		throttleThreshold: uint64(size),
+		resultOffset: 0,
+		items:        make([]*fetchResult, size),
 	}
-}
-
-// SetThrottleThreshold updates the throttling threshold based on the requested
-// limit and the total queue capacity. It returns the (possibly capped) threshold
-func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	fmt.Printf("set throttle threshold: %d\n", threshold)
-	r.throttleThreshold = min(uint64(len(r.items)), threshold)
-	return r.throttleThreshold
 }
 
 // AddFetch adds a header for body/receipt fetching. This is used when the queue
@@ -83,6 +70,10 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, thro
 		return stale, throttled, item, err
 	}
 	if item == nil {
+		if (r.itemsGasUsed+header.GasUsed)/10 > uint64(blockCacheMemory) {
+			return false, true, nil, nil
+		}
+		r.itemsGasUsed += header.GasUsed
 		item = newFetchResult(header, fastSync)
 		r.items[index] = item
 	}
@@ -105,7 +96,14 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 // the index where the result is stored.
 func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, index int, stale, throttle bool, err error) {
 	index = int(int64(headerNumber) - int64(r.resultOffset))
-	throttle = index >= int(r.throttleThreshold)
+
+	// estimate an average block size based on the worst case:
+	// a block filled with calldata containing all zeroes
+	// costing ~10 gas per byte of calldata.
+	avgEstimatedBlockSize := (r.itemsGasUsed / (uint64(index) + 1)) / 10
+
+	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/avgEstimatedBlockSize)
+	throttle = index >= int(throttleThreshold)
 	stale = index < 0
 
 	if index >= len(r.items) {
@@ -157,6 +155,12 @@ func (r *resultStore) countCompleted() int {
 	return int(index)
 }
 
+/*
+func (r *resultStore) GetThrottleThreshold() int {
+	return (r.itemsGasUsed / len(r.items)) / 10
+}
+*/
+
 // GetCompleted returns the next batch of completed fetchResults
 func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	r.lock.Lock()
@@ -172,6 +176,7 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	// Delete the results from the cache and clear the tail.
 	copy(r.items, r.items[limit:])
 	for i := len(r.items) - limit; i < len(r.items); i++ {
+		r.itemsGasUsed -= r.items[i].Header.GasUsed
 		r.items[i] = nil
 	}
 	// Advance the expected block number of the first cache entry
