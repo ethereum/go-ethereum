@@ -354,7 +354,7 @@ func WriteFilterMapBaseRows(db ethdb.KeyValueWriter, mapRowIndex uint64, rows []
 	}
 }
 
-func DeleteFilterMapRows(db ethdb.KeyValueStore, mapRows common.Range[uint64], hashScheme bool, stopCallback func() bool) error {
+func DeleteFilterMapRows(db ethdb.KeyValueStore, mapRows common.Range[uint64], hashScheme bool, stopCallback func(bool) bool) error {
 	return SafeDeleteRange(db, filterMapRowKey(mapRows.First(), false), filterMapRowKey(mapRows.AfterLast(), false), hashScheme, stopCallback)
 }
 
@@ -392,7 +392,7 @@ func DeleteFilterMapLastBlock(db ethdb.KeyValueWriter, mapIndex uint32) {
 	}
 }
 
-func DeleteFilterMapLastBlocks(db ethdb.KeyValueStore, maps common.Range[uint32], hashScheme bool, stopCallback func() bool) error {
+func DeleteFilterMapLastBlocks(db ethdb.KeyValueStore, maps common.Range[uint32], hashScheme bool, stopCallback func(bool) bool) error {
 	return SafeDeleteRange(db, filterMapLastBlockKey(maps.First()), filterMapLastBlockKey(maps.AfterLast()), hashScheme, stopCallback)
 }
 
@@ -427,7 +427,7 @@ func DeleteBlockLvPointer(db ethdb.KeyValueWriter, blockNumber uint64) {
 	}
 }
 
-func DeleteBlockLvPointers(db ethdb.KeyValueStore, blocks common.Range[uint64], hashScheme bool, stopCallback func() bool) error {
+func DeleteBlockLvPointers(db ethdb.KeyValueStore, blocks common.Range[uint64], hashScheme bool, stopCallback func(bool) bool) error {
 	return SafeDeleteRange(db, filterMapBlockLVKey(blocks.First()), filterMapBlockLVKey(blocks.AfterLast()), hashScheme, stopCallback)
 }
 
@@ -479,20 +479,20 @@ func DeleteFilterMapsRange(db ethdb.KeyValueWriter) {
 }
 
 // deletePrefixRange deletes everything with the given prefix from the database.
-func deletePrefixRange(db ethdb.KeyValueStore, prefix []byte, hashScheme bool, stopCallback func() bool) error {
+func deletePrefixRange(db ethdb.KeyValueStore, prefix []byte, hashScheme bool, stopCallback func(bool) bool) error {
 	end := bytes.Clone(prefix)
 	end[len(end)-1]++
 	return SafeDeleteRange(db, prefix, end, hashScheme, stopCallback)
 }
 
 // DeleteFilterMapsDb removes the entire filter maps database
-func DeleteFilterMapsDb(db ethdb.KeyValueStore, hashScheme bool, stopCallback func() bool) error {
+func DeleteFilterMapsDb(db ethdb.KeyValueStore, hashScheme bool, stopCallback func(bool) bool) error {
 	return deletePrefixRange(db, []byte(filterMapsPrefix), hashScheme, stopCallback)
 }
 
 // DeleteFilterMapsDb removes the old bloombits database and the associated
 // chain indexer database.
-func DeleteBloomBitsDb(db ethdb.KeyValueStore, hashScheme bool, stopCallback func() bool) error {
+func DeleteBloomBitsDb(db ethdb.KeyValueStore, hashScheme bool, stopCallback func(bool) bool) error {
 	if err := deletePrefixRange(db, bloomBitsPrefix, hashScheme, stopCallback); err != nil {
 		return err
 	}

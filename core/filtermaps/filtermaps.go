@@ -383,14 +383,14 @@ func (f *FilterMaps) removeBloomBits() {
 // safeDeleteWithLogs is a wrapper for a function that performs a safe range
 // delete operation using rawdb.SafeDeleteRange. It emits log messages if the
 // process takes long enough to call the stop callback.
-func (f *FilterMaps) safeDeleteWithLogs(deleteFn func(db ethdb.KeyValueStore, hashScheme bool, stopCb func() bool) error, action string, stopCb func() bool) error {
+func (f *FilterMaps) safeDeleteWithLogs(deleteFn func(db ethdb.KeyValueStore, hashScheme bool, stopCb func(bool) bool) error, action string, stopCb func() bool) error {
 	var (
 		start          = time.Now()
 		logPrinted     bool
 		lastLogPrinted = start
 	)
-	switch err := deleteFn(f.db, f.hashScheme, func() bool {
-		if !logPrinted || time.Since(lastLogPrinted) > time.Second*10 {
+	switch err := deleteFn(f.db, f.hashScheme, func(deleted bool) bool {
+		if deleted && !logPrinted || time.Since(lastLogPrinted) > time.Second*10 {
 			log.Info(action+" in progress...", "elapsed", time.Since(start))
 			logPrinted, lastLogPrinted = true, time.Now()
 		}
@@ -723,7 +723,7 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 		return false, errors.New("invalid tail epoch number")
 	}
 	// remove index data
-	if err := f.safeDeleteWithLogs(func(db ethdb.KeyValueStore, hashScheme bool, stopCb func() bool) error {
+	if err := f.safeDeleteWithLogs(func(db ethdb.KeyValueStore, hashScheme bool, stopCb func(bool) bool) error {
 		first := f.mapRowIndex(firstMap, 0)
 		count := f.mapRowIndex(firstMap+f.mapsPerEpoch, 0) - first
 		if err := rawdb.DeleteFilterMapRows(f.db, common.NewRange(first, count), hashScheme, stopCb); err != nil {

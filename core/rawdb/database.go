@@ -621,8 +621,10 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 // very slow depending on the number of entries. In this case stopCallback
 // is periodically called and if it returns an error then SafeDeleteRange
 // stops and also returns that error. The callback is not called if native
-// range delete is used or there are a small number of keys only.
-func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool, stopCallback func() bool) error {
+// range delete is used or there are a small number of keys only. The bool
+// argument passed to the callback is true if enrties have actually been
+// deleted already.
+func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool, stopCallback func(bool) bool) error {
 	if !hashScheme {
 		// delete entire range; use fast native range delete on pebble db
 		for {
@@ -630,7 +632,7 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 			case nil:
 				return nil
 			case leveldb.ErrTooManyKeys:
-				if stopCallback() {
+				if stopCallback(true) {
 					return ErrDeleteRangeInterrupted
 				}
 			default:
@@ -667,7 +669,7 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 			if err := batch.Write(); err != nil {
 				return err
 			}
-			if stopCallback() {
+			if stopCallback(deleted != 0) {
 				return ErrDeleteRangeInterrupted
 			}
 			start = append(bytes.Clone(it.Key()), 0) // appending a zero gives us the next possible key
