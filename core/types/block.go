@@ -191,10 +191,10 @@ type Body struct {
 //   - We do not copy body data on access because it does not affect the caches, and also
 //     because it would be too expensive.
 type Block struct {
-	Header_       *Header
-	uncles       []*Header
-	Txs Transactions
-	withdrawals  Withdrawals
+	Header_     *Header
+	uncles      []*Header
+	Txs         Transactions
+	withdrawals Withdrawals
 
 	// caches
 	hash atomic.Value
@@ -446,20 +446,20 @@ func NewBlockWithHeader(header *Header) *Block {
 // the sealed one.
 func (b *Block) WithSeal(header *Header) *Block {
 	return &Block{
-		Header_:       CopyHeader(header),
-		Txs: b.Txs,
-		uncles:       b.uncles,
-		withdrawals:  b.withdrawals,
+		Header_:     CopyHeader(header),
+		Txs:         b.Txs,
+		uncles:      b.uncles,
+		withdrawals: b.withdrawals,
 	}
 }
 
 // WithBody returns a copy of the block with the given transaction and uncle contents.
 func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	block := &Block{
-		Header_:       b.Header_,
-		Txs: make([]*Transaction, len(transactions)),
-		uncles:       make([]*Header, len(uncles)),
-		withdrawals:  b.withdrawals,
+		Header_:     b.Header_,
+		Txs:         make([]*Transaction, len(transactions)),
+		uncles:      make([]*Header, len(uncles)),
+		withdrawals: b.withdrawals,
 	}
 	copy(block.Txs, transactions)
 	for i := range uncles {
@@ -471,9 +471,9 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 // WithWithdrawals returns a copy of the block containing the given withdrawals.
 func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 	block := &Block{
-		Header_:       b.Header_,
-		Txs: b.Txs,
-		uncles:       b.uncles,
+		Header_: b.Header_,
+		Txs:     b.Txs,
+		uncles:  b.uncles,
 	}
 	if withdrawals != nil {
 		block.withdrawals = make([]*Withdrawal, len(withdrawals))
@@ -491,6 +491,11 @@ func (b *Block) Hash() common.Hash {
 	v := b.Header_.Hash()
 	b.hash.Store(v)
 	return v
+}
+
+// Used by tracer/simulation. Should never be called in actual execution.
+func (b *Block) OverwriteHash(h common.Hash) {
+	b.hash.Store(h)
 }
 
 type Blocks []*Block
