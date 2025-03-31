@@ -466,9 +466,9 @@ func (p *TxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) 
 	return p.subs.Track(event.JoinSubscriptions(subs...))
 }
 
-// Nonce returns the next nonce of an account, with all transactions executable
+// PoolNonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
-func (p *TxPool) Nonce(addr common.Address) uint64 {
+func (p *TxPool) PoolNonce(addr common.Address) uint64 {
 	// Since (for now) accounts are unique to subpools, only one pool will have
 	// (at max) a non-state nonce. To avoid stateful lookups, just return the
 	// highest nonce for now.
@@ -479,6 +479,15 @@ func (p *TxPool) Nonce(addr common.Address) uint64 {
 		}
 	}
 	return nonce
+}
+
+// Nonce returns the next nonce of an account at the current chain head. Unlike
+// PoolNonce, this function does not account for pending executable transactions.
+func (p *TxPool) Nonce(addr common.Address) uint64 {
+	p.stateLock.RLock()
+	defer p.stateLock.RUnlock()
+
+	return p.state.GetNonce(addr)
 }
 
 // Stats retrieves the current pool stats, namely the number of pending and the
@@ -556,6 +565,9 @@ func (p *TxPool) Sync() error {
 
 // Clear removes all tracked txs from the subpools.
 func (p *TxPool) Clear() {
+	// Invoke Sync to ensure that txs pending addition don't get added to the pool after
+	// the subpools are subsequently cleared
+	p.Sync()
 	for _, subpool := range p.subpools {
 		subpool.Clear()
 	}

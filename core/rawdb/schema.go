@@ -144,14 +144,6 @@ var (
 	// old log index
 	bloomBitsMetaPrefix = []byte("iB")
 
-	// LES indexes
-	chtPrefix            = []byte("chtRootV2-") // ChtPrefix + chtNum (uint64 big endian) -> trie root hash
-	chtTablePrefix       = []byte("cht-")
-	chtIndexTablePrefix  = []byte("chtIndexV2-")
-	bloomTriePrefix      = []byte("bltRoot-") // BloomTriePrefix + bloomTrieNum (uint64 big endian) -> trie root hash
-	bloomTrieTablePrefix = []byte("blt-")
-	bloomTrieIndexPrefix = []byte("bltIndex-")
-
 	preimageCounter     = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitsCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 	preimageMissCounter = metrics.NewRegisteredCounter("db/preimage/miss", nil)
