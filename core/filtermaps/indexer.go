@@ -67,14 +67,17 @@ func (f *FilterMaps) indexerLoop() {
 				}
 				f.lastFinal = f.finalBlock
 			}
-			if done, err := f.tryIndexTail(); err != nil {
-				f.disableForError("tail rendering", err)
+			// always attempt unindexing before indexing the tail in order to
+			// ensure that a potentially dirty previously unindexed epoch is
+			// always cleaned up before any new maps are rendered.
+			if done, err := f.tryUnindexTail(); err != nil {
+				f.disableForError("tail unindexing", err)
 				return
 			} else if !done {
 				continue
 			}
-			if done, err := f.tryUnindexTail(); err != nil {
-				f.disableForError("tail unindexing", err)
+			if done, err := f.tryIndexTail(); err != nil {
+				f.disableForError("tail rendering", err)
 				return
 			} else if !done {
 				continue
@@ -349,24 +352,23 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 // Note that unindexing is very quick as it only removes continuous ranges of
 // data from the database and is also called while running head indexing.
 func (f *FilterMaps) tryUnindexTail() (bool, error) {
-	for {
-		firstEpoch := (f.indexedRange.maps.First() - f.indexedRange.tailPartialEpoch) >> f.logMapsPerEpoch
-		if f.needTailEpoch(firstEpoch) {
-			break
-		}
-		f.processEvents()
-		if f.stop {
-			return false, nil
-		}
+	firstEpoch := f.indexedRange.maps.First() >> f.logMapsPerEpoch
+	if f.indexedRange.tailPartialEpoch > 0 && firstEpoch > 0 {
+		firstEpoch--
+	}
+	for epoch := min(firstEpoch, f.cleanedEpochsBefore); !f.needTailEpoch(epoch); epoch++ {
 		if !f.startedTailUnindex {
 			f.startedTailUnindexAt = time.Now()
 			f.startedTailUnindex = true
 			f.ptrTailUnindexMap = f.indexedRange.maps.First() - f.indexedRange.tailPartialEpoch
 			f.ptrTailUnindexBlock = f.indexedRange.blocks.First() - f.tailPartialBlocks()
 		}
-		if err := f.deleteTailEpoch(firstEpoch); err != nil {
-			log.Error("Log index tail epoch unindexing failed", "error", err)
+		if done, err := f.deleteTailEpoch(epoch); !done {
 			return false, err
+		}
+		f.processEvents()
+		if f.stop || !f.targetHeadIndexed() {
+			return false, nil
 		}
 	}
 	if f.startedTailUnindex && f.indexedRange.hasIndexedBlocks() {
