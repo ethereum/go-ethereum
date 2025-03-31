@@ -1298,11 +1298,12 @@ func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 // GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
-func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
+func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof, [][]kzg4844.Proof) {
 	// Create a map of the blob hash to indices for faster fills
 	var (
-		blobs  = make([]*kzg4844.Blob, len(vhashes))
-		proofs = make([]*kzg4844.Proof, len(vhashes))
+		blobs       = make([]*kzg4844.Blob, len(vhashes))
+		proofs      = make([]*kzg4844.Proof, len(vhashes))
+		cell_proofs = make([][]kzg4844.Proof, len(vhashes))
 	)
 	index := make(map[common.Hash]int)
 	for i, vhash := range vhashes {
@@ -1341,10 +1342,11 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.
 			if idx, ok := index[blobhash]; ok {
 				blobs[idx] = &sidecar.Blobs[j]
 				proofs[idx] = &sidecar.Proofs[j]
+				cell_proofs[idx] = sidecar.CellProofs[j]
 			}
 		}
 	}
-	return blobs, proofs
+	return blobs, proofs, cell_proofs
 }
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both

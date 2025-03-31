@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -564,7 +563,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	}
 	res := make([]*engine.BlobAndProofV1, len(hashes))
 
-	blobs, proofs := api.eth.TxPool().GetBlobs(hashes)
+	blobs, proofs, _ := api.eth.TxPool().GetBlobs(hashes)
 	for i := 0; i < len(blobs); i++ {
 		if blobs[i] != nil {
 			res[i] = &engine.BlobAndProofV1{
@@ -583,15 +582,11 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	}
 	res := make([]*engine.BlobAndProofV2, len(hashes))
 
-	blobs, _ := api.eth.TxPool().GetBlobs(hashes)
+	blobs, _, cellProofs := api.eth.TxPool().GetBlobs(hashes)
 	for i := 0; i < len(blobs); i++ {
 		if blobs[i] != nil {
-			cellProofs, err := kzg4844.ComputeCells(blobs[i])
-			if err != nil {
-				return nil, err
-			}
 			var proofs []hexutil.Bytes
-			for _, proof := range cellProofs {
+			for _, proof := range cellProofs[i] {
 				proofs = append(proofs, hexutil.Bytes(proof[:]))
 			}
 			res[i] = &engine.BlobAndProofV2{
