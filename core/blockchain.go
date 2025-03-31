@@ -1993,7 +1993,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 			// BOR
 		}
 	} else {
-		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+		bc.chainSideFeed.Send(ChainSideEvent{Header: block.Header()})
 
 		bc.chain2HeadFeed.Send(Chain2HeadEvent{
 			Type:     Chain2HeadForkEvent,
@@ -2994,6 +2994,10 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 	// TODO(karalabe): This should be nuked out, no idea how, deprecate some APIs?
 	{
 		for i := len(oldChain) - 1; i >= 0; i-- {
+			// Also send event for blocks removed from the canon chain. Note: Geth has removed
+			// the concept of side chains but we need them in bor.
+			bc.chainSideFeed.Send(ChainSideEvent{Header: oldChain[i]})
+
 			block := bc.GetBlock(oldChain[i].Hash(), oldChain[i].Number.Uint64())
 			if block == nil {
 				return errInvalidOldChain // Corrupt database, mostly here to avoid weird panics

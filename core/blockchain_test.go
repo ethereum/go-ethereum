@@ -1513,7 +1513,6 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan Re
 }
 
 func TestReorgSideEvent(t *testing.T) {
-	t.Skip("needs discussion")
 	testReorgSideEvent(t, rawdb.HashScheme)
 	testReorgSideEvent(t, rawdb.PathScheme)
 }
@@ -1575,9 +1574,9 @@ done:
 	for {
 		select {
 		case ev := <-chainSideCh:
-			block := ev.Block
-			if _, ok := expectedSideHashes[block.Hash()]; !ok {
-				t.Errorf("%d: didn't expect %x to be in side chain", i, block.Hash())
+			header := ev.Header
+			if _, ok := expectedSideHashes[header.Hash()]; !ok {
+				t.Errorf("%d: didn't expect %x to be in side chain", i, header.Hash())
 			}
 			i++
 
