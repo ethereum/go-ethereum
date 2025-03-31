@@ -111,13 +111,20 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 	return uint16(extport), err
 }
 
+// addAnyPortMapping tries to add a port mapping with the specified external port.
+// If the external port is already in use, it will try to assign another port.
 func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.IP, desc string, lifetimeS uint32) (uint16, error) {
 	if client, ok := n.client.(*internetgateway2.WANIPConnection2); ok {
 		return client.AddAnyPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 	}
-	// It will retry with a random port number if the client does
-	// not support AddAnyPortMapping.
-	var err error
+	// For IGDv1 and v1 services we should first try to add with extport.
+	err := n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+	if err == nil {
+		return uint16(extport), nil
+	}
+
+	// If above fails, we retry with a random port.
+	// We retry several times because of possible port conflicts.
 	for i := 0; i < 3; i++ {
 		extport = n.randomPort()
 		err := n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
