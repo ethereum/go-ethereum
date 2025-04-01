@@ -179,11 +179,6 @@ func (h *GlogHandler) WithGroup(name string) slog.Handler {
 // Handle implements slog.Handler, filtering a log record through the global,
 // local and backtrace filters, finally emitting it if either allow it through.
 func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
-	// If the global log level allows, fast track logging
-	if slog.Level(h.level.Load()) <= r.Level {
-		return h.origin.Handle(context.Background(), r)
-	}
-
 	// Check callsite cache for previously calculated log levels
 	h.lock.RLock()
 	lvl, ok := h.siteCache[r.PC]
