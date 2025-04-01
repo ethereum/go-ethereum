@@ -86,6 +86,11 @@ func (bc *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 	return bc.hc.GetHeaderByNumber(number)
 }
 
+// GetBlockNumber retrieves the block number associated with a block hash.
+func (bc *BlockChain) GetBlockNumber(hash common.Hash) *uint64 {
+	return bc.hc.GetBlockNumber(hash)
+}
+
 // GetHeadersFrom returns a contiguous segment of headers, in rlp-form, going
 // backwards from the given number.
 func (bc *BlockChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
