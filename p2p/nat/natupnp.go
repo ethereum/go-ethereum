@@ -94,13 +94,7 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 		n.DeleteMapping(protocol, extport, intport)
 	}
 
-	err = n.withRateLimit(func() error {
-		return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
-	})
-	if err == nil {
-		return uint16(extport), nil
-	}
-	// Try addAnyPortMapping if mapping specified port didn't work.
+	// Try to add port mapping, preferring the specified external port.
 	err = n.withRateLimit(func() error {
 		p, err := n.addAnyPortMapping(protocol, extport, intport, ip, desc, lifetimeS)
 		if err == nil {
