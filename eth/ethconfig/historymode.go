@@ -90,3 +90,9 @@ var HistoryPrunePoints = map[common.Hash]*HistoryPrunePoint{
 		BlockHash:   common.HexToHash("0x229f6b18ca1552f1d5146deceb5387333f40dc6275aebee3f2c5c4ece07d02db"),
 	},
 }
+
+// PrunedHistoryError is returned when the requested history is pruned.
+type PrunedHistoryError struct{}
+
+func (e *PrunedHistoryError) Error() string  { return "pruned history unavailable" }
+func (e *PrunedHistoryError) ErrorCode() int { return 4444 }
