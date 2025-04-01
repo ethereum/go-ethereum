@@ -143,9 +143,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		return nil, ErrGasUintOverflow
 	}
 	if interpreter.evm.Config.Tracer != nil {
-		if interpreter.evm.Config.Tracer != nil {
-			interpreter.evm.Config.Tracer.OnOpcode(*pc, byte(EOFCREATE), 0, hashingCharge, scope, interpreter.returnData, interpreter.evm.depth, nil)
-		}
+		interpreter.evm.Config.Tracer.OnOpcode(*pc, byte(EOFCREATE), 0, hashingCharge, scope, interpreter.returnData, interpreter.evm.depth, nil)
 	}
 	gas := scope.Contract.Gas
 	// Reuse last popped value from stack
