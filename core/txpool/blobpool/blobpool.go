@@ -1244,6 +1244,9 @@ func (p *BlobPool) GetRLP(hash common.Hash) []byte {
 // The size refers the length of the 'rlp encoding' of a blob transaction
 // including the attached blobs.
 func (p *BlobPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
 	size, ok := p.lookup.sizeOfTx(hash)
 	if !ok {
 		return nil
