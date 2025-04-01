@@ -644,18 +644,15 @@ func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
 	if err := pool.checkDelegationLimit(tx); err != nil {
 		return err
 	}
-	// For symmetry, Allow at most one in-flight tx for any authority with a pending
-	// transaction
+	// For symmetry, allow at most one in-flight tx for any authority with a
+	// pending transaction
 	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
 		for _, auth := range auths {
 			var count int
-			pending := pool.pending[auth]
-
-			if pending != nil {
+			if pending := pool.pending[auth]; pending != nil {
 				count += pending.Len()
 			}
-			queue := pool.queue[auth]
-			if queue != nil {
+			if queue := pool.queue[auth]; queue != nil {
 				count += queue.Len()
 			}
 			if count > 1 {
