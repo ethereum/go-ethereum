@@ -181,7 +181,7 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 }
 
 // isLatestForkAt returns true if the latest fork at the given timestamp
-// is one of the forks provided
+// is one of the forks provided.
 func (api *ConsensusAPI) isLatestForkAt(timestamp uint64, forks ...forks.Fork) bool {
 	latest := api.eth.BlockChain().Config().LatestFork(timestamp)
 	for _, fork := range forks {
