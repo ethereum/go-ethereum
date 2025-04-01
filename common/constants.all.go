@@ -104,9 +104,11 @@ var (
 	TIPXDCXReceiverDisable        = MaintnetConstant.tipXDCXReceiverDisable
 	Eip1559Block                  = MaintnetConstant.eip1559Block
 	CancunBlock                   = MaintnetConstant.cancunBlock
+	TIPUpgradeReward              = MaintnetConstant.tipUpgradeReward
+	TIPEpochHalving               = MaintnetConstant.tipEpochHalving
 
-	TRC21IssuerSMCTestNet = MaintnetConstant.trc21IssuerSMCTestNet
 	TRC21IssuerSMC        = MaintnetConstant.trc21IssuerSMC
+	TRC21IssuerSMCTestNet = MaintnetConstant.trc21IssuerSMCTestNet
 	XDCXListingSMC        = MaintnetConstant.xdcxListingSMC
 	XDCXListingSMCTestNet = MaintnetConstant.xdcxListingSMCTestNet
 
@@ -169,9 +171,11 @@ func CopyConstans(chainID uint64) {
 	TIPXDCXReceiverDisable = c.tipXDCXReceiverDisable
 	Eip1559Block = c.eip1559Block
 	CancunBlock = c.cancunBlock
+	TIPUpgradeReward = c.tipUpgradeReward
+	TIPEpochHalving = c.tipEpochHalving
 
-	TRC21IssuerSMCTestNet = c.trc21IssuerSMCTestNet
 	TRC21IssuerSMC = c.trc21IssuerSMC
+	TRC21IssuerSMCTestNet = c.trc21IssuerSMCTestNet
 	XDCXListingSMC = c.xdcxListingSMC
 	XDCXListingSMCTestNet = c.xdcxListingSMCTestNet
 
