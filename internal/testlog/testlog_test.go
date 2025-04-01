@@ -1,8 +1,9 @@
 package testlog
 
 import (
-	"github.com/ethereum/go-ethereum/log"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func TestLogging(t *testing.T) {
@@ -10,12 +11,6 @@ func TestLogging(t *testing.T) {
 	subLogger := l.New("foobar", 123)
 
 	l.Info("Visible")
-	subLogger.Info("Hide and seek") // not visible due to sub buffer never being flushed
+	subLogger.Info("Hide and seek") // this log is erroneously hidden in master, but fixed with this PR
 	l.Info("Also visible")
-
-	t.Log("flushed: ", l.Handler().(*bufHandler).buf)
-	t.Log("remaining: ", subLogger.Handler().(*bufHandler).buf)
-	// horrible hack to manually bring back the expected log data
-	l.Handler().(*bufHandler).buf = subLogger.Handler().(*bufHandler).buf
-	l.(*logger).flush()
 }
