@@ -170,7 +170,8 @@ func (l *logger) Crit(msg string, ctx ...interface{}) {
 }
 
 func (l *logger) With(ctx ...interface{}) log.Logger {
-	return &logger{l.t, l.l.With(ctx...), l.mu, l.h}
+	newLogger := l.l.With(ctx...)
+	return &logger{l.t, newLogger, l.mu, newLogger.Handler().(*bufHandler)}
 }
 
 func (l *logger) New(ctx ...interface{}) log.Logger {
