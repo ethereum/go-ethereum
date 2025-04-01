@@ -494,7 +494,7 @@ var (
 		Value:    "gokzg",
 		Category: flags.PerfCategory,
 	}
-	
+
 	// Miner settings
 	MinerGasLimitFlag = &cli.Uint64Flag{
 		Name:     "miner.gaslimit",
