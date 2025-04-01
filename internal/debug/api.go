@@ -238,6 +238,9 @@ func (*HandlerT) SetGCPercent(v int) int {
 }
 
 // SetMemoryLimit sets the GOMEMLIMIT for the process. It returns the previous limit.
+// Note:
+//   - Geth also allocates memory off-heap, particularly for fastCache and Pebble, which can be non-trivial (a few gigabytes by default).
+//   - Setting the limit too low will cause Geth to become unresponsive.
 func (*HandlerT) SetMemoryLimit(limit int64) int64 {
 	return debug.SetMemoryLimit(limit)
 }
