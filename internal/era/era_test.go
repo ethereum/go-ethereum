@@ -21,9 +21,17 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/require"
 )
 
 type testchain struct {
@@ -143,4 +151,156 @@ func TestEraFilename(t *testing.T) {
 			t.Errorf("test %d: invalid filename: want %s, got %s", i, tt.expected, got)
 		}
 	}
+}
+
+func genTestChain(t *testing.T) (*core.Genesis, []*types.Block, []types.Receipts) {
+	privateKey, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	var (
+		address = crypto.PubkeyToAddress(privateKey.PublicKey)
+		genesis = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: types.GenesisAlloc{
+				address: {
+					Balance: big.NewInt(10000000000000000), // 10 ETH
+				},
+			},
+			GasLimit:   1000000,
+			Difficulty: big.NewInt(1),
+		}
+	)
+	_, chain, receipts := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 3, func(i int, gen *core.BlockGen) {
+		// Add a transfer transaction
+		to := common.HexToAddress("0x5678")
+		tx := types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i * 2),
+			To:       &to,
+			Value:    big.NewInt(100000000000000), // 0.1 ETH
+			Gas:      21000,
+			GasPrice: big.NewInt(1000000000), // 1 Gwei
+		})
+		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(genesis.Config.ChainID), privateKey)
+		require.NoError(t, err)
+		gen.AddTx(signedTx)
+
+		// Add a contract creation transaction
+		tx = types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i*2 + 1),
+			Value:    big.NewInt(0),
+			Gas:      100000,
+			GasPrice: big.NewInt(1000000000), // 1 Gwei
+			// Simple contract that returns empty data
+			Data: []byte{
+				0x60, 0x00, // PUSH1 0
+				0x60, 0x00, // PUSH1 0
+				0x52,       // MSTORE
+				0x60, 0x20, // PUSH1 32
+				0x60, 0x00, // PUSH1 0
+				0xf3, // RETURN
+			},
+		})
+		signedTx, err = types.SignTx(tx, types.NewEIP155Signer(genesis.Config.ChainID), privateKey)
+		require.NoError(t, err)
+		gen.AddTx(signedTx)
+	})
+	return genesis, chain, receipts
+}
+
+// exportChain creates a temporary era file with the given chain.
+func exportChain(t *testing.T, genesis *core.Genesis, chain []*types.Block, receipts []types.Receipts) (string, string) {
+	tmpDir, err := os.MkdirTemp("", "era-test-*")
+	require.NoError(t, err)
+	const fileName = "test.era1"
+	tmpFile, err := os.Create(filepath.Join(tmpDir, fileName))
+	require.NoError(t, err)
+
+	builder := NewBuilder(tmpFile)
+	// Add blocks to era
+	for i, block := range chain {
+		td := new(big.Int).Add(genesis.Difficulty, big.NewInt(int64(i+1)))
+		headerData, err := rlp.EncodeToBytes(block.Header())
+		require.NoError(t, err)
+		bodyData, err := rlp.EncodeToBytes(block.Body())
+		require.NoError(t, err)
+		receiptsData, err := rlp.EncodeToBytes(receipts[i])
+		require.NoError(t, err)
+
+		err = builder.AddRLP(headerData, bodyData, receiptsData, block.NumberU64(), block.Hash(), td, block.Difficulty())
+		require.NoError(t, err)
+	}
+
+	_, err = builder.Finalize()
+	require.NoError(t, err)
+
+	err = tmpFile.Close()
+	require.NoError(t, err)
+
+	return tmpDir, fileName
+}
+
+func TestEraFunctions(t *testing.T) {
+	genesis, blocks, receipts := genTestChain(t)
+	testdir, filename := exportChain(t, genesis, blocks, receipts)
+	defer os.RemoveAll(testdir)
+	// Open the era file
+	era, err := Open(filepath.Join(testdir, filename))
+	require.NoError(t, err)
+	defer era.Close()
+
+	t.Run("GetHeaderByNumber", func(t *testing.T) {
+		header, err := era.GetHeaderByNumber(era.Start())
+		require.NoError(t, err)
+		haveJson, err := rlp.EncodeToBytes(header)
+		require.NoError(t, err)
+		wantJson, err := rlp.EncodeToBytes(blocks[0].Header())
+		require.NoError(t, err)
+		require.Equal(t, wantJson, haveJson)
+
+		header, err = era.GetHeaderByNumber(era.Start() + era.Count() - 1)
+		require.NoError(t, err)
+		haveJson, err = rlp.EncodeToBytes(header)
+		require.NoError(t, err)
+		wantJson, err = rlp.EncodeToBytes(blocks[2].Header())
+		require.NoError(t, err)
+		require.Equal(t, wantJson, haveJson)
+	})
+
+	t.Run("GetBlockByNumber", func(t *testing.T) {
+		block, err := era.GetBlockByNumber(era.Start())
+		require.NoError(t, err)
+		haveJson, err := rlp.EncodeToBytes(block)
+		require.NoError(t, err)
+		wantJson, err := rlp.EncodeToBytes(blocks[0])
+		require.NoError(t, err)
+		require.Equal(t, wantJson, haveJson)
+
+		block, err = era.GetBlockByNumber(era.Start() + 1)
+		require.NoError(t, err)
+		haveJson, err = rlp.EncodeToBytes(block)
+		require.NoError(t, err)
+		wantJson, err = rlp.EncodeToBytes(blocks[1])
+		require.NoError(t, err)
+		require.Equal(t, wantJson, haveJson)
+	})
+
+	t.Run("GetReceipts", func(t *testing.T) {
+		rcpts, err := era.GetReceipts(era.Start())
+		require.NoError(t, err)
+		require.Equal(t, 2, len(rcpts)) // Should have 2 receipts
+
+		require.Equal(t, receipts[0][0].CumulativeGasUsed, rcpts[0].CumulativeGasUsed)
+		require.Equal(t, receipts[0][1].CumulativeGasUsed, rcpts[1].CumulativeGasUsed)
+		require.Equal(t, receipts[0][0].Status, rcpts[0].Status)
+		require.Equal(t, receipts[0][1].Status, rcpts[0].Status)
+	})
+
+	t.Run("OutOfBounds", func(t *testing.T) {
+		_, err := era.GetHeaderByNumber(era.Start() - 1)
+		require.Error(t, err)
+		require.Equal(t, "out-of-bounds", err.Error())
+
+		_, err = era.GetHeaderByNumber(era.Start() + era.Count())
+		require.Error(t, err)
+		require.Equal(t, "out-of-bounds", err.Error())
+	})
 }
