@@ -89,11 +89,11 @@ require (
 	go.opentelemetry.io/otel/sdk v1.27.0
 	go.uber.org/automaxprocs v1.5.3
 	go.uber.org/goleak v1.3.0
-	golang.org/x/crypto v0.31.0
+	golang.org/x/crypto v0.35.0
 	golang.org/x/exp v0.0.0-20240604190554-fc45aab8b7f8
-	golang.org/x/sync v0.10.0
-	golang.org/x/sys v0.28.0
-	golang.org/x/text v0.21.0
+	golang.org/x/sync v0.11.0
+	golang.org/x/sys v0.30.0
+	golang.org/x/text v0.22.0
 	golang.org/x/time v0.5.0
 	golang.org/x/tools v0.22.0
 	google.golang.org/grpc v1.64.1
@@ -170,7 +170,7 @@ require (
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20240312152122-5f08fbb34913 // indirect
 	golang.org/x/mod v0.18.0 // indirect
-	golang.org/x/net v0.33.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
 	google.golang.org/protobuf v1.34.1
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools v2.2.0+incompatible
