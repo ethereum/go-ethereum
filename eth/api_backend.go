@@ -150,17 +150,15 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		}
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
-	bn := uint64(number)
+	bn := uint64(number) // the resolved number
 	if number == rpc.EarliestBlockNumber {
 		bn = b.eth.blockchain.HistoryPruningCutoff()
 	}
-
-	// bn is the resolved number.
 	block := b.eth.blockchain.GetBlockByNumber(bn)
 	if block == nil && bn < b.eth.blockchain.HistoryPruningCutoff() {
 		return nil, &ethconfig.PrunedHistoryError{}
 	}
-	return nil, nil
+	return block, nil
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
@@ -172,7 +170,7 @@ func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 	if block == nil && *number < b.eth.blockchain.HistoryPruningCutoff() {
 		return nil, &ethconfig.PrunedHistoryError{}
 	}
-	return nil, nil
+	return block, nil
 }
 
 // GetBody returns body of a block. It does not resolve special block numbers.
