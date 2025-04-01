@@ -52,7 +52,8 @@ type GlogHandler struct {
 // to Google's glog logger. The returned handler implements Handler.
 func NewGlogHandler(h slog.Handler) *GlogHandler {
 	return &GlogHandler{
-		origin: h,
+		origin:    h,
+		siteCache: make(map[uintptr]slog.Level),
 	}
 }
 
@@ -196,9 +197,10 @@ func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
 				h.siteCache[r.PC], lvl, ok = rule.level, rule.level, true
 			}
 		}
-		// If no rule matched, remember to drop log the next time
+		// If no rule matched, use the default log lvl
 		if !ok {
-			h.siteCache[r.PC] = 0
+			lvl = slog.Level(h.level.Load())
+			h.siteCache[r.PC] = lvl
 		}
 		h.lock.Unlock()
 	}
