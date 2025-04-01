@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
@@ -763,7 +764,7 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 		t.log.Warn(">> "+packet.Name(), t.logcontext...)
 		return nonce, err
 	}
-
+	t.logcontext = append(t.logcontext, "rawpacket", hexutil.Encode(enc))
 	_, err = t.conn.WriteToUDPAddrPort(enc, toAddr)
 	t.log.Trace(">> "+packet.Name(), t.logcontext...)
 	return nonce, err
@@ -808,6 +809,7 @@ func (t *UDPv5) dispatchReadPacket(from netip.AddrPort, content []byte) bool {
 // handlePacket decodes and processes an incoming packet from the network.
 func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	addr := fromAddr.String()
+	t.log.Trace("<< "+addr, "rawPacket", hexutil.Encode(rawpacket))
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
 	if err != nil {
 		if t.unhandled != nil && v5wire.IsInvalidHeader(err) {

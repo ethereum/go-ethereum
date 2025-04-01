@@ -72,7 +72,8 @@ type (
 		// This must be set by the caller of Encode.
 		Node *enode.Node
 
-		sent mclock.AbsTime // for handshake GC.
+		sent    mclock.AbsTime // for handshake GC.
+		encoded []byte         // Encoded packet raw data for sending out
 	}
 
 	// PING is sent during liveness checks.
