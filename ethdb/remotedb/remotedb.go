@@ -33,8 +33,7 @@ type Database struct {
 }
 
 func (db *Database) Has(key []byte) (bool, error) {
-	_, err := db.Get(key)
-	if err != nil {
+	if _, err := db.Get(key); err != nil {
 		return false, err
 	}
 	return true, nil
