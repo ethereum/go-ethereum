@@ -33,8 +33,8 @@ var DevnetConstant = constant{
 	tipUpgradeReward:              big.NewInt(1773000),
 	tipEpochHalving:               big.NewInt(9999999999),
 
-	trc21IssuerSMCTestNet: HexToAddress("0x0E2C88753131CE01c7551B726b28BFD04e44003F"),
 	trc21IssuerSMC:        HexToAddress("0x8c0faeb5C6bEd2129b8674F262Fd45c4e9468bee"),
+	trc21IssuerSMCTestNet: HexToAddress("0x0E2C88753131CE01c7551B726b28BFD04e44003F"),
 	xdcxListingSMC:        HexToAddress("0xDE34dD0f536170993E8CFF639DdFfCF1A85D3E53"),
 	xdcxListingSMCTestNet: HexToAddress("0x14B2Bf043b9c31827A472CE4F94294fE9a6277e0"),
 

@@ -29,12 +29,12 @@ var TestnetConstant = constant{
 	tipXDCXMinerDisable:           big.NewInt(61290000), // Target 31st March 2024
 	tipXDCXReceiverDisable:        big.NewInt(66825000), // Target 26 Aug 2024
 	eip1559Block:                  big.NewInt(71550000), // Target 14th Feb 2025
-	cancunBlock:                   big.NewInt(9999999999),
+	cancunBlock:                   big.NewInt(73425600),
 	tipUpgradeReward:              big.NewInt(9999999999),
 	tipEpochHalving:               big.NewInt(9999999999),
 
-	trc21IssuerSMCTestNet: HexToAddress("0x0E2C88753131CE01c7551B726b28BFD04e44003F"),
 	trc21IssuerSMC:        HexToAddress("0x8c0faeb5C6bEd2129b8674F262Fd45c4e9468bee"),
+	trc21IssuerSMCTestNet: HexToAddress("0x0E2C88753131CE01c7551B726b28BFD04e44003F"),
 	xdcxListingSMC:        HexToAddress("0xDE34dD0f536170993E8CFF639DdFfCF1A85D3E53"),
 	xdcxListingSMCTestNet: HexToAddress("0x14B2Bf043b9c31827A472CE4F94294fE9a6277e0"),
 
