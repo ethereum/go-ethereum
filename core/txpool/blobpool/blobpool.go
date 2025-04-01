@@ -1124,11 +1124,12 @@ func (p *BlobPool) checkDelegationLimit(tx *types.Transaction) error {
 			return nil
 		}
 	}
+	// Allow a single in-flight pending transaction.
 	pending := p.index[from]
 	if len(pending) == 0 {
 		return nil
 	}
-	// Transaction replacement is supported
+	// If account already has a pending transaction, allow replacement only.
 	if len(pending) == 1 && pending[0].nonce == tx.Nonce() {
 		return nil
 	}
