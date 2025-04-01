@@ -60,3 +60,18 @@ func ckzgComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	panic("unsupported platform")
 }
+
+// ckzgVerifyCellKZGProofBatch verifies a batch of KZG proofs for a set of cells.
+func ckzgVerifyCellKZGProofBatch(commitments []Commitment, cellIndicies []uint64, cells []Cell, proofs []Proof) error {
+	panic("unsupported platform")
+}
+
+// ckzgComputeCells computes the cells for a given blob.
+func ckzgComputeCells(blob *Blob) ([]Cell, error) {
+	panic("unsupported platform")
+}
+
+// ckzgComputeCellsAndKZGProofs computes the cells and KZG proofs for a given blob.
+func ckzgComputeCellsAndKZGProofs(blob *Blob) ([]Cell, []Proof, error) {
+	panic("unsupported platform")
+}

@@ -23,8 +23,8 @@ import (
 	"errors"
 	"sync"
 
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
-	ckzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
+	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -47,15 +47,22 @@ func ckzgInit() {
 	if err = gokzg4844.CheckTrustedSetupIsWellFormed(params); err != nil {
 		panic(err)
 	}
-	g1s := make([]byte, len(params.SetupG1Lagrange)*(len(params.SetupG1Lagrange[0])-2)/2)
+	g1Lag := make([]byte, len(params.SetupG1Lagrange)*(len(params.SetupG1Lagrange[0])-2)/2)
 	for i, g1 := range params.SetupG1Lagrange {
+		copy(g1Lag[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
+	}
+	g1s := make([]byte, len(params.SetupG1Monomial)*(len(params.SetupG1Monomial[0])-2)/2)
+	for i, g1 := range params.SetupG1Monomial {
 		copy(g1s[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
 	}
 	g2s := make([]byte, len(params.SetupG2)*(len(params.SetupG2[0])-2)/2)
 	for i, g2 := range params.SetupG2 {
 		copy(g2s[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
 	}
-	if err = ckzg4844.LoadTrustedSetup(g1s, g2s); err != nil {
+	// The last parameter determines the multiplication table, see https://notes.ethereum.org/@jtraglia/windowed_multiplications
+	// set it to 8 for now, it's a decent compromise between size and speed
+	// Also note that the number must be the same for all trusted setups (in CL as well)
+	if err = ckzg4844.LoadTrustedSetup(g1s, g1Lag, g2s, 8); err != nil {
 		panic(err)
 	}
 }
@@ -124,4 +131,71 @@ func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 		return errors.New("invalid proof")
 	}
 	return nil
+}
+
+// ckzgVerifyCellKZGProofBatch verifies a batch of KZG proofs for a set of cells.
+func ckzgVerifyCellKZGProofBatch(commitments []Commitment, cellIndicies []uint64, cells []Cell, proofs []Proof) error {
+	ckzgIniter.Do(ckzgInit)
+
+	comts := make([]ckzg4844.Bytes48, len(commitments))
+	for i, commitment := range commitments {
+		comts[i] = (ckzg4844.Bytes48)(commitment)
+	}
+
+	cellInputs := make([]ckzg4844.Cell, len(cells))
+	for i := range cells {
+		cellInputs[i] = (ckzg4844.Cell)(cells[i])
+	}
+
+	proofsInput := make([]ckzg4844.Bytes48, len(proofs))
+	for i, proof := range proofs {
+		proofsInput[i] = (ckzg4844.Bytes48)(proof)
+	}
+
+	valid, err := ckzg4844.VerifyCellKZGProofBatch(comts, cellIndicies, cellInputs, proofsInput)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return errors.New("invalid proof")
+	}
+	return nil
+}
+
+// ckzgComputeCells computes the cells for a given blob.
+func ckzgComputeCells(blob *Blob) ([]Cell, error) {
+	ckzgIniter.Do(ckzgInit)
+
+	result, err := ckzg4844.ComputeCells((*ckzg4844.Blob)(blob))
+	if err != nil {
+		return nil, err
+	}
+
+	cells := make([]Cell, len(result))
+	for i, cell := range result {
+		cells[i] = (Cell)(cell)
+	}
+	return cells, nil
+}
+
+// ckzgComputeCellsAndKZGProofs computes the cells and KZG proofs for a given blob.
+func ckzgComputeCellsAndKZGProofs(blob *Blob) ([]Cell, []Proof, error) {
+	ckzgIniter.Do(ckzgInit)
+
+	cellResults, proofResults, err := ckzg4844.ComputeCellsAndKZGProofs((*ckzg4844.Blob)(blob))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cells := make([]Cell, len(cellResults))
+	for i, cell := range cellResults {
+		cells[i] = (Cell)(cell)
+	}
+
+	proofs := make([]Proof, len(proofResults))
+	for i, proof := range proofResults {
+		proofs[i] = (Proof)(proof)
+	}
+
+	return cells, proofs, nil
 }
