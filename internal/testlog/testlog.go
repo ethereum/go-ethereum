@@ -92,17 +92,6 @@ func Logger(t *testing.T, level slog.Level) log.Logger {
 	}
 }
 
-// LoggerWithHandler returns
-func LoggerWithHandler(t *testing.T, handler slog.Handler) log.Logger {
-	var bh bufHandler
-	return &logger{
-		t:  t,
-		l:  log.NewLogger(handler),
-		mu: new(sync.Mutex),
-		h:  &bh,
-	}
-}
-
 func (l *logger) Handler() slog.Handler {
 	return l.l.Handler()
 }
