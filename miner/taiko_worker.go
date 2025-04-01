@@ -391,9 +391,14 @@ func pruneTransactions(
 	var (
 		prunedTxs      []*types.Transaction
 		prunedReceipts []*types.Receipt
+		step           = TxListCompressionPruneStep
 	)
 
 	for len(txs) > 0 {
+		if len(txs) <= step {
+			step = 1
+		}
+
 		b, err := encodeAndCompressTxList(txs)
 		if err != nil {
 			return nil, err
@@ -406,17 +411,11 @@ func pruneTransactions(
 				Size:           len(b),
 			}, nil
 		}
-		if len(txs) < TxListCompressionPruneStep {
-			prunedTxs = append(txs, prunedTxs...)
-			prunedReceipts = append(receipts, prunedReceipts...)
-			txs = []*types.Transaction{}
-			receipts = []*types.Receipt{}
-			break
-		}
-		prunedTxs = append(txs[len(txs)-TxListCompressionPruneStep:], prunedTxs...)
-		prunedReceipts = append(receipts[len(receipts)-TxListCompressionPruneStep:], prunedReceipts...)
-		txs = txs[:len(txs)-TxListCompressionPruneStep]
-		receipts = receipts[:len(receipts)-TxListCompressionPruneStep]
+
+		prunedTxs = append(txs[len(txs)-step:], prunedTxs...)
+		prunedReceipts = append(receipts[len(receipts)-step:], prunedReceipts...)
+		txs = txs[:len(txs)-step]
+		receipts = receipts[:len(receipts)-step]
 	}
 
 	// All transactions are pruned.
