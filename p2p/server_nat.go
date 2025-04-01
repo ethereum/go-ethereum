@@ -164,7 +164,7 @@ func (srv *Server) portMappingLoop() {
 				// It was mapped!
 				m.extPort = int(p)
 				m.nextTime = srv.clock.Now().Add(portMapRefreshInterval)
-				if external != m.extPort {
+				if m.port != m.extPort {
 					log = newLogger(m.protocol, m.extPort, m.port)
 					log.Info("NAT mapped alternative port")
 				} else {
