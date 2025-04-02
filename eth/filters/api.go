@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -354,8 +355,12 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
 		}
+		// Block numbers below 0 are special cases.
 		if begin > 0 && end > 0 && begin > end {
 			return nil, errInvalidBlockRange
+		}
+		if begin > 0 && begin < int64(api.events.backend.HistoryPruningCutoff()) {
+			return nil, &ethconfig.PrunedHistoryError{}
 		}
 		// Construct the range filter
 		filter = api.sys.NewRangeFilter(begin, end, crit.Addresses, crit.Topics)
