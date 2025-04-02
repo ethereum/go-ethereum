@@ -44,6 +44,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 	"github.com/scroll-tech/go-ethereum/rpc"
 	"github.com/scroll-tech/go-ethereum/trie"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related
@@ -384,7 +385,7 @@ func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateles
 func testWitness(blockchain *core.BlockChain, block *types.Block, witness *stateless.Witness) error {
 	stateRoot := witness.Root()
 	diskRoot, err := rawdb.ReadDiskStateRoot(blockchain.Database(), stateRoot)
-	if err != nil {
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return fmt.Errorf("failed to read disk state root for stateRoot %s: %w", stateRoot.Hex(), err)
 	}
 	if diskRoot != (common.Hash{}) {
@@ -409,7 +410,7 @@ func testWitness(blockchain *core.BlockChain, block *types.Block, witness *state
 
 	postStateRoot := block.Root()
 	diskRoot, err = rawdb.ReadDiskStateRoot(blockchain.Database(), postStateRoot)
-	if err != nil {
+	if err != nil && !errors.Is(err, leveldb.ErrNotFound) {
 		return fmt.Errorf("failed to read disk state root for postStateRoot %s: %w", postStateRoot.Hex(), err)
 	}
 	if diskRoot != (common.Hash{}) {
