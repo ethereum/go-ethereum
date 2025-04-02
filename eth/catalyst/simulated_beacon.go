@@ -323,9 +323,9 @@ func (c *SimulatedBeacon) Commit() common.Hash {
 		log.Warn("Error performing sealing work", "err", err)
 	}
 
-	// 로그 이벤트 처리를 보장하기 위해 블록체인 이벤트를 동기화합니다
-	// 이는 로그 필터가 새로운 로그를 즉시 사용할 수 있도록 합니다
-	c.syncLogProcessing()
+	if err := c.syncLogProcessing(); err != nil {
+		log.Warn("Failed to process logs", "err", err)
+	}
 
 	return c.eth.BlockChain().CurrentBlock().Hash()
 }
