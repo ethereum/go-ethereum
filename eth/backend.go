@@ -135,7 +135,7 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 	if networkID == 0 {
 		networkID = chainConfig.ChainId.Uint64()
 	}
-	common.CopyConstans(networkID)
+	common.CopyConstants(networkID)
 
 	log.Info(strings.Repeat("-", 153))
 	for _, line := range strings.Split(chainConfig.Description(), "\n") {

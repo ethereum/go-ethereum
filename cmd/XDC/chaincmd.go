@@ -170,7 +170,7 @@ func initGenesis(ctx *cli.Context) error {
 	}
 
 	if genesis.Config.ChainId != nil {
-		common.CopyConstans(genesis.Config.ChainId.Uint64())
+		common.CopyConstants(genesis.Config.ChainId.Uint64())
 	}
 
 	// Open an initialise both full and light databases

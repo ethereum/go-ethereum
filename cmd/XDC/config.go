@@ -148,22 +148,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	if ctx.IsSet(utils.MiningEnabledFlag.Name) {
 		log.Warn("The flag --mine is deprecated and will be removed")
 	}
-	// if !ctx.IsSet(debug.VerbosityFlag.Name) {
-	// 	debug.Verbosity(log.Lvl(cfg.Verbosity))
-	// }
 
 	if !ctx.IsSet(utils.NATFlag.Name) && cfg.NAT != "" {
 		ctx.Set(utils.NATFlag.Name, cfg.NAT)
-	}
-
-	// Check testnet is enable.
-	if ctx.Bool(utils.TestnetFlag.Name) {
-		common.IsTestnet = true
-		common.TRC21IssuerSMC = common.TRC21IssuerSMCTestNet
-		cfg.Eth.NetworkId = 51
-		common.RelayerRegistrationSMC = common.RelayerRegistrationSMCTestnet
-		common.TIPTRC21Fee = common.TIPTRC21FeeTestnet
-		common.TIPXDCXCancellationFee = common.TIPXDCXCancellationFeeTestnet
 	}
 
 	if ctx.Bool(utils.EnableXDCPrefixFlag.Name) {

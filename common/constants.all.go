@@ -45,13 +45,11 @@ type constant struct {
 	tip2019Block                  *big.Int
 	tipSigning                    *big.Int
 	tipRandomize                  *big.Int
-	tipNoHalvingMNReward          *big.Int // hardfork no halving masternodes reward
+	tipNoHalvingMNReward          *big.Int // hard fork no halving masternodes reward
 	tipXDCX                       *big.Int
 	tipXDCXLending                *big.Int
 	tipXDCXCancellationFee        *big.Int
-	tipXDCXCancellationFeeTestnet *big.Int
 	tipTRC21Fee                   *big.Int
-	tipTRC21FeeTestnet            *big.Int
 	tipIncreaseMasternodes        *big.Int // Upgrade MN Count at Block.
 	berlinBlock                   *big.Int
 	londonBlock                   *big.Int
@@ -66,22 +64,17 @@ type constant struct {
 	eip1559Block                  *big.Int
 	cancunBlock                   *big.Int
 
-	trc21IssuerSMCTestNet Address
-	trc21IssuerSMC        Address
-	xdcxListingSMC        Address
-	xdcxListingSMCTestNet Address
-
-	relayerRegistrationSMC        Address
-	relayerRegistrationSMCTestnet Address
-	lendingRegistrationSMC        Address
-	lendingRegistrationSMCTestnet Address
+	trc21IssuerSMC         Address
+	xdcxListingSMC         Address
+	relayerRegistrationSMC Address
+	lendingRegistrationSMC Address
 
 	ignoreSignerCheckBlockArray map[uint64]struct{}
 
 	blacklist map[Address]struct{}
 }
 
-// variables for specific networks, copy values from MaintnetConstant to pass tests
+// variables for specific networks, copy values from maintnet constant to pass tests
 var (
 	BlackListHFNumber = MaintnetConstant.blackListHFNumber
 	MaxMasternodesV2  = MaintnetConstant.maxMasternodesV2 // Last v1 masternodes
@@ -93,9 +86,7 @@ var (
 	TIPXDCX                       = MaintnetConstant.tipXDCX
 	TIPXDCXLending                = MaintnetConstant.tipXDCXLending
 	TIPXDCXCancellationFee        = MaintnetConstant.tipXDCXCancellationFee
-	TIPXDCXCancellationFeeTestnet = MaintnetConstant.tipXDCXCancellationFeeTestnet
 	TIPTRC21Fee                   = MaintnetConstant.tipTRC21Fee
-	TIPTRC21FeeTestnet            = MaintnetConstant.tipTRC21FeeTestnet
 	TIPIncreaseMasternodes        = MaintnetConstant.tipIncreaseMasternodes
 	BerlinBlock                   = MaintnetConstant.berlinBlock
 	LondonBlock                   = MaintnetConstant.londonBlock
@@ -109,15 +100,10 @@ var (
 	TIPUpgradeReward              = MaintnetConstant.tipUpgradeReward
 	TIPEpochHalving               = MaintnetConstant.tipEpochHalving
 
-	TRC21IssuerSMC        = MaintnetConstant.trc21IssuerSMC
-	TRC21IssuerSMCTestNet = MaintnetConstant.trc21IssuerSMCTestNet
-	XDCXListingSMC        = MaintnetConstant.xdcxListingSMC
-	XDCXListingSMCTestNet = MaintnetConstant.xdcxListingSMCTestNet
-
-	RelayerRegistrationSMC        = MaintnetConstant.relayerRegistrationSMC
-	RelayerRegistrationSMCTestnet = MaintnetConstant.relayerRegistrationSMCTestnet
-	LendingRegistrationSMC        = MaintnetConstant.lendingRegistrationSMC
-	LendingRegistrationSMCTestnet = MaintnetConstant.lendingRegistrationSMCTestnet
+	TRC21IssuerSMC         = MaintnetConstant.trc21IssuerSMC
+	XDCXListingSMC         = MaintnetConstant.xdcxListingSMC
+	RelayerRegistrationSMC = MaintnetConstant.relayerRegistrationSMC
+	LendingRegistrationSMC = MaintnetConstant.lendingRegistrationSMC
 
 	ignoreSignerCheckBlockArray = MaintnetConstant.ignoreSignerCheckBlockArray
 	blacklist                   = MaintnetConstant.blacklist
@@ -136,9 +122,9 @@ func IsInBlacklist(address *Address) bool {
 	return ok
 }
 
-// CopyConstans only handles testnet, devnet, local. It does not
-// handles mainnet since the default value is from mainnet.
-func CopyConstans(chainID uint64) {
+// CopyConstants only handles testnet, devnet, local network.
+// It skips mainnet since the default value is from mainnet.
+func CopyConstants(chainID uint64) {
 	var c *constant
 	if chainID == TestnetConstant.chainID {
 		c = &TestnetConstant
@@ -160,9 +146,7 @@ func CopyConstans(chainID uint64) {
 	TIPXDCX = c.tipXDCX
 	TIPXDCXLending = c.tipXDCXLending
 	TIPXDCXCancellationFee = c.tipXDCXCancellationFee
-	TIPXDCXCancellationFeeTestnet = c.tipXDCXCancellationFeeTestnet
 	TIPTRC21Fee = c.tipTRC21Fee
-	TIPTRC21FeeTestnet = c.tipTRC21FeeTestnet
 	TIPIncreaseMasternodes = c.tipIncreaseMasternodes
 	BerlinBlock = c.berlinBlock
 	LondonBlock = c.londonBlock
@@ -177,14 +161,9 @@ func CopyConstans(chainID uint64) {
 	TIPEpochHalving = c.tipEpochHalving
 
 	TRC21IssuerSMC = c.trc21IssuerSMC
-	TRC21IssuerSMCTestNet = c.trc21IssuerSMCTestNet
 	XDCXListingSMC = c.xdcxListingSMC
-	XDCXListingSMCTestNet = c.xdcxListingSMCTestNet
-
 	RelayerRegistrationSMC = c.relayerRegistrationSMC
-	RelayerRegistrationSMCTestnet = c.relayerRegistrationSMCTestnet
 	LendingRegistrationSMC = c.lendingRegistrationSMC
-	LendingRegistrationSMCTestnet = c.lendingRegistrationSMCTestnet
 
 	clear(ignoreSignerCheckBlockArray)
 	maps.Copy(ignoreSignerCheckBlockArray, c.ignoreSignerCheckBlockArray)

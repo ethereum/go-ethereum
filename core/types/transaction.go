@@ -547,15 +547,7 @@ func (tx *Transaction) IsVotingTransaction() (bool, *common.Address) {
 
 func (tx *Transaction) IsXDCXApplyTransaction() bool {
 	to := tx.To()
-	if to == nil {
-		return false
-	}
-
-	addr := common.XDCXListingSMC
-	if common.IsTestnet {
-		addr = common.XDCXListingSMCTestNet
-	}
-	if *to != addr {
+	if to == nil || *to != common.XDCXListingSMC {
 		return false
 	}
 	data := tx.Data()
@@ -570,15 +562,7 @@ func (tx *Transaction) IsXDCXApplyTransaction() bool {
 
 func (tx *Transaction) IsXDCZApplyTransaction() bool {
 	to := tx.To()
-	if to == nil {
-		return false
-	}
-
-	addr := common.TRC21IssuerSMC
-	if common.IsTestnet {
-		addr = common.TRC21IssuerSMCTestNet
-	}
-	if *to != addr {
+	if to == nil || *to != common.TRC21IssuerSMC {
 		return false
 	}
 	data := tx.Data()
