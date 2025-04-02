@@ -61,10 +61,7 @@ func TestLogging(t *testing.T) {
 		mock := mockT{&outp}
 		tc.run(&mock)
 		if outp.String() != tc.expected {
-			fmt.Println("mismatch")
-			fmt.Printf("'%s'\n", outp.String())
-			fmt.Println("----")
-			fmt.Printf("'%s'\n", tc.expected)
+			fmt.Printf("output mismatch.\nwant: '%s'\ngot: '%s'\n", tc.expected, outp.String())
 		}
 	}
 }
