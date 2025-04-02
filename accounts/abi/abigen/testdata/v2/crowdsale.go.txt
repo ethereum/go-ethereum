@@ -1,0 +1,304 @@
+// Code generated via abigen V2 - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
+package bindtests
+
+import (
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var (
+	_ = bytes.Equal
+	_ = errors.New
+	_ = big.NewInt
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = abi.ConvertType
+)
+
+// CrowdsaleMetaData contains all meta data concerning the Crowdsale contract.
+var CrowdsaleMetaData = bind.MetaData{
+	ABI: "[{\"constant\":false,\"inputs\":[],\"name\":\"checkGoalReached\",\"outputs\":[],\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"deadline\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"beneficiary\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"tokenReward\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"fundingGoal\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"amountRaised\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"price\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"funders\",\"outputs\":[{\"name\":\"addr\",\"type\":\"address\"},{\"name\":\"amount\",\"type\":\"uint256\"}],\"type\":\"function\"},{\"inputs\":[{\"name\":\"ifSuccessfulSendTo\",\"type\":\"address\"},{\"name\":\"fundingGoalInEthers\",\"type\":\"uint256\"},{\"name\":\"durationInMinutes\",\"type\":\"uint256\"},{\"name\":\"etherCostOfEachToken\",\"type\":\"uint256\"},{\"name\":\"addressOfTokenUsedAsReward\",\"type\":\"address\"}],\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"backer\",\"type\":\"address\"},{\"indexed\":false,\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"name\":\"isContribution\",\"type\":\"bool\"}],\"name\":\"FundTransfer\",\"type\":\"event\"}]",
+	ID:  "84d7e935785c5c648282d326307bb8fa0d",
+	Bin: "0x606060408190526007805460ff1916905560a0806105a883396101006040529051608051915160c05160e05160008054600160a060020a03199081169095178155670de0b6b3a7640000958602600155603c9093024201600355930260045560058054909216909217905561052f90819061007990396000f36060604052361561006c5760e060020a600035046301cb3b20811461008257806329dcb0cf1461014457806338af3eed1461014d5780636e66f6e91461015f5780637a3a0e84146101715780637b3e5e7b1461017a578063a035b1fe14610183578063dc0d3dff1461018c575b61020060075460009060ff161561032357610002565b61020060035460009042106103205760025460015490106103cb576002548154600160a060020a0316908290606082818181858883f150915460025460408051600160a060020a039390931683526020830191909152818101869052517fe842aea7a5f1b01049d752008c53c52890b1a6daf660cf39e8eec506112bbdf6945090819003909201919050a15b60405160008054600160a060020a039081169230909116319082818181858883f150506007805460ff1916600117905550505050565b6103a160035481565b6103ab600054600160a060020a031681565b6103ab600554600160a060020a031681565b6103a160015481565b6103a160025481565b6103a160045481565b6103be60043560068054829081101561000257506000526002027ff652222313e28459528d920b65115c16c04f3efc82aaedc97be59f3f377c0d3f8101547ff652222313e28459528d920b65115c16c04f3efc82aaedc97be59f3f377c0d409190910154600160a060020a03919091169082565b005b505050815481101561000257906000526020600020906002020160005060008201518160000160006101000a815481600160a060020a030219169083021790555060208201518160010160005055905050806002600082828250540192505081905550600560009054906101000a9004600160a060020a0316600160a060020a031663a9059cbb3360046000505484046040518360e060020a0281526004018083600160a060020a03168152602001828152602001925050506000604051808303816000876161da5a03f11561000257505060408051600160a060020a03331681526020810184905260018183015290517fe842aea7a5f1b01049d752008c53c52890b1a6daf660cf39e8eec506112bbdf692509081900360600190a15b50565b5060a0604052336060908152346080819052600680546001810180835592939282908280158290116102025760020281600202836000526020600020918201910161020291905b8082111561039d57805473ffffffffffffffffffffffffffffffffffffffff19168155600060019190910190815561036a565b5090565b6060908152602090f35b600160a060020a03166060908152602090f35b6060918252608052604090f35b5b60065481101561010e576006805482908110156100025760009182526002027ff652222313e28459528d920b65115c16c04f3efc82aaedc97be59f3f377c0d3f0190600680549254600160a060020a0316928490811015610002576002027ff652222313e28459528d920b65115c16c04f3efc82aaedc97be59f3f377c0d40015460405190915082818181858883f19350505050507fe842aea7a5f1b01049d752008c53c52890b1a6daf660cf39e8eec506112bbdf660066000508281548110156100025760008290526002027ff652222313e28459528d920b65115c16c04f3efc82aaedc97be59f3f377c0d3f01548154600160a060020a039190911691908490811015610002576002027ff652222313e28459528d920b65115c16c04f3efc82aaedc97be59f3f377c0d40015460408051600160a060020a0394909416845260208401919091526000838201525191829003606001919050a16001016103cc56",
+}
+
+// Crowdsale is an auto generated Go binding around an Ethereum contract.
+type Crowdsale struct {
+	abi abi.ABI
+}
+
+// NewCrowdsale creates a new instance of Crowdsale.
+func NewCrowdsale() *Crowdsale {
+	parsed, err := CrowdsaleMetaData.ParseABI()
+	if err != nil {
+		panic(errors.New("invalid ABI: " + err.Error()))
+	}
+	return &Crowdsale{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *Crowdsale) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+}
+
+// PackConstructor is the Go binding used to pack the parameters required for
+// contract deployment.
+//
+// Solidity: constructor(address ifSuccessfulSendTo, uint256 fundingGoalInEthers, uint256 durationInMinutes, uint256 etherCostOfEachToken, address addressOfTokenUsedAsReward) returns()
+func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, fundingGoalInEthers *big.Int, durationInMinutes *big.Int, etherCostOfEachToken *big.Int, addressOfTokenUsedAsReward common.Address) []byte {
+	enc, err := crowdsale.abi.Pack("", ifSuccessfulSendTo, fundingGoalInEthers, durationInMinutes, etherCostOfEachToken, addressOfTokenUsedAsReward)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackAmountRaised is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x7b3e5e7b.
+//
+// Solidity: function amountRaised() returns(uint256)
+func (crowdsale *Crowdsale) PackAmountRaised() []byte {
+	enc, err := crowdsale.abi.Pack("amountRaised")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackAmountRaised is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x7b3e5e7b.
+//
+// Solidity: function amountRaised() returns(uint256)
+func (crowdsale *Crowdsale) UnpackAmountRaised(data []byte) (*big.Int, error) {
+	out, err := crowdsale.abi.Unpack("amountRaised", data)
+	if err != nil {
+		return new(big.Int), err
+	}
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	return out0, err
+}
+
+// PackBeneficiary is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x38af3eed.
+//
+// Solidity: function beneficiary() returns(address)
+func (crowdsale *Crowdsale) PackBeneficiary() []byte {
+	enc, err := crowdsale.abi.Pack("beneficiary")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackBeneficiary is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x38af3eed.
+//
+// Solidity: function beneficiary() returns(address)
+func (crowdsale *Crowdsale) UnpackBeneficiary(data []byte) (common.Address, error) {
+	out, err := crowdsale.abi.Unpack("beneficiary", data)
+	if err != nil {
+		return *new(common.Address), err
+	}
+	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+	return out0, err
+}
+
+// PackCheckGoalReached is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x01cb3b20.
+//
+// Solidity: function checkGoalReached() returns()
+func (crowdsale *Crowdsale) PackCheckGoalReached() []byte {
+	enc, err := crowdsale.abi.Pack("checkGoalReached")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackDeadline is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x29dcb0cf.
+//
+// Solidity: function deadline() returns(uint256)
+func (crowdsale *Crowdsale) PackDeadline() []byte {
+	enc, err := crowdsale.abi.Pack("deadline")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackDeadline is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x29dcb0cf.
+//
+// Solidity: function deadline() returns(uint256)
+func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
+	out, err := crowdsale.abi.Unpack("deadline", data)
+	if err != nil {
+		return new(big.Int), err
+	}
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	return out0, err
+}
+
+// PackFunders is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xdc0d3dff.
+//
+// Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
+func (crowdsale *Crowdsale) PackFunders(arg0 *big.Int) []byte {
+	enc, err := crowdsale.abi.Pack("funders", arg0)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// FundersOutput serves as a container for the return parameters of contract
+// method Funders.
+type FundersOutput struct {
+	Addr   common.Address
+	Amount *big.Int
+}
+
+// UnpackFunders is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xdc0d3dff.
+//
+// Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
+func (crowdsale *Crowdsale) UnpackFunders(data []byte) (FundersOutput, error) {
+	out, err := crowdsale.abi.Unpack("funders", data)
+	outstruct := new(FundersOutput)
+	if err != nil {
+		return *outstruct, err
+	}
+	outstruct.Addr = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
+	return *outstruct, err
+
+}
+
+// PackFundingGoal is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x7a3a0e84.
+//
+// Solidity: function fundingGoal() returns(uint256)
+func (crowdsale *Crowdsale) PackFundingGoal() []byte {
+	enc, err := crowdsale.abi.Pack("fundingGoal")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackFundingGoal is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x7a3a0e84.
+//
+// Solidity: function fundingGoal() returns(uint256)
+func (crowdsale *Crowdsale) UnpackFundingGoal(data []byte) (*big.Int, error) {
+	out, err := crowdsale.abi.Unpack("fundingGoal", data)
+	if err != nil {
+		return new(big.Int), err
+	}
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	return out0, err
+}
+
+// PackPrice is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xa035b1fe.
+//
+// Solidity: function price() returns(uint256)
+func (crowdsale *Crowdsale) PackPrice() []byte {
+	enc, err := crowdsale.abi.Pack("price")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackPrice is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0xa035b1fe.
+//
+// Solidity: function price() returns(uint256)
+func (crowdsale *Crowdsale) UnpackPrice(data []byte) (*big.Int, error) {
+	out, err := crowdsale.abi.Unpack("price", data)
+	if err != nil {
+		return new(big.Int), err
+	}
+	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	return out0, err
+}
+
+// PackTokenReward is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6e66f6e9.
+//
+// Solidity: function tokenReward() returns(address)
+func (crowdsale *Crowdsale) PackTokenReward() []byte {
+	enc, err := crowdsale.abi.Pack("tokenReward")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// UnpackTokenReward is the Go binding that unpacks the parameters returned
+// from invoking the contract method with ID 0x6e66f6e9.
+//
+// Solidity: function tokenReward() returns(address)
+func (crowdsale *Crowdsale) UnpackTokenReward(data []byte) (common.Address, error) {
+	out, err := crowdsale.abi.Unpack("tokenReward", data)
+	if err != nil {
+		return *new(common.Address), err
+	}
+	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+	return out0, err
+}
+
+// CrowdsaleFundTransfer represents a FundTransfer event raised by the Crowdsale contract.
+type CrowdsaleFundTransfer struct {
+	Backer         common.Address
+	Amount         *big.Int
+	IsContribution bool
+	Raw            *types.Log // Blockchain specific contextual infos
+}
+
+const CrowdsaleFundTransferEventName = "FundTransfer"
+
+// ContractEventName returns the user-defined event name.
+func (CrowdsaleFundTransfer) ContractEventName() string {
+	return CrowdsaleFundTransferEventName
+}
+
+// UnpackFundTransferEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event FundTransfer(address backer, uint256 amount, bool isContribution)
+func (crowdsale *Crowdsale) UnpackFundTransferEvent(log *types.Log) (*CrowdsaleFundTransfer, error) {
+	event := "FundTransfer"
+	if log.Topics[0] != crowdsale.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(CrowdsaleFundTransfer)
+	if len(log.Data) > 0 {
+		if err := crowdsale.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range crowdsale.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}

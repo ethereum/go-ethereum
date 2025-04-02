@@ -19,6 +19,7 @@ package filtermaps
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -27,9 +28,8 @@ type FilterMapsMatcherBackend struct {
 	f *FilterMaps
 
 	// these fields should be accessed under f.matchersLock mutex.
-	valid                 bool
-	firstValid, lastValid uint64
-	syncCh                chan SyncRange
+	validBlocks common.Range[uint64]
+	syncCh      chan SyncRange
 }
 
 // NewMatcherBackend returns a FilterMapsMatcherBackend after registering it in
@@ -43,11 +43,9 @@ func (f *FilterMaps) NewMatcherBackend() *FilterMapsMatcherBackend {
 		f.indexLock.RUnlock()
 	}()
 
-	fm := &FilterMapsMatcherBackend{
-		f:          f,
-		valid:      f.indexedRange.initialized && f.indexedRange.afterLastIndexedBlock > f.indexedRange.firstIndexedBlock,
-		firstValid: f.indexedRange.firstIndexedBlock,
-		lastValid:  f.indexedRange.afterLastIndexedBlock - 1,
+	fm := &FilterMapsMatcherBackend{f: f}
+	if f.indexedRange.initialized {
+		fm.validBlocks = f.indexedRange.blocks
 	}
 	f.matchers[fm] = struct{}{}
 	return fm
@@ -122,28 +120,16 @@ func (fm *FilterMapsMatcherBackend) synced() {
 		fm.f.indexLock.RUnlock()
 	}()
 
-	var (
-		indexed                     bool
-		lastIndexed, subLastIndexed uint64
-	)
-	if !fm.f.indexedRange.headBlockIndexed {
-		subLastIndexed = 1
-	}
-	if fm.f.indexedRange.afterLastIndexedBlock-subLastIndexed > fm.f.indexedRange.firstIndexedBlock {
-		indexed, lastIndexed = true, fm.f.indexedRange.afterLastIndexedBlock-subLastIndexed-1
+	indexedBlocks := fm.f.indexedRange.blocks
+	if !fm.f.indexedRange.headIndexed && !indexedBlocks.IsEmpty() {
+		indexedBlocks.SetAfterLast(indexedBlocks.Last()) // remove partially indexed last block
 	}
 	fm.syncCh <- SyncRange{
-		HeadNumber:   fm.f.indexedView.headNumber,
-		Valid:        fm.valid,
-		FirstValid:   fm.firstValid,
-		LastValid:    fm.lastValid,
-		Indexed:      indexed,
-		FirstIndexed: fm.f.indexedRange.firstIndexedBlock,
-		LastIndexed:  lastIndexed,
+		HeadNumber:    fm.f.targetView.headNumber,
+		ValidBlocks:   fm.validBlocks,
+		IndexedBlocks: indexedBlocks,
 	}
-	fm.valid = indexed
-	fm.firstValid = fm.f.indexedRange.firstIndexedBlock
-	fm.lastValid = lastIndexed
+	fm.validBlocks = indexedBlocks
 	fm.syncCh = nil
 }
 
@@ -155,10 +141,6 @@ func (fm *FilterMapsMatcherBackend) synced() {
 // range that has not been changed and has been consistent with all states of the
 // chain since the previous SyncLogIndex or the creation of the matcher backend.
 func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange, error) {
-	if fm.f.disabled {
-		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
-	}
-
 	syncCh := make(chan SyncRange, 1)
 	fm.f.matchersLock.Lock()
 	fm.syncCh = syncCh
@@ -168,12 +150,16 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 	case fm.f.matcherSyncCh <- fm:
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
+	case <-fm.f.disabledCh:
+		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
 	}
 	select {
 	case vr := <-syncCh:
 		return vr, nil
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
+	case <-fm.f.disabledCh:
+		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
 	}
 }
 
@@ -187,20 +173,10 @@ func (f *FilterMaps) updateMatchersValidRange() {
 	defer f.matchersLock.Unlock()
 
 	for fm := range f.matchers {
-		if !f.indexedRange.hasIndexedBlocks() {
-			fm.valid = false
-		}
-		if !fm.valid {
+		if !f.indexedRange.initialized {
+			fm.validBlocks = common.Range[uint64]{}
 			continue
 		}
-		if fm.firstValid < f.indexedRange.firstIndexedBlock {
-			fm.firstValid = f.indexedRange.firstIndexedBlock
-		}
-		if fm.lastValid >= f.indexedRange.afterLastIndexedBlock {
-			fm.lastValid = f.indexedRange.afterLastIndexedBlock - 1
-		}
-		if fm.firstValid > fm.lastValid {
-			fm.valid = false
-		}
+		fm.validBlocks = fm.validBlocks.Intersection(f.indexedRange.blocks)
 	}
 }

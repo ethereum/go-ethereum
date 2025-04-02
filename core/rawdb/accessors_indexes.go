@@ -30,13 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// ReadTxLookupEntry retrieves the positional metadata associated with a transaction
-// hash to allow retrieving the transaction or receipt by hash.
-func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
-	data, _ := db.Get(txLookupKey(hash))
-	if len(data) == 0 {
-		return nil
-	}
+// DecodeTxLookupEntry decodes the supplied tx lookup data.
+func DecodeTxLookupEntry(data []byte, db ethdb.Reader) *uint64 {
 	// Database v6 tx lookup just stores the block number
 	if len(data) < common.HashLength {
 		number := new(big.Int).SetBytes(data).Uint64()
@@ -49,10 +44,20 @@ func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
 	// Finally try database v3 tx lookup format
 	var entry LegacyTxLookupEntry
 	if err := rlp.DecodeBytes(data, &entry); err != nil {
-		log.Error("Invalid transaction lookup entry RLP", "hash", hash, "blob", data, "err", err)
+		log.Error("Invalid transaction lookup entry RLP", "blob", data, "err", err)
 		return nil
 	}
 	return &entry.BlockIndex
+}
+
+// ReadTxLookupEntry retrieves the positional metadata associated with a transaction
+// hash to allow retrieving the transaction or receipt by hash.
+func ReadTxLookupEntry(db ethdb.Reader, hash common.Hash) *uint64 {
+	data, _ := db.Get(txLookupKey(hash))
+	if len(data) == 0 {
+		return nil
+	}
+	return DecodeTxLookupEntry(data, db)
 }
 
 // writeTxLookupEntry stores a positional metadata for a transaction,
@@ -92,6 +97,34 @@ func DeleteTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash) {
 func DeleteTxLookupEntries(db ethdb.KeyValueWriter, hashes []common.Hash) {
 	for _, hash := range hashes {
 		DeleteTxLookupEntry(db, hash)
+	}
+}
+
+// DeleteAllTxLookupEntries purges all the transaction indexes in the database.
+// If condition is specified, only the entry with condition as True will be
+// removed; If condition is not specified, the entry is deleted.
+func DeleteAllTxLookupEntries(db ethdb.KeyValueStore, condition func(common.Hash, []byte) bool) {
+	iter := NewKeyLengthIterator(db.NewIterator(txLookupPrefix, nil), common.HashLength+len(txLookupPrefix))
+	defer iter.Release()
+
+	batch := db.NewBatch()
+	for iter.Next() {
+		txhash := common.Hash(iter.Key()[1:])
+		if condition == nil || condition(txhash, iter.Value()) {
+			batch.Delete(iter.Key())
+		}
+		if batch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to delete transaction lookup entries", "err", err)
+			}
+			batch.Reset()
+		}
+	}
+	if batch.ValueSize() > 0 {
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to delete transaction lookup entries", "err", err)
+		}
+		batch.Reset()
 	}
 }
 
@@ -145,41 +178,6 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	}
 	log.Error("Receipt not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
 	return nil, common.Hash{}, 0, 0
-}
-
-// ReadBloomBits retrieves the compressed bloom bit vector belonging to the given
-// section and bit index from the.
-func ReadBloomBits(db ethdb.KeyValueReader, bit uint, section uint64, head common.Hash) ([]byte, error) {
-	return db.Get(bloomBitsKey(bit, section, head))
-}
-
-// WriteBloomBits stores the compressed bloom bits vector belonging to the given
-// section and bit index.
-func WriteBloomBits(db ethdb.KeyValueWriter, bit uint, section uint64, head common.Hash, bits []byte) {
-	if err := db.Put(bloomBitsKey(bit, section, head), bits); err != nil {
-		log.Crit("Failed to store bloom bits", "err", err)
-	}
-}
-
-// DeleteBloombits removes all compressed bloom bits vector belonging to the
-// given section range and bit index.
-func DeleteBloombits(db ethdb.Database, bit uint, from uint64, to uint64) {
-	start, end := bloomBitsKey(bit, from, common.Hash{}), bloomBitsKey(bit, to, common.Hash{})
-	it := db.NewIterator(nil, start)
-	defer it.Release()
-
-	for it.Next() {
-		if bytes.Compare(it.Key(), end) >= 0 {
-			break
-		}
-		if len(it.Key()) != len(bloomBitsPrefix)+2+8+32 {
-			continue
-		}
-		db.Delete(it.Key())
-	}
-	if it.Error() != nil {
-		log.Crit("Failed to delete bloom bits", "err", it.Error())
-	}
 }
 
 // ReadFilterMapRow retrieves a filter map row at the given mapRowIndex
@@ -356,10 +354,8 @@ func WriteFilterMapBaseRows(db ethdb.KeyValueWriter, mapRowIndex uint64, rows []
 	}
 }
 
-func DeleteFilterMapRows(db ethdb.KeyValueRangeDeleter, firstMapRowIndex, afterLastMapRowIndex uint64) {
-	if err := db.DeleteRange(filterMapRowKey(firstMapRowIndex, false), filterMapRowKey(afterLastMapRowIndex, false)); err != nil {
-		log.Crit("Failed to delete range of filter map rows", "err", err)
-	}
+func DeleteFilterMapRows(db ethdb.KeyValueStore, mapRows common.Range[uint64], hashScheme bool, stopCallback func(bool) bool) error {
+	return SafeDeleteRange(db, filterMapRowKey(mapRows.First(), false), filterMapRowKey(mapRows.AfterLast(), false), hashScheme, stopCallback)
 }
 
 // ReadFilterMapLastBlock retrieves the number of the block that generated the
@@ -370,7 +366,7 @@ func ReadFilterMapLastBlock(db ethdb.KeyValueReader, mapIndex uint32) (uint64, c
 		return 0, common.Hash{}, err
 	}
 	if len(enc) != 40 {
-		return 0, common.Hash{}, errors.New("Invalid block number and id encoding")
+		return 0, common.Hash{}, errors.New("invalid block number and id encoding")
 	}
 	var id common.Hash
 	copy(id[:], enc[8:])
@@ -396,10 +392,8 @@ func DeleteFilterMapLastBlock(db ethdb.KeyValueWriter, mapIndex uint32) {
 	}
 }
 
-func DeleteFilterMapLastBlocks(db ethdb.KeyValueRangeDeleter, firstMapIndex, afterLastMapIndex uint32) {
-	if err := db.DeleteRange(filterMapLastBlockKey(firstMapIndex), filterMapLastBlockKey(afterLastMapIndex)); err != nil {
-		log.Crit("Failed to delete range of filter map last block pointers", "err", err)
-	}
+func DeleteFilterMapLastBlocks(db ethdb.KeyValueStore, maps common.Range[uint32], hashScheme bool, stopCallback func(bool) bool) error {
+	return SafeDeleteRange(db, filterMapLastBlockKey(maps.First()), filterMapLastBlockKey(maps.AfterLast()), hashScheme, stopCallback)
 }
 
 // ReadBlockLvPointer retrieves the starting log value index where the log values
@@ -410,7 +404,7 @@ func ReadBlockLvPointer(db ethdb.KeyValueReader, blockNumber uint64) (uint64, er
 		return 0, err
 	}
 	if len(encPtr) != 8 {
-		return 0, errors.New("Invalid log value pointer encoding")
+		return 0, errors.New("invalid log value pointer encoding")
 	}
 	return binary.BigEndian.Uint64(encPtr), nil
 }
@@ -433,19 +427,18 @@ func DeleteBlockLvPointer(db ethdb.KeyValueWriter, blockNumber uint64) {
 	}
 }
 
-func DeleteBlockLvPointers(db ethdb.KeyValueRangeDeleter, firstBlockNumber, afterLastBlockNumber uint64) {
-	if err := db.DeleteRange(filterMapBlockLVKey(firstBlockNumber), filterMapBlockLVKey(afterLastBlockNumber)); err != nil {
-		log.Crit("Failed to delete range of block log value pointers", "err", err)
-	}
+func DeleteBlockLvPointers(db ethdb.KeyValueStore, blocks common.Range[uint64], hashScheme bool, stopCallback func(bool) bool) error {
+	return SafeDeleteRange(db, filterMapBlockLVKey(blocks.First()), filterMapBlockLVKey(blocks.AfterLast()), hashScheme, stopCallback)
 }
 
 // FilterMapsRange is a storage representation of the block range covered by the
 // filter maps structure and the corresponting log value index range.
 type FilterMapsRange struct {
-	HeadBlockIndexed                                         bool
-	HeadBlockDelimiter                                       uint64
-	FirstIndexedBlock, AfterLastIndexedBlock                 uint64
-	FirstRenderedMap, AfterLastRenderedMap, TailPartialEpoch uint32
+	HeadIndexed                  bool
+	HeadDelimiter                uint64
+	BlocksFirst, BlocksAfterLast uint64
+	MapsFirst, MapsAfterLast     uint32
+	TailPartialEpoch             uint32
 }
 
 // ReadFilterMapsRange retrieves the filter maps range data. Note that if the
@@ -483,4 +476,25 @@ func DeleteFilterMapsRange(db ethdb.KeyValueWriter) {
 	if err := db.Delete(filterMapsRangeKey); err != nil {
 		log.Crit("Failed to delete filter maps range", "err", err)
 	}
+}
+
+// deletePrefixRange deletes everything with the given prefix from the database.
+func deletePrefixRange(db ethdb.KeyValueStore, prefix []byte, hashScheme bool, stopCallback func(bool) bool) error {
+	end := bytes.Clone(prefix)
+	end[len(end)-1]++
+	return SafeDeleteRange(db, prefix, end, hashScheme, stopCallback)
+}
+
+// DeleteFilterMapsDb removes the entire filter maps database
+func DeleteFilterMapsDb(db ethdb.KeyValueStore, hashScheme bool, stopCallback func(bool) bool) error {
+	return deletePrefixRange(db, []byte(filterMapsPrefix), hashScheme, stopCallback)
+}
+
+// DeleteBloomBitsDb removes the old bloombits database and the associated
+// chain indexer database.
+func DeleteBloomBitsDb(db ethdb.KeyValueStore, hashScheme bool, stopCallback func(bool) bool) error {
+	if err := deletePrefixRange(db, bloomBitsPrefix, hashScheme, stopCallback); err != nil {
+		return err
+	}
+	return deletePrefixRange(db, bloomBitsMetaPrefix, hashScheme, stopCallback)
 }

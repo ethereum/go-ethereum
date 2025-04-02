@@ -140,7 +140,7 @@ type ExtIP net.IP
 
 func (n ExtIP) ExternalIP() (net.IP, error)  { return net.IP(n), nil }
 func (n ExtIP) String() string               { return fmt.Sprintf("ExtIP(%v)", net.IP(n)) }
-func (n ExtIP) MarshalText() ([]byte, error) { return []byte(fmt.Sprintf("extip:%v", net.IP(n))), nil }
+func (n ExtIP) MarshalText() ([]byte, error) { return fmt.Appendf(nil, "extip:%v", net.IP(n)), nil }
 
 // These do nothing.
 

@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -65,6 +66,10 @@ var (
 	// ErrInflightTxLimitReached is returned when the maximum number of in-flight
 	// transactions is reached for specific accounts.
 	ErrInflightTxLimitReached = errors.New("in-flight transaction limit reached for delegated accounts")
+
+	// ErrOutOfOrderTxFromDelegated is returned when the transaction with gapped
+	// nonce received from the accounts with delegation or pending delegation.
+	ErrOutOfOrderTxFromDelegated = errors.New("gapped-nonce tx from delegated accounts")
 
 	// ErrAuthorityReserved is returned if a transaction has an authorization
 	// signed by an address which already has in-flight transactions known to the
@@ -605,33 +610,39 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction) error {
 	return pool.validateAuth(tx)
 }
 
+// checkDelegationLimit determines if the tx sender is delegated or has a
+// pending delegation, and if so, ensures they have at most one in-flight
+// **executable** transaction, e.g. disallow stacked and gapped transactions
+// from the account.
+func (pool *LegacyPool) checkDelegationLimit(tx *types.Transaction) error {
+	from, _ := types.Sender(pool.signer, tx) // validated
+
+	// Short circuit if the sender has neither delegation nor pending delegation.
+	if pool.currentState.GetCodeHash(from) == types.EmptyCodeHash && pool.all.delegationTxsCount(from) == 0 {
+		return nil
+	}
+	pending := pool.pending[from]
+	if pending == nil {
+		// Transaction with gapped nonce is not supported for delegated accounts
+		if pool.pendingNonces.get(from) != tx.Nonce() {
+			return ErrOutOfOrderTxFromDelegated
+		}
+		return nil
+	}
+	// Transaction replacement is supported
+	if pending.Contains(tx.Nonce()) {
+		return nil
+	}
+	return ErrInflightTxLimitReached
+}
+
 // validateAuth verifies that the transaction complies with code authorization
 // restrictions brought by SetCode transaction type.
 func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
-	from, _ := types.Sender(pool.signer, tx) // validated
-
 	// Allow at most one in-flight tx for delegated accounts or those with a
 	// pending authorization.
-	if pool.currentState.GetCodeHash(from) != types.EmptyCodeHash || len(pool.all.auths[from]) != 0 {
-		var (
-			count  int
-			exists bool
-		)
-		pending := pool.pending[from]
-		if pending != nil {
-			count += pending.Len()
-			exists = pending.Contains(tx.Nonce())
-		}
-		queue := pool.queue[from]
-		if queue != nil {
-			count += queue.Len()
-			exists = exists || queue.Contains(tx.Nonce())
-		}
-		// Replace the existing in-flight transaction for delegated accounts
-		// are still supported
-		if count >= 1 && !exists {
-			return ErrInflightTxLimitReached
-		}
+	if err := pool.checkDelegationLimit(tx); err != nil {
+		return err
 	}
 	// Authorities cannot conflict with any pending or queued transactions.
 	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
@@ -1008,6 +1019,33 @@ func (pool *LegacyPool) Get(hash common.Hash) *types.Transaction {
 // get returns a transaction if it is contained in the pool and nil otherwise.
 func (pool *LegacyPool) get(hash common.Hash) *types.Transaction {
 	return pool.all.Get(hash)
+}
+
+// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
+func (pool *LegacyPool) GetRLP(hash common.Hash) []byte {
+	tx := pool.all.Get(hash)
+	if tx == nil {
+		return nil
+	}
+	encoded, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		log.Error("Failed to encoded transaction in legacy pool", "hash", hash, "err", err)
+		return nil
+	}
+	return encoded
+}
+
+// GetMetadata returns the transaction type and transaction size with the
+// given transaction hash.
+func (pool *LegacyPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
+	tx := pool.all.Get(hash)
+	if tx == nil {
+		return nil
+	}
+	return &txpool.TxMetadata{
+		Type: tx.Type(),
+		Size: tx.Size(),
+	}
 }
 
 // GetBlobs is not supported by the legacy transaction pool, it is just here to
@@ -1822,6 +1860,13 @@ func (t *lookup) removeAuthorities(tx *types.Transaction) {
 		}
 		t.auths[addr] = list
 	}
+}
+
+// delegationTxsCount returns the number of pending authorizations for the specified address.
+func (t *lookup) delegationTxsCount(addr common.Address) int {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	return len(t.auths[addr])
 }
 
 // numSlots calculates the number of slots needed for a single transaction.
