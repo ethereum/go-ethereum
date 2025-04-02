@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"encoding/binary"
 	"runtime"
 	"sync/atomic"
 	"time"
@@ -360,4 +361,39 @@ func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt ch
 // unindexTransactionsForTesting is the internal debug version with an additional hook.
 func unindexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	unindexTransactions(db, from, to, interrupt, hook, false)
+}
+
+// PruneTransactionIndex removes all tx index entries below a certain block number.
+func PruneTransactionIndex(db ethdb.Database, pruneBlock uint64) {
+	tail := ReadTxIndexTail(db)
+	if tail == nil || *tail > pruneBlock {
+		return // no index, or index ends above pruneBlock
+	}
+	// There are blocks below pruneBlock in the index. Iterate the entire index to remove
+	// their entries. Note if this fails, the index is messed up, but tail still points to
+	// the old tail.
+	var count, removed int
+	DeleteAllTxLookupEntries(db, func(txhash common.Hash, v []byte) bool {
+		count++
+		if count%10000000 == 0 {
+			log.Info("Pruning tx index", "count", count, "removed", removed)
+		}
+		if len(v) > 8 {
+			log.Error("Skipping legacy tx index entry", "hash", txhash)
+			return false
+		}
+		bn := decodeNumber(v)
+		if bn < pruneBlock {
+			removed++
+			return true
+		}
+		return false
+	})
+	WriteTxIndexTail(db, pruneBlock)
+}
+
+func decodeNumber(b []byte) uint64 {
+	var numBuffer [8]byte
+	copy(numBuffer[8-len(b):], b)
+	return binary.BigEndian.Uint64(numBuffer[:])
 }

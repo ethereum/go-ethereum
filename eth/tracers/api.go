@@ -950,7 +950,9 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	// Apply the customization rules if required.
 	if config != nil {
-		config.BlockOverrides.Apply(&vmctx)
+		if overrideErr := config.BlockOverrides.Apply(&vmctx); overrideErr != nil {
+			return nil, overrideErr
+		}
 		rules := api.backend.ChainConfig().Rules(vmctx.BlockNumber, vmctx.Random != nil, vmctx.Time)
 
 		precompiles = vm.ActivePrecompiledContracts(rules)

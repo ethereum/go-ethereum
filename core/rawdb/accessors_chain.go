@@ -277,6 +277,14 @@ func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
 	}
 }
 
+// DeleteTxIndexTail deletes the number of oldest indexed block
+// from database.
+func DeleteTxIndexTail(db ethdb.KeyValueWriter) {
+	if err := db.Delete(txIndexTailKey); err != nil {
+		log.Crit("Failed to delete the transaction index tail", "err", err)
+	}
+}
+
 // ReadHeaderRange returns the rlp-encoded headers, starting at 'number', and going
 // backwards towards genesis. This method assumes that the caller already has
 // placed a cap on count, to prevent DoS issues.

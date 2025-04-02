@@ -207,8 +207,6 @@ func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
-var ErrTooManyKeys = errors.New("too many keys in deleted range")
-
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
 // (inclusive on start, exclusive on end).
 // Note that this is a fallback implementation as leveldb does not natively
@@ -228,7 +226,7 @@ func (db *Database) DeleteRange(start, end []byte) error {
 			if err := batch.Write(); err != nil {
 				return err
 			}
-			return ErrTooManyKeys
+			return ethdb.ErrTooManyKeys
 		}
 		if err := batch.Delete(it.Key()); err != nil {
 			return err

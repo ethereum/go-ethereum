@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -86,6 +87,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		if header == nil {
 			return nil, errors.New("unknown block")
 		}
+		if header.Number.Uint64() < f.sys.backend.HistoryPruningCutoff() {
+			return nil, &ethconfig.PrunedHistoryError{}
+		}
 		return f.blockLogs(ctx, header)
 	}
 
@@ -114,11 +118,19 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 				return 0, errors.New("safe header not found")
 			}
 			return hdr.Number.Uint64(), nil
+		case rpc.EarliestBlockNumber.Int64():
+			earliest := f.sys.backend.HistoryPruningCutoff()
+			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(earliest))
+			if hdr == nil {
+				return 0, errors.New("earliest header not found")
+			}
+			return hdr.Number.Uint64(), nil
+		default:
+			if number < 0 {
+				return 0, errors.New("negative block number")
+			}
+			return uint64(number), nil
 		}
-		if number < 0 {
-			return 0, errors.New("negative block number")
-		}
-		return uint64(number), nil
 	}
 
 	// range query need to resolve the special begin/end block number
@@ -372,7 +384,7 @@ func (f *Filter) indexedLogs(ctx context.Context, mb filtermaps.MatcherBackend, 
 // iteration and bloom matching.
 func (f *Filter) unindexedLogs(ctx context.Context, begin, end uint64) ([]*types.Log, error) {
 	start := time.Now()
-	log.Warn("Performing unindexed log search", "begin", begin, "end", end)
+	log.Debug("Performing unindexed log search", "begin", begin, "end", end)
 	var matches []*types.Log
 	for blockNumber := begin; blockNumber <= end; blockNumber++ {
 		select {
@@ -390,7 +402,7 @@ func (f *Filter) unindexedLogs(ctx context.Context, begin, end uint64) ([]*types
 		}
 		matches = append(matches, found...)
 	}
-	log.Trace("Performed unindexed log search", "begin", begin, "end", end, "matches", len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Performed unindexed log search", "begin", begin, "end", end, "matches", len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
 	return matches, nil
 }
 
