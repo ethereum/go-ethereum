@@ -269,6 +269,33 @@ func TestHandshake_BadHandshakeAttack(t *testing.T) {
 	net.nodeB.expectDecodeErr(t, errUnexpectedHandshake, findnode)
 }
 
+func TestEncodeWhoareyouResend(t *testing.T) {
+	t.Parallel()
+	net := newHandshakeTest()
+	defer net.close()
+
+	// A -> B   WHOAREYOU
+	challenge := &Whoareyou{
+		Nonce:     Nonce{1, 2, 3, 4},
+		IDNonce:   testIDnonce,
+		RecordSeq: 0,
+	}
+	whoareyou, _ := net.nodeA.encode(t, net.nodeB, challenge)
+	net.nodeB.expectDecode(t, WhoareyouPacket, whoareyou)
+
+	if len(challenge.ChallengeData) == 0 {
+		t.Fatal("ChallengeData not assigned by encode")
+	}
+
+	// A -> B   WHOAREYOU
+	// Send the same challenge again. This should produce exactly
+	// the same bytes as the first send.
+	whoareyou2, _ := net.nodeA.encode(t, net.nodeB, challenge)
+	if !bytes.Equal(whoareyou2, whoareyou) {
+		t.Fatal("re-encoded challenge not equal to first")
+	}
+}
+
 // This test checks some malformed packets.
 func TestDecodeErrorsV5(t *testing.T) {
 	t.Parallel()
