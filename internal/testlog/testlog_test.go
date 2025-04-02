@@ -25,6 +25,8 @@ func (t *mockT) Logf(format string, args ...any) {
 	if _, err := fmt.Fprintf(&lineBuf, fmt.Sprintf(format, args...)); err != nil {
 		panic(err)
 	}
+	// The timestamp is locale-dependent, so we want to trim that off
+	// "INFO [01-01|00:00:00.000] a message ..." -> "a message..."
 	sanitized := strings.Split(lineBuf.String(), "]")[1]
 	if _, err := t.out.Write([]byte(sanitized)); err != nil {
 		panic(err)
