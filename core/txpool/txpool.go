@@ -354,6 +354,17 @@ func (p *TxPool) GetRLP(hash common.Hash) []byte {
 	return nil
 }
 
+// GetMetadata returns the transaction type and transaction size with the given
+// hash.
+func (p *TxPool) GetMetadata(hash common.Hash) *TxMetadata {
+	for _, subpool := range p.subpools {
+		if meta := subpool.GetMetadata(hash); meta != nil {
+			return meta
+		}
+	}
+	return nil
+}
+
 // GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
