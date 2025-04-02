@@ -17,6 +17,7 @@
 package js
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -397,7 +398,7 @@ func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.A
 	t.frame.typ = vm.OpCode(typ).String()
 	t.frame.from = from
 	t.frame.to = to
-	t.frame.input = common.CopyBytes(input)
+	t.frame.input = bytes.Clone(input)
 	t.frame.gas = uint(gas)
 	t.frame.value = nil
 	if value != nil {
@@ -424,7 +425,7 @@ func (t *jsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 	}
 
 	t.frameResult.gasUsed = uint(gasUsed)
-	t.frameResult.output = common.CopyBytes(output)
+	t.frameResult.output = bytes.Clone(output)
 	t.frameResult.err = err
 
 	if _, err := t.exit(t.obj, t.frameResultValue); err != nil {
@@ -534,7 +535,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 			vm.Interrupt(err)
 			return nil
 		}
-		code = common.CopyBytes(code)
+		code = bytes.Clone(code)
 		codeHash := crypto.Keccak256(code)
 		b := crypto.CreateAddress2(addr, common.HexToHash(salt), codeHash).Bytes()
 		res, err := t.toBuf(vm, b)
@@ -869,7 +870,7 @@ func (co *contractObj) GetValue() goja.Value {
 }
 
 func (co *contractObj) GetInput() goja.Value {
-	input := common.CopyBytes(co.scope.CallInput())
+	input := bytes.Clone(co.scope.CallInput())
 	res, err := co.toBuf(co.vm, input)
 	if err != nil {
 		co.vm.Interrupt(err)

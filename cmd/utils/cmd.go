@@ -526,7 +526,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 			return err
 		}
 		// Accumulate the preimages and flush when enough ws gathered
-		preimages[crypto.Keccak256Hash(blob)] = common.CopyBytes(blob)
+		preimages[crypto.Keccak256Hash(blob)] = bytes.Clone(blob)
 		if len(preimages) > 1024 {
 			rawdb.WritePreimages(db, preimages)
 			preimages = make(map[common.Hash][]byte)

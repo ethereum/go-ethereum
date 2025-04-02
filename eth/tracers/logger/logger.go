@@ -17,6 +17,7 @@
 package logger
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -348,7 +349,7 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 		return nil, l.reason
 	}
 	failed := l.err != nil
-	returnData := common.CopyBytes(l.output)
+	returnData := bytes.Clone(l.output)
 	// Return data when successful and revert reason when reverted, otherwise empty.
 	if failed && !errors.Is(l.err, vm.ErrExecutionReverted) {
 		returnData = []byte{}

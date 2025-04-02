@@ -766,7 +766,7 @@ func copyPreimages(srcDb, dstDb ethdb.Database) {
 	preimages := make(map[common.Hash][]byte)
 	for it.Next() {
 		hash := it.Key()[len(rawdb.PreimagePrefix):]
-		preimages[common.BytesToHash(hash)] = common.CopyBytes(it.Value())
+		preimages[common.BytesToHash(hash)] = bytes.Clone(it.Value())
 	}
 	rawdb.WritePreimages(dstDb, preimages)
 }

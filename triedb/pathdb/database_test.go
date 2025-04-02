@@ -697,7 +697,7 @@ func TestTailTruncateHistory(t *testing.T) {
 func copyAccounts(set map[common.Hash][]byte) map[common.Hash][]byte {
 	copied := make(map[common.Hash][]byte, len(set))
 	for key, val := range set {
-		copied[key] = common.CopyBytes(val)
+		copied[key] = bytes.Clone(val)
 	}
 	return copied
 }
@@ -708,7 +708,7 @@ func copyStorages(set map[common.Hash]map[common.Hash][]byte) map[common.Hash]ma
 	for addrHash, subset := range set {
 		copied[addrHash] = make(map[common.Hash][]byte, len(subset))
 		for key, val := range subset {
-			copied[addrHash][key] = common.CopyBytes(val)
+			copied[addrHash][key] = bytes.Clone(val)
 		}
 	}
 	return copied

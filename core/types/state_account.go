@@ -54,7 +54,7 @@ func (acct *StateAccount) Copy() *StateAccount {
 		Nonce:    acct.Nonce,
 		Balance:  balance,
 		Root:     acct.Root,
-		CodeHash: common.CopyBytes(acct.CodeHash),
+		CodeHash: bytes.Clone(acct.CodeHash),
 	}
 }
 

@@ -98,7 +98,7 @@ func encodeForDerive(list DerivableList, i int, buf *bytes.Buffer) []byte {
 	// It's really unfortunate that we need to perform this copy.
 	// StackTrie holds onto the values until Hash is called, so the values
 	// written to it must not alias.
-	return common.CopyBytes(buf.Bytes())
+	return bytes.Clone(buf.Bytes())
 }
 
 // DeriveSha creates the tree hashes of transactions, receipts, and withdrawals in a block header.
