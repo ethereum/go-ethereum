@@ -16,8 +16,9 @@ const (
 	WrappedA0GIBaseRequiredGasMax uint64 = 1000_000_000
 
 	// txs
-	WrappedA0GIBaseFunctionMint = "mint"
-	WrappedA0GIBaseFunctionBurn = "burn"
+	WrappedA0GIBaseFunctionMint         = "mint"
+	WrappedA0GIBaseFunctionBurn         = "burn"
+	WrappedA0GIBaseFunctionSetMinterCap = "setMinterCap"
 	// queries
 	WrappedA0GIBaseFunctionGetWA0GI     = "getWA0GI"
 	WrappedA0GIBaseFunctionMinterSupply = "minterSupply"
@@ -26,6 +27,7 @@ const (
 var WrappedA0GIBaseRequiredGasBasic = map[string]uint64{
 	WrappedA0GIBaseFunctionMint:         100_000,
 	WrappedA0GIBaseFunctionBurn:         100_000,
+	WrappedA0GIBaseFunctionSetMinterCap: 100_000,
 	WrappedA0GIBaseFunctionGetWA0GI:     5_000,
 	WrappedA0GIBaseFunctionMinterSupply: 10_000,
 }
@@ -97,6 +99,8 @@ func (w *WrappedA0giBasePrecompile) Run(evm *EVM, contract *Contract, readonly b
 		bz, err = w.Mint(evm, contract, method, args)
 	case WrappedA0GIBaseFunctionBurn:
 		bz, err = w.Burn(evm, contract, method, args)
+	case WrappedA0GIBaseFunctionSetMinterCap:
+		bz, err = w.SetMinterCap(evm, contract, method, args)
 	}
 
 	if err != nil {
@@ -230,6 +234,56 @@ func (w *WrappedA0giBasePrecompile) Burn(
 	// transfer from wa0gi contract address & burn
 	evm.StateDB.SubBalance(wa0gi, uint256.MustFromBig(amount), tracing.BalanceIncreaseWA0GIMint)
 	// update supply
+	if err = w.setMinterSupply(evm, minter, supply); err != nil {
+		return nil, err
+	}
+	return method.Outputs.Pack()
+}
+
+func (w *WrappedA0giBasePrecompile) getAgency() common.Address {
+	// This is a Wrapped A0GI Agency contract deployed by a raw transaction:
+	// raw tx params:
+	//	 from:
+	//   nonce: 0
+	//	 gasPrice: 100 Gwei
+	//   gasLimit: 1000000
+	// The sender is an ephemeral account, nobody holds its private key and this is the only transaction it signed.
+	// This transaction is a legacy transaction without chain ID so it can be deployed at any EVM chain which supports pre-EIP155 transactions.
+	// raw tx:
+	return common.HexToAddress("0x0000000000000000000000000000000000000000")
+}
+
+func (w *WrappedA0giBasePrecompile) SetMinterCap(
+	evm *EVM,
+	contract *Contract,
+	method *abi.Method,
+	args []interface{},
+) ([]byte, error) {
+	if len(args) != 3 {
+		return nil, ErrExecutionReverted
+	}
+	minter := args[0].(common.Address)
+	cap := args[1].(*big.Int)
+	initialSupply := args[2].(*big.Int)
+	// validation
+	agency := w.getAgency()
+	if contract.caller != agency {
+		return nil, wrappeda0gibase.ErrSenderNotWA0GI
+	}
+	// execute
+	supply, err := w.getMinterSupply(evm, minter)
+	if err != nil {
+		return nil, err
+	}
+	difference := new(big.Int).Sub(initialSupply, supply.InitialSupply)
+	supply.Supply.Add(supply.Supply, difference)
+	if supply.Supply.Cmp(big.NewInt(0)) < 0 {
+		supply.Supply = big.NewInt(0)
+	}
+	supply.Cap = cap
+	supply.InitialSupply = initialSupply
+
+	// update minter supply
 	if err = w.setMinterSupply(evm, minter, supply); err != nil {
 		return nil, err
 	}

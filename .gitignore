@@ -46,3 +46,4 @@ tests/spec-tests/
 
 # Precompiles
 core/vm/Precompiles/interfaces/node_modules
+core/vm/Precompiles/interfaces/build

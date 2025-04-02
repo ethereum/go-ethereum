@@ -37,7 +37,7 @@ type Supply struct {
 
 // Wrappeda0gibaseMetaData contains all meta data concerning the Wrappeda0gibase contract.
 var Wrappeda0gibaseMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"minter\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"burn\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getWA0GI\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"minter\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"mint\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"minter\",\"type\":\"address\"}],\"name\":\"minterSupply\",\"outputs\":[{\"components\":[{\"internalType\":\"uint256\",\"name\":\"cap\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"initialSupply\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"supply\",\"type\":\"uint256\"}],\"internalType\":\"structSupply\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"}]",
+	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"minter\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"burn\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"getWA0GI\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"minter\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"mint\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"minter\",\"type\":\"address\"}],\"name\":\"minterSupply\",\"outputs\":[{\"components\":[{\"internalType\":\"uint256\",\"name\":\"cap\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"initialSupply\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"supply\",\"type\":\"uint256\"}],\"internalType\":\"structSupply\",\"name\":\"\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"minter\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"cap\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"initialSupply\",\"type\":\"uint256\"}],\"name\":\"setMinterCap\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
 }
 
 // Wrappeda0gibaseABI is the input ABI used to generate the binding from.
@@ -288,4 +288,25 @@ func (_Wrappeda0gibase *Wrappeda0gibaseSession) Mint(minter common.Address, amou
 // Solidity: function mint(address minter, uint256 amount) returns()
 func (_Wrappeda0gibase *Wrappeda0gibaseTransactorSession) Mint(minter common.Address, amount *big.Int) (*types.Transaction, error) {
 	return _Wrappeda0gibase.Contract.Mint(&_Wrappeda0gibase.TransactOpts, minter, amount)
+}
+
+// SetMinterCap is a paid mutator transaction binding the contract method 0xdddba6c8.
+//
+// Solidity: function setMinterCap(address minter, uint256 cap, uint256 initialSupply) returns()
+func (_Wrappeda0gibase *Wrappeda0gibaseTransactor) SetMinterCap(opts *bind.TransactOpts, minter common.Address, cap *big.Int, initialSupply *big.Int) (*types.Transaction, error) {
+	return _Wrappeda0gibase.contract.Transact(opts, "setMinterCap", minter, cap, initialSupply)
+}
+
+// SetMinterCap is a paid mutator transaction binding the contract method 0xdddba6c8.
+//
+// Solidity: function setMinterCap(address minter, uint256 cap, uint256 initialSupply) returns()
+func (_Wrappeda0gibase *Wrappeda0gibaseSession) SetMinterCap(minter common.Address, cap *big.Int, initialSupply *big.Int) (*types.Transaction, error) {
+	return _Wrappeda0gibase.Contract.SetMinterCap(&_Wrappeda0gibase.TransactOpts, minter, cap, initialSupply)
+}
+
+// SetMinterCap is a paid mutator transaction binding the contract method 0xdddba6c8.
+//
+// Solidity: function setMinterCap(address minter, uint256 cap, uint256 initialSupply) returns()
+func (_Wrappeda0gibase *Wrappeda0gibaseTransactorSession) SetMinterCap(minter common.Address, cap *big.Int, initialSupply *big.Int) (*types.Transaction, error) {
+	return _Wrappeda0gibase.Contract.SetMinterCap(&_Wrappeda0gibase.TransactOpts, minter, cap, initialSupply)
 }
