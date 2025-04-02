@@ -117,7 +117,6 @@ type sendRequest struct {
 	destID   enode.ID
 	destAddr netip.AddrPort
 	msg      v5wire.Packet
-	destNode *enode.Node
 }
 
 type sendNoRespRequest struct {
