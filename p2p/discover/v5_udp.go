@@ -66,7 +66,7 @@ type codecV5 interface {
 	CurrentChallenge(id enode.ID, addr string) *v5wire.Whoareyou
 
 	// SessionNode returns a node that has completed the handshake.
-	SessionNode(enode.ID, string) *enode.Node
+	SessionNode(id enode.ID, addr string) *enode.Node
 }
 
 // UDPv5 is the implementation of protocol version 5.
