@@ -492,7 +492,7 @@ func TestUDPv5_talkHandling(t *testing.T) {
 	defer test.close()
 
 	var recvMessage []byte
-	test.udp.RegisterTalkHandler("test", func(id enode.ID, addr *net.UDPAddr, message []byte) []byte {
+	test.udp.RegisterTalkHandler("test", func(n *enode.Node, addr *net.UDPAddr, message []byte) []byte {
 		recvMessage = message
 		return []byte("test response")
 	})
@@ -809,6 +809,10 @@ func (c *testCodec) Decode(input []byte, addr string) (enode.ID, *enode.Node, v5
 		return enode.ID{}, nil, nil, err
 	}
 	return frame.NodeID, nil, p, nil
+}
+
+func (c *testCodec) SessionNode(id enode.ID, addr string) *enode.Node {
+	return c.test.nodesByID[id].Node()
 }
 
 func (c *testCodec) decodeFrame(input []byte) (frame testCodecFrame, p v5wire.Packet, err error) {
