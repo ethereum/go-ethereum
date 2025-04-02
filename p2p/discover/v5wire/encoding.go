@@ -359,7 +359,7 @@ func (c *Codec) encodeHandshakeHeader(toID enode.ID, addr string, challenge *Who
 	}
 
 	// TODO: this should happen when the first authenticated message is received
-	c.sc.storeNewSession(toID, addr, session)
+	c.sc.storeNewSession(toID, addr, session, challenge.Node)
 
 	// Encode the auth header.
 	var (
@@ -534,7 +534,7 @@ func (c *Codec) decodeHandshakeMessage(fromAddr string, head *Header, headerData
 	}
 
 	// Handshake OK, drop the challenge and store the new session keys.
-	c.sc.storeNewSession(auth.h.SrcID, fromAddr, session)
+	c.sc.storeNewSession(auth.h.SrcID, fromAddr, session, node)
 	c.sc.deleteHandshake(auth.h.SrcID, fromAddr)
 	return node, msg, nil
 }
@@ -654,6 +654,10 @@ func (c *Codec) decryptMessage(input, nonce, headerData, readKey []byte) (Packet
 		return nil, errMessageTooShort
 	}
 	return DecodeMessage(msgdata[0], msgdata[1:])
+}
+
+func (c *Codec) SessionNode(id enode.ID, addr string) *enode.Node {
+	return c.sc.readNode(id, addr)
 }
 
 // checkValid performs some basic validity checks on the header.
