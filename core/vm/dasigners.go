@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	requiredGasMax uint64 = 1000_000_000
+	DASignersRequiredGasMax uint64 = 1000_000_000
 
 	DASignersFunctionParams            = "params"
 	DASignersFunctionEpochNumber       = "epochNumber"
@@ -35,7 +35,7 @@ const (
 	DASignersFunctionMakeEpoch         = "makeEpoch"
 )
 
-var RequiredGasBasic = map[string]uint64{
+var DASignersRequiredGasBasic = map[string]uint64{
 	DASignersFunctionParams:            1_000,
 	DASignersFunctionEpochNumber:       1_000,
 	DASignersFunctionQuorumCount:       1_000,
@@ -52,8 +52,8 @@ var RequiredGasBasic = map[string]uint64{
 }
 
 const (
-	NewSignerEvent     = "NewSigner"
-	SocketUpdatedEvent = "SocketUpdated"
+	DASignersNewSignerEvent     = "NewSigner"
+	DASignersSocketUpdatedEvent = "SocketUpdated"
 )
 
 var _ StatefulPrecompiledContract = &DASignersPrecompile{}
@@ -81,12 +81,12 @@ func (d *DASignersPrecompile) Address() common.Address {
 func (d *DASignersPrecompile) RequiredGas(input []byte) uint64 {
 	method, err := d.abi.MethodById(input[:4])
 	if err != nil {
-		return requiredGasMax
+		return DASignersRequiredGasMax
 	}
-	if gas, ok := RequiredGasBasic[method.Name]; ok {
+	if gas, ok := DASignersRequiredGasBasic[method.Name]; ok {
 		return gas
 	}
-	return requiredGasMax
+	return DASignersRequiredGasMax
 }
 
 func (d *DASignersPrecompile) IsTx(method string) bool {
@@ -151,7 +151,7 @@ func (d *DASignersPrecompile) Run(evm *EVM, contract *Contract, readonly bool) (
 }
 
 func (d *DASignersPrecompile) EmitNewSignerEvent(evm *EVM, signer dasigners.IDASignersSignerDetail) error {
-	event := d.abi.Events[NewSignerEvent]
+	event := d.abi.Events[DASignersNewSignerEvent]
 	quries := make([]interface{}, 2)
 	quries[0] = event.ID
 	quries[1] = signer.Signer
@@ -174,7 +174,7 @@ func (d *DASignersPrecompile) EmitNewSignerEvent(evm *EVM, signer dasigners.IDAS
 }
 
 func (d *DASignersPrecompile) EmitSocketUpdatedEvent(evm *EVM, signer common.Address, socket string) error {
-	event := d.abi.Events[SocketUpdatedEvent]
+	event := d.abi.Events[DASignersSocketUpdatedEvent]
 	quries := make([]interface{}, 2)
 	quries[0] = event.ID
 	quries[1] = signer
