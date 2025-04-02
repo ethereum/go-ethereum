@@ -7,12 +7,8 @@
 .PHONY: XDC-darwin XDC-darwin-386 XDC-darwin-amd64
 
 GOBIN = $(shell pwd)/build/bin
-GOFMT = gofmt
 GO ?= 1.23.6
 GORUN = go run
-GO_PACKAGES = .
-GO_FILES := $(shell find $(shell go list -f '{{.Dir}}' $(GO_PACKAGES)) -name \*.go)
-GIT = git
 
 #? XDC: Build XDC.
 XDC:
@@ -30,11 +26,6 @@ XDC-devnet-local:
 
 	@echo "Run the devnet script in local"
 	cd cicd/devnet && ./start-local-devnet.sh
-
-gc:
-	go run build/ci.go install ./cmd/gc
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/gc\" to launch gc."
 
 bootnode:
 	go run build/ci.go install ./cmd/bootnode
@@ -70,13 +61,35 @@ check_tidy: ## Run 'go mod tidy'.
 check_generate: ## Run 'go generate ./...'.
 	$(GORUN) build/ci.go check_generate
 
-#? clean: Clean go cache, built executables, and the auto generated folder.
-clean:
-	rm -fr build/_workspace/pkg/ $(GOBIN)/*
-
 #? fmt: Ensure consistent code formatting.
 fmt:
 	gofmt -s -w $(shell find . -name "*.go")
+
+#? clean: Clean go cache, built executables, and the auto generated folder.
+clean:
+	go clean -cache
+	rm -fr build/_workspace/pkg/ $(GOBIN)/*
+
+# The devtools target installs tools required for 'go generate'.
+# You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
+
+#? devtools: Install recommended developer tools.
+devtools:
+	env GOBIN= go install golang.org/x/tools/cmd/stringer@latest
+	env GOBIN= go install github.com/fjl/gencodec@latest
+	env GOBIN= go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	env GOBIN= go install ./cmd/abigen
+	@type "solc" 2> /dev/null || echo 'Please install solc'
+	@type "protoc" 2> /dev/null || echo 'Please install protoc'
+
+#? help: Get more info on make commands.
+help: Makefile
+	@echo ''
+	@echo 'Usage:'
+	@echo '  make [target]'
+	@echo ''
+	@echo 'Targets:'
+	@sed -n 's/^#?//p' $< | column -t -s ':' |  sort | sed -e 's/^/ /'
 
 # Cross Compilation Targets (xgo)
 
@@ -136,6 +149,3 @@ XDC-windows-amd64:
 	go run build/ci.go xgo -- --go=$(GO) -buildmode=mode -x --targets=windows/amd64 -v ./cmd/XDC
 	@echo "Windows amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/XDC-windows-* | grep amd64
-gofmt:
-	$(GOFMT) -s -w $(GO_FILES)
-	$(GIT) checkout vendor
