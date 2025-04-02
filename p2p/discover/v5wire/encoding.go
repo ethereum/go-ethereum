@@ -189,6 +189,11 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 	)
 	switch {
 	case packet.Kind() == WhoareyouPacket:
+		// just send the WHOAREYOU packet raw again, rather than the re-encoded challenge data
+		w := packet.(*Whoareyou)
+		if len(w.Encoded) > 0 {
+			return w.Encoded, w.Nonce, nil
+		}
 		head, err = c.encodeWhoareyou(id, packet.(*Whoareyou))
 	case challenge != nil:
 		// We have an unanswered challenge, send handshake.
@@ -218,15 +223,22 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 	// Store sent WHOAREYOU challenges.
 	if challenge, ok := packet.(*Whoareyou); ok {
 		challenge.ChallengeData = bytesCopy(&c.buf)
+		enc, err := c.EncodeRaw(id, head, msgData)
+		if err != nil {
+			return nil, Nonce{}, err
+		}
+		challenge.Encoded = bytes.Clone(enc)
 		c.sc.storeSentHandshake(id, addr, challenge)
-	} else if msgData == nil {
+		return enc, head.Nonce, err
+	}
+
+	if msgData == nil {
 		headerData := c.buf.Bytes()
 		msgData, err = c.encryptMessage(session, packet, &head, headerData)
 		if err != nil {
 			return nil, Nonce{}, err
 		}
 	}
-
 	enc, err := c.EncodeRaw(id, head, msgData)
 	return enc, head.Nonce, err
 }
