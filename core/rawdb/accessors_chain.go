@@ -26,7 +26,6 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
-	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
@@ -301,11 +300,9 @@ func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
 func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
 	db.ReadAncients(func(reader ethdb.AncientReader) error {
-		// First try to look up the data in ancient database. Extra hash
-		// comparison is necessary since ancient database only maintains
-		// the canonical data.
+		// First try to look up the data in ancient database.
 		data, _ = reader.Ancient(freezerHeaderTable, number)
-		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+		if len(data) > 0 {
 			return nil
 		}
 		// If not, try reading from leveldb
@@ -337,6 +334,14 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 		log.Error("Invalid block header RLP", "hash", hash, "err", err)
 		return nil
 	}
+
+	// Extra hash
+	// comparison is necessary since ancient database only maintains
+	// the canonical data.
+	if header.Hash() != hash {
+		return nil
+	}
+
 	return header
 }
 
