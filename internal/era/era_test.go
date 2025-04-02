@@ -208,9 +208,10 @@ func genTestChain(t *testing.T) (*core.Genesis, []*types.Block, []types.Receipts
 
 // exportChain creates a temporary era file with the given chain.
 func exportChain(t *testing.T, genesis *core.Genesis, chain []*types.Block, receipts []types.Receipts) (string, string) {
-	tmpDir, err := os.MkdirTemp("", "era-test-*")
-	require.NoError(t, err)
-	const fileName = "test.era1"
+	var (
+		tmpDir   = t.TempDir()
+		fileName = "test.era1"
+	)
 	tmpFile, err := os.Create(filepath.Join(tmpDir, fileName))
 	require.NoError(t, err)
 
