@@ -182,7 +182,6 @@ func TestUDPv5_handshakeRepeatChallenge(t *testing.T) {
 	nonce2 := v5wire.Nonce{2}
 	nonce3 := v5wire.Nonce{3}
 	var authTag1 v5wire.Nonce
-	//var record *v5wire.Whoareyou
 	check := func(p *v5wire.Whoareyou, actualAuthTag, wantNonce v5wire.Nonce) {
 		t.Helper()
 		if p.Nonce != wantNonce {
