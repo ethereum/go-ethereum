@@ -775,31 +775,27 @@ type testCodecFrame struct {
 }
 
 func (c *testCodec) Encode(toID enode.ID, addr string, p v5wire.Packet, _ *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error) {
-	if _, ok := p.(*v5wire.Whoareyou); ok {
-		// Store recently sent Whoareyou challenges.
-		if c.sentChallenges == nil {
-			c.sentChallenges = make(map[enode.ID]*v5wire.Whoareyou)
-		}
-		if sentWhoareyou := c.sentChallenges[toID]; sentWhoareyou != nil {
-			// If we've already sent a challenge to this node, don't send another one.
-			return sentWhoareyou.Encoded, sentWhoareyou.Nonce, nil
-		}
+	if wp, ok := p.(*v5wire.Whoareyou); ok && len(wp.Encoded) > 0 {
+		return wp.Encoded, wp.Nonce, nil
 	}
 
 	c.ctr++
 	var authTag v5wire.Nonce
 	binary.BigEndian.PutUint64(authTag[:], c.ctr)
-
 	penc, _ := rlp.EncodeToBytes(p)
 	frame, err := rlp.EncodeToBytes(testCodecFrame{c.id, authTag, p.Kind(), penc})
 	if err != nil {
 		return frame, authTag, err
 	}
 
+	// Store recently sent challenges.
 	if w, ok := p.(*v5wire.Whoareyou); ok {
-		c.sentChallenges[toID] = w
 		w.Nonce = authTag
 		w.Encoded = frame
+		if c.sentChallenges == nil {
+			c.sentChallenges = make(map[enode.ID]*v5wire.Whoareyou)
+		}
+		c.sentChallenges[toID] = w
 	}
 	return frame, authTag, err
 }
