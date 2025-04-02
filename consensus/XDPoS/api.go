@@ -261,17 +261,10 @@ func (api *API) NetworkInformation() NetworkInformation {
 	info := NetworkInformation{}
 	info.NetworkId = api.chain.Config().ChainId
 	info.XDCValidatorAddress = common.MasternodeVotingSMCBinary
-	if common.IsTestnet {
-		info.LendingAddress = common.LendingRegistrationSMCTestnet
-		info.RelayerRegistrationAddress = common.RelayerRegistrationSMCTestnet
-		info.XDCXListingAddress = common.XDCXListingSMCTestNet
-		info.XDCZAddress = common.TRC21IssuerSMCTestNet
-	} else {
-		info.LendingAddress = common.LendingRegistrationSMC
-		info.RelayerRegistrationAddress = common.RelayerRegistrationSMC
-		info.XDCXListingAddress = common.XDCXListingSMC
-		info.XDCZAddress = common.TRC21IssuerSMC
-	}
+	info.LendingAddress = common.LendingRegistrationSMC
+	info.RelayerRegistrationAddress = common.RelayerRegistrationSMC
+	info.XDCXListingAddress = common.XDCXListingSMC
+	info.XDCZAddress = common.TRC21IssuerSMC
 	info.ConsensusConfigs = *api.XDPoS.config
 
 	return info

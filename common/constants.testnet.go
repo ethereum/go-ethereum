@@ -16,9 +16,7 @@ var TestnetConstant = constant{
 	tipXDCX:                       big.NewInt(23779191),
 	tipXDCXLending:                big.NewInt(23779191),
 	tipXDCXCancellationFee:        big.NewInt(23779191),
-	tipXDCXCancellationFeeTestnet: big.NewInt(23779191),
 	tipTRC21Fee:                   big.NewInt(23779191),
-	tipTRC21FeeTestnet:            big.NewInt(23779191),
 	tipIncreaseMasternodes:        big.NewInt(5000000),
 	blockNumberGas50x:             big.NewInt(56828700), // Target 13rd Nov 2023
 	TIPV2SwitchBlock:              big.NewInt(56828700), // Target 13rd Nov 2023
@@ -30,17 +28,11 @@ var TestnetConstant = constant{
 	tipXDCXReceiverDisable:        big.NewInt(66825000), // Target 26 Aug 2024
 	eip1559Block:                  big.NewInt(71550000), // Target 14th Feb 2025
 	cancunBlock:                   big.NewInt(73425600),
-	tipUpgradeReward:              big.NewInt(9999999999),
 
-	trc21IssuerSMC:        HexToAddress("0x8c0faeb5C6bEd2129b8674F262Fd45c4e9468bee"),
-	trc21IssuerSMCTestNet: HexToAddress("0x0E2C88753131CE01c7551B726b28BFD04e44003F"),
-	xdcxListingSMC:        HexToAddress("0xDE34dD0f536170993E8CFF639DdFfCF1A85D3E53"),
-	xdcxListingSMCTestNet: HexToAddress("0x14B2Bf043b9c31827A472CE4F94294fE9a6277e0"),
-
-	relayerRegistrationSMC:        HexToAddress("0x16c63b79f9C8784168103C0b74E6A59EC2de4a02"),
-	relayerRegistrationSMCTestnet: HexToAddress("0xA1996F69f47ba14Cb7f661010A7C31974277958c"),
-	lendingRegistrationSMC:        HexToAddress("0x7d761afd7ff65a79e4173897594a194e3c506e57"),
-	lendingRegistrationSMCTestnet: HexToAddress("0x28d7fC2Cf5c18203aaCD7459EFC6Af0643C97bE8"),
+	trc21IssuerSMC:         HexToAddress("0x0E2C88753131CE01c7551B726b28BFD04e44003F"),
+	xdcxListingSMC:         HexToAddress("0x14B2Bf043b9c31827A472CE4F94294fE9a6277e0"),
+	relayerRegistrationSMC: HexToAddress("0xA1996F69f47ba14Cb7f661010A7C31974277958c"),
+	lendingRegistrationSMC: HexToAddress("0x28d7fC2Cf5c18203aaCD7459EFC6Af0643C97bE8"),
 
 	ignoreSignerCheckBlockArray: map[uint64]struct{}{
 		1032300:  {},

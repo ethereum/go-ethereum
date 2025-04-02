@@ -1393,6 +1393,21 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if ctx.IsSet(NetworkIdFlag.Name) {
 		cfg.NetworkId = ctx.Uint64(NetworkIdFlag.Name)
+		switch cfg.NetworkId {
+		case 50:
+			if !ctx.IsSet(MainnetFlag.Name) {
+				ctx.Set(MainnetFlag.Name, "true")
+			}
+		case 51:
+			common.IsTestnet = true
+			if !ctx.IsSet(TestnetFlag.Name) {
+				ctx.Set(TestnetFlag.Name, "true")
+			}
+		case 551:
+			if !ctx.IsSet(DevnetFlag.Name) {
+				ctx.Set(DevnetFlag.Name, "true")
+			}
+		}
 	}
 
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheDatabaseFlag.Name) {
@@ -1457,6 +1472,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGenesisBlock()
 	case ctx.Bool(TestnetFlag.Name):
+		common.IsTestnet = true
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 51
 		}
