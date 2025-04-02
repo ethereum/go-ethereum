@@ -52,7 +52,7 @@ func (s *Suite) AllTests() []utesting.Test {
 		{Name: "Ping", Fn: s.TestPing},
 		{Name: "PingLargeRequestID", Fn: s.TestPingLargeRequestID},
 		{Name: "PingMultiIP", Fn: s.TestPingMultiIP},
-		{Name: "PingHandshakeInterrupted", Fn: s.TestHandshakeResend},
+		{Name: "HandshakeResend", Fn: s.TestHandshakeResend},
 		{Name: "TalkRequest", Fn: s.TestTalkRequest},
 		{Name: "FindnodeZeroDistance", Fn: s.TestFindnodeZeroDistance},
 		{Name: "FindnodeResults", Fn: s.TestFindnodeResults},
