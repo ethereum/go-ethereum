@@ -181,18 +181,16 @@ func TestUDPv5_handshakeRepeatChallenge(t *testing.T) {
 	nonce1 := v5wire.Nonce{1}
 	nonce2 := v5wire.Nonce{2}
 	nonce3 := v5wire.Nonce{3}
-	var authTag1 v5wire.Nonce
-	check := func(p *v5wire.Whoareyou, actualAuthTag, wantNonce v5wire.Nonce) {
+	var firstAuthTag *v5wire.Nonce
+	check := func(p *v5wire.Whoareyou, authTag, wantNonce v5wire.Nonce) {
 		t.Helper()
 		if p.Nonce != wantNonce {
-			t.Error("wrong nonce in WHOAREYOU:", p.Nonce, wantNonce)
+			t.Error("wrong nonce in WHOAREYOU:", p.Nonce, "want:", wantNonce)
 		}
-		if authTag1 == (v5wire.Nonce{}) {
-			authTag1 = actualAuthTag
-		} else {
-			if authTag1 != authTag1 {
-				t.Error("wrong auth tag in WHOAREYOU header:", authTag1, wantNonce)
-			}
+		if firstAuthTag == nil {
+			firstAuthTag = &authTag
+		} else if authTag != *firstAuthTag {
+			t.Error("wrong auth tag in WHOAREYOU header:", authTag, "want:", *firstAuthTag)
 		}
 	}
 
