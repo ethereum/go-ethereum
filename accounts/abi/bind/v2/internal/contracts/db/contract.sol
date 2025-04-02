@@ -25,7 +25,7 @@ contract DB {
         if (v == 0) {
             return _keys.length;
         }
-        // Check if a key is being overriden
+        // Check if a key is being overridden
         if (_store[k] == 0) {
             _keys.push(k);
             _stats.inserts++;
