@@ -48,10 +48,10 @@ type Peer struct {
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
 
-	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
-	knownTxs    *knownCache        // Set of transaction hashes known to be known by this peer
-	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
-	txAnnounce  chan []common.Hash // Channel used to queue transaction announcement requests
+	txpool      TxPool                 // Transaction pool used by the broadcasters for liveness checks
+	knownTxs    *knownCache            // Set of transaction hashes known to be known by this peer
+	txBroadcast chan []common.Hash     // Channel used to queue transaction propagation requests
+	txAnnounce  chan []*TxAnnouncement // Channel used to queue transaction announcement requests
 
 	reqDispatch chan *request  // Dispatch channel to send requests and track then until fulfillment
 	reqCancel   chan *cancel   // Dispatch channel to cancel pending requests and untrack them
@@ -70,7 +70,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 		version:     version,
 		knownTxs:    newKnownCache(maxKnownTxs),
 		txBroadcast: make(chan []common.Hash),
-		txAnnounce:  make(chan []common.Hash),
+		txAnnounce:  make(chan []*TxAnnouncement),
 		reqDispatch: make(chan *request),
 		reqCancel:   make(chan *cancel),
 		resDispatch: make(chan *response),
@@ -160,13 +160,15 @@ func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash, types []byte, s
 // AsyncSendPooledTransactionHashes queues a list of transactions hashes to eventually
 // announce to a remote peer.  The number of pending sends are capped (new ones
 // will force old sends to be dropped)
-func (p *Peer) AsyncSendPooledTransactionHashes(hashes []common.Hash) {
+func (p *Peer) AsyncSendPooledTransactionHashes(txAnnounce []*TxAnnouncement) {
 	select {
-	case p.txAnnounce <- hashes:
+	case p.txAnnounce <- txAnnounce:
 		// Mark all the transactions as known, but ensure we don't overflow our limits
-		p.knownTxs.Add(hashes...)
+		for _, announce := range txAnnounce {
+			p.knownTxs.Add(announce.Hash)
+		}
 	case <-p.term:
-		p.Log().Debug("Dropping transaction announcement", "count", len(hashes))
+		p.Log().Debug("Dropping transaction announcement", "count", len(txAnnounce))
 	}
 }
 
