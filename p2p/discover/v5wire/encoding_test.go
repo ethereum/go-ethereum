@@ -280,8 +280,9 @@ func TestEncodeWhoareyouResend(t *testing.T) {
 		IDNonce:   testIDnonce,
 		RecordSeq: 0,
 	}
-	whoareyou, _ := net.nodeA.encode(t, net.nodeB, challenge)
-	net.nodeB.expectDecode(t, WhoareyouPacket, whoareyou)
+	enc, _ := net.nodeA.encode(t, net.nodeB, challenge)
+	net.nodeB.expectDecode(t, WhoareyouPacket, enc)
+	whoareyou1 := bytes.Clone(enc)
 
 	if len(challenge.ChallengeData) == 0 {
 		t.Fatal("ChallengeData not assigned by encode")
@@ -290,8 +291,9 @@ func TestEncodeWhoareyouResend(t *testing.T) {
 	// A -> B   WHOAREYOU
 	// Send the same challenge again. This should produce exactly
 	// the same bytes as the first send.
-	whoareyou2, _ := net.nodeA.encode(t, net.nodeB, challenge)
-	if !bytes.Equal(whoareyou2, whoareyou) {
+	enc, _ = net.nodeA.encode(t, net.nodeB, challenge)
+	whoareyou2 := bytes.Clone(enc)
+	if !bytes.Equal(whoareyou2, whoareyou1) {
 		t.Fatal("re-encoded challenge not equal to first")
 	}
 }
