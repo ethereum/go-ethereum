@@ -22,7 +22,7 @@ func (t *mockT) Logf(format string, args ...any) {
 	// we could gate this operation in a mutex, but because testlogger
 	// only calls Logf with its internal mutex held, we just write output here
 	var lineBuf bytes.Buffer
-	if _, err := fmt.Fprintf(&lineBuf, fmt.Sprintf(format, args...)); err != nil {
+	if _, err := fmt.Fprintf(&lineBuf, format, args...); err != nil {
 		panic(err)
 	}
 	// The timestamp is locale-dependent, so we want to trim that off
@@ -67,5 +67,4 @@ func TestLogging(t *testing.T) {
 			fmt.Printf("'%s'\n", tc.expected)
 		}
 	}
-
 }
