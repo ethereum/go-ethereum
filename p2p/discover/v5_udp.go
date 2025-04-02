@@ -522,14 +522,14 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 func (t *UDPv5) callToNode(n *enode.Node, responseType byte, req v5wire.Packet) *callV5 {
 	addr, _ := n.UDPEndpoint()
 	c := &callV5{id: n.ID(), addr: addr, node: n}
-	t.initCall(c, responseType, req)
+	t.initCallAndDelivery(c, responseType, req)
 	return c
 }
 
 // callToID is like callToNode, but for cases where the node record is not available.
 func (t *UDPv5) callToID(id enode.ID, addr netip.AddrPort, responseType byte, req v5wire.Packet) *callV5 {
 	c := &callV5{id: id, addr: addr}
-	t.initCall(c, responseType, req)
+	t.initCallAndDelivery(c, responseType, req)
 	return c
 }
 
@@ -542,6 +542,10 @@ func (t *UDPv5) initCall(c *callV5, responseType byte, packet v5wire.Packet) {
 	// Assign request ID.
 	crand.Read(c.reqid)
 	packet.SetRequestID(c.reqid)
+}
+
+func (t *UDPv5) initCallAndDelivery(c *callV5, responseType byte, packet v5wire.Packet) {
+	t.initCall(c, responseType, packet)
 	// Send call to dispatch.
 	select {
 	case t.callCh <- c:
@@ -592,8 +596,7 @@ func (t *UDPv5) dispatch() {
 			t.callQueue[c.id] = append(t.callQueue[c.id], c)
 			t.sendNextCall(c.id)
 		case cnr := <-t.sendNoRespCh:
-			// send a TalkReq call but not waiting for TalkResp
-			// may more used by portal network
+			// send a TalkReq call but not waiting for response
 			t.sendCallNotWaitResp(cnr)
 
 		case ct := <-t.respTimeoutCh:
@@ -662,20 +665,19 @@ func (t *UDPv5) startResponseTimeout(c *callV5) {
 	close(done)
 }
 
-// sendCallNotWaitResp send a talk request contains utp packet by call, call will not insert into queue
+// sendCallNotWaitResp send a talk request contains utp packet by call, call will not insert into queue.
+// And during handshaking with the target node, new packets may be lost.
 func (t *UDPv5) sendCallNotWaitResp(r *sendNoRespRequest) {
 	// send out a TalkRequest that is a UTP packet for portal network
-	// todo If the destination node has been handshaked, it may not be necessary to use call
-	// request should be cached to handle WHOAREYOU
-	c := &callV5{id: r.destNode.ID(), addr: r.destAddr}
-	c.node = r.destNode
-	c.packet = r.msg
-	c.reqid = make([]byte, 8)
-	c.ch = make(chan v5wire.Packet, 1)
-	c.err = make(chan error, 1)
-	// Assign request ID.
-	crand.Read(c.reqid)
-	c.packet.SetRequestID(c.reqid)
+	id, addr := r.destNode.ID(), r.destAddr.String()
+	if n := t.codec.SessionNode(id, addr); n != nil {
+		// already handshake success
+		t.send(id, r.destAddr, r.msg, nil)
+		return
+	}
+
+	c := &callV5{id: id, addr: r.destAddr, node: r.destNode}
+	t.initCall(c, v5wire.TalkResponseMsg, r.msg)
 
 	nonce, _ := t.send(c.id, c.addr, c.packet, nil)
 	c.nonce = nonce
@@ -689,7 +691,7 @@ func (t *UDPv5) sendNoRespData(c *callV5) {
 	// Just resend the data and not use call again
 	delete(t.noRespCallByAuth, c.nonce)
 	c.timeout.Stop()
-	t.send(c.node.ID(), c.addr, c.packet, nil)
+	t.send(c.node.ID(), c.addr, c.packet, c.challenge)
 }
 
 // sendNextCall sends the next call in the call queue if there is no active call.
@@ -935,10 +937,10 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr n
 	}
 
 	t.log.Trace("<< "+p.Name(), "id", c.node.ID(), "addr", fromAddr)
+	c.handshakeCount++
+	c.challenge = p
 	if _, ok := t.noRespCallByAuth[p.Nonce]; !ok {
 		// Resend the call that was answered by WHOAREYOU.
-		c.handshakeCount++
-		c.challenge = p
 		p.Node = c.node
 		t.sendCall(c)
 	} else {
