@@ -72,8 +72,10 @@ type (
 		// This must be set by the caller of Encode.
 		Node *enode.Node
 
-		sent    mclock.AbsTime // for handshake GC.
-		encoded []byte         // Encoded packet raw data for sending out
+		sent mclock.AbsTime // for handshake GC.
+
+		// Encoded is packet raw data for sending out, but should not be include in the RLP encoding.
+		Encoded []byte `rlp:"-"`
 	}
 
 	// PING is sent during liveness checks.

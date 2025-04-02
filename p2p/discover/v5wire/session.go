@@ -114,7 +114,7 @@ func (sc *SessionCache) readNode(id enode.ID, addr string) *enode.Node {
 // storeNewSession stores new encryption keys in the cache.
 func (sc *SessionCache) storeNewSession(id enode.ID, addr string, s *session, n *enode.Node) {
 	if n == nil {
-		panic("session must caches a non-nil node")
+		panic("nil node in storeNewSession")
 	}
 	s.node = n
 	sc.sessions.Add(sessionID{id, addr}, s)

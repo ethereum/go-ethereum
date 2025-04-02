@@ -72,10 +72,11 @@ func (t *talkSystem) register(protocol string, handler TalkRequestHandler) {
 
 // handleRequest handles a talk request.
 func (t *talkSystem) handleRequest(id enode.ID, addr netip.AddrPort, req *v5wire.TalkRequest) {
-	var n *enode.Node
-	if n = t.transport.codec.SessionNode(id, addr.String()); n == nil {
-		log.Error("Got a TALKREQ from a node that has not completed the handshake", "id", id, "addr", addr)
-		return
+	n := t.transport.codec.SessionNode(id, addr.String())
+	if n == nil {
+		// The node must be contained in the session here, since we wouldn't have
+		// received the request otherwise.
+		panic("missing node in session")
 	}
 	t.mutex.Lock()
 	handler, ok := t.handlers[req.Protocol]
