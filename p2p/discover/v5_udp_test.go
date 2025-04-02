@@ -775,6 +775,8 @@ type testCodecFrame struct {
 }
 
 func (c *testCodec) Encode(toID enode.ID, addr string, p v5wire.Packet, _ *v5wire.Whoareyou) ([]byte, v5wire.Nonce, error) {
+	// To match the behavior of v5wire.Codec, we return the cached encoding of
+	// WHOAREYOU challenges.
 	if wp, ok := p.(*v5wire.Whoareyou); ok && len(wp.Encoded) > 0 {
 		return wp.Encoded, wp.Nonce, nil
 	}
