@@ -196,8 +196,7 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 			// Just apply the masking again here to get back the complete encoding.
 			c.buf.Reset()
 			c.buf.Write(w.ChallengeData)
-			var iv [16]byte
-			copy(iv[:], w.ChallengeData)
+			copy(head.IV[:], w.ChallengeData)
 			enc := applyMasking(id, head.IV, c.buf.Bytes())
 			return enc, w.Nonce, nil
 		}
