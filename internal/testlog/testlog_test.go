@@ -1,16 +1,69 @@
 package testlog
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
 )
 
-func TestLogging(t *testing.T) {
-	l := Logger(t, log.LevelInfo)
-	subLogger := l.New("foobar", 123)
+type mockT struct {
+	out io.Writer
+}
 
-	l.Info("Visible")
-	subLogger.Info("Hide and seek") // this log is erroneously hidden in master, but fixed with this PR
-	l.Info("Also visible")
+func (t *mockT) Helper() {
+	// noop for the purposes of unit tests
+}
+
+func (t *mockT) Logf(format string, args ...any) {
+	// we could gate this operation in a mutex, but because testlogger
+	// only calls Logf with its internal mutex held, we just write output here
+	var lineBuf bytes.Buffer
+	if _, err := fmt.Fprintf(&lineBuf, fmt.Sprintf(format, args...)); err != nil {
+		panic(err)
+	}
+	sanitized := strings.Split(lineBuf.String(), "]")[1]
+	if _, err := t.out.Write([]byte(sanitized)); err != nil {
+		panic(err)
+	}
+}
+
+func TestLogging(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected string
+		run      func(t *mockT)
+	}{
+		{
+			"SubLogger",
+			` Visible                                  
+ Hide and seek                             foobar=123
+ Also visible                             
+`,
+			func(t *mockT) {
+				l := Logger(t, log.LevelInfo)
+				subLogger := l.New("foobar", 123)
+
+				l.Info("Visible")
+				subLogger.Info("Hide and seek")
+				l.Info("Also visible")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		outp := bytes.Buffer{}
+		mock := mockT{&outp}
+		tc.run(&mock)
+		if outp.String() != tc.expected {
+			fmt.Println("mismatch")
+			fmt.Printf("'%s'\n", outp.String())
+			fmt.Println("----")
+			fmt.Printf("'%s'\n", tc.expected)
+		}
+	}
+
 }
