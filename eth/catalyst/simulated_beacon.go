@@ -17,6 +17,7 @@
 package catalyst
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
@@ -256,7 +257,21 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		return err
 	}
 	c.lastBlockTime = payload.Timestamp
+	if err := c.syncLogProcessing(); err != nil {
+		log.Warn("Failed to process logs", "err", err)
+	}
 	return nil
+}
+
+func (c *SimulatedBeacon) syncLogProcessing() error {
+	blockHash := c.eth.BlockChain().CurrentBlock().Hash()
+
+	blockNumber := c.eth.BlockChain().CurrentBlock().Number.Uint64()
+
+	ctx := context.Background()
+
+	_, err := c.eth.APIBackend.GetLogs(ctx, blockHash, blockNumber)
+	return err
 }
 
 // loop runs the block production loop for non-zero period configuration
@@ -307,6 +322,11 @@ func (c *SimulatedBeacon) Commit() common.Hash {
 	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 		log.Warn("Error performing sealing work", "err", err)
 	}
+
+	// 로그 이벤트 처리를 보장하기 위해 블록체인 이벤트를 동기화합니다
+	// 이는 로그 필터가 새로운 로그를 즉시 사용할 수 있도록 합니다
+	c.syncLogProcessing()
+
 	return c.eth.BlockChain().CurrentBlock().Hash()
 }
 
