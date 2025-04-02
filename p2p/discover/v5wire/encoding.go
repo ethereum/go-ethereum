@@ -193,7 +193,7 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 		if len(w.ChallengeData) > 0 {
 			// This WHOAREYOU packet was encoded before, so it's a resend.
 			// The unmasked packet content is stored in w.ChallengeData.
-			// Just apply the masking again here to get back the complete encoding.
+			// Just apply the masking again to finish encoding.
 			c.buf.Reset()
 			c.buf.Write(w.ChallengeData)
 			copy(head.IV[:], w.ChallengeData)
