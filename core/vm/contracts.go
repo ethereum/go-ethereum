@@ -53,7 +53,10 @@ type PrecompiledContract interface {
 // PrecompiledContracts contains the precompiled contracts supported at the given fork.
 type PrecompiledContracts map[common.Address]PrecompiledContract
 
-var CustomPrecompiledContracts = PrecompiledContracts{}
+var CustomPrecompiledContracts = PrecompiledContracts{
+	(&DASignersPrecompile{}).Address():       NewDASignersPrecompile(),
+	(&WrappedA0giBasePrecompile{}).Address(): NewWrappedA0giBasePrecompile(),
+}
 
 // WithCustomPrecompiles merge given precompiles with custom precompiles
 func WithCustomPrecompiles(base PrecompiledContracts) PrecompiledContracts {
@@ -287,7 +290,11 @@ func RunPrecompiledContract(
 	inputCopy := make([]byte, len(input))
 	copy(inputCopy, input)
 
-	contract := NewContract(caller, p.Address(), value, suppliedGas, evm.jumpDests)
+	var jumpDests map[common.Hash]bitvec
+	if evm != nil {
+		jumpDests = evm.jumpDests
+	}
+	contract := NewContract(caller, p.Address(), value, suppliedGas, jumpDests)
 	contract.Input = inputCopy
 
 	gasCost := p.RequiredGas(input)

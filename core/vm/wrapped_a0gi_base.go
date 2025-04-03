@@ -70,14 +70,14 @@ func (w *WrappedA0giBasePrecompile) RequiredGas(input []byte) uint64 {
 	return WrappedA0GIBaseRequiredGasMax
 }
 
-func NewWrappedA0giBasePrecompile() (*WrappedA0giBasePrecompile, error) {
+func NewWrappedA0giBasePrecompile() *WrappedA0giBasePrecompile {
 	abi, err := abi.JSON(strings.NewReader(wrappeda0gibase.Wrappeda0gibaseABI))
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	return &WrappedA0giBasePrecompile{
 		abi: abi,
-	}, nil
+	}
 }
 
 // Run implements vm.PrecompiledContract.

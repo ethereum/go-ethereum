@@ -62,14 +62,14 @@ type DASignersPrecompile struct {
 	abi abi.ABI
 }
 
-func NewDASignersPrecompile() (*DASignersPrecompile, error) {
+func NewDASignersPrecompile() *DASignersPrecompile {
 	abi, err := abi.JSON(strings.NewReader(dasigners.DASignersABI))
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	return &DASignersPrecompile{
 		abi: abi,
-	}, nil
+	}
 }
 
 // Address implements vm.PrecompiledContract.
