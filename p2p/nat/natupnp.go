@@ -35,6 +35,9 @@ import (
 const (
 	soapRequestTimeout = 3 * time.Second
 	rateLimit          = 200 * time.Millisecond
+	retryInterval      = 1 * time.Second // time to wait between retries
+	retryCount         = 3               // number of retries after a failed AddPortMapping
+	randomCount        = 3               // number of random ports to try
 )
 
 type upnp struct {
@@ -115,21 +118,26 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 		return client.AddAnyPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 	}
 	// For IGDv1 and v1 services we should first try to add with extport.
-	err := n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
-	if err == nil {
-		return uint16(extport), nil
-	}
-	log.Trace("Failed to add port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
-
-	// If above fails, we retry with a random port.
-	// We retry several times because of possible port conflicts.
-	for i := 0; i < 3; i++ {
-		extport = n.randomPort()
+	for i := 0; i < retryCount+1; i++ {
 		err := n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
 		if err == nil {
 			return uint16(extport), nil
 		}
+		log.Trace("Failed to add port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
+		time.Sleep(retryInterval)
+	}
+
+	// If above fails, we retry with a random port.
+	// We retry several times because of possible port conflicts.
+	var err error
+	for i := 0; i < randomCount; i++ {
+		extport = n.randomPort()
+		err = n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+		if err == nil {
+			return uint16(extport), nil
+		}
 		log.Trace("Failed to add random port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
+		time.Sleep(retryInterval)
 	}
 	return 0, err
 }
