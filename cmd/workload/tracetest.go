@@ -72,9 +72,9 @@ func (s *traceTestSuite) loadTests() error {
 	return nil
 }
 
-func (s *traceTestSuite) allTests() []utesting.Test {
-	return []utesting.Test{
-		{Name: "Trace/Transaction", Fn: s.traceTransaction},
+func (s *traceTestSuite) allTests() []workloadTest {
+	return []workloadTest{
+		newArchiveWorkloadTest("Trace/Transaction", s.traceTransaction),
 	}
 }
 
