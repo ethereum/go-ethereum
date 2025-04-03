@@ -675,7 +675,7 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping archive creation because this is a PR build")
 		os.Exit(0)
 	}
-	if env.Branch != "master" && !strings.HasPrefix(env.Branch, "firehose") && !strings.HasPrefix(env.Tag, "v1.") && !strings.Contains(env.Tag, "fh") {
+	if env.Branch != "master" && !strings.HasPrefix(env.Branch, "firehose") && !strings.HasPrefix(env.Branch, "release/") && !strings.HasPrefix(env.Tag, "v1.") && !strings.Contains(env.Tag, "fh") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the inclusion list", env.Branch, env.Tag)
 		os.Exit(0)
 	}
@@ -719,7 +719,7 @@ func doDockerBuildx(cmdline []string) {
 		tags = []string{"latest"}
 	case strings.HasPrefix(env.Tag, "v1."):
 		tags = []string{"stable", fmt.Sprintf("release-%v", version.Family), "v" + version.Semantic}
-	case strings.HasPrefix(env.Branch, "firehose"):
+	case strings.HasPrefix(env.Branch, "firehose") || strings.HasPrefix(env.Branch, "release/"):
 		tags = []string{"edge-fh" + tracers.FirehoseProtocolVersion}
 	case strings.Contains(env.Tag, "fh"):
 		tags = []string{"stable-fh" + tracers.FirehoseProtocolVersion, "v" + version.Semantic + "-fh" + tracers.FirehoseProtocolVersion}
