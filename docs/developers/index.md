@@ -15,6 +15,7 @@ Geth has many features that support dapp developers. There are many built-in tra
 - [Go API](/docs/developers/dapp-developer/native)
 - [Go Account management](/docs/developers/dapp-developer/native-accounts)
 - [Go contract bindings](/docs/developers/dapp-developer/native-bindings)
+- [Go contract bindings (v2)](/docs/developers/dapp-developer/native-bindings-v2)
 - [Geth for mobile](/docs/developers/dapp-developer/mobile)
 
 ## EVM tracing
