@@ -130,7 +130,7 @@ func TestEra1Builder(t *testing.T) {
 		if !bytes.Equal(rawReceipts, chain.receipts[i]) {
 			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], rawReceipts)
 		}
-		receipts, err := e.GetReceipts(i)
+		receipts, err := e.GetReceiptsByNumber(i)
 		if err != nil {
 			t.Fatalf("error reading receipts: %v", err)
 		}

@@ -177,8 +177,8 @@ func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	return types.NewBlockWithHeader(&header).WithBody(body), nil
 }
 
-// GetReceipts returns the receipts for the given block number.
-func (e *Era) GetReceipts(num uint64) (types.Receipts, error) {
+// GetReceiptsByNumber returns the receipts for the given block number.
+func (e *Era) GetReceiptsByNumber(num uint64) (types.Receipts, error) {
 	if e.m.start > num || e.m.start+e.m.count <= num {
 		return nil, errors.New("out-of-bounds")
 	}
