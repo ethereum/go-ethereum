@@ -410,7 +410,6 @@ func (dataCopy) Address() common.Address {
 	return common.BytesToAddress([]byte{4})
 }
 
-
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 //
 // This method does not require any overflow checking as the input size gas costs
@@ -865,7 +864,7 @@ type bls12381G1Add struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (bls12381G1Add) Address() common.Address {
-	return common.BytesToAddress([]byte{10})
+	return common.BytesToAddress([]byte{11})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -907,7 +906,7 @@ type bls12381G1Mul struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (bls12381G1Mul) Address() common.Address {
-	return common.BytesToAddress([]byte{11})
+	return common.BytesToAddress([]byte{12})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -951,7 +950,7 @@ type bls12381G1MultiExp struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (bls12381G1MultiExp) Address() common.Address {
-	return common.BytesToAddress([]byte{12})
+	return common.BytesToAddress([]byte{13})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -1017,7 +1016,7 @@ type bls12381G2Add struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (bls12381G2Add) Address() common.Address {
-	return common.BytesToAddress([]byte{13})
+	return common.BytesToAddress([]byte{14})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -1060,7 +1059,7 @@ type bls12381G2Mul struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (bls12381G2Mul) Address() common.Address {
-	return common.BytesToAddress([]byte{14})
+	return common.BytesToAddress([]byte{15})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -1104,7 +1103,7 @@ type bls12381G2MultiExp struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (bls12381G2MultiExp) Address() common.Address {
-	return common.BytesToAddress([]byte{15})
+	return common.BytesToAddress([]byte{16})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -1170,7 +1169,7 @@ type bls12381Pairing struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (bls12381Pairing) Address() common.Address {
-	return common.BytesToAddress([]byte{16})
+	return common.BytesToAddress([]byte{17})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -1328,7 +1327,7 @@ type bls12381MapG1 struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (bls12381MapG1) Address() common.Address {
-	return common.BytesToAddress([]byte{17})
+	return common.BytesToAddress([]byte{18})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -1363,7 +1362,7 @@ type bls12381MapG2 struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (bls12381MapG2) Address() common.Address {
-	return common.BytesToAddress([]byte{18})
+	return common.BytesToAddress([]byte{19})
 }
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
@@ -1402,7 +1401,7 @@ type kzgPointEvaluation struct{}
 // Address defines the precompiled contract address. This MUST match the address
 // set in the precompiled contract map.
 func (kzgPointEvaluation) Address() common.Address {
-	return common.BytesToAddress([]byte{4})
+	return common.BytesToAddress([]byte{10})
 }
 
 // RequiredGas estimates the gas required for running the point evaluation precompile.
