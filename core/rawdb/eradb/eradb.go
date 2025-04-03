@@ -20,9 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
-	"sync"
+	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/log"
@@ -30,12 +30,12 @@ import (
 
 type EraDatabase struct {
 	datadir string
-	table   map[uint64]*era.Era
-	mu      sync.RWMutex
+	network string
+	cache   *lru.Cache[uint64, *era.Era]
 }
 
 // New creates a new EraDatabase instance.
-func New(datadir string) (*EraDatabase, error) {
+func New(datadir, network string) (*EraDatabase, error) {
 	// Ensure the datadir is not a symbolic link if it exists.
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
 		if info == nil {
@@ -50,28 +50,9 @@ func New(datadir string) (*EraDatabase, error) {
 	if err := os.MkdirAll(datadir, 0755); err != nil {
 		return nil, err
 	}
+	db := &EraDatabase{datadir: datadir, network: network, cache: lru.NewCache[uint64, *era.Era](50)}
 	log.Info("Opened erastore", "datadir", datadir)
-	return &EraDatabase{datadir: datadir, table: make(map[uint64]*era.Era)}, nil
-}
-
-// scan returns a list of all era1 files in the datadir.
-func (db *EraDatabase) scan() ([]string, error) {
-	entries, err := os.ReadDir(db.datadir)
-	if err != nil {
-		return nil, err
-	}
-	var files []string
-	for _, entry := range entries {
-		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
-			continue
-		}
-		// Skip files that are not era1 files.
-		if path.Ext(entry.Name()) != ".era1" {
-			continue
-		}
-		files = append(files, entry.Name())
-	}
-	return files, nil
+	return db, nil
 }
 
 func (db *EraDatabase) openEra(name string) (*era.Era, error) {
@@ -86,46 +67,46 @@ func (db *EraDatabase) openEra(name string) (*era.Era, error) {
 	if e.Start()%uint64(era.MaxEra1Size) != 0 {
 		return nil, fmt.Errorf("pre-merge era1 file has invalid boundary. %d %% %d != 0", e.Start(), era.MaxEra1Size)
 	}
-	epoch := e.Start() / uint64(era.MaxEra1Size)
-	db.mu.Lock()
-	db.table[epoch] = e
-	db.mu.Unlock()
 	return e, nil
 }
 
 func (db *EraDatabase) Close() {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	for _, e := range db.table {
-		if err := e.Close(); err != nil {
-			log.Warn("Failed to close era", "error", err)
+	// Close all open era1 files in the cache.
+	keys := db.cache.Keys()
+	for _, key := range keys {
+		if e, ok := db.cache.Get(key); ok {
+			e.Close()
 		}
 	}
-	db.table = nil
 }
 
 func (db *EraDatabase) GetBlockByNumber(number uint64) (*types.Block, error) {
-	files, err := db.scan()
+	// Lookup the table by epoch.
+	epoch := number / uint64(era.MaxEra1Size)
+	// Check the cache first.
+	if e, ok := db.cache.Get(epoch); ok {
+		fmt.Printf("Cache hit for epoch %d\n", epoch)
+		return e.GetBlockByNumber(number)
+	}
+	// file name scheme is <network>-<epoch>-<root>.
+	glob := fmt.Sprintf("%s-%05d-*.era1", db.network, epoch)
+	matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
 	if err != nil {
 		return nil, err
 	}
-	for _, file := range files {
-		_, err := db.openEra(path.Join(db.datadir, file))
-		if err != nil {
-			return nil, err
-		}
+	if len(matches) > 1 {
+		return nil, fmt.Errorf("multiple era1 files found for epoch %d", epoch)
 	}
-
-	// Lookup the table by epoch.
-	epoch := number / uint64(era.MaxEra1Size)
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	if e, ok := db.table[epoch]; ok {
-		block, err := e.GetBlockByNumber(number)
-		if err == nil {
-			return block, nil
-		}
+	if len(matches) == 0 {
+		return nil, nil
 	}
+	filename := matches[0]
+	e, err := db.openEra(filename)
+	if err != nil {
+		return nil, err
+	}
+	// Add the era to the cache.
+	db.cache.Add(epoch, e)
 
-	return nil, errors.New("block not found")
+	return e.GetBlockByNumber(number)
 }
