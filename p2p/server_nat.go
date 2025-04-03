@@ -154,28 +154,40 @@ func (srv *Server) portMappingLoop() {
 				log.Trace("Attempting port mapping")
 				p, err := srv.NAT.AddMapping(m.protocol, m.extPort, m.port, m.name, portMapDuration)
 				if err != nil {
-					log.Debug("Couldn't add port mapping", "err", err)
-					m.extPort = 0
+					// Failed to add or refresh port mapping.
+					if m.extPort == 0 {
+						log.Debug("Couldn't add port mapping", "err", err)
+					} else {
+						//	Since UPnP implementation are often buggy,
+						// and lifetime is larger than the retry interval, this does not mean we lost our
+						// existing mapping. We do not reset the external port, as it is still our best chance,
+						// but we do retry soon.
+						// TODO: we could check the error code, but again, UPnP implementations are buggy.
+						log.Debug("Couldn't refresh port mapping", "err", err)
+					}
 					m.nextTime = srv.clock.Now().Add(portMapRetryInterval)
 					continue
 				}
 				// It was mapped!
-				m.extPort = int(p)
-				m.nextTime = srv.clock.Now().Add(portMapRefreshInterval)
-				log = newLogger(m.protocol, m.extPort, m.port)
-				if m.port != m.extPort {
-					log.Info("NAT mapped alternative port")
-				} else {
-					log.Info("NAT mapped port")
-				}
+				log = newLogger(m.protocol, int(p), m.port)
+				if int(p) != m.extPort {
+					m.extPort = int(p)
+					if m.port != m.extPort {
+						log.Info("NAT mapped alternative port")
+					} else {
+						log.Info("NAT mapped port")
+					}
 
-				// Update port in local ENR.
-				switch m.protocol {
-				case "TCP":
-					srv.localnode.Set(enr.TCP(m.extPort))
-				case "UDP":
-					srv.localnode.SetFallbackUDP(m.extPort)
+					// Update port in local ENR.
+					switch m.protocol {
+					case "TCP":
+						srv.localnode.Set(enr.TCP(m.extPort))
+					case "UDP":
+						srv.localnode.SetFallbackUDP(m.extPort)
+					}
 				}
+				m.nextTime = srv.clock.Now().Add(portMapRefreshInterval)
+
 			}
 		}
 	}
