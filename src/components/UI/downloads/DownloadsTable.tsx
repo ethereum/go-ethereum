@@ -9,7 +9,6 @@ import { ReleaseData } from '../../../types';
 
 interface Props {
   linuxData: ReleaseData[];
-  macOSData: ReleaseData[];
   windowsData: ReleaseData[];
   iOSData: ReleaseData[];
   androidData: ReleaseData[];
@@ -20,7 +19,6 @@ interface Props {
 
 export const DownloadsTable: FC<Props> = ({
   linuxData,
-  macOSData,
   windowsData,
   iOSData,
   androidData,
@@ -30,7 +28,6 @@ export const DownloadsTable: FC<Props> = ({
 }) => {
   const totalReleases = [
     linuxData.length,
-    macOSData.length,
     windowsData.length,
     iOSData.length,
     androidData.length
@@ -41,10 +38,9 @@ export const DownloadsTable: FC<Props> = ({
   const getDefaultIndex = useMemo<number>(() => {
     const OS: string = typeof window !== 'undefined' ? window.navigator.platform : '';
     const userAgent = typeof window !== 'undefined' ? window.navigator.userAgent : '';
-    if (/Mac/i.test(OS)) return 1;
-    if (/Win/i.test(OS)) return 2;
-    if (/iPhone/i.test(OS)) return 3;
-    if (/Android/i.test(userAgent)) return 4;
+    if (/Win/i.test(OS)) return 1;
+    if (/iPhone/i.test(OS)) return 2;
+    if (/Android/i.test(userAgent)) return 3;
     return 0;
   }, []);
 
@@ -67,7 +63,7 @@ export const DownloadsTable: FC<Props> = ({
             return (
               <Tab
                 key={tab}
-                w={'20%'}
+                w={'25%'}
                 p={4}
                 _selected={{
                   bg: 'primary',
@@ -88,12 +84,6 @@ export const DownloadsTable: FC<Props> = ({
             <DataTable
               columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
               data={linuxData.slice(0, LAST_2_LINUX_RELEASES)}
-            />
-          </TabPanel>
-          <TabPanel p={0}>
-            <DataTable
-              columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
-              data={macOSData.slice(0, amountOfReleasesToShow)}
             />
           </TabPanel>
           <TabPanel p={0}>

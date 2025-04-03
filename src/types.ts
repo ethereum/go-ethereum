@@ -3,7 +3,6 @@ export interface LatestReleasesData {
   releaseName: string;
   urls: {
     LATEST_LINUX_BINARY_URL: string;
-    LATEST_MACOS_BINARY_URL: string;
     LATEST_WINDOWS_BINARY_URL: string;
     LATEST_SOURCES_URL: string;
     RELEASE_NOTES_URL: string;

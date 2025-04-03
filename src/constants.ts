@@ -1,6 +1,6 @@
 import React from 'react';
 import { IconProps } from '@chakra-ui/react';
-import { WindowsLogo, MacosLogo, LinuxPenguin, SourceBranch } from './components/UI/icons';
+import { WindowsLogo, LinuxPenguin, SourceBranch } from './components/UI/icons';
 
 export const BORDER_WIDTH = '2px';
 
@@ -39,12 +39,6 @@ export const DOWNLOAD_HEADER_BUTTONS: {
     Svg: LinuxPenguin,
     buildURL: ''
   },
-  macOSBuild: {
-    name: 'macOS',
-    ariaLabel: 'macOS logo',
-    Svg: MacosLogo,
-    buildURL: ''
-  },
   windowsBuild: {
     name: 'Windows',
     ariaLabel: 'Windows logo',
@@ -58,7 +52,7 @@ export const DOWNLOAD_HEADER_BUTTONS: {
     buildURL: ''
   }
 };
-export const DOWNLOADS_TABLE_TABS = ['Linux', 'macOS', 'Windows', 'iOS', 'Android'];
+export const DOWNLOADS_TABLE_TABS = ['Linux', 'Windows', 'iOS', 'Android'];
 export const DOWNLOADS_TABLE_TAB_COLUMN_HEADERS = [
   'Release',
   'Commit',
@@ -102,15 +96,6 @@ export const DOWNLOADS_OPENPGP_SIGNATURES = [
       url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xA61A13569BA28146'
     },
     fingerprint: 'FDE5 A1A0 44FA 13D2 F7AD  A019 A61A 1356 9BA2 8146'
-  },
-  {
-    'build server': 'macOS Builder',
-    'unique id': 'Go Ethereum macOS Builder <geth-ci@ethereum.org>',
-    'openpgp key': {
-      label: '7B9E2481',
-      url: 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x558915E17B9E2481'
-    },
-    fingerprint: '6D1D AF5D 0534 DEA6 1AA7  7AD5 5589 15E1 7B9E 2481'
   },
   {
     'build server': 'Windows Builder',
@@ -183,8 +168,6 @@ export const LAST_COMMIT_BASE_URL = 'https://api.github.com/repos/ethereum/go-et
 export const BINARIES_BASE_URL = 'https://gethstore.blob.core.windows.net/builds/';
 export const LINUX_BINARY_BASE_URL =
   'https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-';
-export const MACOS_BINARY_BASE_URL =
-  'https://gethstore.blob.core.windows.net/builds/geth-darwin-amd64-';
 export const WINDOWS_BINARY_BASE_URL =
   'https://gethstore.blob.core.windows.net/builds/geth-windows-amd64-';
 
@@ -194,12 +177,6 @@ export const ALL_LINUX_GETH_RELEASES_URL =
   'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-linux';
 export const ALL_LINUX_ALLTOOLS_GETH_RELEASES_URL =
   'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-alltools-linux';
-
-// macOS
-export const ALL_MACOS_GETH_RELEASES_URL =
-  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-darwin';
-export const ALL_MACOS_ALLTOOLS_GETH_RELEASES_URL =
-  'https://gethstore.blob.core.windows.net/builds?restype=container&comp=list&prefix=geth-alltools-darwin';
 
 // windows
 export const ALL_WINDOWS_GETH_RELEASES_URL =

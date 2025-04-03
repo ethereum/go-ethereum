@@ -6,6 +6,5 @@ export * from './MoonIcon';
 export * from './SunIcon';
 export * from './TwitterIcon';
 export * from './SourceBranch';
-export * from './MacosLogo';
 export * from './LinuxPenguin';
 export * from './WindowsLogo';

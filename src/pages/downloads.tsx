@@ -46,7 +46,6 @@ export const getStaticProps: GetStaticProps = async () => {
 
   // Latest binaries urls
   const LATEST_LINUX_BINARY_URL = getLatestBinaryURL('linux', versionNumber, commit);
-  const LATEST_MACOS_BINARY_URL = getLatestBinaryURL('darwin', versionNumber, commit);
   const LATEST_WINDOWS_BINARY_URL = getLatestBinaryURL('windows', versionNumber, commit);
 
   // Sources urls
@@ -58,7 +57,6 @@ export const getStaticProps: GetStaticProps = async () => {
     releaseName,
     urls: {
       LATEST_LINUX_BINARY_URL,
-      LATEST_MACOS_BINARY_URL,
       LATEST_WINDOWS_BINARY_URL,
       LATEST_SOURCES_URL,
       RELEASE_NOTES_URL
@@ -72,8 +70,6 @@ export const getStaticProps: GetStaticProps = async () => {
     const [
       ALL_LINUX_RELEASES_XML_DATA,
       ALL_LINUX_ALL_TOOLS_RELEASES_XML_DATA,
-      ALL_MACOS_RELEASES_XML_DATA,
-      ALL_MACOS_ALL_TOOLS_RELEASES_XML_DATA,
       ALL_WINDOWS_RELEASES_XML_DATA,
       ALL_WINDOWS_ALL_TOOLS_RELEASES_XML_DATA,
       ALL_ANDROID_RELEASES_XML_DATA,
@@ -89,13 +85,6 @@ export const getStaticProps: GetStaticProps = async () => {
 
     const linuxAllToolsJson = parser.parse(ALL_LINUX_ALL_TOOLS_RELEASES_XML_DATA);
     const ALL_LINUX_ALL_TOOLS_BLOBS_JSON_DATA = linuxAllToolsJson.EnumerationResults.Blobs.Blob;
-
-    // macOS
-    const macOSJson = parser.parse(ALL_MACOS_RELEASES_XML_DATA);
-    const ALL_MACOS_BLOBS_JSON_DATA = macOSJson.EnumerationResults.Blobs.Blob;
-
-    const macOSAllToolsJson = parser.parse(ALL_MACOS_ALL_TOOLS_RELEASES_XML_DATA);
-    const ALL_MACOS_ALL_TOOLS_BLOBS_JSON_DATA = macOSAllToolsJson.EnumerationResults.Blobs.Blob;
 
     // windows
     const windowsJson = parser.parse(ALL_WINDOWS_RELEASES_XML_DATA);
@@ -128,24 +117,6 @@ export const getStaticProps: GetStaticProps = async () => {
     });
     const LINUX_ALLTOOLS_DEV_BUILDS_DATA = mapReleasesData({
       blobsList: ALL_LINUX_ALL_TOOLS_BLOBS_JSON_DATA,
-      isStableRelease: false
-    });
-
-    // macOS
-    const MACOS_STABLE_RELEASES_DATA = mapReleasesData({
-      blobsList: ALL_MACOS_BLOBS_JSON_DATA,
-      isStableRelease: true
-    });
-    const MACOS_ALLTOOLS_STABLE_RELEASES_DATA = mapReleasesData({
-      blobsList: ALL_MACOS_ALL_TOOLS_BLOBS_JSON_DATA,
-      isStableRelease: true
-    });
-    const MACOS_DEV_BUILDS_DATA = mapReleasesData({
-      blobsList: ALL_MACOS_BLOBS_JSON_DATA,
-      isStableRelease: false
-    });
-    const MACOS_ALLTOOLS_DEV_BUILDS_DATA = mapReleasesData({
-      blobsList: ALL_MACOS_ALL_TOOLS_BLOBS_JSON_DATA,
       isStableRelease: false
     });
 
@@ -201,15 +172,6 @@ export const getStaticProps: GetStaticProps = async () => {
             LINUX_DEV_BUILDS_DATA,
             LINUX_ALLTOOLS_DEV_BUILDS_DATA
           ),
-          // macOS
-          ALL_MACOS_STABLE_RELEASES: getSortedReleases(
-            MACOS_STABLE_RELEASES_DATA,
-            MACOS_ALLTOOLS_STABLE_RELEASES_DATA
-          ),
-          ALL_MACOS_DEV_BUILDS: getSortedReleases(
-            MACOS_DEV_BUILDS_DATA,
-            MACOS_ALLTOOLS_DEV_BUILDS_DATA
-          ),
           // windows
           ALL_WINDOWS_STABLE_RELEASES: getSortedReleases(
             WINDOWS_STABLE_RELEASES_DATA,
@@ -244,9 +206,6 @@ interface Props {
     // linux
     ALL_LINUX_STABLE_RELEASES: ReleaseData[];
     ALL_LINUX_DEV_BUILDS: ReleaseData[];
-    // macOS
-    ALL_MACOS_STABLE_RELEASES: ReleaseData[];
-    ALL_MACOS_DEV_BUILDS: ReleaseData[];
     // windows
     ALL_WINDOWS_STABLE_RELEASES: ReleaseData[];
     ALL_WINDOWS_DEV_BUILDS: ReleaseData[];
@@ -266,9 +225,6 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
     // linux
     ALL_LINUX_STABLE_RELEASES,
     ALL_LINUX_DEV_BUILDS,
-    // macOS
-    ALL_MACOS_STABLE_RELEASES,
-    ALL_MACOS_DEV_BUILDS,
     // windows
     ALL_WINDOWS_STABLE_RELEASES,
     ALL_WINDOWS_DEV_BUILDS,
@@ -304,7 +260,6 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
             currentBuild={LATEST_RELEASES_DATA.releaseName}
             currentBuildVersion={LATEST_RELEASES_DATA.versionNumber}
             linuxBuildURL={LATEST_RELEASES_DATA.urls.LATEST_LINUX_BINARY_URL}
-            macOSBuildURL={LATEST_RELEASES_DATA.urls.LATEST_MACOS_BINARY_URL}
             windowsBuildURL={LATEST_RELEASES_DATA.urls.LATEST_WINDOWS_BINARY_URL}
             sourceCodeURL={LATEST_RELEASES_DATA.urls.LATEST_SOURCES_URL}
             releaseNotesURL={LATEST_RELEASES_DATA.urls.RELEASE_NOTES_URL}
@@ -364,7 +319,6 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
           >
             <DownloadsTable
               linuxData={ALL_LINUX_STABLE_RELEASES}
-              macOSData={ALL_MACOS_STABLE_RELEASES}
               windowsData={ALL_WINDOWS_STABLE_RELEASES}
               iOSData={ALL_IOS_STABLE_RELEASES}
               androidData={ALL_ANDROID_STABLE_RELEASES}
@@ -420,7 +374,6 @@ const DownloadsPage: NextPage<Props> = ({ data }) => {
           >
             <DownloadsTable
               linuxData={ALL_LINUX_DEV_BUILDS}
-              macOSData={ALL_MACOS_DEV_BUILDS}
               windowsData={ALL_WINDOWS_DEV_BUILDS}
               iOSData={ALL_IOS_DEV_BUILDS}
               androidData={ALL_ANDROID_DEV_BUILDS}
