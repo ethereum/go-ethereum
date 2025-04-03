@@ -52,7 +52,7 @@ export const DOWNLOAD_HEADER_BUTTONS: {
     buildURL: ''
   }
 };
-export const DOWNLOADS_TABLE_TABS = ['Linux', 'Windows', 'iOS', 'Android'];
+export const DOWNLOADS_TABLE_TABS = ['Linux', 'macOS', 'Windows', 'iOS', 'Android'];
 export const DOWNLOADS_TABLE_TAB_COLUMN_HEADERS = [
   'Release',
   'Commit',

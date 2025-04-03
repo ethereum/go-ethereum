@@ -1,4 +1,4 @@
-import { Stack, Tabs, TabList, Tab, Text, TabPanel, TabPanels } from '@chakra-ui/react';
+import { Link, Stack, Tabs, TabList, Tab, Text, TabPanel, TabPanels } from '@chakra-ui/react';
 import { FC, useMemo } from 'react';
 
 import { DataTable } from '../../UI';
@@ -38,9 +38,9 @@ export const DownloadsTable: FC<Props> = ({
   const getDefaultIndex = useMemo<number>(() => {
     const OS: string = typeof window !== 'undefined' ? window.navigator.platform : '';
     const userAgent = typeof window !== 'undefined' ? window.navigator.userAgent : '';
-    if (/Win/i.test(OS)) return 1;
-    if (/iPhone/i.test(OS)) return 2;
-    if (/Android/i.test(userAgent)) return 3;
+    if (/Win/i.test(OS)) return 2;
+    if (/iPhone/i.test(OS)) return 3;
+    if (/Android/i.test(userAgent)) return 4;
     return 0;
   }, []);
 
@@ -63,7 +63,7 @@ export const DownloadsTable: FC<Props> = ({
             return (
               <Tab
                 key={tab}
-                w={'25%'}
+                w={'20%'}
                 p={4}
                 _selected={{
                   bg: 'primary',
@@ -85,6 +85,17 @@ export const DownloadsTable: FC<Props> = ({
               columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
               data={linuxData.slice(0, LAST_2_LINUX_RELEASES)}
             />
+          </TabPanel>
+          <TabPanel p={0}>
+            <Stack p={4}>
+              <Text textAlign='center' bg='code-bg' p={3}>
+                Mac users should get their builds from{' '}
+                <Link href='https://formulae.brew.sh/formula/ethereum' variant='light'>
+                  Homebrew
+                </Link>{' '}
+                or compile themselves.
+              </Text>
+            </Stack>
           </TabPanel>
           <TabPanel p={0}>
             <DataTable
