@@ -487,6 +487,15 @@ func (s *Ethereum) setupDiscovery() error {
 		s.discmix.AddSource(iter)
 	}
 
+	// Add DHT nodes from discv4.
+	if s.p2pServer.DiscoveryV4() != nil {
+		asyncFilter := s.p2pServer.DiscoveryV4().RequestENR
+		filter := eth.NewNodeFilter(s.blockchain)
+		iter := enode.AsyncFilter(s.p2pServer.DiscoveryV4().RandomNodes(), asyncFilter)
+		iter = enode.Filter(iter, filter)
+		s.discmix.AddSource(iter)
+	}
+
 	// Add DHT nodes from discv5.
 	if s.p2pServer.DiscoveryV5() != nil {
 		filter := eth.NewNodeFilter(s.blockchain)

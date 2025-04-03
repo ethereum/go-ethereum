@@ -152,6 +152,37 @@ func (f *filterIter) Next() bool {
 	return false
 }
 
+// AsyncFilter wraps an iterator such that Next only returns nodes for which
+// the 'check' function returns a (possibly modified) node.
+func AsyncFilter(it Iterator, check func(*Node) (*Node, error)) Iterator {
+	return &AsyncFilterIter{it, nil, check}
+}
+
+type AsyncFilterIter struct {
+	it     Iterator
+	buffer *Node
+	check  func(*Node) (*Node, error)
+}
+
+func (f *AsyncFilterIter) Next() bool {
+	for f.it.Next() {
+		nn, err := f.check(f.it.Node())
+		if err == nil {
+			f.buffer = nn
+			return true
+		}
+	}
+	return false
+}
+
+func (f *AsyncFilterIter) Node() *Node {
+	return f.buffer
+}
+
+func (f *AsyncFilterIter) Close() {
+	f.it.Close()
+}
+
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
 // only when Close is called. Source iterators added via AddSource are removed from the
 // mix when they end.
