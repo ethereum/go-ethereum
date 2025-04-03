@@ -18,7 +18,6 @@ package era
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -151,7 +150,7 @@ func (e *Era) GetHeaderByNumber(num uint64) (*types.Header, error) {
 // GetBlockByNumber returns the block for the given block number.
 func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if e.m.start > num || e.m.start+e.m.count <= num {
-		return nil, errors.New("out-of-bounds")
+		return nil, fmt.Errorf("out-of-bounds: %d not in [%d, %d)", num, e.m.start, e.m.start+e.m.count)
 	}
 	off, err := e.readOffset(num)
 	if err != nil {

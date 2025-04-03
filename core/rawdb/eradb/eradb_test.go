@@ -24,16 +24,12 @@ import (
 
 func TestEraDatabase_Scan(t *testing.T) {
 	// Create the database
-	db, err := New("testdata")
+	db, err := New("testdata", "sepolia")
 	require.NoError(t, err)
 
-	// Scan for era files
-	files, err := db.scan()
-	require.NoError(t, err)
-
-	t.Log(files)
 	block, err := db.GetBlockByNumber(15000)
 	require.NoError(t, err)
+	require.NotNil(t, block, "block not found")
 	defer db.Close()
 	require.Equal(t, uint64(15000), block.NumberU64())
 }
