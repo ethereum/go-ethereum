@@ -64,40 +64,16 @@ func (s *historyTestSuite) loadTests() error {
 	return nil
 }
 
-func (s *historyTestSuite) allTests() []utesting.Test {
-	return []utesting.Test{
-		{
-			Name: "History/getBlockByHash",
-			Fn:   s.testGetBlockByHash,
-		},
-		{
-			Name: "History/getBlockByNumber",
-			Fn:   s.testGetBlockByNumber,
-		},
-		{
-			Name: "History/getBlockReceiptsByHash",
-			Fn:   s.testGetBlockReceiptsByHash,
-		},
-		{
-			Name: "History/getBlockReceiptsByNumber",
-			Fn:   s.testGetBlockReceiptsByNumber,
-		},
-		{
-			Name: "History/getBlockTransactionCountByHash",
-			Fn:   s.testGetBlockTransactionCountByHash,
-		},
-		{
-			Name: "History/getBlockTransactionCountByNumber",
-			Fn:   s.testGetBlockTransactionCountByNumber,
-		},
-		{
-			Name: "History/getTransactionByBlockHashAndIndex",
-			Fn:   s.testGetTransactionByBlockHashAndIndex,
-		},
-		{
-			Name: "History/getTransactionByBlockNumberAndIndex",
-			Fn:   s.testGetTransactionByBlockNumberAndIndex,
-		},
+func (s *historyTestSuite) allTests() []workloadTest {
+	return []workloadTest{
+		newWorkLoadTest("History/getBlockByHash", s.testGetBlockByHash),
+		newWorkLoadTest("History/getBlockByNumber", s.testGetBlockByNumber),
+		newWorkLoadTest("History/getBlockReceiptsByHash", s.testGetBlockReceiptsByHash),
+		newWorkLoadTest("History/getBlockReceiptsByNumber", s.testGetBlockReceiptsByNumber),
+		newWorkLoadTest("History/getBlockTransactionCountByHash", s.testGetBlockTransactionCountByHash),
+		newWorkLoadTest("History/getBlockTransactionCountByNumber", s.testGetBlockTransactionCountByNumber),
+		newWorkLoadTest("History/getTransactionByBlockHashAndIndex", s.testGetTransactionByBlockHashAndIndex),
+		newWorkLoadTest("History/getTransactionByBlockNumberAndIndex", s.testGetTransactionByBlockNumberAndIndex),
 	}
 }
 
