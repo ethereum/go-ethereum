@@ -35,36 +35,19 @@ type resultStore struct {
 	// *important* : is not safe to use for indexing without checking against length
 	indexIncomplete atomic.Int32
 
-	// throttleThreshold is the limit up to which we _want_ to fill the
-	// results. If blocks are large, we want to limit the results to less
-	// than the number of available slots, and maybe only fill 1024 out of
-	// 8192 possible places. The queue will, at certain times, recalibrate
-	// this index.
-	throttleThreshold uint64
+	// keep track of the total non-blob gas used in the headers we are scheduling for retrieval.
+	// when we  exceed a threshold, we will throttle preventing additional requests until
+	// some current ones have completed.
+	itemsGasUsed uint64
 
 	lock sync.RWMutex
 }
 
 func newResultStore(size int) *resultStore {
 	return &resultStore{
-		resultOffset:      0,
-		items:             make([]*fetchResult, size),
-		throttleThreshold: uint64(size),
+		resultOffset: 0,
+		items:        make([]*fetchResult, size),
 	}
-}
-
-// SetThrottleThreshold updates the throttling threshold based on the requested
-// limit and the total queue capacity. It returns the (possibly capped) threshold
-func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	limit := uint64(len(r.items))
-	if threshold >= limit {
-		threshold = limit
-	}
-	r.throttleThreshold = threshold
-	return r.throttleThreshold
 }
 
 // AddFetch adds a header for body/receipt fetching. This is used when the queue
@@ -86,6 +69,10 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, thro
 		return stale, throttled, item, err
 	}
 	if item == nil {
+		if (r.itemsGasUsed+header.GasUsed)/10 > uint64(blockCacheMemory) {
+			return false, true, nil, nil
+		}
+		r.itemsGasUsed += header.GasUsed
 		item = newFetchResult(header, fastSync)
 		r.items[index] = item
 	}
@@ -104,11 +91,26 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 	return res, stale, err
 }
 
+// throttleThreshold returns whether the given result index is throttled.
+// If the cumulative gas used of all scheduled headers before the given index
+// exceeds a threshold, then the index is throttled.
+// Cumulative gas used for a set of blocks is used as a proxy for the worst-case
+// size of the blocks.  Worst-case block size is estimated by assuming that the
+// blocks each contain a transaction filled with calldata that is all zeroes.
+// The size of a worst-case block is ~= gasUsed / 10
+func (r *resultStore) throttleThreshold(index int) bool {
+	// estimate the average block size of all scheduled blocks
+	estBlockSize := max((r.itemsGasUsed/(uint64(index)+1))/10, 524)
+
+	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/estBlockSize+1)
+	return index >= int(throttleThreshold)
+}
+
 // getFetchResult returns the fetchResult corresponding to the given item, and
 // the index where the result is stored.
 func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, index int, stale, throttle bool, err error) {
 	index = int(int64(headerNumber) - int64(r.resultOffset))
-	throttle = index >= int(r.throttleThreshold)
+	throttle = r.throttleThreshold(index)
 	stale = index < 0
 
 	if index >= len(r.items) {
@@ -160,6 +162,12 @@ func (r *resultStore) countCompleted() int {
 	return int(index)
 }
 
+/*
+func (r *resultStore) GetThrottleThreshold() int {
+	return (r.itemsGasUsed / len(r.items)) / 10
+}
+*/
+
 // GetCompleted returns the next batch of completed fetchResults
 func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	r.lock.Lock()
@@ -171,6 +179,10 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	}
 	results := make([]*fetchResult, limit)
 	copy(results, r.items[:limit])
+
+	for _, result := range results {
+		r.itemsGasUsed -= result.Header.GasUsed
+	}
 
 	// Delete the results from the cache and clear the tail.
 	copy(r.items, r.items[limit:])
