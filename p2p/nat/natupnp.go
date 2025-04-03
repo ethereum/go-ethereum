@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/huin/goupnp"
 	"github.com/huin/goupnp/dcps/internetgateway1"
 	"github.com/huin/goupnp/dcps/internetgateway2"
@@ -80,6 +81,7 @@ func (n *upnp) ExternalIP() (addr net.IP, err error) {
 }
 
 func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, lifetime time.Duration) (uint16, error) {
+
 	ip, err := n.internalAddress()
 	if err != nil {
 		return 0, err
@@ -91,7 +93,8 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 		extport = intport
 	} else {
 		// Only delete port mapping if the external port was already used by geth.
-		n.DeleteMapping(protocol, extport, intport)
+		err := n.DeleteMapping(protocol, extport, intport)
+		log.Trace("Deleting port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
 	}
 
 	// Try to add port mapping, preferring the specified external port.
@@ -116,6 +119,7 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 	if err == nil {
 		return uint16(extport), nil
 	}
+	log.Trace("Failed to add port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
 
 	// If above fails, we retry with a random port.
 	// We retry several times because of possible port conflicts.
@@ -125,6 +129,7 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 		if err == nil {
 			return uint16(extport), nil
 		}
+		log.Trace("Failed to add random port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
 	}
 	return 0, err
 }
