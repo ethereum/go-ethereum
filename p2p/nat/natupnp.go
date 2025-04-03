@@ -37,6 +37,13 @@ const (
 	rateLimit          = 200 * time.Millisecond
 	retryCount         = 3 // number of retries after a failed AddPortMapping
 	randomCount        = 3 // number of random ports to try
+
+	// According to the UPnP spec delete before add is not needed if the
+	// private IP remained the same. However, we have seen this workaround
+	// being used in practice. It could also create problems, so we keep it
+	// disabled by default. If the private IP changed, an external port change
+	// should be OK.
+	deleteBeforeAdd = false
 )
 
 type upnp struct {
@@ -93,7 +100,7 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 
 	if extport == 0 {
 		extport = intport
-	} else {
+	} else if deleteBeforeAdd {
 		// Only delete port mapping if the external port was already used by geth.
 		err := n.DeleteMapping(protocol, extport, intport)
 		log.Trace("Deleting port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
