@@ -161,10 +161,9 @@ type CacheConfig struct {
 }
 
 // triedbConfig derives the configures for trie database.
-func (c *CacheConfig) triedbConfig(isVerkle bool) *triedb.Config {
+func (c *CacheConfig) triedbConfig() *triedb.Config {
 	config := &triedb.Config{
 		Preimages: c.Preimages,
-		IsVerkle:  isVerkle,
 	}
 	if c.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
@@ -232,6 +231,7 @@ type BlockChain struct {
 	lastWrite     uint64                           // Last block when the state was flushed
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
+	verkledb      *triedb.Database                 // The database handler for maintaining verkle nodes.
 	statedb       *state.CachingDB                 // State database to reuse between imports (contains state cache)
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
@@ -283,17 +283,15 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		cacheConfig = defaultCacheConfig
 	}
 	// Open trie database with provided config
-	enableVerkle, err := EnableVerkleAtGenesis(db, genesis)
-	if err != nil {
-		return nil, err
-	}
-	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(enableVerkle))
+	// TODO(gballet) remove EnableVerkleAtGenesis if it's no longer used
+	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
+	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig())
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the
 	// provided genesis or from the locally stored configuration if the genesis
 	// has already been initialized.
-	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
+	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, verkledb, genesis, overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -310,6 +308,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		cacheConfig:   cacheConfig,
 		db:            db,
 		triedb:        triedb,
+		verkledb:      verkledb,
 		triegc:        prque.New[int64, common.Hash](nil),
 		quit:          make(chan struct{}),
 		chainmu:       syncx.NewClosableMutex(),
@@ -327,7 +326,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		return nil, err
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
-	bc.statedb = state.NewDatabase(bc.triedb, nil)
+	bc.statedb = state.NewDatabase(bc.triedb, bc.verkledb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
@@ -468,7 +467,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
 
 		// Re-initialize the state database with snapshot
-		bc.statedb = state.NewDatabase(bc.triedb, bc.snaps)
+		bc.statedb = state.NewDatabase(bc.triedb, bc.verkledb, bc.snaps)
 	}
 
 	// Rewind the chain in case of an incompatible config upgrade.

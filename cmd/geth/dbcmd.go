@@ -546,8 +546,9 @@ func dbDumpTrie(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, db, false, true, false)
+	triedb, verkledb := utils.MakeTrieDatabase(ctx, db, false, true)
 	defer triedb.Close()
+	defer verkledb.Close()
 
 	var (
 		state   []byte
@@ -881,8 +882,9 @@ func inspectHistory(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, db, false, false, false)
+	triedb, verkledb := utils.MakeTrieDatabase(ctx, db, false, false)
 	defer triedb.Close()
+	defer verkledb.Close()
 
 	var (
 		err   error

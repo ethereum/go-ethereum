@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -145,7 +146,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 		emptyRoot = types.EmptyVerkleHash
 	}
 	db := rawdb.NewMemoryDatabase()
-	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil))
+	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), triedb.NewDatabase(db, triedb.VerkleDefaults), nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -164,12 +165,12 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 
 // flushAlloc is very similar with hash, but the main difference is all the
 // generated states will be persisted into the given database.
-func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, error) {
+func flushAlloc(ga *types.GenesisAlloc, triedb, verkledb *triedb.Database) (common.Hash, error) {
 	emptyRoot := types.EmptyRootHash
 	if triedb.IsVerkle() {
 		emptyRoot = types.EmptyVerkleHash
 	}
-	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil))
+	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, verkledb, nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -276,6 +277,20 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 	return cfg.CheckConfigForkOrder()
 }
 
+// saveVerkleTransitionStatusAtVerlkeGenesis saves a conversion marker
+// representing a converted state, which is used in devnets that activate
+// verkle at genesis.
+func saveVerkleTransitionStatusAtVerlkeGenesis(db ethdb.Database) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(&state.TransitionState{Ended: true})
+	if err != nil {
+		log.Error("failed to encode transition state", "err", err)
+		return
+	}
+	rawdb.WriteVerkleTransitionState(db, common.Hash{}, buf.Bytes())
+}
+
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
@@ -287,11 +302,11 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 // The stored chain configuration will be updated if it is compatible (i.e. does not
 // specify a fork block below the local head block). In case of a conflict, the
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
-func SetupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
-	return SetupGenesisBlockWithOverride(db, triedb, genesis, nil)
+func SetupGenesisBlock(db ethdb.Database, triedb, verkledb *triedb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+	return SetupGenesisBlockWithOverride(db, triedb, verkledb, genesis, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, triedb, verkledb *triedb.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 	// Copy the genesis, so we can operate on a copy.
 	genesis = genesis.copy()
 	// Sanitize the supplied genesis, ensuring it has the associated chain
@@ -299,6 +314,13 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 	if genesis != nil && genesis.Config == nil {
 		return nil, common.Hash{}, nil, errGenesisNoConfig
 	}
+
+	// In case of verkle-at-genesis, we need to ensure that the conversion
+	// markers are indicating that the conversion has completed.
+	if genesis != nil && genesis.Config.VerkleTime != nil && *genesis.Config.VerkleTime == genesis.Timestamp {
+		saveVerkleTransitionStatusAtVerlkeGenesis(db)
+	}
+
 	// Commit the genesis if the database is empty
 	ghash := rawdb.ReadCanonicalHash(db, 0)
 	if (ghash == common.Hash{}) {
@@ -312,7 +334,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 			return nil, common.Hash{}, nil, err
 		}
 
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(db, triedb, verkledb)
 		if err != nil {
 			return nil, common.Hash{}, nil, err
 		}
@@ -340,7 +362,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		if hash := genesis.ToBlock().Hash(); hash != ghash {
 			return nil, common.Hash{}, nil, &GenesisMismatchError{ghash, hash}
 		}
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(db, triedb, verkledb)
 		if err != nil {
 			return nil, common.Hash{}, nil, err
 		}
@@ -521,7 +543,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Block, error) {
+func (g *Genesis) Commit(db ethdb.Database, triedb, verkledb *triedb.Database) (*types.Block, error) {
 	if g.Number != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
 	}
@@ -536,7 +558,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 		return nil, errors.New("can't start clique chain without signers")
 	}
 	// flush the data to disk and compute the state root
-	root, err := flushAlloc(&g.Alloc, triedb)
+	root, err := flushAlloc(&g.Alloc, triedb, verkledb)
 	if err != nil {
 		return nil, err
 	}
@@ -561,8 +583,8 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
-func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.Block {
-	block, err := g.Commit(db, triedb)
+func (g *Genesis) MustCommit(db ethdb.Database, triedb, verkledb *triedb.Database) *types.Block {
+	block, err := g.Commit(db, triedb, verkledb)
 	if err != nil {
 		panic(err)
 	}
