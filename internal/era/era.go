@@ -187,19 +187,11 @@ func (e *Era) GetReceipts(num uint64) (types.Receipts, error) {
 		return nil, err
 	}
 
-	// Skip header entry
-	headerLength, err := e.s.LengthAt(off)
+	// Skip over header and body
+	off, err = e.s.SkipN(off, 2)
 	if err != nil {
 		return nil, err
 	}
-	off += headerLength
-
-	// Skip body entry
-	bodyLength, err := e.s.LengthAt(off)
-	if err != nil {
-		return nil, err
-	}
-	off += bodyLength
 
 	// Read and decompress receipts
 	r, _, err := newSnappyReader(e.s, TypeCompressedReceipts, off)
