@@ -31,12 +31,14 @@ const (
 	portMapRefreshInterval = 8 * time.Minute
 	portMapRetryInterval   = 5 * time.Minute
 	extipRetryInterval     = 2 * time.Minute
+	maxRetries             = 5 // max number of failed attempts to refresh the mapping
 )
 
 type portMapping struct {
 	protocol string
 	name     string
 	port     int
+	retries  int // number of failed attempts to refresh the mapping
 
 	// for use by the portMappingLoop goroutine:
 	extPort  int // the mapped port returned by the NAT interface
@@ -158,17 +160,26 @@ func (srv *Server) portMappingLoop() {
 					if m.extPort == 0 {
 						log.Debug("Couldn't add port mapping", "err", err)
 					} else {
-						//	Since UPnP implementation are often buggy,
-						// and lifetime is larger than the retry interval, this does not mean we lost our
-						// existing mapping. We do not reset the external port, as it is still our best chance,
+						// Failed refresh. Since UPnP implementation are often buggy, and lifetime is
+						// larger than the retry interval, this does not mean we lost our existing
+						// mapping. We do not reset the external port, as it is still our best chance,
 						// but we do retry soon.
 						// TODO: we could check the error code, but again, UPnP implementations are buggy.
 						log.Debug("Couldn't refresh port mapping", "err", err)
+						m.retries++
+						if m.retries > maxRetries {
+							m.retries = 0
+							err := srv.NAT.DeleteMapping(m.protocol, m.extPort, m.port)
+							log.Debug("Couldn't refresh port mapping, trying to delete it:", "err", err)
+							m.extPort = 0
+						}
 					}
 					m.nextTime = srv.clock.Now().Add(portMapRetryInterval)
-					continue
+					continue //TODO: this means we never reset the ENR. Is that what we want?
 				}
+
 				// It was mapped!
+				m.retries = 0
 				log = newLogger(m.protocol, int(p), m.port)
 				if int(p) != m.extPort {
 					m.extPort = int(p)
