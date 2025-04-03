@@ -154,25 +154,52 @@ func (f *filterIter) Next() bool {
 
 // AsyncFilter wraps an iterator such that Next only returns nodes for which
 // the 'check' function returns a (possibly modified) node.
-func AsyncFilter(it Iterator, check func(*Node) (*Node, error)) Iterator {
-	return &AsyncFilterIter{it, nil, check}
+func AsyncFilter(it Iterator, check func(*Node) (*Node, error), workers int) Iterator {
+	f := &AsyncFilterIter{it, nil, check, make(chan *Node), sync.WaitGroup{}}
+
+	taskCh := make(chan *Node)
+
+	worker := func() {
+		for task := range taskCh {
+			if task == nil {
+				break
+			}
+			nn, err := f.check(task)
+			if err == nil {
+				f.passed <- nn
+			}
+		}
+		f.wg.Done()
+	}
+
+	for range workers {
+		f.wg.Add(1)
+		go worker()
+	}
+
+	go func() {
+		for f.it.Next() {
+			taskCh <- f.it.Node()
+		}
+		close(taskCh)
+		f.wg.Wait()
+		close(f.passed)
+	}()
+
+	return f
 }
 
 type AsyncFilterIter struct {
 	it     Iterator
 	buffer *Node
 	check  func(*Node) (*Node, error)
+	passed chan *Node
+	wg     sync.WaitGroup
 }
 
 func (f *AsyncFilterIter) Next() bool {
-	for f.it.Next() {
-		nn, err := f.check(f.it.Node())
-		if err == nil {
-			f.buffer = nn
-			return true
-		}
-	}
-	return false
+	f.buffer = <-f.passed
+	return f.buffer != nil
 }
 
 func (f *AsyncFilterIter) Node() *Node {
@@ -181,6 +208,7 @@ func (f *AsyncFilterIter) Node() *Node {
 
 func (f *AsyncFilterIter) Close() {
 	f.it.Close()
+	f.wg.Wait()
 }
 
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
