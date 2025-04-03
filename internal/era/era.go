@@ -70,7 +70,7 @@ func ReadDir(dir, network string) ([]string, error) {
 		}
 		parts := strings.Split(entry.Name(), "-")
 		if len(parts) != 3 || parts[0] != network {
-			// invalid era1 filename, skip
+			// Invalid era1 filename, skip.
 			continue
 		}
 		if epoch, err := strconv.ParseUint(parts[1], 10, 64); err != nil {
@@ -136,7 +136,7 @@ func (e *Era) GetHeaderByNumber(num uint64) (*types.Header, error) {
 		return nil, err
 	}
 
-	// Read and decompress header
+	// Read and decompress header.
 	r, _, err := newSnappyReader(e.s, TypeCompressedHeader, off)
 	if err != nil {
 		return nil, err
@@ -187,13 +187,13 @@ func (e *Era) GetReceipts(num uint64) (types.Receipts, error) {
 		return nil, err
 	}
 
-	// Skip over header and body
+	// Skip over header and body.
 	off, err = e.s.SkipN(off, 2)
 	if err != nil {
 		return nil, err
 	}
 
-	// Read and decompress receipts
+	// Read and decompress receipts.
 	r, _, err := newSnappyReader(e.s, TypeCompressedReceipts, off)
 	if err != nil {
 		return nil, err
@@ -238,13 +238,10 @@ func (e *Era) InitialTD() (*big.Int, error) {
 	}
 	off += n
 
-	// Skip over next two records.
-	for i := 0; i < 2; i++ {
-		length, err := e.s.LengthAt(off)
-		if err != nil {
-			return nil, err
-		}
-		off += length
+	// Skip over header and body.
+	off, err = e.s.SkipN(off, 2)
+	if err != nil {
+		return nil, err
 	}
 
 	// Read total difficulty after first block.
