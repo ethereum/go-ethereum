@@ -274,7 +274,6 @@ func TestPrecompileBlake2FMalformedInput(t *testing.T) {
 func TestPrecompiledEcrecover(t *testing.T) { testJson("ecRecover", "01", t) }
 
 func testJson(name, addr string, t *testing.T) {
-	fmt.Printf("name: %v, addr: %v\n", name, addr)
 	tests, err := loadJson(name)
 	if err != nil {
 		t.Fatal(err)

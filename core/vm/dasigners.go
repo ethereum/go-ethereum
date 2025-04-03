@@ -271,8 +271,9 @@ func (d *DASignersPrecompile) MakeEpoch(
 		if err != nil {
 			return nil, err
 		}
-		StoreBytes(evm.StateDB, d.Address(), dasigners.QuorumKey(epoch+1, uint64(index)), b)
+		StoreBytes(evm.StateDB, d.Address(), dasigners.QuorumKey(epoch, uint64(index)), b)
 	}
+	evm.StateDB.SetState(d.Address(), dasigners.QuorumCountKey(epoch), common.BigToHash(big.NewInt(int64(len(quorums)))))
 	// save epoch number & block height
 	evm.StateDB.SetState(d.Address(), dasigners.EpochNumberKey(), common.BigToHash(big.NewInt(int64(epoch))))
 	evm.StateDB.SetState(d.Address(), dasigners.EpochBlockKey(epoch), common.BigToHash(big.NewInt(int64(blockHeight))))
@@ -481,7 +482,7 @@ func (d *DASignersPrecompile) getSigner(evm *EVM, account common.Address) (dasig
 	if err != nil {
 		return dasigners.IDASignersSignerDetail{}, false, err
 	}
-	return signer, false, nil
+	return signer, true, nil
 }
 
 func (d *DASignersPrecompile) GetSigner(evm *EVM, method *abi.Method, args []interface{}) ([]byte, error) {

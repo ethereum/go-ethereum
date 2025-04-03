@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
@@ -104,6 +106,10 @@ func InitializeStatefulPrecompileCall(
 	// readonly check
 	if readonly && p.IsTx(method.Name) {
 		return nil, nil, ErrExecutionReverted
+	}
+	// Set code to a non-empty value to prevent it from being cleared by stateDB during commit() or finalise()
+	if !readonly && bytes.Equal(crypto.Keccak256Hash(evm.StateDB.GetCode(p.Address())).Bytes(), types.EmptyCodeHash.Bytes()) {
+		evm.StateDB.SetCode(p.Address(), []byte{1})
 	}
 
 	return method, args, nil
