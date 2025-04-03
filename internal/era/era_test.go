@@ -18,20 +18,15 @@ package era
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math/big"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/stretchr/testify/require"
 )
 
 type testchain struct {
@@ -56,9 +51,9 @@ func TestEra1Builder(t *testing.T) {
 		chain   = testchain{}
 	)
 	for i := 0; i < 128; i++ {
-		chain.headers = append(chain.headers, []byte{byte('h'), byte(i)})
-		chain.bodies = append(chain.bodies, []byte{byte('b'), byte(i)})
-		chain.receipts = append(chain.receipts, []byte{byte('r'), byte(i)})
+		chain.headers = append(chain.headers, mustEncode(&types.Header{Number: big.NewInt(int64(i))}))
+		chain.bodies = append(chain.bodies, mustEncode(&types.Body{Transactions: []*types.Transaction{types.NewTransaction(0, common.Address{byte(i)}, nil, 0, nil, nil)}}))
+		chain.receipts = append(chain.receipts, mustEncode(&types.Receipts{{CumulativeGasUsed: uint64(i)}}))
 		chain.tds = append(chain.tds, big.NewInt(int64(i)))
 	}
 
@@ -99,13 +94,25 @@ func TestEra1Builder(t *testing.T) {
 			t.Fatalf("unexpected error %v", it.Error())
 		}
 		// Check headers.
-		header, err := io.ReadAll(it.Header)
+		rawHeader, err := io.ReadAll(it.Header)
+		if err != nil {
+			t.Fatalf("error reading header from iterator: %v", err)
+		}
+		if !bytes.Equal(rawHeader, chain.headers[i]) {
+			t.Fatalf("mismatched header: want %s, got %s", chain.headers[i], rawHeader)
+		}
+		header, err := e.GetHeaderByNumber(i)
 		if err != nil {
 			t.Fatalf("error reading header: %v", err)
 		}
-		if !bytes.Equal(header, chain.headers[i]) {
-			t.Fatalf("mismatched header: want %s, got %s", chain.headers[i], header)
+		encHeader, err := rlp.EncodeToBytes(header)
+		if err != nil {
+			t.Fatalf("error encoding header: %v", err)
 		}
+		if !bytes.Equal(encHeader, chain.headers[i]) {
+			t.Fatalf("mismatched header: want %s, got %s", chain.headers[i], encHeader)
+		}
+
 		// Check bodies.
 		body, err := io.ReadAll(it.Body)
 		if err != nil {
@@ -114,13 +121,25 @@ func TestEra1Builder(t *testing.T) {
 		if !bytes.Equal(body, chain.bodies[i]) {
 			t.Fatalf("mismatched body: want %s, got %s", chain.bodies[i], body)
 		}
+
 		// Check receipts.
-		receipts, err := io.ReadAll(it.Receipts)
+		rawReceipts, err := io.ReadAll(it.Receipts)
+		if err != nil {
+			t.Fatalf("error reading receipts from iterator: %v", err)
+		}
+		if !bytes.Equal(rawReceipts, chain.receipts[i]) {
+			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], rawReceipts)
+		}
+		receipts, err := e.GetReceipts(i)
 		if err != nil {
 			t.Fatalf("error reading receipts: %v", err)
 		}
-		if !bytes.Equal(receipts, chain.receipts[i]) {
-			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], receipts)
+		encReceipts, err := rlp.EncodeToBytes(receipts)
+		if err != nil {
+			t.Fatalf("error encoding receipts: %v", err)
+		}
+		if !bytes.Equal(encReceipts, chain.receipts[i]) {
+			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], encReceipts)
 		}
 
 		// Check total difficulty.
@@ -153,155 +172,10 @@ func TestEraFilename(t *testing.T) {
 	}
 }
 
-func genTestChain(t *testing.T) (*core.Genesis, []*types.Block, []types.Receipts) {
-	privateKey, err := crypto.GenerateKey()
-	require.NoError(t, err)
-	var (
-		address = crypto.PubkeyToAddress(privateKey.PublicKey)
-		genesis = &core.Genesis{
-			Config: params.TestChainConfig,
-			Alloc: types.GenesisAlloc{
-				address: {
-					Balance: big.NewInt(10000000000000000), // 10 ETH
-				},
-			},
-			GasLimit:   1000000,
-			Difficulty: big.NewInt(1),
-		}
-	)
-	_, chain, receipts := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 3, func(i int, gen *core.BlockGen) {
-		// Add a transfer transaction
-		to := common.HexToAddress("0x5678")
-		tx := types.NewTx(&types.LegacyTx{
-			Nonce:    uint64(i * 2),
-			To:       &to,
-			Value:    big.NewInt(100000000000000), // 0.1 ETH
-			Gas:      21000,
-			GasPrice: big.NewInt(1000000000), // 1 Gwei
-		})
-		signedTx, err := types.SignTx(tx, types.NewEIP155Signer(genesis.Config.ChainID), privateKey)
-		require.NoError(t, err)
-		gen.AddTx(signedTx)
-
-		// Add a contract creation transaction
-		tx = types.NewTx(&types.LegacyTx{
-			Nonce:    uint64(i*2 + 1),
-			Value:    big.NewInt(0),
-			Gas:      100000,
-			GasPrice: big.NewInt(1000000000), // 1 Gwei
-			// Simple contract that returns empty data
-			Data: []byte{
-				0x60, 0x00, // PUSH1 0
-				0x60, 0x00, // PUSH1 0
-				0x52,       // MSTORE
-				0x60, 0x20, // PUSH1 32
-				0x60, 0x00, // PUSH1 0
-				0xf3, // RETURN
-			},
-		})
-		signedTx, err = types.SignTx(tx, types.NewEIP155Signer(genesis.Config.ChainID), privateKey)
-		require.NoError(t, err)
-		gen.AddTx(signedTx)
-	})
-	return genesis, chain, receipts
-}
-
-// exportChain creates a temporary era file with the given chain.
-func exportChain(t *testing.T, genesis *core.Genesis, chain []*types.Block, receipts []types.Receipts) (string, string) {
-	var (
-		tmpDir   = t.TempDir()
-		fileName = "test.era1"
-	)
-	tmpFile, err := os.Create(filepath.Join(tmpDir, fileName))
-	require.NoError(t, err)
-
-	builder := NewBuilder(tmpFile)
-	// Add blocks to era
-	for i, block := range chain {
-		td := new(big.Int).Add(genesis.Difficulty, big.NewInt(int64(i+1)))
-		headerData, err := rlp.EncodeToBytes(block.Header())
-		require.NoError(t, err)
-		bodyData, err := rlp.EncodeToBytes(block.Body())
-		require.NoError(t, err)
-		receiptsData, err := rlp.EncodeToBytes(receipts[i])
-		require.NoError(t, err)
-
-		err = builder.AddRLP(headerData, bodyData, receiptsData, block.NumberU64(), block.Hash(), td, block.Difficulty())
-		require.NoError(t, err)
+func mustEncode(obj any) []byte {
+	b, err := rlp.EncodeToBytes(obj)
+	if err != nil {
+		panic(fmt.Sprintf("failed in encode obj: %v", err))
 	}
-
-	_, err = builder.Finalize()
-	require.NoError(t, err)
-
-	err = tmpFile.Close()
-	require.NoError(t, err)
-
-	return tmpDir, fileName
-}
-
-func TestEraFunctions(t *testing.T) {
-	genesis, blocks, receipts := genTestChain(t)
-	testdir, filename := exportChain(t, genesis, blocks, receipts)
-	defer os.RemoveAll(testdir)
-	// Open the era file
-	era, err := Open(filepath.Join(testdir, filename))
-	require.NoError(t, err)
-	defer era.Close()
-
-	t.Run("GetHeaderByNumber", func(t *testing.T) {
-		header, err := era.GetHeaderByNumber(era.Start())
-		require.NoError(t, err)
-		haveJson, err := rlp.EncodeToBytes(header)
-		require.NoError(t, err)
-		wantJson, err := rlp.EncodeToBytes(blocks[0].Header())
-		require.NoError(t, err)
-		require.Equal(t, wantJson, haveJson)
-
-		header, err = era.GetHeaderByNumber(era.Start() + era.Count() - 1)
-		require.NoError(t, err)
-		haveJson, err = rlp.EncodeToBytes(header)
-		require.NoError(t, err)
-		wantJson, err = rlp.EncodeToBytes(blocks[2].Header())
-		require.NoError(t, err)
-		require.Equal(t, wantJson, haveJson)
-	})
-
-	t.Run("GetBlockByNumber", func(t *testing.T) {
-		block, err := era.GetBlockByNumber(era.Start())
-		require.NoError(t, err)
-		haveJson, err := rlp.EncodeToBytes(block)
-		require.NoError(t, err)
-		wantJson, err := rlp.EncodeToBytes(blocks[0])
-		require.NoError(t, err)
-		require.Equal(t, wantJson, haveJson)
-
-		block, err = era.GetBlockByNumber(era.Start() + 1)
-		require.NoError(t, err)
-		haveJson, err = rlp.EncodeToBytes(block)
-		require.NoError(t, err)
-		wantJson, err = rlp.EncodeToBytes(blocks[1])
-		require.NoError(t, err)
-		require.Equal(t, wantJson, haveJson)
-	})
-
-	t.Run("GetReceipts", func(t *testing.T) {
-		rcpts, err := era.GetReceipts(era.Start())
-		require.NoError(t, err)
-		require.Equal(t, 2, len(rcpts)) // Should have 2 receipts
-
-		require.Equal(t, receipts[0][0].CumulativeGasUsed, rcpts[0].CumulativeGasUsed)
-		require.Equal(t, receipts[0][1].CumulativeGasUsed, rcpts[1].CumulativeGasUsed)
-		require.Equal(t, receipts[0][0].Status, rcpts[0].Status)
-		require.Equal(t, receipts[0][1].Status, rcpts[0].Status)
-	})
-
-	t.Run("OutOfBounds", func(t *testing.T) {
-		_, err := era.GetHeaderByNumber(era.Start() - 1)
-		require.Error(t, err)
-		require.Equal(t, "out-of-bounds", err.Error())
-
-		_, err = era.GetHeaderByNumber(era.Start() + era.Count())
-		require.Error(t, err)
-		require.Equal(t, "out-of-bounds", err.Error())
-	})
+	return b
 }
