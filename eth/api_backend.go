@@ -155,8 +155,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		bn = b.HistoryPruningCutoff()
 	}
 	block := b.eth.blockchain.GetBlockByNumber(bn)
-	historyCutoff, _ := b.eth.blockchain.HistoryPruningCutoff()
-	if block == nil && bn < historyCutoff {
+	if block == nil && bn < b.HistoryPruningCutoff() {
 		return nil, &ethconfig.PrunedHistoryError{}
 	}
 	return block, nil
