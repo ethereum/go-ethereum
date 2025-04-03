@@ -64,6 +64,9 @@ type codecV5 interface {
 	// CurrentChallenge returns the most recent WHOAREYOU challenge that was encoded to given node.
 	// This will return a non-nil value if there is an active handshake attempt with the node, and nil otherwise.
 	CurrentChallenge(id enode.ID, addr string) *v5wire.Whoareyou
+
+	// SessionNode returns a node that has completed the handshake.
+	SessionNode(id enode.ID, addr string) *enode.Node
 }
 
 // UDPv5 is the implementation of protocol version 5.
