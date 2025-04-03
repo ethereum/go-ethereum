@@ -76,10 +76,10 @@ func TestCreation(t *testing.T) {
 				{20000000, 1681338454, ID{Hash: checksumToBytes(0xf0afd0e3), Next: 1681338455}}, // Last Gray Glacier block
 				{20000000, 1681338455, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}}, // First Shanghai block
 				{30000000, 1710338134, ID{Hash: checksumToBytes(0xdce96c2d), Next: 1710338135}}, // Last Shanghai block
-				{40000000, 1710338135, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746022487}}, // First Cancun block
-				{30000000, 1746022486, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746022487}}, // Last Cancun block
-				{30000000, 1746022487, ID{Hash: checksumToBytes(0xcca7f404), Next: 0}},          // First Prague block
-				{50000000, 2000000000, ID{Hash: checksumToBytes(0xcca7f404), Next: 0}},          // Future Prague block
+				{40000000, 1710338135, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746612311}}, // First Cancun block
+				{30000000, 1746022486, ID{Hash: checksumToBytes(0x9f3d2254), Next: 1746612311}}, // Last Cancun block
+				{30000000, 1746612311, ID{Hash: checksumToBytes(0xc376cf8b), Next: 0}},          // First Prague block
+				{50000000, 2000000000, ID{Hash: checksumToBytes(0xc376cf8b), Next: 0}},          // Future Prague block
 			},
 		},
 		// Sepolia test cases
@@ -326,7 +326,7 @@ func TestValidation(t *testing.T) {
 		// Local is mainnet Shanghai, remote announces Cancun, but is not aware of Prague. Local
 		// out of sync. Local also knows about a future fork, but that is uncertain yet.
 		//
-		{params.MainnetChainConfig, 21000000, 1678000000, ID{Hash: checksumToBytes(0xcca7f404), Next: 0}, nil},
+		{params.MainnetChainConfig, 21000000, 1678000000, ID{Hash: checksumToBytes(0xc376cf8b), Next: 0}, nil},
 
 		// Local is mainnet Cancun. remote announces Shanghai but is not aware of further forks.
 		// Remote needs software update.
@@ -347,7 +347,7 @@ func TestValidation(t *testing.T) {
 		// at some future timestamp 8888888888, for itself, but past block for local. Local is incompatible.
 		//
 		// This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
-		{params.MainnetChainConfig, 88888888, 8888888888, ID{Hash: checksumToBytes(0xcca7f404), Next: 8888888888}, ErrLocalIncompatibleOrStale},
+		{params.MainnetChainConfig, 88888888, 8888888888, ID{Hash: checksumToBytes(0xc376cf8b), Next: 8888888888}, ErrLocalIncompatibleOrStale},
 
 		// Local is mainnet Shanghai. Remote is also in Shanghai, but announces Gopherium (non existing
 		// fork) at timestamp 1668000000, before Cancun. Local is incompatible.

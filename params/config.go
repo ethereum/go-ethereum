@@ -60,7 +60,7 @@ var (
 		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000_000
 		ShanghaiTime:            newUint64(1681338455),
 		CancunTime:              newUint64(1710338135),
-		PragueTime:              newUint64(1746022487),
+		PragueTime:              newUint64(1746612311),
 		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"),
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
