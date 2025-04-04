@@ -517,7 +517,6 @@ func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.Execu
 	if err != nil {
 		return nil, err
 	}
-	envelope.BlobsBundle.CellProofs = nil
 	return envelope, nil
 }
 
@@ -530,7 +529,6 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 	if err != nil {
 		return nil, err
 	}
-	envelope.BlobsBundle.CellProofs = nil
 	return envelope, nil
 }
 
@@ -543,7 +541,6 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 	if err != nil {
 		return nil, err
 	}
-	envelope.BlobsBundle.Proofs = nil
 	return envelope, nil
 }
 
