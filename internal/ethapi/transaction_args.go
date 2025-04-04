@@ -414,7 +414,7 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
 // Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
-func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoACheck bool) *core.Message {
+func (args *TransactionArgs) ToMessage(rules *params.Rules, baseFee *big.Int, skipNonceCheck, skipEoACheck bool) *core.Message {
 	var (
 		gasPrice  *big.Int
 		gasFeeCap *big.Int
@@ -447,11 +447,25 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
+
+	// Compute the intrinsic gas for stTransaction. Since the test file doesn't
+	// specify the transaction type we need to infer. This is hacky but we can use
+	// dynamic fee tx to represent all txs (with respect to instrinsic gas calc at
+	// least) types except the set code tx type.
+	var txdata types.TxData
+	if args.To == nil {
+		txdata = &types.DynamicFeeTx{To: args.To, Data: args.data(), AccessList: accessList}
+	} else {
+		txdata = &types.SetCodeTx{To: *args.To, Data: args.data(), AccessList: accessList, AuthList: args.AuthorizationList}
+	}
+	intrinsicGas := types.IntrinsicGas(txdata, rules)
+
 	return &core.Message{
 		From:                  args.from(),
 		To:                    args.To,
 		Value:                 (*big.Int)(args.Value),
 		Nonce:                 uint64(*args.Nonce),
+		IntrinsicGas:          intrinsicGas,
 		GasLimit:              uint64(*args.Gas),
 		GasPrice:              gasPrice,
 		GasFeeCap:             gasFeeCap,

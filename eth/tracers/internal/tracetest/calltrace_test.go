@@ -125,11 +125,11 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if tracer.Hooks != nil {
 				logState = state.NewHookedState(st.StateDB, tracer.Hooks)
 			}
-			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
+			evm := vm.NewEVM(context, logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, evm.Rules())
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
@@ -201,19 +201,19 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	if err := tx.UnmarshalBinary(common.FromHex(test.Input)); err != nil {
 		b.Fatalf("failed to parse testcase input: %v", err)
 	}
-	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-	context := test.Context.toBlockContext(test.Genesis)
-	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
-	if err != nil {
-		b.Fatalf("failed to prepare transaction for tracing: %v", err)
-	}
 	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 	defer state.Close()
 
+	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
+	context := test.Context.toBlockContext(test.Genesis)
+	evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{})
+	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee, evm.Rules())
+	if err != nil {
+		b.Fatalf("failed to prepare transaction for tracing: %v", err)
+	}
+
 	b.ReportAllocs()
 	b.ResetTimer()
-
-	evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{})
 
 	for i := 0; i < b.N; i++ {
 		snap := state.StateDB.Snapshot()
@@ -370,7 +370,7 @@ func TestInternals(t *testing.T) {
 				t.Fatalf("test %v: failed to sign transaction: %v", tc.name, err)
 			}
 			evm := vm.NewEVM(context, logState, config, vm.Config{Tracer: tc.tracer.Hooks})
-			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0))
+			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0), evm.Rules())
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
 			}
