@@ -82,7 +82,7 @@ type TxPool struct {
 	state     *state.StateDB // Current state at the blockchain head
 
 	reservations map[common.Address]SubPool // Map with the account to pool reservations
-	reserveLock  sync.Mutex                 // Lock protecting the account reservations
+	reserveLock  sync.RWMutex               // Lock protecting the account reservations
 
 	subs event.SubscriptionScope // Subscription scope to unsubscribe all on shutdown
 	quit chan chan error         // Quit channel to tear down the head updater
@@ -120,7 +120,7 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 		sync:         make(chan chan error),
 	}
 	for i, subpool := range subpools {
-		if err := subpool.Init(gasTip, head, pool.reserver(i, subpool)); err != nil {
+		if err := subpool.Init(gasTip, head, pool.reserver(i, subpool), pool.isReserved); err != nil {
 			for j := i - 1; j >= 0; j-- {
 				subpools[j].Close()
 			}
@@ -129,6 +129,15 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	}
 	go pool.loop(head)
 	return pool, nil
+}
+
+// isReserved returns a flag indicating if the address has been reserved or not.
+func (p *TxPool) isReserved(address common.Address) bool {
+	p.reserveLock.RLock()
+	defer p.reserveLock.RUnlock()
+
+	_, exists := p.reservations[address]
+	return exists
 }
 
 // reserver is a method to create an address reservation callback to exclusively
