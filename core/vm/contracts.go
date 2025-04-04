@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
@@ -311,7 +312,7 @@ func (c *dataCopy) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.IdentityPerWordGas + params.IdentityBaseGas
 }
 func (c *dataCopy) Run(in []byte) ([]byte, error) {
-	return common.CopyBytes(in), nil
+	return bytes.Clone(in), nil
 }
 
 // bigModExp implements a native big integer exponential modular operation.

@@ -308,7 +308,7 @@ func forNodes(tr *Trie) map[string][]byte {
 		if it.Leaf() {
 			continue
 		}
-		nodes[string(it.Path())] = common.CopyBytes(it.NodeBlob())
+		nodes[string(it.Path())] = bytes.Clone(it.NodeBlob())
 	}
 	return nodes
 }
@@ -327,7 +327,7 @@ func forHashedNodes(tr *Trie) map[string][]byte {
 		if it.Hash() == (common.Hash{}) {
 			continue
 		}
-		nodes[string(it.Path())] = common.CopyBytes(it.NodeBlob())
+		nodes[string(it.Path())] = bytes.Clone(it.NodeBlob())
 	}
 	return nodes
 }

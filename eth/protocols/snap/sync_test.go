@@ -1475,7 +1475,7 @@ var (
 // getCodeHash returns a pseudo-random code hash
 func getCodeHash(i uint64) []byte {
 	h := codehashes[int(i)%len(codehashes)]
-	return common.CopyBytes(h[:])
+	return bytes.Clone(h[:])
 }
 
 // getCodeByHash convenience function to lookup the code from the code hash

@@ -17,6 +17,7 @@
 package native
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -74,7 +75,7 @@ func (f callFrame) failed() bool {
 }
 
 func (f *callFrame) processOutput(output []byte, err error, reverted bool) {
-	output = common.CopyBytes(output)
+	output = bytes.Clone(output)
 	// Clear error if tx wasn't reverted. This happened
 	// for pre-homestead contract storage OOG.
 	if err != nil && !reverted {
@@ -170,7 +171,7 @@ func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common
 		Type:  vm.OpCode(typ),
 		From:  from,
 		To:    &toCopy,
-		Input: common.CopyBytes(input),
+		Input: bytes.Clone(input),
 		Gas:   gas,
 		Value: value,
 	}

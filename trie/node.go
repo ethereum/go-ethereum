@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -87,7 +88,7 @@ type nodeFlag struct {
 
 func (n nodeFlag) copy() nodeFlag {
 	return nodeFlag{
-		hash:  common.CopyBytes(n.hash),
+		hash:  bytes.Clone(n.hash),
 		dirty: n.dirty,
 	}
 }
@@ -150,7 +151,7 @@ func mustDecodeNodeUnsafe(hash, buf []byte) node {
 // scenarios with low performance requirements and hard to determine whether the
 // byte slice be modified or not.
 func decodeNode(hash, buf []byte) (node, error) {
-	return decodeNodeUnsafe(hash, common.CopyBytes(buf))
+	return decodeNodeUnsafe(hash, bytes.Clone(buf))
 }
 
 // decodeNodeUnsafe parses the RLP encoding of a trie node. The passed byte slice
