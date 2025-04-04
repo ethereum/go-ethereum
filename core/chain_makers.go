@@ -422,12 +422,15 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		return block, b.receipts
 	}
 
+	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
+	defer verkledb.Close()
+
 	// Forcibly use hash-based state scheme for retaining all nodes in disk.
 	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
 	defer triedb.Close()
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
+		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, verkledb, nil))
 		if err != nil {
 			panic(err)
 		}
@@ -468,9 +471,11 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 // then generate chain on top.
 func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
 	db := rawdb.NewMemoryDatabase()
+	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
+	defer verkledb.Close()
 	triedb := triedb.NewDatabase(db, triedb.HashDefaults)
 	defer triedb.Close()
-	_, err := genesis.Commit(db, triedb)
+	_, err := genesis.Commit(db, triedb, verkledb)
 	if err != nil {
 		panic(err)
 	}
@@ -478,7 +483,7 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	return db, blocks, receipts
 }
 
-func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, trdb *triedb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts, []*verkle.VerkleProof, []verkle.StateDiff) {
+func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, trdb, vktdb *triedb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts, []*verkle.VerkleProof, []verkle.StateDiff) {
 	if config == nil {
 		config = params.TestChainConfig
 	}
@@ -537,7 +542,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 	}
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(trdb, nil))
+		statedb, err := state.New(parent.Root(), state.NewDatabase(trdb, vktdb, nil))
 		if err != nil {
 			panic(err)
 		}
@@ -577,13 +582,15 @@ func GenerateVerkleChainWithGenesis(genesis *Genesis, engine consensus.Engine, n
 	db := rawdb.NewMemoryDatabase()
 	cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 	cacheConfig.SnapshotLimit = 0
-	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
+	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
+	defer verkledb.Close()
+	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig())
 	defer triedb.Close()
-	genesisBlock, err := genesis.Commit(db, triedb)
+	genesisBlock, err := genesis.Commit(db, triedb, verkledb)
 	if err != nil {
 		panic(err)
 	}
-	blocks, receipts, proofs, keyvals := GenerateVerkleChain(genesis.Config, genesisBlock, engine, db, triedb, n, gen)
+	blocks, receipts, proofs, keyvals := GenerateVerkleChain(genesis.Config, genesisBlock, engine, db, triedb, verkledb, n, gen)
 	return genesisBlock.Hash(), db, blocks, receipts, proofs, keyvals
 }
 
