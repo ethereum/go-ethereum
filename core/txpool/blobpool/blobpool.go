@@ -1754,6 +1754,9 @@ func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
 
 // Clear implements txpool.SubPool, removing all tracked transactions
 // from the blob pool and persistent store.
+//
+// Note, do not use this in production / live code. In live code, the pool is
+// meant to reset on a separate thread to avoid DoS vectors.
 func (p *BlobPool) Clear() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
