@@ -1199,7 +1199,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		Header:            header,
 		State:             state,
 		ErrorRatio:        estimateGasErrorRatio,
-		CustomPrecompiles: b.GetCustomPrecompiles(),
+		CustomPrecompiles: b.GetCustomPrecompiles(header.Number.Int64()),
 	}
 
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
@@ -1239,7 +1239,7 @@ func DoEstimateGasAfterCalls(ctx context.Context, b Backend, args TransactionArg
 		Header:            header,
 		State:             state,
 		ErrorRatio:        estimateGasErrorRatio,
-		CustomPrecompiles: b.GetCustomPrecompiles(),
+		CustomPrecompiles: b.GetCustomPrecompiles(header.Number.Int64()),
 	}
 
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {

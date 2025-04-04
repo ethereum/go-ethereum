@@ -97,7 +97,7 @@ type Backend interface {
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 
-	GetCustomPrecompiles() map[common.Address]vm.PrecompiledContract
+	GetCustomPrecompiles(int64) map[common.Address]vm.PrecompiledContract
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {
