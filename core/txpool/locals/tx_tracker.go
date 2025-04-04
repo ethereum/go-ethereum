@@ -58,7 +58,7 @@ type TxTracker struct {
 
 // New creates a new TxTracker
 func New(journalPath string, journalTime time.Duration, chainConfig *params.ChainConfig, next *txpool.TxPool) *TxTracker {
-	pool := &TxTracker{
+	tracker := &TxTracker{
 		all:        make(map[common.Hash]*types.Transaction),
 		byAddr:     make(map[common.Address]*legacypool.SortedMap),
 		signer:     types.LatestSigner(chainConfig),
@@ -66,10 +66,15 @@ func New(journalPath string, journalTime time.Duration, chainConfig *params.Chai
 		pool:       next,
 	}
 	if journalPath != "" {
-		pool.journal = newTxJournal(journalPath)
-		pool.rejournal = journalTime
+		tracker.journal = newTxJournal(journalPath)
+		tracker.rejournal = journalTime
 	}
-	return pool
+	return tracker
+}
+
+// HasTx checks if TxTracker has this tx already.
+func (tracker *TxTracker) HasTx(hash common.Hash) bool {
+	return tracker.all[hash] != nil
 }
 
 // Track adds a transaction to the tracked set.
