@@ -10,7 +10,6 @@ interface DownloadsHero {
   currentBuild: string;
   currentBuildVersion: string;
   linuxBuildURL: string;
-  macOSBuildURL: string;
   releaseNotesURL: string;
   sourceCodeURL: string;
   windowsBuildURL: string;
@@ -20,13 +19,11 @@ export const DownloadsHero: FC<DownloadsHero> = ({
   currentBuild,
   currentBuildVersion,
   linuxBuildURL,
-  macOSBuildURL,
   releaseNotesURL,
   sourceCodeURL,
   windowsBuildURL
 }) => {
   DOWNLOAD_HEADER_BUTTONS.linuxBuild.buildURL = linuxBuildURL;
-  DOWNLOAD_HEADER_BUTTONS.macOSBuild.buildURL = macOSBuildURL;
   DOWNLOAD_HEADER_BUTTONS.windowsBuild.buildURL = windowsBuildURL;
   DOWNLOAD_HEADER_BUTTONS.sourceCode.buildURL = sourceCodeURL;
 

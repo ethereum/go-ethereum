@@ -1,4 +1,4 @@
-import { Stack, Tabs, TabList, Tab, Text, TabPanel, TabPanels } from '@chakra-ui/react';
+import { Link, Stack, Tabs, TabList, Tab, Text, TabPanel, TabPanels } from '@chakra-ui/react';
 import { FC, useMemo } from 'react';
 
 import { DataTable } from '../../UI';
@@ -9,7 +9,6 @@ import { ReleaseData } from '../../../types';
 
 interface Props {
   linuxData: ReleaseData[];
-  macOSData: ReleaseData[];
   windowsData: ReleaseData[];
   iOSData: ReleaseData[];
   androidData: ReleaseData[];
@@ -20,7 +19,6 @@ interface Props {
 
 export const DownloadsTable: FC<Props> = ({
   linuxData,
-  macOSData,
   windowsData,
   iOSData,
   androidData,
@@ -30,7 +28,6 @@ export const DownloadsTable: FC<Props> = ({
 }) => {
   const totalReleases = [
     linuxData.length,
-    macOSData.length,
     windowsData.length,
     iOSData.length,
     androidData.length
@@ -41,7 +38,6 @@ export const DownloadsTable: FC<Props> = ({
   const getDefaultIndex = useMemo<number>(() => {
     const OS: string = typeof window !== 'undefined' ? window.navigator.platform : '';
     const userAgent = typeof window !== 'undefined' ? window.navigator.userAgent : '';
-    if (/Mac/i.test(OS)) return 1;
     if (/Win/i.test(OS)) return 2;
     if (/iPhone/i.test(OS)) return 3;
     if (/Android/i.test(userAgent)) return 4;
@@ -91,10 +87,15 @@ export const DownloadsTable: FC<Props> = ({
             />
           </TabPanel>
           <TabPanel p={0}>
-            <DataTable
-              columnHeaders={DOWNLOADS_TABLE_TAB_COLUMN_HEADERS}
-              data={macOSData.slice(0, amountOfReleasesToShow)}
-            />
+            <Stack p={4}>
+              <Text textAlign='center' bg='code-bg' p={3}>
+                Mac users should get their builds from{' '}
+                <Link href='https://formulae.brew.sh/formula/ethereum' variant='light'>
+                  Homebrew
+                </Link>{' '}
+                or compile themselves.
+              </Text>
+            </Stack>
           </TabPanel>
           <TabPanel p={0}>
             <DataTable
