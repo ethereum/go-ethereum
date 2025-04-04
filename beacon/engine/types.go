@@ -116,7 +116,6 @@ type BlobsBundleV1 struct {
 	Commitments []hexutil.Bytes `json:"commitments"`
 	Proofs      []hexutil.Bytes `json:"proofs"`
 	Blobs       []hexutil.Bytes `json:"blobs"`
-	CellProofs  []hexutil.Bytes `json:"cellProofs"`
 }
 
 type BlobAndProofV1 struct {
@@ -332,15 +331,17 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Commitments: make([]hexutil.Bytes, 0),
 		Blobs:       make([]hexutil.Bytes, 0),
 		Proofs:      make([]hexutil.Bytes, 0),
-		CellProofs:  make([]hexutil.Bytes, 0),
 	}
 	for _, sidecar := range sidecars {
 		for j := range sidecar.Blobs {
 			bundle.Blobs = append(bundle.Blobs, hexutil.Bytes(sidecar.Blobs[j][:]))
 			bundle.Commitments = append(bundle.Commitments, hexutil.Bytes(sidecar.Commitments[j][:]))
-			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(sidecar.Proofs[j][:]))
-			for _, proof := range sidecar.CellProofs[j] {
-				bundle.CellProofs = append(bundle.CellProofs, hexutil.Bytes(proof[:]))
+			if len(sidecar.Proofs[j]) != 0 {
+				bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(sidecar.Proofs[j][:]))
+			} else {
+				for _, proof := range sidecar.CellProofs[j] {
+					bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(proof[:]))
+				}
 			}
 		}
 	}
