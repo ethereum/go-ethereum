@@ -131,19 +131,19 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/common"
 		`,
 		`if b, err := NewInputChecker(common.Address{}, nil); b == nil || err != nil {
-			 t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
-		 } else if false { // Don't run, just compile and test types
-			 var err error
+			t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
+		} else if false { // Don't run, just compile and test types
+			var err error
 
-			 err = b.NoInput(nil)
-			 err = b.NamedInput(nil, "")
-			 err = b.AnonInput(nil, "")
-			 err = b.NamedInputs(nil, "", "")
-			 err = b.AnonInputs(nil, "", "")
-			 err = b.MixedInputs(nil, "", "")
+			err = b.NoInput(nil)
+			err = b.NamedInput(nil, "")
+			err = b.AnonInput(nil, "")
+			err = b.NamedInputs(nil, "", "")
+			err = b.AnonInputs(nil, "", "")
+			err = b.MixedInputs(nil, "", "")
 
-			 fmt.Println(err)
-		 }`,
+			fmt.Println(err)
+		}`,
 		nil,
 		nil,
 		nil,
@@ -169,21 +169,21 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/common"
 		`,
 		`if b, err := NewOutputChecker(common.Address{}, nil); b == nil || err != nil {
-			 t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
+			t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 		 } else if false { // Don't run, just compile and test types
-			 var str1, str2 string
-			 var err error
+			var str1, str2 string
+			var err error
 
-			 err              = b.NoOutput(nil)
-			 str1, err        = b.NamedOutput(nil)
-			 str1, err        = b.AnonOutput(nil)
-			 res, _          := b.NamedOutputs(nil)
-			 str1, str2, err  = b.CollidingOutputs(nil)
-			 str1, str2, err  = b.AnonOutputs(nil)
-			 str1, str2, err  = b.MixedOutputs(nil)
+			err              = b.NoOutput(nil)
+			str1, err        = b.NamedOutput(nil)
+			str1, err        = b.AnonOutput(nil)
+			res, _          := b.NamedOutputs(nil)
+			str1, str2, err  = b.CollidingOutputs(nil)
+			str1, str2, err  = b.AnonOutputs(nil)
+			str1, str2, err  = b.MixedOutputs(nil)
 
-			 fmt.Println(str1, str2, res.Str1, res.Str2, err)
-		 }`,
+			fmt.Println(str1, str2, res.Str1, res.Str2, err)
+		}`,
 		nil,
 		nil,
 		nil,
@@ -210,56 +210,56 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/common"
 		`,
 		`if e, err := NewEventChecker(common.Address{}, nil); e == nil || err != nil {
-			 t.Fatalf("binding (%v) nil or error (%v) not nil", e, nil)
-		 } else if false { // Don't run, just compile and test types
-			 var (
-				 err  error
-			   res  bool
-				 str  string
-				 dat  []byte
-				 hash common.Hash
-			 )
-			 _, err = e.FilterEmpty(nil)
-			 _, err = e.FilterIndexed(nil, []common.Address{}, []*big.Int{})
+			t.Fatalf("binding (%v) nil or error (%v) not nil", e, nil)
+		} else if false { // Don't run, just compile and test types
+			var (
+			    err  error
+			  	res  bool
+			    str  string
+			    dat  []byte
+			    hash common.Hash
+			)
+			_, err = e.FilterEmpty(nil)
+			_, err = e.FilterIndexed(nil, []common.Address{}, []*big.Int{})
 
-			 mit, err := e.FilterMixed(nil, []common.Address{})
+			mit, err := e.FilterMixed(nil, []common.Address{})
 
-			 res = mit.Next()  // Make sure the iterator has a Next method
-			 err = mit.Error() // Make sure the iterator has an Error method
-			 err = mit.Close() // Make sure the iterator has a Close method
+			res = mit.Next()  // Make sure the iterator has a Next method
+			err = mit.Error() // Make sure the iterator has an Error method
+			err = mit.Close() // Make sure the iterator has a Close method
 
-			 fmt.Println(mit.Event.Raw.BlockHash) // Make sure the raw log is contained within the results
-			 fmt.Println(mit.Event.Num)           // Make sure the unpacked non-indexed fields are present
-			 fmt.Println(mit.Event.Addr)          // Make sure the reconstructed indexed fields are present
+			fmt.Println(mit.Event.Raw.BlockHash) // Make sure the raw log is contained within the results
+			fmt.Println(mit.Event.Num)           // Make sure the unpacked non-indexed fields are present
+			fmt.Println(mit.Event.Addr)          // Make sure the reconstructed indexed fields are present
 
-			 dit, err := e.FilterDynamic(nil, []string{}, [][]byte{})
+			dit, err := e.FilterDynamic(nil, []string{}, [][]byte{})
 
-			 str  = dit.Event.Str    // Make sure non-indexed strings retain their type
-			 dat  = dit.Event.Dat    // Make sure non-indexed bytes retain their type
-			 hash = dit.Event.IdxStr // Make sure indexed strings turn into hashes
-			 hash = dit.Event.IdxDat // Make sure indexed bytes turn into hashes
+			str  = dit.Event.Str    // Make sure non-indexed strings retain their type
+			dat  = dit.Event.Dat    // Make sure non-indexed bytes retain their type
+			hash = dit.Event.IdxStr // Make sure indexed strings turn into hashes
+			hash = dit.Event.IdxDat // Make sure indexed bytes turn into hashes
 
-			 sink := make(chan *EventCheckerMixed)
-			 sub, err := e.WatchMixed(nil, sink, []common.Address{})
-			 defer sub.Unsubscribe()
+			sink := make(chan *EventCheckerMixed)
+			sub, err := e.WatchMixed(nil, sink, []common.Address{})
+			defer sub.Unsubscribe()
 
-			 event := <-sink
-			 fmt.Println(event.Raw.BlockHash) // Make sure the raw log is contained within the results
-			 fmt.Println(event.Num)           // Make sure the unpacked non-indexed fields are present
-			 fmt.Println(event.Addr)          // Make sure the reconstructed indexed fields are present
+			event := <-sink
+			fmt.Println(event.Raw.BlockHash) // Make sure the raw log is contained within the results
+			fmt.Println(event.Num)           // Make sure the unpacked non-indexed fields are present
+			fmt.Println(event.Addr)          // Make sure the reconstructed indexed fields are present
 
-			 fmt.Println(res, str, dat, hash, err)
+			fmt.Println(res, str, dat, hash, err)
 
-			 oit, err := e.FilterUnnamed(nil, []*big.Int{}, []*big.Int{})
+			oit, err := e.FilterUnnamed(nil, []*big.Int{}, []*big.Int{})
 
-			 arg0  := oit.Event.Arg0    // Make sure unnamed arguments are handled correctly
-			 arg1  := oit.Event.Arg1    // Make sure unnamed arguments are handled correctly
-			 fmt.Println(arg0, arg1)
-		 }
-		 // Run a tiny reflection test to ensure disallowed methods don't appear
-		 if _, ok := reflect.TypeOf(&EventChecker{}).MethodByName("FilterAnonymous"); ok {
-		 	t.Errorf("binding has disallowed method (FilterAnonymous)")
-		 }`,
+			arg0  := oit.Event.Arg0    // Make sure unnamed arguments are handled correctly
+			arg1  := oit.Event.Arg1    // Make sure unnamed arguments are handled correctly
+			fmt.Println(arg0, arg1)
+		}
+		// Run a tiny reflection test to ensure disallowed methods don't appear
+		if _, ok := reflect.TypeOf(&EventChecker{}).MethodByName("FilterAnonymous"); ok {
+			t.Errorf("binding has disallowed method (FilterAnonymous)")
+		}`,
 		nil,
 		nil,
 		nil,
@@ -463,14 +463,14 @@ var bindTests = []struct {
 			// Deploy a slice tester contract and execute a n array call on it
 			_, _, slicer, err := DeploySlicer(auth, sim)
 			if err != nil {
-					t.Fatalf("Failed to deploy slicer contract: %v", err)
+				t.Fatalf("Failed to deploy slicer contract: %v", err)
 			}
 			sim.Commit()
 
 			if out, err := slicer.EchoAddresses(nil, []common.Address{auth.From, common.Address{}}); err != nil {
-					t.Fatalf("Failed to call slice echoer: %v", err)
+				t.Fatalf("Failed to call slice echoer: %v", err)
 			} else if !reflect.DeepEqual(out, []common.Address{auth.From, common.Address{}}) {
-					t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{auth.From, common.Address{}})
+				t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{auth.From, common.Address{}})
 			}
 		`,
 		nil,
@@ -1790,19 +1790,19 @@ var bindTests = []struct {
 	{
 		`NewSingleStructArgument`,
 		`
-		 pragma solidity ^0.8.0;
+		pragma solidity ^0.8.0;
 
-		 contract NewSingleStructArgument {
-			 struct MyStruct{
-				 uint256 a;
-				 uint256 b;
-			 }
-			 event StructEvent(MyStruct s);
-			 function TestEvent() public {
-				 emit StructEvent(MyStruct({a: 1, b: 2}));
-			 }
-		 }
-	   `,
+		contract NewSingleStructArgument {
+			struct MyStruct{
+				uint256 a;
+				uint256 b;
+			}
+			event StructEvent(MyStruct s);
+			function TestEvent() public {
+				emit StructEvent(MyStruct({a: 1, b: 2}));
+			}
+		}
+		`,
 		[]string{"608060405234801561001057600080fd5b50610113806100206000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806324ec1d3f14602d575b600080fd5b60336035565b005b7fb4b2ff75e30cb4317eaae16dd8a187dd89978df17565104caa6c2797caae27d460405180604001604052806001815260200160028152506040516078919060ba565b60405180910390a1565b6040820160008201516096600085018260ad565b50602082015160a7602085018260ad565b50505050565b60b48160d3565b82525050565b600060408201905060cd60008301846082565b92915050565b600081905091905056fea26469706673582212208823628796125bf9941ce4eda18da1be3cf2931b231708ab848e1bd7151c0c9a64736f6c63430008070033"},
 		[]string{`[{"anonymous":false,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"}],"indexed":false,"internalType":"struct Test.MyStruct","name":"s","type":"tuple"}],"name":"StructEvent","type":"event"},{"inputs":[],"name":"TestEvent","outputs":[],"stateMutability":"nonpayable","type":"function"}]`},
 		`
@@ -1885,7 +1885,7 @@ var bindTests = []struct {
 				revert MyError3(1,2,3);
 			}
 		}
-	   `,
+		`,
 		[]string{"0x6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063726c638214602d575b600080fd5b60336035565b005b60405163024876cd60e61b815260016004820152600260248201526003604482015260640160405180910390fdfea264697066735822122093f786a1bc60216540cd999fbb4a6109e0fef20abcff6e9107fb2817ca968f3c64736f6c63430008070033"},
 		[]string{`[{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError1","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError2","type":"error"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"},{"internalType":"uint256","name":"c","type":"uint256"}],"name":"MyError3","type":"error"},{"inputs":[],"name":"Error","outputs":[],"stateMutability":"pure","type":"function"}]`},
 		`
@@ -1897,7 +1897,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
-	   `,
+		`,
 		`
 			var (
 				key, _  = crypto.GenerateKey()
@@ -1920,7 +1920,7 @@ var bindTests = []struct {
 			}
 			// TODO (MariusVanDerWijden unpack error using abigen
 			// once that is implemented
-	   `,
+		`,
 		nil,
 		nil,
 		nil,
@@ -1978,13 +1978,13 @@ var bindTests = []struct {
 		pragma solidity >=0.4.22 <0.9.0;
 		contract oracle {
 			struct request {
-				 bytes data;
-				 bytes _data;
+				bytes data;
+				bytes _data;
 			}
 			event log (int msg, int _msg);
 			function addRequest(request memory req) public pure {}
 			function getRequest() pure public returns (request memory) {
-				 return request("", "");
+				return request("", "");
 			}
 		}
 		`,
