@@ -491,7 +491,7 @@ func (dl *diskLayer) checkAndFlush(ctx *generatorContext, current []byte) error 
 		dl.lock.Unlock()
 
 		if abort != nil {
-			ctx.stats.Log("Aborting state snapshot generation", dl.root, current)
+			ctx.stats.Log("Pausing state snapshot generation", dl.root, current)
 			return newAbortErr(abort) // bubble up an error for interruption
 		}
 		// Don't hold the iterators too long, release them to let compactor works
