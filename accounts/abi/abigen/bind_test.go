@@ -131,19 +131,19 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/common"
 		`,
 		`if b, err := NewInputChecker(common.Address{}, nil); b == nil || err != nil {
-			 t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
-		 } else if false { // Don't run, just compile and test types
-			 var err error
+			t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
+		} else if false { // Don't run, just compile and test types
+			var err error
 
-			 err = b.NoInput(nil)
-			 err = b.NamedInput(nil, "")
-			 err = b.AnonInput(nil, "")
-			 err = b.NamedInputs(nil, "", "")
-			 err = b.AnonInputs(nil, "", "")
-			 err = b.MixedInputs(nil, "", "")
+			err = b.NoInput(nil)
+			err = b.NamedInput(nil, "")
+			err = b.AnonInput(nil, "")
+			err = b.NamedInputs(nil, "", "")
+			err = b.AnonInputs(nil, "", "")
+			err = b.MixedInputs(nil, "", "")
 
-			 fmt.Println(err)
-		 }`,
+			fmt.Println(err)
+		}`,
 		nil,
 		nil,
 		nil,
@@ -169,21 +169,21 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/common"
 		`,
 		`if b, err := NewOutputChecker(common.Address{}, nil); b == nil || err != nil {
-			 t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
+			t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
 		 } else if false { // Don't run, just compile and test types
-			 var str1, str2 string
-			 var err error
+			var str1, str2 string
+			var err error
 
-			 err              = b.NoOutput(nil)
-			 str1, err        = b.NamedOutput(nil)
-			 str1, err        = b.AnonOutput(nil)
-			 res, _          := b.NamedOutputs(nil)
-			 str1, str2, err  = b.CollidingOutputs(nil)
-			 str1, str2, err  = b.AnonOutputs(nil)
-			 str1, str2, err  = b.MixedOutputs(nil)
+			err              = b.NoOutput(nil)
+			str1, err        = b.NamedOutput(nil)
+			str1, err        = b.AnonOutput(nil)
+			res, _          := b.NamedOutputs(nil)
+			str1, str2, err  = b.CollidingOutputs(nil)
+			str1, str2, err  = b.AnonOutputs(nil)
+			str1, str2, err  = b.MixedOutputs(nil)
 
-			 fmt.Println(str1, str2, res.Str1, res.Str2, err)
-		 }`,
+			fmt.Println(str1, str2, res.Str1, res.Str2, err)
+		}`,
 		nil,
 		nil,
 		nil,
@@ -210,56 +210,56 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/common"
 		`,
 		`if e, err := NewEventChecker(common.Address{}, nil); e == nil || err != nil {
-			 t.Fatalf("binding (%v) nil or error (%v) not nil", e, nil)
-		 } else if false { // Don't run, just compile and test types
-			 var (
-				 err  error
-			   res  bool
-				 str  string
-				 dat  []byte
-				 hash common.Hash
-			 )
-			 _, err = e.FilterEmpty(nil)
-			 _, err = e.FilterIndexed(nil, []common.Address{}, []*big.Int{})
+			t.Fatalf("binding (%v) nil or error (%v) not nil", e, nil)
+		} else if false { // Don't run, just compile and test types
+			var (
+			    err  error
+			  	res  bool
+			    str  string
+			    dat  []byte
+			    hash common.Hash
+			)
+			_, err = e.FilterEmpty(nil)
+			_, err = e.FilterIndexed(nil, []common.Address{}, []*big.Int{})
 
-			 mit, err := e.FilterMixed(nil, []common.Address{})
+			mit, err := e.FilterMixed(nil, []common.Address{})
 
-			 res = mit.Next()  // Make sure the iterator has a Next method
-			 err = mit.Error() // Make sure the iterator has an Error method
-			 err = mit.Close() // Make sure the iterator has a Close method
+			res = mit.Next()  // Make sure the iterator has a Next method
+			err = mit.Error() // Make sure the iterator has an Error method
+			err = mit.Close() // Make sure the iterator has a Close method
 
-			 fmt.Println(mit.Event.Raw.BlockHash) // Make sure the raw log is contained within the results
-			 fmt.Println(mit.Event.Num)           // Make sure the unpacked non-indexed fields are present
-			 fmt.Println(mit.Event.Addr)          // Make sure the reconstructed indexed fields are present
+			fmt.Println(mit.Event.Raw.BlockHash) // Make sure the raw log is contained within the results
+			fmt.Println(mit.Event.Num)           // Make sure the unpacked non-indexed fields are present
+			fmt.Println(mit.Event.Addr)          // Make sure the reconstructed indexed fields are present
 
-			 dit, err := e.FilterDynamic(nil, []string{}, [][]byte{})
+			dit, err := e.FilterDynamic(nil, []string{}, [][]byte{})
 
-			 str  = dit.Event.Str    // Make sure non-indexed strings retain their type
-			 dat  = dit.Event.Dat    // Make sure non-indexed bytes retain their type
-			 hash = dit.Event.IdxStr // Make sure indexed strings turn into hashes
-			 hash = dit.Event.IdxDat // Make sure indexed bytes turn into hashes
+			str  = dit.Event.Str    // Make sure non-indexed strings retain their type
+			dat  = dit.Event.Dat    // Make sure non-indexed bytes retain their type
+			hash = dit.Event.IdxStr // Make sure indexed strings turn into hashes
+			hash = dit.Event.IdxDat // Make sure indexed bytes turn into hashes
 
-			 sink := make(chan *EventCheckerMixed)
-			 sub, err := e.WatchMixed(nil, sink, []common.Address{})
-			 defer sub.Unsubscribe()
+			sink := make(chan *EventCheckerMixed)
+			sub, err := e.WatchMixed(nil, sink, []common.Address{})
+			defer sub.Unsubscribe()
 
-			 event := <-sink
-			 fmt.Println(event.Raw.BlockHash) // Make sure the raw log is contained within the results
-			 fmt.Println(event.Num)           // Make sure the unpacked non-indexed fields are present
-			 fmt.Println(event.Addr)          // Make sure the reconstructed indexed fields are present
+			event := <-sink
+			fmt.Println(event.Raw.BlockHash) // Make sure the raw log is contained within the results
+			fmt.Println(event.Num)           // Make sure the unpacked non-indexed fields are present
+			fmt.Println(event.Addr)          // Make sure the reconstructed indexed fields are present
 
-			 fmt.Println(res, str, dat, hash, err)
+			fmt.Println(res, str, dat, hash, err)
 
-			 oit, err := e.FilterUnnamed(nil, []*big.Int{}, []*big.Int{})
+			oit, err := e.FilterUnnamed(nil, []*big.Int{}, []*big.Int{})
 
-			 arg0  := oit.Event.Arg0    // Make sure unnamed arguments are handled correctly
-			 arg1  := oit.Event.Arg1    // Make sure unnamed arguments are handled correctly
-			 fmt.Println(arg0, arg1)
-		 }
-		 // Run a tiny reflection test to ensure disallowed methods don't appear
-		 if _, ok := reflect.TypeOf(&EventChecker{}).MethodByName("FilterAnonymous"); ok {
-		 	t.Errorf("binding has disallowed method (FilterAnonymous)")
-		 }`,
+			arg0  := oit.Event.Arg0    // Make sure unnamed arguments are handled correctly
+			arg1  := oit.Event.Arg1    // Make sure unnamed arguments are handled correctly
+			fmt.Println(arg0, arg1)
+		}
+		// Run a tiny reflection test to ensure disallowed methods don't appear
+		if _, ok := reflect.TypeOf(&EventChecker{}).MethodByName("FilterAnonymous"); ok {
+			t.Errorf("binding has disallowed method (FilterAnonymous)")
+		}`,
 		nil,
 		nil,
 		nil,
@@ -463,14 +463,14 @@ var bindTests = []struct {
 			// Deploy a slice tester contract and execute a n array call on it
 			_, _, slicer, err := DeploySlicer(auth, sim)
 			if err != nil {
-					t.Fatalf("Failed to deploy slicer contract: %v", err)
+				t.Fatalf("Failed to deploy slicer contract: %v", err)
 			}
 			sim.Commit()
 
 			if out, err := slicer.EchoAddresses(nil, []common.Address{auth.From, common.Address{}}); err != nil {
-					t.Fatalf("Failed to call slice echoer: %v", err)
+				t.Fatalf("Failed to call slice echoer: %v", err)
 			} else if !reflect.DeepEqual(out, []common.Address{auth.From, common.Address{}}) {
-					t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{auth.From, common.Address{}})
+				t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{auth.From, common.Address{}})
 			}
 		`,
 		nil,
@@ -909,6 +909,7 @@ var bindTests = []struct {
 		[]string{`608060405234801561001057600080fd5b5061043f806100206000396000f3006080604052600436106100615763ffffffff7c0100000000000000000000000000000000000000000000000000000000600035041663528300ff8114610066578063630c31e2146100ff5780636cc6b94014610138578063c7d116dd1461015b575b600080fd5b34801561007257600080fd5b506040805160206004803580820135601f81018490048402850184019095528484526100fd94369492936024939284019190819084018382808284375050604080516020601f89358b018035918201839004830284018301909452808352979a9998810197919650918201945092508291508401838280828437509497506101829650505050505050565b005b34801561010b57600080fd5b506100fd73ffffffffffffffffffffffffffffffffffffffff60043516602435604435151560643561033c565b34801561014457600080fd5b506100fd67ffffffffffffffff1960043516610394565b34801561016757600080fd5b506100fd60043560243560010b63ffffffff604435166103d6565b806040518082805190602001908083835b602083106101b25780518252601f199092019160209182019101610193565b51815160209384036101000a6000190180199092169116179052604051919093018190038120875190955087945090928392508401908083835b6020831061020b5780518252601f1990920191602091820191016101ec565b6001836020036101000a03801982511681845116808217855250505050505090500191505060405180910390207f3281fd4f5e152dd3385df49104a3f633706e21c9e80672e88d3bcddf33101f008484604051808060200180602001838103835285818151815260200191508051906020019080838360005b8381101561029c578181015183820152602001610284565b50505050905090810190601f1680156102c95780820380516001836020036101000a031916815260200191505b50838103825284518152845160209182019186019080838360005b838110156102fc5781810151838201526020016102e4565b50505050905090810190601f1680156103295780820380516001836020036101000a031916815260200191505b5094505050505060405180910390a35050565b60408051828152905183151591859173ffffffffffffffffffffffffffffffffffffffff8816917f1f097de4289df643bd9c11011cc61367aa12983405c021056e706eb5ba1250c8919081900360200190a450505050565b6040805167ffffffffffffffff19831680825291517fcdc4c1b1aed5524ffb4198d7a5839a34712baef5fa06884fac7559f4a5854e0a9181900360200190a250565b8063ffffffff168260010b847f3ca7f3a77e5e6e15e781850bc82e32adfa378a2a609370db24b4d0fae10da2c960405160405180910390a45050505600a165627a7a72305820468b5843bf653145bd924b323c64ef035d3dd922c170644b44d61aa666ea6eee0029`},
 		[]string{`[{"constant":false,"inputs":[{"name":"str","type":"string"},{"name":"blob","type":"bytes"}],"name":"raiseDynamicEvent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"addr","type":"address"},{"name":"id","type":"bytes32"},{"name":"flag","type":"bool"},{"name":"value","type":"uint256"}],"name":"raiseSimpleEvent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"blob","type":"bytes24"}],"name":"raiseFixedBytesEvent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"number","type":"uint256"},{"name":"short","type":"int16"},{"name":"long","type":"uint32"}],"name":"raiseNodataEvent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"Addr","type":"address"},{"indexed":true,"name":"Id","type":"bytes32"},{"indexed":true,"name":"Flag","type":"bool"},{"indexed":false,"name":"Value","type":"uint256"}],"name":"SimpleEvent","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"Number","type":"uint256"},{"indexed":true,"name":"Short","type":"int16"},{"indexed":true,"name":"Long","type":"uint32"}],"name":"NodataEvent","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"IndexedString","type":"string"},{"indexed":true,"name":"IndexedBytes","type":"bytes"},{"indexed":false,"name":"NonIndexedString","type":"string"},{"indexed":false,"name":"NonIndexedBytes","type":"bytes"}],"name":"DynamicEvent","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"IndexedBytes","type":"bytes24"},{"indexed":false,"name":"NonIndexedBytes","type":"bytes24"}],"name":"FixedBytesEvent","type":"event"}]`},
 		`
+			"context"
 			"math/big"
 			"time"
 
@@ -934,14 +935,26 @@ var bindTests = []struct {
 			sim.Commit()
 
 			// Inject a few events into the contract, gradually more in each block
+			var txs []*types.Transaction
 			for i := 1; i <= 3; i++ {
 				for j := 1; j <= i; j++ {
-					if _, err := eventer.RaiseSimpleEvent(auth, common.Address{byte(j)}, [32]byte{byte(j)}, true, big.NewInt(int64(10*i+j))); err != nil {
+					tx, err := eventer.RaiseSimpleEvent(auth, common.Address{byte(j)}, [32]byte{byte(j)}, true, big.NewInt(int64(10*i+j)))
+					if err != nil {
 						t.Fatalf("block %d, event %d: raise failed: %v", i, j, err)
 					}
+					txs = append(txs, tx)
 				}
 				sim.Commit()
 			}
+
+			// Wait for all transactions to be mined
+			ctx := context.Background()
+			for i, tx := range txs {
+				if _, err := bind.WaitMined(ctx, sim, tx); err != nil {
+					t.Fatalf("failed to wait for tx %d: %v", i, err)
+				}
+			}
+
 			// Test filtering for certain events and ensure they can be found
 			sit, err := eventer.FilterSimpleEvent(nil, []common.Address{common.Address{1}, common.Address{3}}, [][32]byte{{byte(1)}, {byte(2)}, {byte(3)}}, []bool{true})
 			if err != nil {
@@ -1235,6 +1248,7 @@ var bindTests = []struct {
 [{"anonymous":false,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"indexed":false,"internalType":"struct Tuple.S","name":"a","type":"tuple"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"indexed":false,"internalType":"struct Tuple.T[2][]","name":"b","type":"tuple[2][]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"indexed":false,"internalType":"struct Tuple.T[][2]","name":"c","type":"tuple[][2]"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"indexed":false,"internalType":"struct Tuple.S[]","name":"d","type":"tuple[]"},{"indexed":false,"internalType":"uint256[]","name":"e","type":"uint256[]"}],"name":"TupleEvent","type":"event"},{"anonymous":false,"inputs":[{"components":[{"internalType":"uint8","name":"x","type":"uint8"},{"internalType":"uint8","name":"y","type":"uint8"}],"indexed":false,"internalType":"struct Tuple.P[]","name":"","type":"tuple[]"}],"name":"TupleEvent2","type":"event"},{"constant":true,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S","name":"a","type":"tuple"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[2][]","name":"b","type":"tuple[2][]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[][2]","name":"c","type":"tuple[][2]"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S[]","name":"d","type":"tuple[]"},{"internalType":"uint256[]","name":"e","type":"uint256[]"}],"name":"func1","outputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S","name":"","type":"tuple"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[2][]","name":"","type":"tuple[2][]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[][2]","name":"","type":"tuple[][2]"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S[]","name":"","type":"tuple[]"},{"internalType":"uint256[]","name":"","type":"uint256[]"}],"payable":false,"stateMutability":"pure","type":"function"},{"constant":false,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S","name":"a","type":"tuple"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[2][]","name":"b","type":"tuple[2][]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[][2]","name":"c","type":"tuple[][2]"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256[]","name":"b","type":"uint256[]"},{"components":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"internalType":"struct Tuple.T[]","name":"c","type":"tuple[]"}],"internalType":"struct Tuple.S[]","name":"d","type":"tuple[]"},{"internalType":"uint256[]","name":"e","type":"uint256[]"}],"name":"func2","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"components":[{"internalType":"uint16","name":"x","type":"uint16"},{"internalType":"uint16","name":"y","type":"uint16"}],"internalType":"struct Tuple.Q[]","name":"","type":"tuple[]"}],"name":"func3","outputs":[],"payable":false,"stateMutability":"pure","type":"function"}]
 		`},
 		`
+			"context"
 			"math/big"
 			"reflect"
 
@@ -1323,11 +1337,15 @@ var bindTests = []struct {
 			check(ret4, d, "ret4 mismatch")
 			check(ret5, e, "ret5 mismatch")
 
-			_, err = contract.Func2(auth, a, b, c, d, e)
+			tx, err := contract.Func2(auth, a, b, c, d, e)
 			if err != nil {
 				t.Fatalf("invoke contract failed, err %v", err)
 			}
 			sim.Commit()
+			_, err = bind.WaitMined(context.Background(), sim, tx)
+			if err != nil {
+				t.Fatalf("Failed to wait for tx mine: %v", err)
+			}
 
 			iter, err := contract.FilterTupleEvent(nil)
 			if err != nil {
@@ -1718,6 +1736,7 @@ var bindTests = []struct {
 		[]string{`[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bytes","name":"data","type":"bytes"}],"name":"Fallback","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"addr","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"Received","type":"event"},{"stateMutability":"nonpayable","type":"fallback"},{"stateMutability":"payable","type":"receive"}]`},
 		`
 			"bytes"
+			"context"
 			"math/big"
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -1741,8 +1760,15 @@ var bindTests = []struct {
 
 			// Test receive function
 			opts.Value = big.NewInt(100)
-			c.Receive(opts)
+			tx, err := c.Receive(opts)
+			if err != nil {
+				t.Fatalf("Failed to call receive: %v", err)
+			}
 			sim.Commit()
+			_, err = bind.WaitMined(context.Background(), sim, tx)
+			if err != nil {
+				t.Fatalf("Failed to wait for tx mine: %v", err)
+			}
 
 			var gotEvent bool
 			iter, _ := c.FilterReceived(nil)
@@ -1765,8 +1791,15 @@ var bindTests = []struct {
 			gotEvent = false
 			opts.Value = nil
 			calldata := []byte{0x01, 0x02, 0x03}
-			c.Fallback(opts, calldata)
+			tx, err = c.Fallback(opts, calldata)
+			if err != nil {
+				t.Fatalf("Failed to call fallback: %v", err)
+			}
 			sim.Commit()
+			_, err = bind.WaitMined(context.Background(), sim, tx)
+			if err != nil {
+				t.Fatalf("Failed to wait for tx mine: %v", err)
+			}
 
 			iter2, _ := c.FilterFallback(nil)
 			defer iter2.Close()
@@ -1790,19 +1823,19 @@ var bindTests = []struct {
 	{
 		`NewSingleStructArgument`,
 		`
-		 pragma solidity ^0.8.0;
+		pragma solidity ^0.8.0;
 
-		 contract NewSingleStructArgument {
-			 struct MyStruct{
-				 uint256 a;
-				 uint256 b;
-			 }
-			 event StructEvent(MyStruct s);
-			 function TestEvent() public {
-				 emit StructEvent(MyStruct({a: 1, b: 2}));
-			 }
-		 }
-	   `,
+		contract NewSingleStructArgument {
+			struct MyStruct{
+				uint256 a;
+				uint256 b;
+			}
+			event StructEvent(MyStruct s);
+			function TestEvent() public {
+				emit StructEvent(MyStruct({a: 1, b: 2}));
+			}
+		}
+		`,
 		[]string{"608060405234801561001057600080fd5b50610113806100206000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806324ec1d3f14602d575b600080fd5b60336035565b005b7fb4b2ff75e30cb4317eaae16dd8a187dd89978df17565104caa6c2797caae27d460405180604001604052806001815260200160028152506040516078919060ba565b60405180910390a1565b6040820160008201516096600085018260ad565b50602082015160a7602085018260ad565b50505050565b60b48160d3565b82525050565b600060408201905060cd60008301846082565b92915050565b600081905091905056fea26469706673582212208823628796125bf9941ce4eda18da1be3cf2931b231708ab848e1bd7151c0c9a64736f6c63430008070033"},
 		[]string{`[{"anonymous":false,"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"}],"indexed":false,"internalType":"struct Test.MyStruct","name":"s","type":"tuple"}],"name":"StructEvent","type":"event"},{"inputs":[],"name":"TestEvent","outputs":[],"stateMutability":"nonpayable","type":"function"}]`},
 		`
@@ -1885,7 +1918,7 @@ var bindTests = []struct {
 				revert MyError3(1,2,3);
 			}
 		}
-	   `,
+		`,
 		[]string{"0x6080604052348015600f57600080fd5b5060998061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063726c638214602d575b600080fd5b60336035565b005b60405163024876cd60e61b815260016004820152600260248201526003604482015260640160405180910390fdfea264697066735822122093f786a1bc60216540cd999fbb4a6109e0fef20abcff6e9107fb2817ca968f3c64736f6c63430008070033"},
 		[]string{`[{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError1","type":"error"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"MyError2","type":"error"},{"inputs":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"uint256","name":"b","type":"uint256"},{"internalType":"uint256","name":"c","type":"uint256"}],"name":"MyError3","type":"error"},{"inputs":[],"name":"Error","outputs":[],"stateMutability":"pure","type":"function"}]`},
 		`
@@ -1897,7 +1930,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
-	   `,
+		`,
 		`
 			var (
 				key, _  = crypto.GenerateKey()
@@ -1920,7 +1953,7 @@ var bindTests = []struct {
 			}
 			// TODO (MariusVanDerWijden unpack error using abigen
 			// once that is implemented
-	   `,
+		`,
 		nil,
 		nil,
 		nil,
@@ -1978,13 +2011,13 @@ var bindTests = []struct {
 		pragma solidity >=0.4.22 <0.9.0;
 		contract oracle {
 			struct request {
-				 bytes data;
-				 bytes _data;
+				bytes data;
+				bytes _data;
 			}
 			event log (int msg, int _msg);
 			function addRequest(request memory req) public pure {}
 			function getRequest() pure public returns (request memory) {
-				 return request("", "");
+				return request("", "");
 			}
 		}
 		`,
