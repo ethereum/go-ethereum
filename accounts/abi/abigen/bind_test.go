@@ -1736,6 +1736,7 @@ var bindTests = []struct {
 		[]string{`[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"bytes","name":"data","type":"bytes"}],"name":"Fallback","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"addr","type":"address"},{"indexed":false,"internalType":"uint256","name":"value","type":"uint256"}],"name":"Received","type":"event"},{"stateMutability":"nonpayable","type":"fallback"},{"stateMutability":"payable","type":"receive"}]`},
 		`
 			"bytes"
+			"context"
 			"math/big"
 
 			"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -1759,8 +1760,15 @@ var bindTests = []struct {
 
 			// Test receive function
 			opts.Value = big.NewInt(100)
-			c.Receive(opts)
+			tx, err := c.Receive(opts)
+			if err != nil {
+				t.Fatalf("Failed to call receive: %v", err)
+			}
 			sim.Commit()
+			_, err = bind.WaitMined(context.Background(), sim, tx)
+			if err != nil {
+				t.Fatalf("Failed to wait for tx mine: %v", err)
+			}
 
 			var gotEvent bool
 			iter, _ := c.FilterReceived(nil)
@@ -1783,8 +1791,15 @@ var bindTests = []struct {
 			gotEvent = false
 			opts.Value = nil
 			calldata := []byte{0x01, 0x02, 0x03}
-			c.Fallback(opts, calldata)
+			tx, err = c.Fallback(opts, calldata)
+			if err != nil {
+				t.Fatalf("Failed to call fallback: %v", err)
+			}
 			sim.Commit()
+			_, err = bind.WaitMined(context.Background(), sim, tx)
+			if err != nil {
+				t.Fatalf("Failed to wait for tx mine: %v", err)
+			}
 
 			iter2, _ := c.FilterFallback(nil)
 			defer iter2.Close()
