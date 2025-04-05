@@ -62,8 +62,8 @@ dir=./testdata/9 && ./evm t8n --state.fork=Berlin --input.alloc=$dir/alloc.json 
 ERROR(10): Failed signing transactions: ERROR(10): Tx 0: failed to sign tx: transaction type not supported
 ```
 
-It fails, due to the `evm t8n` cannot sign them in with the given signer. We can bypass that, however, 
-by feeding it presigned transactions, located in `txs_signed.json`. 
+It fails because the `evm t8n` cannot sign them in with the given signer. We can bypass that, however, 
+by feeding it pre-signed transactions, located in `txs_signed.json`. 
 
 ```
 dir=./testdata/9 && ./evm t8n --state.fork=Berlin --input.alloc=$dir/alloc.json --input.txs=$dir/txs_signed.json --input.env=$dir/env.json 
