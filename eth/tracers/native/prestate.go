@@ -177,11 +177,9 @@ func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if t.config.DiffMode {
 		t.processDiffState()
 	}
-	// the new created contracts' prestate were empty, so delete them
-	for a := range t.created {
-		// the created contract maybe exists in statedb before the creating tx
-		if s := t.pre[a]; s != nil && s.empty {
-			delete(t.pre, a)
+	for addr, s := range t.pre {
+		if s.empty {
+			delete(t.pre, addr)
 		}
 	}
 }
