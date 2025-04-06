@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -78,18 +79,29 @@ func (tr *tableRevalidation) nodeEndpointChanged(tab *Table, n *tableNode) {
 // to schedule a timer. However, run can be called at any time.
 func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mclock.AbsTime) {
 	reval := func(list *revalidationList) {
+		// nextTime locked for reading, unlock in the end of function or before schedule to prevent deadlock
+		list.ntLock.RLock()
 		if list.nextTime <= now {
 			if n := list.get(&tab.rand, tr.activeReq); n != nil {
 				tr.startRequest(tab, n)
 			}
 			// Update nextTime regardless if any requests were started because
 			// current value has passed.
+			// unlock before schedule to prevent deadlock with write lock, return to prevent double unlock
+			list.ntLock.RUnlock()
 			list.schedule(now, &tab.rand)
+			return
 		}
+		// in case of false if verification, unlock nextTime
+		list.ntLock.RUnlock()
 	}
 	reval(&tr.fast)
 	reval(&tr.slow)
 
+	tr.fast.ntLock.RLock()
+	tr.slow.ntLock.RLock()
+	defer tr.fast.ntLock.RUnlock()
+	defer tr.slow.ntLock.RUnlock()
 	return min(tr.fast.nextTime, tr.slow.nextTime)
 }
 
@@ -198,6 +210,7 @@ func (tr *tableRevalidation) moveToList(dest *revalidationList, n *tableNode, no
 type revalidationList struct {
 	nodes    []*tableNode
 	nextTime mclock.AbsTime
+	ntLock   sync.RWMutex
 	interval time.Duration
 	name     string
 }
@@ -218,6 +231,8 @@ func (list *revalidationList) get(rand randomSource, exclude map[enode.ID]struct
 }
 
 func (list *revalidationList) schedule(now mclock.AbsTime, rand randomSource) {
+	list.ntLock.Lock()
+	defer list.ntLock.Unlock()
 	list.nextTime = now.Add(time.Duration(rand.Int63n(int64(list.interval))))
 }
 
@@ -236,6 +251,8 @@ func (list *revalidationList) remove(n *tableNode) {
 	}
 	list.nodes = slices.Delete(list.nodes, i, i+1)
 	if len(list.nodes) == 0 {
+		list.ntLock.Lock()
+		defer list.ntLock.Unlock()
 		list.nextTime = never
 	}
 	n.revalList = nil
