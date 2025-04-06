@@ -68,6 +68,8 @@ type pattern struct {
 // and source files can be raised using Vmodule.
 func (h *GlogHandler) Verbosity(level slog.Level) {
 	h.level.Store(int32(level))
+	// clear the cache to make sure the verbosity is applied correctly.
+	h.siteCache = make(map[uintptr]slog.Level)
 }
 
 // Vmodule sets the glog verbosity pattern.
