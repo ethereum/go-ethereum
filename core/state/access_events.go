@@ -95,16 +95,16 @@ func (ae *AccessEvents) Copy() *AccessEvents {
 // member fields of an account.
 func (ae *AccessEvents) AddAccount(addr common.Address, isWrite bool, availableGas uint64) uint64 {
 	var gas uint64 // accumulate the consumed gas
-	consumed, wanted := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, isWrite, availableGas)
-	if consumed < wanted {
-		return wanted
+	consumed, expected := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, isWrite, availableGas)
+	if consumed < expected {
+		return expected
 	}
 	gas += consumed
-	consumed, wanted = ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, isWrite, availableGas-consumed)
-	if consumed < wanted {
-		return wanted + gas
+	consumed, expected = ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, isWrite, availableGas-consumed)
+	if consumed < expected {
+		return expected + gas
 	}
-	gas += wanted
+	gas += expected
 	return gas
 }
 
@@ -112,25 +112,25 @@ func (ae *AccessEvents) AddAccount(addr common.Address, isWrite bool, availableG
 // cold member fields of an account, that need to be touched when making a message
 // call to that account.
 func (ae *AccessEvents) MessageCallGas(destination common.Address, availableGas uint64) uint64 {
-	_, wanted := ae.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.BasicDataLeafKey, false, availableGas)
-	if wanted == 0 {
-		wanted = params.WarmStorageReadCostEIP2929
+	_, expected := ae.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.BasicDataLeafKey, false, availableGas)
+	if expected == 0 {
+		expected = params.WarmStorageReadCostEIP2929
 	}
-	return wanted
+	return expected
 }
 
 // ValueTransferGas returns the gas to be charged for each of the currently
 // cold balance member fields of the caller and the callee accounts.
 func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address, availableGas uint64) uint64 {
-	_, wanted1 := ae.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, utils.BasicDataLeafKey, true, availableGas)
-	if wanted1 > availableGas {
-		return wanted1
+	_, expected1 := ae.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, utils.BasicDataLeafKey, true, availableGas)
+	if expected1 > availableGas {
+		return expected1
 	}
-	_, wanted2 := ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BasicDataLeafKey, true, availableGas-wanted1)
-	if wanted1+wanted2 > availableGas {
+	_, expected2 := ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BasicDataLeafKey, true, availableGas-expected1)
+	if expected1+expected2 > availableGas {
 		return params.WarmStorageReadCostEIP2929
 	}
-	return wanted1 + wanted2
+	return expected1 + expected2
 }
 
 // ContractCreatePreCheckGas charges access costs before
@@ -138,20 +138,20 @@ func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address, 
 // address collision is done before the transfer, and so no write
 // are guaranteed to happen at this point.
 func (ae *AccessEvents) ContractCreatePreCheckGas(addr common.Address, availableGas uint64) uint64 {
-	consumed, wanted1 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, false, availableGas)
-	_, wanted2 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, false, availableGas-consumed)
-	return wanted1 + wanted2
+	consumed, expected1 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, false, availableGas)
+	_, expected2 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, false, availableGas-consumed)
+	return expected1 + expected2
 }
 
 // ContractCreateInitGas returns the access gas costs for the initialization of
 // a contract creation.
 func (ae *AccessEvents) ContractCreateInitGas(addr common.Address, availableGas uint64) (uint64, uint64) {
 	var gas uint64
-	consumed, wanted1 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, true, availableGas)
+	consumed, expected1 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, true, availableGas)
 	gas += consumed
-	consumed, wanted2 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, true, availableGas-consumed)
+	consumed, expected2 := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, true, availableGas-consumed)
 	gas += consumed
-	return gas, wanted1 + wanted2
+	return gas, expected1 + expected2
 }
 
 // AddTxOrigin adds the member fields of the sender account to the access event list,
@@ -171,15 +171,15 @@ func (ae *AccessEvents) AddTxDestination(addr common.Address, sendsValue, doesnt
 // SlotGas returns the amount of gas to be charged for a cold storage access.
 func (ae *AccessEvents) SlotGas(addr common.Address, slot common.Hash, isWrite bool, availableGas uint64, chargeWarmCosts bool) uint64 {
 	treeIndex, subIndex := utils.StorageIndex(slot.Bytes())
-	_, wanted := ae.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite, availableGas)
-	if wanted == 0 && chargeWarmCosts {
-		wanted = params.WarmStorageReadCostEIP2929
+	_, expected := ae.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite, availableGas)
+	if expected == 0 && chargeWarmCosts {
+		expected = params.WarmStorageReadCostEIP2929
 	}
-	return wanted
+	return expected
 }
 
-// touchAddressAndChargeGas adds any missing access event to the access event list, and returns the cold
-// access cost to be charged, if need be.
+// touchAddressAndChargeGas adds any missing access event to the access event list, and returns the
+// consumed and required gas.
 func (ae *AccessEvents) touchAddressAndChargeGas(addr common.Address, treeIndex uint256.Int, subIndex byte, isWrite bool, availableGas uint64) (uint64, uint64) {
 	branchKey := newBranchAccessKey(addr, treeIndex)
 	chunkKey := newChunkAccessKey(branchKey, subIndex)
@@ -224,7 +224,7 @@ func (ae *AccessEvents) touchAddressAndChargeGas(addr common.Address, treeIndex 
 	}
 
 	if availableGas < gas {
-		// consumed != wanted
+		// consumed != expected
 		return availableGas, gas
 	}
 
@@ -241,7 +241,7 @@ func (ae *AccessEvents) touchAddressAndChargeGas(addr common.Address, treeIndex 
 		ae.chunks[chunkKey] |= AccessWitnessWriteFlag
 	}
 
-	// consumed == wanted
+	// consumed == expected
 	return gas, gas
 }
 
@@ -293,10 +293,10 @@ func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC,
 	for chunkNumber := startPC / 31; chunkNumber <= endPC/31; chunkNumber++ {
 		treeIndex := *uint256.NewInt((chunkNumber + 128) / 256)
 		subIndex := byte((chunkNumber + 128) % 256)
-		consumed, wanted := ae.touchAddressAndChargeGas(contractAddr, treeIndex, subIndex, isWrite, availableGas)
+		consumed, expected := ae.touchAddressAndChargeGas(contractAddr, treeIndex, subIndex, isWrite, availableGas)
 		// did we OOG ?
-		if wanted > consumed {
-			return statelessGasCharged + consumed, statelessGasCharged + wanted
+		if expected > consumed {
+			return statelessGasCharged + consumed, statelessGasCharged + expected
 		}
 		var overflow bool
 		statelessGasCharged, overflow = math.SafeAdd(statelessGasCharged, consumed)
@@ -313,14 +313,14 @@ func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC,
 // Note that an access in write mode implies an access in read mode, whereas an
 // access in read mode does not imply an access in write mode.
 func (ae *AccessEvents) BasicDataGas(addr common.Address, isWrite bool, availableGas uint64, chargeWarmCosts bool) uint64 {
-	_, wanted := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, isWrite, availableGas)
-	if wanted == 0 && chargeWarmCosts {
+	_, expected := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, isWrite, availableGas)
+	if expected == 0 && chargeWarmCosts {
 		if availableGas < params.WarmStorageReadCostEIP2929 {
 			return availableGas
 		}
-		wanted = params.WarmStorageReadCostEIP2929
+		expected = params.WarmStorageReadCostEIP2929
 	}
-	return wanted
+	return expected
 }
 
 // CodeHashGas adds the account's code hash to the accessed data, and returns the
@@ -329,12 +329,12 @@ func (ae *AccessEvents) BasicDataGas(addr common.Address, isWrite bool, availabl
 // Note that an access in write mode implies an access in read mode, whereas an access in
 // read mode does not imply an access in write mode.
 func (ae *AccessEvents) CodeHashGas(addr common.Address, isWrite bool, availableGas uint64, chargeWarmCosts bool) uint64 {
-	_, wanted := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, isWrite, availableGas)
-	if wanted == 0 && chargeWarmCosts {
+	_, expected := ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, isWrite, availableGas)
+	if expected == 0 && chargeWarmCosts {
 		if availableGas < params.WarmStorageReadCostEIP2929 {
 			return availableGas
 		}
-		wanted = params.WarmStorageReadCostEIP2929
+		expected = params.WarmStorageReadCostEIP2929
 	}
-	return wanted
+	return expected
 }
