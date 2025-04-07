@@ -76,7 +76,7 @@ type Ethereum struct {
 
 	handler *handler
 	discmix *enode.FairMix
-	connman *connManager
+	dropper *dropper
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -290,7 +290,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	eth.connman = newConnManager(&connmanConfig{
+	eth.dropper = newDropper(&dropperConfig{
 		maxDialPeers:    eth.p2pServer.MaxDialedConns(),
 		maxInboundPeers: eth.p2pServer.MaxInboundConns(),
 	})
@@ -406,7 +406,7 @@ func (s *Ethereum) Start() error {
 	s.handler.Start(s.p2pServer.MaxPeers)
 
 	// Start the connection manager
-	s.connman.Start(s.p2pServer, func() bool { return !s.Synced() })
+	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() })
 
 	// start log indexer
 	s.filterMaps.Start()
@@ -509,7 +509,7 @@ func (s *Ethereum) setupDiscovery() error {
 func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.discmix.Close()
-	s.connman.Stop()
+	s.dropper.Stop()
 	s.handler.Stop()
 
 	// Then stop everything else.

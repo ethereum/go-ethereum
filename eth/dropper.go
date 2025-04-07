@@ -46,13 +46,13 @@ const (
 	syncCheckInterval = 60 * time.Second
 )
 
-// connManager monitors the state of the peer pool and makes changes as follows:
-//   - during sync the Downloader handles peer connections co connManager is disabled
+// dropper monitors the state of the peer pool and makes changes as follows:
+//   - during sync the Downloader handles peer connections, so dropper is disabled
 //   - if not syncing and the peer count is close to the limit, it drops peers
 //     randomly every peerDropInterval to make space for new peers
 //   - peers are dropped separately from the inboud pool and from the dialed pool
-type connManager struct {
-	connmanConfig
+type dropper struct {
+	dropperConfig
 	peersFunc   getPeersFunc
 	syncingFunc getSyncingFunc
 
@@ -75,7 +75,7 @@ type getPeersFunc func() []*p2p.Peer
 // Returns true while syncing, false when synced.
 type getSyncingFunc func() bool
 
-type connmanConfig struct {
+type dropperConfig struct {
 	maxDialPeers    int // maximum number of dialed peers
 	maxInboundPeers int // maximum number of inbound peers
 	log             log.Logger
@@ -83,7 +83,7 @@ type connmanConfig struct {
 	rand            *mrand.Rand
 }
 
-func (cfg connmanConfig) withDefaults() connmanConfig {
+func (cfg dropperConfig) withDefaults() dropperConfig {
 	if cfg.log == nil {
 		cfg.log = log.Root()
 	}
@@ -99,10 +99,10 @@ func (cfg connmanConfig) withDefaults() connmanConfig {
 	return cfg
 }
 
-func newConnManager(config *connmanConfig) *connManager {
+func newDropper(config *dropperConfig) *dropper {
 	cfg := config.withDefaults()
-	cm := &connManager{
-		connmanConfig:        cfg,
+	cm := &dropper{
+		dropperConfig:        cfg,
 		peerDropDialedTimer:  mclock.NewAlarm(cfg.clock),
 		peerDropInboundTimer: mclock.NewAlarm(cfg.clock),
 		peerEventCh:          make(chan *p2p.PeerEvent),
@@ -111,13 +111,13 @@ func newConnManager(config *connmanConfig) *connManager {
 	if peerDropIntervalMin > peerDropIntervalMax {
 		panic("peerDropIntervalMin duration must be less than or equal to peerDropIntervalMax duration")
 	}
-	cm.log.Info("New Connection Manager", "maxDialPeers", cm.maxDialPeers, "threshold", peerDropThreshold,
+	cm.log.Info("New Dropper", "maxDialPeers", cm.maxDialPeers, "threshold", peerDropThreshold,
 		"intervalMin", peerDropIntervalMin, "intervalMax", peerDropIntervalMax)
 	return cm
 }
 
-// Start the connection manager.
-func (cm *connManager) Start(srv *p2p.Server, syncingFunc getSyncingFunc) {
+// Start the dropper.
+func (cm *dropper) Start(srv *p2p.Server, syncingFunc getSyncingFunc) {
 	cm.wg.Add(1)
 	cm.peersFunc = srv.Peers
 	cm.syncingFunc = syncingFunc
@@ -125,8 +125,8 @@ func (cm *connManager) Start(srv *p2p.Server, syncingFunc getSyncingFunc) {
 	go cm.loop()
 }
 
-// Stop the connection manager.
-func (cm *connManager) Stop() {
+// Stop the dropper.
+func (cm *dropper) Stop() {
 	cm.sub.Unsubscribe()
 	cm.peerDropInboundTimer.Stop()
 	cm.peerDropDialedTimer.Stop()
@@ -135,14 +135,14 @@ func (cm *connManager) Stop() {
 }
 
 // numPeers returns the current number of peers and its breakdown (dialed or inbound).
-func (cm *connManager) numPeers() (numPeers int, numDialed int, numInbound int) {
+func (cm *dropper) numPeers() (numPeers int, numDialed int, numInbound int) {
 	peers := cm.peersFunc()
 	dialed := slices.DeleteFunc(peers, (*p2p.Peer).Inbound)
 	return len(peers), len(dialed), len(peers) - len(dialed)
 }
 
 // dropRandomPeer selects one of the peers randomly and drops it from the peer pool.
-func (cm *connManager) dropRandomPeer(dialed bool) bool {
+func (cm *dropper) dropRandomPeer(dialed bool) bool {
 	peers := cm.peersFunc()
 
 	selectDoNotDrop := func(p *p2p.Peer) bool {
@@ -183,9 +183,9 @@ func randomDuration(rand *mrand.Rand, min, max time.Duration) time.Duration {
 }
 
 // updatePeerDropTimers checks and starts/stops the timer for peer drop.
-func (cm *connManager) updatePeerDropTimers(syncing bool) {
+func (cm *dropper) updatePeerDropTimers(syncing bool) {
 	numPeers, numDialed, numInbound := cm.numPeers()
-	cm.log.Trace("ConnManager status", "syncing", syncing,
+	cm.log.Trace("Dropper status", "syncing", syncing,
 		"peers", numPeers, "out", numDialed, "in", numInbound,
 		"maxout", cm.maxDialPeers, "maxin", cm.maxInboundPeers)
 
@@ -211,8 +211,8 @@ func (cm *connManager) updatePeerDropTimers(syncing bool) {
 	}
 }
 
-// loop is the main loop of the connection manager.
-func (cm *connManager) loop() {
+// loop is the main loop of the connection dropper.
+func (cm *dropper) loop() {
 	defer cm.wg.Done()
 
 	// Set up periodic timer to pull syncing status.
@@ -222,7 +222,7 @@ func (cm *connManager) loop() {
 	// - subscribe to DownloaderAPI (which itself polls the sync status)
 	syncing := cm.syncingFunc()
 	cm.log.Trace("Sync status", "syncing", syncing)
-	syncCheckTimer := mclock.NewAlarm(cm.connmanConfig.clock)
+	syncCheckTimer := mclock.NewAlarm(cm.dropperConfig.clock)
 	syncCheckTimer.Schedule(cm.clock.Now().Add(syncCheckInterval))
 	defer syncCheckTimer.Stop()
 
