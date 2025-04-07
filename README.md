@@ -1,3 +1,9 @@
+## DevOps docs
+### Build
+When a PR with label CI:Build is merged in the master branch, a Docker image is build and pushed tagged with latest AND with the commit ID. This way you can refer to older version if needed but at the same time latest is available.
+
+!NB If you encounter a problem with pushing to the registry, check if the access token has not expired. It has 30 days expiration.
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
