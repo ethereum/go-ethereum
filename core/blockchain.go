@@ -283,7 +283,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		cacheConfig = defaultCacheConfig
 	}
 	// Open trie database with provided config
-	// TODO(gballet) remove EnableVerkleAtGenesis if it's no longer used
 	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig())
 
