@@ -47,6 +47,8 @@ import (
 )
 
 const (
+	poolName = "blobpool" // The name of legacy txpool
+
 	// blobSize is the protocol constrained byte size of a single blob in a
 	// transaction. There can be multiple of these embedded into a single tx.
 	blobSize = params.BlobTxFieldElementsPerBlob * params.BlobTxBytesPerFieldElement
@@ -299,7 +301,7 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //     and leading up to the first no-change.
 type BlobPool struct {
 	config         Config                    // Pool configuration
-	reserve        txpool.AddressReserver    // Address reserver to ensure exclusivity across subpools
+	reserver       *txpool.Reserver          // Address reserver to ensure exclusivity across subpools
 	hasPendingAuth func(common.Address) bool // Determine whether the specified address has a pending 7702-auth
 
 	store  billy.Database // Persistent data store for the tx metadata and blobs
@@ -355,8 +357,8 @@ func (p *BlobPool) Filter(tx *types.Transaction) bool {
 // Init sets the gas price needed to keep a transaction in the pool and the chain
 // head to allow balance / nonce checks. The transaction journal will be loaded
 // from disk and filtered based on the provided starting settings.
-func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.AddressReserver, _ txpool.IsAddressReserved) error {
-	p.reserve = reserve
+func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver *txpool.Reserver) error {
+	p.reserver = reserver
 
 	var (
 		queuedir string
@@ -501,7 +503,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		return err
 	}
 	if _, ok := p.index[sender]; !ok {
-		if err := p.reserve(sender, true); err != nil {
+		if err := p.reserver.Hold(sender, poolName); err != nil {
 			return err
 		}
 		p.index[sender] = []*blobTxMeta{}
@@ -556,7 +558,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		if inclusions != nil { // only during reorgs will the heap be initialized
 			heap.Remove(p.evict, p.evict.index[addr])
 		}
-		p.reserve(addr, false)
+		p.reserver.Release(addr, poolName)
 
 		if gapped {
 			log.Warn("Dropping dangling blob transactions", "from", addr, "missing", next, "drop", nonces, "ids", ids)
@@ -709,7 +711,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			if inclusions != nil { // only during reorgs will the heap be initialized
 				heap.Remove(p.evict, p.evict.index[addr])
 			}
-			p.reserve(addr, false)
+			p.reserver.Release(addr, poolName)
 		} else {
 			p.index[addr] = txs
 		}
@@ -1008,7 +1010,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// Update the indices and metrics
 	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
 	if _, ok := p.index[addr]; !ok {
-		if err := p.reserve(addr, true); err != nil {
+		if err := p.reserver.Hold(addr, poolName); err != nil {
 			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
 			return err
 		}
@@ -1068,7 +1070,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 						delete(p.spent, addr)
 
 						heap.Remove(p.evict, p.evict.index[addr])
-						p.reserve(addr, false)
+						p.reserver.Release(addr, poolName)
 					}
 					// Clear out the transactions from the data store
 					log.Warn("Dropping underpriced blob transaction", "from", addr, "rejected", tx.nonce, "tip", tx.execTipCap, "want", tip, "drop", nonces, "ids", ids)
@@ -1407,7 +1409,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// only by this subpool until all transactions are evicted
 	from, _ := types.Sender(p.signer, tx) // already validated above
 	if _, ok := p.index[from]; !ok {
-		if err := p.reserve(from, true); err != nil {
+		if err := p.reserver.Hold(from, poolName); err != nil {
 			addNonExclusiveMeter.Mark(1)
 			return err
 		}
@@ -1419,7 +1421,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			// by a return statement before running deferred methods. Take care with
 			// removing or subscoping err as it will break this clause.
 			if err != nil {
-				p.reserve(from, false)
+				p.reserver.Release(from, poolName)
 			}
 		}()
 	}
@@ -1551,7 +1553,7 @@ func (p *BlobPool) drop() {
 	if last {
 		delete(p.index, from)
 		delete(p.spent, from)
-		p.reserve(from, false)
+		p.reserver.Release(from, poolName)
 	} else {
 		txs[len(txs)-1] = nil
 		txs = txs[:len(txs)-1]
@@ -1827,7 +1829,7 @@ func (p *BlobPool) Clear() {
 	// can't happen until Clear releases the reservation lock.  Clear cannot
 	// acquire the subpool lock until the transaction addition is completed.
 	for acct := range p.index {
-		p.reserve(acct, false)
+		p.reserver.Release(acct, poolName)
 	}
 	p.lookup = newLookup()
 	p.index = make(map[common.Address][]*blobTxMeta)

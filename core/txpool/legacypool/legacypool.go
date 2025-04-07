@@ -45,6 +45,8 @@ import (
 )
 
 const (
+	poolName = "general" // The name of legacy txpool
+
 	// txSlotSize is used to calculate how many data slots a single transaction
 	// takes up based on its size. The slots are used as DoS protection, ensuring
 	// that validating a new transaction remains a constant operation (in reality
@@ -237,9 +239,7 @@ type LegacyPool struct {
 	currentHead   atomic.Pointer[types.Header] // Current head of the blockchain
 	currentState  *state.StateDB               // Current state in the blockchain head
 	pendingNonces *noncer                      // Pending state tracking virtual nonces
-
-	reserve    txpool.AddressReserver   // Address reserver to ensure exclusivity across subpools
-	isReserved txpool.IsAddressReserved // Address reserver to check whether the address has been reserved
+	reserver      *txpool.Reserver             // Address reserver to ensure exclusivity across subpools
 
 	pending map[common.Address]*list     // All currently processable transactions
 	queue   map[common.Address]*list     // Queued but non-processable transactions
@@ -304,10 +304,9 @@ func (pool *LegacyPool) Filter(tx *types.Transaction) bool {
 // Init sets the gas price needed to keep a transaction in the pool and the chain
 // head to allow balance / nonce checks. The internal
 // goroutines will be spun up and the pool deemed operational afterwards.
-func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserve txpool.AddressReserver, isReserved txpool.IsAddressReserved) error {
+func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserver *txpool.Reserver) error {
 	// Set the address reserver to request exclusive access to pooled accounts
-	pool.reserve = reserve
-	pool.isReserved = isReserved
+	pool.reserver = reserver
 
 	// Set the basic pool parameters
 	pool.gasTip.Store(uint256.NewInt(gasTip))
@@ -658,7 +657,7 @@ func (pool *LegacyPool) validateAuth(tx *types.Transaction) error {
 			// This scenario is considered acceptable, as the rule primarily ensures
 			// that attackers cannot easily stack a SetCode transaction when the sender
 			// is reserved by other pools.
-			if pool.isReserved(auth) {
+			if pool.reserver.Has(auth) {
 				return ErrAuthorityReserved
 			}
 		}
@@ -694,7 +693,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 		_, hasQueued  = pool.queue[from]
 	)
 	if !hasPending && !hasQueued {
-		if err := pool.reserve(from, true); err != nil {
+		if err := pool.reserver.Hold(from, poolName); err != nil {
 			return false, err
 		}
 		defer func() {
@@ -705,7 +704,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 			// by a return statement before running deferred methods. Take care with
 			// removing or subscoping err as it will break this clause.
 			if err != nil {
-				pool.reserve(from, false)
+				pool.reserver.Release(from, poolName)
 			}
 		}()
 	}
@@ -1098,7 +1097,7 @@ func (pool *LegacyPool) removeTx(hash common.Hash, outofbound bool, unreserve bo
 				_, hasQueued  = pool.queue[addr]
 			)
 			if !hasPending && !hasQueued {
-				pool.reserve(addr, false)
+				pool.reserver.Release(addr, poolName)
 			}
 		}()
 	}
@@ -1478,7 +1477,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 			delete(pool.queue, addr)
 			delete(pool.beats, addr)
 			if _, ok := pool.pending[addr]; !ok {
-				pool.reserve(addr, false)
+				pool.reserver.Release(addr, poolName)
 			}
 		}
 	}
@@ -1664,7 +1663,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 		if list.Empty() {
 			delete(pool.pending, addr)
 			if _, ok := pool.queue[addr]; !ok {
-				pool.reserve(addr, false)
+				pool.reserver.Release(addr, poolName)
 			}
 		}
 	}
@@ -1909,7 +1908,7 @@ func (pool *LegacyPool) Clear() {
 	// acquire the subpool lock until the transaction addition is completed.
 	for _, tx := range pool.all.txs {
 		senderAddr, _ := types.Sender(pool.signer, tx)
-		pool.reserve(senderAddr, false)
+		pool.reserver.Release(senderAddr, poolName)
 	}
 	pool.all = newLookup()
 	pool.priced = newPricedList(pool.all)

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
@@ -86,9 +87,7 @@ func TestTransactionFutureAttack(t *testing.T) {
 	config.GlobalQueue = 100
 	config.GlobalSlots = 100
 	pool := New(config, blockchain)
-
-	reserver, isReserved := makeAddressReserver()
-	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), reserver, isReserved)
+	pool.Init(config.PriceLimit, blockchain.CurrentBlock(), txpool.NewReserver())
 	defer pool.Close()
 	fillPool(t, pool)
 	pending, _ := pool.Stats()
@@ -122,9 +121,7 @@ func TestTransactionFuture1559(t *testing.T) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	blockchain := newTestBlockChain(eip1559Config, 1000000, statedb, new(event.Feed))
 	pool := New(testTxPoolConfig, blockchain)
-
-	reserver, isReserved := makeAddressReserver()
-	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), reserver, isReserved)
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), txpool.NewReserver())
 	defer pool.Close()
 
 	// Create a number of test accounts, fund them and make transactions
@@ -157,9 +154,7 @@ func TestTransactionZAttack(t *testing.T) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	blockchain := newTestBlockChain(eip1559Config, 1000000, statedb, new(event.Feed))
 	pool := New(testTxPoolConfig, blockchain)
-
-	reserver, isReserved := makeAddressReserver()
-	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), reserver, isReserved)
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), txpool.NewReserver())
 	defer pool.Close()
 	// Create a number of test accounts, fund them and make transactions
 	fillPool(t, pool)
@@ -230,9 +225,7 @@ func BenchmarkFutureAttack(b *testing.B) {
 	config.GlobalQueue = 100
 	config.GlobalSlots = 100
 	pool := New(config, blockchain)
-
-	reserver, isReserved := makeAddressReserver()
-	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), reserver, isReserved)
+	pool.Init(testTxPoolConfig.PriceLimit, blockchain.CurrentBlock(), txpool.NewReserver())
 	defer pool.Close()
 	fillPool(b, pool)
 

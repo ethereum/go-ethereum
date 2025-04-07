@@ -26,7 +26,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -166,33 +165,6 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
 	return bc.statedb, nil
-}
-
-// makeAddressReserver is a utility method to sanity check that accounts are
-// properly reserved by the blobpool (no duplicate reserves or unreserves).
-func makeAddressReserver() txpool.AddressReserver {
-	var (
-		reserved = make(map[common.Address]struct{})
-		lock     sync.Mutex
-	)
-	return func(addr common.Address, reserve bool) error {
-		lock.Lock()
-		defer lock.Unlock()
-
-		_, exists := reserved[addr]
-		if reserve {
-			if exists {
-				panic("already reserved")
-			}
-			reserved[addr] = struct{}{}
-			return nil
-		}
-		if !exists {
-			panic("not reserved")
-		}
-		delete(reserved, addr)
-		return nil
-	}
 }
 
 // makeTx is a utility method to construct a random blob transaction and sign it
@@ -700,7 +672,7 @@ func TestOpenDrops(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain, nil)
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver(), nil); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -818,7 +790,7 @@ func TestOpenIndex(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain, nil)
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver(), nil); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -919,7 +891,7 @@ func TestOpenHeap(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain, nil)
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver(), nil); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -998,7 +970,7 @@ func TestOpenCap(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage, Datacap: datacap}, chain, nil)
-		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver(), nil); err != nil {
+		if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
 			t.Fatalf("failed to create blob pool: %v", err)
 		}
 		// Verify that enough transactions have been dropped to get the pool's size
@@ -1099,7 +1071,7 @@ func TestChangingSlotterSize(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage}, chain, nil)
-		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver(), nil); err != nil {
+		if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
 			t.Fatalf("failed to create blob pool: %v", err)
 		}
 
@@ -1542,7 +1514,7 @@ func TestAdd(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage}, chain, nil)
-		if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver(), nil); err != nil {
+		if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
 			t.Fatalf("test %d: failed to create blob pool: %v", i, err)
 		}
 		verifyPoolInternals(t, pool)
@@ -1641,7 +1613,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		pool = New(Config{Datadir: ""}, chain, nil)
 	)
 
-	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver(), nil); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
 		b.Fatalf("failed to create blob pool: %v", err)
 	}
 	// Make the pool not use disk (just drop everything). This test never reads
