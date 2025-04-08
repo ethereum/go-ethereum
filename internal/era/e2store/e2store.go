@@ -219,3 +219,15 @@ func (r *Reader) FindAll(want uint16) ([]*Entry, error) {
 		off += int64(headerSize + length)
 	}
 }
+
+// SkipN skips `n` entries starting from `offset` and returns the new offset.
+func (r *Reader) SkipN(offset int64, n uint64) (int64, error) {
+	for i := uint64(0); i < n; i++ {
+		length, err := r.LengthAt(offset)
+		if err != nil {
+			return 0, err
+		}
+		offset += length
+	}
+	return offset, nil
+}

@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -91,7 +92,13 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 		}
 		return block, nil
 	}
-	return b.eth.blockchain.GetHeaderByNumber(uint64(number)), nil
+	var bn uint64
+	if number == rpc.EarliestBlockNumber {
+		bn = b.HistoryPruningCutoff()
+	} else {
+		bn = uint64(number)
+	}
+	return b.eth.blockchain.GetHeaderByNumber(bn), nil
 }
 
 func (b *EthAPIBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
@@ -143,11 +150,27 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 		}
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
-	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
+	bn := uint64(number) // the resolved number
+	if number == rpc.EarliestBlockNumber {
+		bn = b.HistoryPruningCutoff()
+	}
+	block := b.eth.blockchain.GetBlockByNumber(bn)
+	if block == nil && bn < b.HistoryPruningCutoff() {
+		return nil, &ethconfig.PrunedHistoryError{}
+	}
+	return block, nil
 }
 
 func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(hash), nil
+	number := b.eth.blockchain.GetBlockNumber(hash)
+	if number == nil {
+		return nil, nil
+	}
+	block := b.eth.blockchain.GetBlock(hash, *number)
+	if block == nil && *number < b.HistoryPruningCutoff() {
+		return nil, &ethconfig.PrunedHistoryError{}
+	}
+	return block, nil
 }
 
 // GetBody returns body of a block. It does not resolve special block numbers.
@@ -155,10 +178,14 @@ func (b *EthAPIBackend) GetBody(ctx context.Context, hash common.Hash, number rp
 	if number < 0 || hash == (common.Hash{}) {
 		return nil, errors.New("invalid arguments; expect hash and no special block numbers")
 	}
-	if body := b.eth.blockchain.GetBody(hash); body != nil {
-		return body, nil
+	body := b.eth.blockchain.GetBody(hash)
+	if body == nil {
+		if uint64(number) < b.HistoryPruningCutoff() {
+			return nil, &ethconfig.PrunedHistoryError{}
+		}
+		return nil, errors.New("block body not found")
 	}
-	return nil, errors.New("block body not found")
+	return body, nil
 }
 
 func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
@@ -175,6 +202,9 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		}
 		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
 		if block == nil {
+			if header.Number.Uint64() < b.HistoryPruningCutoff() {
+				return nil, &ethconfig.PrunedHistoryError{}
+			}
 			return nil, errors.New("header found, but block body is missing")
 		}
 		return block, nil
@@ -232,6 +262,11 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		return stateDb, header, nil
 	}
 	return nil, nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (b *EthAPIBackend) HistoryPruningCutoff() uint64 {
+	bn, _ := b.eth.blockchain.HistoryPruningCutoff()
+	return bn
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {

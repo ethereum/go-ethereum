@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // This file contains the code snippets from the developer's guide embedded into
-// Go tests. This ensures that any code published in out guides will not break
+// Go tests. This ensures that any code published in our guides will not break
 // accidentally via some code update. If some API changes nonetheless that needs
 // modifying this file, please port any modification over into the developer's
 // guide wiki pages too!

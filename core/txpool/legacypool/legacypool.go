@@ -1035,6 +1035,19 @@ func (pool *LegacyPool) GetRLP(hash common.Hash) []byte {
 	return encoded
 }
 
+// GetMetadata returns the transaction type and transaction size with the
+// given transaction hash.
+func (pool *LegacyPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
+	tx := pool.all.Get(hash)
+	if tx == nil {
+		return nil
+	}
+	return &txpool.TxMetadata{
+		Type: tx.Type(),
+		Size: tx.Size(),
+	}
+}
+
 // GetBlobs is not supported by the legacy transaction pool, it is just here to
 // implement the txpool.SubPool interface.
 func (pool *LegacyPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {

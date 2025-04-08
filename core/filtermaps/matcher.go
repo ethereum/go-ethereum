@@ -125,6 +125,7 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 
 	start := time.Now()
 	res, err := m.process()
+	matchRequestTimer.Update(time.Since(start))
 
 	if doRuntimeStats {
 		log.Info("Log search finished", "elapsed", time.Since(start))
@@ -202,6 +203,7 @@ func (m *matcherEnv) process() ([]*types.Log, error) {
 			logs = append(logs, tasks[waitEpoch].logs...)
 			if err := tasks[waitEpoch].err; err != nil {
 				if err == ErrMatchAll {
+					matchAllMeter.Mark(1)
 					return logs, err
 				}
 				return logs, fmt.Errorf("failed to process log index epoch %d: %v", waitEpoch, err)
@@ -220,6 +222,7 @@ func (m *matcherEnv) process() ([]*types.Log, error) {
 
 // processEpoch returns the potentially matching logs from the given epoch.
 func (m *matcherEnv) processEpoch(epochIndex uint32) ([]*types.Log, error) {
+	start := time.Now()
 	var logs []*types.Log
 	// create a list of map indices to process
 	fm, lm := epochIndex<<m.params.logMapsPerEpoch, (epochIndex+1)<<m.params.logMapsPerEpoch-1
@@ -254,6 +257,7 @@ func (m *matcherEnv) processEpoch(epochIndex uint32) ([]*types.Log, error) {
 		logs = append(logs, mlogs...)
 	}
 	m.getLogStats.addAmount(st, int64(len(logs)))
+	matchEpochTimer.Update(time.Since(start))
 	return logs, nil
 }
 
@@ -273,6 +277,7 @@ func (m *matcherEnv) getLogsFromMatches(matches potentialMatches) ([]*types.Log,
 		if log != nil {
 			logs = append(logs, log)
 		}
+		matchLogLookup.Mark(1)
 	}
 	return logs, nil
 }
@@ -380,6 +385,13 @@ func (m *singleMatcherInstance) getMatchesForLayer(ctx context.Context, layerInd
 		if err != nil {
 			m.stats.setState(&st, stNone)
 			return nil, fmt.Errorf("failed to retrieve filter map %d row %d: %v", mapIndex, rowIndex, err)
+		}
+		if layerIndex == 0 {
+			matchBaseRowAccessMeter.Mark(1)
+			matchBaseRowSizeMeter.Mark(int64(len(filterRow)))
+		} else {
+			matchExtRowAccessMeter.Mark(1)
+			matchExtRowSizeMeter.Mark(int64(len(filterRow)))
 		}
 		m.stats.addAmount(st, int64(len(filterRow)))
 		m.stats.setState(&st, stOther)

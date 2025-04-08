@@ -1,6 +1,6 @@
 # Clef
 
-Clef can be used to sign transactions and data and is meant as a(n eventual) replacement for Geth's account management. This allows DApps to not depend on Geth's account management. When a DApp wants to sign data (or a transaction), it can send the content to Clef, which will then provide the user with context and asks for permission to sign the content. If the users grants the signing request, Clef will send the signature back to the DApp.
+Clef can be used to sign transactions and data and is meant as a(n eventual) replacement for Geth's account management. This allows DApps to not depend on Geth's account management. When a DApp wants to sign data (or a transaction), it can send the content to Clef, which will then provide the user with context and ask for permission to sign the content. If the user grants the signing request, Clef will send the signature back to the DApp.
 
 This setup allows a DApp to connect to a remote Ethereum node and send transactions that are locally signed. This can help in situations when a DApp is connected to an untrusted remote Ethereum node, because a local one is not available, not synchronized with the chain, or is a node that has no built-in (or limited) account management.
 
@@ -123,7 +123,7 @@ The External API is **untrusted**: it does not accept credentials, nor does it e
 
 Clef has one native console-based UI, for operation without any standalone tools. However, there is also an API to communicate with an external UI. To enable that UI, the signer needs to be executed with the `--stdio-ui` option, which allocates `stdin` / `stdout` for the UI API.
 
-An example (insecure) proof-of-concept of has been implemented in `pythonsigner.py`.
+An example (insecure) proof-of-concept has been implemented in `pythonsigner.py`.
 
 The model is as follows:
 
@@ -335,7 +335,7 @@ Bash example:
 
 #### Arguments
   - content type [string]: type of signed data
-     - `text/validator`: hex data with custom validator defined in a contract
+     - `text/validator`: hex data with a custom validator defined in a contract
      - `application/clique`: [clique](https://github.com/ethereum/EIPs/issues/225) headers
      - `text/plain`: simple hex data validated by `account_ecRecover`
   - account [address]: account to sign with
