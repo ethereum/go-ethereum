@@ -52,8 +52,8 @@ func NewReservationTracker() *ReservationTracker {
 
 // NewHandle creates a named handle on the ReservationTracker. The handle
 // identifies the subpool so ownership of reservations can be determined.
-func (r *ReservationTracker) NewHandle(id int) *ReserverHandle {
-	return &ReserverHandle{r, id}
+func (r *ReservationTracker) NewHandle(id int) *ReservationHandle {
+	return &ReservationHandle{r, id}
 }
 
 // Reserver is an interface for creating and releasing owned reservations in the
@@ -72,17 +72,17 @@ type Reserver interface {
 	Has(address common.Address) bool
 }
 
-// ReserverHandle is a named handle on ReservationTracker. It is held by subpools to
+// ReservationHandle is a named handle on ReservationTracker. It is held by subpools to
 // make reservations for accounts it is tracking. The id is used to determine
 // which pool owns an address and disallows non-owners to hold or release
 // addresses it doesn't own.
-type ReserverHandle struct {
+type ReservationHandle struct {
 	tracker *ReservationTracker
 	id      int
 }
 
 // Hold implements the Reserver interface.
-func (h *ReserverHandle) Hold(addr common.Address) error {
+func (h *ReservationHandle) Hold(addr common.Address) error {
 	h.tracker.lock.Lock()
 	defer h.tracker.lock.Unlock()
 
@@ -105,7 +105,7 @@ func (h *ReserverHandle) Hold(addr common.Address) error {
 }
 
 // Release implements the Reserver interface.
-func (h *ReserverHandle) Release(addr common.Address) error {
+func (h *ReservationHandle) Release(addr common.Address) error {
 	h.tracker.lock.Lock()
 	defer h.tracker.lock.Unlock()
 
@@ -129,7 +129,7 @@ func (h *ReserverHandle) Release(addr common.Address) error {
 }
 
 // Has implements the Reserver interface.
-func (h *ReserverHandle) Has(address common.Address) bool {
+func (h *ReservationHandle) Has(address common.Address) bool {
 	h.tracker.lock.RLock()
 	defer h.tracker.lock.RUnlock()
 
