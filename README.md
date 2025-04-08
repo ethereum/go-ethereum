@@ -1,8 +1,31 @@
 ## DevOps docs
+All workflows are limited to PRs with target=master for the sake of simplicity in this demo.
+In the future, a feature should be implemented which allows to build images and deploy contracts from feature branches.
+
 ### Build
 When a PR with label CI:Build is merged in the master branch, a Docker image is build and pushed tagged with latest AND with the commit ID. This way you can refer to older version if needed but at the same time latest is available.
 
 !NB If you encounter a problem with pushing to the registry, check if the access token has not expired. It has 30 days expiration.
+
+### Deploy
+
+#### Deploying the contract
+Although hardhat ignition works perfectly with the hardhat network, there are issues when trying to deploy to Geth.
+
+To solve this, there is deploy script in `hardhat/scripts` dir which deploys the sample Lock contract to the blockchain.
+
+If you need to deploy the contract locally:
+1. cd to `hardhat` dir
+2. run `npx hardhat run scripts/deploy.ts --network geth`
+
+---
+
+#### Creating new image containing the contract
+I've decided to go with mounted dir for the data dir because it is easier to create new dokcer image with the contract already deployed. If I've stayed on the volume mount, it would require more steps to persist the data dir.
+Using mounted dir for the data can be tricky because of permission errs tho.
+
+Currently, the new image (with contract) is built from the latest base image.
+This should be extended in the future to support building from a given tag.
 
 ## Go Ethereum
 

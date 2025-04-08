@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  geth:
+    image: yyx00xzz/geth-dev:latest
+    ports:
+      - "8545:8545"
+      - "30303:30303"
+    command: >
+      --dev
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api admin,debug,web3,eth,txpool,miner,net,dev
+      --miner.gasprice "1"
+      --http.corsdomain "*"
+    volumes:
+      - geth_data:/root/.ethereum
+
+volumes:
+  geth_data:

@@ -1,0 +1,80 @@
+name: deploy
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+    paths: ["**"]
+
+jobs:
+  deploy:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: prep tags
+        id: vars
+        run: |
+          echo "COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ secrets.DOCKERHUB_USERNAME }}/geth-dev" >> $GITHUB_ENV
+
+      - name: start geth
+        run: |
+          mkdir -p geth_data
+          docker run -d --name geth-service -p 8545:8545 -p 30303:30303 -v "$(pwd)/geth_data:/root/.ethereum" yyx00xzz/geth-dev:latest --dev --http --http.addr 0.0.0.0 --http.port 8545 --http.api admin,debug,web3,eth,txpool,miner,net,dev --miner.gasprice "1" --http.corsdomain "*"
+          echo "Waiting for Geth to be ready..."
+          # Poll the Geth RPC endpoint until it's responsive
+          while ! curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}' http://localhost:8545 > /dev/null; do
+            echo "Geth not ready yet, waiting..."
+            docker logs geth-service
+            sleep 5
+          done
+          echo "Geth is ready."
+
+      - name: install hardhat deps
+        run: |
+          cd ./hardhat
+          npm install
+
+      - name: deploy contract
+        run: |
+          cd ./hardhat
+          npx hardhat compile
+          npx hardhat run scripts/deploy.ts --network geth
+
+      - name: get docker logs
+        run: docker logs geth-service
+
+      - name: stop geth
+        run: docker stop geth-service
+
+      - name: build new image with deployed contract
+        run: |
+          pwd
+
+          cat <<EOF > Dockerfile.with-contract
+          FROM yyx00xzz/geth-dev:latest
+          COPY geth_data /root/.ethereum
+          EOF
+
+          docker build -t $IMAGE_NAME:with-contract-latest -t $IMAGE_NAME:with-contract-$COMMIT_SHA -f Dockerfile.with-contract .
+
+          rm Dockerfile.with-contract
+
+          docker images -a
+      - name: push image
+        run: |
+          docker push $IMAGE_NAME:with-contract-latest
+          docker push $IMAGE_NAME:with-contract-$COMMIT_SHA

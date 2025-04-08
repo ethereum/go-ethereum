@@ -56,3 +56,21 @@ cmd/evm/evm
 cmd/geth/geth
 cmd/rlpdump/rlpdump
 cmd/workload/workload
+
+hardhat/node_modules
+hardhat/.env
+
+# Hardhat files
+hardhat/cache
+hardhat/artifacts
+
+# TypeChain files
+hardhat/typechain
+hardhat/typechain-types
+
+# solidity-coverage files
+hardhat/coverage
+hardhat/coverage.json
+
+# Hardhat Ignition default folder for deployments against a local node
+hardhat/ignition/deployments/chain-31337
