@@ -1311,6 +1311,9 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
+//
+// Note, if sync is set the method will block until all internal maintenance
+// related to the add is finished. Only use this during tests for determinism.
 func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
 		adds = make([]*types.Transaction, 0, len(txs))
