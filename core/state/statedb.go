@@ -1122,9 +1122,10 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 		storageTrieNodesUpdated atomic.Int32
 		storageTrieNodesDeleted atomic.Int32
 
-		lock    sync.Mutex                                               // protect two maps below
-		nodes   = trienode.NewMergedNodeSet()                            // aggregated trie nodes
-		updates = make(map[common.Hash]*accountUpdate, len(s.mutations)) // aggregated account updates
+		nodesLock   sync.Mutex                                               // protect the nodes map
+		updatesLock sync.Mutex                                               // protect the updates map
+		nodes       = trienode.NewMergedNodeSet()                            // aggregated trie nodes
+		updates     = make(map[common.Hash]*accountUpdate, len(s.mutations)) // aggregated account updates
 
 		// merge aggregates the dirty trie nodes into the global set.
 		//
@@ -1149,8 +1150,8 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 				storageTrieNodesDeleted.Add(int32(deletes))
 			}
 
-			lock.Lock()
-			defer lock.Unlock()
+			nodesLock.Lock()
+			defer nodesLock.Unlock()
 			return nodes.Merge(set)
 		}
 	)
@@ -1221,10 +1222,10 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 			if err := merge(set); err != nil {
 				return err
 			}
-			lock.Lock()
+			updatesLock.Lock()
 			updates[obj.addrHash] = update
 			s.StorageCommits = time.Since(start) // overwrite with the longest storage commit runtime
-			lock.Unlock()
+			updatesLock.Unlock()
 			return nil
 		})
 	}
