@@ -618,7 +618,7 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 			// not found, return empty response
 			return nil, nil
 		}
-		if len(sidecar.Blobs) != len(sidecar.Proofs)*kzg4844.CellProofsPerBlob {
+		if len(sidecar.Proofs) != len(sidecar.Blobs)*kzg4844.CellProofsPerBlob {
 			return nil, errors.New("NORMAL PROOFS IN GETBLOBSV2, THIS SHOULD NEVER HAPPEN, PLEASE REPORT")
 		}
 		blobHashes := sidecar.BlobHashes()
