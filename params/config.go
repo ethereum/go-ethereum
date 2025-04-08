@@ -458,6 +458,7 @@ type ChainConfig struct {
 	BPO4Time      *uint64 `json:"bpo4Time,omitempty"`      // BPO4 switch time (nil = no fork, 0 = already on bpo4)
 	BPO5Time      *uint64 `json:"bpo5Time,omitempty"`      // BPO5 switch time (nil = no fork, 0 = already on bpo5)
 	AmsterdamTime *uint64 `json:"amsterdamTime,omitempty"` // Amsterdam switch time (nil = no fork, 0 = already on amsterdam)
+	Eip7805Time   *uint64 `json:"eip7805Time,omitempty"`   // Eip7805 switch time (nil = no fork, 0 = already on eip7805)
 	VerkleTime    *uint64 `json:"verkleTime,omitempty"`    // Verkle switch time (nil = no fork, 0 = already on verkle)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
@@ -858,6 +859,11 @@ func (c *ChainConfig) IsAmsterdam(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.AmsterdamTime, time)
 }
 
+// IsEip7805 returns whether time is either equal to the Eip7805 fork time or greater.
+func (c *ChainConfig) IsEip7805(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.Eip7805Time, time)
+}
+
 // IsVerkle returns whether time is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
@@ -1136,6 +1142,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	london := c.LondonBlock
 
 	switch {
+	case c.IsEip7805(london, time):
+		return forks.Eip7805
 	case c.IsAmsterdam(london, time):
 		return forks.Amsterdam
 	case c.IsBPO5(london, time):
