@@ -382,19 +382,11 @@ func (rs Receipts) Len() int { return len(rs) }
 // EncodeIndex encodes the i'th receipt to w.
 func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	r := rs[i]
-	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
 	if r.Type == LegacyTxType {
+		data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
 		rlp.Encode(w, data)
-		return
-	}
-	w.WriteByte(r.Type)
-	switch r.Type {
-	case AccessListTxType, DynamicFeeTxType:
-		rlp.Encode(w, data)
-	default:
-		// For unsupported types, write nothing. Since this is for
-		// DeriveSha, the error will be caught matching the derived hash
-		// to the block.
+	} else {
+		rlp.Encode(w, r)
 	}
 }
 
