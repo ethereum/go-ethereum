@@ -405,6 +405,10 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 	}
 }
 
+func newReserver() *txpool.Reserver {
+	return txpool.NewReservationTracker().NewHandle(42)
+}
+
 // Tests that transactions can be loaded from disk on startup and that they are
 // correctly discarded if invalid.
 //
@@ -672,7 +676,7 @@ func TestOpenDrops(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain, nil)
-	if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -790,7 +794,7 @@ func TestOpenIndex(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain, nil)
-	if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -891,7 +895,7 @@ func TestOpenHeap(t *testing.T) {
 		statedb: statedb,
 	}
 	pool := New(Config{Datadir: storage}, chain, nil)
-	if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 	defer pool.Close()
@@ -970,7 +974,7 @@ func TestOpenCap(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage, Datacap: datacap}, chain, nil)
-		if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("failed to create blob pool: %v", err)
 		}
 		// Verify that enough transactions have been dropped to get the pool's size
@@ -1071,7 +1075,7 @@ func TestChangingSlotterSize(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage}, chain, nil)
-		if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("failed to create blob pool: %v", err)
 		}
 
@@ -1514,7 +1518,7 @@ func TestAdd(t *testing.T) {
 			statedb: statedb,
 		}
 		pool := New(Config{Datadir: storage}, chain, nil)
-		if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
+		if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 			t.Fatalf("test %d: failed to create blob pool: %v", i, err)
 		}
 		verifyPoolInternals(t, pool)
@@ -1613,7 +1617,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		pool = New(Config{Datadir: ""}, chain, nil)
 	)
 
-	if err := pool.Init(1, chain.CurrentBlock(), txpool.NewReserver()); err != nil {
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		b.Fatalf("failed to create blob pool: %v", err)
 	}
 	// Make the pool not use disk (just drop everything). This test never reads

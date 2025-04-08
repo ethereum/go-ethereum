@@ -45,8 +45,6 @@ import (
 )
 
 const (
-	poolName = "general" // The name of legacy txpool
-
 	// txSlotSize is used to calculate how many data slots a single transaction
 	// takes up based on its size. The slots are used as DoS protection, ensuring
 	// that validating a new transaction remains a constant operation (in reality
@@ -693,7 +691,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 		_, hasQueued  = pool.queue[from]
 	)
 	if !hasPending && !hasQueued {
-		if err := pool.reserver.Hold(from, poolName); err != nil {
+		if err := pool.reserver.Hold(from); err != nil {
 			return false, err
 		}
 		defer func() {
@@ -704,7 +702,7 @@ func (pool *LegacyPool) add(tx *types.Transaction) (replaced bool, err error) {
 			// by a return statement before running deferred methods. Take care with
 			// removing or subscoping err as it will break this clause.
 			if err != nil {
-				pool.reserver.Release(from, poolName)
+				pool.reserver.Release(from)
 			}
 		}()
 	}
@@ -1097,7 +1095,7 @@ func (pool *LegacyPool) removeTx(hash common.Hash, outofbound bool, unreserve bo
 				_, hasQueued  = pool.queue[addr]
 			)
 			if !hasPending && !hasQueued {
-				pool.reserver.Release(addr, poolName)
+				pool.reserver.Release(addr)
 			}
 		}()
 	}
@@ -1477,7 +1475,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 			delete(pool.queue, addr)
 			delete(pool.beats, addr)
 			if _, ok := pool.pending[addr]; !ok {
-				pool.reserver.Release(addr, poolName)
+				pool.reserver.Release(addr)
 			}
 		}
 	}
@@ -1663,7 +1661,7 @@ func (pool *LegacyPool) demoteUnexecutables() {
 		if list.Empty() {
 			delete(pool.pending, addr)
 			if _, ok := pool.queue[addr]; !ok {
-				pool.reserver.Release(addr, poolName)
+				pool.reserver.Release(addr)
 			}
 		}
 	}
@@ -1908,7 +1906,7 @@ func (pool *LegacyPool) Clear() {
 	// acquire the subpool lock until the transaction addition is completed.
 	for _, tx := range pool.all.txs {
 		senderAddr, _ := types.Sender(pool.signer, tx)
-		pool.reserver.Release(senderAddr, poolName)
+		pool.reserver.Release(senderAddr)
 	}
 	pool.all = newLookup()
 	pool.priced = newPricedList(pool.all)

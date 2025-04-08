@@ -47,8 +47,6 @@ import (
 )
 
 const (
-	poolName = "blobpool" // The name of legacy txpool
-
 	// blobSize is the protocol constrained byte size of a single blob in a
 	// transaction. There can be multiple of these embedded into a single tx.
 	blobSize = params.BlobTxFieldElementsPerBlob * params.BlobTxBytesPerFieldElement
@@ -503,7 +501,7 @@ func (p *BlobPool) parseTransaction(id uint64, size uint32, blob []byte) error {
 		return err
 	}
 	if _, ok := p.index[sender]; !ok {
-		if err := p.reserver.Hold(sender, poolName); err != nil {
+		if err := p.reserver.Hold(sender); err != nil {
 			return err
 		}
 		p.index[sender] = []*blobTxMeta{}
@@ -558,7 +556,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		if inclusions != nil { // only during reorgs will the heap be initialized
 			heap.Remove(p.evict, p.evict.index[addr])
 		}
-		p.reserver.Release(addr, poolName)
+		p.reserver.Release(addr)
 
 		if gapped {
 			log.Warn("Dropping dangling blob transactions", "from", addr, "missing", next, "drop", nonces, "ids", ids)
@@ -711,7 +709,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			if inclusions != nil { // only during reorgs will the heap be initialized
 				heap.Remove(p.evict, p.evict.index[addr])
 			}
-			p.reserver.Release(addr, poolName)
+			p.reserver.Release(addr)
 		} else {
 			p.index[addr] = txs
 		}
@@ -1010,7 +1008,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	// Update the indices and metrics
 	meta := newBlobTxMeta(id, tx.Size(), p.store.Size(id), tx)
 	if _, ok := p.index[addr]; !ok {
-		if err := p.reserver.Hold(addr, poolName); err != nil {
+		if err := p.reserver.Hold(addr); err != nil {
 			log.Warn("Failed to reserve account for blob pool", "tx", tx.Hash(), "from", addr, "err", err)
 			return err
 		}
@@ -1070,7 +1068,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 						delete(p.spent, addr)
 
 						heap.Remove(p.evict, p.evict.index[addr])
-						p.reserver.Release(addr, poolName)
+						p.reserver.Release(addr)
 					}
 					// Clear out the transactions from the data store
 					log.Warn("Dropping underpriced blob transaction", "from", addr, "rejected", tx.nonce, "tip", tx.execTipCap, "want", tip, "drop", nonces, "ids", ids)
@@ -1409,7 +1407,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// only by this subpool until all transactions are evicted
 	from, _ := types.Sender(p.signer, tx) // already validated above
 	if _, ok := p.index[from]; !ok {
-		if err := p.reserver.Hold(from, poolName); err != nil {
+		if err := p.reserver.Hold(from); err != nil {
 			addNonExclusiveMeter.Mark(1)
 			return err
 		}
@@ -1421,7 +1419,7 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 			// by a return statement before running deferred methods. Take care with
 			// removing or subscoping err as it will break this clause.
 			if err != nil {
-				p.reserver.Release(from, poolName)
+				p.reserver.Release(from)
 			}
 		}()
 	}
@@ -1553,7 +1551,7 @@ func (p *BlobPool) drop() {
 	if last {
 		delete(p.index, from)
 		delete(p.spent, from)
-		p.reserver.Release(from, poolName)
+		p.reserver.Release(from)
 	} else {
 		txs[len(txs)-1] = nil
 		txs = txs[:len(txs)-1]
@@ -1829,7 +1827,7 @@ func (p *BlobPool) Clear() {
 	// can't happen until Clear releases the reservation lock.  Clear cannot
 	// acquire the subpool lock until the transaction addition is completed.
 	for acct := range p.index {
-		p.reserver.Release(acct, poolName)
+		p.reserver.Release(acct)
 	}
 	p.lookup = newLookup()
 	p.index = make(map[common.Address][]*blobTxMeta)
