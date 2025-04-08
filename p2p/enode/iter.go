@@ -155,7 +155,7 @@ func (f *filterIter) Next() bool {
 // AsyncFilter wraps an iterator such that Next only returns nodes for which
 // the 'check' function returns a (possibly modified) node.
 func AsyncFilter(it Iterator, check func(*Node) (*Node, error), workers int) Iterator {
-	f := &AsyncFilterIter{it, check, make(chan struct{}, workers), make(chan *Node), nil}
+	f := &AsyncFilterIter{it, check, make(chan struct{}, workers), make(chan *Node), make(chan struct{}), nil}
 
 	// create slots
 	for range cap(f.slots) {
@@ -172,7 +172,10 @@ func AsyncFilter(it Iterator, check func(*Node) (*Node, error), workers int) Ite
 					// check the node async, in a separate goroutine
 					go func() {
 						if nn, err := f.check(n); err == nil {
-							f.passed <- nn
+							select {
+							case f.passed <- nn:
+							case <-f.closed: // bale out if downstream is already closed and not calling Next
+							}
 						}
 						f.slots <- struct{}{}
 					}()
@@ -197,6 +200,7 @@ type AsyncFilterIter struct {
 	check  func(*Node) (*Node, error)
 	slots  chan struct{}
 	passed chan *Node
+	closed chan struct{}
 	buffer *Node
 }
 
@@ -211,6 +215,7 @@ func (f *AsyncFilterIter) Node() *Node {
 
 func (f *AsyncFilterIter) Close() {
 	f.it.Close()
+	close(f.closed) // override the passed channel
 	for range cap(f.slots) {
 		<-f.slots
 	}
