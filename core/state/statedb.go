@@ -1117,10 +1117,10 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 	}
 	// Commit objects to the trie, measuring the elapsed time
 	var (
-		accountTrieNodesUpdated int
-		accountTrieNodesDeleted int
-		storageTrieNodesUpdated int
-		storageTrieNodesDeleted int
+		accountTrieNodesUpdated atomic.Int32
+		accountTrieNodesDeleted atomic.Int32
+		storageTrieNodesUpdated atomic.Int32
+		storageTrieNodesDeleted atomic.Int32
 
 		lock    sync.Mutex                                               // protect two maps below
 		nodes   = trienode.NewMergedNodeSet()                            // aggregated trie nodes
@@ -1139,17 +1139,18 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 			if set == nil {
 				return nil
 			}
-			lock.Lock()
-			defer lock.Unlock()
 
 			updates, deletes := set.Size()
 			if set.Owner == (common.Hash{}) {
-				accountTrieNodesUpdated += updates
-				accountTrieNodesDeleted += deletes
+				accountTrieNodesUpdated.Add(int32(updates))
+				accountTrieNodesDeleted.Add(int32(deletes))
 			} else {
-				storageTrieNodesUpdated += updates
-				storageTrieNodesDeleted += deletes
+				storageTrieNodesUpdated.Add(int32(updates))
+				storageTrieNodesDeleted.Add(int32(deletes))
 			}
+
+			lock.Lock()
+			defer lock.Unlock()
 			return nodes.Merge(set)
 		}
 	)
@@ -1237,10 +1238,10 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 	storageUpdatedMeter.Mark(s.StorageUpdated.Load())
 	accountDeletedMeter.Mark(int64(s.AccountDeleted))
 	storageDeletedMeter.Mark(s.StorageDeleted.Load())
-	accountTrieUpdatedMeter.Mark(int64(accountTrieNodesUpdated))
-	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
-	storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
-	storageTriesDeletedMeter.Mark(int64(storageTrieNodesDeleted))
+	accountTrieUpdatedMeter.Mark(int64(accountTrieNodesUpdated.Load()))
+	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted.Load()))
+	storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated.Load()))
+	storageTriesDeletedMeter.Mark(int64(storageTrieNodesDeleted.Load()))
 
 	// Clear the metric markers
 	s.AccountLoaded, s.AccountUpdated, s.AccountDeleted = 0, 0, 0
