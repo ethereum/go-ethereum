@@ -988,7 +988,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 			return nil, err
 		}
 	}
-	vmenv := vm.NewEVM(vmctx, vm.TxContext{GasPrice: big.NewInt(0)}, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true}, api.backend.GetCustomPrecompiles(txctx.BlockNumber.Int64()))
+	vmenv := vm.NewEVM(vmctx, vm.TxContext{GasPrice: big.NewInt(0)}, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true}, api.backend.GetCustomPrecompiles(vmctx.BlockNumber.Int64()))
 	statedb.SetLogger(tracer.Hooks)
 
 	// Define a meaningful timeout of a single transaction trace
