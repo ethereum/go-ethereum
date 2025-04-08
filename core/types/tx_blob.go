@@ -55,6 +55,7 @@ type BlobTx struct {
 
 // BlobTxSidecar contains the blobs of a blob transaction.
 type BlobTxSidecar struct {
+	Version     byte                 // Version
 	Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
 	Commitments []kzg4844.Commitment // Commitments needed by the blob pool
 	Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
@@ -125,8 +126,8 @@ type blobTxWithBlobs struct {
 }
 
 type versionedBlobTxWithBlobs struct {
-	Version     byte
 	BlobTx      *BlobTx
+	Version     byte
 	Blobs       []kzg4844.Blob
 	Commitments []kzg4844.Commitment
 	Proofs      []kzg4844.Proof
@@ -240,6 +241,17 @@ func (tx *BlobTx) encode(b *bytes.Buffer) error {
 	if tx.Sidecar == nil {
 		return rlp.Encode(b, tx)
 	}
+	// Encode a cell proof transaction
+	if tx.Sidecar.Version != 0 {
+		inner := &versionedBlobTxWithBlobs{
+			BlobTx:      tx,
+			Version:     tx.Sidecar.Version,
+			Blobs:       tx.Sidecar.Blobs,
+			Commitments: tx.Sidecar.Commitments,
+			Proofs:      tx.Sidecar.Proofs,
+		}
+		return rlp.Encode(b, inner)
+	}
 	inner := &blobTxWithBlobs{
 		BlobTx:      tx,
 		Blobs:       tx.Sidecar.Blobs,
@@ -269,20 +281,22 @@ func (tx *BlobTx) decode(input []byte) error {
 		return rlp.DecodeBytes(input, tx)
 	}
 
-	// It's a tx with blobs.
-	var inner blobTxWithBlobs
+	// It's a tx with blobs. Try to decode it as version 0.
+	var inner versionedBlobTxWithBlobs
 	if err := rlp.DecodeBytes(input, &inner); err != nil {
-		var innerWithVersion versionedBlobTxWithBlobs
-		if err := rlp.DecodeBytes(input, &innerWithVersion); err != nil {
+		var innerV0 blobTxWithBlobs
+		if err := rlp.DecodeBytes(input, &innerV0); err != nil {
 			return err
 		}
-		inner.BlobTx = innerWithVersion.BlobTx
-		inner.Blobs = innerWithVersion.Blobs
-		inner.Commitments = innerWithVersion.Commitments
-		inner.Proofs = innerWithVersion.Proofs
+		inner.BlobTx = innerV0.BlobTx
+		inner.Version = 0
+		inner.Blobs = innerV0.Blobs
+		inner.Commitments = innerV0.Commitments
+		inner.Proofs = innerV0.Proofs
 	}
 	*tx = *inner.BlobTx
 	tx.Sidecar = &BlobTxSidecar{
+		Version:     inner.Version,
 		Blobs:       inner.Blobs,
 		Commitments: inner.Commitments,
 		Proofs:      inner.Proofs,
