@@ -18,6 +18,7 @@
 package catalyst
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strconv"
@@ -32,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -558,14 +560,28 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-	res := make([]*engine.BlobAndProofV1, len(hashes))
+	var (
+		res      = make([]*engine.BlobAndProofV1, len(hashes))
+		hasher   = sha256.New()
+		index    = make(map[common.Hash]int)
+		sidecars = api.eth.TxPool().GetBlobs(hashes)
+	)
 
-	blobs, proofs, _ := api.eth.TxPool().GetBlobs(hashes)
-	for i := 0; i < len(blobs); i++ {
-		if blobs[i] != nil {
-			res[i] = &engine.BlobAndProofV1{
-				Blob:  (*blobs[i])[:],
-				Proof: (*proofs[i])[:],
+	for i, hash := range hashes {
+		index[hash] = i
+	}
+	for i, sidecar := range sidecars {
+		if res[i] != nil {
+			// already filled
+			continue
+		}
+		for cIdx, commitment := range sidecar.Commitments {
+			computed := kzg4844.CalcBlobHashV1(hasher, &commitment)
+			if idx, ok := index[computed]; ok {
+				res[idx] = &engine.BlobAndProofV1{
+					Blob:  sidecar.Blobs[cIdx][:],
+					Proof: sidecar.Proofs[cIdx][:],
+				}
 			}
 		}
 	}
@@ -577,18 +593,35 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
-	res := make([]*engine.BlobAndProofV2, len(hashes))
+	var (
+		res      = make([]*engine.BlobAndProofV2, len(hashes))
+		index    = make(map[common.Hash]int)
+		sidecars = api.eth.TxPool().GetBlobs(hashes)
+	)
 
-	blobs, _, cellProofs := api.eth.TxPool().GetBlobs(hashes)
-	for i := 0; i < len(blobs); i++ {
-		if blobs[i] != nil {
-			var proofs []hexutil.Bytes
-			for _, proof := range cellProofs[i] {
-				proofs = append(proofs, hexutil.Bytes(proof[:]))
-			}
-			res[i] = &engine.BlobAndProofV2{
-				Blob:       (*blobs[i])[:],
-				CellProofs: proofs,
+	for i, hash := range hashes {
+		index[hash] = i
+	}
+	for i, sidecar := range sidecars {
+		if res[i] != nil {
+			// already filled
+			continue
+		}
+		if len(sidecar.Blobs) != len(sidecar.Proofs)*kzg4844.CellProofsPerBlob {
+			return nil, errors.New("NORMAL PROOFS IN GETBLOBSV2, THIS SHOULD NEVER HAPPEN, PLEASE REPORT")
+		}
+		blobHashes := sidecar.BlobHashes()
+		for bIdx, hash := range blobHashes {
+			if idx, ok := index[hash]; ok {
+				proofs := sidecar.CellProofsAt(bIdx)
+				var cellProofs []hexutil.Bytes
+				for _, proof := range proofs {
+					cellProofs = append(cellProofs, proof[:])
+				}
+				res[idx] = &engine.BlobAndProofV2{
+					Blob:       sidecar.Blobs[bIdx][:],
+					CellProofs: cellProofs,
+				}
 			}
 		}
 	}
