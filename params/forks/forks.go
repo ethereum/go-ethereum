@@ -40,4 +40,5 @@ const (
 	Cancun
 	Prague
 	Osaka
+	Eip7805
 )

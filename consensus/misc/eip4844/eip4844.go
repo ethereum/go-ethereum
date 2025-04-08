@@ -83,6 +83,9 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
 	var frac uint64
 	switch config.LatestFork(header.Time) {
+	case forks.Eip7805:
+		// EIP7805 fork is a transient fork so it piggy backs on an existing canonical fork's config.
+		frac = config.BlobScheduleConfig.Prague.UpdateFraction
 	case forks.Osaka:
 		frac = config.BlobScheduleConfig.Osaka.UpdateFraction
 	case forks.Prague:
