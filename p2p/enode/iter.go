@@ -152,8 +152,18 @@ func (f *filterIter) Next() bool {
 	return false
 }
 
-// AsyncFilter wraps an iterator such that Next only returns nodes for which
+// AsyncFilterIter wraps an iterator such that Next only returns nodes for which
 // the 'check' function returns a (possibly modified) node.
+type AsyncFilterIter struct {
+	it     Iterator                   // the iterator to filter
+	check  func(*Node) (*Node, error) // the blocking check function
+	slots  chan struct{}              // the slots for parallel checking
+	passed chan *Node                 // channel to collect passed nodes
+	closed chan struct{}              // channel to override passed when closing
+	buffer *Node                      // buffer to serve the Node call
+}
+
+// AsyncFilter creates an iterator which checks nodes in parallel.
 func AsyncFilter(it Iterator, check func(*Node) (*Node, error), workers int) Iterator {
 	f := &AsyncFilterIter{it, check, make(chan struct{}, workers), make(chan *Node), make(chan struct{}), nil}
 
@@ -195,24 +205,18 @@ func AsyncFilter(it Iterator, check func(*Node) (*Node, error), workers int) Ite
 	return f
 }
 
-type AsyncFilterIter struct {
-	it     Iterator
-	check  func(*Node) (*Node, error)
-	slots  chan struct{}
-	passed chan *Node
-	closed chan struct{}
-	buffer *Node
-}
-
+// Next blocks until a node is available or the iterator is closed.
 func (f *AsyncFilterIter) Next() bool {
 	f.buffer = <-f.passed
 	return f.buffer != nil
 }
 
+// Node returns the current node.
 func (f *AsyncFilterIter) Node() *Node {
 	return f.buffer
 }
 
+// Close ends the iterator, also closing the wrapped iterator.
 func (f *AsyncFilterIter) Close() {
 	f.it.Close()
 	close(f.closed) // override the passed channel
