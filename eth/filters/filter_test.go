@@ -453,7 +453,8 @@ func TestRangeLogs(t *testing.T) {
 		addresses       = []common.Address{{}}
 	)
 
-	expEvent := func(exp rangeLogsTestEvent) {
+	expEvent := func(expEvent int, expFirst, expAfterLast uint64) {
+		exp := rangeLogsTestEvent{expEvent, common.NewRange[uint64](expFirst, expAfterLast-expFirst)}
 		event++
 		ev := <-filter.rangeLogsTestHook
 		if ev != exp {
@@ -472,7 +473,6 @@ func TestRangeLogs(t *testing.T) {
 			for range filter.rangeLogsTestHook {
 			}
 		}(filter)
-		expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 0, 0})
 	}
 
 	updateHead := func() {
@@ -483,81 +483,122 @@ func TestRangeLogs(t *testing.T) {
 
 	// test case #1
 	newFilter(300, 500)
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 401, 500})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 401, 500})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 401, 500})
-	expEvent(rangeLogsTestEvent{rangeLogsTestUnindexed, 300, 400})
+	expEvent(rangeLogsTestIndexed, 401, 501)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 401, 601)
+	expEvent(rangeLogsTestResults, 401, 501)
+	expEvent(rangeLogsTestUnindexed, 300, 401)
 	if _, err := bc.InsertChain(chain[600:700]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 300, 500})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 300, 500}) // unindexed search is not affected by trimmed tail
-	expEvent(rangeLogsTestEvent{rangeLogsTestDone, 0, 0})
+	expEvent(rangeLogsTestResults, 300, 501)
+	expEvent(rangeLogsTestDone, 0, 0)
 
 	// test case #2
 	newFilter(400, int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 501, 700})
+	expEvent(rangeLogsTestIndexed, 501, 701)
 	if _, err := bc.InsertChain(chain[700:800]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 501, 700})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 601, 698})
-	expEvent(rangeLogsTestEvent{rangeLogsTestUnindexed, 400, 600})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 698})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 400, 698})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 699, 800})
-	if err := bc.SetHead(750); err != nil {
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 601, 699)
+	expEvent(rangeLogsTestResults, 601, 699)
+	expEvent(rangeLogsTestUnindexed, 400, 601)
+	expEvent(rangeLogsTestResults, 400, 699)
+	expEvent(rangeLogsTestIndexed, 699, 801)
+	if _, err := bc.SetCanonical(chain[749]); err != nil { // set head to block 750
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 800})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 400, 748})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 749, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 400, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestDone, 0, 0})
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 601, 749)
+	expEvent(rangeLogsTestResults, 400, 749)
+	expEvent(rangeLogsTestIndexed, 749, 751)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 751)
+	expEvent(rangeLogsTestResults, 400, 751)
+	expEvent(rangeLogsTestDone, 0, 0)
 
 	// test case #3
 	newFilter(int64(rpc.LatestBlockNumber), int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 750, 750})
-	if err := bc.SetHead(740); err != nil {
+	expEvent(rangeLogsTestIndexed, 750, 751)
+	if _, err := bc.SetCanonical(chain[739]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 750, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 0, 0})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 740, 740})
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 739)
+	expEvent(rangeLogsTestResults, 0, 0)
+	expEvent(rangeLogsTestIndexed, 740, 741)
 	if _, err := bc.InsertChain(chain[740:750]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 740, 740})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 0, 0})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 750, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 750, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 750, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestDone, 0, 0})
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 739)
+	expEvent(rangeLogsTestResults, 0, 0)
+	expEvent(rangeLogsTestIndexed, 750, 751)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 751)
+	expEvent(rangeLogsTestResults, 750, 751)
+	expEvent(rangeLogsTestDone, 0, 0)
 
 	// test case #4
+	if _, err := bc.SetCanonical(chain[499]); err != nil {
+		t.Fatal(err)
+	}
+	updateHead()
 	newFilter(400, int64(rpc.LatestBlockNumber))
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 551, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 551, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 551, 750})
-	expEvent(rangeLogsTestEvent{rangeLogsTestUnindexed, 400, 550})
+	expEvent(rangeLogsTestIndexed, 400, 501)
+	if _, err := bc.InsertChain(chain[500:650]); err != nil {
+		t.Fatal(err)
+	}
+	updateHead()
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 451, 499)
+	expEvent(rangeLogsTestResults, 451, 499)
+	expEvent(rangeLogsTestUnindexed, 400, 451)
+	expEvent(rangeLogsTestResults, 400, 499)
+	// indexed head extension seems possible
+	expEvent(rangeLogsTestIndexed, 499, 651)
+	// further head extension causes tail unindexing in searched range
+	if _, err := bc.InsertChain(chain[650:750]); err != nil {
+		t.Fatal(err)
+	}
+	updateHead()
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 649)
+	// tail trimmed to 551; cannot merge with existing results
+	expEvent(rangeLogsTestResults, 551, 649)
+	expEvent(rangeLogsTestUnindexed, 400, 551)
+	expEvent(rangeLogsTestResults, 400, 649)
+	expEvent(rangeLogsTestIndexed, 649, 751)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 751)
+	expEvent(rangeLogsTestResults, 400, 751)
+	expEvent(rangeLogsTestDone, 0, 0)
+
+	// test case #5
+	newFilter(400, int64(rpc.LatestBlockNumber))
+	expEvent(rangeLogsTestIndexed, 551, 751)
+	expEvent(rangeLogsTestSync, 0, 0)
+	expEvent(rangeLogsTestSynced, 551, 751)
+	expEvent(rangeLogsTestResults, 551, 751)
+	expEvent(rangeLogsTestUnindexed, 400, 551)
 	if _, err := bc.InsertChain(chain[750:1000]); err != nil {
 		t.Fatal(err)
 	}
 	updateHead()
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 750})
-	// indexed range affected by tail pruning so we have to discard the entire
-	// match set
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 0, 0})
-	expEvent(rangeLogsTestEvent{rangeLogsTestIndexed, 801, 1000})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 801, 1000})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 801, 1000})
-	expEvent(rangeLogsTestEvent{rangeLogsTestUnindexed, 400, 800})
-	expEvent(rangeLogsTestEvent{rangeLogsTestSync, 400, 1000})
-	expEvent(rangeLogsTestEvent{rangeLogsTestTrimmed, 400, 1000})
+	expEvent(rangeLogsTestResults, 400, 751)
+	// indexed tail already beyond results head; revert to unindexed head search
+	expEvent(rangeLogsTestUnindexed, 751, 1001)
+	if _, err := bc.SetCanonical(chain[899]); err != nil {
+		t.Fatal(err)
+	}
+	updateHead()
+	expEvent(rangeLogsTestResults, 400, 1001)
+	expEvent(rangeLogsTestReorg, 400, 901)
+	expEvent(rangeLogsTestDone, 0, 0)
 }
