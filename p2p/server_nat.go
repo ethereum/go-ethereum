@@ -160,11 +160,11 @@ func (srv *Server) portMappingLoop() {
 					if m.extPort == 0 {
 						log.Debug("Couldn't add port mapping", "err", err)
 					} else {
-						// Failed refresh. Since UPnP implementation are often buggy, and lifetime is
-						// larger than the retry interval, this does not mean we lost our existing
-						// mapping. We do not reset the external port, as it is still our best chance,
-						// but we do retry soon.
-						// We could check the error code, but again, UPnP implementations are buggy.
+						// Failed refresh. Since UPnP implementation are often buggy,
+						// and lifetime is larger than the retry interval, this does not
+						// mean we lost our existing mapping. We do not reset the external
+						// port, as it is still our best chance, but we do retry soon.
+						// We could check the error code, but UPnP implementations are buggy.
 						log.Debug("Couldn't refresh port mapping", "err", err)
 						m.retries++
 						if m.retries > maxRetries {
