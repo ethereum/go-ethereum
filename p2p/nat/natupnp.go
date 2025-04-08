@@ -114,7 +114,7 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 		if err == nil {
 			return uint16(extport), nil
 		}
-		log.Trace("Failed to add port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
+		log.Debug("Failed to add port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
 	}
 
 	// If above fails, we retry with a random port.
@@ -128,7 +128,7 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 		if err == nil {
 			return uint16(extport), nil
 		}
-		log.Trace("Failed to add random port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
+		log.Debug("Failed to add random port mapping", "protocol", protocol, "extport", extport, "intport", intport, "err", err)
 	}
 	return 0, err
 }
