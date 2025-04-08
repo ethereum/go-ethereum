@@ -164,7 +164,7 @@ func (srv *Server) portMappingLoop() {
 						// larger than the retry interval, this does not mean we lost our existing
 						// mapping. We do not reset the external port, as it is still our best chance,
 						// but we do retry soon.
-						// TODO: we could check the error code, but again, UPnP implementations are buggy.
+						// We could check the error code, but again, UPnP implementations are buggy.
 						log.Debug("Couldn't refresh port mapping", "err", err)
 						m.retries++
 						if m.retries > maxRetries {
@@ -175,7 +175,8 @@ func (srv *Server) portMappingLoop() {
 						}
 					}
 					m.nextTime = srv.clock.Now().Add(portMapRetryInterval)
-					continue //TODO: this means we never reset the ENR. Is that what we want?
+					// Note ENR is not updated here, i.e. we keep the last port.
+					continue
 				}
 
 				// It was mapped!
