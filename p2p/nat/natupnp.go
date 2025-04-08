@@ -83,7 +83,6 @@ func (n *upnp) ExternalIP() (addr net.IP, err error) {
 }
 
 func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, lifetime time.Duration) (uint16, error) {
-
 	ip, err := n.internalAddress()
 	if err != nil {
 		return 0, err

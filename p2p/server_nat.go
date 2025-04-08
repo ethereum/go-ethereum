@@ -198,7 +198,6 @@ func (srv *Server) portMappingLoop() {
 					}
 				}
 				m.nextTime = srv.clock.Now().Add(portMapRefreshInterval)
-
 			}
 		}
 	}
