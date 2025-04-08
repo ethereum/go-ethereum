@@ -391,6 +391,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			continue
 		}
 
+		// Make sure all transactions after osaka have cell proofs
 		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
 			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
 				if len(sidecar.Blobs) != len(sidecar.Proofs)*kzg4844.CellProofsPerBlob {
