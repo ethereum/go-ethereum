@@ -336,13 +336,9 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		for j := range sidecar.Blobs {
 			bundle.Blobs = append(bundle.Blobs, hexutil.Bytes(sidecar.Blobs[j][:]))
 			bundle.Commitments = append(bundle.Commitments, hexutil.Bytes(sidecar.Commitments[j][:]))
-			if len(sidecar.CellProofs) == 0 {
-				bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(sidecar.Proofs[j][:]))
-			} else {
-				for _, proof := range sidecar.CellProofs[j] {
-					bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(proof[:]))
-				}
-			}
+		}
+		for _, proof := range sidecar.Proofs {
+			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(proof[:]))
 		}
 	}
 

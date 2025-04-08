@@ -47,8 +47,7 @@ func TestBlobs(t *testing.T) {
 	sidecarWithCellProofs := &types.BlobTxSidecar{
 		Blobs:       []kzg4844.Blob{*emptyBlob},
 		Commitments: []kzg4844.Commitment{emptyBlobCommit},
-		Proofs:      []kzg4844.Proof{emptyBlobProof},
-		CellProofs:  [][]kzg4844.Proof{emptyCellProof},
+		Proofs:      emptyCellProof,
 	}
 	env = BlockToExecutableData(block, common.Big0, []*types.BlobTxSidecar{sidecarWithCellProofs}, nil)
 	if len(env.BlobsBundle.Proofs) != 128 {

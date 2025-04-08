@@ -58,7 +58,6 @@ type BlobTxSidecar struct {
 	Blobs       []kzg4844.Blob       // Blobs needed by the blob pool
 	Commitments []kzg4844.Commitment // Commitments needed by the blob pool
 	Proofs      []kzg4844.Proof      // Proofs needed by the blob pool
-	CellProofs  [][]kzg4844.Proof    // Cell proofs
 }
 
 // BlobHashes computes the blob hashes of the given blobs.
@@ -69,6 +68,20 @@ func (sc *BlobTxSidecar) BlobHashes() []common.Hash {
 		h[i] = kzg4844.CalcBlobHashV1(hasher, &sc.Commitments[i])
 	}
 	return h
+}
+
+// CellProofsAt returns the cell proofs for blob with index idx.
+func (sc *BlobTxSidecar) CellProofsAt(idx int) []kzg4844.Proof {
+	var cellProofs []kzg4844.Proof
+	for i := range kzg4844.CellProofsPerBlob {
+		index := idx*kzg4844.CellProofsPerBlob + i
+		if index > len(sc.Proofs) {
+			return nil
+		}
+		proof := sc.Proofs[index]
+		cellProofs = append(cellProofs, proof)
+	}
+	return cellProofs
 }
 
 // encodedSize computes the RLP size of the sidecar elements. This does NOT return the
@@ -105,6 +118,14 @@ func (sc *BlobTxSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) erro
 
 // blobTxWithBlobs is used for encoding of transactions when blobs are present.
 type blobTxWithBlobs struct {
+	BlobTx      *BlobTx
+	Blobs       []kzg4844.Blob
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
+}
+
+type versionedBlobTxWithBlobs struct {
+	Version     byte
 	BlobTx      *BlobTx
 	Blobs       []kzg4844.Blob
 	Commitments []kzg4844.Commitment
@@ -158,15 +179,10 @@ func (tx *BlobTx) copy() TxData {
 		cpy.S.Set(tx.S)
 	}
 	if tx.Sidecar != nil {
-		cellProofs := make([][]kzg4844.Proof, len(tx.Sidecar.CellProofs))
-		for i := range tx.Sidecar.CellProofs {
-			cellProofs[i] = append([]kzg4844.Proof(nil), tx.Sidecar.CellProofs[i]...)
-		}
 		cpy.Sidecar = &BlobTxSidecar{
 			Blobs:       append([]kzg4844.Blob(nil), tx.Sidecar.Blobs...),
 			Commitments: append([]kzg4844.Commitment(nil), tx.Sidecar.Commitments...),
 			Proofs:      append([]kzg4844.Proof(nil), tx.Sidecar.Proofs...),
-			CellProofs:  cellProofs,
 		}
 	}
 	return cpy
@@ -252,26 +268,24 @@ func (tx *BlobTx) decode(input []byte) error {
 	if firstElemKind != rlp.List {
 		return rlp.DecodeBytes(input, tx)
 	}
+
 	// It's a tx with blobs.
 	var inner blobTxWithBlobs
 	if err := rlp.DecodeBytes(input, &inner); err != nil {
-		return err
-	}
-	*tx = *inner.BlobTx
-	// compute the cell proof
-	cellProofs := make([][]kzg4844.Proof, 0)
-	for i := range len(inner.Blobs) {
-		cellProof, err := kzg4844.ComputeCells(&inner.Blobs[i])
-		if err != nil {
+		var innerWithVersion versionedBlobTxWithBlobs
+		if err := rlp.DecodeBytes(input, &innerWithVersion); err != nil {
 			return err
 		}
-		cellProofs = append(cellProofs, cellProof)
+		inner.BlobTx = innerWithVersion.BlobTx
+		inner.Blobs = innerWithVersion.Blobs
+		inner.Commitments = innerWithVersion.Commitments
+		inner.Proofs = innerWithVersion.Proofs
 	}
+	*tx = *inner.BlobTx
 	tx.Sidecar = &BlobTxSidecar{
 		Blobs:       inner.Blobs,
 		Commitments: inner.Commitments,
 		Proofs:      inner.Proofs,
-		CellProofs:  cellProofs,
 	}
 	return nil
 }

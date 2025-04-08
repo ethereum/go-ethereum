@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -1065,8 +1064,8 @@ func (pool *LegacyPool) GetMetadata(hash common.Hash) *txpool.TxMetadata {
 
 // GetBlobs is not supported by the legacy transaction pool, it is just here to
 // implement the txpool.SubPool interface.
-func (pool *LegacyPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof, [][]kzg4844.Proof) {
-	return nil, nil, nil
+func (pool *LegacyPool) GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar {
+	return nil
 }
 
 // Has returns an indicator whether txpool has a transaction cached with the
