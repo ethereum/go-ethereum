@@ -1913,6 +1913,11 @@ func (pool *LegacyPool) Clear() {
 	// acquire the subpool lock until the transaction addition is completed.
 
 	for addr := range pool.pending {
+		if _, ok := pool.queue[addr]; !ok {
+			pool.reserver.Release(addr)
+		}
+	}
+	for addr := range pool.queue {
 		pool.reserver.Release(addr)
 	}
 	pool.all = newLookup()
