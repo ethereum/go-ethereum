@@ -94,7 +94,7 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	}
 	var bn uint64
 	if number == rpc.EarliestBlockNumber {
-		bn = b.eth.blockchain.HistoryPruningCutoff()
+		bn = b.HistoryPruningCutoff()
 	} else {
 		bn = uint64(number)
 	}
@@ -152,10 +152,10 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	}
 	bn := uint64(number) // the resolved number
 	if number == rpc.EarliestBlockNumber {
-		bn = b.eth.blockchain.HistoryPruningCutoff()
+		bn = b.HistoryPruningCutoff()
 	}
 	block := b.eth.blockchain.GetBlockByNumber(bn)
-	if block == nil && bn < b.eth.blockchain.HistoryPruningCutoff() {
+	if block == nil && bn < b.HistoryPruningCutoff() {
 		return nil, &ethconfig.PrunedHistoryError{}
 	}
 	return block, nil
@@ -167,7 +167,7 @@ func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 		return nil, nil
 	}
 	block := b.eth.blockchain.GetBlock(hash, *number)
-	if block == nil && *number < b.eth.blockchain.HistoryPruningCutoff() {
+	if block == nil && *number < b.HistoryPruningCutoff() {
 		return nil, &ethconfig.PrunedHistoryError{}
 	}
 	return block, nil
@@ -180,7 +180,7 @@ func (b *EthAPIBackend) GetBody(ctx context.Context, hash common.Hash, number rp
 	}
 	body := b.eth.blockchain.GetBody(hash)
 	if body == nil {
-		if uint64(number) < b.eth.blockchain.HistoryPruningCutoff() {
+		if uint64(number) < b.HistoryPruningCutoff() {
 			return nil, &ethconfig.PrunedHistoryError{}
 		}
 		return nil, errors.New("block body not found")
@@ -202,7 +202,7 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		}
 		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
 		if block == nil {
-			if header.Number.Uint64() < b.eth.blockchain.HistoryPruningCutoff() {
+			if header.Number.Uint64() < b.HistoryPruningCutoff() {
 				return nil, &ethconfig.PrunedHistoryError{}
 			}
 			return nil, errors.New("header found, but block body is missing")
@@ -265,7 +265,8 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 }
 
 func (b *EthAPIBackend) HistoryPruningCutoff() uint64 {
-	return b.eth.blockchain.HistoryPruningCutoff()
+	bn, _ := b.eth.blockchain.HistoryPruningCutoff()
+	return bn
 }
 
 func (b *EthAPIBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
