@@ -155,35 +155,38 @@ func (f *filterIter) Next() bool {
 // AsyncFilter wraps an iterator such that Next only returns nodes for which
 // the 'check' function returns a (possibly modified) node.
 func AsyncFilter(it Iterator, check func(*Node) (*Node, error), workers int) Iterator {
-	f := &AsyncFilterIter{it, nil, check, make(chan *Node), sync.WaitGroup{}}
+	f := &AsyncFilterIter{it, check, make(chan struct{}, workers), make(chan *Node), nil}
 
-	taskCh := make(chan *Node)
-
-	worker := func() {
-		for task := range taskCh {
-			if task == nil {
-				break
-			}
-			nn, err := f.check(task)
-			if err == nil {
-				f.passed <- nn
-			}
-		}
-		f.wg.Done()
-	}
-
-	for range workers {
-		f.wg.Add(1)
-		go worker()
+	// create slots
+	for range cap(f.slots) {
+		f.slots <- struct{}{}
 	}
 
 	go func() {
-		for f.it.Next() {
-			taskCh <- f.it.Node()
+		// read from the iterator and start checking nodes in parallel
+		// when a node is checked, it will be sent to the passed channel
+		// and the slot will be released
+		for range f.slots {
+			if f.it.Next() {
+				if n := f.it.Node(); n != nil {
+					// check the node async, in a separate goroutine
+					go func() {
+						if nn, err := f.check(n); err == nil {
+							f.passed <- nn
+						}
+						f.slots <- struct{}{}
+					}()
+				} else {
+					// this is not supposed to happen
+					f.slots <- struct{}{}
+					break
+				}
+			} else {
+				// the iterator has ended
+				f.slots <- struct{}{}
+				break
+			}
 		}
-		close(taskCh)
-		f.wg.Wait()
-		close(f.passed)
 	}()
 
 	return f
@@ -191,10 +194,10 @@ func AsyncFilter(it Iterator, check func(*Node) (*Node, error), workers int) Ite
 
 type AsyncFilterIter struct {
 	it     Iterator
-	buffer *Node
 	check  func(*Node) (*Node, error)
+	slots  chan struct{}
 	passed chan *Node
-	wg     sync.WaitGroup
+	buffer *Node
 }
 
 func (f *AsyncFilterIter) Next() bool {
@@ -208,7 +211,11 @@ func (f *AsyncFilterIter) Node() *Node {
 
 func (f *AsyncFilterIter) Close() {
 	f.it.Close()
-	f.wg.Wait()
+	for range cap(f.slots) {
+		<-f.slots
+	}
+	close(f.slots)
+	close(f.passed)
 }
 
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
