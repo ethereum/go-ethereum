@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/syndtr/goleveldb/leveldb"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -44,7 +46,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 	"github.com/scroll-tech/go-ethereum/rpc"
 	"github.com/scroll-tech/go-ethereum/trie"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related
@@ -354,12 +355,10 @@ func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateles
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve parent state: %w", err)
 	}
+	statedb.WithWitness(witness)
 
 	// Collect storage locations that prover needs but sequencer might not touch necessarily
 	statedb.GetState(rcfg.L2MessageQueueAddress, rcfg.WithdrawTrieRootSlot)
-
-	statedb.StartPrefetcher("debug_execution_witness", witness)
-	defer statedb.StopPrefetcher()
 
 	receipts, _, usedGas, err := blockchain.Processor().Process(block, statedb, *blockchain.GetVMConfig())
 	if err != nil {
@@ -370,16 +369,10 @@ func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateles
 		return nil, fmt.Errorf("failed to validate block %d: %w", block.Number(), err)
 	}
 
-	// FIXME: testWitness will fail from time to time, the problem is caused by occasional state root mismatch
-	// after processing the block based on witness. We need to investigate the root cause and fix it.
-	for retries := 0; retries < 5; retries++ {
-		if err = testWitness(blockchain, block, witness); err == nil {
-			return witness, nil
-		} else {
-			log.Warn("Failed to validate witness", "block", block.Number(), "error", err)
-		}
+	if err = testWitness(blockchain, block, witness); err != nil {
+		return nil, err
 	}
-	return witness, err
+	return witness, nil
 }
 
 func testWitness(blockchain *core.BlockChain, block *types.Block, witness *stateless.Witness) error {

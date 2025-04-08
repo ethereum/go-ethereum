@@ -1699,7 +1699,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		}
 
 		// Enable prefetching to pull in trie node paths while processing transactions
-		statedb.StartPrefetcher("chain", nil)
+		statedb.StartPrefetcher("chain")
 		activeState = statedb
 
 		// If we have a followup block, run that against the current state to pre-cache
@@ -1836,7 +1836,7 @@ func (bc *BlockChain) BuildAndWriteBlock(parentBlock *types.Block, header *types
 		return nil, NonStatTy, err
 	}
 
-	statedb.StartPrefetcher("l1sync", nil)
+	statedb.StartPrefetcher("l1sync")
 	defer statedb.StopPrefetcher()
 
 	header.ParentHash = parentBlock.Hash()

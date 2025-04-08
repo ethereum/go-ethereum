@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"slices"
 	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
@@ -344,8 +345,17 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	tr := s.getTrie(db)
 	hasher := s.db.hasher
 
+	sortedPendingStorages := make([]common.Hash, 0, len(s.pendingStorage))
+	for key := range s.pendingStorage {
+		sortedPendingStorages = append(sortedPendingStorages, key)
+	}
+	slices.SortFunc(sortedPendingStorages, func(a, b common.Hash) int {
+		return bytes.Compare(a[:], b[:])
+	})
+
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
-	for key, value := range s.pendingStorage {
+	for _, key := range sortedPendingStorages {
+		value := s.pendingStorage[key]
 		// Skip noop changes, persist actual changes
 		if value == s.originStorage[key] {
 			continue
