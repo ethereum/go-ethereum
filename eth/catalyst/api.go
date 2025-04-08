@@ -593,6 +593,13 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	if len(hashes) > 128 {
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
+
+	// Optimization: check first if all blobs are available, if not, return empty response
+	if !api.eth.TxPool().HasBlobs(hashes) {
+		return nil, nil
+	}
+
+	// pull up the blob hashes
 	var (
 		res      = make([]*engine.BlobAndProofV2, len(hashes))
 		index    = make(map[common.Hash]int)

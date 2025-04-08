@@ -137,6 +137,10 @@ type SubPool interface {
 	// retrieve blobs from the pools directly instead of the network.
 	GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar
 
+	// HasBlobs returns true if all blobs corresponding to the versioned hashes
+	// are in the sub pool.
+	HasBlobs(vhashes []common.Hash) bool
+
 	// ValidateTxBasics checks whether a transaction is valid according to the consensus
 	// rules, but does not check state-dependent validation such as sufficient balance.
 	// This check is meant as a static check which can be performed without holding the
