@@ -50,12 +50,16 @@ func NewReservationTracker() *ReservationTracker {
 	}
 }
 
-// NewHandle creates a named handle on the ReservationTracker.
+// NewHandle creates a named handle on the ReservationTracker. The handle
+// identifies the subpool so ownership of reservations can be determined.
 func (r *ReservationTracker) NewHandle(id int) *Reserver {
 	return &Reserver{r, id}
 }
 
-// Reserver is a named handle on ReservationTracker.
+// Reserver is a named handle on ReservationTracker. It is held by subpools to
+// make reservations for accounts it is tracking. The id is used to determine
+// which pool owns an address and disallows non-owners to hold or release
+// addresses it doesn't own.
 type Reserver struct {
 	tracker *ReservationTracker
 	id      int
