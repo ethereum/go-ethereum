@@ -173,6 +173,9 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 }
 
 func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) error {
+	if sidecar.Version != 0 {
+		return fmt.Errorf("invalid sidecar version pre-osaka: %v", sidecar.Version)
+	}
 	if len(sidecar.Blobs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
 	}
@@ -193,6 +196,9 @@ func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) err
 }
 
 func validateBlobSidecarOsaka(hashes []common.Hash, sidecar *types.BlobTxSidecar) error {
+	if sidecar.Version != 1 {
+		return fmt.Errorf("invalid sidecar version post-osaka: %v", sidecar.Version)
+	}
 	if len(sidecar.Blobs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
 	}
