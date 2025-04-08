@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -41,15 +40,6 @@ const (
 	TxStatusQueued
 	TxStatusPending
 	TxStatusIncluded
-)
-
-var (
-	// reservationsGaugeName is the prefix of a per-subpool address reservation
-	// metric.
-	//
-	// This is mostly a sanity metric to ensure there's no bug that would make
-	// some subpool hog all the reservations due to mis-accounting.
-	reservationsGaugeName = "txpool/reservations"
 )
 
 // BlockChain defines the minimal set of methods needed to back a tx pool with
@@ -81,9 +71,6 @@ type TxPool struct {
 	stateLock sync.RWMutex   // The lock for protecting state instance
 	state     *state.StateDB // Current state at the blockchain head
 
-	reservations map[common.Address]SubPool // Map with the account to pool reservations
-	reserveLock  sync.Mutex                 // Lock protecting the account reservations
-
 	subs event.SubscriptionScope // Subscription scope to unsubscribe all on shutdown
 	quit chan chan error         // Quit channel to tear down the head updater
 	term chan struct{}           // Termination channel to detect a closed pool
@@ -110,17 +97,17 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 		return nil, err
 	}
 	pool := &TxPool{
-		subpools:     subpools,
-		chain:        chain,
-		signer:       types.LatestSigner(chain.Config()),
-		state:        statedb,
-		reservations: make(map[common.Address]SubPool),
-		quit:         make(chan chan error),
-		term:         make(chan struct{}),
-		sync:         make(chan chan error),
+		subpools: subpools,
+		chain:    chain,
+		signer:   types.LatestSigner(chain.Config()),
+		state:    statedb,
+		quit:     make(chan chan error),
+		term:     make(chan struct{}),
+		sync:     make(chan chan error),
 	}
+	reserver := NewReservationTracker()
 	for i, subpool := range subpools {
-		if err := subpool.Init(gasTip, head, pool.reserver(i, subpool)); err != nil {
+		if err := subpool.Init(gasTip, head, reserver.NewHandle(i)); err != nil {
 			for j := i - 1; j >= 0; j-- {
 				subpools[j].Close()
 			}
@@ -129,52 +116,6 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	}
 	go pool.loop(head)
 	return pool, nil
-}
-
-// reserver is a method to create an address reservation callback to exclusively
-// assign/deassign addresses to/from subpools. This can ensure that at any point
-// in time, only a single subpool is able to manage an account, avoiding cross
-// subpool eviction issues and nonce conflicts.
-func (p *TxPool) reserver(id int, subpool SubPool) AddressReserver {
-	return func(addr common.Address, reserve bool) error {
-		p.reserveLock.Lock()
-		defer p.reserveLock.Unlock()
-
-		owner, exists := p.reservations[addr]
-		if reserve {
-			// Double reservations are forbidden even from the same pool to
-			// avoid subtle bugs in the long term.
-			if exists {
-				if owner == subpool {
-					log.Error("pool attempted to reserve already-owned address", "address", addr)
-					return nil // Ignore fault to give the pool a chance to recover while the bug gets fixed
-				}
-				return ErrAlreadyReserved
-			}
-			p.reservations[addr] = subpool
-			if metrics.Enabled() {
-				m := fmt.Sprintf("%s/%d", reservationsGaugeName, id)
-				metrics.GetOrRegisterGauge(m, nil).Inc(1)
-			}
-			return nil
-		}
-		// Ensure subpools only attempt to unreserve their own owned addresses,
-		// otherwise flag as a programming error.
-		if !exists {
-			log.Error("pool attempted to unreserve non-reserved address", "address", addr)
-			return errors.New("address not reserved")
-		}
-		if subpool != owner {
-			log.Error("pool attempted to unreserve non-owned address", "address", addr)
-			return errors.New("address not owned")
-		}
-		delete(p.reservations, addr)
-		if metrics.Enabled() {
-			m := fmt.Sprintf("%s/%d", reservationsGaugeName, id)
-			metrics.GetOrRegisterGauge(m, nil).Dec(1)
-		}
-		return nil
-	}
 }
 
 // Close terminates the transaction pool and all its subpools.
