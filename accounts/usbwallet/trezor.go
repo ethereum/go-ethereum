@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -251,7 +252,7 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 	// Extract the Ethereum signature and do a sanity validation
 	if len(response.GetSignatureR()) == 0 || len(response.GetSignatureS()) == 0 {
 		return common.Address{}, nil, errors.New("reply lacks signature")
-	} else if response.GetSignatureV() == 0 && int(chainID.Int64()) < uint32 {
+	} else if response.GetSignatureV() == 0 && int(chainID.Int64()) <= (math.MaxUint32-36)/2 {
 		// for chainId >= (MaxUint32-36)/2, Trezor returns signature bit only
 		// https://github.com/trezor/trezor-mcu/pull/399
 		return common.Address{}, nil, errors.New("reply lacks signature")
@@ -267,7 +268,7 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 		signer = types.NewEIP155Signer(chainID)
 		// if chainId is above (MaxUint32 - 36) / 2 then the final v values is returned
 		// directly. Otherwise, the returned value is 35 + chainid * 2.
-		if signature[64] > 1 {
+		if signature[64] > 1 && int(chainID.Int64()) <= (math.MaxUint32-36)/2 {
 			signature[64] -= byte(chainID.Uint64()*2 + 35)
 		}
 	}
