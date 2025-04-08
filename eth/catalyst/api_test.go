@@ -139,7 +139,7 @@ func assembleWithTransactions(api *ConsensusAPI, parentHash common.Hash, params 
 			return nil, err
 		}
 		if have, want := len(execData.Transactions), want; have != want {
-			err = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
+			err = fmt.Errorf("block %d: invalid number of transactions, have %d want %d", execData.Number, have, want)
 			continue
 		}
 		return execData, nil
@@ -448,6 +448,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
 	}
+	time.Sleep(100 * time.Millisecond)
 
 	ethservice.SetSynced()
 	return n, ethservice
