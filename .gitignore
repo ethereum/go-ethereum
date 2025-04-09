@@ -78,3 +78,4 @@ hardhat/ignition/deployments/chain-31337
 # Infrastructure related ignores
 infrastructure/secrets
 infrastructure/.terraform
+infrastructure/terraform.tfstate*
