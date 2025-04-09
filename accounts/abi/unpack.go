@@ -25,6 +25,7 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -36,9 +37,10 @@ var (
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value.
 func ReadInteger(typ Type, b []byte) (interface{}, error) {
-	ret := new(big.Int).SetBytes(b)
 
 	if typ.T == UintTy {
+		ret := new(uint256.Int).SetBytes(b)
+
 		u64, isu64 := ret.Uint64(), ret.IsUint64()
 		switch typ.Size {
 		case 8:
@@ -66,6 +68,8 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 			return ret, nil
 		}
 	}
+
+	ret := new(big.Int).SetBytes(b)
 
 	// big.SetBytes can't tell if a number is negative or positive in itself.
 	// On EVM, if the returned number > max int256, it is negative.
