@@ -22,14 +22,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEraDatabase_Scan(t *testing.T) {
+func TestEraDatabase(t *testing.T) {
 	// Create the database
 	db, err := New("testdata", "sepolia")
 	require.NoError(t, err)
+	defer db.Close()
 
 	block, err := db.GetBlockByNumber(15000)
 	require.NoError(t, err)
 	require.NotNil(t, block, "block not found")
-	defer db.Close()
 	require.Equal(t, uint64(15000), block.NumberU64())
+
+	// Get Header
+	header, err := db.GetHeaderByNumber(15000)
+	require.NoError(t, err)
+	require.NotNil(t, header, "header not found")
+	require.Equal(t, uint64(15000), header.Number.Uint64())
+
+	// Get Receipts
+	receipts, err := db.GetReceiptsByNumber(15000)
+	require.NoError(t, err)
+	require.NotNil(t, receipts, "receipts not found")
+	require.Equal(t, 0, len(receipts), "receipts length mismatch")
 }
