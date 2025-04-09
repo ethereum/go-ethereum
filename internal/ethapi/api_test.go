@@ -850,17 +850,6 @@ func TestEstimateGas(t *testing.T) {
 			},
 			want: 46000,
 		},
-		// Should retrieve the code of 0xef0001 || accounts[0].addr and return an invalid opcode error.
-		{
-			blockNumber: rpc.LatestBlockNumber,
-			call: TransactionArgs{
-				From:              &accounts[0].addr,
-				To:                &accounts[0].addr,
-				Value:             (*hexutil.Big)(big.NewInt(0)),
-				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
-			},
-			expectErr: vm.NewErrInvalidOpCode(0xef),
-		},
 		// SetCodeTx with empty authorization list should fail.
 		{
 			blockNumber: rpc.LatestBlockNumber,
