@@ -47,8 +47,9 @@ const (
 
 	// This is the fairness knob for the discovery mixer. When looking for peers, we'll
 	// wait this long for a single source of candidates before moving on and trying other
-	// sources.
-	discmixTimeout = 5 * time.Second
+	// sources. Currently there is only one source at the Server level, so this has no effect.
+	// Check the fairMox tineout in the Backend for the actual timeout.
+	discmixTimeout = 100 * time.Millisecond
 
 	// Connectivity defaults.
 	defaultMaxPendingPeers = 50
