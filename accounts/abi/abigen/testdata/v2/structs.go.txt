@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // Struct0 is an auto generated low-level Go binding around an user-defined struct.
@@ -72,7 +74,7 @@ func (structs *Structs) PackF() []byte {
 // method F.
 type FOutput struct {
 	A []Struct0
-	C []*big.Int
+	C []*uint256.Int
 	D []bool
 }
 
@@ -87,7 +89,7 @@ func (structs *Structs) UnpackF(data []byte) (FOutput, error) {
 		return *outstruct, err
 	}
 	outstruct.A = *abi.ConvertType(out[0], new([]Struct0)).(*[]Struct0)
-	outstruct.C = *abi.ConvertType(out[1], new([]*big.Int)).(*[]*big.Int)
+	outstruct.C = *abi.ConvertType(out[1], new([]*uint256.Int)).(*[]*uint256.Int)
 	outstruct.D = *abi.ConvertType(out[2], new([]bool)).(*[]bool)
 	return *outstruct, err
 

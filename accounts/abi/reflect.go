@@ -22,6 +22,8 @@ import (
 	"math/big"
 	"reflect"
 	"strings"
+
+	"github.com/holiman/uint256"
 )
 
 // ConvertType converts an interface of a runtime type into an interface of the
@@ -51,9 +53,9 @@ func ConvertType(in interface{}, proto interface{}) interface{} {
 }
 
 // indirect recursively dereferences the value until it either gets the value
-// or finds a big.Int
+// or finds a big.Int or uint256.Int
 func indirect(v reflect.Value) reflect.Value {
-	if v.Kind() == reflect.Ptr && v.Elem().Type() != reflect.TypeOf(big.Int{}) {
+	if v.Kind() == reflect.Ptr && v.Elem().Type() != reflect.TypeOf(big.Int{}) && v.Elem().Type() != reflect.TypeOf(uint256.Int{}) {
 		return indirect(v.Elem())
 	}
 	return v
@@ -73,6 +75,7 @@ func reflectIntType(unsigned bool, size int) reflect.Type {
 		case 64:
 			return reflect.TypeOf(uint64(0))
 		}
+		return reflect.TypeOf(&uint256.Int{})
 	}
 	switch size {
 	case 8:
@@ -104,7 +107,7 @@ func set(dst, src reflect.Value) error {
 	switch {
 	case dstType.Kind() == reflect.Interface && dst.Elem().IsValid() && (dst.Elem().Type().Kind() == reflect.Ptr || dst.Elem().CanSet()):
 		return set(dst.Elem(), src)
-	case dstType.Kind() == reflect.Ptr && dstType.Elem() != reflect.TypeOf(big.Int{}):
+	case dstType.Kind() == reflect.Ptr && dstType.Elem() != reflect.TypeOf(big.Int{}) && dstType.Elem() != reflect.TypeOf(uint256.Int{}):
 		return set(dst.Elem(), src)
 	case srcType.AssignableTo(dstType) && dst.CanSet():
 		dst.Set(src)

@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // SlicerMetaData contains all meta data concerning the Slicer contract.
@@ -105,7 +107,7 @@ func (slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
 // the contract method with ID 0xd88becc0.
 //
 // Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
-func (slicer *Slicer) PackEchoFancyInts(input [23]*big.Int) []byte {
+func (slicer *Slicer) PackEchoFancyInts(input [23]*uint256.Int) []byte {
 	enc, err := slicer.abi.Pack("echoFancyInts", input)
 	if err != nil {
 		panic(err)
@@ -117,12 +119,12 @@ func (slicer *Slicer) PackEchoFancyInts(input [23]*big.Int) []byte {
 // from invoking the contract method with ID 0xd88becc0.
 //
 // Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
-func (slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
+func (slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*uint256.Int, error) {
 	out, err := slicer.abi.Unpack("echoFancyInts", data)
 	if err != nil {
-		return *new([23]*big.Int), err
+		return *new([23]*uint256.Int), err
 	}
-	out0 := *abi.ConvertType(out[0], new([23]*big.Int)).(*[23]*big.Int)
+	out0 := *abi.ConvertType(out[0], new([23]*uint256.Int)).(*[23]*uint256.Int)
 	return out0, err
 }
 

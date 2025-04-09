@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // TokenMetaData contains all meta data concerning the Token contract.
@@ -55,7 +57,7 @@ func (c *Token) Instance(backend bind.ContractBackend, addr common.Address) *bin
 // contract deployment.
 //
 // Solidity: constructor(uint256 initialSupply, string tokenName, uint8 decimalUnits, string tokenSymbol) returns()
-func (token *Token) PackConstructor(initialSupply *big.Int, tokenName string, decimalUnits uint8, tokenSymbol string) []byte {
+func (token *Token) PackConstructor(initialSupply *uint256.Int, tokenName string, decimalUnits uint8, tokenSymbol string) []byte {
 	enc, err := token.abi.Pack("", initialSupply, tokenName, decimalUnits, tokenSymbol)
 	if err != nil {
 		panic(err)
@@ -79,12 +81,12 @@ func (token *Token) PackAllowance(arg0 common.Address, arg1 common.Address) []by
 // from invoking the contract method with ID 0xdd62ed3e.
 //
 // Solidity: function allowance(address , address ) returns(uint256)
-func (token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
+func (token *Token) UnpackAllowance(data []byte) (*uint256.Int, error) {
 	out, err := token.abi.Unpack("allowance", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -92,7 +94,7 @@ func (token *Token) UnpackAllowance(data []byte) (*big.Int, error) {
 // the contract method with ID 0xcae9ca51.
 //
 // Solidity: function approveAndCall(address _spender, uint256 _value, bytes _extraData) returns(bool success)
-func (token *Token) PackApproveAndCall(spender common.Address, value *big.Int, extraData []byte) []byte {
+func (token *Token) PackApproveAndCall(spender common.Address, value *uint256.Int, extraData []byte) []byte {
 	enc, err := token.abi.Pack("approveAndCall", spender, value, extraData)
 	if err != nil {
 		panic(err)
@@ -129,12 +131,12 @@ func (token *Token) PackBalanceOf(arg0 common.Address) []byte {
 // from invoking the contract method with ID 0x70a08231.
 //
 // Solidity: function balanceOf(address ) returns(uint256)
-func (token *Token) UnpackBalanceOf(data []byte) (*big.Int, error) {
+func (token *Token) UnpackBalanceOf(data []byte) (*uint256.Int, error) {
 	out, err := token.abi.Unpack("balanceOf", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -204,12 +206,12 @@ func (token *Token) PackSpentAllowance(arg0 common.Address, arg1 common.Address)
 // from invoking the contract method with ID 0xdc3080f2.
 //
 // Solidity: function spentAllowance(address , address ) returns(uint256)
-func (token *Token) UnpackSpentAllowance(data []byte) (*big.Int, error) {
+func (token *Token) UnpackSpentAllowance(data []byte) (*uint256.Int, error) {
 	out, err := token.abi.Unpack("spentAllowance", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -242,7 +244,7 @@ func (token *Token) UnpackSymbol(data []byte) (string, error) {
 // the contract method with ID 0xa9059cbb.
 //
 // Solidity: function transfer(address _to, uint256 _value) returns()
-func (token *Token) PackTransfer(to common.Address, value *big.Int) []byte {
+func (token *Token) PackTransfer(to common.Address, value *uint256.Int) []byte {
 	enc, err := token.abi.Pack("transfer", to, value)
 	if err != nil {
 		panic(err)
@@ -254,7 +256,7 @@ func (token *Token) PackTransfer(to common.Address, value *big.Int) []byte {
 // the contract method with ID 0x23b872dd.
 //
 // Solidity: function transferFrom(address _from, address _to, uint256 _value) returns(bool success)
-func (token *Token) PackTransferFrom(from common.Address, to common.Address, value *big.Int) []byte {
+func (token *Token) PackTransferFrom(from common.Address, to common.Address, value *uint256.Int) []byte {
 	enc, err := token.abi.Pack("transferFrom", from, to, value)
 	if err != nil {
 		panic(err)
@@ -279,7 +281,7 @@ func (token *Token) UnpackTransferFrom(data []byte) (bool, error) {
 type TokenTransfer struct {
 	From  common.Address
 	To    common.Address
-	Value *big.Int
+	Value *uint256.Int
 	Raw   *types.Log // Blockchain specific contextual infos
 }
 

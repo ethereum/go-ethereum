@@ -77,6 +77,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/common"
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
 		`,
 		`
 			if b, err := NewToken(common.Address{}, nil); b == nil || err != nil {
@@ -90,8 +91,10 @@ var bindTests = []struct {
 			sim := backends.NewSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
 			defer sim.Close()
 
+			maxUint256 := uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+
 			// Deploy an interaction tester contract and call a transaction on it
-			_, _, interactor, err := DeployToken(auth, sim, big.NewInt(-1), "TestToken", 19, "Test")
+			_, _, interactor, err := DeployToken(auth, sim, maxUint256, "TestToken", 19, "Test")
 			if err != nil {
 				t.Fatalf("Failed to deploy interactor contract: %v", err)
 			}
@@ -101,7 +104,7 @@ var bindTests = []struct {
 			toKey, _ := crypto.GenerateKey()
 			toAddr := crypto.PubkeyToAddress(toKey.PublicKey)
 
-			transferValue := big.NewInt(-1)
+			transferValue := maxUint256
 			_, err = interactor.Transfer(auth, toAddr, transferValue)
 			if err != nil {
 				t.Fatalf("Failed to transfer tokens: %v", err)
@@ -249,6 +252,7 @@ var bindTests = []struct {
 			"reflect"
 
 			"github.com/ethereum/go-ethereum/common"
+			"github.com/holiman/uint256"
 		`,
 		`if e, err := NewEventChecker(common.Address{}, nil); e == nil || err != nil {
 			 t.Fatalf("binding (%v) nil or error (%v) not nil", e, nil)
@@ -291,7 +295,7 @@ var bindTests = []struct {
 
 			 fmt.Println(res, str, dat, hash, err)
 
-			 oit, err := e.FilterUnnamed(nil, []*big.Int{}, []*big.Int{})
+			 oit, err := e.FilterUnnamed(nil, []*uint256.Int{}, []*uint256.Int{})
 
 			 arg0  := oit.Event.Arg0    // Make sure unnamed arguments are handled correctly
 			 arg1  := oit.Event.Arg1    // Make sure unnamed arguments are handled correctly
@@ -958,6 +962,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/common"
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
 		`,
 		`
 			// Generate a new random account and a funded simulator
@@ -977,7 +982,7 @@ var bindTests = []struct {
 			// Inject a few events into the contract, gradually more in each block
 			for i := 1; i <= 3; i++ {
 				for j := 1; j <= i; j++ {
-					if _, err := eventer.RaiseSimpleEvent(auth, common.Address{byte(j)}, [32]byte{byte(j)}, true, big.NewInt(int64(10*i+j))); err != nil {
+					if _, err := eventer.RaiseSimpleEvent(auth, common.Address{byte(j)}, [32]byte{byte(j)}, true, uint256.NewInt(uint64(10*i+j))); err != nil {
 						t.Fatalf("block %d, event %d: raise failed: %v", i, j, err)
 					}
 				}
@@ -1014,12 +1019,12 @@ var bindTests = []struct {
 				t.Fatalf("simple event iteration failed: %v", err)
 			}
 			// Test raising and filtering for an event with no data component
-			if _, err := eventer.RaiseNodataEvent(auth, big.NewInt(314), 141, 271); err != nil {
+			if _, err := eventer.RaiseNodataEvent(auth, uint256.NewInt(314), 141, 271); err != nil {
 				t.Fatalf("failed to raise nodata event: %v", err)
 			}
 			sim.Commit()
 
-			nit, err := eventer.FilterNodataEvent(nil, []*big.Int{big.NewInt(314)}, []int16{140, 141, 142}, []uint32{271})
+			nit, err := eventer.FilterNodataEvent(nil, []*uint256.Int{uint256.NewInt(314)}, []int16{140, 141, 142}, []uint32{271})
 			if err != nil {
 				t.Fatalf("failed to filter for nodata events: %v", err)
 			}
@@ -1094,7 +1099,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("failed to subscribe to simple events: %v", err)
 			}
-			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{255}, [32]byte{255}, true, big.NewInt(255)); err != nil {
+			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{255}, [32]byte{255}, true, uint256.NewInt(255)); err != nil {
 				t.Fatalf("failed to raise subscribed simple event: %v", err)
 			}
 			sim.Commit()
@@ -1110,7 +1115,7 @@ var bindTests = []struct {
 			// Unsubscribe from the event and make sure we're not delivered more
 			sub.Unsubscribe()
 
-			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{254}, [32]byte{254}, true, big.NewInt(254)); err != nil {
+			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{254}, [32]byte{254}, true, uint256.NewInt(254)); err != nil {
 				t.Fatalf("failed to raise subscribed simple event: %v", err)
 			}
 			sim.Commit()
@@ -1283,6 +1288,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
 		`,
 
 		`
@@ -1305,16 +1311,16 @@ var bindTests = []struct {
 			}
 
 			a := TupleS{
-				A: big.NewInt(1),
-				B: []*big.Int{big.NewInt(2), big.NewInt(3)},
+				A: uint256.NewInt(1),
+				B: []*uint256.Int{uint256.NewInt(2), uint256.NewInt(3)},
 				C: []TupleT{
 					{
-						X: big.NewInt(4),
-						Y: big.NewInt(5),
+						X: uint256.NewInt(4),
+						Y: uint256.NewInt(5),
 					},
 					{
-						X: big.NewInt(6),
-						Y: big.NewInt(7),
+						X: uint256.NewInt(6),
+						Y: uint256.NewInt(7),
 					},
 				},
 			}
@@ -1322,12 +1328,12 @@ var bindTests = []struct {
 			b := [][2]TupleT{
 				{
 					{
-						X: big.NewInt(8),
-						Y: big.NewInt(9),
+						X: uint256.NewInt(8),
+						Y: uint256.NewInt(9),
 					},
 					{
-						X: big.NewInt(10),
-						Y: big.NewInt(11),
+						X: uint256.NewInt(10),
+						Y: uint256.NewInt(11),
 					},
 				},
 			}
@@ -1335,25 +1341,25 @@ var bindTests = []struct {
 			c := [2][]TupleT{
 				{
 					{
-						X: big.NewInt(12),
-						Y: big.NewInt(13),
+						X: uint256.NewInt(12),
+						Y: uint256.NewInt(13),
 					},
 					{
-						X: big.NewInt(14),
-						Y: big.NewInt(15),
+						X: uint256.NewInt(14),
+						Y: uint256.NewInt(15),
 					},
 				},
 				{
 					{
-						X: big.NewInt(16),
-						Y: big.NewInt(17),
+						X: uint256.NewInt(16),
+						Y: uint256.NewInt(17),
 					},
 				},
 			}
 
 			d := []TupleS{a}
 
-			e := []*big.Int{big.NewInt(18), big.NewInt(19)}
+			e := []*uint256.Int{uint256.NewInt(18), uint256.NewInt(19)}
 			ret1, ret2, ret3, ret4, ret5, err := contract.Func1(nil, a, b, c, d, e)
 			if err != nil {
 				t.Fatalf("invoke contract failed, err %v", err)
@@ -1425,6 +1431,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
 		`,
 		`
 			// Generate a new random account and a funded simulator
@@ -1448,11 +1455,11 @@ var bindTests = []struct {
 			res, err := testContract.Add(&bind.CallOpts{
 				From: auth.From,
 				Pending: false,
-			}, big.NewInt(1), big.NewInt(2))
+			}, uint256.NewInt(1), uint256.NewInt(2))
 			if err != nil {
 				t.Fatalf("Failed to call linked contract: %v", err)
 			}
-			if res.Cmp(big.NewInt(3)) != 0 {
+			if res.Cmp(uint256.NewInt(3)) != 0 {
 				t.Fatalf("Add did not return the correct result: %d != %d", res, 3)
 			}
 		`,
@@ -1491,6 +1498,7 @@ var bindTests = []struct {
 		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 		"github.com/ethereum/go-ethereum/core/types"
 		"github.com/ethereum/go-ethereum/crypto"
+		"github.com/holiman/uint256"
 		`,
 		`
 		// Initialize test accounts
@@ -1529,7 +1537,7 @@ var bindTests = []struct {
 				}
 			}
 		}()
-		contract.Foo(auth, big.NewInt(1), big.NewInt(2))
+		contract.Foo(auth, uint256.NewInt(1), uint256.NewInt(2))
 		sim.Commit()
 		select {
 		case n := <-resCh:
@@ -1540,7 +1548,7 @@ var bindTests = []struct {
 			t.Fatalf("Wait bar0 event timeout")
 		}
 
-		contract.Foo0(auth, big.NewInt(1))
+		contract.Foo0(auth, uint256.NewInt(1))
 		sim.Commit()
 		select {
 		case n := <-resCh:
@@ -1642,6 +1650,7 @@ var bindTests = []struct {
 		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 		"github.com/ethereum/go-ethereum/crypto"
 		"github.com/ethereum/go-ethereum/core/types"
+		"github.com/holiman/uint256"
         `,
 		`
 		key, _ := crypto.GenerateKey()
@@ -1658,7 +1667,7 @@ var bindTests = []struct {
 		}
 		sim.Commit()
 		err = c1.Foo(nil, ExternalLibSharedStruct{
-			F1: big.NewInt(100),
+			F1: uint256.NewInt(100),
 			F2: [32]byte{0x01, 0x02, 0x03},
 		})
 		if err != nil {
@@ -1670,7 +1679,7 @@ var bindTests = []struct {
 		}
 		sim.Commit()
 		err = c2.Bar(nil, ExternalLibSharedStruct{
-			F1: big.NewInt(100),
+			F1: uint256.NewInt(100),
 			F2: [32]byte{0x01, 0x02, 0x03},
 		})
 		if err != nil {
@@ -1704,6 +1713,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
 		`,
 		`
 			// Generate a new random account and a funded simulator
@@ -1723,12 +1733,12 @@ var bindTests = []struct {
 			// This test the existence of the free retriever call for view and pure functions
 			if num, err := pav.PureFunc(nil); err != nil {
 				t.Fatalf("Failed to call anonymous field retriever: %v", err)
-			} else if num.Cmp(big.NewInt(42)) != 0 {
+			} else if num.Cmp(uint256.NewInt(42)) != 0 {
 				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 42)
 			}
 			if num, err := pav.ViewFunc(nil); err != nil {
 				t.Fatalf("Failed to call anonymous field retriever: %v", err)
-			} else if num.Cmp(big.NewInt(1)) != 0 {
+			} else if num.Cmp(uint256.NewInt(1)) != 0 {
 				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 1)
 			}
 		`,
@@ -1749,7 +1759,7 @@ var bindTests = []struct {
 				emit Fallback(msg.data);
 			}
 
-			event Received(address addr, uint value);
+			event Received(address addr, uint256 value);
 			receive() external payable {
 				emit Received(msg.sender, msg.value);
 			}
@@ -1856,6 +1866,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
+			"github.com/holiman/uint256"
 	   `,
 		`
 			var (
@@ -1894,10 +1905,10 @@ var bindTests = []struct {
 			}
 			var count int
 			for it.Next() {
-				if it.Event.S.A.Cmp(big.NewInt(1)) != 0 {
+				if it.Event.S.A.Cmp(uint256.NewInt(1)) != 0 {
 					t.Fatal("Unexpected contract event")
 				}
-				if it.Event.S.B.Cmp(big.NewInt(2)) != 0 {
+				if it.Event.S.B.Cmp(uint256.NewInt(2)) != 0 {
 					t.Fatal("Unexpected contract event")
 				}
 				count += 1
@@ -1991,6 +2002,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
+			"github.com/holiman/uint256"
 		`,
 		tester: `
 			var (
@@ -2000,7 +2012,7 @@ var bindTests = []struct {
 			)
 			defer sim.Close()
 
-			_, tx, _, err := DeployConstructorWithStructParam(user, sim, ConstructorWithStructParamStructType{Field: big.NewInt(42)})
+			_, tx, _, err := DeployConstructorWithStructParam(user, sim, ConstructorWithStructParamStructType{Field: uint256.NewInt(42)})
 			if err != nil {
 				t.Fatalf("DeployConstructorWithStructParam() got err %v; want nil err", err)
 			}
