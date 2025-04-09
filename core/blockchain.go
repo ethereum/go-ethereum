@@ -274,6 +274,10 @@ type BlockChain struct {
 	processor  Processor // Block transaction processor interface
 	vmConfig   vm.Config
 	logger     *tracing.Hooks
+
+	// Verkle transition fields
+	blockToBaseStateRoot *state.BlockToBaseStateRoot
+	verkleTransitionBlock uint64 // Block number when Verkle transition begins
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -486,6 +490,21 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if txLookupLimit != nil {
 		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
 	}
+
+	// Initialize verkle transition mapping if needed
+	if chainConfig.IsVerkleActive(0) || (chainConfig.VerkleBlock != nil && chainConfig.VerkleBlock.Uint64() > 0) {
+		bc.verkleTransitionBlock = chainConfig.VerkleBlock.Uint64()
+
+		mapping, err := state.LoadBlockToBaseStateRoot(db)
+		if err != nil {
+			return nil, err
+		}
+		bc.blockToBaseStateRoot = mapping
+		log.Info("Initialized Verkle transition mapping", "verkleBlock", bc.verkleTransitionBlock)
+	} else {
+		bc.blockToBaseStateRoot = state.NewBlockToBaseStateRootMapping()
+	}
+
 	return bc, nil
 }
 

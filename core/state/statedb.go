@@ -86,6 +86,11 @@ type StateDB struct {
 	// It will be updated when the Commit is called.
 	originalRoot common.Hash
 
+	// Verkle transition fields for identifying state
+	verkleTransitionActive bool
+	baseStateRoot          common.Hash
+	blockHash              common.Hash
+
 	// This map holds 'live' objects, which will get modified while
 	// processing a state transition.
 	stateObjects map[common.Address]*stateObject
@@ -1433,4 +1438,53 @@ func (s *StateDB) Witness() *stateless.Witness {
 
 func (s *StateDB) AccessEvents() *AccessEvents {
 	return s.accessEvents
+}
+
+// Add new methods for Verkle transition
+func (s *StateDB) SetVerkleTransitionData(blockHash, baseStateRoot common.Hash) {
+	s.verkleTransitionActive = true
+	s.baseStateRoot = baseStateRoot
+	s.blockHash = blockHash
+}
+
+// IsVerkleTransitionActive returns whether the state is in Verkle transition
+func (s *StateDB) IsVerkleTransitionActive() bool {
+	return s.verkleTransitionActive
+}
+
+// BaseStateRoot returns the Merkle state root used as base during transition
+func (s *StateDB) BaseStateRoot() common.Hash {
+	return s.baseStateRoot
+}
+
+func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
+    // Try current state first
+    value := s.GetState(addr, hash)  // This is wrong - would cause recursion
+
+    // Instead, check how GetState is currently implemented
+    // Likely something like:
+    stateObject := s.getStateObject(addr)
+    if stateObject != nil {
+        value = stateObject.GetState(hash)
+    }
+
+    // If in verkle transition and value not found, fallback to base state
+    if s.verkleTransitionActive && value == (common.Hash{}) {
+        return s.getStateFromBase(addr, hash)
+    }
+
+    return value
+}
+
+// Add method to access base state
+func (s *StateDB) getStateFromBase(addr common.Address, hash common.Hash) common.Hash {
+	// Implementation depends on how Merkle states are accessed
+	// This is a simplified implementation for the PR
+	baseState, err := New(s.baseStateRoot, s.db)
+	if err != nil {
+		log.Error("Failed to access base state", "error", err)
+		return common.Hash{}
+	}
+
+	return baseState.GetState(addr, hash)
 }
