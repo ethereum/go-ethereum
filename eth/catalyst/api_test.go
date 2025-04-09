@@ -119,7 +119,6 @@ func TestEth2AssembleBlock(t *testing.T) {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
 	ethservice.TxPool().Add([]*types.Transaction{tx}, true)
-	fmt.Println("in test: added txs")
 	blockParams := engine.PayloadAttributes{
 		Timestamp: blocks[9].Time() + 5,
 	}
@@ -139,7 +138,7 @@ func assembleWithTransactions(api *ConsensusAPI, parentHash common.Hash, params 
 			return nil, err
 		}
 		if have, want := len(execData.Transactions), want; have != want {
-			err = fmt.Errorf("block %d: invalid number of transactions, have %d want %d", execData.Number, have, want)
+			err = fmt.Errorf("invalid number of transactions, have %d want %d", have, want)
 			continue
 		}
 		return execData, nil
@@ -448,7 +447,6 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
 	}
-	time.Sleep(100 * time.Millisecond)
 
 	ethservice.SetSynced()
 	return n, ethservice

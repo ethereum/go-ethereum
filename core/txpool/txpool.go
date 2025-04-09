@@ -361,7 +361,6 @@ func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 	splits := make([]int, len(txs))
 
 	for i, tx := range txs {
-		fmt.Printf("txpool attempting to add %v\n", tx.Hash())
 		// Mark this transaction belonging to no-subpool
 		splits[i] = -1
 

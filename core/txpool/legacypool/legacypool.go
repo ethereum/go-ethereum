@@ -19,7 +19,6 @@ package legacypool
 
 import (
 	"errors"
-	"fmt"
 	"maps"
 	"math"
 	"math/big"
@@ -978,7 +977,6 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 	pool.requestPromoteExecutables(req)
 	if sync {
 		<-req.done
-		fmt.Printf("added %x\n", txs[0].Hash())
 	}
 	return errs
 }
@@ -1205,7 +1203,6 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 
 		select {
 		case req := <-pool.reqResetCh:
-			fmt.Printf("request reset to %d\n", req.newHead.Number)
 			// Reset request: update head if request is already pending.
 			if reset == nil {
 				reset = req
@@ -1214,10 +1211,8 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 			}
 			nextDones = append(nextDones, req.done)
 			launchNextRun = true
-			//pool.reorgDoneCh <- nextDone
 
 		case req := <-pool.reqPromoteCh:
-			fmt.Println("request promote")
 			// Promote request: update address set if request is already pending.
 			if dirtyAccounts == nil {
 				dirtyAccounts = req.set
@@ -1226,7 +1221,6 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 			}
 			nextDones = append(nextDones, req.done)
 			launchNextRun = true
-			//pool.reorgDoneCh <- nextDone
 
 		case tx := <-pool.queueTxEventCh:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
@@ -1310,7 +1304,6 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 		for addr, list := range pool.pending {
 			highestPending := list.LastElement()
 			nonces[addr] = highestPending.Nonce() + 1
-			fmt.Printf("set pending nonce %x <- %d\n", addr, highestPending.Nonce()+1)
 		}
 		pool.pendingNonces.setAll(nonces)
 	}
@@ -1467,22 +1460,14 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 		log.Trace("Removed unpayable queued transactions", "count", len(drops))
 		queuedNofundsMeter.Mark(int64(len(drops)))
 
-		fmt.Printf("pending nonce of %x is %d\n", addr, pool.pendingNonces.get(addr))
-		fmt.Printf("in-state nonce of %x is %d\n", addr, pool.currentState.GetNonce(addr))
 		// Gather all executable transactions and promote them
 		readies := list.Ready(pool.pendingNonces.get(addr))
-		fmt.Println(len(readies))
 
 		for _, tx := range readies {
 			hash := tx.Hash()
 			if pool.promoteTx(addr, hash, tx) {
 				promoted = append(promoted, tx)
 			}
-		}
-		fmt.Println(len(promoted))
-		if len(promoted) > 0 {
-			fmt.Println(promoted[0].Hash())
-			fmt.Println(promoted[0].Nonce())
 		}
 		log.Trace("Promoted queued transactions", "count", len(promoted))
 		queuedGauge.Dec(int64(len(readies)))
