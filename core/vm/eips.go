@@ -338,12 +338,7 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	}
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.GetCode(addr)
-	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-	consumed, wanted := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false, scope.Contract.Gas)
-	scope.Contract.UseGas(consumed, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified)
-	if consumed < wanted {
-		return nil, ErrOutOfGas
-	}
+	paddedCodeCopy, _, _ := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), paddedCodeCopy)
 
 	return nil, nil

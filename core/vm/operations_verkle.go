@@ -201,5 +201,17 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	if gas, overflow = math.SafeAdd(gas, wgas); overflow {
 		return 0, ErrGasUintOverflow
 	}
+	codeOffset := stack.Back(2)
+	length := stack.Back(3)
+	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
+	if overflow {
+		uint64CodeOffset = gomath.MaxUint64
+	}
+	code := evm.StateDB.GetCode(addr)
+	_, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
+	_, wanted := evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false, gas)
+	if gas, overflow = math.SafeAdd(gas, wanted); overflow {
+		return 0, ErrGasUintOverflow
+	}
 	return gas, nil
 }
