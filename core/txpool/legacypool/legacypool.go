@@ -927,8 +927,8 @@ func (pool *LegacyPool) addRemoteSync(tx *types.Transaction) error {
 
 // Add enqueues a batch of transactions into the pool if they are valid.
 //
-// If sync is set, the method will block until all internal maintenance related
-// to the add is finished. Only use this during tests for determinism!
+// Note, if sync is set the method will block until all internal maintenance
+// related to the add is finished. Only use this during tests for determinism.
 func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
 	var (
@@ -1886,6 +1886,9 @@ func numSlots(tx *types.Transaction) int {
 
 // Clear implements txpool.SubPool, removing all tracked txs from the pool
 // and rotating the journal.
+//
+// Note, do not use this in production / live code. In live code, the pool is
+// meant to reset on a separate thread to avoid DoS vectors.
 func (pool *LegacyPool) Clear() {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
