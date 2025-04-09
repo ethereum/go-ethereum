@@ -27,6 +27,25 @@ Using mounted dir for the data can be tricky because of permission errs tho.
 Currently, the new image (with contract) is built from the latest base image.
 This should be extended in the future to support building from a given tag.
 
+---
+
+### Tests
+The default tests that Hardhat Sample Project provides depends on using the Hardhat network.
+This is an example of an error they throw when ran against the Geth:
+```
+  4) Lock
+       Deployment
+         Should fail if the unlockTime is not in the future:
+     OnlyHardhatNetworkError: This helper can only be used with Hardhat Network. You are connected to 'geth'.
+      at checkIfDevelopmentNetwork (<obfustcated>/hardhat/node_modules/@nomicfoundation/hardhat-network-helpers/src/utils.ts:30:11)
+      at getHardhatProvider (<obfuscated>/hardhat/node_modules/@nomicfoundation/hardhat-network-helpers/src/utils.ts:41:9)
+      at async Object.latest (<obfuscated>/hardhat/node_modules/@nomicfoundation/hardhat-network-helpers/src/helpers/time/latest.ts:7:20)
+      at async Context.<anonymous> (<obfuscated>/hardhat/test/Lock.ts:54:26)
+```
+I've provided the same tests reworked to be compatible with Geth.
+
+When running the docker container with Geth, I do not use bind mount and I am making sure that the geth_data dir from previous steps is cleaned so I can be sure that I am working with the contract previously deployed in the container.
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.

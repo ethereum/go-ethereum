@@ -1,14 +1,14 @@
-name: deploy
+name: deploy contract and run test
 
-on:
-  pull_request:
-    types: [closed]
-    branches: [master]
-    paths: ["**"]
+on: [push, pull_request]
+  # pull_request:
+  #   types: [closed]
+  #   branches: [master]
+  #   paths: ["**"]
 
 jobs:
   deploy:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
+    # if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
     runs-on: ubuntu-latest
 
     steps:
@@ -72,9 +72,27 @@ jobs:
           docker build -t $IMAGE_NAME:with-contract-latest -t $IMAGE_NAME:with-contract-$COMMIT_SHA -f Dockerfile.with-contract .
 
           rm Dockerfile.with-contract
+          rm -rf ./geth_data
 
           docker images -a
       - name: push image
         run: |
           docker push $IMAGE_NAME:with-contract-latest
           docker push $IMAGE_NAME:with-contract-$COMMIT_SHA
+
+      - name: start geth with contract
+        run: |
+          docker run -d --name geth-service-with-contract -p 8545:8545 -p 30303:30303 yyx00xzz/geth-dev:with-contract-latest --dev --http --http.addr 0.0.0.0 --http.port 8545 --http.api admin,debug,web3,eth,txpool,miner,net,dev --miner.gasprice "1" --http.corsdomain "*"
+          echo "Waiting for Geth to be ready..."
+          # Poll the Geth RPC endpoint until it's responsive
+          while ! curl -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}' http://localhost:8545 > /dev/null; do
+            echo "Geth not ready yet, waiting..."
+            docker logs geth-service
+            sleep 5
+          done
+          echo "Geth is ready."
+
+      - name: run tests
+        run: |
+          cd ./hardhat
+          npx hardhat test --network geth
