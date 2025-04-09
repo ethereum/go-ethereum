@@ -67,8 +67,8 @@ type Reserver interface {
 	// Returns an error if the address is not reserved or is reserved by another pool.
 	Release(addr common.Address) error
 
-	// Has returns a flag indicating if the address has been reserved by another
-	// pool or not.
+	// Has returns a flag indicating if the address has been reserved by a pool
+	// other than one with the current Reserver handle.
 	Has(address common.Address) bool
 }
 
