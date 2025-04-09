@@ -239,9 +239,12 @@ func (*HandlerT) SetGCPercent(v int) int {
 
 // SetMemoryLimit sets the GOMEMLIMIT for the process. It returns the previous limit.
 // Note:
-//   - Geth also allocates memory off-heap, particularly for fastCache and Pebble, which can be non-trivial (a few gigabytes by default).
+//   - The input limit is provided as bytes, and includes all memory mapped, managed, and not released by the Go runtime.
+//   - A zero limit or a limit that's lower than the amount of memory used by the Go runtime may cause the garbage collector to runnearly continuously. However, the application may still make progress.
 //   - Setting the limit too low will cause Geth to become unresponsive.
+//   - Geth also allocates memory off-heap, particularly for fastCache and Pebble, which can be non-trivial (a few gigabytes by default).
 func (*HandlerT) SetMemoryLimit(limit int64) int64 {
+	log.Info("Setting memory limit", "limit(MB)", limit/1024/1024)
 	return debug.SetMemoryLimit(limit)
 }
 
