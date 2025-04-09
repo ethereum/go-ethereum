@@ -579,9 +579,9 @@ func (p *TxPool) Sync() error {
 
 // Clear removes all tracked txs from the subpools.
 //
-// Note, this method invokes Sync() is only used for testing and is susceptible
-// to DoS vectors. In production code, the pool is meant to reset on a separate
-// thread.
+// Note, this method invokes Sync() and is only used for testing, because it is
+// susceptible to DoS vectors. In production code, the pool is meant to reset on
+// a separate thread.
 func (p *TxPool) Clear() {
 	// Invoke Sync to ensure that txs pending addition don't get added to the pool after
 	// the subpools are subsequently cleared
