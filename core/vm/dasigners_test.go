@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -261,11 +260,8 @@ func (suite *DASignersTestSuite) queryGetAggPkG1(testSigner common.Address, bitm
 
 func (suite *DASignersTestSuite) Test_DASigners() {
 	// tx test
-	fmt.Println("registering signer 1..")
 	signer1 := suite.registerSigner(suite.signerOne, big.NewInt(1))
-	fmt.Println("registering signer 2..")
 	signer2 := suite.registerSigner(suite.signerTwo, big.NewInt(11))
-	fmt.Println("signers registered..")
 	suite.updateSocket(suite.signerOne, signer1)
 	suite.updateSocket(suite.signerTwo, signer2)
 	suite.registerEpoch(suite.signerOne, big.NewInt(1))

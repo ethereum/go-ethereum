@@ -241,7 +241,7 @@ func (w *WrappedA0giBasePrecompile) Burn(
 }
 
 func (w *WrappedA0giBasePrecompile) getAgency() common.Address {
-	// This is a Wrapped A0GI Agency contract deployed by a raw transaction:
+	// This is a Multi-sig contract deployed by a raw transaction:
 	// raw tx params:
 	//	 from:
 	//   nonce: 0
@@ -268,7 +268,7 @@ func (w *WrappedA0giBasePrecompile) SetMinterCap(
 	// validation
 	agency := w.getAgency()
 	if contract.caller != agency {
-		return nil, wrappeda0gibase.ErrSenderNotWA0GI
+		return nil, wrappeda0gibase.ErrSenderNotAgency
 	}
 	// execute
 	supply, err := w.getMinterSupply(evm, minter)
