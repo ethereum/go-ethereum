@@ -76,4 +76,5 @@ hardhat/coverage.json
 hardhat/ignition/deployments/chain-31337
 
 # Infrastructure related ignores
-Infrastructure/secrets
+infrastructure/secrets
+infrastructure/.terraform
