@@ -25,6 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/core/rawdb/eradb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -71,6 +72,8 @@ type Freezer struct {
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock *flock.Flock             // File-system lock to prevent double opens
 	closeOnce    sync.Once
+
+	eradb *eradb.EraDatabase
 }
 
 // NewFreezer creates a freezer instance for maintaining immutable ordered
@@ -120,6 +123,15 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		instanceLock: lock,
 	}
 
+	// Create the era database.
+	// TODO: Pipe down network name.
+	edb, err := eradb.New(datadir, "sepolia")
+	if err != nil {
+		lock.Unlock()
+		return nil, err
+	}
+	freezer.eradb = edb
+
 	// Create the tables.
 	for name, config := range tables {
 		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, maxTableSize, config, readonly)
@@ -132,7 +144,6 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		}
 		freezer.tables[name] = table
 	}
-	var err error
 	if freezer.readonly {
 		// In readonly mode only validate, don't truncate.
 		// validate also sets `freezer.frozen`.
@@ -171,6 +182,7 @@ func (f *Freezer) Close() error {
 		if err := f.instanceLock.Unlock(); err != nil {
 			errs = append(errs, err)
 		}
+		f.eradb.Close()
 	})
 	if errs != nil {
 		return fmt.Errorf("%v", errs)
@@ -195,6 +207,17 @@ func (f *Freezer) HasAncient(kind string, number uint64) (bool, error) {
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
 func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	if table := f.tables[kind]; table != nil {
+		if table.config.prunable && number < f.tail.Load() {
+			// The requested item has been pruned. Attempt fetching from era1 file.
+			switch kind {
+			case ChainFreezerBodiesTable:
+				return f.eradb.GetRawBody(number)
+			case ChainFreezerReceiptTable:
+				return f.eradb.GetRawReceipts(number)
+			default:
+				return nil, errOutOfBounds
+			}
+		}
 		return table.Retrieve(number)
 	}
 	return nil, errUnknownTable
