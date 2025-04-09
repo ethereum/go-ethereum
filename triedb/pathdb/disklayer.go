@@ -306,6 +306,16 @@ func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes *no
 // and returns a newly constructed disk layer. Note the current disk
 // layer must be tagged as stale first to prevent re-access.
 func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
+	var stats fastcache.Stats
+	dl.nodes.UpdateStats(&stats)
+	snapshotCacheGetGauge.Update(int64(stats.GetCalls))
+	snapshotCacheSetGauge.Update(int64(stats.SetCalls))
+	snapshotCacheMissGauge.Update(int64(stats.Misses))
+	snapshotCacheSizeGauge.Update(int64(stats.BytesSize))
+	snapshotCacheCapacityGauge.Update(int64(stats.MaxBytesSize))
+	snapshotCacheEntriesGauge.Update(int64(stats.EntriesCount))
+	snapshotCacheCollisionGauge.Update(int64(stats.Collisions))
+
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
