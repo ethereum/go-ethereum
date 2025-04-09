@@ -205,6 +205,45 @@ func (e *Era) GetReceiptsByNumber(num uint64) (types.Receipts, error) {
 	return receipts, nil
 }
 
+// GetRawBodyByNumber returns the RLP-encoded body for the given block number.
+func (e *Era) GetRawBodyByNumber(num uint64) ([]byte, error) {
+	if e.m.start > num || e.m.start+e.m.count <= num {
+		return nil, fmt.Errorf("out-of-bounds: %d not in [%d, %d)", num, e.m.start, e.m.start+e.m.count)
+	}
+	off, err := e.readOffset(num)
+	if err != nil {
+		return nil, err
+	}
+	r, _, err := newSnappyReader(e.s, TypeCompressedBody, off)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(r)
+}
+
+// GetRawReceiptsByNumber returns the RLP-encoded receipts for the given block number.
+func (e *Era) GetRawReceiptsByNumber(num uint64) ([]byte, error) {
+	if e.m.start > num || e.m.start+e.m.count <= num {
+		return nil, fmt.Errorf("out-of-bounds: %d not in [%d, %d)", num, e.m.start, e.m.start+e.m.count)
+	}
+	off, err := e.readOffset(num)
+	if err != nil {
+		return nil, err
+	}
+
+	// Skip over header and body.
+	off, err = e.s.SkipN(off, 2)
+	if err != nil {
+		return nil, err
+	}
+
+	r, _, err := newSnappyReader(e.s, TypeCompressedReceipts, off)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(r)
+}
+
 // Accumulator reads the accumulator entry in the Era1 file.
 func (e *Era) Accumulator() (common.Hash, error) {
 	entry, err := e.s.Find(TypeAccumulator)
