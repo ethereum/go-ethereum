@@ -31,7 +31,8 @@ import (
 type EraDatabase struct {
 	datadir string
 	network string
-	cache   *lru.Cache[uint64, *era.Era]
+	// TODO: should take into account configured number of fd handles.
+	cache *lru.Cache[uint64, *era.Era]
 }
 
 // New creates a new EraDatabase instance.
@@ -70,23 +71,10 @@ func (db *EraDatabase) openEra(name string) (*era.Era, error) {
 	return e, nil
 }
 
-func (db *EraDatabase) Close() {
-	// Close all open era1 files in the cache.
-	keys := db.cache.Keys()
-	for _, key := range keys {
-		if e, ok := db.cache.Get(key); ok {
-			e.Close()
-		}
-	}
-}
-
-func (db *EraDatabase) GetBlockByNumber(number uint64) (*types.Block, error) {
-	// Lookup the table by epoch.
-	epoch := number / uint64(era.MaxEra1Size)
+func (db *EraDatabase) getEraByEpoch(epoch uint64) (*era.Era, error) {
 	// Check the cache first.
 	if e, ok := db.cache.Get(epoch); ok {
-		fmt.Printf("Cache hit for epoch %d\n", epoch)
-		return e.GetBlockByNumber(number)
+		return e, nil
 	}
 	// file name scheme is <network>-<epoch>-<root>.
 	glob := fmt.Sprintf("%s-%05d-*.era1", db.network, epoch)
@@ -107,6 +95,84 @@ func (db *EraDatabase) GetBlockByNumber(number uint64) (*types.Block, error) {
 	}
 	// Add the era to the cache.
 	db.cache.Add(epoch, e)
+	return e, nil
+}
 
+func (db *EraDatabase) Close() {
+	// Close all open era1 files in the cache.
+	keys := db.cache.Keys()
+	for _, key := range keys {
+		if e, ok := db.cache.Get(key); ok {
+			e.Close()
+		}
+	}
+}
+
+// TODO: do we need this method? we do have headers in the freezer.
+func (db *EraDatabase) GetHeaderByNumber(number uint64) (*types.Header, error) {
+	// Lookup the table by epoch.
+	epoch := number / uint64(era.MaxEra1Size)
+	e, err := db.getEraByEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
+	// The era1 file for given epoch may not exist.
+	if e == nil {
+		return nil, nil
+	}
+	return e.GetHeaderByNumber(number)
+}
+
+func (db *EraDatabase) GetRawBody(number uint64) ([]byte, error) {
+	// Lookup the table by epoch.
+	epoch := number / uint64(era.MaxEra1Size)
+	e, err := db.getEraByEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
+	// The era1 file for given epoch may not exist.
+	if e == nil {
+		return nil, nil
+	}
+	return e.GetRawBodyByNumber(number)
+}
+
+func (db *EraDatabase) GetRawReceipts(number uint64) ([]byte, error) {
+	epoch := number / uint64(era.MaxEra1Size)
+	e, err := db.getEraByEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
+	// The era1 file for given epoch may not exist.
+	if e == nil {
+		return nil, nil
+	}
+	return e.GetRawReceiptsByNumber(number)
+}
+
+func (db *EraDatabase) GetBlockByNumber(number uint64) (*types.Block, error) {
+	// Lookup the table by epoch.
+	epoch := number / uint64(era.MaxEra1Size)
+	e, err := db.getEraByEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
+	// The era1 file for given epoch may not exist.
+	if e == nil {
+		return nil, nil
+	}
 	return e.GetBlockByNumber(number)
+}
+
+func (db *EraDatabase) GetReceiptsByNumber(number uint64) (types.Receipts, error) {
+	epoch := number / uint64(era.MaxEra1Size)
+	e, err := db.getEraByEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
+	// The era1 file for given epoch may not exist.
+	if e == nil {
+		return nil, nil
+	}
+	return e.GetReceiptsByNumber(number)
 }
