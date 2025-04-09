@@ -276,7 +276,7 @@ type BlockChain struct {
 	logger     *tracing.Hooks
 
 	// Verkle transition fields
-	blockToBaseStateRoot *state.BlockToBaseStateRoot
+	blockToBaseStateRoot  *state.BlockToBaseStateRoot
 	verkleTransitionBlock uint64 // Block number when Verkle transition begins
 }
 
@@ -1188,6 +1188,13 @@ func (bc *BlockChain) Stop() {
 	if bc.logger != nil && bc.logger.OnClose != nil {
 		bc.logger.OnClose()
 	}
+
+	if bc.blockToBaseStateRoot != nil {
+		if err := bc.blockToBaseStateRoot.Store(bc.db); err != nil {
+			log.Error("Failed to store verkle transition mappings", "err", err)
+		}
+	}
+
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
 		log.Error("Failed to close trie database", "err", err)
@@ -1882,6 +1889,26 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 		defer func() {
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()
+	}
+
+	// Handle Verkle transition
+	if bc.verkleTransitionBlock > 0 && block.NumberU64() >= bc.verkleTransitionBlock {
+		parentHash := block.ParentHash()
+		parentHeader := bc.GetHeaderByHash(parentHash)
+		if parentHeader == nil {
+			return nil, fmt.Errorf("parent header not found: %s", parentHash.Hex())
+		}
+
+		// Store the mapping from block hash to parent's state root
+		bc.blockToBaseStateRoot.Add(block.Hash(), parentHeader.Root)
+
+		// Set Verkle transition data in state
+		statedb.SetVerkleTransitionData(block.Hash(), parentHeader.Root)
+
+		log.Debug("Processing Verkle transition block",
+			"number", block.NumberU64(),
+			"hash", block.Hash(),
+			"baseStateRoot", parentHeader.Root)
 	}
 
 	// Process block using the parent state as reference point

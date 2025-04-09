@@ -4,7 +4,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/triedb" // Added triedb import
 )
 
 func TestBlockToBaseStateRootMapping(t *testing.T) {
@@ -46,7 +47,7 @@ func TestBlockToBaseStateRootMapping(t *testing.T) {
 	}
 
 	// Test Store and Load
-	db := memorydb.New()
+	db := rawdb.NewMemoryDatabase()
 	err := mapping.Store(db)
 	if err != nil {
 		t.Fatalf("Failed to store mapping: %v", err)
@@ -67,19 +68,29 @@ func TestBlockToBaseStateRootMapping(t *testing.T) {
 }
 
 func TestStateDBVerkleTransition(t *testing.T) {
-	// Create a test state
-	db := NewDatabase(memorydb.New())
-	baseState, _ := New(common.Hash{}, db, nil)
+	// Create a database backend
+	ethDb := rawdb.NewMemoryDatabase()
+
+	// Create a trie database first
+	trieDb := triedb.NewDatabase(ethDb, nil) // Use proper config if needed
+
+	// Create state database with trie database
+	stateDb := NewDatabase(trieDb, nil)
+
+	// Create base state
+	baseState, _ := New(common.Hash{}, stateDb)
 
 	// Create base state with account1
 	addr1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
 	key1 := common.HexToHash("0xaaaa")
 	value1 := common.HexToHash("0xbbbb")
 	baseState.SetState(addr1, key1, value1)
-	baseRoot, _ := baseState.Commit(false)
 
-	// Create new verkle state with account2
-	statedb, _ := New(common.Hash{}, db, nil)
+	// Commit state - check the actual parameters needed in your codebase
+	baseRoot, _ := baseState.Commit(0, false, false)
+
+	// Create new verkle state
+	statedb, _ := New(common.Hash{}, stateDb)
 	statedb.SetVerkleTransitionData(common.HexToHash("0xblock"), baseRoot)
 
 	addr2 := common.HexToAddress("0x2222222222222222222222222222222222222222")

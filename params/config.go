@@ -432,6 +432,7 @@ type ChainConfig struct {
 	Ethash             *EthashConfig       `json:"ethash,omitempty"`
 	Clique             *CliqueConfig       `json:"clique,omitempty"`
 	BlobScheduleConfig *BlobScheduleConfig `json:"blobSchedule,omitempty"`
+	VerkleBlock        *big.Int            `json:"verkleBlock,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -644,6 +645,11 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 // IsOsaka returns whether time is either equal to the Osaka fork time or greater.
 func (c *ChainConfig) IsOsaka(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.OsakaTime, time)
+}
+
+// IsVerkleActive returns whether num is either equal to the Verkle block or greater.
+func (c *ChainConfig) IsVerkleActive(num uint64) bool {
+	return c.VerkleBlock != nil && c.VerkleBlock.Uint64() <= num
 }
 
 // IsVerkle returns whether time is either equal to the Verkle fork time or greater.

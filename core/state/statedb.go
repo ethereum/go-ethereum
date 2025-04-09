@@ -376,10 +376,17 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 // GetState retrieves the value associated with the specific key.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
+	var value common.Hash
 	if stateObject != nil {
-		return stateObject.GetState(hash)
+		value = stateObject.GetState(hash)
 	}
-	return common.Hash{}
+
+	// If in verkle transition and value not found, fallback to base state
+	if s.verkleTransitionActive && value == (common.Hash{}) {
+		return s.getStateFromBase(addr, hash)
+	}
+
+	return value
 }
 
 // GetCommittedState retrieves the value associated with the specific key
@@ -1455,25 +1462,6 @@ func (s *StateDB) IsVerkleTransitionActive() bool {
 // BaseStateRoot returns the Merkle state root used as base during transition
 func (s *StateDB) BaseStateRoot() common.Hash {
 	return s.baseStateRoot
-}
-
-func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
-    // Try current state first
-    value := s.GetState(addr, hash)  // This is wrong - would cause recursion
-
-    // Instead, check how GetState is currently implemented
-    // Likely something like:
-    stateObject := s.getStateObject(addr)
-    if stateObject != nil {
-        value = stateObject.GetState(hash)
-    }
-
-    // If in verkle transition and value not found, fallback to base state
-    if s.verkleTransitionActive && value == (common.Hash{}) {
-        return s.getStateFromBase(addr, hash)
-    }
-
-    return value
 }
 
 // Add method to access base state
