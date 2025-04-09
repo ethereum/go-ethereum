@@ -248,7 +248,6 @@ type LegacyPool struct {
 	reqResetCh      chan *txpoolResetRequest
 	reqPromoteCh    chan *reqPromote
 	queueTxEventCh  chan *types.Transaction
-	reorgDoneCh     chan chan struct{}
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
@@ -280,7 +279,6 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		reqResetCh:      make(chan *txpoolResetRequest),
 		reqPromoteCh:    make(chan *reqPromote),
 		queueTxEventCh:  make(chan *types.Transaction),
-		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		initDoneCh:      make(chan struct{}),
 	}
@@ -1445,7 +1443,6 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 		if list == nil {
 			continue // Just in case someone calls with a non existing account
 		}
-
 		// Drop all transactions that are deemed too old (low nonce)
 		forwards := list.Forward(pool.currentState.GetNonce(addr))
 		for _, tx := range forwards {
@@ -1462,7 +1459,6 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 
 		// Gather all executable transactions and promote them
 		readies := list.Ready(pool.pendingNonces.get(addr))
-
 		for _, tx := range readies {
 			hash := tx.Hash()
 			if pool.promoteTx(addr, hash, tx) {
@@ -1701,6 +1697,10 @@ type accountSet struct {
 	cache    []common.Address
 }
 
+// reqPromote contains a set of accounts from which to attempt to promote
+// queued transactions into the executable stage upon the next pool reorg.
+// It also contains a channel which will be closed to signal the completion
+// of the reorg cycle where the promotion request was evaluated.
 type reqPromote struct {
 	set  *accountSet
 	done chan struct{}
