@@ -46,6 +46,45 @@ I've provided the same tests reworked to be compatible with Geth.
 
 When running the docker container with Geth, I do not use bind mount and I am making sure that the geth_data dir from previous steps is cleaned so I can be sure that I am working with the contract previously deployed in the container.
 
+### Infrastructure
+All Infrastructure as a Code is stored inside `infrastructure` dir. I went with GCP because of the free trial (AWS was exhausted).
+
+Currently, the IaC is ment to be used locally. Later, a pipeline should be create and the state must be stored remotely and securely.
+
+The `secrets` directory is holding all infrastrucutre related sensitive data. It is excluded from source control. 
+
+To authenicate the provider, place your service account key JSON file in the `secrets` dir and name it `svc_acc_key.json`.
+This is not a requirement and you can change this as you like, but this is the fastest and easiest way to get up and running.
+
+Please name your service account `terraformer` when creating it in the GCP WEB UI for ease of use.
+
+#### Modules
+
+**gcp-apis**
+This module is responsible for enabling all APIs that will be needed for the project.
+
+Required inputs:
+- `project_id`
+
+!NB There is known issues with enabling APIs through Terraform. Sometimes the backend does not return a response quickly enough which results in the API being enabled really but terraform apply fails. Rerun the pipeline/command.
+There are workaround but for the sake of this demo please use the solution described above.
+
+**gcp-networking**
+Holds code responsible for setting up all networking resource needed for a k8s cluster to operate - router and a NAT gateway.
+
+Required inputs:
+- `project_id`
+
+**gcp-gke-cluster**
+The quota for the free trial is being an issue for the demo. I can't raise the quota limit and I am using the min. disk size (10GB). 
+To overcome this limitation I had to use zonal cluster with only 2 nodes.
+
+Required inputs:
+- `project_id`
+
+
+---
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
