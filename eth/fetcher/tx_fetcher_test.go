@@ -2160,6 +2160,11 @@ func TestTransactionForgotten(t *testing.T) {
 
 	// Create a mock clock for deterministic time control
 	mockClock := new(mclock.Simulated)
+	mockTime := func() time.Time {
+		nanoTime := int64(mockClock.Now())
+		return time.Unix(nanoTime/1000000000, nanoTime%1000000000)
+	}
+
 	fetcher := NewTxFetcherForTests(
 		func(common.Hash) bool { return false },
 		func(txs []*types.Transaction) []error {
@@ -2172,6 +2177,7 @@ func TestTransactionForgotten(t *testing.T) {
 		func(string, []common.Hash) error { return nil },
 		func(string) {},
 		mockClock,
+		mockTime,
 		rand.New(rand.NewSource(0)), // Use fixed seed for deterministic behavior
 	)
 	fetcher.Start()
@@ -2181,7 +2187,7 @@ func TestTransactionForgotten(t *testing.T) {
 	tx1 := types.NewTransaction(0, common.Address{}, big.NewInt(100), 21000, big.NewInt(1), nil)
 	tx2 := types.NewTransaction(1, common.Address{}, big.NewInt(100), 21000, big.NewInt(1), nil)
 
-	now := time.Unix(int64(mockClock.Now()/1000000000), 0)
+	now := mockTime()
 	tx1.SetTime(now)
 	tx2.SetTime(now)
 
@@ -2234,8 +2240,7 @@ func TestTransactionForgotten(t *testing.T) {
 	}
 
 	// Re-enqueue tx1 with updated timestamp
-	now = time.Unix(int64(mockClock.Now()/1000000000), 0)
-	tx1.SetTime(now)
+	tx1.SetTime(mockTime())
 	if err := fetcher.Enqueue("peer", []*types.Transaction{tx1}, false); err != nil {
 		t.Fatal(err)
 	}
