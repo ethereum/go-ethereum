@@ -163,6 +163,10 @@ func (e *Era) GetRawBodyByNumber(num uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	off, err = e.s.SkipN(off, 1)
+	if err != nil {
+		return nil, err
+	}
 	r, _, err := newSnappyReader(e.s, TypeCompressedBody, off)
 	if err != nil {
 		return nil, err
