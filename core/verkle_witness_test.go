@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"slices"
 	"testing"
@@ -58,7 +59,6 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
-		EnableVerkleAtGenesis:   true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Verkle: params.DefaultPragueBlobConfig,
 		},
@@ -82,7 +82,6 @@ var (
 		ShanghaiTime:            u64(0),
 		VerkleTime:              u64(0),
 		TerminalTotalDifficulty: common.Big0,
-		EnableVerkleAtGenesis:   true,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Verkle: params.DefaultPragueBlobConfig,
 		},
@@ -202,6 +201,9 @@ func TestProcessVerkle(t *testing.T) {
 
 	t.Log("verified verkle proof, inserting blocks into the chain")
 
+	for i, b := range chain {
+		fmt.Printf("%d %x\n", i, b.Root())
+	}
 	endnum, err := blockchain.InsertChain(chain)
 	if err != nil {
 		t.Fatalf("block %d imported with error: %v", endnum, err)

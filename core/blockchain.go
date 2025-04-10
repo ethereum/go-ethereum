@@ -283,12 +283,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
-	// Open trie database with provided config
-	enableVerkle, err := EnableVerkleAtGenesis(db, genesis)
-	if err != nil {
-		return nil, err
-	}
-	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(enableVerkle))
+	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(genesis.IsVerkle()))
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the

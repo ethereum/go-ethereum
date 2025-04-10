@@ -286,7 +286,6 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		OsakaTime:               &verkleTime,
 		VerkleTime:              &verkleTime,
 		TerminalTotalDifficulty: big.NewInt(0),
-		EnableVerkleAtGenesis:   true,
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
@@ -314,6 +313,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
+	saveVerkleTransitionStatusAtVerlkeGenesis(db)
 	triedb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
