@@ -17,8 +17,6 @@
 package eth
 
 import (
-	crand "crypto/rand"
-	"encoding/binary"
 	mrand "math/rand"
 	"slices"
 	"sync"
@@ -80,7 +78,6 @@ type dropperConfig struct {
 	maxInboundPeers int // maximum number of inbound peers
 	log             log.Logger
 	clock           mclock.Clock
-	rand            *mrand.Rand
 }
 
 func (cfg dropperConfig) withDefaults() dropperConfig {
@@ -89,12 +86,6 @@ func (cfg dropperConfig) withDefaults() dropperConfig {
 	}
 	if cfg.clock == nil {
 		cfg.clock = mclock.System{}
-	}
-	if cfg.rand == nil {
-		seedb := make([]byte, 8)
-		crand.Read(seedb)
-		seed := int64(binary.BigEndian.Uint64(seedb))
-		cfg.rand = mrand.New(mrand.NewSource(seed))
 	}
 	return cfg
 }
@@ -162,7 +153,7 @@ func (cm *dropper) dropRandomPeer(dialed bool) bool {
 	}
 	droppable := slices.DeleteFunc(peers, selectDoNotDrop)
 	if len(droppable) > 0 {
-		p := droppable[cm.rand.Intn(len(droppable))]
+		p := droppable[mrand.Intn(len(droppable))]
 		cm.log.Debug("dropping random peer", "id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()),
 			"dialed", dialed, "peercountbefore", len(peers))
 		p.Disconnect(p2p.DiscTooManyPeers)
@@ -172,14 +163,11 @@ func (cm *dropper) dropRandomPeer(dialed bool) bool {
 }
 
 // randomDuration generates a random duration between min and max.
-// TODO: maybe we should move this to a common utlity package.
-// TODO: panic might be too harsh, maybe return an error.
-func randomDuration(rand *mrand.Rand, min, max time.Duration) time.Duration {
+func randomDuration(min, max time.Duration) time.Duration {
 	if min > max {
 		panic("min duration must be less than or equal to max duration")
 	}
-	nanos := rand.Int63n(max.Nanoseconds()-min.Nanoseconds()) + min.Nanoseconds()
-	return time.Duration(nanos)
+	return time.Duration(mrand.Int63n(int64(max-min)) + int64(min))
 }
 
 // updatePeerDropTimers checks and starts/stops the timer for peer drop.
@@ -192,14 +180,14 @@ func (cm *dropper) updatePeerDropTimers(syncing bool) {
 	if !syncing {
 		// If a drop was already scheduled, Schedule does nothing.
 		if cm.maxDialPeers-numDialed <= peerDropThreshold {
-			interval := randomDuration(cm.rand, peerDropIntervalMin, peerDropIntervalMax)
+			interval := randomDuration(peerDropIntervalMin, peerDropIntervalMax)
 			cm.peerDropDialedTimer.Schedule(cm.clock.Now().Add(interval))
 		} else {
 			cm.peerDropDialedTimer.Stop()
 		}
 
 		if cm.maxInboundPeers-numInbound <= peerDropThreshold {
-			interval := randomDuration(cm.rand, peerDropIntervalMin, peerDropIntervalMax)
+			interval := randomDuration(peerDropIntervalMin, peerDropIntervalMax)
 			cm.peerDropInboundTimer.Schedule(cm.clock.Now().Add(interval))
 		} else {
 			cm.peerDropInboundTimer.Stop()
