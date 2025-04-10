@@ -26,6 +26,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -165,6 +166,44 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
 	return bc.statedb, nil
+}
+
+// reserver is a utility struct to sanity check that accounts are
+// properly reserved by the blobpool (no duplicate reserves or unreserves).
+type reserver struct {
+	accounts map[common.Address]struct{}
+	lock     sync.RWMutex
+}
+
+func newReserver() txpool.Reserver {
+	return &reserver{accounts: make(map[common.Address]struct{})}
+}
+
+func (r *reserver) Hold(addr common.Address) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if _, exists := r.accounts[addr]; exists {
+		panic("already reserved")
+	}
+	r.accounts[addr] = struct{}{}
+	return nil
+}
+
+func (r *reserver) Release(addr common.Address) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	if _, exists := r.accounts[addr]; !exists {
+		panic("not reserved")
+	}
+	delete(r.accounts, addr)
+	return nil
+}
+
+func (r *reserver) Has(address common.Address) bool {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+	_, exists := r.accounts[address]
+	return exists
 }
 
 // makeTx is a utility method to construct a random blob transaction and sign it
@@ -403,10 +442,6 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 	for hash := range known {
 		t.Errorf("indexed blob #%x missing from retrieval", hash)
 	}
-}
-
-func newReserver() *txpool.Reserver {
-	return txpool.NewReservationTracker().NewHandle(42)
 }
 
 // Tests that transactions can be loaded from disk on startup and that they are
