@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -43,10 +44,13 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/eth/filters"
 	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/ethstats"
 	"github.com/XinFinOrg/XDPoSChain/internal/ethapi"
 	"github.com/XinFinOrg/XDPoSChain/internal/flags"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -1506,6 +1510,36 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.GasPrice = big.NewInt(1)
 		}
 	}
+}
+
+// RegisterEthService adds an Ethereum client to the stack.
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config, XDCXServ *XDCx.XDCX, lendingServ *XDCxlending.Lending) (ethapi.Backend, *eth.Ethereum) {
+	if cfg.SyncMode == downloader.LightSync {
+		Fatalf("can't register eth service in light sync mode, light mode has been deprecated")
+		return nil, nil
+	} else {
+		backend, err := eth.New(stack, cfg, XDCXServ, lendingServ)
+		if err != nil {
+			Fatalf("Failed to register the Ethereum service: %v", err)
+		}
+
+		return backend.ApiBackend, backend
+	}
+}
+
+// RegisterEthStatsService configures the Ethereum Stats daemon and adds it to the node.
+func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
+	if err := ethstats.New(stack, backend, backend.Engine(), url); err != nil {
+		Fatalf("Failed to register the Ethereum Stats service: %v", err)
+	}
+}
+
+func RegisterXDCXService(stack *node.Node, cfg *XDCx.Config) (*XDCx.XDCX, *XDCxlending.Lending) {
+	// register XDCx service
+	XDCX := XDCx.New(stack, cfg)
+	// register XDCxlending service
+	lendingServ := XDCxlending.New(stack, XDCX)
+	return XDCX, lendingServ
 }
 
 // SetupNetwork configures the system for either the main net or some test network.

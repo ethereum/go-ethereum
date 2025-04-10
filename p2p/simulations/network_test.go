@@ -31,7 +31,7 @@ import (
 // with each other and that a snapshot fully represents the desired topology
 func TestNetworkSimulation(t *testing.T) {
 	// create simulation network with 20 testService nodes
-	adapter := adapters.NewSimAdapter(adapters.Services{
+	adapter := adapters.NewSimAdapter(adapters.LifecycleConstructors{
 		"test": newTestService,
 	})
 	network := NewNetwork(adapter, &NetworkConfig{

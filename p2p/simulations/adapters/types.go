@@ -89,11 +89,11 @@ type NodeConfig struct {
 	// Name is a human friendly name for the node like "node01"
 	Name string
 
-	// Services are the names of the services which should be run when
-	// starting the node (for SimNodes it should be the names of services
-	// contained in SimAdapter.services, for other nodes it should be
-	// services registered by calling the RegisterService function)
-	Services []string
+	// Lifecycles are the names of the service lifecycles which should be run when
+	// starting the node (for SimNodes it should be the names of service lifecycles
+	// contained in SimAdapter.lifecycles, for other nodes it should be
+	// service lifecycles registered by calling the RegisterLifecycle function)
+	Lifecycles []string
 
 	// function to sanction or prevent suggesting a peer
 	Reachable func(id discover.NodeID) bool
@@ -127,7 +127,7 @@ func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 	confJSON := nodeConfigJSON{
 		ID:           n.ID.String(),
 		Name:         n.Name,
-		Services:     n.Services,
+		Services:     n.Lifecycles,
 		LogFile:      n.LogFile,
 		LogVerbosity: int(n.LogVerbosity),
 	}
@@ -166,7 +166,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	n.Name = confJSON.Name
-	n.Services = confJSON.Services
+	n.Lifecycles = confJSON.Services
 	n.LogFile = confJSON.LogFile
 	n.LogVerbosity = slog.Level(confJSON.LogVerbosity)
 
@@ -194,9 +194,8 @@ func RandomNodeConfig() *NodeConfig {
 type ServiceContext struct {
 	RPCDialer
 
-	NodeContext *node.ServiceContext
-	Config      *NodeConfig
-	Snapshot    []byte
+	Config   *NodeConfig
+	Snapshot []byte
 }
 
 // RPCDialer is used when initialising services which need to connect to
@@ -206,27 +205,29 @@ type RPCDialer interface {
 	DialRPC(id discover.NodeID) (*rpc.Client, error)
 }
 
-// Services is a collection of services which can be run in a simulation
-type Services map[string]ServiceFunc
+// LifecycleConstructor allows a Lifecycle to be constructed during node start-up.
+// While the service-specific package usually takes care of Lifecycle creation and registration,
+// for testing purposes, it is useful to be able to construct a Lifecycle on spot.
+type LifecycleConstructor func(ctx *ServiceContext, stack *node.Node) (node.Lifecycle, error)
 
-// ServiceFunc returns a node.Service which can be used to boot a devp2p node
-type ServiceFunc func(ctx *ServiceContext) (node.Service, error)
+// LifecycleConstructors stores LifecycleConstructor functions to call during node start-up.
+type LifecycleConstructors map[string]LifecycleConstructor
 
-// serviceFuncs is a map of registered services which are used to boot devp2p
+// lifecycleConstructorFuncs is a map of registered services which are used to boot devp2p
 // nodes
-var serviceFuncs = make(Services)
+var lifecycleConstructorFuncs = make(LifecycleConstructors)
 
-// RegisterServices registers the given Services which can then be used to
+// RegisterLifecycles registers the given Services which can then be used to
 // start devp2p nodes using either the Exec or Docker adapters.
 //
 // It should be called in an init function so that it has the opportunity to
 // execute the services before main() is called.
-func RegisterServices(services Services) {
-	for name, f := range services {
-		if _, exists := serviceFuncs[name]; exists {
+func RegisterLifecycles(lifecycles LifecycleConstructors) {
+	for name, f := range lifecycles {
+		if _, exists := lifecycleConstructorFuncs[name]; exists {
 			panic(fmt.Sprintf("node service already exists: %q", name))
 		}
-		serviceFuncs[name] = f
+		lifecycleConstructorFuncs[name] = f
 	}
 
 	// now we have registered the services, run reexec.Init() which will

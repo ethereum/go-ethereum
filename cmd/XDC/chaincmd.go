@@ -174,7 +174,7 @@ func initGenesis(ctx *cli.Context) error {
 	}
 
 	// Open an initialise both full and light databases
-	stack, _ := makeFullNode(ctx)
+	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
 	name := "chaindata"
@@ -195,7 +195,7 @@ func importChain(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack, cfg := makeFullNode(ctx)
+	stack, _, cfg := makeFullNode(ctx)
 	defer stack.Close()
 
 	// Start metrics export if enabled
@@ -273,7 +273,7 @@ func exportChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 
-	stack, _ := makeFullNode(ctx)
+	stack, _, _ := makeFullNode(ctx)
 	defer stack.Close()
 
 	chain, db := utils.MakeChain(ctx, stack, true)
@@ -310,7 +310,7 @@ func importPreimages(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 
-	stack, _ := makeFullNode(ctx)
+	stack, _, _ := makeFullNode(ctx)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, false)
@@ -329,7 +329,7 @@ func exportPreimages(ctx *cli.Context) error {
 	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack, _ := makeFullNode(ctx)
+	stack, _, _ := makeFullNode(ctx)
 	defer stack.Close()
 
 	db := utils.MakeChainDatabase(ctx, stack, true)
@@ -344,7 +344,7 @@ func exportPreimages(ctx *cli.Context) error {
 }
 
 func dump(ctx *cli.Context) error {
-	stack, _ := makeFullNode(ctx)
+	stack, _, _ := makeFullNode(ctx)
 	defer stack.Close()
 
 	chain, chainDb := utils.MakeChain(ctx, stack, true)

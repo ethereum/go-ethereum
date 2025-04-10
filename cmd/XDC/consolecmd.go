@@ -75,12 +75,12 @@ JavaScript API. See https://github.com/XinFinOrg/XDPoSChain/wiki/JavaScript-Cons
 // same time.
 func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
-	node, cfg := makeFullNode(ctx)
-	startNode(ctx, node, cfg)
-	defer node.Close()
+	stack, backend, cfg := makeFullNode(ctx)
+	startNode(ctx, stack, backend, cfg)
+	defer stack.Close()
 
 	// Attach to the newly started node and start the JavaScript console
-	client, err := node.Attach()
+	client, err := stack.Attach()
 	if err != nil {
 		utils.Fatalf("Failed to attach to the inproc XDC: %v", err)
 	}
@@ -180,12 +180,12 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 // everything down.
 func ephemeralConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
-	node, cfg := makeFullNode(ctx)
-	startNode(ctx, node, cfg)
-	defer node.Close()
+	stack, backend, cfg := makeFullNode(ctx)
+	startNode(ctx, stack, backend, cfg)
+	defer stack.Close()
 
 	// Attach to the newly started node and start the JavaScript console
-	client, err := node.Attach()
+	client, err := stack.Attach()
 	if err != nil {
 		utils.Fatalf("Failed to attach to the inproc XDC: %v", err)
 	}

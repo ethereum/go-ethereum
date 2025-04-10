@@ -82,7 +82,7 @@ func (net *Network) Events() *event.Feed {
 // NewNode adds a new node to the network with a random ID
 func (net *Network) NewNode() (*Node, error) {
 	conf := adapters.RandomNodeConfig()
-	conf.Services = []string{net.DefaultService}
+	conf.Lifecycles = []string{net.DefaultService}
 	return net.NewNodeWithConfig(conf)
 }
 
@@ -120,8 +120,8 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 	}
 
 	// if no services are configured, use the default service
-	if len(conf.Services) == 0 {
-		conf.Services = []string{net.DefaultService}
+	if len(conf.Lifecycles) == 0 {
+		conf.Lifecycles = []string{net.DefaultService}
 	}
 
 	// use the NodeAdapter to create the node
@@ -551,6 +551,10 @@ func (n *Node) NodeInfo() *p2p.NodeInfo {
 		return nil
 	}
 	info := n.Node.NodeInfo()
+	if info == nil {
+		return nil
+	}
+
 	info.Name = n.Config.Name
 	return info
 }

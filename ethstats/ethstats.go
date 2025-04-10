@@ -38,8 +38,11 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/miner"
+	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"github.com/gorilla/websocket"
@@ -63,22 +66,35 @@ type consensusEngine interface {
 	SubscribeForensicsEvent(chan<- types.ForensicsEvent) event.Subscription
 }
 
-type txPool interface {
-	// SubscribeNewTxsEvent should return an event subscription of
-	// NewTxsEvent and send events to the given channel.
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+// backend encompasses the bare-minimum functionality needed for ethstats reporting
+type backend interface {
+	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
+	CurrentHeader() *types.Header
+	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
+	GetTd(ctx context.Context, hash common.Hash) *big.Int
+	Stats() (pending int, queued int)
+	Downloader() *downloader.Downloader
+	Engine() consensus.Engine
+	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 }
 
-type blockChain interface {
-	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+// fullNodeBackend encompasses the functionality necessary for a full node
+// reporting to ethstats
+type fullNodeBackend interface {
+	backend
+	Miner() *miner.Miner
+	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	CurrentBlock() *types.Block
+	SuggestPrice(ctx context.Context) (*big.Int, error)
 }
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
 // chain statistics up to a monitoring server.
 type Service struct {
-	server *p2p.Server      // Peer-to-peer server to retrieve networking infos
-	eth    *eth.Ethereum    // Full Ethereum service if monitoring a full node
-	engine consensus.Engine // Consensus engine to retrieve variadic block fields
+	server  *p2p.Server // Peer-to-peer server to retrieve networking infos
+	backend backend
+	engine  consensus.Engine // Consensus engine to retrieve variadic block fields
 
 	node string // Name of the node to display on the monitoring page
 	pass string // Password to authorize access to the monitoring page
@@ -135,47 +151,37 @@ func (w *connWrapper) Close() error {
 }
 
 // New returns a monitoring service ready for stats reporting.
-func New(url string, ethServ *eth.Ethereum) (*Service, error) {
+func New(node *node.Node, backend backend, engine consensus.Engine, url string) error {
 	// Parse the netstats connection url
 	re := regexp.MustCompile("([^:@]*)(:([^@]*))?@(.+)")
 	parts := re.FindStringSubmatch(url)
 	if len(parts) != 5 {
-		return nil, fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
+		return fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
 	}
-	// Assemble and return the stats service
-	var engine consensus.Engine
-	if ethServ != nil {
-		engine = ethServ.Engine()
+	ethstats := &Service{
+		backend: backend,
+		engine:  engine,
+		server:  node.Server(),
+		node:    parts[1],
+		pass:    parts[3],
+		host:    parts[4],
+		pongCh:  make(chan struct{}),
+		histCh:  make(chan []uint64, 1),
 	}
-	return &Service{
-		eth:    ethServ,
-		engine: engine,
-		node:   parts[1],
-		pass:   parts[3],
-		host:   parts[4],
-		pongCh: make(chan struct{}),
-		histCh: make(chan []uint64, 1),
-	}, nil
+
+	node.RegisterLifecycle(ethstats)
+	return nil
 }
 
-// Protocols implements node.Service, returning the P2P network protocols used
-// by the stats service (nil as it doesn't use the devp2p overlay network).
-func (s *Service) Protocols() []p2p.Protocol { return nil }
-
-// APIs implements node.Service, returning the RPC API endpoints provided by the
-// stats service (nil as it doesn't provide any user callable APIs).
-func (s *Service) APIs() []rpc.API { return nil }
-
-// Start implements node.Service, starting up the monitoring and reporting daemon.
-func (s *Service) Start(server *p2p.Server) error {
-	s.server = server
+// Start implements node.Lifecycle, starting up the monitoring and reporting daemon.
+func (s *Service) Start() error {
 	go s.loop()
 
 	log.Info("Stats daemon started")
 	return nil
 }
 
-// Stop implements node.Service, terminating the monitoring and reporting daemon.
+// Stop implements node.Lifecycle, terminating the monitoring and reporting daemon.
 func (s *Service) Stop() error {
 	log.Info("Stats daemon stopped")
 	return nil
@@ -185,26 +191,17 @@ func (s *Service) Stop() error {
 // until termination.
 func (s *Service) loop() {
 	// Subscribe to chain events to execute updates on
-	var blockchain blockChain
-	var txpool txPool
-	var engine consensusEngine
-	if s.eth != nil {
-		blockchain = s.eth.BlockChain()
-		txpool = s.eth.TxPool()
-		engine = s.eth.Engine().(*XDPoS.XDPoS)
-	}
-
 	chainHeadCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
-	headSub := blockchain.SubscribeChainHeadEvent(chainHeadCh)
+	headSub := s.backend.SubscribeChainHeadEvent(chainHeadCh)
 	defer headSub.Unsubscribe()
 
 	txEventCh := make(chan core.NewTxsEvent, txChanSize)
-	txSub := txpool.SubscribeNewTxsEvent(txEventCh)
+	txSub := s.backend.SubscribeNewTxsEvent(txEventCh)
 	defer txSub.Unsubscribe()
 
 	// Forensics events
 	forensicsEventCh := make(chan types.ForensicsEvent)
-	if engine != nil {
+	if engine, ok := s.engine.(consensusEngine); ok && engine != nil {
 		forensicsSub := engine.SubscribeForensicsEvent(forensicsEventCh)
 		defer forensicsSub.Unsubscribe()
 	}
@@ -640,19 +637,30 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		txs    []txStats
 		uncles []*types.Header
 	)
-	if s.eth != nil {
-		// Full nodes have all needed information available
+
+	// check if backend is a full node
+	fullBackend, ok := s.backend.(fullNodeBackend)
+	if ok {
 		if block == nil {
-			block = s.eth.BlockChain().CurrentBlock()
+			block = fullBackend.CurrentBlock()
 		}
 		header = block.Header()
-		td = s.eth.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
+		td = fullBackend.GetTd(context.Background(), header.Hash())
 
 		txs = make([]txStats, len(block.Transactions()))
 		for i, tx := range block.Transactions() {
 			txs[i].Hash = tx.Hash()
 		}
 		uncles = block.Uncles()
+	} else {
+		// Light nodes would need on-demand lookups for transactions/uncles, skip
+		if block != nil {
+			header = block.Header()
+		} else {
+			header = s.backend.CurrentHeader()
+		}
+		td = s.backend.GetTd(context.Background(), header.Hash())
+		txs = []txStats{}
 	}
 	// Assemble and return the block stats
 	author, err := s.engine.Author(header)
@@ -687,10 +695,7 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 		indexes = append(indexes, list...)
 	} else {
 		// No indexes requested, send back the top ones
-		var head int64
-		if s.eth != nil {
-			head = s.eth.BlockChain().CurrentHeader().Number.Int64()
-		}
+		head := s.backend.CurrentHeader().Number.Int64()
 		start := head - historyUpdateRange + 1
 		if start < 0 {
 			start = 0
@@ -702,10 +707,15 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 	// Gather the batch of blocks to report
 	history := make([]*blockStats, len(indexes))
 	for i, number := range indexes {
+		fullBackend, ok := s.backend.(fullNodeBackend)
 		// Retrieve the next block if it's known to us
 		var block *types.Block
-		if s.eth != nil {
-			block = s.eth.BlockChain().GetBlockByNumber(number)
+		if ok {
+			block, _ = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number)) // TODO ignore error here ?
+		} else {
+			if header, _ := s.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(number)); header != nil {
+				block = types.NewBlockWithHeader(header)
+			}
 		}
 		// If we do have the block, add to the history and continue
 		if block != nil {
@@ -741,10 +751,7 @@ type pendStats struct {
 // it to the stats server.
 func (s *Service) reportPending(conn *connWrapper) error {
 	// Retrieve the pending count from the local blockchain
-	var pending int
-	if s.eth != nil {
-		pending, _ = s.eth.TxPool().Stats()
-	}
+	pending, _ := s.backend.Stats()
 	// Assemble the transaction stats and send it to the server
 	log.Trace("Sending pending transactions to ethstats", "count", pending)
 
@@ -771,7 +778,7 @@ type nodeStats struct {
 	Uptime   int  `json:"uptime"`
 }
 
-// reportPending retrieves various stats about the node at the networking and
+// reportStats retrieves various stats about the node at the networking and
 // mining layer and reports it to the stats server.
 func (s *Service) reportStats(conn *connWrapper) error {
 	// Gather the syncing and mining infos from the local miner instance
@@ -781,17 +788,22 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		syncing  bool
 		gasprice int
 	)
-	if s.eth != nil {
-		mining = s.eth.Miner().Mining()
-		hashrate = int(s.eth.Miner().HashRate())
+	// check if backend is a full node
+	fullBackend, ok := s.backend.(fullNodeBackend)
+	if ok {
+		mining = fullBackend.Miner().Mining()
+		hashrate = int(fullBackend.Miner().HashRate())
 
-		sync := s.eth.Downloader().Progress()
-		syncing = s.eth.BlockChain().CurrentHeader().Number.Uint64() >= sync.HighestBlock
+		sync := fullBackend.Downloader().Progress()
+		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
 
-		price, _ := s.eth.ApiBackend.SuggestGasTipCap(context.Background())
+		price, _ := s.backend.SuggestGasTipCap(context.Background())
 		gasprice = int(price.Uint64())
-		if basefee := s.eth.ApiBackend.CurrentHeader().BaseFee; basefee != nil {
+		if basefee := fullBackend.CurrentHeader().BaseFee; basefee != nil {
 			gasprice += int(basefee.Uint64())
+		} else {
+			sync := s.backend.Downloader().Progress()
+			syncing = s.backend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
 		}
 	}
 	// Assemble the node stats and send it to the server
@@ -803,7 +815,7 @@ func (s *Service) reportStats(conn *connWrapper) error {
 			Active:   true,
 			Mining:   mining,
 			Hashrate: hashrate,
-			Peers:    s.eth.GetPeer(),
+			Peers:    s.server.PeerCount(),
 			GasPrice: gasprice,
 			Syncing:  syncing,
 			Uptime:   100,

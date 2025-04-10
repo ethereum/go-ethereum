@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"unicode"
@@ -35,6 +36,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
+	"github.com/XinFinOrg/XDPoSChain/internal/ethapi"
 	"github.com/XinFinOrg/XDPoSChain/internal/flags"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
@@ -216,7 +218,7 @@ func applyValues(values []string, params *[]string) {
 
 }
 
-func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
+func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend, XDCConfig) {
 	stack, cfg := makeConfigNode(ctx)
 
 	// Start metrics export if enabled
@@ -224,15 +226,29 @@ func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 
 	// Register XDCX's OrderBook service if requested.
 	// enable in default
-	utils.RegisterXDCXService(stack, &cfg.XDCX)
-	utils.RegisterEthService(stack, &cfg.Eth, cfg.Node.Version)
+	XDCXServ, lendingServ := utils.RegisterXDCXService(stack, &cfg.XDCX)
+	backend, eth := utils.RegisterEthService(stack, &cfg.Eth, XDCXServ, lendingServ)
+
+	// Create gauge with geth system and build information
+	if eth != nil { // The 'eth' backend may be nil in light mode
+		var protos []string
+		for _, p := range eth.Protocols() {
+			protos = append(protos, fmt.Sprintf("%v/%d", p.Name, p.Version))
+		}
+		metrics.NewRegisteredGaugeInfo("xdc/info", nil).Update(metrics.GaugeInfoValue{
+			"arch":          runtime.GOARCH,
+			"os":            runtime.GOOS,
+			"version":       cfg.Node.Version,
+			"eth_protocols": strings.Join(protos, ","),
+		})
+	}
 
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
-		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
+		utils.RegisterEthStatsService(stack, backend, cfg.Ethstats.URL)
 	}
 
-	return stack, cfg
+	return stack, backend, cfg
 }
 
 // dumpConfig is the dumpconfig command.

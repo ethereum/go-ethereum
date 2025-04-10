@@ -70,7 +70,7 @@ type Backend interface {
 	GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error)
 	PendingBlockAndReceipts() (*types.Block, types.Receipts)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
-	GetTd(blockHash common.Hash) *big.Int
+	GetTd(ctx context.Context, blockHash common.Hash) *big.Int
 	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
@@ -93,9 +93,9 @@ type Backend interface {
 	SendLendingTx(ctx context.Context, signedTx *types.LendingTransaction) error
 
 	ChainConfig() *params.ChainConfig
+	Engine() consensus.Engine
 	CurrentBlock() *types.Block
 	GetIPCClient() (bind.ContractBackend, error)
-	GetEngine() consensus.Engine
 	GetRewardByHash(hash common.Hash) map[string]map[string]map[string]*big.Int
 
 	GetVotersRewards(common.Address) map[common.Address]*big.Int
@@ -116,6 +116,7 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
+	GetPeer() int
 }
 
 func GetAPIs(apiBackend Backend, chainReader consensus.ChainReader) []rpc.API {

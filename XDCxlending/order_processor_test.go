@@ -11,6 +11,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/node"
 )
 
 func Test_getCancelFeeV1(t *testing.T) {
@@ -95,7 +96,12 @@ func Test_getCancelFeeV1(t *testing.T) {
 }
 
 func Test_getCancelFee(t *testing.T) {
-	XDCx := XDCx.New(&XDCx.DefaultConfig)
+	stack, err := node.New(&node.DefaultConfig)
+	if err != nil {
+		t.Fatalf("could not create new node: %v", err)
+	}
+	XDCx := XDCx.New(stack, &XDCx.DefaultConfig)
+	defer stack.Close()
 	db := rawdb.NewMemoryDatabase()
 	stateCache := tradingstate.NewDatabase(db)
 	tradingStateDb, _ := tradingstate.New(types.EmptyRootHash, stateCache)
@@ -113,7 +119,7 @@ func Test_getCancelFee(t *testing.T) {
 	// set tokenBPrice = 1 XDC
 	tradingStateDb.SetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(testTokenB, common.XDCNativeAddressBinary), common.BasePrice)
 
-	l := New(XDCx)
+	l := New(stack, XDCx)
 
 	type CancelFeeArg struct {
 		borrowFeeRate *big.Int
