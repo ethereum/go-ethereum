@@ -33,12 +33,15 @@ import (
 * - FD leak possible on concurrent access to GetRaw*.
  */
 
+const (
+	openFileLimit = 64
+)
+
 // EraDatabase manages read access to a directory of era1 files.
 // The getter methods are thread-safe.
 type EraDatabase struct {
 	datadir string
-	// TODO: should take into account configured number of fd handles.
-	cache *lru.Cache[uint64, *era.Era]
+	cache   *lru.Cache[uint64, *era.Era]
 }
 
 // New creates a new EraDatabase instance.
@@ -57,7 +60,7 @@ func New(datadir string) (*EraDatabase, error) {
 	if err := os.MkdirAll(datadir, 0755); err != nil {
 		return nil, err
 	}
-	db := &EraDatabase{datadir: datadir, cache: lru.NewCache[uint64, *era.Era](50)}
+	db := &EraDatabase{datadir: datadir, cache: lru.NewCache[uint64, *era.Era](openFileLimit)}
 	log.Info("Opened erastore", "datadir", datadir)
 	return db, nil
 }
