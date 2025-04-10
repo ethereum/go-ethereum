@@ -112,7 +112,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 
 	// Reopen and check that the rolled-back data doesn't reappear.
 	tables := map[string]freezerTableConfig{"test": {noSnappy: true}}
-	f2, err := NewFreezer(dir, "", false, 2049, tables)
+	f2, err := NewFreezer(dir, "", false, 2049, tables, nil)
 	if err != nil {
 		t.Fatalf("can't reopen freezer after failed ModifyAncients: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 	dir := t.TempDir()
 	// Open non-readonly freezer and fill individual tables
 	// with different amount of data.
-	f, err := NewFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, 2049, tables, nil)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -276,7 +276,7 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 
 	// Re-opening as readonly should fail when validating
 	// table lengths.
-	_, err = NewFreezer(dir, "", true, 2049, tables)
+	_, err = NewFreezer(dir, "", true, 2049, tables, nil)
 	if err == nil {
 		t.Fatal("readonly freezer should fail with differing table lengths")
 	}
@@ -288,7 +288,7 @@ func TestFreezerConcurrentReadonly(t *testing.T) {
 	tables := map[string]freezerTableConfig{"a": {noSnappy: true}}
 	dir := t.TempDir()
 
-	f, err := NewFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, 2049, tables, nil)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -314,7 +314,7 @@ func TestFreezerConcurrentReadonly(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 
-			f, err := NewFreezer(dir, "", true, 2049, tables)
+			f, err := NewFreezer(dir, "", true, 2049, tables, nil)
 			if err == nil {
 				fs[i] = f
 			} else {
@@ -339,7 +339,7 @@ func newFreezerForTesting(t *testing.T, tables map[string]freezerTableConfig) (*
 	dir := t.TempDir()
 	// note: using low max table size here to ensure the tests actually
 	// switch between multiple files.
-	f, err := NewFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, 2049, tables, nil)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}

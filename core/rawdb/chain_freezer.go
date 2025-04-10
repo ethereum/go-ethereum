@@ -19,10 +19,12 @@ package rawdb
 import (
 	"errors"
 	"fmt"
+	"path"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb/eradb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -64,7 +66,12 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 	if datadir == "" {
 		freezer = NewMemoryFreezer(readonly, chainFreezerTableConfigs)
 	} else {
-		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs)
+		eraDatadir := path.Join(datadir, "era")
+		eradb, err := eradb.New(eraDatadir)
+		if err != nil {
+			return nil, err
+		}
+		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs, eradb)
 	}
 	if err != nil {
 		return nil, err
