@@ -487,6 +487,10 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 	}
 	// Ensure the received batch is monotonic increasing and contains no deletions
 	for i := 0; i < len(keys)-1; i++ {
+		// See: https://github.com/ava-labs/coreth/issues/907
+		if len(keys[i]) != len(keys[i+1]) {
+			return false, errKeysHaveDifferentLengths
+		}
 		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
 			return false, errors.New("range is not monotonically increasing")
 		}
