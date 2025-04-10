@@ -59,8 +59,8 @@ func TestHashedNodeCopy(t *testing.T) {
 func TestHashedNodeInsert(t *testing.T) {
 	node := HashedNode(common.HexToHash("0x1234"))
 
-	key := make([]byte, 32)
-	value := make([]byte, 32)
+	key := make([]byte, HashSize)
+	value := make([]byte, HashSize)
 
 	_, err := node.Insert(key, value, nil, 0)
 	if err == nil {
@@ -76,7 +76,7 @@ func TestHashedNodeInsert(t *testing.T) {
 func TestHashedNodeGetValuesAtStem(t *testing.T) {
 	node := HashedNode(common.HexToHash("0x1234"))
 
-	stem := make([]byte, 31)
+	stem := make([]byte, StemSize)
 	_, err := node.GetValuesAtStem(stem, nil)
 	if err == nil {
 		t.Fatal("Expected error for GetValuesAtStem on HashedNode")
@@ -91,8 +91,8 @@ func TestHashedNodeGetValuesAtStem(t *testing.T) {
 func TestHashedNodeInsertValuesAtStem(t *testing.T) {
 	node := HashedNode(common.HexToHash("0x1234"))
 
-	stem := make([]byte, 31)
-	values := make([][]byte, 256)
+	stem := make([]byte, StemSize)
+	values := make([][]byte, StemNodeWidth)
 
 	_, err := node.InsertValuesAtStem(stem, values, nil, 0)
 	if err == nil {
