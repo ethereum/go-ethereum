@@ -232,6 +232,51 @@ func (f *AsyncFilterIter) Close() {
 	})
 }
 
+// BufferIter wraps an iterator and buffers the nodes it returns.
+// The buffer is pre-filled with the given size from the wrapped iterator.
+type BufferIter struct {
+	it     Iterator
+	buffer chan *Node
+	head   *Node
+}
+
+// NewBufferIter creates a new pre-fetch buffer.
+func NewBufferIter(it Iterator, size int) *BufferIter {
+	b := BufferIter{
+		it:     it,
+		buffer: make(chan *Node, size),
+	}
+
+	go func() {
+		defer close(b.buffer)
+		for b.it.Next() {
+			b.buffer <- b.it.Node()
+		}
+	}()
+	return &b
+}
+
+func (b *BufferIter) Next() bool {
+	b.head = <-b.buffer
+	return b.head != nil
+}
+
+func (b *BufferIter) Node() *Node {
+	return b.head
+}
+
+func (b *BufferIter) Close() {
+	b.it.Close()
+	// Wait for the buffer to be consumed.
+	for range b.buffer {
+	}
+	// Close the buffer channel.
+	// close(b.buffer)
+	b.buffer = nil
+	b.head = nil
+	b.it = nil
+}
+
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
 // only when Close is called. Source iterators added via AddSource are removed from the
 // mix when they end.
