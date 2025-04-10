@@ -125,7 +125,8 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 
 	// Create the era database.
 	// TODO: Pipe down network name.
-	edb, err := eradb.New(datadir, "sepolia")
+	eradir := filepath.Join(datadir, "eradb")
+	edb, err := eradb.New(eradir)
 	if err != nil {
 		lock.Unlock()
 		return nil, err

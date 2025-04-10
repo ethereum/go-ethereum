@@ -24,7 +24,7 @@ import (
 
 func TestEraDatabase(t *testing.T) {
 	// Create the database
-	db, err := New("testdata", "sepolia")
+	db, err := New("testdata")
 	require.NoError(t, err)
 	defer db.Close()
 
