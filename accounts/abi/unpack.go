@@ -37,7 +37,6 @@ var (
 
 // ReadInteger reads the integer based on its kind and returns the appropriate value.
 func ReadInteger(typ Type, b []byte) (interface{}, error) {
-
 	if typ.T == UintTy {
 		ret := new(uint256.Int).SetBytes(b)
 
