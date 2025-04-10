@@ -365,9 +365,9 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	}
 	gasFeeCap = gasFeeCap.Sub(gasFeeCap, baseFee)
 
-	gasTipCap := tx.GasTipCap()
+	gasTipCap := tx.inner.gasTipCap()
 	if gasTipCap.Cmp(gasFeeCap) < 0 {
-		return gasTipCap, err
+		return gasFeeCap.Set(gasTipCap), err
 	}
 	return gasFeeCap, err
 }
