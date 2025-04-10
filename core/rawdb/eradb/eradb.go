@@ -30,13 +30,12 @@ import (
 
 type EraDatabase struct {
 	datadir string
-	network string
 	// TODO: should take into account configured number of fd handles.
 	cache *lru.Cache[uint64, *era.Era]
 }
 
 // New creates a new EraDatabase instance.
-func New(datadir, network string) (*EraDatabase, error) {
+func New(datadir string) (*EraDatabase, error) {
 	// Ensure the datadir is not a symbolic link if it exists.
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
 		if info == nil {
@@ -51,7 +50,7 @@ func New(datadir, network string) (*EraDatabase, error) {
 	if err := os.MkdirAll(datadir, 0755); err != nil {
 		return nil, err
 	}
-	db := &EraDatabase{datadir: datadir, network: network, cache: lru.NewCache[uint64, *era.Era](50)}
+	db := &EraDatabase{datadir: datadir, cache: lru.NewCache[uint64, *era.Era](50)}
 	log.Info("Opened erastore", "datadir", datadir)
 	return db, nil
 }
@@ -77,7 +76,7 @@ func (db *EraDatabase) getEraByEpoch(epoch uint64) (*era.Era, error) {
 		return e, nil
 	}
 	// file name scheme is <network>-<epoch>-<root>.
-	glob := fmt.Sprintf("%s-%05d-*.era1", db.network, epoch)
+	glob := fmt.Sprintf("*-%05d-*.era1", epoch)
 	matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
 	if err != nil {
 		return nil, err
