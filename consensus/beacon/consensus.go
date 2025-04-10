@@ -396,7 +396,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 			return nil, errors.New("post-state tree is not available")
 		}
 		vktPreTrie, okpre := preTrie.(*trie.VerkleTrie)
-		vktPostTrie, okpost := postTrie.(*trie.VerkleTrie)
+		vktPostTrie, okpost := state.GetTrie().(*trie.VerkleTrie)
 
 		// The witness is only attached iff both parent and current block are
 		// using verkle tree.

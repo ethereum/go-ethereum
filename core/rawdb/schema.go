@@ -158,6 +158,9 @@ var (
 	preimageCounter     = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitsCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 	preimageMissCounter = metrics.NewRegisteredCounter("db/preimage/miss", nil)
+
+	// Verkle transition information
+	VerkleTransitionStatePrefix = []byte("verkle-transition-state-")
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -396,4 +399,9 @@ func storageHistoryIndexBlockKey(addressHash common.Hash, storageHash common.Has
 	var buf [4]byte
 	binary.BigEndian.PutUint32(buf[:], blockID)
 	return append(append(append(StateHistoryStorageBlockPrefix, addressHash.Bytes()...), storageHash.Bytes()...), buf[:]...)
+}
+
+// transitionStateKey = transitionStatusKey + hash
+func transitionStateKey(hash common.Hash) []byte {
+	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
 }
