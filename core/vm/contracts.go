@@ -317,6 +317,7 @@ func (c *dataCopy) Run(in []byte) ([]byte, error) {
 // bigModExp implements a native big integer exponential modular operation.
 type bigModExp struct {
 	eip2565 bool
+	eip7883 bool
 }
 
 var (
@@ -402,6 +403,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	} else {
 		gas.Set(modLen)
 	}
+	maxLen := new(big.Int).Set(gas)
 	if c.eip2565 {
 		// EIP-2565 has three changes
 		// 1. Different multComplexity (inlined here)
@@ -415,6 +417,14 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		gas.Rsh(gas, 3)
 		gas.Mul(gas, gas)
 
+		var minPrice uint64 = 200
+		if c.eip7883 {
+			minPrice = 500
+			if maxLen.Cmp(big32) > 0 {
+				gas.Mul(gas, big.NewInt(2))
+			}
+		}
+
 		if adjExpLen.Cmp(big1) > 0 {
 			gas.Mul(gas, adjExpLen)
 		}
@@ -423,9 +433,9 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		if gas.BitLen() > 64 {
 			return math.MaxUint64
 		}
-		// 3. Minimum price of 200 gas
-		if gas.Uint64() < 200 {
-			return 200
+
+		if gas.Uint64() < minPrice {
+			return minPrice
 		}
 		return gas.Uint64()
 	}
