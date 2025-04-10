@@ -50,7 +50,7 @@ const (
 //     randomly every peerDropInterval to make space for new peers
 //   - peers are dropped separately from the inboud pool and from the dialed pool
 type dropper struct {
-	dropperConfig
+	cfg         dropperConfig
 	peersFunc   getPeersFunc
 	syncingFunc getSyncingFunc
 
@@ -76,14 +76,10 @@ type getSyncingFunc func() bool
 type dropperConfig struct {
 	maxDialPeers    int // maximum number of dialed peers
 	maxInboundPeers int // maximum number of inbound peers
-	log             log.Logger
 	clock           mclock.Clock
 }
 
 func (cfg dropperConfig) withDefaults() dropperConfig {
-	if cfg.log == nil {
-		cfg.log = log.Root()
-	}
 	if cfg.clock == nil {
 		cfg.clock = mclock.System{}
 	}
@@ -93,7 +89,7 @@ func (cfg dropperConfig) withDefaults() dropperConfig {
 func newDropper(config *dropperConfig) *dropper {
 	cfg := config.withDefaults()
 	cm := &dropper{
-		dropperConfig:        cfg,
+		cfg:                  cfg,
 		peerDropDialedTimer:  mclock.NewAlarm(cfg.clock),
 		peerDropInboundTimer: mclock.NewAlarm(cfg.clock),
 		peerEventCh:          make(chan *p2p.PeerEvent),
@@ -102,7 +98,7 @@ func newDropper(config *dropperConfig) *dropper {
 	if peerDropIntervalMin > peerDropIntervalMax {
 		panic("peerDropIntervalMin duration must be less than or equal to peerDropIntervalMax duration")
 	}
-	cm.log.Info("New Dropper", "maxDialPeers", cm.maxDialPeers, "threshold", peerDropThreshold,
+	log.Info("New Dropper", "maxDialPeers", cm.cfg.maxDialPeers, "threshold", peerDropThreshold,
 		"intervalMin", peerDropIntervalMin, "intervalMax", peerDropIntervalMax)
 	return cm
 }
@@ -154,7 +150,7 @@ func (cm *dropper) dropRandomPeer(dialed bool) bool {
 	droppable := slices.DeleteFunc(peers, selectDoNotDrop)
 	if len(droppable) > 0 {
 		p := droppable[mrand.Intn(len(droppable))]
-		cm.log.Debug("dropping random peer", "id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()),
+		log.Debug("dropping random peer", "id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()),
 			"dialed", dialed, "peercountbefore", len(peers))
 		p.Disconnect(p2p.DiscTooManyPeers)
 		return true
@@ -173,22 +169,22 @@ func randomDuration(min, max time.Duration) time.Duration {
 // updatePeerDropTimers checks and starts/stops the timer for peer drop.
 func (cm *dropper) updatePeerDropTimers(syncing bool) {
 	numPeers, numDialed, numInbound := cm.numPeers()
-	cm.log.Trace("Dropper status", "syncing", syncing,
+	log.Trace("Dropper status", "syncing", syncing,
 		"peers", numPeers, "out", numDialed, "in", numInbound,
-		"maxout", cm.maxDialPeers, "maxin", cm.maxInboundPeers)
+		"maxout", cm.cfg.maxDialPeers, "maxin", cm.cfg.maxInboundPeers)
 
 	if !syncing {
 		// If a drop was already scheduled, Schedule does nothing.
-		if cm.maxDialPeers-numDialed <= peerDropThreshold {
+		if cm.cfg.maxDialPeers-numDialed <= peerDropThreshold {
 			interval := randomDuration(peerDropIntervalMin, peerDropIntervalMax)
-			cm.peerDropDialedTimer.Schedule(cm.clock.Now().Add(interval))
+			cm.peerDropDialedTimer.Schedule(cm.cfg.clock.Now().Add(interval))
 		} else {
 			cm.peerDropDialedTimer.Stop()
 		}
 
-		if cm.maxInboundPeers-numInbound <= peerDropThreshold {
+		if cm.cfg.maxInboundPeers-numInbound <= peerDropThreshold {
 			interval := randomDuration(peerDropIntervalMin, peerDropIntervalMax)
-			cm.peerDropInboundTimer.Schedule(cm.clock.Now().Add(interval))
+			cm.peerDropInboundTimer.Schedule(cm.cfg.clock.Now().Add(interval))
 		} else {
 			cm.peerDropInboundTimer.Stop()
 		}
@@ -209,9 +205,9 @@ func (cm *dropper) loop() {
 	// - subscribe to Downloader.mux
 	// - subscribe to DownloaderAPI (which itself polls the sync status)
 	syncing := cm.syncingFunc()
-	cm.log.Trace("Sync status", "syncing", syncing)
-	syncCheckTimer := mclock.NewAlarm(cm.dropperConfig.clock)
-	syncCheckTimer.Schedule(cm.clock.Now().Add(syncCheckInterval))
+	log.Trace("Sync status", "syncing", syncing)
+	syncCheckTimer := mclock.NewAlarm(cm.cfg.clock)
+	syncCheckTimer.Schedule(cm.cfg.clock.Now().Add(syncCheckInterval))
 	defer syncCheckTimer.Stop()
 
 	for {
@@ -221,11 +217,11 @@ func (cm *dropper) loop() {
 			syncingNew := cm.syncingFunc()
 			if syncing != syncingNew {
 				// Syncing status changed, we might need to update the timers.
-				cm.log.Trace("Sync status changed", "syncing", syncingNew)
+				log.Trace("Sync status changed", "syncing", syncingNew)
 				syncing = syncingNew
 				cm.updatePeerDropTimers(syncing)
 			}
-			syncCheckTimer.Schedule(cm.clock.Now().Add(syncCheckInterval))
+			syncCheckTimer.Schedule(cm.cfg.clock.Now().Add(syncCheckInterval))
 		case ev := <-cm.peerEventCh:
 			if ev.Type == p2p.PeerEventTypeAdd || ev.Type == p2p.PeerEventTypeDrop {
 				// Number of peers changed, we might need to start the timers.
