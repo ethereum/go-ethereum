@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"math/big"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -166,33 +166,33 @@ func TestEventMultiValueWithArrayUnpack(t *testing.T) {
 func TestEventTupleUnpack(t *testing.T) {
 	t.Parallel()
 	type EventTransfer struct {
-		Value *big.Int
+		Value *uint256.Int
 	}
 
 	type EventTransferWithTag struct {
 		// this is valid because `value` is not exportable,
 		// so value is only unmarshalled into `Value1`.
-		value  *big.Int //lint:ignore U1000 unused field is part of test
-		Value1 *big.Int `abi:"value"`
+		value  *uint256.Int //lint:ignore U1000 unused field is part of test
+		Value1 *uint256.Int `abi:"value"`
 	}
 
 	type BadEventTransferWithSameFieldAndTag struct {
-		Value  *big.Int
-		Value1 *big.Int `abi:"value"`
+		Value  *uint256.Int
+		Value1 *uint256.Int `abi:"value"`
 	}
 
 	type BadEventTransferWithDuplicatedTag struct {
-		Value1 *big.Int `abi:"value"`
-		Value2 *big.Int `abi:"value"`
+		Value1 *uint256.Int `abi:"value"`
+		Value2 *uint256.Int `abi:"value"`
 	}
 
 	type BadEventTransferWithEmptyTag struct {
-		Value *big.Int `abi:""`
+		Value *uint256.Int `abi:""`
 	}
 
 	type EventPledge struct {
 		Who      common.Address
-		Wad      *big.Int
+		Wad      *uint256.Int
 		Currency [3]byte
 	}
 
@@ -203,15 +203,15 @@ func TestEventTupleUnpack(t *testing.T) {
 	}
 
 	type EventMixedCase struct {
-		Value1 *big.Int `abi:"value"`
-		Value2 *big.Int `abi:"_value"`
-		Value3 *big.Int `abi:"Value"`
+		Value1 *uint256.Int `abi:"value"`
+		Value2 *uint256.Int `abi:"_value"`
+		Value3 *uint256.Int `abi:"Value"`
 	}
 
-	bigint := new(big.Int)
-	bigintExpected := big.NewInt(1000000)
-	bigintExpected2 := big.NewInt(2218516807680)
-	bigintExpected3 := big.NewInt(1000001)
+	UInt256 := new(uint256.Int)
+	UInt256Expected := uint256.NewInt(1000000)
+	UInt256Expected2 := uint256.NewInt(2218516807680)
+	UInt256Expected3 := uint256.NewInt(1000001)
 	addr := common.HexToAddress("0x00Ce0d46d924CC8437c806721496599FC3FFA268")
 	var testCases = []struct {
 		data     string
@@ -223,21 +223,21 @@ func TestEventTupleUnpack(t *testing.T) {
 	}{{
 		transferData1,
 		&EventTransfer{},
-		&EventTransfer{Value: bigintExpected},
+		&EventTransfer{Value: UInt256Expected},
 		jsonEventTransfer,
 		"",
 		"Can unpack ERC20 Transfer event into structure",
 	}, {
 		transferData1,
-		&[]interface{}{&bigint},
-		&[]interface{}{&bigintExpected},
+		&[]interface{}{&UInt256},
+		&[]interface{}{&UInt256Expected},
 		jsonEventTransfer,
 		"",
 		"Can unpack ERC20 Transfer event into slice",
 	}, {
 		transferData1,
 		&EventTransferWithTag{},
-		&EventTransferWithTag{Value1: bigintExpected},
+		&EventTransferWithTag{Value1: UInt256Expected},
 		jsonEventTransfer,
 		"",
 		"Can unpack ERC20 Transfer event into structure with abi: tag",
@@ -267,27 +267,27 @@ func TestEventTupleUnpack(t *testing.T) {
 		&EventPledge{},
 		&EventPledge{
 			addr,
-			bigintExpected2,
+			UInt256Expected2,
 			[3]byte{'u', 's', 'd'}},
 		jsonEventPledge,
 		"",
 		"Can unpack Pledge event into structure",
 	}, {
 		pledgeData1,
-		&[]interface{}{&common.Address{}, &bigint, &[3]byte{}},
+		&[]interface{}{&common.Address{}, &UInt256, &[3]byte{}},
 		&[]interface{}{
 			&addr,
-			&bigintExpected2,
+			&UInt256Expected2,
 			&[3]byte{'u', 's', 'd'}},
 		jsonEventPledge,
 		"",
 		"Can unpack Pledge event into slice",
 	}, {
 		pledgeData1,
-		&[3]interface{}{&common.Address{}, &bigint, &[3]byte{}},
+		&[3]interface{}{&common.Address{}, &UInt256, &[3]byte{}},
 		&[3]interface{}{
 			&addr,
-			&bigintExpected2,
+			&UInt256Expected2,
 			&[3]byte{'u', 's', 'd'}},
 		jsonEventPledge,
 		"",
@@ -308,7 +308,7 @@ func TestEventTupleUnpack(t *testing.T) {
 		"Can not unpack Pledge event into struct with wrong filed types",
 	}, {
 		pledgeData1,
-		&[]interface{}{common.Address{}, new(big.Int)},
+		&[]interface{}{common.Address{}, new(uint256.Int)},
 		&[]interface{}{},
 		jsonEventPledge,
 		"abi: insufficient number of arguments for unpack, want 3, got 2",
@@ -323,7 +323,7 @@ func TestEventTupleUnpack(t *testing.T) {
 	}, {
 		mixedCaseData1,
 		&EventMixedCase{},
-		&EventMixedCase{Value1: bigintExpected, Value2: bigintExpected2, Value3: bigintExpected3},
+		&EventMixedCase{Value1: UInt256Expected, Value2: UInt256Expected2, Value3: UInt256Expected3},
 		jsonEventMixedCase,
 		"",
 		"Can unpack abi variables with mixed case",

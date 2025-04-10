@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 )
 
 type packUnpackTest struct {
@@ -70,7 +71,7 @@ var packUnpackTests = []packUnpackTest{
 	{
 		def:      `[{"type": "uint17"}]`,
 		packed:   "0000000000000000000000000000000000000000000000000000000000000001",
-		unpacked: big.NewInt(1),
+		unpacked: uint256.NewInt(1),
 	},
 	{
 		def:      `[{"type": "uint32"}]`,
@@ -100,12 +101,12 @@ var packUnpackTests = []packUnpackTest{
 	},
 	{
 		def:      `[{"type": "uint256"}]`,
-		unpacked: big.NewInt(2),
+		unpacked: uint256.NewInt(2),
 		packed:   "0000000000000000000000000000000000000000000000000000000000000002",
 	},
 	{
 		def:      `[{"type": "uint256[]"}]`,
-		unpacked: []*big.Int{big.NewInt(1), big.NewInt(2)},
+		unpacked: []*uint256.Int{uint256.NewInt(1), uint256.NewInt(2)},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" +
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
@@ -408,7 +409,7 @@ var packUnpackTests = []packUnpackTest{
 		def: `[{"type": "uint256[]"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" +
 			"0000000000000000000000000000000000000000000000000000000000000000",
-		unpacked: []*big.Int{},
+		unpacked: []*uint256.Int{},
 	},
 	{
 		def: `[{"type": "uint8[2]"}]`,
@@ -652,14 +653,14 @@ var packUnpackTests = []packUnpackTest{
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002",
-		unpacked: []*big.Int{big.NewInt(1), big.NewInt(2)},
+		unpacked: []*uint256.Int{uint256.NewInt(1), uint256.NewInt(2)},
 	},
 	{
 		def: `[{"type": "uint256[3]"}]`,
 		packed: "0000000000000000000000000000000000000000000000000000000000000001" +
 			"0000000000000000000000000000000000000000000000000000000000000002" +
 			"0000000000000000000000000000000000000000000000000000000000000003",
-		unpacked: [3]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
+		unpacked: [3]*uint256.Int{uint256.NewInt(1), uint256.NewInt(2), uint256.NewInt(3)},
 	},
 	{
 		def: `[{"type": "string[4]"}]`,
@@ -718,7 +719,7 @@ var packUnpackTests = []packUnpackTest{
 			"00000000000000000000000000000000000000000000000000000000000000c8" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
 			"00000000000000000000000000000000000000000000000000000000000003e8",
-		unpacked: [][][2]*big.Int{{{big.NewInt(1), big.NewInt(200)}, {big.NewInt(1), big.NewInt(1000)}}, {{big.NewInt(1), big.NewInt(200)}, {big.NewInt(1), big.NewInt(1000)}}},
+		unpacked: [][][2]*uint256.Int{{{uint256.NewInt(1), uint256.NewInt(200)}, {uint256.NewInt(1), uint256.NewInt(1000)}}, {{uint256.NewInt(1), uint256.NewInt(200)}, {uint256.NewInt(1), uint256.NewInt(1000)}}},
 	},
 	// struct outputs
 	{
@@ -901,16 +902,16 @@ var packUnpackTests = []packUnpackTest{
 							{"name": "b","type": "uint256[]"}],  "type": "tuple"}]`,
 		unpacked: struct {
 			A struct {
-				A *big.Int
-				B []*big.Int
+				A *uint256.Int
+				B []*uint256.Int
 			}
-			B []*big.Int
+			B []*uint256.Int
 		}{
 			A: struct {
-				A *big.Int
-				B []*big.Int
-			}{big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(2)}},
-			B: []*big.Int{big.NewInt(1), big.NewInt(2)}},
+				A *uint256.Int
+				B []*uint256.Int
+			}{uint256.NewInt(1), []*uint256.Int{uint256.NewInt(1), uint256.NewInt(2)}},
+			B: []*uint256.Int{uint256.NewInt(1), uint256.NewInt(2)}},
 		packed: "0000000000000000000000000000000000000000000000000000000000000020" + // struct a
 			"0000000000000000000000000000000000000000000000000000000000000040" + // a offset
 			"00000000000000000000000000000000000000000000000000000000000000e0" + // b offset
