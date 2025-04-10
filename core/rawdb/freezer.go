@@ -81,7 +81,7 @@ type Freezer struct {
 //
 // The 'tables' argument defines the data tables. If the value of a map
 // entry is true, snappy compression is disabled for the table.
-func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig) (*Freezer, error) {
+func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig, eradb *eradb.EraDatabase) (*Freezer, error) {
 	// Create the initial freezer object
 	var (
 		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
@@ -121,17 +121,8 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		readonly:     readonly,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
+		eradb:        eradb,
 	}
-
-	// Create the era database.
-	// TODO: Pipe down network name.
-	eradir := filepath.Join(datadir, "eradb")
-	edb, err := eradb.New(eradir)
-	if err != nil {
-		lock.Unlock()
-		return nil, err
-	}
-	freezer.eradb = edb
 
 	// Create the tables.
 	for name, config := range tables {
@@ -145,6 +136,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		}
 		freezer.tables[name] = table
 	}
+	var err error
 	if freezer.readonly {
 		// In readonly mode only validate, don't truncate.
 		// validate also sets `freezer.frozen`.
@@ -183,7 +175,9 @@ func (f *Freezer) Close() error {
 		if err := f.instanceLock.Unlock(); err != nil {
 			errs = append(errs, err)
 		}
-		f.eradb.Close()
+		if f.eradb != nil {
+			f.eradb.Close()
+		}
 	})
 	if errs != nil {
 		return fmt.Errorf("%v", errs)
@@ -208,7 +202,7 @@ func (f *Freezer) HasAncient(kind string, number uint64) (bool, error) {
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
 func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	if table := f.tables[kind]; table != nil {
-		if table.config.prunable && number < f.tail.Load() {
+		if f.eradb != nil && table.config.prunable && number < f.tail.Load() {
 			// The requested item has been pruned. Attempt fetching from era1 file.
 			switch kind {
 			case ChainFreezerBodiesTable:
