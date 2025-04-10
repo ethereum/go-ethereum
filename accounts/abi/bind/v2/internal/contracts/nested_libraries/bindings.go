@@ -61,7 +61,7 @@ func (c *C1) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 // contract deployment.
 //
 // Solidity: constructor(uint256 v1, uint256 v2) returns()
-func (c1 *C1) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
+func (c1 *C1) PackConstructor(v1 *uint256.Int, v2 *uint256.Int) []byte {
 	enc, err := c1.abi.Pack("", v1, v2)
 	if err != nil {
 		panic(err)
@@ -73,7 +73,7 @@ func (c1 *C1) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 // the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
-func (c1 *C1) PackDo(val *big.Int) []byte {
+func (c1 *C1) PackDo(val *uint256.Int) []byte {
 	enc, err := c1.abi.Pack("Do", val)
 	if err != nil {
 		panic(err)
@@ -85,12 +85,12 @@ func (c1 *C1) PackDo(val *big.Int) []byte {
 // from invoking the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
-func (c1 *C1) UnpackDo(data []byte) (*big.Int, error) {
+func (c1 *C1) UnpackDo(data []byte) (*uint256.Int, error) {
 	out, err := c1.abi.Unpack("Do", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -129,7 +129,7 @@ func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 // contract deployment.
 //
 // Solidity: constructor(uint256 v1, uint256 v2) returns()
-func (c2 *C2) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
+func (c2 *C2) PackConstructor(v1 *uint256.Int, v2 *uint256.Int) []byte {
 	enc, err := c2.abi.Pack("", v1, v2)
 	if err != nil {
 		panic(err)
@@ -141,7 +141,7 @@ func (c2 *C2) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 // the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
-func (c2 *C2) PackDo(val *big.Int) []byte {
+func (c2 *C2) PackDo(val *uint256.Int) []byte {
 	enc, err := c2.abi.Pack("Do", val)
 	if err != nil {
 		panic(err)
@@ -153,12 +153,12 @@ func (c2 *C2) PackDo(val *big.Int) []byte {
 // from invoking the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
-func (c2 *C2) UnpackDo(data []byte) (*big.Int, error) {
+func (c2 *C2) UnpackDo(data []byte) (*uint256.Int, error) {
 	out, err := c2.abi.Unpack("Do", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -193,7 +193,7 @@ func (c *L1) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 // the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l1 *L1) PackDo(val *big.Int) []byte {
+func (l1 *L1) PackDo(val *uint256.Int) []byte {
 	enc, err := l1.abi.Pack("Do", val)
 	if err != nil {
 		panic(err)
@@ -205,12 +205,12 @@ func (l1 *L1) PackDo(val *big.Int) []byte {
 // from invoking the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l1 *L1) UnpackDo(data []byte) (*big.Int, error) {
+func (l1 *L1) UnpackDo(data []byte) (*uint256.Int, error) {
 	out, err := l1.abi.Unpack("Do", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -248,7 +248,7 @@ func (c *L2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 // the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l2 *L2) PackDo(val *big.Int) []byte {
+func (l2 *L2) PackDo(val *uint256.Int) []byte {
 	enc, err := l2.abi.Pack("Do", val)
 	if err != nil {
 		panic(err)
@@ -260,12 +260,12 @@ func (l2 *L2) PackDo(val *big.Int) []byte {
 // from invoking the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l2 *L2) UnpackDo(data []byte) (*big.Int, error) {
+func (l2 *L2) UnpackDo(data []byte) (*uint256.Int, error) {
 	out, err := l2.abi.Unpack("Do", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -303,7 +303,7 @@ func (c *L2b) Instance(backend bind.ContractBackend, addr common.Address) *bind.
 // the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l2b *L2b) PackDo(val *big.Int) []byte {
+func (l2b *L2b) PackDo(val *uint256.Int) []byte {
 	enc, err := l2b.abi.Pack("Do", val)
 	if err != nil {
 		panic(err)
@@ -315,12 +315,12 @@ func (l2b *L2b) PackDo(val *big.Int) []byte {
 // from invoking the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l2b *L2b) UnpackDo(data []byte) (*big.Int, error) {
+func (l2b *L2b) UnpackDo(data []byte) (*uint256.Int, error) {
 	out, err := l2b.abi.Unpack("Do", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -355,7 +355,7 @@ func (c *L3) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 // the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l3 *L3) PackDo(val *big.Int) []byte {
+func (l3 *L3) PackDo(val *uint256.Int) []byte {
 	enc, err := l3.abi.Pack("Do", val)
 	if err != nil {
 		panic(err)
@@ -367,12 +367,12 @@ func (l3 *L3) PackDo(val *big.Int) []byte {
 // from invoking the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l3 *L3) UnpackDo(data []byte) (*big.Int, error) {
+func (l3 *L3) UnpackDo(data []byte) (*uint256.Int, error) {
 	out, err := l3.abi.Unpack("Do", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -411,7 +411,7 @@ func (c *L4) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 // the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l4 *L4) PackDo(val *big.Int) []byte {
+func (l4 *L4) PackDo(val *uint256.Int) []byte {
 	enc, err := l4.abi.Pack("Do", val)
 	if err != nil {
 		panic(err)
@@ -423,12 +423,12 @@ func (l4 *L4) PackDo(val *big.Int) []byte {
 // from invoking the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l4 *L4) UnpackDo(data []byte) (*big.Int, error) {
+func (l4 *L4) UnpackDo(data []byte) (*uint256.Int, error) {
 	out, err := l4.abi.Unpack("Do", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -466,7 +466,7 @@ func (c *L4b) Instance(backend bind.ContractBackend, addr common.Address) *bind.
 // the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l4b *L4b) PackDo(val *big.Int) []byte {
+func (l4b *L4b) PackDo(val *uint256.Int) []byte {
 	enc, err := l4b.abi.Pack("Do", val)
 	if err != nil {
 		panic(err)
@@ -478,11 +478,11 @@ func (l4b *L4b) PackDo(val *big.Int) []byte {
 // from invoking the contract method with ID 0x2ad11272.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
-func (l4b *L4b) UnpackDo(data []byte) (*big.Int, error) {
+func (l4b *L4b) UnpackDo(data []byte) (*uint256.Int, error) {
 	out, err := l4b.abi.Unpack("Do", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }

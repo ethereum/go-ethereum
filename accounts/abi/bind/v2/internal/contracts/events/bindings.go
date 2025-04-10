@@ -79,8 +79,8 @@ func (c *C) PackEmitOne() []byte {
 
 // CBasic1 represents a basic1 event raised by the C contract.
 type CBasic1 struct {
-	Id   *big.Int
-	Data *big.Int
+	Id   *uint256.Int
+	Data *uint256.Int
 	Raw  *types.Log // Blockchain specific contextual infos
 }
 
@@ -122,7 +122,7 @@ func (c *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
 // CBasic2 represents a basic2 event raised by the C contract.
 type CBasic2 struct {
 	Flag bool
-	Data *big.Int
+	Data *uint256.Int
 	Raw  *types.Log // Blockchain specific contextual infos
 }
 

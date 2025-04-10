@@ -91,10 +91,10 @@ var bindTests = []struct {
 			sim := backends.NewSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
 			defer sim.Close()
 
-			maxUint256 := uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+			maxU256 := uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 
 			// Deploy an interaction tester contract and call a transaction on it
-			_, _, interactor, err := DeployToken(auth, sim, maxUint256, "TestToken", 19, "Test")
+			_, _, interactor, err := DeployToken(auth, sim, maxU256, "TestToken", 19, "Test")
 			if err != nil {
 				t.Fatalf("Failed to deploy interactor contract: %v", err)
 			}
@@ -104,7 +104,7 @@ var bindTests = []struct {
 			toKey, _ := crypto.GenerateKey()
 			toAddr := crypto.PubkeyToAddress(toKey.PublicKey)
 
-			transferValue := maxUint256
+			transferValue := maxU256
 			_, err = interactor.Transfer(auth, toAddr, transferValue)
 			if err != nil {
 				t.Fatalf("Failed to transfer tokens: %v", err)

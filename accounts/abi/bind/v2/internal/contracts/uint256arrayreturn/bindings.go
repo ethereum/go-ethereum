@@ -69,11 +69,11 @@ func (myContract *MyContract) PackGetNums() []byte {
 // from invoking the contract method with ID 0xbd6d1007.
 //
 // Solidity: function GetNums() pure returns(uint256[5])
-func (myContract *MyContract) UnpackGetNums(data []byte) ([5]*big.Int, error) {
+func (myContract *MyContract) UnpackGetNums(data []byte) ([5]*uint256.Int, error) {
 	out, err := myContract.abi.Unpack("GetNums", data)
 	if err != nil {
-		return *new([5]*big.Int), err
+		return *new([5]*uint256.Int), err
 	}
-	out0 := *abi.ConvertType(out[0], new([5]*big.Int)).(*[5]*big.Int)
+	out0 := *abi.ConvertType(out[0], new([5]*uint256.Int)).(*[5]*uint256.Int)
 	return out0, err
 }
