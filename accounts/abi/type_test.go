@@ -23,6 +23,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 )
 
 // typeWithoutStringer is an alias for the Type type which simply doesn't implement
@@ -142,33 +143,33 @@ func TestTypeCheck(t *testing.T) {
 		{"int16", nil, int16(1), ""},
 		{"int32", nil, int32(1), ""},
 		{"int64", nil, int64(1), ""},
-		{"uint24", nil, big.NewInt(1), ""},
-		{"uint40", nil, big.NewInt(1), ""},
-		{"uint48", nil, big.NewInt(1), ""},
-		{"uint56", nil, big.NewInt(1), ""},
-		{"uint72", nil, big.NewInt(1), ""},
-		{"uint80", nil, big.NewInt(1), ""},
-		{"uint88", nil, big.NewInt(1), ""},
-		{"uint96", nil, big.NewInt(1), ""},
-		{"uint104", nil, big.NewInt(1), ""},
-		{"uint112", nil, big.NewInt(1), ""},
-		{"uint120", nil, big.NewInt(1), ""},
-		{"uint128", nil, big.NewInt(1), ""},
-		{"uint136", nil, big.NewInt(1), ""},
-		{"uint144", nil, big.NewInt(1), ""},
-		{"uint152", nil, big.NewInt(1), ""},
-		{"uint160", nil, big.NewInt(1), ""},
-		{"uint168", nil, big.NewInt(1), ""},
-		{"uint176", nil, big.NewInt(1), ""},
-		{"uint184", nil, big.NewInt(1), ""},
-		{"uint192", nil, big.NewInt(1), ""},
-		{"uint200", nil, big.NewInt(1), ""},
-		{"uint208", nil, big.NewInt(1), ""},
-		{"uint216", nil, big.NewInt(1), ""},
-		{"uint224", nil, big.NewInt(1), ""},
-		{"uint232", nil, big.NewInt(1), ""},
-		{"uint240", nil, big.NewInt(1), ""},
-		{"uint248", nil, big.NewInt(1), ""},
+		{"uint24", nil, uint256.NewInt(1), ""},
+		{"uint40", nil, uint256.NewInt(1), ""},
+		{"uint48", nil, uint256.NewInt(1), ""},
+		{"uint56", nil, uint256.NewInt(1), ""},
+		{"uint72", nil, uint256.NewInt(1), ""},
+		{"uint80", nil, uint256.NewInt(1), ""},
+		{"uint88", nil, uint256.NewInt(1), ""},
+		{"uint96", nil, uint256.NewInt(1), ""},
+		{"uint104", nil, uint256.NewInt(1), ""},
+		{"uint112", nil, uint256.NewInt(1), ""},
+		{"uint120", nil, uint256.NewInt(1), ""},
+		{"uint128", nil, uint256.NewInt(1), ""},
+		{"uint136", nil, uint256.NewInt(1), ""},
+		{"uint144", nil, uint256.NewInt(1), ""},
+		{"uint152", nil, uint256.NewInt(1), ""},
+		{"uint160", nil, uint256.NewInt(1), ""},
+		{"uint168", nil, uint256.NewInt(1), ""},
+		{"uint176", nil, uint256.NewInt(1), ""},
+		{"uint184", nil, uint256.NewInt(1), ""},
+		{"uint192", nil, uint256.NewInt(1), ""},
+		{"uint200", nil, uint256.NewInt(1), ""},
+		{"uint208", nil, uint256.NewInt(1), ""},
+		{"uint216", nil, uint256.NewInt(1), ""},
+		{"uint224", nil, uint256.NewInt(1), ""},
+		{"uint232", nil, uint256.NewInt(1), ""},
+		{"uint240", nil, uint256.NewInt(1), ""},
+		{"uint248", nil, uint256.NewInt(1), ""},
 		{"int24", nil, big.NewInt(1), ""},
 		{"int40", nil, big.NewInt(1), ""},
 		{"int48", nil, big.NewInt(1), ""},
@@ -269,19 +270,19 @@ func TestTypeCheck(t *testing.T) {
 		{"invalidSlice[]", nil, "", "unsupported arg type: invalidSlice"},
 		// simple tuple
 		{"tuple", []ArgumentMarshaling{{Name: "a", Type: "uint256"}, {Name: "b", Type: "uint256"}}, struct {
-			A *big.Int
-			B *big.Int
+			A *uint256.Int
+			B *uint256.Int
 		}{}, ""},
 		// tuple slice
 		{"tuple[]", []ArgumentMarshaling{{Name: "a", Type: "uint256"}, {Name: "b", Type: "uint256"}}, []struct {
-			A *big.Int
-			B *big.Int
+			A *uint256.Int
+			B *uint256.Int
 		}{}, ""},
 		// tuple array
 		{"tuple[2]", []ArgumentMarshaling{{Name: "a", Type: "uint256"}, {Name: "b", Type: "uint256"}}, []struct {
-			A *big.Int
-			B *big.Int
-		}{{big.NewInt(0), big.NewInt(0)}, {big.NewInt(0), big.NewInt(0)}}, ""},
+			A *uint256.Int
+			B *uint256.Int
+		}{{uint256.NewInt(0), uint256.NewInt(0)}, {uint256.NewInt(0), uint256.NewInt(0)}}, ""},
 	} {
 		typ, err := NewType(test.typ, "", test.components)
 		if err != nil && len(test.err) == 0 {

@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
 
@@ -143,7 +144,7 @@ var unpackTests = []unpackTest{
 		def:  `[{"type": "uint17"}]`,
 		enc:  "0000000000000000000000000000000000000000000000000000000000000001",
 		want: uint16(0),
-		err:  "abi: cannot unmarshal *big.Int in to uint16",
+		err:  "abi: cannot unmarshal *uint256.Int in to uint16",
 	},
 	{
 		def:  `[{"type": "int32"}]`,
@@ -343,14 +344,14 @@ func TestUnpackIntoInterfaceSetDynamicArrayOutput(t *testing.T) {
 }
 
 type methodMultiOutput struct {
-	Int    *big.Int
+	Int    *uint256.Int
 	String string
 }
 
 func methodMultiReturn(require *require.Assertions) (ABI, []byte, methodMultiOutput) {
 	const definition = `[
 	{ "name" : "multi", "type": "function", "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
-	var expected = methodMultiOutput{big.NewInt(1), "hello"}
+	var expected = methodMultiOutput{uint256.NewInt(1), "hello"}
 
 	abi, err := JSON(strings.NewReader(definition))
 	require.NoError(err)
@@ -367,7 +368,7 @@ func TestMethodMultiReturn(t *testing.T) {
 	t.Parallel()
 	type reversed struct {
 		String string
-		Int    *big.Int
+		Int    *uint256.Int
 	}
 
 	newInterfaceSlice := func(len int) interface{} {
@@ -376,7 +377,7 @@ func TestMethodMultiReturn(t *testing.T) {
 	}
 
 	abi, data, expected := methodMultiReturn(require.New(t))
-	bigint := new(big.Int)
+	UInt := new(uint256.Int)
 	var testCases = []struct {
 		dest     interface{}
 		expected interface{}
@@ -393,17 +394,17 @@ func TestMethodMultiReturn(t *testing.T) {
 		"",
 		"Can unpack into reversed structure",
 	}, {
-		&[]interface{}{&bigint, new(string)},
+		&[]interface{}{&UInt, new(string)},
 		&[]interface{}{&expected.Int, &expected.String},
 		"",
 		"Can unpack into a slice",
 	}, {
-		&[]interface{}{&bigint, ""},
+		&[]interface{}{&UInt, ""},
 		&[]interface{}{&expected.Int, expected.String},
 		"",
 		"Can unpack into a slice without indirection",
 	}, {
-		&[2]interface{}{&bigint, new(string)},
+		&[2]interface{}{&UInt, new(string)},
 		&[2]interface{}{&expected.Int, &expected.String},
 		"",
 		"Can unpack into an array",
@@ -420,7 +421,7 @@ func TestMethodMultiReturn(t *testing.T) {
 	}, {
 		&[]interface{}{new(int), new(int)},
 		&[]interface{}{&expected.Int, &expected.String},
-		"abi: cannot unmarshal *big.Int in to int",
+		"abi: cannot unmarshal *uint256.Int in to int",
 		"Can not unpack into a slice with wrong types",
 	}, {
 		&[]interface{}{new(int)},
@@ -475,8 +476,9 @@ func TestMultiReturnWithStringArray(t *testing.T) {
 	}
 	buff := new(bytes.Buffer)
 	buff.Write(common.Hex2Bytes("000000000000000000000000000000000000000000000000000000005c1b78ea0000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000001a055690d9db80000000000000000000000000000ab1257528b3782fb40d7ed5f72e624b744dffb2f00000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000008457468657265756d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001048656c6c6f2c20457468657265756d2100000000000000000000000000000000"))
+
 	temp, _ := new(big.Int).SetString("30000000000000000000", 10)
-	ret1, ret1Exp := new([3]*big.Int), [3]*big.Int{big.NewInt(1545304298), big.NewInt(6), temp}
+	ret1, ret1Exp := new([3]*uint256.Int), [3]*uint256.Int{uint256.NewInt(1545304298), uint256.NewInt(6), uint256.MustFromBig(temp)}
 	ret2, ret2Exp := new(common.Address), common.HexToAddress("ab1257528b3782fb40d7ed5f72e624b744dffb2f")
 	ret3, ret3Exp := new([2]string), [2]string{"Ethereum", "Hello, Ethereum!"}
 	ret4, ret4Exp := new(bool), false
@@ -518,7 +520,7 @@ func TestMultiReturnWithStringSlice(t *testing.T) {
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000064")) // output[1][0] value
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000065")) // output[1][1] value
 	ret1, ret1Exp := new([]string), []string{"ethereum", "go-ethereum"}
-	ret2, ret2Exp := new([]*big.Int), []*big.Int{big.NewInt(100), big.NewInt(101)}
+	ret2, ret2Exp := new([]*uint256.Int), []*uint256.Int{uint256.NewInt(100), uint256.NewInt(101)}
 	if err := abi.UnpackIntoInterface(&[]interface{}{ret1, ret2}, "multi", buff.Bytes()); err != nil {
 		t.Fatal(err)
 	}
@@ -614,13 +616,13 @@ func TestUnmarshal(t *testing.T) {
 	}
 
 	// marshal int
-	var Int *big.Int
+	var Int *uint256.Int
 	err = abi.UnpackIntoInterface(&Int, "int", common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
 	if err != nil {
 		t.Error(err)
 	}
 
-	if Int == nil || Int.Cmp(big.NewInt(1)) != 0 {
+	if Int == nil || Int.Cmp(uint256.NewInt(1)) != 0 {
 		t.Error("expected Int to be 1 got", Int)
 	}
 
@@ -738,15 +740,15 @@ func TestUnmarshal(t *testing.T) {
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000002"))
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000003"))
 	// marshal int array
-	var intArray [3]*big.Int
+	var intArray [3]*uint256.Int
 	err = abi.UnpackIntoInterface(&intArray, "intArraySingle", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
-	var testAgainstIntArray [3]*big.Int
-	testAgainstIntArray[0] = big.NewInt(1)
-	testAgainstIntArray[1] = big.NewInt(2)
-	testAgainstIntArray[2] = big.NewInt(3)
+	var testAgainstIntArray [3]*uint256.Int
+	testAgainstIntArray[0] = uint256.NewInt(1)
+	testAgainstIntArray[1] = uint256.NewInt(2)
+	testAgainstIntArray[2] = uint256.NewInt(3)
 
 	for i, Int := range intArray {
 		if Int.Cmp(testAgainstIntArray[i]) != 0 {
@@ -884,42 +886,42 @@ func TestUnpackTuple(t *testing.T) {
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001")) // s.C[1].Y
 
 	type T struct {
-		X *big.Int `abi:"x"`
-		Z *big.Int `abi:"y"` // Test whether the abi tag works.
+		X *uint256.Int `abi:"x"`
+		Z *uint256.Int `abi:"y"` // Test whether the abi tag works.
 	}
 
 	type S struct {
-		A *big.Int
-		B []*big.Int
+		A *uint256.Int
+		B []*uint256.Int
 		C []T
 	}
 
 	type Ret struct {
 		FieldS S `abi:"s"`
 		FieldT T `abi:"t"`
-		A      *big.Int
+		A      *uint256.Int
 	}
 	var ret Ret
 	var expected = Ret{
 		FieldS: S{
-			A: big.NewInt(1),
-			B: []*big.Int{big.NewInt(1), big.NewInt(2)},
+			A: uint256.NewInt(1),
+			B: []*uint256.Int{uint256.NewInt(1), uint256.NewInt(2)},
 			C: []T{
-				{big.NewInt(1), big.NewInt(2)},
-				{big.NewInt(2), big.NewInt(1)},
+				{uint256.NewInt(1), uint256.NewInt(2)},
+				{uint256.NewInt(2), uint256.NewInt(1)},
 			},
 		},
 		FieldT: T{
-			big.NewInt(0), big.NewInt(1),
+			uint256.NewInt(0), uint256.NewInt(1),
 		},
-		A: big.NewInt(1),
+		A: uint256.NewInt(1),
 	}
 
 	err = abi.UnpackIntoInterface(&ret, "tuple", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
-	if reflect.DeepEqual(ret, expected) {
+	if !reflect.DeepEqual(ret, expected) {
 		t.Error("unexpected unpack value")
 	}
 }
@@ -1011,6 +1013,9 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 		panic("bug")
 	}
 	maxU64Plus1 := new(big.Int).Add(maxU64, big.NewInt(1))
+
+	// maxU256 := uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+
 	cases := []struct {
 		decodeType  string
 		inputValue  *big.Int
@@ -1065,7 +1070,7 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 			decodeType:  "uint256",
 			inputValue:  maxU64Plus1,
 			err:         nil,
-			expectValue: maxU64Plus1,
+			expectValue: uint256.MustFromBig(maxU64Plus1),
 		},
 		{
 			decodeType: "int8",
