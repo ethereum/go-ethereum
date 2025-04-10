@@ -355,6 +355,9 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 // Note: if the effective gasTipCap is negative, this method returns both error
 // the actual negative value, _and_ ErrGasFeeCapTooLow
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
+	if baseFee == nil {
+		return tx.inner.gasTipCap(), nil
+	}
 	out, err := tx.effectiveGasTip(baseFee)
 	return new(big.Int).Set(out), err
 }
@@ -363,10 +366,8 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 // Note: if the effective gasTipCap is negative, this method returns both error
 // the actual negative value, _and_ ErrGasFeeCapTooLow
 // Note: please copy the return value before modifying.
+// Note: assumes basefee to be non-nil.
 func (tx *Transaction) effectiveGasTip(baseFee *big.Int) (*big.Int, error) {
-	if baseFee == nil {
-		return tx.inner.gasTipCap(), nil
-	}
 	var err error
 	gasFeeCap := tx.inner.gasFeeCap()
 	if gasFeeCap.Cmp(baseFee) < 0 {
