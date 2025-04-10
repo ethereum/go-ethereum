@@ -28,9 +28,9 @@ var (
 
 // DBStats is an auto generated low-level Go binding around an user-defined struct.
 type DBStats struct {
-	Gets    *big.Int
-	Inserts *big.Int
-	Mods    *big.Int
+	Gets    *uint256.Int
+	Inserts *uint256.Int
+	Mods    *uint256.Int
 }
 
 // DBMetaData contains all meta data concerning the DB contract.
@@ -64,7 +64,7 @@ func (c *DB) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 // the contract method with ID 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
-func (dB *DB) PackGet(k *big.Int) []byte {
+func (dB *DB) PackGet(k *uint256.Int) []byte {
 	enc, err := dB.abi.Pack("get", k)
 	if err != nil {
 		panic(err)
@@ -76,12 +76,12 @@ func (dB *DB) PackGet(k *big.Int) []byte {
 // from invoking the contract method with ID 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
-func (dB *DB) UnpackGet(data []byte) (*big.Int, error) {
+func (dB *DB) UnpackGet(data []byte) (*uint256.Int, error) {
 	out, err := dB.abi.Unpack("get", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -100,9 +100,9 @@ func (dB *DB) PackGetNamedStatParams() []byte {
 // GetNamedStatParamsOutput serves as a container for the return parameters of contract
 // method GetNamedStatParams.
 type GetNamedStatParamsOutput struct {
-	Gets    *big.Int
-	Inserts *big.Int
-	Mods    *big.Int
+	Gets    *uint256.Int
+	Inserts *uint256.Int
+	Mods    *uint256.Int
 }
 
 // UnpackGetNamedStatParams is the Go binding that unpacks the parameters returned
@@ -115,9 +115,9 @@ func (dB *DB) UnpackGetNamedStatParams(data []byte) (GetNamedStatParamsOutput, e
 	if err != nil {
 		return *outstruct, err
 	}
-	outstruct.Gets = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	outstruct.Inserts = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-	outstruct.Mods = abi.ConvertType(out[2], new(big.Int)).(*big.Int)
+	outstruct.Gets = abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
+	outstruct.Inserts = abi.ConvertType(out[1], new(uint256.Int)).(*uint256.Int)
+	outstruct.Mods = abi.ConvertType(out[2], new(uint256.Int)).(*uint256.Int)
 	return *outstruct, err
 
 }
@@ -137,9 +137,9 @@ func (dB *DB) PackGetStatParams() []byte {
 // GetStatParamsOutput serves as a container for the return parameters of contract
 // method GetStatParams.
 type GetStatParamsOutput struct {
-	Arg0 *big.Int
-	Arg1 *big.Int
-	Arg2 *big.Int
+	Arg0 *uint256.Int
+	Arg1 *uint256.Int
+	Arg2 *uint256.Int
 }
 
 // UnpackGetStatParams is the Go binding that unpacks the parameters returned
@@ -152,9 +152,9 @@ func (dB *DB) UnpackGetStatParams(data []byte) (GetStatParamsOutput, error) {
 	if err != nil {
 		return *outstruct, err
 	}
-	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-	outstruct.Arg2 = abi.ConvertType(out[2], new(big.Int)).(*big.Int)
+	outstruct.Arg0 = abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
+	outstruct.Arg1 = abi.ConvertType(out[1], new(uint256.Int)).(*uint256.Int)
+	outstruct.Arg2 = abi.ConvertType(out[2], new(uint256.Int)).(*uint256.Int)
 	return *outstruct, err
 
 }
@@ -188,7 +188,7 @@ func (dB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
 // the contract method with ID 0x1d834a1b.
 //
 // Solidity: function insert(uint256 k, uint256 v) returns(uint256)
-func (dB *DB) PackInsert(k *big.Int, v *big.Int) []byte {
+func (dB *DB) PackInsert(k *uint256.Int, v *uint256.Int) []byte {
 	enc, err := dB.abi.Pack("insert", k, v)
 	if err != nil {
 		panic(err)
@@ -200,20 +200,20 @@ func (dB *DB) PackInsert(k *big.Int, v *big.Int) []byte {
 // from invoking the contract method with ID 0x1d834a1b.
 //
 // Solidity: function insert(uint256 k, uint256 v) returns(uint256)
-func (dB *DB) UnpackInsert(data []byte) (*big.Int, error) {
+func (dB *DB) UnpackInsert(data []byte) (*uint256.Int, error) {
 	out, err := dB.abi.Unpack("insert", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
 // DBInsert represents a Insert event raised by the DB contract.
 type DBInsert struct {
-	Key    *big.Int
-	Value  *big.Int
-	Length *big.Int
+	Key    *uint256.Int
+	Value  *uint256.Int
+	Length *uint256.Int
 	Raw    *types.Log // Blockchain specific contextual infos
 }
 
@@ -254,8 +254,8 @@ func (dB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
 
 // DBKeyedInsert represents a KeyedInsert event raised by the DB contract.
 type DBKeyedInsert struct {
-	Key   *big.Int
-	Value *big.Int
+	Key   *uint256.Int
+	Value *uint256.Int
 	Raw   *types.Log // Blockchain specific contextual infos
 }
 

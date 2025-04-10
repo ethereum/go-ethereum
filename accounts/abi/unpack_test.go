@@ -1014,8 +1014,6 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 	}
 	maxU64Plus1 := new(big.Int).Add(maxU64, big.NewInt(1))
 
-	// maxU256 := uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-
 	cases := []struct {
 		decodeType  string
 		inputValue  *big.Int

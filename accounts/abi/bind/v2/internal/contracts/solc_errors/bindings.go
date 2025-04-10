@@ -91,9 +91,9 @@ func (c *C) UnpackError(raw []byte) (any, error) {
 
 // CBadThing represents a BadThing error raised by the C contract.
 type CBadThing struct {
-	Arg1 *big.Int
-	Arg2 *big.Int
-	Arg3 *big.Int
+	Arg1 *uint256.Int
+	Arg2 *uint256.Int
+	Arg3 *uint256.Int
 	Arg4 bool
 }
 
@@ -118,10 +118,10 @@ func (c *C) UnpackBadThingError(raw []byte) (*CBadThing, error) {
 
 // CBadThing2 represents a BadThing2 error raised by the C contract.
 type CBadThing2 struct {
-	Arg1 *big.Int
-	Arg2 *big.Int
-	Arg3 *big.Int
-	Arg4 *big.Int
+	Arg1 *uint256.Int
+	Arg2 *uint256.Int
+	Arg3 *uint256.Int
+	Arg4 *uint256.Int
 }
 
 // ErrorID returns the hash of canonical representation of the error's signature.
@@ -193,9 +193,9 @@ func (c2 *C2) UnpackError(raw []byte) (any, error) {
 
 // C2BadThing represents a BadThing error raised by the C2 contract.
 type C2BadThing struct {
-	Arg1 *big.Int
-	Arg2 *big.Int
-	Arg3 *big.Int
+	Arg1 *uint256.Int
+	Arg2 *uint256.Int
+	Arg3 *uint256.Int
 	Arg4 bool
 }
 

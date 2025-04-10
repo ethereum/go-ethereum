@@ -17,13 +17,13 @@
 package fourbyte
 
 import (
-	"math/big"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 )
 
 func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {
@@ -64,7 +64,7 @@ func TestNewUnpacker(t *testing.T) {
 			// 0x123, [0x456, 0x789], "1234567890", "Hello, world!"
 			"8be65246" + "00000000000000000000000000000000000000000000000000000000000001230000000000000000000000000000000000000000000000000000000000000080313233343536373839300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000004560000000000000000000000000000000000000000000000000000000000000789000000000000000000000000000000000000000000000000000000000000000d48656c6c6f2c20776f726c642100000000000000000000000000000000000000",
 			[]interface{}{
-				big.NewInt(0x123),
+				uint256.NewInt(0x123),
 				[]uint32{0x456, 0x789},
 				[10]byte{49, 50, 51, 52, 53, 54, 55, 56, 57, 48},
 				common.Hex2Bytes("48656c6c6f2c20776f726c6421"),
@@ -76,19 +76,19 @@ func TestNewUnpacker(t *testing.T) {
 			[]interface{}{
 				[]byte{0x64, 0x61, 0x76, 0x65},
 				true,
-				[]*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)},
+				[]*uint256.Int{uint256.NewInt(1), uint256.NewInt(2), uint256.NewInt(3)},
 			},
 		}, {
 			`[{"type":"function","name":"send","inputs":[{"type":"uint256"}]}]`,
 			"a52c101e0000000000000000000000000000000000000000000000000000000000000012",
-			[]interface{}{big.NewInt(0x12)},
+			[]interface{}{uint256.NewInt(0x12)},
 		}, {
 			`[{"type":"function","name":"compareAndApprove","inputs":[{"type":"address"},{"type":"uint256"},{"type":"uint256"}]}]`,
 			"751e107900000000000000000000000000000133700000deadbeef00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			[]interface{}{
 				common.HexToAddress("0x00000133700000deadbeef000000000000000000"),
-				new(big.Int).SetBytes([]byte{0x00}),
-				big.NewInt(0x1),
+				new(uint256.Int).SetBytes([]byte{0x00}),
+				uint256.NewInt(0x1),
 			},
 		},
 	}
