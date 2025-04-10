@@ -275,13 +275,17 @@ jobs:
           echo "Starting RPC Tests..."
           timeout 5m bash bor/integration-tests/rpc_test.sh
 
+      - name: Resolve absolute path for logs
+        id: pathfix
+        run: |
+          echo "ABS_LOG_PATH=$(realpath matic-cli/devnet/logs)" >> $GITHUB_ENV
+
       - name: Upload logs
         if: always()
-      - uses: PaloAltoNetworks/upload-secure-artifact@main
+        uses: PaloAltoNetworks/upload-secure-artifact@main
         with:
           name: logs_${{ github.run_id }}
-          path: |
-            matic-cli/devnet/logs
+          path: ${{ env.ABS_LOG_PATH }}
 
       - name: Package code and chain data
         if: always()
