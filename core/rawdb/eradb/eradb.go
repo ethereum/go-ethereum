@@ -23,11 +23,18 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/log"
 )
 
+/**
+* TODO:
+* - FD leak possible on cache eviction.
+* - FD leak possible on concurrent access to GetRaw*.
+ */
+
+// EraDatabase manages read access to a directory of era1 files.
+// The getter methods are thread-safe.
 type EraDatabase struct {
 	datadir string
 	// TODO: should take into account configured number of fd handles.
@@ -53,6 +60,46 @@ func New(datadir string) (*EraDatabase, error) {
 	db := &EraDatabase{datadir: datadir, cache: lru.NewCache[uint64, *era.Era](50)}
 	log.Info("Opened erastore", "datadir", datadir)
 	return db, nil
+}
+
+// Close closes all open era1 files in the cache.
+func (db *EraDatabase) Close() {
+	// Close all open era1 files in the cache.
+	keys := db.cache.Keys()
+	for _, key := range keys {
+		if e, ok := db.cache.Get(key); ok {
+			e.Close()
+		}
+	}
+}
+
+// GetRawBody returns the raw body for a given block number.
+func (db *EraDatabase) GetRawBody(number uint64) ([]byte, error) {
+	// Lookup the table by epoch.
+	epoch := number / uint64(era.MaxEra1Size)
+	e, err := db.getEraByEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
+	// The era1 file for given epoch may not exist.
+	if e == nil {
+		return nil, nil
+	}
+	return e.GetRawBodyByNumber(number)
+}
+
+// GetRawReceipts returns the raw receipts for a given block number.
+func (db *EraDatabase) GetRawReceipts(number uint64) ([]byte, error) {
+	epoch := number / uint64(era.MaxEra1Size)
+	e, err := db.getEraByEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
+	// The era1 file for given epoch may not exist.
+	if e == nil {
+		return nil, nil
+	}
+	return e.GetRawReceiptsByNumber(number)
 }
 
 func (db *EraDatabase) openEra(name string) (*era.Era, error) {
@@ -95,83 +142,4 @@ func (db *EraDatabase) getEraByEpoch(epoch uint64) (*era.Era, error) {
 	// Add the era to the cache.
 	db.cache.Add(epoch, e)
 	return e, nil
-}
-
-func (db *EraDatabase) Close() {
-	// Close all open era1 files in the cache.
-	keys := db.cache.Keys()
-	for _, key := range keys {
-		if e, ok := db.cache.Get(key); ok {
-			e.Close()
-		}
-	}
-}
-
-// TODO: do we need this method? we do have headers in the freezer.
-func (db *EraDatabase) GetHeaderByNumber(number uint64) (*types.Header, error) {
-	// Lookup the table by epoch.
-	epoch := number / uint64(era.MaxEra1Size)
-	e, err := db.getEraByEpoch(epoch)
-	if err != nil {
-		return nil, err
-	}
-	// The era1 file for given epoch may not exist.
-	if e == nil {
-		return nil, nil
-	}
-	return e.GetHeaderByNumber(number)
-}
-
-func (db *EraDatabase) GetRawBody(number uint64) ([]byte, error) {
-	// Lookup the table by epoch.
-	epoch := number / uint64(era.MaxEra1Size)
-	e, err := db.getEraByEpoch(epoch)
-	if err != nil {
-		return nil, err
-	}
-	// The era1 file for given epoch may not exist.
-	if e == nil {
-		return nil, nil
-	}
-	return e.GetRawBodyByNumber(number)
-}
-
-func (db *EraDatabase) GetRawReceipts(number uint64) ([]byte, error) {
-	epoch := number / uint64(era.MaxEra1Size)
-	e, err := db.getEraByEpoch(epoch)
-	if err != nil {
-		return nil, err
-	}
-	// The era1 file for given epoch may not exist.
-	if e == nil {
-		return nil, nil
-	}
-	return e.GetRawReceiptsByNumber(number)
-}
-
-func (db *EraDatabase) GetBlockByNumber(number uint64) (*types.Block, error) {
-	// Lookup the table by epoch.
-	epoch := number / uint64(era.MaxEra1Size)
-	e, err := db.getEraByEpoch(epoch)
-	if err != nil {
-		return nil, err
-	}
-	// The era1 file for given epoch may not exist.
-	if e == nil {
-		return nil, nil
-	}
-	return e.GetBlockByNumber(number)
-}
-
-func (db *EraDatabase) GetReceiptsByNumber(number uint64) (types.Receipts, error) {
-	epoch := number / uint64(era.MaxEra1Size)
-	e, err := db.getEraByEpoch(epoch)
-	if err != nil {
-		return nil, err
-	}
-	// The era1 file for given epoch may not exist.
-	if e == nil {
-		return nil, nil
-	}
-	return e.GetReceiptsByNumber(number)
 }

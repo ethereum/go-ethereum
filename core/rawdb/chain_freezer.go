@@ -66,6 +66,8 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 	if datadir == "" {
 		freezer = NewMemoryFreezer(readonly, chainFreezerTableConfigs)
 	} else {
+		// Instantiate eradb outside of freezer to avoid
+		// creating an instance for the state freezer.
 		eraDatadir := path.Join(datadir, "era")
 		eradb, err := eradb.New(eraDatadir)
 		if err != nil {
