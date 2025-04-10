@@ -51,12 +51,15 @@ type testService struct {
 	state atomic.Value
 }
 
-func newTestService(ctx *adapters.ServiceContext) (node.Service, error) {
+func newTestService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	svc := &testService{
 		id:    ctx.Config.ID,
 		peers: make(map[discover.NodeID]*testPeer),
 	}
 	svc.state.Store(ctx.Snapshot)
+
+	stack.RegisterProtocols(svc.Protocols())
+	stack.RegisterAPIs(svc.APIs())
 	return svc, nil
 }
 
@@ -113,7 +116,7 @@ func (t *testService) APIs() []rpc.API {
 	}}
 }
 
-func (t *testService) Start(server *p2p.Server) error {
+func (t *testService) Start() error {
 	return nil
 }
 
@@ -275,7 +278,7 @@ func (t *TestAPI) Events(ctx context.Context) (*rpc.Subscription, error) {
 	return rpcSub, nil
 }
 
-var testServices = adapters.Services{
+var testServices = adapters.LifecycleConstructors{
 	"test": newTestService,
 }
 

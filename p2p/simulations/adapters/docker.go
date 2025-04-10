@@ -72,11 +72,11 @@ func (d *DockerAdapter) Name() string {
 
 // NewNode returns a new DockerNode using the given config
 func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
-	if len(config.Services) == 0 {
-		return nil, errors.New("node must have at least one service")
+	if len(config.Lifecycles) == 0 {
+		return nil, errors.New("node must have at least one lifecycle")
 	}
-	for _, service := range config.Services {
-		if _, exists := serviceFuncs[service]; !exists {
+	for _, service := range config.Lifecycles {
+		if _, exists := lifecycleConstructorFuncs[service]; !exists {
 			return nil, fmt.Errorf("unknown node service %q", service)
 		}
 	}
@@ -123,7 +123,7 @@ func (n *DockerNode) dockerCommand() *exec.Cmd {
 		"sh", "-c",
 		fmt.Sprintf(
 			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" %s p2p-node %s %s`,
-			dockerImage, strings.Join(n.Config.Node.Services, ","), n.ID.String(),
+			dockerImage, strings.Join(n.Config.Node.Lifecycles, ","), n.ID.String(),
 		),
 	)
 }

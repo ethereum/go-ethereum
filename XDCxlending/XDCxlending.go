@@ -19,6 +19,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
@@ -50,7 +51,7 @@ func (l *Lending) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{}
 }
 
-func (l *Lending) Start(server *p2p.Server) error {
+func (l *Lending) Start() error {
 	return nil
 }
 
@@ -58,7 +59,7 @@ func (l *Lending) Stop() error {
 	return nil
 }
 
-func New(XDCx *XDCx.XDCX) *Lending {
+func New(stack *node.Node, XDCx *XDCx.XDCX) *Lending {
 	lending := &Lending{
 		orderNonce:          make(map[common.Address]*big.Int),
 		Triegc:              prque.New[int64, common.Hash](nil),
@@ -67,6 +68,12 @@ func New(XDCx *XDCx.XDCX) *Lending {
 	}
 	lending.StateCache = lendingstate.NewDatabase(XDCx.GetLevelDB())
 	lending.XDCx = XDCx
+
+	// Register the backend on the node
+	stack.RegisterAPIs(lending.APIs())
+	stack.RegisterProtocols(lending.Protocols())
+	stack.RegisterLifecycle(lending)
+
 	return lending
 }
 

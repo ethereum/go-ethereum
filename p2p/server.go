@@ -157,7 +157,7 @@ type Server struct {
 	newPeerHook  func(*Peer)
 
 	lock    sync.Mutex // protects running
-	running bool
+	Running bool
 
 	ntab         discoverTable
 	listener     net.Listener
@@ -344,7 +344,7 @@ func (srv *Server) Self() *discover.Node {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 
-	if !srv.running {
+	if !srv.Running {
 		return &discover.Node{IP: net.ParseIP("0.0.0.0")}
 	}
 	return srv.makeSelf(srv.listener, srv.ntab)
@@ -375,10 +375,10 @@ func (srv *Server) makeSelf(listener net.Listener, ntab discoverTable) *discover
 func (srv *Server) Stop() {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
-	if !srv.running {
+	if !srv.Running {
 		return
 	}
-	srv.running = false
+	srv.Running = false
 	if srv.listener != nil {
 		// this unblocks listener Accept
 		srv.listener.Close()
@@ -418,10 +418,10 @@ func (s *sharedUDPConn) Close() error {
 func (srv *Server) Start() (err error) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
-	if srv.running {
+	if srv.Running {
 		return errors.New("server already running")
 	}
-	srv.running = true
+	srv.Running = true
 	srv.log = srv.Config.Logger
 	if srv.log == nil {
 		srv.log = log.New()
@@ -538,7 +538,7 @@ func (srv *Server) Start() (err error) {
 
 	srv.loopWG.Add(1)
 	go srv.run(dialer)
-	srv.running = true
+	srv.Running = true
 	return nil
 }
 
@@ -881,7 +881,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *discover.Nod
 func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) error {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
-	running := srv.running
+	running := srv.Running
 	srv.lock.Unlock()
 	if !running {
 		return errServerStopped

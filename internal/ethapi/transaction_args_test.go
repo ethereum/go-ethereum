@@ -304,6 +304,7 @@ func (b *backendMock) RPCEVMTimeout() time.Duration      { return time.Second }
 func (b *backendMock) RPCTxFeeCap() float64              { return 0 }
 func (b *backendMock) UnprotectedAllowed() bool          { return false }
 func (b *backendMock) SetHead(number uint64)             {}
+func (b *backendMock) GetPeer() int                      { return 0 }
 
 func (b *backendMock) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	return nil, nil
@@ -345,7 +346,7 @@ func (b *backendMock) GetReceipts(ctx context.Context, hash common.Hash) (types.
 	return nil, nil
 }
 
-func (b *backendMock) GetTd(common.Hash) *big.Int {
+func (b *backendMock) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	return nil
 }
 
@@ -410,10 +411,6 @@ func (b *backendMock) GetBlock(context.Context, common.Hash) (*types.Block, erro
 
 func (b *backendMock) GetBlocksHashCache(blockNr uint64) []common.Hash {
 	return []common.Hash{}
-}
-
-func (b *backendMock) GetEngine() consensus.Engine {
-	return nil
 }
 
 func (b *backendMock) GetEpochDuration() *big.Int {

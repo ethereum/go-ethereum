@@ -34,6 +34,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/eth"
 	"github.com/XinFinOrg/XDPoSChain/ethclient"
 	"github.com/XinFinOrg/XDPoSChain/internal/debug"
+	"github.com/XinFinOrg/XDPoSChain/internal/ethapi"
 	"github.com/XinFinOrg/XDPoSChain/internal/flags"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
@@ -249,17 +250,17 @@ func main() {
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func XDC(ctx *cli.Context) error {
-	node, cfg := makeFullNode(ctx)
-	defer node.Close()
-	startNode(ctx, node, cfg)
-	node.Wait()
+	stack, backend, cfg := makeFullNode(ctx)
+	defer stack.Close()
+	startNode(ctx, stack, backend, cfg)
+	stack.Wait()
 	return nil
 }
 
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
-func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
+func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, cfg XDCConfig) {
 	// Start up the node itself
 	utils.StartNode(stack)
 
@@ -324,17 +325,17 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	}()
 	// Start auxiliary services if enabled
 
-	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err != nil {
-		utils.Fatalf("Ethereum service not running: %v", err)
+	ethBackend, ok := backend.(*eth.EthAPIBackend)
+	if !ok {
+		utils.Fatalf("Ethereum service not running")
 	}
-	if engine, ok := ethereum.Engine().(*XDPoS.XDPoS); ok {
+	if engine, ok := ethBackend.Engine().(*XDPoS.XDPoS); ok {
 		go func() {
 			started := false
 			ok := false
 			slaveMode := ctx.IsSet(utils.XDCSlaveModeFlag.Name)
 			var err error
-			ok, err = ethereum.ValidateMasternode()
+			ok, err = ethBackend.ValidateMasternode()
 			if err != nil {
 				utils.Fatalf("Can't verify masternode permission: %v", err)
 			}
@@ -349,13 +350,13 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 						type threaded interface {
 							SetThreads(threads int)
 						}
-						if th, ok := ethereum.Engine().(threaded); ok {
+						if th, ok := ethBackend.Engine().(threaded); ok {
 							th.SetThreads(threads)
 						}
 					}
 					// Set the gas price to the limits from the CLI and start mining
-					ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
-					if err := ethereum.StartStaking(true); err != nil {
+					ethBackend.TxPool().SetGasPrice(cfg.Eth.GasPrice)
+					if err := ethBackend.StartStaking(true); err != nil {
 						utils.Fatalf("Failed to start staking: %v", err)
 					}
 					started = true
@@ -366,17 +367,17 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 			for range core.CheckpointCh {
 				log.Info("Checkpoint!!! It's time to reconcile node's state...")
 				log.Info("Update consensus parameters")
-				chain := ethereum.BlockChain()
+				chain := ethBackend.BlockChain()
 				engine.UpdateParams(chain.CurrentHeader())
 
-				ok, err = ethereum.ValidateMasternode()
+				ok, err = ethBackend.ValidateMasternode()
 				if err != nil {
 					utils.Fatalf("Can't verify masternode permission: %v", err)
 				}
 				if !ok {
 					if started {
 						log.Info("Only masternode can propose and verify blocks. Cancelling staking on this node...")
-						ethereum.StopStaking()
+						ethBackend.StopStaking()
 						started = false
 						log.Info("Cancelled mining mode!!!")
 					}
@@ -391,13 +392,13 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 							type threaded interface {
 								SetThreads(threads int)
 							}
-							if th, ok := ethereum.Engine().(threaded); ok {
+							if th, ok := ethBackend.Engine().(threaded); ok {
 								th.SetThreads(threads)
 							}
 						}
 						// Set the gas price to the limits from the CLI and start mining
-						ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
-						if err := ethereum.StartStaking(true); err != nil {
+						ethBackend.TxPool().SetGasPrice(cfg.Eth.GasPrice)
+						if err := ethBackend.StartStaking(true); err != nil {
 							utils.Fatalf("Failed to start staking: %v", err)
 						}
 						started = true

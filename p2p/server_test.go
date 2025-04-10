@@ -243,7 +243,7 @@ func TestServerTaskScheduling(t *testing.T) {
 		Config:  Config{MaxPeers: 10},
 		quit:    make(chan struct{}),
 		ntab:    fakeTable{},
-		running: true,
+		Running: true,
 		log:     log.New(),
 	}
 	srv.loopWG.Add(1)
@@ -288,7 +288,7 @@ func TestServerManyTasks(t *testing.T) {
 		srv = &Server{
 			quit:    make(chan struct{}),
 			ntab:    fakeTable{},
-			running: true,
+			Running: true,
 			log:     log.New(),
 		}
 		done       = make(chan *testTask)

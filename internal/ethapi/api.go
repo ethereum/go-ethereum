@@ -905,7 +905,7 @@ func (s *PublicBlockChainAPI) GetMasternodes(ctx context.Context, b *types.Block
 		if prevBlockNumber >= latestBlockNumber || !s.b.ChainConfig().IsTIP2019(b.Number()) {
 			prevBlockNumber = curBlockNumber
 		}
-		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+		if engine, ok := s.b.Engine().(*XDPoS.XDPoS); ok {
 			// Get block epoc latest.
 			return engine.GetMasternodesByNumber(s.chainReader, prevBlockNumber), nil
 		} else {
@@ -980,7 +980,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 
 	var maxMasternodes int
 	if header.Number.Cmp(s.b.ChainConfig().XDPoS.V2.SwitchBlock) == 1 {
-		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+		if engine, ok := s.b.Engine().(*XDPoS.XDPoS); ok {
 			round, err := engine.EngineV2.GetRoundNumber(header)
 			if err != nil {
 				return result, err
@@ -1008,7 +1008,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 	}
 
 	// Get masternode list
-	if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+	if engine, ok := s.b.Engine().(*XDPoS.XDPoS); ok {
 		masternodes = engine.GetMasternodesFromCheckpointHeader(header)
 		if len(masternodes) == 0 {
 			log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes), "blockNum", header.Number.Uint64())
@@ -1139,7 +1139,7 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 	}
 
 	// Find candidates that have masternode status
-	if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+	if engine, ok := s.b.Engine().(*XDPoS.XDPoS); ok {
 		masternodes = engine.GetMasternodesFromCheckpointHeader(header)
 		if len(masternodes) == 0 {
 			log.Error("Failed to get masternodes", "err", err, "len(masternodes)", len(masternodes), "blockNum", header.Number.Uint64())
@@ -1175,7 +1175,7 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 
 	var maxMasternodes int
 	if header.Number.Cmp(s.b.ChainConfig().XDPoS.V2.SwitchBlock) == 1 {
-		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+		if engine, ok := s.b.Engine().(*XDPoS.XDPoS); ok {
 			round, err := engine.EngineV2.GetRoundNumber(header)
 			if err != nil {
 				return result, err
@@ -1251,7 +1251,7 @@ func (s *PublicBlockChainAPI) GetCheckpointFromEpoch(ctx context.Context, epochN
 
 	if epochNum == rpc.LatestEpochNumber {
 		blockNumer := s.b.CurrentBlock().Number()
-		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+		if engine, ok := s.b.Engine().(*XDPoS.XDPoS); ok {
 			var err error
 			var currentEpoch uint64
 			checkpointNumber, currentEpoch, err = engine.GetCurrentEpochSwitchBlock(s.chainReader, blockNumer)
@@ -1340,7 +1340,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if block == nil {
 		return nil, fmt.Errorf("nil block in DoCall: number=%d, hash=%s", header.Number.Uint64(), header.Hash().Hex())
 	}
-	author, err := b.GetEngine().Author(block.Header())
+	author, err := b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -1672,7 +1672,7 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx bool, ctx context.Context) (map[string]interface{}, error) {
 	fields := RPCMarshalHeader(b.Header())
 	fields["size"] = hexutil.Uint64(b.Size())
-	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(b.Hash()))
+	fields["totalDifficulty"] = (*hexutil.Big)(s.b.GetTd(context.Background(), b.Hash()))
 
 	if inclTx {
 		formatTx := func(tx *types.Transaction) (interface{}, error) {
@@ -1720,7 +1720,7 @@ func (s *PublicBlockChainAPI) findNearestSignedBlock(ctx context.Context, b *typ
 	}
 
 	// Get block epoc latest
-	checkpointNumber, _, err := s.b.GetEngine().(*XDPoS.XDPoS).GetCurrentEpochSwitchBlock(s.chainReader, big.NewInt(int64(signedBlockNumber)))
+	checkpointNumber, _, err := s.b.Engine().(*XDPoS.XDPoS).GetCurrentEpochSwitchBlock(s.chainReader, big.NewInt(int64(signedBlockNumber)))
 	if err != nil {
 		log.Error("[findNearestSignedBlock] Error while trying to get current Epoch switch block", "Number", signedBlockNumber)
 	}
@@ -1740,7 +1740,7 @@ findFinalityOfBlock return finality of a block
 Use blocksHashCache for to keep track - refer core/blockchain.go for more detail
 */
 func (s *PublicBlockChainAPI) findFinalityOfBlock(ctx context.Context, b *types.Block, masternodes []common.Address) (uint, error) {
-	engine, _ := s.b.GetEngine().(*XDPoS.XDPoS)
+	engine, _ := s.b.Engine().(*XDPoS.XDPoS)
 	signedBlock := s.findNearestSignedBlock(ctx, b)
 
 	if signedBlock == nil {
@@ -1839,7 +1839,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlockSigners(b *types.Block, ctx context.
 		return []common.Address{}, err
 	}
 
-	engine, ok := s.b.GetEngine().(*XDPoS.XDPoS)
+	engine, ok := s.b.Engine().(*XDPoS.XDPoS)
 	if !ok {
 		log.Error("Undefined XDPoS consensus engine")
 		return []common.Address{}, nil
@@ -2018,7 +2018,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if block == nil {
 		return nil, 0, nil, fmt.Errorf("nil block in AccessList: number=%d, hash=%s", header.Number.Uint64(), header.Hash().Hex())
 	}
-	author, err := b.GetEngine().Author(block.Header())
+	author, err := b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -2619,7 +2619,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBid(ctx context.Context, baseToken
 	if XDCxService == nil {
 		return result, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return result, err
 	}
@@ -2644,7 +2644,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestAsk(ctx context.Context, baseToken
 	if XDCxService == nil {
 		return result, errors.New("not found XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return result, err
 	}
@@ -2668,7 +2668,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBidTree(ctx context.Context, baseToken
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2692,7 +2692,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetPrice(ctx context.Context, baseToken, 
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2716,7 +2716,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLastEpochPrice(ctx context.Context, ba
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2740,7 +2740,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetCurrentEpochPrice(ctx context.Context,
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2764,7 +2764,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetAskTree(ctx context.Context, baseToken
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2788,7 +2788,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetOrderById(ctx context.Context, baseTok
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2813,7 +2813,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetTradingOrderBookInfo(ctx context.Conte
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2837,7 +2837,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLiquidationPriceTree(ctx context.Conte
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2861,7 +2861,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetInvestingTree(ctx context.Context, len
 	if lendingService == nil {
 		return nil, errors.New("XDCX Lending service not found")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2885,7 +2885,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBorrowingTree(ctx context.Context, len
 	if lendingService == nil {
 		return nil, errors.New("XDCX Lending service not found")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2909,7 +2909,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderBookInfo(tx context.Contex
 	if lendingService == nil {
 		return nil, errors.New("XDCX Lending service not found")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2933,7 +2933,7 @@ func (s *PublicXDCXTransactionPoolAPI) getLendingOrderTree(ctx context.Context, 
 	if lendingService == nil {
 		return nil, errors.New("not find XDCX Lending service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2957,7 +2957,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeTree(ctx context.Context, 
 	if lendingService == nil {
 		return nil, errors.New("not find XDCX lending service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -2981,7 +2981,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLiquidationTimeTree(ctx context.Contex
 	if lendingService == nil {
 		return nil, errors.New("not find XDCX Lending service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -3005,7 +3005,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderCount(ctx context.Context,
 	if lendingService == nil {
 		return nil, errors.New("not find XDCX Lending service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -3027,7 +3027,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestInvesting(ctx context.Context, len
 	if lendingService == nil {
 		return result, errors.New("not find XDCX Lending service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return result, err
 	}
@@ -3049,7 +3049,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBorrowing(ctx context.Context, len
 	if lendingService == nil {
 		return result, errors.New("not find XDCX Lending service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return result, err
 	}
@@ -3070,7 +3070,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBids(ctx context.Context, baseToken, q
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -3094,7 +3094,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetAsks(ctx context.Context, baseToken, q
 	if XDCxService == nil {
 		return nil, errors.New("not find XDCX service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -3118,7 +3118,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetInvests(ctx context.Context, lendingTo
 	if lendingService == nil {
 		return nil, errors.New("XDCX Lending service not found")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -3142,7 +3142,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBorrows(ctx context.Context, lendingTo
 	if lendingService == nil {
 		return nil, errors.New("XDCX Lending service not found")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -3200,7 +3200,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderById(ctx context.Context, 
 	if lendingService == nil {
 		return lendingItem, errors.New("not find XDCX lending service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return lendingItem, err
 	}
@@ -3227,7 +3227,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeById(ctx context.Context, 
 	if lendingService == nil {
 		return lendingItem, errors.New("not find XDCX Lending service")
 	}
-	author, err := s.b.GetEngine().Author(block.Header())
+	author, err := s.b.Engine().Author(block.Header())
 	if err != nil {
 		return lendingItem, err
 	}
@@ -3535,7 +3535,7 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 		mapMN[node] = true
 	}
 	signer := types.MakeSigner(b.ChainConfig(), new(big.Int).SetUint64(blockNumber))
-	if engine, ok := b.GetEngine().(*XDPoS.XDPoS); ok {
+	if engine, ok := b.Engine().(*XDPoS.XDPoS); ok {
 		limitNumber := blockNumber + common.LimitTimeFinality
 		currentNumber := b.CurrentBlock().NumberU64()
 		if limitNumber > currentNumber {

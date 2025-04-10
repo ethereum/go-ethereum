@@ -75,11 +75,11 @@ func (e *ExecAdapter) Name() string {
 
 // NewNode returns a new ExecNode using the given config
 func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
-	if len(config.Services) == 0 {
-		return nil, errors.New("node must have at least one service")
+	if len(config.Lifecycles) == 0 {
+		return nil, errors.New("node must have at least one service lifecycle")
 	}
-	for _, service := range config.Services {
-		if _, exists := serviceFuncs[service]; !exists {
+	for _, service := range config.Lifecycles {
+		if _, exists := lifecycleConstructorFuncs[service]; !exists {
 			return nil, fmt.Errorf("unknown node service %q", service)
 		}
 	}
@@ -238,7 +238,7 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 func (n *ExecNode) execCommand() *exec.Cmd {
 	return &exec.Cmd{
 		Path: reexec.Self(),
-		Args: []string{"p2p-node", strings.Join(n.Config.Node.Services, ","), n.ID.String()},
+		Args: []string{"p2p-node", strings.Join(n.Config.Node.Lifecycles, ","), n.ID.String()},
 	}
 }
 
@@ -426,43 +426,36 @@ func execP2PNode() {
 		log.Crit("error creating node stack", "err", err)
 	}
 
-	// register the services, collecting them into a map so we can wrap
-	// them in a snapshot service
-	services := make(map[string]node.Service, len(serviceNames))
+	// Register the services, collecting them into a map so they can
+	// be accessed by the snapshot API.
+	services := make(map[string]node.Lifecycle, len(serviceNames))
 	for _, name := range serviceNames {
-		serviceFunc, exists := serviceFuncs[name]
+		lifecycleFunc, exists := lifecycleConstructorFuncs[name]
 		if !exists {
 			log.Crit("unknown node service", "name", name)
 		}
-		constructor := func(nodeCtx *node.ServiceContext) (node.Service, error) {
-			ctx := &ServiceContext{
-				RPCDialer:   &wsRPCDialer{addrs: conf.PeerAddrs},
-				NodeContext: nodeCtx,
-				Config:      conf.Node,
-			}
-			if conf.Snapshots != nil {
-				ctx.Snapshot = conf.Snapshots[name]
-			}
-			service, err := serviceFunc(ctx)
-			if err != nil {
-				return nil, err
-			}
-			services[name] = service
-			return service, nil
+		ctx := &ServiceContext{
+			RPCDialer: &wsRPCDialer{addrs: conf.PeerAddrs},
+			Config:    conf.Node,
 		}
-		if err := stack.Register(constructor); err != nil {
+		if conf.Snapshots != nil {
+			ctx.Snapshot = conf.Snapshots[name]
+		}
+		service, err := lifecycleFunc(ctx, stack)
+		if err != nil {
 			log.Crit("error starting service", "name", name, "err", err)
 		}
+		services[name] = service
+		stack.RegisterLifecycle(service)
 	}
 
-	// register the snapshot service
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return &snapshotService{services}, nil
-	}); err != nil {
-		log.Crit("error starting snapshot service", "err", err)
-	}
+	// Add the snapshot API.
+	stack.RegisterAPIs([]rpc.API{{
+		Namespace: "simulation",
+		Version:   "1.0",
+		Service:   SnapshotAPI{services},
+	}})
 
-	// start the stack
 	if err := stack.Start(); err != nil {
 		log.Crit("error stating node stack", "err", err)
 	}
@@ -474,37 +467,11 @@ func execP2PNode() {
 		defer signal.Stop(sigc)
 		<-sigc
 		log.Info("Received SIGTERM, shutting down...")
-		stack.Stop()
+		stack.Close()
 	}()
 
 	// wait for the stack to exit
 	stack.Wait()
-}
-
-// snapshotService is a node.Service which wraps a list of services and
-// exposes an API to generate a snapshot of those services
-type snapshotService struct {
-	services map[string]node.Service
-}
-
-func (s *snapshotService) APIs() []rpc.API {
-	return []rpc.API{{
-		Namespace: "simulation",
-		Version:   "1.0",
-		Service:   SnapshotAPI{s.services},
-	}}
-}
-
-func (s *snapshotService) Protocols() []p2p.Protocol {
-	return nil
-}
-
-func (s *snapshotService) Start(*p2p.Server) error {
-	return nil
-}
-
-func (s *snapshotService) Stop() error {
-	return nil
 }
 
 const (
@@ -513,7 +480,7 @@ const (
 
 // SnapshotAPI provides an RPC method to create snapshots of services
 type SnapshotAPI struct {
-	services map[string]node.Service
+	services map[string]node.Lifecycle
 }
 
 func (api SnapshotAPI) Snapshot() (map[string][]byte, error) {
