@@ -290,10 +290,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	eth.dropper = newDropper(&dropperConfig{
-		maxDialPeers:    eth.p2pServer.MaxDialedConns(),
-		maxInboundPeers: eth.p2pServer.MaxInboundConns(),
-	})
+	eth.dropper = newDropper(eth.p2pServer.MaxDialedConns(), eth.p2pServer.MaxInboundConns())
 
 	eth.miner = miner.New(eth, config.Miner, eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
