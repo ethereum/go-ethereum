@@ -68,12 +68,15 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 	} else {
 		// Instantiate eradb outside of freezer to avoid
 		// creating an instance for the state freezer.
-		eraDatadir := path.Join(datadir, "era")
-		eradb, err := eradb.New(eraDatadir)
+		var (
+			edb        *eradb.EraDatabase
+			eraDatadir = path.Join(datadir, "era")
+		)
+		edb, err = eradb.New(eraDatadir)
 		if err != nil {
 			return nil, err
 		}
-		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs, eradb)
+		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs, edb)
 	}
 	if err != nil {
 		return nil, err
