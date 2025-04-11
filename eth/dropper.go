@@ -88,8 +88,6 @@ func newDropper(maxDialPeers, maxInboundPeers int) *dropper {
 	if peerDropIntervalMin > peerDropIntervalMax {
 		panic("peerDropIntervalMin duration must be less than or equal to peerDropIntervalMax duration")
 	}
-	log.Info("New Dropper", "maxDialPeers", cm.maxDialPeers, "threshold", peerDropThreshold,
-		"intervalMin", peerDropIntervalMin, "intervalMax", peerDropIntervalMax)
 	return cm
 }
 
@@ -132,7 +130,8 @@ func (cm *dropper) dropRandomPeer() bool {
 	droppable := slices.DeleteFunc(peers, selectDoNotDrop)
 	if len(droppable) > 0 {
 		p := droppable[mrand.Intn(len(droppable))]
-		log.Debug("Dropping random peer", "id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()), "inbound", p.Inbound(), "peercountbefore", len(peers))
+		log.Debug("Dropping random peer", "inbound", p.Inbound(),
+			"id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()), "peercountbefore", len(peers))
 		p.Disconnect(p2p.DiscTooManyPeers)
 		if p.Inbound() {
 			droppedInbound.Mark(1)
