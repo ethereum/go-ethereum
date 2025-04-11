@@ -34,9 +34,10 @@ type Contract struct {
 	jumpdests map[common.Hash]bitvec // Aggregated result of JUMPDEST analysis.
 	analysis  bitvec                 // Locally cached result of JUMPDEST analysis
 
-	Code     []byte
-	CodeHash common.Hash
-	Input    []byte
+	Code      []byte
+	Container *Container
+	CodeHash  common.Hash
+	Input     []byte
 
 	// is the execution frame represented by this object a contract deployment
 	IsDeployment bool
@@ -113,7 +114,6 @@ func (c *Contract) GetOp(n uint64) OpCode {
 	if n < uint64(len(c.Code)) {
 		return OpCode(c.Code[n])
 	}
-
 	return STOP
 }
 
@@ -158,7 +158,13 @@ func (c *Contract) Value() *uint256.Int {
 	return c.value
 }
 
-// SetCallCode sets the code of the contract,
+// IsEOF returns whether the contract is EOF.
+func (c *Contract) IsEOF() bool {
+	return c.Container != nil
+}
+
+// SetCallCode sets the code of the contract and address of the backing data
+// object
 func (c *Contract) SetCallCode(hash common.Hash, code []byte) {
 	c.Code = code
 	c.CodeHash = hash
