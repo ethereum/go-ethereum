@@ -1391,6 +1391,8 @@ func (p *BlobPool) add(tx *types.Transaction) (err error) {
 		switch {
 		case errors.Is(err, txpool.ErrUnderpriced):
 			addUnderpricedMeter.Mark(1)
+		case errors.Is(err, txpool.ErrTxGasPriceTooLow):
+			addUnderpricedMeter.Mark(1)
 		case errors.Is(err, core.ErrNonceTooLow):
 			addStaleMeter.Mark(1)
 		case errors.Is(err, core.ErrNonceTooHigh):
