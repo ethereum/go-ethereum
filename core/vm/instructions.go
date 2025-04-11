@@ -964,10 +964,9 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	)
 	*pc += 1
 	if *pc < codeLen {
-		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
-	} else {
-		scope.Stack.push(integer.Clear())
+		integer.SetUint64(uint64(scope.Contract.Code[*pc]))
 	}
+	scope.Stack.push(integer)
 	return nil, nil
 }
 
@@ -978,12 +977,11 @@ func opPush2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 		integer = new(uint256.Int)
 	)
 	if *pc+2 < codeLen {
-		scope.Stack.push(integer.SetBytes2(scope.Contract.Code[*pc+1 : *pc+3]))
+		integer.SetBytes2(scope.Contract.Code[*pc+1 : *pc+3])
 	} else if *pc+1 < codeLen {
-		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc+1]) << 8))
-	} else {
-		scope.Stack.push(integer.Clear())
+		integer.SetUint64(uint64(scope.Contract.Code[*pc+1]) << 8)
 	}
+	scope.Stack.push(integer)
 	*pc += 2
 	return nil, nil
 }
