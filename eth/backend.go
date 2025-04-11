@@ -62,6 +62,16 @@ import (
 	gethversion "github.com/ethereum/go-ethereum/version"
 )
 
+const (
+	// This is the fairness knob for the discovery mixer. When looking for peers, we'll
+	// wait this long for a single source of candidates before moving on and trying other
+	// sources. If this timeout expires, the source will be skipped in this round, but it
+	// will continue to fetch in the background and will have a chance with a new timeout
+	// in the next rounds, giving it overall more time but a proportionally smaller share.
+	// We expect a normal source to produce ~10 candidates per second.
+	discmixTimeout = 100 * time.Millisecond
+)
+
 // Config contains the configuration options of the ETH protocol.
 // Deprecated: use ethconfig.Config instead.
 type Config = ethconfig.Config
@@ -184,7 +194,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		networkID:       networkID,
 		gasPrice:        config.Miner.GasPrice,
 		p2pServer:       stack.Server(),
-		discmix:         enode.NewFairMix(0),
+		discmix:         enode.NewFairMix(discmixTimeout),
 		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
 	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -484,7 +494,7 @@ func (s *Ethereum) setupDiscovery() error {
 		if err != nil {
 			return err
 		}
-		s.discmix.AddSource(iter)
+		s.discmix.AddSource(iter, "DNSdiscEth")
 	}
 
 	// Add snap nodes from DNS.
@@ -493,14 +503,23 @@ func (s *Ethereum) setupDiscovery() error {
 		if err != nil {
 			return err
 		}
-		s.discmix.AddSource(iter)
+		s.discmix.AddSource(iter, "DNSdiscSnap")
+	}
+
+	// Add DHT nodes from discv4.
+	if s.p2pServer.DiscoveryV4() != nil {
+		asyncFilter := s.p2pServer.DiscoveryV4().RequestENR
+		filter := eth.NewNodeFilter(s.blockchain)
+		iter := enode.AsyncFilter(s.p2pServer.DiscoveryV4().RandomNodes(), asyncFilter, 16)
+		iter = enode.Filter(iter, filter)
+		s.discmix.AddSource(iter, "DiscoveryV4")
 	}
 
 	// Add DHT nodes from discv5.
 	if s.p2pServer.DiscoveryV5() != nil {
 		filter := eth.NewNodeFilter(s.blockchain)
 		iter := enode.Filter(s.p2pServer.DiscoveryV5().RandomNodes(), filter)
-		s.discmix.AddSource(iter)
+		s.discmix.AddSource(iter, "DiscoveryV5")
 	}
 
 	return nil

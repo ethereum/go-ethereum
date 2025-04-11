@@ -123,6 +123,81 @@ func (f *filterIter) Next() bool {
 	return false
 }
 
+// AsyncFilterIter wraps an iterator such that Next only returns nodes for which
+// the 'check' function returns a (possibly modified) node.
+type AsyncFilterIter struct {
+	it     Iterator                   // the iterator to filter
+	check  func(*Node) (*Node, error) // the blocking check function
+	slots  chan struct{}              // the slots for parallel checking
+	passed chan *Node                 // channel to collect passed nodes
+	closed chan struct{}              // channel to override passed when closing
+	buffer *Node                      // buffer to serve the Node call
+}
+
+// AsyncFilter creates an iterator which checks nodes in parallel.
+func AsyncFilter(it Iterator, check func(*Node) (*Node, error), workers int) Iterator {
+	f := &AsyncFilterIter{it, check, make(chan struct{}, workers), make(chan *Node), make(chan struct{}), nil}
+
+	// create slots
+	for range cap(f.slots) {
+		f.slots <- struct{}{}
+	}
+
+	go func() {
+		// read from the iterator and start checking nodes in parallel
+		// when a node is checked, it will be sent to the passed channel
+		// and the slot will be released
+		for range f.slots {
+			if f.it.Next() {
+				if n := f.it.Node(); n != nil {
+					// check the node async, in a separate goroutine
+					go func() {
+						if nn, err := f.check(n); err == nil {
+							select {
+							case f.passed <- nn:
+							case <-f.closed: // bale out if downstream is already closed and not calling Next
+							}
+						}
+						f.slots <- struct{}{}
+					}()
+				} else {
+					// this is not supposed to happen
+					f.slots <- struct{}{}
+					break
+				}
+			} else {
+				// the iterator has ended
+				f.slots <- struct{}{}
+				break
+			}
+		}
+	}()
+
+	return f
+}
+
+// Next blocks until a node is available or the iterator is closed.
+func (f *AsyncFilterIter) Next() bool {
+	f.buffer = <-f.passed
+	return f.buffer != nil
+}
+
+// Node returns the current node.
+func (f *AsyncFilterIter) Node() *Node {
+	return f.buffer
+}
+
+// Close ends the iterator, also closing the wrapped iterator.
+func (f *AsyncFilterIter) Close() {
+	f.it.Close()
+	close(f.closed) // override the passed channel
+	for range cap(f.slots) {
+		<-f.slots
+	}
+	close(f.slots)
+	close(f.passed)
+}
+
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
 // only when Close is called. Source iterators added via AddSource are removed from the
 // mix when they end.
@@ -149,6 +224,7 @@ type mixSource struct {
 	it      Iterator
 	next    chan *Node
 	timeout time.Duration
+	name    string
 }
 
 // NewFairMix creates a mixer.
@@ -167,7 +243,7 @@ func NewFairMix(timeout time.Duration) *FairMix {
 }
 
 // AddSource adds a source of nodes.
-func (m *FairMix) AddSource(it Iterator) {
+func (m *FairMix) AddSource(it Iterator, name ...string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -175,7 +251,10 @@ func (m *FairMix) AddSource(it Iterator) {
 		return
 	}
 	m.wg.Add(1)
-	source := &mixSource{it, make(chan *Node), m.timeout}
+	source := &mixSource{it, make(chan *Node), m.timeout, ""}
+	if len(name) > 0 {
+		source.name = name[0]
+	}
 	m.sources = append(m.sources, source)
 	go m.runSource(m.closed, source)
 }
