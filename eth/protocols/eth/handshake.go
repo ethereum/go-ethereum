@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -35,44 +36,112 @@ const (
 
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *Peer) Handshake(network uint64, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) error {
-	// Send out own handshake in a new thread
+func (p *Peer) Handshake(networkID uint64, chain *core.BlockChain) error {
+	switch p.version {
+	case ETH69:
+		return p.handshake69(networkID, chain)
+	case ETH68:
+		return p.handshake68(networkID, chain)
+	default:
+		return errors.New("unsupported protocol version")
+	}
+}
+
+func (p *Peer) handshake68(networkID uint64, chain *core.BlockChain) error {
+	var (
+		genesis    = chain.Genesis()
+		latest     = chain.CurrentBlock()
+		forkID     = forkid.NewID(chain.Config(), genesis, latest.Number.Uint64(), latest.Time)
+		forkFilter = forkid.NewFilter(chain)
+	)
 	errc := make(chan error, 2)
-
-	var status StatusPacket // safe to read after two values have been received from errc
-
 	go func() {
-		pkt := &StatusPacket{
+		pkt := &StatusPacket68{
 			ProtocolVersion: uint32(p.version),
-			NetworkID:       network,
-			Head:            head,
-			Genesis:         genesis,
+			NetworkID:       networkID,
+			Head:            latest.Hash(),
+			Genesis:         genesis.Hash(),
 			ForkID:          forkID,
 		}
 		errc <- p2p.Send(p.rw, StatusMsg, pkt)
 	}()
+	var status StatusPacket68 // safe to read after two values have been received from errc
 	go func() {
-		errc <- p.readStatus(network, &status, genesis, forkFilter)
+		errc <- p.readStatus68(networkID, &status, genesis.Hash(), forkFilter)
 	}()
-	timeout := time.NewTimer(handshakeTimeout)
-	defer timeout.Stop()
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-errc:
-			if err != nil {
-				markError(p, err)
-				return err
-			}
-		case <-timeout.C:
-			markError(p, p2p.DiscReadTimeout)
-			return p2p.DiscReadTimeout
-		}
+
+	return waitForHandshake(errc, p)
+}
+
+func (p *Peer) readStatus68(networkID uint64, status *StatusPacket68, genesis common.Hash, forkFilter forkid.Filter) error {
+	if err := p.readStatusMsg(status); err != nil {
+		return err
+	}
+	if status.NetworkID != networkID {
+		return fmt.Errorf("%w: %d (!= %d)", errNetworkIDMismatch, status.NetworkID, networkID)
+	}
+	if uint(status.ProtocolVersion) != p.version {
+		return fmt.Errorf("%w: %d (!= %d)", errProtocolVersionMismatch, status.ProtocolVersion, p.version)
+	}
+	if status.Genesis != genesis {
+		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.Genesis, genesis)
+	}
+	if err := forkFilter(status.ForkID); err != nil {
+		return fmt.Errorf("%w: %v", errForkIDRejected, err)
 	}
 	return nil
 }
 
-// readStatus reads the remote handshake message.
-func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.Hash, forkFilter forkid.Filter) error {
+func (p *Peer) handshake69(networkID uint64, chain *core.BlockChain) error {
+	var (
+		genesis     = chain.Genesis()
+		latest      = chain.CurrentBlock()
+		forkID      = forkid.NewID(chain.Config(), genesis, latest.Number.Uint64(), latest.Time)
+		forkFilter  = forkid.NewFilter(chain)
+		earliest, _ = chain.HistoryPruningCutoff()
+	)
+	errc := make(chan error, 2)
+	go func() {
+		pkt := &StatusPacket69{
+			ProtocolVersion: uint32(p.version),
+			NetworkID:       networkID,
+			Genesis:         genesis.Hash(),
+			ForkID:          forkID,
+			EarliestBlock:   earliest,
+			LatestBlock:     latest.Number.Uint64(),
+			LatestBlockHash: latest.Hash(),
+		}
+		errc <- p2p.Send(p.rw, StatusMsg, pkt)
+	}()
+	var status StatusPacket69 // safe to read after two values have been received from errc
+	go func() {
+		errc <- p.readStatus69(networkID, &status, genesis.Hash(), forkFilter)
+	}()
+
+	return waitForHandshake(errc, p)
+}
+
+func (p *Peer) readStatus69(networkID uint64, status *StatusPacket69, genesis common.Hash, forkFilter forkid.Filter) error {
+	if err := p.readStatusMsg(status); err != nil {
+		return err
+	}
+	if status.NetworkID != networkID {
+		return fmt.Errorf("%w: %d (!= %d)", errNetworkIDMismatch, status.NetworkID, networkID)
+	}
+	if uint(status.ProtocolVersion) != p.version {
+		return fmt.Errorf("%w: %d (!= %d)", errProtocolVersionMismatch, status.ProtocolVersion, p.version)
+	}
+	if status.Genesis != genesis {
+		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.Genesis, genesis)
+	}
+	if err := forkFilter(status.ForkID); err != nil {
+		return fmt.Errorf("%w: %v", errForkIDRejected, err)
+	}
+	return nil
+}
+
+// readStatusMsg reads the first message on the connection.
+func (p *Peer) readStatusMsg(dst any) error {
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -83,21 +152,26 @@ func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.H
 	if msg.Size > maxMessageSize {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
 	}
-	// Decode the handshake and make sure everything matches
-	if err := msg.Decode(&status); err != nil {
+	if err := msg.Decode(dst); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	if status.NetworkID != network {
-		return fmt.Errorf("%w: %d (!= %d)", errNetworkIDMismatch, status.NetworkID, network)
-	}
-	if uint(status.ProtocolVersion) != p.version {
-		return fmt.Errorf("%w: %d (!= %d)", errProtocolVersionMismatch, status.ProtocolVersion, p.version)
-	}
-	if status.Genesis != genesis {
-		return fmt.Errorf("%w: %x (!= %x)", errGenesisMismatch, status.Genesis, genesis)
-	}
-	if err := forkFilter(status.ForkID); err != nil {
-		return fmt.Errorf("%w: %v", errForkIDRejected, err)
+	return nil
+}
+
+func waitForHandshake(errc <-chan error, p *Peer) error {
+	timeout := time.NewTimer(handshakeTimeout)
+	defer timeout.Stop()
+	for range 2 {
+		select {
+		case err := <-errc:
+			if err != nil {
+				markError(p, err)
+				return err
+			}
+		case <-timeout.C:
+			markError(p, p2p.DiscReadTimeout)
+			return p2p.DiscReadTimeout
+		}
 	}
 	return nil
 }

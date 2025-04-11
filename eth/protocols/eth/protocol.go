@@ -44,7 +44,7 @@ var ProtocolVersions = []uint{ETH69, ETH68}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH68: 17, ETH69: 17}
+var protocolLengths = map[uint]uint64{ETH68: 17, ETH69: 18}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -63,6 +63,7 @@ const (
 	PooledTransactionsMsg         = 0x0a
 	GetReceiptsMsg                = 0x0f
 	ReceiptsMsg                   = 0x10
+	BlockRangeUpdateMsg           = 0x11
 )
 
 var (
@@ -83,13 +84,25 @@ type Packet interface {
 }
 
 // StatusPacket is the network packet for the status message.
-type StatusPacket struct {
+type StatusPacket68 struct {
 	ProtocolVersion uint32
 	NetworkID       uint64
 	TD              *big.Int
 	Head            common.Hash
 	Genesis         common.Hash
 	ForkID          forkid.ID
+}
+
+// StatusPacket69 is the network packet for the status message.
+type StatusPacket69 struct {
+	ProtocolVersion uint32
+	NetworkID       uint64
+	Genesis         common.Hash
+	ForkID          forkid.ID
+	// initial available block range
+	EarliestBlock   uint64
+	LatestBlock     uint64
+	LatestBlockHash common.Hash
 }
 
 // NewBlockHashesPacket is the network packet for the block announcements.
@@ -312,8 +325,18 @@ type PooledTransactionsRLPPacket struct {
 	PooledTransactionsRLPResponse
 }
 
-func (*StatusPacket) Name() string { return "Status" }
-func (*StatusPacket) Kind() byte   { return StatusMsg }
+// BlockRangeUpdatePacket is an announcement of the node's available block range.
+type BlockRangeUpdatePacket struct {
+	EarliestBlock   uint64
+	LatestBlock     uint64
+	LatestBlockHash common.Hash
+}
+
+func (*StatusPacket68) Name() string { return "Status" }
+func (*StatusPacket68) Kind() byte   { return StatusMsg }
+
+func (*StatusPacket69) Name() string { return "Status" }
+func (*StatusPacket69) Kind() byte   { return StatusMsg }
 
 func (*NewBlockHashesPacket) Name() string { return "NewBlockHashes" }
 func (*NewBlockHashesPacket) Kind() byte   { return NewBlockHashesMsg }
@@ -353,3 +376,6 @@ func (*ReceiptsResponse) Kind() byte   { return ReceiptsMsg }
 
 func (*ReceiptsRLPResponse) Name() string { return "Receipts" }
 func (*ReceiptsRLPResponse) Kind() byte   { return ReceiptsMsg }
+
+func (*BlockRangeUpdatePacket) Name() string { return "BlockRangeUpdate" }
+func (*BlockRangeUpdatePacket) Kind() byte   { return BlockRangeUpdateMsg }
