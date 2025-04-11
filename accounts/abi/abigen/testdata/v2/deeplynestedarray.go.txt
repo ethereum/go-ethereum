@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // DeeplyNestedArrayMetaData contains all meta data concerning the DeeplyNestedArray contract.
@@ -55,7 +57,7 @@ func (c *DeeplyNestedArray) Instance(backend bind.ContractBackend, addr common.A
 // the contract method with ID 0x98ed1856.
 //
 // Solidity: function deepUint64Array(uint256 , uint256 , uint256 ) view returns(uint64)
-func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(arg0 *big.Int, arg1 *big.Int, arg2 *big.Int) []byte {
+func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(arg0 *uint256.Int, arg1 *uint256.Int, arg2 *uint256.Int) []byte {
 	enc, err := deeplyNestedArray.abi.Pack("deepUint64Array", arg0, arg1, arg2)
 	if err != nil {
 		panic(err)

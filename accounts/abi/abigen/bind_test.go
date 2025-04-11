@@ -69,10 +69,54 @@ var bindTests = []struct {
 		`https://ethereum.org/token`,
 		[]string{`60606040526040516107fd3803806107fd83398101604052805160805160a05160c051929391820192909101600160a060020a0333166000908152600360209081526040822086905581548551838052601f6002600019610100600186161502019093169290920482018390047f290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e56390810193919290918801908390106100e857805160ff19168380011785555b506101189291505b8082111561017157600081556001016100b4565b50506002805460ff19168317905550505050610658806101a56000396000f35b828001600101855582156100ac579182015b828111156100ac5782518260005055916020019190600101906100fa565b50508060016000509080519060200190828054600181600116156101000203166002900490600052602060002090601f016020900481019282601f1061017557805160ff19168380011785555b506100c89291506100b4565b5090565b82800160010185558215610165579182015b8281111561016557825182600050559160200191906001019061018756606060405236156100775760e060020a600035046306fdde03811461007f57806323b872dd146100dc578063313ce5671461010e57806370a082311461011a57806395d89b4114610132578063a9059cbb1461018e578063cae9ca51146101bd578063dc3080f21461031c578063dd62ed3e14610341575b610365610002565b61036760008054602060026001831615610100026000190190921691909104601f810182900490910260809081016040526060828152929190828280156104eb5780601f106104c0576101008083540402835291602001916104eb565b6103d5600435602435604435600160a060020a038316600090815260036020526040812054829010156104f357610002565b6103e760025460ff1681565b6103d560043560036020526000908152604090205481565b610367600180546020600282841615610100026000190190921691909104601f810182900490910260809081016040526060828152929190828280156104eb5780601f106104c0576101008083540402835291602001916104eb565b610365600435602435600160a060020a033316600090815260036020526040902054819010156103f157610002565b60806020604435600481810135601f8101849004909302840160405260608381526103d5948235946024803595606494939101919081908382808284375094965050505050505060006000836004600050600033600160a060020a03168152602001908152602001600020600050600087600160a060020a031681526020019081526020016000206000508190555084905080600160a060020a0316638f4ffcb1338630876040518560e060020a0281526004018085600160a060020a0316815260200184815260200183600160a060020a03168152602001806020018281038252838181518152602001915080519060200190808383829060006004602084601f0104600f02600301f150905090810190601f1680156102f25780820380516001836020036101000a031916815260200191505b50955050505050506000604051808303816000876161da5a03f11561000257505050509392505050565b6005602090815260043560009081526040808220909252602435815220546103d59081565b60046020818152903560009081526040808220909252602435815220546103d59081565b005b60405180806020018281038252838181518152602001915080519060200190808383829060006004602084601f0104600f02600301f150905090810190601f1680156103c75780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b60408051918252519081900360200190f35b6060908152602090f35b600160a060020a03821660009081526040902054808201101561041357610002565b806003600050600033600160a060020a03168152602001908152602001600020600082828250540392505081905550806003600050600084600160a060020a0316815260200190815260200160002060008282825054019250508190555081600160a060020a031633600160a060020a03167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef836040518082815260200191505060405180910390a35050565b820191906000526020600020905b8154815290600101906020018083116104ce57829003601f168201915b505050505081565b600160a060020a03831681526040812054808301101561051257610002565b600160a060020a0380851680835260046020908152604080852033949094168086529382528085205492855260058252808520938552929052908220548301111561055c57610002565b816003600050600086600160a060020a03168152602001908152602001600020600082828250540392505081905550816003600050600085600160a060020a03168152602001908152602001600020600082828250540192505081905550816005600050600086600160a060020a03168152602001908152602001600020600050600033600160a060020a0316815260200190815260200160002060008282825054019250508190555082600160a060020a031633600160a060020a03167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040518082815260200191505060405180910390a3939250505056`},
 		[]string{`[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"type":"function"},{"constant":false,"inputs":[{"name":"_from","type":"address"},{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transferFrom","outputs":[{"name":"success","type":"bool"}],"type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"constant":true,"inputs":[],"name":"symbol","outputs":[{"name":"","type":"string"}],"type":"function"},{"constant":false,"inputs":[{"name":"_to","type":"address"},{"name":"_value","type":"uint256"}],"name":"transfer","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"},{"name":"_extraData","type":"bytes"}],"name":"approveAndCall","outputs":[{"name":"success","type":"bool"}],"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"},{"name":"","type":"address"}],"name":"spentAllowance","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"},{"name":"","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"inputs":[{"name":"initialSupply","type":"uint256"},{"name":"tokenName","type":"string"},{"name":"decimalUnits","type":"uint8"},{"name":"tokenSymbol","type":"string"}],"type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":false,"name":"value","type":"uint256"}],"name":"Transfer","type":"event"}]`},
-		`"github.com/ethereum/go-ethereum/common"`,
+		`
+			"math/big"
+
+			"github.com/ethereum/go-ethereum/accounts/abi/bind"
+			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ethereum/go-ethereum/common"
+			"github.com/ethereum/go-ethereum/core/types"
+			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
+		`,
 		`
 			if b, err := NewToken(common.Address{}, nil); b == nil || err != nil {
 				t.Fatalf("binding (%v) nil or error (%v) not nil", b, nil)
+			}
+
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
+
+			sim := backends.NewSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			defer sim.Close()
+
+			maxU256 := uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+
+			// Deploy an interaction tester contract and call a transaction on it
+			_, _, interactor, err := DeployToken(auth, sim, maxU256, "TestToken", 19, "Test")
+			if err != nil {
+				t.Fatalf("Failed to deploy interactor contract: %v", err)
+			}
+			sim.Commit()
+
+			// Generate a new random account to receive tokens
+			toKey, _ := crypto.GenerateKey()
+			toAddr := crypto.PubkeyToAddress(toKey.PublicKey)
+
+			transferValue := maxU256
+			_, err = interactor.Transfer(auth, toAddr, transferValue)
+			if err != nil {
+				t.Fatalf("Failed to transfer tokens: %v", err)
+			}
+			sim.Commit()
+
+			bal, err := interactor.BalanceOf(&bind.CallOpts{}, toAddr)
+			if err != nil {
+				t.Fatalf("Failed to get balance: %v", err)
+			}
+			if bal.Cmp(transferValue) != 0 {
+				t.Fatalf("Expect token balance to equal transfer value: %s != %s", bal, transferValue)
 			}
 		`,
 		nil,
@@ -208,6 +252,7 @@ var bindTests = []struct {
 			"reflect"
 
 			"github.com/ethereum/go-ethereum/common"
+			"github.com/holiman/uint256"
 		`,
 		`if e, err := NewEventChecker(common.Address{}, nil); e == nil || err != nil {
 			 t.Fatalf("binding (%v) nil or error (%v) not nil", e, nil)
@@ -250,7 +295,7 @@ var bindTests = []struct {
 
 			 fmt.Println(res, str, dat, hash, err)
 
-			 oit, err := e.FilterUnnamed(nil, []*big.Int{}, []*big.Int{})
+			 oit, err := e.FilterUnnamed(nil, []*uint256.Int{}, []*uint256.Int{})
 
 			 arg0  := oit.Event.Arg0    // Make sure unnamed arguments are handled correctly
 			 arg1  := oit.Event.Arg1    // Make sure unnamed arguments are handled correctly
@@ -917,6 +962,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/common"
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
 		`,
 		`
 			// Generate a new random account and a funded simulator
@@ -936,7 +982,7 @@ var bindTests = []struct {
 			// Inject a few events into the contract, gradually more in each block
 			for i := 1; i <= 3; i++ {
 				for j := 1; j <= i; j++ {
-					if _, err := eventer.RaiseSimpleEvent(auth, common.Address{byte(j)}, [32]byte{byte(j)}, true, big.NewInt(int64(10*i+j))); err != nil {
+					if _, err := eventer.RaiseSimpleEvent(auth, common.Address{byte(j)}, [32]byte{byte(j)}, true, uint256.NewInt(uint64(10*i+j))); err != nil {
 						t.Fatalf("block %d, event %d: raise failed: %v", i, j, err)
 					}
 				}
@@ -973,12 +1019,12 @@ var bindTests = []struct {
 				t.Fatalf("simple event iteration failed: %v", err)
 			}
 			// Test raising and filtering for an event with no data component
-			if _, err := eventer.RaiseNodataEvent(auth, big.NewInt(314), 141, 271); err != nil {
+			if _, err := eventer.RaiseNodataEvent(auth, uint256.NewInt(314), 141, 271); err != nil {
 				t.Fatalf("failed to raise nodata event: %v", err)
 			}
 			sim.Commit()
 
-			nit, err := eventer.FilterNodataEvent(nil, []*big.Int{big.NewInt(314)}, []int16{140, 141, 142}, []uint32{271})
+			nit, err := eventer.FilterNodataEvent(nil, []*uint256.Int{uint256.NewInt(314)}, []int16{140, 141, 142}, []uint32{271})
 			if err != nil {
 				t.Fatalf("failed to filter for nodata events: %v", err)
 			}
@@ -1053,7 +1099,7 @@ var bindTests = []struct {
 			if err != nil {
 				t.Fatalf("failed to subscribe to simple events: %v", err)
 			}
-			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{255}, [32]byte{255}, true, big.NewInt(255)); err != nil {
+			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{255}, [32]byte{255}, true, uint256.NewInt(255)); err != nil {
 				t.Fatalf("failed to raise subscribed simple event: %v", err)
 			}
 			sim.Commit()
@@ -1069,7 +1115,7 @@ var bindTests = []struct {
 			// Unsubscribe from the event and make sure we're not delivered more
 			sub.Unsubscribe()
 
-			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{254}, [32]byte{254}, true, big.NewInt(254)); err != nil {
+			if _, err := eventer.RaiseSimpleEvent(auth, common.Address{254}, [32]byte{254}, true, uint256.NewInt(254)); err != nil {
 				t.Fatalf("failed to raise subscribed simple event: %v", err)
 			}
 			sim.Commit()
@@ -1242,6 +1288,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
 		`,
 
 		`
@@ -1264,16 +1311,16 @@ var bindTests = []struct {
 			}
 
 			a := TupleS{
-				A: big.NewInt(1),
-				B: []*big.Int{big.NewInt(2), big.NewInt(3)},
+				A: uint256.NewInt(1),
+				B: []*uint256.Int{uint256.NewInt(2), uint256.NewInt(3)},
 				C: []TupleT{
 					{
-						X: big.NewInt(4),
-						Y: big.NewInt(5),
+						X: uint256.NewInt(4),
+						Y: uint256.NewInt(5),
 					},
 					{
-						X: big.NewInt(6),
-						Y: big.NewInt(7),
+						X: uint256.NewInt(6),
+						Y: uint256.NewInt(7),
 					},
 				},
 			}
@@ -1281,12 +1328,12 @@ var bindTests = []struct {
 			b := [][2]TupleT{
 				{
 					{
-						X: big.NewInt(8),
-						Y: big.NewInt(9),
+						X: uint256.NewInt(8),
+						Y: uint256.NewInt(9),
 					},
 					{
-						X: big.NewInt(10),
-						Y: big.NewInt(11),
+						X: uint256.NewInt(10),
+						Y: uint256.NewInt(11),
 					},
 				},
 			}
@@ -1294,25 +1341,25 @@ var bindTests = []struct {
 			c := [2][]TupleT{
 				{
 					{
-						X: big.NewInt(12),
-						Y: big.NewInt(13),
+						X: uint256.NewInt(12),
+						Y: uint256.NewInt(13),
 					},
 					{
-						X: big.NewInt(14),
-						Y: big.NewInt(15),
+						X: uint256.NewInt(14),
+						Y: uint256.NewInt(15),
 					},
 				},
 				{
 					{
-						X: big.NewInt(16),
-						Y: big.NewInt(17),
+						X: uint256.NewInt(16),
+						Y: uint256.NewInt(17),
 					},
 				},
 			}
 
 			d := []TupleS{a}
 
-			e := []*big.Int{big.NewInt(18), big.NewInt(19)}
+			e := []*uint256.Int{uint256.NewInt(18), uint256.NewInt(19)}
 			ret1, ret2, ret3, ret4, ret5, err := contract.Func1(nil, a, b, c, d, e)
 			if err != nil {
 				t.Fatalf("invoke contract failed, err %v", err)
@@ -1384,6 +1431,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
 		`,
 		`
 			// Generate a new random account and a funded simulator
@@ -1407,11 +1455,11 @@ var bindTests = []struct {
 			res, err := testContract.Add(&bind.CallOpts{
 				From: auth.From,
 				Pending: false,
-			}, big.NewInt(1), big.NewInt(2))
+			}, uint256.NewInt(1), uint256.NewInt(2))
 			if err != nil {
 				t.Fatalf("Failed to call linked contract: %v", err)
 			}
-			if res.Cmp(big.NewInt(3)) != 0 {
+			if res.Cmp(uint256.NewInt(3)) != 0 {
 				t.Fatalf("Add did not return the correct result: %d != %d", res, 3)
 			}
 		`,
@@ -1450,6 +1498,7 @@ var bindTests = []struct {
 		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 		"github.com/ethereum/go-ethereum/core/types"
 		"github.com/ethereum/go-ethereum/crypto"
+		"github.com/holiman/uint256"
 		`,
 		`
 		// Initialize test accounts
@@ -1488,7 +1537,7 @@ var bindTests = []struct {
 				}
 			}
 		}()
-		contract.Foo(auth, big.NewInt(1), big.NewInt(2))
+		contract.Foo(auth, uint256.NewInt(1), uint256.NewInt(2))
 		sim.Commit()
 		select {
 		case n := <-resCh:
@@ -1499,7 +1548,7 @@ var bindTests = []struct {
 			t.Fatalf("Wait bar0 event timeout")
 		}
 
-		contract.Foo0(auth, big.NewInt(1))
+		contract.Foo0(auth, uint256.NewInt(1))
 		sim.Commit()
 		select {
 		case n := <-resCh:
@@ -1601,6 +1650,7 @@ var bindTests = []struct {
 		"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 		"github.com/ethereum/go-ethereum/crypto"
 		"github.com/ethereum/go-ethereum/core/types"
+		"github.com/holiman/uint256"
         `,
 		`
 		key, _ := crypto.GenerateKey()
@@ -1617,7 +1667,7 @@ var bindTests = []struct {
 		}
 		sim.Commit()
 		err = c1.Foo(nil, ExternalLibSharedStruct{
-			F1: big.NewInt(100),
+			F1: uint256.NewInt(100),
 			F2: [32]byte{0x01, 0x02, 0x03},
 		})
 		if err != nil {
@@ -1629,7 +1679,7 @@ var bindTests = []struct {
 		}
 		sim.Commit()
 		err = c2.Bar(nil, ExternalLibSharedStruct{
-			F1: big.NewInt(100),
+			F1: uint256.NewInt(100),
 			F2: [32]byte{0x01, 0x02, 0x03},
 		})
 		if err != nil {
@@ -1663,6 +1713,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
+			"github.com/holiman/uint256"
 		`,
 		`
 			// Generate a new random account and a funded simulator
@@ -1682,12 +1733,12 @@ var bindTests = []struct {
 			// This test the existence of the free retriever call for view and pure functions
 			if num, err := pav.PureFunc(nil); err != nil {
 				t.Fatalf("Failed to call anonymous field retriever: %v", err)
-			} else if num.Cmp(big.NewInt(42)) != 0 {
+			} else if num.Cmp(uint256.NewInt(42)) != 0 {
 				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 42)
 			}
 			if num, err := pav.ViewFunc(nil); err != nil {
 				t.Fatalf("Failed to call anonymous field retriever: %v", err)
-			} else if num.Cmp(big.NewInt(1)) != 0 {
+			} else if num.Cmp(uint256.NewInt(1)) != 0 {
 				t.Fatalf("Retrieved value mismatch: have %v, want %v", num, 1)
 			}
 		`,
@@ -1708,7 +1759,7 @@ var bindTests = []struct {
 				emit Fallback(msg.data);
 			}
 
-			event Received(address addr, uint value);
+			event Received(address addr, uint256 value);
 			receive() external payable {
 				emit Received(msg.sender, msg.value);
 			}
@@ -1815,6 +1866,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
+			"github.com/holiman/uint256"
 	   `,
 		`
 			var (
@@ -1853,10 +1905,10 @@ var bindTests = []struct {
 			}
 			var count int
 			for it.Next() {
-				if it.Event.S.A.Cmp(big.NewInt(1)) != 0 {
+				if it.Event.S.A.Cmp(uint256.NewInt(1)) != 0 {
 					t.Fatal("Unexpected contract event")
 				}
-				if it.Event.S.B.Cmp(big.NewInt(2)) != 0 {
+				if it.Event.S.B.Cmp(uint256.NewInt(2)) != 0 {
 					t.Fatal("Unexpected contract event")
 				}
 				count += 1
@@ -1950,6 +2002,7 @@ var bindTests = []struct {
 			"github.com/ethereum/go-ethereum/core/types"
 			"github.com/ethereum/go-ethereum/crypto"
 			"github.com/ethereum/go-ethereum/eth/ethconfig"
+			"github.com/holiman/uint256"
 		`,
 		tester: `
 			var (
@@ -1959,7 +2012,7 @@ var bindTests = []struct {
 			)
 			defer sim.Close()
 
-			_, tx, _, err := DeployConstructorWithStructParam(user, sim, ConstructorWithStructParamStructType{Field: big.NewInt(42)})
+			_, tx, _, err := DeployConstructorWithStructParam(user, sim, ConstructorWithStructParamStructType{Field: uint256.NewInt(42)})
 			if err != nil {
 				t.Fatalf("DeployConstructorWithStructParam() got err %v; want nil err", err)
 			}
