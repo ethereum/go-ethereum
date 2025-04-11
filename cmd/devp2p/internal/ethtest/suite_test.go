@@ -51,13 +51,13 @@ func TestEthSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not make jwt secret: %v", err)
 	}
-	geth, err := runGeth("./testdata", jwtPath)
+	aiigo, err := runAiigo("./testdata", jwtPath)
 	if err != nil {
-		t.Fatalf("could not run geth: %v", err)
+		t.Fatalf("could not run aiigo: %v", err)
 	}
-	defer geth.Close()
+	defer aiigo.Close()
 
-	suite, err := NewSuite(geth.Server().Self(), "./testdata", geth.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
+	suite, err := NewSuite(aiigo.Server().Self(), "./testdata", aiigo.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
@@ -79,13 +79,13 @@ func TestSnapSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not make jwt secret: %v", err)
 	}
-	geth, err := runGeth("./testdata", jwtPath)
+	aiigo, err := runAiigo("./testdata", jwtPath)
 	if err != nil {
-		t.Fatalf("could not run geth: %v", err)
+		t.Fatalf("could not run aiigo: %v", err)
 	}
-	defer geth.Close()
+	defer aiigo.Close()
 
-	suite, err := NewSuite(geth.Server().Self(), "./testdata", geth.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
+	suite, err := NewSuite(aiigo.Server().Self(), "./testdata", aiigo.HTTPAuthEndpoint(), common.Bytes2Hex(secret[:]))
 	if err != nil {
 		t.Fatalf("could not create new test suite: %v", err)
 	}
@@ -99,8 +99,8 @@ func TestSnapSuite(t *testing.T) {
 	}
 }
 
-// runGeth creates and starts a geth node
-func runGeth(dir string, jwtPath string) (*node.Node, error) {
+// runAiigo creates and starts a aiigo node
+func runAiigo(dir string, jwtPath string) (*node.Node, error) {
 	stack, err := node.New(&node.Config{
 		AuthAddr: "127.0.0.1",
 		AuthPort: 0,
@@ -116,7 +116,7 @@ func runGeth(dir string, jwtPath string) (*node.Node, error) {
 		return nil, err
 	}
 
-	err = setupGeth(stack, dir)
+	err = setupAiigo(stack, dir)
 	if err != nil {
 		stack.Close()
 		return nil, err
@@ -128,7 +128,7 @@ func runGeth(dir string, jwtPath string) (*node.Node, error) {
 	return stack, nil
 }
 
-func setupGeth(stack *node.Node, dir string) error {
+func setupAiigo(stack *node.Node, dir string) error {
 	chain, err := NewChain(dir)
 	if err != nil {
 		return err

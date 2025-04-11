@@ -126,14 +126,14 @@ type ConsensusAPI struct {
 	//
 	// There are a few important caveats in this mechanism:
 	//   - The bad block tracking is ephemeral, in-memory only. We must never
-	//     persist any bad block information to disk as a bug in Geth could end
-	//     up blocking a valid chain, even if a later Geth update would accept
+	//     persist any bad block information to disk as a bug in Aiigo could end
+	//     up blocking a valid chain, even if a later Aiigo update would accept
 	//     it.
 	//   - Bad blocks will get forgotten after a certain threshold of import
 	//     attempts and will be retried. The rationale is that if the network
 	//     really-really-really tries to feed us a block, we should give it a
 	//     new chance, perhaps us being racey instead of the block being legit
-	//     bad (this happened in Geth at a point with import vs. pending race).
+	//     bad (this happened in Aiigo at a point with import vs. pending race).
 	//   - Tracking all the blocks built on top of the bad one could be a bit
 	//     problematic, so we will only track the head chain segment of a bad
 	//     chain to allow discarding progressing bad chains and side chains,
@@ -142,7 +142,7 @@ type ConsensusAPI struct {
 	invalidTipsets    map[common.Hash]*types.Header // Ephemeral cache to track invalid tipsets and their bad ancestor
 	invalidLock       sync.Mutex                    // Protects the invalid maps from concurrent access
 
-	// Geth can appear to be stuck or do strange things if the beacon client is
+	// Aiigo can appear to be stuck or do strange things if the beacon client is
 	// offline or is sending us strange data. Stash some update stats away so
 	// that we can warn the user and not have them open issues on our tracker.
 	lastTransitionUpdate time.Time
@@ -467,7 +467,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 
 	ttd := api.eth.BlockChain().Config().TerminalTotalDifficulty
 	if ttd == nil || ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
-		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
+		log.Warn("Invalid TTD configured", "aiigo", ttd, "beacon", config.TerminalTotalDifficulty)
 		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
 	}
 	if config.TerminalBlockHash != (common.Hash{}) {

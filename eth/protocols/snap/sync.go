@@ -305,7 +305,7 @@ type accountTask struct {
 	// This is a list of account hashes whose storage are already completed
 	// in this cycle. This field is newly introduced in v1.14 and will be
 	// empty if the task is resolved from legacy progress data. Furthermore,
-	// this additional field will be ignored by legacy Geth. The only side
+	// this additional field will be ignored by legacy Aiigo. The only side
 	// effect is that these contracts might be resynced in the new cycle,
 	// retaining the legacy behavior.
 	StorageCompleted []common.Hash `json:",omitempty"`

@@ -3,7 +3,7 @@ ARG COMMIT=""
 ARG VERSION=""
 ARG BUILDNUM=""
 
-# Build Geth in a stock Go builder container
+# Build Aiigo in a stock Go builder container
 FROM golang:1.24-alpine AS builder
 
 RUN apk add --no-cache gcc musl-dev linux-headers git
@@ -19,7 +19,7 @@ ADD . /go-ethereum
 # makes it so that under certain circumstances, the docker layer can be cached,
 # and the builder can jump to the next (build all) command, with the go cache fully loaded.
 #
-RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
+RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/aiigo
 
 RUN cd /go-ethereum && go run build/ci.go install -static
 

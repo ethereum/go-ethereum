@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 )
 
-// FullSyncTester is an auxiliary service that allows Geth to perform full sync
+// FullSyncTester is an auxiliary service that allows Aiigo to perform full sync
 // alone without consensus-layer attached. Users must specify a valid block hash
 // as the sync target.
 //

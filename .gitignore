@@ -21,14 +21,14 @@
 /build/_workspace/
 /build/cache/
 /build/bin/
-/geth*.zip
+/aiigo*.zip
 
 # used by the build/ci.go archive + upload tool
-/geth*.tar.gz
-/geth*.tar.gz.sig
-/geth*.tar.gz.asc
-/geth*.zip.sig
-/geth*.zip.asc
+/aiigo*.tar.gz
+/aiigo*.tar.gz.sig
+/aiigo*.tar.gz.asc
+/aiigo*.zip.sig
+/aiigo*.zip.asc
 
 
 # travis
@@ -53,6 +53,6 @@ cmd/devp2p/devp2p
 cmd/era/era
 cmd/ethkey/ethkey
 cmd/evm/evm
-cmd/geth/geth
+cmd/aiigo/aiigo
 cmd/rlpdump/rlpdump
 cmd/workload/workload

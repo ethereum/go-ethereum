@@ -22,7 +22,7 @@ import (
 )
 
 // EngineAPIError is a standardized error message between consensus and execution
-// clients, also containing any custom error message Geth might include.
+// clients, also containing any custom error message Aiigo might include.
 type EngineAPIError struct {
 	code int
 	msg  string

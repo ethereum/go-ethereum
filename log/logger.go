@@ -35,7 +35,7 @@ const (
 	LvlDebug = LevelDebug
 )
 
-// FromLegacyLevel converts from old Geth verbosity level constants
+// FromLegacyLevel converts from old Aiigo verbosity level constants
 // to levels defined by slog
 func FromLegacyLevel(lvl int) slog.Level {
 	switch lvl {

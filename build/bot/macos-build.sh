@@ -8,7 +8,7 @@ xcodebuild -version
 
 # -- Build for macOS and upload to Azure
 go run build/ci.go install -dlgo
-go run build/ci.go archive -type tar # -signer OSX_SIGNING_KEY -upload gethstore/builds
+go run build/ci.go archive -type tar # -signer OSX_SIGNING_KEY -upload aiigostore/builds
 
 # # -- CocoaPods
 # gem uninstall cocoapods -a -x
@@ -19,4 +19,4 @@ go run build/ci.go archive -type tar # -signer OSX_SIGNING_KEY -upload gethstore
 # pod setup --verbose
 
 # # -- Build for iOS and upload to Azure
-# go run build/ci.go xcode -signer IOS_SIGNING_KEY -upload gethstore/builds
+# go run build/ci.go xcode -signer IOS_SIGNING_KEY -upload aiigostore/builds

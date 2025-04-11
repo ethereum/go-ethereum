@@ -147,7 +147,7 @@ type Downloader struct {
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
 
 	// Progress reporting metrics
-	syncStartBlock uint64    // Head snap block when Geth was started
+	syncStartBlock uint64    // Head snap block when Aiigo was started
 	syncStartTime  time.Time // Time instance when chain sync started
 	syncLogTime    time.Time // Time instance when status was last reported
 }

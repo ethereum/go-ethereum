@@ -2,17 +2,17 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth all test lint fmt clean devtools help
+.PHONY: aiigo all test lint fmt clean devtools help
 
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
 
-#? geth: Build geth.
-geth:
-	$(GORUN) build/ci.go install ./cmd/geth
+#? aiigo: Build aiigo.
+aiigo:
+	$(GORUN) build/ci.go install ./cmd/aiigo
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+	@echo "Run \"$(GOBIN)/aiigo\" to launch aiigo."
 
 #? all: Build all packages and executables.
 all:

@@ -89,7 +89,7 @@ Some security precautions can be made, such as:
 ##### Security of implementation
 
 The drawback of this very flexible solution is that the `signer` needs to contain a javascript engine. This is pretty simple to implement since it's already
-implemented for `geth`. There are no known security vulnerabilities in it, nor have we had any security problems with it so far.
+implemented for `aiigo`. There are no known security vulnerabilities in it, nor have we had any security problems with it so far.
 
 The javascript engine would be an added attack surface; but if the validation of `rulesets` is made good (with hash-based attestation), the actual javascript cannot be considered
 an attack surface -- if an attacker can control the ruleset, a much simpler attack would be to implement an "always-approve" rule instead of exploiting the js vm. The only benefit

@@ -17,7 +17,7 @@
 // Package abigen generates Ethereum contract Go bindings.
 //
 // Detailed usage document and tutorial available on the go-ethereum Wiki page:
-// https://geth.ethereum.org/docs/developers/dapp-developer/native-bindings
+// https://aiigo.ethereum.org/docs/developers/dapp-developer/native-bindings
 package abigen
 
 import (

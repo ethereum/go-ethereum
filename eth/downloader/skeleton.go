@@ -65,7 +65,7 @@ var errSyncMerged = errors.New("sync merged")
 var errSyncReorged = errors.New("sync reorged")
 
 // errTerminated is returned if the sync mechanism was terminated for this run of
-// the process. This is usually the case when Geth is shutting down and some events
+// the process. This is usually the case when Aiigo is shutting down and some events
 // might still be propagating.
 var errTerminated = errors.New("terminated")
 
@@ -257,7 +257,7 @@ func (s *skeleton) startup() {
 	for {
 		select {
 		case errc := <-s.terminate:
-			// No head was announced but Geth is shutting down
+			// No head was announced but Aiigo is shutting down
 			errc <- nil
 			return
 
@@ -303,7 +303,7 @@ func (s *skeleton) startup() {
 
 				default:
 					// Sync either successfully terminated or failed with an unhandled
-					// error. Abort and wait until Geth requests a termination.
+					// error. Abort and wait until Aiigo requests a termination.
 					errc := <-s.terminate
 					errc <- err
 					return

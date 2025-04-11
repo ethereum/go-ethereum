@@ -20,7 +20,7 @@ package kzg4844
 
 import "sync"
 
-// ckzgAvailable signals whether the library was compiled into Geth.
+// ckzgAvailable signals whether the library was compiled into Aiigo.
 const ckzgAvailable = false
 
 // ckzgIniter ensures that we initialize the KZG library once before using it.

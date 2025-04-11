@@ -122,7 +122,7 @@ type NodeIterator interface {
 	// reading from disk. In those cases, this resolver allows short circuiting
 	// accesses and returning them from memory.
 	//
-	// Before adding a similar mechanism to any other place in Geth, consider
+	// Before adding a similar mechanism to any other place in Aiigo, consider
 	// making trie.Database an interface and wrapping at that level. It's a huge
 	// refactor, but it could be worth it if another occurrence arises.
 	AddResolver(NodeResolver)
