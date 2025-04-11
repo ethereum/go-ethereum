@@ -43,7 +43,7 @@ func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[co
 			v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
 			storages[addr][testrand.Hash()] = v
 		}
-		account := generateAccount(types.EmptyRootHash)
+		account := generateAccount(types.EmptyRootHash, types.EmptyCodeHash.Bytes())
 		accounts[addr] = types.SlimAccountRLP(account)
 	}
 	return accounts, storages
