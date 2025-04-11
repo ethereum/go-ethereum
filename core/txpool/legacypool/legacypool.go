@@ -246,9 +246,8 @@ type LegacyPool struct {
 	priced  *pricedList                  // All transactions sorted by price
 
 	reqResetCh      chan *txpoolResetRequest
-	reqPromoteCh    chan *accountSet
+	reqPromoteCh    chan *reqPromote
 	queueTxEventCh  chan *types.Transaction
-	reorgDoneCh     chan chan struct{}
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
@@ -258,6 +257,7 @@ type LegacyPool struct {
 
 type txpoolResetRequest struct {
 	oldHead, newHead *types.Header
+	done             chan struct{}
 }
 
 // New creates a new transaction pool to gather, sort and filter inbound
@@ -277,9 +277,8 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		beats:           make(map[common.Address]time.Time),
 		all:             newLookup(),
 		reqResetCh:      make(chan *txpoolResetRequest),
-		reqPromoteCh:    make(chan *accountSet),
+		reqPromoteCh:    make(chan *reqPromote),
 		queueTxEventCh:  make(chan *types.Transaction),
-		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		initDoneCh:      make(chan struct{}),
 	}
@@ -979,9 +978,10 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 		nilSlot++
 	}
 	// Reorg the pool internals if needed and return
-	done := pool.requestPromoteExecutables(dirtyAddrs)
+	req := &reqPromote{dirtyAddrs, make(chan struct{})}
+	pool.requestPromoteExecutables(req)
 	if sync {
-		<-done
+		<-req.done
 	}
 	return errs
 }
@@ -1147,9 +1147,10 @@ func (pool *LegacyPool) removeTx(hash common.Hash, outofbound bool, unreserve bo
 // requestReset requests a pool reset to the new head block.
 // The returned channel is closed when the reset has occurred.
 func (pool *LegacyPool) requestReset(oldHead *types.Header, newHead *types.Header) chan struct{} {
+	req := &txpoolResetRequest{oldHead, newHead, make(chan struct{})}
 	select {
-	case pool.reqResetCh <- &txpoolResetRequest{oldHead, newHead}:
-		return <-pool.reorgDoneCh
+	case pool.reqResetCh <- req:
+		return req.done
 	case <-pool.reorgShutdownCh:
 		return pool.reorgShutdownCh
 	}
@@ -1157,10 +1158,10 @@ func (pool *LegacyPool) requestReset(oldHead *types.Header, newHead *types.Heade
 
 // requestPromoteExecutables requests transaction promotion checks for the given addresses.
 // The returned channel is closed when the promotion checks have occurred.
-func (pool *LegacyPool) requestPromoteExecutables(set *accountSet) chan struct{} {
+func (pool *LegacyPool) requestPromoteExecutables(req *reqPromote) chan struct{} {
 	select {
-	case pool.reqPromoteCh <- set:
-		return <-pool.reorgDoneCh
+	case pool.reqPromoteCh <- req:
+		return req.done
 	case <-pool.reorgShutdownCh:
 		return pool.reorgShutdownCh
 	}
@@ -1181,6 +1182,8 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 	defer pool.wg.Done()
 
 	var (
+		curDones      []chan struct{}
+		nextDones     []chan struct{}
 		curDone       chan struct{} // non-nil while runReorg is active
 		nextDone      = make(chan struct{})
 		launchNextRun bool
@@ -1196,6 +1199,7 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 
 			// Prepare everything for the next round of reorg
 			curDone, nextDone = nextDone, make(chan struct{})
+			curDones, nextDones = nextDones, []chan struct{}{}
 			launchNextRun = false
 
 			reset, dirtyAccounts = nil, nil
@@ -1210,18 +1214,18 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 			} else {
 				reset.newHead = req.newHead
 			}
+			nextDones = append(nextDones, req.done)
 			launchNextRun = true
-			pool.reorgDoneCh <- nextDone
 
 		case req := <-pool.reqPromoteCh:
 			// Promote request: update address set if request is already pending.
 			if dirtyAccounts == nil {
-				dirtyAccounts = req
+				dirtyAccounts = req.set
 			} else {
-				dirtyAccounts.merge(req)
+				dirtyAccounts.merge(req.set)
 			}
+			nextDones = append(nextDones, req.done)
 			launchNextRun = true
-			pool.reorgDoneCh <- nextDone
 
 		case tx := <-pool.queueTxEventCh:
 			// Queue up the event, but don't schedule a reorg. It's up to the caller to
@@ -1233,12 +1237,18 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 			queuedEvents[addr].Put(tx)
 
 		case <-curDone:
+			for _, ch := range curDones {
+				close(ch)
+			}
 			curDone = nil
 
 		case <-pool.reorgShutdownCh:
 			// Wait for current run to finish.
 			if curDone != nil {
 				<-curDone
+				for _, ch := range curDones {
+					close(ch)
+				}
 			}
 			close(nextDone)
 			return
@@ -1692,6 +1702,15 @@ type accountSet struct {
 	accounts map[common.Address]struct{}
 	signer   types.Signer
 	cache    []common.Address
+}
+
+// reqPromote contains a set of accounts from which to attempt to promote
+// queued transactions into the executable stage upon the next pool reorg.
+// It also contains a channel which will be closed to signal the completion
+// of the reorg cycle where the promotion request was evaluated.
+type reqPromote struct {
+	set  *accountSet
+	done chan struct{}
 }
 
 // newAccountSet creates a new address set with an associated signer for sender

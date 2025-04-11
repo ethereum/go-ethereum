@@ -430,7 +430,7 @@ func TestQueue(t *testing.T) {
 	<-pool.requestReset(nil, nil)
 
 	pool.enqueueTx(tx.Hash(), tx, true)
-	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
+	<-pool.requestPromoteExecutables(&reqPromote{newAccountSet(pool.signer, from), make(chan struct{})})
 	if len(pool.pending) != 1 {
 		t.Error("expected valid txs to be 1 is", len(pool.pending))
 	}
@@ -440,7 +440,7 @@ func TestQueue(t *testing.T) {
 	testSetNonce(pool, from, 2)
 	pool.enqueueTx(tx.Hash(), tx, true)
 
-	<-pool.requestPromoteExecutables(newAccountSet(pool.signer, from))
+	<-pool.requestPromoteExecutables(&reqPromote{newAccountSet(pool.signer, from), make(chan struct{})})
 	if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
 		t.Error("expected transaction to be in tx pool")
 	}
@@ -579,7 +579,7 @@ func TestDoubleNonce(t *testing.T) {
 	if replace, err := pool.add(tx2); err != nil || !replace {
 		t.Errorf("second transaction insert failed (%v) or not reported replacement (%v)", err, replace)
 	}
-	<-pool.requestPromoteExecutables(newAccountSet(signer, addr))
+	<-pool.requestPromoteExecutables(&reqPromote{newAccountSet(signer, addr), make(chan struct{})})
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
@@ -589,7 +589,7 @@ func TestDoubleNonce(t *testing.T) {
 
 	// Add the third transaction and ensure it's not saved (smaller price)
 	pool.add(tx3)
-	<-pool.requestPromoteExecutables(newAccountSet(signer, addr))
+	<-pool.requestPromoteExecutables(&reqPromote{newAccountSet(signer, addr), make(chan struct{})})
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
