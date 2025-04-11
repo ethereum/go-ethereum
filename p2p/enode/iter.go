@@ -149,6 +149,7 @@ type mixSource struct {
 	it      Iterator
 	next    chan *Node
 	timeout time.Duration
+	name    string
 }
 
 // NewFairMix creates a mixer.
@@ -167,7 +168,7 @@ func NewFairMix(timeout time.Duration) *FairMix {
 }
 
 // AddSource adds a source of nodes.
-func (m *FairMix) AddSource(it Iterator) {
+func (m *FairMix) AddSource(it Iterator, name ...string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -175,7 +176,10 @@ func (m *FairMix) AddSource(it Iterator) {
 		return
 	}
 	m.wg.Add(1)
-	source := &mixSource{it, make(chan *Node), m.timeout}
+	source := &mixSource{it, make(chan *Node), m.timeout, ""}
+	if len(name) > 0 {
+		source.name = name[0]
+	}
 	m.sources = append(m.sources, source)
 	go m.runSource(m.closed, source)
 }
