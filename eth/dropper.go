@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
@@ -41,6 +42,13 @@ const (
 	peerDropThreshold = 0
 	// Sync status poll interval (no need to be too reactive here)
 	syncCheckInterval = 60 * time.Second
+)
+
+var (
+	// droppedInbound is the number of inbound peers dropped
+	droppedInbound = metrics.NewRegisteredMeter("eth/dropper/inbound", nil)
+	// droppedOutbound is the number of outbound peers dropped
+	droppedOutbound = metrics.NewRegisteredMeter("eth/dropper/outbound", nil)
 )
 
 // dropper monitors the state of the peer pool and makes changes as follows:
@@ -128,6 +136,11 @@ func (cm *dropper) dropRandomPeer() bool {
 		p := droppable[mrand.Intn(len(droppable))]
 		log.Debug("Dropping random peer", "id", p.ID(), "duration", common.PrettyDuration(p.Lifetime()), "inbound", p.Inbound(), "peercountbefore", len(peers))
 		p.Disconnect(p2p.DiscTooManyPeers)
+		if p.Inbound() {
+			droppedInbound.Mark(1)
+		} else {
+			droppedOutbound.Mark(1)
+		}
 		return true
 	}
 	return false
