@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.15.0](https://github.com/taikoxyz/taiko-geth/compare/v1.14.1...v1.15.0) (2025-04-01)
+
+
+### Features
+
+* **miner:** improve `pruneTransactions` ([#411](https://github.com/taikoxyz/taiko-geth/issues/411)) ([7a019ea](https://github.com/taikoxyz/taiko-geth/commit/7a019ea44bc98be082a1a4dfa0c6975b30939196))
+* **miner:** reduce the number compression attempts when fetching transactions list ([#406](https://github.com/taikoxyz/taiko-geth/issues/406)) ([9e6edc5](https://github.com/taikoxyz/taiko-geth/commit/9e6edc51dbb37b3f9b280c95a031c0a2f68af53a))
+
+
+### Chores
+
+* **eth:** always use the latest block number for pending state in RPC calls ([#410](https://github.com/taikoxyz/taiko-geth/issues/410)) ([6822358](https://github.com/taikoxyz/taiko-geth/commit/682235849b5df653c4108f2a4099ee39b8cde6b6))
+
 ## [1.14.1](https://github.com/taikoxyz/taiko-geth/compare/v1.14.0...v1.14.1) (2025-03-21)
 
 
