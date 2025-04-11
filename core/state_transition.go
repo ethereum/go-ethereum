@@ -455,7 +455,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		st.evm.AccessEvents.AddTxOrigin(msg.From)
 
 		if targetAddr := msg.To; targetAddr != nil {
-			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0)
+			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0, !st.state.Exist(*targetAddr))
 		}
 	}
 
@@ -544,7 +544,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 		// add the coinbase to the witness iff the fee is greater than 0
 		if rules.IsEIP4762 && fee.Sign() != 0 {
-			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true)
+			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
 		}
 	}
 
