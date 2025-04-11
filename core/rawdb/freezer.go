@@ -25,6 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/core/rawdb/eradb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -71,6 +72,8 @@ type Freezer struct {
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock *flock.Flock             // File-system lock to prevent double opens
 	closeOnce    sync.Once
+
+	eradb *eradb.EraDatabase
 }
 
 // NewFreezer creates a freezer instance for maintaining immutable ordered
@@ -78,7 +81,7 @@ type Freezer struct {
 //
 // The 'tables' argument defines the data tables. If the value of a map
 // entry is true, snappy compression is disabled for the table.
-func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig) (*Freezer, error) {
+func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig, eradb *eradb.EraDatabase) (*Freezer, error) {
 	// Create the initial freezer object
 	var (
 		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
@@ -118,6 +121,7 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		readonly:     readonly,
 		tables:       make(map[string]*freezerTable),
 		instanceLock: lock,
+		eradb:        eradb,
 	}
 
 	// Create the tables.
@@ -171,6 +175,9 @@ func (f *Freezer) Close() error {
 		if err := f.instanceLock.Unlock(); err != nil {
 			errs = append(errs, err)
 		}
+		if f.eradb != nil {
+			f.eradb.Close()
+		}
 	})
 	if errs != nil {
 		return fmt.Errorf("%v", errs)
@@ -195,6 +202,17 @@ func (f *Freezer) HasAncient(kind string, number uint64) (bool, error) {
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
 func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	if table := f.tables[kind]; table != nil {
+		if f.eradb != nil && table.config.prunable && number < f.tail.Load() {
+			// The requested item has been pruned. Attempt fetching from era1 file.
+			switch kind {
+			case ChainFreezerBodiesTable:
+				return f.eradb.GetRawBody(number)
+			case ChainFreezerReceiptTable:
+				return f.eradb.GetRawReceipts(number)
+			default:
+				return nil, errOutOfBounds
+			}
+		}
 		return table.Retrieve(number)
 	}
 	return nil, errUnknownTable
