@@ -67,10 +67,6 @@ type LazyResolver interface {
 	Get(hash common.Hash) *types.Transaction
 }
 
-// AddressReserver is passed by the main transaction pool to subpools, so they
-// may request (and relinquish) exclusive access to certain addresses.
-type AddressReserver func(addr common.Address, reserve bool) error
-
 // PendingFilter is a collection of filter rules to allow retrieving a subset
 // of transactions for announcement or mining.
 //
@@ -84,6 +80,12 @@ type PendingFilter struct {
 
 	OnlyPlainTxs bool // Return only plain EVM transactions (peer-join announces, block space filling)
 	OnlyBlobTxs  bool // Return only blob transactions (block blob-space filling)
+}
+
+// TxMetadata denotes the metadata of a transaction.
+type TxMetadata struct {
+	Type uint8  // The type of the transaction
+	Size uint64 // The length of the 'rlp encoding' of a transaction
 }
 
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
@@ -103,7 +105,7 @@ type SubPool interface {
 	// These should not be passed as a constructor argument - nor should the pools
 	// start by themselves - in order to keep multiple subpools in lockstep with
 	// one another.
-	Init(gasTip uint64, head *types.Header, reserve AddressReserver) error
+	Init(gasTip uint64, head *types.Header, reserver Reserver) error
 
 	// Close terminates any background processing threads and releases any held
 	// resources.
@@ -126,6 +128,10 @@ type SubPool interface {
 
 	// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
 	GetRLP(hash common.Hash) []byte
+
+	// GetMetadata returns the transaction type and transaction size with the
+	// given transaction hash.
+	GetMetadata(hash common.Hash) *TxMetadata
 
 	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 	// This is a utility method for the engine API, enabling consensus clients to
