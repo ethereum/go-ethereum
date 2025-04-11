@@ -18,8 +18,10 @@ package eth
 
 import (
 	"errors"
+	"maps"
 	"math"
 	"math/big"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,6 +48,9 @@ const (
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+
+	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
+	chainHeadChanSize = 128
 
 	// txMaxBroadcastSize is the max size of a transaction that will be broadcasted.
 	// All transactions with a higher size will be announced and need to be fetched
@@ -117,9 +122,10 @@ type handler struct {
 	txFetcher  *fetcher.TxFetcher
 	peers      *peerSet
 
-	eventMux *event.TypeMux
-	txsCh    chan core.NewTxsEvent
-	txsSub   event.Subscription
+	eventMux   *event.TypeMux
+	txsCh      chan core.NewTxsEvent
+	txsSub     event.Subscription
+	blockRange *blockRangeState
 
 	requiredBlocks map[uint64]common.Hash
 
@@ -424,6 +430,11 @@ func (h *handler) Start(maxPeers int) {
 	h.txsSub = h.txpool.SubscribeTransactions(h.txsCh, false)
 	go h.txBroadcastLoop()
 
+	// broadcast block range
+	h.wg.Add(1)
+	h.blockRange = newBlockRangeState(h.chain, h.eventMux)
+	go h.blockRangeLoop(h.blockRange)
+
 	// start sync handlers
 	h.txFetcher.Start()
 
@@ -434,6 +445,7 @@ func (h *handler) Start(maxPeers int) {
 
 func (h *handler) Stop() {
 	h.txsSub.Unsubscribe() // quits txBroadcastLoop
+	h.blockRange.stop()
 	h.txFetcher.Stop()
 	h.downloader.Terminate()
 
@@ -554,4 +566,120 @@ func (h *handler) enableSyncedFeatures() {
 		log.Info("Snap sync complete, auto disabling")
 		h.snapSync.Store(false)
 	}
+}
+
+type blockRangeState struct {
+	prev    eth.BlockRangeUpdatePacket
+	next    eth.BlockRangeUpdatePacket
+	headCh  chan core.ChainHeadEvent
+	headSub event.Subscription
+	syncSub *event.TypeMuxSubscription
+}
+
+func newBlockRangeState(chain *core.BlockChain, typeMux *event.TypeMux) *blockRangeState {
+	headCh := make(chan core.ChainHeadEvent, chainHeadChanSize)
+	headSub := chain.SubscribeChainHeadEvent(headCh)
+	syncSub := typeMux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
+	st := &blockRangeState{
+		headCh:  headCh,
+		headSub: headSub,
+		syncSub: syncSub,
+	}
+	st.update(chain, chain.CurrentBlock())
+	st.prev = st.next
+	return st
+}
+
+// blockRangeBroadcastLoop announces changes in locally-available block range to peers.
+// The range to announce is the range that is available in the store, so it's not just
+// about imported blocks.
+func (h *handler) blockRangeLoop(st *blockRangeState) {
+	defer h.wg.Done()
+
+	for {
+		select {
+		case ev := <-st.syncSub.Chan():
+			if ev == nil {
+				continue
+			}
+			if _, ok := ev.Data.(downloader.StartEvent); ok && h.snapSync.Load() {
+				h.blockRangeWhileSnapSyncing(st)
+			}
+		case <-st.headCh:
+			st.update(h.chain, h.chain.CurrentBlock())
+			if st.shouldSend() {
+				h.broadcastBlockRange(st)
+			}
+		case <-st.headSub.Err():
+			return
+		}
+	}
+}
+
+// blockRangeWhileSnapSyncing announces block range updates during snap sync.
+// Here we poll the CurrentSnapBlock on a timer and announce updates to it.
+func (h *handler) blockRangeWhileSnapSyncing(st *blockRangeState) {
+	tick := time.NewTicker(1 * time.Minute)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-tick.C:
+			st.update(h.chain, h.chain.CurrentSnapBlock())
+			if st.shouldSend() {
+				h.broadcastBlockRange(st)
+			}
+		// back to processing head block updates when sync is done
+		case ev := <-st.syncSub.Chan():
+			if ev == nil {
+				continue
+			}
+			switch ev.Data.(type) {
+			case downloader.FailedEvent, downloader.DoneEvent:
+				return
+			}
+		// ignore head updates, but exit when the subscription ends
+		case <-st.headCh:
+		case <-st.headSub.Err():
+			return
+		}
+	}
+}
+
+// broadcastBlockRange sends a range update when one is due.
+func (h *handler) broadcastBlockRange(state *blockRangeState) {
+	h.peers.lock.Lock()
+	peerlist := slices.Collect(maps.Values(h.peers.peers))
+	h.peers.lock.Unlock()
+	if len(peerlist) == 0 {
+		return
+	}
+	msg := state.next
+	log.Debug("Sending BlockRangeUpdate message", "peers", len(peerlist), "earliest", msg.EarliestBlock, "latest", msg.LatestBlock)
+	for _, p := range peerlist {
+		p.SendBlockRangeUpdate(msg)
+	}
+	state.prev = state.next
+}
+
+// update assigns the values of the next block range update from the chain.
+func (st *blockRangeState) update(chain *core.BlockChain, latest *types.Header) {
+	earliest, _ := chain.HistoryPruningCutoff()
+	st.next.EarliestBlock = min(latest.Number.Uint64(), earliest)
+	st.next.LatestBlock = latest.Number.Uint64()
+	st.next.LatestBlockHash = latest.Hash()
+}
+
+// shouldSend decides whether it is time to send a block range update. We don't want to
+// send these updates constantly, so they will usually only be sent every 32 blocks.
+// However, there is a special case: if the range would move back, i.e. due to SetHead, we
+// want to send it immediately.
+func (st *blockRangeState) shouldSend() bool {
+	return st.next.LatestBlock < st.prev.LatestBlock ||
+		st.next.LatestBlock-st.prev.LatestBlock >= 32
+}
+
+func (st *blockRangeState) stop() {
+	st.syncSub.Unsubscribe()
+	st.headSub.Unsubscribe()
 }
