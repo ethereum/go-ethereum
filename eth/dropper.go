@@ -40,8 +40,6 @@ const (
 	// dropping when no more peers can be added. Larger numbers result in more
 	// aggressive drop behavior.
 	peerDropThreshold = 0
-	// Sync status poll interval (no need to be too reactive here)
-	syncCheckInterval = 60 * time.Second
 )
 
 var (
@@ -158,27 +156,11 @@ func randomDuration(min, max time.Duration) time.Duration {
 func (cm *dropper) loop() {
 	defer cm.wg.Done()
 
-	// Set up periodic timer to pull syncing status.
-	// We could get syncing status in a few ways:
-	// - poll the sync status (we use this for now)
-	// - subscribe to Downloader.mux
-	// - subscribe to DownloaderAPI (which itself polls the sync status)
-	syncing := cm.syncingFunc()
-	syncCheckTimer := time.NewTimer(syncCheckInterval)
-	defer syncCheckTimer.Stop()
-
 	for {
 		select {
-		case <-syncCheckTimer.C:
-			// Update info about syncing status, and rearm the timers.
-			syncingNew := cm.syncingFunc()
-			if syncing != syncingNew {
-				// Syncing status changed, we might need to update the timers.
-				syncing = syncingNew
-			}
-			syncCheckTimer.Reset(syncCheckInterval)
 		case <-cm.peerDropTimer.C:
-			if !syncing {
+			// Drop a random peer if we are not syncing and the peer count is close to the limit.
+			if !cm.syncingFunc() {
 				cm.dropRandomPeer()
 			}
 			cm.peerDropTimer.Reset(randomDuration(peerDropIntervalMin, peerDropIntervalMax))
