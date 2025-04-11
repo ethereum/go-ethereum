@@ -35,7 +35,7 @@ const (
 var (
 	MainnetGenesisHash = common.HexToHash("0x4a9d748bd78a8d0385b67788c2435dcdb914f98a96250b68863a1f8b7642d6b1") // XDC Mainnet genesis hash to enforce below configs on
 	TestnetGenesisHash = common.HexToHash("0xbdea512b4f12ff1135ec92c00dc047ffb93890c2ea1aa0eefe9b013d80640075") // XDC Testnet genesis hash to enforce below configs on
-	DevnetGenesisHash  = common.HexToHash("0x977c7a1b4ecbc40acc3963c1778666b62a95940a7fba6fec5867f78702835daf") // XDC Devnet genesis hash to enforce below configs on
+	DevnetGenesisHash  = common.HexToHash("0x3c636c841ebee9121374fa76bd5480d17a23e1ba61d425dde21d7b3caba864f4") // XDC Devnet genesis hash to enforce below configs on
 )
 
 var (
