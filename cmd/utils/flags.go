@@ -1743,33 +1743,38 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 1
+		if ctx.IsSet(NetworkIdFlag.Name) && ctx.Uint64(NetworkIdFlag.Name) != 1 {
+			Fatalf("Network ID %d is not allowed on mainnet", ctx.Uint64(NetworkIdFlag.Name))
 		}
+		cfg.NetworkId = 1
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 	case ctx.Bool(HoleskyFlag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 17000
+		if ctx.IsSet(NetworkIdFlag.Name) && ctx.Uint64(NetworkIdFlag.Name) != 17000 {
+			Fatalf("Network ID %d is not allowed on holesky", ctx.Uint64(NetworkIdFlag.Name))
 		}
+		cfg.NetworkId = 17000
 		cfg.Genesis = core.DefaultHoleskyGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.HoleskyGenesisHash)
 	case ctx.Bool(SepoliaFlag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 11155111
+		if ctx.IsSet(NetworkIdFlag.Name) && ctx.Uint64(NetworkIdFlag.Name) != 11155111 {
+			Fatalf("Network ID %d is not allowed on sepolia", ctx.Uint64(NetworkIdFlag.Name))
 		}
+		cfg.NetworkId = 11155111
 		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
 	case ctx.Bool(HoodiFlag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 560048
+		if ctx.IsSet(NetworkIdFlag.Name) && ctx.Uint64(NetworkIdFlag.Name) != 560048 {
+			Fatalf("Network ID %d is not allowed on hoodi", ctx.Uint64(NetworkIdFlag.Name))
 		}
+		cfg.NetworkId = 560048
 		cfg.Genesis = core.DefaultHoodiGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.HoodiGenesisHash)
 	case ctx.Bool(DeveloperFlag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 1337
+		if ctx.IsSet(NetworkIdFlag.Name) && ctx.Uint64(NetworkIdFlag.Name) != 1337 {
+			Fatalf("Network ID %d is not allowed on hoodi", ctx.Uint64(NetworkIdFlag.Name))
 		}
+		cfg.NetworkId = 1337
 		cfg.SyncMode = ethconfig.FullSync
 		// Create new developer account or reuse existing one
 		var (
