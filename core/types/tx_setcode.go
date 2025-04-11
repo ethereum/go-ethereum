@@ -142,7 +142,7 @@ func (tx *SetCodeTx) copy() TxData {
 	cpy := &SetCodeTx{
 		Nonce: tx.Nonce,
 		To:    tx.To,
-		Data:  common.CopyBytes(tx.Data),
+		Data:  bytes.Clone(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
