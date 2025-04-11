@@ -64,8 +64,6 @@ type dropper struct {
 	// We handle Dialed and Inbound connections separately
 	peerDropTimer *time.Timer
 
-	peerEventCh chan *p2p.PeerEvent // channel for peer event changes
-
 	wg         sync.WaitGroup // wg for graceful shutdown
 	shutdownCh chan struct{}
 }
@@ -82,7 +80,6 @@ func newDropper(maxDialPeers, maxInboundPeers int) *dropper {
 		maxDialPeers:    maxDialPeers,
 		maxInboundPeers: maxInboundPeers,
 		peerDropTimer:   time.NewTimer(randomDuration(peerDropIntervalMin, peerDropIntervalMax)),
-		peerEventCh:     make(chan *p2p.PeerEvent),
 		shutdownCh:      make(chan struct{}),
 	}
 	if peerDropIntervalMin > peerDropIntervalMax {
