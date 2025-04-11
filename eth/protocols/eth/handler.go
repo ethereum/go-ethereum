@@ -192,6 +192,7 @@ var eth69 = map[uint64]msgHandler{
 	ReceiptsMsg:                   handleReceipts69,
 	GetPooledTransactionsMsg:      handleGetPooledTransactions,
 	PooledTransactionsMsg:         handlePooledTransactions,
+	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
 }
 
 // handleMessage is invoked whenever an inbound message is received from a remote

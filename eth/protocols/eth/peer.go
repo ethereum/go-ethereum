@@ -343,6 +343,15 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	})
 }
 
+// SendBlockRangeUpdate sends a notification about our available block range to the peer.
+func (p *Peer) SendBlockRangeUpdate(earliestBlock, latestBlock uint64, latestBlockHash common.Hash) error {
+	return p2p.Send(p.rw, BlockRangeUpdateMsg, &BlockRangeUpdatePacket{
+		EarliestBlock:   earliestBlock,
+		LatestBlock:     latestBlock,
+		LatestBlockHash: latestBlockHash,
+	})
+}
+
 // knownCache is a cache for known hashes.
 type knownCache struct {
 	hashes mapset.Set[common.Hash]

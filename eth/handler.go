@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -103,9 +102,8 @@ type handlerConfig struct {
 }
 
 type handler struct {
-	nodeID     enode.ID
-	networkID  uint64
-	forkFilter forkid.Filter // Fork ID filter, constant across the lifetime of the node
+	nodeID    enode.ID
+	networkID uint64
 
 	snapSync atomic.Bool // Flag whether snap sync is enabled (gets disabled if we already have blocks)
 	synced   atomic.Bool // Flag whether we're considered synchronised (enables transaction processing)
@@ -143,7 +141,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	h := &handler{
 		nodeID:         config.NodeID,
 		networkID:      config.Network,
-		forkFilter:     forkid.NewFilter(config.Chain),
 		eventMux:       config.EventMux,
 		database:       config.Database,
 		txpool:         config.TxPool,
@@ -256,14 +253,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 
 	// Execute the Ethereum handshake
-	var (
-		genesis = h.chain.Genesis()
-		head    = h.chain.CurrentHeader()
-		hash    = head.Hash()
-		number  = head.Number.Uint64()
-	)
-	forkID := forkid.NewID(h.chain.Config(), genesis, number, head.Time)
-	if err := peer.Handshake(h.networkID, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
+	if err := peer.Handshake(h.networkID, h.chain); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}

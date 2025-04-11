@@ -532,3 +532,12 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 
 	return backend.Handle(peer, &txs.PooledTransactionsResponse)
 }
+
+func handleBlockRangeUpdate(backend Backend, msg Decoder, peer *Peer) error {
+	var update BlockRangeUpdatePacket
+	if err := msg.Decode(&update); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	// We don't do anything with these messages for now.
+	return nil
+}
