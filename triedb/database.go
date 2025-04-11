@@ -312,6 +312,26 @@ func (db *Database) Journal(root common.Hash) error {
 	return pdb.Journal(root)
 }
 
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (pathdb.AccountIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.AccountIterator(root, seek)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be move to the specific start position.
+func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (pathdb.StorageIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.StorageIterator(root, account, seek)
+}
+
 // IsVerkle returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsVerkle() bool {
 	return db.config.IsVerkle
