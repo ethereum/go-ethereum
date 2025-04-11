@@ -76,10 +76,10 @@ func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params
 	}, nil
 }
 
-func (t *muxTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *muxTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, isCancun bool, err error) {
 	for _, t := range t.tracers {
 		if t.OnOpcode != nil {
-			t.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
+			t.OnOpcode(pc, op, gas, cost, scope, rData, depth, isCancun, err)
 		}
 	}
 }
