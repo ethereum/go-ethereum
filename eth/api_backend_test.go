@@ -151,5 +151,4 @@ func TestLocalTxSend(t *testing.T) {
 			}
 		}
 	}
-
 }
