@@ -568,6 +568,7 @@ func (h *handler) enableSyncedFeatures() {
 	}
 }
 
+// blockRangeState holds the state of the block range update broadcasting mechanism.
 type blockRangeState struct {
 	prev    eth.BlockRangeUpdatePacket
 	next    eth.BlockRangeUpdatePacket
@@ -655,7 +656,7 @@ func (h *handler) broadcastBlockRange(state *blockRangeState) {
 		return
 	}
 	msg := state.next
-	log.Debug("Sending BlockRangeUpdate message", "peers", len(peerlist), "earliest", msg.EarliestBlock, "latest", msg.LatestBlock)
+	log.Debug("Sending BlockRangeUpdate", "peers", len(peerlist), "earliest", msg.EarliestBlock, "latest", msg.LatestBlock)
 	for _, p := range peerlist {
 		p.SendBlockRangeUpdate(msg)
 	}
