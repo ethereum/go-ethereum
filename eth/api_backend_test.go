@@ -20,7 +20,9 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math/big"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -66,7 +68,8 @@ func initBackend(t *testing.T, withLocal bool) *EthAPIBackend {
 	txconfig := legacypool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
 
-	blobPool := blobpool.New(blobpool.Config{Datadir: t.TempDir()}, chain, nil)
+	dir := filepath.Join(t.TempDir(), fmt.Sprintf("withLocal%t", withLocal))
+	blobPool := blobpool.New(blobpool.Config{Datadir: dir}, chain, nil)
 	legacyPool := legacypool.New(txconfig, chain)
 	txpool, _ := txpool.New(txconfig.PriceLimit, chain, []txpool.SubPool{legacyPool, blobPool})
 
