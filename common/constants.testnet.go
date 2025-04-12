@@ -27,7 +27,7 @@ var TestnetConstant = constant{
 	tipXDCXMinerDisable:           big.NewInt(61290000), // Target 31st March 2024
 	tipXDCXReceiverDisable:        big.NewInt(66825000), // Target 26 Aug 2024
 	eip1559Block:                  big.NewInt(71550000), // Target 14th Feb 2025
-	cancunBlock:                   big.NewInt(73425600),
+	cancunBlock:                   big.NewInt(71550000),
 	tipUpgradeReward:              big.NewInt(9999999999),
 	tipEpochHalving:               big.NewInt(9999999999),
 
