@@ -907,7 +907,8 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
 		clog.Trace("Failed p2p handshake", "err", err)
-		return fmt.Errorf("%w: %v", errProtoHandshakeError, err)
+		//Wrapping both errors for later inspection
+		return fmt.Errorf("%w: %w", errProtoHandshakeError, err)
 	}
 	if id := c.node.ID(); !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
 		clog.Trace("Wrong devp2p handshake identity", "phsid", hex.EncodeToString(phs.ID))
