@@ -137,10 +137,6 @@ type SubPool interface {
 	// retrieve blobs from the pools directly instead of the network.
 	GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar
 
-	// HasBlobs returns true if all blobs corresponding to the versioned hashes
-	// are in the sub pool.
-	HasBlobs(vhashes []common.Hash) bool
-
 	// GetBlobCounts returns number of blobs in the subpool that matches the given
 	// versioned hashes, without performing db read.
 	GetBlobCounts(vhashes []common.Hash) int

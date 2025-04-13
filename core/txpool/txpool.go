@@ -334,20 +334,6 @@ func (p *TxPool) GetBlobCounts(vhashes []common.Hash) int {
 	return 0
 }
 
-// HasBlobs will return true if all the vhashes are available in the same subpool.
-func (p *TxPool) HasBlobs(vhashes []common.Hash) bool {
-	for _, subpool := range p.subpools {
-		// It's an ugly to assume that only one pool will be capable of returning
-		// anything meaningful for this call, but anything else requires merging
-		// partial responses and that's too annoying to do until we get a second
-		// blobpool (probably never).
-		if subpool.HasBlobs(vhashes) {
-			return true
-		}
-	}
-	return false
-}
-
 // ValidateTxBasics checks whether a transaction is valid according to the consensus
 // rules, but does not check state-dependent validation such as sufficient balance.
 func (p *TxPool) ValidateTxBasics(tx *types.Transaction) error {

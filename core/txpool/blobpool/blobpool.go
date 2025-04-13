@@ -1325,19 +1325,6 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar {
 	return sidecars
 }
 
-func (p *BlobPool) HasBlobs(vhashes []common.Hash) bool {
-	for _, vhash := range vhashes {
-		// Retrieve the datastore item (in a short lock)
-		p.lock.RLock()
-		_, exists := p.lookup.storeidOfBlob(vhash)
-		p.lock.RUnlock()
-		if !exists {
-			return false
-		}
-	}
-	return true
-}
-
 func (p *BlobPool) GetBlobCounts(vhashes []common.Hash) int {
 	count := 0
 	for _, vhash := range vhashes {
