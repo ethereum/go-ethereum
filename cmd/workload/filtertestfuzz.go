@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
@@ -45,7 +46,38 @@ var (
 // filterFuzzCmd is the main function of the filter fuzzer.
 func filterFuzzCmd(ctx *cli.Context) error {
 	f := newFilterTestGen(ctx, maxFilterRangeForTestFuzz)
-	var lastHead common.Hash
+	var lastHead *types.Header
+	headerCache := lru.NewCache[common.Hash, *types.Header](200)
+
+	commonAncestor := func(oldPtr, newPtr *types.Header) *types.Header {
+		if oldPtr == nil || newPtr == nil {
+			return nil
+		}
+		if newPtr.Number.Uint64() > oldPtr.Number.Uint64()+100 || oldPtr.Number.Uint64() > newPtr.Number.Uint64()+100 {
+			return nil
+		}
+		for oldPtr.Hash() != newPtr.Hash() {
+			if newPtr.Number.Uint64() >= oldPtr.Number.Uint64() {
+				if parent, _ := headerCache.Get(newPtr.ParentHash); parent != nil {
+					newPtr = parent
+				} else {
+					newPtr, _ = getHeaderByHash(f.client, newPtr.ParentHash)
+					if newPtr == nil {
+						return nil
+					}
+					headerCache.Add(newPtr.Hash(), newPtr)
+				}
+			}
+			if oldPtr.Number.Uint64() > newPtr.Number.Uint64() {
+				oldPtr, _ = headerCache.Get(oldPtr.ParentHash)
+				if oldPtr == nil {
+					return nil
+				}
+			}
+		}
+		return newPtr
+	}
+
 mainLoop:
 	for {
 		select {
@@ -53,7 +85,7 @@ mainLoop:
 			return nil
 		default:
 		}
-		header, err := getLatestHeader(f.client)
+		currentHead, err := getLatestHeader(f.client)
 		if err != nil {
 			fmt.Println("Could not fetch head block", err)
 			select {
@@ -63,15 +95,29 @@ mainLoop:
 			}
 			continue mainLoop
 		}
+		headerCache.Add(currentHead.Hash(), currentHead)
 		var query *filterQuery
-		if header.Hash() == lastHead {
+		if lastHead != nil && currentHead.Hash() == lastHead.Hash() {
 			query = f.newQuery()
 		} else {
-			f.blockLimit = header.Number.Int64()
-			fmt.Println("new head", f.blockLimit)
+			f.blockLimit = currentHead.Number.Int64()
+			ca := commonAncestor(lastHead, currentHead)
+			fmt.Print("*** New head ", f.blockLimit)
+			if ca == nil {
+				fmt.Println("  <no common ancestor>")
+			} else {
+				if reorged := lastHead.Number.Uint64() - ca.Number.Uint64(); reorged > 0 {
+					fmt.Print("  reorged ", reorged)
+				}
+				if missed := currentHead.Number.Uint64() - ca.Number.Uint64() - 1; missed > 0 {
+					fmt.Print("  missed ", missed)
+				}
+				fmt.Println()
+			}
 			query = f.newHeadSeedQuery(f.blockLimit)
-			lastHead = header.Hash()
+			lastHead = currentHead
 		}
+		query.checkLastBlockHash(f.client)
 		query.run(f.client, nil)
 		if query.Err != nil {
 			query.printError()
@@ -133,6 +179,13 @@ func getLatestHeader(client *client) (*types.Header, error) {
 	return client.Eth.HeaderByNumber(ctx, big.NewInt(int64(rpc.LatestBlockNumber)))
 }
 
+func getHeaderByHash(client *client, hash common.Hash) (*types.Header, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	return client.Eth.HeaderByHash(ctx, hash)
+}
+
 // newHeadSeedQuery creates a query that gets all logs from the latest head.
 func (s *filterTestGen) newHeadSeedQuery(head int64) *filterQuery {
 	return &filterQuery{
@@ -147,13 +200,16 @@ func (fq *filterQuery) checkLastBlockHash(client *client) bool {
 
 	header, err := client.Eth.HeaderByNumber(ctx, big.NewInt(fq.ToBlock))
 	if err != nil {
+		fmt.Println("Cound not fetch last block hash of query  number:", fq.ToBlock, "error:", err)
 		fq.lastBlockHash = common.Hash{}
 		return false
 	}
 	hash := header.Hash()
-	match := fq.lastBlockHash == hash
+	if fq.lastBlockHash == hash {
+		return true
+	}
 	fq.lastBlockHash = hash
-	return match
+	return false
 }
 
 func (fq *filterQuery) filterLog(log *types.Log) bool {
