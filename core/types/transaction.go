@@ -640,7 +640,7 @@ func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	if tx.Type() == LegacyTxType {
 		rlp.Encode(w, tx.inner)
 	} else {
-		rlp.Encode(w, tx)
+		tx.encodeTyped(w)
 	}
 }
 
