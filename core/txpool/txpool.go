@@ -323,6 +323,17 @@ func (p *TxPool) GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar {
 	return nil
 }
 
+// GetBlobCounts returns a number of blobs that are present in the txpool for
+// the given versioned hashes.
+func (p *TxPool) GetBlobCounts(vhashes []common.Hash) int {
+	for _, subpool := range p.subpools {
+		if count := subpool.GetBlobCounts(vhashes); count != 0 {
+			return count
+		}
+	}
+	return 0
+}
+
 // HasBlobs will return true if all the vhashes are available in the same subpool.
 func (p *TxPool) HasBlobs(vhashes []common.Hash) bool {
 	for _, subpool := range p.subpools {

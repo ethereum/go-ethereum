@@ -141,6 +141,10 @@ type SubPool interface {
 	// are in the sub pool.
 	HasBlobs(vhashes []common.Hash) bool
 
+	// GetBlobCounts returns number of blobs in the subpool that matches the given
+	// versioned hashes, without performing db read.
+	GetBlobCounts(vhashes []common.Hash) int
+
 	// ValidateTxBasics checks whether a transaction is valid according to the consensus
 	// rules, but does not check state-dependent validation such as sufficient balance.
 	// This check is meant as a static check which can be performed without holding the

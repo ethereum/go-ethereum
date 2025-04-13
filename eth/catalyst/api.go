@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params/forks"
@@ -159,6 +160,12 @@ type ConsensusAPI struct {
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
 }
+
+var (
+	getBlobsV2RequestedTotal  = metrics.NewRegisteredCounter("execution_get_blobs_requested_from_cl_total", nil)
+	getBlobsV2RequestedHit    = metrics.NewRegisteredCounter("execution_get_blobs_requested_from_cl_hit", nil)
+	getBlobsV2RequestDuration = metrics.NewRegisteredHistogram("execution_get_blobs_request_duration_milliseconds", nil, metrics.NewExpDecaySample(1028, 0.015))
+)
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
@@ -582,8 +589,19 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
 
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start)
+		getBlobsV2RequestDuration.Update(duration.Milliseconds())
+	}()
+
+	getBlobsV2RequestedTotal.Inc(int64(len(hashes)))
+
 	// Optimization: check first if all blobs are available, if not, return empty response
-	if !api.eth.TxPool().HasBlobs(hashes) {
+	blobCounts := api.eth.TxPool().GetBlobCounts(hashes)
+	getBlobsV2RequestedHit.Inc(int64(blobCounts))
+
+	if blobCounts != len(hashes) {
 		return nil, nil
 	}
 

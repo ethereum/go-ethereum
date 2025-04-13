@@ -1338,6 +1338,20 @@ func (p *BlobPool) HasBlobs(vhashes []common.Hash) bool {
 	return true
 }
 
+func (p *BlobPool) GetBlobCounts(vhashes []common.Hash) int {
+	count := 0
+	for _, vhash := range vhashes {
+		// Retrieve the datastore item (in a short lock)
+		p.lock.RLock()
+		_, exists := p.lookup.storeidOfBlob(vhash)
+		p.lock.RUnlock()
+		if exists {
+			count += 1
+		}
+	}
+	return count
+}
+
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
 //

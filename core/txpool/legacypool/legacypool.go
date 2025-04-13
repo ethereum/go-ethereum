@@ -1074,6 +1074,12 @@ func (pool *LegacyPool) HasBlobs(vhashes []common.Hash) bool {
 	return false
 }
 
+// GetBlobCounts returns number of blobs in the subpool that matches the given
+// versioned hashes, without performing db read.
+func (pool *LegacyPool) GetBlobCounts(vhashes []common.Hash) int {
+	return 0
+}
+
 // Has returns an indicator whether txpool has a transaction cached with the
 // given hash.
 func (pool *LegacyPool) Has(hash common.Hash) bool {
