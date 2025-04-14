@@ -51,6 +51,10 @@ var (
 	dialSuccessMeter    = metrics.NewRegisteredMeter("p2p/dials/success", nil)
 	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil)
 
+	// count peers that stayed connected for at least 1 min
+	serve1MinSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success/1min", nil)
+	dial1MinSuccessMeter  = metrics.NewRegisteredMeter("p2p/dials/success/1min", nil)
+
 	// handshake error meters
 	dialTooManyPeers        = metrics.NewRegisteredMeter("p2p/dials/error/saturated", nil)
 	dialAlreadyConnected    = metrics.NewRegisteredMeter("p2p/dials/error/known", nil)
