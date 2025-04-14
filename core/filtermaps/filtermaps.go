@@ -144,7 +144,10 @@ type filterMap []FilterRow
 // copies made for snapshots during rendering.
 func (fm filterMap) copy() filterMap {
 	c := make(filterMap, len(fm))
-	copy(c, fm)
+	for i, row := range fm {
+		c[i] = make(FilterRow, len(row))
+		copy(c[i], row)
+	}
 	return c
 }
 
