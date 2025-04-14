@@ -59,10 +59,16 @@ var (
 	dialUnexpectedIdentity  = metrics.NewRegisteredMeter("p2p/dials/error/id/unexpected", nil)
 	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)
 	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil)
+
+	// capure the rest of errors that are not handled by the above meters
+	dialOtherError = metrics.NewRegisteredMeter("p2p/dials/error/other", nil)
 )
 
 // markDialError matches errors that occur while setting up a dial connection
 // to the corresponding meter.
+// markDialError will bump exactly one meter per call. We don't maintain meters
+// for evert possible error. If there are multiple levels of wrapped errors, we
+// capture the innermost for which we have a meter.
 func markDialError(err error) {
 	if !metrics.Enabled() {
 		return
@@ -84,6 +90,10 @@ func markDialError(err error) {
 		dialEncHandshakeError.Mark(1)
 	case errors.As(err, &phe):
 		dialProtoHandshakeError.Mark(1)
+	default:
+		// catch all for any other error, not supposed to happen, only here for cross-checking
+		// that all errors are captured by the above meters
+		dialOtherError.Mark(1)
 	}
 }
 
