@@ -72,7 +72,7 @@ var (
 
 type protoHandshakeError struct{ err error }
 
-func (e *protoHandshakeError) Error() string { return fmt.Sprintf("rlpx proto error: %s", e.err) }
+func (e *protoHandshakeError) Error() string { return fmt.Sprintf("rlpx proto error: %v", e.err) }
 func (e *protoHandshakeError) Unwrap() error { return e.err }
 
 // Server manages all peer connections.
