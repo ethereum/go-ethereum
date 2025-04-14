@@ -1305,7 +1305,6 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 			return nil, err
 		}
 	}
-	s.db.SaveTransitionState(ret.root, &TransitionState{Ended: true})
 	if !ret.empty() {
 		// If snapshotting is enabled, update the snapshot tree with this new version
 		if snap := s.db.Snapshot(); snap != nil && snap.Snapshot(ret.originRoot) != nil {

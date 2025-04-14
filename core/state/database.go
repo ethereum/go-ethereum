@@ -66,12 +66,6 @@ type Database interface {
 
 	// Snapshot returns the underlying state snapshot.
 	Snapshot() *snapshot.Tree
-
-	// SaveTransitionState saves the tree transition progress markers to the database.
-	SaveTransitionState(common.Hash, *TransitionState)
-
-	// LoadTransitionState loads the tree transition progress markers from the database.
-	LoadTransitionState(common.Hash) *TransitionState
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
