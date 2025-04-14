@@ -123,7 +123,7 @@ type tester struct {
 
 func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int) *tester {
 	var (
-		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
+		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, "")
 		db      = New(disk, &Config{
 			StateHistory:    historyLimit,
 			TrieCleanSize:   256 * 1024,

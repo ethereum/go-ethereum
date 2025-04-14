@@ -19,7 +19,6 @@ package rawdb
 import (
 	"errors"
 	"fmt"
-	"path"
 	"sync"
 	"time"
 
@@ -58,7 +57,7 @@ type chainFreezer struct {
 //     state freezer (e.g. dev mode).
 //   - if non-empty directory is given, initializes the regular file-based
 //     state freezer.
-func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFreezer, error) {
+func newChainFreezer(datadir string, namespace string, readonly bool, eraDir string) (*chainFreezer, error) {
 	var (
 		err     error
 		freezer ethdb.AncientStore
@@ -68,13 +67,12 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 	} else {
 		// Instantiate eradb outside of freezer to avoid
 		// creating an instance for the state freezer.
-		var (
-			edb        *eradb.EraDatabase
-			eraDatadir = path.Join(datadir, "era")
-		)
-		edb, err = eradb.New(eraDatadir)
-		if err != nil {
-			return nil, err
+		var edb *eradb.EraDatabase
+		if eraDir != "" {
+			edb, err = eradb.New(eraDir)
+			if err != nil {
+				return nil, err
+			}
 		}
 		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs, edb)
 	}
