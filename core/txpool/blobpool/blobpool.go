@@ -299,7 +299,7 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //     and leading up to the first no-change.
 type BlobPool struct {
 	config         Config                    // Pool configuration
-	reserver       *txpool.Reserver          // Address reserver to ensure exclusivity across subpools
+	reserver       txpool.Reserver           // Address reserver to ensure exclusivity across subpools
 	hasPendingAuth func(common.Address) bool // Determine whether the specified address has a pending 7702-auth
 
 	store  billy.Database // Persistent data store for the tx metadata and blobs
@@ -355,7 +355,7 @@ func (p *BlobPool) Filter(tx *types.Transaction) bool {
 // Init sets the gas price needed to keep a transaction in the pool and the chain
 // head to allow balance / nonce checks. The transaction journal will be loaded
 // from disk and filtered based on the provided starting settings.
-func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver *txpool.Reserver) error {
+func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reserver) error {
 	p.reserver = reserver
 
 	var (
@@ -1349,6 +1349,9 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
+//
+// Note, if sync is set the method will block until all internal maintenance
+// related to the add is finished. Only use this during tests for determinism.
 func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
 		adds = make([]*types.Transaction, 0, len(txs))
@@ -1792,6 +1795,9 @@ func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
 
 // Clear implements txpool.SubPool, removing all tracked transactions
 // from the blob pool and persistent store.
+//
+// Note, do not use this in production / live code. In live code, the pool is
+// meant to reset on a separate thread to avoid DoS vectors.
 func (p *BlobPool) Clear() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
