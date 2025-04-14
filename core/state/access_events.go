@@ -127,7 +127,7 @@ func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address, 
 		return expected1
 	}
 	_, expected2 := ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BasicDataLeafKey, true, availableGas-expected1)
-	if expected1+expected2 > availableGas {
+	if expected1+expected2 == 0 {
 		return params.WarmStorageReadCostEIP2929
 	}
 	return expected1 + expected2
