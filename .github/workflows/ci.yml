@@ -271,7 +271,7 @@ jobs:
             mkdir -p ${{ github.run_id }}/matic-cli
             sudo mv bor ${{ github.run_id }}
             sudo mv matic-cli/devnet ${{ github.run_id }}/matic-cli
-            sudo tar czf code.tar.gz --exclude='.git' . ${{ github.run_id }}
+            sudo tar --warning=no-file-changed --exclude='.git' -czf code.tar.gz ${{ github.run_id }}
 
         - name: Upload code and chain data
           if: always()
