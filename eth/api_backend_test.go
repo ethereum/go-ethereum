@@ -20,9 +20,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
 	"math/big"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -68,8 +66,7 @@ func initBackend(t *testing.T, withLocal bool) *EthAPIBackend {
 	txconfig := legacypool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
 
-	dir := filepath.Join(t.TempDir(), fmt.Sprintf("withLocal%t", withLocal))
-	blobPool := blobpool.New(blobpool.Config{Datadir: dir}, chain, nil)
+	blobPool := blobpool.New(blobpool.Config{Datadir: t.TempDir()}, chain, nil)
 	legacyPool := legacypool.New(txconfig, chain)
 	txpool, _ := txpool.New(txconfig.PriceLimit, chain, []txpool.SubPool{legacyPool, blobPool})
 
@@ -129,29 +126,32 @@ func pricedSetCodeTxWithAuth(nonce uint64, gaslimit uint64, gasFee, tip *uint256
 	})
 }
 
-func TestLocalTxSend(t *testing.T) {
-	for _, withLocal := range []bool{false, true} {
-		b := initBackend(t, withLocal)
+func TestSendTx(t *testing.T) {
+	testSendTx(t, false)
+	testSendTx(t, true)
+}
 
-		txA := pricedSetCodeTx(0, 250000, uint256.NewInt(params.GWei), uint256.NewInt(params.GWei), key, []unsignedAuth{
-			{
-				nonce: 0,
-				key:   key,
-			},
-		})
-		b.SendTx(context.Background(), txA)
+func testSendTx(t *testing.T, withLocal bool) {
+	b := initBackend(t, withLocal)
 
-		txB := makeTx(1, nil, nil, key)
-		err := b.SendTx(context.Background(), txB)
+	txA := pricedSetCodeTx(0, 250000, uint256.NewInt(params.GWei), uint256.NewInt(params.GWei), key, []unsignedAuth{
+		{
+			nonce: 0,
+			key:   key,
+		},
+	})
+	b.SendTx(context.Background(), txA)
 
-		if withLocal {
-			if err != nil {
-				t.Fatalf("Unexpected error sending tx: %v", err)
-			}
-		} else {
-			if !errors.Is(err, txpool.ErrInflightTxLimitReached) {
-				t.Fatalf("Unexpected error, want: %v, got: %v", txpool.ErrInflightTxLimitReached, err)
-			}
+	txB := makeTx(1, nil, nil, key)
+	err := b.SendTx(context.Background(), txB)
+
+	if withLocal {
+		if err != nil {
+			t.Fatalf("Unexpected error sending tx: %v", err)
+		}
+	} else {
+		if !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+			t.Fatalf("Unexpected error, want: %v, got: %v", txpool.ErrInflightTxLimitReached, err)
 		}
 	}
 }
