@@ -943,8 +943,11 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 		news = make([]*types.Transaction, 0, len(txs))
 	)
 	for i, tx := range txs {
+		pool.mu.Lock()
+		hash := pool.all.Get(tx.Hash())
+		pool.mu.Unlock()
 		// If the transaction is known, pre-set the error slot
-		if pool.all.Get(tx.Hash()) != nil {
+		if hash != nil {
 			errs[i] = txpool.ErrAlreadyKnown
 			knownTxMeter.Mark(1)
 			continue
