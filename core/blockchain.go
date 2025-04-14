@@ -534,6 +534,12 @@ func (bc *BlockChain) loadLastState() error {
 	}
 	bc.hc.SetCurrentHeader(headHeader)
 
+	// Initialize history pruning.
+	latest := max(headBlock.NumberU64(), headHeader.Number.Uint64())
+	if err := bc.initializeHistoryPruning(latest); err != nil {
+		return err
+	}
+
 	// Restore the last known head snap block
 	bc.currentSnapBlock.Store(headBlock.Header())
 	headFastBlockGauge.Update(int64(headBlock.NumberU64()))
@@ -555,11 +561,6 @@ func (bc *BlockChain) loadLastState() error {
 			bc.currentSafeBlock.Store(block.Header())
 			headSafeBlockGauge.Update(int64(block.NumberU64()))
 		}
-	}
-
-	// Initialize history pruning.
-	if err := bc.initializeHistoryPruning(headBlock.NumberU64()); err != nil {
-		return err
 	}
 
 	// Issue a status log for the user
