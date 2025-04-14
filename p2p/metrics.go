@@ -68,7 +68,7 @@ func markDialError(err error) {
 		return
 	}
 
-	var e *protoHandshakeError
+	var phe *protoHandshakeError
 	switch {
 	case errors.Is(err, DiscTooManyPeers):
 		dialTooManyPeers.Mark(1)
@@ -82,7 +82,7 @@ func markDialError(err error) {
 		dialUnexpectedIdentity.Mark(1)
 	case errors.Is(err, errEncHandshakeError):
 		dialEncHandshakeError.Mark(1)
-	case errors.As(err, &e):
+	case errors.As(err, &phe):
 		dialProtoHandshakeError.Mark(1)
 	}
 }
