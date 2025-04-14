@@ -473,7 +473,7 @@ func (g *Genesis) chainConfigOrDefault(ghash common.Hash, stored *params.ChainCo
 // IsVerkle indicates whether the state is already stored in a verkle
 // tree at genesis time.
 func (g *Genesis) IsVerkle() bool {
-	return g.Config.VerkleTime != nil && *g.Config.VerkleTime == g.Timestamp
+	return g != nil && g.Config != nil && g.Config.VerkleTime != nil && *g.Config.VerkleTime == g.Timestamp
 }
 
 // ToBlock returns the genesis block according to genesis specification.
