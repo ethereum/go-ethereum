@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 )
 
@@ -129,16 +128,7 @@ func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 
 // hashAlloc computes the state root according to the genesis specification.
 func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
-	// If a genesis-time verkle trie is requested, create a trie config
-	// with the verkle trie enabled so that the tree can be initialized
-	// as such.
-	var config *triedb.Config
-	if isVerkle {
-		config = &triedb.Config{
-			PathDB:   pathdb.Defaults,
-			IsVerkle: true,
-		}
-	}
+
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
 	emptyRoot := types.EmptyRootHash
@@ -149,7 +139,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 	if isVerkle {
 		saveVerkleTransitionStatusAtVerlkeGenesis(db)
 	}
-	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil))
+	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, nil), triedb.NewDatabase(db, triedb.VerkleDefaults), nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -168,12 +158,12 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 
 // flushAlloc is very similar with hash, but the main difference is all the
 // generated states will be persisted into the given database.
-func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, error) {
+func flushAlloc(ga *types.GenesisAlloc, triedb, verkledb *triedb.Database) (common.Hash, error) {
 	emptyRoot := types.EmptyRootHash
 	if triedb.IsVerkle() {
 		emptyRoot = types.EmptyVerkleHash
 	}
-	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil))
+	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, verkledb, nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -309,11 +299,11 @@ func saveVerkleTransitionStatus(db ethdb.Database, root common.Hash, ts *state.T
 // The stored chain configuration will be updated if it is compatible (i.e. does not
 // specify a fork block below the local head block). In case of a conflict, the
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
-func SetupGenesisBlock(db ethdb.Database, triedb *triedb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
-	return SetupGenesisBlockWithOverride(db, triedb, genesis, nil)
+func SetupGenesisBlock(db ethdb.Database, triedb, verkledb *triedb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+	return SetupGenesisBlockWithOverride(db, triedb, verkledb, genesis, nil)
 }
 
-func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+func SetupGenesisBlockWithOverride(db ethdb.Database, triedb, verkledb *triedb.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 	// Copy the genesis, so we can operate on a copy.
 	genesis = genesis.copy()
 	// Sanitize the supplied genesis, ensuring it has the associated chain
@@ -339,7 +329,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 			return nil, common.Hash{}, nil, err
 		}
 
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(db, triedb, verkledb)
 		if err != nil {
 			return nil, common.Hash{}, nil, err
 		}
@@ -367,7 +357,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		if hash := genesis.ToBlock().Hash(); hash != ghash {
 			return nil, common.Hash{}, nil, &GenesisMismatchError{ghash, hash}
 		}
-		block, err := genesis.Commit(db, triedb)
+		block, err := genesis.Commit(db, triedb, verkledb)
 		if err != nil {
 			return nil, common.Hash{}, nil, err
 		}
@@ -548,7 +538,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
-func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Block, error) {
+func (g *Genesis) Commit(db ethdb.Database, triedb, verkledb *triedb.Database) (*types.Block, error) {
 	if g.Number != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
 	}
@@ -563,7 +553,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 		return nil, errors.New("can't start clique chain without signers")
 	}
 	// flush the data to disk and compute the state root
-	root, err := flushAlloc(&g.Alloc, triedb)
+	root, err := flushAlloc(&g.Alloc, triedb, verkledb)
 	if err != nil {
 		return nil, err
 	}
@@ -591,8 +581,8 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 
 // MustCommit writes the genesis block and state to db, panicking on error.
 // The block is committed as the canonical head block.
-func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.Block {
-	block, err := g.Commit(db, triedb)
+func (g *Genesis) MustCommit(db ethdb.Database, triedb, verkledb *triedb.Database) *types.Block {
+	block, err := g.Commit(db, triedb, verkledb)
 	if err != nil {
 		panic(err)
 	}

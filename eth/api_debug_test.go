@@ -65,7 +65,7 @@ func TestAccountRange(t *testing.T) {
 
 	var (
 		mdb     = rawdb.NewMemoryDatabase()
-		statedb = state.NewDatabase(triedb.NewDatabase(mdb, &triedb.Config{Preimages: true}), nil)
+		statedb = state.NewDatabase(triedb.NewDatabase(mdb, &triedb.Config{Preimages: true}), triedb.NewDatabase(mdb, triedb.VerkleDefaults), nil)
 		sdb, _  = state.New(types.EmptyRootHash, statedb)
 		addrs   = [AccountRangeMaxResults * 2]common.Address{}
 		m       = map[common.Address]bool{}
@@ -164,7 +164,8 @@ func TestStorageRangeAt(t *testing.T) {
 	var (
 		mdb    = rawdb.NewMemoryDatabase()
 		tdb    = triedb.NewDatabase(mdb, &triedb.Config{Preimages: true})
-		db     = state.NewDatabase(tdb, nil)
+		vdb    = triedb.NewDatabase(mdb, triedb.VerkleDefaults)
+		db     = state.NewDatabase(tdb, vdb, nil)
 		sdb, _ = state.New(types.EmptyRootHash, db)
 		addr   = common.Address{0x01}
 		keys   = []common.Hash{ // hashes of Keys of storage

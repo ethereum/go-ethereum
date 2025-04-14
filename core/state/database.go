@@ -201,6 +201,7 @@ func (ts *TransitionState) Copy() *TransitionState {
 type CachingDB struct {
 	disk          ethdb.KeyValueStore
 	triedb        *triedb.Database
+	verkledb      *triedb.Database
 	snap          *snapshot.Tree
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	codeSizeCache *lru.Cache[common.Hash, int]
@@ -211,10 +212,11 @@ type CachingDB struct {
 }
 
 // NewDatabase creates a state database with the provided data sources.
-func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
+func NewDatabase(triedb, verkledb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 	return &CachingDB{
 		disk:                   triedb.Disk(),
 		triedb:                 triedb,
+		verkledb:               verkledb,
 		snap:                   snap,
 		codeCache:              lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		codeSizeCache:          lru.NewCache[common.Hash, int](codeSizeCacheSize),
@@ -226,7 +228,8 @@ func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 // NewDatabaseForTesting is similar to NewDatabase, but it initializes the caching
 // db by using an ephemeral memory db with default config for testing.
 func NewDatabaseForTesting() *CachingDB {
-	return NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
+	memdb := rawdb.NewMemoryDatabase()
+	return NewDatabase(triedb.NewDatabase(memdb, nil), triedb.NewDatabase(memdb, triedb.VerkleDefaults), nil)
 }
 
 // Reader returns a state reader associated with the specified state root.
@@ -274,7 +277,7 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 		panic("transition isn't supported yet")
 	}
 	if ts.Transitioned() {
-		return trie.NewVerkleTrie(root, db.triedb, db.pointCache)
+		return trie.NewVerkleTrie(root, db.verkledb, db.pointCache)
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {

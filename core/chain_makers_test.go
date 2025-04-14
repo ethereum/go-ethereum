@@ -75,7 +75,7 @@ func TestGeneratePOSChain(t *testing.T) {
 		Storage: storage,
 		Code:    common.Hex2Bytes("600154600354"),
 	}
-	genesis := gspec.MustCommit(gendb, triedb.NewDatabase(gendb, triedb.HashDefaults))
+	genesis := gspec.MustCommit(gendb, triedb.NewDatabase(gendb, triedb.HashDefaults), triedb.NewDatabase(gendb, triedb.VerkleDefaults))
 	engine := beacon.New(ethash.NewFaker())
 
 	genchain, genreceipts := GenerateChain(gspec.Config, genesis, engine, gendb, 4, func(i int, gen *BlockGen) {
@@ -199,7 +199,7 @@ func ExampleGenerateChain() {
 		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Alloc:  types.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 	}
-	genesis := gspec.MustCommit(genDb, triedb.NewDatabase(genDb, triedb.HashDefaults))
+	genesis := gspec.MustCommit(genDb, triedb.NewDatabase(genDb, triedb.HashDefaults), triedb.NewDatabase(genDb, triedb.VerkleDefaults))
 
 	// This call generates a chain of 5 blocks. The function runs for
 	// each block and adds different features to gen based on the

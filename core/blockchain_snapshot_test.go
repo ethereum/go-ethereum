@@ -255,6 +255,7 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	db.Close()
 	chain.stopWithoutSaving()
 	chain.triedb.Close()
+	chain.verkledb.Close()
 
 	// Start a new blockchain back up and see where the repair leads us
 	pdb, err := pebble.New(snaptest.datadir, 0, 0, "", false, true)
@@ -410,6 +411,7 @@ func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 
 	// Simulate the blockchain crash.
 	tmp.triedb.Close()
+	tmp.verkledb.Close()
 	tmp.stopWithoutSaving()
 
 	newchain, err = NewBlockChain(snaptest.db, DefaultCacheConfigWithScheme(snaptest.scheme), snaptest.gspec, nil, snaptest.engine, vm.Config{}, nil)

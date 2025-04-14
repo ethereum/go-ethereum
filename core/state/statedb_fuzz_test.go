@@ -189,6 +189,7 @@ func (test *stateTest) run() bool {
 			storageOrigin = append(storageOrigin, maps.Clone(update.storagesOrigin))
 		}
 		disk      = rawdb.NewMemoryDatabase()
+		vdb       = triedb.NewDatabase(disk, triedb.VerkleDefaults)
 		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})
 		byzantium = rand.Intn(2) == 0
 	)
@@ -209,7 +210,7 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, NewDatabase(tdb, snaps))
+		state, err := New(root, NewDatabase(tdb, vdb, snaps))
 		if err != nil {
 			panic(err)
 		}

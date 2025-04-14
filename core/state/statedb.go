@@ -788,7 +788,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
-	if s.db.TrieDB().IsVerkle() {
+	if s.GetTrie().IsVerkle() {
 		// Whilst MPT storage tries are independent, Verkle has one single trie
 		// for all the accounts and all the storage slots merged together. The
 		// former can thus be simply parallelized, but updating the latter will
@@ -802,7 +802,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 		obj := s.stateObjects[addr] // closure for the task runner below
 		workers.Go(func() error {
-			if s.db.TrieDB().IsVerkle() {
+			if s.GetTrie().IsVerkle() {
 				obj.updateTrie()
 			} else {
 				obj.updateRoot()
@@ -819,7 +819,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// If witness building is enabled, gather all the read-only accesses.
 	// Skip witness collection in Verkle mode, they will be gathered
 	// together at the end.
-	if s.witness != nil && !s.db.TrieDB().IsVerkle() {
+	if s.witness != nil && !s.GetTrie().IsVerkle() {
 		// Pull in anything that has been accessed before destruction
 		for _, obj := range s.stateObjectsDestruct {
 			// Skip any objects that haven't touched their storage

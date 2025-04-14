@@ -259,8 +259,9 @@ func TestProcessParentBlockHash(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
 		cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 		cacheConfig.SnapshotLimit = 0
+		verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
-		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))
+		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, verkledb, nil))
 		checkBlockHashes(statedb, true)
 	})
 }

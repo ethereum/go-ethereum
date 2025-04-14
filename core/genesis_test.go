@@ -64,14 +64,14 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "genesis without ChainConfig",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
-				return SetupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), new(Genesis))
+				return SetupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), triedb.NewDatabase(db, triedb.VerkleDefaults), new(Genesis))
 			},
 			wantErr: errGenesisNoConfig,
 		},
 		{
 			name: "no block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
-				return SetupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), nil)
+				return SetupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), triedb.NewDatabase(db, triedb.VerkleDefaults), nil)
 			},
 			wantHash:   params.MainnetGenesisHash,
 			wantConfig: params.MainnetChainConfig,
@@ -79,8 +79,8 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "mainnet block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
-				DefaultGenesisBlock().MustCommit(db, triedb.NewDatabase(db, newDbConfig(scheme)))
-				return SetupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), nil)
+				DefaultGenesisBlock().MustCommit(db, triedb.NewDatabase(db, newDbConfig(scheme)), triedb.NewDatabase(db, triedb.VerkleDefaults))
+				return SetupGenesisBlock(db, triedb.NewDatabase(db, newDbConfig(scheme)), triedb.NewDatabase(db, triedb.VerkleDefaults), nil)
 			},
 			wantHash:   params.MainnetGenesisHash,
 			wantConfig: params.MainnetChainConfig,
@@ -88,9 +88,10 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "custom block in DB, genesis == nil",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+				vdb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb)
-				return SetupGenesisBlock(db, tdb, nil)
+				customg.Commit(db, tdb, vdb)
+				return SetupGenesisBlock(db, tdb, vdb, nil)
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
@@ -98,18 +99,20 @@ func testSetupGenesis(t *testing.T, scheme string) {
 		{
 			name: "custom block in DB, genesis == sepolia",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+				vdb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb)
-				return SetupGenesisBlock(db, tdb, DefaultSepoliaGenesisBlock())
+				customg.Commit(db, tdb, vdb)
+				return SetupGenesisBlock(db, tdb, vdb, DefaultSepoliaGenesisBlock())
 			},
 			wantErr: &GenesisMismatchError{Stored: customghash, New: params.SepoliaGenesisHash},
 		},
 		{
 			name: "custom block in DB, genesis == hoodi",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+				vdb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb)
-				return SetupGenesisBlock(db, tdb, DefaultHoodiGenesisBlock())
+				customg.Commit(db, tdb, vdb)
+				return SetupGenesisBlock(db, tdb, vdb, DefaultHoodiGenesisBlock())
 			},
 			wantErr: &GenesisMismatchError{Stored: customghash, New: params.HoodiGenesisHash},
 		},
@@ -117,8 +120,9 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				oldcustomg.Commit(db, tdb)
-				return SetupGenesisBlock(db, tdb, &customg)
+				vdb := triedb.NewDatabase(db, triedb.VerkleDefaults)
+				oldcustomg.Commit(db, tdb, vdb)
+				return SetupGenesisBlock(db, tdb, vdb, &customg)
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
@@ -128,8 +132,9 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
 				// Commit the 'old' genesis block with Homestead transition at #2.
 				// Advance to block #4, past the homestead transition block of customg.
+				vdb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				oldcustomg.Commit(db, tdb)
+				oldcustomg.Commit(db, tdb, vdb)
 
 				bc, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(scheme), &oldcustomg, nil, ethash.NewFullFaker(), vm.Config{}, nil)
 				defer bc.Stop()
@@ -138,7 +143,7 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				bc.InsertChain(blocks)
 
 				// This should return a compatibility error.
-				return SetupGenesisBlock(db, tdb, &customg)
+				return SetupGenesisBlock(db, tdb, vdb, &customg)
 			},
 			wantHash:   customghash,
 			wantConfig: customg.Config,
@@ -192,7 +197,7 @@ func TestGenesisHashes(t *testing.T) {
 	} {
 		// Test via MustCommit
 		db := rawdb.NewMemoryDatabase()
-		if have := c.genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults)).Hash(); have != c.want {
+		if have := c.genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults), triedb.NewDatabase(db, triedb.VerkleDefaults)).Hash(); have != c.want {
 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 		// Test via ToBlock
@@ -210,7 +215,7 @@ func TestGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	genesisBlock := genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
+	genesisBlock := genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults), triedb.NewDatabase(db, triedb.VerkleDefaults))
 
 	if genesis.Difficulty != nil {
 		t.Fatalf("assumption wrong")
@@ -314,8 +319,9 @@ func TestVerkleGenesisCommit(t *testing.T) {
 
 	db := rawdb.NewMemoryDatabase()
 	saveVerkleTransitionStatusAtVerlkeGenesis(db)
+	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 	triedb := triedb.NewDatabase(db, triedb.VerkleDefaults)
-	block := genesis.MustCommit(db, triedb)
+	block := genesis.MustCommit(db, triedb, verkledb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, block.Root())
 	}

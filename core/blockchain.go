@@ -234,6 +234,7 @@ type BlockChain struct {
 	lastWrite     uint64                           // Last block when the state was flushed
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
+	verkledb      *triedb.Database                 // The database handler for maintaining verkle trie nodes.
 	statedb       *state.CachingDB                 // State database to reuse between imports (contains state cache)
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
@@ -283,13 +284,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
+	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(genesis.IsVerkle()))
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the
 	// provided genesis or from the locally stored configuration if the genesis
 	// has already been initialized.
-	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
+	chainConfig, genesisHash, compatErr, err := SetupGenesisBlockWithOverride(db, triedb, verkledb, genesis, overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -306,6 +308,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		cacheConfig:   cacheConfig,
 		db:            db,
 		triedb:        triedb,
+		verkledb:      verkledb,
 		triegc:        prque.New[int64, common.Hash](nil),
 		quit:          make(chan struct{}),
 		chainmu:       syncx.NewClosableMutex(),
@@ -323,7 +326,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		return nil, err
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
-	bc.statedb = state.NewDatabase(bc.triedb, nil)
+	bc.statedb = state.NewDatabase(bc.triedb, bc.verkledb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
@@ -464,7 +467,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
 
 		// Re-initialize the state database with snapshot
-		bc.statedb = state.NewDatabase(bc.triedb, bc.snaps)
+		bc.statedb = state.NewDatabase(bc.triedb, bc.verkledb, bc.snaps)
 	}
 
 	// Rewind the chain in case of an incompatible config upgrade.
@@ -1167,6 +1170,9 @@ func (bc *BlockChain) Stop() {
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
 		log.Error("Failed to close trie database", "err", err)
+	}
+	if err := bc.verkledb.Close(); err != nil {
+		log.Error("Failed to close the verkle trie database", "err", err)
 	}
 	log.Info("Blockchain stopped")
 }
