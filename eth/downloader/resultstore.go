@@ -18,11 +18,20 @@ package downloader
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core/types"
 )
+
+// returns a rough estimate of the worst-case block size (in bytes) given the
+// block gas used.  The worst-case block size is assumed to be constructed by
+// inserting a transaction with calldata containing all-zeros.  With changes
+// introduced in EIP-XXX, the price of zero-byte calldata becomes ~10 gas / byte.
+func estWorstCaseBlockSize(gasUsed uint64) (size uint64) {
+	return gasUsed / 10
+}
 
 // resultStore implements a structure for maintaining fetchResults, tracking their
 // download-progress and delivering (finished) results.
@@ -91,28 +100,38 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 	return res, stale, err
 }
 
-// throttleThreshold returns whether the given result index is throttled.
-// If the cumulative gas used of all scheduled headers before the given index
-// exceeds a threshold, then the index is throttled.
-// Cumulative gas used for a set of blocks is used as a proxy for the worst-case
-// size of the blocks.  Worst-case block size is estimated by assuming that the
-// blocks each contain a transaction filled with calldata that is all zeroes.
-// The size of a worst-case block is ~= gasUsed / 10
-func (r *resultStore) throttleThreshold(index int) bool {
-	// estimate the average size of a worst-case block, given what we have already queued:
-	//   total gas used by in flight blocks / number of in-flight blocks / 10
-	var headerSize uint64 = 524
-	estBlockSize := max((r.itemsGasUsed/(uint64(index)+1))/10, headerSize)
+var headerSize uint64 = uint64(reflect.TypeOf(types.Header{}).Size())
 
-	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/estBlockSize+1)
-	return index >= int(throttleThreshold)
+// isThrottled returns whether the given result index is throttled.
+func (r *resultStore) isThrottled(index int) bool {
+	return index >= r.throttleThreshold()
+}
+
+// throttleThreshold returns the index at which block requests will be throttled.
+// It is calculated by projecting an average worst-case expected block size for
+// in-flight block retrievals:
+//
+// Take the average gas used per in-flight block
+// and estimate the size of the block that could be constructed by filling the
+// block with a tx containing all-zero calldata (10 gas per byte of calldata).
+//
+// From this average worst-case block size, calculate the number of in-flight
+// retrievals that can be allowed until the cumulative block size hits a
+// predetermined threshold (1 gb).
+func (r *resultStore) throttleThreshold() int {
+	index := r.indexIncomplete.Load()
+	avgGasUsed := r.itemsGasUsed / (uint64(index) + 1)
+	blockSize := max(estWorstCaseBlockSize(avgGasUsed), headerSize)
+
+	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/blockSize+1)
+	return int(throttleThreshold)
 }
 
 // getFetchResult returns the fetchResult corresponding to the given item, and
 // the index where the result is stored.
 func (r *resultStore) getFetchResult(headerNumber uint64) (item *fetchResult, index int, stale, throttle bool, err error) {
 	index = int(int64(headerNumber) - int64(r.resultOffset))
-	throttle = r.throttleThreshold(index)
+	throttle = r.isThrottled(index)
 	stale = index < 0
 
 	if index >= len(r.items) {
@@ -163,12 +182,6 @@ func (r *resultStore) countCompleted() int {
 	r.indexIncomplete.Store(index)
 	return int(index)
 }
-
-/*
-func (r *resultStore) GetThrottleThreshold() int {
-	return (r.itemsGasUsed / len(r.items)) / 10
-}
-*/
 
 // GetCompleted returns the next batch of completed fetchResults
 func (r *resultStore) GetCompleted(limit int) []*fetchResult {

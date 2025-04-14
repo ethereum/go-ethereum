@@ -370,7 +370,6 @@ func (q *queue) Results(block bool) []*fetchResult {
 		q.lock.Unlock()
 	}
 	// Regardless if closed or not, we can still deliver whatever we have
-
 	results := q.resultCache.GetCompleted(maxResultsProcess)
 
 	// With results removed from the cache, wake throttled fetchers
@@ -385,7 +384,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 		q.logTime = time.Now()
 
 		info := q.Stats()
-		info = append(info, "throttle", 0) // TODO: fix this...
+		info = append(info, "throttle", q.resultCache.throttleThreshold())
 		log.Debug("Downloader queue stats", info...)
 	}
 	return results
