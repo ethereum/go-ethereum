@@ -35,7 +35,7 @@ const (
 	// Interval between peer drop events (uniform between min and max)
 	peerDropIntervalMax = 7 * time.Minute
 	// Avoid dropping peers for some time after connection
-	doNotDropBefore = 2 * peerDropIntervalMax
+	doNotDropBefore = 10 * time.Minute
 	// How close to max should we initiate the drop timer. O should be fine,
 	// dropping when no more peers can be added. Larger numbers result in more
 	// aggressive drop behavior.
