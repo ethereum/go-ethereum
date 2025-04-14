@@ -620,7 +620,7 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 			log.Error("Chain history pruning is not supported for this network", "genesis", bc.genesisBlock.Hash())
 			return fmt.Errorf("history pruning requested for unknown network")
 		} else if freezerTail != predefinedPoint.BlockNumber {
-			log.Error("Chain history database is pruned to unkown block", "tail", freezerTail)
+			log.Error("Chain history database is pruned to unknown block", "tail", freezerTail)
 			return fmt.Errorf("unexpected database tail")
 		}
 		bc.historyPrunePoint.Store(predefinedPoint)
