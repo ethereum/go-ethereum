@@ -50,6 +50,7 @@ var (
 )
 
 const (
+	databaseVersion       = 1    // reindexed if database version does not match
 	cachedLastBlocks      = 1000 // last block of map pointers
 	cachedLvPointers      = 1000 // first log value pointer of block pointers
 	cachedBaseRows        = 100  // groups of base layer filter row data
@@ -210,8 +211,9 @@ type Config struct {
 // NewFilterMaps creates a new FilterMaps and starts the indexer.
 func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, finalBlock uint64, params Params, config Config) *FilterMaps {
 	rs, initialized, err := rawdb.ReadFilterMapsRange(db)
-	if err != nil {
-		log.Error("Error reading log index range", "error", err)
+	if err != nil || rs.Version != databaseVersion {
+		rs, initialized = rawdb.FilterMapsRange{}, false
+		log.Warn("Invalid log index database version; resetting log index")
 	}
 	params.deriveFields()
 	f := &FilterMaps{
@@ -440,6 +442,7 @@ func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, ne
 	f.updateMatchersValidRange()
 	if newRange.initialized {
 		rs := rawdb.FilterMapsRange{
+			Version:          databaseVersion,
 			HeadIndexed:      newRange.headIndexed,
 			HeadDelimiter:    newRange.headDelimiter,
 			BlocksFirst:      newRange.blocks.First(),
