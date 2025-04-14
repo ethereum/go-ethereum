@@ -42,9 +42,8 @@ const (
 )
 
 var (
-	blockCacheMaxItems     = 8192               // Maximum number of blocks to cache before throttling the download
-	blockCacheInitialItems = 32                 // Initial number of blocks to start fetching, before we know the sizes of the blocks
-	blockCacheMemory       = 1024 * 1024 * 1024 // Maximum amount of memory to use for block caching
+	blockCacheMaxItems = 8192               // Maximum number of blocks to cache before throttling the download
+	blockCacheMemory   = 1024 * 1024 * 1024 // Maximum amount of memory to use for block caching
 )
 
 var (
@@ -159,7 +158,7 @@ type queue struct {
 }
 
 // newQueue creates a new download queue for scheduling block retrieval.
-func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
+func newQueue() *queue {
 	lock := new(sync.RWMutex)
 	q := &queue{
 		headerContCh:     make(chan bool, 1),
@@ -170,12 +169,12 @@ func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 		active:           sync.NewCond(lock),
 		lock:             lock,
 	}
-	q.Reset(blockCacheLimit, thresholdInitialSize)
+	q.Reset()
 	return q
 }
 
 // Reset clears out the queue contents.
-func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
+func (q *queue) Reset() {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -193,7 +192,7 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.receiptTaskQueue.Reset()
 	q.receiptPendPool = make(map[string]*fetchRequest)
 
-	q.resultCache = newResultStore(blockCacheLimit)
+	q.resultCache = newResultStore()
 }
 
 // Close marks the end of the sync, unblocking Results.

@@ -206,7 +206,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, dropPeer 
 	dl := &Downloader{
 		stateDB:        stateDb,
 		mux:            mux,
-		queue:          newQueue(blockCacheMaxItems, blockCacheInitialItems),
+		queue:          newQueue(),
 		peers:          newPeerSet(),
 		blockchain:     chain,
 		dropPeer:       dropPeer,
@@ -352,7 +352,7 @@ func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error 
 		}
 	}
 	// Reset the queue, peer set and wake channels to clean any internal leftover state
-	d.queue.Reset(blockCacheMaxItems, blockCacheInitialItems)
+	d.queue.Reset()
 	d.peers.Reset()
 
 	for _, ch := range []chan bool{d.queue.blockWakeCh, d.queue.receiptWakeCh} {

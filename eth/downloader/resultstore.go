@@ -43,10 +43,10 @@ type resultStore struct {
 	lock sync.RWMutex
 }
 
-func newResultStore(size int) *resultStore {
+func newResultStore() *resultStore {
 	return &resultStore{
 		resultOffset: 0,
-		items:        make([]*fetchResult, size),
+		items:        make([]*fetchResult, blockCacheMaxItems),
 	}
 }
 
@@ -99,8 +99,10 @@ func (r *resultStore) GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, 
 // blocks each contain a transaction filled with calldata that is all zeroes.
 // The size of a worst-case block is ~= gasUsed / 10
 func (r *resultStore) throttleThreshold(index int) bool {
-	// estimate the average block size of all scheduled blocks
-	estBlockSize := max((r.itemsGasUsed/(uint64(index)+1))/10, 524)
+	// estimate the average size of a worst-case block, given what we have already queued:
+	//   total gas used by in flight blocks / number of in-flight blocks / 10
+	var headerSize uint64 = 524
+	estBlockSize := max((r.itemsGasUsed/(uint64(index)+1))/10, headerSize)
 
 	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/estBlockSize+1)
 	return index >= int(throttleThreshold)
