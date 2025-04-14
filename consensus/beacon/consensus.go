@@ -382,7 +382,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	// This step needs to happen as late as possible to catch all access events.
 	if chain.Config().IsVerkle(header.Number, header.Time) {
 		// TODO(gballet) move this to the end of the overlay conversion function in a subsequent PR
-		statedb.Database().SaveTransitionState(header.Root, &state.TransitionState{Ended: true})
+		statedb.Database().(*state.CachingDB).SaveTransitionState(header.Root, &state.TransitionState{Ended: true})
 		keys := statedb.AccessEvents().Keys()
 
 		// Open the pre-tree to prove the pre-state against
