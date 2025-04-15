@@ -57,11 +57,20 @@ func TestTransformReceipts(t *testing.T) {
 	}
 
 	for i, test := range tests {
+		// encode receipts from types object.
 		in, _ := rlp.EncodeToBytes(test.input)
-		have := blockReceiptsToNetwork(in, test.txs)
+
+		// encode block body from types object.
+		blockBody := types.Body{Transactions: test.txs}
+		encBlockBody, _ := rlp.EncodeToBytes(blockBody)
+
+		have, err := blockReceiptsToNetwork(in, encBlockBody)
+		if err != nil {
+			t.Fatalf("test[%d]: blockReceiptsToNetwork error: %v", i, err)
+		}
 		out, _ := rlp.EncodeToBytes(test.output)
 		if !bytes.Equal(have, out) {
-			t.Fatalf("test[%d]: blockReceiptToNetwork mismatch\nhave: %x\nwant: %x\n  in: %x", i, out, have, in)
+			t.Fatalf("test[%d]: blockReceiptsToNetwork mismatch\nhave: %x\nwant: %x\n  in: %x", i, out, have, in)
 		}
 
 		var rl ReceiptList69

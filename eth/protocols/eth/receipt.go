@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"iter"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -199,7 +200,14 @@ func (rl *ReceiptList69) toStorageReceiptsRLP() rlp.RawValue {
 // blockReceiptsToNetwork takes a slice of rlp-encoded receipts, and transactions,
 // and applies the type-encoding on the receipts (for non-legacy receipts).
 // e.g. for non-legacy receipts: receipt-data -> {tx-type || receipt-data}
-func blockReceiptsToNetwork(blockReceipts rlp.RawValue, txs []*types.Transaction) []byte {
+func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, error) {
+	txTypesIter, err := txTypesInBody(blockBody)
+	if err != nil {
+		return nil, fmt.Errorf("invalid block body: %v", err)
+	}
+	nextTxType, stopTxTypes := iter.Pull(txTypesIter)
+	defer stopTxTypes()
+
 	var (
 		out   bytes.Buffer
 		enc   = rlp.NewEncoderBuffer(&out)
@@ -207,13 +215,43 @@ func blockReceiptsToNetwork(blockReceipts rlp.RawValue, txs []*types.Transaction
 	)
 	outer := enc.List()
 	for i := 0; it.Next(); i++ {
+		txType, _ := nextTxType()
 		content, _, _ := rlp.SplitList(it.Value())
 		receiptList := enc.List()
-		enc.WriteUint64(uint64(txs[i].Type()))
+		enc.WriteUint64(uint64(txType))
 		enc.Write(content)
 		enc.ListEnd(receiptList)
 	}
 	enc.ListEnd(outer)
 	enc.Flush()
-	return out.Bytes()
+	return out.Bytes(), nil
+}
+
+// txTypesInBody parses the transactions list of an encoded block body,
+// returning just the types.
+func txTypesInBody(body rlp.RawValue) (iter.Seq[byte], error) {
+	bodyFields, _, err := rlp.SplitList(body)
+	if err != nil {
+		return nil, err
+	}
+	txsIter, err := rlp.NewListIterator(bodyFields)
+	if err != nil {
+		return nil, err
+	}
+	return func(yield func(byte) bool) {
+		for txsIter.Next() {
+			var txType byte
+			switch k, content, _, _ := rlp.Split(txsIter.Value()); k {
+			case rlp.List:
+				txType = 0
+			case rlp.String:
+				if len(content) > 0 {
+					txType = content[0]
+				}
+			}
+			if !yield(txType) {
+				return
+			}
+		}
+	}, nil
 }

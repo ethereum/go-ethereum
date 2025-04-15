@@ -319,12 +319,15 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 				continue
 			}
 		} else {
-			header := chain.GetHeaderByHash(hash)
-			if header.ReceiptHash != types.EmptyReceiptsHash {
-				body := new(types.Body)
-				if err := rlp.DecodeBytes(chain.GetBodyRLP(hash), &body); err == nil {
-					results = blockReceiptsToNetwork(results, body.Transactions)
-				}
+			body := chain.GetBodyRLP(hash)
+			if body == nil {
+				continue
+			}
+			var err error
+			results, err = blockReceiptsToNetwork(results, body)
+			if err != nil {
+				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
+				continue
 			}
 		}
 		receipts = append(receipts, results)
@@ -424,7 +427,7 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	for i := range res.List {
 		res.List[i].buf = buffers
 	}
-	metadata := func() interface{} {
+	metadata := func() any {
 		hasher := trie.NewStackTrie(nil)
 		hashes := make([]common.Hash, len(res.List))
 		for i := range res.List {
