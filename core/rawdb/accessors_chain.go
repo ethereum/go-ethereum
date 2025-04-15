@@ -440,12 +440,6 @@ func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue 
 		// Check if the data is in ancients
 		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(ChainFreezerBodiesTable, number)
-			// The freezer might be pruned. In the particular case of genesis, the block
-			// will be still available in kvdb. The full genesis block is needed on startup
-			// sometimes for repair.
-			if data == nil {
-				data, _ = db.Get(blockBodyKey(number, hash))
-			}
 			return nil
 		}
 		// If not, try reading from leveldb

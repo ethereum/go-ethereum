@@ -513,19 +513,33 @@ func (bc *BlockChain) loadLastState() error {
 		log.Warn("Empty database, resetting chain")
 		return bc.Reset()
 	}
-	// Make sure the entire head block is available
-	headBlock := bc.GetBlockByHash(head)
+	headHeader := bc.GetHeaderByHash(head)
+	if headHeader == nil {
+		// Corrupt or empty database, init from scratch
+		log.Warn("Head header missing, resetting chain", "hash", head)
+		return bc.Reset()
+	}
+
+	var headBlock *types.Block
+	if cmp := headHeader.Number.Cmp(new(big.Int)); cmp == 1 {
+		// Make sure the entire head block is available.
+		headBlock = bc.GetBlockByHash(head)
+	} else if cmp == 0 {
+		// On a pruned node the block body might not be available. But a pruned
+		// block should never be the head block. The only exception is when, as
+		// a last resort, chain is reset to genesis.
+		headBlock = bc.genesisBlock
+	}
 	if headBlock == nil {
 		// Corrupt or empty database, init from scratch
 		log.Warn("Head block missing, resetting chain", "hash", head)
 		return bc.Reset()
 	}
 	// Everything seems to be fine, set as the head block
-	bc.currentBlock.Store(headBlock.Header())
+	bc.currentBlock.Store(headHeader)
 	headBlockGauge.Update(int64(headBlock.NumberU64()))
 
 	// Restore the last known head header
-	headHeader := headBlock.Header()
 	if head := rawdb.ReadHeadHeaderHash(bc.db); head != (common.Hash{}) {
 		if header := bc.GetHeaderByHash(head); header != nil {
 			headHeader = header
