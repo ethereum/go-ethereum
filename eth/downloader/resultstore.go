@@ -25,10 +25,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// returns a rough estimate of the worst-case block size (in bytes) given the
-// block gas used.  The worst-case block size is assumed to be constructed by
+// estWorstCaseBlockSize returns a rough estimate of the worst-case block size
+// (in bytes) given the block gas used.
+// The worst-case block size is assumed to be constructed by
 // inserting a transaction with calldata containing all-zeros.  With changes
-// introduced in EIP-XXX, the price of zero-byte calldata becomes ~10 gas / byte.
+// introduced in EIP-7623, the price of zero-byte calldata becomes 10 gas / byte
+// for a large transaction.
 func estWorstCaseBlockSize(gasUsed uint64) (size uint64) {
 	return gasUsed / 10
 }
