@@ -414,11 +414,12 @@ func handleReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 
 func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
-	res := new(ReceiptsPacket69)
-	if err := msg.Decode(res); err != nil {
+	var res ReceiptsPacket69
+	if err := msg.Decode(&res); err != nil {
 		return err
 	}
-	// only use one buffer
+	// Assign temporary hashing buffer to each list item, the same buffer is shared
+	// between all receipt list instances.
 	buffers := new(receiptListBuffers)
 	for i := range res.List {
 		res.List[i].buf = buffers
@@ -426,15 +427,16 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
 		hashes := make([]common.Hash, len(res.List))
-		for i, rl := range res.List {
-			hashes[i] = types.DeriveSha(&rl, hasher)
+		for i := range res.List {
+			hashes[i] = types.DeriveSha(&res.List[i], hasher)
 		}
 		return hashes
 	}
+
 	// TODO this can probably be made 0-alloc.
 	var enc ReceiptsRLPResponse
-	for _, blockReceipts := range res.List {
-		enc = append(enc, blockReceipts.toStorageReceiptsRLP())
+	for i := range res.List {
+		enc = append(enc, res.List[i].toStorageReceiptsRLP())
 	}
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
