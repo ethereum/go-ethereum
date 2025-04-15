@@ -420,8 +420,8 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	// only use one buffer
 	buffers := new(receiptListBuffers)
-	for _, rl := range res.List {
-		rl.buf = buffers
+	for i := range res.List {
+		res.List[i].buf = buffers
 	}
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
@@ -432,7 +432,7 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 		return hashes
 	}
 	// TODO this can probably be made 0-alloc.
-	var enc []rlp.RawValue
+	var enc ReceiptsRLPResponse
 	for _, blockReceipts := range res.List {
 		enc = append(enc, blockReceipts.toStorageReceiptsRLP())
 	}
