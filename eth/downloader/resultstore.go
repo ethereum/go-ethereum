@@ -49,6 +49,9 @@ type resultStore struct {
 	// some current ones have completed.
 	itemsGasUsed uint64
 
+	// count of all scheduled items (including completes that haven't yet been purged)
+	itemsCount int
+
 	lock sync.RWMutex
 }
 
@@ -82,6 +85,7 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, thro
 			return false, true, nil, nil
 		}
 		r.itemsGasUsed += header.GasUsed
+		r.itemsCount++
 		item = newFetchResult(header, fastSync)
 		r.items[index] = item
 	}
@@ -119,7 +123,7 @@ func (r *resultStore) isThrottled(index int) bool {
 // retrievals that can be allowed until the cumulative block size hits a
 // predetermined threshold (1 gb).
 func (r *resultStore) throttleThreshold() int {
-	index := r.indexIncomplete.Load()
+	index := r.itemsCount - 1
 	avgGasUsed := r.itemsGasUsed / (uint64(index) + 1)
 	blockSize := max(estWorstCaseBlockSize(avgGasUsed), headerSize)
 
@@ -198,6 +202,7 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	for _, result := range results {
 		r.itemsGasUsed -= result.Header.GasUsed
 	}
+	r.itemsCount -= len(results)
 
 	// Delete the results from the cache and clear the tail.
 	copy(r.items, r.items[limit:])
