@@ -60,7 +60,7 @@ var (
 	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)   // EOF; connection reset during handshake; message too big; i/o timeout
 	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil) // EOF
 
-	// capure the rest of errors that are not handled by the above meters
+	// capture the rest of errors that are not handled by the above meters
 	dialOtherError = metrics.NewRegisteredMeter("p2p/dials/error/other", nil)
 )
 
@@ -91,8 +91,8 @@ func markDialError(err error) {
 	case errors.As(err, &phe):
 		dialProtoHandshakeError.Mark(1)
 	default:
-		// catch all for any other error, not supposed to happen, only here for cross-checking
-		// that all errors are captured by the above meters
+		// dialOtherError is a catch-all for any other error, which are not supposed to happen.
+		// Only here for cross-checking that all errors are captured by the above meters.
 		dialOtherError.Mark(1)
 	}
 }
