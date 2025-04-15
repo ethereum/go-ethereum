@@ -153,7 +153,7 @@ func (p *Peer) readStatusMsg(dst any) error {
 		return fmt.Errorf("%w: %v > %v", errMsgTooLarge, msg.Size, maxMessageSize)
 	}
 	if err := msg.Decode(dst); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	return nil
 }
