@@ -49,7 +49,7 @@ var (
 	serveSuccessMeter   = metrics.NewRegisteredMeter("p2p/serves/success", nil)
 	dialMeter           = metrics.NewRegisteredMeter("p2p/dials", nil)
 	dialSuccessMeter    = metrics.NewRegisteredMeter("p2p/dials/success", nil)
-	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil)
+	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil) // dial timeout; no route to host; connection refused; network is unreachable
 
 	// handshake error meters
 	dialTooManyPeers        = metrics.NewRegisteredMeter("p2p/dials/error/saturated", nil)
@@ -57,8 +57,8 @@ var (
 	dialSelf                = metrics.NewRegisteredMeter("p2p/dials/error/self", nil)
 	dialUselessPeer         = metrics.NewRegisteredMeter("p2p/dials/error/useless", nil)
 	dialUnexpectedIdentity  = metrics.NewRegisteredMeter("p2p/dials/error/id/unexpected", nil)
-	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)
-	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil)
+	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)   // EOF; connection reset during handshake; message too big; i/o timeout
+	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil) // EOF
 
 	// capure the rest of errors that are not handled by the above meters
 	dialOtherError = metrics.NewRegisteredMeter("p2p/dials/error/other", nil)
