@@ -75,7 +75,7 @@ type PrunePoint struct {
 	BlockHash   common.Hash
 }
 
-// PrunePointsins the pre-defined history pruning cutoff blocks for known networks.
+// PrunePoints the pre-defined history pruning cutoff blocks for known networks.
 // They point to the first post-merge block. Any pruning should truncate *up to* but excluding
 // given block.
 var PrunePoints = map[common.Hash]*PrunePoint{
