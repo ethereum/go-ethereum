@@ -298,11 +298,11 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	evm.StateDB.AddAddressToAccessList(addr)
 	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
 	evm.StateDB.Finalise(true)
-	if len(ret) == 0 {
-		return nil // skip empty output
-	}
 	if err != nil {
 		return fmt.Errorf("system call failed to execute: %v", err)
+	}
+	if len(ret) == 0 {
+		return nil // skip empty output
 	}
 	// Append prefixed requestsData to the requests list.
 	requestsData := make([]byte, len(ret)+1)
