@@ -150,6 +150,21 @@ func (rl *ReceiptList69) EncodeIndex(i int, b *bytes.Buffer) {
 	w.Flush()
 }
 
+func (rl *ReceiptList69) DecodeRLP(s *rlp.Stream) error {
+	if _, err := s.List(); err != nil {
+		return err
+	}
+	for i := 0; s.MoreDataInList(); i++ {
+		var item Receipt
+		err := item.DecodeRLP(s)
+		if err != nil {
+			return fmt.Errorf("receipt %d: %v", err)
+		}
+		rl.items = append(rl.items, item)
+	}
+	return s.ListEnd()
+}
+
 func (rl *ReceiptList69) toStorageReceiptsRLP() rlp.RawValue {
 	var (
 		out bytes.Buffer
