@@ -23,6 +23,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -36,6 +37,10 @@ const EngineApi = "engine"
 type CodecOption int
 
 const (
+	// give pending requests StopPendingRequestTimeout the time to finish when the server is stopped
+	// if readiness probe period is 5 seconds, this is enough time for health check to be triggered
+	StopPendingRequestTimeout = 6 * time.Second
+
 	// OptionMethodInvocation is an indication that the codec supports RPC method calls
 	OptionMethodInvocation CodecOption = 1 << iota
 
@@ -51,6 +56,7 @@ type Server struct {
 	mutex              sync.Mutex
 	codecs             map[ServerCodec]struct{}
 	run                atomic.Bool
+	ready              bool
 	batchItemLimit     int
 	batchResponseLimit int
 	httpBodyLimit      int
@@ -68,6 +74,7 @@ func NewServer() *Server {
 	// as the services and methods it offers.
 	rpcService := &RPCService{server}
 	server.RegisterName(MetadataApi, rpcService)
+	server.ready = true
 	return server
 }
 
@@ -184,15 +191,19 @@ func messageForReadError(err error) string {
 // requests to finish, then closes all codecs which will cancel pending requests and
 // subscriptions.
 func (s *Server) Stop() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	log.Debug("RPC server draining pending requests")
+	s.ready = false
+	time.AfterFunc(StopPendingRequestTimeout, func() {
+		s.mutex.Lock()
+		defer s.mutex.Unlock()
 
-	if s.run.CompareAndSwap(true, false) {
-		log.Debug("RPC server shutting down")
-		for codec := range s.codecs {
-			codec.close()
+		if s.run.CompareAndSwap(true, false) {
+			log.Debug("RPC server shutting down")
+			for codec := range s.codecs {
+				codec.close()
+			}
 		}
-	}
+	})
 }
 
 // RPCService gives meta information about the server.

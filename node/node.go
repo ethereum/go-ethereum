@@ -28,6 +28,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -519,6 +520,7 @@ func (n *Node) stopRPC() {
 	n.ws.stop()
 	n.httpAuth.stop()
 	n.wsAuth.stop()
+	time.Sleep(rpc.StopPendingRequestTimeout)
 	n.ipc.stop()
 	n.stopInProc()
 }

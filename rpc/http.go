@@ -309,7 +309,11 @@ func (t *httpServerConn) SetWriteDeadline(time.Time) error { return nil }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Permit dumb empty requests for remote health-checks (AWS)
 	if r.Method == http.MethodGet && r.ContentLength == 0 && r.URL.RawQuery == "" {
-		w.WriteHeader(http.StatusOK)
+		if s.ready {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
 		return
 	}
 	if code, err := s.validateRequest(r); err != nil {
