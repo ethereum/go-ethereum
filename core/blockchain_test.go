@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -4257,13 +4258,7 @@ func testChainReorgSnapSync(t *testing.T, ancientLimit uint64) {
 // be persisted without the receipts and bodies; chain after should be persisted
 // normally.
 func TestInsertChainWithCutoff(t *testing.T) {
-	testInsertChainWithCutoff(t, 32, 32) // cutoff = 32, ancientLimit = 32
-	testInsertChainWithCutoff(t, 32, 64) // cutoff = 32, ancientLimit = 64 (entire chain in ancient)
-	testInsertChainWithCutoff(t, 32, 65) // cutoff = 32, ancientLimit = 65 (64 blocks in ancient, 1 block in live)
-}
-
-func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64) {
-	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+	const chainLength = 64
 
 	// Configure and generate a sample block chain
 	var (
@@ -4278,24 +4273,51 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64)
 		signer = types.LatestSigner(gspec.Config)
 		engine = beacon.New(ethash.NewFaker())
 	)
-	_, blocks, receipts := GenerateChainWithGenesis(gspec, engine, int(2*cutoff), func(i int, block *BlockGen) {
+	_, blocks, receipts := GenerateChainWithGenesis(gspec, engine, chainLength, func(i int, block *BlockGen) {
 		block.SetCoinbase(common.Address{0x00})
-
 		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, block.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
 		}
 		block.AddTx(tx)
 	})
+
+	// Run the actual tests.
+	t.Run("cutoff-32/ancientLimit-32", func(t *testing.T) {
+		// cutoff = 32, ancientLimit = 32
+		testInsertChainWithCutoff(t, 32, 32, gspec, blocks, receipts)
+	})
+	t.Run("cutoff-32/ancientLimit-64", func(t *testing.T) {
+		// cutoff = 32, ancientLimit = 64 (entire chain in ancient)
+		testInsertChainWithCutoff(t, 32, 64, gspec, blocks, receipts)
+	})
+	t.Run("cutoff-32/ancientLimit-64", func(t *testing.T) {
+		// cutoff = 32, ancientLimit = 65 (64 blocks in ancient, 1 block in live)
+		testInsertChainWithCutoff(t, 32, 65, gspec, blocks, receipts)
+	})
+}
+
+func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64, genesis *Genesis, blocks []*types.Block, receipts []types.Receipts) {
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
+
+	// Add a known pruning point for the duration of the test.
+	ghash := genesis.ToBlock().Hash()
+	cutoffBlock := blocks[cutoff-1]
+	history.PrunePoints[ghash] = &history.PrunePoint{
+		BlockNumber: cutoffBlock.NumberU64(),
+		BlockHash:   cutoffBlock.Hash(),
+	}
+	defer func() {
+		delete(history.PrunePoints, ghash)
+	}()
+
+	// Enable pruning in cache config.
+	config := DefaultCacheConfigWithScheme(rawdb.PathScheme)
+	config.ChainHistoryMode = history.KeepPostMerge
+
 	db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
 	defer db.Close()
-
-	cutoffBlock := blocks[cutoff-1]
-	config := DefaultCacheConfigWithScheme(rawdb.PathScheme)
-	config.HistoryPruningCutoffNumber = cutoffBlock.NumberU64()
-	config.HistoryPruningCutoffHash = cutoffBlock.Hash()
-
-	chain, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(rawdb.PathScheme), gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
+	chain, _ := NewBlockChain(db, DefaultCacheConfigWithScheme(rawdb.PathScheme), genesis, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
 	defer chain.Stop()
 
 	var (
@@ -4326,8 +4348,8 @@ func testInsertChainWithCutoff(t *testing.T, cutoff uint64, ancientLimit uint64)
 		t.Errorf("head header #%d: header mismatch: want: %v, got: %v", headHeader.Number, blocks[len(blocks)-1].Hash(), headHeader.Hash())
 	}
 	headBlock := chain.CurrentBlock()
-	if headBlock.Hash() != gspec.ToBlock().Hash() {
-		t.Errorf("head block #%d: header mismatch: want: %v, got: %v", headBlock.Number, gspec.ToBlock().Hash(), headBlock.Hash())
+	if headBlock.Hash() != ghash {
+		t.Errorf("head block #%d: header mismatch: want: %v, got: %v", headBlock.Number, ghash, headBlock.Hash())
 	}
 
 	// Iterate over all chain data components, and cross reference
