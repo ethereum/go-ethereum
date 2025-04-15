@@ -55,7 +55,7 @@ var (
 	signer = types.LatestSignerForChainID(gspec.Config.ChainID)
 )
 
-func initBackend(t *testing.T, withLocal bool) *EthAPIBackend {
+func initBackend(withLocal bool) *EthAPIBackend {
 	var (
 		// Create a database pre-initialize with a genesis block
 		db     = rawdb.NewMemoryDatabase()
@@ -66,7 +66,7 @@ func initBackend(t *testing.T, withLocal bool) *EthAPIBackend {
 	txconfig := legacypool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
 
-	blobPool := blobpool.New(blobpool.Config{Datadir: t.TempDir()}, chain, nil)
+	blobPool := blobpool.New(blobpool.Config{Datadir: ""}, chain, nil)
 	legacyPool := legacypool.New(txconfig, chain)
 	txpool, _ := txpool.New(txconfig.PriceLimit, chain, []txpool.SubPool{legacyPool, blobPool})
 
@@ -132,7 +132,7 @@ func TestSendTx(t *testing.T) {
 }
 
 func testSendTx(t *testing.T, withLocal bool) {
-	b := initBackend(t, withLocal)
+	b := initBackend(withLocal)
 
 	txA := pricedSetCodeTx(0, 250000, uint256.NewInt(params.GWei), uint256.NewInt(params.GWei), key, []unsignedAuth{
 		{
