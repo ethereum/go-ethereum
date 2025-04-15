@@ -49,9 +49,13 @@ type resultStore struct {
 	// keep track of the total non-blob gas used in the headers we are scheduling for retrieval.
 	// when we  exceed a threshold, we will throttle preventing additional requests until
 	// some current ones have completed.
+
+	// cumulative non-blob gas used of all scheduled blocks.  used to project worst-case
+	// block size of what we expect to be delivered, and becomes a signal to throttle
+	// if the estimated total size of all pending blocks exceeds a threshold.
 	itemsGasUsed uint64
 
-	// count of all scheduled items (including completes that haven't yet been purged)
+	// count of all scheduled blocks (including completes that haven't yet been purged)
 	itemsCount int
 
 	lock sync.RWMutex
@@ -83,7 +87,11 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, thro
 		return stale, throttled, item, err
 	}
 	if item == nil {
-		if (r.itemsGasUsed+header.GasUsed)/10 > uint64(blockCacheMemory) {
+		var curEstSize uint64
+		if r.itemsCount > 0 {
+			curEstSize = estWorstCaseBlockSize(r.itemsGasUsed/uint64(r.itemsCount)) * uint64(r.itemsCount)
+		}
+		if curEstSize+estWorstCaseBlockSize(header.GasUsed) > uint64(blockCacheMemory) {
 			return false, true, nil, nil
 		}
 		r.itemsGasUsed += header.GasUsed
@@ -130,8 +138,10 @@ func (r *resultStore) throttleThreshold() int {
 		avgGasUsed = r.itemsGasUsed / uint64(r.itemsCount)
 	}
 	blockSize := max(estWorstCaseBlockSize(avgGasUsed), headerSize)
-	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/blockSize+1)
-	return int(throttleThreshold)
+
+	// cap the throttle threshold to len(items)
+	throttleThreshold := min(len(r.items), blockCacheMemory/int(blockSize)+1)
+	return throttleThreshold
 }
 
 // getFetchResult returns the fetchResult corresponding to the given item, and
