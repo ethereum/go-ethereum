@@ -176,7 +176,9 @@ func (f *Freezer) Close() error {
 			errs = append(errs, err)
 		}
 		if f.eradb != nil {
-			f.eradb.Close()
+			if err := f.eradb.Close(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	})
 	if errs != nil {
