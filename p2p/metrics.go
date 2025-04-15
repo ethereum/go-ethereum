@@ -64,35 +64,33 @@ var (
 	dialOtherError = metrics.NewRegisteredMeter("p2p/dials/error/other", nil)
 )
 
-// markDialError matches errors that occur while setting up a dial connection
-// to the corresponding meter.
-// markDialError will bump exactly one meter per call. We don't maintain meters
-// for evert possible error. If there are multiple levels of wrapped errors, we
-// capture the innermost for which we have a meter.
+// markDialError matches errors that occur while setting up a dial connection to the
+// corresponding meter. We don't maintain meters for evert possible error, just for
+// the most interesting ones.
 func markDialError(err error) {
 	if !metrics.Enabled() {
 		return
 	}
 
-	var phe *protoHandshakeError
+	var reason DiscReason
+	var handshakeErr *protoHandshakeError
+	d := errors.As(err, &reason)
 	switch {
-	case errors.Is(err, DiscTooManyPeers):
+	case d && reason == DiscTooManyPeers:
 		dialTooManyPeers.Mark(1)
-	case errors.Is(err, DiscAlreadyConnected):
+	case d && reason == DiscAlreadyConnected:
 		dialAlreadyConnected.Mark(1)
-	case errors.Is(err, DiscSelf):
+	case d && reason == DiscSelf:
 		dialSelf.Mark(1)
-	case errors.Is(err, DiscUselessPeer):
+	case d && reason == DiscUselessPeer:
 		dialUselessPeer.Mark(1)
-	case errors.Is(err, DiscUnexpectedIdentity):
+	case d && reason == DiscUnexpectedIdentity:
 		dialUnexpectedIdentity.Mark(1)
+	case errors.As(err, &handshakeErr):
+		dialProtoHandshakeError.Mark(1)
 	case errors.Is(err, errEncHandshakeError):
 		dialEncHandshakeError.Mark(1)
-	case errors.As(err, &phe):
-		dialProtoHandshakeError.Mark(1)
 	default:
-		// dialOtherError is a catch-all for any other error, which are not supposed to happen.
-		// Only here for cross-checking that all errors are captured by the above meters.
 		dialOtherError.Mark(1)
 	}
 }
