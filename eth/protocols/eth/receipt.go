@@ -62,6 +62,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	return s.ListEnd()
 }
 
+// EncodeRLP writes the network encoding of receipts.
 func (r *Receipt) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	list := w.List()
@@ -71,6 +72,15 @@ func (r *Receipt) EncodeRLP(_w io.Writer) error {
 	w.Write(r.Logs)
 	w.ListEnd(list)
 	return w.Flush()
+}
+
+// encodeStorage writes the network encoding of receipts.
+func (r *Receipt) encodeStorage(w *rlp.EncoderBuffer) {
+	list := w.List()
+	w.WriteBytes(r.PostStateOrStatus)
+	w.WriteUint64(r.GasUsed)
+	w.Write(r.Logs)
+	w.ListEnd(list)
 }
 
 // bloom computes the bloom filter of the receipt.
@@ -150,6 +160,7 @@ func (rl *ReceiptList69) EncodeIndex(i int, b *bytes.Buffer) {
 	w.Flush()
 }
 
+// DecodeRLP decodes a list receipts from the network format.
 func (rl *ReceiptList69) DecodeRLP(s *rlp.Stream) error {
 	if _, err := s.List(); err != nil {
 		return err
@@ -165,17 +176,23 @@ func (rl *ReceiptList69) DecodeRLP(s *rlp.Stream) error {
 	return s.ListEnd()
 }
 
+// toStorageReceiptsRLP encodes the receipts for storage into the database.
 func (rl *ReceiptList69) toStorageReceiptsRLP() rlp.RawValue {
+	if rl.buf == nil {
+		rl.buf = new(receiptListBuffers)
+	}
+
 	var (
 		out bytes.Buffer
-		enc = rlp.NewEncoderBuffer(&out)
+		w   = &rl.buf.enc
 	)
-	outer := enc.List()
+	w.Reset(&out)
+	outer := w.List()
 	for _, receipts := range rl.items {
-		receipts.EncodeRLP(enc)
+		receipts.encodeStorage(w)
 	}
-	enc.ListEnd(outer)
-	enc.Flush()
+	w.ListEnd(outer)
+	w.Flush()
 	return out.Bytes()
 }
 

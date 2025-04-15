@@ -61,7 +61,16 @@ func TestTransformReceipts(t *testing.T) {
 		have := blockReceiptsToNetwork(in, test.txs)
 		out, _ := rlp.EncodeToBytes(test.output)
 		if !bytes.Equal(have, out) {
-			t.Fatalf("transforming receipt mismatch, test %v: want %v have %v, in %v", i, out, have, in)
+			t.Fatalf("test[%d]: blockReceiptToNetwork mismatch\nhave: %x\nwant: %x\n  in: %x", i, out, have, in)
+		}
+
+		var rl ReceiptList69
+		if err := rlp.DecodeBytes(out, &rl); err != nil {
+			t.Fatalf("test[%d]: can't decode network receipts: %v", i, err)
+		}
+		storageEnc := rl.toStorageReceiptsRLP()
+		if !bytes.Equal(storageEnc, in) {
+			t.Fatalf("test[%d]: re-encoded receipts not equal\nhave: %x\nwant: %x", i, storageEnc, in)
 		}
 	}
 }
