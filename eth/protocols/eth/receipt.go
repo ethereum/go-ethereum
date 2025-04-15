@@ -158,7 +158,7 @@ func (rl *ReceiptList69) DecodeRLP(s *rlp.Stream) error {
 		var item Receipt
 		err := item.DecodeRLP(s)
 		if err != nil {
-			return fmt.Errorf("receipt %d: %v", err)
+			return fmt.Errorf("receipt %d: %v", i, err)
 		}
 		rl.items = append(rl.items, item)
 	}
