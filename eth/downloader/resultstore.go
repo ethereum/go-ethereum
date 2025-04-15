@@ -123,10 +123,11 @@ func (r *resultStore) isThrottled(index int) bool {
 // retrievals that can be allowed until the cumulative block size hits a
 // predetermined threshold (1 gb).
 func (r *resultStore) throttleThreshold() int {
-	index := r.itemsCount - 1
-	avgGasUsed := r.itemsGasUsed / (uint64(index) + 1)
+	var avgGasUsed uint64
+	if r.itemsCount > 0 {
+		avgGasUsed = r.itemsGasUsed / uint64(r.itemsCount)
+	}
 	blockSize := max(estWorstCaseBlockSize(avgGasUsed), headerSize)
-
 	throttleThreshold := min(uint64(len(r.items)), uint64(blockCacheMemory)/blockSize+1)
 	return int(throttleThreshold)
 }
