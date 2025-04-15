@@ -104,7 +104,7 @@ func (f *FilterMaps) renderMapsFromSnapshot(cp *renderedMap) (*mapRenderer, erro
 	return &mapRenderer{
 		f: f,
 		currentMap: &renderedMap{
-			filterMap:   cp.filterMap.copy(),
+			filterMap:   cp.filterMap.fullCopy(),
 			mapIndex:    cp.mapIndex,
 			lastBlock:   cp.lastBlock,
 			blockLvPtrs: cp.blockLvPtrs,
@@ -260,7 +260,7 @@ func (r *mapRenderer) makeSnapshot() {
 		panic("iterator state inconsistent with last block")
 	}
 	r.f.renderSnapshots.Add(r.currentMap.lastBlock, &renderedMap{
-		filterMap:     r.currentMap.filterMap.copy(),
+		filterMap:     r.currentMap.filterMap.fastCopy(),
 		mapIndex:      r.currentMap.mapIndex,
 		lastBlock:     r.currentMap.lastBlock,
 		lastBlockId:   r.f.targetView.getBlockId(r.currentMap.lastBlock),

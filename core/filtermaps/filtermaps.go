@@ -139,11 +139,23 @@ type FilterMaps struct {
 // as transparent (uncached/unchanged).
 type filterMap []FilterRow
 
-// copy returns a copy of the given filter map. Note that the row slices are
-// copied but their contents are not. This permits extending the rows further
+// fastCopy returns a copy of the given filter map. Note that the row slices are
+// copied but their contents are not. This permits appending to the rows further
 // (which happens during map rendering) without affecting the validity of
 // copies made for snapshots during rendering.
-func (fm filterMap) copy() filterMap {
+// Appending to the rows of both the original map and the fast copy, or two fast
+// copies of the same map would result in data corruption, therefore a fast copy
+// should always be used in a read only way.
+func (fm filterMap) fastCopy() filterMap {
+	c := make(filterMap, len(fm))
+	copy(c, fm)
+	return c
+}
+
+// fullCopy returns a copy of the given filter map, also making a copy of each
+// individual filter row, ensuring that a modification to either one will never
+// affect the other.
+func (fm filterMap) fullCopy() filterMap {
 	c := make(filterMap, len(fm))
 	for i, row := range fm {
 		c[i] = make(FilterRow, len(row))
