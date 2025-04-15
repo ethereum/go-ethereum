@@ -22,9 +22,10 @@ package lru
 // This type is not safe for concurrent use.
 // The zero value is not valid, instances must be created using NewCache.
 type BasicLRU[K comparable, V any] struct {
-	list  *list[K]
-	items map[K]cacheItem[K, V]
-	cap   int
+	list      *list[K]
+	items     map[K]cacheItem[K, V]
+	cap       int
+	onEvicted func(key K, value V)
 }
 
 type cacheItem[K any, V any] struct {
@@ -61,6 +62,10 @@ func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
 		elem = c.list.removeLast()
 		delete(c.items, elem.v)
 		evicted = true
+		if c.onEvicted != nil {
+			v := c.items[elem.v]
+			c.onEvicted(elem.v, v.value)
+		}
 	} else {
 		elem = new(listElem[K])
 	}
@@ -140,6 +145,11 @@ func (c *BasicLRU[K, V]) RemoveOldest() (key K, value V, ok bool) {
 	delete(c.items, key)
 	c.list.remove(lastElem)
 	return key, item.value, true
+}
+
+// OnEvicted sets a callback function to be called when an item is evicted from the cache.
+func (c *BasicLRU[K, V]) OnEvicted(fn func(k K, v V)) {
+	c.onEvicted = fn
 }
 
 // Keys returns all keys in the cache.

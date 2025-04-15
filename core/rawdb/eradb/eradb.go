@@ -61,19 +61,32 @@ func New(datadir string) (*EraDatabase, error) {
 		return nil, err
 	}
 	db := &EraDatabase{datadir: datadir, cache: lru.NewCache[uint64, *era.Era](openFileLimit)}
+	db.cache.OnEvicted(func(key uint64, value *era.Era) {
+		// Close the era1 file when it is evicted from the cache
+		// to avoid leaks.
+		if value != nil {
+			if err := value.Close(); err != nil {
+				log.Warn("Error closing era1 file", "epoch", key, "err", err)
+			}
+		}
+	})
 	log.Info("Opened erastore", "datadir", datadir)
 	return db, nil
 }
 
 // Close closes all open era1 files in the cache.
-func (db *EraDatabase) Close() {
+func (db *EraDatabase) Close() error {
 	// Close all open era1 files in the cache.
 	keys := db.cache.Keys()
+	errs := make([]error, len(keys))
 	for _, key := range keys {
 		if e, ok := db.cache.Get(key); ok {
-			e.Close()
+			if err := e.Close(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
+	return errors.Join(errs...)
 }
 
 // GetRawBody returns the raw body for a given block number.
