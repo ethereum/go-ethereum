@@ -59,7 +59,7 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		GasUsed:           gasUsed,
 		Logs:              logs,
 	}
-	return nil
+	return s.ListEnd()
 }
 
 func (r *Receipt) EncodeRLP(_w io.Writer) error {
