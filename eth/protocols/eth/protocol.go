@@ -69,7 +69,6 @@ const (
 var (
 	errNoStatusMsg             = errors.New("no status message")
 	errMsgTooLarge             = errors.New("message too long")
-	errDecode                  = errors.New("invalid message")
 	errInvalidMsgCode          = errors.New("invalid message code")
 	errProtocolVersionMismatch = errors.New("protocol version mismatch")
 	errNetworkIDMismatch       = errors.New("network ID mismatch")

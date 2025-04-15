@@ -38,7 +38,7 @@ func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the complex header query
 	var query GetBlockHeadersPacket
 	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	response := ServiceGetBlockHeadersQuery(backend.Chain(), query.GetBlockHeadersRequest, peer)
 	return peer.ReplyBlockHeadersRLP(query.RequestId, response)
@@ -221,7 +221,7 @@ func handleGetBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block body retrieval message
 	var query GetBlockBodiesPacket
 	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	response := ServiceGetBlockBodiesQuery(backend.Chain(), query.GetBlockBodiesRequest)
 	return peer.ReplyBlockBodiesRLP(query.RequestId, response)
@@ -252,7 +252,7 @@ func handleGetReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block receipts retrieval message
 	var query GetReceiptsPacket
 	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	response := ServiceGetReceiptsQuery68(backend.Chain(), query.GetReceiptsRequest)
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
@@ -262,7 +262,7 @@ func handleGetReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	// Decode the block receipts retrieval message
 	var query GetReceiptsPacket
 	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	response := serviceGetReceiptsQuery69(backend.Chain(), query.GetReceiptsRequest)
 	return peer.ReplyReceiptsRLP(query.RequestId, response)
@@ -345,7 +345,7 @@ func handleBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of headers arrived to one of our previous requests
 	res := new(BlockHeadersPacket)
 	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	metadata := func() interface{} {
 		hashes := make([]common.Hash, len(res.BlockHeadersRequest))
@@ -365,7 +365,7 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of block bodies arrived to one of our previous requests
 	res := new(BlockBodiesPacket)
 	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	metadata := func() interface{} {
 		var (
@@ -394,7 +394,7 @@ func handleReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
 	res := new(ReceiptsPacket)
 	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
@@ -416,7 +416,7 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
 	res := new(ReceiptsPacket69)
 	if err := msg.Decode(res); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	// only use one buffer
 	buffers := new(receiptListBuffers)
@@ -451,10 +451,10 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 	}
 	ann := new(NewPooledTransactionHashesPacket)
 	if err := msg.Decode(ann); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	if len(ann.Hashes) != len(ann.Types) || len(ann.Hashes) != len(ann.Sizes) {
-		return fmt.Errorf("%w: message %v: invalid len of fields: %v %v %v", errDecode, msg, len(ann.Hashes), len(ann.Types), len(ann.Sizes))
+		return fmt.Errorf("NewPooledTransactionHashes: invalid len of fields in %v %v %v", len(ann.Hashes), len(ann.Types), len(ann.Sizes))
 	}
 	// Schedule all the unknown hashes for retrieval
 	for _, hash := range ann.Hashes {
@@ -467,7 +467,7 @@ func handleGetPooledTransactions(backend Backend, msg Decoder, peer *Peer) error
 	// Decode the pooled transactions retrieval message
 	var query GetPooledTransactionsPacket
 	if err := msg.Decode(&query); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsRequest)
 	return peer.ReplyPooledTransactionsRLP(query.RequestId, hashes, txs)
@@ -504,12 +504,12 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	// Transactions can be processed, parse all of them and deliver to the pool
 	var txs TransactionsPacket
 	if err := msg.Decode(&txs); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	for i, tx := range txs {
 		// Validate and mark the remote transaction
 		if tx == nil {
-			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
+			return fmt.Errorf("Transactions: transaction %d is nil", i)
 		}
 		peer.markTransaction(tx.Hash())
 	}
@@ -524,12 +524,12 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	// Transactions can be processed, parse all of them and deliver to the pool
 	var txs PooledTransactionsPacket
 	if err := msg.Decode(&txs); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	for i, tx := range txs.PooledTransactionsResponse {
 		// Validate and mark the remote transaction
 		if tx == nil {
-			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
+			return fmt.Errorf("PooledTransactions: transaction %d is nil", i)
 		}
 		peer.markTransaction(tx.Hash())
 	}
@@ -541,7 +541,7 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 func handleBlockRangeUpdate(backend Backend, msg Decoder, peer *Peer) error {
 	var update BlockRangeUpdatePacket
 	if err := msg.Decode(&update); err != nil {
-		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+		return err
 	}
 	// We don't do anything with these messages for now.
 	return nil
