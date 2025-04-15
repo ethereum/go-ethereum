@@ -66,10 +66,14 @@ const (
 )
 
 var (
-	errServerStopped       = errors.New("server stopped")
-	errEncHandshakeError   = errors.New("rlpx enc error")
-	errProtoHandshakeError = errors.New("rlpx proto error")
+	errServerStopped     = errors.New("server stopped")
+	errEncHandshakeError = errors.New("rlpx enc error")
 )
+
+type protoHandshakeError struct{ err error }
+
+func (e *protoHandshakeError) Error() string { return fmt.Sprintf("rlpx proto error: %v", e.err) }
+func (e *protoHandshakeError) Unwrap() error { return e.err }
 
 // Server manages all peer connections.
 type Server struct {
@@ -907,7 +911,7 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
 		clog.Trace("Failed p2p handshake", "err", err)
-		return fmt.Errorf("%w: %v", errProtoHandshakeError, err)
+		return &protoHandshakeError{err: err}
 	}
 	if id := c.node.ID(); !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
 		clog.Trace("Wrong devp2p handshake identity", "phsid", hex.EncodeToString(phs.ID))
