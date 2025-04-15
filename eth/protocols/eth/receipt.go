@@ -96,6 +96,7 @@ func (r *Receipt) bloom(buffer *[6]byte) types.Bloom {
 	}
 	for logsIter.Next() {
 		log := logsIter.Value()
+		log, _, _ = rlp.SplitList(log)
 		address, log, _ := rlp.SplitString(log)
 		b.AddWithBuffer(address, buffer)
 		topicsIter, err := rlp.NewListIterator(log)
@@ -103,7 +104,8 @@ func (r *Receipt) bloom(buffer *[6]byte) types.Bloom {
 			return b
 		}
 		for topicsIter.Next() {
-			b.AddWithBuffer(topicsIter.Value(), buffer)
+			topic, _, _ := rlp.SplitString(topicsIter.Value())
+			b.AddWithBuffer(topic, buffer)
 		}
 	}
 	return b
@@ -137,7 +139,10 @@ func (rl *ReceiptList69) EncodeIndex(i int, b *bytes.Buffer) {
 		bloom = r.bloom(&rl.buf.bloom)
 		w     = &rl.buf.enc
 	)
-	// encode receipt list: [postStateOrStatus, gasUsed, bloom, logs]
+	if r.TxType != 0 {
+		b.WriteByte(r.TxType)
+	}
+	// encode list = [postStateOrStatus, gasUsed, bloom, logs]
 	w.Reset(b)
 	l := w.List()
 	w.WriteBytes(r.PostStateOrStatus)
@@ -145,19 +150,6 @@ func (rl *ReceiptList69) EncodeIndex(i int, b *bytes.Buffer) {
 	w.WriteBytes(bloom[:])
 	w.Write(r.Logs)
 	w.ListEnd(l)
-	if err := w.Flush(); err != nil {
-		return
-	}
-	// if this is a legacy transaction receipt, we are done.
-	if r.TxType == 0 {
-		return
-	}
-	// Otherwise it's a typed transaction receipt, which has the type prefix and
-	// the inner list as a byte-array: tx-type || rlp(list).
-	// Since b contains the correct inner list, we can reuse its content.
-	w.Reset(b)
-	w.WriteUint64(uint64(r.TxType))
-	w.WriteBytes(b.Bytes())
 	w.Flush()
 }
 
@@ -227,8 +219,7 @@ func blockReceiptsToNetwork(blockReceipts, blockBody rlp.RawValue) ([]byte, erro
 	return out.Bytes(), nil
 }
 
-// txTypesInBody parses the transactions list of an encoded block body,
-// returning just the types.
+// txTypesInBody parses the transactions list of an encoded block body, returning just the types.
 func txTypesInBody(body rlp.RawValue) (iter.Seq[byte], error) {
 	bodyFields, _, err := rlp.SplitList(body)
 	if err != nil {

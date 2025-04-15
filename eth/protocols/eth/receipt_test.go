@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 func TestTransformReceipts(t *testing.T) {
@@ -64,6 +65,7 @@ func TestTransformReceipts(t *testing.T) {
 		blockBody := types.Body{Transactions: test.txs}
 		encBlockBody, _ := rlp.EncodeToBytes(blockBody)
 
+		// convert from storage encoding to network encoding
 		have, err := blockReceiptsToNetwork(in, encBlockBody)
 		if err != nil {
 			t.Fatalf("test[%d]: blockReceiptsToNetwork error: %v", i, err)
@@ -73,6 +75,7 @@ func TestTransformReceipts(t *testing.T) {
 			t.Fatalf("test[%d]: blockReceiptsToNetwork mismatch\nhave: %x\nwant: %x\n  in: %x", i, out, have, in)
 		}
 
+		// parse as Receipts response list from network encoding
 		var rl ReceiptList69
 		if err := rlp.DecodeBytes(out, &rl); err != nil {
 			t.Fatalf("test[%d]: can't decode network receipts: %v", i, err)
@@ -80,6 +83,23 @@ func TestTransformReceipts(t *testing.T) {
 		storageEnc := rl.toStorageReceiptsRLP()
 		if !bytes.Equal(storageEnc, in) {
 			t.Fatalf("test[%d]: re-encoded receipts not equal\nhave: %x\nwant: %x", i, storageEnc, in)
+		}
+
+		// compute expected root hash
+		receipts := make(types.Receipts, len(test.input))
+		for i := range test.input {
+			r := types.Receipt(test.input[i])
+			// need to derive these fields to get the correct result from DeriveSha.
+			r.Type = test.txs[i].Type()
+			r.Bloom = types.CreateBloom(&r)
+			receipts[i] = &r
+		}
+		expectedHash := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+
+		// compute root hash from ReceiptList69 and compare.
+		responseHash := types.DeriveSha(&rl, trie.NewStackTrie(nil))
+		if responseHash != expectedHash {
+			t.Fatalf("test[%d]: wrong root hash from ReceiptList69\nhave: %v\nwant: %v", i, responseHash, expectedHash)
 		}
 	}
 }
