@@ -335,7 +335,6 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
 			panic(fmt.Sprintf("could not process consolidation requests: %v", err))
 		}
-
 	}
 	return requests
 }
