@@ -1,0 +1,42 @@
+name: Taiko Geth JSON-RPC Autogen Docs
+
+on:
+  push:
+    branches: [taiko]
+
+jobs:
+    generate-and-deploy:
+        runs-on: [arc-runner-set]
+        permissions:
+          contents: write
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v4
+    
+          - name: Set up Go
+            uses: actions/setup-go@v5
+            with:
+              go-version: "1.23"
+
+          - name: Set up node
+            uses: actions/setup-node@v4
+            with:
+              node-version: "20"
+
+          - name: Install jrgen
+            run: |
+                npm install -g jrgen
+    
+          - name: Run script
+            run: |
+                go run ./scripts/generate-jsonrpc.go
+                jrgen docs-html jrgen.json
+                mv taiko-json-rpc-api-reference.html index.html
+    
+          - name: Deploy to GitHub Pages
+            uses: peaceiris/actions-gh-pages@v4
+            with:
+              github_token: ${{ secrets.GITHUB_TOKEN }}
+              publish_dir: ./ # Set this to where your `index.html` is located
+              publish_branch: gh-pages
+              destination_dir: taiko-geth-json-rpc

@@ -8,6 +8,10 @@ The codebase is based on [go-ethereum v1.15.5](https://github.com/ethereum/go-et
 
 All source code changes by [taiko](https://taiko.xyz) team are commented with `"CHANGE(taiko): ...."`, and the filenames of all additional files have the prefix `"taiko_"` (`taiko_*.go`).
 
+## JSON-RPC API
+
+JSON-RPC documentation for taiko-specific JSON-RPC calls can be found [here](https://taikoxyz.github.io/taiko-geth/taiko-geth-json-rpc/).
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
