@@ -180,7 +180,7 @@ var (
 			ExpTimeoutConfig:     ExpTimeoutConfig{Base: 1.0, MaxExponent: 0},
 			MasternodeReward:     500, // double as Reward
 			ProtectorReward:      400,
-			ObserverReward:       300,
+			ObserverReward:       300.125,
 		},
 	}
 
@@ -462,9 +462,9 @@ type V2Config struct {
 	TimeoutPeriod        int     `json:"timeoutPeriod"`        // Duration in ms
 	CertThreshold        float64 `json:"certificateThreshold"` // Necessary number of messages from master nodes to form a certificate
 
-	MasternodeReward uint64 `json:"masternodeReward"` // Block reward per master node (core validator) - unit Ether
-	ProtectorReward  uint64 `json:"protectorReward"`  // Block reward per protector - unit Ether
-	ObserverReward   uint64 `json:"observerReward"`   // Block reward per observer - unit Ether
+	MasternodeReward float64 `json:"masternodeReward"` // Block reward per master node (core validator) - unit Ether
+	ProtectorReward  float64 `json:"protectorReward"`  // Block reward per protector - unit Ether
+	ObserverReward   float64 `json:"observerReward"`   // Block reward per observer - unit Ether
 
 	ExpTimeoutConfig ExpTimeoutConfig `json:"expTimeoutConfig"`
 }

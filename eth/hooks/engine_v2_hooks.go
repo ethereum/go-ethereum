@@ -234,7 +234,7 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			rewardsMap["signersProtector"] = signers[ProtectorNodeBeneficiary]
 			rewardsMap["signersObserver"] = signers[ObserverNodeBeneficiary]
 			type rewardWithType struct {
-				r   uint64
+				r   float64
 				t   Beneficiary
 				key string
 			}
@@ -243,7 +243,8 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 				{currentConfig.ProtectorReward, ProtectorNodeBeneficiary, "rewardsProtector"},
 				{currentConfig.ObserverReward, ObserverNodeBeneficiary, "rewardsObserver"},
 			} {
-				originalReward := new(big.Int).Mul(new(big.Int).SetUint64(rwt.r), new(big.Int).SetUint64(params.Ether))
+				originalRewardFloat := new(big.Float).Mul(new(big.Float).SetFloat64(rwt.r), new(big.Float).SetUint64(params.Ether))
+				originalReward, _ := originalRewardFloat.Int(nil)
 				chainReward := util.RewardInflation(chain, originalReward, number, common.BlocksPerYear)
 				rewardSigners, err := CalculateRewardForSignerFixed(chainReward, signers[rwt.t])
 				if err != nil {

@@ -291,9 +291,9 @@ func TestHookRewardAfterUpgrade(t *testing.T) {
 		assert.Equal(t, addr, observer1Addr)
 		r := x.(map[common.Address]*big.Int)
 		owner := state.GetCandidateOwner(parentState, addr)
-		a, _ := big.NewInt(0).SetString("270000000000000000000", 10)
+		a, _ := big.NewInt(0).SetString("270112500000000000000", 10) // this value tests the float64 reward
 		assert.Zero(t, a.Cmp(r[owner]), "real reward is", r[owner])
-		b, _ := big.NewInt(0).SetString("30000000000000000000", 10)
+		b, _ := big.NewInt(0).SetString("30012500000000000000", 10) // this value tests the float64 reward
 		assert.Zero(t, b.Cmp(r[config.XDPoS.FoudationWalletAddr]), "real reward is", r[config.XDPoS.FoudationWalletAddr])
 	}
 	common.TIPUpgradeReward = backup

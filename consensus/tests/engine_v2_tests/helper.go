@@ -682,9 +682,6 @@ func PrepareXDCTestBlockChainWithProtectorObserver(t *testing.T, numOfBlocks int
 		}
 		block := CreateBlock(blockchain, chainConfig, currentBlock, i, roundNumber, blockCoinBase, signer, signFn, penalty, nil, "f11ec19df702aa6bd9b3b2186edbc66d6b50b06334455a4a2ae8d166f28a14ff")
 
-		if i == 900 {
-			fmt.Println(block.Penalties())
-		}
 		err = blockchain.InsertBlock(block)
 		if err != nil {
 			t.Fatal(err)
