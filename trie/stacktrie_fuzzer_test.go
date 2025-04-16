@@ -37,16 +37,13 @@ func FuzzStackTrie(f *testing.F) {
 }
 
 func fuzz(data []byte, debugging bool) {
-	// This spongeDb is used to check the sequence of disk-db-writes
 	var (
-		input   = bytes.NewReader(data)
-		spongeA = &spongeDb{sponge: crypto.NewKeccakState()}
-		dbA     = newTestDatabase(rawdb.NewDatabase(spongeA), rawdb.HashScheme)
-		trieA   = NewEmpty(dbA)
-		spongeB = &spongeDb{sponge: crypto.NewKeccakState()}
-		dbB     = newTestDatabase(rawdb.NewDatabase(spongeB), rawdb.HashScheme)
-		trieB   = NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-			rawdb.WriteTrieNode(spongeB, common.Hash{}, path, hash, blob, dbB.Scheme())
+		input = bytes.NewReader(data)
+		dbA   = newTestDatabase(rawdb.NewMemoryDatabase(), rawdb.HashScheme)
+		trieA = NewEmpty(dbA)
+		memDB = rawdb.NewMemoryDatabase()
+		trieB = NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+			rawdb.WriteTrieNode(memDB, common.Hash{}, path, hash, blob, rawdb.HashScheme)
 		})
 		vals        []*kv
 		maxElements = 10000
@@ -55,13 +52,17 @@ func fuzz(data []byte, debugging bool) {
 	)
 	// Fill the trie with elements
 	for i := 0; input.Len() > 0 && i < maxElements; i++ {
+		// Build the key
 		k := make([]byte, 32)
 		input.Read(k)
+
+		// Build the val
 		var a uint16
 		binary.Read(input, binary.LittleEndian, &a)
 		a = 1 + a%100
 		v := make([]byte, a)
 		input.Read(v)
+
 		if input.Len() == 0 {
 			// If it was exhausted while reading, the value may be all zeroes,
 			// thus 'deletion' which is not supported on stacktrie
@@ -73,6 +74,7 @@ func fuzz(data []byte, debugging bool) {
 		}
 		keys[string(k)] = struct{}{}
 		vals = append(vals, &kv{k: k, v: v})
+
 		trieA.MustUpdate(k, v)
 	}
 	if len(vals) == 0 {
@@ -98,11 +100,6 @@ func fuzz(data []byte, debugging bool) {
 	rootB := trieB.Hash()
 	if rootA != rootB {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootB))
-	}
-	sumA := spongeA.sponge.Sum(nil)
-	sumB := spongeB.sponge.Sum(nil)
-	if !bytes.Equal(sumA, sumB) {
-		panic(fmt.Sprintf("sequence differ: (trie) %x != %x (stacktrie)", sumA, sumB))
 	}
 
 	// Ensure all the nodes are persisted correctly

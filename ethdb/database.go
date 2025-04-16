@@ -17,7 +17,10 @@
 // Package ethdb defines the interfaces for an Ethereum data store.
 package ethdb
 
-import "io"
+import (
+	"errors"
+	"io"
+)
 
 // KeyValueReader wraps the Has and Get method of a backing data store.
 type KeyValueReader interface {
@@ -37,10 +40,14 @@ type KeyValueWriter interface {
 	Delete(key []byte) error
 }
 
+var ErrTooManyKeys = errors.New("too many keys in deleted range")
+
 // KeyValueRangeDeleter wraps the DeleteRange method of a backing data store.
 type KeyValueRangeDeleter interface {
 	// DeleteRange deletes all of the keys (and values) in the range [start,end)
 	// (inclusive on start, exclusive on end).
+	// Some implementations of DeleteRange may return ErrTooManyKeys after
+	// partially deleting entries in the given range.
 	DeleteRange(start, end []byte) error
 }
 
@@ -128,6 +135,8 @@ type AncientWriter interface {
 	// is item_n(start from 0). The deleted items may not be removed from the ancient store
 	// immediately, but only when the accumulated deleted data reach the threshold then
 	// will be removed all together.
+	//
+	// Note that data marked as non-prunable will still be retained and remain accessible.
 	TruncateTail(n uint64) (uint64, error)
 
 	// Sync flushes all in-memory ancient store data to disk.

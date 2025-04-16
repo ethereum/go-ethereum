@@ -116,10 +116,10 @@ func (p *Peer) announceTransactions() {
 				size         common.StorageSize
 			)
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
-				if tx := p.txpool.Get(queue[count]); tx != nil {
+				if meta := p.txpool.GetMetadata(queue[count]); meta != nil {
 					pending = append(pending, queue[count])
-					pendingTypes = append(pendingTypes, tx.Type())
-					pendingSizes = append(pendingSizes, uint32(tx.Size()))
+					pendingTypes = append(pendingTypes, meta.Type)
+					pendingSizes = append(pendingSizes, uint32(meta.Size))
 					size += common.HashLength
 				}
 			}

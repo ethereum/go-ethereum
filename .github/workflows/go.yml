@@ -29,7 +29,7 @@ jobs:
     - name: Run linters
       run: |
         go run build/ci.go lint
-        go run build/ci.go check_tidy
+        go run build/ci.go check_generate
         go run build/ci.go check_baddeps
 
   build:
@@ -39,7 +39,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23.0
+          go-version: 1.24.0
           cache: false
       - name: Run tests
         run: go test -short ./...
