@@ -943,11 +943,8 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 		news = make([]*types.Transaction, 0, len(txs))
 	)
 	for i, tx := range txs {
-		pool.mu.Lock()
-		hash := pool.all.Get(tx.Hash())
-		pool.mu.Unlock()
 		// If the transaction is known, pre-set the error slot
-		if hash != nil {
+		if pool.all.Get(tx.Hash()) != nil {
 			errs[i] = txpool.ErrAlreadyKnown
 			knownTxMeter.Mark(1)
 			continue
@@ -1830,6 +1827,15 @@ func (t *lookup) Remove(hash common.Hash) {
 	delete(t.txs, hash)
 }
 
+func (t *lookup) Clear() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	t.slots = 0
+	t.txs = make(map[common.Hash]*types.Transaction)
+	t.auths = make(map[common.Address][]common.Hash)
+}
+
 // TxsBelowTip finds all remote transactions below the given tip threshold.
 func (t *lookup) TxsBelowTip(threshold *big.Int) types.Transactions {
 	found := make(types.Transactions, 0, 128)
@@ -1926,7 +1932,7 @@ func (pool *LegacyPool) Clear() {
 	for addr := range pool.queue {
 		pool.reserver.Release(addr)
 	}
-	pool.all = newLookup()
+	pool.all.Clear()
 	pool.priced = newPricedList(pool.all)
 	pool.pending = make(map[common.Address]*list)
 	pool.queue = make(map[common.Address]*list)
