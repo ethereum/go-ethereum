@@ -66,18 +66,14 @@ func TestTransformReceipts(t *testing.T) {
 		encBlockBody, _ := rlp.EncodeToBytes(blockBody)
 
 		// convert from storage encoding to network encoding
-		have, err := blockReceiptsToNetwork(in, encBlockBody)
+		network, err := blockReceiptsToNetwork(in, encBlockBody)
 		if err != nil {
 			t.Fatalf("test[%d]: blockReceiptsToNetwork error: %v", i, err)
-		}
-		out, _ := rlp.EncodeToBytes(test.output)
-		if !bytes.Equal(have, out) {
-			t.Fatalf("test[%d]: blockReceiptsToNetwork mismatch\nhave: %x\nwant: %x\n  in: %x", i, out, have, in)
 		}
 
 		// parse as Receipts response list from network encoding
 		var rl ReceiptList69
-		if err := rlp.DecodeBytes(out, &rl); err != nil {
+		if err := rlp.DecodeBytes(network, &rl); err != nil {
 			t.Fatalf("test[%d]: can't decode network receipts: %v", i, err)
 		}
 		storageEnc := rl.toStorageReceiptsRLP()

@@ -19,7 +19,6 @@ package eth
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"iter"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -63,19 +62,8 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	return s.ListEnd()
 }
 
-// EncodeRLP writes the network encoding of receipts.
-func (r *Receipt) EncodeRLP(_w io.Writer) error {
-	w := rlp.NewEncoderBuffer(_w)
-	list := w.List()
-	w.WriteUint64(uint64(r.TxType))
-	w.WriteBytes(r.PostStateOrStatus)
-	w.WriteUint64(r.GasUsed)
-	w.Write(r.Logs)
-	w.ListEnd(list)
-	return w.Flush()
-}
-
-// encodeStorage writes the network encoding of receipts.
+// encodeStorage writes the storage encoding, i.e. the result matches
+// types.ReceiptForStorage.
 func (r *Receipt) encodeStorage(w *rlp.EncoderBuffer) {
 	list := w.List()
 	w.WriteBytes(r.PostStateOrStatus)
