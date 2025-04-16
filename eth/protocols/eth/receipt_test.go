@@ -32,49 +32,70 @@ func miniDeriveFields(r *types.Receipt, txType byte) {
 	r.Bloom = types.CreateBloom(r)
 }
 
-func TestReceiptList69(t *testing.T) {
-	logs := []*types.Log{{Address: common.Address{1}, Topics: []common.Hash{{1}}}}
-	encLogs, _ := rlp.EncodeToBytes(logs)
+var receiptsTestLogs1 = []*types.Log{{Address: common.Address{1}, Topics: []common.Hash{{1}}}}
+var receiptsTestLogs2 = []*types.Log{
+	{Address: common.Address{2}, Topics: []common.Hash{{21}, {22}}, Data: []byte{2, 2, 32, 32}},
+	{Address: common.Address{3}, Topics: []common.Hash{{31}, {32}}, Data: []byte{3, 3, 32, 32}},
+}
 
-	tests := []struct {
-		input  []types.ReceiptForStorage
-		txs    []*types.Transaction
-		output []Receipt
-	}{
-		{
-			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
-			txs:    []*types.Transaction{types.NewTx(&types.LegacyTx{})},
-			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: rlp.EmptyList}},
-		},
-		{
-			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
-			txs:    []*types.Transaction{types.NewTx(&types.DynamicFeeTx{})},
-			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: rlp.EmptyList, TxType: 2}},
-		},
-		{
-			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: nil}},
-			txs:    []*types.Transaction{types.NewTx(&types.AccessListTx{})},
-			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: rlp.EmptyList, TxType: 1}},
-		},
-		{
-			input:  []types.ReceiptForStorage{{CumulativeGasUsed: 123, Status: 1, Logs: logs}},
-			txs:    []*types.Transaction{types.NewTx(&types.AccessListTx{})},
-			output: []Receipt{{GasUsed: 123, PostStateOrStatus: []byte{1}, Logs: encLogs, TxType: 1}},
-		},
+var receiptsTests = []struct {
+	input []types.ReceiptForStorage
+	txs   []*types.Transaction
+	root  common.Hash
+}{
+	{
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: nil}},
+		txs:   []*types.Transaction{types.NewTx(&types.LegacyTx{})},
+	},
+	{
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: nil}},
+		txs:   []*types.Transaction{types.NewTx(&types.DynamicFeeTx{})},
+	},
+	{
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: nil}},
+		txs:   []*types.Transaction{types.NewTx(&types.AccessListTx{})},
+	},
+	{
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: receiptsTestLogs1}},
+		txs:   []*types.Transaction{types.NewTx(&types.LegacyTx{})},
+	},
+	{
+		input: []types.ReceiptForStorage{{CumulativeGasUsed: 555, Status: 1, Logs: receiptsTestLogs2}},
+		txs:   []*types.Transaction{types.NewTx(&types.AccessListTx{})},
+	},
+}
+
+func init() {
+	for i := range receiptsTests {
+		// derive basic fields
+		for j := range receiptsTests[i].input {
+			r := (*types.Receipt)(&receiptsTests[i].input[j])
+			txType := receiptsTests[i].txs[j].Type()
+			miniDeriveFields(r, txType)
+		}
+		// compute expected root
+		receipts := make(types.Receipts, len(receiptsTests[i].input))
+		for j, sr := range receiptsTests[i].input {
+			r := types.Receipt(sr)
+			receipts[j] = &r
+		}
+		receiptsTests[i].root = types.DeriveSha(receipts, trie.NewStackTrie(nil))
 	}
+}
 
-	for i, test := range tests {
-		// encode receipts from types object.
-		in, _ := rlp.EncodeToBytes(test.input)
+func TestReceiptList69(t *testing.T) {
+	for i, test := range receiptsTests {
+		// encode receipts from types.ReceiptForStorage object.
+		canonDB, _ := rlp.EncodeToBytes(test.input)
 
 		// encode block body from types object.
 		blockBody := types.Body{Transactions: test.txs}
-		encBlockBody, _ := rlp.EncodeToBytes(blockBody)
+		canonBody, _ := rlp.EncodeToBytes(blockBody)
 
 		// convert from storage encoding to network encoding
-		network, err := blockReceiptsToNetwork69(in, encBlockBody)
+		network, err := blockReceiptsToNetwork69(canonDB, canonBody)
 		if err != nil {
-			t.Fatalf("test[%d]: blockReceiptsToNetwork error: %v", i, err)
+			t.Fatalf("test[%d]: blockReceiptsToNetwork69 error: %v", i, err)
 		}
 
 		// parse as Receipts response list from network encoding
@@ -82,24 +103,56 @@ func TestReceiptList69(t *testing.T) {
 		if err := rlp.DecodeBytes(network, &rl); err != nil {
 			t.Fatalf("test[%d]: can't decode network receipts: %v", i, err)
 		}
-		storageEnc := rl.EncodeForStorage()
-		if !bytes.Equal(storageEnc, in) {
-			t.Fatalf("test[%d]: re-encoded receipts not equal\nhave: %x\nwant: %x", i, storageEnc, in)
+		rlStorageEnc := rl.EncodeForStorage()
+		if !bytes.Equal(rlStorageEnc, canonDB) {
+			t.Fatalf("test[%d]: re-encoded receipts not equal\nhave: %x\nwant: %x", i, rlStorageEnc, canonDB)
 		}
-
-		// compute expected root hash
-		receipts := make(types.Receipts, len(test.input))
-		for i := range test.input {
-			r := types.Receipt(test.input[i])
-			miniDeriveFields(&r, test.txs[i].Type())
-			receipts[i] = &r
+		rlNetworkEnc, _ := rlp.EncodeToBytes(&rl)
+		if !bytes.Equal(rlNetworkEnc, network) {
+			t.Fatalf("test[%d]: re-encoded network receipt list not equal\nhave: %x\nwant: %x", i, rlNetworkEnc, network)
 		}
-		expectedHash := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 
 		// compute root hash from ReceiptList69 and compare.
 		responseHash := types.DeriveSha(&rl, trie.NewStackTrie(nil))
-		if responseHash != expectedHash {
-			t.Fatalf("test[%d]: wrong root hash from ReceiptList69\nhave: %v\nwant: %v", i, responseHash, expectedHash)
+		if responseHash != test.root {
+			t.Fatalf("test[%d]: wrong root hash from ReceiptList69\nhave: %v\nwant: %v", i, responseHash, test.root)
+		}
+	}
+}
+
+func TestReceiptList68(t *testing.T) {
+	for i, test := range receiptsTests {
+		// encode receipts from types.ReceiptForStorage object.
+		canonDB, _ := rlp.EncodeToBytes(test.input)
+
+		// encode block body from types object.
+		blockBody := types.Body{Transactions: test.txs}
+		canonBody, _ := rlp.EncodeToBytes(blockBody)
+
+		// convert from storage encoding to network encoding
+		network, err := blockReceiptsToNetwork68(canonDB, canonBody)
+		if err != nil {
+			t.Fatalf("test[%d]: blockReceiptsToNetwork68 error: %v", i, err)
+		}
+
+		// parse as Receipts response list from network encoding
+		var rl ReceiptList68
+		if err := rlp.DecodeBytes(network, &rl); err != nil {
+			t.Fatalf("test[%d]: can't decode network receipts: %v", i, err)
+		}
+		rlStorageEnc := rl.EncodeForStorage()
+		if !bytes.Equal(rlStorageEnc, canonDB) {
+			t.Fatalf("test[%d]: re-encoded receipts not equal\nhave: %x\nwant: %x", i, rlStorageEnc, canonDB)
+		}
+		rlNetworkEnc, _ := rlp.EncodeToBytes(&rl)
+		if !bytes.Equal(rlNetworkEnc, network) {
+			t.Fatalf("test[%d]: re-encoded network receipt list not equal\nhave: %x\nwant: %x", i, rlNetworkEnc, network)
+		}
+
+		// compute root hash from ReceiptList68 and compare.
+		responseHash := types.DeriveSha(&rl, trie.NewStackTrie(nil))
+		if responseHash != test.root {
+			t.Fatalf("test[%d]: wrong root hash from ReceiptList68\nhave: %v\nwant: %v", i, responseHash, test.root)
 		}
 	}
 }
