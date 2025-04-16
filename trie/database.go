@@ -336,7 +336,7 @@ func (db *Database) InsertPreimage(hash common.Hash, preimage []byte) {
 	db.preimagesSize += common.StorageSize(common.HashLength + len(preimage))
 }
 
-// Node retrieves a cached trie Node from memory, or returns nil if none can be
+// node retrieves a cached trie Node from memory, or returns nil if none can be
 // found in the memory Cache.
 func (db *Database) node(hash common.Hash) node {
 	// Retrieve the Node from the clean Cache if available

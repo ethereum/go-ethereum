@@ -58,7 +58,8 @@ var Defaults = Config{
 	NetworkId:          0, // enable auto configuration of networkID == chainID
 	LightPeers:         100,
 	DatabaseCache:      768,
-	TrieCache:          256,
+	TrieCleanCache:     256,
+	TrieDirtyCache:     256,
 	TrieTimeout:        5 * time.Minute,
 	FilterLogCacheSize: 32,
 	GasPrice:           big.NewInt(0.25 * params.Shannon),
@@ -112,7 +113,8 @@ type Config struct {
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`
 	DatabaseCache      int
-	TrieCache          int
+	TrieCleanCache     int
+	TrieDirtyCache     int
 	TrieTimeout        time.Duration
 
 	// This is the number of blocks for which logs will be cached in the filter system.

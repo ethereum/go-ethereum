@@ -127,10 +127,12 @@ const (
 // CacheConfig contains the configuration values for the trie caching/pruning
 // that's resident in a blockchain.
 type CacheConfig struct {
-	Disabled      bool          // Whether to disable trie write caching (archive node)
-	TrieNodeLimit int           // Memory limit (MB) at which to flush the current in-memory trie to disk
-	TrieTimeLimit time.Duration // Time limit after which to flush the current in-memory trie to disk
+	Disabled       bool          // Whether to disable trie write caching (archive node)
+	TrieCleanLimit int           // Memory allowance (MB) to use for caching trie nodes in memory
+	TrieDirtyLimit int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
+	TrieTimeLimit  time.Duration // Time limit after which to flush the current in-memory trie to disk
 }
+
 type ResultProcessBlock struct {
 	logs         []*types.Log
 	receipts     []*types.Receipt
@@ -226,8 +228,9 @@ type BlockChain struct {
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *params.ChainConfig, engine consensus.Engine, vmConfig vm.Config) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = &CacheConfig{
-			TrieNodeLimit: 256 * 1024 * 1024,
-			TrieTimeLimit: 5 * time.Minute,
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
 		}
 	}
 
@@ -236,7 +239,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		cacheConfig:         cacheConfig,
 		db:                  db,
 		triegc:              prque.New[int64, common.Hash](nil),
-		stateCache:          state.NewDatabase(db),
+		stateCache:          state.NewDatabaseWithCache(db, cacheConfig.TrieCleanLimit),
 		quit:                make(chan struct{}),
 		chainmu:             syncx.NewClosableMutex(),
 		bodyCache:           lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
@@ -587,6 +590,11 @@ func (bc *BlockChain) State() (*state.StateDB, error) {
 // StateAt returns a new mutable state based on a particular point in time.
 func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.stateCache)
+}
+
+// StateCache returns the caching database underpinning the blockchain instance.
+func (bc *BlockChain) StateCache() state.Database {
+	return bc.stateCache
 }
 
 // OrderStateAt returns a new mutable state based on a particular point in time.
@@ -1450,7 +1458,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			//}
 			var (
 				nodes, imgs = triedb.Size()
-				limit       = common.StorageSize(bc.cacheConfig.TrieNodeLimit) * 1024 * 1024
+				limit       = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
 			)
 			if nodes > limit || imgs > 4*1024*1024 {
 				triedb.Cap(limit - ethdb.IdealBatchSize)

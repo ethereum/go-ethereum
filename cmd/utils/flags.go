@@ -289,6 +289,12 @@ var (
 		Value:    50,
 		Category: flags.PerfCategory,
 	}
+	CacheTrieFlag = &cli.IntFlag{
+		Name:     "cache.trie",
+		Usage:    "Percentage of cache memory allowance to use for trie caching (default = 15% full mode, 30% archive mode)",
+		Value:    15,
+		Category: flags.PerfCategory,
+	}
 	CacheGCFlag = &cli.IntFlag{
 		Name:     "cache-gc",
 		Aliases:  []string{"cache.gc"},
@@ -1424,8 +1430,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	cfg.NoPruning = ctx.String(GCModeFlag.Name) == "archive"
 
+	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
+		cfg.TrieCleanCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
+	}
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
-		cfg.TrieCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
+		cfg.TrieDirtyCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
 	if ctx.IsSet(MinerThreadsFlag.Name) {
 		cfg.MinerThreads = ctx.Int(MinerThreadsFlag.Name)
@@ -1673,12 +1682,16 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (chain *core.B
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	cache := &core.CacheConfig{
-		Disabled:      ctx.String(GCModeFlag.Name) == "archive",
-		TrieNodeLimit: ethconfig.Defaults.TrieCache,
-		TrieTimeLimit: ethconfig.Defaults.TrieTimeout,
+		Disabled:       ctx.String(GCModeFlag.Name) == "archive",
+		TrieCleanLimit: ethconfig.Defaults.TrieCleanCache,
+		TrieDirtyLimit: ethconfig.Defaults.TrieDirtyCache,
+		TrieTimeLimit:  ethconfig.Defaults.TrieTimeout,
+	}
+	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
+		cache.TrieCleanLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
 	}
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
-		cache.TrieNodeLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
+		cache.TrieCleanLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
 	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg)
