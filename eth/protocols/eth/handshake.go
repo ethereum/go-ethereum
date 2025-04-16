@@ -137,6 +137,12 @@ func (p *Peer) readStatus69(networkID uint64, status *StatusPacket69, genesis co
 	if err := forkFilter(status.ForkID); err != nil {
 		return fmt.Errorf("%w: %v", errForkIDRejected, err)
 	}
+	// Handle initial block range.
+	p.lastRange.Store(&BlockRangeUpdatePacket{
+		EarliestBlock:   status.EarliestBlock,
+		LatestBlock:     status.LatestBlock,
+		LatestBlockHash: status.LatestBlockHash,
+	})
 	return nil
 }
 

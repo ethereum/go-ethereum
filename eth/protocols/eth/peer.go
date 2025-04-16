@@ -18,6 +18,7 @@ package eth
 
 import (
 	"math/rand"
+	"sync/atomic"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -47,6 +48,7 @@ type Peer struct {
 	*p2p.Peer                   // The embedded P2P package peer
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
+	lastRange atomic.Pointer[BlockRangeUpdatePacket]
 
 	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
 	knownTxs    *knownCache        // Set of transaction hashes known to be known by this peer
@@ -100,6 +102,12 @@ func (p *Peer) ID() string {
 // Version retrieves the peer's negotiated `eth` protocol version.
 func (p *Peer) Version() uint {
 	return p.version
+}
+
+// BlockRange returns the latest announced block range.
+// This will be nil for peers below protocol version eth/69.
+func (p *Peer) BlockRange() *BlockRangeUpdatePacket {
+	return p.lastRange.Load()
 }
 
 // KnownTransaction returns whether peer is known to already have a transaction.
