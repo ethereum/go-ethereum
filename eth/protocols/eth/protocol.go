@@ -265,18 +265,19 @@ type GetReceiptsPacket struct {
 // ReceiptsResponse is the network packet for block receipts distribution.
 type ReceiptsResponse []types.Receipts
 
-// ReceiptsPacket is the network packet for block receipts distribution with
-// request ID wrapping.
-type ReceiptsPacket struct {
-	RequestId uint64
-	ReceiptsResponse
+// ReceiptsList is a type constraint for block receceipt list types.
+type ReceiptsList interface {
+	*ReceiptList68 | *ReceiptList69
+	setBuffers(*receiptListBuffers)
+	EncodeForStorage() rlp.RawValue
+	types.DerivableList
 }
 
 // ReceiptsPacket is the network packet for block receipts distribution with
 // request ID wrapping.
-type ReceiptsPacket69 struct {
+type ReceiptsPacket[L ReceiptsList] struct {
 	RequestId uint64
-	List      []ReceiptList69
+	List      []L
 }
 
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded

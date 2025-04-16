@@ -282,19 +282,25 @@ func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest)
 			break
 		}
 		// Retrieve the requested block's receipts
-		results := chain.GetReceiptsByHash(hash)
+		results := chain.GetRawReceiptsByHash(hash)
 		if results == nil {
 			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
 				continue
 			}
-		}
-		// If known, encode and queue for response packet
-		if encoded, err := rlp.EncodeToBytes(results); err != nil {
-			log.Error("Failed to encode receipt", "err", err)
 		} else {
-			receipts = append(receipts, encoded)
-			bytes += len(encoded)
+			body := chain.GetBodyRLP(hash)
+			if body == nil {
+				continue
+			}
+			var err error
+			results, err = blockReceiptsToNetwork68(results, body)
+			if err != nil {
+				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
+				continue
+			}
 		}
+		receipts = append(receipts, results)
+		bytes += len(results)
 	}
 	return receipts
 }
@@ -324,7 +330,7 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 				continue
 			}
 			var err error
-			results, err = blockReceiptsToNetwork(results, body)
+			results, err = blockReceiptsToNetwork69(results, body)
 			if err != nil {
 				log.Error("Error in block receipts conversion", "hash", hash, "err", err)
 				continue
@@ -393,53 +399,30 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 	}, metadata)
 }
 
-func handleReceipts68(backend Backend, msg Decoder, peer *Peer) error {
+func handleReceipts[L ReceiptsList](backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
-	res := new(ReceiptsPacket)
+	res := new(ReceiptsPacket[L])
 	if err := msg.Decode(res); err != nil {
-		return err
-	}
-	metadata := func() interface{} {
-		hasher := trie.NewStackTrie(nil)
-		hashes := make([]common.Hash, len(res.ReceiptsResponse))
-		for i, receipt := range res.ReceiptsResponse {
-			hashes[i] = types.DeriveSha(receipt, hasher)
-		}
-		return hashes
-	}
-	encoded := ReceiptsRLPResponse(types.ReceiptsToRLP(res.ReceiptsResponse))
-	return peer.dispatchResponse(&Response{
-		id:   res.RequestId,
-		code: ReceiptsMsg,
-		Res:  &encoded,
-	}, metadata)
-}
-
-func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
-	// A batch of receipts arrived to one of our previous requests
-	var res ReceiptsPacket69
-	if err := msg.Decode(&res); err != nil {
 		return err
 	}
 	// Assign temporary hashing buffer to each list item, the same buffer is shared
 	// between all receipt list instances.
 	buffers := new(receiptListBuffers)
 	for i := range res.List {
-		res.List[i].buf = buffers
+		res.List[i].setBuffers(buffers)
 	}
-	metadata := func() any {
+
+	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
 		hashes := make([]common.Hash, len(res.List))
 		for i := range res.List {
-			hashes[i] = types.DeriveSha(&res.List[i], hasher)
+			hashes[i] = types.DeriveSha(res.List[i], hasher)
 		}
 		return hashes
 	}
-
-	// TODO this can probably be made 0-alloc.
 	var enc ReceiptsRLPResponse
 	for i := range res.List {
-		enc = append(enc, res.List[i].toStorageReceiptsRLP())
+		enc = append(enc, res.List[i].EncodeForStorage())
 	}
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,

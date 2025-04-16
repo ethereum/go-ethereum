@@ -176,7 +176,7 @@ var eth68 = map[uint64]msgHandler{
 	GetBlockBodiesMsg:             handleGetBlockBodies,
 	BlockBodiesMsg:                handleBlockBodies,
 	GetReceiptsMsg:                handleGetReceipts68,
-	ReceiptsMsg:                   handleReceipts68,
+	ReceiptsMsg:                   handleReceipts[*ReceiptList68],
 	GetPooledTransactionsMsg:      handleGetPooledTransactions,
 	PooledTransactionsMsg:         handlePooledTransactions,
 }
@@ -189,7 +189,7 @@ var eth69 = map[uint64]msgHandler{
 	GetBlockBodiesMsg:             handleGetBlockBodies,
 	BlockBodiesMsg:                handleBlockBodies,
 	GetReceiptsMsg:                handleGetReceipts69,
-	ReceiptsMsg:                   handleReceipts69,
+	ReceiptsMsg:                   handleReceipts[*ReceiptList69],
 	GetPooledTransactionsMsg:      handleGetPooledTransactions,
 	PooledTransactionsMsg:         handlePooledTransactions,
 	BlockRangeUpdateMsg:           handleBlockRangeUpdate,
