@@ -202,22 +202,23 @@ type TxFetcher struct {
 	fetchTxs func(string, []common.Hash) error  // Retrieves a set of txs from a remote peer
 	dropPeer func(string)                       // Drops a peer in case of announcement violation
 
-	step  chan struct{} // Notification channel when the fetcher loop iterates
-	clock mclock.Clock  // Time wrapper to simulate in tests
-	rand  *mrand.Rand   // Randomizer to use in tests instead of map range loops (soft-random)
+	step     chan struct{}    // Notification channel when the fetcher loop iterates
+	clock    mclock.Clock     // Monotonic clock or simulated clock for tests
+	realTime func() time.Time // Real system time or simulated time for tests
+	rand     *mrand.Rand      // Randomizer to use in tests instead of map range loops (soft-random)
 }
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
 func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string)) *TxFetcher {
-	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, dropPeer, mclock.System{}, nil)
+	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, dropPeer, mclock.System{}, time.Now, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 func NewTxFetcherForTests(
 	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, dropPeer func(string),
-	clock mclock.Clock, rand *mrand.Rand) *TxFetcher {
+	clock mclock.Clock, realTime func() time.Time, rand *mrand.Rand) *TxFetcher {
 	return &TxFetcher{
 		notify:      make(chan *txAnnounce),
 		cleanup:     make(chan *txDelivery),
@@ -237,6 +238,7 @@ func NewTxFetcherForTests(
 		fetchTxs:    fetchTxs,
 		dropPeer:    dropPeer,
 		clock:       clock,
+		realTime:    realTime,
 		rand:        rand,
 	}
 }
@@ -293,7 +295,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 // isKnownUnderpriced reports whether a transaction hash was recently found to be underpriced.
 func (f *TxFetcher) isKnownUnderpriced(hash common.Hash) bool {
 	prevTime, ok := f.underpriced.Peek(hash)
-	if ok && prevTime.Before(time.Now().Add(-maxTxUnderpricedTimeout)) {
+	if ok && prevTime.Before(f.realTime().Add(-maxTxUnderpricedTimeout)) {
 		f.underpriced.Remove(hash)
 		return false
 	}

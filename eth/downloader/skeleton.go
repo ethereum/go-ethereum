@@ -275,7 +275,7 @@ func (s *skeleton) startup() {
 			for {
 				// If the sync cycle terminated or was terminated, propagate up when
 				// higher layers request termination. There's no fancy explicit error
-				// signalling as the sync loop should never terminate (TM).
+				// signaling as the sync loop should never terminate (TM).
 				newhead, err := s.sync(head)
 				switch {
 				case err == errSyncLinked:

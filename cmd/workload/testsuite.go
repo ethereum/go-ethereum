@@ -18,13 +18,17 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"os"
 	"slices"
 
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -77,10 +81,31 @@ var (
 
 // testConfig holds the parameters for testing.
 type testConfig struct {
-	client          *client
-	fsys            fs.FS
-	filterQueryFile string
-	historyTestFile string
+	client            *client
+	fsys              fs.FS
+	filterQueryFile   string
+	historyTestFile   string
+	historyPruneBlock *uint64
+}
+
+var errPrunedHistory = fmt.Errorf("attempt to access pruned history")
+
+// validateHistoryPruneErr checks whether the given error is caused by access
+// to history before the pruning threshold block (it is an rpc.Error with code 4444).
+// In this case, errPrunedHistory is returned.
+// If the error is a pruned history error that occurs when accessing a block past the
+// historyPrune block, an error is returned.
+// Otherwise, the original value of err is returned.
+func validateHistoryPruneErr(err error, blockNum uint64, historyPruneBlock *uint64) error {
+	if err != nil {
+		if rpcErr, ok := err.(rpc.Error); ok && rpcErr.ErrorCode() == 4444 {
+			if historyPruneBlock != nil && blockNum > *historyPruneBlock {
+				return fmt.Errorf("pruned history error returned after pruning threshold")
+			}
+			return errPrunedHistory
+		}
+	}
+	return err
 }
 
 func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
@@ -98,10 +123,14 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
 		cfg.historyTestFile = "queries/history_mainnet.json"
+		cfg.historyPruneBlock = new(uint64)
+		*cfg.historyPruneBlock = ethconfig.HistoryPrunePoints[params.MainnetGenesisHash].BlockNumber
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
 		cfg.historyTestFile = "queries/history_sepolia.json"
+		cfg.historyPruneBlock = new(uint64)
+		*cfg.historyPruneBlock = ethconfig.HistoryPrunePoints[params.SepoliaGenesisHash].BlockNumber
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)
