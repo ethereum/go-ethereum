@@ -377,20 +377,16 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			PayloadID:     id,
 		}
 	}
-	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
+	if api.eth.BlockChain().CurrentBlock().Hash() == update.HeadBlockHash {
+		// If the specified head matches with our local head, do nothing and keep
+		// generating the payload. It's a special corner case that a few slots are
+		// missing and we are requested to generate the payload in slot.
+	}
+	else {
 		// Block is not canonical, set head.
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
 			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
 		}
-	} else if api.eth.BlockChain().CurrentBlock().Hash() == update.HeadBlockHash {
-		// If the specified head matches with our local head, do nothing and keep
-		// generating the payload. It's a special corner case that a few slots are
-		// missing and we are requested to generate the payload in slot.
-	} else {
-		// If the head block is already in our canonical chain, the beacon client is
-		// probably resyncing. Ignore the update.
-		log.Info("Ignoring beacon update to old head", "number", block.NumberU64(), "hash", update.HeadBlockHash, "age", common.PrettyAge(time.Unix(int64(block.Time()), 0)), "have", api.eth.BlockChain().CurrentBlock().Number)
-		return valid(nil), nil
 	}
 	api.eth.SetSynced()
 
