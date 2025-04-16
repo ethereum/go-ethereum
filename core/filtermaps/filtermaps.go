@@ -147,9 +147,7 @@ type filterMap []FilterRow
 // copies of the same map would result in data corruption, therefore a fast copy
 // should always be used in a read only way.
 func (fm filterMap) fastCopy() filterMap {
-	c := make(filterMap, len(fm))
-	copy(c, fm)
-	return c
+	return slices.Clone(fm)
 }
 
 // fullCopy returns a copy of the given filter map, also making a copy of each
@@ -158,8 +156,7 @@ func (fm filterMap) fastCopy() filterMap {
 func (fm filterMap) fullCopy() filterMap {
 	c := make(filterMap, len(fm))
 	for i, row := range fm {
-		c[i] = make(FilterRow, len(row))
-		copy(c[i], row)
+		c[i] = slices.Clone(row)
 	}
 	return c
 }
