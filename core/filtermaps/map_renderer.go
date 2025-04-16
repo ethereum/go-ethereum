@@ -84,7 +84,7 @@ func (f *FilterMaps) renderMapsBefore(renderBefore uint32) (*mapRenderer, error)
 	if err != nil {
 		return nil, err
 	}
-	if snapshot := f.lastCanonicalSnapshotBefore(renderBefore); snapshot != nil && snapshot.mapIndex >= nextMap {
+	if snapshot := f.lastCanonicalSnapshotOfMap(nextMap); snapshot != nil {
 		return f.renderMapsFromSnapshot(snapshot)
 	}
 	if nextMap >= renderBefore {
@@ -97,14 +97,14 @@ func (f *FilterMaps) renderMapsBefore(renderBefore uint32) (*mapRenderer, error)
 // snapshot made at a block boundary.
 func (f *FilterMaps) renderMapsFromSnapshot(cp *renderedMap) (*mapRenderer, error) {
 	f.testSnapshotUsed = true
-	iter, err := f.newLogIteratorFromBlockDelimiter(cp.lastBlock)
+	iter, err := f.newLogIteratorFromBlockDelimiter(cp.lastBlock, cp.headDelimiter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log iterator from block delimiter %d: %v", cp.lastBlock, err)
 	}
 	return &mapRenderer{
 		f: f,
 		currentMap: &renderedMap{
-			filterMap:   cp.filterMap.copy(),
+			filterMap:   cp.filterMap.fullCopy(),
 			mapIndex:    cp.mapIndex,
 			lastBlock:   cp.lastBlock,
 			blockLvPtrs: cp.blockLvPtrs,
@@ -137,14 +137,14 @@ func (f *FilterMaps) renderMapsFromMapBoundary(firstMap, renderBefore uint32, st
 	}, nil
 }
 
-// lastCanonicalSnapshotBefore returns the latest cached snapshot that matches
-// the current targetView.
-func (f *FilterMaps) lastCanonicalSnapshotBefore(renderBefore uint32) *renderedMap {
+// lastCanonicalSnapshotOfMap returns the latest cached snapshot of the given map
+// that is also consistent with the current targetView.
+func (f *FilterMaps) lastCanonicalSnapshotOfMap(mapIndex uint32) *renderedMap {
 	var best *renderedMap
 	for _, blockNumber := range f.renderSnapshots.Keys() {
 		if cp, _ := f.renderSnapshots.Get(blockNumber); cp != nil && blockNumber < f.indexedRange.blocks.AfterLast() &&
 			blockNumber <= f.targetView.headNumber && f.targetView.getBlockId(blockNumber) == cp.lastBlockId &&
-			cp.mapIndex < renderBefore && (best == nil || blockNumber > best.lastBlock) {
+			cp.mapIndex == mapIndex && (best == nil || blockNumber > best.lastBlock) {
 			best = cp
 		}
 	}
@@ -171,10 +171,9 @@ func (f *FilterMaps) lastCanonicalMapBoundaryBefore(renderBefore uint32) (nextMa
 		if err != nil {
 			return 0, 0, 0, fmt.Errorf("failed to retrieve last block of reverse iterated map %d: %v", mapIndex, err)
 		}
-		if lastBlock >= f.indexedView.headNumber || lastBlock >= f.targetView.headNumber ||
-			lastBlockId != f.targetView.getBlockId(lastBlock) {
-			// map is not full or inconsistent with targetView; roll back
-			continue
+		if (f.indexedRange.headIndexed && mapIndex >= f.indexedRange.maps.Last()) ||
+			lastBlock >= f.targetView.headNumber || lastBlockId != f.targetView.getBlockId(lastBlock) {
+			continue // map is not full or inconsistent with targetView; roll back
 		}
 		lvPtr, err := f.getBlockLvPointer(lastBlock)
 		if err != nil {
@@ -257,11 +256,14 @@ func (f *FilterMaps) loadHeadSnapshot() error {
 
 // makeSnapshot creates a snapshot of the current state of the rendered map.
 func (r *mapRenderer) makeSnapshot() {
-	r.f.renderSnapshots.Add(r.iterator.blockNumber, &renderedMap{
-		filterMap:     r.currentMap.filterMap.copy(),
+	if r.iterator.blockNumber != r.currentMap.lastBlock || r.iterator.chainView != r.f.targetView {
+		panic("iterator state inconsistent with current rendered map")
+	}
+	r.f.renderSnapshots.Add(r.currentMap.lastBlock, &renderedMap{
+		filterMap:     r.currentMap.filterMap.fastCopy(),
 		mapIndex:      r.currentMap.mapIndex,
-		lastBlock:     r.iterator.blockNumber,
-		lastBlockId:   r.f.targetView.getBlockId(r.currentMap.lastBlock),
+		lastBlock:     r.currentMap.lastBlock,
+		lastBlockId:   r.iterator.chainView.getBlockId(r.currentMap.lastBlock),
 		blockLvPtrs:   r.currentMap.blockLvPtrs,
 		finished:      true,
 		headDelimiter: r.iterator.lvIndex,
@@ -661,23 +663,12 @@ var errUnindexedRange = errors.New("unindexed range")
 // newLogIteratorFromBlockDelimiter creates a logIterator starting at the
 // given block's first log value entry (the block delimiter), according to the
 // current targetView.
-func (f *FilterMaps) newLogIteratorFromBlockDelimiter(blockNumber uint64) (*logIterator, error) {
+func (f *FilterMaps) newLogIteratorFromBlockDelimiter(blockNumber, lvIndex uint64) (*logIterator, error) {
 	if blockNumber > f.targetView.headNumber {
 		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", blockNumber, f.targetView.headNumber)
 	}
 	if !f.indexedRange.blocks.Includes(blockNumber) {
 		return nil, errUnindexedRange
-	}
-	var lvIndex uint64
-	if f.indexedRange.headIndexed && blockNumber+1 == f.indexedRange.blocks.AfterLast() {
-		lvIndex = f.indexedRange.headDelimiter
-	} else {
-		var err error
-		lvIndex, err = f.getBlockLvPointer(blockNumber + 1)
-		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve log value pointer of block %d after delimiter: %v", blockNumber+1, err)
-		}
-		lvIndex--
 	}
 	finished := blockNumber == f.targetView.headNumber
 	l := &logIterator{
