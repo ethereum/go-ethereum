@@ -746,7 +746,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 			Type:              n.config.DBEngine,
 			Directory:         n.ResolvePath(name),
 			AncientsDirectory: n.ResolveAncient(name, ancient),
-			EraDirectory:      n.ResolveEra(ancient, era),
+			EraDirectory:      n.ResolveEraDirectory(ancient, era),
 			Namespace:         namespace,
 			Cache:             cache,
 			Handles:           handles,
@@ -775,8 +775,8 @@ func (n *Node) ResolveAncient(name string, ancient string) string {
 	return ancient
 }
 
-// ResolveEra returns the absolute path of the era directory.
-func (n *Node) ResolveEra(ancient, era string) string {
+// ResolveEraDirectory returns the absolute path of the era directory.
+func (n *Node) ResolveEraDirectory(ancient, era string) string {
 	switch {
 	case era == "":
 		era = filepath.Join(ancient, "era")
