@@ -203,9 +203,10 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
-		stop chan struct{}                                 // Non-nil if background routine is active
-		done chan struct{}                                 // Non-nil if background routine is active
-		head = rawdb.ReadHeadBlock(indexer.db).NumberU64() // The latest announced chain head
+		stop      chan struct{}                     // Non-nil if background routine is active
+		done      chan struct{}                     // Non-nil if background routine is active
+		headBlock = rawdb.ReadHeadBlock(indexer.db) // The latest announced chain head
+		head      uint64
 
 		headCh = make(chan ChainHeadEvent)
 		sub    = chain.SubscribeChainHeadEvent(headCh)
@@ -213,13 +214,16 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 	defer sub.Unsubscribe()
 
 	// Validate the transaction indexes and repair if necessary
-	indexer.repair(head)
+	if headBlock != nil {
+		indexer.repair(headBlock.NumberU64())
+	}
 
 	// Launch the initial processing if chain is not empty (head != genesis).
 	// This step is useful in these scenarios that chain has no progress.
-	if head != 0 {
+	if headBlock != nil && headBlock.NumberU64() != 0 {
 		stop = make(chan struct{})
 		done = make(chan struct{})
+		head = headBlock.Number().Uint64()
 		go indexer.run(head, stop, done)
 	}
 	for {
