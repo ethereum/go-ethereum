@@ -27,12 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-/**
-* TODO:
-* - FD leak possible on cache eviction.
-* - FD leak possible on concurrent access to GetRaw*.
- */
-
 const (
 	openFileLimit = 64
 )
@@ -61,17 +55,20 @@ func New(datadir string) (*EraDatabase, error) {
 		return nil, err
 	}
 	db := &EraDatabase{datadir: datadir, cache: lru.NewCache[uint64, *era.Era](openFileLimit)}
-	db.cache.OnEvicted(func(key uint64, value *era.Era) {
-		if value == nil {
-			log.Warn("Era1 cache evicted nil value", "epoch", key)
+	// Take care to close era1 files when they are evicted or replaced
+	// in the cache to avoid leaking file descriptors.
+	closeEra := func(epoch uint64, e *era.Era) {
+		if e == nil {
+			log.Warn("Era1 cache contained nil value", "epoch", epoch)
 			return
 		}
-		// Close the era1 file when it is evicted from the cache
-		// to avoid leaks.
-		if err := value.Close(); err != nil {
-			log.Warn("Error closing era1 file", "epoch", key, "err", err)
+		if err := e.Close(); err != nil {
+			log.Warn("Error closing era1 file", "epoch", epoch, "err", err)
 		}
-	})
+
+	}
+	db.cache.OnEvicted(closeEra)
+	db.cache.OnReplaced(closeEra)
 	log.Info("Opened erastore", "datadir", datadir)
 	return db, nil
 }
