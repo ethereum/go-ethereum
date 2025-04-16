@@ -256,14 +256,14 @@ func (f *FilterMaps) loadHeadSnapshot() error {
 
 // makeSnapshot creates a snapshot of the current state of the rendered map.
 func (r *mapRenderer) makeSnapshot() {
-	if r.iterator.blockNumber != r.currentMap.lastBlock {
-		panic("iterator state inconsistent with last block")
+	if r.iterator.blockNumber != r.currentMap.lastBlock || r.iterator.chainView != r.f.targetView {
+		panic("iterator state inconsistent with current rendered map")
 	}
 	r.f.renderSnapshots.Add(r.currentMap.lastBlock, &renderedMap{
 		filterMap:     r.currentMap.filterMap.fastCopy(),
 		mapIndex:      r.currentMap.mapIndex,
 		lastBlock:     r.currentMap.lastBlock,
-		lastBlockId:   r.f.targetView.getBlockId(r.currentMap.lastBlock),
+		lastBlockId:   r.iterator.chainView.getBlockId(r.currentMap.lastBlock),
 		blockLvPtrs:   r.currentMap.blockLvPtrs,
 		finished:      true,
 		headDelimiter: r.iterator.lvIndex,
