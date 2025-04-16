@@ -407,7 +407,7 @@ func handleReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 		}
 		return hashes
 	}
-	encoded := types.ReceiptsToRLP(res.ReceiptsResponse)
+	encoded := ReceiptsRLPResponse(types.ReceiptsToRLP(res.ReceiptsResponse))
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
 		code: ReceiptsMsg,
