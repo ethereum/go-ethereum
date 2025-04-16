@@ -62,12 +62,14 @@ func New(datadir string) (*EraDatabase, error) {
 	}
 	db := &EraDatabase{datadir: datadir, cache: lru.NewCache[uint64, *era.Era](openFileLimit)}
 	db.cache.OnEvicted(func(key uint64, value *era.Era) {
+		if value == nil {
+			log.Warn("Era1 cache evicted nil value", "epoch", key)
+			return
+		}
 		// Close the era1 file when it is evicted from the cache
 		// to avoid leaks.
-		if value != nil {
-			if err := value.Close(); err != nil {
-				log.Warn("Error closing era1 file", "epoch", key, "err", err)
-			}
+		if err := value.Close(); err != nil {
+			log.Warn("Error closing era1 file", "epoch", key, "err", err)
 		}
 	})
 	log.Info("Opened erastore", "datadir", datadir)
