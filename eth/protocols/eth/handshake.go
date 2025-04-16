@@ -96,10 +96,12 @@ func (p *Peer) handshake69(networkID uint64, chain *core.BlockChain) error {
 	var (
 		genesis     = chain.Genesis()
 		latest      = chain.CurrentBlock()
+		latestSnap  = chain.CurrentSnapBlock()
 		forkID      = forkid.NewID(chain.Config(), genesis, latest.Number.Uint64(), latest.Time)
 		forkFilter  = forkid.NewFilter(chain)
 		earliest, _ = chain.HistoryPruningCutoff()
 	)
+
 	errc := make(chan error, 2)
 	go func() {
 		pkt := &StatusPacket69{
@@ -108,8 +110,13 @@ func (p *Peer) handshake69(networkID uint64, chain *core.BlockChain) error {
 			Genesis:         genesis.Hash(),
 			ForkID:          forkID,
 			EarliestBlock:   earliest,
-			LatestBlock:     latest.Number.Uint64(),
-			LatestBlockHash: latest.Hash(),
+		}
+		if latestSnap != nil && latestSnap.Number.Uint64() > latest.Number.Uint64() {
+			pkt.LatestBlock = latestSnap.Number.Uint64()
+			pkt.LatestBlockHash = latestSnap.Hash()
+		} else {
+			pkt.LatestBlock = latest.Number.Uint64()
+			pkt.LatestBlockHash = latest.Hash()
 		}
 		errc <- p2p.Send(p.rw, StatusMsg, pkt)
 	}()
