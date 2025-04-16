@@ -461,7 +461,7 @@ func (d *DASignersPrecompile) params() dasigners.IDASignersParams {
 		TokensPerVote:     big.NewInt(10), // deprecated
 		MaxVotesPerSigner: big.NewInt(1024),
 		MaxQuorums:        big.NewInt(10),
-		EpochBlocks:       big.NewInt(5760),
+		EpochBlocks:       big.NewInt(28800),
 		EncodedSlices:     big.NewInt(3072),
 	}
 }
