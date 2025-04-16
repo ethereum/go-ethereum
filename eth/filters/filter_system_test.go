@@ -175,7 +175,7 @@ func (b *testBackend) startFilterMaps(history uint64, disabled bool, params filt
 		Disabled:       disabled,
 		ExportFileName: "",
 	}
-	b.fm = filtermaps.NewFilterMaps(b.db, chainView, 0, 0, params, config)
+	b.fm, _ = filtermaps.NewFilterMaps(b.db, chainView, 0, 0, params, config)
 	b.fm.Start()
 	b.fm.WaitIdle()
 }
