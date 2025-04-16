@@ -1,4 +1,4 @@
-// Copyright 2024 the libevm authors.
+// Copyright 2024-2025 the libevm authors.
 //
 // The libevm additions to go-ethereum are free software: you can redistribute
 // them and/or modify them under the terms of the GNU Lesser General Public License
@@ -48,11 +48,9 @@ func (o *evmArgOverrider) OverrideEVMResetArgs(r params.Rules, _ *EVMResetArgs) 
 
 func (o *evmArgOverrider) register(t *testing.T) {
 	t.Helper()
-	libevmHooks = nil
+	TestOnlyClearRegisteredHooks()
 	RegisterHooks(o)
-	t.Cleanup(func() {
-		libevmHooks = nil
-	})
+	t.Cleanup(TestOnlyClearRegisteredHooks)
 }
 
 func TestOverrideNewEVMArgs(t *testing.T) {
