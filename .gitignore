@@ -47,3 +47,15 @@ tests/spec-tests/
 # Precompiles
 core/vm/Precompiles/interfaces/node_modules
 core/vm/Precompiles/interfaces/build
+# binaries
+cmd/abidump/abidump
+cmd/abigen/abigen
+cmd/blsync/blsync
+cmd/clef/clef
+cmd/devp2p/devp2p
+cmd/era/era
+cmd/ethkey/ethkey
+cmd/evm/evm
+cmd/geth/geth
+cmd/rlpdump/rlpdump
+cmd/workload/workload
