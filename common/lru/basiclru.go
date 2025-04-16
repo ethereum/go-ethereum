@@ -60,12 +60,12 @@ func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
 	var elem *listElem[K]
 	if c.Len() >= c.cap {
 		elem = c.list.removeLast()
-		delete(c.items, elem.v)
-		evicted = true
 		if c.onEvicted != nil {
 			v := c.items[elem.v]
 			c.onEvicted(elem.v, v.value)
 		}
+		delete(c.items, elem.v)
+		evicted = true
 	} else {
 		elem = new(listElem[K])
 	}
