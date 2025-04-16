@@ -2264,8 +2264,7 @@ func TestSetCodeTransactions(t *testing.T) {
 	}{
 		{
 			// Check that only one in-flight transaction is allowed for accounts
-			// with 
-      set.
+			// with delegation set.
 			name:    "accept-one-inflight-tx-of-delegated-account",
 			pending: 1,
 			run: func(name string) {
