@@ -109,9 +109,8 @@ func (c *committer) commit(n node, db *Database) (node, error) {
 		hashedNode := c.store(collapsed, db)
 		if hn, ok := hashedNode.(hashNode); ok {
 			return hn, nil
-		} else {
-			return collapsed, nil
 		}
+		return collapsed, nil
 	case *fullNode:
 		hashedKids, err := c.commitChildren(cn, db)
 		if err != nil {
@@ -256,7 +255,7 @@ func estimateSize(n node) int {
 			if child := n.Children[i]; child != nil {
 				s += estimateSize(child)
 			} else {
-				s += 1
+				s++
 			}
 		}
 		return s
@@ -266,6 +265,5 @@ func estimateSize(n node) int {
 		return 1 + len(n)
 	default:
 		panic(fmt.Sprintf("Node type %T", n))
-
 	}
 }
