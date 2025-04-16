@@ -25,6 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
@@ -42,10 +43,10 @@ const (
 )
 
 var (
-	blockCacheMaxItems     = 8192              // Maximum number of blocks to cache before throttling the download
-	blockCacheInitialItems = 2048              // Initial number of blocks to start fetching, before we know the sizes of the blocks
-	blockCacheMemory       = 256 * 1024 * 1024 // Maximum amount of memory to use for block caching
-	blockCacheSizeWeight   = 0.1               // Multiplier to approximate the average block size based on past ones
+	blockCacheMaxItems     = 8192 * 4               // Maximum number of blocks to cache before throttling the download
+	blockCacheInitialItems = 2048                   // Initial number of blocks to start fetching, before we know the sizes of the blocks
+	blockCacheMemory       = 2 * 1024 * 1024 * 1024 // Maximum amount of memory to use for block caching
+	blockCacheSizeWeight   = 0.1                    // Multiplier to approximate the average block size based on past ones
 )
 
 var (
@@ -86,6 +87,18 @@ func newFetchResult(header *types.Header, snapSync bool) *fetchResult {
 		item.pending.Store(item.pending.Load() | (1 << receiptType))
 	}
 	return item
+}
+
+func (f *fetchResult) Size() int {
+	receiptsSize := 0
+	for _, r := range f.Receipts {
+		receiptsSize += int(r.Size())
+	}
+	txsSize := 0
+	for _, t := range f.Transactions {
+		txsSize += int(t.Size())
+	}
+	return common.HashLength*len(f.Uncles) + int(unsafe.Sizeof(types.Withdrawal{})) + int(f.Header.Size()) + receiptsSize + txsSize
 }
 
 // body returns a representation of the fetch result as a types.Body object.

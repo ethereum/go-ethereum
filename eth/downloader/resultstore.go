@@ -43,6 +43,8 @@ type resultStore struct {
 	throttleThreshold uint64
 
 	lock sync.RWMutex
+
+	pendingCount int
 }
 
 func newResultStore(size int) *resultStore {
@@ -88,6 +90,7 @@ func (r *resultStore) AddFetch(header *types.Header, snapSync bool) (stale, thro
 	if item == nil {
 		item = newFetchResult(header, snapSync)
 		r.items[index] = item
+		r.pendingCount++
 	}
 	return stale, throttled, item, err
 }
@@ -169,6 +172,18 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	if limit > completed {
 		limit = completed
 	}
+
+	var totalSize int
+	for i := 0; i < limit; i++ {
+		totalSize += r.items[i].Size()
+	}
+	if limit > 0 {
+		blockSizeGauge.Update(int64(totalSize / limit))
+		r.pendingCount -= limit
+	}
+
+	pendingBodyGauge.Update(int64(r.pendingCount))
+
 	results := make([]*fetchResult, limit)
 	copy(results, r.items[:limit])
 
