@@ -71,12 +71,13 @@ func SerializeG2(p BN254G2Point) []byte {
 var (
 	signerKey                = []byte{0x00} // signer => registered signer info
 	quorumKey                = []byte{0x01} // epoch => quorumId => quorum
-	registrationKey          = []byte{0x02} // signer => signature hash
-	quorumCountKey           = []byte{0x03} // epoch => quorum count
-	epochNumberKey           = []byte{0x04} // epoch number
-	epochBlockKey            = []byte{0x05} // epoch number => block number
-	epochRegistrationKey     = []byte{0x06} // epoch number => registration count
-	epochRegisteredSignerKey = []byte{0x07} // epoch number => index => signer
+	registrationKey          = []byte{0x02} // epoch => signer => signature(vrf)
+	votesKey                 = []byte{0x03} // epoch => signer => votes
+	quorumCountKey           = []byte{0x04} // epoch => quorum count
+	epochNumberKey           = []byte{0x05} // epoch number
+	epochBlockKey            = []byte{0x06} // epoch number => block number
+	epochRegistrationKey     = []byte{0x07} // epoch number => registration count
+	epochRegisteredSignerKey = []byte{0x08} // epoch number => index => signer
 )
 
 func SignerKey(account common.Address) common.Hash {
@@ -89,6 +90,10 @@ func QuorumKey(epochNumber uint64, quorumId uint64) common.Hash {
 
 func RegistrationKey(epochNumber uint64, account common.Address) common.Hash {
 	return crypto.Keccak256Hash(append(append(registrationKey, common.Uint64ToBytes(epochNumber)...), account.Bytes()...))
+}
+
+func VotesKey(epochNumber uint64, account common.Address) common.Hash {
+	return crypto.Keccak256Hash(append(append(votesKey, common.Uint64ToBytes(epochNumber)...), account.Bytes()...))
 }
 
 func QuorumCountKey(epochNumber uint64) common.Hash {

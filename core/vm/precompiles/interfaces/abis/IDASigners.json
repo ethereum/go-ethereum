@@ -337,6 +337,11 @@
   {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "signer",
+        "type": "address"
+      },
+      {
         "components": [
           {
             "internalType": "uint256",
@@ -352,6 +357,11 @@
         "internalType": "struct BN254.G1Point",
         "name": "_signature",
         "type": "tuple"
+      },
+      {
+        "internalType": "uint256",
+        "name": "votes",
+        "type": "uint256"
       }
     ],
     "name": "registerNextEpoch",

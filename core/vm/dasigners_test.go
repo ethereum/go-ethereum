@@ -69,7 +69,7 @@ func (suite *DASignersTestSuite) registerSigner(testSigner common.Address, sk *b
 	suite.Assert().NoError(err)
 
 	oldLogs := suite.statedb.Logs()
-	_, err = suite.runTx(input, testSigner, 10000000, uint256.NewInt(0), false)
+	_, err = suite.runTx(input, suite.dasigners.getRegistry(), 10000000, uint256.NewInt(0), false)
 	suite.Assert().NoError(err)
 	logs := suite.statedb.Logs()
 	suite.Assert().EqualValues(len(logs), len(oldLogs)+2)
@@ -110,18 +110,20 @@ func (suite *DASignersTestSuite) updateSocket(testSigner common.Address, signer 
 	signer.Socket = "0.0.0.0:2345"
 }
 
-func (suite *DASignersTestSuite) registerEpoch(testSigner common.Address, sk *big.Int) {
+func (suite *DASignersTestSuite) registerEpoch(testSigner common.Address, sk *big.Int, votes *big.Int) {
 	epoch := suite.dasigners.epochNumber(suite.evm) + 1
 	hash := dasigners.EpochRegistrationHash(testSigner, epoch, suite.evm.chainConfig.ChainID)
 	signature := new(bn254.G1Affine).ScalarMultiplication(hash, sk)
 
 	input, err := suite.abi.Pack(
 		"registerNextEpoch",
+		testSigner,
 		dasigners.NewBN254G1Point(bn254util.SerializeG1(signature)),
+		votes,
 	)
 	suite.Assert().NoError(err)
 
-	_, err = suite.runTx(input, testSigner, 10000000, uint256.NewInt(0), false)
+	_, err = suite.runTx(input, suite.dasigners.getRegistry(), 10000000, uint256.NewInt(0), false)
 	suite.Assert().NoError(err)
 }
 
@@ -264,8 +266,8 @@ func (suite *DASignersTestSuite) Test_DASigners() {
 	signer2 := suite.registerSigner(suite.signerTwo, big.NewInt(11))
 	suite.updateSocket(suite.signerOne, signer1)
 	suite.updateSocket(suite.signerTwo, signer2)
-	suite.registerEpoch(suite.signerOne, big.NewInt(1))
-	suite.registerEpoch(suite.signerTwo, big.NewInt(11))
+	suite.registerEpoch(suite.signerOne, big.NewInt(1), big.NewInt(1))
+	suite.registerEpoch(suite.signerTwo, big.NewInt(11), big.NewInt(2))
 	// move to next epochs
 	daparams := suite.dasigners.params()
 	suite.queryEpochNumber(suite.signerOne, big.NewInt(0))
@@ -274,8 +276,8 @@ func (suite *DASignersTestSuite) Test_DASigners() {
 	suite.queryEpochNumber(suite.signerOne, big.NewInt(1))
 	suite.makeEpoch(suite.signerOne)
 	suite.queryEpochNumber(suite.signerOne, big.NewInt(1))
-	suite.registerEpoch(suite.signerOne, big.NewInt(1))
-	suite.registerEpoch(suite.signerTwo, big.NewInt(11))
+	suite.registerEpoch(suite.signerOne, big.NewInt(1), big.NewInt(1))
+	suite.registerEpoch(suite.signerTwo, big.NewInt(11), big.NewInt(2))
 	// move to epoch 2
 	suite.evm.Context.BlockNumber = suite.evm.Context.BlockNumber.Add(suite.evm.Context.BlockNumber, daparams.EpochBlocks)
 	suite.makeEpoch(suite.signerOne)
@@ -307,10 +309,8 @@ func (suite *DASignersTestSuite) Test_DASigners() {
 			twoPos = min(twoPos, i)
 		}
 	}
-	suite.Assert().EqualValues(cnt[suite.signerOne], len(quorum)/2)
-	suite.Assert().EqualValues(cnt[suite.signerTwo], len(quorum)/2)
-	// suite.Assert().EqualValues(cnt[suite.signerOne], len(quorum)/3)
-	// suite.Assert().EqualValues(cnt[suite.signerTwo], len(quorum)*2/3)
+	suite.Assert().EqualValues(cnt[suite.signerOne], len(quorum)/3)
+	suite.Assert().EqualValues(cnt[suite.signerTwo], len(quorum)*2/3)
 
 	bitMap := make([]byte, len(quorum)/8)
 	bitMap[onePos/8] |= 1 << (onePos % 8)
@@ -321,8 +321,7 @@ func (suite *DASignersTestSuite) Test_DASigners() {
 	}{
 		AggPkG1: dasigners.NewBN254G1Point(bn254util.SerializeG1(new(bn254.G1Affine).ScalarMultiplication(bn254util.GetG1Generator(), big.NewInt(1)))),
 		Total:   big.NewInt(int64(len(quorum))),
-		Hit:     big.NewInt(int64(len(quorum) / 2)),
-		// Hit:     big.NewInt(int64(len(quorum) / 3)),
+		Hit:     big.NewInt(int64(len(quorum) / 3)),
 	})
 
 	bitMap[twoPos/8] |= 1 << (twoPos % 8)

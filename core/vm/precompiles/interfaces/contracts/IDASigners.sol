@@ -24,7 +24,7 @@ interface IDASigners {
     }
 
     struct Params {
-        uint tokensPerVote;
+        uint tokensPerVote; // deprecated
         uint maxVotesPerSigner;
         uint maxQuorums;
         uint epochBlocks;
@@ -75,7 +75,11 @@ interface IDASigners {
         uint _epoch
     ) external view returns (bool);
 
-    function registerNextEpoch(BN254.G1Point memory _signature) external;
+    function registerNextEpoch(
+        address signer,
+        BN254.G1Point memory _signature,
+        uint votes
+    ) external;
 
     function makeEpoch() external;
 
