@@ -25,8 +25,8 @@ import (
 // ethPeerInfo represents a short summary of the `eth` sub-protocol metadata known
 // about a connected peer.
 type ethPeerInfo struct {
-	Version    uint            `json:"version"` // Ethereum protocol version negotiated
-	BlockRange *peerBlockRange `json:"blockRange"`
+	Version uint `json:"version"` // Ethereum protocol version negotiated
+	*peerBlockRange
 }
 
 type peerBlockRange struct {
@@ -45,7 +45,7 @@ type ethPeer struct {
 func (p *ethPeer) info() *ethPeerInfo {
 	info := &ethPeerInfo{Version: p.Version()}
 	if br := p.BlockRange(); br != nil {
-		info.BlockRange = &peerBlockRange{
+		info.peerBlockRange = &peerBlockRange{
 			Earliest:   br.EarliestBlock,
 			Latest:     br.LatestBlock,
 			LatestHash: br.LatestBlockHash,
