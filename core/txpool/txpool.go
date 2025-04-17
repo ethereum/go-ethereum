@@ -186,13 +186,15 @@ func (p *TxPool) loop(head *types.Header) {
 			// Try to inject a busy marker and start a reset if successful
 			select {
 			case resetBusy <- struct{}{}:
-				statedb, err := p.chain.StateAt(newHead.Root)
-				if err != nil {
-					log.Crit("Failed to reset txpool state", "err", err)
+				// Updates the statedb with the new chain head. The head state may be
+				// unavailable if the initial state sync has not yet completed.
+				if statedb, err := p.chain.StateAt(newHead.Root); err != nil {
+					log.Error("Failed to reset txpool state", "err", err)
+				} else {
+					p.stateLock.Lock()
+					p.state = statedb
+					p.stateLock.Unlock()
 				}
-				p.stateLock.Lock()
-				p.state = statedb
-				p.stateLock.Unlock()
 
 				// Busy marker injected, start a new subpool reset
 				go func(oldHead, newHead *types.Header) {

@@ -60,10 +60,12 @@ var (
 		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000_000
 		ShanghaiTime:            newUint64(1681338455),
 		CancunTime:              newUint64(1710338135),
+		PragueTime:              newUint64(1746612311),
 		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"),
 		Ethash:                  new(EthashConfig),
 		BlobScheduleConfig: &BlobScheduleConfig{
 			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
 		},
 	}
 	// HoleskyChainConfig contains the chain parameters to run a node on the Holesky test network.
@@ -904,6 +906,23 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 		return forks.Shanghai
 	default:
 		return forks.Paris
+	}
+}
+
+// Timestamp returns the timestamp associated with the fork or returns nil if
+// the fork isn't defined or isn't a time-based fork.
+func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
+	switch {
+	case fork == forks.Osaka:
+		return c.OsakaTime
+	case fork == forks.Prague:
+		return c.PragueTime
+	case fork == forks.Cancun:
+		return c.CancunTime
+	case fork == forks.Shanghai:
+		return c.ShanghaiTime
+	default:
+		return nil
 	}
 }
 
