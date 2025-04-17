@@ -519,6 +519,8 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				// check.
 				cnode, err := t.resolve(n.Children[pos], append(prefix, byte(pos)))
 				if err != nil {
+					// Ignore the error will pass the test
+					// cnode = n.Children[pos]
 					return false, nil, err
 				}
 				if cnode, ok := cnode.(*shortNode); ok {
