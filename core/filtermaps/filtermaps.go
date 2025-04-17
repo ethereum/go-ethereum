@@ -568,8 +568,8 @@ func (f *FilterMaps) getFilterMap(mapIndex uint32) (filterMap, error) {
 // getFilterMapRow fetches the given filter map row. If baseLayerOnly is true
 // then only the first baseRowLength entries are returned.
 func (f *FilterMaps) getFilterMapRow(mapIndex, row uint32, baseLayerOnly bool) (FilterRow, error) {
-	aligned := f.Params.mapGroupIndex(mapIndex)
-	rowIndex := f.mapRowIndex(aligned, row)
+	group := f.Params.mapGroupIndex(mapIndex)
+	rowIndex := f.mapRowIndex(group, row)
 	baseRows, ok := f.baseRowsCache.Get(rowIndex)
 	if !ok {
 		var err error
