@@ -1484,7 +1484,7 @@ func TestAdd(t *testing.T) {
 				{ // New account, no previous txs, nonce 0, but blob fee cap too low
 					from: "alice",
 					tx:   makeUnsignedTx(0, 1, 1, 0),
-					err:  txpool.ErrUnderpriced,
+					err:  txpool.ErrTxGasPriceTooLow,
 				},
 				{ // Same as above but blob fee cap equals minimum, should be accepted
 					from: "alice",
