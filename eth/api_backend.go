@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/locals"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -318,7 +319,7 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	// very little chance it will be accepted later (e.g., the gas price is below the
 	// configured minimum, or the sender has insufficient funds to cover the cost),
 	// propagate the error to the user.
-	if err != nil && !errors.As(err, &txpool.ErrTxTemporarilyRejected{}) {
+	if err != nil && !locals.IsTemporaryReject(err) {
 		return err
 	}
 	// No error will be returned to user if the transaction fails with a temporary

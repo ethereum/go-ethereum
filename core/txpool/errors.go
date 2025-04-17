@@ -68,30 +68,3 @@ var (
 	// transactions is reached for specific accounts.
 	ErrInflightTxLimitReached = errors.New("in-flight transaction limit reached for delegated accounts")
 )
-
-// ErrTxTemporarilyRejected represents a temporarily rejected transaction,
-// typically due to a full transaction pool or other transient conditions.
-// The transaction may be accepted later.
-type ErrTxTemporarilyRejected struct {
-	Err error
-}
-
-// WrapTxTemporarilyRejected wraps the given error in an ErrTxTemporarilyRejected type.
-func WrapTxTemporarilyRejected(err error) ErrTxTemporarilyRejected {
-	return ErrTxTemporarilyRejected{Err: err}
-}
-
-// Error implements the error interface.
-func (e ErrTxTemporarilyRejected) Error() string {
-	return e.Err.Error()
-}
-
-// Unwrap allows unwrapping the underlying error.
-func (e ErrTxTemporarilyRejected) Unwrap() error {
-	return e.Err
-}
-
-// Is enables errors.Is to match either the wrapper or the wrapped error.
-func (e ErrTxTemporarilyRejected) Is(target error) bool {
-	return errors.Is(e.Err, target)
-}

@@ -932,39 +932,6 @@ func (pool *LegacyPool) addRemoteSync(tx *types.Transaction) error {
 	return pool.Add([]*types.Transaction{tx}, true)[0]
 }
 
-// annotateErrors processes the provided errors and annotate them with a
-// txpool.ErrTxTemporarilyRejected wrapper, reflecting the transactions
-// are temporarily rejected with some reasons but may be accepted later.
-func annotateErrors(errs []error) []error {
-	var annotated []error
-	for _, err := range errs {
-		switch {
-		/*
-			//	These two errors are not possible in case of leagcy pool
-			case errors.Is(err, core.ErrNonceTooHigh):
-				annotated = append(annotated, txpool.WrapTxTemporarilyRejected(err))
-			case errors.Is(err, txpool.ErrAccountLimitExceeded):
-				annotated = append(annotated, txpool.WrapTxTemporarilyRejected(err))
-		*/
-		case errors.Is(err, ErrOutOfOrderTxFromDelegated):
-			annotated = append(annotated, txpool.WrapTxTemporarilyRejected(err))
-		case errors.Is(err, txpool.ErrInflightTxLimitReached):
-			annotated = append(annotated, txpool.WrapTxTemporarilyRejected(err))
-		case errors.Is(err, ErrAuthorityReserved):
-			annotated = append(annotated, txpool.WrapTxTemporarilyRejected(err))
-		case errors.Is(err, txpool.ErrUnderpriced):
-			annotated = append(annotated, txpool.WrapTxTemporarilyRejected(err))
-		case errors.Is(err, ErrTxPoolOverflow):
-			annotated = append(annotated, txpool.WrapTxTemporarilyRejected(err))
-		case errors.Is(err, ErrFutureReplacePending):
-			annotated = append(annotated, txpool.WrapTxTemporarilyRejected(err))
-		default:
-			annotated = append(annotated, err)
-		}
-	}
-	return annotated
-}
-
 // Add enqueues a batch of transactions into the pool if they are valid.
 //
 // Note, if sync is set the method will block until all internal maintenance
@@ -1016,7 +983,7 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 	if sync {
 		<-done
 	}
-	return annotateErrors(errs)
+	return errs
 }
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
