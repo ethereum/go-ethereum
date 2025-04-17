@@ -128,15 +128,10 @@ func NewSimulatedBeacon(period uint64, feeRecipient common.Address, eth *eth.Eth
 
 	// cap the dev mode period to a reasonable maximum value to avoid
 	// overflowing the time.Duration (int64) that it will occupy
-	maxPeriod := uint64(math.MaxInt64 / time.Second)
-	if period > maxPeriod {
-		log.Warn("sanitizing period exceeding maximum possible value", "was", period, "now", maxPeriod)
-		period = maxPeriod
-	}
-
+	const maxPeriod = math.MaxInt64 / time.Second
 	return &SimulatedBeacon{
 		eth:                eth,
-		period:             period,
+		period:             min(period, maxPeriod),
 		shutdownCh:         make(chan struct{}),
 		engineAPI:          engineAPI,
 		lastBlockTime:      block.Time,
