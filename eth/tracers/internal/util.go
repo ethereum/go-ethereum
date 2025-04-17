@@ -20,11 +20,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
 
 const (
-	memoryPadLimit = 1024 * 1024
+	memoryPadLimit = common.Megabytes
 )
 
 // GetMemoryCopyPadded returns offset + size as a new slice.

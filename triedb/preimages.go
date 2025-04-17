@@ -74,7 +74,7 @@ func (store *preimageStore) commit(force bool) error {
 	store.lock.Lock()
 	defer store.lock.Unlock()
 
-	if store.preimagesSize <= 4*1024*1024 && !force {
+	if store.preimagesSize <= 4*common.Megabytes && !force {
 		return nil
 	}
 	batch := store.disk.NewBatch()

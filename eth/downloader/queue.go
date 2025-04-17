@@ -42,10 +42,10 @@ const (
 )
 
 var (
-	blockCacheMaxItems     = 8192              // Maximum number of blocks to cache before throttling the download
-	blockCacheInitialItems = 2048              // Initial number of blocks to start fetching, before we know the sizes of the blocks
-	blockCacheMemory       = 256 * 1024 * 1024 // Maximum amount of memory to use for block caching
-	blockCacheSizeWeight   = 0.1               // Multiplier to approximate the average block size based on past ones
+	blockCacheMaxItems     = 8192                   // Maximum number of blocks to cache before throttling the download
+	blockCacheInitialItems = 2048                   // Initial number of blocks to start fetching, before we know the sizes of the blocks
+	blockCacheMemory       = 256 * common.Megabytes // Maximum amount of memory to use for block caching
+	blockCacheSizeWeight   = 0.1                    // Multiplier to approximate the average block size based on past ones
 )
 
 var (
@@ -400,7 +400,8 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 //	progress - whether any progress was made
 //	throttle - if the caller should throttle for a while
 func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque[int64, *types.Header],
-	pendPool map[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool) {
+	pendPool map[string]*fetchRequest, kind uint,
+) (*fetchRequest, bool, bool) {
 	// Short circuit if the pool has been depleted, or if the peer's already
 	// downloading something (sanity check not to corrupt state)
 	if taskQueue.Empty() {
@@ -658,7 +659,8 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	taskQueue *prque.Prque[int64, *types.Header], pendPool map[string]*fetchRequest,
 	reqTimer *metrics.Timer, resInMeter, resDropMeter *metrics.Meter,
 	results int, validate func(index int, header *types.Header) error,
-	reconstruct func(index int, result *fetchResult)) (int, error) {
+	reconstruct func(index int, result *fetchResult),
+) (int, error) {
 	// Short circuit if the data was never requested
 	request := pendPool[id]
 	if request == nil {

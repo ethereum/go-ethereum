@@ -53,14 +53,14 @@ const (
 
 	// txAvgSize is an approximate byte size of a transaction metadata to avoid
 	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
-	txAvgSize = 4 * 1024
+	txAvgSize = 4 * common.Kilobytes
 
 	// txMaxSize is the maximum size a single transaction can have, outside
 	// the included blobs. Since blob transactions are pulled instead of pushed,
 	// and only a small metadata is kept in ram, the rest is on disk, there is
 	// no critical limit that should be enforced. Still, capping it to some sane
 	// limit can never hurt.
-	txMaxSize = 1024 * 1024
+	txMaxSize = common.Megabytes
 
 	// maxTxsPerAccount is the maximum number of blob transactions admitted from
 	// a single account. The limit is enforced to minimize the DoS potential of

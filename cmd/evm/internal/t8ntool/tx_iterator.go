@@ -176,7 +176,7 @@ type rlpTxIterator struct {
 }
 
 func newRlpTxIterator(rlpData []byte) txIterator {
-	in := rlp.NewStream(bytes.NewBuffer(rlpData), 1024*1024)
+	in := rlp.NewStream(bytes.NewBuffer(rlpData), common.Megabytes)
 	in.List()
 	return &rlpTxIterator{in}
 }

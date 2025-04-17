@@ -28,6 +28,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/gorilla/websocket"
 )
@@ -38,7 +39,7 @@ const (
 	wsPingInterval     = 30 * time.Second
 	wsPingWriteTimeout = 5 * time.Second
 	wsPongTimeout      = 30 * time.Second
-	wsDefaultReadLimit = 32 * 1024 * 1024
+	wsDefaultReadLimit = 32 * common.Megabytes
 )
 
 var wsBufferPool = new(sync.Pool)

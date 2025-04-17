@@ -35,7 +35,7 @@ import (
 
 const (
 	// softResponseLimit is the target maximum size of replies to data retrievals.
-	softResponseLimit = 2 * 1024 * 1024
+	softResponseLimit = 2 * common.Megabytes
 
 	// maxCodeLookups is the maximum number of bytecodes to serve. This number is
 	// there to limit the number of disk lookups.

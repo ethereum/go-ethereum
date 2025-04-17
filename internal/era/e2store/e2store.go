@@ -21,11 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
 	headerSize     = 8
-	valueSizeLimit = 1024 * 1024 * 50
+	valueSizeLimit = 50 * common.Megabytes
 )
 
 // Entry is a variable-length-data record in an e2store.

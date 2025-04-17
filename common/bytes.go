@@ -24,6 +24,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+const (
+	Kilobytes = 1024
+	Megabytes = 1024 * Kilobytes
+	Gigabytes = 1024 * Megabytes
+	Terabytes = 1024 * Gigabytes
+)
+
 // FromHex returns the bytes represented by the hexadecimal string s.
 // s may be prefixed with "0x".
 func FromHex(s string) []byte {

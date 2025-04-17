@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/urfave/cli/v2"
@@ -105,7 +106,7 @@ func eofParseAction(ctx *cli.Context) error {
 	}
 	// If neither are passed in, read input from stdin.
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
+	scanner.Buffer(make([]byte, common.Megabytes), 10*common.Megabytes)
 	for scanner.Scan() {
 		l := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(l, "#") || l == "" {
@@ -197,7 +198,7 @@ func eofDumpAction(ctx *cli.Context) error {
 	}
 	// Otherwise read from stdin
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
+	scanner.Buffer(make([]byte, common.Megabytes), 10*common.Megabytes)
 	for scanner.Scan() {
 		l := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(l, "#") || l == "" {

@@ -30,10 +30,12 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
-	defaultBodyLimit = 5 * 1024 * 1024
+	defaultBodyLimit = 5 * common.Megabytes
 	contentType      = "application/json"
 )
 

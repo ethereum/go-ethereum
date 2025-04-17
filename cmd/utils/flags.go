@@ -1587,11 +1587,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
 	if err == nil {
-		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
-			log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
-			mem.Total = 2 * 1024 * 1024 * 1024
+		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*common.Gigabytes {
+			log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/common.Megabytes, "addressable", 2*common.Kilobytes)
+			mem.Total = 2 * common.Gigabytes
 		}
-		allowance := int(mem.Total / 1024 / 1024 / 3)
+		allowance := int(mem.Total / common.Megabytes / 3)
 		if cache := ctx.Int(CacheFlag.Name); cache > allowance {
 			log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))

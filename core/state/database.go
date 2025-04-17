@@ -37,7 +37,7 @@ const (
 	codeSizeCacheSize = 100000
 
 	// Cache size granted for caching clean code.
-	codeCacheSize = 64 * 1024 * 1024
+	codeCacheSize = 64 * common.Megabytes
 
 	// Number of address->curve point associations to keep.
 	pointCacheSize = 4096

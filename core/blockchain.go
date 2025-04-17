@@ -170,14 +170,14 @@ func (c *CacheConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	}
 	if c.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
-			CleanCacheSize: c.TrieCleanLimit * 1024 * 1024,
+			CleanCacheSize: c.TrieCleanLimit * common.Megabytes,
 		}
 	}
 	if c.StateScheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
 			StateHistory:    c.StateHistory,
-			CleanCacheSize:  c.TrieCleanLimit * 1024 * 1024,
-			WriteBufferSize: c.TrieDirtyLimit * 1024 * 1024,
+			CleanCacheSize:  c.TrieCleanLimit * common.Megabytes,
+			WriteBufferSize: c.TrieDirtyLimit * common.Megabytes,
 		}
 	}
 	return config
@@ -1518,9 +1518,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// If we exceeded our memory allowance, flush matured singleton nodes to disk
 	var (
 		_, nodes, imgs = bc.triedb.Size() // all memory is contained within the nodes return for hashdb
-		limit          = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * 1024 * 1024
+		limit          = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * common.Megabytes
 	)
-	if nodes > limit || imgs > 4*1024*1024 {
+	if nodes > limit || imgs > 4*common.Megabytes {
 		bc.triedb.Cap(limit - ethdb.IdealBatchSize)
 	}
 	// Find the next state trie we need to commit
@@ -2022,7 +2022,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 // switch over to the new chain if the TD exceeded the current chain.
 // insertSideChain is only used pre-merge.
 func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, makeWitness bool) (*stateless.Witness, int, error) {
-	var current = bc.CurrentBlock()
+	current := bc.CurrentBlock()
 
 	// The first sidechain block error is already verified to be ErrPrunedAncestor.
 	// Since we don't import them here, we expect ErrUnknownAncestor for the remaining
@@ -2100,7 +2100,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, ma
 		// If memory use grew too large, import and continue. Sadly we need to discard
 		// all raised events and logs from notifications since we're too heavy on the
 		// memory here.
-		if len(blocks) >= 2048 || memory > 64*1024*1024 {
+		if len(blocks) >= 2048 || memory > 64*common.Megabytes {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
 			if _, _, err := bc.insertChain(blocks, true, false); err != nil {
 				return nil, 0, err

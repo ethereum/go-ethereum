@@ -56,7 +56,7 @@ type stateBloom struct {
 // to the https://hur.st/bloomfilter/?n=600000000&p=&m=2048MB&k=4, the parameters
 // are picked so that the false-positive rate for mainnet is low enough.
 func newStateBloomWithSize(size uint64) (*stateBloom, error) {
-	bloom, err := bloomfilter.New(size*1024*1024*8, 4)
+	bloom, err := bloomfilter.New(size*common.Megabytes*8, 4)
 	if err != nil {
 		return nil, err
 	}

@@ -16,9 +16,11 @@
 
 package ethdb
 
+import "github.com/ethereum/go-ethereum/common"
+
 // IdealBatchSize defines the size of the data batches should ideally add in one
 // write.
-const IdealBatchSize = 100 * 1024
+const IdealBatchSize = 100 * common.Kilobytes
 
 // Batch is a write-only database that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.

@@ -71,7 +71,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, cache
 		diskdb:     diskdb,
 		triedb:     triedb,
 		root:       root,
-		cache:      fastcache.New(cache * 1024 * 1024),
+		cache:      fastcache.New(cache * common.Megabytes),
 		genMarker:  genMarker,
 		genPending: make(chan struct{}),
 		genAbort:   make(chan chan *generatorStats),

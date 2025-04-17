@@ -324,7 +324,7 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 		return rlpHeaders
 	}
 	// read remaining from ancients, cap at 2M
-	data, err := db.AncientRange(ChainFreezerHeaderTable, i+1-count, count, 2*1024*1024)
+	data, err := db.AncientRange(ChainFreezerHeaderTable, i+1-count, count, 2*common.Megabytes)
 	if err != nil {
 		log.Error("Failed to read headers from freezer", "err", err)
 		return rlpHeaders

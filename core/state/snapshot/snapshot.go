@@ -560,7 +560,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		// Ensure we don't write too much data blindly. It's ok to flush, the
 		// root will go missing in case of a crash and we'll detect and regen
 		// the snapshot.
-		if batch.ValueSize() > 64*1024*1024 {
+		if batch.ValueSize() > 64*common.Megabytes {
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to write state changes", "err", err)
 			}
@@ -595,7 +595,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			// Ensure we don't write too much data blindly. It's ok to flush, the
 			// root will go missing in case of a crash and we'll detect and regen
 			// the snapshot.
-			if batch.ValueSize() > 64*1024*1024 {
+			if batch.ValueSize() > 64*common.Megabytes {
 				if err := batch.Write(); err != nil {
 					log.Crit("Failed to write state changes", "err", err)
 				}
