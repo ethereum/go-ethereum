@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
@@ -1699,11 +1700,43 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 // namespace.
 type DebugAPI struct {
 	b Backend
+	// contains filtered or unexported fields
 }
 
-// NewDebugAPI creates a new instance of DebugAPI.
+// NewDebugAPI creates a new DebugAPI instance.
 func NewDebugAPI(b Backend) *DebugAPI {
-	return &DebugAPI{b: b}
+	// Fill defaults based on the chain config
+	var gasLimit uint64
+	if head := b.CurrentBlock(); head != nil {
+		gasLimit = head.GasLimit
+	}
+	// The geth console doesn't allow flags, so we depend on the configured backend.
+	return &DebugAPI{
+		b:              b,
+		defaultCallGas: gasLimit,
+	}
+}
+
+// SetSyncTarget manually sets the target hash for full sync.
+// This is primarily intended for debugging and testing purposes, allowing
+// simulation of syncing to specific forks or targets without restarting the node.
+func (api *DebugAPI) SetSyncTarget(ctx context.Context, target common.Hash) error {
+	// Note: BeaconDevSync might block; running in a goroutine to avoid blocking RPC/console.
+	// Also, passing nil for the cancel channel as we don't provide a way to cancel via API.
+	go func() {
+		err := api.b.Downloader().BeaconDevSync(ethconfig.FullSync, target, nil)
+		if err != nil {
+			log.Warn("debug_setSyncTarget: BeaconDevSync failed", "target", target, "err", err)
+		} else {
+			log.Info("debug_setSyncTarget: BeaconDevSync initiated", "target", target)
+		}
+	}()
+	return nil // API call returns immediately
+}
+
+// ChainConfig returns the active chain configuration.
+func (api *DebugAPI) ChainConfig() *params.ChainConfig {
+	return api.b.ChainConfig()
 }
 
 // GetRawHeader retrieves the RLP encoding for a single header.
