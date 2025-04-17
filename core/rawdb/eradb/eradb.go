@@ -63,7 +63,6 @@ func New(datadir string) (*EraDatabase, error) {
 		if err := e.Close(); err != nil {
 			log.Warn("Error closing era1 file", "epoch", epoch, "err", err)
 		}
-
 	}
 	// Take care to close era1 files when they are evicted from cache.
 	db.cache.OnEvicted(closeEra)
