@@ -106,7 +106,7 @@ func eofParseAction(ctx *cli.Context) error {
 	}
 	// If neither are passed in, read input from stdin.
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, common.Megabytes), 10*common.Megabytes)
+	scanner.Buffer(make([]byte, common.Megabyte), 10*common.Megabyte)
 	for scanner.Scan() {
 		l := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(l, "#") || l == "" {
@@ -198,7 +198,7 @@ func eofDumpAction(ctx *cli.Context) error {
 	}
 	// Otherwise read from stdin
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, common.Megabytes), 10*common.Megabytes)
+	scanner.Buffer(make([]byte, common.Megabyte), 10*common.Megabyte)
 	for scanner.Scan() {
 		l := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(l, "#") || l == "" {

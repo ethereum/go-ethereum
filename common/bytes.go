@@ -25,10 +25,10 @@ import (
 )
 
 const (
-	Kilobytes = 1024
-	Megabytes = 1024 * Kilobytes
-	Gigabytes = 1024 * Megabytes
-	Terabytes = 1024 * Gigabytes
+	Kilobyte = 1024
+	Megabyte = 1024 * Kilobyte
+	Gigabyte = 1024 * Megabyte
+	Terabyte = 1024 * Gigabyte
 )
 
 // FromHex returns the bytes represented by the hexadecimal string s.

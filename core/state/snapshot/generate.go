@@ -71,7 +71,7 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, cache
 		diskdb:     diskdb,
 		triedb:     triedb,
 		root:       root,
-		cache:      fastcache.New(cache * common.Megabytes),
+		cache:      fastcache.New(cache * common.Megabyte),
 		genMarker:  genMarker,
 		genPending: make(chan struct{}),
 		genAbort:   make(chan chan *generatorStats),
@@ -284,7 +284,8 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 			diskMore: diskMore,
 			trieMore: cont,
 			proofErr: err,
-			tr:       tr},
+			tr:       tr,
+		},
 		nil
 }
 
@@ -534,7 +535,7 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 		return nil
 	}
 	// Loop for re-generating the missing storage slots.
-	var origin = common.CopyBytes(storeMarker)
+	origin := common.CopyBytes(storeMarker)
 	for {
 		id := trie.StorageTrieID(stateRoot, account, storageRoot)
 		exhausted, last, err := dl.generateRange(ctx, id, append(rawdb.SnapshotStoragePrefix, account.Bytes()...), snapStorage, origin, storageCheckRange, onStorage, nil)

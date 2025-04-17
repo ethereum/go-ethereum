@@ -27,7 +27,7 @@ import (
 
 const (
 	headerSize     = 8
-	valueSizeLimit = 50 * common.Megabytes
+	valueSizeLimit = 50 * common.Megabyte
 )
 
 // Entry is a variable-length-data record in an e2store.

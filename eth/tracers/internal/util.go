@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	memoryPadLimit = common.Megabytes
+	memoryPadLimit = common.Megabyte
 )
 
 // GetMemoryCopyPadded returns offset + size as a new slice.

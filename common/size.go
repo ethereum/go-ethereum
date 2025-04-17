@@ -26,14 +26,14 @@ type StorageSize float64
 
 // String implements the stringer interface.
 func (s StorageSize) String() string {
-	if s > Terabytes {
-		return fmt.Sprintf("%.2f TiB", s/Terabytes)
-	} else if s > Gigabytes {
-		return fmt.Sprintf("%.2f GiB", s/Gigabytes)
-	} else if s > Megabytes {
-		return fmt.Sprintf("%.2f MiB", s/Megabytes)
-	} else if s > Kilobytes {
-		return fmt.Sprintf("%.2f KiB", s/Kilobytes)
+	if s > Terabyte {
+		return fmt.Sprintf("%.2f TiB", s/Terabyte)
+	} else if s > Gigabyte {
+		return fmt.Sprintf("%.2f GiB", s/Gigabyte)
+	} else if s > Megabyte {
+		return fmt.Sprintf("%.2f MiB", s/Megabyte)
+	} else if s > Kilobyte {
+		return fmt.Sprintf("%.2f KiB", s/Kilobyte)
 	} else {
 		return fmt.Sprintf("%.2f B", s)
 	}
@@ -42,14 +42,14 @@ func (s StorageSize) String() string {
 // TerminalString implements log.TerminalStringer, formatting a string for console
 // output during logging.
 func (s StorageSize) TerminalString() string {
-	if s > Terabytes {
-		return fmt.Sprintf("%.2fTiB", s/Terabytes)
-	} else if s > Gigabytes {
-		return fmt.Sprintf("%.2fGiB", s/Gigabytes)
-	} else if s > Megabytes {
-		return fmt.Sprintf("%.2fMiB", s/Megabytes)
-	} else if s > Kilobytes {
-		return fmt.Sprintf("%.2fKiB", s/Kilobytes)
+	if s > Terabyte {
+		return fmt.Sprintf("%.2fTiB", s/Terabyte)
+	} else if s > Gigabyte {
+		return fmt.Sprintf("%.2fGiB", s/Gigabyte)
+	} else if s > Megabyte {
+		return fmt.Sprintf("%.2fMiB", s/Megabyte)
+	} else if s > Kilobyte {
+		return fmt.Sprintf("%.2fKiB", s/Kilobyte)
 	} else {
 		return fmt.Sprintf("%.2fB", s)
 	}

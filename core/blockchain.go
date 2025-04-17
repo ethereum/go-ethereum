@@ -170,14 +170,14 @@ func (c *CacheConfig) triedbConfig(isVerkle bool) *triedb.Config {
 	}
 	if c.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
-			CleanCacheSize: c.TrieCleanLimit * common.Megabytes,
+			CleanCacheSize: c.TrieCleanLimit * common.Megabyte,
 		}
 	}
 	if c.StateScheme == rawdb.PathScheme {
 		config.PathDB = &pathdb.Config{
 			StateHistory:    c.StateHistory,
-			CleanCacheSize:  c.TrieCleanLimit * common.Megabytes,
-			WriteBufferSize: c.TrieDirtyLimit * common.Megabytes,
+			CleanCacheSize:  c.TrieCleanLimit * common.Megabyte,
+			WriteBufferSize: c.TrieDirtyLimit * common.Megabyte,
 		}
 	}
 	return config
@@ -1518,9 +1518,9 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// If we exceeded our memory allowance, flush matured singleton nodes to disk
 	var (
 		_, nodes, imgs = bc.triedb.Size() // all memory is contained within the nodes return for hashdb
-		limit          = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * common.Megabytes
+		limit          = common.StorageSize(bc.cacheConfig.TrieDirtyLimit) * common.Megabyte
 	)
-	if nodes > limit || imgs > 4*common.Megabytes {
+	if nodes > limit || imgs > 4*common.Megabyte {
 		bc.triedb.Cap(limit - ethdb.IdealBatchSize)
 	}
 	// Find the next state trie we need to commit
@@ -2100,7 +2100,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, ma
 		// If memory use grew too large, import and continue. Sadly we need to discard
 		// all raised events and logs from notifications since we're too heavy on the
 		// memory here.
-		if len(blocks) >= 2048 || memory > 64*common.Megabytes {
+		if len(blocks) >= 2048 || memory > 64*common.Megabyte {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
 			if _, _, err := bc.insertChain(blocks, true, false); err != nil {
 				return nil, 0, err

@@ -39,7 +39,7 @@ const (
 	wsPingInterval     = 30 * time.Second
 	wsPingWriteTimeout = 5 * time.Second
 	wsPongTimeout      = 30 * time.Second
-	wsDefaultReadLimit = 32 * common.Megabytes
+	wsDefaultReadLimit = 32 * common.Megabyte
 )
 
 var wsBufferPool = new(sync.Pool)
@@ -49,7 +49,7 @@ var wsBufferPool = new(sync.Pool)
 // allowedOrigins should be a comma-separated list of allowed origin URLs.
 // To allow connections with any origin, pass "*".
 func (s *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
-	var upgrader = websocket.Upgrader{
+	upgrader := websocket.Upgrader{
 		ReadBufferSize:  wsReadBuffer,
 		WriteBufferSize: wsWriteBuffer,
 		WriteBufferPool: wsBufferPool,
@@ -347,7 +347,7 @@ func (wc *websocketCodec) writeJSON(ctx context.Context, v interface{}, isError 
 
 // pingLoop sends periodic ping frames when the connection is idle.
 func (wc *websocketCodec) pingLoop() {
-	var pingTimer = time.NewTimer(wsPingInterval)
+	pingTimer := time.NewTimer(wsPingInterval)
 	defer wc.wg.Done()
 	defer pingTimer.Stop()
 

@@ -48,12 +48,12 @@ const (
 	// minRequestSize is the minimum number of bytes to request from a remote peer.
 	// This number is used as the low cap for account and storage range requests.
 	// Bytecode and trienode are limited inherently by item count (1).
-	minRequestSize = 64 * common.Kilobytes
+	minRequestSize = 64 * common.Kilobyte
 
 	// maxRequestSize is the maximum number of bytes to request from a remote peer.
 	// This number is used as the high cap for account and storage range requests.
 	// Bytecode and trienode are limited more explicitly by the caps below.
-	maxRequestSize = 512 * common.Kilobytes
+	maxRequestSize = 512 * common.Kilobyte
 
 	// maxCodeRequestCount is the maximum number of bytecode blobs to request in a
 	// single query. If this number is too low, we're not filling responses fully
@@ -63,7 +63,7 @@ const (
 	// Deployed bytecodes are currently capped at 24KB, so the minimum request
 	// size should be maxRequestSize / 24K. Assuming that most contracts do not
 	// come close to that, requesting 4x should be a good approximation.
-	maxCodeRequestCount = maxRequestSize / (24 * common.Kilobytes) * 4
+	maxCodeRequestCount = maxRequestSize / (24 * common.Kilobyte) * 4
 
 	// maxTrieRequestCount is the maximum number of trie node blobs to request in
 	// a single query. If this number is too low, we're not filling responses fully
@@ -95,7 +95,7 @@ const (
 	trienodeHealThrottleDecrease = 1.25
 
 	// batchSizeThreshold is the maximum size allowed for gentrie batch.
-	batchSizeThreshold = 8 * common.Megabytes
+	batchSizeThreshold = 8 * common.Megabyte
 )
 
 var (
@@ -1987,9 +1987,7 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 func (s *Syncer) processBytecodeResponse(res *bytecodeResponse) {
 	batch := s.db.NewBatch()
 
-	var (
-		codes uint64
-	)
+	var codes uint64
 	for i, hash := range res.hashes {
 		code := res.codes[i]
 

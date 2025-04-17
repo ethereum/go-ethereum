@@ -56,7 +56,7 @@ const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
 
-	messageSizeLimit = 15 * common.Megabytes
+	messageSizeLimit = 15 * common.Megabyte
 )
 
 // backend encompasses the bare-minimum functionality needed for ethstats reporting

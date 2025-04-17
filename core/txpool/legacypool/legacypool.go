@@ -49,7 +49,7 @@ const (
 	// takes up based on its size. The slots are used as DoS protection, ensuring
 	// that validating a new transaction remains a constant operation (in reality
 	// O(maxslots), where max slots are 4 currently).
-	txSlotSize = 32 * common.Kilobytes
+	txSlotSize = 32 * common.Kilobyte
 
 	// txMaxSize is the maximum size a single transaction can have. This field has
 	// non-trivial consequences: larger transactions are significantly harder and
@@ -970,7 +970,7 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, sync bool) []error {
 	newErrs, dirtyAddrs := pool.addTxsLocked(news)
 	pool.mu.Unlock()
 
-	var nilSlot = 0
+	nilSlot := 0
 	for _, err := range newErrs {
 		for errs[nilSlot] != nil {
 			nilSlot++
@@ -1466,7 +1466,7 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 		queuedGauge.Dec(int64(len(readies)))
 
 		// Drop all transactions over the allowed limit
-		var caps = list.Cap(int(pool.config.AccountQueue))
+		caps := list.Cap(int(pool.config.AccountQueue))
 		for _, tx := range caps {
 			hash := tx.Hash()
 			pool.all.Remove(hash)

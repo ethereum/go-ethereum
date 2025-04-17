@@ -28,7 +28,7 @@ import (
 
 // This is the maximum amount of data that will be buffered in memory
 // for a single freezer table batch.
-const freezerBatchBufferLimit = 2 * common.Megabytes
+const freezerBatchBufferLimit = 2 * common.Megabyte
 
 // freezerBatch is a write operation of multiple items on a freezer.
 type freezerBatch struct {

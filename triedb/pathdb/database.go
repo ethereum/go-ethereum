@@ -36,26 +36,24 @@ import (
 
 const (
 	// defaultCleanSize is the default memory allowance of clean cache.
-	defaultCleanSize = 16 * common.Megabytes
+	defaultCleanSize = 16 * common.Megabyte
 
 	// maxBufferSize is the maximum memory allowance of node buffer.
 	// Too large buffer will cause the system to pause for a long
 	// time when write happens. Also, the largest batch that pebble can
 	// support is 4GB, node will panic if batch size exceeds this limit.
-	maxBufferSize = 256 * common.Megabytes
+	maxBufferSize = 256 * common.Megabyte
 
 	// defaultBufferSize is the default memory allowance of node buffer
 	// that aggregates the writes from above until it's flushed into the
 	// disk. It's meant to be used once the initial sync is finished.
 	// Do not increase the buffer size arbitrarily, otherwise the system
 	// pause time will increase when the database writes happen.
-	defaultBufferSize = 64 * common.Megabytes
+	defaultBufferSize = 64 * common.Megabyte
 )
 
-var (
-	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
-	maxDiffLayers = 128
-)
+// maxDiffLayers is the maximum diff layers allowed in the layer tree.
+var maxDiffLayers = 128
 
 // layer is the interface implemented by all state layers which includes some
 // public methods and some additional methods for internal usage.

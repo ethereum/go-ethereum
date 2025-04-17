@@ -1587,11 +1587,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
 	if err == nil {
-		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*common.Gigabytes {
-			log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/common.Megabytes, "addressable", 2*common.Kilobytes)
-			mem.Total = 2 * common.Gigabytes
+		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*common.Gigabyte {
+			log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/common.Megabyte, "addressable", 2*common.Kilobyte)
+			mem.Total = 2 * common.Gigabyte
 		}
-		allowance := int(mem.Total / common.Megabytes / 3)
+		allowance := int(mem.Total / common.Megabyte / 3)
 		if cache := ctx.Int(CacheFlag.Name); cache > allowance {
 			log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
 			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
@@ -1826,7 +1826,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
 				cfg.Genesis = nil // fallback to db content
 
-				//validate genesis has PoS enabled in block 0
+				// validate genesis has PoS enabled in block 0
 				genesis, err := core.ReadGenesis(chaindb)
 				if err != nil {
 					Fatalf("Could not read genesis from database: %v", err)

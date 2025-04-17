@@ -377,7 +377,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 
 // randBuf makes a random buffer size kilobytes large.
 func randBuf(size int) []byte {
-	buf := make([]byte, size*common.Kilobytes)
+	buf := make([]byte, size*common.Kilobyte)
 	rand.Read(buf)
 	return buf
 }

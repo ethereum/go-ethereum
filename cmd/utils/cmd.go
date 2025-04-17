@@ -94,7 +94,7 @@ func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 			minFreeDiskSpace = 2 * ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 		}
 		if minFreeDiskSpace > 0 {
-			go monitorFreeDiskSpace(sigc, stack.InstanceDir(), uint64(minFreeDiskSpace)*common.Megabytes)
+			go monitorFreeDiskSpace(sigc, stack.InstanceDir(), uint64(minFreeDiskSpace)*common.Megabyte)
 		}
 
 		shutdown := func() {
@@ -523,7 +523,7 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 		}
 		// Accumulate the preimages and flush when enough ws gathered
 		preimages[crypto.Keccak256Hash(blob)] = common.CopyBytes(blob)
-		if len(preimages) > common.Kilobytes {
+		if len(preimages) > common.Kilobyte {
 			rawdb.WritePreimages(db, preimages)
 			preimages = make(map[common.Hash][]byte)
 		}

@@ -560,7 +560,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		// Ensure we don't write too much data blindly. It's ok to flush, the
 		// root will go missing in case of a crash and we'll detect and regen
 		// the snapshot.
-		if batch.ValueSize() > 64*common.Megabytes {
+		if batch.ValueSize() > 64*common.Megabyte {
 			if err := batch.Write(); err != nil {
 				log.Crit("Failed to write state changes", "err", err)
 			}
@@ -595,7 +595,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			// Ensure we don't write too much data blindly. It's ok to flush, the
 			// root will go missing in case of a crash and we'll detect and regen
 			// the snapshot.
-			if batch.ValueSize() > 64*common.Megabytes {
+			if batch.ValueSize() > 64*common.Megabyte {
 				if err := batch.Write(); err != nil {
 					log.Crit("Failed to write state changes", "err", err)
 				}
@@ -774,7 +774,6 @@ func (t *Tree) Verify(root common.Hash) error {
 		}
 		return hash, nil
 	}, newGenerateStats(), true)
-
 	if err != nil {
 		return err
 	}

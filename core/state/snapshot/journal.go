@@ -139,7 +139,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 	base := &diskLayer{
 		diskdb: diskdb,
 		triedb: triedb,
-		cache:  fastcache.New(cache * common.Megabytes),
+		cache:  fastcache.New(cache * common.Megabyte),
 		root:   baseRoot,
 	}
 	snapshot, generator, err := loadAndParseJournal(diskdb, base)

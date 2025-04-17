@@ -61,7 +61,7 @@ const (
 	// on top of memory.
 	// For non-archive nodes, this limit _will_ be overblown, as disk-backed tries
 	// will only be found every ~15K blocks or so.
-	defaultTracechainMemLimit = common.StorageSize(500 * common.Megabytes)
+	defaultTracechainMemLimit = common.StorageSize(500 * common.Megabyte)
 
 	// maximumPendingTraceStates is the maximum number of states allowed waiting
 	// for tracing. The creation of trace state will be paused if the unused

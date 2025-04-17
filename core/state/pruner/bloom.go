@@ -56,7 +56,7 @@ type stateBloom struct {
 // to the https://hur.st/bloomfilter/?n=600000000&p=&m=2048MB&k=4, the parameters
 // are picked so that the false-positive rate for mainnet is low enough.
 func newStateBloomWithSize(size uint64) (*stateBloom, error) {
-	bloom, err := bloomfilter.New(size*common.Megabytes*8, 4)
+	bloom, err := bloomfilter.New(size*common.Megabyte*8, 4)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (bloom *stateBloom) Commit(filename, tempname string) error {
 		return err
 	}
 	// Ensure the file is synced to disk
-	f, err := os.OpenFile(tempname, os.O_RDWR, 0666)
+	f, err := os.OpenFile(tempname, os.O_RDWR, 0o666)
 	if err != nil {
 		return err
 	}

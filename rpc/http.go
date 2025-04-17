@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	defaultBodyLimit = 5 * common.Megabytes
+	defaultBodyLimit = 5 * common.Megabyte
 	contentType      = "application/json"
 )
 

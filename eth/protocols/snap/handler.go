@@ -35,7 +35,7 @@ import (
 
 const (
 	// softResponseLimit is the target maximum size of replies to data retrievals.
-	softResponseLimit = 2 * common.Megabytes
+	softResponseLimit = 2 * common.Megabyte
 
 	// maxCodeLookups is the maximum number of bytecodes to serve. This number is
 	// there to limit the number of disk lookups.
@@ -354,7 +354,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		if len(req.Origin) > 0 {
 			origin, req.Origin = common.BytesToHash(req.Origin), nil
 		}
-		var limit = common.MaxHash
+		limit := common.MaxHash
 		if len(req.Limit) > 0 {
 			limit, req.Limit = common.BytesToHash(req.Limit), nil
 		}

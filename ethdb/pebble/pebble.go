@@ -153,7 +153,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		handles = minHandles
 	}
 	logger := log.New("database", file)
-	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*common.Megabytes), "handles", handles)
+	logger.Info("Allocated cache and file handles", "cache", common.StorageSize(cache*common.Megabyte), "handles", handles)
 
 	// The max memtable size is limited by the uint32 offsets stored in
 	// internal/arenaskl.node, DeferredBatchOp, and flushableBatchEntry.
@@ -170,7 +170,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 	// Two memory tables is configured which is identical to leveldb,
 	// including a frozen memory table and another live one.
 	memTableLimit := 2
-	memTableSize := cache * common.Megabytes / 2 / memTableLimit
+	memTableSize := cache * common.Megabyte / 2 / memTableLimit
 
 	// The memory table size is currently capped at maxMemTableSize-1 due to a
 	// known bug in the pebble where maxMemTableSize is not recognized as a
@@ -191,7 +191,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		// Pebble has a single combined cache area and the write
 		// buffers are taken from this too. Assign all available
 		// memory allowance for cache.
-		Cache:        pebble.NewCache(int64(cache * common.Megabytes)),
+		Cache:        pebble.NewCache(int64(cache * common.Megabyte)),
 		MaxOpenFiles: handles,
 
 		// The size of memory table(as well as the write buffer).
@@ -212,13 +212,13 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 		// Per-level options. Options for at least one level must be specified. The
 		// options for the last level are used for all subsequent levels.
 		Levels: []pebble.LevelOptions{
-			{TargetFileSize: 2 * common.Megabytes, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 4 * common.Megabytes, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 8 * common.Megabytes, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 16 * common.Megabytes, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 32 * common.Megabytes, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 64 * common.Megabytes, FilterPolicy: bloom.FilterPolicy(10)},
-			{TargetFileSize: 128 * common.Megabytes, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 2 * common.Megabyte, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 4 * common.Megabyte, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 8 * common.Megabyte, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 16 * common.Megabyte, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 32 * common.Megabyte, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 64 * common.Megabyte, FilterPolicy: bloom.FilterPolicy(10)},
+			{TargetFileSize: 128 * common.Megabyte, FilterPolicy: bloom.FilterPolicy(10)},
 		},
 		ReadOnly: readonly,
 		EventListener: &pebble.EventListener{

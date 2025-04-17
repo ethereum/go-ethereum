@@ -33,7 +33,7 @@ import (
 
 const (
 	// softResponseLimit is the target maximum size of replies to data retrievals.
-	softResponseLimit = 2 * common.Megabytes
+	softResponseLimit = 2 * common.Megabyte
 
 	// maxHeadersServe is the maximum number of block headers to serve. This number
 	// is there to limit the number of disk lookups.
@@ -160,11 +160,13 @@ func Handle(backend Backend, peer *Peer) error {
 	}
 }
 
-type msgHandler func(backend Backend, msg Decoder, peer *Peer) error
-type Decoder interface {
-	Decode(val interface{}) error
-	Time() time.Time
-}
+type (
+	msgHandler func(backend Backend, msg Decoder, peer *Peer) error
+	Decoder    interface {
+		Decode(val interface{}) error
+		Time() time.Time
+	}
+)
 
 var eth68 = map[uint64]msgHandler{
 	NewBlockHashesMsg:             handleNewBlockhashes,
@@ -194,7 +196,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 	}
 	defer msg.Discard()
 
-	var handlers = eth68
+	handlers := eth68
 
 	// Track the amount of time it takes to serve the request and run the handler
 	if metrics.Enabled() {
