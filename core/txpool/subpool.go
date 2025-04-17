@@ -67,10 +67,6 @@ type LazyResolver interface {
 	Get(hash common.Hash) *types.Transaction
 }
 
-// AddressReserver is passed by the main transaction pool to subpools, so they
-// may request (and relinquish) exclusive access to certain addresses.
-type AddressReserver func(addr common.Address, reserve bool) error
-
 // PendingFilter is a collection of filter rules to allow retrieving a subset
 // of transactions for announcement or mining.
 //
@@ -109,7 +105,7 @@ type SubPool interface {
 	// These should not be passed as a constructor argument - nor should the pools
 	// start by themselves - in order to keep multiple subpools in lockstep with
 	// one another.
-	Init(gasTip uint64, head *types.Header, reserve AddressReserver) error
+	Init(gasTip uint64, head *types.Header, reserver Reserver) error
 
 	// Close terminates any background processing threads and releases any held
 	// resources.

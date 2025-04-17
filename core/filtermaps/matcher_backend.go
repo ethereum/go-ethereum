@@ -75,6 +75,9 @@ func (fm *FilterMapsMatcherBackend) Close() {
 // on write.
 // GetFilterMapRow implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) GetFilterMapRow(ctx context.Context, mapIndex, rowIndex uint32, baseLayerOnly bool) (FilterRow, error) {
+	fm.f.indexLock.RLock()
+	defer fm.f.indexLock.RUnlock()
+
 	return fm.f.getFilterMapRow(mapIndex, rowIndex, baseLayerOnly)
 }
 

@@ -17,8 +17,10 @@
 package filtermaps
 
 import (
+	"context"
 	crand "crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -31,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var testParams = Params{
@@ -104,6 +107,7 @@ func TestIndexerRandomRange(t *testing.T) {
 			fork, head = rand.Intn(len(forks)), rand.Intn(1001)
 			ts.chain.setCanonicalChain(forks[fork][:head+1])
 		case 2:
+			checkSnapshot = false
 			if head < 1000 {
 				checkSnapshot = !noHistory && head != 0 // no snapshot generated for block 0
 				// add blocks after the current head
@@ -154,6 +158,63 @@ func TestIndexerRandomRange(t *testing.T) {
 
 		if ts.fm.indexedRange.blocks.First() != expTailBlock {
 			ts.t.Fatalf("Invalid index tail block (expected #%d, got #%d)", expTailBlock, ts.fm.indexedRange.blocks.First())
+		}
+	}
+}
+
+func TestIndexerMatcherView(t *testing.T) {
+	testIndexerMatcherView(t, false)
+}
+
+func TestIndexerMatcherViewWithConcurrentRead(t *testing.T) {
+	testIndexerMatcherView(t, true)
+}
+
+func testIndexerMatcherView(t *testing.T, concurrentRead bool) {
+	ts := newTestSetup(t)
+	defer ts.close()
+
+	forks := make([][]common.Hash, 20)
+	hashes := make([]common.Hash, 20)
+	ts.chain.addBlocks(100, 5, 2, 4, true)
+	ts.setHistory(0, false)
+	for i := range forks {
+		if i != 0 {
+			ts.chain.setHead(100 - i)
+			ts.chain.addBlocks(i, 5, 2, 4, true)
+		}
+		ts.fm.WaitIdle()
+		forks[i] = ts.chain.getCanonicalChain()
+		hashes[i] = ts.matcherViewHash()
+	}
+	fork := len(forks) - 1
+	for i := 0; i < 5000; i++ {
+		oldFork := fork
+		fork = rand.Intn(len(forks))
+		stopCh := make(chan chan struct{})
+		if concurrentRead {
+			go func() {
+				for {
+					ts.matcherViewHash()
+					select {
+					case ch := <-stopCh:
+						close(ch)
+						return
+					default:
+					}
+				}
+			}()
+		}
+		ts.chain.setCanonicalChain(forks[fork])
+		ts.fm.WaitIdle()
+		if concurrentRead {
+			ch := make(chan struct{})
+			stopCh <- ch
+			<-ch
+		}
+		hash := ts.matcherViewHash()
+		if hash != hashes[fork] {
+			t.Fatalf("Matcher view hash mismatch when switching from for %d to %d", oldFork, fork)
 		}
 	}
 }
@@ -289,6 +350,55 @@ func (ts *testSetup) fmDbHash() common.Hash {
 	var result common.Hash
 	hasher.Sum(result[:0])
 	return result
+}
+
+func (ts *testSetup) matcherViewHash() common.Hash {
+	mb := ts.fm.NewMatcherBackend()
+	defer mb.Close()
+
+	ctx := context.Background()
+	params := mb.GetParams()
+	hasher := sha256.New()
+	var headPtr uint64
+	for b := uint64(0); ; b++ {
+		lvptr, err := mb.GetBlockLvPointer(ctx, b)
+		if err != nil || (b > 0 && lvptr == headPtr) {
+			break
+		}
+		var enc [8]byte
+		binary.LittleEndian.PutUint64(enc[:], lvptr)
+		hasher.Write(enc[:])
+		headPtr = lvptr
+	}
+	headMap := uint32(headPtr >> params.logValuesPerMap)
+	var enc [12]byte
+	for r := uint32(0); r < params.mapHeight; r++ {
+		binary.LittleEndian.PutUint32(enc[:4], r)
+		for m := uint32(0); m <= headMap; m++ {
+			binary.LittleEndian.PutUint32(enc[4:8], m)
+			row, _ := mb.GetFilterMapRow(ctx, m, r, false)
+			for _, v := range row {
+				binary.LittleEndian.PutUint32(enc[8:], v)
+				hasher.Write(enc[:])
+			}
+		}
+	}
+	var hash common.Hash
+	hasher.Sum(hash[:0])
+	for i := 0; i < 50; i++ {
+		hasher.Reset()
+		hasher.Write(hash[:])
+		lvptr := binary.LittleEndian.Uint64(hash[:8]) % headPtr
+		if log, _ := mb.GetLogByLvIndex(ctx, lvptr); log != nil {
+			enc, err := rlp.EncodeToBytes(log)
+			if err != nil {
+				panic(err)
+			}
+			hasher.Write(enc)
+		}
+		hasher.Sum(hash[:0])
+	}
+	return hash
 }
 
 func (ts *testSetup) close() {

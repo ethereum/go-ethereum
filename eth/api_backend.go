@@ -29,12 +29,12 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -156,7 +156,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	}
 	block := b.eth.blockchain.GetBlockByNumber(bn)
 	if block == nil && bn < b.HistoryPruningCutoff() {
-		return nil, &ethconfig.PrunedHistoryError{}
+		return nil, &history.PrunedHistoryError{}
 	}
 	return block, nil
 }
@@ -168,7 +168,7 @@ func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 	}
 	block := b.eth.blockchain.GetBlock(hash, *number)
 	if block == nil && *number < b.HistoryPruningCutoff() {
-		return nil, &ethconfig.PrunedHistoryError{}
+		return nil, &history.PrunedHistoryError{}
 	}
 	return block, nil
 }
@@ -181,7 +181,7 @@ func (b *EthAPIBackend) GetBody(ctx context.Context, hash common.Hash, number rp
 	body := b.eth.blockchain.GetBody(hash)
 	if body == nil {
 		if uint64(number) < b.HistoryPruningCutoff() {
-			return nil, &ethconfig.PrunedHistoryError{}
+			return nil, &history.PrunedHistoryError{}
 		}
 		return nil, errors.New("block body not found")
 	}
@@ -203,7 +203,7 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
 		if block == nil {
 			if header.Number.Uint64() < b.HistoryPruningCutoff() {
-				return nil, &ethconfig.PrunedHistoryError{}
+				return nil, &history.PrunedHistoryError{}
 			}
 			return nil, errors.New("header found, but block body is missing")
 		}

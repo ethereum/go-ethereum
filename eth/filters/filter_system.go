@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -311,7 +311,7 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	}
 	// Queries beyond the pruning cutoff are not supported.
 	if uint64(from) < es.backend.HistoryPruningCutoff() {
-		return nil, &ethconfig.PrunedHistoryError{}
+		return nil, &history.PrunedHistoryError{}
 	}
 
 	// only interested in new mined logs
