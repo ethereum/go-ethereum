@@ -1244,10 +1244,12 @@ func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 				func(txs []*types.Transaction) []error {
 					errs := make([]error, len(txs))
 					for i := 0; i < len(errs); i++ {
-						if i%2 == 0 {
+						if i%3 == 0 {
 							errs[i] = txpool.ErrUnderpriced
-						} else {
+						} else if i%3 == 1 {
 							errs[i] = txpool.ErrReplaceUnderpriced
+						} else {
+							errs[i] = txpool.ErrTxGasPriceTooLow
 						}
 					}
 					return errs
