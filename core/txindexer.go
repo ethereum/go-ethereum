@@ -196,6 +196,19 @@ func (indexer *txIndexer) repair(head uint64) {
 	}
 }
 
+// resolveHead resolves the block number of the current chain head.
+func (indexer *txIndexer) resolveHead() uint64 {
+	headBlockHash := rawdb.ReadHeadBlockHash(indexer.db)
+	if headBlockHash == (common.Hash{}) {
+		return 0
+	}
+	headBlockNumber := rawdb.ReadHeaderNumber(indexer.db, headBlockHash)
+	if headBlockNumber == nil {
+		return 0
+	}
+	return *headBlockNumber
+}
+
 // loop is the scheduler of the indexer, assigning indexing/unindexing tasks depending
 // on the received chain event.
 func (indexer *txIndexer) loop(chain *BlockChain) {
@@ -203,10 +216,9 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
-		stop      chan struct{}                     // Non-nil if background routine is active
-		done      chan struct{}                     // Non-nil if background routine is active
-		headBlock = rawdb.ReadHeadBlock(indexer.db) // The latest announced chain head
-		head      uint64
+		stop chan struct{}           // Non-nil if background routine is active
+		done chan struct{}           // Non-nil if background routine is active
+		head = indexer.resolveHead() // The latest announced chain head
 
 		headCh = make(chan ChainHeadEvent)
 		sub    = chain.SubscribeChainHeadEvent(headCh)
@@ -214,16 +226,13 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 	defer sub.Unsubscribe()
 
 	// Validate the transaction indexes and repair if necessary
-	if headBlock != nil {
-		indexer.repair(headBlock.NumberU64())
-	}
+	indexer.repair(head)
 
 	// Launch the initial processing if chain is not empty (head != genesis).
 	// This step is useful in these scenarios that chain has no progress.
-	if headBlock != nil && headBlock.NumberU64() != 0 {
+	if head != 0 {
 		stop = make(chan struct{})
 		done = make(chan struct{})
-		head = headBlock.Number().Uint64()
 		go indexer.run(head, stop, done)
 	}
 	for {
