@@ -1827,6 +1827,7 @@ func (t *lookup) Remove(hash common.Hash) {
 	delete(t.txs, hash)
 }
 
+// Clear resets the lookup structure, removing all stored entries.
 func (t *lookup) Clear() {
 	t.lock.Lock()
 	defer t.lock.Unlock()
