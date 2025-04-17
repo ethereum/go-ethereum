@@ -108,6 +108,9 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	bf.results.gasUsedRatio = float64(bf.header.GasUsed) / float64(bf.header.GasLimit)
 	if blobGasUsed := bf.header.BlobGasUsed; blobGasUsed != nil {
 		maxBlobGas := eip4844.MaxBlobGasPerBlock(config, bf.header.Time)
+		if maxBlobGas == 0 {
+			return
+		}
 		bf.results.blobGasUsedRatio = float64(*blobGasUsed) / float64(maxBlobGas)
 	}
 
