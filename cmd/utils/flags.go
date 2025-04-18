@@ -112,8 +112,9 @@ var (
 		Category: flags.EthCategory,
 	}
 	EraFlag = &flags.DirectoryFlag{
-		Name:  "datadir.era",
-		Usage: "Root directory for era1 history (default = inside ancient/chain)",
+		Name:     "datadir.era",
+		Usage:    "Root directory for era1 history (default = inside ancient/chain)",
+		Category: flags.EthCategory,
 	}
 	MinFreeDiskSpaceFlag = &flags.DirectoryFlag{
 		Name:     "datadir.minfreedisk",

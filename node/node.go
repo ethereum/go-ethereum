@@ -746,7 +746,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 			Type:              n.config.DBEngine,
 			Directory:         n.ResolvePath(name),
 			AncientsDirectory: n.ResolveAncient(name, ancient),
-			EraDirectory:      n.ResolveEraDirectory(ancient, era),
+			EraDirectory:      era,
 			Namespace:         namespace,
 			Cache:             cache,
 			Handles:           handles,
@@ -773,17 +773,6 @@ func (n *Node) ResolveAncient(name string, ancient string) string {
 		ancient = n.ResolvePath(ancient)
 	}
 	return ancient
-}
-
-// ResolveEraDirectory returns the absolute path of the era directory.
-func (n *Node) ResolveEraDirectory(ancient, era string) string {
-	switch {
-	case era == "":
-		era = filepath.Join(ancient, "era")
-	case !filepath.IsAbs(era):
-		era = n.ResolvePath(era)
-	}
-	return era
 }
 
 // closeTrackingDB wraps the Close method of a database. When the database is closed by the

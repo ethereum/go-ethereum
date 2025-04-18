@@ -32,11 +32,14 @@ type openOptions struct {
 	Type              string // "leveldb" | "pebble"
 	Directory         string // the datadir
 	AncientsDirectory string // the ancients-dir
-	EraDirectory      string
-	Namespace         string // the namespace for database relevant metrics
-	Cache             int    // the capacity(in megabytes) of the data caching
-	Handles           int    // number of files to be open simultaneously
-	ReadOnly          bool
+
+	// The optional Era folder, which can be either a subfolder under
+	// ancient/chain or a directory specified via an absolute path.
+	EraDirectory string
+	Namespace    string // the namespace for database relevant metrics
+	Cache        int    // the capacity(in megabytes) of the data caching
+	Handles      int    // number of files to be open simultaneously
+	ReadOnly     bool
 
 	// Ephemeral means that filesystem sync operations should be avoided:
 	// data integrity in the face of a crash is not important. This option
