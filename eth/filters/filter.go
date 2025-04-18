@@ -431,10 +431,6 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if len(logs) == 0 {
 		return nil, nil
 	}
-	// Most backends will deliver un-derived logs, but check nevertheless.
-	if len(logs) > 0 && logs[0].TxHash != (common.Hash{}) {
-		return logs, nil
-	}
 
 	return logs, nil
 }

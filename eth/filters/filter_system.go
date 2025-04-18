@@ -109,11 +109,6 @@ func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Has
 		return nil, fmt.Errorf("failed to get logs for block #%d (0x%s)", number, blockHash.TerminalString())
 	}
 
-	body, err := sys.backend.GetBody(ctx, blockHash, rpc.BlockNumber(number))
-	if err != nil {
-		return nil, err
-	}
-
 	// Database logs are un-derived.
 	// Fill in whatever we can (txHash is inaccessible at this point).
 	flattened := make([]*types.Log, 0)
@@ -123,12 +118,23 @@ func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Has
 			log.BlockHash = blockHash
 			log.BlockNumber = number
 			log.TxIndex = uint(i)
-			log.TxHash = body.Transactions[i].Hash()
 			log.Index = logIdx
 			logIdx++
 			flattened = append(flattened, log)
 		}
 	}
+
+	// Most backends will deliver un-derived logs, but check nevertheless.
+	if len(flattened) > 0 && flattened[0].TxHash == (common.Hash{}) {
+		body, err := sys.backend.GetBody(ctx, blockHash, rpc.BlockNumber(number))
+		if err != nil {
+			return nil, err
+		}
+		for _, log := range flattened {
+			log.TxHash = body.Transactions[log.TxIndex].Hash()
+		}
+	}
+
 	elem := &logCacheElem{logs: flattened}
 	sys.logsCache.Add(blockHash, elem)
 	return elem, nil
