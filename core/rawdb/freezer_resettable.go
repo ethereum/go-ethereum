@@ -54,7 +54,7 @@ func newResettableFreezer(datadir string, namespace string, readonly bool, maxTa
 		return nil, err
 	}
 	opener := func() (*Freezer, error) {
-		return NewFreezer(datadir, namespace, readonly, maxTableSize, tables, nil)
+		return NewFreezer(datadir, namespace, readonly, maxTableSize, tables)
 	}
 	freezer, err := opener()
 	if err != nil {
