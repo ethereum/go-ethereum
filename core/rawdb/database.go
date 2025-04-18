@@ -186,6 +186,18 @@ func resolveChainFreezerDir(ancient string) string {
 	return freezer
 }
 
+// resolveChainEraDir is a helper function which resolves the absolute path of era database.
+func resolveChainEraDir(chainFreezerDir string, era string) string {
+	switch {
+	case era == "":
+		return filepath.Join(chainFreezerDir, "era")
+	case !filepath.IsAbs(era):
+		return filepath.Join(chainFreezerDir, era)
+	default:
+		return era
+	}
+}
+
 // NewDatabaseWithFreezer creates a high level database on top of a given key-
 // value data store with a freezer moving immutable chain segments into cold
 // storage. The passed ancient indicates the path of root ancient directory
@@ -197,6 +209,9 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	chainFreezerDir := ancient
 	if chainFreezerDir != "" {
 		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
+	}
+	if chainFreezerDir != "" {
+		eraDir = resolveChainEraDir(chainFreezerDir, eraDir)
 	}
 	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly, eraDir)
 	if err != nil {

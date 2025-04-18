@@ -32,11 +32,14 @@ type openOptions struct {
 	Type              string // "leveldb" | "pebble"
 	Directory         string // the datadir
 	AncientsDirectory string // the ancients-dir
-	EraDirectory      string
-	Namespace         string // the namespace for database relevant metrics
-	Cache             int    // the capacity(in megabytes) of the data caching
-	Handles           int    // number of files to be open simultaneously
-	ReadOnly          bool
+
+	// The optional Era folder, which can be either a subfolder under
+	// ancient/chain or a directory specified via an absolute path.
+	EraDirectory string
+	Namespace    string // the namespace for database relevant metrics
+	Cache        int    // the capacity(in megabytes) of the data caching
+	Handles      int    // number of files to be open simultaneously
+	ReadOnly     bool
 }
 
 // openDatabase opens both a disk-based key-value database such as leveldb or pebble, but also
@@ -62,8 +65,8 @@ func openDatabase(o openOptions) (ethdb.Database, error) {
 
 // openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
 //
-//	                      type == null          type != null
-//	                   +----------------------------------------
+//						  type == null          type != null
+//					   +----------------------------------------
 //	db is non-existent |  pebble default  |  specified type
 //	db is existent     |  from db         |  specified type (if compatible)
 func openKeyValueDatabase(o openOptions) (ethdb.Database, error) {
