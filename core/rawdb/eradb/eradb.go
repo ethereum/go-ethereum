@@ -74,7 +74,7 @@ func New(datadir string) (*EraDatabase, error) {
 	// opened multiple times.
 	db.cache.OnReplaced(closeEra)
 
-	log.Info("Opened erastore", "datadir", datadir)
+	log.Info("Opened Era store", "datadir", datadir)
 	return db, nil
 }
 
