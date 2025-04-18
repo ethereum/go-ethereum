@@ -461,7 +461,7 @@ func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []comm
 		}
 		return true
 	}
-	var ret = make([]*types.Log, 0, len(logs))
+	var ret []*types.Log
 	for _, log := range logs {
 		if check(log) {
 			ret = append(ret, log)
