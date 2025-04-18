@@ -17,9 +17,7 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -65,79 +63,6 @@ func (result *ExecutionResult) Revert() []byte {
 		return nil
 	}
 	return common.CopyBytes(result.ReturnData)
-}
-
-// IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
-	// Set the starting gas for the raw transaction
-	var gas uint64
-	if isContractCreation && isHomestead {
-		gas = params.TxGasContractCreation
-	} else {
-		gas = params.TxGas
-	}
-	dataLen := uint64(len(data))
-	// Bump the required gas by the amount of transactional data
-	if dataLen > 0 {
-		// Zero and non-zero bytes are priced differently
-		z := uint64(bytes.Count(data, []byte{0}))
-		nz := dataLen - z
-
-		// Make sure we don't exceed uint64 for all data combinations
-		nonZeroGas := params.TxDataNonZeroGasFrontier
-		if isEIP2028 {
-			nonZeroGas = params.TxDataNonZeroGasEIP2028
-		}
-		if (math.MaxUint64-gas)/nonZeroGas < nz {
-			return 0, ErrGasUintOverflow
-		}
-		gas += nz * nonZeroGas
-
-		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
-			return 0, ErrGasUintOverflow
-		}
-		gas += z * params.TxDataZeroGas
-
-		if isContractCreation && isEIP3860 {
-			lenWords := toWordSize(dataLen)
-			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
-				return 0, ErrGasUintOverflow
-			}
-			gas += lenWords * params.InitCodeWordGas
-		}
-	}
-	if accessList != nil {
-		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
-		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
-	}
-	if authList != nil {
-		gas += uint64(len(authList)) * params.CallNewAccountGas
-	}
-	return gas, nil
-}
-
-// FloorDataGas computes the minimum gas required for a transaction based on its data tokens (EIP-7623).
-func FloorDataGas(data []byte) (uint64, error) {
-	var (
-		z      = uint64(bytes.Count(data, []byte{0}))
-		nz     = uint64(len(data)) - z
-		tokens = nz*params.TxTokenPerNonZeroByte + z
-	)
-	// Check for overflow
-	if (math.MaxUint64-params.TxGas)/params.TxCostFloorPerToken < tokens {
-		return 0, ErrGasUintOverflow
-	}
-	// Minimum gas required for a transaction based on its data tokens (EIP-7623).
-	return params.TxGas + tokens*params.TxCostFloorPerToken, nil
-}
-
-// toWordSize returns the ceiled word size required for init code payment calculation.
-func toWordSize(size uint64) uint64 {
-	if size > math.MaxUint64-31 {
-		return math.MaxUint64/32 + 1
-	}
-
-	return (size + 31) / 32
 }
 
 // A Message contains the data derived from a single transaction that is relevant to state
@@ -257,50 +182,6 @@ func (st *stateTransition) to() common.Address {
 	return *st.msg.To
 }
 
-func (st *stateTransition) buyGas() error {
-	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
-	mgval.Mul(mgval, st.msg.GasPrice)
-	balanceCheck := new(big.Int).Set(mgval)
-	if st.msg.GasFeeCap != nil {
-		balanceCheck.SetUint64(st.msg.GasLimit)
-		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
-	}
-	balanceCheck.Add(balanceCheck, st.msg.Value)
-
-	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
-		if blobGas := st.blobGasUsed(); blobGas > 0 {
-			// Check that the user has enough funds to cover blobGasUsed * tx.BlobGasFeeCap
-			blobBalanceCheck := new(big.Int).SetUint64(blobGas)
-			blobBalanceCheck.Mul(blobBalanceCheck, st.msg.BlobGasFeeCap)
-			balanceCheck.Add(balanceCheck, blobBalanceCheck)
-			// Pay for blobGasUsed * actual blob fee
-			blobFee := new(big.Int).SetUint64(blobGas)
-			blobFee.Mul(blobFee, st.evm.Context.BlobBaseFee)
-			mgval.Add(mgval, blobFee)
-		}
-	}
-	balanceCheckU256, overflow := uint256.FromBig(balanceCheck)
-	if overflow {
-		return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
-	}
-	if have, want := st.state.GetBalance(st.msg.From), balanceCheckU256; have.Cmp(want) < 0 {
-		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
-	}
-	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
-		return err
-	}
-
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil {
-		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, tracing.GasChangeTxInitialBalance)
-	}
-	st.gasRemaining = st.msg.GasLimit
-
-	st.initialGas = st.msg.GasLimit
-	mgvalU256, _ := uint256.FromBig(mgval)
-	st.state.SubBalance(st.msg.From, mgvalU256, tracing.BalanceDecreaseGasBuy)
-	return nil
-}
-
 func (st *stateTransition) preCheck() error {
 	// Only check transactions that are not fake
 	msg := st.msg
@@ -327,29 +208,8 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
-	if st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
-		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
-		skipCheck := st.evm.Config.NoBaseFee && msg.GasFeeCap.BitLen() == 0 && msg.GasTipCap.BitLen() == 0
-		if !skipCheck {
-			if l := msg.GasFeeCap.BitLen(); l > 256 {
-				return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
-					msg.From.Hex(), l)
-			}
-			if l := msg.GasTipCap.BitLen(); l > 256 {
-				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
-					msg.From.Hex(), l)
-			}
-			if msg.GasFeeCap.Cmp(msg.GasTipCap) < 0 {
-				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
-					msg.From.Hex(), msg.GasTipCap, msg.GasFeeCap)
-			}
-			// This will panic if baseFee is nil, but basefee presence is verified
-			// as part of header validation.
-			if msg.GasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
-				return fmt.Errorf("%w: address %v, maxFeePerGas: %s, baseFee: %s", ErrFeeCapTooLow,
-					msg.From.Hex(), msg.GasFeeCap, st.evm.Context.BaseFee)
-			}
-		}
+	if err := st.preCheckGasLondon(msg); err != nil {
+		return err
 	}
 	// Check the blob version validity
 	if msg.BlobHashes != nil {
@@ -369,19 +229,8 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Check that the user is paying at least the current blob fee
-	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
-		if st.blobGasUsed() > 0 {
-			// Skip the checks if gas fields are zero and blobBaseFee was explicitly disabled (eth_call)
-			skipCheck := st.evm.Config.NoBaseFee && msg.BlobGasFeeCap.BitLen() == 0
-			if !skipCheck {
-				// This will panic if blobBaseFee is nil, but blobBaseFee presence
-				// is verified as part of header validation.
-				if msg.BlobGasFeeCap.Cmp(st.evm.Context.BlobBaseFee) < 0 {
-					return fmt.Errorf("%w: address %v blobGasFeeCap: %v, blobBaseFee: %v", ErrBlobFeeCapTooLow,
-						msg.From.Hex(), msg.BlobGasFeeCap, st.evm.Context.BlobBaseFee)
-				}
-			}
-		}
+	if err := st.preCheckGasCancun(msg); err != nil {
+		return err
 	}
 	// Check that EIP-7702 authorization list signatures are well formed.
 	if msg.SetCodeAuthorizations != nil {
@@ -510,43 +359,10 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	}
 
 	// Compute refund counter, capped to a refund quotient.
-	gasRefund := st.calcRefund()
-	st.gasRemaining += gasRefund
-	if rules.IsPrague {
-		// After EIP-7623: Data-heavy transactions pay the floor gas.
-		if st.gasUsed() < floorDataGas {
-			prev := st.gasRemaining
-			st.gasRemaining = st.initialGas - floorDataGas
-			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
-				t.OnGasChange(prev, st.gasRemaining, tracing.GasChangeTxDataFloor)
-			}
-		}
-	}
-	st.returnGas()
+	gasRefund := st.calcGasRefund()
+	st.returnGas(gasRefund, floorDataGas)
 
-	effectiveTip := msg.GasPrice
-	if rules.IsLondon {
-		effectiveTip = new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee)
-		if effectiveTip.Cmp(msg.GasTipCap) > 0 {
-			effectiveTip = msg.GasTipCap
-		}
-	}
-	effectiveTipU256, _ := uint256.FromBig(effectiveTip)
-
-	if st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0 {
-		// Skip fee payment when NoBaseFee is set and the fee fields
-		// are 0. This avoids a negative effectiveTip being applied to
-		// the coinbase when simulating calls.
-	} else {
-		fee := new(uint256.Int).SetUint64(st.gasUsed())
-		fee.Mul(fee, effectiveTipU256)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
-
-		// add the coinbase to the witness iff the fee is greater than 0
-		if rules.IsEIP4762 && fee.Sign() != 0 {
-			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true)
-		}
-	}
+	st.payTip(rules, msg)
 
 	return &ExecutionResult{
 		UsedGas:     st.gasUsed(),
@@ -612,49 +428,4 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 	st.state.SetCode(authority, types.AddressToDelegation(auth.Address))
 
 	return nil
-}
-
-// calcRefund computes refund counter, capped to a refund quotient.
-func (st *stateTransition) calcRefund() uint64 {
-	var refund uint64
-	if !st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber) {
-		// Before EIP-3529: refunds were capped to gasUsed / 2
-		refund = st.gasUsed() / params.RefundQuotient
-	} else {
-		// After EIP-3529: refunds are capped to gasUsed / 5
-		refund = st.gasUsed() / params.RefundQuotientEIP3529
-	}
-	if refund > st.state.GetRefund() {
-		refund = st.state.GetRefund()
-	}
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && refund > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, st.gasRemaining+refund, tracing.GasChangeTxRefunds)
-	}
-	return refund
-}
-
-// returnGas returns ETH for remaining gas,
-// exchanged at the original rate.
-func (st *stateTransition) returnGas() {
-	remaining := uint256.NewInt(st.gasRemaining)
-	remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
-	st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
-
-	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining > 0 {
-		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, tracing.GasChangeTxLeftOverReturned)
-	}
-
-	// Also return remaining gas to the block gas counter so it is
-	// available for the next transaction.
-	st.gp.AddGas(st.gasRemaining)
-}
-
-// gasUsed returns the amount of gas used up by the state transition.
-func (st *stateTransition) gasUsed() uint64 {
-	return st.initialGas - st.gasRemaining
-}
-
-// blobGasUsed returns the amount of blob gas used by the message.
-func (st *stateTransition) blobGasUsed() uint64 {
-	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }
