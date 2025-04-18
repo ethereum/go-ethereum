@@ -54,7 +54,10 @@ func New(datadir string) (*EraDatabase, error) {
 	if err := os.MkdirAll(datadir, 0755); err != nil {
 		return nil, err
 	}
-	db := &EraDatabase{datadir: datadir, cache: lru.NewCache[uint64, *era.Era](openFileLimit)}
+	db := &EraDatabase{
+		datadir: datadir,
+		cache:   lru.NewCache[uint64, *era.Era](openFileLimit),
+	}
 	closeEra := func(epoch uint64, e *era.Era) {
 		if e == nil {
 			log.Warn("Era1 cache contained nil value", "epoch", epoch)
@@ -66,9 +69,11 @@ func New(datadir string) (*EraDatabase, error) {
 	}
 	// Take care to close era1 files when they are evicted from cache.
 	db.cache.OnEvicted(closeEra)
+
 	// Concurrently calling GetRaw* methods can cause the same era1 file to be
 	// opened multiple times.
 	db.cache.OnReplaced(closeEra)
+
 	log.Info("Opened erastore", "datadir", datadir)
 	return db, nil
 }
