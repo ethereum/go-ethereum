@@ -14,7 +14,7 @@ name: Semgrep
 jobs:
   semgrep:
     name: semgrep/ci
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     permissions: {}
     env:
       SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}

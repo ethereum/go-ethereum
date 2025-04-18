@@ -112,13 +112,13 @@ func TestCalcBaseFee(t *testing.T) {
 		parentL1BaseFee   int64
 		expectedL2BaseFee int64
 	}{
-		{0, 39200000},
-		{1000000000, 39370000},
-		{2000000000, 39540000},
-		{100000000000, 56200000},
-		{111111111111, 58088888},
-		{2164000000000, 407080000},
-		{58592942000000, 10000000000}, // cap at max L2 base fee
+		{0, 15680000},
+		{1000000000, 15714000},
+		{2000000000, 15748000},
+		{100000000000, 19080000},
+		{111111111111, 19457777},
+		{2164000000000, 89256000},
+		{644149677419355, 10000000000}, // cap at max L2 base fee
 	}
 	for i, test := range tests {
 		if have, want := CalcBaseFee(config(), nil, big.NewInt(test.parentL1BaseFee)), big.NewInt(test.expectedL2BaseFee); have.Cmp(want) != 0 {
