@@ -186,13 +186,15 @@ func (p *TxPool) loop(head *types.Header) {
 			// Try to inject a busy marker and start a reset if successful
 			select {
 			case resetBusy <- struct{}{}:
-				statedb, err := p.chain.StateAt(newHead.Root)
-				if err != nil {
-					log.Crit("Failed to reset txpool state", "err", err)
+				// Updates the statedb with the new chain head. The head state may be
+				// unavailable if the initial state sync has not yet completed.
+				if statedb, err := p.chain.StateAt(newHead.Root); err != nil {
+					log.Error("Failed to reset txpool state", "err", err)
+				} else {
+					p.stateLock.Lock()
+					p.state = statedb
+					p.stateLock.Unlock()
 				}
-				p.stateLock.Lock()
-				p.state = statedb
-				p.stateLock.Unlock()
 
 				// Busy marker injected, start a new subpool reset
 				go func(oldHead, newHead *types.Header) {
@@ -320,31 +322,6 @@ func (p *TxPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Pr
 		}
 	}
 	return nil, nil
-}
-
-// ValidateTxBasics checks whether a transaction is valid according to the consensus
-// rules, but does not check state-dependent validation such as sufficient balance.
-func (p *TxPool) ValidateTxBasics(tx *types.Transaction) error {
-	addr, err := types.Sender(p.signer, tx)
-	if err != nil {
-		return err
-	}
-	// Reject transactions with stale nonce. Gapped-nonce future transactions
-	// are considered valid and will be handled by the subpool according to its
-	// internal policy.
-	p.stateLock.RLock()
-	nonce := p.state.GetNonce(addr)
-	p.stateLock.RUnlock()
-
-	if nonce > tx.Nonce() {
-		return core.ErrNonceTooLow
-	}
-	for _, subpool := range p.subpools {
-		if subpool.Filter(tx) {
-			return subpool.ValidateTxBasics(tx)
-		}
-	}
-	return fmt.Errorf("%w: received type %d", core.ErrTxTypeNotSupported, tx.Type())
 }
 
 // Add enqueues a batch of transactions into the pool if they are valid. Due

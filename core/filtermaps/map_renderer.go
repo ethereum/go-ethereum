@@ -143,6 +143,7 @@ func (f *FilterMaps) lastCanonicalSnapshotOfMap(mapIndex uint32) *renderedMap {
 	var best *renderedMap
 	for _, blockNumber := range f.renderSnapshots.Keys() {
 		if cp, _ := f.renderSnapshots.Get(blockNumber); cp != nil && blockNumber < f.indexedRange.blocks.AfterLast() &&
+			blockNumber <= f.indexedView.headNumber && f.indexedView.getBlockId(blockNumber) == cp.lastBlockId &&
 			blockNumber <= f.targetView.headNumber && f.targetView.getBlockId(blockNumber) == cp.lastBlockId &&
 			cp.mapIndex == mapIndex && (best == nil || blockNumber > best.lastBlock) {
 			best = cp

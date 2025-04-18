@@ -484,7 +484,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	total := new(big.Int).Exp(direct, big.NewInt(2), nil) // Stabilise total peer count a bit based on sqrt peers
 
 	var (
-		signer = types.LatestSignerForChainID(h.chain.Config().ChainID) // Don't care about chain status, we just need *a* sender
+		signer = types.LatestSigner(h.chain.Config()) // Don't care about chain status, we just need *a* sender
 		hasher = crypto.NewKeccakState()
 		hash   = make([]byte, 32)
 	)
