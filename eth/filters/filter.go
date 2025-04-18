@@ -436,16 +436,6 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 		return logs, nil
 	}
 
-	body, err := f.sys.cachedGetBody(ctx, cached, hash, header.Number.Uint64())
-	if err != nil {
-		return nil, err
-	}
-	for i, log := range logs {
-		// Copy log not to modify cache elements
-		logcopy := *log
-		logcopy.TxHash = body.Transactions[logcopy.TxIndex].Hash()
-		logs[i] = &logcopy
-	}
 	return logs, nil
 }
 
@@ -475,7 +465,7 @@ func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []comm
 		}
 		return true
 	}
-	var ret []*types.Log
+	var ret = make([]*types.Log, 0, len(logs))
 	for _, log := range logs {
 		if check(log) {
 			ret = append(ret, log)

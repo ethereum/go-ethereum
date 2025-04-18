@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -93,7 +92,6 @@ func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 
 type logCacheElem struct {
 	logs []*types.Log
-	body atomic.Pointer[types.Body]
 }
 
 // cachedLogElem loads block logs from the backend and caches the result.
@@ -110,6 +108,12 @@ func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Has
 	if logs == nil {
 		return nil, fmt.Errorf("failed to get logs for block #%d (0x%s)", number, blockHash.TerminalString())
 	}
+
+	body, err := sys.backend.GetBody(ctx, blockHash, rpc.BlockNumber(number))
+	if err != nil {
+		return nil, err
+	}
+
 	// Database logs are un-derived.
 	// Fill in whatever we can (txHash is inaccessible at this point).
 	flattened := make([]*types.Log, 0)
@@ -119,6 +123,7 @@ func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Has
 			log.BlockHash = blockHash
 			log.BlockNumber = number
 			log.TxIndex = uint(i)
+			log.TxHash = body.Transactions[i].Hash()
 			log.Index = logIdx
 			logIdx++
 			flattened = append(flattened, log)
@@ -127,18 +132,6 @@ func (sys *FilterSystem) cachedLogElem(ctx context.Context, blockHash common.Has
 	elem := &logCacheElem{logs: flattened}
 	sys.logsCache.Add(blockHash, elem)
 	return elem, nil
-}
-
-func (sys *FilterSystem) cachedGetBody(ctx context.Context, elem *logCacheElem, hash common.Hash, number uint64) (*types.Body, error) {
-	if body := elem.body.Load(); body != nil {
-		return body, nil
-	}
-	body, err := sys.backend.GetBody(ctx, hash, rpc.BlockNumber(number))
-	if err != nil {
-		return nil, err
-	}
-	elem.body.Store(body)
-	return body, nil
 }
 
 // Type determines the kind of filter and is used to put the filter in to
