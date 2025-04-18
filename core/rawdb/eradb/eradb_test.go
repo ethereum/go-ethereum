@@ -31,7 +31,7 @@ func TestEraDatabase(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	r, err := db.GetRawBody(15000)
+	r, err := db.GetRawBody(1024)
 	require.NoError(t, err)
 	var body *types.Body
 	err = rlp.DecodeBytes(r, &body)
@@ -40,7 +40,7 @@ func TestEraDatabase(t *testing.T) {
 	assert.Equal(t, 0, len(body.Transactions))
 
 	// Get Receipts
-	r, err = db.GetRawReceipts(15000)
+	r, err = db.GetRawReceipts(1024)
 	require.NoError(t, err)
 	var receipts types.Receipts
 	err = rlp.DecodeBytes(r, &receipts)
