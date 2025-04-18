@@ -238,26 +238,39 @@ type BufferIter struct {
 	it     Iterator
 	buffer chan *Node
 	head   *Node
+	closed chan struct{}
 }
 
-// NewBufferIter creates a new pre-fetch buffer.
+// NewBufferIter creates a new pre-fetch buffer of a given size.
 func NewBufferIter(it Iterator, size int) *BufferIter {
 	b := BufferIter{
 		it:     it,
 		buffer: make(chan *Node, size),
+		head:   nil,
+		closed: make(chan struct{}),
 	}
 
 	go func() {
+		// if the wrapped iterator ends, the buffer content will still be served.
 		defer close(b.buffer)
+		// If instead the bufferIterator is closed, we bail out of the loop.
 		for b.it.Next() {
-			b.buffer <- b.it.Node()
+			select {
+			case b.buffer <- b.it.Node():
+			case <-b.closed:
+				return
+			}
 		}
 	}()
 	return &b
 }
 
 func (b *BufferIter) Next() bool {
-	b.head = <-b.buffer
+	select {
+	case b.head = <-b.buffer:
+	case <-b.closed:
+		return false
+	}
 	return b.head != nil
 }
 
@@ -266,12 +279,11 @@ func (b *BufferIter) Node() *Node {
 }
 
 func (b *BufferIter) Close() {
+	// Close the wrapped iterator first.
 	b.it.Close()
-	// Wait for the buffer to be consumed.
+	close(b.closed)
 	for range b.buffer {
 	}
-	// Close the buffer channel.
-	// close(b.buffer)
 	b.buffer = nil
 	b.head = nil
 	b.it = nil
