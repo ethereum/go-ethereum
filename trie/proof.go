@@ -489,7 +489,6 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 	// - monotonically increasing,
 	// - not expanding down prefix-paths
 	// - and contains no deletions
-	//last := []byte{0}
 	for i := 0; i < len(keys); i++ {
 		if i < len(keys)-1 {
 			if bytes.Compare(keys[i], keys[i+1]) >= 0 {
