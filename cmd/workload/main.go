@@ -50,6 +50,7 @@ func init() {
 		historyGenerateCommand,
 		filterGenerateCommand,
 		filterPerfCommand,
+		filterFuzzCommand,
 	}
 }
 
