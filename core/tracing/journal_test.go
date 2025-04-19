@@ -297,7 +297,9 @@ func newTracerAllHooks() *tracerAllHooks {
 	for i := 0; i < hooksType.NumField(); i++ {
 		t.hooksCalled[hooksType.Field(i).Name] = false
 	}
+	// Deprecated methods
 	delete(t.hooksCalled, "OnNonceChange")
+	delete(t.hooksCalled, "OnSystemCallStart")
 	return t
 }
 
@@ -322,7 +324,11 @@ func (t *tracerAllHooks) hooks() *Hooks {
 	hooksValue := reflect.ValueOf(h).Elem()
 	for i := 0; i < hooksValue.NumField(); i++ {
 		field := hooksValue.Type().Field(i)
+		// Skip deprecated methods
 		if field.Name == "OnNonceChange" {
+			continue
+		}
+		if field.Name == "OnSystemCallStart" {
 			continue
 		}
 		hookMethod := reflect.MakeFunc(field.Type, func(args []reflect.Value) []reflect.Value {
