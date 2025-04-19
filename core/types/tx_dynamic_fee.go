@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+//go:generate go run ../../rlp/rlpgen -type DynamicFeeTx -out gen_dynamic_fee_tx_rlp.go
+
 // DynamicFeeTx represents an EIP-1559 transaction.
 type DynamicFeeTx struct {
 	ChainID    *big.Int

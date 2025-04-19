@@ -23,6 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+//go:generate go run ../../rlp/rlpgen -type LegacyTx -out gen_legacy_tx_rlp.go
+
 // LegacyTx is the transaction data of the original Ethereum transactions.
 type LegacyTx struct {
 	Nonce    uint64          // nonce of sender account
