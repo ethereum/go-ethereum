@@ -105,9 +105,14 @@ type ContractTransactor interface {
 	PendingNonceAt(ctx context.Context, account common.Address) (uint64, error)
 }
 
-// DeployBackend wraps the operations needed by WaitMined and WaitDeployed.
-type DeployBackend interface {
+// TxReceiptBackend wraps the operations needed by WaitMined.
+type TxReceiptBackend interface {
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
+}
+
+// DeployBackend wraps the operations needed by WaitDeployed.
+type DeployBackend interface {
+	TxReceiptBackend
 	CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error)
 }
 
