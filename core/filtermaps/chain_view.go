@@ -67,6 +67,9 @@ func (cv *ChainView) HeadNumber() uint64 {
 // Note that the hash of the head block is not returned because ChainView might
 // represent a view where the head block is currently being created.
 func (cv *ChainView) BlockHash(number uint64) common.Hash {
+	cv.lock.Lock()
+	defer cv.lock.Unlock()
+
 	if number > cv.headNumber {
 		panic("invalid block number")
 	}
@@ -79,6 +82,9 @@ func (cv *ChainView) BlockHash(number uint64) common.Hash {
 // consensus and therefore rendering the index with the new head will happen
 // before the hash of that new head is available.
 func (cv *ChainView) BlockId(number uint64) common.Hash {
+	cv.lock.Lock()
+	defer cv.lock.Unlock()
+
 	if number > cv.headNumber {
 		panic("invalid block number")
 	}
@@ -93,10 +99,7 @@ func (cv *ChainView) Header(number uint64) *types.Header {
 // Receipts returns the set of receipts belonging to the block at the given
 // block number.
 func (cv *ChainView) Receipts(number uint64) types.Receipts {
-	if number > cv.headNumber {
-		panic("invalid block number")
-	}
-	blockHash := cv.blockHash(number)
+	blockHash := cv.BlockHash(number)
 	if blockHash == (common.Hash{}) {
 		log.Error("Chain view: block hash unavailable", "number", number, "head", cv.headNumber)
 	}
@@ -105,7 +108,10 @@ func (cv *ChainView) Receipts(number uint64) types.Receipts {
 
 // SharedRange returns the block range shared by two chain views.
 func (cv *ChainView) SharedRange(cv2 *ChainView) common.Range[uint64] {
-	if cv == nil || cv2 == nil {
+	cv.lock.Lock()
+	defer cv.lock.Unlock()
+
+	if cv == nil || cv2 == nil || !cv.extendNonCanonical() || !cv2.extendNonCanonical() {
 		return common.Range[uint64]{}
 	}
 	var sharedLen uint64
@@ -120,7 +126,7 @@ func (cv *ChainView) limitedView(newHead uint64) *ChainView {
 	if newHead >= cv.headNumber {
 		return cv
 	}
-	return NewChainView(cv.chain, newHead, cv.blockHash(newHead))
+	return NewChainView(cv.chain, newHead, cv.BlockHash(newHead))
 }
 
 // equalViews returns true if the two chain views are equivalent.
@@ -172,9 +178,6 @@ func (cv *ChainView) extendNonCanonical() bool {
 
 // blockHash returns the given block hash without doing the head number check.
 func (cv *ChainView) blockHash(number uint64) common.Hash {
-	cv.lock.Lock()
-	defer cv.lock.Unlock()
-
 	if number+uint64(len(cv.hashes)) <= cv.headNumber {
 		hash := cv.chain.GetCanonicalHash(number)
 		if !cv.extendNonCanonical() {
