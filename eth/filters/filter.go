@@ -355,7 +355,7 @@ func (s *searchSession) doSearchIteration() error {
 		}
 		headMatchRange, headMatches, err := s.searchInRange(headRange, !s.forceUnindexed)
 		if err != nil {
-			return nil
+			return err
 		}
 		if headMatchRange.First() != s.matchRange.AfterLast() {
 			// improbable corner case, first part of new head range invalidated by tail unindexing
