@@ -1,4 +1,4 @@
-module github.com/edudukin/go-ethereum
+module github.com/YehorDudukin/go-ethereum
 
 go 1.23.0
 
