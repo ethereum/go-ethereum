@@ -113,9 +113,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, err
 		}
 		// EIP-7002
-		ProcessWithdrawalQueue(&requests, evm)
+		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+			return nil, err
+		}
 		// EIP-7251
-		ProcessConsolidationQueue(&requests, evm)
+		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+			return nil, err
+		}
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -265,17 +269,17 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM) {
-	processRequestsSystemCall(requests, evm, 0x01, params.WithdrawalQueueAddress)
+func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM) error {
+	return processRequestsSystemCall(requests, evm, 0x01, params.WithdrawalQueueAddress)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM) {
-	processRequestsSystemCall(requests, evm, 0x02, params.ConsolidationQueueAddress)
+func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM) error {
+	return processRequestsSystemCall(requests, evm, 0x02, params.ConsolidationQueueAddress)
 }
 
-func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address) {
+func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address) error {
 	if tracer := evm.Config.Tracer; tracer != nil {
 		onSystemCallStart(tracer, evm.GetVMContext())
 		if tracer.OnSystemCallEnd != nil {
@@ -292,17 +296,20 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(addr)
-	ret, _, _ := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
+	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
 	evm.StateDB.Finalise(true)
-	if len(ret) == 0 {
-		return // skip empty output
+	if err != nil {
+		return fmt.Errorf("system call failed to execute: %v", err)
 	}
-
+	if len(ret) == 0 {
+		return nil // skip empty output
+	}
 	// Append prefixed requestsData to the requests list.
 	requestsData := make([]byte, len(ret)+1)
 	requestsData[0] = requestType
 	copy(requestsData[1:], ret)
 	*requests = append(*requests, requestsData)
+	return nil
 }
 
 var depositTopic = common.HexToHash("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")
