@@ -864,6 +864,8 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 	if err != nil {
 		if !c.is(inboundConn) {
 			markDialError(err)
+		} else {
+			markServeError(err)
 		}
 		c.close(err)
 	}
