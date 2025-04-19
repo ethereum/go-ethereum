@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // IdentifierCollisionMetaData contains all meta data concerning the IdentifierCollision contract.
@@ -67,12 +69,12 @@ func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
 // from invoking the contract method with ID 0x4ef1f0ad.
 //
 // Solidity: function MyVar() view returns(uint256)
-func (identifierCollision *IdentifierCollision) UnpackMyVar(data []byte) (*big.Int, error) {
+func (identifierCollision *IdentifierCollision) UnpackMyVar(data []byte) (*uint256.Int, error) {
 	out, err := identifierCollision.abi.Unpack("MyVar", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -92,11 +94,11 @@ func (identifierCollision *IdentifierCollision) PackPubVar() []byte {
 // from invoking the contract method with ID 0x01ad4d87.
 //
 // Solidity: function _myVar() view returns(uint256)
-func (identifierCollision *IdentifierCollision) UnpackPubVar(data []byte) (*big.Int, error) {
+func (identifierCollision *IdentifierCollision) UnpackPubVar(data []byte) (*uint256.Int, error) {
 	out, err := identifierCollision.abi.Unpack("_myVar", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }

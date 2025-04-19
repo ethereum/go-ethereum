@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // TupleP is an auto generated low-level Go binding around an user-defined struct.
@@ -38,15 +40,15 @@ type TupleQ struct {
 
 // TupleS is an auto generated low-level Go binding around an user-defined struct.
 type TupleS struct {
-	A *big.Int
-	B []*big.Int
+	A *uint256.Int
+	B []*uint256.Int
 	C []TupleT
 }
 
 // TupleT is an auto generated low-level Go binding around an user-defined struct.
 type TupleT struct {
-	X *big.Int
-	Y *big.Int
+	X *uint256.Int
+	Y *uint256.Int
 }
 
 // TupleMetaData contains all meta data concerning the Tuple contract.
@@ -80,7 +82,7 @@ func (c *Tuple) Instance(backend bind.ContractBackend, addr common.Address) *bin
 // the contract method with ID 0x443c79b4.
 //
 // Solidity: function func1((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) pure returns((uint256,uint256[],(uint256,uint256)[]), (uint256,uint256)[2][], (uint256,uint256)[][2], (uint256,uint256[],(uint256,uint256)[])[], uint256[])
-func (tuple *Tuple) PackFunc1(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*big.Int) []byte {
+func (tuple *Tuple) PackFunc1(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*uint256.Int) []byte {
 	enc, err := tuple.abi.Pack("func1", a, b, c, d, e)
 	if err != nil {
 		panic(err)
@@ -95,7 +97,7 @@ type Func1Output struct {
 	Arg1 [][2]TupleT
 	Arg2 [2][]TupleT
 	Arg3 []TupleS
-	Arg4 []*big.Int
+	Arg4 []*uint256.Int
 }
 
 // UnpackFunc1 is the Go binding that unpacks the parameters returned
@@ -112,7 +114,7 @@ func (tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 	outstruct.Arg1 = *abi.ConvertType(out[1], new([][2]TupleT)).(*[][2]TupleT)
 	outstruct.Arg2 = *abi.ConvertType(out[2], new([2][]TupleT)).(*[2][]TupleT)
 	outstruct.Arg3 = *abi.ConvertType(out[3], new([]TupleS)).(*[]TupleS)
-	outstruct.Arg4 = *abi.ConvertType(out[4], new([]*big.Int)).(*[]*big.Int)
+	outstruct.Arg4 = *abi.ConvertType(out[4], new([]*uint256.Int)).(*[]*uint256.Int)
 	return *outstruct, err
 
 }
@@ -121,7 +123,7 @@ func (tuple *Tuple) UnpackFunc1(data []byte) (Func1Output, error) {
 // the contract method with ID 0xd0062cdd.
 //
 // Solidity: function func2((uint256,uint256[],(uint256,uint256)[]) a, (uint256,uint256)[2][] b, (uint256,uint256)[][2] c, (uint256,uint256[],(uint256,uint256)[])[] d, uint256[] e) returns()
-func (tuple *Tuple) PackFunc2(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*big.Int) []byte {
+func (tuple *Tuple) PackFunc2(a TupleS, b [][2]TupleT, c [2][]TupleT, d []TupleS, e []*uint256.Int) []byte {
 	enc, err := tuple.abi.Pack("func2", a, b, c, d, e)
 	if err != nil {
 		panic(err)
@@ -147,7 +149,7 @@ type TupleTupleEvent struct {
 	B   [][2]TupleT
 	C   [2][]TupleT
 	D   []TupleS
-	E   []*big.Int
+	E   []*uint256.Int
 	Raw *types.Log // Blockchain specific contextual infos
 }
 

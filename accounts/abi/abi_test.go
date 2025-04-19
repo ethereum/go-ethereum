@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/holiman/uint256"
 )
 
 const jsondata = `
@@ -185,7 +186,7 @@ func TestConstructor(t *testing.T) {
 		t.Error("Missing expected constructor")
 	}
 	// Test pack/unpack
-	packed, err := abi.Pack("", big.NewInt(1), big.NewInt(2))
+	packed, err := abi.Pack("", uint256.NewInt(1), uint256.NewInt(2))
 	if err != nil {
 		t.Error(err)
 	}
@@ -194,10 +195,10 @@ func TestConstructor(t *testing.T) {
 		t.Error(err)
 	}
 
-	if !reflect.DeepEqual(unpacked[0], big.NewInt(1)) {
+	if !reflect.DeepEqual(unpacked[0], uint256.NewInt(1)) {
 		t.Error("Unable to pack/unpack from constructor")
 	}
-	if !reflect.DeepEqual(unpacked[1], big.NewInt(2)) {
+	if !reflect.DeepEqual(unpacked[1], uint256.NewInt(2)) {
 		t.Error("Unable to pack/unpack from constructor")
 	}
 }
@@ -328,11 +329,11 @@ func TestCustomErrorUnpackIntoInterface(t *testing.T) {
 	}
 	type MyError struct {
 		Sender  common.Address
-		Balance *big.Int
+		Balance *uint256.Int
 	}
 
 	sender := testrand.Address()
-	balance := new(big.Int).SetBytes(testrand.Bytes(8))
+	balance := new(uint256.Int).SetBytes(testrand.Bytes(8))
 	encoded, err := abi.Errors[errorName].Inputs.Pack(sender, balance)
 	if err != nil {
 		t.Fatal(err)
@@ -802,7 +803,7 @@ func TestUnpackEvent(t *testing.T) {
 
 	type ReceivedEvent struct {
 		Sender common.Address
-		Amount *big.Int
+		Amount *uint256.Int
 		Memo   []byte
 	}
 	var ev ReceivedEvent
@@ -842,7 +843,7 @@ func TestUnpackEventIntoMap(t *testing.T) {
 	receivedMap := map[string]interface{}{}
 	expectedReceivedMap := map[string]interface{}{
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
-		"amount": big.NewInt(1),
+		"amount": uint256.NewInt(1),
 		"memo":   []byte{88},
 	}
 	if err := abi.UnpackIntoMap(receivedMap, "received", data); err != nil {
@@ -854,7 +855,7 @@ func TestUnpackEventIntoMap(t *testing.T) {
 	if receivedMap["sender"] != expectedReceivedMap["sender"] {
 		t.Error("unpacked `received` map does not match expected map")
 	}
-	if receivedMap["amount"].(*big.Int).Cmp(expectedReceivedMap["amount"].(*big.Int)) != 0 {
+	if receivedMap["amount"].(*uint256.Int).Cmp(expectedReceivedMap["amount"].(*uint256.Int)) != 0 {
 		t.Error("unpacked `received` map does not match expected map")
 	}
 	if !bytes.Equal(receivedMap["memo"].([]byte), expectedReceivedMap["memo"].([]byte)) {
@@ -906,7 +907,7 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 	if len(sendMap) != 1 {
 		t.Error("unpacked `send` map expected to have length 1")
 	}
-	if sendMap["amount"].(*big.Int).Cmp(big.NewInt(1)) != 0 {
+	if sendMap["amount"].(*uint256.Int).Cmp(uint256.NewInt(1)) != 0 {
 		t.Error("unpacked `send` map expected `amount` value of 1")
 	}
 
@@ -988,7 +989,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	}
 	expectedReceivedMap := map[string]interface{}{
 		"sender": common.HexToAddress("0x376c47978271565f56DEB45495afa69E59c16Ab2"),
-		"amount": big.NewInt(1),
+		"amount": uint256.NewInt(1),
 		"memo":   []byte{88},
 	}
 	if err = abi.UnpackIntoMap(receivedMap, "Received", data); err != nil {
@@ -1000,7 +1001,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 	if receivedMap["sender"] != expectedReceivedMap["sender"] {
 		t.Error("unpacked `received` map does not match expected map")
 	}
-	if receivedMap["amount"].(*big.Int).Cmp(expectedReceivedMap["amount"].(*big.Int)) != 0 {
+	if receivedMap["amount"].(*uint256.Int).Cmp(expectedReceivedMap["amount"].(*uint256.Int)) != 0 {
 		t.Error("unpacked `received` map does not match expected map")
 	}
 	if !bytes.Equal(receivedMap["memo"].([]byte), expectedReceivedMap["memo"].([]byte)) {

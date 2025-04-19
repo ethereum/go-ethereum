@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // CMetaData contains all meta data concerning the C contract.
@@ -77,8 +79,8 @@ func (c *C) PackEmitOne() []byte {
 
 // CBasic1 represents a basic1 event raised by the C contract.
 type CBasic1 struct {
-	Id   *big.Int
-	Data *big.Int
+	Id   *uint256.Int
+	Data *uint256.Int
 	Raw  *types.Log // Blockchain specific contextual infos
 }
 
@@ -120,7 +122,7 @@ func (c *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
 // CBasic2 represents a basic2 event raised by the C contract.
 type CBasic2 struct {
 	Flag bool
-	Data *big.Int
+	Data *uint256.Int
 	Raw  *types.Log // Blockchain specific contextual infos
 }
 
