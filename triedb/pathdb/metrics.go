@@ -46,7 +46,7 @@ var (
 	nodeDiskFalseMeter  = metrics.NewRegisteredMeter("pathdb/disk/false", nil)
 	nodeDiffFalseMeter  = metrics.NewRegisteredMeter("pathdb/diff/false", nil)
 
-	commitTimeTimer  = metrics.NewRegisteredTimer("pathdb/commit/time", nil)
+	commitTimeTimer  = metrics.NewRegisteredResettingTimer("pathdb/commit/time", nil)
 	commitNodesMeter = metrics.NewRegisteredMeter("pathdb/commit/nodes", nil)
 	commitBytesMeter = metrics.NewRegisteredMeter("pathdb/commit/bytes", nil)
 
@@ -57,7 +57,7 @@ var (
 	gcStorageMeter       = metrics.NewRegisteredMeter("pathdb/gc/storage/count", nil)
 	gcStorageBytesMeter  = metrics.NewRegisteredMeter("pathdb/gc/storage/bytes", nil)
 
-	historyBuildTimeMeter  = metrics.NewRegisteredTimer("pathdb/history/time", nil)
+	historyBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/time", nil)
 	historyDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/bytes/data", nil)
 	historyIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/bytes/index", nil)
 )
