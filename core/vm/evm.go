@@ -591,6 +591,13 @@ func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
+// Rules returns the rules for the EVM given the current block's context.
+func (evm *EVM) Rules() *params.Rules {
+	bctx := evm.Context
+	rules := evm.ChainConfig().Rules(bctx.BlockNumber, bctx.Random != nil, bctx.Time)
+	return &rules
+}
+
 func (evm *EVM) captureBegin(depth int, typ OpCode, from common.Address, to common.Address, input []byte, startGas uint64, value *big.Int) {
 	tracer := evm.Config.Tracer
 	if tracer.OnEnter != nil {
