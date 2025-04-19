@@ -13,7 +13,7 @@ require (
 	github.com/cespare/cp v0.1.0
 	github.com/cloudflare/cloudflare-go v0.114.0
 	github.com/cockroachdb/pebble v1.1.2
-	github.com/consensys/gnark-crypto v0.14.0
+	github.com/consensys/gnark-crypto v0.16.0
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a
 	github.com/crate-crypto/go-kzg-4844 v1.1.0
 	github.com/davecgh/go-spew v1.1.1
@@ -91,14 +91,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.23.2 // indirect
 	github.com/aws/smithy-go v1.15.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.17.0 // indirect
+	github.com/bits-and-blooms/bitset v1.20.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/errors v1.11.3 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
-	github.com/consensys/bavard v0.1.22 // indirect
+	github.com/consensys/bavard v0.1.27 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
 	github.com/deepmap/oapi-codegen v1.6.0 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
