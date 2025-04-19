@@ -62,6 +62,33 @@ import (
 	gethversion "github.com/ethereum/go-ethereum/version"
 )
 
+const (
+	// This is the fairness knob for the discovery mixer. When looking for peers, we'll
+	// wait this long for a single source of candidates before moving on and trying other
+	// sources. If this timeout expires, the source will be skipped in this round, but it
+	// will continue to fetch in the background and will have a chance with a new timeout
+	// in the next rounds, giving it overall more time but a proportionally smaller share.
+	// We expect a normal source to produce ~10 candidates per second.
+	discmixTimeout = 100 * time.Millisecond
+
+	// discoveryParallelLookups is the number of parallel lookups to perform by DHT
+	// sources (disc/v4 and disc/v5). We set this number large enough to be able to
+	// feed the dial queue with enough peers. Since the whole discovery process is triggered
+	// only when dial candidates are needed, we can keep this number high without worrying
+	// about overloading the DHT.
+	discoveryParallelLookups = 3
+
+	// discoveryPrefetchBuffer is the number of peers to pre-fetch from a discovery
+	// source. It is useful to avoid the negative effects of potential longer timeouts
+	// in the discovery, keeping dial progress while waiting for the next batch of
+	// candidates.
+	discoveryPrefetchBuffer = 32
+
+	// maxParallelENRRequests is the maximum number of parallel ENR requests that can be
+	// performed by a disc/v4 source.
+	maxParallelENRRequests = 16
+)
+
 // Config contains the configuration options of the ETH protocol.
 // Deprecated: use ethconfig.Config instead.
 type Config = ethconfig.Config
@@ -169,7 +196,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		networkID:       networkID,
 		gasPrice:        config.Miner.GasPrice,
 		p2pServer:       stack.Server(),
-		discmix:         enode.NewFairMix(0),
+		discmix:         enode.NewFairMix(discmixTimeout),
 		shutdownTracker: shutdowncheck.NewShutdownTracker(chainDb),
 	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
@@ -478,7 +505,7 @@ func (s *Ethereum) setupDiscovery() error {
 		if err != nil {
 			return err
 		}
-		s.discmix.AddSource(iter)
+		s.discmix.AddSource(iter, "DNSdiscEth")
 	}
 
 	// Add snap nodes from DNS.
@@ -487,14 +514,34 @@ func (s *Ethereum) setupDiscovery() error {
 		if err != nil {
 			return err
 		}
-		s.discmix.AddSource(iter)
+		s.discmix.AddSource(iter, "DNSdiscSnap")
+	}
+
+	// Add DHT nodes from discv4.
+	if s.p2pServer.DiscoveryV4() != nil {
+		fairmix := enode.NewFairMix(0)
+		for i := 0; i < discoveryParallelLookups; i++ {
+			asyncFilter := s.p2pServer.DiscoveryV4().RequestENR
+			filter := eth.NewNodeFilter(s.blockchain)
+			iter := enode.AsyncFilter(
+				enode.NewBufferIter(s.p2pServer.DiscoveryV4().RandomNodes(), discoveryPrefetchBuffer),
+				asyncFilter, maxParallelENRRequests)
+			iter = enode.Filter(iter, filter)
+			fairmix.AddSource(iter, fmt.Sprintf("DiscoveryV4-%d", i))
+		}
+		s.discmix.AddSource(fairmix, "DiscoveryV4")
 	}
 
 	// Add DHT nodes from discv5.
 	if s.p2pServer.DiscoveryV5() != nil {
-		filter := eth.NewNodeFilter(s.blockchain)
-		iter := enode.Filter(s.p2pServer.DiscoveryV5().RandomNodes(), filter)
-		s.discmix.AddSource(iter)
+		fairmix := enode.NewFairMix(0)
+		for i := 0; i < discoveryParallelLookups; i++ {
+			iter := enode.NewBufferIter(s.p2pServer.DiscoveryV5().RandomNodes(), discoveryPrefetchBuffer)
+			filter := eth.NewNodeFilter(s.blockchain)
+			filterIter := enode.Filter(iter, filter)
+			fairmix.AddSource(filterIter, fmt.Sprintf("DiscoveryV5-%d", i))
+		}
+		s.discmix.AddSource(fairmix, "DiscoveryV5")
 	}
 
 	return nil
