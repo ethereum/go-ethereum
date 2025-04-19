@@ -70,6 +70,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "Status", Fn: s.TestStatus},
 		// get block headers
 		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "GetNonexistentBlockHeaders", Fn: s.TestGetNonexistentBlockHeaders},
 		{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
 		{Name: "SameRequestID", Fn: s.TestSameRequestID},
 		{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
@@ -156,6 +157,56 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	if !headersMatch(expected, headers.BlockHeadersRequest) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
 	}
+}
+
+func (s *Suite) TestGetNonexistentBlockHeaders(t *utesting.T) {
+	t.Log(`This test sends GetBlockHeaders requests for nonexistent blocks (using max uint64 value) 
+to check if the node disconnects after receiving multiple invalid requests.`)
+
+	conn, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+
+	// Create request with max uint64 value for a nonexistent block
+	badReq := &eth.GetBlockHeadersPacket{
+		RequestId: uint64(1),
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			Origin:  eth.HashOrNumber{Number: ^uint64(0)},
+			Amount:  1,
+			Skip:    0,
+			Reverse: false,
+		},
+	}
+
+	// Send the request 10 times
+	for i := 0; i < 10; i++ {
+		if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, badReq); err != nil {
+			if err == errDisc {
+				t.Logf("peer disconnected after %d requests", i+1)
+				return
+			}
+			t.Fatalf("write failed: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Check if peer disconnects
+	code, _, err := conn.Read()
+	if err == errDisc {
+		t.Logf("peer disconnected after all requests")
+		return
+	}
+	if code == discMsg {
+		t.Logf("received disconnect message")
+		return
+	}
+	t.Fatalf("peer did not disconnect after receiving invalid requests")
 }
 
 func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
