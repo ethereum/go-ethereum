@@ -262,7 +262,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 	f.targetView = initView
 	if f.indexedRange.initialized {
 		f.indexedView = f.initChainView(f.targetView)
-		f.indexedRange.headIndexed = f.indexedRange.blocks.AfterLast() == f.indexedView.headNumber+1
+		f.indexedRange.headIndexed = f.indexedRange.blocks.AfterLast() == f.indexedView.HeadNumber()+1
 		if !f.indexedRange.headIndexed {
 			f.indexedRange.headDelimiter = 0
 		}
@@ -313,7 +313,7 @@ func (f *FilterMaps) initChainView(chainView *ChainView) *ChainView {
 			log.Error("Could not initialize indexed chain view", "error", err)
 			break
 		}
-		if lastBlockNumber <= chainView.headNumber && chainView.getBlockId(lastBlockNumber) == lastBlockId {
+		if lastBlockNumber <= chainView.HeadNumber() && chainView.BlockId(lastBlockNumber) == lastBlockId {
 			return chainView.limitedView(lastBlockNumber)
 		}
 	}
@@ -370,7 +370,7 @@ func (f *FilterMaps) init() error {
 		for min < max {
 			mid := (min + max + 1) / 2
 			cp := checkpointList[mid-1]
-			if cp.BlockNumber <= f.targetView.headNumber && f.targetView.getBlockId(cp.BlockNumber) == cp.BlockId {
+			if cp.BlockNumber <= f.targetView.HeadNumber() && f.targetView.BlockId(cp.BlockNumber) == cp.BlockId {
 				min = mid
 			} else {
 				max = mid - 1
@@ -512,7 +512,7 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 		}
 	}
 	// get block receipts
-	receipts := f.indexedView.getReceipts(firstBlockNumber)
+	receipts := f.indexedView.Receipts(firstBlockNumber)
 	if receipts == nil {
 		return nil, fmt.Errorf("failed to retrieve receipts for block %d containing searched log value index %d: %v", firstBlockNumber, lvIndex, err)
 	}

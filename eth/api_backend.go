@@ -443,6 +443,14 @@ func (b *EthAPIBackend) RPCTxFeeCap() float64 {
 	return b.eth.config.RPCTxFeeCap
 }
 
+func (b *EthAPIBackend) CurrentView() *filtermaps.ChainView {
+	head := b.eth.blockchain.CurrentBlock()
+	if head == nil {
+		return nil
+	}
+	return filtermaps.NewChainView(b.eth.blockchain, head.Number.Uint64(), head.Hash())
+}
+
 func (b *EthAPIBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	return b.eth.filterMaps.NewMatcherBackend()
 }
