@@ -28,12 +28,12 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/usbwallet/trezor"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/YehorDudukin/go-ethereum/accounts"
+	"github.com/YehorDudukin/go-ethereum/accounts/usbwallet/trezor"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/common/hexutil"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/log"
 	"google.golang.org/protobuf/proto"
 )
 

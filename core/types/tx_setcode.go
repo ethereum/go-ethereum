@@ -22,10 +22,10 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/common/hexutil"
+	"github.com/YehorDudukin/go-ethereum/crypto"
+	"github.com/YehorDudukin/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 

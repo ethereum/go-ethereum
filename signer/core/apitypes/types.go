@@ -30,13 +30,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/YehorDudukin/go-ethereum/accounts"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/common/hexutil"
+	"github.com/YehorDudukin/go-ethereum/common/math"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/crypto"
+	"github.com/YehorDudukin/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
 )
 
@@ -95,7 +95,7 @@ type SendTxArgs struct {
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
-	// Issue detail: https://github.com/ethereum/go-ethereum/issues/15628
+	// Issue detail: https://github.com/YehorDudukin/go-ethereum/issues/15628
 	Data  *hexutil.Bytes `json:"data,omitempty"`
 	Input *hexutil.Bytes `json:"input,omitempty"`
 

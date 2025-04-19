@@ -23,12 +23,12 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/crypto"
+	"github.com/YehorDudukin/go-ethereum/log"
+	"github.com/YehorDudukin/go-ethereum/rlp"
+	"github.com/YehorDudukin/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
 

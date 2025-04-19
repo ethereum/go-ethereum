@@ -19,17 +19,17 @@ package state
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/lru"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/common/lru"
+	"github.com/YehorDudukin/go-ethereum/core/rawdb"
+	"github.com/YehorDudukin/go-ethereum/core/state/snapshot"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/crypto"
+	"github.com/YehorDudukin/go-ethereum/ethdb"
+	"github.com/YehorDudukin/go-ethereum/trie"
+	"github.com/YehorDudukin/go-ethereum/trie/trienode"
+	"github.com/YehorDudukin/go-ethereum/trie/utils"
+	"github.com/YehorDudukin/go-ethereum/triedb"
 )
 
 const (

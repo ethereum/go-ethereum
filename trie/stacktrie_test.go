@@ -22,9 +22,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/core/rawdb"
+	"github.com/YehorDudukin/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 )
 

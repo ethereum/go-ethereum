@@ -23,10 +23,10 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/version"
+	"github.com/YehorDudukin/go-ethereum/version"
 )
 
-const ourPath = "github.com/ethereum/go-ethereum" // Path to our module
+const ourPath = "github.com/YehorDudukin/go-ethereum" // Path to our module
 
 // Family holds the textual version string for major.minor
 var Family = fmt.Sprintf("%d.%d", version.Major, version.Minor)

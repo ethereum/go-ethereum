@@ -27,13 +27,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/internal/era"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/internal/era"
+	"github.com/YehorDudukin/go-ethereum/internal/ethapi"
+	"github.com/YehorDudukin/go-ethereum/internal/flags"
+	"github.com/YehorDudukin/go-ethereum/params"
+	"github.com/YehorDudukin/go-ethereum/trie"
 	"github.com/urfave/cli/v2"
 )
 

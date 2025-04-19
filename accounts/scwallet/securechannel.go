@@ -26,7 +26,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/YehorDudukin/go-ethereum/crypto"
 	pcsc "github.com/gballet/go-libpcsclite"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/text/unicode/norm"

@@ -17,13 +17,13 @@
 package vm
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/stateless"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/core/state"
+	"github.com/YehorDudukin/go-ethereum/core/stateless"
+	"github.com/YehorDudukin/go-ethereum/core/tracing"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/params"
+	"github.com/YehorDudukin/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 

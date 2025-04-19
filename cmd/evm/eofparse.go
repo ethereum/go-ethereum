@@ -26,8 +26,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/YehorDudukin/go-ethereum/core/vm"
+	"github.com/YehorDudukin/go-ethereum/log"
 	"github.com/urfave/cli/v2"
 )
 

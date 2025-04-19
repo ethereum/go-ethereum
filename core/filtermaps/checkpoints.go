@@ -20,7 +20,7 @@ import (
 	_ "embed"
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/common"
 )
 
 // checkpointList lists checkpoints for finalized epochs of a given chain.

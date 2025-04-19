@@ -20,11 +20,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/internal/blocktest"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/ethdb"
+	"github.com/YehorDudukin/go-ethereum/internal/blocktest"
+	"github.com/YehorDudukin/go-ethereum/rlp"
 )
 
 var newTestHasher = blocktest.NewHasher

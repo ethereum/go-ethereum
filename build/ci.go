@@ -56,10 +56,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/YehorDudukin/go-ethereum/crypto/signify"
+	"github.com/YehorDudukin/go-ethereum/internal/build"
+	"github.com/YehorDudukin/go-ethereum/internal/version"
 	"github.com/cespare/cp"
-	"github.com/ethereum/go-ethereum/crypto/signify"
-	"github.com/ethereum/go-ethereum/internal/build"
-	"github.com/ethereum/go-ethereum/internal/version"
 )
 
 var (
@@ -234,8 +234,8 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 	// cgo-linker further down.
 	ld = append(ld, "--buildid=none")
 	if env.Commit != "" {
-		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitCommit="+env.Commit)
-		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitDate="+env.Date)
+		ld = append(ld, "-X", "github.com/YehorDudukin/go-ethereum/internal/version.gitCommit="+env.Commit)
+		ld = append(ld, "-X", "github.com/YehorDudukin/go-ethereum/internal/version.gitDate="+env.Date)
 	}
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
@@ -401,8 +401,8 @@ func doCheckGenerate() {
 func doCheckBadDeps() {
 	baddeps := [][2]string{
 		// Rawdb tends to be a dumping ground for db utils, sometimes leaking the db itself
-		{"github.com/ethereum/go-ethereum/core/rawdb", "github.com/ethereum/go-ethereum/ethdb/leveldb"},
-		{"github.com/ethereum/go-ethereum/core/rawdb", "github.com/ethereum/go-ethereum/ethdb/pebbledb"},
+		{"github.com/YehorDudukin/go-ethereum/core/rawdb", "github.com/YehorDudukin/go-ethereum/ethdb/leveldb"},
+		{"github.com/YehorDudukin/go-ethereum/core/rawdb", "github.com/YehorDudukin/go-ethereum/ethdb/pebbledb"},
 	}
 	tc := new(build.GoToolchain)
 

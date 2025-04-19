@@ -23,17 +23,17 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/YehorDudukin/go-ethereum/cmd/evm/internal/t8ntool"
+	"github.com/YehorDudukin/go-ethereum/core/state"
+	"github.com/YehorDudukin/go-ethereum/core/tracing"
+	"github.com/YehorDudukin/go-ethereum/eth/tracers/logger"
+	"github.com/YehorDudukin/go-ethereum/internal/debug"
+	"github.com/YehorDudukin/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
 
 	// Force-load the tracer engines to trigger registration
-	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
-	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
+	_ "github.com/YehorDudukin/go-ethereum/eth/tracers/js"
+	_ "github.com/YehorDudukin/go-ethereum/eth/tracers/native"
 )
 
 // Some other nice-to-haves:

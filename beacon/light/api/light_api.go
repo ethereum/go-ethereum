@@ -28,13 +28,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/YehorDudukin/go-ethereum/beacon/merkle"
+	"github.com/YehorDudukin/go-ethereum/beacon/params"
+	"github.com/YehorDudukin/go-ethereum/beacon/types"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/common/hexutil"
+	"github.com/YehorDudukin/go-ethereum/log"
 	"github.com/donovanhide/eventsource"
-	"github.com/ethereum/go-ethereum/beacon/merkle"
-	"github.com/ethereum/go-ethereum/beacon/params"
-	"github.com/ethereum/go-ethereum/beacon/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var (

@@ -26,9 +26,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/internal/flags"
+	"github.com/YehorDudukin/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 

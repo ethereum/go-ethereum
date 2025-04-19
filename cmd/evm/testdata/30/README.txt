@@ -1,4 +1,4 @@
-This example comes from https://github.com/ethereum/go-ethereum/issues/27730.
+This example comes from https://github.com/YehorDudukin/go-ethereum/issues/27730.
 The input transactions contain three transactions, number `0` and `2` are taken from
 `testdata/13`, whereas number `1` is taken from #27730.
 

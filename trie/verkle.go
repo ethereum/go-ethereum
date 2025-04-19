@@ -22,12 +22,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/ethdb"
+	"github.com/YehorDudukin/go-ethereum/trie/trienode"
+	"github.com/YehorDudukin/go-ethereum/trie/utils"
+	"github.com/YehorDudukin/go-ethereum/triedb/database"
 	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 )

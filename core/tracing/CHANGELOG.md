@@ -49,7 +49,7 @@ The state changes that are covered by the journaling library are:
 - `OnCodeChange`
 - `OnStorageChange`
 
-## [v1.14.9](https://github.com/ethereum/go-ethereum/releases/tag/v1.14.9)
+## [v1.14.9](https://github.com/YehorDudukin/go-ethereum/releases/tag/v1.14.9)
 
 ### Modified types
 
@@ -86,7 +86,7 @@ There have been minor backwards-compatible changes to the tracing interface to e
 
 ## [v1.14.0]
 
-There has been a major breaking change in the tracing interface for custom native tracers. JS and built-in tracers are not affected by this change and tracing API methods may be used as before. This overhaul has been done as part of the new live tracing feature ([#29189](https://github.com/ethereum/go-ethereum/pull/29189)). To learn more about live tracing please refer to the [docs](https://geth.ethereum.org/docs/developers/evm-tracing/live-tracing).
+There has been a major breaking change in the tracing interface for custom native tracers. JS and built-in tracers are not affected by this change and tracing API methods may be used as before. This overhaul has been done as part of the new live tracing feature ([#29189](https://github.com/YehorDudukin/go-ethereum/pull/29189)). To learn more about live tracing please refer to the [docs](https://geth.ethereum.org/docs/developers/evm-tracing/live-tracing).
 
 **The `EVMLogger` interface which the tracers implemented has been removed.** It has been replaced by a new struct `tracing.Hooks`. `Hooks` keeps pointers to event listening functions. Internally the EVM will use these function pointers to emit events and can skip an event if the tracer has opted not to implement it. In fact this is the main reason for this change of approach. Another benefit is the ease of adding new hooks in future, and dynamically assigning event receivers.
 
@@ -148,7 +148,7 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 - `CaptureState` -> `OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error)`. `op` is of type `byte` which can be cast to `vm.OpCode` when necessary. A `*vm.ScopeContext` is not passed anymore. It is replaced by `tracing.OpContext` which offers access to the memory, stack and current contract.
 - `CaptureFault` -> `OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error)`. Similar to above.
 
-[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.8...master
-[v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0
-[v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
-[v1.14.4]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.4
+[unreleased]: https://github.com/YehorDudukin/go-ethereum/compare/v1.14.8...master
+[v1.14.0]: https://github.com/YehorDudukin/go-ethereum/releases/tag/v1.14.0
+[v1.14.3]: https://github.com/YehorDudukin/go-ethereum/releases/tag/v1.14.3
+[v1.14.4]: https://github.com/YehorDudukin/go-ethereum/releases/tag/v1.14.4

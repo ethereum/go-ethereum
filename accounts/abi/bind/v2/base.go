@@ -24,12 +24,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum"
+	"github.com/YehorDudukin/go-ethereum"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/YehorDudukin/go-ethereum/accounts/abi"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/event"
 )
 
 const basefeeWiggleMultiplier = 2

@@ -25,10 +25,10 @@ import (
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/YehorDudukin/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/core/rawdb"
+	"github.com/YehorDudukin/go-ethereum/core/types"
+	"github.com/YehorDudukin/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -185,7 +185,7 @@ func TestDiskLayerExternalInvalidationPartialFlatten(t *testing.T) {
 // layer to check the usual mode of operation where the accumulator is retained.
 func TestDiffLayerExternalInvalidationPartialFlatten(t *testing.T) {
 	// Un-commenting this triggers the bloom set to be deterministic. The values below
-	// were used to trigger the flaw described in https://github.com/ethereum/go-ethereum/issues/27254.
+	// were used to trigger the flaw described in https://github.com/YehorDudukin/go-ethereum/issues/27254.
 	// bloomDestructHasherOffset, bloomAccountHasherOffset, bloomStorageHasherOffset = 14, 24, 5
 
 	// Create an empty base layer and a snapshot tree out of it

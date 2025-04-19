@@ -22,7 +22,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/YehorDudukin/go-ethereum/common"
 )
 
 func TestMatcher(t *testing.T) {
