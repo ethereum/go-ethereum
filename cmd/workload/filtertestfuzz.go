@@ -162,14 +162,52 @@ mainLoop:
 			}
 			if !reflect.DeepEqual(query.results, results) {
 				fmt.Println("Results mismatch  from:", query.FromBlock, "to:", query.ToBlock, "addresses:", query.Address, "topics:", query.Topics)
-				fmt.Println(" getLogs:", query.results)
-				fmt.Println(" receipts:", results)
+				resShared, resGetLogs, resReceipts := compareResults(query.results, results)
+				fmt.Println(" shared:", len(resShared))
+				fmt.Println(" only from getLogs:", resGetLogs)
+				fmt.Println(" only from receipts:", resReceipts)
 				continue mainLoop
 			}
 			fmt.Println("Successful query  from:", query.FromBlock, "to:", query.ToBlock, "results:", len(query.results))
 			f.storeQuery(query)
 		}
 	}
+}
+
+func compareResults(a, b []types.Log) (shared, onlya, onlyb []types.Log) {
+	for len(a) > 0 && len(b) > 0 {
+		if reflect.DeepEqual(a[0], b[0]) {
+			shared = append(shared, a[0])
+			a = a[1:]
+			b = b[1:]
+		} else {
+			for i := 1; ; i++ {
+				if i >= len(a) { // b[0] not found in a
+					onlyb = append(onlyb, b[0])
+					b = b[1:]
+					break
+				}
+				if i >= len(b) { // a[0] not found in b
+					onlya = append(onlya, a[0])
+					a = a[1:]
+					break
+				}
+				if reflect.DeepEqual(b[0], a[i]) { // a[:i] not found in b
+					onlya = append(onlya, a[:i]...)
+					a = a[i:]
+					break
+				}
+				if reflect.DeepEqual(a[0], b[i]) { // b[:i] not found in a
+					onlyb = append(onlyb, b[:i]...)
+					b = b[i:]
+					break
+				}
+			}
+		}
+	}
+	onlya = append(onlya, a...)
+	onlyb = append(onlyb, b...)
+	return
 }
 
 func getLatestHeader(client *client) (*types.Header, error) {
