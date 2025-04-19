@@ -172,10 +172,7 @@ func (f *Freezer) Close() error {
 			errs = append(errs, err)
 		}
 	})
-	if errs != nil {
-		return fmt.Errorf("%v", errs)
-	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // AncientDatadir returns the path of the ancient store.

@@ -731,7 +731,7 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient string, namespace string, readonly bool, era string) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
@@ -740,12 +740,13 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
-		db, err = rawdb.NewDatabaseWithFreezer(memorydb.New(), "", namespace, readonly)
+		db, err = rawdb.NewDatabaseWithFreezer(memorydb.New(), "", namespace, readonly, "")
 	} else {
 		db, err = openDatabase(openOptions{
 			Type:              n.config.DBEngine,
 			Directory:         n.ResolvePath(name),
 			AncientsDirectory: n.ResolveAncient(name, ancient),
+			EraDirectory:      era,
 			Namespace:         namespace,
 			Cache:             cache,
 			Handles:           handles,

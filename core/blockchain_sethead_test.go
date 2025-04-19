@@ -1973,7 +1973,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	if err != nil {
 		t.Fatalf("Failed to create persistent key-value database: %v", err)
 	}
-	db, err := rawdb.NewDatabaseWithFreezer(pdb, ancient, "", false)
+	db, err := rawdb.NewDatabaseWithFreezer(pdb, ancient, "", false, "")
 	if err != nil {
 		t.Fatalf("Failed to create persistent freezer database: %v", err)
 	}

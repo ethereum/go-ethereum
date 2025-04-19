@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb/eradb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -45,6 +46,9 @@ const (
 type chainFreezer struct {
 	ethdb.AncientStore // Ancient store for storing cold chain segment
 
+	// Optional Era database used as a backup for the pruned chain.
+	eradb *eradb.EraDatabase
+
 	quit    chan struct{}
 	wg      sync.WaitGroup
 	trigger chan chan struct{} // Manual blocking freeze trigger, test determinism
@@ -56,21 +60,28 @@ type chainFreezer struct {
 //     state freezer (e.g. dev mode).
 //   - if non-empty directory is given, initializes the regular file-based
 //     state freezer.
-func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFreezer, error) {
-	var (
-		err     error
-		freezer ethdb.AncientStore
-	)
+func newChainFreezer(datadir string, namespace string, readonly bool, eraDir string) (*chainFreezer, error) {
 	if datadir == "" {
-		freezer = NewMemoryFreezer(readonly, chainFreezerTableConfigs)
-	} else {
-		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs)
+		return &chainFreezer{
+			AncientStore: NewMemoryFreezer(readonly, chainFreezerTableConfigs),
+			quit:         make(chan struct{}),
+			trigger:      make(chan chan struct{}),
+		}, nil
 	}
+	freezer, err := NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs)
 	if err != nil {
 		return nil, err
 	}
+	var edb *eradb.EraDatabase
+	if eraDir != "" {
+		edb, err = eradb.New(eraDir)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &chainFreezer{
 		AncientStore: freezer,
+		eradb:        edb,
 		quit:         make(chan struct{}),
 		trigger:      make(chan chan struct{}),
 	}, nil
@@ -84,7 +95,14 @@ func (f *chainFreezer) Close() error {
 		close(f.quit)
 	}
 	f.wg.Wait()
-	return f.AncientStore.Close()
+
+	var errs []error
+	if f.eradb != nil {
+		errs = append(errs, f.eradb.Close())
+	}
+	errs = append(errs, f.AncientStore.Close())
+
+	return errors.Join(errs...)
 }
 
 // readHeadNumber returns the number of chain head block. 0 is returned if the
@@ -333,4 +351,32 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 		return nil
 	})
 	return hashes, err
+}
+
+// Ancient retrieves an ancient binary blob from the append-only immutable files.
+func (f *chainFreezer) Ancient(kind string, number uint64) ([]byte, error) {
+	// Lookup the entry in the underlying ancient store, assuming that
+	// headers and hashes are always available.
+	if kind == ChainFreezerHeaderTable || kind == ChainFreezerHashTable {
+		return f.AncientStore.Ancient(kind, number)
+	}
+	tail, err := f.Tail()
+	if err != nil {
+		return nil, err
+	}
+	// Lookup the entry in the underlying ancient store if it's not pruned
+	if number >= tail {
+		return f.AncientStore.Ancient(kind, number)
+	}
+	// Lookup the entry in the optional era backend
+	if f.eradb == nil {
+		return nil, errOutOfBounds
+	}
+	switch kind {
+	case ChainFreezerBodiesTable:
+		return f.eradb.GetRawBody(number)
+	case ChainFreezerReceiptTable:
+		return f.eradb.GetRawReceipts(number)
+	}
+	return nil, errUnknownTable
 }
