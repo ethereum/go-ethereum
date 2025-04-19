@@ -431,21 +431,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if len(logs) == 0 {
 		return nil, nil
 	}
-	// Most backends will deliver un-derived logs, but check nevertheless.
-	if len(logs) > 0 && logs[0].TxHash != (common.Hash{}) {
-		return logs, nil
-	}
 
-	body, err := f.sys.cachedGetBody(ctx, cached, hash, header.Number.Uint64())
-	if err != nil {
-		return nil, err
-	}
-	for i, log := range logs {
-		// Copy log not to modify cache elements
-		logcopy := *log
-		logcopy.TxHash = body.Transactions[logcopy.TxIndex].Hash()
-		logs[i] = &logcopy
-	}
 	return logs, nil
 }
 
