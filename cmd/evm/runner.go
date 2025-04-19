@@ -221,13 +221,14 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	db := rawdb.NewMemoryDatabase()
+	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 	triedb := triedb.NewDatabase(db, &triedb.Config{
 		Preimages: preimages,
 		HashDB:    hashdb.Defaults,
 	})
 	defer triedb.Close()
-	genesis := genesisConfig.MustCommit(db, triedb)
-	sdb := state.NewDatabase(triedb, nil)
+	genesis := genesisConfig.MustCommit(db, triedb, verkledb)
+	sdb := state.NewDatabase(triedb, verkledb, nil)
 	prestate, _ = state.New(genesis.Root(), sdb)
 	chainConfig = genesisConfig.Config
 
