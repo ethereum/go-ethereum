@@ -72,8 +72,8 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 			)
 			nodes[common.Hash{}][string(path)] = node
 			if npath == nil && depth == index {
-				npath = common.CopyBytes(path)
-				nblob = common.CopyBytes(blob)
+				npath = bytes.Clone(path)
+				nblob = bytes.Clone(blob)
 			}
 		}
 		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), NewStateSetWithOrigin(nil, nil, nil, nil, false))

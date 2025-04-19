@@ -17,9 +17,8 @@
 package trie
 
 import (
+	"bytes"
 	"maps"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // tracer tracks the changes of trie nodes. During the trie operations,
@@ -96,7 +95,7 @@ func (t *tracer) reset() {
 func (t *tracer) copy() *tracer {
 	accessList := make(map[string][]byte, len(t.accessList))
 	for path, blob := range t.accessList {
-		accessList[path] = common.CopyBytes(blob)
+		accessList[path] = bytes.Clone(blob)
 	}
 	return &tracer{
 		inserts:    maps.Clone(t.inserts),

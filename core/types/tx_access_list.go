@@ -62,7 +62,7 @@ func (tx *AccessListTx) copy() TxData {
 	cpy := &AccessListTx{
 		Nonce: tx.Nonce,
 		To:    copyAddressPtr(tx.To),
-		Data:  common.CopyBytes(tx.Data),
+		Data:  bytes.Clone(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),

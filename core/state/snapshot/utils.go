@@ -56,7 +56,7 @@ func checkDanglingDiskStorage(chaindb ethdb.KeyValueStore) error {
 			// No need to look up for every slot
 			continue
 		}
-		lastKey = common.CopyBytes(accKey)
+		lastKey = bytes.Clone(accKey)
 		if time.Since(lastReport) > time.Second*8 {
 			log.Info("Iterating snap storage", "at", fmt.Sprintf("%#x", accKey), "elapsed", common.PrettyDuration(time.Since(start)))
 			lastReport = time.Now()
