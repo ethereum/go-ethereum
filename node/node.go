@@ -128,7 +128,7 @@ func New(conf *Config) (*Node, error) {
 	}
 	node.keyDir = keyDir
 	node.keyDirTemp = isEphem
-	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/geth)
+	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/aiigo)
 	// are required to add the backends later on.
 	node.accman = accounts.NewManager(nil)
 

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is a command-line client for Ethereum.
+// aiigo is a command-line client for Ethereum.
 package main
 
 import (
@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	clientIdentifier = "geth" // Client identifier to advertise over the network
+	clientIdentifier = "aiigo" // Client identifier to advertise over the network
 )
 
 var (
@@ -212,8 +212,8 @@ var (
 var app = flags.NewApp("the go-ethereum command line interface")
 
 func init() {
-	// Initialize the CLI app and start Geth
-	app.Action = geth
+	// Initialize the CLI app and start Aiigo
+	app.Action = aiigo
 	app.Commands = []*cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -291,17 +291,17 @@ func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
 	case ctx.IsSet(utils.SepoliaFlag.Name):
-		log.Info("Starting Geth on Sepolia testnet...")
+		log.Info("Starting Aiigo on Sepolia testnet...")
 
 	case ctx.IsSet(utils.HoleskyFlag.Name):
-		log.Info("Starting Geth on Holesky testnet...")
+		log.Info("Starting Aiigo on Holesky testnet...")
 
 	case ctx.IsSet(utils.HoodiFlag.Name):
-		log.Info("Starting Geth on Hoodi testnet...")
+		log.Info("Starting Aiigo on Hoodi testnet...")
 
 	case ctx.IsSet(utils.DeveloperFlag.Name):
-		log.Info("Starting Geth in ephemeral dev mode...")
-		log.Warn(`You are running Geth in --dev mode. Please note the following:
+		log.Info("Starting Aiigo in ephemeral dev mode...")
+		log.Warn(`You are running Aiigo in --dev mode. Please note the following:
 
   1. This mode is only intended for fast, iterative development without assumptions on
      security or persistence.
@@ -318,7 +318,7 @@ func prepare(ctx *cli.Context) {
 `)
 
 	case !ctx.IsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting Geth on Ethereum mainnet...")
+		log.Info("Starting Aiigo on Ethereum mainnet...")
 	}
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
 	if !ctx.IsSet(utils.CacheFlag.Name) && !ctx.IsSet(utils.NetworkIdFlag.Name) {
@@ -334,10 +334,10 @@ func prepare(ctx *cli.Context) {
 	}
 }
 
-// geth is the main entry point into the system if no special subcommand is run.
+// aiigo is the main entry point into the system if no special subcommand is run.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
-func geth(ctx *cli.Context) error {
+func aiigo(ctx *cli.Context) error {
 	if args := ctx.Args().Slice(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
@@ -365,7 +365,7 @@ func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	events := make(chan accounts.WalletEvent, 16)
 	stack.AccountManager().Subscribe(events)
 
-	// Create a client to interact with local geth node.
+	// Create a client to interact with local aiigo node.
 	rpcClient := stack.Attach()
 	ethClient := ethclient.NewClient(rpcClient)
 

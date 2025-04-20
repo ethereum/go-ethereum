@@ -111,11 +111,11 @@ The Eth Protocol test suite is a conformance test suite for the [eth protocol][e
 To run the eth protocol test suite against your implementation, the node needs to be initialized
 with our test chain. The chain files are located in `./cmd/devp2p/internal/ethtest/testdata`.
 
-1. initialize the geth node with the `genesis.json` file
+1. initialize the aiigo node with the `genesis.json` file
 2. import blocks from `chain.rlp`
-3. run the client using the resulting database. For geth, use a command like the one below:
+3. run the client using the resulting database. For aiigo, use a command like the one below:
 
-    geth \
+    aiigo \
         --datadir <datadir>            \
         --nodiscover                   \
         --nat=none                     \
@@ -136,6 +136,6 @@ Repeat the above process (re-initialising the node) in order to run the Eth Prot
 
 
 [eth]: https://github.com/ethereum/devp2p/blob/master/caps/eth.md
-[dns-tutorial]: https://geth.ethereum.org/docs/developers/geth-developer/dns-discovery-setup
+[dns-tutorial]: https://aiigo.ethereum.org/docs/developers/aiigo-developer/dns-discovery-setup
 [discv4]: https://github.com/ethereum/devp2p/tree/master/discv4.md
 [discv5]: https://github.com/ethereum/devp2p/tree/master/discv5/discv5.md

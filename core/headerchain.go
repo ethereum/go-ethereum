@@ -545,7 +545,7 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 		}
 		parentHash = parent.Hash()
 
-		// Notably, since geth has the possibility for setting the head to a low
+		// Notably, since aiigo has the possibility for setting the head to a low
 		// height which is even lower than ancient head.
 		// In order to ensure that the head is always no higher than the data in
 		// the database (ancient store or active store), we need to update head

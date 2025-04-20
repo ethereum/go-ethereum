@@ -1,4 +1,4 @@
-_geth_zsh_autocomplete() {
+_aiigo_zsh_autocomplete() {
   local -a opts
   local cur
   cur=${words[-1]}
@@ -15,4 +15,4 @@ _geth_zsh_autocomplete() {
   fi
 }
 
-compdef _geth_zsh_autocomplete geth
+compdef _aiigo_zsh_autocomplete aiigo

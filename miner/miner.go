@@ -57,7 +57,7 @@ var DefaultConfig = Config{
 
 	// The default recommit time is chosen as two seconds since
 	// consensus-layer usually will wait a half slot of time(6s)
-	// for payload generation. It should be enough for Geth to
+	// for payload generation. It should be enough for Aiigo to
 	// run 3 rounds.
 	Recommit: 2 * time.Second,
 }

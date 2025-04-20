@@ -138,11 +138,11 @@ func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritica
 			break
 		}
 		if freeSpace < freeDiskSpaceCritical {
-			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", common.StorageSize(freeSpace), "path", path)
+			log.Error("Low disk space. Gracefully shutting down Aiigo to prevent database corruption.", "available", common.StorageSize(freeSpace), "path", path)
 			sigc <- syscall.SIGTERM
 			break
 		} else if freeSpace < 2*freeDiskSpaceCritical {
-			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical), "path", path)
+			log.Warn("Disk space is running low. Aiigo will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical), "path", path)
 		}
 		time.Sleep(30 * time.Second)
 	}
@@ -671,13 +671,13 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 // should be bumped.
 // If the importer sees a higher version, it should reject the import.
 type exportHeader struct {
-	Magic    string // Always set to 'gethdbdump' for disambiguation
+	Magic    string // Always set to 'aiigodbdump' for disambiguation
 	Version  uint64
 	Kind     string
 	UnixTime uint64
 }
 
-const exportMagic = "gethdbdump"
+const exportMagic = "aiigodbdump"
 const (
 	OpBatchAdd = 0
 	OpBatchDel = 1

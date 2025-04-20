@@ -838,7 +838,7 @@ var (
 	HttpHeaderFlag = &cli.StringSliceFlag{
 		Name:     "header",
 		Aliases:  []string{"H"},
-		Usage:    "Pass custom headers to the RPC server when using --" + RemoteDBFlag.Name + " or the geth attach console. This flag can be given multiple times.",
+		Usage:    "Pass custom headers to the RPC server when using --" + RemoteDBFlag.Name + " or the aiigo attach console. This flag can be given multiple times.",
 		Category: flags.APICategory,
 	}
 
@@ -1263,7 +1263,7 @@ func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
-// for Geth and returns half of the allowance to assign to the database.
+// for Aiigo and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles(max int) int {
 	limit, err := fdlimit.Maximum()
 	if err != nil {
@@ -2025,11 +2025,11 @@ func SetupMetrics(cfg *metrics.Config) {
 	)
 	if enableExport {
 		log.Info("Enabling metrics export to InfluxDB")
-		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "aiigo.", tagsMap)
 	} else if enableExportV2 {
 		tagsMap := SplitTagsFlag(cfg.InfluxDBTags)
 		log.Info("Enabling metrics export to InfluxDB (v2)")
-		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
+		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "aiigo.", tagsMap)
 	}
 
 	// Expvar exporter.
@@ -2115,7 +2115,7 @@ func DialRPCWithHeaders(endpoint string, headers []string) (*rpc.Client, error) 
 		return nil, errors.New("endpoint must be specified")
 	}
 	if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
-		// Backwards compatibility with geth < 1.5 which required
+		// Backwards compatibility with aiigo < 1.5 which required
 		// these prefixes.
 		endpoint = endpoint[4:]
 	}

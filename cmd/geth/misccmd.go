@@ -30,7 +30,7 @@ var (
 	VersionCheckUrlFlag = &cli.StringFlag{
 		Name:  "check.url",
 		Usage: "URL to use when checking vulnerabilities",
-		Value: "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json",
+		Value: "https://aiigo.ethereum.org/docs/vulnerabilities/vulnerabilities.json",
 	}
 	VersionCheckVersionFlag = &cli.StringFlag{
 		Name:  "check.version",
@@ -53,10 +53,10 @@ The output of this command is supposed to be machine-readable.
 			VersionCheckVersionFlag,
 		},
 		Name:      "version-check",
-		Usage:     "Checks (online) for known Geth security vulnerabilities",
+		Usage:     "Checks (online) for known Aiigo security vulnerabilities",
 		ArgsUsage: "<versionstring (optional)>",
 		Description: `
-The version-check command fetches vulnerability-information from https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json, 
+The version-check command fetches vulnerability-information from https://aiigo.ethereum.org/docs/vulnerabilities/vulnerabilities.json, 
 and displays information about any security vulnerabilities that affect the currently executing version.
 `,
 	}
@@ -88,17 +88,17 @@ func printVersion(ctx *cli.Context) error {
 }
 
 func license(_ *cli.Context) error {
-	fmt.Println(`Geth is free software: you can redistribute it and/or modify
+	fmt.Println(`Aiigo is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-Geth is distributed in the hope that it will be useful,
+Aiigo is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with geth. If not, see <http://www.gnu.org/licenses/>.`)
+along with aiigo. If not, see <http://www.gnu.org/licenses/>.`)
 	return nil
 }

@@ -120,7 +120,7 @@ func DownloadGo(csdb *ChecksumDB) string {
 		log.Fatal(err)
 	}
 
-	godir := filepath.Join(ucache, fmt.Sprintf("geth-go-%s-%s-%s", version, os, arch))
+	godir := filepath.Join(ucache, fmt.Sprintf("aiigo-go-%s-%s-%s", version, os, arch))
 	if err := ExtractArchive(dst, godir); err != nil {
 		log.Fatal(err)
 	}

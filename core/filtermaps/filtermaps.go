@@ -66,7 +66,7 @@ const (
 // https://eips.ethereum.org/EIPS/eip-7745
 type FilterMaps struct {
 	// If disabled is set, log indexing is fully disabled.
-	// This is configured by the --history.logs.disable Geth flag.
+	// This is configured by the --history.logs.disable Aiigo flag.
 	// We chose to implement disabling this way because it requires less special
 	// case logic in eth/filters.
 	disabled   bool

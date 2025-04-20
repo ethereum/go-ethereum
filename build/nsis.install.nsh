@@ -1,4 +1,4 @@
-Name "geth ${MAJORVERSION}.${MINORVERSION}.${BUILDVERSION}" # VERSION variables set through command line arguments
+Name "aiigo ${MAJORVERSION}.${MINORVERSION}.${BUILDVERSION}" # VERSION variables set through command line arguments
 InstallDir "$InstDir"
 OutFile "${OUTPUTFILE}" # set through command line arguments
 
@@ -12,30 +12,30 @@ PageEx license
   LicenseData {{.License}}
 PageExEnd
 
-# Install geth binary
-Section "Geth" GETH_IDX
+# Install aiigo binary
+Section "Aiigo" GETH_IDX
   SetOutPath $INSTDIR
-  file {{.Geth}}
+  file {{.Aiigo}}
 
   # Create start menu launcher
   createDirectory "$SMPROGRAMS\${APPNAME}"
-  createShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\geth.exe"
-  createShortCut "$SMPROGRAMS\${APPNAME}\Attach.lnk" "$INSTDIR\geth.exe" "attach"
+  createShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\aiigo.exe"
+  createShortCut "$SMPROGRAMS\${APPNAME}\Attach.lnk" "$INSTDIR\aiigo.exe" "attach"
   createShortCut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" "$INSTDIR\uninstall.exe"
 
   # Firewall - remove rules (if exists)
-  SimpleFC::AdvRemoveRule "Geth incoming peers (TCP:30303)"
-  SimpleFC::AdvRemoveRule "Geth outgoing peers (TCP:30303)"
-  SimpleFC::AdvRemoveRule "Geth UDP discovery (UDP:30303)"
+  SimpleFC::AdvRemoveRule "Aiigo incoming peers (TCP:30303)"
+  SimpleFC::AdvRemoveRule "Aiigo outgoing peers (TCP:30303)"
+  SimpleFC::AdvRemoveRule "Aiigo UDP discovery (UDP:30303)"
 
   # Firewall - add rules
-  SimpleFC::AdvAddRule "Geth incoming peers (TCP:30303)" ""  6 1 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "Ethereum" 30303 "" "" ""
-  SimpleFC::AdvAddRule "Geth outgoing peers (TCP:30303)" ""  6 2 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "Ethereum" "" 30303 "" ""
-  SimpleFC::AdvAddRule "Geth UDP discovery (UDP:30303)" "" 17 2 1 2147483647 1 "$INSTDIR\geth.exe" "" "" "Ethereum" "" 30303 "" ""
+  SimpleFC::AdvAddRule "Aiigo incoming peers (TCP:30303)" ""  6 1 1 2147483647 1 "$INSTDIR\aiigo.exe" "" "" "Ethereum" 30303 "" "" ""
+  SimpleFC::AdvAddRule "Aiigo outgoing peers (TCP:30303)" ""  6 2 1 2147483647 1 "$INSTDIR\aiigo.exe" "" "" "Ethereum" "" 30303 "" ""
+  SimpleFC::AdvAddRule "Aiigo UDP discovery (UDP:30303)" "" 17 2 1 2147483647 1 "$INSTDIR\aiigo.exe" "" "" "Ethereum" "" 30303 "" ""
 
   # Set default IPC endpoint (https://github.com/ethereum/EIPs/issues/147)
-  ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\geth.ipc"
-  ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "A" "HKLM" "\\.\pipe\geth.ipc"
+  ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\aiigo.ipc"
+  ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "A" "HKLM" "\\.\pipe\aiigo.ipc"
 
   # Add instdir to PATH
   Push "$INSTDIR"

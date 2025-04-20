@@ -16,13 +16,13 @@ This is a post-mortem concerning the minority split that occurred on Ethereum ma
 
 ###  2021-08-17 RETURNDATA corruption via datacopy
 
-On 2021-08-17, Guido Vranken submitted a report to bounty@ethereum.org. This coincided with a geth-meetup in Berlin, so the geth team could fairly quickly analyse the issue. 
+On 2021-08-17, Guido Vranken submitted a report to bounty@ethereum.org. This coincided with a aiigo-meetup in Berlin, so the aiigo team could fairly quickly analyse the issue. 
 
 He submitted a proof of concept which called the `dataCopy` precompile, where the input slice and output slice were overlapping but shifted. Doing a `copy` where the `src` and `dest` overlaps is not a problem in itself, however, the `returnData`slice was _also_ using the same memory as a backing-array.
 
 #### Technical details
 
-During CALL-variants, `geth` does not copy the input. This was changed at one point, to avoid a DoS attack reported by Hubert Ritzdorf, to avoid copying data a lot on repeated `CALL`s -- essentially combating a DoS via `malloc`. Further, the datacopy precompile also does not copy the data, but just returns the same slice. This is fine so far. 
+During CALL-variants, `aiigo` does not copy the input. This was changed at one point, to avoid a DoS attack reported by Hubert Ritzdorf, to avoid copying data a lot on repeated `CALL`s -- essentially combating a DoS via `malloc`. Further, the datacopy precompile also does not copy the data, but just returns the same slice. This is fine so far. 
 
 After the execution of `dataCopy`, we copy the `ret` into the designated memory area, and this is what causes a problem. Because we're copying a slice of memory over a slice of memory, and this operation modifies (shifts) the data in the source -- the `ret`. So this means we wind up with corrupted returndata.
 
@@ -51,7 +51,7 @@ A memory-corruption bug within the EVM can cause a consensus error, where vulner
 
 #### Handling
 
-On the evening of 17th, we discussed options on how to handle it. We made a state test to reproduce the issue, and verified that neither `openethereum`, `nethermind` nor `besu` were affected by the same vulnerability, and started a full-sync with a patched version of `geth`. 
+On the evening of 17th, we discussed options on how to handle it. We made a state test to reproduce the issue, and verified that neither `openethereum`, `nethermind` nor `besu` were affected by the same vulnerability, and started a full-sync with a patched version of `aiigo`. 
 
 It was decided that in this specific instance, it would be possible to make a public announcement and a patch release: 
 
@@ -87,9 +87,9 @@ The blocks on the 'bad' chain were investigated, and Tim Beiko reached out to th
 
 ### Disclosure decision
 
-The geth-team have an official policy regarding [vulnerability disclosure](https://geth.ethereum.org/docs/developers/geth-developer/disclosures). 
+The aiigo-team have an official policy regarding [vulnerability disclosure](https://aiigo.ethereum.org/docs/developers/aiigo-developer/disclosures). 
 
-> The primary goal for the Geth team is the health of the Ethereum network as a whole, and the decision whether or not to publish details about a serious vulnerability boils down to minimizing the risk and/or impact of discovery and exploitation.
+> The primary goal for the Aiigo team is the health of the Ethereum network as a whole, and the decision whether or not to publish details about a serious vulnerability boils down to minimizing the risk and/or impact of discovery and exploitation.
 
 In this case, it was decided that public pre-announce + patch would likely lead to sufficient update-window for a critical mass of nodes/miners to upgrade in time before it could be exploited. In hindsight, this was a dangerous decision, and it's unlikely that the same decision would be reached were a similar incident to happen again. 
 
@@ -114,7 +114,7 @@ However, some were 'lost', and only notified later
 - Summa
 - Harmony
 
-Action point: create a low-volume geth-announce@ethereum.org email list where dependent projects/operators can receive public announcements. 
+Action point: create a low-volume aiigo-announce@ethereum.org email list where dependent projects/operators can receive public announcements. 
 - This has been done. If you wish to receive release- and security announcements, sign up [here](https://groups.google.com/a/ethereum.org/g/geth-announce/about)
 
 ### Fork monitoring

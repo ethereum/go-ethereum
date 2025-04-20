@@ -101,7 +101,7 @@ func TestTxArgs(t *testing.T) {
 
 			$ go run ./cmd/clef --advanced --suppress-bootwarn
 
-			$ go run ./cmd/geth --nodiscover --maxpeers 0 --signer /home/user/.clef/clef.ipc console
+			$ go run ./cmd/aiigo --nodiscover --maxpeers 0 --signer /home/user/.clef/clef.ipc console
 
 				> tx={"from":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","to":"0x1b442286e32ddcaa6e2570ce9ed85f4b4fc87425","gas":"0x124f8","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x3b9aca00","value":"0x0","nonce":"0x0","input":"0x","accessList":[],"maxFeePerBlobGas":"0x3b9aca00","blobVersionedHashes":["0x010657f37554c781402a22917dee2f75def7ab966d7b770905398eba3c444014"]}
 				> eth.signTransaction(tx)

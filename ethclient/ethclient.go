@@ -692,7 +692,7 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 
 // RevertErrorData returns the 'revert reason' data of a contract call.
 //
-// This can be used with CallContract and EstimateGas, and only when the server is Geth.
+// This can be used with CallContract and EstimateGas, and only when the server is Aiigo.
 func RevertErrorData(err error) ([]byte, bool) {
 	var ec rpc.Error
 	var ed rpc.DataError

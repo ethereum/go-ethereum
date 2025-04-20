@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-// ckzgAvailable signals whether the library was compiled into Geth.
+// ckzgAvailable signals whether the library was compiled into Aiigo.
 const ckzgAvailable = true
 
 // ckzgIniter ensures that we initialize the KZG library once before using it.

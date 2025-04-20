@@ -34,17 +34,17 @@ const (
 	httpAPIs = "eth:1.0 net:1.0 rpc:1.0 web3:1.0"
 )
 
-// spawns geth with the given command line args, using a set of flags to minimise
+// spawns aiigo with the given command line args, using a set of flags to minimise
 // memory and disk IO. If the args don't set --datadir, the
 // child g gets a temporary data directory.
-func runMinimalGeth(t *testing.T, args ...string) *testgeth {
+func runMinimalAiigo(t *testing.T, args ...string) *testaiigo {
 	// --holesky to make the 'writing genesis to disk' faster (no accounts)
 	// --networkid=1337 to avoid cache bump
 	// --syncmode=full to avoid allocating fast sync bloom
 	allArgs := []string{"--holesky", "--networkid", "1337", "--authrpc.port", "0", "--syncmode=full", "--port", "0",
 		"--nat", "none", "--nodiscover", "--maxpeers", "0", "--cache", "64",
 		"--datadir.minfreedisk", "0"}
-	return runGeth(t, append(allArgs, args...)...)
+	return runAiigo(t, append(allArgs, args...)...)
 }
 
 // Tests that a node embedded within a console can be started up properly and
@@ -53,24 +53,24 @@ func TestConsoleWelcome(t *testing.T) {
 	t.Parallel()
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 
-	// Start a geth console, make sure it's cleaned up and terminate the console
-	geth := runMinimalGeth(t, "--miner.etherbase", coinbase, "console")
+	// Start a aiigo console, make sure it's cleaned up and terminate the console
+	aiigo := runMinimalAiigo(t, "--miner.etherbase", coinbase, "console")
 
 	// Gather all the infos the welcome message needs to contain
-	geth.SetTemplateFunc("goos", func() string { return runtime.GOOS })
-	geth.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
-	geth.SetTemplateFunc("gover", runtime.Version)
-	geth.SetTemplateFunc("gethver", func() string { return version.WithCommit("", "") })
-	geth.SetTemplateFunc("niltime", func() string {
+	aiigo.SetTemplateFunc("goos", func() string { return runtime.GOOS })
+	aiigo.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
+	aiigo.SetTemplateFunc("gover", runtime.Version)
+	aiigo.SetTemplateFunc("aiigover", func() string { return version.WithCommit("", "") })
+	aiigo.SetTemplateFunc("niltime", func() string {
 		return time.Unix(1695902100, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
 	})
-	geth.SetTemplateFunc("apis", func() string { return ipcAPIs })
+	aiigo.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
 	// Verify the actual welcome message to the required template
-	geth.Expect(`
-Welcome to the Geth JavaScript console!
+	aiigo.Expect(`
+Welcome to the Aiigo JavaScript console!
 
-instance: Geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
+instance: Aiigo/v{{aiigover}}/{{goos}}-{{goarch}}/{{gover}}
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
  modules: {{apis}}
@@ -78,7 +78,7 @@ at block: 0 ({{niltime}})
 To exit, press ctrl-d or type exit
 > {{.InputLine "exit"}}
 `)
-	geth.ExpectExit()
+	aiigo.ExpectExit()
 }
 
 // Tests that a console can be attached to a running node via various means.
@@ -90,38 +90,38 @@ func TestAttachWelcome(t *testing.T) {
 	)
 	// Configure the instance for IPC attachment
 	if runtime.GOOS == "windows" {
-		ipc = `\\.\pipe\geth` + strconv.Itoa(trulyRandInt(100000, 999999))
+		ipc = `\\.\pipe\aiigo` + strconv.Itoa(trulyRandInt(100000, 999999))
 	} else {
-		ipc = filepath.Join(t.TempDir(), "geth.ipc")
+		ipc = filepath.Join(t.TempDir(), "aiigo.ipc")
 	}
 	// And HTTP + WS attachment
 	p := trulyRandInt(1024, 65533) // Yeah, sometimes this will fail, sorry :P
 	httpPort = strconv.Itoa(p)
 	wsPort = strconv.Itoa(p + 1)
-	geth := runMinimalGeth(t, "--miner.etherbase", "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182",
+	aiigo := runMinimalAiigo(t, "--miner.etherbase", "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182",
 		"--ipcpath", ipc,
 		"--http", "--http.port", httpPort,
 		"--ws", "--ws.port", wsPort)
 	t.Run("ipc", func(t *testing.T) {
 		waitForEndpoint(t, ipc, 4*time.Second)
-		testAttachWelcome(t, geth, "ipc:"+ipc, ipcAPIs)
+		testAttachWelcome(t, aiigo, "ipc:"+ipc, ipcAPIs)
 	})
 	t.Run("http", func(t *testing.T) {
 		endpoint := "http://127.0.0.1:" + httpPort
 		waitForEndpoint(t, endpoint, 4*time.Second)
-		testAttachWelcome(t, geth, endpoint, httpAPIs)
+		testAttachWelcome(t, aiigo, endpoint, httpAPIs)
 	})
 	t.Run("ws", func(t *testing.T) {
 		endpoint := "ws://127.0.0.1:" + wsPort
 		waitForEndpoint(t, endpoint, 4*time.Second)
-		testAttachWelcome(t, geth, endpoint, httpAPIs)
+		testAttachWelcome(t, aiigo, endpoint, httpAPIs)
 	})
-	geth.Kill()
+	aiigo.Kill()
 }
 
-func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {
-	// Attach to a running geth node and terminate immediately
-	attach := runGeth(t, "attach", endpoint)
+func testAttachWelcome(t *testing.T, aiigo *testaiigo, endpoint, apis string) {
+	// Attach to a running aiigo node and terminate immediately
+	attach := runAiigo(t, "attach", endpoint)
 	defer attach.ExpectExit()
 	attach.CloseStdin()
 
@@ -129,19 +129,19 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint, apis string) {
 	attach.SetTemplateFunc("goos", func() string { return runtime.GOOS })
 	attach.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	attach.SetTemplateFunc("gover", runtime.Version)
-	attach.SetTemplateFunc("gethver", func() string { return version.WithCommit("", "") })
+	attach.SetTemplateFunc("aiigover", func() string { return version.WithCommit("", "") })
 	attach.SetTemplateFunc("niltime", func() string {
 		return time.Unix(1695902100, 0).Format("Mon Jan 02 2006 15:04:05 GMT-0700 (MST)")
 	})
 	attach.SetTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
-	attach.SetTemplateFunc("datadir", func() string { return geth.Datadir })
+	attach.SetTemplateFunc("datadir", func() string { return aiigo.Datadir })
 	attach.SetTemplateFunc("apis", func() string { return apis })
 
 	// Verify the actual welcome message to the required template
 	attach.Expect(`
-Welcome to the Geth JavaScript console!
+Welcome to the Aiigo JavaScript console!
 
-instance: Geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
+instance: Aiigo/v{{aiigover}}/{{goos}}-{{goarch}}/{{gover}}
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}
  modules: {{apis}}

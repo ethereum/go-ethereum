@@ -39,7 +39,7 @@ func TestTransaction(t *testing.T) {
 	txt.skipLoad("^ttNonce/TransactionWithHighNonce64Minus1.json")
 
 	// The value is larger than uint64, which according to the test is invalid.
-	// Geth accepts it, which is not a consensus issue since we use big.Int's
+	// Aiigo accepts it, which is not a consensus issue since we use big.Int's
 	// internally to calculate the cost
 	txt.skipLoad("^ttValue/TransactionWithHighValueOverflow.json")
 

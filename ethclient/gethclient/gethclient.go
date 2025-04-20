@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package gethclient provides an RPC client for geth-specific APIs.
-package gethclient
+// Package aiigoclient provides an RPC client for aiigo-specific APIs.
+package aiigoclient
 
 import (
 	"context"
@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// Client is a wrapper around rpc.Client that implements geth-specific functionality.
+// Client is a wrapper around rpc.Client that implements aiigo-specific functionality.
 //
 // If you want to use the standardized Ethereum RPC functionality, use ethclient.Client instead.
 type Client struct {
@@ -166,7 +166,7 @@ func (ec *Client) CallContractWithBlockOverrides(ctx context.Context, msg ethere
 	return hex, err
 }
 
-// GCStats retrieves the current garbage collection stats from a geth node.
+// GCStats retrieves the current garbage collection stats from a aiigo node.
 func (ec *Client) GCStats(ctx context.Context) (*debug.GCStats, error) {
 	var result debug.GCStats
 	err := ec.c.CallContext(ctx, &result, "debug_gcStats")

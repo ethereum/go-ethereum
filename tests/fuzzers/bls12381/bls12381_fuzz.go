@@ -88,7 +88,7 @@ func fuzzCrossPairing(data []byte) int {
 	blstResult.FinalExp()
 	res := massageBLST(blstResult.ToBendian())
 	if !(bytes.Equal(res, cResult.Marshal())) {
-		panic("pairing mismatch blst / geth")
+		panic("pairing mismatch blst / aiigo")
 	}
 
 	return 1
@@ -140,7 +140,7 @@ func fuzzCrossG1Add(data []byte) int {
 
 	bl3 := blst.P1AffinesAdd([]*blst.P1Affine{bl1, bl2})
 	if !(bytes.Equal(cp.Marshal(), bl3.Serialize())) {
-		panic("G1 point addition mismatch blst / geth ")
+		panic("G1 point addition mismatch blst / aiigo ")
 	}
 
 	return 1
@@ -168,7 +168,7 @@ func fuzzCrossG2Add(data []byte) int {
 
 	bl3 := blst.P2AffinesAdd([]*blst.P2Affine{bl1, bl2})
 	if !(bytes.Equal(gp.Marshal(), bl3.Serialize())) {
-		panic("G2 point addition mismatch blst / geth ")
+		panic("G2 point addition mismatch blst / aiigo ")
 	}
 
 	return 1
@@ -184,7 +184,7 @@ func fuzzCrossG1MultiExp(data []byte) int {
 	)
 	// n random scalars (max 17)
 	for i := 0; i < 17; i++ {
-		// note that geth/crypto/bls12381 works only with scalars <= 32bytes
+		// note that aiigo/crypto/bls12381 works only with scalars <= 32bytes
 		s, err := randomScalar(input, fr.Modulus())
 		if err != nil {
 			break
@@ -235,7 +235,7 @@ func fuzzCrossG2MultiExp(data []byte) int {
 	)
 	// n random scalars (max 17)
 	for i := 0; i < 17; i++ {
-		// note that geth/crypto/bls12381 works only with scalars <= 32bytes
+		// note that aiigo/crypto/bls12381 works only with scalars <= 32bytes
 		s, err := randomScalar(input, fr.Modulus())
 		if err != nil {
 			break
@@ -294,7 +294,7 @@ func getG1Points(input io.Reader) (*gnark.G1Affine, *blst.P1Affine, error) {
 	p1 := new(blst.P1Affine).From(scalar)
 	blstRes := p1.Serialize()
 	if !bytes.Equal(blstRes, cpBytes) {
-		panic(fmt.Sprintf("bytes(blst.G1) != bytes(geth.G1)\nblst.G1: %x\ngeth.G1: %x\n", blstRes, cpBytes))
+		panic(fmt.Sprintf("bytes(blst.G1) != bytes(aiigo.G1)\nblst.G1: %x\naiigo.G1: %x\n", blstRes, cpBytes))
 	}
 
 	return cp, p1, nil

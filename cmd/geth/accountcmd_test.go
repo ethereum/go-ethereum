@@ -43,8 +43,8 @@ func tmpDatadirWithKeystore(t *testing.T) string {
 
 func TestAccountListEmpty(t *testing.T) {
 	t.Parallel()
-	geth := runGeth(t, "account", "list")
-	geth.ExpectExit()
+	aiigo := runAiigo(t, "account", "list")
+	aiigo.ExpectExit()
 }
 
 func TestAccountList(t *testing.T) {
@@ -63,22 +63,22 @@ Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}\k
 `
 	}
 	{
-		geth := runGeth(t, "account", "list", "--datadir", datadir)
-		geth.Expect(want)
-		geth.ExpectExit()
+		aiigo := runAiigo(t, "account", "list", "--datadir", datadir)
+		aiigo.Expect(want)
+		aiigo.ExpectExit()
 	}
 	{
-		geth := runGeth(t, "--datadir", datadir, "account", "list")
-		geth.Expect(want)
-		geth.ExpectExit()
+		aiigo := runAiigo(t, "--datadir", datadir, "account", "list")
+		aiigo.Expect(want)
+		aiigo.ExpectExit()
 	}
 }
 
 func TestAccountNew(t *testing.T) {
 	t.Parallel()
-	geth := runGeth(t, "account", "new", "--lightkdf")
-	defer geth.ExpectExit()
-	geth.Expect(`
+	aiigo := runAiigo(t, "account", "new", "--lightkdf")
+	defer aiigo.ExpectExit()
+	aiigo.Expect(`
 Your new account is locked with a password. Please give a password. Do not forget this password.
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "foobar"}}
@@ -86,7 +86,7 @@ Repeat password: {{.InputLine "foobar"}}
 
 Your new key was generated
 `)
-	geth.ExpectRegexp(`
+	aiigo.ExpectRegexp(`
 Public address of the key:   0x[0-9a-fA-F]{40}
 Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
 
@@ -121,15 +121,15 @@ func TestAccountImport(t *testing.T) {
 
 func TestAccountHelp(t *testing.T) {
 	t.Parallel()
-	geth := runGeth(t, "account", "-h")
-	geth.WaitExit()
-	if have, want := geth.ExitStatus(), 0; have != want {
+	aiigo := runAiigo(t, "account", "-h")
+	aiigo.WaitExit()
+	if have, want := aiigo.ExitStatus(), 0; have != want {
 		t.Errorf("exit error, have %d want %d", have, want)
 	}
 
-	geth = runGeth(t, "account", "import", "-h")
-	geth.WaitExit()
-	if have, want := geth.ExitStatus(), 0; have != want {
+	aiigo = runAiigo(t, "account", "import", "-h")
+	aiigo.WaitExit()
+	if have, want := aiigo.ExitStatus(), 0; have != want {
 		t.Errorf("exit error, have %d want %d", have, want)
 	}
 }
@@ -144,16 +144,16 @@ func importAccountWithExpect(t *testing.T, key string, expected string) {
 	if err := os.WriteFile(passwordFile, []byte("foobar"), 0600); err != nil {
 		t.Error(err)
 	}
-	geth := runGeth(t, "--lightkdf", "account", "import", "-password", passwordFile, keyfile)
-	defer geth.ExpectExit()
-	geth.Expect(expected)
+	aiigo := runAiigo(t, "--lightkdf", "account", "import", "-password", passwordFile, keyfile)
+	defer aiigo.ExpectExit()
+	aiigo.Expect(expected)
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
 	t.Parallel()
-	geth := runGeth(t, "account", "new", "--lightkdf")
-	defer geth.ExpectExit()
-	geth.Expect(`
+	aiigo := runAiigo(t, "account", "new", "--lightkdf")
+	defer aiigo.ExpectExit()
+	aiigo.Expect(`
 Your new account is locked with a password. Please give a password. Do not forget this password.
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "something"}}
@@ -165,11 +165,11 @@ Fatal: Passwords do not match
 func TestAccountUpdate(t *testing.T) {
 	t.Parallel()
 	datadir := tmpDatadirWithKeystore(t)
-	geth := runGeth(t, "account", "update",
+	aiigo := runAiigo(t, "account", "update",
 		"--datadir", datadir, "--lightkdf",
 		"f466859ead1932d743d622cb74fc058882e8648a")
-	defer geth.ExpectExit()
-	geth.Expect(`
+	defer aiigo.ExpectExit()
+	aiigo.Expect(`
 Please give a NEW password. Do not forget this password.
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "foobar2"}}
@@ -181,15 +181,15 @@ Password: {{.InputLine "foobar"}}
 
 func TestWalletImport(t *testing.T) {
 	t.Parallel()
-	geth := runGeth(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
-	defer geth.ExpectExit()
-	geth.Expect(`
+	aiigo := runAiigo(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
+	defer aiigo.ExpectExit()
+	aiigo.Expect(`
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "foo"}}
 Address: {d4584b5f6229b7be90727b0fc8c6b91bb427821f}
 `)
 
-	files, err := os.ReadDir(filepath.Join(geth.Datadir, "keystore"))
+	files, err := os.ReadDir(filepath.Join(aiigo.Datadir, "keystore"))
 	if len(files) != 1 {
 		t.Errorf("expected one key file in keystore directory, found %d files (error: %v)", len(files), err)
 	}
@@ -197,9 +197,9 @@ Address: {d4584b5f6229b7be90727b0fc8c6b91bb427821f}
 
 func TestWalletImportBadPassword(t *testing.T) {
 	t.Parallel()
-	geth := runGeth(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
-	defer geth.ExpectExit()
-	geth.Expect(`
+	aiigo := runAiigo(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
+	defer aiigo.ExpectExit()
+	aiigo.Expect(`
 !! Unsupported terminal, password will be echoed.
 Password: {{.InputLine "wrong"}}
 Fatal: could not decrypt key with given password

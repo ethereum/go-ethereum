@@ -1,0 +1,52 @@
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=big.Int 111,222,333,444,555,678,999=111222333444555678999
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=-big.Int -111,222,333,444,555,678,999=-111222333444555678999
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=big.Int 11,122,233,344,455,567,899,900=11122233344455567899900
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=-big.Int -11,122,233,344,455,567,899,900=-11122233344455567899900
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=uint256 111,222,333,444,555,678,999=111222333444555678999
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=uint256 11,122,233,344,455,567,899,900=11122233344455567899900
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=int64 1,000,000=1000000
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=int64 -1,000,000=-1000000
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=int64 9,223,372,036,854,775,807=9223372036854775807
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=int64 -9,223,372,036,854,775,808=-9223372036854775808
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=uint64 1,000,000=1000000
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=uint64 18,446,744,073,709,551,615=18446744073709551615
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Special chars in value" key="special \r\n\t chars"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Special chars in key" "special \n\t chars"=value
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=nospace nospace=nospace
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="with space" "with nospace"="with nospace"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Bash escapes in value" key="\x1b[1G\x1b[K\x1b[1A"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Bash escapes in key" "\x1b[1G\x1b[K\x1b[1A"=value
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Bash escapes in message  \x1b[1G\x1b[K\x1b[1A end" key=value
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="\x1b[35mColored\x1b[0m[" "\x1b[35mColored\x1b[0m["="\x1b[35mColored\x1b[0m["
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="an error message with quotes" error="this is an 'error'"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Custom Stringer value" 2562047h47m16.854s=2562047h47m16.854s
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="a custom stringer that emits quoted text" output="output with 'quotes'"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="A message with wonky 💩 characters"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="A multiline message \nINFO [10-18|14:11:31.106] with wonky characters 💩"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="A multiline message \nLALA [ZZZZZZZZZZZZZZZZZZ] Actually part of message above"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=boolean true=true false=false
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="repeated-key 1" foo=alpha foo=beta
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="repeated-key 2" xx=short xx=longer
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="log at level info"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=warn msg="log at level warn"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=error msg="log at level error"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=test bar=short a="aligned left"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=test bar="a long message" a=1
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=test bar=short a="aligned right"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="The following logs should align so that the key-fields make 5 columns"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Inserted known block" number=1012 hash=0x0000000000000000000000000000000000000000000000000000000000001234 txs=200 gas=1123123 other=first
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Inserted new block" number=1 hash=0x0000000000000000000000000000000000000000000000000000000000001235 txs=2 gas=1123 other=second
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Inserted known block" number=99 hash=0x0000000000000000000000000000000000000000000000000000000000012322 txs=10 gas=1 other=third
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=warn msg="Inserted known block" number=1012 hash=0x0000000000000000000000000000000000000000000000000000000000001234 txs=200 gas=99 other=fourth
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(*big.Int)(nil) <nil>=<nil>
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(*uint256.Int)(nil) <nil>=<nil>
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(fmt.Stringer)(nil) res=<nil>
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=nil-concrete-stringer res=<nil>
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="error(nil) " res=<nil>
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=nil-concrete-error res=""
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=nil-custom-struct res=<nil>
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="raw nil" res=<nil>
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg=(*uint64)(nil) res=<nil>
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Using keys 't', 'lvl', 'time', 'level' and 'msg'" t=t time=time lvl=lvl level=level msg=msg
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Odd pair (1 attr)" key=<nil> LOG_ERROR="Normalized odd number of arguments by adding nil"
+t=xxxx-xx-xxTxx:xx:xx+xxxx lvl=info msg="Odd pair (3 attr)" key=value key2=<nil> LOG_ERROR="Normalized odd number of arguments by adding nil"
