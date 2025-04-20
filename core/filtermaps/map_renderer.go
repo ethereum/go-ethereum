@@ -536,6 +536,7 @@ func (r *mapRenderer) getTempRange() (filterMapsRange, error) {
 		} else {
 			tempRange.blocks.SetAfterLast(0)
 		}
+		tempRange.headIndexed = false
 		tempRange.headDelimiter = 0
 	}
 	return tempRange, nil

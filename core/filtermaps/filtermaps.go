@@ -659,7 +659,7 @@ func (f *FilterMaps) mapRowIndex(mapIndex, rowIndex uint32) uint64 {
 // called from outside the indexerLoop goroutine.
 func (f *FilterMaps) getBlockLvPointer(blockNumber uint64) (uint64, error) {
 	if blockNumber >= f.indexedRange.blocks.AfterLast() && f.indexedRange.headIndexed {
-		return f.indexedRange.headDelimiter, nil
+		return f.indexedRange.headDelimiter + 1, nil
 	}
 	if lvPointer, ok := f.lvPointerCache.Get(blockNumber); ok {
 		return lvPointer, nil
