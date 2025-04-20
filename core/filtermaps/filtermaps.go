@@ -128,6 +128,7 @@ type FilterMaps struct {
 
 	// test hooks
 	testDisableSnapshots, testSnapshotUsed bool
+	testProcessEventsHook                  func()
 }
 
 // filterMap is a full or partial in-memory representation of a filter map where
