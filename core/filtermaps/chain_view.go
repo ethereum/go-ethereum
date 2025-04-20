@@ -17,8 +17,6 @@
 package filtermaps
 
 import (
-	"sync"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -41,7 +39,6 @@ type blockchain interface {
 // of the underlying blockchain, it should only possess the block headers
 // and receipts up until the expected chain view head.
 type ChainView struct {
-	lock       sync.Mutex
 	chain      blockchain
 	headNumber uint64
 	hashes     []common.Hash // block hashes starting backwards from headNumber until first canonical hash
@@ -150,9 +147,6 @@ func (cv *ChainView) extendNonCanonical() bool {
 
 // blockHash returns the given block hash without doing the head number check.
 func (cv *ChainView) blockHash(number uint64) common.Hash {
-	cv.lock.Lock()
-	defer cv.lock.Unlock()
-
 	if number+uint64(len(cv.hashes)) <= cv.headNumber {
 		hash := cv.chain.GetCanonicalHash(number)
 		if !cv.extendNonCanonical() {
