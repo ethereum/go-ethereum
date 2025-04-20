@@ -515,6 +515,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if rules.IsPrague {
 		// After EIP-7623: Data-heavy transactions pay the floor gas.
 		if st.gasUsed() < floorDataGas {
+			gasRefund = 0
 			prev := st.gasRemaining
 			st.gasRemaining = st.initialGas - floorDataGas
 			if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
