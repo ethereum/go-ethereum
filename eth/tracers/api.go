@@ -809,8 +809,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			// Swap out the noop logger to the standard tracer
 			writer = bufio.NewWriter(dump)
 			vmConf = vm.Config{
-				Tracer:                  logger.NewJSONLogger(&logConfig, writer),
-				EnablePreimageRecording: true,
+				Tracer: logger.NewJSONLogger(&logConfig, writer),
 			}
 		}
 		// Execute the transaction and flush any traces to disk
