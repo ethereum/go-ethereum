@@ -244,7 +244,7 @@ func (f *FilterMaps) loadHeadSnapshot() error {
 		}
 	}
 	f.renderSnapshots.Add(f.indexedRange.blocks.Last(), &renderedMap{
-		filterMap:     fm,
+		filterMap:     fm.fullCopy(),
 		mapIndex:      f.indexedRange.maps.Last(),
 		lastBlock:     f.indexedRange.blocks.Last(),
 		lastBlockId:   f.indexedView.BlockId(f.indexedRange.blocks.Last()),

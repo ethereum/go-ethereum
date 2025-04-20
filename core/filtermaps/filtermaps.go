@@ -573,7 +573,7 @@ func (f *FilterMaps) getFilterMapRow(mapIndex, rowIndex uint32, baseLayerOnly bo
 		}
 		f.baseRowsCache.Add(baseMapRowIndex, baseRows)
 	}
-	baseRow := baseRows[mapIndex&(f.baseRowGroupLength-1)]
+	baseRow := slices.Clone(baseRows[mapIndex&(f.baseRowGroupLength-1)])
 	if baseLayerOnly {
 		return baseRow, nil
 	}
@@ -610,7 +610,9 @@ func (f *FilterMaps) storeFilterMapRowsOfGroup(batch ethdb.Batch, mapIndices []u
 	if uint32(len(mapIndices)) != f.baseRowGroupLength { // skip base rows read if all rows are replaced
 		var ok bool
 		baseRows, ok = f.baseRowsCache.Get(baseMapRowIndex)
-		if !ok {
+		if ok {
+			baseRows = slices.Clone(baseRows)
+		} else {
 			var err error
 			baseRows, err = rawdb.ReadFilterMapBaseRows(f.db, baseMapRowIndex, f.baseRowGroupLength, f.logMapWidth)
 			if err != nil {
