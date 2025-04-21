@@ -165,6 +165,9 @@ func (f *FilterMaps) waitForNewHead() {
 // processEvents processes all events, blocking only if a block processing is
 // happening and indexing should be suspended.
 func (f *FilterMaps) processEvents() {
+	if f.testProcessEventsHook != nil {
+		f.testProcessEventsHook()
+	}
 	for f.processSingleEvent(f.blockProcessing) {
 	}
 }

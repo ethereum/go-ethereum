@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"time"
 
@@ -107,7 +108,7 @@ func (f *FilterMaps) renderMapsFromSnapshot(cp *renderedMap) (*mapRenderer, erro
 			filterMap:   cp.filterMap.fullCopy(),
 			mapIndex:    cp.mapIndex,
 			lastBlock:   cp.lastBlock,
-			blockLvPtrs: cp.blockLvPtrs,
+			blockLvPtrs: slices.Clone(cp.blockLvPtrs),
 		},
 		finishedMaps: make(map[uint32]*renderedMap),
 		finished:     common.NewRange(cp.mapIndex, 0),
@@ -244,7 +245,7 @@ func (f *FilterMaps) loadHeadSnapshot() error {
 		}
 	}
 	f.renderSnapshots.Add(f.indexedRange.blocks.Last(), &renderedMap{
-		filterMap:     fm,
+		filterMap:     fm.fullCopy(),
 		mapIndex:      f.indexedRange.maps.Last(),
 		lastBlock:     f.indexedRange.blocks.Last(),
 		lastBlockId:   f.indexedView.BlockId(f.indexedRange.blocks.Last()),
@@ -536,6 +537,7 @@ func (r *mapRenderer) getTempRange() (filterMapsRange, error) {
 		} else {
 			tempRange.blocks.SetAfterLast(0)
 		}
+		tempRange.headIndexed = false
 		tempRange.headDelimiter = 0
 	}
 	return tempRange, nil
