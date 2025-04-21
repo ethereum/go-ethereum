@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -36,6 +37,7 @@ type tableRevalidation struct {
 	fast      revalidationList
 	slow      revalidationList
 	activeReq map[enode.ID]struct{}
+	mu        sync.Mutex
 }
 
 type revalidationResponse struct {
@@ -95,10 +97,13 @@ func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mcloc
 
 // startRequest spawns a revalidation request for node n.
 func (tr *tableRevalidation) startRequest(tab *Table, n *tableNode) {
+	tr.mu.Lock()
 	if _, ok := tr.activeReq[n.ID()]; ok {
+		tr.mu.Unlock()
 		panic(fmt.Errorf("duplicate startRequest (node %v)", n.ID()))
 	}
 	tr.activeReq[n.ID()] = struct{}{}
+	tr.mu.Unlock()
 	resp := revalidationResponse{n: n}
 
 	// Fetch the node while holding lock.
@@ -133,11 +138,14 @@ func (tab *Table) doRevalidate(resp revalidationResponse, node *enode.Node) {
 // handleResponse processes the result of a revalidation request.
 func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationResponse) {
 	var (
-		now = tab.cfg.Clock.Now()
 		n   = resp.n
+		now = tab.cfg.Clock.Now()
 		b   = tab.bucket(n.ID())
 	)
+
+	tr.mu.Lock()
 	delete(tr.activeReq, n.ID())
+	tr.mu.Unlock()
 
 	// If the node was removed from the table while getting checked, we need to stop
 	// processing here to avoid re-adding it.
@@ -145,15 +153,13 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 		return
 	}
 
-	// Store potential seeds in database.
-	// This is done via defer to avoid holding Table lock while writing to DB.
+	// Store potential seeds in database via defer to avoid holding Table lock during DB update.
 	defer func() {
 		if n.isValidatedLive && n.livenessChecks > 5 {
 			tab.db.UpdateNode(resp.n.Node)
 		}
 	}()
 
-	// Remaining logic needs access to Table internals.
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 
@@ -172,6 +178,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	n.livenessChecks++
 	n.isValidatedLive = true
 	tab.log.Debug("Node revalidated", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "q", n.revalList.name)
+
 	var endpointChanged bool
 	if resp.newRecord != nil {
 		_, endpointChanged = tab.bumpInBucket(b, resp.newRecord, false)
@@ -181,6 +188,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	if !endpointChanged {
 		tr.moveToList(&tr.slow, n, now, &tab.rand)
 	}
+
 }
 
 // moveToList ensures n is in the 'dest' list.
