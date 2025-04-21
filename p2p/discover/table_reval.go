@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -78,7 +79,11 @@ func (tr *tableRevalidation) nodeEndpointChanged(tab *Table, n *tableNode) {
 // to schedule a timer. However, run can be called at any time.
 func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mclock.AbsTime) {
 	reval := func(list *revalidationList) {
-		if list.nextTime <= now {
+		list.mu.Lock()
+		shouldSchedule := list.nextTime <= now
+		list.mu.Unlock()
+
+		if shouldSchedule {
 			if n := list.get(&tab.rand, tr.activeReq); n != nil {
 				tr.startRequest(tab, n)
 			}
@@ -90,7 +95,13 @@ func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mcloc
 	reval(&tr.fast)
 	reval(&tr.slow)
 
-	return min(tr.fast.nextTime, tr.slow.nextTime)
+	tr.fast.mu.Lock()
+	fastNext := tr.fast.nextTime
+	tr.fast.mu.Unlock()
+	tr.slow.mu.Lock()
+	slowNext := tr.slow.nextTime
+	tr.slow.mu.Unlock()
+	return min(fastNext, slowNext)
 }
 
 // startRequest spawns a revalidation request for node n.
@@ -200,6 +211,7 @@ type revalidationList struct {
 	nextTime mclock.AbsTime
 	interval time.Duration
 	name     string
+	mu       sync.Mutex
 }
 
 // get returns a random node from the queue. Nodes in the 'exclude' map are not returned.
@@ -217,28 +229,53 @@ func (list *revalidationList) get(rand randomSource, exclude map[enode.ID]struct
 	return nil
 }
 
+// schedule computes the next revalidation time.
 func (list *revalidationList) schedule(now mclock.AbsTime, rand randomSource) {
-	list.nextTime = now.Add(time.Duration(rand.Int63n(int64(list.interval))))
+	list.mu.Lock()         // Lock before accessing nextTime
+	defer list.mu.Unlock() // Unlock when function exits
+
+	if len(list.nodes) == 0 {
+		list.nextTime = never
+		return
+	}
+	// Add random delay up to the interval duration.
+	// This ensures nodes are revalidated close to the interval on average,
+	// but not all at the same time.
+	delay := time.Duration(rand.Int63n(int64(list.interval)))
+	list.nextTime = now.Add(delay)
 }
 
 func (list *revalidationList) push(n *tableNode, now mclock.AbsTime, rand randomSource) {
+	list.mu.Lock()
 	list.nodes = append(list.nodes, n)
-	if list.nextTime == never {
+	n.revalList = list
+	list.mu.Unlock()
+
+	// If list was previously empty, reschedule. schedule handles its own locking.
+	if len(list.nodes) == 1 {
 		list.schedule(now, rand)
 	}
-	n.revalList = list
 }
 
 func (list *revalidationList) remove(n *tableNode) {
-	i := slices.Index(list.nodes, n)
-	if i == -1 {
-		panic(fmt.Errorf("node %v not found in list", n.ID()))
+	list.mu.Lock()
+	defer list.mu.Unlock()
+
+	if n.revalList != list {
+		panic(fmt.Errorf("node %v is not in list %q", n.ID(), list.name))
 	}
-	list.nodes = slices.Delete(list.nodes, i, i+1)
-	if len(list.nodes) == 0 {
-		list.nextTime = never
+	idx := -1
+	for i, node := range list.nodes {
+		if node == n {
+			idx = i
+			break
+		}
 	}
-	n.revalList = nil
+	if idx == -1 {
+		panic(fmt.Errorf("node %v is not in list %q (but revalList field points to it)", n.ID(), list.name))
+	}
+	list.nodes = slices.Delete(list.nodes, idx, idx+1)
+	n.revalList = nil // Mark node as removed from any list
 }
 
 func (list *revalidationList) contains(id enode.ID) bool {
