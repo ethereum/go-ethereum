@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"time"
 
@@ -107,7 +108,7 @@ func (f *FilterMaps) renderMapsFromSnapshot(cp *renderedMap) (*mapRenderer, erro
 			filterMap:   cp.filterMap.fullCopy(),
 			mapIndex:    cp.mapIndex,
 			lastBlock:   cp.lastBlock,
-			blockLvPtrs: cp.blockLvPtrs,
+			blockLvPtrs: slices.Clone(cp.blockLvPtrs),
 		},
 		finishedMaps: make(map[uint32]*renderedMap),
 		finished:     common.NewRange(cp.mapIndex, 0),
