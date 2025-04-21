@@ -568,7 +568,7 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 		txs := list.Flatten()
 
 		// If the miner requests tip enforcement, cap the lists now
-		if enforceTips && !pool.locals.contains(addr) {
+		if enforceTips && pool.priced.urgent.baseFee != nil && !pool.locals.contains(addr) {
 			for i, tx := range txs {
 				if !tx.IsSpecialTransaction() && tx.GasPrice().Cmp(pool.priced.urgent.baseFee) < 0 {
 					txs = txs[:i]
@@ -664,8 +664,15 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInvalidSender
 	}
 	// Drop non-local transactions under our own minimal accepted gas price or tip
-	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
-		if !tx.IsSpecialTransaction() || (pool.IsSigner != nil && !pool.IsSigner(from)) {
+	if !local {
+		isUnderpriced := false
+		if pool.priced.urgent.baseFee != nil {
+			// check tx.GasPrice() when GasTipCap() == 0
+			isUnderpriced = tx.GasPrice().Cmp(pool.priced.urgent.baseFee) < 0
+		} else {
+			isUnderpriced = tx.GasTipCapIntCmp(pool.gasPrice) < 0
+		}
+		if isUnderpriced && (!tx.IsSpecialTransaction() || (pool.IsSigner != nil && !pool.IsSigner(from))) {
 			return ErrUnderpriced
 		}
 	}
