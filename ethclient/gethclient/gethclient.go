@@ -173,7 +173,7 @@ func (ec *Client) GCStats(ctx context.Context) (*debug.GCStats, error) {
 	return &result, err
 }
 
-// MemStats retrieves the current memory stats from a geth node.
+// MemStats retrieves the current memory stats from a aiigo node.
 func (ec *Client) MemStats(ctx context.Context) (*runtime.MemStats, error) {
 	var result runtime.MemStats
 	err := ec.c.CallContext(ctx, &result, "debug_memStats")
