@@ -195,7 +195,12 @@ This command dumps out the state for a given block (or latest, if none provided)
 		Name:      "prune-history",
 		Usage:     "Prune blockchain history (block bodies and receipts) up to the merge block",
 		ArgsUsage: "",
-		Flags:     utils.DatabaseFlags,
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.AncientFlag,
+			utils.RemoteDBFlag,
+			utils.HttpHeaderFlag,
+		},
 		Description: `
 The prune-history command removes historical block bodies and receipts from the
 blockchain database up to the merge block, while preserving block headers. This
