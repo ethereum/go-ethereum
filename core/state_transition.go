@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -258,33 +259,43 @@ func (st *stateTransition) to() common.Address {
 }
 
 func (st *stateTransition) buyGas() error {
-	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
-	mgval.Mul(mgval, st.msg.GasPrice)
-	balanceCheck := new(big.Int).Set(mgval)
+	mgval := new(uint256.Int)
 	if st.msg.GasFeeCap != nil {
-		balanceCheck.SetUint64(st.msg.GasLimit)
-		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
+		mgvalU256, _ := uint256.FromBig(st.msg.GasFeeCap)
+		mgval.Set(mgvalU256)
 	}
-	balanceCheck.Add(balanceCheck, st.msg.Value)
-
-	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
-		if blobGas := st.blobGasUsed(); blobGas > 0 {
-			// Check that the user has enough funds to cover blobGasUsed * tx.BlobGasFeeCap
-			blobBalanceCheck := new(big.Int).SetUint64(blobGas)
-			blobBalanceCheck.Mul(blobBalanceCheck, st.msg.BlobGasFeeCap)
-			balanceCheck.Add(balanceCheck, blobBalanceCheck)
-			// Pay for blobGasUsed * actual blob fee
-			blobFee := new(big.Int).SetUint64(blobGas)
-			blobFee.Mul(blobFee, st.evm.Context.BlobBaseFee)
-			mgval.Add(mgval, blobFee)
+	if st.msg.GasPrice != nil {
+		gasPriceU256, _ := uint256.FromBig(st.msg.GasPrice)
+		if mgval.Cmp(gasPriceU256) < 0 {
+			mgval.Set(gasPriceU256)
 		}
 	}
-	balanceCheckU256, overflow := uint256.FromBig(balanceCheck)
-	if overflow {
-		return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
-	}
-	if have, want := st.state.GetBalance(st.msg.From), balanceCheckU256; have.Cmp(want) < 0 {
-		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+	mgval.Mul(mgval, new(uint256.Int).SetUint64(st.msg.GasLimit))
+	log.Debug("buyGas: calculating gas cost",
+		"gasLimit", st.msg.GasLimit,
+		"gasPrice", st.msg.GasPrice,
+		"gasFeeCap", st.msg.GasFeeCap,
+		"mgval", mgval)
+
+	balanceCheckU256 := new(uint256.Int)
+	valueU256, _ := uint256.FromBig(st.msg.Value)
+	balanceCheckU256.Add(mgval, valueU256)
+	log.Debug("buyGas: calculating total cost",
+		"mgval", mgval,
+		"value", st.msg.Value,
+		"total", balanceCheckU256)
+
+	// Check if the sender has enough balance
+	have := st.state.GetBalance(st.msg.From)
+	log.Debug("buyGas: checking balance",
+		"address", st.msg.From.Hex(),
+		"have", have,
+		"want", balanceCheckU256)
+
+	if have.Cmp(balanceCheckU256) < 0 {
+		err := fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have.Uint64(), balanceCheckU256.Uint64())
+		log.Debug("buyGas: insufficient funds error", "error", err)
+		return err
 	}
 	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
 		return err
@@ -296,8 +307,8 @@ func (st *stateTransition) buyGas() error {
 	st.gasRemaining = st.msg.GasLimit
 
 	st.initialGas = st.msg.GasLimit
-	mgvalU256, _ := uint256.FromBig(mgval)
-	st.state.SubBalance(st.msg.From, mgvalU256, tracing.BalanceDecreaseGasBuy)
+	// No need to convert mgval since it's already uint256.Int
+	st.state.SubBalance(st.msg.From, mgval, tracing.BalanceDecreaseGasBuy)
 	return nil
 }
 
@@ -398,7 +409,7 @@ func (st *stateTransition) preCheck() error {
 // execute will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
-//   - used gas: total gas used (including gas being refunded)
+//   - used gas: total gas used (including gas refunds)
 //   - returndata: the returned data from evm
 //   - concrete execution error: various EVM errors which abort the execution, e.g.
 //     ErrOutOfGas, ErrExecutionReverted
@@ -465,7 +476,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
 	}
 	if !value.IsZero() && !st.evm.Context.CanTransfer(st.state, msg.From, value) {
-		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
+		have := st.state.GetBalance(msg.From)
+		return nil, fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFundsForTransfer, msg.From.Hex(), have.Uint64(), value.Uint64())
 	}
 
 	// Check whether the init code size has been exceeded.
