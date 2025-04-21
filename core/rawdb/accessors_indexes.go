@@ -180,7 +180,7 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	return nil, common.Hash{}, 0, 0
 }
 
-// ReadFilterMapRow retrieves a filter map row at the given mapRowIndex
+// ReadFilterMapExtRow retrieves a filter map row at the given mapRowIndex
 // (see filtermaps.mapRowIndex for the storage index encoding).
 // Note that zero length rows are not stored in the database and therefore all
 // non-existent entries are interpreted as empty rows and return no error.
@@ -191,9 +191,6 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 // https://eips.ethereum.org/EIPS/eip-7745#hash-tree-structure
 func ReadFilterMapExtRow(db ethdb.KeyValueReader, mapRowIndex uint64, bitLength uint) ([]uint32, error) {
 	byteLength := int(bitLength) / 8
-	if int(bitLength) != byteLength*8 {
-		panic("invalid bit length")
-	}
 	key := filterMapRowKey(mapRowIndex, false)
 	has, err := db.Has(key)
 	if err != nil {
@@ -207,7 +204,7 @@ func ReadFilterMapExtRow(db ethdb.KeyValueReader, mapRowIndex uint64, bitLength 
 		return nil, err
 	}
 	if len(encRow)%byteLength != 0 {
-		return nil, errors.New("Invalid encoded extended filter row length")
+		return nil, errors.New("invalid encoded extended filter row length")
 	}
 	row := make([]uint32, len(encRow)/byteLength)
 	var b [4]byte
@@ -220,9 +217,6 @@ func ReadFilterMapExtRow(db ethdb.KeyValueReader, mapRowIndex uint64, bitLength 
 
 func ReadFilterMapBaseRows(db ethdb.KeyValueReader, mapRowIndex uint64, rowCount uint32, bitLength uint) ([][]uint32, error) {
 	byteLength := int(bitLength) / 8
-	if int(bitLength) != byteLength*8 {
-		panic("invalid bit length")
-	}
 	key := filterMapRowKey(mapRowIndex, true)
 	has, err := db.Has(key)
 	if err != nil {
@@ -261,7 +255,7 @@ func ReadFilterMapBaseRows(db ethdb.KeyValueReader, mapRowIndex uint64, rowCount
 		headerBits--
 	}
 	if headerLen+byteLength*entryCount > encLen {
-		return nil, errors.New("Invalid encoded base filter rows length")
+		return nil, errors.New("invalid encoded base filter rows length")
 	}
 	if entriesInRow > 0 {
 		rows[rowIndex] = make([]uint32, entriesInRow)
@@ -278,13 +272,10 @@ func ReadFilterMapBaseRows(db ethdb.KeyValueReader, mapRowIndex uint64, rowCount
 	return rows, nil
 }
 
-// WriteFilterMapRow stores a filter map row at the given mapRowIndex or deletes
-// any existing entry if the row is empty.
+// WriteFilterMapExtRow stores an extended filter map row at the given mapRowIndex
+// or deletes any existing entry if the row is empty.
 func WriteFilterMapExtRow(db ethdb.KeyValueWriter, mapRowIndex uint64, row []uint32, bitLength uint) {
 	byteLength := int(bitLength) / 8
-	if int(bitLength) != byteLength*8 {
-		panic("invalid bit length")
-	}
 	var err error
 	if len(row) > 0 {
 		encRow := make([]byte, len(row)*byteLength)
@@ -304,9 +295,6 @@ func WriteFilterMapExtRow(db ethdb.KeyValueWriter, mapRowIndex uint64, row []uin
 
 func WriteFilterMapBaseRows(db ethdb.KeyValueWriter, mapRowIndex uint64, rows [][]uint32, bitLength uint) {
 	byteLength := int(bitLength) / 8
-	if int(bitLength) != byteLength*8 {
-		panic("invalid bit length")
-	}
 	var entryCount, zeroBits int
 	for i, row := range rows {
 		if len(row) > 0 {
