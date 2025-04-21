@@ -188,7 +188,6 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	if !endpointChanged {
 		tr.moveToList(&tr.slow, n, now, &tab.rand)
 	}
-
 }
 
 // moveToList ensures n is in the 'dest' list.
