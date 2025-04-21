@@ -128,6 +128,7 @@ type FilterMaps struct {
 
 	// test hooks
 	testDisableSnapshots, testSnapshotUsed bool
+	testProcessEventsHook                  func()
 }
 
 // filterMap is a full or partial in-memory representation of a filter map where
@@ -573,7 +574,7 @@ func (f *FilterMaps) getFilterMapRow(mapIndex, rowIndex uint32, baseLayerOnly bo
 		}
 		f.baseRowsCache.Add(baseMapRowIndex, baseRows)
 	}
-	baseRow := baseRows[mapIndex&(f.baseRowGroupLength-1)]
+	baseRow := slices.Clone(baseRows[mapIndex&(f.baseRowGroupLength-1)])
 	if baseLayerOnly {
 		return baseRow, nil
 	}
@@ -610,7 +611,9 @@ func (f *FilterMaps) storeFilterMapRowsOfGroup(batch ethdb.Batch, mapIndices []u
 	if uint32(len(mapIndices)) != f.baseRowGroupLength { // skip base rows read if all rows are replaced
 		var ok bool
 		baseRows, ok = f.baseRowsCache.Get(baseMapRowIndex)
-		if !ok {
+		if ok {
+			baseRows = slices.Clone(baseRows)
+		} else {
 			var err error
 			baseRows, err = rawdb.ReadFilterMapBaseRows(f.db, baseMapRowIndex, f.baseRowGroupLength, f.logMapWidth)
 			if err != nil {
@@ -656,7 +659,7 @@ func (f *FilterMaps) mapRowIndex(mapIndex, rowIndex uint32) uint64 {
 // called from outside the indexerLoop goroutine.
 func (f *FilterMaps) getBlockLvPointer(blockNumber uint64) (uint64, error) {
 	if blockNumber >= f.indexedRange.blocks.AfterLast() && f.indexedRange.headIndexed {
-		return f.indexedRange.headDelimiter, nil
+		return f.indexedRange.headDelimiter + 1, nil
 	}
 	if lvPointer, ok := f.lvPointerCache.Get(blockNumber); ok {
 		return lvPointer, nil
