@@ -42,9 +42,11 @@ type resultStore struct {
 	// this index.
 	throttleThreshold uint64
 
-	lock sync.RWMutex
-
+	// pendingCount is the current number of in-flight block body retrievals
+	// contained in items.
 	pendingCount int
+
+	lock sync.RWMutex
 }
 
 func newResultStore(size int) *resultStore {
@@ -177,11 +179,7 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 	for i := 0; i < limit; i++ {
 		totalSize += r.items[i].Size()
 	}
-	if limit > 0 {
-		blockSizeGauge.Update(int64(totalSize / limit))
-		r.pendingCount -= limit
-	}
-
+	r.pendingCount -= limit
 	pendingBodyGauge.Update(int64(r.pendingCount))
 
 	results := make([]*fetchResult, limit)
