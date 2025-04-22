@@ -89,11 +89,23 @@ var (
 	{{ end }}
 
 	{{range .Calls}}
-		// Pack{{.Normalized.Name}} is the Go binding used to pack the parameters required for calling
+		// Pack{{.Normalized.Name}} is the Go binding used to pack the parameters required for calling, will panic for any error.
 		// the contract method with ID 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
-		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Pack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) ([]byte, error) {
+		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Pack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
+			enc, err := {{ decapitalise $contract.Type}}.abi.Pack("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
+			if err != nil {
+				panic(err)
+			}
+			return enc
+		}
+
+		// Pack{{.Normalized.Name}} is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+		// the contract method with ID 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) TryPack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) ([]byte, error) {
 			return {{ decapitalise $contract.Type}}.abi.Pack("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 

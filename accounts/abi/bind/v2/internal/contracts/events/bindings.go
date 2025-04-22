@@ -51,19 +51,43 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) *bind.Bo
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackEmitMulti is the Go binding used to pack the parameters required for calling
+// PackEmitMulti is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0xcb493749.
 //
 // Solidity: function EmitMulti() returns()
-func (c *C) PackEmitMulti() ([]byte, error) {
+func (c *C) PackEmitMulti() []byte {
+	enc, err := c.abi.Pack("EmitMulti")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackEmitMulti is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0xcb493749.
+//
+// Solidity: function EmitMulti() returns()
+func (c *C) TryPackEmitMulti() ([]byte, error) {
 	return c.abi.Pack("EmitMulti")
 }
 
-// PackEmitOne is the Go binding used to pack the parameters required for calling
+// PackEmitOne is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0xe8e49a71.
 //
 // Solidity: function EmitOne() returns()
-func (c *C) PackEmitOne() ([]byte, error) {
+func (c *C) PackEmitOne() []byte {
+	enc, err := c.abi.Pack("EmitOne")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackEmitOne is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0xe8e49a71.
+//
+// Solidity: function EmitOne() returns()
+func (c *C) TryPackEmitOne() ([]byte, error) {
 	return c.abi.Pack("EmitOne")
 }
 

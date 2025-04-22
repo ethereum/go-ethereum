@@ -58,11 +58,23 @@ func (c *DB) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackGet is the Go binding used to pack the parameters required for calling
+// PackGet is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0x9507d39a.
 //
 // Solidity: function get(uint256 k) returns(uint256)
-func (dB *DB) PackGet(k *big.Int) ([]byte, error) {
+func (dB *DB) PackGet(k *big.Int) []byte {
+	enc, err := dB.abi.Pack("get", k)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackGet is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0x9507d39a.
+//
+// Solidity: function get(uint256 k) returns(uint256)
+func (dB *DB) TryPackGet(k *big.Int) ([]byte, error) {
 	return dB.abi.Pack("get", k)
 }
 
@@ -79,11 +91,23 @@ func (dB *DB) UnpackGet(data []byte) (*big.Int, error) {
 	return out0, nil
 }
 
-// PackGetNamedStatParams is the Go binding used to pack the parameters required for calling
+// PackGetNamedStatParams is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0xe369ba3b.
 //
 // Solidity: function getNamedStatParams() view returns(uint256 gets, uint256 inserts, uint256 mods)
-func (dB *DB) PackGetNamedStatParams() ([]byte, error) {
+func (dB *DB) PackGetNamedStatParams() []byte {
+	enc, err := dB.abi.Pack("getNamedStatParams")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackGetNamedStatParams is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0xe369ba3b.
+//
+// Solidity: function getNamedStatParams() view returns(uint256 gets, uint256 inserts, uint256 mods)
+func (dB *DB) TryPackGetNamedStatParams() ([]byte, error) {
 	return dB.abi.Pack("getNamedStatParams")
 }
 
@@ -111,11 +135,23 @@ func (dB *DB) UnpackGetNamedStatParams(data []byte) (*GetNamedStatParamsOutput, 
 	return outstruct, nil
 }
 
-// PackGetStatParams is the Go binding used to pack the parameters required for calling
+// PackGetStatParams is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0x6fcb9c70.
 //
 // Solidity: function getStatParams() view returns(uint256, uint256, uint256)
-func (dB *DB) PackGetStatParams() ([]byte, error) {
+func (dB *DB) PackGetStatParams() []byte {
+	enc, err := dB.abi.Pack("getStatParams")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackGetStatParams is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0x6fcb9c70.
+//
+// Solidity: function getStatParams() view returns(uint256, uint256, uint256)
+func (dB *DB) TryPackGetStatParams() ([]byte, error) {
 	return dB.abi.Pack("getStatParams")
 }
 
@@ -143,11 +179,23 @@ func (dB *DB) UnpackGetStatParams(data []byte) (*GetStatParamsOutput, error) {
 	return outstruct, nil
 }
 
-// PackGetStatsStruct is the Go binding used to pack the parameters required for calling
+// PackGetStatsStruct is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0xee8161e0.
 //
 // Solidity: function getStatsStruct() view returns((uint256,uint256,uint256))
-func (dB *DB) PackGetStatsStruct() ([]byte, error) {
+func (dB *DB) PackGetStatsStruct() []byte {
+	enc, err := dB.abi.Pack("getStatsStruct")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackGetStatsStruct is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0xee8161e0.
+//
+// Solidity: function getStatsStruct() view returns((uint256,uint256,uint256))
+func (dB *DB) TryPackGetStatsStruct() ([]byte, error) {
 	return dB.abi.Pack("getStatsStruct")
 }
 
@@ -164,11 +212,23 @@ func (dB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
 	return out0, nil
 }
 
-// PackInsert is the Go binding used to pack the parameters required for calling
+// PackInsert is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0x1d834a1b.
 //
 // Solidity: function insert(uint256 k, uint256 v) returns(uint256)
-func (dB *DB) PackInsert(k *big.Int, v *big.Int) ([]byte, error) {
+func (dB *DB) PackInsert(k *big.Int, v *big.Int) []byte {
+	enc, err := dB.abi.Pack("insert", k, v)
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackInsert is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0x1d834a1b.
+//
+// Solidity: function insert(uint256 k, uint256 v) returns(uint256)
+func (dB *DB) TryPackInsert(k *big.Int, v *big.Int) ([]byte, error) {
 	return dB.abi.Pack("insert", k, v)
 }
 
