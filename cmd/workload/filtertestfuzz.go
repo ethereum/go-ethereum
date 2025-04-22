@@ -78,6 +78,63 @@ func filterFuzzCmd(ctx *cli.Context) error {
 		return newPtr
 	}
 
+	fetchHead := func() (*types.Header, bool) {
+		currentHead, err := getLatestHeader(f.client)
+		if err != nil {
+			fmt.Println("Could not fetch head block", err)
+			return nil, false
+		}
+		headerCache.Add(currentHead.Hash(), currentHead)
+		if lastHead != nil && currentHead.Hash() == lastHead.Hash() {
+			return currentHead, false
+		}
+		f.blockLimit = currentHead.Number.Int64()
+		ca := commonAncestor(lastHead, currentHead)
+		fmt.Print("*** New head ", f.blockLimit)
+		if ca == nil {
+			fmt.Println("  <no common ancestor>")
+		} else {
+			if reorged := lastHead.Number.Uint64() - ca.Number.Uint64(); reorged > 0 {
+				fmt.Print("  reorged ", reorged)
+			}
+			if missed := currentHead.Number.Uint64() - ca.Number.Uint64() - 1; missed > 0 {
+				fmt.Print("  missed ", missed)
+			}
+			fmt.Println()
+		}
+		lastHead = currentHead
+		return currentHead, true
+	}
+
+	tryExtendQuery := func(query *filterQuery) *filterQuery {
+		for {
+			extQuery := f.extendRange(query)
+			if extQuery == nil {
+				return query
+			}
+			extQuery.checkLastBlockHash(f.client)
+			extQuery.run(f.client, nil)
+			if extQuery.Err == nil && len(extQuery.results) == 0 {
+				// query is useless now due to major reorg; abandon and continue
+				fmt.Println("Zero length results")
+				return nil
+			}
+			if extQuery.Err != nil {
+				extQuery.printError()
+				return nil
+			}
+			if len(extQuery.results) > maxFilterResultSize {
+				return query
+			}
+			query = extQuery
+		}
+	}
+
+	var (
+		mmQuery              *filterQuery
+		mmRetry, mmNextRetry int
+	)
+
 mainLoop:
 	for {
 		select {
@@ -85,92 +142,81 @@ mainLoop:
 			return nil
 		default:
 		}
-		currentHead, err := getLatestHeader(f.client)
+		var query *filterQuery
+		if mmQuery != nil {
+			if mmRetry == 0 {
+				query = mmQuery
+				mmRetry = mmNextRetry
+				mmNextRetry *= 2
+				query.checkLastBlockHash(f.client)
+				query.run(f.client, nil)
+				if query.Err != nil {
+					query.printError()
+					continue
+				}
+				fmt.Println("Retrying query  from:", query.FromBlock, "to:", query.ToBlock, "results:", len(query.results))
+			} else {
+				mmRetry--
+			}
+		}
+		if query == nil {
+			currentHead, isNewHead := fetchHead()
+			if currentHead == nil {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(time.Second):
+				}
+				continue mainLoop
+			}
+			if isNewHead {
+				query = f.newHeadSeedQuery(currentHead.Number.Int64())
+			} else {
+				query = f.newQuery()
+			}
+			query.checkLastBlockHash(f.client)
+			query.run(f.client, nil)
+			if query.Err != nil {
+				query.printError()
+				continue
+			}
+			fmt.Println("New query  from:", query.FromBlock, "to:", query.ToBlock, "results:", len(query.results))
+			if len(query.results) == 0 || len(query.results) > maxFilterResultSize {
+				continue mainLoop
+			}
+			if query = tryExtendQuery(query); query == nil {
+				continue mainLoop
+			}
+		}
+		if !query.checkLastBlockHash(f.client) {
+			fmt.Println("Reorg during search")
+			continue mainLoop
+		}
+		// now we have a new query; check results
+		results, err := query.getResultsFromReceipts(f.client)
 		if err != nil {
-			fmt.Println("Could not fetch head block", err)
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(time.Second):
+			fmt.Println("Could not fetch results from receipts", err)
+			continue mainLoop
+		}
+		if !query.checkLastBlockHash(f.client) {
+			fmt.Println("Reorg during search")
+			continue mainLoop
+		}
+		if !reflect.DeepEqual(query.results, results) {
+			fmt.Println("Results mismatch  from:", query.FromBlock, "to:", query.ToBlock, "addresses:", query.Address, "topics:", query.Topics)
+			resShared, resGetLogs, resReceipts := compareResults(query.results, results)
+			fmt.Println(" shared:", len(resShared))
+			fmt.Println(" only from getLogs:", len(resGetLogs), resGetLogs)
+			fmt.Println(" only from receipts:", len(resReceipts), resReceipts)
+			if mmQuery != query {
+				mmQuery = query
+				mmRetry = 0
+				mmNextRetry = 1
 			}
 			continue mainLoop
 		}
-		headerCache.Add(currentHead.Hash(), currentHead)
-		var query *filterQuery
-		if lastHead != nil && currentHead.Hash() == lastHead.Hash() {
-			query = f.newQuery()
-		} else {
-			f.blockLimit = currentHead.Number.Int64()
-			ca := commonAncestor(lastHead, currentHead)
-			fmt.Print("*** New head ", f.blockLimit)
-			if ca == nil {
-				fmt.Println("  <no common ancestor>")
-			} else {
-				if reorged := lastHead.Number.Uint64() - ca.Number.Uint64(); reorged > 0 {
-					fmt.Print("  reorged ", reorged)
-				}
-				if missed := currentHead.Number.Uint64() - ca.Number.Uint64() - 1; missed > 0 {
-					fmt.Print("  missed ", missed)
-				}
-				fmt.Println()
-			}
-			query = f.newHeadSeedQuery(f.blockLimit)
-			lastHead = currentHead
-		}
-		query.checkLastBlockHash(f.client)
-		query.run(f.client, nil)
-		if query.Err != nil {
-			query.printError()
-			continue
-		}
-		fmt.Println("New query  from:", query.FromBlock, "to:", query.ToBlock, "results:", len(query.results))
-		if len(query.results) > 0 && len(query.results) <= maxFilterResultSize {
-			for {
-				extQuery := f.extendRange(query)
-				if extQuery == nil {
-					break
-				}
-				extQuery.checkLastBlockHash(f.client)
-				extQuery.run(f.client, nil)
-				if extQuery.Err == nil && len(extQuery.results) == 0 {
-					// query is useless now due to major reorg; abandon and continue
-					fmt.Println("Zero length results")
-					continue mainLoop
-				}
-				if extQuery.Err != nil {
-					extQuery.printError()
-					continue mainLoop
-				}
-				if len(extQuery.results) > maxFilterResultSize {
-					break
-				}
-				query = extQuery
-			}
-			if !query.checkLastBlockHash(f.client) {
-				fmt.Println("Reorg during search")
-				continue mainLoop
-			}
-			// now we have a new query; check results
-			results, err := query.getResultsFromReceipts(f.client)
-			if err != nil {
-				fmt.Println("Could not fetch results from receipts", err)
-				continue mainLoop
-			}
-			if !query.checkLastBlockHash(f.client) {
-				fmt.Println("Reorg during search")
-				continue mainLoop
-			}
-			if !reflect.DeepEqual(query.results, results) {
-				fmt.Println("Results mismatch  from:", query.FromBlock, "to:", query.ToBlock, "addresses:", query.Address, "topics:", query.Topics)
-				resShared, resGetLogs, resReceipts := compareResults(query.results, results)
-				fmt.Println(" shared:", len(resShared))
-				fmt.Println(" only from getLogs:", resGetLogs)
-				fmt.Println(" only from receipts:", resReceipts)
-				continue mainLoop
-			}
-			fmt.Println("Successful query  from:", query.FromBlock, "to:", query.ToBlock, "results:", len(query.results))
-			f.storeQuery(query)
-		}
+		fmt.Println("Successful query  from:", query.FromBlock, "to:", query.ToBlock, "results:", len(query.results))
+		f.storeQuery(query)
 	}
 }
 
