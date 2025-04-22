@@ -188,6 +188,10 @@ func (b *testBackend) GetCustomPrecompiles(int64) map[common.Address]vm.Precompi
 	return nil
 }
 
+func (b *testBackend) PrepareTx(statedb vm.StateDB, tx *types.Transaction) error {
+	return nil
+}
+
 func TestTraceCall(t *testing.T) {
 	t.Parallel()
 
