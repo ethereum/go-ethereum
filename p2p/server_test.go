@@ -128,7 +128,7 @@ func TestServerDial(t *testing.T) {
 		t.Fatalf("could not setup listener: %v", err)
 	}
 	defer listener.Close()
-	accepted := make(chan net.Conn)
+	accepted := make(chan net.Conn, 1)
 	go func() {
 		conn, err := listener.Accept()
 		if err != nil {
