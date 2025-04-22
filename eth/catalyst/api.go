@@ -892,7 +892,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	if parent == nil {
 		return api.delayPayloadImport(block), nil
 	}
-	if block.Time() <= parent.Time() {
+	if block.Time() < parent.Time() {
 		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
 		return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
 	}
