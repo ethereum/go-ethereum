@@ -338,12 +338,10 @@ func (s *stateSet) encode(w io.Writer) error {
 		AddrHashes []common.Hash
 		Accounts   [][]byte
 	}
-	var enc accounts
-	for addrHash, blob := range s.accountData {
-		enc.AddrHashes = append(enc.AddrHashes, addrHash)
-		enc.Accounts = append(enc.Accounts, blob)
-	}
-	if err := rlp.Encode(w, enc); err != nil {
+	if err := rlp.Encode(w, accounts{
+		AddrHashes: slices.Collect(maps.Keys(s.accountData)),
+		Accounts:   slices.Collect(maps.Values(s.accountData)),
+	}); err != nil {
 		return err
 	}
 	// Encode storages
@@ -354,16 +352,10 @@ func (s *stateSet) encode(w io.Writer) error {
 	}
 	storages := make([]Storage, 0, len(s.storageData))
 	for addrHash, slots := range s.storageData {
-		keys := make([]common.Hash, 0, len(slots))
-		vals := make([][]byte, 0, len(slots))
-		for key, val := range slots {
-			keys = append(keys, key)
-			vals = append(vals, val)
-		}
 		storages = append(storages, Storage{
 			AddrHash: addrHash,
-			Keys:     keys,
-			Vals:     vals,
+			Keys:     slices.Collect(maps.Keys(slots)),
+			Vals:     slices.Collect(maps.Values(slots)),
 		})
 	}
 	return rlp.Encode(w, storages)
@@ -498,12 +490,10 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 		Addresses []common.Address
 		Accounts  [][]byte
 	}
-	var accounts Accounts
-	for address, blob := range s.accountOrigin {
-		accounts.Addresses = append(accounts.Addresses, address)
-		accounts.Accounts = append(accounts.Accounts, blob)
-	}
-	if err := rlp.Encode(w, accounts); err != nil {
+	if err := rlp.Encode(w, Accounts{
+		Addresses: slices.Collect(maps.Keys(s.accountOrigin)),
+		Accounts:  slices.Collect(maps.Values(s.accountOrigin)),
+	}); err != nil {
 		return err
 	}
 	// Encode storages
@@ -514,13 +504,11 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 	}
 	storages := make([]Storage, 0, len(s.storageOrigin))
 	for address, slots := range s.storageOrigin {
-		keys := make([]common.Hash, 0, len(slots))
-		vals := make([][]byte, 0, len(slots))
-		for key, val := range slots {
-			keys = append(keys, key)
-			vals = append(vals, val)
-		}
-		storages = append(storages, Storage{Address: address, Keys: keys, Vals: vals})
+		storages = append(storages, Storage{
+			Address: address,
+			Keys:    slices.Collect(maps.Keys(slots)),
+			Vals:    slices.Collect(maps.Values(slots)),
+		})
 	}
 	return rlp.Encode(w, storages)
 }
