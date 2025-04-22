@@ -418,3 +418,7 @@ func (b *EthAPIBackend) StateAtTransaction(ctx context.Context, block *types.Blo
 func (b *EthAPIBackend) GetCustomPrecompiles(int64) map[common.Address]vm.PrecompiledContract {
 	return nil
 }
+
+func (b *EthAPIBackend) PrepareTx(statedb vm.StateDB, tx *types.Transaction) error {
+	return nil
+}

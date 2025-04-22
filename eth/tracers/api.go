@@ -90,6 +90,7 @@ type Backend interface {
 	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base vm.StateDB, readOnly bool, preferDisk bool) (vm.StateDB, StateReleaseFunc, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, vm.StateDB, StateReleaseFunc, error)
 	GetCustomPrecompiles(int64) map[common.Address]vm.PrecompiledContract
+	PrepareTx(statedb vm.StateDB, tx *types.Transaction) error
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -1010,6 +1011,9 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 
 	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
+	if err := api.backend.PrepareTx(statedb, tx); err != nil {
+		return nil, err
+	}
 	_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, vmenv)
 	if err != nil {
 		// Due to how our mempool works, a transaction with insufficient funds can be included in a block. For tracing purposes, we should ignore this.
