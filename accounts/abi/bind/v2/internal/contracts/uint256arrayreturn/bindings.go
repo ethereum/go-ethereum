@@ -55,12 +55,8 @@ func (c *MyContract) Instance(backend bind.ContractBackend, addr common.Address)
 // the contract method with ID 0xbd6d1007.
 //
 // Solidity: function GetNums() pure returns(uint256[5])
-func (myContract *MyContract) PackGetNums() []byte {
-	enc, err := myContract.abi.Pack("GetNums")
-	if err != nil {
-		panic(err)
-	}
-	return enc
+func (myContract *MyContract) PackGetNums() ([]byte, error) {
+	return myContract.abi.Pack("GetNums")
 }
 
 // UnpackGetNums is the Go binding that unpacks the parameters returned

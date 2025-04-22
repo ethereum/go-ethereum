@@ -93,12 +93,8 @@ var (
 		// the contract method with ID 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
-		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Pack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) []byte {
-			enc, err := {{ decapitalise $contract.Type}}.abi.Pack("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
-			if err != nil {
-				panic(err)
-			}
-			return enc
+		func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Pack{{.Normalized.Name}}({{range .Normalized.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) ([]byte, error) {
+			return {{ decapitalise $contract.Type}}.abi.Pack("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 
 		{{/* Unpack method is needed only when there are return args */}}
@@ -117,14 +113,14 @@ var (
 			//
 			// Solidity: {{.Original.String}}
 			func ({{ decapitalise $contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) (
-				{{- if .Structured}} {{.Normalized.Name}}Output,{{else}}
+				{{- if .Structured}} *{{.Normalized.Name}}Output,{{else}}
 				{{- range .Normalized.Outputs}} {{bindtype .Type $structs}},{{- end }}
 				{{- end }} error) {
 				out, err := {{ decapitalise $contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
 				{{- if .Structured}}
 				outstruct := new({{.Normalized.Name}}Output)
 				if err != nil {
-					return *outstruct, err
+					return outstruct, nil
 				}
 				{{- range $i, $t := .Normalized.Outputs}}
 				{{- if ispointertype .Type}}
@@ -133,8 +129,7 @@ var (
 					outstruct.{{capitalise .Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
 				{{- end }}
 				{{- end }}
-				return *outstruct, err
-				{{else}}
+				return outstruct, nil{{else}}
 				if err != nil {
 					return {{range $i, $_ := .Normalized.Outputs}}{{if ispointertype .Type}}new({{underlyingbindtype .Type }}), {{else}}*new({{bindtype .Type $structs}}), {{end}}{{end}} err
 				}
@@ -145,8 +140,7 @@ var (
 				out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
 				{{- end }}
 				{{- end}}
-				return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} nil
-                {{- end}}
+				return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} nil{{- end}}
 			}
 		{{end}}
 	{{end}}

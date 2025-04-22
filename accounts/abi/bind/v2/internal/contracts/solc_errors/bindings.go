@@ -55,24 +55,16 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) *bind.Bo
 // the contract method with ID 0xb0a378b0.
 //
 // Solidity: function Bar() pure returns()
-func (c *C) PackBar() []byte {
-	enc, err := c.abi.Pack("Bar")
-	if err != nil {
-		panic(err)
-	}
-	return enc
+func (c *C) PackBar() ([]byte, error) {
+	return c.abi.Pack("Bar")
 }
 
 // PackFoo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
-func (c *C) PackFoo() []byte {
-	enc, err := c.abi.Pack("Foo")
-	if err != nil {
-		panic(err)
-	}
-	return enc
+func (c *C) PackFoo() ([]byte, error) {
+	return c.abi.Pack("Foo")
 }
 
 // UnpackError attempts to decode the provided error data using user-defined
@@ -172,12 +164,8 @@ func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 // the contract method with ID 0xbfb4ebcf.
 //
 // Solidity: function Foo() pure returns()
-func (c2 *C2) PackFoo() []byte {
-	enc, err := c2.abi.Pack("Foo")
-	if err != nil {
-		panic(err)
-	}
-	return enc
+func (c2 *C2) PackFoo() ([]byte, error) {
+	return c2.abi.Pack("Foo")
 }
 
 // UnpackError attempts to decode the provided error data using user-defined
