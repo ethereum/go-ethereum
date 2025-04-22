@@ -22,11 +22,6 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"sync"
-	"sync/atomic"
-	"time"
-	"unsafe"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,6 +30,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 const (
@@ -87,18 +85,6 @@ func newFetchResult(header *types.Header, snapSync bool) *fetchResult {
 		item.pending.Store(item.pending.Load() | (1 << receiptType))
 	}
 	return item
-}
-
-func (f *fetchResult) Size() int {
-	receiptsSize := 0
-	for _, r := range f.Receipts {
-		receiptsSize += int(r.Size())
-	}
-	txsSize := 0
-	for _, t := range f.Transactions {
-		txsSize += int(t.Size())
-	}
-	return common.HashLength*len(f.Uncles) + int(unsafe.Sizeof(types.Withdrawal{})) + int(f.Header.Size()) + receiptsSize + txsSize
 }
 
 // body returns a representation of the fetch result as a types.Body object.

@@ -31,8 +31,6 @@ var (
 	bodyReqTimer     = metrics.NewRegisteredTimer("eth/downloader/bodies/req", nil)
 	bodyDropMeter    = metrics.NewRegisteredMeter("eth/downloader/bodies/drop", nil)
 	bodyTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/bodies/timeout", nil)
-
-	blockSizeGauge   = metrics.NewRegisteredGauge("eth/downloader/blocks/size", nil)
 	pendingBodyGauge = metrics.NewRegisteredGauge("eth/downloader/bodies/pending", nil)
 
 	receiptInMeter      = metrics.NewRegisteredMeter("eth/downloader/receipts/in", nil)
