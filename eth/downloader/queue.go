@@ -22,6 +22,10 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -30,9 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 const (
