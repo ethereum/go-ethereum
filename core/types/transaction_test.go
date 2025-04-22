@@ -625,7 +625,7 @@ func BenchmarkEffectiveGasTip(b *testing.B) {
 		b.ReportAllocs()
 		dst := new(big.Int)
 		for i := 0; i < b.N; i++ {
-			err := tx.EffectiveGasTipInto(dst, baseFee)
+			err := tx.effectiveGasTipInto(dst, baseFee)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -675,7 +675,7 @@ func TestEffectiveGasTipInto(t *testing.T) {
 
 		// Get result from new method
 		dst := new(big.Int)
-		newErr := tx.EffectiveGasTipInto(dst, baseFee)
+		newErr := tx.effectiveGasTipInto(dst, baseFee)
 
 		// Compare results
 		if (origErr != nil) != (newErr != nil) {
