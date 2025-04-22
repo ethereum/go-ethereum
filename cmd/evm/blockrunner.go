@@ -89,7 +89,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 			continue
 		}
 		result := &testResult{Name: name, Pass: true}
-		if err := tests[name].Run(false, rawdb.HashScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
+		if err := tests[name].Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
 					result.State = dump(s)

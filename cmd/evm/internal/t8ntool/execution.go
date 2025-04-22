@@ -39,13 +39,15 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
 
 type Prestate struct {
-	Env stEnv              `json:"env"`
-	Pre types.GenesisAlloc `json:"pre"`
+	Env stEnv                         `json:"env"`
+	Pre types.GenesisAlloc            `json:"pre"`
+	VKT map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type ExecutionResult -field-override executionResultMarshaling -out gen_execresult.go
@@ -68,6 +70,11 @@ type ExecutionResult struct {
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 	RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
 	Requests             [][]byte              `json:"requests"`
+
+	// Verkle witness
+	VerkleProof *verkle.VerkleProof `json:"verkleProof,omitempty"`
+	StateDiff   verkle.StateDiff    `json:"stateDiff,omitempty"`
+	ParentRoot  common.Hash         `json:"parentStateRoot,omitempty"`
 }
 
 type executionResultMarshaling struct {
@@ -101,6 +108,7 @@ type stEnv struct {
 	ParentExcessBlobGas   *uint64                             `json:"parentExcessBlobGas,omitempty"`
 	ParentBlobGasUsed     *uint64                             `json:"parentBlobGasUsed,omitempty"`
 	ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
+	ParentHash            *common.Hash                        `json:"parentHash,omitempty"`
 }
 
 type stEnvMarshaling struct {
@@ -143,16 +151,17 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		return h
 	}
 	var (
-		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
-		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
-		gaspool     = new(core.GasPool)
-		blockHash   = common.Hash{0x13, 0x37}
-		rejectedTxs []*rejectedTx
-		includedTxs types.Transactions
-		gasUsed     = uint64(0)
-		blobGasUsed = uint64(0)
-		receipts    = make(types.Receipts, 0)
-		txIndex     = 0
+		parentStateRoot, statedb = MakePreState(rawdb.NewMemoryDatabase(), chainConfig, pre, chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp))
+		signer                   = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
+		gaspool                  = new(core.GasPool)
+		blockHash                = common.Hash{0x13, 0x37}
+		rejectedTxs              []*rejectedTx
+		includedTxs              types.Transactions
+		gasUsed                  = uint64(0)
+		blobGasUsed              = uint64(0)
+		receipts                 = make(types.Receipts, 0)
+		txIndex                  = 0
+		vtrpre                   *trie.VerkleTrie
 	)
 	gaspool.AddGas(pre.Env.GasLimit)
 	vmContext := vm.BlockContext{
@@ -165,6 +174,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		GasLimit:    pre.Env.GasLimit,
 		GetHash:     getHash,
 	}
+
+	// We save the current state of the Verkle Tree before applying the transactions.
+	// Note that if the Verkle fork isn't active, this will be a noop.
+	switch tr := statedb.GetTrie().(type) {
+	case *trie.VerkleTrie:
+		vtrpre = tr.Copy()
+	}
+
 	// If currentBaseFee is defined, add it to the vmContext.
 	if pre.Env.BaseFee != nil {
 		vmContext.BaseFee = new(big.Int).Set(pre.Env.BaseFee)
@@ -251,6 +268,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 			}
 		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
+		evm.AccessEvents = state.NewAccessEvents(evm.StateDB.PointCache())
 		var (
 			snapshot = statedb.Snapshot()
 			prevGas  = gaspool.Gas()
@@ -315,7 +333,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 				evm.Config.Tracer.OnTxEnd(receipt, nil)
 			}
 		}
-
+		statedb.AccessEvents().Merge(evm.AccessEvents)
 		txIndex++
 	}
 	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
@@ -348,6 +366,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		// Amount is in gwei, turn into wei
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
 		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
+
+		statedb.AccessEvents().AddAccount(w.Address, true)
 	}
 
 	// Gather the execution-layer triggered requests.
@@ -373,6 +393,25 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
+	// Add the witness to the execution result
+	var vktProof *verkle.VerkleProof
+	var vktStateDiff verkle.StateDiff
+	if chainConfig.IsVerkle(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp) {
+		keys := statedb.AccessEvents().Keys()
+		if len(keys) > 0 && vtrpre != nil {
+			var proofTrie *trie.VerkleTrie
+			switch tr := statedb.GetTrie().(type) {
+			case *trie.VerkleTrie:
+				proofTrie = tr
+			default:
+				return nil, nil, nil, fmt.Errorf("invalid tree type in proof generation: %v", tr)
+			}
+			vktProof, vktStateDiff, err = vtrpre.Proof(proofTrie, keys)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("error generating verkle proof for block %d: %w", pre.Env.Number, err)
+			}
+		}
+	}
 	execRs := &ExecutionResult{
 		StateRoot:   root,
 		TxRoot:      types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
@@ -384,6 +423,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
 		GasUsed:     (math.HexOrDecimal64)(gasUsed),
 		BaseFee:     (*math.HexOrDecimal256)(vmContext.BaseFee),
+		VerkleProof: vktProof,
+		StateDiff:   vktStateDiff,
+		ParentRoot:  parentStateRoot,
 	}
 	if pre.Env.Withdrawals != nil {
 		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
@@ -414,11 +456,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	return statedb, execRs, body, nil
 }
 
-func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB {
+// XXX peut-etre pas besoin de changer les parametres tant qu'on n'a pas la conversion
+func MakePreState(db ethdb.Database, chainConfig *params.ChainConfig, pre *Prestate, verkle bool) (common.Hash, *state.StateDB) {
 	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
 	sdb := state.NewDatabase(tdb, nil)
+
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
-	for addr, a := range accounts {
+	for addr, a := range pre.Pre {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeGenesis)
 		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceIncreaseGenesisBalance)
@@ -427,9 +471,19 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false, false)
-	statedb, _ = state.New(root, sdb)
-	return statedb
+	mptRoot, err := statedb.Commit(0, false, false)
+	if err != nil {
+		panic(err)
+	}
+	parentRoot := mptRoot
+	// If verkle mode started, establish the conversion
+	if verkle {
+		if _, ok := statedb.GetTrie().(*trie.VerkleTrie); ok {
+			return parentRoot, statedb
+		}
+	}
+	statedb, _ = state.New(mptRoot, sdb)
+	return parentRoot, statedb
 }
 
 func rlpHash(x interface{}) (h common.Hash) {

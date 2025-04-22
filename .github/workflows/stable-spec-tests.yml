@@ -1,0 +1,77 @@
+name: Execution Spec Tests - Consume (stable)
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master, kaustinen-with-shapella]
+  workflow_dispatch:
+
+env:
+  FIXTURES_TAG: "verkle@v0.0.9-alpha-1"
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout go-ethereum
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.4"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22.4
+
+      - name: Build geth evm
+        run: |
+          go build -v ./cmd/evm
+          mkdir -p ${{ github.workspace }}/bin
+          mv evm ${{ github.workspace }}/bin/evm
+          chmod +x ${{ github.workspace }}/bin/evm
+
+      - name: Archive built evm
+        uses: actions/upload-artifact@v4
+        with:
+          name: evm
+          path: ${{ github.workspace }}/bin/evm
+
+  consume:
+    runs-on: ubuntu-latest
+    needs: setup
+    strategy:
+      matrix:
+        filename:
+          [
+            fixtures_verkle-genesis.tar.gz,
+          ]
+    steps:
+      - name: Download geth evm
+        uses: actions/download-artifact@v4
+        with:
+          name: evm
+          path: ./bin
+
+      - name: Make evm binary executable and add to PATH
+        run: |
+          chmod +x ./bin/evm
+          echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+
+      - name: Download fixtures
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: "ethereum/execution-spec-tests"
+          tag: "${{ env.FIXTURES_TAG }}"
+          fileName: "${{ matrix.filename }}"
+          extract: true
+      - name: Clone execution-spec-tests and consume tests
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          git clone https://github.com/ethereum/execution-spec-tests  -b ${{ env.FIXTURES_TAG }} --depth 1
+          cd execution-spec-tests
+          uv run consume direct --evm-bin="${{ github.workspace }}/bin/evm" --input=../fixtures -n auto
+        shell: bash

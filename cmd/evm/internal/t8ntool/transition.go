@@ -75,10 +75,11 @@ var (
 )
 
 type input struct {
-	Alloc types.GenesisAlloc `json:"alloc,omitempty"`
-	Env   *stEnv             `json:"env,omitempty"`
-	Txs   []*txWithKey       `json:"txs,omitempty"`
-	TxRlp string             `json:"txsRlp,omitempty"`
+	Alloc types.GenesisAlloc            `json:"alloc,omitempty"`
+	Env   *stEnv                        `json:"env,omitempty"`
+	VKT   map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
+	Txs   []*txWithKey                  `json:"txs,omitempty"`
+	TxRlp string                        `json:"txsRlp,omitempty"`
 }
 
 func Transition(ctx *cli.Context) error {
@@ -90,16 +91,16 @@ func Transition(ctx *cli.Context) error {
 	// stdin input or in files.
 	// Check if anything needs to be read from stdin
 	var (
-		prestate Prestate
-		txIt     txIterator // txs to apply
-		allocStr = ctx.String(InputAllocFlag.Name)
-
+		prestate  Prestate
+		txIt      txIterator // txs to apply
+		allocStr  = ctx.String(InputAllocFlag.Name)
+		vktStr    = ctx.String(InputVKTFlag.Name)
 		envStr    = ctx.String(InputEnvFlag.Name)
 		txStr     = ctx.String(InputTxsFlag.Name)
 		inputData = &input{}
 	)
 	// Figure out the prestate alloc
-	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
+	if allocStr == stdinSelector || vktStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
@@ -110,8 +111,18 @@ func Transition(ctx *cli.Context) error {
 			return err
 		}
 	}
+	if vktStr != stdinSelector {
+		if err := readFile(vktStr, "VKT", &inputData.Alloc); err != nil {
+			return err
+		}
+	}
 	prestate.Pre = inputData.Alloc
-
+	if vktStr != stdinSelector && vktStr != "" {
+		if err := readFile(vktStr, "VKT", &inputData.VKT); err != nil {
+			return err
+		}
+	}
+	prestate.VKT = inputData.VKT
 	// Set the block environment
 	if envStr != stdinSelector {
 		var env stEnv
@@ -183,8 +194,14 @@ func Transition(ctx *cli.Context) error {
 	}
 	// Dump the execution result
 	collector := make(Alloc)
-	s.DumpToCollector(collector, nil)
-	return dispatchOutput(ctx, baseDir, result, collector, body)
+	var vktleaves map[common.Hash]hexutil.Bytes
+	if !chainConfig.IsVerkle(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp) {
+		s.DumpToCollector(collector, nil)
+	} else {
+		vktleaves = make(map[common.Hash]hexutil.Bytes)
+		s.DumpVKTLeaves(vktleaves)
+	}
+	return dispatchOutput(ctx, baseDir, result, collector, body, vktleaves)
 }
 
 func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
@@ -306,7 +323,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 
 // dispatchOutput writes the output data to either stderr or stdout, or to the specified
 // files
-func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, body hexutil.Bytes) error {
+func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, body hexutil.Bytes, vkt map[common.Hash]hexutil.Bytes) error {
 	stdOutObject := make(map[string]interface{})
 	stdErrObject := make(map[string]interface{})
 	dispatch := func(baseDir, fName, name string, obj interface{}) error {
@@ -332,6 +349,11 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 	}
 	if err := dispatch(baseDir, ctx.String(OutputBodyFlag.Name), "body", body); err != nil {
 		return err
+	}
+	if vkt != nil {
+		if err := dispatch(baseDir, ctx.String(OutputVKTFlag.Name), "vkt", vkt); err != nil {
+			return err
+		}
 	}
 	if len(stdOutObject) > 0 {
 		b, err := json.MarshalIndent(stdOutObject, "", "  ")

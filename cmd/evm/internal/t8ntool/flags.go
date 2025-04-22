@@ -88,6 +88,22 @@ var (
 			"\t<file> - into the file <file> ",
 		Value: "block.json",
 	}
+	OutputVKTFlag = &cli.StringFlag{
+		Name: "output.vkt",
+		Usage: "Determines where to put the `VKT` of the post-state.\n" +
+			"\t`stdout` - into the stdout output\n" +
+			"\t`stderr` - into the stderr output\n" +
+			"\t<file> - into the file <file> ",
+		Value: "vkt.json",
+	}
+	OutputWitnessFlag = &cli.StringFlag{
+		Name: "output.witness",
+		Usage: "Determines where to put the `witness` of the post-state.\n" +
+			"\t`stdout` - into the stdout output\n" +
+			"\t`stderr` - into the stderr output\n" +
+			"\t<file> - into the file <file> ",
+		Value: "witness.json",
+	}
 	InputAllocFlag = &cli.StringFlag{
 		Name:  "input.alloc",
 		Usage: "`stdin` or file name of where to find the prestate alloc to use.",
@@ -122,6 +138,10 @@ var (
 		Name:  "input.txs",
 		Usage: "`stdin` or file name of where to find the transactions list in RLP form.",
 		Value: "txs.rlp",
+	}
+	InputVKTFlag = &cli.StringFlag{
+		Name:  "input.vkt",
+		Usage: "`stdin` or file name of where to find the prestate VKT.",
 	}
 	SealCliqueFlag = &cli.StringFlag{
 		Name:  "seal.clique",

@@ -101,6 +101,17 @@ information about the specified address.
 `,
 			},
 			{
+				Name:      "inspect-garys-account",
+				Usage:     "Check all snapshot layers for the specific account",
+				ArgsUsage: "<address | hash>",
+				Action:    checkGarysAccounts,
+				Flags:     slices.Concat(utils.NetworkFlags, utils.DatabaseFlags),
+				Description: `
+geth snapshot inspect-account <address | hash> checks all snapshot layers and prints out
+information about the specified address.
+`,
+			},
+			{
 				Name:      "traverse-state",
 				Usage:     "Traverse the state with given root hash and perform quick verification",
 				ArgsUsage: "<root>",
@@ -690,5 +701,74 @@ func checkAccount(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Checked the snapshot journalled storage", "time", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+func checkGarysAccounts(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	defer chaindb.Close()
+
+	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	defer triedb.Close()
+
+	var root common.Hash
+	if ctx.NArg() == 1 {
+		rootBytes := common.FromHex(ctx.Args().Get(1))
+		if len(rootBytes) != common.HashLength {
+			return fmt.Errorf("invalid hash: %s", ctx.Args().Get(1))
+		}
+		root = common.BytesToHash(rootBytes)
+	} else {
+		headBlock := rawdb.ReadHeadBlock(chaindb)
+		if headBlock == nil {
+			log.Error("Failed to load head block")
+			return errors.New("no head block")
+		}
+		root = headBlock.Root()
+	}
+	snapConfig := snapshot.Config{
+		CacheSize:  256,
+		Recovery:   false,
+		NoBuild:    true,
+		AsyncBuild: false,
+	}
+	snaptree, err := snapshot.New(snapConfig, chaindb, triedb, root)
+	if err != nil {
+		return err
+	}
+	accIt, err := snaptree.AccountIterator(root, common.Hash{})
+	if err != nil {
+		log.Error("Failed to create account iterator", "error", err)
+		return err
+	}
+	defer accIt.Release()
+
+	// Open the file in append mode, create it if it doesn't exist
+	file, err := os.OpenFile("weird_contracts.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	file.WriteString("account hash,nonce,code hash,root hash,balance\n")
+
+	var weird int
+	for accIt.Next() {
+		acc, err := types.FullAccount(accIt.Account())
+		if err != nil {
+			log.Error("Failed to get full account", "error", err)
+			return err
+		}
+
+		if acc.Nonce == 0 && bytes.Equal(acc.CodeHash, types.EmptyCodeHash[:]) && acc.Root != types.EmptyRootHash {
+			weird++
+			if _, err = file.WriteString(fmt.Sprintf("%x,%d,%x,%x,%s\n", accIt.Hash(), acc.Nonce, acc.CodeHash, acc.Root, acc.Balance.String())); err != nil {
+				return err
+			}
+		}
+	}
+	log.Info("sweep completed", "count", weird)
 	return nil
 }
