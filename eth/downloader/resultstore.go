@@ -175,10 +175,6 @@ func (r *resultStore) GetCompleted(limit int) []*fetchResult {
 		limit = completed
 	}
 
-	var totalSize int
-	for i := 0; i < limit; i++ {
-		totalSize += r.items[i].Size()
-	}
 	r.pendingCount -= limit
 	pendingBodyGauge.Update(int64(r.pendingCount))
 
