@@ -171,10 +171,10 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	// to parent+1 if the mutation is allowed.
 	timestamp := genParams.timestamp
 	if parent.Time >= timestamp {
-		if genParams.forceTime {
+		/*if genParams.forceTime {
 			return nil, fmt.Errorf("invalid timestamp, parent %d given %d", parent.Time, timestamp)
-		}
-		timestamp = parent.Time + 1
+		}*/
+		timestamp = parent.Time
 	}
 	// Construct the sealing block header.
 	header := &types.Header{
