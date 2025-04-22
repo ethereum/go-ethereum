@@ -73,5 +73,5 @@ func (myContract *MyContract) UnpackGetNums(data []byte) ([5]*big.Int, error) {
 		return *new([5]*big.Int), err
 	}
 	out0 := *abi.ConvertType(out[0], new([5]*big.Int)).(*[5]*big.Int)
-	return out0, err
+	return out0, nil
 }

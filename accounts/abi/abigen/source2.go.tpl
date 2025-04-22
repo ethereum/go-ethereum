@@ -145,7 +145,7 @@ var (
 				out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}})
 				{{- end }}
 				{{- end}}
-				return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} err
+				return {{range $i, $t := .Normalized.Outputs}}out{{$i}}, {{end}} nil
                 {{- end}}
 			}
 		{{end}}

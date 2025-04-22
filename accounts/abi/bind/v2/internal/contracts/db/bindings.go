@@ -80,7 +80,7 @@ func (dB *DB) UnpackGet(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // PackGetNamedStatParams is the Go binding used to pack the parameters required for calling
@@ -179,7 +179,7 @@ func (dB *DB) UnpackGetStatsStruct(data []byte) (DBStats, error) {
 		return *new(DBStats), err
 	}
 	out0 := *abi.ConvertType(out[0], new(DBStats)).(*DBStats)
-	return out0, err
+	return out0, nil
 }
 
 // PackInsert is the Go binding used to pack the parameters required for calling
@@ -204,7 +204,7 @@ func (dB *DB) UnpackInsert(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // DBInsert represents a Insert event raised by the DB contract.

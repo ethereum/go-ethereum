@@ -89,7 +89,7 @@ func (c1 *C1) UnpackDo(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // C2MetaData contains all meta data concerning the C2 contract.
@@ -157,7 +157,7 @@ func (c2 *C2) UnpackDo(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // L1MetaData contains all meta data concerning the L1 contract.
@@ -209,7 +209,7 @@ func (l1 *L1) UnpackDo(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // L2MetaData contains all meta data concerning the L2 contract.
@@ -264,7 +264,7 @@ func (l2 *L2) UnpackDo(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // L2bMetaData contains all meta data concerning the L2b contract.
@@ -319,7 +319,7 @@ func (l2b *L2b) UnpackDo(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // L3MetaData contains all meta data concerning the L3 contract.
@@ -371,7 +371,7 @@ func (l3 *L3) UnpackDo(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // L4MetaData contains all meta data concerning the L4 contract.
@@ -427,7 +427,7 @@ func (l4 *L4) UnpackDo(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // L4bMetaData contains all meta data concerning the L4b contract.
@@ -482,5 +482,5 @@ func (l4b *L4b) UnpackDo(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
