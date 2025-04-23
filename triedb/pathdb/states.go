@@ -19,7 +19,6 @@ package pathdb
 import (
 	"fmt"
 	"io"
-	"maps"
 	"slices"
 	"sync"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/exp/maps"
 )
 
 // counter helps in tracking items and their corresponding sizes.
@@ -174,7 +174,8 @@ func (s *stateSet) accountList() []common.Hash {
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
-	list = slices.SortedFunc(maps.Keys(s.accountData), common.Hash.Cmp)
+	list = maps.Keys(s.accountData)
+	slices.SortFunc(list, common.Hash.Cmp)
 	s.accountListSorted = list
 	return list
 }
@@ -204,7 +205,8 @@ func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
-	list := slices.SortedFunc(maps.Keys(s.storageData[accountHash]), common.Hash.Cmp)
+	list := maps.Keys(s.storageData[accountHash])
+	slices.SortFunc(list, common.Hash.Cmp)
 	s.storageListSorted[accountHash] = list
 	return list
 }
@@ -339,8 +341,8 @@ func (s *stateSet) encode(w io.Writer) error {
 		Accounts   [][]byte
 	}
 	if err := rlp.Encode(w, accounts{
-		AddrHashes: slices.Collect(maps.Keys(s.accountData)),
-		Accounts:   slices.Collect(maps.Values(s.accountData)),
+		AddrHashes: maps.Keys(s.accountData),
+		Accounts:   maps.Values(s.accountData),
 	}); err != nil {
 		return err
 	}
@@ -354,8 +356,8 @@ func (s *stateSet) encode(w io.Writer) error {
 	for addrHash, slots := range s.storageData {
 		storages = append(storages, Storage{
 			AddrHash: addrHash,
-			Keys:     slices.Collect(maps.Keys(slots)),
-			Vals:     slices.Collect(maps.Values(slots)),
+			Keys:     maps.Keys(slots),
+			Vals:     maps.Values(slots),
 		})
 	}
 	return rlp.Encode(w, storages)
@@ -491,8 +493,8 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 		Accounts  [][]byte
 	}
 	if err := rlp.Encode(w, Accounts{
-		Addresses: slices.Collect(maps.Keys(s.accountOrigin)),
-		Accounts:  slices.Collect(maps.Values(s.accountOrigin)),
+		Addresses: maps.Keys(s.accountOrigin),
+		Accounts:  maps.Values(s.accountOrigin),
 	}); err != nil {
 		return err
 	}
@@ -506,8 +508,8 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 	for address, slots := range s.storageOrigin {
 		storages = append(storages, Storage{
 			Address: address,
-			Keys:    slices.Collect(maps.Keys(slots)),
-			Vals:    slices.Collect(maps.Values(slots)),
+			Keys:    maps.Keys(slots),
+			Vals:    maps.Values(slots),
 		})
 	}
 	return rlp.Encode(w, storages)
