@@ -63,7 +63,7 @@ func (interactor *Interactor) PackConstructor(str string) []byte {
 	return enc
 }
 
-// PackDeployString is the Go binding used to pack the parameters required for calling
+// PackDeployString is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0x6874e809.
 //
 // Solidity: function deployString() returns(string)
@@ -73,6 +73,14 @@ func (interactor *Interactor) PackDeployString() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// PackDeployString is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0x6874e809.
+//
+// Solidity: function deployString() returns(string)
+func (interactor *Interactor) TryPackDeployString() ([]byte, error) {
+	return interactor.abi.Pack("deployString")
 }
 
 // UnpackDeployString is the Go binding that unpacks the parameters returned
@@ -85,10 +93,10 @@ func (interactor *Interactor) UnpackDeployString(data []byte) (string, error) {
 		return *new(string), err
 	}
 	out0 := *abi.ConvertType(out[0], new(string)).(*string)
-	return out0, err
+	return out0, nil
 }
 
-// PackTransact is the Go binding used to pack the parameters required for calling
+// PackTransact is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0xd736c513.
 //
 // Solidity: function transact(string str) returns()
@@ -100,7 +108,15 @@ func (interactor *Interactor) PackTransact(str string) []byte {
 	return enc
 }
 
-// PackTransactString is the Go binding used to pack the parameters required for calling
+// PackTransact is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0xd736c513.
+//
+// Solidity: function transact(string str) returns()
+func (interactor *Interactor) TryPackTransact(str string) ([]byte, error) {
+	return interactor.abi.Pack("transact", str)
+}
+
+// PackTransactString is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0x0d86a0e1.
 //
 // Solidity: function transactString() returns(string)
@@ -110,6 +126,14 @@ func (interactor *Interactor) PackTransactString() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// PackTransactString is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0x0d86a0e1.
+//
+// Solidity: function transactString() returns(string)
+func (interactor *Interactor) TryPackTransactString() ([]byte, error) {
+	return interactor.abi.Pack("transactString")
 }
 
 // UnpackTransactString is the Go binding that unpacks the parameters returned
@@ -122,5 +146,5 @@ func (interactor *Interactor) UnpackTransactString(data []byte) (string, error) 
 		return *new(string), err
 	}
 	out0 := *abi.ConvertType(out[0], new(string)).(*string)
-	return out0, err
+	return out0, nil
 }

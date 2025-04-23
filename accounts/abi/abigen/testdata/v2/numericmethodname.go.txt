@@ -51,7 +51,7 @@ func (c *NumericMethodName) Instance(backend bind.ContractBackend, addr common.A
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackE1test is the Go binding used to pack the parameters required for calling
+// PackE1test is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0xffa02795.
 //
 // Solidity: function _1test() pure returns()
@@ -63,7 +63,15 @@ func (numericMethodName *NumericMethodName) PackE1test() []byte {
 	return enc
 }
 
-// PackE1test0 is the Go binding used to pack the parameters required for calling
+// PackE1test is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0xffa02795.
+//
+// Solidity: function _1test() pure returns()
+func (numericMethodName *NumericMethodName) TryPackE1test() ([]byte, error) {
+	return numericMethodName.abi.Pack("_1test")
+}
+
+// PackE1test0 is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0xd02767c7.
 //
 // Solidity: function __1test() pure returns()
@@ -75,7 +83,15 @@ func (numericMethodName *NumericMethodName) PackE1test0() []byte {
 	return enc
 }
 
-// PackE2test is the Go binding used to pack the parameters required for calling
+// PackE1test0 is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0xd02767c7.
+//
+// Solidity: function __1test() pure returns()
+func (numericMethodName *NumericMethodName) TryPackE1test0() ([]byte, error) {
+	return numericMethodName.abi.Pack("__1test")
+}
+
+// PackE2test is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0x9d993132.
 //
 // Solidity: function __2test() pure returns()
@@ -85,6 +101,14 @@ func (numericMethodName *NumericMethodName) PackE2test() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// PackE2test is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0x9d993132.
+//
+// Solidity: function __2test() pure returns()
+func (numericMethodName *NumericMethodName) TryPackE2test() ([]byte, error) {
+	return numericMethodName.abi.Pack("__2test")
 }
 
 // NumericMethodNameE1TestEvent represents a _1TestEvent event raised by the NumericMethodName contract.

@@ -57,7 +57,7 @@ func (c *NameConflict) Instance(backend bind.ContractBackend, addr common.Addres
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackAddRequest is the Go binding used to pack the parameters required for calling
+// PackAddRequest is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0xcce7b048.
 //
 // Solidity: function addRequest((bytes,bytes) req) pure returns()
@@ -69,7 +69,15 @@ func (nameConflict *NameConflict) PackAddRequest(req Oraclerequest) []byte {
 	return enc
 }
 
-// PackGetRequest is the Go binding used to pack the parameters required for calling
+// PackAddRequest is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0xcce7b048.
+//
+// Solidity: function addRequest((bytes,bytes) req) pure returns()
+func (nameConflict *NameConflict) TryPackAddRequest(req Oraclerequest) ([]byte, error) {
+	return nameConflict.abi.Pack("addRequest", req)
+}
+
+// PackGetRequest is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0xc2bb515f.
 //
 // Solidity: function getRequest() pure returns((bytes,bytes))
@@ -79,6 +87,14 @@ func (nameConflict *NameConflict) PackGetRequest() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// PackGetRequest is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0xc2bb515f.
+//
+// Solidity: function getRequest() pure returns((bytes,bytes))
+func (nameConflict *NameConflict) TryPackGetRequest() ([]byte, error) {
+	return nameConflict.abi.Pack("getRequest")
 }
 
 // UnpackGetRequest is the Go binding that unpacks the parameters returned
@@ -91,7 +107,7 @@ func (nameConflict *NameConflict) UnpackGetRequest(data []byte) (Oraclerequest, 
 		return *new(Oraclerequest), err
 	}
 	out0 := *abi.ConvertType(out[0], new(Oraclerequest)).(*Oraclerequest)
-	return out0, err
+	return out0, nil
 }
 
 // NameConflictLog represents a log event raised by the NameConflict contract.

@@ -51,7 +51,7 @@ func (c *Getter) Instance(backend bind.ContractBackend, addr common.Address) *bi
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackGetter is the Go binding used to pack the parameters required for calling
+// PackGetter is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0x993a04b7.
 //
 // Solidity: function getter() returns(string, int256, bytes32)
@@ -61,6 +61,14 @@ func (getter *Getter) PackGetter() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// PackGetter is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0x993a04b7.
+//
+// Solidity: function getter() returns(string, int256, bytes32)
+func (getter *Getter) TryPackGetter() ([]byte, error) {
+	return getter.abi.Pack("getter")
 }
 
 // GetterOutput serves as a container for the return parameters of contract
@@ -75,15 +83,14 @@ type GetterOutput struct {
 // from invoking the contract method with ID 0x993a04b7.
 //
 // Solidity: function getter() returns(string, int256, bytes32)
-func (getter *Getter) UnpackGetter(data []byte) (GetterOutput, error) {
+func (getter *Getter) UnpackGetter(data []byte) (*GetterOutput, error) {
 	out, err := getter.abi.Unpack("getter", data)
-	outstruct := new(GetterOutput)
 	if err != nil {
-		return *outstruct, err
+		return nil, err
 	}
+	outstruct := new(GetterOutput)
 	outstruct.Arg0 = *abi.ConvertType(out[0], new(string)).(*string)
 	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
 	outstruct.Arg2 = *abi.ConvertType(out[2], new([32]byte)).(*[32]byte)
-	return *outstruct, err
-
+	return outstruct, nil
 }

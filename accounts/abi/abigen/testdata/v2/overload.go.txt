@@ -51,7 +51,7 @@ func (c *Overload) Instance(backend bind.ContractBackend, addr common.Address) *
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackFoo is the Go binding used to pack the parameters required for calling
+// PackFoo is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0x04bc52f8.
 //
 // Solidity: function foo(uint256 i, uint256 j) returns()
@@ -63,7 +63,15 @@ func (overload *Overload) PackFoo(i *big.Int, j *big.Int) []byte {
 	return enc
 }
 
-// PackFoo0 is the Go binding used to pack the parameters required for calling
+// PackFoo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0x04bc52f8.
+//
+// Solidity: function foo(uint256 i, uint256 j) returns()
+func (overload *Overload) TryPackFoo(i *big.Int, j *big.Int) ([]byte, error) {
+	return overload.abi.Pack("foo", i, j)
+}
+
+// PackFoo0 is the Go binding used to pack the parameters required for calling, will panic for any error.
 // the contract method with ID 0x2fbebd38.
 //
 // Solidity: function foo(uint256 i) returns()
@@ -73,6 +81,14 @@ func (overload *Overload) PackFoo0(i *big.Int) []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// PackFoo0 is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
+// the contract method with ID 0x2fbebd38.
+//
+// Solidity: function foo(uint256 i) returns()
+func (overload *Overload) TryPackFoo0(i *big.Int) ([]byte, error) {
+	return overload.abi.Pack("foo0", i)
 }
 
 // OverloadBar represents a bar event raised by the Overload contract.
