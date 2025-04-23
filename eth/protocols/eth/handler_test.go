@@ -613,10 +613,10 @@ func setup() (*testBackend, *testPeer) {
 }
 
 func FuzzEthProtocolHandlers(f *testing.F) {
-	handlers := eth68
+	handlers := eth69
 	backend, peer := setup()
 	f.Fuzz(func(t *testing.T, code byte, msg []byte) {
-		handler := handlers[uint64(code)%protocolLengths[ETH68]]
+		handler := handlers[uint64(code)%protocolLengths[ETH69]]
 		if handler == nil {
 			return
 		}
