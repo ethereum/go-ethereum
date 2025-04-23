@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -1700,21 +1701,11 @@ func (api *TransactionAPI) Resend(ctx context.Context, sendArgs TransactionArgs,
 // namespace.
 type DebugAPI struct {
 	b Backend
-	// contains filtered or unexported fields
 }
 
 // NewDebugAPI creates a new DebugAPI instance.
 func NewDebugAPI(b Backend) *DebugAPI {
-	// Fill defaults based on the chain config
-	var gasLimit uint64
-	if head := b.CurrentBlock(); head != nil {
-		gasLimit = head.GasLimit
-	}
-	// The geth console doesn't allow flags, so we depend on the configured backend.
-	return &DebugAPI{
-		b:              b,
-		defaultCallGas: gasLimit,
-	}
+	return &DebugAPI{b: b}
 }
 
 // SetSyncTarget manually sets the target hash for full sync.
@@ -1723,15 +1714,27 @@ func NewDebugAPI(b Backend) *DebugAPI {
 func (api *DebugAPI) SetSyncTarget(ctx context.Context, target common.Hash) error {
 	// Note: BeaconDevSync might block; running in a goroutine to avoid blocking RPC/console.
 	// Also, passing nil for the cancel channel as we don't provide a way to cancel via API.
-	go func() {
-		err := api.b.Downloader().BeaconDevSync(ethconfig.FullSync, target, nil)
+	type Downloader interface {
+		Downloader() *downloader.Downloader
+	}
+	backend, ok := api.b.(Downloader)
+	if !ok {
+		log.Error("Could not get downloader")
+	}
+	// retry 20 times to retrieve the header from random peers
+	for range 20 {
+		header, err := backend.Downloader().GetHeader(target)
 		if err != nil {
-			log.Warn("debug_setSyncTarget: BeaconDevSync failed", "target", target, "err", err)
-		} else {
-			log.Info("debug_setSyncTarget: BeaconDevSync initiated", "target", target)
+			continue
 		}
-	}()
-	return nil // API call returns immediately
+		if err := backend.Downloader().BeaconSync(ethconfig.FullSync, header, header); err != nil {
+			return err
+		} else {
+			// Sync target set successfully, return
+			return nil
+		}
+	}
+	return errors.New("could not set sync target")
 }
 
 // ChainConfig returns the active chain configuration.
