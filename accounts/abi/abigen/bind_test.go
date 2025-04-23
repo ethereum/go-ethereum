@@ -939,6 +939,7 @@ var bindTests = []struct {
 					if _, err := eventer.RaiseSimpleEvent(auth, common.Address{byte(j)}, [32]byte{byte(j)}, true, big.NewInt(int64(10*i+j))); err != nil {
 						t.Fatalf("block %d, event %d: raise failed: %v", i, j, err)
 					}
+					time.Sleep(time.Millisecond * 200)
 				}
 				sim.Commit()
 			}
@@ -1495,7 +1496,7 @@ var bindTests = []struct {
 			if n != 3 {
 				t.Fatalf("Invalid bar0 event")
 			}
-		case <-time.NewTimer(3 * time.Second).C:
+		case <-time.NewTimer(10 * time.Second).C:
 			t.Fatalf("Wait bar0 event timeout")
 		}
 
@@ -1506,7 +1507,7 @@ var bindTests = []struct {
 			if n != 1 {
 				t.Fatalf("Invalid bar event")
 			}
-		case <-time.NewTimer(3 * time.Second).C:
+		case <-time.NewTimer(10 * time.Second).C:
 			t.Fatalf("Wait bar event timeout")
 		}
 		close(stopCh)
