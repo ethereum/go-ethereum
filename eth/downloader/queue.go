@@ -138,8 +138,9 @@ type queue struct {
 	receiptPendPool  map[string]*fetchRequest           // Currently pending receipt retrieval operations
 	receiptWakeCh    chan bool                          // Channel to notify when receipt fetcher of new tasks
 
-	resultCache *resultStore       // Downloaded but not yet delivered fetch results
-	resultSize  common.StorageSize // Approximate size of a block (exponential moving average)
+	resultCache        *resultStore       // Downloaded but not yet delivered fetch results
+	resultSize         common.StorageSize // Approximate size of a block (exponential moving average)
+	resultGasSizeRatio common.StorageSize // gas used vs block size (bytes) EWMA
 
 	lock   *sync.RWMutex
 	active *sync.Cond
@@ -180,8 +181,7 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.receiptTaskQueue.Reset()
 	q.receiptPendPool = make(map[string]*fetchRequest)
 
-	q.resultCache = newResultStore(blockCacheLimit)
-	q.resultCache.SetThrottleThreshold(uint64(thresholdInitialSize))
+	q.resultCache = newResultStore(blockCacheLimit, thresholdInitialSize)
 }
 
 // Close marks the end of the sync, unblocking Results.
@@ -327,11 +327,12 @@ func (q *queue) Results(block bool) []*fetchResult {
 		size += common.StorageSize(result.Withdrawals.Size())
 		q.resultSize = common.StorageSize(blockCacheSizeWeight)*size +
 			(1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
+
+		// TODO: do we need to keep the resultSize EWMA above?  it's only used in the metrics rn
+		q.resultGasSizeRatio = common.StorageSize(blockCacheSizeWeight)*(common.StorageSize(result.Header.GasUsed)/size) +
+			(1-common.StorageSize(blockCacheSizeWeight))*q.resultGasSizeRatio
 	}
-	// Using the newly calibrated result size, figure out the new throttle limit
-	// on the result cache
-	throttleThreshold := uint64((common.StorageSize(blockCacheMemory) + q.resultSize - 1) / q.resultSize)
-	throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
+	throttleThreshold := q.resultCache.SetThrottleTarget(q.resultGasSizeRatio)
 
 	// With results removed from the cache, wake throttled fetchers
 	for _, ch := range []chan bool{q.blockWakeCh, q.receiptWakeCh} {
