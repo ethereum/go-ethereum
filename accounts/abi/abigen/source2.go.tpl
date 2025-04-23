@@ -130,10 +130,10 @@ var (
 				{{- end }} error) {
 				out, err := {{ decapitalise $contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
 				{{- if .Structured}}
-				outstruct := new({{.Normalized.Name}}Output)
 				if err != nil {
 					return nil, err
 				}
+				outstruct := new({{.Normalized.Name}}Output)
 				{{- range $i, $t := .Normalized.Outputs}}
 				{{- if ispointertype .Type}}
 					outstruct.{{capitalise .Name}} = abi.ConvertType(out[{{$i}}], new({{underlyingbindtype .Type }})).({{bindtype .Type $structs}})

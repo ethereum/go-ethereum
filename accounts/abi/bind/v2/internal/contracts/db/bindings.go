@@ -125,10 +125,10 @@ type GetNamedStatParamsOutput struct {
 // Solidity: function getNamedStatParams() view returns(uint256 gets, uint256 inserts, uint256 mods)
 func (dB *DB) UnpackGetNamedStatParams(data []byte) (*GetNamedStatParamsOutput, error) {
 	out, err := dB.abi.Unpack("getNamedStatParams", data)
-	outstruct := new(GetNamedStatParamsOutput)
 	if err != nil {
 		return nil, err
 	}
+	outstruct := new(GetNamedStatParamsOutput)
 	outstruct.Gets = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Inserts = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
 	outstruct.Mods = abi.ConvertType(out[2], new(big.Int)).(*big.Int)
@@ -169,10 +169,10 @@ type GetStatParamsOutput struct {
 // Solidity: function getStatParams() view returns(uint256, uint256, uint256)
 func (dB *DB) UnpackGetStatParams(data []byte) (*GetStatParamsOutput, error) {
 	out, err := dB.abi.Unpack("getStatParams", data)
-	outstruct := new(GetStatParamsOutput)
 	if err != nil {
 		return nil, err
 	}
+	outstruct := new(GetStatParamsOutput)
 	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
 	outstruct.Arg2 = abi.ConvertType(out[2], new(big.Int)).(*big.Int)
