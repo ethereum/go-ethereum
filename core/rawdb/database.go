@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -33,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
+	"golang.org/x/exp/maps"
 )
 
 var ErrDeleteRangeInterrupted = errors.New("safe delete range operation interrupted")
@@ -552,7 +552,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 
 	if unaccounted.size > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
-		for _, e := range slices.SortedFunc(maps.Values(unaccountedKeys), bytes.Compare) {
+		keys := maps.Values(unaccountedKeys)
+		slices.SortFunc(keys, bytes.Compare)
+		for _, e := range keys {
 			log.Error(fmt.Sprintf("   example key: %x", e))
 		}
 	}

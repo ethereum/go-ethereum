@@ -19,7 +19,6 @@ package snapshot
 import (
 	"encoding/binary"
 	"fmt"
-	"maps"
 	"math"
 	"math/rand"
 	"slices"
@@ -31,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
+	"golang.org/x/exp/maps"
 )
 
 var (
@@ -431,7 +431,8 @@ func (dl *diffLayer) AccountList() []common.Hash {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	dl.accountList = slices.SortedFunc(maps.Keys(dl.accountData), common.Hash.Cmp)
+	dl.accountList = maps.Keys(dl.accountData)
+	slices.SortFunc(dl.accountList, common.Hash.Cmp)
 	dl.memory += uint64(len(dl.accountList) * common.HashLength)
 	return dl.accountList
 }
@@ -463,7 +464,8 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) []common.Hash {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	storageList := slices.SortedFunc(maps.Keys(dl.storageData[accountHash]), common.Hash.Cmp)
+	storageList := maps.Keys(dl.storageData[accountHash])
+	slices.SortFunc(storageList, common.Hash.Cmp)
 	dl.storageList[accountHash] = storageList
 	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
 	return storageList

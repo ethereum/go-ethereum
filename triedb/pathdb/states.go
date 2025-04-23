@@ -19,7 +19,6 @@ package pathdb
 import (
 	"fmt"
 	"io"
-	"maps"
 	"slices"
 	"sync"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/exp/maps"
 )
 
 // counter helps in tracking items and their corresponding sizes.
@@ -174,7 +174,8 @@ func (s *stateSet) accountList() []common.Hash {
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
-	list = slices.SortedFunc(maps.Keys(s.accountData), common.Hash.Cmp)
+	list = maps.Keys(s.accountData)
+	slices.SortFunc(list, common.Hash.Cmp)
 	s.accountListSorted = list
 	return list
 }
@@ -204,7 +205,8 @@ func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
-	list := slices.SortedFunc(maps.Keys(s.storageData[accountHash]), common.Hash.Cmp)
+	list := maps.Keys(s.storageData[accountHash])
+	slices.SortFunc(list, common.Hash.Cmp)
 	s.storageListSorted[accountHash] = list
 	return list
 }

@@ -19,7 +19,6 @@ package legacypool
 
 import (
 	"errors"
-	"maps"
 	"math"
 	"math/big"
 	"slices"
@@ -42,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
+	"golang.org/x/exp/maps"
 )
 
 const (
@@ -1724,7 +1724,7 @@ func (as *accountSet) addTx(tx *types.Transaction) {
 // reuse. The returned slice should not be changed!
 func (as *accountSet) flatten() []common.Address {
 	if as.cache == nil {
-		as.cache = slices.Collect(maps.Keys(as.accounts))
+		as.cache = maps.Keys(as.accounts)
 	}
 	return as.cache
 }
