@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/lib/ethapi"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -421,4 +422,8 @@ func (b *EthAPIBackend) GetCustomPrecompiles(int64) map[common.Address]vm.Precom
 
 func (b *EthAPIBackend) PrepareTx(statedb vm.StateDB, tx *types.Transaction) error {
 	return nil
+}
+
+func (b *EthAPIBackend) GetBlockContext(ctx context.Context, block *types.Block, statedb vm.StateDB, backend ethapi.ChainContextBackend) (vm.BlockContext, error) {
+	return core.NewEVMBlockContext(block.Header(), ethapi.NewChainContext(ctx, backend), nil), nil
 }
