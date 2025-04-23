@@ -251,8 +251,8 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	if msg.BlobHashes != nil {
 		arg["blobVersionedHashes"] = msg.BlobHashes
 	}
-	if msg.AuthList != nil {
-		arg["authorizationList"] = msg.AuthList
+	if msg.AuthorizationList != nil {
+		arg["authorizationList"] = msg.AuthorizationList
 	}
 	return arg
 }

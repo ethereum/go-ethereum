@@ -158,7 +158,7 @@ type CallMsg struct {
 	BlobHashes    []common.Hash
 
 	// For SetCodeTxType
-	AuthList []types.SetCodeAuthorization
+	AuthorizationList []types.SetCodeAuthorization
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by
