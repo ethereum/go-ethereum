@@ -138,7 +138,7 @@ func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, node
 	// Explicitly sync the state freezer, ensuring that all written
 	// data is transferred to disk before updating the key-value store.
 	if freezer != nil {
-		if err := freezer.Sync(); err != nil {
+		if err := freezer.SyncAncient(); err != nil {
 			return err
 		}
 	}
