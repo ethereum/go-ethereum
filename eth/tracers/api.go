@@ -91,6 +91,7 @@ type Backend interface {
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, vm.StateDB, StateReleaseFunc, error)
 	GetCustomPrecompiles(int64) map[common.Address]vm.PrecompiledContract
 	PrepareTx(statedb vm.StateDB, tx *types.Transaction) error
+	GetBlockContext(ctx context.Context, block *types.Block, statedb vm.StateDB, backend ethapi.ChainContextBackend) (vm.BlockContext, error)
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -597,10 +598,13 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		}
 	}
 	// Native tracers have low overhead
+	blockCtx, err := api.backend.GetBlockContext(ctx, block, statedb, api.backend)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get block context: %w", err)
+	}
 	var (
 		txs       = block.Transactions()
 		blockHash = block.Hash()
-		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*TxTraceResult, len(txs))
 	)
@@ -657,7 +661,11 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 				// as the GetHash function of BlockContext is not safe for
 				// concurrent use.
 				// See: https://github.com/ethereum/go-ethereum/issues/29114
-				blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+				blockCtx, err := api.backend.GetBlockContext(ctx, block, statedb, api.backend)
+				if err != nil {
+					results[task.index] = &TxTraceResult{TxHash: txs[task.index].Hash(), Error: err.Error()}
+					continue
+				}
 				res, err := api.traceTx(ctx, txs[task.index], msg, txctx, blockCtx, task.statedb, config)
 				if err != nil {
 					results[task.index] = &TxTraceResult{TxHash: txs[task.index].Hash(), Error: err.Error()}
@@ -670,7 +678,10 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 
 	// Feed the transactions into the tracers and return
 	var failed error
-	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	blockCtx, err := api.backend.GetBlockContext(ctx, block, statedb, api.backend)
+	if err != nil {
+		return nil, err
+	}
 txloop:
 	for i, tx := range txs {
 		// Send the trace task over for execution
@@ -744,11 +755,14 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	logConfig.Debug = true
 
 	// Execute transaction, either tracing all or just the requested one
+	vmctx, err := api.backend.GetBlockContext(ctx, block, statedb, api.backend)
+	if err != nil {
+		return nil, err
+	}
 	var (
 		dumps       []string
 		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		chainConfig = api.backend.ChainConfig()
-		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		canon       = true
 	)
 	// Check if there are any overrides: the caller may wish to enable a future
@@ -932,7 +946,10 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	}
 	defer release()
 
-	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	vmctx, err := api.backend.GetBlockContext(ctx, block, statedb, api.backend)
+	if err != nil {
+		return nil, err
+	}
 	// Apply the customization rules if required.
 	if config != nil {
 		if err := config.StateOverrides.Apply(statedb); err != nil {

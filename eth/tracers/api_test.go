@@ -192,6 +192,10 @@ func (b *testBackend) PrepareTx(statedb vm.StateDB, tx *types.Transaction) error
 	return nil
 }
 
+func (b *testBackend) GetBlockContext(ctx context.Context, block *types.Block, statedb vm.StateDB, backend ethapi.ChainContextBackend) (vm.BlockContext, error) {
+	return core.NewEVMBlockContext(block.Header(), ethapi.NewChainContext(ctx, backend), nil), nil
+}
+
 func TestTraceCall(t *testing.T) {
 	t.Parallel()
 
