@@ -138,6 +138,10 @@ func (db *Database) Compact(start []byte, limit []byte) error {
 	return nil
 }
 
+func (db *Database) Sync() error {
+	return nil
+}
+
 func (db *Database) Close() error {
 	db.remote.Close()
 	return nil

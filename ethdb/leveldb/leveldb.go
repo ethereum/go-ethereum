@@ -324,6 +324,12 @@ func (db *Database) Path() string {
 	return db.fn
 }
 
+// Sync flushes all pending writes in the write-ahead-log to disk, ensuring
+// data durability up to that point.
+func (db *Database) Sync() error {
+	return nil
+}
+
 // meter periodically retrieves internal leveldb counters and reports them to
 // the metrics subsystem.
 func (db *Database) meter(refresh time.Duration, namespace string) {

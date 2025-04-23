@@ -199,6 +199,12 @@ func (db *Database) Compact(start []byte, limit []byte) error {
 	return nil
 }
 
+// Sync ensures that all pending writes are flushed to disk, guaranteeing
+// data durability up to the point.
+func (db *Database) Sync() error {
+	return nil
+}
+
 // Len returns the number of entries currently present in the memory database.
 //
 // Note, this method is only used for testing (i.e. not public in general) and

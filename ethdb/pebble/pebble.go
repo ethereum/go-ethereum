@@ -414,6 +414,14 @@ func (d *Database) Path() string {
 	return d.fn
 }
 
+// Sync flushes all pending writes in the write-ahead-log to disk, ensuring
+// data durability up to that point.
+func (d *Database) Sync() error {
+	b := d.db.NewBatch()
+	b.LogData(nil, nil)
+	return d.db.Apply(b, pebble.Sync)
+}
+
 // meter periodically retrieves internal pebble counters and reports them to
 // the metrics subsystem.
 func (d *Database) meter(refresh time.Duration, namespace string) {

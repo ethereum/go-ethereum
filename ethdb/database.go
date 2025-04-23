@@ -57,6 +57,13 @@ type KeyValueStater interface {
 	Stat() (string, error)
 }
 
+// KeyValueSyncer wraps the Sync method of a backing data store.
+type KeyValueSyncer interface {
+	// Sync ensures that all pending writes are flushed to disk, guaranteeing
+	// data durability up to the point.
+	Sync() error
+}
+
 // Compacter wraps the Compact method of a backing data store.
 type Compacter interface {
 	// Compact flattens the underlying data store for the given key range. In essence,
@@ -75,6 +82,7 @@ type KeyValueStore interface {
 	KeyValueReader
 	KeyValueWriter
 	KeyValueStater
+	KeyValueSyncer
 	KeyValueRangeDeleter
 	Batcher
 	Iteratee
