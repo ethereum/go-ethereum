@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"time"
 
@@ -107,7 +108,7 @@ func (f *FilterMaps) renderMapsFromSnapshot(cp *renderedMap) (*mapRenderer, erro
 			filterMap:   cp.filterMap.fullCopy(),
 			mapIndex:    cp.mapIndex,
 			lastBlock:   cp.lastBlock,
-			blockLvPtrs: cp.blockLvPtrs,
+			blockLvPtrs: slices.Clone(cp.blockLvPtrs),
 		},
 		finishedMaps: make(map[uint32]*renderedMap),
 		finished:     common.NewRange(cp.mapIndex, 0),
@@ -143,7 +144,8 @@ func (f *FilterMaps) lastCanonicalSnapshotOfMap(mapIndex uint32) *renderedMap {
 	var best *renderedMap
 	for _, blockNumber := range f.renderSnapshots.Keys() {
 		if cp, _ := f.renderSnapshots.Get(blockNumber); cp != nil && blockNumber < f.indexedRange.blocks.AfterLast() &&
-			blockNumber <= f.targetView.headNumber && f.targetView.getBlockId(blockNumber) == cp.lastBlockId &&
+			blockNumber <= f.indexedView.HeadNumber() && f.indexedView.BlockId(blockNumber) == cp.lastBlockId &&
+			blockNumber <= f.targetView.HeadNumber() && f.targetView.BlockId(blockNumber) == cp.lastBlockId &&
 			cp.mapIndex == mapIndex && (best == nil || blockNumber > best.lastBlock) {
 			best = cp
 		}
@@ -172,7 +174,7 @@ func (f *FilterMaps) lastCanonicalMapBoundaryBefore(renderBefore uint32) (nextMa
 			return 0, 0, 0, fmt.Errorf("failed to retrieve last block of reverse iterated map %d: %v", mapIndex, err)
 		}
 		if (f.indexedRange.headIndexed && mapIndex >= f.indexedRange.maps.Last()) ||
-			lastBlock >= f.targetView.headNumber || lastBlockId != f.targetView.getBlockId(lastBlock) {
+			lastBlock >= f.targetView.HeadNumber() || lastBlockId != f.targetView.BlockId(lastBlock) {
 			continue // map is not full or inconsistent with targetView; roll back
 		}
 		lvPtr, err := f.getBlockLvPointer(lastBlock)
@@ -243,10 +245,10 @@ func (f *FilterMaps) loadHeadSnapshot() error {
 		}
 	}
 	f.renderSnapshots.Add(f.indexedRange.blocks.Last(), &renderedMap{
-		filterMap:     fm,
+		filterMap:     fm.fullCopy(),
 		mapIndex:      f.indexedRange.maps.Last(),
 		lastBlock:     f.indexedRange.blocks.Last(),
-		lastBlockId:   f.indexedView.getBlockId(f.indexedRange.blocks.Last()),
+		lastBlockId:   f.indexedView.BlockId(f.indexedRange.blocks.Last()),
 		blockLvPtrs:   lvPtrs,
 		finished:      true,
 		headDelimiter: f.indexedRange.headDelimiter,
@@ -263,7 +265,7 @@ func (r *mapRenderer) makeSnapshot() {
 		filterMap:     r.currentMap.filterMap.fastCopy(),
 		mapIndex:      r.currentMap.mapIndex,
 		lastBlock:     r.currentMap.lastBlock,
-		lastBlockId:   r.iterator.chainView.getBlockId(r.currentMap.lastBlock),
+		lastBlockId:   r.iterator.chainView.BlockId(r.currentMap.lastBlock),
 		blockLvPtrs:   r.currentMap.blockLvPtrs,
 		finished:      true,
 		headDelimiter: r.iterator.lvIndex,
@@ -369,7 +371,7 @@ func (r *mapRenderer) renderCurrentMap(stopCb func() bool) (bool, error) {
 		r.currentMap.finished = true
 		r.currentMap.headDelimiter = r.iterator.lvIndex
 	}
-	r.currentMap.lastBlockId = r.f.targetView.getBlockId(r.currentMap.lastBlock)
+	r.currentMap.lastBlockId = r.f.targetView.BlockId(r.currentMap.lastBlock)
 	totalTime += time.Since(start)
 	mapRenderTimer.Update(totalTime)
 	mapLogValueMeter.Mark(logValuesProcessed)
@@ -535,6 +537,7 @@ func (r *mapRenderer) getTempRange() (filterMapsRange, error) {
 		} else {
 			tempRange.blocks.SetAfterLast(0)
 		}
+		tempRange.headIndexed = false
 		tempRange.headDelimiter = 0
 	}
 	return tempRange, nil
@@ -565,8 +568,8 @@ func (r *mapRenderer) getUpdatedRange() (filterMapsRange, error) {
 		lm := r.finishedMaps[r.finished.Last()]
 		newRange.headIndexed = lm.finished
 		if lm.finished {
-			newRange.blocks.SetLast(r.f.targetView.headNumber)
-			if lm.lastBlock != r.f.targetView.headNumber {
+			newRange.blocks.SetLast(r.f.targetView.HeadNumber())
+			if lm.lastBlock != r.f.targetView.HeadNumber() {
 				panic("map rendering finished but last block != head block")
 			}
 			newRange.headDelimiter = lm.headDelimiter
@@ -664,13 +667,13 @@ var errUnindexedRange = errors.New("unindexed range")
 // given block's first log value entry (the block delimiter), according to the
 // current targetView.
 func (f *FilterMaps) newLogIteratorFromBlockDelimiter(blockNumber, lvIndex uint64) (*logIterator, error) {
-	if blockNumber > f.targetView.headNumber {
-		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", blockNumber, f.targetView.headNumber)
+	if blockNumber > f.targetView.HeadNumber() {
+		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", blockNumber, f.targetView.HeadNumber())
 	}
 	if !f.indexedRange.blocks.Includes(blockNumber) {
 		return nil, errUnindexedRange
 	}
-	finished := blockNumber == f.targetView.headNumber
+	finished := blockNumber == f.targetView.HeadNumber()
 	l := &logIterator{
 		chainView:   f.targetView,
 		params:      &f.Params,
@@ -686,11 +689,11 @@ func (f *FilterMaps) newLogIteratorFromBlockDelimiter(blockNumber, lvIndex uint6
 // newLogIteratorFromMapBoundary creates a logIterator starting at the given
 // map boundary, according to the current targetView.
 func (f *FilterMaps) newLogIteratorFromMapBoundary(mapIndex uint32, startBlock, startLvPtr uint64) (*logIterator, error) {
-	if startBlock > f.targetView.headNumber {
-		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", startBlock, f.targetView.headNumber)
+	if startBlock > f.targetView.HeadNumber() {
+		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", startBlock, f.targetView.HeadNumber())
 	}
 	// get block receipts
-	receipts := f.targetView.getReceipts(startBlock)
+	receipts := f.targetView.Receipts(startBlock)
 	if receipts == nil {
 		return nil, fmt.Errorf("receipts not found for start block %d", startBlock)
 	}
@@ -757,7 +760,7 @@ func (l *logIterator) next() error {
 	if l.delimiter {
 		l.delimiter = false
 		l.blockNumber++
-		l.receipts = l.chainView.getReceipts(l.blockNumber)
+		l.receipts = l.chainView.Receipts(l.blockNumber)
 		if l.receipts == nil {
 			return fmt.Errorf("receipts not found for block %d", l.blockNumber)
 		}
@@ -794,7 +797,7 @@ func (l *logIterator) enforceValidState() {
 		}
 		l.logIndex = 0
 	}
-	if l.blockNumber == l.chainView.headNumber {
+	if l.blockNumber == l.chainView.HeadNumber() {
 		l.finished = true
 	} else {
 		l.delimiter = true
