@@ -127,7 +127,7 @@ func (dB *DB) UnpackGetNamedStatParams(data []byte) (*GetNamedStatParamsOutput, 
 	out, err := dB.abi.Unpack("getNamedStatParams", data)
 	outstruct := new(GetNamedStatParamsOutput)
 	if err != nil {
-		return outstruct, nil
+		return nil, err
 	}
 	outstruct.Gets = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Inserts = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
@@ -171,7 +171,7 @@ func (dB *DB) UnpackGetStatParams(data []byte) (*GetStatParamsOutput, error) {
 	out, err := dB.abi.Unpack("getStatParams", data)
 	outstruct := new(GetStatParamsOutput)
 	if err != nil {
-		return outstruct, nil
+		return nil, err
 	}
 	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)

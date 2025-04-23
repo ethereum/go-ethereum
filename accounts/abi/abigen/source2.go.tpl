@@ -132,7 +132,7 @@ var (
 				{{- if .Structured}}
 				outstruct := new({{.Normalized.Name}}Output)
 				if err != nil {
-					return outstruct, nil
+					return nil, err
 				}
 				{{- range $i, $t := .Normalized.Outputs}}
 				{{- if ispointertype .Type}}
