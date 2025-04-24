@@ -227,8 +227,16 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 			WriteStallBegin: db.onWriteStallBegin,
 			WriteStallEnd:   db.onWriteStallEnd,
 		},
+		Logger: panicLogger{}, // TODO(karalabe): Delete when this is upstreamed in Pebble
+
+		// Pebble is configured to use asynchronous write mode, meaning write operations
+		// return as soon as the data is cached in memory, without waiting for the WAL
+		// to be written. This mode offers better write performance but risks losing
+		// recent writes if the application crashes or a power failure/system crash occurs.
+		//
+		// By setting the WALBytesPerSync, the cached WAL writes will be periodically
+		// flushed at the background if the accumulated size exceeds this threshold.
 		WALBytesPerSync: 5 * ethdb.IdealBatchSize,
-		Logger:          panicLogger{}, // TODO(karalabe): Delete when this is upstreamed in Pebble
 	}
 	// Disable seek compaction explicitly. Check https://github.com/ethereum/go-ethereum/pull/20130
 	// for more details.
@@ -419,6 +427,11 @@ func (d *Database) Path() string {
 // data durability up to that point.
 func (d *Database) Sync() error {
 	b := d.db.NewBatch()
+
+	// The entry (value=nil) is not written to the database; it is only
+	// added to the WAL. Writing this special log entry in sync mode
+	// automatically flushes all previous writes, ensuring database
+	// durability up to this point.
 	b.LogData(nil, nil)
 	return d.db.Apply(b, pebble.Sync)
 }

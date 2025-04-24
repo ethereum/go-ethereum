@@ -454,6 +454,15 @@ func (db *Database) Recover(root common.Hash) error {
 		db.tree.reset(dl)
 	}
 	rawdb.DeleteTrieJournal(db.diskdb)
+
+	// Explicitly sync the key-value store to ensure all recent writes are
+	// flushed to disk. This step is crucial to prevent a scenario where
+	// recent key-value writes are lost due to an application panic, while
+	// the associated state histories have already been removed, resulting
+	// in the inability to perform a state rollback.
+	if err := db.diskdb.Sync(); err != nil {
+		return err
+	}
 	_, err := truncateFromHead(db.diskdb, db.freezer, dl.stateID())
 	if err != nil {
 		return err

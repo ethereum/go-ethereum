@@ -327,6 +327,15 @@ func (db *Database) Path() string {
 // Sync flushes all pending writes in the write-ahead-log to disk, ensuring
 // data durability up to that point.
 func (db *Database) Sync() error {
+	// In theory, the WAL (Write-Ahead Log) can be explicitly synchronized using
+	// a write operation with SYNC=true. However, there is no dedicated key reserved
+	// for this purpose, and even a nil key (key=nil) is considered a valid database entry.
+	//
+	// In LevelDB, writes are blocked until the data is written to the WAL, meaning
+	// recent writes won't be lost unless a power failure or system crash occurs.
+	// Additionally, LevelDB is no longer the default database engine and is likely
+	// only used by hash-mode archive nodes. Given this, the durability guarantees
+	// without explicit sync are acceptable in the context of LevelDB.
 	return nil
 }
 
