@@ -72,9 +72,8 @@ func (r *resultStore) SetThrottleTarget(targetRatio common.StorageSize) uint64 {
 	if r.pendingCount == 0 {
 		return r.throttleThreshold
 	}
-	if targetRatio == 0 {
-		targetRatio = 0.1 // TODO: more informed choice of a minimum here?
-	}
+	targetRatio = max(targetRatio, 0.1)
+
 	// use the target ratio to determine
 	// (pendingGasUsed / target) <- estimated total size of collective in-flight retrievals
 	estBlockSize := common.StorageSize(r.pendingGasUsed/uint64(r.pendingCount)) / targetRatio
