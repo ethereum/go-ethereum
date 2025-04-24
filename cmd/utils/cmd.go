@@ -309,7 +309,7 @@ func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 				if err != nil {
 					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
 				}
-				encReceipts := types.ReceiptsToRLP([]types.Receipts{receipts})
+				encReceipts := types.EncodeBlockReceiptLists([]types.Receipts{receipts})
 				if _, err := chain.InsertReceiptChain([]*types.Block{block}, encReceipts, 2^64-1); err != nil {
 					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
 				}

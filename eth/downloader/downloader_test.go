@@ -269,7 +269,7 @@ func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash, sink chan *
 	req := &eth.Request{
 		Peer: dlp.id,
 	}
-	resp := eth.ReceiptsRLPResponse(types.ReceiptsToRLP(receipts))
+	resp := eth.ReceiptsRLPResponse(types.EncodeBlockReceiptLists(receipts))
 	res := &eth.Response{
 		Req:  req,
 		Res:  &resp,

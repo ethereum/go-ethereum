@@ -378,8 +378,8 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 	return nil
 }
 
-// ReceiptsToRLP encodes a slice of receipts into RLP.
-func ReceiptsToRLP(receipts []Receipts) []rlp.RawValue {
+// EncodeBlockReceiptLists encodes a list of block receipt lists into RLP.
+func EncodeBlockReceiptLists(receipts []Receipts) []rlp.RawValue {
 	result := make([]rlp.RawValue, 0)
 	for _, receipt := range receipts {
 		storageReceipts := make([]*ReceiptForStorage, len(receipt))
