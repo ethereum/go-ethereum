@@ -239,6 +239,7 @@ type BufferIter struct {
 	buffer chan *Node
 	head   *Node
 	closed chan struct{}
+	mu     sync.Mutex
 }
 
 // NewBufferIter creates a new pre-fetch buffer of a given size.
@@ -266,6 +267,9 @@ func NewBufferIter(it Iterator, size int) *BufferIter {
 }
 
 func (b *BufferIter) Next() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	select {
 	case b.head = <-b.buffer:
 	case <-b.closed:
@@ -275,6 +279,8 @@ func (b *BufferIter) Next() bool {
 }
 
 func (b *BufferIter) Node() *Node {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	return b.head
 }
 
@@ -282,6 +288,9 @@ func (b *BufferIter) Close() {
 	// Close the wrapped iterator first.
 	b.it.Close()
 	close(b.closed)
+	// Wait for Next to terminate, then drain the buffer.
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	for range b.buffer {
 	}
 	b.buffer = nil
