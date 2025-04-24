@@ -19,6 +19,9 @@ package eth
 import "github.com/ethereum/go-ethereum/metrics"
 
 type peerMeters struct {
+	base string
+	reg  metrics.Registry
+
 	txReceived *metrics.Meter
 	txSent     *metrics.Meter
 
@@ -30,7 +33,13 @@ type peerMeters struct {
 
 // newPeerMeters registers and returns peer-level meters.
 func newPeerMeters(base string, r metrics.Registry) *peerMeters {
+	if r == nil {
+		r = metrics.DefaultRegistry
+	}
 	return &peerMeters{
+		base: base,
+		reg:  r,
+
 		txReceived: metrics.NewRegisteredMeter(base+"/txReceived", r),
 		txSent:     metrics.NewRegisteredMeter(base+"/txSent", r),
 
@@ -39,4 +48,13 @@ func newPeerMeters(base string, r metrics.Registry) *peerMeters {
 		txReplyUnderpricedMeter: metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/underpriced", r),
 		txReplyOtherRejectMeter: metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/otherreject", r),
 	}
+}
+
+func (m *peerMeters) Close() {
+	m.reg.Unregister(m.base + "/txReceived")
+	m.reg.Unregister(m.base + "/txSent")
+	m.reg.Unregister(m.base + "/eth/fetcher/transaction/replies/in")
+	m.reg.Unregister(m.base + "/eth/fetcher/transaction/replies/known")
+	m.reg.Unregister(m.base + "/eth/fetcher/transaction/replies/underpriced")
+	m.reg.Unregister(m.base + "/eth/fetcher/transaction/replies/otherreject")
 }

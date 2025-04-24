@@ -95,6 +95,7 @@ func NewPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, txpool TxPool) *Pe
 // clean it up!
 func (p *Peer) Close() {
 	close(p.term)
+	p.meters.Close()
 }
 
 // ID retrieves the peer's unique identifier.
