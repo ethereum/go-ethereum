@@ -482,10 +482,13 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
-	direct := big.NewInt(int64(math.Sqrt(float64(h.peers.len())))) // Approximate number of peers to broadcast to
-	if direct.BitLen() == 0 {
-		direct = big.NewInt(1)
-	}
+	sqrtPeers := int64(math.Sqrt(float64(h.peers.len()))) // Approximate number of peers to broadcast to
+
+	// If maxPeers is just above some perfect square, we need to stabilize
+	// the number to avoid frequent changes when a few peers drop.
+	maxDirect := int64(math.Sqrt(float64(h.maxPeers)) - 0.5)
+	direct := big.NewInt(max(min(sqrtPeers, maxDirect), 1))
+
 	total := new(big.Int).Exp(direct, big.NewInt(2), nil) // Stabilise total peer count a bit based on sqrt peers
 
 	var (
