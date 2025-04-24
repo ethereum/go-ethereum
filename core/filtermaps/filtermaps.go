@@ -762,7 +762,11 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 		return false, errors.New("invalid tail epoch number")
 	}
 	// remove index data
-	if err := f.safeDeleteWithLogs(func(db ethdb.KeyValueStore, hashScheme bool, stopCb func(bool) bool) error {
+	f.indexLock.Unlock()
+	// Note: indexLock should not be held while deleting data because the callback
+	// might want to acquire it. The epoch has been marked unindexed already so
+	// this is just dirty data that should not affect any concurrent search process.
+	err = f.safeDeleteWithLogs(func(db ethdb.KeyValueStore, hashScheme bool, stopCb func(bool) bool) error {
 		first := f.mapRowIndex(firstMap, 0)
 		count := f.mapRowIndex(firstMap+f.mapsPerEpoch, 0) - first
 		if err := rawdb.DeleteFilterMapRows(f.db, common.NewRange(first, count), hashScheme, stopCb); err != nil {
@@ -789,7 +793,9 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 	}, fmt.Sprintf("Deleting tail epoch #%d", epoch), func() bool {
 		f.processEvents()
 		return f.stop || !f.targetHeadIndexed()
-	}); err == nil {
+	})
+	f.indexLock.Lock()
+	if err == nil {
 		// everything removed; mark as cleaned and report success
 		if f.cleanedEpochsBefore == epoch {
 			f.cleanedEpochsBefore = epoch + 1
