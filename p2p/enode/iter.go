@@ -243,7 +243,7 @@ type BufferIter struct {
 }
 
 // NewBufferIter creates a new pre-fetch buffer of a given size.
-func NewBufferIter(it Iterator, size int) *BufferIter {
+func NewBufferIter(it Iterator, size int) Iterator {
 	b := BufferIter{
 		it:     it,
 		buffer: make(chan *Node, size),
