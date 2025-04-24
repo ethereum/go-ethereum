@@ -380,17 +380,18 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 
 // EncodeBlockReceiptLists encodes a list of block receipt lists into RLP.
 func EncodeBlockReceiptLists(receipts []Receipts) []rlp.RawValue {
-	result := make([]rlp.RawValue, 0)
-	for _, receipt := range receipts {
-		storageReceipts := make([]*ReceiptForStorage, len(receipt))
-		for i, r := range receipt {
-			storageReceipts[i] = (*ReceiptForStorage)(r)
+	var storageReceipts []*ReceiptForStorage
+	result := make([]rlp.RawValue, len(receipts))
+	for i, receipt := range receipts {
+		storageReceipts = storageReceipts[:0]
+		for _, r := range receipt {
+			storageReceipts = append(storageReceipts, (*ReceiptForStorage)(r))
 		}
 		bytes, err := rlp.EncodeToBytes(storageReceipts)
 		if err != nil {
 			log.Crit("Failed to encode block receipts", "err", err)
 		}
-		result = append(result, bytes)
+		result[i] = bytes
 	}
 	return result
 }
