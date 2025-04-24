@@ -18,7 +18,6 @@ package native
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -115,7 +114,7 @@ type flatCallTracer struct {
 
 // newFlatCallTracer returns a new flatCallTracer.
 func newFlatCallTracer(ctx *tracers.Context) tracers.Tracer {
-	t := &callTracer{callstack: make([]callFrame, 1)}
+	t := &callTracer{callstack: make([]callFrame, 0, 1)}
 
 	return &flatCallTracer{callTracer: t, ctx: ctx}
 
@@ -133,7 +132,10 @@ func (t *flatCallTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	if len(t.callTracer.callstack) < 1 {
-		return nil, errors.New("invalid number of calls")
+		// If the callstack is empty, return an empty JSON list instead of erroring
+		// Callstack can be empty due to an edge case where an L1 message is reverted even
+		// before entering the first call.
+		return json.RawMessage("[]"), nil
 	}
 
 	flat, err := flatFromNested(&t.callTracer.callstack[0], []int{}, true, t.ctx)

@@ -18,7 +18,6 @@ package native
 
 import (
 	"encoding/json"
-	"errors"
 	"math/big"
 	"strconv"
 	"strings"
@@ -60,21 +59,21 @@ type callTracer struct {
 func newCallTracer(ctx *tracers.Context) tracers.Tracer {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	t := &callTracer{callstack: make([]callFrame, 1)}
+	t := &callTracer{callstack: make([]callFrame, 0, 1)}
 	return t
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
 func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int, authorizationResults []types.AuthorizationResult) {
 	t.env = env
-	t.callstack[0] = callFrame{
+	t.callstack = append(t.callstack, callFrame{
 		Type:  "CALL",
 		From:  addrToHex(from),
 		To:    addrToHex(to),
 		Input: bytesToHex(input),
 		Gas:   uintToHex(gas),
 		Value: bigToHex(value),
-	}
+	})
 	if create {
 		t.callstack[0].Type = "CREATE"
 	}
@@ -152,7 +151,10 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *callTracer) GetResult() (json.RawMessage, error) {
 	if len(t.callstack) != 1 {
-		return nil, errors.New("incorrect number of top-level calls")
+		// If the callstack is empty, return an empty JSON object instead of erroring
+		// Callstack can be empty due to an edge case where an L1 message is reverted even
+		// before entering the first call.
+		return json.RawMessage("{}"), nil
 	}
 	res, err := json.Marshal(t.callstack[0])
 	if err != nil {
