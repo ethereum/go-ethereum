@@ -50,8 +50,6 @@ type resultStore struct {
 	// pendingGasUsed tracks the current total gas used of all in-flight bodies
 	pendingGasUsed uint64
 
-	targetGasScheduled uint64
-
 	lock sync.RWMutex
 }
 
@@ -112,9 +110,6 @@ func (r *resultStore) AddFetch(header *types.Header, snapSync bool) (stale, thro
 		return stale, throttled, item, err
 	}
 	if item == nil {
-		if header.GasUsed+r.pendingGasUsed > r.targetGasScheduled {
-			return false, true, nil, nil
-		}
 		item = newFetchResult(header, snapSync)
 		r.items[index] = item
 		r.pendingCount++
