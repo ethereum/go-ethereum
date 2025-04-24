@@ -463,6 +463,12 @@ var (
 		Value:    "debug,eth,net,personal,txpool,web3,XDPoS",
 		Category: flags.APICategory,
 	}
+	HTTPPathPrefixFlag = &cli.StringFlag{
+		Name:     "http-rpcprefix",
+		Usage:    "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
+		Value:    "",
+		Category: flags.APICategory,
+	}
 	HTTPReadTimeoutFlag = &cli.DurationFlag{
 		Name:     "http-readtimeout",
 		Aliases:  []string{"rpcreadtimeout"},
@@ -516,6 +522,12 @@ var (
 		Aliases:  []string{"wsorigins"},
 		Usage:    "Origins from which to accept websockets requests",
 		Value:    "*",
+		Category: flags.APICategory,
+	}
+	WSPathPrefixFlag = &cli.StringFlag{
+		Name:     "ws-rpcprefix",
+		Usage:    "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
+		Value:    "",
 		Category: flags.APICategory,
 	}
 	ExecFlag = &cli.StringFlag{
@@ -982,6 +994,9 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(HTTPPortFlag.Name) {
 		cfg.HTTPPort = ctx.Int(HTTPPortFlag.Name)
 	}
+	if ctx.IsSet(HTTPPathPrefixFlag.Name) {
+		cfg.HTTPPathPrefix = ctx.String(HTTPPathPrefixFlag.Name)
+	}
 	if ctx.IsSet(HTTPReadTimeoutFlag.Name) {
 		cfg.HTTPTimeouts.ReadTimeout = ctx.Duration(HTTPReadTimeoutFlag.Name)
 	}
@@ -1008,6 +1023,9 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.IsSet(WSPortFlag.Name) {
 		cfg.WSPort = ctx.Int(WSPortFlag.Name)
+	}
+	if ctx.IsSet(WSPathPrefixFlag.Name) {
+		cfg.WSPathPrefix = ctx.String(WSPathPrefixFlag.Name)
 	}
 	cfg.WSOrigins = SplitAndTrim(ctx.String(WSAllowedOriginsFlag.Name))
 	cfg.WSModules = SplitAndTrim(ctx.String(WSApiFlag.Name))

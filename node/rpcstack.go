@@ -39,12 +39,14 @@ type httpConfig struct {
 	Modules            []string
 	CorsAllowedOrigins []string
 	Vhosts             []string
+	prefix             string // path prefix on which to mount http handler
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
 	Origins []string
 	Modules []string
+	prefix  string // path prefix on which to mount ws handler
 }
 
 type rpcHandler struct {
@@ -141,12 +143,18 @@ func (h *httpServer) start() error {
 
 	// if server is websocket only, return after logging
 	if h.wsAllowed() && !h.rpcAllowed() {
+		url := fmt.Sprintf("ws://%v", listener.Addr())
+		if h.wsConfig.prefix != "" {
+			url += h.wsConfig.prefix
+		}
+		h.log.Info("WebSocket enabled", "url", url)
 		h.log.Info("WebSocket enabled", "url", fmt.Sprintf("ws://%v", listener.Addr()))
 		return nil
 	}
 	// Log http endpoint.
 	h.log.Info("HTTP server started",
 		"endpoint", listener.Addr(),
+		"prefix", h.httpConfig.prefix,
 		"cors", strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
 		"vhosts", strings.Join(h.httpConfig.Vhosts, ","),
 	)
@@ -169,26 +177,60 @@ func (h *httpServer) start() error {
 }
 
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rpc := h.httpHandler.Load().(*rpcHandler)
-	if r.RequestURI == "/" {
-		// Serve JSON-RPC on the root path.
-		ws := h.wsHandler.Load().(*rpcHandler)
-		if ws != nil && isWebsocket(r) {
+	// check if ws request and serve if ws enabled
+	ws := h.wsHandler.Load().(*rpcHandler)
+	if ws != nil && isWebsocket(r) {
+		if checkPath(r, h.wsConfig.prefix) {
 			ws.ServeHTTP(w, r)
-			return
 		}
-		if rpc != nil {
-			rpc.ServeHTTP(w, r)
-			return
-		}
-	} else if rpc != nil {
+		return
+	}
+	// if http-rpc is enabled, try to serve request
+	rpc := h.httpHandler.Load().(*rpcHandler)
+	if rpc != nil {
+		// First try to route in the mux.
 		// Requests to a path below root are handled by the mux,
 		// which has all the handlers registered via Node.RegisterHandler.
 		// These are made available when RPC is enabled.
-		h.mux.ServeHTTP(w, r)
-		return
+		muxHandler, pattern := h.mux.Handler(r)
+		if pattern != "" {
+			muxHandler.ServeHTTP(w, r)
+			return
+		}
+
+		if checkPath(r, h.httpConfig.prefix) {
+			rpc.ServeHTTP(w, r)
+			return
+		}
 	}
-	w.WriteHeader(404)
+	w.WriteHeader(http.StatusNotFound)
+}
+
+// checkPath checks whether a given request URL matches a given path prefix.
+func checkPath(r *http.Request, path string) bool {
+	// if no prefix has been specified, request URL must be on root
+	if path == "" {
+		return r.URL.Path == "/"
+	}
+	// otherwise, check to make sure prefix matches
+	return len(r.URL.Path) >= len(path) && r.URL.Path[:len(path)] == path
+}
+
+// validatePrefix checks if 'path' is a valid configuration value for the RPC prefix option.
+func validatePrefix(what, path string) error {
+	if path == "" {
+		return nil
+	}
+	if path[0] != '/' {
+		return fmt.Errorf(`%s RPC path prefix %q does not contain leading "/"`, what, path)
+	}
+	if strings.ContainsAny(path, "?#") {
+		// This is just to avoid confusion. While these would match correctly (i.e. they'd
+		// match if URL-escaped into path), it's not easy to understand for users when
+		// setting that on the command line.
+		return fmt.Errorf("%s RPC path prefix %q contains URL meta-characters", what, path)
+	}
+	return nil
 }
 
 // stop shuts down the HTTP server.
