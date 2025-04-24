@@ -34,9 +34,9 @@ func newPeerMeters(base string, r metrics.Registry) *peerMeters {
 		txReceived: metrics.NewRegisteredMeter(base+"/txReceived", r),
 		txSent:     metrics.NewRegisteredMeter(base+"/txSent", r),
 
-		txReplyInMeter:          metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/in", nil),
-		txReplyKnownMeter:       metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/known", nil),
-		txReplyUnderpricedMeter: metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/underpriced", nil),
-		txReplyOtherRejectMeter: metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/otherreject", nil),
+		txReplyInMeter:          metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/in", r),
+		txReplyKnownMeter:       metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/known", r),
+		txReplyUnderpricedMeter: metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/underpriced", r),
+		txReplyOtherRejectMeter: metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/otherreject", r),
 	}
 }
