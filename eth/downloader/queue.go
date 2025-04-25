@@ -333,6 +333,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 			(1-common.StorageSize(blockCacheSizeWeight))*q.resultGasSizeRatio
 	}
 	throttleThreshold := q.resultCache.SetThrottleTarget(q.resultGasSizeRatio)
+	blockGasSizeRatioGauge.Update(float64(q.resultGasSizeRatio))
 
 	// With results removed from the cache, wake throttled fetchers
 	for _, ch := range []chan bool{q.blockWakeCh, q.receiptWakeCh} {

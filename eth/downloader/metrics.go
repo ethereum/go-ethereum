@@ -38,5 +38,6 @@ var (
 	receiptDropMeter    = metrics.NewRegisteredMeter("eth/downloader/receipts/drop", nil)
 	receiptTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/receipts/timeout", nil)
 
-	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
+	throttleCounter        = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
+	blockGasSizeRatioGauge = metrics.NewRegisteredGaugeFloat64("eth/downloader/gassizeratio", nil)
 )
