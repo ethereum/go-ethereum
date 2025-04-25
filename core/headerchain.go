@@ -620,7 +620,8 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 	// This step must be performed after synchronizing the key-value store;
 	// otherwise, in the event of a panic, it's theoretically possible to
 	// lose recent key-value store writes while the ancient store deletions
-	// remain, leading to data inconsistency.
+	// remain, leading to data inconsistency, e.g., the gap between the key
+	// value store and ancient can be created due to unclean shutdown.
 	if delFn != nil {
 		// Ignore the error here since light client won't hit this path
 		frozen, _ := hc.chainDb.Ancients()

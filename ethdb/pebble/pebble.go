@@ -182,10 +182,18 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		memTableSize = maxMemTableSize - 1
 	}
 	db := &Database{
-		fn:           file,
-		log:          logger,
-		quitChan:     make(chan chan error),
-		writeOptions: &pebble.WriteOptions{Sync: false},
+		fn:       file,
+		log:      logger,
+		quitChan: make(chan chan error),
+
+		// Use asynchronous write mode by default. Otherwise, the overhead of frequent fsync
+		// operations can be significant, especially on platforms with slow fsync performance
+		// (e.g., macOS) or less capable SSDs.
+		//
+		// Note that enabling async writes means recent data may be lost in the event of an
+		// application-level panic (writes will also be lost on a machine-level failure,
+		// of course). Geth is expected to handle recovery from an unclean shutdown.
+		writeOptions: pebble.NoSync,
 	}
 	opt := &pebble.Options{
 		// Pebble has a single combined cache area and the write
@@ -426,12 +434,11 @@ func (d *Database) Path() string {
 // Sync flushes all pending writes in the write-ahead-log to disk, ensuring
 // data durability up to that point.
 func (d *Database) Sync() error {
-	b := d.db.NewBatch()
-
 	// The entry (value=nil) is not written to the database; it is only
 	// added to the WAL. Writing this special log entry in sync mode
 	// automatically flushes all previous writes, ensuring database
 	// durability up to this point.
+	b := d.db.NewBatch()
 	b.LogData(nil, nil)
 	return d.db.Apply(b, pebble.Sync)
 }

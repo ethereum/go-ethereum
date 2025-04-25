@@ -329,7 +329,8 @@ func (db *Database) Path() string {
 func (db *Database) Sync() error {
 	// In theory, the WAL (Write-Ahead Log) can be explicitly synchronized using
 	// a write operation with SYNC=true. However, there is no dedicated key reserved
-	// for this purpose, and even a nil key (key=nil) is considered a valid database entry.
+	// for this purpose, and even a nil key (key=nil) is considered a valid
+	// database entry.
 	//
 	// In LevelDB, writes are blocked until the data is written to the WAL, meaning
 	// recent writes won't be lost unless a power failure or system crash occurs.
