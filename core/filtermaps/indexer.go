@@ -43,6 +43,8 @@ func (f *FilterMaps) indexerLoop() {
 	log.Info("Started log indexer")
 
 	for !f.stop {
+		// Note: acquiring the indexLock read lock is unnecessary here,
+		// as the `indexedRange` is accessed within the indexerLoop.
 		if !f.indexedRange.initialized {
 			if f.targetView.HeadNumber() == 0 {
 				// initialize when chain head is available
@@ -105,7 +107,7 @@ type targetUpdate struct {
 	historyCutoff, finalBlock uint64
 }
 
-// SetTargetView sets a new target chain view for the indexer to render.
+// SetTarget sets a new target chain view for the indexer to render.
 // Note that SetTargetView never blocks.
 func (f *FilterMaps) SetTarget(targetView *ChainView, historyCutoff, finalBlock uint64) {
 	if targetView == nil {
@@ -178,6 +180,8 @@ func (f *FilterMaps) processSingleEvent(blocking bool) bool {
 	if f.stop {
 		return false
 	}
+	// Note: acquiring the indexLock read lock is unnecessary here,
+	// as this function is always called within the indexLoop.
 	if !f.hasTempRange {
 		for _, mb := range f.matcherSyncRequests {
 			mb.synced()
