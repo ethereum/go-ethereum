@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -156,6 +157,29 @@ func (t *perfTracer) OnBlockEnd(err error) {
 		blockEndIO.StorageReads + blockEndIO.StorageUpdates + blockEndIO.StorageCommits +
 		blockEndIO.SnapshotCommits + blockEndIO.TrieDBCommits
 	evmTime := totalTime - ioTime
+
+	// Sanity check: IO time should not exceed total time
+	if ioTime > totalTime {
+		log.Error("PerfTracer: Block IO time exceeds total time",
+			"blockNumber", t.currentBlock.Number(),
+			"ioTime", ioTime,
+			"totalTime", totalTime)
+		return
+	}
+
+	// Calculate sum of transaction times and gas
+	var totalTxTime time.Duration
+	for _, tx := range t.txData {
+		txTime, _ := strconv.ParseUint(tx["totalTime"].(string)[2:], 16, 64)
+		totalTxTime += time.Duration(txTime)
+	}
+	if totalTxTime > totalTime {
+		log.Error("PerfTracer: Sum of transaction times exceeds block total time",
+			"blockNumber", t.currentBlock.Number(),
+			"totalTxTime", totalTxTime,
+			"blockTotalTime", totalTime)
+		return
+	}
 
 	blockRecord := map[string]interface{}{
 		"blockNumber":  fmt.Sprintf("0x%x", t.currentBlock.Number()),
