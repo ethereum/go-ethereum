@@ -120,6 +120,13 @@ func (t *perfTracer) OnBlockStart(event tracing.BlockEvent) {
 func (t *perfTracer) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.txStartTime = time.Now()
 	t.statedb = vm.StateDB
+
+	// The accumulated measurements include IO performed before any txs were executed.
+	if t.txIndex == 0 {
+		initialIO := t.statedb.GetAccumulatedIOMeasurements()
+		t.prevAccountReads = initialIO.AccountReads
+		t.prevStorageReads = initialIO.StorageReads
+	}
 }
 
 func (t *perfTracer) OnTxEnd(receipt *types.Receipt, err error) {
@@ -131,7 +138,7 @@ func (t *perfTracer) OnTxEnd(receipt *types.Receipt, err error) {
 		evmTime time.Duration
 	)
 	if ioTime > totalTime {
-		log.Error("PerfTracer: IO time exceeds total time", "ioTime", ioTime, "totalTime", totalTime)
+		log.Error("PerfTracer: IO time exceeds total time", "ioTime", ioTime, "totalTime", totalTime, "txIdx", t.txIndex)
 	} else {
 		evmTime = totalTime - ioTime
 	}
