@@ -152,7 +152,9 @@ func (t *perfTracer) OnBlockEnd(err error) {
 	// Calculate block-level timings
 	totalTime := time.Since(t.blockStartTime)
 	blockEndIO := t.statedb.GetAccumulatedIOMeasurements()
-	ioTime := blockEndIO.AccountReads + blockEndIO.StorageReads
+	ioTime := blockEndIO.AccountReads + blockEndIO.AccountHashes + blockEndIO.AccountUpdates + blockEndIO.AccountCommits +
+		blockEndIO.StorageReads + blockEndIO.StorageUpdates + blockEndIO.StorageCommits +
+		blockEndIO.SnapshotCommits + blockEndIO.TrieDBCommits
 	evmTime := totalTime - ioTime
 
 	blockRecord := map[string]interface{}{
