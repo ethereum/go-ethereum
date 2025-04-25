@@ -1502,7 +1502,7 @@ func (pool *LegacyPool) truncatePending() {
 		length := uint64(list.Len())
 		pending += length
 		if length > pool.config.AccountSlots {
-			spammers.Push(addr, uint64(length))
+			spammers.Push(addr, length)
 		}
 	}
 	if pending <= pool.config.GlobalSlots {
