@@ -259,7 +259,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	}
 
 	// Execute the Ethereum handshake
-	if err := peer.Handshake(h.networkID, h.chain); err != nil {
+	if err := peer.Handshake(h.networkID, h.chain, h.blockRange.currentRange()); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
@@ -571,7 +571,7 @@ func (h *handler) enableSyncedFeatures() {
 // blockRangeState holds the state of the block range update broadcasting mechanism.
 type blockRangeState struct {
 	prev    eth.BlockRangeUpdatePacket
-	next    eth.BlockRangeUpdatePacket
+	next    atomic.Pointer[eth.BlockRangeUpdatePacket]
 	headCh  chan core.ChainHeadEvent
 	headSub event.Subscription
 	syncSub *event.TypeMuxSubscription
@@ -587,7 +587,7 @@ func newBlockRangeState(chain *core.BlockChain, typeMux *event.TypeMux) *blockRa
 		syncSub: syncSub,
 	}
 	st.update(chain, chain.CurrentBlock())
-	st.prev = st.next
+	st.prev = *st.next.Load()
 	return st
 }
 
@@ -655,20 +655,22 @@ func (h *handler) broadcastBlockRange(state *blockRangeState) {
 	if len(peerlist) == 0 {
 		return
 	}
-	msg := state.next
+	msg := state.currentRange()
 	log.Debug("Sending BlockRangeUpdate", "peers", len(peerlist), "earliest", msg.EarliestBlock, "latest", msg.LatestBlock)
 	for _, p := range peerlist {
 		p.SendBlockRangeUpdate(msg)
 	}
-	state.prev = state.next
+	state.prev = *state.next.Load()
 }
 
 // update assigns the values of the next block range update from the chain.
 func (st *blockRangeState) update(chain *core.BlockChain, latest *types.Header) {
 	earliest, _ := chain.HistoryPruningCutoff()
-	st.next.EarliestBlock = min(latest.Number.Uint64(), earliest)
-	st.next.LatestBlock = latest.Number.Uint64()
-	st.next.LatestBlockHash = latest.Hash()
+	st.next.Store(&eth.BlockRangeUpdatePacket{
+		EarliestBlock:   min(latest.Number.Uint64(), earliest),
+		LatestBlock:     latest.Number.Uint64(),
+		LatestBlockHash: latest.Hash(),
+	})
 }
 
 // shouldSend decides whether it is time to send a block range update. We don't want to
@@ -676,11 +678,18 @@ func (st *blockRangeState) update(chain *core.BlockChain, latest *types.Header) 
 // However, there is a special case: if the range would move back, i.e. due to SetHead, we
 // want to send it immediately.
 func (st *blockRangeState) shouldSend() bool {
-	return st.next.LatestBlock < st.prev.LatestBlock ||
-		st.next.LatestBlock-st.prev.LatestBlock >= 32
+	next := st.next.Load()
+	return next.LatestBlock < st.prev.LatestBlock ||
+		next.LatestBlock-st.prev.LatestBlock >= 32
 }
 
 func (st *blockRangeState) stop() {
 	st.syncSub.Unsubscribe()
 	st.headSub.Unsubscribe()
+}
+
+// currentRange returns the current block range.
+// This is safe to call from any goroutine.
+func (st *blockRangeState) currentRange() eth.BlockRangeUpdatePacket {
+	return *st.next.Load()
 }

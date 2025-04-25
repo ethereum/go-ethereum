@@ -36,10 +36,10 @@ const (
 
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *Peer) Handshake(networkID uint64, chain *core.BlockChain) error {
+func (p *Peer) Handshake(networkID uint64, chain *core.BlockChain, rangeMsg BlockRangeUpdatePacket) error {
 	switch p.version {
 	case ETH69:
-		return p.handshake69(networkID, chain)
+		return p.handshake69(networkID, chain, rangeMsg)
 	case ETH68:
 		return p.handshake68(networkID, chain)
 	default:
@@ -92,14 +92,12 @@ func (p *Peer) readStatus68(networkID uint64, status *StatusPacket68, genesis co
 	return nil
 }
 
-func (p *Peer) handshake69(networkID uint64, chain *core.BlockChain) error {
+func (p *Peer) handshake69(networkID uint64, chain *core.BlockChain, rangeMsg BlockRangeUpdatePacket) error {
 	var (
-		genesis     = chain.Genesis()
-		latest      = chain.CurrentBlock()
-		latestSnap  = chain.CurrentSnapBlock()
-		forkID      = forkid.NewID(chain.Config(), genesis, latest.Number.Uint64(), latest.Time)
-		forkFilter  = forkid.NewFilter(chain)
-		earliest, _ = chain.HistoryPruningCutoff()
+		genesis    = chain.Genesis()
+		latest     = chain.CurrentBlock()
+		forkID     = forkid.NewID(chain.Config(), genesis, latest.Number.Uint64(), latest.Time)
+		forkFilter = forkid.NewFilter(chain)
 	)
 
 	errc := make(chan error, 2)
@@ -109,14 +107,9 @@ func (p *Peer) handshake69(networkID uint64, chain *core.BlockChain) error {
 			NetworkID:       networkID,
 			Genesis:         genesis.Hash(),
 			ForkID:          forkID,
-			EarliestBlock:   earliest,
-		}
-		if latestSnap != nil && latestSnap.Number.Uint64() > latest.Number.Uint64() {
-			pkt.LatestBlock = latestSnap.Number.Uint64()
-			pkt.LatestBlockHash = latestSnap.Hash()
-		} else {
-			pkt.LatestBlock = latest.Number.Uint64()
-			pkt.LatestBlockHash = latest.Hash()
+			EarliestBlock:   rangeMsg.EarliestBlock,
+			LatestBlock:     rangeMsg.LatestBlock,
+			LatestBlockHash: rangeMsg.LatestBlockHash,
 		}
 		errc <- p2p.Send(p.rw, StatusMsg, pkt)
 	}()
@@ -145,11 +138,15 @@ func (p *Peer) readStatus69(networkID uint64, status *StatusPacket69, genesis co
 		return fmt.Errorf("%w: %v", errForkIDRejected, err)
 	}
 	// Handle initial block range.
-	p.lastRange.Store(&BlockRangeUpdatePacket{
+	initRange := &BlockRangeUpdatePacket{
 		EarliestBlock:   status.EarliestBlock,
 		LatestBlock:     status.LatestBlock,
 		LatestBlockHash: status.LatestBlockHash,
-	})
+	}
+	if err := initRange.Validate(); err != nil {
+		return fmt.Errorf("%w: %v", errInvalidBlockRange, err)
+	}
+	p.lastRange.Store(initRange)
 	return nil
 }
 
@@ -209,4 +206,15 @@ func markError(p *Peer, err error) {
 	default:
 		m.peerError.Mark(1)
 	}
+}
+
+// Validate checks basic validity of a block range announcement.
+func (p *BlockRangeUpdatePacket) Validate() error {
+	if p.EarliestBlock > p.LatestBlock {
+		return errors.New("earliest > latest")
+	}
+	if p.LatestBlockHash == (common.Hash{}) {
+		return errors.New("zero latest hash")
+	}
+	return nil
 }

@@ -256,7 +256,7 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 		return eth.Handle((*ethHandler)(handler.handler), peer)
 	})
 	// Run the handshake locally to avoid spinning up a source handler
-	if err := src.Handshake(1, handler.chain); err != nil {
+	if err := src.Handshake(1, handler.chain, eth.BlockRangeUpdatePacket{}); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// Send the transaction to the sink and verify that it's added to the tx pool
@@ -311,7 +311,7 @@ func testSendTransactions(t *testing.T, protocol uint) {
 		return eth.Handle((*ethHandler)(handler.handler), peer)
 	})
 	// Run the handshake locally to avoid spinning up a source handler
-	if err := sink.Handshake(1, handler.chain); err != nil {
+	if err := sink.Handshake(1, handler.chain, eth.BlockRangeUpdatePacket{}); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
 	// After the handshake completes, the source handler should stream the sink
