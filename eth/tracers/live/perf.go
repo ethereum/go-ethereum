@@ -28,10 +28,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func init() {
-	tracers.LiveDirectory.Register("perfTracer", newPerfTracer)
+	tracers.LiveDirectory.Register("perf", newPerfTracer)
 }
 
 type perfTracerConfig struct {
@@ -127,8 +128,13 @@ func (t *perfTracer) OnTxEnd(receipt *types.Receipt, err error) {
 		accumulatedIO = t.statedb.GetAccumulatedIOMeasurements()
 		ioTime        = (accumulatedIO.AccountReads - t.prevAccountReads) +
 			(accumulatedIO.StorageReads - t.prevStorageReads)
-		evmTime = totalTime - ioTime
+		evmTime time.Duration
 	)
+	if ioTime > totalTime {
+		log.Error("PerfTracer: IO time exceeds total time", "ioTime", ioTime, "totalTime", totalTime)
+	} else {
+		evmTime = totalTime - ioTime
+	}
 
 	row := []string{
 		t.currentBlock.Number().String(),
