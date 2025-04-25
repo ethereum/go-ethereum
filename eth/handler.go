@@ -57,6 +57,9 @@ const (
 	// All transactions with a higher size will be announced and need to be fetched
 	// by the peer.
 	txMaxBroadcastSize = 4096
+
+	// Hysteresis to stabilize the number of direct peers to send transactions to.
+	directPeersHysteresis = 0.5
 )
 
 var syncChallengeTimeout = 15 * time.Second // Time allowance for a node to reply to the sync progress challenge
@@ -114,10 +117,11 @@ type handler struct {
 	snapSync atomic.Bool // Flag whether snap sync is enabled (gets disabled if we already have blocks)
 	synced   atomic.Bool // Flag whether we're considered synchronised (enables transaction processing)
 
-	database ethdb.Database
-	txpool   txPool
-	chain    *core.BlockChain
-	maxPeers int
+	database   ethdb.Database
+	txpool     txPool
+	chain      *core.BlockChain
+	maxPeers   int
+	lastDirect int64 // Last number of peers we sent transactions to, used to stabilize the randomness
 
 	downloader *downloader.Downloader
 	txFetcher  *fetcher.TxFetcher
@@ -482,13 +486,20 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
-	sqrtPeers := int64(math.Sqrt(float64(h.peers.len()))) // Approximate number of peers to broadcast to
+	sqrtPeers := math.Sqrt(float64(h.peers.len())) // Approximate number of peers to broadcast to
 
-	// If maxPeers is just above some perfect square, we need to stabilize
-	// the number to avoid frequent changes when a few peers drop.
-	maxDirect := int64(math.Sqrt(float64(h.maxPeers)) - 0.5)
-	direct := big.NewInt(max(min(sqrtPeers, maxDirect), 1))
+	// Use some hysteresis to avoid oscillating between two values, stabilising the modulus in the peer selection
+	// If the number of peers is small, use a minimum of 1 peer
+	var directInt int64
+	lastDirect := atomic.LoadInt64(&h.lastDirect)
+	if int64(sqrtPeers) >= lastDirect {
+		directInt = max(int64(sqrtPeers), 1)
+	} else {
+		directInt = max(min(int64(sqrtPeers+directPeersHysteresis), lastDirect), 1)
+	}
+	atomic.StoreInt64(&h.lastDirect, directInt)
 
+	direct := big.NewInt(directInt)                       // Number of peers to send directly to
 	total := new(big.Int).Exp(direct, big.NewInt(2), nil) // Stabilise total peer count a bit based on sqrt peers
 
 	var (
