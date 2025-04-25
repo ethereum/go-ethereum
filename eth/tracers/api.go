@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -788,7 +789,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Prepare the transaction for un-traced execution
 		var (
 			msg, _ = core.TransactionToMessage(tx, signer, block.BaseFee())
-			vmConf vm.Config
+			tracer *tracing.Hooks
 			dump   *os.File
 			writer *bufio.Writer
 			err    error
@@ -808,23 +809,20 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 
 			// Swap out the noop logger to the standard tracer
 			writer = bufio.NewWriter(dump)
-			vmConf = vm.Config{
-				Tracer:                  logger.NewJSONLogger(&logConfig, writer),
-				EnablePreimageRecording: true,
-			}
+			tracer = logger.NewJSONLogger(&logConfig, writer)
 		}
 		// Execute the transaction and flush any traces to disk
 		statedb.SetTxContext(tx.Hash(), i)
-		if vmConf.Tracer.OnTxStart != nil {
-			vmConf.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		if tracer != nil && tracer.OnTxStart != nil {
+			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
-		if vmConf.Tracer.OnTxEnd != nil {
+		if tracer != nil && tracer.OnTxEnd != nil {
 			var receipt *types.Receipt
 			if err == nil {
 				receipt = &types.Receipt{GasUsed: vmRet.UsedGas}
 			}
-			vmConf.Tracer.OnTxEnd(receipt, err)
+			tracer.OnTxEnd(receipt, err)
 		}
 		if writer != nil {
 			writer.Flush()
