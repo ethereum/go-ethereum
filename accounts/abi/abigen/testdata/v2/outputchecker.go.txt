@@ -50,8 +50,9 @@ func (c *OutputChecker) Instance(backend bind.ContractBackend, addr common.Addre
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackAnonOutput is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x008bda05.
+// PackAnonOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x008bda05.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function anonOutput() returns(string)
 func (outputChecker *OutputChecker) PackAnonOutput() []byte {
@@ -62,8 +63,9 @@ func (outputChecker *OutputChecker) PackAnonOutput() []byte {
 	return enc
 }
 
-// PackAnonOutput is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x008bda05.
+// PackAnonOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x008bda05.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function anonOutput() returns(string)
 func (outputChecker *OutputChecker) TryPackAnonOutput() ([]byte, error) {
@@ -83,8 +85,9 @@ func (outputChecker *OutputChecker) UnpackAnonOutput(data []byte) (string, error
 	return out0, nil
 }
 
-// PackAnonOutputs is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x3c401115.
+// PackAnonOutputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x3c401115.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function anonOutputs() returns(string, string)
 func (outputChecker *OutputChecker) PackAnonOutputs() []byte {
@@ -95,8 +98,9 @@ func (outputChecker *OutputChecker) PackAnonOutputs() []byte {
 	return enc
 }
 
-// PackAnonOutputs is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x3c401115.
+// PackAnonOutputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x3c401115.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function anonOutputs() returns(string, string)
 func (outputChecker *OutputChecker) TryPackAnonOutputs() ([]byte, error) {
@@ -114,19 +118,20 @@ type AnonOutputsOutput struct {
 // from invoking the contract method with ID 0x3c401115.
 //
 // Solidity: function anonOutputs() returns(string, string)
-func (outputChecker *OutputChecker) UnpackAnonOutputs(data []byte) (*AnonOutputsOutput, error) {
+func (outputChecker *OutputChecker) UnpackAnonOutputs(data []byte) (AnonOutputsOutput, error) {
 	out, err := outputChecker.abi.Unpack("anonOutputs", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(AnonOutputsOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Arg0 = *abi.ConvertType(out[0], new(string)).(*string)
 	outstruct.Arg1 = *abi.ConvertType(out[1], new(string)).(*string)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackCollidingOutputs is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xeccbc1ee.
+// PackCollidingOutputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xeccbc1ee.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function collidingOutputs() returns(string str, string Str)
 func (outputChecker *OutputChecker) PackCollidingOutputs() []byte {
@@ -137,8 +142,9 @@ func (outputChecker *OutputChecker) PackCollidingOutputs() []byte {
 	return enc
 }
 
-// PackCollidingOutputs is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xeccbc1ee.
+// PackCollidingOutputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xeccbc1ee.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function collidingOutputs() returns(string str, string Str)
 func (outputChecker *OutputChecker) TryPackCollidingOutputs() ([]byte, error) {
@@ -156,19 +162,20 @@ type CollidingOutputsOutput struct {
 // from invoking the contract method with ID 0xeccbc1ee.
 //
 // Solidity: function collidingOutputs() returns(string str, string Str)
-func (outputChecker *OutputChecker) UnpackCollidingOutputs(data []byte) (*CollidingOutputsOutput, error) {
+func (outputChecker *OutputChecker) UnpackCollidingOutputs(data []byte) (CollidingOutputsOutput, error) {
 	out, err := outputChecker.abi.Unpack("collidingOutputs", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(CollidingOutputsOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Str = *abi.ConvertType(out[0], new(string)).(*string)
 	outstruct.Str0 = *abi.ConvertType(out[1], new(string)).(*string)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackMixedOutputs is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x21b77b44.
+// PackMixedOutputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x21b77b44.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function mixedOutputs() returns(string, string str)
 func (outputChecker *OutputChecker) PackMixedOutputs() []byte {
@@ -179,8 +186,9 @@ func (outputChecker *OutputChecker) PackMixedOutputs() []byte {
 	return enc
 }
 
-// PackMixedOutputs is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x21b77b44.
+// PackMixedOutputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x21b77b44.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function mixedOutputs() returns(string, string str)
 func (outputChecker *OutputChecker) TryPackMixedOutputs() ([]byte, error) {
@@ -198,19 +206,20 @@ type MixedOutputsOutput struct {
 // from invoking the contract method with ID 0x21b77b44.
 //
 // Solidity: function mixedOutputs() returns(string, string str)
-func (outputChecker *OutputChecker) UnpackMixedOutputs(data []byte) (*MixedOutputsOutput, error) {
+func (outputChecker *OutputChecker) UnpackMixedOutputs(data []byte) (MixedOutputsOutput, error) {
 	out, err := outputChecker.abi.Unpack("mixedOutputs", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(MixedOutputsOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Arg0 = *abi.ConvertType(out[0], new(string)).(*string)
 	outstruct.Str = *abi.ConvertType(out[1], new(string)).(*string)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackNamedOutput is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x5e632bd5.
+// PackNamedOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x5e632bd5.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function namedOutput() returns(string str)
 func (outputChecker *OutputChecker) PackNamedOutput() []byte {
@@ -221,8 +230,9 @@ func (outputChecker *OutputChecker) PackNamedOutput() []byte {
 	return enc
 }
 
-// PackNamedOutput is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x5e632bd5.
+// PackNamedOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x5e632bd5.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function namedOutput() returns(string str)
 func (outputChecker *OutputChecker) TryPackNamedOutput() ([]byte, error) {
@@ -242,8 +252,9 @@ func (outputChecker *OutputChecker) UnpackNamedOutput(data []byte) (string, erro
 	return out0, nil
 }
 
-// PackNamedOutputs is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x7970a189.
+// PackNamedOutputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x7970a189.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function namedOutputs() returns(string str1, string str2)
 func (outputChecker *OutputChecker) PackNamedOutputs() []byte {
@@ -254,8 +265,9 @@ func (outputChecker *OutputChecker) PackNamedOutputs() []byte {
 	return enc
 }
 
-// PackNamedOutputs is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x7970a189.
+// PackNamedOutputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x7970a189.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function namedOutputs() returns(string str1, string str2)
 func (outputChecker *OutputChecker) TryPackNamedOutputs() ([]byte, error) {
@@ -273,19 +285,20 @@ type NamedOutputsOutput struct {
 // from invoking the contract method with ID 0x7970a189.
 //
 // Solidity: function namedOutputs() returns(string str1, string str2)
-func (outputChecker *OutputChecker) UnpackNamedOutputs(data []byte) (*NamedOutputsOutput, error) {
+func (outputChecker *OutputChecker) UnpackNamedOutputs(data []byte) (NamedOutputsOutput, error) {
 	out, err := outputChecker.abi.Unpack("namedOutputs", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(NamedOutputsOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Str1 = *abi.ConvertType(out[0], new(string)).(*string)
 	outstruct.Str2 = *abi.ConvertType(out[1], new(string)).(*string)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackNoOutput is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x625f0306.
+// PackNoOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x625f0306.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function noOutput() returns()
 func (outputChecker *OutputChecker) PackNoOutput() []byte {
@@ -296,8 +309,9 @@ func (outputChecker *OutputChecker) PackNoOutput() []byte {
 	return enc
 }
 
-// PackNoOutput is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x625f0306.
+// PackNoOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x625f0306.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function noOutput() returns()
 func (outputChecker *OutputChecker) TryPackNoOutput() ([]byte, error) {

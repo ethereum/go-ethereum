@@ -57,8 +57,9 @@ func (c *NameConflict) Instance(backend bind.ContractBackend, addr common.Addres
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackAddRequest is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xcce7b048.
+// PackAddRequest is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xcce7b048.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function addRequest((bytes,bytes) req) pure returns()
 func (nameConflict *NameConflict) PackAddRequest(req Oraclerequest) []byte {
@@ -69,16 +70,18 @@ func (nameConflict *NameConflict) PackAddRequest(req Oraclerequest) []byte {
 	return enc
 }
 
-// PackAddRequest is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xcce7b048.
+// PackAddRequest is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xcce7b048.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function addRequest((bytes,bytes) req) pure returns()
 func (nameConflict *NameConflict) TryPackAddRequest(req Oraclerequest) ([]byte, error) {
 	return nameConflict.abi.Pack("addRequest", req)
 }
 
-// PackGetRequest is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xc2bb515f.
+// PackGetRequest is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xc2bb515f.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function getRequest() pure returns((bytes,bytes))
 func (nameConflict *NameConflict) PackGetRequest() []byte {
@@ -89,8 +92,9 @@ func (nameConflict *NameConflict) PackGetRequest() []byte {
 	return enc
 }
 
-// PackGetRequest is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xc2bb515f.
+// PackGetRequest is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xc2bb515f.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function getRequest() pure returns((bytes,bytes))
 func (nameConflict *NameConflict) TryPackGetRequest() ([]byte, error) {

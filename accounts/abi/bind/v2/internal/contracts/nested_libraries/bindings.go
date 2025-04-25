@@ -67,8 +67,9 @@ func (c1 *C1) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
 func (c1 *C1) PackDo(val *big.Int) []byte {
@@ -79,8 +80,9 @@ func (c1 *C1) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
 func (c1 *C1) TryPackDo(val *big.Int) ([]byte, error) {
@@ -143,8 +145,9 @@ func (c2 *C2) PackConstructor(v1 *big.Int, v2 *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
 func (c2 *C2) PackDo(val *big.Int) []byte {
@@ -155,8 +158,9 @@ func (c2 *C2) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256 res)
 func (c2 *C2) TryPackDo(val *big.Int) ([]byte, error) {
@@ -203,8 +207,9 @@ func (c *L1) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l1 *L1) PackDo(val *big.Int) []byte {
@@ -215,8 +220,9 @@ func (l1 *L1) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l1 *L1) TryPackDo(val *big.Int) ([]byte, error) {
@@ -266,8 +272,9 @@ func (c *L2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l2 *L2) PackDo(val *big.Int) []byte {
@@ -278,8 +285,9 @@ func (l2 *L2) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l2 *L2) TryPackDo(val *big.Int) ([]byte, error) {
@@ -329,8 +337,9 @@ func (c *L2b) Instance(backend bind.ContractBackend, addr common.Address) *bind.
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l2b *L2b) PackDo(val *big.Int) []byte {
@@ -341,8 +350,9 @@ func (l2b *L2b) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l2b *L2b) TryPackDo(val *big.Int) ([]byte, error) {
@@ -389,8 +399,9 @@ func (c *L3) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l3 *L3) PackDo(val *big.Int) []byte {
@@ -401,8 +412,9 @@ func (l3 *L3) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l3 *L3) TryPackDo(val *big.Int) ([]byte, error) {
@@ -453,8 +465,9 @@ func (c *L4) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l4 *L4) PackDo(val *big.Int) []byte {
@@ -465,8 +478,9 @@ func (l4 *L4) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l4 *L4) TryPackDo(val *big.Int) ([]byte, error) {
@@ -516,8 +530,9 @@ func (c *L4b) Instance(backend bind.ContractBackend, addr common.Address) *bind.
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l4b *L4b) PackDo(val *big.Int) []byte {
@@ -528,8 +543,9 @@ func (l4b *L4b) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x2ad11272.
+// PackDo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2ad11272.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Do(uint256 val) pure returns(uint256)
 func (l4b *L4b) TryPackDo(val *big.Int) ([]byte, error) {

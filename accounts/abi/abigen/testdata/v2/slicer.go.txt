@@ -51,8 +51,9 @@ func (c *Slicer) Instance(backend bind.ContractBackend, addr common.Address) *bi
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackEchoAddresses is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xbe1127a3.
+// PackEchoAddresses is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbe1127a3.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function echoAddresses(address[] input) returns(address[] output)
 func (slicer *Slicer) PackEchoAddresses(input []common.Address) []byte {
@@ -63,8 +64,9 @@ func (slicer *Slicer) PackEchoAddresses(input []common.Address) []byte {
 	return enc
 }
 
-// PackEchoAddresses is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xbe1127a3.
+// PackEchoAddresses is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbe1127a3.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function echoAddresses(address[] input) returns(address[] output)
 func (slicer *Slicer) TryPackEchoAddresses(input []common.Address) ([]byte, error) {
@@ -84,8 +86,9 @@ func (slicer *Slicer) UnpackEchoAddresses(data []byte) ([]common.Address, error)
 	return out0, nil
 }
 
-// PackEchoBools is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xf637e589.
+// PackEchoBools is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xf637e589.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function echoBools(bool[] input) returns(bool[] output)
 func (slicer *Slicer) PackEchoBools(input []bool) []byte {
@@ -96,8 +99,9 @@ func (slicer *Slicer) PackEchoBools(input []bool) []byte {
 	return enc
 }
 
-// PackEchoBools is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xf637e589.
+// PackEchoBools is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xf637e589.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function echoBools(bool[] input) returns(bool[] output)
 func (slicer *Slicer) TryPackEchoBools(input []bool) ([]byte, error) {
@@ -117,8 +121,9 @@ func (slicer *Slicer) UnpackEchoBools(data []byte) ([]bool, error) {
 	return out0, nil
 }
 
-// PackEchoFancyInts is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xd88becc0.
+// PackEchoFancyInts is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd88becc0.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
 func (slicer *Slicer) PackEchoFancyInts(input [23]*big.Int) []byte {
@@ -129,8 +134,9 @@ func (slicer *Slicer) PackEchoFancyInts(input [23]*big.Int) []byte {
 	return enc
 }
 
-// PackEchoFancyInts is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xd88becc0.
+// PackEchoFancyInts is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd88becc0.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function echoFancyInts(uint24[23] input) returns(uint24[23] output)
 func (slicer *Slicer) TryPackEchoFancyInts(input [23]*big.Int) ([]byte, error) {
@@ -150,8 +156,9 @@ func (slicer *Slicer) UnpackEchoFancyInts(data []byte) ([23]*big.Int, error) {
 	return out0, nil
 }
 
-// PackEchoInts is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xe15a3db7.
+// PackEchoInts is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe15a3db7.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function echoInts(int256[] input) returns(int256[] output)
 func (slicer *Slicer) PackEchoInts(input []*big.Int) []byte {
@@ -162,8 +169,9 @@ func (slicer *Slicer) PackEchoInts(input []*big.Int) []byte {
 	return enc
 }
 
-// PackEchoInts is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xe15a3db7.
+// PackEchoInts is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe15a3db7.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function echoInts(int256[] input) returns(int256[] output)
 func (slicer *Slicer) TryPackEchoInts(input []*big.Int) ([]byte, error) {

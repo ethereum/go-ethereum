@@ -51,8 +51,9 @@ func (c *IdentifierCollision) Instance(backend bind.ContractBackend, addr common
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackMyVar is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x4ef1f0ad.
+// PackMyVar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x4ef1f0ad.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function MyVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
@@ -63,8 +64,9 @@ func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
 	return enc
 }
 
-// PackMyVar is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x4ef1f0ad.
+// PackMyVar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x4ef1f0ad.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function MyVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) TryPackMyVar() ([]byte, error) {
@@ -84,8 +86,9 @@ func (identifierCollision *IdentifierCollision) UnpackMyVar(data []byte) (*big.I
 	return out0, nil
 }
 
-// PackPubVar is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x01ad4d87.
+// PackPubVar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x01ad4d87.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function _myVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) PackPubVar() []byte {
@@ -96,8 +99,9 @@ func (identifierCollision *IdentifierCollision) PackPubVar() []byte {
 	return enc
 }
 
-// PackPubVar is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x01ad4d87.
+// PackPubVar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x01ad4d87.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function _myVar() view returns(uint256)
 func (identifierCollision *IdentifierCollision) TryPackPubVar() ([]byte, error) {

@@ -51,8 +51,9 @@ func (c *Underscorer) Instance(backend bind.ContractBackend, addr common.Address
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackAllPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xb564b34d.
+// PackAllPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xb564b34d.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function AllPurelyUnderscoredOutput() view returns(int256 _, int256 __)
 func (underscorer *Underscorer) PackAllPurelyUnderscoredOutput() []byte {
@@ -63,8 +64,9 @@ func (underscorer *Underscorer) PackAllPurelyUnderscoredOutput() []byte {
 	return enc
 }
 
-// PackAllPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xb564b34d.
+// PackAllPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xb564b34d.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function AllPurelyUnderscoredOutput() view returns(int256 _, int256 __)
 func (underscorer *Underscorer) TryPackAllPurelyUnderscoredOutput() ([]byte, error) {
@@ -82,19 +84,20 @@ type AllPurelyUnderscoredOutputOutput struct {
 // from invoking the contract method with ID 0xb564b34d.
 //
 // Solidity: function AllPurelyUnderscoredOutput() view returns(int256 _, int256 __)
-func (underscorer *Underscorer) UnpackAllPurelyUnderscoredOutput(data []byte) (*AllPurelyUnderscoredOutputOutput, error) {
+func (underscorer *Underscorer) UnpackAllPurelyUnderscoredOutput(data []byte) (AllPurelyUnderscoredOutputOutput, error) {
 	out, err := underscorer.abi.Unpack("AllPurelyUnderscoredOutput", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(AllPurelyUnderscoredOutputOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Arg1 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackLowerLowerCollision is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xe409ca45.
+// PackLowerLowerCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe409ca45.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function LowerLowerCollision() view returns(int256 _res, int256 res)
 func (underscorer *Underscorer) PackLowerLowerCollision() []byte {
@@ -105,8 +108,9 @@ func (underscorer *Underscorer) PackLowerLowerCollision() []byte {
 	return enc
 }
 
-// PackLowerLowerCollision is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xe409ca45.
+// PackLowerLowerCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe409ca45.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function LowerLowerCollision() view returns(int256 _res, int256 res)
 func (underscorer *Underscorer) TryPackLowerLowerCollision() ([]byte, error) {
@@ -124,19 +128,20 @@ type LowerLowerCollisionOutput struct {
 // from invoking the contract method with ID 0xe409ca45.
 //
 // Solidity: function LowerLowerCollision() view returns(int256 _res, int256 res)
-func (underscorer *Underscorer) UnpackLowerLowerCollision(data []byte) (*LowerLowerCollisionOutput, error) {
+func (underscorer *Underscorer) UnpackLowerLowerCollision(data []byte) (LowerLowerCollisionOutput, error) {
 	out, err := underscorer.abi.Unpack("LowerLowerCollision", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(LowerLowerCollisionOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackLowerUpperCollision is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x03a59213.
+// PackLowerUpperCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x03a59213.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function LowerUpperCollision() view returns(int256 _res, int256 Res)
 func (underscorer *Underscorer) PackLowerUpperCollision() []byte {
@@ -147,8 +152,9 @@ func (underscorer *Underscorer) PackLowerUpperCollision() []byte {
 	return enc
 }
 
-// PackLowerUpperCollision is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x03a59213.
+// PackLowerUpperCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x03a59213.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function LowerUpperCollision() view returns(int256 _res, int256 Res)
 func (underscorer *Underscorer) TryPackLowerUpperCollision() ([]byte, error) {
@@ -166,19 +172,20 @@ type LowerUpperCollisionOutput struct {
 // from invoking the contract method with ID 0x03a59213.
 //
 // Solidity: function LowerUpperCollision() view returns(int256 _res, int256 Res)
-func (underscorer *Underscorer) UnpackLowerUpperCollision(data []byte) (*LowerUpperCollisionOutput, error) {
+func (underscorer *Underscorer) UnpackLowerUpperCollision(data []byte) (LowerUpperCollisionOutput, error) {
 	out, err := underscorer.abi.Unpack("LowerUpperCollision", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(LowerUpperCollisionOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x9df48485.
+// PackPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x9df48485.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function PurelyUnderscoredOutput() view returns(int256 _, int256 res)
 func (underscorer *Underscorer) PackPurelyUnderscoredOutput() []byte {
@@ -189,8 +196,9 @@ func (underscorer *Underscorer) PackPurelyUnderscoredOutput() []byte {
 	return enc
 }
 
-// PackPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x9df48485.
+// PackPurelyUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x9df48485.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function PurelyUnderscoredOutput() view returns(int256 _, int256 res)
 func (underscorer *Underscorer) TryPackPurelyUnderscoredOutput() ([]byte, error) {
@@ -208,19 +216,20 @@ type PurelyUnderscoredOutputOutput struct {
 // from invoking the contract method with ID 0x9df48485.
 //
 // Solidity: function PurelyUnderscoredOutput() view returns(int256 _, int256 res)
-func (underscorer *Underscorer) UnpackPurelyUnderscoredOutput(data []byte) (*PurelyUnderscoredOutputOutput, error) {
+func (underscorer *Underscorer) UnpackPurelyUnderscoredOutput(data []byte) (PurelyUnderscoredOutputOutput, error) {
 	out, err := underscorer.abi.Unpack("PurelyUnderscoredOutput", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(PurelyUnderscoredOutputOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Arg0 = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Res = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackUnderscoredOutput is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x67e6633d.
+// PackUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x67e6633d.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function UnderscoredOutput() view returns(int256 _int, string _string)
 func (underscorer *Underscorer) PackUnderscoredOutput() []byte {
@@ -231,8 +240,9 @@ func (underscorer *Underscorer) PackUnderscoredOutput() []byte {
 	return enc
 }
 
-// PackUnderscoredOutput is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x67e6633d.
+// PackUnderscoredOutput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x67e6633d.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function UnderscoredOutput() view returns(int256 _int, string _string)
 func (underscorer *Underscorer) TryPackUnderscoredOutput() ([]byte, error) {
@@ -250,19 +260,20 @@ type UnderscoredOutputOutput struct {
 // from invoking the contract method with ID 0x67e6633d.
 //
 // Solidity: function UnderscoredOutput() view returns(int256 _int, string _string)
-func (underscorer *Underscorer) UnpackUnderscoredOutput(data []byte) (*UnderscoredOutputOutput, error) {
+func (underscorer *Underscorer) UnpackUnderscoredOutput(data []byte) (UnderscoredOutputOutput, error) {
 	out, err := underscorer.abi.Unpack("UnderscoredOutput", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(UnderscoredOutputOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Int = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.String = *abi.ConvertType(out[1], new(string)).(*string)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackUpperLowerCollision is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xaf7486ab.
+// PackUpperLowerCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xaf7486ab.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function UpperLowerCollision() view returns(int256 _Res, int256 res)
 func (underscorer *Underscorer) PackUpperLowerCollision() []byte {
@@ -273,8 +284,9 @@ func (underscorer *Underscorer) PackUpperLowerCollision() []byte {
 	return enc
 }
 
-// PackUpperLowerCollision is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xaf7486ab.
+// PackUpperLowerCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xaf7486ab.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function UpperLowerCollision() view returns(int256 _Res, int256 res)
 func (underscorer *Underscorer) TryPackUpperLowerCollision() ([]byte, error) {
@@ -292,19 +304,20 @@ type UpperLowerCollisionOutput struct {
 // from invoking the contract method with ID 0xaf7486ab.
 //
 // Solidity: function UpperLowerCollision() view returns(int256 _Res, int256 res)
-func (underscorer *Underscorer) UnpackUpperLowerCollision(data []byte) (*UpperLowerCollisionOutput, error) {
+func (underscorer *Underscorer) UnpackUpperLowerCollision(data []byte) (UpperLowerCollisionOutput, error) {
 	out, err := underscorer.abi.Unpack("UpperLowerCollision", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(UpperLowerCollisionOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackUpperUpperCollision is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xe02ab24d.
+// PackUpperUpperCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe02ab24d.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function UpperUpperCollision() view returns(int256 _Res, int256 Res)
 func (underscorer *Underscorer) PackUpperUpperCollision() []byte {
@@ -315,8 +328,9 @@ func (underscorer *Underscorer) PackUpperUpperCollision() []byte {
 	return enc
 }
 
-// PackUpperUpperCollision is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xe02ab24d.
+// PackUpperUpperCollision is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xe02ab24d.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function UpperUpperCollision() view returns(int256 _Res, int256 Res)
 func (underscorer *Underscorer) TryPackUpperUpperCollision() ([]byte, error) {
@@ -334,19 +348,20 @@ type UpperUpperCollisionOutput struct {
 // from invoking the contract method with ID 0xe02ab24d.
 //
 // Solidity: function UpperUpperCollision() view returns(int256 _Res, int256 Res)
-func (underscorer *Underscorer) UnpackUpperUpperCollision(data []byte) (*UpperUpperCollisionOutput, error) {
+func (underscorer *Underscorer) UnpackUpperUpperCollision(data []byte) (UpperUpperCollisionOutput, error) {
 	out, err := underscorer.abi.Unpack("UpperUpperCollision", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(UpperUpperCollisionOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.Res = abi.ConvertType(out[0], new(big.Int)).(*big.Int)
 	outstruct.Res0 = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackUnderScoredFunc is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x46546dbe.
+// PackUnderScoredFunc is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x46546dbe.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function _under_scored_func() view returns(int256 _int)
 func (underscorer *Underscorer) PackUnderScoredFunc() []byte {
@@ -357,8 +372,9 @@ func (underscorer *Underscorer) PackUnderScoredFunc() []byte {
 	return enc
 }
 
-// PackUnderScoredFunc is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x46546dbe.
+// PackUnderScoredFunc is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x46546dbe.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function _under_scored_func() view returns(int256 _int)
 func (underscorer *Underscorer) TryPackUnderScoredFunc() ([]byte, error) {

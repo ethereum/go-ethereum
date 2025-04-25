@@ -51,8 +51,9 @@ func (c *C) Instance(backend bind.ContractBackend, addr common.Address) *bind.Bo
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackBar is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xb0a378b0.
+// PackBar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xb0a378b0.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Bar() pure returns()
 func (c *C) PackBar() []byte {
@@ -63,16 +64,18 @@ func (c *C) PackBar() []byte {
 	return enc
 }
 
-// PackBar is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xb0a378b0.
+// PackBar is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xb0a378b0.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Bar() pure returns()
 func (c *C) TryPackBar() ([]byte, error) {
 	return c.abi.Pack("Bar")
 }
 
-// PackFoo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xbfb4ebcf.
+// PackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbfb4ebcf.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Foo() pure returns()
 func (c *C) PackFoo() []byte {
@@ -83,8 +86,9 @@ func (c *C) PackFoo() []byte {
 	return enc
 }
 
-// PackFoo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xbfb4ebcf.
+// PackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbfb4ebcf.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Foo() pure returns()
 func (c *C) TryPackFoo() ([]byte, error) {
@@ -184,8 +188,9 @@ func (c *C2) Instance(backend bind.ContractBackend, addr common.Address) *bind.B
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackFoo is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0xbfb4ebcf.
+// PackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbfb4ebcf.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function Foo() pure returns()
 func (c2 *C2) PackFoo() []byte {
@@ -196,8 +201,9 @@ func (c2 *C2) PackFoo() []byte {
 	return enc
 }
 
-// PackFoo is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0xbfb4ebcf.
+// PackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xbfb4ebcf.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function Foo() pure returns()
 func (c2 *C2) TryPackFoo() ([]byte, error) {

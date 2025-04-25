@@ -51,8 +51,9 @@ func (c *Tupler) Instance(backend bind.ContractBackend, addr common.Address) *bi
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackTuple is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x3175aae2.
+// PackTuple is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x3175aae2.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function tuple() returns(string a, int256 b, bytes32 c)
 func (tupler *Tupler) PackTuple() []byte {
@@ -63,8 +64,9 @@ func (tupler *Tupler) PackTuple() []byte {
 	return enc
 }
 
-// PackTuple is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x3175aae2.
+// PackTuple is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x3175aae2.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function tuple() returns(string a, int256 b, bytes32 c)
 func (tupler *Tupler) TryPackTuple() ([]byte, error) {
@@ -83,14 +85,14 @@ type TupleOutput struct {
 // from invoking the contract method with ID 0x3175aae2.
 //
 // Solidity: function tuple() returns(string a, int256 b, bytes32 c)
-func (tupler *Tupler) UnpackTuple(data []byte) (*TupleOutput, error) {
+func (tupler *Tupler) UnpackTuple(data []byte) (TupleOutput, error) {
 	out, err := tupler.abi.Unpack("tuple", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(TupleOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.A = *abi.ConvertType(out[0], new(string)).(*string)
 	outstruct.B = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
 	outstruct.C = *abi.ConvertType(out[2], new([32]byte)).(*[32]byte)
-	return outstruct, nil
+	return *outstruct, nil
 }

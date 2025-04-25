@@ -56,8 +56,9 @@ func (c *Structs) Instance(backend bind.ContractBackend, addr common.Address) *b
 	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
 }
 
-// PackF is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x28811f59.
+// PackF is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x28811f59.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
 func (structs *Structs) PackF() []byte {
@@ -68,8 +69,9 @@ func (structs *Structs) PackF() []byte {
 	return enc
 }
 
-// PackF is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x28811f59.
+// PackF is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x28811f59.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
 func (structs *Structs) TryPackF() ([]byte, error) {
@@ -88,20 +90,21 @@ type FOutput struct {
 // from invoking the contract method with ID 0x28811f59.
 //
 // Solidity: function F() view returns((bytes32)[] a, uint256[] c, bool[] d)
-func (structs *Structs) UnpackF(data []byte) (*FOutput, error) {
+func (structs *Structs) UnpackF(data []byte) (FOutput, error) {
 	out, err := structs.abi.Unpack("F", data)
-	if err != nil {
-		return nil, err
-	}
 	outstruct := new(FOutput)
+	if err != nil {
+		return *outstruct, err
+	}
 	outstruct.A = *abi.ConvertType(out[0], new([]Struct0)).(*[]Struct0)
 	outstruct.C = *abi.ConvertType(out[1], new([]*big.Int)).(*[]*big.Int)
 	outstruct.D = *abi.ConvertType(out[2], new([]bool)).(*[]bool)
-	return outstruct, nil
+	return *outstruct, nil
 }
 
-// PackG is the Go binding used to pack the parameters required for calling, will panic for any error.
-// the contract method with ID 0x6fecb623.
+// PackG is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6fecb623.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function G() view returns((bytes32)[] a)
 func (structs *Structs) PackG() []byte {
@@ -112,8 +115,9 @@ func (structs *Structs) PackG() []byte {
 	return enc
 }
 
-// PackG is the Go binding used to pack the parameters required for calling, return error if it failed to pack.
-// the contract method with ID 0x6fecb623.
+// PackG is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6fecb623.  This method will return an error
+// if any inputs are invalid/nil.
 //
 // Solidity: function G() view returns((bytes32)[] a)
 func (structs *Structs) TryPackG() ([]byte, error) {
