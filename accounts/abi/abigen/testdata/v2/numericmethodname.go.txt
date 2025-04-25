@@ -64,7 +64,7 @@ func (numericMethodName *NumericMethodName) PackE1test() []byte {
 	return enc
 }
 
-// PackE1test is the Go binding used to pack the parameters required for calling
+// TryPackE1test is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xffa02795.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -86,7 +86,7 @@ func (numericMethodName *NumericMethodName) PackE1test0() []byte {
 	return enc
 }
 
-// PackE1test0 is the Go binding used to pack the parameters required for calling
+// TryPackE1test0 is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xd02767c7.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -108,7 +108,7 @@ func (numericMethodName *NumericMethodName) PackE2test() []byte {
 	return enc
 }
 
-// PackE2test is the Go binding used to pack the parameters required for calling
+// TryPackE2test is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x9d993132.  This method will return an error
 // if any inputs are invalid/nil.
 //

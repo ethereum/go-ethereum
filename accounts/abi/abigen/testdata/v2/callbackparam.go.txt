@@ -64,7 +64,7 @@ func (callbackParam *CallbackParam) PackTest(callback [24]byte) []byte {
 	return enc
 }
 
-// PackTest is the Go binding used to pack the parameters required for calling
+// TryPackTest is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xd7a5aba2.  This method will return an error
 // if any inputs are invalid/nil.
 //

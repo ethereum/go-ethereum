@@ -80,7 +80,7 @@ func (c1 *C1) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling
+// TryPackDo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x2ad11272.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -158,7 +158,7 @@ func (c2 *C2) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling
+// TryPackDo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x2ad11272.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -220,7 +220,7 @@ func (l1 *L1) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling
+// TryPackDo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x2ad11272.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -285,7 +285,7 @@ func (l2 *L2) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling
+// TryPackDo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x2ad11272.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -350,7 +350,7 @@ func (l2b *L2b) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling
+// TryPackDo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x2ad11272.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -412,7 +412,7 @@ func (l3 *L3) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling
+// TryPackDo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x2ad11272.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -478,7 +478,7 @@ func (l4 *L4) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling
+// TryPackDo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x2ad11272.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -543,7 +543,7 @@ func (l4b *L4b) PackDo(val *big.Int) []byte {
 	return enc
 }
 
-// PackDo is the Go binding used to pack the parameters required for calling
+// TryPackDo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x2ad11272.  This method will return an error
 // if any inputs are invalid/nil.
 //

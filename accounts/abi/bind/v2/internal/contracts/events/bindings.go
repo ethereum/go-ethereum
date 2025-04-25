@@ -64,7 +64,7 @@ func (c *C) PackEmitMulti() []byte {
 	return enc
 }
 
-// PackEmitMulti is the Go binding used to pack the parameters required for calling
+// TryPackEmitMulti is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xcb493749.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -86,7 +86,7 @@ func (c *C) PackEmitOne() []byte {
 	return enc
 }
 
-// PackEmitOne is the Go binding used to pack the parameters required for calling
+// TryPackEmitOne is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xe8e49a71.  This method will return an error
 // if any inputs are invalid/nil.
 //

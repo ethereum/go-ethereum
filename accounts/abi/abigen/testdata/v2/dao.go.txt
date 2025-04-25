@@ -76,7 +76,7 @@ func (dAO *DAO) PackChangeMembership(targetMember common.Address, canVote bool, 
 	return enc
 }
 
-// PackChangeMembership is the Go binding used to pack the parameters required for calling
+// TryPackChangeMembership is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x9644fcbd.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -98,7 +98,7 @@ func (dAO *DAO) PackChangeVotingRules(minimumQuorumForProposals *big.Int, minute
 	return enc
 }
 
-// PackChangeVotingRules is the Go binding used to pack the parameters required for calling
+// TryPackChangeVotingRules is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xbcca1fd3.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -120,7 +120,7 @@ func (dAO *DAO) PackCheckProposalCode(proposalNumber *big.Int, beneficiary commo
 	return enc
 }
 
-// PackCheckProposalCode is the Go binding used to pack the parameters required for calling
+// TryPackCheckProposalCode is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xeceb2945.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -155,7 +155,7 @@ func (dAO *DAO) PackDebatingPeriodInMinutes() []byte {
 	return enc
 }
 
-// PackDebatingPeriodInMinutes is the Go binding used to pack the parameters required for calling
+// TryPackDebatingPeriodInMinutes is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x69bd3436.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -190,7 +190,7 @@ func (dAO *DAO) PackExecuteProposal(proposalNumber *big.Int, transactionBytecode
 	return enc
 }
 
-// PackExecuteProposal is the Go binding used to pack the parameters required for calling
+// TryPackExecuteProposal is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x237e9492.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -225,7 +225,7 @@ func (dAO *DAO) PackMajorityMargin() []byte {
 	return enc
 }
 
-// PackMajorityMargin is the Go binding used to pack the parameters required for calling
+// TryPackMajorityMargin is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xaa02a90f.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -260,7 +260,7 @@ func (dAO *DAO) PackMemberId(arg0 common.Address) []byte {
 	return enc
 }
 
-// PackMemberId is the Go binding used to pack the parameters required for calling
+// TryPackMemberId is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x39106821.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -295,7 +295,7 @@ func (dAO *DAO) PackMembers(arg0 *big.Int) []byte {
 	return enc
 }
 
-// PackMembers is the Go binding used to pack the parameters required for calling
+// TryPackMembers is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x5daf08ca.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -343,7 +343,7 @@ func (dAO *DAO) PackMinimumQuorum() []byte {
 	return enc
 }
 
-// PackMinimumQuorum is the Go binding used to pack the parameters required for calling
+// TryPackMinimumQuorum is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x8160f0b5.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -378,7 +378,7 @@ func (dAO *DAO) PackNewProposal(beneficiary common.Address, etherAmount *big.Int
 	return enc
 }
 
-// PackNewProposal is the Go binding used to pack the parameters required for calling
+// TryPackNewProposal is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xb1050da5.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -413,7 +413,7 @@ func (dAO *DAO) PackNumProposals() []byte {
 	return enc
 }
 
-// PackNumProposals is the Go binding used to pack the parameters required for calling
+// TryPackNumProposals is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x400e3949.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -448,7 +448,7 @@ func (dAO *DAO) PackOwner() []byte {
 	return enc
 }
 
-// PackOwner is the Go binding used to pack the parameters required for calling
+// TryPackOwner is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x8da5cb5b.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -483,7 +483,7 @@ func (dAO *DAO) PackProposals(arg0 *big.Int) []byte {
 	return enc
 }
 
-// PackProposals is the Go binding used to pack the parameters required for calling
+// TryPackProposals is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x013cf08b.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -541,7 +541,7 @@ func (dAO *DAO) PackTransferOwnership(newOwner common.Address) []byte {
 	return enc
 }
 
-// PackTransferOwnership is the Go binding used to pack the parameters required for calling
+// TryPackTransferOwnership is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xf2fde38b.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -563,7 +563,7 @@ func (dAO *DAO) PackVote(proposalNumber *big.Int, supportsProposal bool, justifi
 	return enc
 }
 
-// PackVote is the Go binding used to pack the parameters required for calling
+// TryPackVote is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xd3c0715b.  This method will return an error
 // if any inputs are invalid/nil.
 //

@@ -64,7 +64,7 @@ func (getter *Getter) PackGetter() []byte {
 	return enc
 }
 
-// PackGetter is the Go binding used to pack the parameters required for calling
+// TryPackGetter is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x993a04b7.  This method will return an error
 // if any inputs are invalid/nil.
 //

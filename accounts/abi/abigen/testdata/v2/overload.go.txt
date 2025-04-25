@@ -64,7 +64,7 @@ func (overload *Overload) PackFoo(i *big.Int, j *big.Int) []byte {
 	return enc
 }
 
-// PackFoo is the Go binding used to pack the parameters required for calling
+// TryPackFoo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x04bc52f8.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -86,7 +86,7 @@ func (overload *Overload) PackFoo0(i *big.Int) []byte {
 	return enc
 }
 
-// PackFoo0 is the Go binding used to pack the parameters required for calling
+// TryPackFoo0 is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x2fbebd38.  This method will return an error
 // if any inputs are invalid/nil.
 //

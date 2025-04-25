@@ -64,7 +64,7 @@ func (identifierCollision *IdentifierCollision) PackMyVar() []byte {
 	return enc
 }
 
-// PackMyVar is the Go binding used to pack the parameters required for calling
+// TryPackMyVar is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x4ef1f0ad.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -99,7 +99,7 @@ func (identifierCollision *IdentifierCollision) PackPubVar() []byte {
 	return enc
 }
 
-// PackPubVar is the Go binding used to pack the parameters required for calling
+// TryPackPubVar is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x01ad4d87.  This method will return an error
 // if any inputs are invalid/nil.
 //

@@ -64,7 +64,7 @@ func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(arg0 *big.Int, a
 	return enc
 }
 
-// PackDeepUint64Array is the Go binding used to pack the parameters required for calling
+// TryPackDeepUint64Array is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x98ed1856.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -99,7 +99,7 @@ func (deeplyNestedArray *DeeplyNestedArray) PackRetrieveDeepArray() []byte {
 	return enc
 }
 
-// PackRetrieveDeepArray is the Go binding used to pack the parameters required for calling
+// TryPackRetrieveDeepArray is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x8ed4573a.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -134,7 +134,7 @@ func (deeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(arr [5][4][3]
 	return enc
 }
 
-// PackStoreDeepUintArray is the Go binding used to pack the parameters required for calling
+// TryPackStoreDeepUintArray is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x34424855.  This method will return an error
 // if any inputs are invalid/nil.
 //

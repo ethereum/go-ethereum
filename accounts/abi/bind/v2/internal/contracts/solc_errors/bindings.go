@@ -64,7 +64,7 @@ func (c *C) PackBar() []byte {
 	return enc
 }
 
-// PackBar is the Go binding used to pack the parameters required for calling
+// TryPackBar is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xb0a378b0.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -86,7 +86,7 @@ func (c *C) PackFoo() []byte {
 	return enc
 }
 
-// PackFoo is the Go binding used to pack the parameters required for calling
+// TryPackFoo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xbfb4ebcf.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -201,7 +201,7 @@ func (c2 *C2) PackFoo() []byte {
 	return enc
 }
 
-// PackFoo is the Go binding used to pack the parameters required for calling
+// TryPackFoo is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xbfb4ebcf.  This method will return an error
 // if any inputs are invalid/nil.
 //

@@ -76,7 +76,7 @@ func (token *Token) PackAllowance(arg0 common.Address, arg1 common.Address) []by
 	return enc
 }
 
-// PackAllowance is the Go binding used to pack the parameters required for calling
+// TryPackAllowance is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xdd62ed3e.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -111,7 +111,7 @@ func (token *Token) PackApproveAndCall(spender common.Address, value *big.Int, e
 	return enc
 }
 
-// PackApproveAndCall is the Go binding used to pack the parameters required for calling
+// TryPackApproveAndCall is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xcae9ca51.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -146,7 +146,7 @@ func (token *Token) PackBalanceOf(arg0 common.Address) []byte {
 	return enc
 }
 
-// PackBalanceOf is the Go binding used to pack the parameters required for calling
+// TryPackBalanceOf is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x70a08231.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -181,7 +181,7 @@ func (token *Token) PackDecimals() []byte {
 	return enc
 }
 
-// PackDecimals is the Go binding used to pack the parameters required for calling
+// TryPackDecimals is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x313ce567.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -216,7 +216,7 @@ func (token *Token) PackName() []byte {
 	return enc
 }
 
-// PackName is the Go binding used to pack the parameters required for calling
+// TryPackName is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x06fdde03.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -251,7 +251,7 @@ func (token *Token) PackSpentAllowance(arg0 common.Address, arg1 common.Address)
 	return enc
 }
 
-// PackSpentAllowance is the Go binding used to pack the parameters required for calling
+// TryPackSpentAllowance is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xdc3080f2.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -286,7 +286,7 @@ func (token *Token) PackSymbol() []byte {
 	return enc
 }
 
-// PackSymbol is the Go binding used to pack the parameters required for calling
+// TryPackSymbol is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x95d89b41.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -321,7 +321,7 @@ func (token *Token) PackTransfer(to common.Address, value *big.Int) []byte {
 	return enc
 }
 
-// PackTransfer is the Go binding used to pack the parameters required for calling
+// TryPackTransfer is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xa9059cbb.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -343,7 +343,7 @@ func (token *Token) PackTransferFrom(from common.Address, to common.Address, val
 	return enc
 }
 
-// PackTransferFrom is the Go binding used to pack the parameters required for calling
+// TryPackTransferFrom is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x23b872dd.  This method will return an error
 // if any inputs are invalid/nil.
 //

@@ -63,7 +63,7 @@ func (inputChecker *InputChecker) PackAnonInput(arg0 string) []byte {
 	return enc
 }
 
-// PackAnonInput is the Go binding used to pack the parameters required for calling
+// TryPackAnonInput is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x3e708e82.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -85,7 +85,7 @@ func (inputChecker *InputChecker) PackAnonInputs(arg0 string, arg1 string) []byt
 	return enc
 }
 
-// PackAnonInputs is the Go binding used to pack the parameters required for calling
+// TryPackAnonInputs is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x28160527.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -107,7 +107,7 @@ func (inputChecker *InputChecker) PackMixedInputs(arg0 string, str string) []byt
 	return enc
 }
 
-// PackMixedInputs is the Go binding used to pack the parameters required for calling
+// TryPackMixedInputs is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xc689ebdc.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -129,7 +129,7 @@ func (inputChecker *InputChecker) PackNamedInput(str string) []byte {
 	return enc
 }
 
-// PackNamedInput is the Go binding used to pack the parameters required for calling
+// TryPackNamedInput is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x0d402005.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -151,7 +151,7 @@ func (inputChecker *InputChecker) PackNamedInputs(str1 string, str2 string) []by
 	return enc
 }
 
-// PackNamedInputs is the Go binding used to pack the parameters required for calling
+// TryPackNamedInputs is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x63c796ed.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -173,7 +173,7 @@ func (inputChecker *InputChecker) PackNoInput() []byte {
 	return enc
 }
 
-// PackNoInput is the Go binding used to pack the parameters required for calling
+// TryPackNoInput is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x53539029.  This method will return an error
 // if any inputs are invalid/nil.
 //

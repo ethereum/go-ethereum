@@ -64,7 +64,7 @@ func (myContract *MyContract) PackGetNums() []byte {
 	return enc
 }
 
-// PackGetNums is the Go binding used to pack the parameters required for calling
+// TryPackGetNums is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xbd6d1007.  This method will return an error
 // if any inputs are invalid/nil.
 //

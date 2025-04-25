@@ -71,7 +71,7 @@ func (dB *DB) PackGet(k *big.Int) []byte {
 	return enc
 }
 
-// PackGet is the Go binding used to pack the parameters required for calling
+// TryPackGet is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x9507d39a.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -106,7 +106,7 @@ func (dB *DB) PackGetNamedStatParams() []byte {
 	return enc
 }
 
-// PackGetNamedStatParams is the Go binding used to pack the parameters required for calling
+// TryPackGetNamedStatParams is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xe369ba3b.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -152,7 +152,7 @@ func (dB *DB) PackGetStatParams() []byte {
 	return enc
 }
 
-// PackGetStatParams is the Go binding used to pack the parameters required for calling
+// TryPackGetStatParams is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x6fcb9c70.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -198,7 +198,7 @@ func (dB *DB) PackGetStatsStruct() []byte {
 	return enc
 }
 
-// PackGetStatsStruct is the Go binding used to pack the parameters required for calling
+// TryPackGetStatsStruct is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xee8161e0.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -233,7 +233,7 @@ func (dB *DB) PackInsert(k *big.Int, v *big.Int) []byte {
 	return enc
 }
 
-// PackInsert is the Go binding used to pack the parameters required for calling
+// TryPackInsert is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x1d834a1b.  This method will return an error
 // if any inputs are invalid/nil.
 //

@@ -70,7 +70,7 @@ func (nameConflict *NameConflict) PackAddRequest(req Oraclerequest) []byte {
 	return enc
 }
 
-// PackAddRequest is the Go binding used to pack the parameters required for calling
+// TryPackAddRequest is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xcce7b048.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -92,7 +92,7 @@ func (nameConflict *NameConflict) PackGetRequest() []byte {
 	return enc
 }
 
-// PackGetRequest is the Go binding used to pack the parameters required for calling
+// TryPackGetRequest is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xc2bb515f.  This method will return an error
 // if any inputs are invalid/nil.
 //

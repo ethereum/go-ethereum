@@ -63,7 +63,7 @@ func (outputChecker *OutputChecker) PackAnonOutput() []byte {
 	return enc
 }
 
-// PackAnonOutput is the Go binding used to pack the parameters required for calling
+// TryPackAnonOutput is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x008bda05.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -98,7 +98,7 @@ func (outputChecker *OutputChecker) PackAnonOutputs() []byte {
 	return enc
 }
 
-// PackAnonOutputs is the Go binding used to pack the parameters required for calling
+// TryPackAnonOutputs is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x3c401115.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -142,7 +142,7 @@ func (outputChecker *OutputChecker) PackCollidingOutputs() []byte {
 	return enc
 }
 
-// PackCollidingOutputs is the Go binding used to pack the parameters required for calling
+// TryPackCollidingOutputs is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xeccbc1ee.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -186,7 +186,7 @@ func (outputChecker *OutputChecker) PackMixedOutputs() []byte {
 	return enc
 }
 
-// PackMixedOutputs is the Go binding used to pack the parameters required for calling
+// TryPackMixedOutputs is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x21b77b44.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -230,7 +230,7 @@ func (outputChecker *OutputChecker) PackNamedOutput() []byte {
 	return enc
 }
 
-// PackNamedOutput is the Go binding used to pack the parameters required for calling
+// TryPackNamedOutput is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x5e632bd5.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -265,7 +265,7 @@ func (outputChecker *OutputChecker) PackNamedOutputs() []byte {
 	return enc
 }
 
-// PackNamedOutputs is the Go binding used to pack the parameters required for calling
+// TryPackNamedOutputs is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x7970a189.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -309,7 +309,7 @@ func (outputChecker *OutputChecker) PackNoOutput() []byte {
 	return enc
 }
 
-// PackNoOutput is the Go binding used to pack the parameters required for calling
+// TryPackNoOutput is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x625f0306.  This method will return an error
 // if any inputs are invalid/nil.
 //

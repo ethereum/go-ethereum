@@ -64,7 +64,7 @@ func (rangeKeyword *RangeKeyword) PackFunctionWithKeywordParameter(arg0 *big.Int
 	return enc
 }
 
-// PackFunctionWithKeywordParameter is the Go binding used to pack the parameters required for calling
+// TryPackFunctionWithKeywordParameter is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x527a119f.  This method will return an error
 // if any inputs are invalid/nil.
 //

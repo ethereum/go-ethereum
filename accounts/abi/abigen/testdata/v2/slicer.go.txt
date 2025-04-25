@@ -64,7 +64,7 @@ func (slicer *Slicer) PackEchoAddresses(input []common.Address) []byte {
 	return enc
 }
 
-// PackEchoAddresses is the Go binding used to pack the parameters required for calling
+// TryPackEchoAddresses is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xbe1127a3.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -99,7 +99,7 @@ func (slicer *Slicer) PackEchoBools(input []bool) []byte {
 	return enc
 }
 
-// PackEchoBools is the Go binding used to pack the parameters required for calling
+// TryPackEchoBools is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xf637e589.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -134,7 +134,7 @@ func (slicer *Slicer) PackEchoFancyInts(input [23]*big.Int) []byte {
 	return enc
 }
 
-// PackEchoFancyInts is the Go binding used to pack the parameters required for calling
+// TryPackEchoFancyInts is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xd88becc0.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -169,7 +169,7 @@ func (slicer *Slicer) PackEchoInts(input []*big.Int) []byte {
 	return enc
 }
 
-// PackEchoInts is the Go binding used to pack the parameters required for calling
+// TryPackEchoInts is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xe15a3db7.  This method will return an error
 // if any inputs are invalid/nil.
 //

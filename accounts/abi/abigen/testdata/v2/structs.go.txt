@@ -69,7 +69,7 @@ func (structs *Structs) PackF() []byte {
 	return enc
 }
 
-// PackF is the Go binding used to pack the parameters required for calling
+// TryPackF is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x28811f59.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -115,7 +115,7 @@ func (structs *Structs) PackG() []byte {
 	return enc
 }
 
-// PackG is the Go binding used to pack the parameters required for calling
+// TryPackG is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x6fecb623.  This method will return an error
 // if any inputs are invalid/nil.
 //

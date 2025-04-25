@@ -76,7 +76,7 @@ func (interactor *Interactor) PackDeployString() []byte {
 	return enc
 }
 
-// PackDeployString is the Go binding used to pack the parameters required for calling
+// TryPackDeployString is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x6874e809.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -111,7 +111,7 @@ func (interactor *Interactor) PackTransact(str string) []byte {
 	return enc
 }
 
-// PackTransact is the Go binding used to pack the parameters required for calling
+// TryPackTransact is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0xd736c513.  This method will return an error
 // if any inputs are invalid/nil.
 //
@@ -133,7 +133,7 @@ func (interactor *Interactor) PackTransactString() []byte {
 	return enc
 }
 
-// PackTransactString is the Go binding used to pack the parameters required for calling
+// TryPackTransactString is the Go binding used to pack the parameters required for calling
 // the contract method with ID 0x0d86a0e1.  This method will return an error
 // if any inputs are invalid/nil.
 //
