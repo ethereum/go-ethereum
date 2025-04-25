@@ -102,7 +102,7 @@ var (
 			return enc
 		}
 
-		// Pack{{.Normalized.Name}} is the Go binding used to pack the parameters required for calling
+		// TryPack{{.Normalized.Name}} is the Go binding used to pack the parameters required for calling
 		// the contract method with ID 0x{{printf "%x" .Original.ID}}.  This method will return an error
 		// if any inputs are invalid/nil.
 		//
