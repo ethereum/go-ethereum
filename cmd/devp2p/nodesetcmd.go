@@ -151,7 +151,7 @@ func parseFilters(args []string) ([]nodeFilter, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid filter %q", args[0])
 		}
-		if len(args)-1 < fc.narg {
+		if len(args) <= fc.narg {
 			return nil, fmt.Errorf("filter %q wants %d arguments, have %d", args[0], fc.narg, len(args)-1)
 		}
 		filter, err := fc.fn(args[1 : 1+fc.narg])

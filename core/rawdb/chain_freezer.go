@@ -195,7 +195,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			first = frozen    // the first block to freeze
 			last  = threshold // the last block to freeze
 		)
-		if last-first+1 > freezerBatchLimit {
+		if last-first >= freezerBatchLimit {
 			last = freezerBatchLimit + first - 1
 		}
 		ancients, err := f.freezeRange(nfdb, first, last)
