@@ -41,7 +41,8 @@ var (
 		AddFork("ALTAIR", 74240, []byte{1, 0, 0, 0}).
 		AddFork("BELLATRIX", 144896, []byte{2, 0, 0, 0}).
 		AddFork("CAPELLA", 194048, []byte{3, 0, 0, 0}).
-		AddFork("DENEB", 269568, []byte{4, 0, 0, 0})
+		AddFork("DENEB", 269568, []byte{4, 0, 0, 0}).
+		AddFork("ELECTRA", 364032, []byte{5, 0, 0, 0})
 
 	SepoliaLightConfig = (&ChainConfig{
 		GenesisValidatorsRoot: common.HexToHash("0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"),
