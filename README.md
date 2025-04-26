@@ -29,12 +29,6 @@ or, to build the full suite of utilities:
 make all
 ```
 
-If make `geth fails` due to a missing `build/ci.go` file  or related error, you can instead build Geth directly using:
-
-```shell
-go build -o geth ./cmd/geth
-```
-
 ## Executables
 
 The go-ethereum project comes with several wrappers/executables found in the `cmd`
