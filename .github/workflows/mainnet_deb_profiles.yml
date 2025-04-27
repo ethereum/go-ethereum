@@ -394,7 +394,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.GIT_TAG }}
-          prerelease: true
+          make_latest: false
           files: |
             packaging/deb/bor-mainnet-**.deb
             packaging/deb/bor-pbss-mainnet-**.deb
