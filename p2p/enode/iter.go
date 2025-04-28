@@ -235,11 +235,11 @@ func (f *AsyncFilterIter) Close() {
 // BufferIter wraps an iterator and buffers the nodes it returns.
 // The buffer is pre-filled with the given size from the wrapped iterator.
 type BufferIter struct {
-	it     Iterator
-	buffer chan *Node
-	head   *Node
-	closed chan struct{}
-	mu     sync.Mutex
+	it        Iterator
+	buffer    chan *Node
+	head      *Node
+	closed    chan struct{}
+	closeOnce sync.Once
 }
 
 // NewBufferIter creates a new pre-fetch buffer of a given size.
@@ -267,35 +267,26 @@ func NewBufferIter(it Iterator, size int) Iterator {
 }
 
 func (b *BufferIter) Next() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
 	select {
 	case b.head = <-b.buffer:
 	case <-b.closed:
-		return false
+		b.head = nil
 	}
 	return b.head != nil
 }
 
 func (b *BufferIter) Node() *Node {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	return b.head
 }
 
 func (b *BufferIter) Close() {
-	// Close the wrapped iterator first.
-	b.it.Close()
-	close(b.closed)
-	// Wait for Next to terminate, then drain the buffer.
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for range b.buffer {
-	}
-	b.buffer = nil
-	b.head = nil
-	b.it = nil
+	b.closeOnce.Do(func() {
+		b.it.Close()
+		close(b.closed)
+		// Wait for Next to terminate.
+		for range b.buffer {
+		}
+	})
 }
 
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
