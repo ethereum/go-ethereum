@@ -120,7 +120,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrIntrinsicGas, tx.Gas(), intrGas)
 	}
 	// Ensure the transaction can cover floor data gas.
-	if opts.Config.IsPrague(head.Number, head.Time) {
+	if rules.IsPrague {
 		floorDataGas, err := core.FloorDataGas(tx.Data())
 		if err != nil {
 			return err
