@@ -217,7 +217,8 @@ func verifyState(ctx *cli.Context) error {
 		log.Error("Failed to load head block")
 		return errors.New("no head block")
 	}
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	triedb, verkledb := utils.MakeTrieDatabase(ctx, chaindb, false, true)
+	defer verkledb.Close()
 	defer triedb.Close()
 
 	snapConfig := snapshot.Config{
@@ -272,8 +273,9 @@ func traverseState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	triedb, verkledb := utils.MakeTrieDatabase(ctx, chaindb, false, true)
 	defer triedb.Close()
+	defer verkledb.Close()
 
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
@@ -381,8 +383,9 @@ func traverseRawState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	triedb, verkledb := utils.MakeTrieDatabase(ctx, chaindb, false, true)
 	defer triedb.Close()
+	defer verkledb.Close()
 
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
@@ -548,8 +551,9 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	triedb := utils.MakeTrieDatabase(ctx, db, false, true, false)
+	triedb, verkledb := utils.MakeTrieDatabase(ctx, db, false, true)
 	defer triedb.Close()
+	defer verkledb.Close()
 
 	snapConfig := snapshot.Config{
 		CacheSize:  256,
@@ -630,8 +634,9 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
+	triedb, verkledb := utils.MakeTrieDatabase(ctx, chaindb, false, true)
 	defer triedb.Close()
+	defer verkledb.Close()
 
 	var root common.Hash
 	if ctx.NArg() > 1 {

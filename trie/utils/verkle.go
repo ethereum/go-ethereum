@@ -185,7 +185,7 @@ func CodeHashKey(address []byte) []byte {
 	return GetTreeKey(address, zero, CodeHashLeafKey)
 }
 
-func codeChunkIndex(chunk *uint256.Int) (*uint256.Int, byte) {
+func CodeChunkIndex(chunk *uint256.Int) (*uint256.Int, byte) {
 	var (
 		chunkOffset            = new(uint256.Int).Add(codeOffset, chunk)
 		treeIndex, subIndexMod = new(uint256.Int).DivMod(chunkOffset, verkleNodeWidth, new(uint256.Int))
@@ -196,7 +196,7 @@ func codeChunkIndex(chunk *uint256.Int) (*uint256.Int, byte) {
 // CodeChunkKey returns the verkle tree key of the code chunk for the
 // specified account.
 func CodeChunkKey(address []byte, chunk *uint256.Int) []byte {
-	treeIndex, subIndex := codeChunkIndex(chunk)
+	treeIndex, subIndex := CodeChunkIndex(chunk)
 	return GetTreeKey(address, treeIndex, subIndex)
 }
 
@@ -260,7 +260,7 @@ func CodeHashKeyWithEvaluatedAddress(evaluated *verkle.Point) []byte {
 // chunk for the specified account. The difference between CodeChunkKey is the
 // address evaluation is already computed to minimize the computational overhead.
 func CodeChunkKeyWithEvaluatedAddress(addressPoint *verkle.Point, chunk *uint256.Int) []byte {
-	treeIndex, subIndex := codeChunkIndex(chunk)
+	treeIndex, subIndex := CodeChunkIndex(chunk)
 	return GetTreeKeyWithEvaluatedAddress(addressPoint, treeIndex, subIndex)
 }
 
