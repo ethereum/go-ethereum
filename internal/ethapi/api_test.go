@@ -668,6 +668,11 @@ func TestEstimateGas(t *testing.T) {
 		b.SetPoS()
 	}))
 
+	setCodeAuthorization, _ := types.SignSetCode(accounts[0].key, types.SetCodeAuthorization{
+		Address: accounts[0].addr,
+		Nonce:   uint64(genBlocks + 1),
+	})
+
 	var testSuite = []struct {
 		blockNumber    rpc.BlockNumber
 		call           TransactionArgs
@@ -846,6 +851,50 @@ func TestEstimateGas(t *testing.T) {
 			},
 			want: 21000,
 		},
+		// Should be able to estimate SetCodeTx.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[1].addr,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			want: 46000,
+		},
+		// Should retrieve the code of 0xef0001 || accounts[0].addr and return an invalid opcode error.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[0].addr,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			expectErr: errors.New("invalid opcode: opcode 0xef not defined"),
+		},
+		// SetCodeTx with empty authorization list should fail.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &common.Address{},
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{},
+			},
+			expectErr: core.ErrEmptyAuthList,
+		},
+		// SetCodeTx with nil `to` should fail.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                nil,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			expectErr: core.ErrSetCodeTxCreate,
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
@@ -855,7 +904,7 @@ func TestEstimateGas(t *testing.T) {
 				continue
 			}
 			if !errors.Is(err, tc.expectErr) {
-				if !reflect.DeepEqual(err, tc.expectErr) {
+				if err.Error() != tc.expectErr.Error() {
 					t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
 				}
 			}
