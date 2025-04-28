@@ -907,28 +907,23 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 	return true
 }
 
-// addRemotes enqueues a batch of transactions into the pool if they are valid.
-// Full pricing constraints will apply.
-//
-// This method is used to add transactions from the p2p network and does not wait for pool
-// reorganization and internal event propagation.
-func (pool *LegacyPool) addRemotes(txs []*types.Transaction) []error {
+// addAsync is a convenience wrapper around Add. Tests use this method.
+func (pool *LegacyPool) addAsync(txs []*types.Transaction) []error {
 	return pool.Add(txs, false)
 }
 
-// addRemote enqueues a single transaction into the pool if it is valid. This is a convenience
-// wrapper around addRemotes.
-func (pool *LegacyPool) addRemote(tx *types.Transaction) error {
-	return pool.addRemotes([]*types.Transaction{tx})[0]
+// addTxAsync is a convenience wrapper around Add. Tests use this method.
+func (pool *LegacyPool) addTxAsync(tx *types.Transaction) error {
+	return pool.Add([]*types.Transaction{tx}, false)[0]
 }
 
-// addRemotesSync is like addRemotes, but waits for pool reorganization. Tests use this method.
-func (pool *LegacyPool) addRemotesSync(txs []*types.Transaction) []error {
+// addSync is a convenience wrapper around Add. Tests use this method.
+func (pool *LegacyPool) addSync(txs []*types.Transaction) []error {
 	return pool.Add(txs, true)
 }
 
-// This is like addRemotes with a single transaction, but waits for pool reorganization. Tests use this method.
-func (pool *LegacyPool) addRemoteSync(tx *types.Transaction) error {
+// addTxSync is a convenience wrapper around Add. Tests use this method.
+func (pool *LegacyPool) addTxSync(tx *types.Transaction) error {
 	return pool.Add([]*types.Transaction{tx}, true)[0]
 }
 

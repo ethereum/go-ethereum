@@ -354,7 +354,7 @@ func TestStateChangeDuringReset(t *testing.T) {
 		t.Fatalf("Invalid nonce, want 0, got %d", nonce)
 	}
 
-	pool.addRemotesSync([]*types.Transaction{tx0, tx1})
+	pool.addSync([]*types.Transaction{tx0, tx1})
 
 	nonce = pool.Nonce(address)
 	if nonce != 2 {
@@ -394,26 +394,26 @@ func TestInvalidTransactions(t *testing.T) {
 
 	// Intrinsic gas too low
 	testAddBalance(pool, from, big.NewInt(1))
-	if err, want := pool.addRemote(tx), core.ErrIntrinsicGas; !errors.Is(err, want) {
+	if err, want := pool.addTxAsync(tx), core.ErrIntrinsicGas; !errors.Is(err, want) {
 		t.Errorf("want %v have %v", want, err)
 	}
 
 	// Insufficient funds
 	tx = transaction(0, 100000, key)
-	if err, want := pool.addRemote(tx), core.ErrInsufficientFunds; !errors.Is(err, want) {
+	if err, want := pool.addTxAsync(tx), core.ErrInsufficientFunds; !errors.Is(err, want) {
 		t.Errorf("want %v have %v", want, err)
 	}
 
 	testSetNonce(pool, from, 1)
 	testAddBalance(pool, from, big.NewInt(0xffffffffffffff))
 	tx = transaction(0, 100000, key)
-	if err, want := pool.addRemote(tx), core.ErrNonceTooLow; !errors.Is(err, want) {
+	if err, want := pool.addTxAsync(tx), core.ErrNonceTooLow; !errors.Is(err, want) {
 		t.Errorf("want %v have %v", want, err)
 	}
 
 	tx = transaction(1, 100000, key)
 	pool.gasTip.Store(uint256.NewInt(1000))
-	if err, want := pool.addRemote(tx), txpool.ErrTxGasPriceTooLow; !errors.Is(err, want) {
+	if err, want := pool.addTxAsync(tx), txpool.ErrTxGasPriceTooLow; !errors.Is(err, want) {
 		t.Errorf("want %v have %v", want, err)
 	}
 }
@@ -484,7 +484,7 @@ func TestNegativeValue(t *testing.T) {
 	tx, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(-1), 100, big.NewInt(1), nil), types.HomesteadSigner{}, key)
 	from, _ := deriveSender(tx)
 	testAddBalance(pool, from, big.NewInt(1))
-	if err := pool.addRemote(tx); !errors.Is(err, txpool.ErrNegativeValue) {
+	if err := pool.addTxAsync(tx); !errors.Is(err, txpool.ErrNegativeValue) {
 		t.Error("expected", txpool.ErrNegativeValue, "got", err)
 	}
 }
@@ -497,7 +497,7 @@ func TestTipAboveFeeCap(t *testing.T) {
 
 	tx := dynamicFeeTx(0, 100, big.NewInt(1), big.NewInt(2), key)
 
-	if err := pool.addRemote(tx); !errors.Is(err, core.ErrTipAboveFeeCap) {
+	if err := pool.addTxAsync(tx); !errors.Is(err, core.ErrTipAboveFeeCap) {
 		t.Error("expected", core.ErrTipAboveFeeCap, "got", err)
 	}
 }
@@ -512,12 +512,12 @@ func TestVeryHighValues(t *testing.T) {
 	veryBigNumber.Lsh(veryBigNumber, 300)
 
 	tx := dynamicFeeTx(0, 100, big.NewInt(1), veryBigNumber, key)
-	if err := pool.addRemote(tx); !errors.Is(err, core.ErrTipVeryHigh) {
+	if err := pool.addTxAsync(tx); !errors.Is(err, core.ErrTipVeryHigh) {
 		t.Error("expected", core.ErrTipVeryHigh, "got", err)
 	}
 
 	tx2 := dynamicFeeTx(0, 100, veryBigNumber, big.NewInt(1), key)
-	if err := pool.addRemote(tx2); !errors.Is(err, core.ErrFeeCapVeryHigh) {
+	if err := pool.addTxAsync(tx2); !errors.Is(err, core.ErrFeeCapVeryHigh) {
 		t.Error("expected", core.ErrFeeCapVeryHigh, "got", err)
 	}
 }
@@ -638,7 +638,7 @@ func TestNonceRecovery(t *testing.T) {
 	<-pool.requestReset(nil, nil)
 
 	tx := transaction(n, 100000, key)
-	if err := pool.addRemote(tx); err != nil {
+	if err := pool.addTxAsync(tx); err != nil {
 		t.Error(err)
 	}
 	// simulate some weird re-order of transactions and missing nonce(s)
@@ -789,7 +789,7 @@ func TestPostponing(t *testing.T) {
 			txs = append(txs, tx)
 		}
 	}
-	for i, err := range pool.addRemotesSync(txs) {
+	for i, err := range pool.addSync(txs) {
 		if err != nil {
 			t.Fatalf("tx %d: failed to add transactions: %v", i, err)
 		}
@@ -885,7 +885,7 @@ func TestGapFilling(t *testing.T) {
 	defer sub.Unsubscribe()
 
 	// Create a pending and a queued transaction with a nonce-gap in between
-	pool.addRemotesSync([]*types.Transaction{
+	pool.addSync([]*types.Transaction{
 		transaction(0, 100000, key),
 		transaction(2, 100000, key),
 	})
@@ -903,7 +903,7 @@ func TestGapFilling(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 	// Fill the nonce gap and ensure all transactions become pending
-	if err := pool.addRemoteSync(transaction(1, 100000, key)); err != nil {
+	if err := pool.addTxSync(transaction(1, 100000, key)); err != nil {
 		t.Fatalf("failed to add gapped transaction: %v", err)
 	}
 	pending, queued = pool.Stats()
@@ -935,7 +935,7 @@ func TestQueueAccountLimiting(t *testing.T) {
 
 	// Keep queuing up transactions and make sure all above a limit are dropped
 	for i := uint64(1); i <= testTxPoolConfig.AccountQueue+5; i++ {
-		if err := pool.addRemoteSync(transaction(i, 100000, key)); err != nil {
+		if err := pool.addTxSync(transaction(i, 100000, key)); err != nil {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
 		if len(pool.pending) != 0 {
@@ -995,7 +995,7 @@ func TestQueueGlobalLimiting(t *testing.T) {
 		nonces[addr]++
 	}
 	// Import the batch and verify that limits have been enforced
-	pool.addRemotesSync(txs)
+	pool.addSync(txs)
 
 	queued := 0
 	for addr, list := range pool.queue {
@@ -1034,7 +1034,7 @@ func TestQueueTimeLimiting(t *testing.T) {
 	testAddBalance(pool, crypto.PubkeyToAddress(remote.PublicKey), big.NewInt(1000000000))
 
 	// Add the transaction and ensure it is queued up
-	if err := pool.addRemote(pricedTransaction(1, 100000, big.NewInt(1), remote)); err != nil {
+	if err := pool.addTxAsync(pricedTransaction(1, 100000, big.NewInt(1), remote)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
 	pending, queued := pool.Stats()
@@ -1094,13 +1094,13 @@ func TestQueueTimeLimiting(t *testing.T) {
 	}
 
 	// Queue gapped transactions
-	if err := pool.addRemoteSync(pricedTransaction(4, 100000, big.NewInt(1), remote)); err != nil {
+	if err := pool.addTxSync(pricedTransaction(4, 100000, big.NewInt(1), remote)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
 	time.Sleep(5 * evictionInterval) // A half lifetime pass
 
 	// Queue executable transactions, the life cycle should be restarted.
-	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), remote)); err != nil {
+	if err := pool.addTxSync(pricedTransaction(2, 100000, big.NewInt(1), remote)); err != nil {
 		t.Fatalf("failed to add remote transaction: %v", err)
 	}
 	time.Sleep(6 * evictionInterval)
@@ -1151,7 +1151,7 @@ func TestPendingLimiting(t *testing.T) {
 
 	// Keep queuing up transactions and make sure all above a limit are dropped
 	for i := uint64(0); i < testTxPoolConfig.AccountQueue+5; i++ {
-		if err := pool.addRemoteSync(transaction(i, 100000, key)); err != nil {
+		if err := pool.addTxSync(transaction(i, 100000, key)); err != nil {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
 		if pool.pending[account].Len() != int(i)+1 {
@@ -1207,7 +1207,7 @@ func TestPendingGlobalLimiting(t *testing.T) {
 		}
 	}
 	// Import the batch and verify that limits have been enforced
-	pool.addRemotesSync(txs)
+	pool.addSync(txs)
 
 	pending := 0
 	for _, list := range pool.pending {
@@ -1243,19 +1243,19 @@ func TestAllowedTxSize(t *testing.T) {
 
 	// Try adding a transaction with maximal allowed size
 	tx := pricedDataTransaction(0, pool.currentHead.Load().GasLimit, big.NewInt(1), key, maxTxDataLength)
-	if err := pool.addRemoteSync(tx); err != nil {
+	if err := pool.addTxSync(tx); err != nil {
 		t.Fatalf("failed to add transaction of size %d, close to maximal: %v", int(tx.Size()), err)
 	}
 	// Try adding a transaction with random allowed size
-	if err := pool.addRemoteSync(pricedDataTransaction(1, pool.currentHead.Load().GasLimit, big.NewInt(1), key, uint64(rand.Intn(int(maxTxDataLength+1))))); err != nil {
+	if err := pool.addTxSync(pricedDataTransaction(1, pool.currentHead.Load().GasLimit, big.NewInt(1), key, uint64(rand.Intn(int(maxTxDataLength+1))))); err != nil {
 		t.Fatalf("failed to add transaction of random allowed size: %v", err)
 	}
 	// Try adding a transaction above maximum size by one
-	if err := pool.addRemoteSync(pricedDataTransaction(2, pool.currentHead.Load().GasLimit, big.NewInt(1), key, maxTxDataLength+1)); err == nil {
+	if err := pool.addTxSync(pricedDataTransaction(2, pool.currentHead.Load().GasLimit, big.NewInt(1), key, maxTxDataLength+1)); err == nil {
 		t.Fatalf("expected rejection on slightly oversize transaction")
 	}
 	// Try adding a transaction above maximum size by more than one
-	if err := pool.addRemoteSync(pricedDataTransaction(2, pool.currentHead.Load().GasLimit, big.NewInt(1), key, maxTxDataLength+1+uint64(rand.Intn(10*txMaxSize)))); err == nil {
+	if err := pool.addTxSync(pricedDataTransaction(2, pool.currentHead.Load().GasLimit, big.NewInt(1), key, maxTxDataLength+1+uint64(rand.Intn(10*txMaxSize)))); err == nil {
 		t.Fatalf("expected rejection on oversize transaction")
 	}
 	// Run some sanity checks on the pool internals
@@ -1298,7 +1298,7 @@ func TestCapClearsFromAll(t *testing.T) {
 		txs = append(txs, transaction(uint64(j), 100000, key))
 	}
 	// Import the batch and verify that limits have been enforced
-	pool.addRemotes(txs)
+	pool.addAsync(txs)
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1339,7 +1339,7 @@ func TestPendingMinimumAllowance(t *testing.T) {
 		}
 	}
 	// Import the batch and verify that limits have been enforced
-	pool.addRemotesSync(txs)
+	pool.addSync(txs)
 
 	for addr, list := range pool.pending {
 		if list.Len() != int(config.AccountSlots) {
@@ -1392,7 +1392,7 @@ func TestRepricing(t *testing.T) {
 	txs = append(txs, pricedTransaction(3, 100000, big.NewInt(2), keys[2]))
 
 	// Import the batch and that both pending and queued transactions match up
-	pool.addRemotesSync(txs)
+	pool.addSync(txs)
 
 	pending, queued := pool.Stats()
 	if pending != 6 {
@@ -1424,13 +1424,13 @@ func TestRepricing(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 	// Check that we can't add the old transactions back
-	if err := pool.addRemote(pricedTransaction(1, 100000, big.NewInt(1), keys[0])); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
+	if err := pool.addTxAsync(pricedTransaction(1, 100000, big.NewInt(1), keys[0])); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, txpool.ErrTxGasPriceTooLow)
 	}
-	if err := pool.addRemote(pricedTransaction(0, 100000, big.NewInt(1), keys[1])); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
+	if err := pool.addTxAsync(pricedTransaction(0, 100000, big.NewInt(1), keys[1])); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, txpool.ErrTxGasPriceTooLow)
 	}
-	if err := pool.addRemote(pricedTransaction(2, 100000, big.NewInt(1), keys[2])); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
+	if err := pool.addTxAsync(pricedTransaction(2, 100000, big.NewInt(1), keys[2])); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
 		t.Fatalf("adding underpriced queued transaction error mismatch: have %v, want %v", err, txpool.ErrTxGasPriceTooLow)
 	}
 	if err := validateEvents(events, 0); err != nil {
@@ -1440,13 +1440,13 @@ func TestRepricing(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 	// we can fill gaps with properly priced transactions
-	if err := pool.addRemote(pricedTransaction(1, 100000, big.NewInt(2), keys[0])); err != nil {
+	if err := pool.addTxAsync(pricedTransaction(1, 100000, big.NewInt(2), keys[0])); err != nil {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
-	if err := pool.addRemote(pricedTransaction(0, 100000, big.NewInt(2), keys[1])); err != nil {
+	if err := pool.addTxAsync(pricedTransaction(0, 100000, big.NewInt(2), keys[1])); err != nil {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
-	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(2), keys[2])); err != nil {
+	if err := pool.addTxSync(pricedTransaction(2, 100000, big.NewInt(2), keys[2])); err != nil {
 		t.Fatalf("failed to add queued transaction: %v", err)
 	}
 	if err := validateEvents(events, 5); err != nil {
@@ -1527,7 +1527,7 @@ func TestRepricingDynamicFee(t *testing.T) {
 	txs = append(txs, dynamicFeeTx(3, 100000, big.NewInt(2), big.NewInt(2), keys[2]))
 
 	// Import the batch and that both pending and queued transactions match up
-	pool.addRemotesSync(txs)
+	pool.addSync(txs)
 
 	pending, queued := pool.Stats()
 	if pending != 6 {
@@ -1560,15 +1560,15 @@ func TestRepricingDynamicFee(t *testing.T) {
 	}
 	// Check that we can't add the old transactions back
 	tx := pricedTransaction(1, 100000, big.NewInt(1), keys[0])
-	if err := pool.addRemote(tx); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
+	if err := pool.addTxAsync(tx); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, txpool.ErrTxGasPriceTooLow)
 	}
 	tx = dynamicFeeTx(0, 100000, big.NewInt(2), big.NewInt(1), keys[1])
-	if err := pool.addRemote(tx); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
+	if err := pool.addTxAsync(tx); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, txpool.ErrTxGasPriceTooLow)
 	}
 	tx = dynamicFeeTx(2, 100000, big.NewInt(1), big.NewInt(1), keys[2])
-	if err := pool.addRemote(tx); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
+	if err := pool.addTxAsync(tx); !errors.Is(err, txpool.ErrTxGasPriceTooLow) {
 		t.Fatalf("adding underpriced queued transaction error mismatch: have %v, want %v", err, txpool.ErrTxGasPriceTooLow)
 	}
 	if err := validateEvents(events, 0); err != nil {
@@ -1580,15 +1580,15 @@ func TestRepricingDynamicFee(t *testing.T) {
 
 	// And we can fill gaps with properly priced transactions
 	tx = pricedTransaction(1, 100000, big.NewInt(2), keys[0])
-	if err := pool.addRemote(tx); err != nil {
+	if err := pool.addTxAsync(tx); err != nil {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
 	tx = dynamicFeeTx(0, 100000, big.NewInt(3), big.NewInt(2), keys[1])
-	if err := pool.addRemote(tx); err != nil {
+	if err := pool.addTxAsync(tx); err != nil {
 		t.Fatalf("failed to add pending transaction: %v", err)
 	}
 	tx = dynamicFeeTx(2, 100000, big.NewInt(2), big.NewInt(2), keys[2])
-	if err := pool.addRemoteSync(tx); err != nil {
+	if err := pool.addTxSync(tx); err != nil {
 		t.Fatalf("failed to add queued transaction: %v", err)
 	}
 	if err := validateEvents(events, 5); err != nil {
@@ -1639,7 +1639,7 @@ func TestUnderpricing(t *testing.T) {
 
 	txs = append(txs, pricedTransaction(1, 100000, big.NewInt(1), keys[1])) // queued
 	// Import the batch and that both pending and queued transactions match up
-	pool.addRemotesSync(txs)
+	pool.addSync(txs)
 
 	pending, queued := pool.Stats()
 	if pending != 3 {
@@ -1655,25 +1655,25 @@ func TestUnderpricing(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 	// Ensure that adding an underpriced transaction on block limit fails
-	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keys[1])); !errors.Is(err, txpool.ErrUnderpriced) {
+	if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1), keys[1])); !errors.Is(err, txpool.ErrUnderpriced) {
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, txpool.ErrUnderpriced)
 	}
 	// Replace a future transaction with a future transaction
-	if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(5), keys[1])); err != nil { // +K1:1 => -K1:1 => Pend K0:0, K0:1, K2:0; Que K1:1
+	if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(5), keys[1])); err != nil { // +K1:1 => -K1:1 => Pend K0:0, K0:1, K2:0; Que K1:1
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 	// Ensure that adding high priced transactions drops cheap ones, but not own
-	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(3), keys[1])); err != nil { // +K1:0 => -K1:1 => Pend K0:0, K0:1, K1:0, K2:0; Que -
+	if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(3), keys[1])); err != nil { // +K1:0 => -K1:1 => Pend K0:0, K0:1, K1:0, K2:0; Que -
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
-	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(4), keys[1])); err != nil { // +K1:2 => -K0:0 => Pend K1:0, K2:0; Que K0:1 K1:2
+	if err := pool.addTxSync(pricedTransaction(2, 100000, big.NewInt(4), keys[1])); err != nil { // +K1:2 => -K0:0 => Pend K1:0, K2:0; Que K0:1 K1:2
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
-	if err := pool.addRemoteSync(pricedTransaction(3, 100000, big.NewInt(5), keys[1])); err != nil { // +K1:3 => -K0:1 => Pend K1:0, K2:0; Que K1:2 K1:3
+	if err := pool.addTxSync(pricedTransaction(3, 100000, big.NewInt(5), keys[1])); err != nil { // +K1:3 => -K0:1 => Pend K1:0, K2:0; Que K1:2 K1:3
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 	// Ensure that replacing a pending transaction with a future transaction fails
-	if err := pool.addRemoteSync(pricedTransaction(5, 100000, big.NewInt(6), keys[1])); !errors.Is(err, ErrFutureReplacePending) {
+	if err := pool.addTxSync(pricedTransaction(5, 100000, big.NewInt(6), keys[1])); !errors.Is(err, ErrFutureReplacePending) {
 		t.Fatalf("adding future replace transaction error mismatch: have %v, want %v", err, ErrFutureReplacePending)
 	}
 	pending, queued = pool.Stats()
@@ -1725,7 +1725,7 @@ func TestStableUnderpricing(t *testing.T) {
 	for i := uint64(0); i < config.GlobalSlots; i++ {
 		txs = append(txs, pricedTransaction(i, 100000, big.NewInt(1), keys[0]))
 	}
-	pool.addRemotesSync(txs)
+	pool.addSync(txs)
 
 	pending, queued := pool.Stats()
 	if pending != int(config.GlobalSlots) {
@@ -1741,7 +1741,7 @@ func TestStableUnderpricing(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 	// Ensure that adding high priced transactions drops a cheap, but doesn't produce a gap
-	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(3), keys[1])); err != nil {
+	if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(3), keys[1])); err != nil {
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 	pending, queued = pool.Stats()
@@ -1792,7 +1792,7 @@ func TestUnderpricingDynamicFee(t *testing.T) {
 	txs = append(txs, dynamicFeeTx(0, 100000, big.NewInt(2), big.NewInt(1), keys[2])) // pending
 
 	// Import the batch and check that both pending and queued transactions match up
-	pool.addRemotesSync(txs) // Pend K0:0, K0:1; Que K1:1
+	pool.addSync(txs) // Pend K0:0, K0:1; Que K1:1
 
 	pending, queued := pool.Stats()
 	if pending != 3 {
@@ -1810,22 +1810,22 @@ func TestUnderpricingDynamicFee(t *testing.T) {
 
 	// Ensure that adding an underpriced transaction fails
 	tx := dynamicFeeTx(0, 100000, big.NewInt(2), big.NewInt(1), keys[1])
-	if err := pool.addRemoteSync(tx); !errors.Is(err, txpool.ErrUnderpriced) { // Pend K0:0, K0:1, K2:0; Que K1:1
+	if err := pool.addTxSync(tx); !errors.Is(err, txpool.ErrUnderpriced) { // Pend K0:0, K0:1, K2:0; Que K1:1
 		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, txpool.ErrUnderpriced)
 	}
 
 	// Ensure that adding high priced transactions drops cheap ones, but not own
 	tx = pricedTransaction(0, 100000, big.NewInt(2), keys[1])
-	if err := pool.addRemoteSync(tx); err != nil { // +K1:0, -K1:1 => Pend K0:0, K0:1, K1:0, K2:0; Que -
+	if err := pool.addTxSync(tx); err != nil { // +K1:0, -K1:1 => Pend K0:0, K0:1, K1:0, K2:0; Que -
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 
 	tx = pricedTransaction(1, 100000, big.NewInt(3), keys[1])
-	if err := pool.addRemoteSync(tx); err != nil { // +K1:2, -K0:1 => Pend K0:0 K1:0, K2:0; Que K1:2
+	if err := pool.addTxSync(tx); err != nil { // +K1:2, -K0:1 => Pend K0:0 K1:0, K2:0; Que K1:2
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 	tx = dynamicFeeTx(2, 100000, big.NewInt(4), big.NewInt(1), keys[1])
-	if err := pool.addRemoteSync(tx); err != nil { // +K1:3, -K1:0 => Pend K0:0 K2:0; Que K1:2 K1:3
+	if err := pool.addTxSync(tx); err != nil { // +K1:3, -K1:0 => Pend K0:0 K2:0; Que K1:2 K1:3
 		t.Fatalf("failed to add well priced transaction: %v", err)
 	}
 	pending, queued = pool.Stats()
@@ -1878,7 +1878,7 @@ func TestDualHeapEviction(t *testing.T) {
 				tx = dynamicFeeTx(0, 100000, big.NewInt(int64(baseFee+200+i)), big.NewInt(1), key)
 				highCap = tx
 			}
-			pool.addRemotesSync([]*types.Transaction{tx})
+			pool.addSync([]*types.Transaction{tx})
 		}
 		pending, queued := pool.Stats()
 		if pending+queued != 20 {
@@ -1925,7 +1925,7 @@ func TestDeduplication(t *testing.T) {
 	for i := 0; i < len(txs); i += 2 {
 		firsts = append(firsts, txs[i])
 	}
-	errs := pool.addRemotesSync(firsts)
+	errs := pool.addSync(firsts)
 	if len(errs) != len(firsts) {
 		t.Fatalf("first add mismatching result count: have %d, want %d", len(errs), len(firsts))
 	}
@@ -1942,7 +1942,7 @@ func TestDeduplication(t *testing.T) {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, len(txs)/2-1)
 	}
 	// Try to add all of them now and ensure previous ones error out as knowns
-	errs = pool.addRemotesSync(txs)
+	errs = pool.addSync(txs)
 	if len(errs) != len(txs) {
 		t.Fatalf("all add mismatching result count: have %d, want %d", len(errs), len(txs))
 	}
@@ -1992,26 +1992,26 @@ func TestReplacement(t *testing.T) {
 	price := int64(100)
 	threshold := (price * (100 + int64(testTxPoolConfig.PriceBump))) / 100
 
-	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), key)); err != nil {
+	if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1), key)); err != nil {
 		t.Fatalf("failed to add original cheap pending transaction: %v", err)
 	}
-	if err := pool.addRemote(pricedTransaction(0, 100001, big.NewInt(1), key)); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+	if err := pool.addTxAsync(pricedTransaction(0, 100001, big.NewInt(1), key)); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
 		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err, txpool.ErrReplaceUnderpriced)
 	}
-	if err := pool.addRemote(pricedTransaction(0, 100000, big.NewInt(2), key)); err != nil {
+	if err := pool.addTxAsync(pricedTransaction(0, 100000, big.NewInt(2), key)); err != nil {
 		t.Fatalf("failed to replace original cheap pending transaction: %v", err)
 	}
 	if err := validateEvents(events, 2); err != nil {
 		t.Fatalf("cheap replacement event firing failed: %v", err)
 	}
 
-	if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(price), key)); err != nil {
+	if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(price), key)); err != nil {
 		t.Fatalf("failed to add original proper pending transaction: %v", err)
 	}
-	if err := pool.addRemote(pricedTransaction(0, 100001, big.NewInt(threshold-1), key)); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+	if err := pool.addTxAsync(pricedTransaction(0, 100001, big.NewInt(threshold-1), key)); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
 		t.Fatalf("original proper pending transaction replacement error mismatch: have %v, want %v", err, txpool.ErrReplaceUnderpriced)
 	}
-	if err := pool.addRemote(pricedTransaction(0, 100000, big.NewInt(threshold), key)); err != nil {
+	if err := pool.addTxAsync(pricedTransaction(0, 100000, big.NewInt(threshold), key)); err != nil {
 		t.Fatalf("failed to replace original proper pending transaction: %v", err)
 	}
 	if err := validateEvents(events, 2); err != nil {
@@ -2019,23 +2019,23 @@ func TestReplacement(t *testing.T) {
 	}
 
 	// Add queued transactions, ensuring the minimum price bump is enforced for replacement (for ultra low prices too)
-	if err := pool.addRemote(pricedTransaction(2, 100000, big.NewInt(1), key)); err != nil {
+	if err := pool.addTxAsync(pricedTransaction(2, 100000, big.NewInt(1), key)); err != nil {
 		t.Fatalf("failed to add original cheap queued transaction: %v", err)
 	}
-	if err := pool.addRemote(pricedTransaction(2, 100001, big.NewInt(1), key)); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+	if err := pool.addTxAsync(pricedTransaction(2, 100001, big.NewInt(1), key)); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
 		t.Fatalf("original cheap queued transaction replacement error mismatch: have %v, want %v", err, txpool.ErrReplaceUnderpriced)
 	}
-	if err := pool.addRemote(pricedTransaction(2, 100000, big.NewInt(2), key)); err != nil {
+	if err := pool.addTxAsync(pricedTransaction(2, 100000, big.NewInt(2), key)); err != nil {
 		t.Fatalf("failed to replace original cheap queued transaction: %v", err)
 	}
 
-	if err := pool.addRemote(pricedTransaction(2, 100000, big.NewInt(price), key)); err != nil {
+	if err := pool.addTxAsync(pricedTransaction(2, 100000, big.NewInt(price), key)); err != nil {
 		t.Fatalf("failed to add original proper queued transaction: %v", err)
 	}
-	if err := pool.addRemote(pricedTransaction(2, 100001, big.NewInt(threshold-1), key)); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+	if err := pool.addTxAsync(pricedTransaction(2, 100001, big.NewInt(threshold-1), key)); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
 		t.Fatalf("original proper queued transaction replacement error mismatch: have %v, want %v", err, txpool.ErrReplaceUnderpriced)
 	}
-	if err := pool.addRemote(pricedTransaction(2, 100000, big.NewInt(threshold), key)); err != nil {
+	if err := pool.addTxAsync(pricedTransaction(2, 100000, big.NewInt(threshold), key)); err != nil {
 		t.Fatalf("failed to replace original proper queued transaction: %v", err)
 	}
 
@@ -2091,17 +2091,17 @@ func TestReplacementDynamicFee(t *testing.T) {
 
 		// 1.  Send initial tx => accept
 		tx := dynamicFeeTx(nonce, 100000, big.NewInt(2), big.NewInt(1), key)
-		if err := pool.addRemoteSync(tx); err != nil {
+		if err := pool.addTxSync(tx); err != nil {
 			t.Fatalf("failed to add original cheap %s transaction: %v", stage, err)
 		}
 		// 2.  Don't bump tip or feecap => discard
 		tx = dynamicFeeTx(nonce, 100001, big.NewInt(2), big.NewInt(1), key)
-		if err := pool.addRemote(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+		if err := pool.addTxAsync(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
 			t.Fatalf("original cheap %s transaction replacement error mismatch: have %v, want %v", stage, err, txpool.ErrReplaceUnderpriced)
 		}
 		// 3.  Bump both more than min => accept
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(3), big.NewInt(2), key)
-		if err := pool.addRemote(tx); err != nil {
+		if err := pool.addTxAsync(tx); err != nil {
 			t.Fatalf("failed to replace original cheap %s transaction: %v", stage, err)
 		}
 		// 4.  Check events match expected (2 new executable txs during pending, 0 during queue)
@@ -2114,33 +2114,33 @@ func TestReplacementDynamicFee(t *testing.T) {
 		}
 		// 5.  Send new tx with larger tip and feeCap => accept
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(gasFeeCap), big.NewInt(gasTipCap), key)
-		if err := pool.addRemoteSync(tx); err != nil {
+		if err := pool.addTxSync(tx); err != nil {
 			t.Fatalf("failed to add original proper %s transaction: %v", stage, err)
 		}
 
 		// 6.  Bump tip max allowed so it's still underpriced => discard
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(gasFeeCap), big.NewInt(tipThreshold-1), key)
-		if err := pool.addRemote(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+		if err := pool.addTxAsync(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, txpool.ErrReplaceUnderpriced)
 		}
 		// 7.  Bump fee cap max allowed so it's still underpriced => discard
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold-1), big.NewInt(gasTipCap), key)
-		if err := pool.addRemote(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+		if err := pool.addTxAsync(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, txpool.ErrReplaceUnderpriced)
 		}
 		// 8.  Bump tip min for acceptance => accept
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(gasFeeCap), big.NewInt(tipThreshold), key)
-		if err := pool.addRemote(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+		if err := pool.addTxAsync(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, txpool.ErrReplaceUnderpriced)
 		}
 		// 9.  Bump fee cap min for acceptance => accept
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold), big.NewInt(gasTipCap), key)
-		if err := pool.addRemote(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
+		if err := pool.addTxAsync(tx); !errors.Is(err, txpool.ErrReplaceUnderpriced) {
 			t.Fatalf("original proper %s transaction replacement error mismatch: have %v, want %v", stage, err, txpool.ErrReplaceUnderpriced)
 		}
 		// 10. Check events match expected (3 new executable txs during pending, 0 during queue)
 		tx = dynamicFeeTx(nonce, 100000, big.NewInt(feeCapThreshold), big.NewInt(tipThreshold), key)
-		if err := pool.addRemote(tx); err != nil {
+		if err := pool.addTxAsync(tx); err != nil {
 			t.Fatalf("failed to replace original cheap %s transaction: %v", stage, err)
 		}
 		// 11. Check events match expected (3 new executable txs during pending, 0 during queue)
@@ -2186,7 +2186,7 @@ func TestStatusCheck(t *testing.T) {
 	txs = append(txs, pricedTransaction(2, 100000, big.NewInt(1), keys[2])) // Queued only
 
 	// Import the transaction and ensure they are correctly added
-	pool.addRemotesSync(txs)
+	pool.addSync(txs)
 
 	pending, queued := pool.Stats()
 	if pending != 2 {
@@ -2274,23 +2274,23 @@ func TestSetCodeTransactions(t *testing.T) {
 				statedb.SetCode(aa, []byte{byte(vm.ADDRESS), byte(vm.PUSH0), byte(vm.SSTORE)})
 
 				// Send gapped transaction, it should be rejected.
-				if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), keyA)); !errors.Is(err, ErrOutOfOrderTxFromDelegated) {
+				if err := pool.addTxSync(pricedTransaction(2, 100000, big.NewInt(1), keyA)); !errors.Is(err, ErrOutOfOrderTxFromDelegated) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, ErrOutOfOrderTxFromDelegated, err)
 				}
 				// Send transactions. First is accepted, second is rejected.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keyA)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1), keyA)); err != nil {
 					t.Fatalf("%s: failed to add remote transaction: %v", name, err)
 				}
 				// Second and further transactions shall be rejected
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyA)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+				if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(1), keyA)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrInflightTxLimitReached, err)
 				}
 				// Check gapped transaction again.
-				if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), keyA)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+				if err := pool.addTxSync(pricedTransaction(2, 100000, big.NewInt(1), keyA)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrInflightTxLimitReached, err)
 				}
 				// Replace by fee.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(10), keyA)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(10), keyA)); err != nil {
 					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
 
@@ -2305,19 +2305,19 @@ func TestSetCodeTransactions(t *testing.T) {
 			pending: 2,
 			run: func(name string) {
 				// Create a pending delegation request from B.
-				if err := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{0, keyB}})); err != nil {
+				if err := pool.addTxSync(setCodeTx(0, keyA, []unsignedAuth{{0, keyB}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
 				// First transaction from B is accepted.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1), keyB)); err != nil {
 					t.Fatalf("%s: failed to add remote transaction: %v", name, err)
 				}
 				// Second transaction fails due to limit.
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+				if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrInflightTxLimitReached, err)
 				}
 				// Replace by fee for first transaction from B works.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(2), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(2), keyB)); err != nil {
 					t.Fatalf("%s: failed to add remote transaction: %v", name, err)
 				}
 			},
@@ -2329,15 +2329,15 @@ func TestSetCodeTransactions(t *testing.T) {
 			pending: 2,
 			run: func(name string) {
 				// The first in-flight transaction is accepted.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1), keyB)); err != nil {
 					t.Fatalf("%s: failed to add with pending delegation: %v", name, err)
 				}
 				// Delegation is accepted.
-				if err := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{0, keyB}})); err != nil {
+				if err := pool.addTxSync(setCodeTx(0, keyA, []unsignedAuth{{0, keyB}})); err != nil {
 					t.Fatalf("%s: failed to add remote transaction: %v", name, err)
 				}
 				// The second in-flight transaction is rejected.
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+				if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrInflightTxLimitReached, err)
 				}
 			},
@@ -2347,14 +2347,14 @@ func TestSetCodeTransactions(t *testing.T) {
 			pending: 2,
 			run: func(name string) {
 				// Submit two transactions.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1), keyB)); err != nil {
 					t.Fatalf("%s: failed to add with pending delegation: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); err != nil {
 					t.Fatalf("%s: failed to add with pending delegation: %v", name, err)
 				}
 				// Delegation rejected since two txs are already in-flight.
-				if err := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{0, keyB}})); !errors.Is(err, ErrAuthorityReserved) {
+				if err := pool.addTxSync(setCodeTx(0, keyA, []unsignedAuth{{0, keyB}})); !errors.Is(err, ErrAuthorityReserved) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, ErrAuthorityReserved, err)
 				}
 			},
@@ -2365,10 +2365,10 @@ func TestSetCodeTransactions(t *testing.T) {
 			run: func(name string) {
 				// Send two transactions where the first has no conflicting delegations and
 				// the second should be allowed despite conflicting with the authorities in the first.
-				if err := pool.addRemoteSync(setCodeTx(0, keyA, []unsignedAuth{{1, keyC}})); err != nil {
+				if err := pool.addTxSync(setCodeTx(0, keyA, []unsignedAuth{{1, keyC}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(setCodeTx(0, keyB, []unsignedAuth{{1, keyC}})); err != nil {
+				if err := pool.addTxSync(setCodeTx(0, keyB, []unsignedAuth{{1, keyC}})); err != nil {
 					t.Fatalf("%s: failed to add conflicting delegation: %v", name, err)
 				}
 			},
@@ -2377,10 +2377,10 @@ func TestSetCodeTransactions(t *testing.T) {
 			name:    "replace-by-fee-setcode-tx",
 			pending: 1,
 			run: func(name string) {
-				if err := pool.addRemoteSync(setCodeTx(0, keyB, []unsignedAuth{{1, keyC}})); err != nil {
+				if err := pool.addTxSync(setCodeTx(0, keyB, []unsignedAuth{{1, keyC}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(2000), uint256.NewInt(2), keyB, []unsignedAuth{{0, keyC}})); err != nil {
+				if err := pool.addTxSync(pricedSetCodeTx(0, 250000, uint256.NewInt(2000), uint256.NewInt(2), keyB, []unsignedAuth{{0, keyC}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
 			},
@@ -2390,19 +2390,19 @@ func TestSetCodeTransactions(t *testing.T) {
 			pending: 3,
 			run: func(name string) {
 				// Send transaction from A with B as an authority.
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyB}})); err != nil {
+				if err := pool.addTxSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyB}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
 				// Replace transaction with another having C as an authority.
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(3000), uint256.NewInt(300), keyA, []unsignedAuth{{0, keyC}})); err != nil {
+				if err := pool.addTxSync(pricedSetCodeTx(0, 250000, uint256.NewInt(3000), uint256.NewInt(300), keyA, []unsignedAuth{{0, keyC}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
 				// B should not be considred as having an in-flight delegation, so
 				// should allow more than one pooled transaction.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(10), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(10), keyB)); err != nil {
 					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(10), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(10), keyB)); err != nil {
 					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
 			},
@@ -2414,24 +2414,24 @@ func TestSetCodeTransactions(t *testing.T) {
 			pending: 3,
 			run: func(name string) {
 				// Send transaction from A with A as an authority.
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyA}})); err != nil {
+				if err := pool.addTxSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyA}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
 				// Replace transaction with a transaction with B as an authority.
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(30), uint256.NewInt(30), keyA, []unsignedAuth{{0, keyB}})); err != nil {
+				if err := pool.addTxSync(pricedSetCodeTx(0, 250000, uint256.NewInt(30), uint256.NewInt(30), keyA, []unsignedAuth{{0, keyB}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
 				// The one in-flight transaction limit from A no longer applies, so we
 				// can stack a second transaction for the account.
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1000), keyA)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(1000), keyA)); err != nil {
 					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
 				// B should still be able to send transactions.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1000), keyB)); err != nil {
 					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
 				// However B still has the limitation to one in-flight transaction.
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+				if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrInflightTxLimitReached, err)
 				}
 			},
@@ -2441,23 +2441,23 @@ func TestSetCodeTransactions(t *testing.T) {
 			pending: 2,
 			run: func(name string) {
 				// Send transaction from A with B as an authority.
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyB}})); err != nil {
+				if err := pool.addTxSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyB}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
 				// Send two transactions from B. Only the first should be accepted due
 				// to in-flight limit.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1), keyB)); err != nil {
 					t.Fatalf("%s: failed to add remote transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+				if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrInflightTxLimitReached, err)
 				}
 				// Replace the in-flight transaction from B.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(30), keyB)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(30), keyB)); err != nil {
 					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
 				// Ensure the in-flight limit for B is still in place.
-				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+				if err := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(1), keyB)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, txpool.ErrInflightTxLimitReached, err)
 				}
 			},
@@ -2469,22 +2469,22 @@ func TestSetCodeTransactions(t *testing.T) {
 			pending: 3,
 			run: func(name string) {
 				// Send two setcode txs both with C as an authority.
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyC}})); err != nil {
+				if err := pool.addTxSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, []unsignedAuth{{0, keyC}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
-				if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(30), uint256.NewInt(30), keyB, []unsignedAuth{{0, keyC}})); err != nil {
+				if err := pool.addTxSync(pricedSetCodeTx(0, 250000, uint256.NewInt(30), uint256.NewInt(30), keyB, []unsignedAuth{{0, keyC}})); err != nil {
 					t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 				}
 				// Replace the tx from A with a non-setcode tx.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keyA)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1000), keyA)); err != nil {
 					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
 				// Make sure we can only pool one tx from keyC since it is still a
 				// pending authority.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keyC)); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1000), keyC)); err != nil {
 					t.Fatalf("%s: failed to added single pooled for account with pending delegation: %v", name, err)
 				}
-				if err, want := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1000), keyC)), txpool.ErrInflightTxLimitReached; !errors.Is(err, want) {
+				if err, want := pool.addTxSync(pricedTransaction(1, 100000, big.NewInt(1000), keyC)), txpool.ErrInflightTxLimitReached; !errors.Is(err, want) {
 					t.Fatalf("%s: error mismatch: want %v, have %v", name, want, err)
 				}
 			},
@@ -2503,14 +2503,14 @@ func TestSetCodeTransactions(t *testing.T) {
 				// Create a transactions with 3 unique auths so the lookup's auth map is
 				// filled with addresses.
 				for i := 0; i < 30; i += 3 {
-					if err := pool.addRemoteSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keys[i], []unsignedAuth{{0, keys[i]}, {0, keys[i+1]}, {0, keys[i+2]}})); err != nil {
+					if err := pool.addTxSync(pricedSetCodeTx(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keys[i], []unsignedAuth{{0, keys[i]}, {0, keys[i+1]}, {0, keys[i+2]}})); err != nil {
 						t.Fatalf("%s: failed to add with remote setcode transaction: %v", name, err)
 					}
 				}
 				// Replace one of the transactions with a normal transaction so that the
 				// original hash is removed from the tracker. The hash should be
 				// associated with 3 different authorities.
-				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1000), keys[0])); err != nil {
+				if err := pool.addTxSync(pricedTransaction(0, 100000, big.NewInt(1000), keys[0])); err != nil {
 					t.Fatalf("%s: failed to replace with remote transaction: %v", name, err)
 				}
 			},
@@ -2556,7 +2556,7 @@ func TestSetCodeTransactionsReorg(t *testing.T) {
 		Nonce:   0,
 	})
 	authList = append(authList, auth)
-	if err := pool.addRemoteSync(pricedSetCodeTxWithAuth(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, authList)); err != nil {
+	if err := pool.addTxSync(pricedSetCodeTxWithAuth(0, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, authList)); err != nil {
 		t.Fatalf("failed to add with remote setcode transaction: %v", err)
 	}
 	// Simulate the chain moving
@@ -2570,11 +2570,11 @@ func TestSetCodeTransactionsReorg(t *testing.T) {
 		Nonce:   0,
 	})
 	authList = append(authList, auth)
-	if err := pool.addRemoteSync(pricedSetCodeTxWithAuth(1, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, authList)); err != nil {
+	if err := pool.addTxSync(pricedSetCodeTxWithAuth(1, 250000, uint256.NewInt(10), uint256.NewInt(3), keyA, authList)); err != nil {
 		t.Fatalf("failed to add with remote setcode transaction: %v", err)
 	}
 	// Try to add a transactions in
-	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1000), keyA)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
+	if err := pool.addTxSync(pricedTransaction(2, 100000, big.NewInt(1000), keyA)); !errors.Is(err, txpool.ErrInflightTxLimitReached) {
 		t.Fatalf("unexpected error %v, expecting %v", err, txpool.ErrInflightTxLimitReached)
 	}
 	// Simulate the chain moving
@@ -2582,10 +2582,10 @@ func TestSetCodeTransactionsReorg(t *testing.T) {
 	blockchain.statedb.SetCode(addrA, nil)
 	<-pool.requestReset(nil, nil)
 	// Now send two transactions from addrA
-	if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1000), keyA)); err != nil {
+	if err := pool.addTxSync(pricedTransaction(2, 100000, big.NewInt(1000), keyA)); err != nil {
 		t.Fatalf("failed to added single transaction: %v", err)
 	}
-	if err := pool.addRemoteSync(pricedTransaction(3, 100000, big.NewInt(1000), keyA)); err != nil {
+	if err := pool.addTxSync(pricedTransaction(3, 100000, big.NewInt(1000), keyA)); err != nil {
 		t.Fatalf("failed to added single transaction: %v", err)
 	}
 }
@@ -2663,7 +2663,7 @@ func benchmarkBatchInsert(b *testing.B, size int) {
 	// Benchmark importing the transactions into the queue
 	b.ResetTimer()
 	for _, batch := range batches {
-		pool.addRemotes(batch)
+		pool.addAsync(batch)
 	}
 }
 
@@ -2684,6 +2684,6 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	// Benchmark importing the transactions into the queue
 	b.ResetTimer()
 	for _, tx := range batches {
-		pool.addRemotesSync([]*types.Transaction{tx})
+		pool.addSync([]*types.Transaction{tx})
 	}
 }
