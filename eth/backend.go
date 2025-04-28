@@ -70,6 +70,10 @@ const (
 	// in the next rounds, giving it overall more time but a proportionally smaller share.
 	// We expect a normal source to produce ~10 candidates per second.
 	discmixTimeout = 100 * time.Millisecond
+
+	// maxParallelENRRequests is the maximum number of parallel ENR requests that can be
+	// performed by a disc/v4 source.
+	maxParallelENRRequests = 16
 )
 
 // Config contains the configuration options of the ETH protocol.
@@ -501,7 +505,7 @@ func (s *Ethereum) setupDiscovery() error {
 	if s.p2pServer.DiscoveryV4() != nil {
 		asyncFilter := s.p2pServer.DiscoveryV4().RequestENR
 		filter := eth.NewNodeFilter(s.blockchain)
-		iter := enode.AsyncFilter(s.p2pServer.DiscoveryV4().RandomNodes(), asyncFilter, 16)
+		iter := enode.AsyncFilter(s.p2pServer.DiscoveryV4().RandomNodes(), asyncFilter, maxParallelENRRequests)
 		iter = enode.Filter(iter, filter)
 		s.discmix.AddSource(iter)
 	}
