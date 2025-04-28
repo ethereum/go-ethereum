@@ -23,6 +23,7 @@ const (
 	finalizeBatchEventName    = "FinalizeBatch"
 	nextUnfinalizedQueueIndex = "nextUnfinalizedQueueIndex"
 	lastFinalizedBatchIndex   = "lastFinalizedBatchIndex"
+	finalizedStateRoots       = "finalizedStateRoots"
 
 	defaultRollupEventsFetchBlockRange = 100
 )
@@ -72,7 +73,7 @@ func NewReader(ctx context.Context, config Config, l1Client Client) (*Reader, er
 	return &reader, nil
 }
 
-func (r *Reader) FinalizedL1MessageQueueIndex(blockNumber uint64) (uint64, error) {
+func (r *Reader) NextUnfinalizedL1MessageQueueIndex(blockNumber uint64) (uint64, error) {
 	data, err := r.l1MessageQueueABI.Pack(nextUnfinalizedQueueIndex)
 	if err != nil {
 		return 0, fmt.Errorf("failed to pack %s: %w", nextUnfinalizedQueueIndex, err)
@@ -92,11 +93,7 @@ func (r *Reader) FinalizedL1MessageQueueIndex(blockNumber uint64) (uint64, error
 	}
 
 	next := parsedResult.Uint64()
-	if next == 0 {
-		return 0, nil
-	}
-
-	return next - 1, nil
+	return next, nil
 }
 
 func (r *Reader) LatestFinalizedBatchIndex(blockNumber uint64) (uint64, error) {
@@ -119,6 +116,28 @@ func (r *Reader) LatestFinalizedBatchIndex(blockNumber uint64) (uint64, error) {
 	}
 
 	return parsedResult.Uint64(), nil
+}
+
+func (r *Reader) GetFinalizedStateRootByBatchIndex(blockNumber uint64, batchIndex uint64) (common.Hash, error) {
+	data, err := r.scrollChainABI.Pack(finalizedStateRoots, big.NewInt(int64(batchIndex)))
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to pack %s: %w", finalizedStateRoots, err)
+	}
+
+	result, err := r.client.CallContract(r.ctx, ethereum.CallMsg{
+		To:   &r.config.ScrollChainAddress,
+		Data: data,
+	}, new(big.Int).SetUint64(blockNumber))
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to call %s: %w", finalizedStateRoots, err)
+	}
+
+	var parsedResult common.Hash
+	if err = r.scrollChainABI.UnpackIntoInterface(&parsedResult, finalizedStateRoots, result); err != nil {
+		return common.Hash{}, fmt.Errorf("failed to unpack result: %w", err)
+	}
+
+	return parsedResult, nil
 }
 
 // GetLatestFinalizedBlockNumber fetches the block number of the latest finalized block from the L1 chain.
