@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
 )
 
 const testHead = 32
@@ -151,15 +152,18 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
-	config.TerminalTotalDifficulty = common.Big0
-	// var engine consensus.Engine = beacon.New(ethash.NewFaker())
-	// td := params.GenesisDifficulty.Uint64()
+	// if cancunBlock != nil {
+	// 	// Enable the merge with cancun fork.
+	// 	config.MergeNetsplitBlock = cancunBlock
+	// }
+	// engine := beacon.New(ethash.NewFaker())
 	engine := ethash.NewFaker()
 
 	// if cancunBlock != nil {
 	// 	ts := gspec.Timestamp + cancunBlock.Uint64()*10 // fixed 10 sec block time in blockgen
 	// 	config.ShanghaiTime = &ts
 	// 	config.CancunTime = &ts
+	// 	config.BlobScheduleConfig = params.DefaultBlobSchedule
 	// 	signer = types.LatestSigner(gspec.Config)
 	// }
 
@@ -190,7 +194,30 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 		}
 
 		b.AddTx(types.MustSignNewTx(key, signer, txdata))
+
+		if cancunBlock != nil && b.Number().Cmp(cancunBlock) >= 0 {
+			b.SetPoS()
+
+			// put more blobs in each new block
+			for j := 0; j < i && j < 6; j++ {
+				blobTx := &types.BlobTx{
+					ChainID:    uint256.MustFromBig(gspec.Config.ChainID),
+					Nonce:      b.TxNonce(addr),
+					To:         common.Address{},
+					Gas:        30000,
+					GasFeeCap:  uint256.NewInt(100 * params.GWei),
+					GasTipCap:  uint256.NewInt(uint64(i+1) * params.GWei),
+					Data:       []byte{},
+					BlobFeeCap: uint256.NewInt(1),
+					BlobHashes: []common.Hash{emptyBlobVHash},
+					Value:      uint256.NewInt(100),
+					Sidecar:    nil,
+				}
+				b.AddTx(types.MustSignNewTx(key, signer, blobTx))
+			}
+		}
 	})
+
 	// Construct testing chain
 	// gspec.Config.TerminalTotalDifficulty = new(big.Int).SetUint64(td)
 	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec, nil, engine, vm.Config{}, nil, nil, nil)

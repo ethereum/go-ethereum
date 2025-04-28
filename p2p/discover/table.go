@@ -578,7 +578,7 @@ func (tab *Table) nodeAdded(b *bucket, n *tableNode) {
 	if tab.nodeAddedHook != nil {
 		tab.nodeAddedHook(b, n)
 	}
-	if metrics.Enabled {
+	if metrics.Enabled() {
 		bucketsCounter[b.index].Inc(1)
 	}
 }
@@ -588,7 +588,7 @@ func (tab *Table) nodeRemoved(b *bucket, n *tableNode) {
 	if tab.nodeRemovedHook != nil {
 		tab.nodeRemovedHook(b, n)
 	}
-	if metrics.Enabled {
+	if metrics.Enabled() {
 		bucketsCounter[b.index].Dec(1)
 	}
 }
@@ -703,4 +703,12 @@ func pushNode(list []*tableNode, n *tableNode, max int) ([]*tableNode, *tableNod
 	list[0] = n
 
 	return list, removed
+}
+
+// deleteNode removes a node from the table.
+func (tab *Table) deleteNode(n *enode.Node) {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+	b := tab.bucket(n.ID())
+	tab.deleteInBucket(b, n.ID())
 }

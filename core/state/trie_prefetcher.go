@@ -47,21 +47,21 @@ type triePrefetcher struct {
 	term     chan struct{}          // Channel to signal interruption
 	noreads  bool                   // Whether to ignore state-read-only prefetch requests
 
-	deliveryMissMeter metrics.Meter
+	deliveryMissMeter *metrics.Meter
 
-	accountLoadReadMeter  metrics.Meter
-	accountLoadWriteMeter metrics.Meter
-	accountDupReadMeter   metrics.Meter
-	accountDupWriteMeter  metrics.Meter
-	accountDupCrossMeter  metrics.Meter
-	accountWasteMeter     metrics.Meter
+	accountLoadReadMeter  *metrics.Meter
+	accountLoadWriteMeter *metrics.Meter
+	accountDupReadMeter   *metrics.Meter
+	accountDupWriteMeter  *metrics.Meter
+	accountDupCrossMeter  *metrics.Meter
+	accountWasteMeter     *metrics.Meter
 
-	storageLoadReadMeter  metrics.Meter
-	storageLoadWriteMeter metrics.Meter
-	storageDupReadMeter   metrics.Meter
-	storageDupWriteMeter  metrics.Meter
-	storageDupCrossMeter  metrics.Meter
-	storageWasteMeter     metrics.Meter
+	storageLoadReadMeter  *metrics.Meter
+	storageLoadWriteMeter *metrics.Meter
+	storageDupReadMeter   *metrics.Meter
+	storageDupWriteMeter  *metrics.Meter
+	storageDupCrossMeter  *metrics.Meter
+	storageWasteMeter     *metrics.Meter
 
 	lock sync.RWMutex // Use RWMutex for better read/write locking
 }
@@ -119,7 +119,7 @@ func (p *triePrefetcher) report() {
 	p.lock.RLock()         // Lock for reading
 	defer p.lock.RUnlock() // Ensure the lock is released after the function
 
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return
 	}
 	for _, fetcher := range p.fetchers {

@@ -72,6 +72,7 @@ var DefaultConfig = Config{
 // Miner creates blocks and searches for proof-of-work values.
 // nolint:staticcheck
 type Miner struct {
+	confMu  sync.RWMutex // The lock used to protect the config fields: GasCeil, GasTip and Extradata
 	mux     *event.TypeMux
 	eth     Backend
 	engine  consensus.Engine
@@ -79,6 +80,7 @@ type Miner struct {
 	startCh chan struct{}
 	stopCh  chan chan struct{}
 	worker  *worker
+	prio    []common.Address // A list of senders to prioritize
 
 	wg sync.WaitGroup
 }
@@ -246,6 +248,13 @@ func (miner *Miner) PendingBlock() *types.Block {
 
 func (miner *Miner) SetEtherbase(addr common.Address) {
 	miner.worker.setEtherbase(addr)
+}
+
+// SetPrioAddresses sets a list of addresses to prioritize for transaction inclusion.
+func (miner *Miner) SetPrioAddresses(prio []common.Address) {
+	miner.confMu.Lock()
+	miner.prio = prio
+	miner.confMu.Unlock()
 }
 
 // SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.

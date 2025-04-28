@@ -42,7 +42,7 @@ func TestGeneratePOSChain(t *testing.T) {
 		aa      = common.Address{0xaa}
 		bb      = common.Address{0xbb}
 		funds   = big.NewInt(0).Mul(big.NewInt(1337), big.NewInt(params.Ether))
-		config  = *params.AllEthashProtocolChanges
+		config  = *params.MergedTestChainConfig
 		gspec   = &Genesis{
 			Config: &config,
 			Alloc: types.GenesisAlloc{
@@ -56,12 +56,6 @@ func TestGeneratePOSChain(t *testing.T) {
 		gendb = rawdb.NewMemoryDatabase()
 		db    = rawdb.NewMemoryDatabase()
 	)
-
-	config.TerminalTotalDifficulty = common.Big0
-	config.ShanghaiBlock = common.Big0
-	config.CancunBlock = common.Big0
-	config.PragueBlock = common.Big0
-	// config.VerkleBlock = common.Big0
 
 	// init 0xaa with some storage elements
 	storage := make(map[common.Hash]common.Hash)
@@ -82,8 +76,9 @@ func TestGeneratePOSChain(t *testing.T) {
 		Code:    common.Hex2Bytes("600154600354"),
 	}
 	genesis := gspec.MustCommit(gendb, triedb.NewDatabase(gendb, triedb.HashDefaults))
+	engine := beacon.New(ethash.NewFaker())
 
-	genchain, genreceipts := GenerateChain(gspec.Config, genesis, beacon.NewFaker(), gendb, 4, func(i int, gen *BlockGen) {
+	genchain, genreceipts := GenerateChain(gspec.Config, genesis, engine, gendb, 4, func(i int, gen *BlockGen) {
 		gen.SetParentBeaconRoot(common.Hash{byte(i + 1)})
 
 		// Add value transfer tx.
@@ -126,7 +121,7 @@ func TestGeneratePOSChain(t *testing.T) {
 	})
 
 	// Import the chain. This runs all block validation rules.
-	blockchain, _ := NewBlockChain(db, nil, gspec, nil, beacon.NewFaker(), vm.Config{}, nil, nil, nil)
+	blockchain, _ := NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	defer blockchain.Stop()
 
 	if i, err := blockchain.InsertChain(genchain); err != nil {

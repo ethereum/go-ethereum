@@ -48,7 +48,7 @@ func NewUIServerAPI(extapi *SignerAPI) *UIServerAPI {
 	return &UIServerAPI{extapi, extapi.am}
 }
 
-// List available accounts. As opposed to the external API definition, this method delivers
+// ListAccounts lists available accounts. As opposed to the external API definition, this method delivers
 // the full Account object and not only Address.
 // Example call
 // {"jsonrpc":"2.0","method":"clef_listAccounts","params":[], "id":4}

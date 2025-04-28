@@ -1,4 +1,4 @@
-// Copyright 2023 go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -136,8 +136,8 @@ func TestVerkleRollBack(t *testing.T) {
 		}
 	}
 
-	// ensure there is some code in the 2nd group
-	keyOf2ndGroup := []byte{141, 124, 185, 236, 50, 22, 185, 39, 244, 47, 97, 209, 96, 235, 22, 13, 205, 38, 18, 201, 128, 223, 0, 59, 146, 199, 222, 119, 133, 13, 91, 0}
+	// ensure there is some code in the 2nd group of the 1st account
+	keyOf2ndGroup := utils.CodeChunkKeyWithEvaluatedAddress(tr.cache.Get(common.Address{1}.Bytes()), uint256.NewInt(128))
 	chunk, err := tr.root.Get(keyOf2ndGroup, nil)
 	if err != nil {
 		t.Fatalf("Failed to get account, %v", err)

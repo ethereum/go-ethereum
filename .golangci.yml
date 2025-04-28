@@ -3,9 +3,6 @@
 run:
   timeout: 20m
   tests: true
-  # default is true. Enables skipping of directories:
-  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
-  skip-dirs-use-default: true
 
 linters:
   disable-all: true
@@ -29,6 +26,7 @@ linters:
     - reassign
     - mirror
     - tenv
+    - usetesting
     ### linters we tried and will not be using:
     ###
     # - structcheck # lots of false positives
@@ -54,6 +52,9 @@ linters-settings:
         exclude: [""]
 
 issues:
+  # default is true. Enables skipping of directories:
+  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
+  exclude-dirs-use-default: true
   exclude-files:
     - core/genesis_alloc.go
   exclude-rules:

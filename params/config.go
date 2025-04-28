@@ -17,6 +17,7 @@
 package params
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -34,6 +35,7 @@ var (
 	SepoliaGenesisHash    = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
 	RinkebyGenesisHash    = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash     = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
+	HoodiGenesisHash      = common.HexToHash("0xbbe312868b376a3001692a646dd2d7d1e4406380dfd86b98aa8a34d1557c971b")
 	MumbaiGenesisHash     = common.HexToHash("0x7b66506a9ebdbf30d32b43c5f15a3b1216269a1ec3a75aa3182b86176a2b1ca7")
 	BorMainnetGenesisHash = common.HexToHash("0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
 	KilnGenesisHash       = common.HexToHash("0x51c7fe41be669f69c45c33a56982cbde405313342d9e2b00d7c91a7b284dd4f8")
@@ -67,6 +69,9 @@ var (
 		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000_000
 		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"),
 		Ethash:                  new(EthashConfig),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+		},
 	}
 	// HoleskyChainConfig contains the chain parameters to run a node on the Holesky test network.
 	HoleskyChainConfig = &ChainConfig{
@@ -89,6 +94,11 @@ var (
 		TerminalTotalDifficulty: big.NewInt(0),
 		MergeNetsplitBlock:      nil,
 		Ethash:                  new(EthashConfig),
+		DepositContractAddress:  common.HexToAddress("0x4242424242424242424242424242424242424242"),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
+		},
 	}
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
 	SepoliaChainConfig = &ChainConfig{
@@ -110,7 +120,39 @@ var (
 		GrayGlacierBlock:        nil,
 		TerminalTotalDifficulty: big.NewInt(17_000_000_000_000_000),
 		MergeNetsplitBlock:      big.NewInt(1735371),
+		DepositContractAddress:  common.HexToAddress("0x7f02c3e3c98b133055b8b348b2ac625669ed295d"),
 		Ethash:                  new(EthashConfig),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
+		},
+	}
+	// HoodiChainConfig contains the chain parameters to run a node on the Hoodi test network.
+	HoodiChainConfig = &ChainConfig{
+		ChainID:                 big.NewInt(560048),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          true,
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       nil,
+		GrayGlacierBlock:        nil,
+		TerminalTotalDifficulty: big.NewInt(0),
+		MergeNetsplitBlock:      big.NewInt(0),
+		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cBB839Cbe05303d7705Fa"),
+		Ethash:                  new(EthashConfig),
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
+		},
 	}
 	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
 	GoerliChainConfig = &ChainConfig{
@@ -463,6 +505,7 @@ var (
 		ShanghaiBlock:           nil,
 		CancunBlock:             nil,
 		PragueBlock:             nil,
+		OsakaBlock:              nil,
 		VerkleBlock:             nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -488,7 +531,11 @@ var (
 		CancunBlock:             big.NewInt(0),
 		TerminalTotalDifficulty: big.NewInt(0),
 		PragueBlock:             big.NewInt(0),
-		Bor:                     &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
+		},
+		Bor: &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
@@ -514,6 +561,7 @@ var (
 		ShanghaiBlock:           nil,
 		CancunBlock:             nil,
 		PragueBlock:             nil,
+		OsakaBlock:              nil,
 		VerkleBlock:             nil,
 		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		Ethash:                  nil,
@@ -544,6 +592,7 @@ var (
 		ShanghaiBlock:           nil,
 		CancunBlock:             nil,
 		PragueBlock:             nil,
+		OsakaBlock:              nil,
 		VerkleBlock:             nil,
 		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		Ethash:                  new(EthashConfig),
@@ -577,14 +626,20 @@ var (
 		ShanghaiBlock:           big.NewInt(0),
 		CancunBlock:             big.NewInt(0),
 		PragueBlock:             big.NewInt(0),
+		OsakaBlock:              big.NewInt(0),
 		VerkleBlock:             nil,
 		TerminalTotalDifficulty: big.NewInt(0),
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
+		BlobScheduleConfig: &BlobScheduleConfig{
+			Cancun: DefaultCancunBlobConfig,
+			Prague: DefaultPragueBlobConfig,
+		},
 		Bor: &BorConfig{
 			Sprint: map[string]uint64{
 				"0": 4},
-			BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
+			BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"},
+		},
 	}
 
 	// NonActivatedConfig defines the chain configuration without activating
@@ -611,6 +666,7 @@ var (
 		CancunBlock:             nil,
 		PragueBlock:             nil,
 		VerkleBlock:             nil,
+		OsakaBlock:              nil,
 		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -618,15 +674,43 @@ var (
 	TestRules = TestChainConfig.Rules(new(big.Int), false, 0)
 )
 
+var (
+	// DefaultCancunBlobConfig is the default blob configuration for the Cancun fork.
+	DefaultCancunBlobConfig = &BlobConfig{
+		Target:         3,
+		Max:            6,
+		UpdateFraction: 3338477,
+	}
+	// DefaultPragueBlobConfig is the default blob configuration for the Prague fork.
+	DefaultPragueBlobConfig = &BlobConfig{
+		Target:         6,
+		Max:            9,
+		UpdateFraction: 5007716,
+	}
+	// DefaultOsakaBlobConfig is the default blob configuration for the Osaka fork.
+	DefaultOsakaBlobConfig = &BlobConfig{
+		Target:         6,
+		Max:            9,
+		UpdateFraction: 5007716,
+	}
+	// DefaultBlobSchedule is the latest configured blob schedule for test chains.
+	DefaultBlobSchedule = &BlobScheduleConfig{
+		Cancun: DefaultCancunBlobConfig,
+		Prague: DefaultPragueBlobConfig,
+		Osaka:  DefaultOsakaBlobConfig,
+	}
+)
+
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
 	MainnetChainConfig.ChainID.String():    "mainnet",
 	GoerliChainConfig.ChainID.String():     "goerli",
 	SepoliaChainConfig.ChainID.String():    "sepolia",
+	HoleskyChainConfig.ChainID.String():    "holesky",
+	HoodiChainConfig.ChainID.String():      "hoodi",
 	BorMainnetChainConfig.ChainID.String(): "bor",
 	MumbaiChainConfig.ChainID.String():     "mumbai",
 	AmoyChainConfig.ChainID.String():       "amoy",
-	HoleskyChainConfig.ChainID.String():    "holesky",
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -664,6 +748,7 @@ type ChainConfig struct {
 	CancunBlock   *big.Int `json:"cancunBlock,omitempty"`   // Cancun switch Block (nil = no fork, 0 = already on cancun)
 	PragueBlock   *big.Int `json:"pragueBlock,omitempty"`   // Prague switch Block (nil = no fork, 0 = already on prague)
 	VerkleBlock   *big.Int `json:"verkleBlock,omitempty"`   // Verkle switch Block (nil = no fork, 0 = already on verkle)
+	OsakaBlock    *big.Int `json:"osakaBlock,omitempty"`    // Osaka switch Block (nil = no fork, 0 = already on osaka)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -671,11 +756,24 @@ type ChainConfig struct {
 
 	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
 
+	// EnableVerkleAtGenesis is a flag that specifies whether the network uses
+	// the Verkle tree starting from the genesis block. If set to true, the
+	// genesis state will be committed using the Verkle tree, eliminating the
+	// need for any Verkle transition later.
+	//
+	// This is a temporary flag only for verkle devnet testing, where verkle is
+	// activated at genesis, and the configured activation date has already passed.
+	//
+	// In production networks (mainnet and public testnets), verkle activation
+	// always occurs after the genesis block, making this flag irrelevant in
+	// those cases.
+	EnableVerkleAtGenesis bool `json:"enableVerkleAtGenesis,omitempty"`
+
 	// Various consensus engines
-	Bor       *BorConfig    `json:"bor,omitempty"`
-	Ethash    *EthashConfig `json:"ethash,omitempty"`
-	Clique    *CliqueConfig `json:"clique,omitempty"`
-	IsDevMode bool          `json:"isDev,omitempty"`
+	Bor                *BorConfig          `json:"bor,omitempty"`
+	Ethash             *EthashConfig       `json:"ethash,omitempty"`
+	Clique             *CliqueConfig       `json:"clique,omitempty"`
+	BlobScheduleConfig *BlobScheduleConfig `json:"blobSchedule,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -887,7 +985,25 @@ func (c *ChainConfig) Description() string {
 	if c.VerkleBlock != nil {
 		banner += fmt.Sprintf(" - Verkle:                      @%-10v\n", *c.VerkleBlock)
 	}
+	if c.OsakaBlock != nil {
+		banner += fmt.Sprintf(" - Osaka:                      #%-8v\n", *c.OsakaBlock)
+	}
 	return banner
+}
+
+// BlobConfig specifies the target and max blobs per block for the associated fork.
+type BlobConfig struct {
+	Target         int    `json:"target"`
+	Max            int    `json:"max"`
+	UpdateFraction uint64 `json:"baseFeeUpdateFraction"`
+}
+
+// BlobScheduleConfig determines target and max number of blobs allow per fork.
+type BlobScheduleConfig struct {
+	Cancun *BlobConfig `json:"cancun,omitempty"`
+	Prague *BlobConfig `json:"prague,omitempty"`
+	Osaka  *BlobConfig `json:"osaka,omitempty"`
+	Verkle *BlobConfig `json:"verkle,omitempty"`
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
@@ -991,6 +1107,25 @@ func (c *ChainConfig) IsVerkle(num *big.Int) bool {
 	return c.IsLondon(num) && isBlockForked(c.VerkleBlock, num)
 }
 
+// IsOsaka returns whether time is either equal to the Osaka fork time or greater.
+func (c *ChainConfig) IsOsaka(num *big.Int) bool {
+	return c.IsLondon(num) && isBlockForked(c.OsakaBlock, num)
+}
+
+// IsVerkleGenesis checks whether the verkle fork is activated at the genesis block.
+//
+// Verkle mode is considered enabled if the verkle fork time is configured,
+// regardless of whether the local time has surpassed the fork activation time.
+// This is a temporary workaround for verkle devnet testing, where verkle is
+// activated at genesis, and the configured activation date has already passed.
+//
+// In production networks (mainnet and public testnets), verkle activation
+// always occurs after the genesis block, making this function irrelevant in
+// those cases.
+func (c *ChainConfig) IsVerkleGenesis() bool {
+	return c.EnableVerkleAtGenesis
+}
+
 // IsEIP4762 returns whether eip 4762 has been activated at given block.
 func (c *ChainConfig) IsEIP4762(num *big.Int, time uint64) bool {
 	return c.IsVerkle(num)
@@ -1054,6 +1189,8 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "shanghaiBlock", block: c.ShanghaiBlock},
 		{name: "cancunBlock", block: c.CancunBlock, optional: true},
 		{name: "pragueBlock", block: c.PragueBlock, optional: true},
+		{name: "osakaBlock", block: c.OsakaBlock, optional: true},
+		{name: "verkleBlock", block: c.VerkleBlock, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {
@@ -1090,6 +1227,45 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		}
 	}
 
+	// Check that all forks with blobs explicitly define the blob schedule configuration.
+	bsc := c.BlobScheduleConfig
+	if bsc == nil {
+		bsc = new(BlobScheduleConfig)
+	}
+	for _, cur := range []struct {
+		name      string
+		timestamp *uint64
+		config    *BlobConfig
+	}{
+		{name: "cancun", timestamp: nil, config: bsc.Cancun},
+		{name: "prague", timestamp: nil, config: bsc.Prague},
+		{name: "osaka", timestamp: nil, config: bsc.Osaka},
+	} {
+		if cur.config != nil {
+			if err := cur.config.validate(); err != nil {
+				return fmt.Errorf("invalid chain configuration in blobSchedule for fork %q: %v", cur.name, err)
+			}
+		}
+		if cur.timestamp != nil {
+			// If the fork is configured, a blob schedule must be defined for it.
+			if cur.config == nil {
+				return fmt.Errorf("invalid chain configuration: missing entry for fork %q in blobSchedule", cur.name)
+			}
+		}
+	}
+	return nil
+}
+
+func (bc *BlobConfig) validate() error {
+	if bc.Max < 0 {
+		return errors.New("max < 0")
+	}
+	if bc.Target < 0 {
+		return errors.New("target < 0")
+	}
+	if bc.UpdateFraction == 0 {
+		return errors.New("update fraction must be defined and non-zero")
+	}
 	return nil
 }
 
@@ -1180,6 +1356,11 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkBlockIncompatible(c.VerkleBlock, newcfg.VerkleBlock, headNumber) {
 		return newBlockCompatError("Verkle fork timestamp", c.VerkleBlock, newcfg.VerkleBlock)
 	}
+
+	if isForkBlockIncompatible(c.OsakaBlock, newcfg.OsakaBlock, headNumber) {
+		return newBlockCompatError("Osaka fork block", c.OsakaBlock, newcfg.OsakaBlock)
+	}
+
 	return nil
 }
 
@@ -1201,6 +1382,8 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	switch {
 	case c.IsPrague(london):
 		return forks.Prague
+	case c.IsOsaka(london):
+		return forks.Osaka
 	case c.IsCancun(london):
 		return forks.Cancun
 	case c.IsShanghai(london):
@@ -1332,7 +1515,7 @@ type Rules struct {
 	IsEIP2929, IsEIP4762                                    bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
-	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
+	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
 	IsVerkle                                                bool
 }
 
@@ -1363,5 +1546,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsCancun:         c.IsCancun(num),
 		IsPrague:         c.IsPrague(num),
 		IsVerkle:         c.IsVerkle(num),
+		IsOsaka:          c.IsOsaka(num),
+		IsEIP4762:        c.IsVerkle(num),
 	}
 }

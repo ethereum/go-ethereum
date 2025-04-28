@@ -52,7 +52,7 @@ func TestPriorityCalculation(t *testing.T) {
 func BenchmarkDynamicFeeJumpCalculation(b *testing.B) {
 	fees := make([]*uint256.Int, b.N)
 	for i := 0; i < b.N; i++ {
-		fees[i] = uint256.NewInt(rand.Uint64())
+		fees[i] = uint256.NewInt(rnd.Uint64())
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -76,8 +76,8 @@ func BenchmarkPriorityCalculation(b *testing.B) {
 	txBasefeeJumps := make([]float64, b.N)
 	txBlobfeeJumps := make([]float64, b.N)
 	for i := 0; i < b.N; i++ {
-		txBasefeeJumps[i] = dynamicFeeJumps(uint256.NewInt(rand.Uint64()))
-		txBlobfeeJumps[i] = dynamicFeeJumps(uint256.NewInt(rand.Uint64()))
+		txBasefeeJumps[i] = dynamicFeeJumps(uint256.NewInt(rnd.Uint64()))
+		txBlobfeeJumps[i] = dynamicFeeJumps(uint256.NewInt(rnd.Uint64()))
 	}
 	b.ResetTimer()
 	b.ReportAllocs()

@@ -366,7 +366,6 @@ func accountImport(ctx *cli.Context) error {
 	if len(backends) == 0 {
 		utils.Fatalf("Keystore is not available")
 	}
-
 	ks := backends[0].(*keystore.KeyStore)
 	password, ok := readPasswordFromFile(ctx.Path(utils.PasswordFileFlag.Name))
 	if !ok {

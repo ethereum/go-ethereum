@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -75,8 +75,6 @@ func TestSupplyOmittedFields(t *testing.T) {
 		}
 	)
 
-	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
-
 	out, _, err := testSupplyTracer(t, gspec, func(b *core.BlockGen) {
 		b.SetPoS()
 	})
@@ -85,8 +83,10 @@ func TestSupplyOmittedFields(t *testing.T) {
 	}
 
 	expected := supplyInfo{
-		Number:     0,
-		Hash:       common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
+		Number: 0,
+		// kept the bor hash (commented) for reference.
+		// Hash:       common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
+		Hash:       common.HexToHash("0x3055fc27d6b4a08eb07033a0d1ee755a4b2988086f28a6189eac1b507525eeb1"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 	actual := out[expected.Number]
@@ -361,6 +361,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	cancunBlock := big.NewInt(0)
 	gspec.Config.ShanghaiBlock = cancunBlock
 	gspec.Config.CancunBlock = cancunBlock
+	gspec.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	postCancunOutput, postCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {
@@ -545,9 +546,7 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 }
 
 func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, *core.BlockChain, error) {
-	var (
-		engine = beacon.New(ethash.NewFaker())
-	)
+	engine := beacon.New(ethash.NewFaker())
 
 	traceOutputPath := filepath.ToSlash(t.TempDir())
 	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")

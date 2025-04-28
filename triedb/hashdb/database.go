@@ -532,12 +532,6 @@ func (c *cleaner) Delete(key []byte) error {
 	panic("not implemented")
 }
 
-// Initialized returns an indicator if state data is already initialized
-// in hash-based scheme by checking the presence of genesis state.
-func (db *Database) Initialized(genesisRoot common.Hash) bool {
-	return rawdb.HasLegacyTrieNode(db.diskdb, genesisRoot)
-}
-
 // Update inserts the dirty nodes in provided nodeset into database and link the
 // account trie with multiple storage tries if necessary.
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet) error {
@@ -634,4 +628,10 @@ type reader struct {
 func (reader *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	blob, _ := reader.db.node(hash)
 	return blob, nil
+}
+
+// StateReader returns a reader that allows access to the state data associated
+// with the specified state.
+func (db *Database) StateReader(root common.Hash) (database.StateReader, error) {
+	return nil, errors.New("not implemented")
 }

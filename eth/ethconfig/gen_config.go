@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/miner"
 )
@@ -20,7 +19,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	type Config struct {
 		Genesis                              *core.Genesis `toml:",omitempty"`
 		NetworkId                            uint64
-		SyncMode                             downloader.SyncMode
+		SyncMode                             SyncMode
 		EthDiscoveryURLs                     []string
 		SnapDiscoveryURLs                    []string
 		NoPruning                            bool
@@ -69,6 +68,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		BorLogs                              bool
 		ParallelEVM                          core.ParallelEVMConfig `toml:",omitempty"`
 		DevFakeAuthor                        bool                   `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
+		OverridePrague                       *big.Int               `toml:",omitempty"`
 		OverrideVerkle                       *big.Int               `toml:",omitempty"`
 		EnableBlockTracking                  bool
 	}
@@ -76,6 +76,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.Genesis = c.Genesis
 	enc.NetworkId = c.NetworkId
 	enc.SyncMode = c.SyncMode
+	enc.HistoryMode = c.HistoryMode
 	enc.EthDiscoveryURLs = c.EthDiscoveryURLs
 	enc.SnapDiscoveryURLs = c.SnapDiscoveryURLs
 	enc.NoPruning = c.NoPruning
@@ -111,7 +112,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCReturnDataLimit = c.RPCReturnDataLimit
 	enc.RPCEVMTimeout = c.RPCEVMTimeout
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
-	enc.OverrideCancun = c.OverrideCancun
+	enc.OverridePrague = c.OverridePrague
 	enc.HeimdallURL = c.HeimdallURL
 	enc.HeimdallTimeout = c.HeimdallTimeout
 	enc.WithoutHeimdall = c.WithoutHeimdall
@@ -132,7 +133,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	type Config struct {
 		Genesis                              *core.Genesis `toml:",omitempty"`
 		NetworkId                            *uint64
-		SyncMode                             *downloader.SyncMode
+		SyncMode                             *SyncMode
 		EthDiscoveryURLs                     []string
 		SnapDiscoveryURLs                    []string
 		NoPruning                            *bool
@@ -181,6 +182,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		BorLogs                              *bool
 		ParallelEVM                          *core.ParallelEVMConfig `toml:",omitempty"`
 		DevFakeAuthor                        *bool                   `hcl:"devfakeauthor,optional" toml:"devfakeauthor,optional"`
+		OverridePrague                       *big.Int                `toml:",omitempty"`
 		OverrideVerkle                       *big.Int                `toml:",omitempty"`
 		EnableBlockTracking                  *bool
 	}
@@ -196,6 +198,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.SyncMode != nil {
 		c.SyncMode = *dec.SyncMode
+	}
+	if dec.HistoryMode != nil {
+		c.HistoryMode = *dec.HistoryMode
 	}
 	if dec.EthDiscoveryURLs != nil {
 		c.EthDiscoveryURLs = dec.EthDiscoveryURLs
@@ -302,8 +307,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.RPCTxFeeCap != nil {
 		c.RPCTxFeeCap = *dec.RPCTxFeeCap
 	}
-	if dec.OverrideCancun != nil {
-		c.OverrideCancun = dec.OverrideCancun
+	if dec.OverridePrague != nil {
+		c.OverridePrague = dec.OverridePrague
 	}
 	if dec.HeimdallURL != nil {
 		c.HeimdallURL = *dec.HeimdallURL

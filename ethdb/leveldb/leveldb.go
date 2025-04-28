@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !js
-// +build !js
+//go:build !js && !wasip1
+// +build !js,!wasip1
 
 // Package leveldb implements the key-value database layer based on LevelDB.
 package leveldb
@@ -62,21 +62,21 @@ type Database struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
 
-	compTimeMeter       metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter       metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter      metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter    metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter     metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskSizeGauge       metrics.Gauge // Gauge for tracking the size of all the levels in the database
-	diskReadMeter       metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter      metrics.Meter // Meter for measuring the effective amount of data written
-	memCompGauge        metrics.Gauge // Gauge for tracking the number of memory compaction
-	level0CompGauge     metrics.Gauge // Gauge for tracking the number of table compaction in level0
-	nonlevel0CompGauge  metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
-	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
-	manualMemAllocGauge metrics.Gauge // Gauge to track the amount of memory that has been manually allocated (not a part of runtime/GC)
+	compTimeMeter       *metrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter       *metrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter      *metrics.Meter // Meter for measuring the data written during compaction
+	writeDelayNMeter    *metrics.Meter // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter     *metrics.Meter // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge       *metrics.Gauge // Gauge for tracking the size of all the levels in the database
+	diskReadMeter       *metrics.Meter // Meter for measuring the effective amount of data read
+	diskWriteMeter      *metrics.Meter // Meter for measuring the effective amount of data written
+	memCompGauge        *metrics.Gauge // Gauge for tracking the number of memory compaction
+	level0CompGauge     *metrics.Gauge // Gauge for tracking the number of table compaction in level0
+	nonlevel0CompGauge  *metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
+	seekCompGauge       *metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
+	manualMemAllocGauge *metrics.Gauge // Gauge to track the amount of memory that has been manually allocated (not a part of runtime/GC)
 
-	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
+	levelsGauge []*metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -229,8 +229,6 @@ func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
-var ErrTooManyKeys = errors.New("too many keys in deleted range")
-
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
 // (inclusive on start, exclusive on end).
 // Note that this is a fallback implementation as leveldb does not natively
@@ -250,7 +248,7 @@ func (db *Database) DeleteRange(start, end []byte) error {
 			if err := batch.Write(); err != nil {
 				return err
 			}
-			return ErrTooManyKeys
+			return ethdb.ErrTooManyKeys
 		}
 		if err := batch.Delete(it.Key()); err != nil {
 			return err
@@ -391,34 +389,17 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 		compactions[i%2][2] = stats.LevelRead.Sum()
 		compactions[i%2][3] = stats.LevelWrite.Sum()
 		// Update all the requested meters
-		if db.diskSizeGauge != nil {
-			db.diskSizeGauge.Update(compactions[i%2][0])
-		}
-
-		if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(compactions[i%2][1] - compactions[(i-1)%2][1])
-		}
-
-		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(compactions[i%2][2] - compactions[(i-1)%2][2])
-		}
-
-		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(compactions[i%2][3] - compactions[(i-1)%2][3])
-		}
-
+		db.diskSizeGauge.Update(compactions[i%2][0])
+		db.compTimeMeter.Mark(compactions[i%2][1] - compactions[(i-1)%2][1])
+		db.compReadMeter.Mark(compactions[i%2][2] - compactions[(i-1)%2][2])
+		db.compWriteMeter.Mark(compactions[i%2][3] - compactions[(i-1)%2][3])
 		var (
 			delayN   = int64(stats.WriteDelayCount)
 			duration = stats.WriteDelayDuration
 			paused   = stats.WritePaused
 		)
-		if db.writeDelayNMeter != nil {
-			db.writeDelayNMeter.Mark(delayN - delaystats[0])
-		}
-
-		if db.writeDelayMeter != nil {
-			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
-		}
+		db.writeDelayNMeter.Mark(delayN - delaystats[0])
+		db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&
@@ -434,14 +415,8 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 			nRead  = int64(stats.IORead)
 			nWrite = int64(stats.IOWrite)
 		)
-		if db.diskReadMeter != nil {
-			db.diskReadMeter.Mark(nRead - iostats[0])
-		}
-
-		if db.diskWriteMeter != nil {
-			db.diskWriteMeter.Mark(nWrite - iostats[1])
-		}
-
+		db.diskReadMeter.Mark(nRead - iostats[0])
+		db.diskWriteMeter.Mark(nWrite - iostats[1])
 		iostats[0], iostats[1] = nRead, nWrite
 
 		db.memCompGauge.Update(int64(stats.MemComp))
