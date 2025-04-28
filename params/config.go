@@ -416,7 +416,7 @@ type ChainConfig struct {
 	// CHANGE(taiko): Taiko network flag.
 	Taiko       bool     `json:"taiko"`
 	OntakeBlock *big.Int `json:"ontakeBlock,omitempty"` // Ontake switch block (nil = no fork, 0 = already activated)
-	PacayaBlock *big.Int `json:"pacayaBlock,omitempty"` // Ontake switch block (nil = no fork, 0 = already activated)
+	PacayaBlock *big.Int `json:"pacayaBlock,omitempty"` // Pacaya switch block (nil = no fork, 0 = already activated)
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -644,7 +644,7 @@ func (c *ChainConfig) IsOntake(num *big.Int) bool {
 	return isBlockForked(c.OntakeBlock, num)
 }
 
-// CHANGE(taiko): IsPacaya returns whether num is either equal to the pacaya fork block or greater.
+// CHANGE(taiko): IsPacaya returns whether num is either equal to the Pacaya fork block or greater.
 func (c *ChainConfig) IsPacaya(num *big.Int) bool {
 	return isBlockForked(c.PacayaBlock, num)
 }
