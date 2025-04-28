@@ -1048,7 +1048,7 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiaryAndPrefundedAccount
 		contract   = crypto.CreateAddress(deployer, 0)
 	)
 	// Prefund the account, at an address that the contract will be deployed at,
-	// before it selfdestrucs. We can therefore check that the account itseld is
+	// before it selfdestructs. We can therefore check that the account itself is
 	// NOT destroyed, which is what the current version of the spec requires.
 	// TODO(gballet) revisit after the spec has been modified.
 	gspec.Alloc[contract] = types.Account{
