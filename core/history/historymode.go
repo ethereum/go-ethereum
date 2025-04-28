@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethconfig
+package history
 
 import (
 	"fmt"
@@ -27,22 +27,22 @@ import (
 type HistoryMode uint32
 
 const (
-	// AllHistory (default) means that all chain history down to genesis block will be kept.
-	AllHistory HistoryMode = iota
+	// KeepAll (default) means that all chain history down to genesis block will be kept.
+	KeepAll HistoryMode = iota
 
-	// PostMergeHistory sets the history pruning point to the merge activation block.
-	PostMergeHistory
+	// KeepPostMerge sets the history pruning point to the merge activation block.
+	KeepPostMerge
 )
 
 func (m HistoryMode) IsValid() bool {
-	return m <= PostMergeHistory
+	return m <= KeepPostMerge
 }
 
 func (m HistoryMode) String() string {
 	switch m {
-	case AllHistory:
+	case KeepAll:
 		return "all"
-	case PostMergeHistory:
+	case KeepPostMerge:
 		return "postmerge"
 	default:
 		return fmt.Sprintf("invalid HistoryMode(%d)", m)
@@ -61,24 +61,24 @@ func (m HistoryMode) MarshalText() ([]byte, error) {
 func (m *HistoryMode) UnmarshalText(text []byte) error {
 	switch string(text) {
 	case "all":
-		*m = AllHistory
+		*m = KeepAll
 	case "postmerge":
-		*m = PostMergeHistory
+		*m = KeepPostMerge
 	default:
 		return fmt.Errorf(`unknown sync mode %q, want "all" or "postmerge"`, text)
 	}
 	return nil
 }
 
-type HistoryPrunePoint struct {
+type PrunePoint struct {
 	BlockNumber uint64
 	BlockHash   common.Hash
 }
 
-// HistoryPrunePoints contains the pre-defined history pruning cutoff blocks for known networks.
+// PrunePoints the pre-defined history pruning cutoff blocks for known networks.
 // They point to the first post-merge block. Any pruning should truncate *up to* but excluding
 // given block.
-var HistoryPrunePoints = map[common.Hash]*HistoryPrunePoint{
+var PrunePoints = map[common.Hash]*PrunePoint{
 	// mainnet
 	params.MainnetGenesisHash: {
 		BlockNumber: 15537393,
@@ -91,7 +91,7 @@ var HistoryPrunePoints = map[common.Hash]*HistoryPrunePoint{
 	},
 }
 
-// PrunedHistoryError is returned when the requested history is pruned.
+// PrunedHistoryError is returned by APIs when the requested history is pruned.
 type PrunedHistoryError struct{}
 
 func (e *PrunedHistoryError) Error() string  { return "pruned history unavailable" }

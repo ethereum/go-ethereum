@@ -23,7 +23,7 @@ import (
 	"os"
 	"slices"
 
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/log"
@@ -124,13 +124,13 @@ func testConfigFromCLI(ctx *cli.Context) (cfg testConfig) {
 		cfg.filterQueryFile = "queries/filter_queries_mainnet.json"
 		cfg.historyTestFile = "queries/history_mainnet.json"
 		cfg.historyPruneBlock = new(uint64)
-		*cfg.historyPruneBlock = ethconfig.HistoryPrunePoints[params.MainnetGenesisHash].BlockNumber
+		*cfg.historyPruneBlock = history.PrunePoints[params.MainnetGenesisHash].BlockNumber
 	case ctx.Bool(testSepoliaFlag.Name):
 		cfg.fsys = builtinTestFiles
 		cfg.filterQueryFile = "queries/filter_queries_sepolia.json"
 		cfg.historyTestFile = "queries/history_sepolia.json"
 		cfg.historyPruneBlock = new(uint64)
-		*cfg.historyPruneBlock = ethconfig.HistoryPrunePoints[params.SepoliaGenesisHash].BlockNumber
+		*cfg.historyPruneBlock = history.PrunePoints[params.SepoliaGenesisHash].BlockNumber
 	default:
 		cfg.fsys = os.DirFS(".")
 		cfg.filterQueryFile = ctx.String(filterQueryFileFlag.Name)

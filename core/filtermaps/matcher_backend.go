@@ -75,6 +75,9 @@ func (fm *FilterMapsMatcherBackend) Close() {
 // on write.
 // GetFilterMapRow implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) GetFilterMapRow(ctx context.Context, mapIndex, rowIndex uint32, baseLayerOnly bool) (FilterRow, error) {
+	fm.f.indexLock.RLock()
+	defer fm.f.indexLock.RUnlock()
+
 	return fm.f.getFilterMapRow(mapIndex, rowIndex, baseLayerOnly)
 }
 
@@ -125,7 +128,7 @@ func (fm *FilterMapsMatcherBackend) synced() {
 		indexedBlocks.SetAfterLast(indexedBlocks.Last()) // remove partially indexed last block
 	}
 	fm.syncCh <- SyncRange{
-		HeadNumber:    fm.f.targetView.headNumber,
+		IndexedView:   fm.f.indexedView,
 		ValidBlocks:   fm.validBlocks,
 		IndexedBlocks: indexedBlocks,
 	}
@@ -151,7 +154,7 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
 	case <-fm.f.disabledCh:
-		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
+		return SyncRange{IndexedView: fm.f.indexedView}, nil
 	}
 	select {
 	case vr := <-syncCh:
@@ -159,7 +162,7 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
 	case <-fm.f.disabledCh:
-		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
+		return SyncRange{IndexedView: fm.f.indexedView}, nil
 	}
 }
 

@@ -44,7 +44,7 @@ func (f *FilterMaps) indexerLoop() {
 
 	for !f.stop {
 		if !f.indexedRange.initialized {
-			if f.targetView.headNumber == 0 {
+			if f.targetView.HeadNumber() == 0 {
 				// initialize when chain head is available
 				f.processSingleEvent(true)
 				continue
@@ -165,6 +165,9 @@ func (f *FilterMaps) waitForNewHead() {
 // processEvents processes all events, blocking only if a block processing is
 // happening and indexing should be suspended.
 func (f *FilterMaps) processEvents() {
+	if f.testProcessEventsHook != nil {
+		f.testProcessEventsHook()
+	}
 	for f.processSingleEvent(f.blockProcessing) {
 	}
 }
@@ -249,7 +252,7 @@ func (f *FilterMaps) tryIndexHead() error {
 			log.Info("Log index head rendering in progress",
 				"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
 				"processed", f.indexedRange.blocks.AfterLast()-f.ptrHeadIndex,
-				"remaining", f.indexedView.headNumber-f.indexedRange.blocks.Last(),
+				"remaining", f.indexedView.HeadNumber()-f.indexedRange.blocks.Last(),
 				"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
 			f.loggedHeadIndex = true
 			f.lastLogHeadIndex = time.Now()
@@ -418,10 +421,10 @@ func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
 // tailTargetBlock returns the target value for the tail block number according
 // to the log history parameter and the current index head.
 func (f *FilterMaps) tailTargetBlock() uint64 {
-	if f.history == 0 || f.indexedView.headNumber < f.history {
+	if f.history == 0 || f.indexedView.HeadNumber() < f.history {
 		return 0
 	}
-	return f.indexedView.headNumber + 1 - f.history
+	return f.indexedView.HeadNumber() + 1 - f.history
 }
 
 // tailPartialBlocks returns the number of rendered blocks in the partially

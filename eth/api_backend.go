@@ -29,12 +29,13 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/locals"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -156,7 +157,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	}
 	block := b.eth.blockchain.GetBlockByNumber(bn)
 	if block == nil && bn < b.HistoryPruningCutoff() {
-		return nil, &ethconfig.PrunedHistoryError{}
+		return nil, &history.PrunedHistoryError{}
 	}
 	return block, nil
 }
@@ -168,7 +169,7 @@ func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 	}
 	block := b.eth.blockchain.GetBlock(hash, *number)
 	if block == nil && *number < b.HistoryPruningCutoff() {
-		return nil, &ethconfig.PrunedHistoryError{}
+		return nil, &history.PrunedHistoryError{}
 	}
 	return block, nil
 }
@@ -181,7 +182,7 @@ func (b *EthAPIBackend) GetBody(ctx context.Context, hash common.Hash, number rp
 	body := b.eth.blockchain.GetBody(hash)
 	if body == nil {
 		if uint64(number) < b.HistoryPruningCutoff() {
-			return nil, &ethconfig.PrunedHistoryError{}
+			return nil, &history.PrunedHistoryError{}
 		}
 		return nil, errors.New("block body not found")
 	}
@@ -203,7 +204,7 @@ func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		block := b.eth.blockchain.GetBlock(hash, header.Number.Uint64())
 		if block == nil {
 			if header.Number.Uint64() < b.HistoryPruningCutoff() {
-				return nil, &ethconfig.PrunedHistoryError{}
+				return nil, &history.PrunedHistoryError{}
 			}
 			return nil, errors.New("header found, but block body is missing")
 		}
@@ -307,19 +308,24 @@ func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	locals := b.eth.localTxTracker
-	if locals != nil {
-		if err := locals.Track(signedTx); err != nil {
-			return err
-		}
-	}
-	// No error will be returned to user if the transaction fails stateful
-	// validation (e.g., no available slot), as the locally submitted transactions
-	// may be resubmitted later via the local tracker.
 	err := b.eth.txPool.Add([]*types.Transaction{signedTx}, false)[0]
-	if err != nil && locals == nil {
+
+	// If the local transaction tracker is not configured, returns whatever
+	// returned from the txpool.
+	if b.eth.localTxTracker == nil {
 		return err
 	}
+	// If the transaction fails with an error indicating it is invalid, or if there is
+	// very little chance it will be accepted later (e.g., the gas price is below the
+	// configured minimum, or the sender has insufficient funds to cover the cost),
+	// propagate the error to the user.
+	if err != nil && !locals.IsTemporaryReject(err) {
+		return err
+	}
+	// No error will be returned to user if the transaction fails with a temporary
+	// error and might be accepted later (e.g., the transaction pool is full).
+	// Locally submitted transactions will be resubmitted later via the local tracker.
+	b.eth.localTxTracker.Track(signedTx)
 	return nil
 }
 
@@ -435,6 +441,14 @@ func (b *EthAPIBackend) RPCEVMTimeout() time.Duration {
 
 func (b *EthAPIBackend) RPCTxFeeCap() float64 {
 	return b.eth.config.RPCTxFeeCap
+}
+
+func (b *EthAPIBackend) CurrentView() *filtermaps.ChainView {
+	head := b.eth.blockchain.CurrentBlock()
+	if head == nil {
+		return nil
+	}
+	return filtermaps.NewChainView(b.eth.blockchain, head.Number.Uint64(), head.Hash())
 }
 
 func (b *EthAPIBackend) NewMatcherBackend() filtermaps.MatcherBackend {
