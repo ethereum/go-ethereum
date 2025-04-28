@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -503,10 +504,13 @@ func (s *Ethereum) setupDiscovery() error {
 
 	// Add DHT nodes from discv4.
 	if s.p2pServer.DiscoveryV4() != nil {
-		asyncFilter := s.p2pServer.DiscoveryV4().RequestENR
-		filter := eth.NewNodeFilter(s.blockchain)
-		iter := enode.AsyncFilter(s.p2pServer.DiscoveryV4().RandomNodes(), asyncFilter, maxParallelENRRequests)
-		iter = enode.Filter(iter, filter)
+		iter := s.p2pServer.DiscoveryV4().RandomNodes()
+		resolverFunc := func(ctx context.Context, enr *enode.Node) (*enode.Node, error) {
+			// RequestENR does not yet support context. It will simply time out.
+			return s.p2pServer.DiscoveryV4().RequestENR(enr)
+		}
+		iter = enode.AsyncFilter(iter, resolverFunc, maxParallelENRRequests)
+		iter = enode.Filter(iter, eth.NewNodeFilter(s.blockchain))
 		s.discmix.AddSource(iter)
 	}
 
