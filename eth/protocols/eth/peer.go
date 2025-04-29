@@ -140,6 +140,7 @@ func (p *Peer) SendTransactions(txs types.Transactions) error {
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
+	p.meters.txSent.Mark(int64(len(txs)))
 	return p2p.Send(p.rw, TransactionsMsg, txs)
 }
 
@@ -166,6 +167,7 @@ func (p *Peer) AsyncSendTransactions(hashes []common.Hash) {
 func (p *Peer) sendPooledTransactionHashes(hashes []common.Hash, types []byte, sizes []uint32) error {
 	// Mark all the transactions as known, but ensure we don't overflow our limits
 	p.knownTxs.Add(hashes...)
+	p.meters.annSent.Mark(int64(len(hashes)))
 	return p2p.Send(p.rw, NewPooledTransactionHashesMsg, NewPooledTransactionHashesPacket{Types: types, Sizes: sizes, Hashes: hashes})
 }
 
@@ -188,6 +190,7 @@ func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs [
 	p.knownTxs.Add(hashes...)
 
 	// Not packed into PooledTransactionsResponse to avoid RLP decoding
+	p.meters.pooledTxSent.Mark(int64(len(txs)))
 	return p2p.Send(p.rw, PooledTransactionsMsg, &PooledTransactionsRLPPacket{
 		RequestId:                     id,
 		PooledTransactionsRLPResponse: txs,

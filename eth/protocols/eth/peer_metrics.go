@@ -22,13 +22,12 @@ type peerMeters struct {
 	base string
 	reg  metrics.Registry
 
-	txReceived *metrics.Meter
-	txSent     *metrics.Meter
-
-	txReplyInMeter          *metrics.Meter
-	txReplyKnownMeter       *metrics.Meter
-	txReplyUnderpricedMeter *metrics.Meter
-	txReplyOtherRejectMeter *metrics.Meter
+	txReceived       *metrics.Meter
+	txSent           *metrics.Meter
+	pooledTxSent     *metrics.Meter
+	pooledTxReceived *metrics.Meter
+	annReceived      *metrics.Meter
+	annSent          *metrics.Meter
 }
 
 // newPeerMeters registers and returns peer-level meters.
@@ -40,21 +39,20 @@ func newPeerMeters(base string, r metrics.Registry) *peerMeters {
 		base: base,
 		reg:  r,
 
-		txReceived: metrics.NewRegisteredMeter(base+"/txReceived", r),
-		txSent:     metrics.NewRegisteredMeter(base+"/txSent", r),
-
-		txReplyInMeter:          metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/in", r),
-		txReplyKnownMeter:       metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/known", r),
-		txReplyUnderpricedMeter: metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/underpriced", r),
-		txReplyOtherRejectMeter: metrics.NewRegisteredMeter(base+"/eth/fetcher/transaction/replies/otherreject", r),
+		txReceived:       metrics.NewRegisteredMeter(base+"/txReceived", r),
+		txSent:           metrics.NewRegisteredMeter(base+"/txSent", r),
+		pooledTxSent:     metrics.NewRegisteredMeter(base+"/pooledTxSent", r),
+		pooledTxReceived: metrics.NewRegisteredMeter(base+"/pooledTxReceived", r),
+		annReceived:      metrics.NewRegisteredMeter(base+"/annReceived", r),
+		annSent:          metrics.NewRegisteredMeter(base+"/annSent", r),
 	}
 }
 
 func (m *peerMeters) Close() {
 	m.reg.Unregister(m.base + "/txReceived")
 	m.reg.Unregister(m.base + "/txSent")
-	m.reg.Unregister(m.base + "/eth/fetcher/transaction/replies/in")
-	m.reg.Unregister(m.base + "/eth/fetcher/transaction/replies/known")
-	m.reg.Unregister(m.base + "/eth/fetcher/transaction/replies/underpriced")
-	m.reg.Unregister(m.base + "/eth/fetcher/transaction/replies/otherreject")
+	m.reg.Unregister(m.base + "/pooledTxSent")
+	m.reg.Unregister(m.base + "/pooledTxReceived")
+	m.reg.Unregister(m.base + "/annReceived")
+	m.reg.Unregister(m.base + "/annSent")
 }

@@ -448,6 +448,7 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 	for _, hash := range ann.Hashes {
 		peer.markTransaction(hash)
 	}
+	peer.meters.annReceived.Mark(int64(len(ann.Hashes)))
 	return backend.Handle(peer, ann)
 }
 
@@ -524,6 +525,7 @@ func handlePooledTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	requestTracker.Fulfil(peer.id, peer.version, PooledTransactionsMsg, txs.RequestId)
 
+	peer.meters.pooledTxReceived.Mark(int64(len(txs.PooledTransactionsResponse)))
 	return backend.Handle(peer, &txs.PooledTransactionsResponse)
 }
 
