@@ -72,6 +72,12 @@ const (
 	// We expect a normal source to produce ~10 candidates per second.
 	discmixTimeout = 100 * time.Millisecond
 
+	// discoveryPrefetchBuffer is the number of peers to pre-fetch from a discovery
+	// source. It is useful to avoid the negative effects of potential longer timeouts
+	// in the discovery, keeping dial progress while waiting for the next batch of
+	// candidates.
+	discoveryPrefetchBuffer = 32
+
 	// maxParallelENRRequests is the maximum number of parallel ENR requests that can be
 	// performed by a disc/v4 source.
 	maxParallelENRRequests = 16
@@ -514,6 +520,7 @@ func (s *Ethereum) setupDiscovery() error {
 		}
 		iter = enode.AsyncFilter(iter, resolverFunc, maxParallelENRRequests)
 		iter = enode.Filter(iter, eth.NewNodeFilter(s.blockchain))
+		iter = enode.NewBufferIter(iter, discoveryPrefetchBuffer)
 		s.discmix.AddSource(iter)
 	}
 
@@ -521,6 +528,7 @@ func (s *Ethereum) setupDiscovery() error {
 	if s.p2pServer.DiscoveryV5() != nil {
 		filter := eth.NewNodeFilter(s.blockchain)
 		iter := enode.Filter(s.p2pServer.DiscoveryV5().RandomNodes(), filter)
+		iter = enode.NewBufferIter(iter, discoveryPrefetchBuffer)
 		s.discmix.AddSource(iter)
 	}
 
