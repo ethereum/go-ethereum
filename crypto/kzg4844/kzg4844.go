@@ -186,7 +186,7 @@ func IsValidVersionedHash(h []byte) bool {
 
 func ComputeCells(blob *Blob) ([]Proof, error) {
 	if useCKZG.Load() {
-		return ckzgComputeCells(blob)
+		return ckzgComputeCellProofs(blob)
 	}
-	return gokzgComputeCells(blob)
+	return gokzgComputeCellProofs(blob)
 }
