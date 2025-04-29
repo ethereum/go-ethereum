@@ -430,10 +430,6 @@ func (db *Database) Recover(root common.Hash) error {
 	if db.freezer == nil {
 		return errors.New("state rollback is non-supported")
 	}
-	// Short circuit if the target state is not recoverable
-	if !db.Recoverable(root) {
-		return errStateUnrecoverable
-	}
 	// Apply the state histories upon the disk layer in order
 	var (
 		start = time.Now()
