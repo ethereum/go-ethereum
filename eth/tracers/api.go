@@ -17,7 +17,7 @@
 package tracers
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -778,7 +777,9 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Note: This copies the config, to not screw up the main config
 		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
 	}
-	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+	writer := bytes.NewBuffer(nil)
+	vmConf := vm.Config{Tracer: logger.NewJSONLogger(&logConfig, writer)}
+	evm := vm.NewEVM(vmctx, statedb, chainConfig, vmConf)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
@@ -786,50 +787,18 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	for i, tx := range block.Transactions() {
-		// Prepare the transaction for un-traced execution
-		var (
-			msg, _ = core.TransactionToMessage(tx, signer, block.BaseFee())
-			tracer *tracing.Hooks
-			dump   *os.File
-			writer *bufio.Writer
-			err    error
-		)
-		// If the transaction needs tracing, swap out the configs
-		if tx.Hash() == txHash || txHash == (common.Hash{}) {
-			// Generate a unique temporary file to dump it into
-			prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], i, tx.Hash().Bytes()[:4])
-			if !canon {
-				prefix = fmt.Sprintf("%valt-", prefix)
-			}
-			dump, err = os.CreateTemp(os.TempDir(), prefix)
-			if err != nil {
-				return nil, err
-			}
-			dumps = append(dumps, dump.Name())
-
-			// Swap out the noop logger to the standard tracer
-			writer = bufio.NewWriter(dump)
-			tracer = logger.NewJSONLogger(&logConfig, writer)
-		}
-		// Execute the transaction and flush any traces to disk
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		statedb.SetTxContext(tx.Hash(), i)
-		if tracer != nil && tracer.OnTxStart != nil {
-			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		if vmConf.Tracer.OnTxStart != nil {
+			vmConf.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
-		if tracer != nil && tracer.OnTxEnd != nil {
+		if vmConf.Tracer.OnTxEnd != nil {
 			var receipt *types.Receipt
 			if err == nil {
 				receipt = &types.Receipt{GasUsed: vmRet.UsedGas}
 			}
-			tracer.OnTxEnd(receipt, err)
-		}
-		if writer != nil {
-			writer.Flush()
-		}
-		if dump != nil {
-			dump.Close()
-			log.Info("Wrote standard trace", "file", dump.Name())
+			vmConf.Tracer.OnTxEnd(receipt, err)
 		}
 		if err != nil {
 			return dumps, err
@@ -837,6 +806,27 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Finalize the state so any modifications are written to the trie
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+
+		// If the transaction needs tracing, write the trace to disk.
+		if tx.Hash() == txHash || txHash == (common.Hash{}) {
+			// Generate a unique temporary file to dump it into
+			prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], i, tx.Hash().Bytes()[:4])
+			if !canon {
+				prefix = fmt.Sprintf("%valt-", prefix)
+			}
+			dump, err := os.CreateTemp(os.TempDir(), prefix)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := dump.Write(writer.Bytes()); err != nil {
+				return nil, err
+			}
+			dump.Close()
+			dumps = append(dumps, dump.Name())
+			log.Info("Wrote standard trace", "file", dump.Name())
+		}
+		// Clean the trace buffer.
+		writer.Reset()
 
 		// If we've traced the transaction we were looking for, abort
 		if tx.Hash() == txHash {

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"slices"
 	"sync/atomic"
@@ -1211,6 +1212,134 @@ func TestTraceBlockWithBasefee(t *testing.T) {
 		want := tc.want
 		if string(have) != want {
 			t.Errorf("test %d, result mismatch\nhave: %v\nwant: %v\n", i, string(have), want)
+		}
+	}
+}
+
+func TestStandardTraceBlockToFile(t *testing.T) {
+	var (
+		// A sender who makes transactions, has some funds
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000000000)
+
+		aa        = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
+		aaStorage = make(map[common.Hash]common.Hash)          // Initial storage in AA
+		aaCode    = []byte{byte(vm.PC), byte(vm.SELFDESTRUCT)} // Code for AA (simple selfdestruct)
+	)
+	// Populate two slots
+	aaStorage[common.HexToHash("01")] = common.HexToHash("01")
+	aaStorage[common.HexToHash("02")] = common.HexToHash("02")
+
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			address: {Balance: funds},
+			// The address 0xAAAAA selfdestructs if called
+			aa: {
+				// Code needs to just selfdestruct
+				Code:    aaCode,
+				Nonce:   1,
+				Balance: big.NewInt(0),
+				Storage: aaStorage,
+			},
+		},
+	}
+	txHashs := make([]common.Hash, 0, 2)
+	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		// One transaction to AA, to kill it
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    0,
+			To:       &aa,
+			Value:    big.NewInt(0),
+			Gas:      50000,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		txHashs = append(txHashs, tx.Hash())
+		// One transaction to AA, to recreate it (but without storage
+		tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    1,
+			To:       &aa,
+			Value:    big.NewInt(1),
+			Gas:      100000,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		txHashs = append(txHashs, tx.Hash())
+	})
+	defer backend.chain.Stop()
+
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		config      *StdTraceConfig
+		wants       []string
+		expectErr   error
+	}{
+		{
+			blockNumber: rpc.BlockNumber(0),
+			expectErr:   errors.New("genesis is not traceable"),
+		},
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			config:      nil, // TxHash is not set, so we get all traces.
+			wants: []string{
+				`{"pc":0,"op":88,"gas":"0x7148","gasCost":"0x2","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PC"}
+{"pc":1,"op":255,"gas":"0x7146","gasCost":"0x1db0","memSize":0,"stack":["0x0"],"depth":1,"refund":0,"opName":"SELFDESTRUCT"}
+{"output":"","gasUsed":"0x0"}
+{"output":"","gasUsed":"0x1db2"}`,
+				`{"output":"","gasUsed":"0x0"}`,
+			},
+		},
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			config:      &StdTraceConfig{TxHash: txHashs[0]},
+			wants: []string{
+				`{"pc":0,"op":88,"gas":"0x7148","gasCost":"0x2","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PC"}
+{"pc":1,"op":255,"gas":"0x7146","gasCost":"0x1db0","memSize":0,"stack":["0x0"],"depth":1,"refund":0,"opName":"SELFDESTRUCT"}
+{"output":"","gasUsed":"0x0"}
+{"output":"","gasUsed":"0x1db2"}`,
+			},
+		},
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			config:      &StdTraceConfig{TxHash: txHashs[1]},
+			wants: []string{
+				`{"output":"","gasUsed":"0x0"}`,
+			},
+		},
+	}
+
+	api := NewAPI(backend)
+	for i, tc := range testSuite {
+		block, _ := api.blockByNumber(context.Background(), tc.blockNumber)
+		tracers, err := api.StandardTraceBlockToFile(context.Background(), block.Hash(), tc.config)
+		if tc.expectErr != nil {
+			if err == nil {
+				t.Errorf("test %d, want error %v", i, tc.expectErr)
+				continue
+			}
+			if !reflect.DeepEqual(err, tc.expectErr) {
+				t.Errorf("test %d: error mismatch, want %v, get %v", i, tc.expectErr, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d, want no error, have %v", i, err)
+			continue
+		}
+		if len(tracers) != len(tc.wants) {
+			t.Errorf("test %d, result length mismatch, have %d, want %d", i, len(tracers), len(tc.wants))
+			continue
+		}
+		for j, tracer := range tracers {
+			data, _ := os.ReadFile(tracer)
+			if string(data[:len(data)-1]) != tc.wants[j] {
+				t.Errorf("test %d, result mismatch, want %s, have %s", i, tc.wants[j], string(data))
+			}
 		}
 	}
 }
