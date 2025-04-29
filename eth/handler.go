@@ -121,7 +121,7 @@ type handler struct {
 	txpool     txPool
 	chain      *core.BlockChain
 	maxPeers   int
-	lastDirect int64 // Last number of peers we sent transactions to, used to stabilize the randomness
+	lastDirect atomic.Int64 // Last number of peers we sent transactions to, used to stabilize the randomness
 
 	downloader *downloader.Downloader
 	txFetcher  *fetcher.TxFetcher
@@ -491,13 +491,13 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	// Use some hysteresis to avoid oscillating between two values, stabilising the modulus in the peer selection
 	// If the number of peers is small, use a minimum of 1 peer
 	var directInt int64
-	lastDirect := atomic.LoadInt64(&h.lastDirect)
+	lastDirect := h.lastDirect.Load()
 	if int64(sqrtPeers) >= lastDirect {
 		directInt = max(int64(sqrtPeers), 1)
 	} else {
 		directInt = max(min(int64(sqrtPeers+directPeersHysteresis), lastDirect), 1)
 	}
-	atomic.StoreInt64(&h.lastDirect, directInt)
+	h.lastDirect.Store(directInt)
 
 	direct := big.NewInt(directInt)            // Number of peers to send directly to
 	total := big.NewInt(directInt * directInt) // Stabilise total peer count a bit based on sqrt peers
