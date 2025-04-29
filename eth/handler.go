@@ -499,8 +499,8 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	}
 	atomic.StoreInt64(&h.lastDirect, directInt)
 
-	direct := big.NewInt(directInt)                       // Number of peers to send directly to
-	total := new(big.Int).Exp(direct, big.NewInt(2), nil) // Stabilise total peer count a bit based on sqrt peers
+	direct := big.NewInt(directInt)            // Number of peers to send directly to
+	total := big.NewInt(directInt * directInt) // Stabilise total peer count a bit based on sqrt peers
 
 	var (
 		signer = types.LatestSigner(h.chain.Config()) // Don't care about chain status, we just need *a* sender
