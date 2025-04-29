@@ -1094,12 +1094,11 @@ func TestChangingSlotterSize(t *testing.T) {
 		statedb.Commit(0, true, false)
 
 		// Make custom chain config where the max blob count changes based on the loop variable.
-		cancunTime := uint64(0)
 		config := &params.ChainConfig{
 			ChainID:     big.NewInt(1),
 			LondonBlock: big.NewInt(0),
 			BerlinBlock: big.NewInt(0),
-			CancunTime:  &cancunTime,
+			CancunBlock: big.NewInt(0),
 			BlobScheduleConfig: &params.BlobScheduleConfig{
 				Cancun: &params.BlobConfig{
 					Target:         maxBlobs / 2,

@@ -1533,10 +1533,11 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 
 	genesis, blocks := generateMergeChain(10, true)
 
+	// Bor doesn't allow timebased hardforks
 	// Set cancun time to last block + 5 seconds
-	time := blocks[len(blocks)-1].Time() + 5
-	genesis.Config.ShanghaiTime = &time
-	genesis.Config.CancunTime = &time
+	// time := blocks[len(blocks)-1].Time() + 5
+	// genesis.Config.ShanghaiTime = &time
+	// genesis.Config.CancunTime = &time
 	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	n, ethservice := startEthService(t, genesis, blocks)

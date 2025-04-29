@@ -364,7 +364,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 
 	// Gather the execution-layer triggered requests.
 	var requests [][]byte
-	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) && chainConfig.Bor == nil {
+	if chainConfig.IsPrague(vmContext.BlockNumber) && chainConfig.Bor == nil {
 		requests = [][]byte{}
 		// EIP-6110
 		var allLogs []*types.Log
@@ -381,7 +381,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 
 	// Commit block
-	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
+	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber))
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}

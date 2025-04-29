@@ -1102,12 +1102,12 @@ func (c *ChainConfig) IsPrague(num *big.Int) bool {
 	return isBlockForked(c.PragueBlock, num)
 }
 
-// IsVerkle returns whether num is either equal to the Verkle fork time or greater.
+// IsVerkle returns whether num is either equal to the Verkle fork block or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int) bool {
 	return c.IsLondon(num) && isBlockForked(c.VerkleBlock, num)
 }
 
-// IsOsaka returns whether time is either equal to the Osaka fork time or greater.
+// IsOsaka returns whether num is either equal to the Osaka fork block or greater.
 func (c *ChainConfig) IsOsaka(num *big.Int) bool {
 	return c.IsLondon(num) && isBlockForked(c.OsakaBlock, num)
 }

@@ -72,7 +72,7 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 		parentBlobGasUsed = *parent.BlobGasUsed
 	}
 	excessBlobGas := parentExcessBlobGas + parentBlobGasUsed
-	targetGas := uint64(targetBlobsPerBlock(config, headTimestamp)) * params.BlobTxBlobGasPerBlob
+	targetGas := uint64(targetBlobsPerBlock(config, uint64(0))) * params.BlobTxBlobGasPerBlob
 	if excessBlobGas < targetGas {
 		return 0
 	}
@@ -105,11 +105,11 @@ func MaxBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 		s      = cfg.BlobScheduleConfig
 	)
 	switch {
-	case cfg.IsOsaka(london, time) && s.Osaka != nil:
+	case cfg.IsOsaka(london) && s.Osaka != nil:
 		return s.Osaka.Max
-	case cfg.IsPrague(london, time) && s.Prague != nil:
+	case cfg.IsPrague(london) && s.Prague != nil:
 		return s.Prague.Max
-	case cfg.IsCancun(london, time) && s.Cancun != nil:
+	case cfg.IsCancun(london) && s.Cancun != nil:
 		return s.Cancun.Max
 	default:
 		return 0
@@ -150,11 +150,11 @@ func targetBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 		s      = cfg.BlobScheduleConfig
 	)
 	switch {
-	case cfg.IsOsaka(london, time) && s.Osaka != nil:
+	case cfg.IsOsaka(london) && s.Osaka != nil:
 		return s.Osaka.Target
-	case cfg.IsPrague(london, time) && s.Prague != nil:
+	case cfg.IsPrague(london) && s.Prague != nil:
 		return s.Prague.Target
-	case cfg.IsCancun(london, time) && s.Cancun != nil:
+	case cfg.IsCancun(london) && s.Cancun != nil:
 		return s.Cancun.Target
 	default:
 		return 0

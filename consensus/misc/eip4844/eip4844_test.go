@@ -28,7 +28,7 @@ import (
 func TestCalcExcessBlobGas(t *testing.T) {
 	var (
 		config        = params.MainnetChainConfig
-		targetBlobs   = targetBlobsPerBlock(config, *config.CancunTime)
+		targetBlobs   = targetBlobsPerBlock(config, uint64(0))
 		targetBlobGas = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
 	)
 	var tests = []struct {
@@ -61,7 +61,7 @@ func TestCalcExcessBlobGas(t *testing.T) {
 			ExcessBlobGas: &tt.excess,
 			BlobGasUsed:   &blobGasUsed,
 		}
-		result := CalcExcessBlobGas(config, header, *config.CancunTime)
+		result := CalcExcessBlobGas(config, header, uint64(0))
 		if result != tt.want {
 			t.Errorf("test %d: excess blob gas mismatch: have %v, want %v", i, result, tt.want)
 		}
@@ -70,8 +70,6 @@ func TestCalcExcessBlobGas(t *testing.T) {
 
 func TestCalcBlobFee(t *testing.T) {
 	t.Parallel()
-
-	zero := uint64(0)
 
 	tests := []struct {
 		excessBlobGas uint64
@@ -83,7 +81,7 @@ func TestCalcBlobFee(t *testing.T) {
 		{10 * 1024 * 1024, 23},
 	}
 	for i, tt := range tests {
-		config := &params.ChainConfig{LondonBlock: big.NewInt(0), CancunTime: &zero, BlobScheduleConfig: params.DefaultBlobSchedule}
+		config := &params.ChainConfig{LondonBlock: big.NewInt(0), CancunBlock: big.NewInt(0), BlobScheduleConfig: params.DefaultBlobSchedule}
 		header := &types.Header{ExcessBlobGas: &tt.excessBlobGas}
 		have := CalcBlobFee(config, header)
 		if have.Int64() != tt.blobfee {

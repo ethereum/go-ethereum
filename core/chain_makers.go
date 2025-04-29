@@ -324,7 +324,7 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		statedb = statedb.Copy()
 	}
 
-	if b.cm.config.IsPrague(b.header.Number, b.header.Time) {
+	if b.cm.config.IsPrague(b.header.Number) {
 		requests = [][]byte{}
 		// EIP-6110 deposits
 		var blockLogs []*types.Log
@@ -397,7 +397,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			misc.ApplyDAOHardFork(statedb)
 		}
 
-		if config.IsPrague(b.header.Number, b.header.Time) || config.IsVerkle(b.header.Number, b.header.Time) {
+		if config.IsPrague(b.header.Number) || config.IsVerkle(b.header.Number) {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
@@ -423,7 +423,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		// Write state changes to db
-		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number), config.IsCancun(b.header.Number, b.header.Time))
+		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number), config.IsCancun(b.header.Number))
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
@@ -535,7 +535,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		}
 
 		// Write state changes to DB.
-		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number), config.IsCancun(b.header.Number, b.header.Time))
+		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number), config.IsCancun(b.header.Number))
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
@@ -620,7 +620,7 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
 	}
-	if cm.config.IsCancun(header.Number, header.Time) {
+	if cm.config.IsCancun(header.Number) {
 		excessBlobGas := eip4844.CalcExcessBlobGas(cm.config, parentHeader, time)
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)

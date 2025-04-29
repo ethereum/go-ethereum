@@ -246,7 +246,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
+	if sim.chainConfig.IsPrague(header.Number) || sim.chainConfig.IsVerkle(header.Number) {
 		core.ProcessParentBlockHash(header.ParentHash, evm)
 	}
 	if header.ParentBeaconRoot != nil {

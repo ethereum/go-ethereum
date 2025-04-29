@@ -284,10 +284,10 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 		return nil
 	}
 	if o.OverridePrague != nil {
-		cfg.PragueTime = o.OverridePrague
+		cfg.PragueBlock = o.OverridePrague
 	}
 	if o.OverrideVerkle != nil {
-		cfg.VerkleTime = o.OverrideVerkle
+		cfg.VerkleBlock = o.OverrideVerkle
 	}
 	return cfg.CheckConfigForkOrder()
 }

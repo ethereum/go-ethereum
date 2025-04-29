@@ -290,7 +290,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		ShanghaiBlock:           big.NewInt(0),
 		CancunBlock:             big.NewInt(0),
 		PragueBlock:             big.NewInt(0),
-		OsakaTime:               big.NewInt(0),
+		OsakaBlock:              big.NewInt(0),
 		VerkleBlock:             big.NewInt(0),
 		TerminalTotalDifficulty: big.NewInt(0),
 		EnableVerkleAtGenesis:   true,

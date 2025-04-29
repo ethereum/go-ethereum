@@ -296,7 +296,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// - the block body is verified against the header in block_validator.go:ValidateBody
 	// Here, we just do this shortcut smaller fix, since state tests do not
 	// utilize those codepaths.
-	if config.IsCancun(new(big.Int), block.Time()) {
+	if config.IsCancun(new(big.Int)) {
 		if len(msg.BlobHashes) > eip4844.MaxBlobsPerBlock(config, block.Time()) {
 			return st, common.Hash{}, 0, errors.New("blob gas exceeds maximum")
 		}
@@ -363,7 +363,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	st.StateDB.AddBalance(block.Coinbase(), new(uint256.Int), tracing.BalanceChangeUnspecified)
 
 	// Commit state mutations into database.
-	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()), config.IsCancun(block.Number(), block.Time()))
+	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()), config.IsCancun(block.Number()))
 	if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
 		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
 		tracer.OnTxEnd(receipt, nil)
