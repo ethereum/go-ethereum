@@ -1306,12 +1306,12 @@ func (w *worker) prepareWork(genParams *generateParams, witness bool) (*environm
 	}
 	if header.ParentBeaconRoot != nil {
 		context := core.NewEVMBlockContext(header, w.chain, nil)
-		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
+		vmenv := vm.NewEVM(context, env.state, w.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
 	}
 	if w.chainConfig.IsPrague(header.Number) {
 		context := core.NewEVMBlockContext(header, w.chain, nil)
-		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
+		vmenv := vm.NewEVM(context, env.state, w.chainConfig, vm.Config{})
 		core.ProcessParentBlockHash(header.ParentHash, vmenv, env.state)
 	}
 	return env, nil
@@ -1437,7 +1437,7 @@ func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadR
 		requests = append(requests, depositRequests)
 		// create EVM for system calls
 		blockContext := core.NewEVMBlockContext(work.header, w.chain, &work.header.Coinbase)
-		vmenv := vm.NewEVM(blockContext, vm.TxContext{}, work.state, w.chainConfig, vm.Config{})
+		vmenv := vm.NewEVM(blockContext, work.state, w.chainConfig, vm.Config{})
 		// EIP-7002 withdrawals
 		withdrawalRequests := core.ProcessWithdrawalQueue(vmenv, work.state)
 		requests = append(requests, withdrawalRequests)

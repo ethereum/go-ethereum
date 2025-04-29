@@ -187,11 +187,10 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(b.chainConfig, block.Number(), block.Time())
-	context := core.NewEVMBlockContext(block.Header(), b.chain, nil)
-	evm := vm.NewEVM(context, statedb, b.chainConfig, vm.Config{})
+	blockContext := core.NewEVMBlockContext(block.Header(), b.chain, nil)
+	evm := vm.NewEVM(blockContext, statedb, b.chainConfig, vm.Config{})
 	for idx, tx := range block.Transactions() {
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		txContext := core.NewEVMTxContext(msg)
 
 		blockContext := core.NewEVMBlockContext(block.Header(), b.chain, nil)
 		if idx == txIndex {

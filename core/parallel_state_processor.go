@@ -100,7 +100,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 	task.statedb.SetMVHashmap(mvh)
 	task.statedb.SetIncarnation(incarnation)
 
-	evm := vm.NewEVM(task.blockContext, vm.TxContext{}, task.statedb, task.config, task.evmConfig)
+	evm := vm.NewEVM(task.blockContext, task.statedb, task.config, task.evmConfig)
 
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(&task.msg)
@@ -303,7 +303,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	context := NewEVMBlockContext(header, p.bc.hc, nil)
 
-	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
+	vmenv := vm.NewEVM(context, statedb, p.config, cfg)
 	var tracingStateDB = vm.StateDB(statedb)
 	if hooks := cfg.Tracer; hooks != nil {
 		tracingStateDB = state.NewHookedState(statedb, hooks)

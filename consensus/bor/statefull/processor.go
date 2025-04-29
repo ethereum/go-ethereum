@@ -81,12 +81,12 @@ func ApplyMessage(
 
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, state, chainConfig, vm.Config{})
+	vmenv := vm.NewEVM(blockContext, state, chainConfig, vm.Config{})
 
 	// nolint : contextcheck
 	// Apply the transaction to the current state (included in the env)
 	ret, gasLeft, err := vmenv.Call(
-		vm.AccountRef(msg.From()),
+		msg.From(),
 		*msg.To(),
 		msg.Data(),
 		msg.Gas(),
@@ -124,7 +124,7 @@ func ApplyBorMessage(vmenv *vm.EVM, msg Callmsg) (*core.ExecutionResult, error) 
 
 	// Apply the transaction to the current state (included in the env)
 	ret, gasLeft, err := vmenv.Call(
-		vm.AccountRef(msg.From()),
+		msg.From(),
 		*msg.To(),
 		msg.Data(),
 		msg.Gas(),
