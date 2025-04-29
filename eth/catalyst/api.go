@@ -373,8 +373,11 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	}
 	valid := func(id *engine.PayloadID) engine.ForkChoiceResponse {
 		return engine.ForkChoiceResponse{
-			PayloadStatus: engine.PayloadStatusV1{Status: engine.VALID, LatestValidHash: &update.HeadBlockHash},
-			PayloadID:     id,
+			PayloadStatus: engine.PayloadStatusV1{
+				Status:          engine.VALID,
+				LatestValidHash: &update.HeadBlockHash,
+			},
+			PayloadID: id,
 		}
 	}
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
