@@ -515,11 +515,7 @@ func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	envelope, err := api.getPayload(payloadID, false)
-	if err != nil {
-		return nil, err
-	}
-	return envelope, nil
+	return api.getPayload(payloadID, false)
 }
 
 // GetPayloadV4 returns a cached payload by id.
@@ -527,11 +523,7 @@ func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	envelope, err := api.getPayload(payloadID, false)
-	if err != nil {
-		return nil, err
-	}
-	return envelope, nil
+	return api.getPayload(payloadID, false)
 }
 
 // GetPayloadV4 returns a cached payload by id.
@@ -539,11 +531,7 @@ func (api *ConsensusAPI) GetPayloadV5(payloadID engine.PayloadID) (*engine.Execu
 	if !payloadID.Is(engine.PayloadV3) {
 		return nil, engine.UnsupportedFork
 	}
-	envelope, err := api.getPayload(payloadID, false)
-	if err != nil {
-		return nil, err
-	}
-	return envelope, nil
+	return api.getPayload(payloadID, false)
 }
 
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
@@ -618,8 +606,8 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 			// not found, return empty response
 			return nil, nil
 		}
-		if len(sidecar.Proofs) != len(sidecar.Blobs)*kzg4844.CellProofsPerBlob {
-			return nil, errors.New("NORMAL PROOFS IN GETBLOBSV2, THIS SHOULD NEVER HAPPEN, PLEASE REPORT")
+		if sidecar.Version != 1 {
+			return nil, fmt.Errorf("GetBlobs queried V0 transaction: index %v, blobhashes %v", index, sidecar.BlobHashes())
 		}
 		blobHashes := sidecar.BlobHashes()
 		for bIdx, hash := range blobHashes {
