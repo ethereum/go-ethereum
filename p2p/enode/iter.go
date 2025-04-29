@@ -163,7 +163,7 @@ type AsyncFilterIter struct {
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 }
-type AsyncFilterFunc func(context.Context, *Node) (*Node, error)
+type AsyncFilterFunc func(context.Context, *Node) *Node
 
 // AsyncFilter creates an iterator which checks nodes in parallel.
 func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
@@ -192,7 +192,7 @@ func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 			<-f.slots
 			// check the node async, in a separate goroutine
 			go func() {
-				if nn, err := check(ctx, n); err == nil {
+				if nn := check(ctx, n); nn != nil {
 					select {
 					case f.passed <- nn:
 					case <-ctx.Done(): // bale out if downstream is already closed and not calling Next

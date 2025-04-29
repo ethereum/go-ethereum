@@ -505,9 +505,12 @@ func (s *Ethereum) setupDiscovery() error {
 	// Add DHT nodes from discv4.
 	if s.p2pServer.DiscoveryV4() != nil {
 		iter := s.p2pServer.DiscoveryV4().RandomNodes()
-		resolverFunc := func(ctx context.Context, enr *enode.Node) (*enode.Node, error) {
+		resolverFunc := func(ctx context.Context, enr *enode.Node) *enode.Node {
 			// RequestENR does not yet support context. It will simply time out.
-			return s.p2pServer.DiscoveryV4().RequestENR(enr)
+			// If the ENR can't be resolved, RequestENR will return nil. We don't
+			// care about the specific error here, so we ignore it.
+			nn, _ := s.p2pServer.DiscoveryV4().RequestENR(enr)
+			return nn
 		}
 		iter = enode.AsyncFilter(iter, resolverFunc, maxParallelENRRequests)
 		iter = enode.Filter(iter, eth.NewNodeFilter(s.blockchain))
