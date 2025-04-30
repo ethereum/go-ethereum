@@ -496,6 +496,7 @@ func vmTestBlockHash(n uint64) common.Hash {
 type StateTestState struct {
 	StateDB   *state.StateDB
 	TrieDB    *triedb.Database
+	VerkleDB  *triedb.Database
 	Snapshots *snapshot.Tree
 }
 
@@ -507,8 +508,9 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	} else {
 		tconf.PathDB = pathdb.Defaults
 	}
+	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 	triedb := triedb.NewDatabase(db, tconf)
-	sdb := state.NewDatabase(triedb, nil)
+	sdb := state.NewDatabase(triedb, verkledb, nil)
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
@@ -532,9 +534,9 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	sdb = state.NewDatabase(triedb, snaps)
+	sdb = state.NewDatabase(triedb, verkledb, snaps)
 	statedb, _ = state.New(root, sdb)
-	return StateTestState{statedb, triedb, snaps}
+	return StateTestState{statedb, triedb, verkledb, snaps}
 }
 
 // Close should be called when the state is no longer needed, ie. after running the test.

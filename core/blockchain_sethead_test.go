@@ -2034,6 +2034,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	}
 	// Reopen the trie database without persisting in-memory dirty nodes.
 	chain.triedb.Close()
+	chain.verkledb.Close()
 	dbconfig := &triedb.Config{}
 	if scheme == rawdb.PathScheme {
 		dbconfig.PathDB = pathdb.Defaults
@@ -2041,7 +2042,8 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		dbconfig.HashDB = hashdb.Defaults
 	}
 	chain.triedb = triedb.NewDatabase(chain.db, dbconfig)
-	chain.statedb = state.NewDatabase(chain.triedb, chain.snaps)
+	chain.verkledb = triedb.NewDatabase(chain.db, triedb.VerkleDefaults)
+	chain.statedb = state.NewDatabase(chain.triedb, chain.verkledb, chain.snaps)
 
 	// Force run a freeze cycle
 	type freezer interface {

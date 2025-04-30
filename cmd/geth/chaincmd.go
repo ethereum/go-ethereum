@@ -243,10 +243,11 @@ func initGenesis(ctx *cli.Context) error {
 	}
 	defer chaindb.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
+	triedb, verkledb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
 	defer triedb.Close()
+	defer verkledb.Close()
 
-	_, hash, _, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
+	_, hash, _, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, verkledb, genesis, &overrides)
 	if err != nil {
 		utils.Fatalf("Failed to write genesis block: %v", err)
 	}
@@ -594,10 +595,11 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	triedb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
+	triedb, verkledb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
+	defer verkledb.Close()
 
-	state, err := state.New(root, state.NewDatabase(triedb, nil))
+	state, err := state.New(root, state.NewDatabase(triedb, verkledb, nil))
 	if err != nil {
 		return err
 	}

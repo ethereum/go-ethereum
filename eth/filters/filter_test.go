@@ -99,7 +99,7 @@ func benchmarkFilters(b *testing.B, history uint64, noHistory bool) {
 	// The test txs are not properly signed, can't simply create a chain
 	// and then import blocks. TODO(rjl493456442) try to get rid of the
 	// manual database writes.
-	gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
+	gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults), triedb.NewDatabase(db, triedb.VerkleDefaults))
 
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
@@ -209,7 +209,7 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 
 	// Hack: GenerateChainWithGenesis creates a new db.
 	// Commit the genesis manually and use GenerateChain.
-	_, err = gspec.Commit(db, triedb.NewDatabase(db, nil))
+	_, err = gspec.Commit(db, triedb.NewDatabase(db, nil), triedb.NewDatabase(db, triedb.VerkleDefaults))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +429,7 @@ func TestRangeLogs(t *testing.T) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 	)
-	_, err := gspec.Commit(db, triedb.NewDatabase(db, nil))
+	_, err := gspec.Commit(db, triedb.NewDatabase(db, nil), triedb.NewDatabase(db, triedb.VerkleDefaults))
 	if err != nil {
 		t.Fatal(err)
 	}

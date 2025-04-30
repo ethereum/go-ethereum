@@ -135,8 +135,9 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	if gspec.Config.TerminalTotalDifficulty == nil {
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(stdmath.MaxInt64)
 	}
+	verkledb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 	triedb := triedb.NewDatabase(db, tconf)
-	gblock, err := gspec.Commit(db, triedb)
+	gblock, err := gspec.Commit(db, triedb, verkledb)
 	if err != nil {
 		return err
 	}

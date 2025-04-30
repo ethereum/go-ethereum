@@ -68,8 +68,9 @@ func TestUseAfterTerminate(t *testing.T) {
 
 func TestVerklePrefetcher(t *testing.T) {
 	disk := rawdb.NewMemoryDatabase()
-	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
-	sdb := NewDatabase(db, nil)
+	tdb := triedb.NewDatabase(disk, nil)
+	vdb := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+	sdb := NewDatabase(tdb, vdb, nil)
 
 	state, err := New(types.EmptyRootHash, sdb)
 	if err != nil {
