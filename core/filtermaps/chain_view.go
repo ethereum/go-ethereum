@@ -103,6 +103,7 @@ func (cv *ChainView) Receipts(number uint64) types.Receipts {
 	blockHash := cv.BlockHash(number)
 	if blockHash == (common.Hash{}) {
 		log.Error("Chain view: block hash unavailable", "number", number, "head", cv.headNumber)
+		return nil
 	}
 	return cv.chain.GetReceiptsByHash(blockHash)
 }
@@ -114,6 +115,7 @@ func (cv *ChainView) RawReceipts(number uint64) types.Receipts {
 	blockHash := cv.BlockHash(number)
 	if blockHash == (common.Hash{}) {
 		log.Error("Chain view: block hash unavailable", "number", number, "head", cv.headNumber)
+		return nil
 	}
 	return cv.chain.GetRawReceiptsByHash(blockHash)
 }
