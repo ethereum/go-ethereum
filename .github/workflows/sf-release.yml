@@ -41,21 +41,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate docker tags/labels from github build context
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag,prefix=
-            type=sha,prefix=
-            type=sha,prefix=,suffix=-${{ matrix.platform_suffix }}
-            type=edge,branch=firehose-fh3.0,priority=1
-            type=edge,branch=release/*,priority=1
-          flavor: |
-            latest=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
-            prefix=geth-,onlatest=true
-
       - name: Extract version
         id: extract-version
         run: |
@@ -64,22 +49,44 @@ jobs:
             version=${GITHUB_REF#refs/tags/}
           fi
 
-          echo "VERSION=${version} (Commit ${GITHUB_SHA::7}, Commit Date $(git show -s --format=%cI))" >> "$GITHUB_OUTPUT"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Generate docker tags/labels from github build context
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # The second sha tag is defined to uniquely identify the image and the platform,
+          # we append extract version, either edge or <tag>, this is necessary to avoid a
+          # race condition when pushing a tag and its related branches. In this case, three
+          # build are launched, but only one, the tag, will get it's version set to the tag.
+          #
+          # What happened is that non-tag Docker built image like `3b14725-amd64` was
+          # overwriting the tag Docker image also labeled `3b14725-amd64`. The `push` action
+          # was then merging an image that didn't have the version labels correctly set.
+          #
+          # Our image more looks like `3b14725-edge-amd64` or `3b14725-geth-v1.15.10-fh3.0-amd64`
+          # which mean the `push` can now pick the correct image depending on the type of build.
+          tags: |
+            type=ref,event=tag,prefix=
+            type=sha,prefix=
+            type=sha,prefix=,suffix=-${{ steps.extract-version.outputs.VERSION }}-${{ matrix.platform_suffix }}
+            type=edge,branch=firehose-fh3.0,priority=1
+            type=edge,branch=release/*,priority=1
+          flavor: |
+            latest=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
+            prefix=geth-,onlatest=true
 
       - name: Build and push Docker image (${{ matrix.platform }})
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile.sf
           platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
-          build-args: |
-            BUILDNUM=""
-            COMMIT=${{ github.sha }}
-            VERSION=${{ steps.extract-version.outputs.VERSION }}
 
   push:
     needs: build
@@ -115,7 +122,12 @@ jobs:
       - name: Extract image
         id: image
         run: |
-            echo "ID=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          version="edge"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            version=${GITHUB_REF#refs/tags/}
+          fi
+
+          echo "ID=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA::7}-${version}" >> "$GITHUB_OUTPUT"
 
       - name: Create and push manifest images
         uses: Noelware/docker-manifest-action@0.4.3
