@@ -22,6 +22,7 @@ import (
 	"math"
 	mrand "math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -201,6 +202,8 @@ type TxFetcher struct {
 
 	// txFromPeer stores where we received a transaction from
 	txFromPeer map[common.Hash]string
+	// should be protected by mutex
+	txFromPeerMutex sync.Mutex
 
 	// Callbacks
 	hasTx    func(common.Hash) bool             // Retrieves a tx from the local txpool
@@ -358,7 +361,10 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			// Track a few interesting failure types
 			switch {
 			case err == nil:
+				// protect against concurrent access to the map
+				f.txFromPeerMutex.Lock()
 				f.txFromPeer[batch[j].Hash()] = peer
+				f.txFromPeerMutex.Unlock()
 
 			case errors.Is(err, txpool.ErrAlreadyKnown):
 				duplicate++
