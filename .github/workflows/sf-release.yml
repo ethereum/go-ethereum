@@ -87,6 +87,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
+          # FIXME: Switch to Firehose Ethereum!
+          build-args: |
+            FIREHOSE_CORE=18bb86f
 
   push:
     needs: build
