@@ -52,19 +52,19 @@ func testHandshake(t *testing.T, protocol uint) {
 			want: errNoStatusMsg,
 		},
 		{
-			code: StatusMsg, data: StatusPacket{10, 1, new(big.Int), head.Hash(), genesis.Hash(), forkID},
+			code: StatusMsg, data: StatusPacket68{10, 1, new(big.Int), head.Hash(), genesis.Hash(), forkID},
 			want: errProtocolVersionMismatch,
 		},
 		{
-			code: StatusMsg, data: StatusPacket{uint32(protocol), 999, new(big.Int), head.Hash(), genesis.Hash(), forkID},
+			code: StatusMsg, data: StatusPacket68{uint32(protocol), 999, new(big.Int), head.Hash(), genesis.Hash(), forkID},
 			want: errNetworkIDMismatch,
 		},
 		{
-			code: StatusMsg, data: StatusPacket{uint32(protocol), 1, new(big.Int), head.Hash(), common.Hash{3}, forkID},
+			code: StatusMsg, data: StatusPacket68{uint32(protocol), 1, new(big.Int), head.Hash(), common.Hash{3}, forkID},
 			want: errGenesisMismatch,
 		},
 		{
-			code: StatusMsg, data: StatusPacket{uint32(protocol), 1, new(big.Int), head.Hash(), genesis.Hash(), forkid.ID{Hash: [4]byte{0x00, 0x01, 0x02, 0x03}}},
+			code: StatusMsg, data: StatusPacket68{uint32(protocol), 1, new(big.Int), head.Hash(), genesis.Hash(), forkid.ID{Hash: [4]byte{0x00, 0x01, 0x02, 0x03}}},
 			want: errForkIDRejected,
 		},
 	}
@@ -80,7 +80,7 @@ func testHandshake(t *testing.T, protocol uint) {
 		// Send the junk test with one peer, check the handshake failure
 		go p2p.Send(app, test.code, test.data)
 
-		err := peer.Handshake(1, head.Hash(), genesis.Hash(), forkID, forkid.NewFilter(backend.chain))
+		err := peer.Handshake(1, backend.chain, BlockRangeUpdatePacket{})
 		if err == nil {
 			t.Errorf("test %d: protocol returned nil error, want %q", i, test.want)
 		} else if !errors.Is(err, test.want) {
