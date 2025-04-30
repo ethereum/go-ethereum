@@ -324,9 +324,9 @@ func (db *Database) Path() string {
 	return db.fn
 }
 
-// Sync flushes all pending writes in the write-ahead-log to disk, ensuring
-// data durability up to that point.
-func (db *Database) Sync() error {
+// SyncKeyValue flushes all pending writes in the write-ahead-log to disk,
+// ensuring data durability up to that point.
+func (db *Database) SyncKeyValue() error {
 	// In theory, the WAL (Write-Ahead Log) can be explicitly synchronized using
 	// a write operation with SYNC=true. However, there is no dedicated key reserved
 	// for this purpose, and even a nil key (key=nil) is considered a valid

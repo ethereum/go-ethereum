@@ -138,7 +138,7 @@ func (db *Database) Compact(start []byte, limit []byte) error {
 	return nil
 }
 
-func (db *Database) Sync() error {
+func (db *Database) SyncKeyValue() error {
 	return nil
 }
 

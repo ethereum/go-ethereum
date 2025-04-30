@@ -188,10 +188,10 @@ func (t *table) Compact(start []byte, limit []byte) error {
 	return t.db.Compact(start, limit)
 }
 
-// Sync ensures that all pending writes are flushed to disk, guaranteeing
-// data durability up to the point.
-func (t *table) Sync() error {
-	return t.db.Sync()
+// SyncKeyValue ensures that all pending writes are flushed to disk,
+// guaranteeing data durability up to the point.
+func (t *table) SyncKeyValue() error {
+	return t.db.SyncKeyValue()
 }
 
 // NewBatch creates a write-only database that buffers changes to its host db

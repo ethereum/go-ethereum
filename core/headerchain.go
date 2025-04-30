@@ -611,7 +611,7 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 	}
 	// Explicitly flush the pending writes in the key-value store to disk, ensuring
 	// data durability of the previous deletions.
-	if err := hc.chainDb.Sync(); err != nil {
+	if err := hc.chainDb.SyncKeyValue(); err != nil {
 		log.Crit("Failed to sync the key-value store in setHead", "err", err)
 	}
 	// Truncate the excessive chain segments in the ancient store.

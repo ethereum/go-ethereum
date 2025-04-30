@@ -431,9 +431,9 @@ func (d *Database) Path() string {
 	return d.fn
 }
 
-// Sync flushes all pending writes in the write-ahead-log to disk, ensuring
-// data durability up to that point.
-func (d *Database) Sync() error {
+// SyncKeyValue flushes all pending writes in the write-ahead-log to disk,
+// ensuring data durability up to that point.
+func (d *Database) SyncKeyValue() error {
 	// The entry (value=nil) is not written to the database; it is only
 	// added to the WAL. Writing this special log entry in sync mode
 	// automatically flushes all previous writes, ensuring database

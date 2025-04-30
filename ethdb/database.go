@@ -59,9 +59,9 @@ type KeyValueStater interface {
 
 // KeyValueSyncer wraps the Sync method of a backing data store.
 type KeyValueSyncer interface {
-	// Sync ensures that all pending writes are flushed to disk, guaranteeing
-	// data durability up to the point.
-	Sync() error
+	// SyncKeyValue ensures that all pending writes are flushed to disk,
+	// guaranteeing data durability up to the point.
+	SyncKeyValue() error
 }
 
 // Compacter wraps the Compact method of a backing data store.

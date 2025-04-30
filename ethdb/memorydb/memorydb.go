@@ -199,9 +199,9 @@ func (db *Database) Compact(start []byte, limit []byte) error {
 	return nil
 }
 
-// Sync ensures that all pending writes are flushed to disk, guaranteeing
-// data durability up to the point.
-func (db *Database) Sync() error {
+// SyncKeyValue ensures that all pending writes are flushed to disk,
+// guaranteeing data durability up to the point.
+func (db *Database) SyncKeyValue() error {
 	return nil
 }
 

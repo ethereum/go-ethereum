@@ -460,7 +460,7 @@ func (db *Database) Recover(root common.Hash) error {
 	// recent key-value writes are lost due to an application panic, while
 	// the associated state histories have already been removed, resulting
 	// in the inability to perform a state rollback.
-	if err := db.diskdb.Sync(); err != nil {
+	if err := db.diskdb.SyncKeyValue(); err != nil {
 		return err
 	}
 	_, err := truncateFromHead(db.diskdb, db.freezer, dl.stateID())
