@@ -29,6 +29,7 @@ type blockchain interface {
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetCanonicalHash(number uint64) common.Hash
 	GetReceiptsByHash(hash common.Hash) types.Receipts
+	GetRawReceiptsByHash(hash common.Hash) types.Receipts
 }
 
 // ChainView represents an immutable view of a chain with a block id and a set
@@ -102,8 +103,21 @@ func (cv *ChainView) Receipts(number uint64) types.Receipts {
 	blockHash := cv.BlockHash(number)
 	if blockHash == (common.Hash{}) {
 		log.Error("Chain view: block hash unavailable", "number", number, "head", cv.headNumber)
+		return nil
 	}
 	return cv.chain.GetReceiptsByHash(blockHash)
+}
+
+// RawReceipts returns the set of receipts belonging to the block at the given
+// block number. Does not derive the fields of the receipts, should only be
+// used during creation of the filter maps, please use cv.Receipts during querying.
+func (cv *ChainView) RawReceipts(number uint64) types.Receipts {
+	blockHash := cv.BlockHash(number)
+	if blockHash == (common.Hash{}) {
+		log.Error("Chain view: block hash unavailable", "number", number, "head", cv.headNumber)
+		return nil
+	}
+	return cv.chain.GetRawReceiptsByHash(blockHash)
 }
 
 // SharedRange returns the block range shared by two chain views.

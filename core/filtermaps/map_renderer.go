@@ -693,7 +693,7 @@ func (f *FilterMaps) newLogIteratorFromMapBoundary(mapIndex uint32, startBlock, 
 		return nil, fmt.Errorf("iterator entry point %d after target chain head block %d", startBlock, f.targetView.HeadNumber())
 	}
 	// get block receipts
-	receipts := f.targetView.Receipts(startBlock)
+	receipts := f.targetView.RawReceipts(startBlock)
 	if receipts == nil {
 		return nil, fmt.Errorf("receipts not found for start block %d", startBlock)
 	}
@@ -760,7 +760,7 @@ func (l *logIterator) next() error {
 	if l.delimiter {
 		l.delimiter = false
 		l.blockNumber++
-		l.receipts = l.chainView.Receipts(l.blockNumber)
+		l.receipts = l.chainView.RawReceipts(l.blockNumber)
 		if l.receipts == nil {
 			return fmt.Errorf("receipts not found for block %d", l.blockNumber)
 		}
