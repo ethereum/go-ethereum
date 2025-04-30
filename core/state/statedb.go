@@ -793,7 +793,6 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tr
 		s.GetBalance(addr)
 	}
 
-	// TODO(manav): Confirm if we need to record if amount is zero
 	stateObject = s.mvRecordWritten(stateObject)
 	MVWrite(s, blockstm.NewSubpathKey(addr, BalancePath))
 
