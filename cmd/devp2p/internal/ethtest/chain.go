@@ -143,7 +143,11 @@ func (c *Chain) ForkID() forkid.ID {
 // TD calculates the total difficulty of the chain at the
 // chain head.
 func (c *Chain) TD() *big.Int {
-	return new(big.Int)
+	sum := new(big.Int)
+	for _, block := range c.blocks[:c.Len()] {
+		sum.Add(sum, block.Difficulty())
+	}
+	return sum
 }
 
 // GetBlock returns the block at the specified number.

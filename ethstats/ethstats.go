@@ -68,6 +68,7 @@ type backend interface {
 	SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription
 	CurrentHeader() *types.Header
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
+	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	Stats() (pending int, queued int)
 	SyncProgress() ethereum.SyncProgress
 
@@ -707,6 +708,7 @@ func (s *Service) reportBlock(conn *connWrapper, header *types.Header) error {
 func (s *Service) assembleBlockStats(header *types.Header) *blockStats {
 	// Gather the block infos from the local blockchain
 	var (
+		td     *big.Int
 		txs    []txStats
 		uncles []*types.Header
 	)
@@ -722,6 +724,8 @@ func (s *Service) assembleBlockStats(header *types.Header) *blockStats {
 		if block == nil {
 			return nil
 		}
+		td = fullBackend.GetTd(context.Background(), header.Hash())
+
 		txs = make([]txStats, len(block.Transactions()))
 		for i, tx := range block.Transactions() {
 			txs[i].Hash = tx.Hash()
@@ -733,6 +737,7 @@ func (s *Service) assembleBlockStats(header *types.Header) *blockStats {
 		if header == nil {
 			header = s.backend.CurrentHeader()
 		}
+		td = s.backend.GetTd(context.Background(), header.Hash())
 		txs = []txStats{}
 	}
 	// Assemble and return the block stats
@@ -747,7 +752,7 @@ func (s *Service) assembleBlockStats(header *types.Header) *blockStats {
 		GasUsed:    header.GasUsed,
 		GasLimit:   header.GasLimit,
 		Diff:       header.Difficulty.String(),
-		TotalDiff:  "0", // unknown post-merge with pruned chain tail
+		TotalDiff:  td.String(),
 		Txs:        txs,
 		TxHash:     header.TxHash,
 		Root:       header.Root,

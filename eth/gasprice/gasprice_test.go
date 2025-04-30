@@ -157,6 +157,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 	// 	config.MergeNetsplitBlock = cancunBlock
 	// }
 	// engine := beacon.New(ethash.NewFaker())
+	config.TerminalTotalDifficulty = common.Big0
 	engine := ethash.NewFaker()
 
 	// if cancunBlock != nil {

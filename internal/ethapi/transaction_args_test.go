@@ -380,6 +380,7 @@ func (b *backendMock) GetLogs(ctx context.Context, blockHash common.Hash, number
 	//nolint:nilnil
 	return nil, nil
 }
+func (b *backendMock) GetTd(ctx context.Context, hash common.Hash) *big.Int { return nil }
 func (b *backendMock) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	return nil
 }

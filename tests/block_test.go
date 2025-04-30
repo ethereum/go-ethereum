@@ -57,8 +57,8 @@ func TestBlockchain(t *testing.T) {
 	bt.skipLoad(`.*InvalidBlocks*`)
 	bt.skipLoad(`.*TransitionTests*`)
 
-	// With chain history removal, TDs become unavailable, this transition tests based on TTD are unrunnable
-	bt.skipLoad(`.*bcArrowGlacierToParis/powToPosBlockRejection.json`)
+	// // With chain history removal, TDs become unavailable, this transition tests based on TTD are unrunnable
+	// bt.skipLoad(`.*bcArrowGlacierToParis/powToPosBlockRejection.json`)
 
 	// This directory contains no test.
 	bt.skipLoad(`.*\.meta/.*`)

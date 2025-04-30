@@ -764,3 +764,7 @@ func (cm *chainMaker) GetHeader(hash common.Hash, number uint64) *types.Header {
 func (cm *chainMaker) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return cm.blockByNumber(number)
 }
+
+func (cm *chainMaker) GetTd(hash common.Hash, number uint64) *big.Int {
+	return nil // not supported
+}

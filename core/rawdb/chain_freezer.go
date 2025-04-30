@@ -348,6 +348,11 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if len(receipts) == 0 {
 				return fmt.Errorf("block receipts missing, can't freeze block %d", number)
 			}
+			td := ReadTdRLP(nfdb, hash, number)
+			if len(td) == 0 {
+				return fmt.Errorf("total difficulty missing, can't freeze block %d", number)
+			}
+
 			// Write to the batch.
 			if err := op.AppendRaw(ChainFreezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to Freezer: %v", err)
@@ -371,6 +376,9 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 				return fmt.Errorf("can't write bor-receipt to freezer: %v", err)
 			}
 
+			if err := op.AppendRaw(ChainFreezerDifficultyTable, number, td); err != nil {
+				return fmt.Errorf("can't write td to Freezer: %v", err)
+			}
 			hashes = append(hashes, hash)
 		}
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"math/big"
 	"reflect"
 	"sync"
 	"time"
@@ -77,6 +78,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
 		// // malicious handshakes + status
 		{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
+		{Name: "MaliciousStatus", Fn: s.TestMaliciousStatus},
 		// test transactions
 		{Name: "LargeTxRequest", Fn: s.TestLargeTxRequest, Slow: true},
 		{Name: "Transaction", Fn: s.TestTransaction},
@@ -466,6 +468,42 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 				t.Fatalf("unexpected msg: code %d", code)
 			}
 		}
+	}
+}
+
+func (s *Suite) TestMaliciousStatus(t *utesting.T) {
+	t.Log(`This test sends a malicious eth Status message to the node and expects a disconnect.`)
+
+	conn, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+	if err := conn.handshake(); err != nil {
+		t.Fatalf("handshake failed: %v", err)
+	}
+	// Create status with large total difficulty.
+	status := &eth.StatusPacket{
+		ProtocolVersion: uint32(conn.negotiatedProtoVersion),
+		NetworkID:       s.chain.config.ChainID.Uint64(),
+		TD:              new(big.Int).SetBytes(randBuf(2048)),
+		Head:            s.chain.Head().Hash(),
+		Genesis:         s.chain.GetBlock(0).Hash(),
+		ForkID:          s.chain.ForkID(),
+	}
+	if err := conn.statusExchange(s.chain, status); err != nil {
+		t.Fatalf("status exchange failed: %v", err)
+	}
+	// Wait for disconnect.
+	code, _, err := conn.Read()
+	if err != nil {
+		t.Fatalf("error reading from connection: %v", err)
+	}
+	switch code {
+	case discMsg:
+		break
+	default:
+		t.Fatalf("expected disconnect, got: %d", code)
 	}
 }
 
