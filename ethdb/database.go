@@ -57,7 +57,7 @@ type KeyValueStater interface {
 	Stat() (string, error)
 }
 
-// KeyValueSyncer wraps the Sync method of a backing data store.
+// KeyValueSyncer wraps the SyncKeyValue method of a backing data store.
 type KeyValueSyncer interface {
 	// SyncKeyValue ensures that all pending writes are flushed to disk,
 	// guaranteeing data durability up to the point.

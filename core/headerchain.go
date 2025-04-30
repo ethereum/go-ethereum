@@ -625,8 +625,12 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 	if delFn != nil {
 		// Ignore the error here since light client won't hit this path
 		frozen, _ := hc.chainDb.Ancients()
-		if headBlock+1 < frozen {
-			_, err := hc.chainDb.TruncateHead(headBlock + 1)
+		header := hc.CurrentHeader()
+
+		// Truncate the excessive chain segment above the current chain head
+		// in the ancient store.
+		if header.Number.Uint64()+1 < frozen {
+			_, err := hc.chainDb.TruncateHead(header.Number.Uint64() + 1)
 			if err != nil {
 				log.Crit("Failed to truncate head block", "err", err)
 			}
