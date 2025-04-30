@@ -622,9 +622,6 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header, wit
 		if err != nil {
 			return nil, nil, 0, nil, 0, err
 		}
-		// TODO(manav): confirm if not setting logger here affects block-stm or not as it's removed
-		// from upstream
-		// parallelStatedb.SetLogger(bc.logger)
 
 		processorCount++
 
