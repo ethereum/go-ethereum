@@ -254,6 +254,7 @@ func (miner *Miner) SetEtherbase(addr common.Address) {
 func (miner *Miner) SetPrioAddresses(prio []common.Address) {
 	miner.confMu.Lock()
 	miner.prio = prio
+	miner.worker.prio = miner.prio
 	miner.confMu.Unlock()
 }
 

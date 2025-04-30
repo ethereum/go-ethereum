@@ -207,6 +207,8 @@ type worker struct {
 	eth         Backend
 	chain       *core.BlockChain
 
+	prio []common.Address // A list of senders to prioritize
+
 	// Feeds
 	pendingLogsFeed event.Feed
 
@@ -860,7 +862,7 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 		coinbase: coinbase,
 		header:   header,
 		witness:  state.Witness(),
-		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		evm:      vm.NewEVM(core.NewEVMBlockContext(header, w.chain, &coinbase), state, w.chainConfig, vm.Config{}),
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
@@ -980,7 +982,7 @@ mainloop:
 		}
 		// If we don't have enough blob space for any further blob transactions,
 		// skip that list altogether
-		if !blobTxs.Empty() && env.blobs >= eip4844.MaxBlobsPerBlock(miner.chainConfig, env.header.Time) {
+		if !blobTxs.Empty() && env.blobs >= eip4844.MaxBlobsPerBlock(w.chainConfig, env.header.Time) {
 			log.Trace("Not enough blob space for further blob transactions")
 			blobTxs.Clear()
 			// Fall though to pick up any plain txs
@@ -1020,8 +1022,8 @@ mainloop:
 		// Most of the blob gas logic here is agnostic as to if the chain supports
 		// blobs or not, however the max check panics when called on a chain without
 		// a defined schedule, so we need to verify it's safe to call.
-		if miner.chainConfig.IsCancun(env.header.Number, env.header.Time) {
-			left := eip4844.MaxBlobsPerBlock(miner.chainConfig, env.header.Time) - env.blobs
+		if w.chainConfig.IsCancun(env.header.Number) {
+			left := eip4844.MaxBlobsPerBlock(w.chainConfig, env.header.Time) - env.blobs
 			if left < int(ltx.BlobGas/params.BlobTxBlobGasPerBlob) {
 				log.Trace("Not enough blob space left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas/params.BlobTxBlobGasPerBlob)
 				txs.Pop()
@@ -1307,12 +1309,12 @@ func (w *worker) prepareWork(genParams *generateParams, witness bool) (*environm
 	if header.ParentBeaconRoot != nil {
 		context := core.NewEVMBlockContext(header, w.chain, nil)
 		vmenv := vm.NewEVM(context, env.state, w.chainConfig, vm.Config{})
-		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
+		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv)
 	}
 	if w.chainConfig.IsPrague(header.Number) {
 		context := core.NewEVMBlockContext(header, w.chain, nil)
 		vmenv := vm.NewEVM(context, env.state, w.chainConfig, vm.Config{})
-		core.ProcessParentBlockHash(header.ParentHash, vmenv, env.state)
+		core.ProcessParentBlockHash(header.ParentHash, vmenv)
 	}
 	return env, nil
 }
@@ -1324,14 +1326,10 @@ func (w *worker) prepareWork(genParams *generateParams, witness bool) (*environm
 //
 //nolint:gocognit
 func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) error {
-	// TODO(@pratikspatil024) - review these locks and tip/prio
-	miner.confMu.RLock()
 	w.mu.RLock()
 	tip := w.tip
-	tip := miner.config.GasPrice
-	prio := miner.prio
+	prio := w.prio
 	w.mu.RUnlock()
-	miner.confMu.RUnlock()
 
 	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
 	filter := txpool.PendingFilter{
@@ -1343,7 +1341,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	}
 
 	if env.header.ExcessBlobGas != nil {
-		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(miner.chainConfig, env.header))
+		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(w.chainConfig, env.header))
 	}
 
 	var (
@@ -1430,20 +1428,17 @@ func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadR
 	var requests [][]byte
 	if w.chainConfig.IsPrague(work.header.Number) && w.chainConfig.Bor == nil {
 		// EIP-6110 deposits
-		depositRequests, err := core.ParseDepositLogs(allLogs, w.chainConfig)
+		err := core.ParseDepositLogs(&requests, allLogs, w.chainConfig)
 		if err != nil {
 			return &newPayloadResult{err: err}
 		}
-		requests = append(requests, depositRequests)
 		// create EVM for system calls
 		blockContext := core.NewEVMBlockContext(work.header, w.chain, &work.header.Coinbase)
 		vmenv := vm.NewEVM(blockContext, work.state, w.chainConfig, vm.Config{})
 		// EIP-7002 withdrawals
-		withdrawalRequests := core.ProcessWithdrawalQueue(vmenv, work.state)
-		requests = append(requests, withdrawalRequests)
+		core.ProcessWithdrawalQueue(&requests, vmenv)
 		// EIP-7251 consolidations
-		consolidationRequests := core.ProcessConsolidationQueue(vmenv, work.state)
-		requests = append(requests, consolidationRequests)
+		core.ProcessConsolidationQueue(&requests, vmenv)
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
