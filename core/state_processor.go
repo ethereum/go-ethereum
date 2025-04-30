@@ -89,7 +89,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, tracingStateDB)
 	}
-	if p.config.IsPrague(block.Number()) {
+	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {
 		ProcessParentBlockHash(block.ParentHash(), vmenv, tracingStateDB)
 	}
 

@@ -478,7 +478,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		// preState := statedb.Copy()
 
 		// Pre-execution system calls.
-		if config.IsPrague(b.header.Number) {
+		if config.IsPrague(b.header.Number) && config.Bor == nil {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
