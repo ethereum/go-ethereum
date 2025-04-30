@@ -483,6 +483,21 @@ web3._extend({
 			inputFormatter:[web3._extend.formatters.inputBlockNumberFormatter, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
 		new web3._extend.Method({
+			name: 'dbGet',
+			call: 'debug_dbGet',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'dbAncient',
+			call: 'debug_dbAncient',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'dbAncients',
+			call: 'debug_dbAncients',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'executionWitness',
 			call: 'debug_executionWitness',
 			params: 1,
