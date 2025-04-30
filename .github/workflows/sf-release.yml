@@ -49,7 +49,7 @@ jobs:
             version=${GITHUB_REF#refs/tags/}
           fi
 
-          echo "VERSION=${version}" >> "$GITHUB_ENV"
+          echo "VERSION=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Generate docker tags/labels from github build context
         id: meta
