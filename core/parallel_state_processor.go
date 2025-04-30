@@ -104,7 +104,7 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(&task.msg)
-	evm.Reset(txContext, task.statedb)
+	evm.SetTxContext(txContext)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -246,7 +246,7 @@ func (task *ExecutionTask) Settle() {
 
 	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = task.finalStateDB.GetLogs(task.tx.Hash(), task.blockNumber.Uint64(), task.blockHash)
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.Bloom = types.CreateBloom(receipt)
 	receipt.BlockHash = task.blockHash
 	receipt.BlockNumber = task.blockNumber
 	receipt.TransactionIndex = uint(task.finalStateDB.TxIndex())
@@ -304,15 +304,12 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	context := NewEVMBlockContext(header, p.bc.hc, nil)
 
 	vmenv := vm.NewEVM(context, statedb, p.config, cfg)
-	var tracingStateDB = vm.StateDB(statedb)
-	if hooks := cfg.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(statedb, hooks)
-	}
+
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		ProcessBeaconBlockRoot(*beaconRoot, vmenv, tracingStateDB)
+		ProcessBeaconBlockRoot(*beaconRoot, vmenv)
 	}
 	if p.config.IsPrague(block.Number()) {
-		ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+		ProcessParentBlockHash(block.ParentHash(), vmenv)
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -405,17 +402,16 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	var requests [][]byte
 	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {
 		// EIP-6110 deposits
-		depositRequests, err := ParseDepositLogs(allLogs, p.config)
+		err := ParseDepositLogs(&requests, allLogs, p.config)
 		if err != nil {
 			return nil, err
 		}
-		requests = append(requests, depositRequests)
+
 		// EIP-7002 withdrawals
-		withdrawalRequests := ProcessWithdrawalQueue(vmenv, tracingStateDB)
-		requests = append(requests, withdrawalRequests)
+		ProcessWithdrawalQueue(&requests, vmenv)
+
 		// EIP-7251 consolidations
-		consolidationRequests := ProcessConsolidationQueue(vmenv, tracingStateDB)
-		requests = append(requests, consolidationRequests)
+		ProcessConsolidationQueue(&requests, vmenv)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)

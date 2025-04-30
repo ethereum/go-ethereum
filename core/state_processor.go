@@ -159,7 +159,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
-	evm.Reset(txContext, tracingStateDB)
+	evm.SetTxContext(txContext)
 
 	var result *ExecutionResult
 
@@ -313,7 +313,8 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 		GasPrice:  common.Big0,
 		GasFeeCap: common.Big0,
 		GasTipCap: common.Big0,
-		To:        &addr,
+		To:        &params.HistoryStorageAddress,
+		Data:      prevHash.Bytes(),
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(params.HistoryStorageAddress)
