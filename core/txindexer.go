@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -220,6 +221,9 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 		done chan struct{}           // Non-nil if background routine is active
 		head = indexer.resolveHead() // The latest announced chain head
 
+		prog     *TxIndexProgress // Cached tx indexing progress
+		progTime time.Time        // Timestamp the progress was made
+
 		headCh = make(chan ChainHeadEvent)
 		sub    = chain.SubscribeChainHeadEvent(headCh)
 	)
@@ -248,7 +252,23 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			stop = nil
 			done = nil
 		case ch := <-indexer.progress:
-			ch <- indexer.report(head)
+			// Serve the indexing progress query using the cached result first.
+			// If the cached value is too old, fall back to querying real-time progress.
+			//
+			// A slight delay (up to 8 seconds) is acceptable. Once all transactions
+			// are fully indexed, the cached result is correct regardless of its age.
+			//
+			// It's a workaround for the potential performance reported by
+			// https://github.com/ethereum/go-ethereum/issues/31732 in which the single
+			// `rawdb.ReadTxIndexTail(indexer.db)` is super slow due to unknown database
+			// status and blocks all the subsequent indexing query requests.
+			if prog != nil && time.Since(progTime) < time.Second*8 {
+				ch <- *prog
+			} else {
+				prog = indexer.report(head)
+				progTime = time.Now()
+				ch <- *prog
+			}
 		case ch := <-indexer.term:
 			if stop != nil {
 				close(stop)
@@ -264,11 +284,11 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 }
 
 // report returns the tx indexing progress.
-func (indexer *txIndexer) report(head uint64) TxIndexProgress {
+func (indexer *txIndexer) report(head uint64) *TxIndexProgress {
 	// Special case if the head is even below the cutoff,
 	// nothing to index.
 	if head < indexer.cutoff {
-		return TxIndexProgress{
+		return &TxIndexProgress{
 			Indexed:   0,
 			Remaining: 0,
 		}
@@ -294,7 +314,7 @@ func (indexer *txIndexer) report(head uint64) TxIndexProgress {
 	if indexed < total {
 		remaining = total - indexed
 	}
-	return TxIndexProgress{
+	return &TxIndexProgress{
 		Indexed:   indexed,
 		Remaining: remaining,
 	}
