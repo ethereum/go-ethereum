@@ -1337,7 +1337,7 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 		}
 		for j, tracer := range tracers {
 			data, _ := os.ReadFile(tracer)
-			if string(data[:len(data)-1]) != tc.wants[j] {
+			if len(data) == 0 || string(data[:len(data)-1]) != tc.wants[j] {
 				t.Errorf("test %d, result mismatch, want %s, have %s", i, tc.wants[j], string(data))
 			}
 		}
