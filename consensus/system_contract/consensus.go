@@ -130,7 +130,7 @@ func (s *SystemContract) verifyHeader(chain consensus.ChainHeaderReader, header 
 		return errInvalidNonce
 	}
 	// Check that the BlockSignature contains signature if block is not requested
-	if !header.Requested && header.Number.Cmp(big.NewInt(0)) != 0 && len(header.BlockSignature) != extraSeal {
+	if header.Number.Cmp(big.NewInt(0)) != 0 && len(header.BlockSignature) != extraSeal {
 		return errMissingSignature
 	}
 	// Ensure that the mix digest is zero
@@ -197,20 +197,17 @@ func (s *SystemContract) verifyCascadingFields(chain consensus.ChainHeaderReader
 		return err
 	}
 
-	// only if block header has NOT been requested, then verify the signature against the current signer
-	if !header.Requested {
-		signer, err := ecrecover(header)
-		if err != nil {
-			return err
-		}
+	signer, err := ecrecover(header)
+	if err != nil {
+		return err
+	}
 
-		s.lock.RLock()
-		defer s.lock.RUnlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-		if signer != s.signerAddressL1 {
-			log.Error("Unauthorized signer", "Got", signer, "Expected:", s.signerAddressL1)
-			return ErrUnauthorizedSigner
-		}
+	if signer != s.signerAddressL1 {
+		log.Error("Unauthorized signer", "Got", signer, "Expected:", s.signerAddressL1)
+		return ErrUnauthorizedSigner
 	}
 
 	return nil
