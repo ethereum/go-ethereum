@@ -110,7 +110,7 @@ jobs:
       - name: Test
         run: make test
 
-      - uses: actions/upload-artifact@v4.4.0
+      - uses: PaloAltoNetworks/upload-secure-artifact@main
         with:
           name: unitTest-coverage
           path: cover.out
@@ -161,7 +161,7 @@ jobs:
       - name: test-integration
         run: make test-integration
 
-      - uses: actions/upload-artifact@v4.4.0
+      - uses: PaloAltoNetworks/upload-secure-artifact@main
         with:
           name: integrationTest-coverage
           path: cover.out
@@ -275,13 +275,17 @@ jobs:
           echo "Starting RPC Tests..."
           timeout 5m bash bor/integration-tests/rpc_test.sh
 
+      - name: Resolve absolute path for logs
+        id: pathfix
+        run: |
+          echo "ABS_LOG_PATH=$(realpath matic-cli/devnet/logs)" >> $GITHUB_ENV
+
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v4.4.0
+        uses: PaloAltoNetworks/upload-secure-artifact@main
         with:
           name: logs_${{ github.run_id }}
-          path: |
-            matic-cli/devnet/logs
+          path: ${{ env.ABS_LOG_PATH }}
 
       - name: Package code and chain data
         if: always()
@@ -292,11 +296,11 @@ jobs:
           mkdir -p ${{ github.run_id }}/matic-cli
           sudo mv bor ${{ github.run_id }}
           sudo mv matic-cli/devnet ${{ github.run_id }}/matic-cli
-          sudo tar czf code.tar.gz ${{ github.run_id }}
+          sudo tar --warning=no-file-changed --exclude='.git' -czf code.tar.gz ${{ github.run_id }}
 
       - name: Upload code and chain data
         if: always()
-        uses: actions/upload-artifact@v4.4.0
+      - uses: PaloAltoNetworks/upload-secure-artifact@main
         with:
           name: code_${{ github.run_id }}
           path: code.tar.gz
