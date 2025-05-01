@@ -244,20 +244,23 @@ func (f *FilterMaps) tryIndexHead() error {
 		f.startedHeadIndexAt = f.lastLogHeadIndex
 		f.startedHeadIndex = true
 		f.ptrHeadIndex = f.indexedRange.blocks.AfterLast()
+		f.pausedHeadIndex = 0
 	}
 	if _, err := headRenderer.run(func() bool {
+		cbStart := time.Now()
 		f.processEvents()
+		f.pausedHeadIndex += time.Since(cbStart)
 		return f.stop
 	}, func() {
 		f.tryUnindexTail()
 		if f.indexedRange.hasIndexedBlocks() && f.indexedRange.blocks.AfterLast() >= f.ptrHeadIndex &&
-			((!f.loggedHeadIndex && time.Since(f.startedHeadIndexAt) > headLogDelay) ||
+			((!f.loggedHeadIndex && time.Since(f.startedHeadIndexAt)-f.pausedHeadIndex > headLogDelay) ||
 				time.Since(f.lastLogHeadIndex) > logFrequency) {
 			log.Info("Log index head rendering in progress",
 				"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
 				"processed", f.indexedRange.blocks.AfterLast()-f.ptrHeadIndex,
 				"remaining", f.indexedView.HeadNumber()-f.indexedRange.blocks.Last(),
-				"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
+				"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)-f.pausedHeadIndex))
 			f.loggedHeadIndex = true
 			f.lastLogHeadIndex = time.Now()
 		}
@@ -268,7 +271,7 @@ func (f *FilterMaps) tryIndexHead() error {
 		log.Info("Log index head rendering finished",
 			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
 			"processed", f.indexedRange.blocks.AfterLast()-f.ptrHeadIndex,
-			"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
+			"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)-f.pausedHeadIndex))
 	}
 	f.loggedHeadIndex, f.startedHeadIndex = false, false
 	return nil
@@ -310,9 +313,12 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 			f.startedTailIndexAt = f.lastLogTailIndex
 			f.startedTailIndex = true
 			f.ptrTailIndex = f.indexedRange.blocks.First() - f.tailPartialBlocks()
+			f.pausedTailIndex = 0
 		}
 		done, err := tailRenderer.run(func() bool {
+			cbStart := time.Now()
 			f.processEvents()
+			f.pausedTailIndex += time.Since(cbStart)
 			return f.stop || !f.targetHeadIndexed()
 		}, func() {
 			tpb, ttb := f.tailPartialBlocks(), f.tailTargetBlock()
@@ -327,7 +333,7 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 					"processed", f.ptrTailIndex-f.indexedRange.blocks.First()+tpb,
 					"remaining", remaining,
 					"next tail epoch percentage", f.indexedRange.tailPartialEpoch*100/f.mapsPerEpoch,
-					"elapsed", common.PrettyDuration(time.Since(f.startedTailIndexAt)))
+					"elapsed", common.PrettyDuration(time.Since(f.startedTailIndexAt)-f.pausedTailIndex))
 				f.loggedTailIndex = true
 				f.lastLogTailIndex = time.Now()
 			}
@@ -348,7 +354,7 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 		log.Info("Log index tail rendering finished",
 			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
 			"processed", f.ptrTailIndex-f.indexedRange.blocks.First(),
-			"elapsed", common.PrettyDuration(time.Since(f.startedTailIndexAt)))
+			"elapsed", common.PrettyDuration(time.Since(f.startedTailIndexAt)-f.pausedTailIndex))
 		f.loggedTailIndex = false
 	}
 	return true, nil
@@ -364,11 +370,12 @@ func (f *FilterMaps) tryUnindexTail() (bool, error) {
 		firstEpoch--
 	}
 	for epoch := min(firstEpoch, f.cleanedEpochsBefore); !f.needTailEpoch(epoch); epoch++ {
-		if !f.startedTailUnindex {
+		if !f.startedTailUnindex && epoch >= firstEpoch { // do not log initial cleanup
 			f.startedTailUnindexAt = time.Now()
 			f.startedTailUnindex = true
 			f.ptrTailUnindexMap = f.indexedRange.maps.First() - f.indexedRange.tailPartialEpoch
 			f.ptrTailUnindexBlock = f.indexedRange.blocks.First() - f.tailPartialBlocks()
+			f.pausedRangeDelete = 0
 		}
 		if done, err := f.deleteTailEpoch(epoch); !done {
 			return false, err
@@ -383,7 +390,7 @@ func (f *FilterMaps) tryUnindexTail() (bool, error) {
 			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
 			"removed maps", f.indexedRange.maps.First()-f.ptrTailUnindexMap,
 			"removed blocks", f.indexedRange.blocks.First()-f.tailPartialBlocks()-f.ptrTailUnindexBlock,
-			"elapsed", common.PrettyDuration(time.Since(f.startedTailUnindexAt)))
+			"elapsed", common.PrettyDuration(time.Since(f.startedTailUnindexAt)-f.pausedRangeDelete))
 		f.startedTailUnindex = false
 	}
 	return true, nil

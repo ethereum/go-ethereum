@@ -114,6 +114,7 @@ type FilterMaps struct {
 	renderSnapshots                                              *lru.Cache[uint64, *renderedMap]
 	startedHeadIndex, startedTailIndex, startedTailUnindex       bool
 	startedHeadIndexAt, startedTailIndexAt, startedTailUnindexAt time.Time
+	pausedHeadIndex, pausedTailIndex, pausedRangeDelete          time.Duration
 	loggedHeadIndex, loggedTailIndex                             bool
 	lastLogHeadIndex, lastLogTailIndex                           time.Time
 	ptrHeadIndex, ptrTailIndex, ptrTailUnindexBlock              uint64
@@ -427,21 +428,28 @@ func (f *FilterMaps) safeDeleteWithLogs(deleteFn func(db ethdb.KeyValueStore, ha
 		start          = time.Now()
 		logPrinted     bool
 		lastLogPrinted = start
+		paused         time.Duration
 	)
+	defer func() {
+		f.pausedRangeDelete += paused
+	}()
 	switch err := deleteFn(f.db, f.hashScheme, func(deleted bool) bool {
-		if deleted && !logPrinted || time.Since(lastLogPrinted) > time.Second*10 {
-			log.Info(action+" in progress...", "elapsed", common.PrettyDuration(time.Since(start)))
+		if deleted && !logPrinted || time.Since(lastLogPrinted)-paused > time.Second*10 {
+			log.Info(action+" in progress...", "elapsed", common.PrettyDuration(time.Since(start)-paused))
 			logPrinted, lastLogPrinted = true, time.Now()
 		}
-		return stopCb()
+		cbStart := time.Now()
+		stop := stopCb()
+		paused += time.Since(cbStart)
+		return stop
 	}); {
 	case err == nil:
 		if logPrinted {
-			log.Info(action+" finished", "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info(action+" finished", "elapsed", common.PrettyDuration(time.Since(start)-paused))
 		}
 		return nil
 	case errors.Is(err, rawdb.ErrDeleteRangeInterrupted):
-		log.Warn(action+" interrupted", "elapsed", common.PrettyDuration(time.Since(start)))
+		log.Warn(action+" interrupted", "elapsed", common.PrettyDuration(time.Since(start)-paused))
 		return err
 	default:
 		log.Error(action+" failed", "error", err)
