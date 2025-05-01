@@ -175,7 +175,6 @@ to check if the node disconnects after receiving multiple invalid requests.`)
 
 	// Create request with max uint64 value for a nonexistent block
 	badReq := &eth.GetBlockHeadersPacket{
-		RequestId: uint64(1),
 		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			Origin:  eth.HashOrNumber{Number: ^uint64(0)},
 			Amount:  1,
@@ -184,29 +183,22 @@ to check if the node disconnects after receiving multiple invalid requests.`)
 		},
 	}
 
-	// Send the request 10 times
+	// Send request 10 times. Some clients are lient on the first few invalids.
 	for i := 0; i < 10; i++ {
+		badReq.RequestId = uint64(i)
 		if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, badReq); err != nil {
 			if err == errDisc {
-				t.Logf("peer disconnected after %d requests", i+1)
-				return
+				t.Fatalf("peer disconnected after %d requests", i+1)
 			}
 			t.Fatalf("write failed: %v", err)
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 
-	// Check if peer disconnects
+	// Check if peer disconnects at the end.
 	code, _, err := conn.Read()
-	if err == errDisc {
-		t.Logf("peer disconnected after all requests")
-		return
+	if err == errDisc || code == discMsg {
+		t.Fatal("peer improperly disconnected")
 	}
-	if code == discMsg {
-		t.Logf("received disconnect message")
-		return
-	}
-	t.Fatalf("peer did not disconnect after receiving invalid requests")
 }
 
 func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
