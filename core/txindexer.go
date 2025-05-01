@@ -308,11 +308,14 @@ func (indexer *txIndexer) txIndexProgress(ctx context.Context) (TxIndexProgress,
 	ch := make(chan TxIndexProgress, 1)
 	select {
 	case indexer.progress <- ch:
-		return <-ch, nil
+		select {
+		case prog := <-ch:
+			return prog, nil
+		case <-ctx.Done():
+			return TxIndexProgress{}, ctx.Err()
+		}
 	case <-indexer.closed:
 		return TxIndexProgress{}, errors.New("indexer is closed")
-	case <-ctx.Done():
-		return TxIndexProgress{}, ctx.Err()
 	}
 }
 
