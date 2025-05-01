@@ -231,7 +231,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 					return nil, fmt.Errorf("signer missing: %v", err)
 				}
 
-				cli.Authorize(eb, wallet.SignData)
+				cli.Authorize(eb)
 
 				authorized = true
 			}
@@ -315,7 +315,7 @@ func (s *Server) Stop() {
 
 func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error {
 	// Check the global metrics if they're matching with the provided config
-	if metrics.Enabled != config.Enabled {
+	if metrics.Enabled() != config.Enabled {
 		log.Warn(
 			"Metric misconfiguration, some of them might not be visible",
 			"metrics", metrics.Enabled,
@@ -325,9 +325,11 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 	}
 
 	// Update the values anyways (for services which don't need immediate attention)
-	metrics.Enabled = config.Enabled
+	if config.Enabled {
+		metrics.Enable()
+	}
 
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		// metrics are disabled, do not set up any sink
 		return nil
 	}

@@ -206,7 +206,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	stack, cfg := makeConfigNode(ctx)
 	if ctx.IsSet(utils.OverridePrague.Name) {
 		v := ctx.Uint64(utils.OverridePrague.Name)
-		cfg.Eth.OverridePrague = &v
+		cfg.Eth.OverridePrague = new(big.Int).SetUint64(v)
 	}
 	if ctx.IsSet(utils.OverrideVerkle.Name) {
 		v := ctx.Int64(utils.OverrideVerkle.Name)

@@ -698,6 +698,11 @@ func (b testBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (
 func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("implement me")
 }
+
+func (b testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	panic("implement me")
+}
+
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts

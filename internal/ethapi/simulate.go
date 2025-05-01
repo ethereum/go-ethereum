@@ -81,7 +81,7 @@ type simBlockResult struct {
 }
 
 func (r *simBlockResult) MarshalJSON() ([]byte, error) {
-	blockData := RPCMarshalBlock(r.Block, true, r.fullTx, r.chainConfig)
+	blockData := RPCMarshalBlock(r.Block, true, r.fullTx, r.chainConfig, nil)
 	blockData["calls"] = r.Calls
 	return json.Marshal(blockData)
 }
@@ -106,6 +106,10 @@ func (m *simChainHeadReader) Config() *params.ChainConfig {
 
 func (m *simChainHeadReader) CurrentHeader() *types.Header {
 	return m.Backend.CurrentHeader()
+}
+
+func (m *simChainHeadReader) GetTd(hash common.Hash, number uint64) *big.Int {
+	return nil
 }
 
 func (m *simChainHeadReader) GetHeader(hash common.Hash, number uint64) *types.Header {

@@ -128,14 +128,6 @@ var (
 		Hidden:   true,
 		Category: traceCategory,
 	}
-	refTestFlag = &cli.StringFlag{
-		Name:  "test",
-		Usage: "Path to EOF validation reference test.",
-	}
-	hexFlag = &cli.StringFlag{
-		Name:  "hex",
-		Usage: "single container data parse and validation",
-	}
 )
 
 // Command definitions.
