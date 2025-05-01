@@ -158,8 +158,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
 	}
-	// Pending blocks do not return a block hash, set it to empty hash explicitly
-	// for sender caching.
+	// Pending blocks don't return a block hash, compute it for sender caching.
 	if body.Hash == nil {
 		tmp := head.Hash()
 		body.Hash = &tmp
