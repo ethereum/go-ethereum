@@ -564,7 +564,7 @@ func TestFreezerOffset(t *testing.T) {
 	}
 
 	// Write 6 x 20 bytes, splitting out into three files
-	batch := f.newBatch()
+	batch := f.newBatch(0)
 	require.NoError(t, batch.AppendRaw(0, getChunk(20, 0xFF)))
 	require.NoError(t, batch.AppendRaw(1, getChunk(20, 0xEE)))
 
@@ -589,7 +589,7 @@ func TestFreezerOffset(t *testing.T) {
 	t.Log(f.dumpIndexString(0, 100))
 
 	// It should allow writing item 6.
-	batch = f.newBatch()
+	batch = f.newBatch(6)
 	require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x99)))
 	require.NoError(t, batch.commit())
 
@@ -1540,7 +1540,7 @@ func TestFlushOffsetTracking(t *testing.T) {
 			// Data files:
 			//   F1(10 items) -> F2(10 items) -> F3(10 items) -> F4(10 items, full)
 			func(f *freezerTable) {
-				batch := f.newBatch()
+				batch := f.newBatch(0)
 				for i := 0; i < 5; i++ {
 					batch.AppendRaw(items+uint64(i), make([]byte, dataSize))
 				}
@@ -1554,7 +1554,7 @@ func TestFlushOffsetTracking(t *testing.T) {
 			// Data files:
 			//   F1(10 items) -> F2(10 items) -> F3(10 items) -> F4(10 items) -> F5(1 item)
 			func(f *freezerTable) {
-				batch := f.newBatch()
+				batch := f.newBatch(0)
 				batch.AppendRaw(items+5, make([]byte, dataSize))
 				batch.commit()
 			},

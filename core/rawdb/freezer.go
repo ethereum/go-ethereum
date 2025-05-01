@@ -493,7 +493,7 @@ func (f *Freezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	// Set up new dir for the migrated table, the content of which
 	// we'll at the end move over to the ancients dir.
 	migrationPath := filepath.Join(ancientsPath, "migration")
-	newTable, err := newFreezerTable(migrationPath, kind, table.noCompression, false)
+	newTable, err := newFreezerTable(migrationPath, kind, table.config, false)
 	if err != nil {
 		return err
 	}

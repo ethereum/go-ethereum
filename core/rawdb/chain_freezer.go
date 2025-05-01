@@ -53,7 +53,7 @@ type chainFreezer struct {
 // NewChainFreezer is a small utility method around NewFreezer that sets the
 // default parameters for the chain storage.
 func NewChainFreezer(datadir string, namespace string, readonly bool, offset uint64) (*Freezer, error) {
-	return NewFreezer(datadir, namespace, readonly, offset, freezerTableSize, chainFreezerNoSnappy)
+	return NewFreezer(datadir, namespace, readonly, offset, freezerTableSize, chainFreezerTableConfigs)
 }
 
 // newChainFreezer initializes the freezer for ancient chain segment.
