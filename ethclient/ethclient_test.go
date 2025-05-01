@@ -119,7 +119,7 @@ func newTestBackend(config *node.Config) (*node.Node, []*types.Block, error) {
 	}
 	// Ensure the tx indexing is fully generated
 	for ; ; time.Sleep(time.Millisecond * 100) {
-		progress, err := ethservice.BlockChain().TxIndexProgress()
+		progress, err := ethservice.BlockChain().TxIndexProgress(context.Background())
 		if err == nil && progress.Done() {
 			break
 		}

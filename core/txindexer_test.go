@@ -440,7 +440,7 @@ func TestTxIndexerReport(t *testing.T) {
 		if c.tail != nil {
 			rawdb.WriteTxIndexTail(db, *c.tail)
 		}
-		p := indexer.report(c.head)
+		p := indexer.report(c.head, c.tail)
 		if p.Indexed != c.expIndexed {
 			t.Fatalf("Unexpected indexed: %d, expected: %d", p.Indexed, c.expIndexed)
 		}
