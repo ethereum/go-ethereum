@@ -144,8 +144,8 @@ func (api *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
 // - highestBlock:  block number of the highest block header this node has received from peers
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
-func (api *EthereumAPI) Syncing() (interface{}, error) {
-	progress := api.b.SyncProgress()
+func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
+	progress := api.b.SyncProgress(ctx)
 
 	// Return not syncing if the synchronisation already completed
 	if progress.Done() {

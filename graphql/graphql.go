@@ -1530,8 +1530,8 @@ func (s *SyncState) TxIndexRemainingBlocks() hexutil.Uint64 {
 // - healingBytecode:     number of bytecodes pending
 // - txIndexFinishedBlocks:  number of blocks whose transactions are indexed
 // - txIndexRemainingBlocks: number of blocks whose transactions are not indexed yet
-func (r *Resolver) Syncing() (*SyncState, error) {
-	progress := r.backend.SyncProgress()
+func (r *Resolver) Syncing(ctx context.Context) (*SyncState, error) {
+	progress := r.backend.SyncProgress(ctx)
 
 	// Return not syncing if the synchronisation already completed
 	if progress.Done() {

@@ -472,7 +472,9 @@ func (b *testBackend) setPendingBlock(block *types.Block) {
 	b.pending = block
 }
 
-func (b testBackend) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
+func (b testBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
+	return ethereum.SyncProgress{}
+}
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil
 }

@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -277,7 +278,7 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 // A null will be returned in the transaction is not found and background
 // transaction indexing is already finished. The transaction is not existent
 // from the node's perspective.
-func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction, error) {
+func (bc *BlockChain) GetTransactionLookup(ctx context.Context, hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction, error) {
 	bc.txLookupLock.RLock()
 	defer bc.txLookupLock.RUnlock()
 
@@ -287,7 +288,7 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 	}
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
 	if tx == nil {
-		progress, err := bc.TxIndexProgress()
+		progress, err := bc.TxIndexProgress(ctx)
 		if err != nil {
 			// No error is returned if the transaction indexing progress is unreachable
 			// due to unexpected internal errors. In such cases, it is impossible to
@@ -408,11 +409,11 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 }
 
 // TxIndexProgress returns the transaction indexing progress.
-func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
+func (bc *BlockChain) TxIndexProgress(ctx context.Context) (TxIndexProgress, error) {
 	if bc.txIndexer == nil {
 		return TxIndexProgress{}, errors.New("tx indexer is not enabled")
 	}
-	return bc.txIndexer.txIndexProgress()
+	return bc.txIndexer.txIndexProgress(ctx)
 }
 
 // HistoryPruningCutoff returns the configured history pruning point.

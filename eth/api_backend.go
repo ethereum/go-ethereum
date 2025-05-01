@@ -357,7 +357,7 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 // indexing is already finished. The transaction is not existent from the perspective
 // of node.
 func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
-	lookup, tx, err := b.eth.blockchain.GetTransactionLookup(txHash)
+	lookup, tx, err := b.eth.blockchain.GetTransactionLookup(ctx, txHash)
 	if err != nil {
 		return false, nil, common.Hash{}, 0, 0, err
 	}
@@ -391,9 +391,9 @@ func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.S
 	return b.eth.txPool.SubscribeTransactions(ch, true)
 }
 
-func (b *EthAPIBackend) SyncProgress() ethereum.SyncProgress {
+func (b *EthAPIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
 	prog := b.eth.Downloader().Progress()
-	if txProg, err := b.eth.blockchain.TxIndexProgress(); err == nil {
+	if txProg, err := b.eth.blockchain.TxIndexProgress(ctx); err == nil {
 		prog.TxIndexFinishedBlocks = txProg.Indexed
 		prog.TxIndexRemainingBlocks = txProg.Remaining
 	}
