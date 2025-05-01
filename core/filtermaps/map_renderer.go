@@ -473,7 +473,7 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 		// in order to always ensure continuous block pointers, initialize
 		// blockNumber based on the last block of the previous map, then verify
 		// against the first block associated with each rendered map
-		lastBlock, _, err := r.f.getLastBlockOfMap(r.finished.First()-1)
+		lastBlock, _, err := r.f.getLastBlockOfMap(r.finished.First() - 1)
 		if err != nil {
 			return fmt.Errorf("failed to get last block of previous map %d: %v", r.finished.First()-1, err)
 		}
