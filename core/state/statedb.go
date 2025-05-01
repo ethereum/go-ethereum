@@ -416,7 +416,7 @@ func (s *StateDB) ApplyMVWriteSet(writes []blockstm.WriteDescriptor) {
 			case BalancePath:
 				s.SetBalance(addr, sr.GetBalance(addr), tracing.BalanceChangeUnspecified)
 			case NoncePath:
-				s.SetNonce(addr, sr.GetNonce(addr))
+				s.SetNonce(addr, sr.GetNonce(addr), tracing.NonceChangeUnspecified)
 			case CodePath:
 				s.SetCode(addr, sr.GetCode(addr))
 			case SuicidePath:
@@ -665,19 +665,12 @@ func (s *StateDB) Version() blockstm.Version {
 }
 
 func (s *StateDB) GetCode(addr common.Address) []byte {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		if s.witness != nil {
-			s.witness.AddCode(stateObject.Code())
-		}
-		return stateObject.Code()
-	}
-}
-
-func (s *StateDB) GetCode(addr common.Address) []byte {
 	return MVRead(s, blockstm.NewSubpathKey(addr, CodePath), nil, func(s *StateDB) []byte {
 		stateObject := s.getStateObject(addr)
 		if stateObject != nil {
+			if s.witness != nil {
+				s.witness.AddCode(stateObject.Code())
+			}
 			return stateObject.Code()
 		}
 
@@ -965,7 +958,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(addr common.Address) {
 	// Track the amount of time wasted on deleting the account from the trie
-	if metrics.Enabled {
+	if metrics.Enabled() {
 		defer func(start time.Time) { s.AccountUpdates += time.Since(start) }(time.Now())
 	}
 

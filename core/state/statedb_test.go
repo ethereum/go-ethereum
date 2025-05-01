@@ -1185,13 +1185,13 @@ func TestApplyMVWriteSet(t *testing.T) {
 	// Tx1 write
 	states[1].SetState(addr1, key2, val2)
 	states[1].SetBalance(addr1, balance2, tracing.BalanceChangeTransfer)
-	states[1].SetNonce(addr1, 1)
+	states[1].SetNonce(addr1, 1, tracing.NonceChangeUnspecified)
 	states[1].Finalise(true)
 	states[1].FlushMVWriteSet()
 
 	sSingleProcess.SetState(addr1, key2, val2)
 	sSingleProcess.SetBalance(addr1, balance2, tracing.BalanceChangeTransfer)
-	sSingleProcess.SetNonce(addr1, 1)
+	sSingleProcess.SetNonce(addr1, 1, tracing.NonceChangeUnspecified)
 
 	sClean.ApplyMVWriteSet(states[1].MVWriteList())
 
@@ -1200,13 +1200,13 @@ func TestApplyMVWriteSet(t *testing.T) {
 	// Tx2 write
 	states[2].SetState(addr1, key1, val2)
 	states[2].SetBalance(addr1, balance2, tracing.BalanceChangeTransfer)
-	states[2].SetNonce(addr1, 2)
+	states[2].SetNonce(addr1, 2, tracing.NonceChangeUnspecified)
 	states[2].Finalise(true)
 	states[2].FlushMVWriteSet()
 
 	sSingleProcess.SetState(addr1, key1, val2)
 	sSingleProcess.SetBalance(addr1, balance2, tracing.BalanceChangeTransfer)
-	sSingleProcess.SetNonce(addr1, 2)
+	sSingleProcess.SetNonce(addr1, 2, tracing.NonceChangeUnspecified)
 
 	sClean.ApplyMVWriteSet(states[2].MVWriteList())
 

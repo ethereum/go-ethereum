@@ -77,7 +77,7 @@ func (m *SortedMap) Get(nonce uint64) *types.Transaction {
 	return m.items[nonce]
 }
 
-func (m *sortedMap) Has(nonce uint64) bool {
+func (m *SortedMap) Has(nonce uint64) bool {
 	if m == nil {
 		return false
 	}
@@ -273,7 +273,7 @@ func (m *SortedMap) flatten() types.Transactions {
 	return m.cache
 }
 
-func (m *sortedMap) lastElement() *types.Transaction {
+func (m *SortedMap) lastElement() *types.Transaction {
 	cache := m.flatten()
 	return cache[len(cache)-1]
 }

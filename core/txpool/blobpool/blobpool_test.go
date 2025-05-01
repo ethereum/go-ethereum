@@ -139,7 +139,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		tmp := mid.Uint64()
 		if eip4844.CalcBlobFee(bc.Config(), &types.Header{
 			Number:        blockNumber,
-			Time:          blockTime,
+			Time:          uint64(blockTime),
 			ExcessBlobGas: &tmp,
 		}).Cmp(bc.blobfee.ToBig()) > 0 {
 			hi = mid
