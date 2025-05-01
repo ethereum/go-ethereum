@@ -77,7 +77,7 @@ func TestWaitDeployed(t *testing.T) {
 		)
 
 		go func() {
-			address, err = bind.WaitDeployed(ctx, backend.Client(), tx.Hash())
+			address, err = bind.WaitDeployed(ctx, backend.Client, tx.Hash())
 			close(mined)
 		}()
 
@@ -125,7 +125,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 		t.Errorf("failed to send transaction: %q", err)
 	}
 	backend.Commit()
-	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx.Hash()); err != bind.ErrNoAddressInReceipt {
+	if _, err := bind.WaitDeployed(ctx, backend.Client, tx.Hash()); err != bind.ErrNoAddressInReceipt {
 		t.Errorf("error mismatch: want %q, got %q, ", bind.ErrNoAddressInReceipt, err)
 	}
 
@@ -135,7 +135,7 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 
 	go func() {
 		contextCanceled := errors.New("context canceled")
-		if _, err := bind.WaitDeployed(ctx, backend.Client(), tx.Hash()); err.Error() != contextCanceled.Error() {
+		if _, err := bind.WaitDeployed(ctx, backend.Client, tx.Hash()); err.Error() != contextCanceled.Error() {
 			t.Errorf("error mismatch: want %q, got %q, ", contextCanceled, err)
 		}
 	}()

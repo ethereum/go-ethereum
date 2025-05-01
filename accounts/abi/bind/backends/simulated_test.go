@@ -229,7 +229,7 @@ func TestNewAdjustTimeFail(t *testing.T) {
 func TestBalanceAt(t *testing.T) {
 	t.Parallel()
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	expectedBal := uint256.NewInt(10000000000000000)
+	expectedBal := uint256.NewInt(10000000000000000).ToBig()
 
 	sim := simTestBackend(testAddr)
 	defer sim.Close()

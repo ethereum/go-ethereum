@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
@@ -97,7 +98,7 @@ func (mc *mockCaller) CallContract(ctx context.Context, call ethereum.CallMsg, b
 	return mc.callContractBytes, mc.callContractErr
 }
 
-func (mc *mockCaller) CallWithState(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, state *state.StateDB, overrides *ethapi.StateOverride, blockOverrides *ethapi.BlockOverrides) (hexutil.Bytes, error) {
+func (mc *mockCaller) CallWithState(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, state *state.StateDB, overrides *override.StateOverride, blockOverrides *override.BlockOverrides) (hexutil.Bytes, error) {
 	return mc.CallContract(ctx, ethereum.CallMsg{}, nil)
 }
 
