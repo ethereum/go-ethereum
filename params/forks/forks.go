@@ -24,8 +24,8 @@ const (
 	FrontierThawing
 	Homestead
 	DAO
-	TangerineWhistle // a.k.a. the EIP150 fork
-	SpuriousDragon   // a.k.a. the EIP155 fork
+	TangerineWhistle
+	SpuriousDragon
 	Byzantium
 	Constantinople
 	Petersburg
