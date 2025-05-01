@@ -246,9 +246,12 @@ func initGenesis(ctx *cli.Context) error {
 	triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
 	defer triedb.Close()
 
-	_, hash, _, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
+	_, hash, compatErr, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
 	if err != nil {
 		utils.Fatalf("Failed to write genesis block: %v", err)
+	}
+	if compatErr != nil {
+		utils.Fatalf("Failed to write chain config: %v", compatErr)
 	}
 	log.Info("Successfully wrote genesis state", "database", "chaindata", "hash", hash)
 
