@@ -312,10 +312,14 @@ func (indexer *txIndexer) txIndexProgress(ctx context.Context) (TxIndexProgress,
 		case prog := <-ch:
 			return prog, nil
 		case <-ctx.Done():
+			// Since the channel is buffered the loop will not block
+			// eventually when it prepares the response.
 			return TxIndexProgress{}, ctx.Err()
 		}
 	case <-indexer.closed:
 		return TxIndexProgress{}, errors.New("indexer is closed")
+	case <-ctx.Done():
+		return TxIndexProgress{}, ctx.Err()
 	}
 }
 
