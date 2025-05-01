@@ -158,6 +158,13 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
 	}
+	// Pending blocks do not return a block hash, set it to empty hash explicitly
+	// for sender caching.
+	if body.Hash == nil {
+		tmp := head.Hash()
+		body.Hash = &tmp
+	}
+
 	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
 	if head.UncleHash == types.EmptyUncleHash && len(body.UncleHashes) > 0 {
 		return nil, errors.New("server returned non-empty uncle list but block header indicates no uncles")
@@ -198,7 +205,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	// Fill the sender cache of transactions in the block.
 	txs := make([]*types.Transaction, len(body.Transactions))
 	for i, tx := range body.Transactions {
-		if tx.From != nil && body.Hash != nil {
+		if tx.From != nil {
 			setSenderFromServer(tx.tx, *tx.From, *body.Hash)
 		}
 		txs[i] = tx.tx

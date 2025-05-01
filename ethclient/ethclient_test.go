@@ -625,6 +625,21 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	if gas != 21000 {
 		t.Fatalf("unexpected gas limit: %v", gas)
 	}
+
+	// Verify that sender address of pending transaction is saved in cache.
+	pendingBlock, err := ec.BlockByNumber(context.Background(), big.NewInt(int64(rpc.PendingBlockNumber)))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// No additional RPC should be required, ensure the server is not asked by
+	// canceling the context.
+	sender, err := ec.TransactionSender(newCanceledContext(), pendingBlock.Transactions()[0], pendingBlock.Hash(), 0)
+	if err != nil {
+		t.Fatal("unable to recover sender:", err)
+	}
+	if sender != testAddr {
+		t.Fatal("wrong sender:", sender)
+	}
 }
 
 func testTransactionSender(t *testing.T, client *rpc.Client) {
@@ -646,10 +661,7 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 
 	// The sender address is cached in tx1, so no additional RPC should be required in
 	// TransactionSender. Ensure the server is not asked by canceling the context here.
-	canceledCtx, cancel := context.WithCancel(context.Background())
-	cancel()
-	<-canceledCtx.Done() // Ensure the close of the Done channel
-	sender1, err := ec.TransactionSender(canceledCtx, tx1, block2.Hash(), 0)
+	sender1, err := ec.TransactionSender(newCanceledContext(), tx1, block2.Hash(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -666,6 +678,13 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 	if sender2 != testAddr {
 		t.Fatal("wrong sender:", sender2)
 	}
+}
+
+func newCanceledContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	<-ctx.Done() // Ensure the close of the Done channel
+	return ctx
 }
 
 func sendTransaction(ec *ethclient.Client) error {
