@@ -221,7 +221,7 @@ func (h *Header) ValidateBlockNumberOptionsPIP15(minBlockNumber *big.Int, maxBlo
 	return nil
 }
 
-// ValidateBlockNumberOptionsPIP15 validates the timestamp range passed as in the options parameter in the conditional transaction (PIP-15)
+// ValidateTimestampOptionsPIP15 validates the timestamp range passed as in the options parameter in the conditional transaction (PIP-15)
 func (h *Header) ValidateTimestampOptionsPIP15(minTimestamp *uint64, maxTimestamp *uint64) error {
 	currentBlockTime := h.Time
 
