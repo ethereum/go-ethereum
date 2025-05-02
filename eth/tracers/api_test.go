@@ -833,7 +833,6 @@ func TestTracingWithOverrides(t *testing.T) {
 					},
 				},
 			},
-			//want: `{"gas":46900,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000539"}`,
 			want: `{"gas":44100,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000001"}`,
 		},
 		{ // No state override
@@ -858,7 +857,6 @@ func TestTracingWithOverrides(t *testing.T) {
 					},
 				},
 			},
-			want: `{"gas":25288,"failed":false,"returnValue":"0000000000000000000000000000000000000000000000000000000000000011"}`,
 			want: `{"gas":25288,"failed":false,"returnValue":"0x0000000000000000000000000000000000000000000000000000000000000077"}`,
 		},
 		{ // Full state override
@@ -1442,7 +1440,7 @@ func TestTraceBadBlock(t *testing.T) {
 		// Trace existing bad block
 		{
 			blockHash:  badBlockHash,
-			wantResult: fmt.Sprintf(`[{"txHash":"%v","result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}}]`, badTxHash.Hex()),
+			wantResult: fmt.Sprintf(`[{"txHash":"%v","result":{"gas":21000,"failed":false,"returnValue":"0x","structLogs":[]}}]`, badTxHash.Hex()),
 		},
 	}
 
