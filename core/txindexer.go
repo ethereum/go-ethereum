@@ -220,7 +220,7 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 		stop     chan struct{}                       // Non-nil if background routine is active
 		done     chan struct{}                       // Non-nil if background routine is active
 		head     = indexer.resolveHead()             // The latest announced chain head
-		lastTail = rawdb.ReadTxIndexTail(indexer.db) // // The oldest indexed block, nil means nothing indexed
+		lastTail = rawdb.ReadTxIndexTail(indexer.db) // The oldest indexed block, nil means nothing indexed
 
 		headCh = make(chan ChainHeadEvent)
 		sub    = chain.SubscribeChainHeadEvent(headCh)

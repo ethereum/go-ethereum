@@ -271,8 +271,7 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 // GetTransactionLookup retrieves the lookup along with the transaction
 // itself associate with the given transaction hash.
 //
-// A null will be returned in the transaction is not found. The transaction is not existent
-// // from the node's perspective. This can be due to
+// A null will be returned if the transaction is not found. This can be due to
 // the transaction indexer not being finished. The caller must explicitly check
 // the indexer progress.
 func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction) {
@@ -312,10 +311,7 @@ func (bc *BlockChain) TxIndexDone(ctx context.Context) bool {
 		// this is clearly an unintended and unexpected situation.
 		return true
 	}
-	if !progress.Done() {
-		return false
-	}
-	return true
+	return progress.Done()
 }
 
 // HasState checks if state trie is fully present in the database or not.
