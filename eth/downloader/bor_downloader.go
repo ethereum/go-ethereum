@@ -267,10 +267,10 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 
 	current := uint64(0)
 	mode := d.getMode()
-	switch mode {
-	case FullSync:
+	switch {
+	case d.blockchain != nil && mode == FullSync:
 		current = d.blockchain.CurrentBlock().Number.Uint64()
-	case SnapSync:
+	case d.blockchain != nil && mode == SnapSync:
 		current = d.blockchain.CurrentSnapBlock().Number.Uint64()
 	case d.lightchain != nil:
 		current = d.lightchain.CurrentHeader().Number.Uint64()

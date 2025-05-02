@@ -254,7 +254,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
 		// Start dev mode.
-		simBeacon, err := catalyst.NewSimulatedBeacon(ctx.Uint64(utils.DeveloperPeriodFlag.Name), cfg.Eth.Miner.PendingFeeRecipient, eth)
+		simBeacon, err := catalyst.NewSimulatedBeacon(ctx.Uint64(utils.DeveloperPeriodFlag.Name), common.Address{}, eth)
 		if err != nil {
 			utils.Fatalf("failed to register dev mode catalyst service: %v", err)
 		}

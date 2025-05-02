@@ -1394,7 +1394,7 @@ func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 		return
 	}
 
-	cfg.Miner.PendingFeeRecipient = common.BytesToAddress(b)
+	cfg.Miner.Etherbase = common.BytesToAddress(b)
 
 }
 
