@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -200,9 +199,9 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	var chainHead *types.Header
 
 	switch d.getMode() {
-	case ethconfig.FullSync:
+	case FullSync:
 		chainHead = d.blockchain.CurrentBlock()
-	case ethconfig.SnapSync:
+	case SnapSync:
 		chainHead = d.blockchain.CurrentSnapBlock()
 	default:
 		chainHead = d.lightchain.CurrentHeader()
@@ -222,9 +221,9 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 
 	var linked bool
 	switch d.getMode() {
-	case ethconfig.FullSync:
+	case FullSync:
 		linked = d.blockchain.HasBlock(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
-	case ethconfig.SnapSync:
+	case SnapSync:
 		linked = d.blockchain.HasFastBlock(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
 	default:
 		linked = d.blockchain.HasHeader(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
@@ -260,9 +259,9 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		var known bool
 
 		switch d.getMode() {
-		case ethconfig.FullSync:
+		case FullSync:
 			known = d.blockchain.HasBlock(h.Hash(), n)
-		case ethconfig.SnapSync:
+		case SnapSync:
 			known = d.blockchain.HasFastBlock(h.Hash(), n)
 		default:
 			known = d.lightchain.HasHeader(h.Hash(), n)
