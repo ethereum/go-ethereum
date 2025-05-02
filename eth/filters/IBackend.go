@@ -10,10 +10,10 @@ import (
 
 	common "github.com/ethereum/go-ethereum/common"
 	core "github.com/ethereum/go-ethereum/core"
-	bloombits "github.com/ethereum/go-ethereum/core/bloombits"
 	types "github.com/ethereum/go-ethereum/core/types"
 	ethdb "github.com/ethereum/go-ethereum/ethdb"
 	event "github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	params "github.com/ethereum/go-ethereum/params"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 	gomock "github.com/golang/mock/gomock"
@@ -204,17 +204,6 @@ func (mr *MockBackendMockRecorder) HeaderByNumber(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumber", reflect.TypeOf((*MockBackend)(nil).HeaderByNumber), arg0, arg1)
 }
 
-// ServiceFilter mocks base method.
-func (m *MockBackend) ServiceFilter(arg0 context.Context, arg1 *bloombits.MatcherSession) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ServiceFilter", arg0, arg1)
-}
-
-// ServiceFilter indicates an expected call of ServiceFilter.
-func (mr *MockBackendMockRecorder) ServiceFilter(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ServiceFilter", reflect.TypeOf((*MockBackend)(nil).ServiceFilter), arg0, arg1)
-}
 
 // SubscribeChainEvent mocks base method.
 func (m *MockBackend) SubscribeChainEvent(arg0 chan<- core.ChainEvent) event.Subscription {
@@ -298,4 +287,12 @@ func (m *MockBackend) SubscribeStateSyncEvent(arg0 chan<- core.StateSyncEvent) e
 func (mr *MockBackendMockRecorder) SubscribeStateSyncEvent(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeStateSyncEvent", reflect.TypeOf((*MockBackend)(nil).SubscribeStateSyncEvent), arg0)
+}
+
+func (m *MockBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+	panic("implement me")
+}
+
+func (mr *MockBackendMockRecorder) NewMatcherBackend() filtermaps.MatcherBackend {
+	panic("implement me")
 }
