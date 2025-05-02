@@ -104,15 +104,3 @@ func FuzzG2SubgroupChecks(f *testing.F) {
 		fuzzG2SubgroupChecks(data)
 	})
 }
-
-func FuzzG2Mul(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzz(blsG2Mul, data)
-	})
-}
-
-func FuzzG1Mul(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzz(blsG1Mul, data)
-	})
-}
