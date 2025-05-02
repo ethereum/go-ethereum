@@ -229,7 +229,7 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block) 
 		return t.tx, t.block
 	}
 	// Try to return an already finalized transaction
-	found, tx, blockHash, _, index, _ := t.r.backend.GetTransaction(ctx, t.hash)
+	found, tx, blockHash, _, index := t.r.backend.GetTransaction(t.hash)
 	if found {
 		t.tx = tx
 		blockNrOrHash := rpc.BlockNumberOrHashWithHash(blockHash, false)

@@ -82,7 +82,8 @@ type Backend interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error)
+	GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64)
+	TxIndexDone(ctx context.Context) bool
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -858,12 +859,13 @@ func containsTx(block *types.Block, hash common.Hash) bool {
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
-	found, _, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
-	if err != nil {
-		return nil, ethapi.NewTxIndexingError()
-	}
-	// Only mined txes are supported
+	found, _, blockHash, blockNumber, index := api.backend.GetTransaction(hash)
 	if !found {
+		// Warn in case tx indexer is not done.
+		if !api.backend.TxIndexDone(ctx) {
+			return nil, ethapi.NewTxIndexingError()
+		}
+		// Only mined txes are supported
 		return nil, errTxNotFound
 	}
 	// It shouldn't happen in practice.

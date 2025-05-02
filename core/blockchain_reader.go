@@ -275,17 +275,17 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 // // from the node's perspective. This can be due to
 // the transaction indexer not being finished. The caller must explicitly check
 // the indexer progress.
-func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction, error) {
+func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction) {
 	bc.txLookupLock.RLock()
 	defer bc.txLookupLock.RUnlock()
 
 	// Short circuit if the txlookup already in the cache, retrieve otherwise
 	if item, exist := bc.txLookupCache.Get(hash); exist {
-		return item.lookup, item.transaction, nil
+		return item.lookup, item.transaction
 	}
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
 	if tx == nil {
-		return nil, nil, nil
+		return nil, nil
 	}
 	lookup := &rawdb.LegacyTxLookupEntry{
 		BlockHash:  blockHash,
@@ -296,11 +296,11 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 		lookup:      lookup,
 		transaction: tx,
 	})
-	return lookup, tx, nil
+	return lookup, tx
 }
 
 // TxIndexDone returns true if the transaction indexer has finished indexing.
-func (bc *BlockChain) TxIndexDone(ctx context.Context) (bool, error) {
+func (bc *BlockChain) TxIndexDone(ctx context.Context) bool {
 	progress, err := bc.TxIndexProgress(ctx)
 	if err != nil {
 		// No error is returned if the transaction indexing progress is unreachable
@@ -310,12 +310,12 @@ func (bc *BlockChain) TxIndexDone(ctx context.Context) (bool, error) {
 		//
 		// In such scenarios, the transaction is treated as unreachable, though
 		// this is clearly an unintended and unexpected situation.
-		return true, nil
+		return true
 	}
 	if !progress.Done() {
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 // HasState checks if state trie is fully present in the database or not.
