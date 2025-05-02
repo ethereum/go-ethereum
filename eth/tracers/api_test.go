@@ -992,7 +992,7 @@ func TestTraceChain(t *testing.T) {
 		for j := 0; j < i+1; j++ {
 			tx, _ := types.SignTx(types.NewTransaction(nonce, accounts[1].addr, big.NewInt(1000), params.TxGas, b.BaseFee(), nil), signer, accounts[0].key)
 			b.AddTx(tx)
-			nonce += 1
+			nonce++
 		}
 	})
 	backend.refHook = func() { ref.Add(1) }
@@ -1167,6 +1167,8 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 		config    *StdTraceConfig
 		wantFiles int
 		wantErr   error
+		txCount   int  // Expected number of transactions in the trace
+		hasTx     bool // Whether trace should contain our specific txHash
 	}{
 		// Trace genesis block, expect error
 		{
@@ -1177,6 +1179,8 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 		{
 			blockHash: backend.chain.CurrentBlock().Hash(),
 			wantFiles: 1,
+			txCount:   1,
+			hasTx:     true,
 		},
 		// Trace non-existent block
 		{
@@ -1190,6 +1194,8 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 				TxHash: txHash,
 			},
 			wantFiles: 1,
+			txCount:   1,
+			hasTx:     true,
 		},
 	}
 
@@ -1213,11 +1219,61 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 			t.Errorf("test %d: wrong number of files, want %d, got %d", i, tc.wantFiles, len(files))
 			continue
 		}
-		// Verify files exist and are readable
+
+		// Verify files exist, are readable, and contain the expected content
 		for _, f := range files {
 			if _, err := os.Stat(f); err != nil {
 				t.Errorf("test %d: file %s not accessible: %v", i, f, err)
+				continue
 			}
+
+			// Read and parse the trace file
+			data, err := os.ReadFile(f)
+			if err != nil {
+				t.Errorf("test %d: cannot read file %s: %v", i, f, err)
+				continue
+			}
+
+			var traces []map[string]interface{}
+			if err := json.Unmarshal(data, &traces); err != nil {
+				t.Errorf("test %d: invalid JSON in trace file %s: %v", i, f, err)
+				continue
+			}
+
+			// Verify trace content
+			if len(traces) != tc.txCount {
+				t.Errorf("test %d: wrong transaction count in trace, want %d, got %d",
+					i, tc.txCount, len(traces))
+			}
+
+			// If we expect a specific transaction, verify it's in the trace
+			if tc.hasTx && len(traces) > 0 {
+				found := false
+				for _, trace := range traces {
+					if txHashStr, ok := trace["txHash"].(string); ok {
+						if common.HexToHash(txHashStr) == txHash {
+							found = true
+
+							// Verify trace contains expected fields
+							if _, ok := trace["gas"].(float64); !ok {
+								t.Errorf("test %d: trace missing 'gas' field", i)
+							}
+							if _, ok := trace["failed"].(bool); !ok {
+								t.Errorf("test %d: trace missing 'failed' field", i)
+							}
+							if _, ok := trace["structLogs"].([]interface{}); !ok {
+								t.Errorf("test %d: trace missing 'structLogs' field", i)
+							}
+
+							break
+						}
+					}
+				}
+				if !found {
+					t.Errorf("test %d: transaction %s not found in trace", i, txHash.Hex())
+				}
+			}
+
 			// Cleanup
 			os.Remove(f)
 		}
@@ -1240,6 +1296,7 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 	genBlocks := 1
 	signer := types.HomesteadSigner{}
 	var badBlockHash common.Hash
+	var badTxHash common.Hash
 
 	// Create a bad block by making a transaction that will fail
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
@@ -1253,6 +1310,7 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 			Data:     nil}),
 			signer, accounts[0].key)
 		b.AddTx(tx)
+		badTxHash = tx.Hash()
 	})
 	defer backend.chain.Stop()
 
@@ -1270,6 +1328,7 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 		config    *StdTraceConfig
 		wantFiles int
 		wantErr   error
+		failedTx  bool // Whether trace should contain a failed transaction
 	}{
 		// Trace non-existent bad block
 		{
@@ -1289,6 +1348,7 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 				Reexec: nil,
 			},
 			wantFiles: 1,
+			failedTx:  true,
 		},
 	}
 
@@ -1312,11 +1372,49 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 			t.Errorf("test %d: wrong number of files, want %d, got %d", i, tc.wantFiles, len(files))
 			continue
 		}
-		// Verify files exist and are readable
+
+		// Verify files exist, are readable, and contain the expected content
 		for _, f := range files {
 			if _, err := os.Stat(f); err != nil {
 				t.Errorf("test %d: file %s not accessible: %v", i, f, err)
+				continue
 			}
+
+			// Read and parse the trace file
+			data, err := os.ReadFile(f)
+			if err != nil {
+				t.Errorf("test %d: cannot read file %s: %v", i, f, err)
+				continue
+			}
+
+			var traces []map[string]interface{}
+			if err := json.Unmarshal(data, &traces); err != nil {
+				t.Errorf("test %d: invalid JSON in trace file %s: %v", i, f, err)
+				continue
+			}
+
+			// Verify that the trace includes the bad transaction
+			if tc.failedTx {
+				found := false
+				for _, trace := range traces {
+					if txHashStr, ok := trace["txHash"].(string); ok {
+						if common.HexToHash(txHashStr) == badTxHash {
+							found = true
+
+							// For a bad block trace, we expect failed=true
+							if failed, ok := trace["failed"].(bool); !ok || !failed {
+								t.Errorf("test %d: bad transaction should have failed=true", i)
+							}
+
+							break
+						}
+					}
+				}
+				if !found {
+					t.Errorf("test %d: bad transaction %s not found in trace", i, badTxHash.Hex())
+				}
+			}
+
 			// Cleanup
 			os.Remove(f)
 		}
@@ -1339,6 +1437,7 @@ func TestTraceBadBlock(t *testing.T) {
 	genBlocks := 1
 	signer := types.HomesteadSigner{}
 	var badBlockHash common.Hash
+	var badTxHash common.Hash
 
 	// Create a bad block by making a transaction that will fail
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
@@ -1352,6 +1451,7 @@ func TestTraceBadBlock(t *testing.T) {
 			Data:     nil}),
 			signer, accounts[0].key)
 		b.AddTx(tx)
+		badTxHash = tx.Hash()
 	})
 	defer backend.chain.Stop()
 
@@ -1365,10 +1465,10 @@ func TestTraceBadBlock(t *testing.T) {
 	api := NewAPI(backend)
 
 	var testSuite = []struct {
-		blockHash common.Hash
-		config    *TraceConfig
-		want      string
-		wantErr   error
+		blockHash  common.Hash
+		config     *TraceConfig
+		wantErr    error
+		wantResult string
 	}{
 		// Trace non-existent bad block
 		{
@@ -1377,8 +1477,8 @@ func TestTraceBadBlock(t *testing.T) {
 		},
 		// Trace existing bad block
 		{
-			blockHash: badBlockHash,
-			want:      fmt.Sprintf(`[{"txHash":"%v","result":{"gas":21000,"failed":true,"returnValue":"","structLogs":[]}}]`, block.Transactions()[0].Hash()),
+			blockHash:  badBlockHash,
+			wantResult: fmt.Sprintf(`[{"txHash":"%v","result":{"gas":21000,"failed":true,"returnValue":"","structLogs":[]}}]`, badTxHash.Hex()),
 		},
 	}
 
@@ -1398,9 +1498,41 @@ func TestTraceBadBlock(t *testing.T) {
 			t.Errorf("test %d, want no error, got %v", i, err)
 			continue
 		}
+
+		// Verify the trace result content
 		have, _ := json.Marshal(result)
-		if string(have) != tc.want {
-			t.Errorf("test %d: result mismatch, want %v, got %v", i, tc.want, string(have))
+		if string(have) != tc.wantResult {
+			t.Errorf("test %d: result mismatch, want %v, got %v", i, tc.wantResult, string(have))
+		}
+
+		// Verify specific trace result fields
+		if len(result) == 0 {
+			t.Errorf("test %d: empty trace result", i)
+			continue
+		}
+
+		// Verify the transaction hash matches
+		if result[0].TxHash.Hex() != badTxHash.Hex() {
+			t.Errorf("test %d: txHash mismatch, want %s, got %s", i, badTxHash.Hex(), result[0].TxHash.Hex())
+		}
+
+		// Check if the transaction failed by examining the result directly
+		resultMap, err := json.Marshal(result[0].Result)
+		if err != nil {
+			t.Errorf("test %d: failed to marshal result: %v", i, err)
+			continue
+		}
+
+		var parsedResult struct {
+			Failed bool `json:"failed"`
+		}
+		if err := json.Unmarshal(resultMap, &parsedResult); err != nil {
+			t.Errorf("test %d: failed to unmarshal result: %v", i, err)
+			continue
+		}
+
+		if !parsedResult.Failed {
+			t.Errorf("test %d: transaction in bad block should have failed", i)
 		}
 	}
 }
@@ -1420,6 +1552,7 @@ func TestIntermediateRoots(t *testing.T) {
 	}
 	genBlocks := 1
 	signer := types.HomesteadSigner{}
+	var txHashes []common.Hash
 
 	// Create a block with multiple transactions to test intermediate roots
 	backend := newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
@@ -1433,6 +1566,7 @@ func TestIntermediateRoots(t *testing.T) {
 			Data:     nil}),
 			signer, accounts[0].key)
 		b.AddTx(tx1)
+		txHashes = append(txHashes, tx1.Hash())
 
 		// Second transaction: another transfer
 		tx2, _ := types.SignTx(types.NewTx(&types.LegacyTx{
@@ -1444,6 +1578,7 @@ func TestIntermediateRoots(t *testing.T) {
 			Data:     nil}),
 			signer, accounts[0].key)
 		b.AddTx(tx2)
+		txHashes = append(txHashes, tx2.Hash())
 	})
 	defer backend.chain.Stop()
 
@@ -1496,14 +1631,19 @@ func TestIntermediateRoots(t *testing.T) {
 			t.Errorf("test %d: wrong number of roots, want %d, got %d", i, tc.wantLen, len(roots))
 			continue
 		}
-		// Verify that roots are not empty and different from each other
+
+		// Verify each root is valid
+		for j, root := range roots {
+			if root == (common.Hash{}) {
+				t.Errorf("test %d: empty root at position %d", i, j)
+			}
+		}
+
+		// Verify that roots are different from each other
 		if tc.wantLen > 1 {
 			for j := 1; j < len(roots); j++ {
 				if roots[j] == roots[j-1] {
-					t.Errorf("test %d: consecutive roots are identical", i)
-				}
-				if roots[j] == (common.Hash{}) {
-					t.Errorf("test %d: empty root at position %d", i, j)
+					t.Errorf("test %d: consecutive roots are identical at positions %d and %d", i, j-1, j)
 				}
 			}
 		}
