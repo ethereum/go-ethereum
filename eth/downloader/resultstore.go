@@ -76,7 +76,7 @@ func (r *resultStore) SetThrottleThreshold(threshold uint64) uint64 {
 //	throttled - if true, the store is at capacity, this particular header is not prio now
 //	item      - the result to store data into
 //	err       - any error that occurred
-func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, throttled bool, item *fetchResult, err error) {
+func (r *resultStore) AddFetch(header *types.Header, snapSync bool) (stale, throttled bool, item *fetchResult, err error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -86,7 +86,7 @@ func (r *resultStore) AddFetch(header *types.Header, fastSync bool) (stale, thro
 		return stale, throttled, item, err
 	}
 	if item == nil {
-		item = newFetchResult(header, fastSync)
+		item = newFetchResult(header, snapSync)
 		r.items[index] = item
 	}
 	return stale, throttled, item, err

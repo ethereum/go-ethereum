@@ -135,7 +135,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, cancun bool, generat
 	storage, _ := os.MkdirTemp("", "blobpool-")
 	defer os.RemoveAll(storage)
 
-	blobPool := blobpool.New(blobpool.Config{Datadir: storage}, chain)
+	blobPool := blobpool.New(blobpool.Config{Datadir: storage}, chain, nil)
 	legacyPool := legacypool.New(txconfig, chain)
 	txpool, _ := txpool.New(txconfig.PriceLimit, chain, []txpool.SubPool{legacyPool, blobPool})
 
@@ -295,6 +295,34 @@ func testGetBlockHeaders(t *testing.T, protocol uint) {
 				backend.chain.GetBlockByNumber(2).Hash(),
 				backend.chain.GetBlockByNumber(1).Hash(),
 				backend.chain.GetBlockByNumber(0).Hash(),
+			},
+		},
+		// Check a corner case where skipping causes overflow with reverse=false
+		{
+			&GetBlockHeadersRequest{Origin: HashOrNumber{Number: 1}, Amount: 2, Reverse: false, Skip: math.MaxUint64 - 1},
+			[]common.Hash{
+				backend.chain.GetBlockByNumber(1).Hash(),
+			},
+		},
+		// Check a corner case where skipping causes overflow with reverse=true
+		{
+			&GetBlockHeadersRequest{Origin: HashOrNumber{Number: 1}, Amount: 2, Reverse: true, Skip: math.MaxUint64 - 1},
+			[]common.Hash{
+				backend.chain.GetBlockByNumber(1).Hash(),
+			},
+		},
+		// Check another corner case where skipping causes overflow with reverse=false
+		{
+			&GetBlockHeadersRequest{Origin: HashOrNumber{Number: 1}, Amount: 2, Reverse: false, Skip: math.MaxUint64},
+			[]common.Hash{
+				backend.chain.GetBlockByNumber(1).Hash(),
+			},
+		},
+		// Check another corner case where skipping causes overflow with reverse=true
+		{
+			&GetBlockHeadersRequest{Origin: HashOrNumber{Number: 1}, Amount: 2, Reverse: true, Skip: math.MaxUint64},
+			[]common.Hash{
+				backend.chain.GetBlockByNumber(1).Hash(),
 			},
 		},
 		// Check a corner case where skipping overflow loops back into the chain start

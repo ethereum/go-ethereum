@@ -9,12 +9,11 @@ beacon/light/                   @zsfelfoldi
 beacon/merkle/                  @zsfelfoldi 
 beacon/types/                   @zsfelfoldi @fjl
 beacon/params/                  @zsfelfoldi @fjl
-cmd/clef/                       @holiman
-cmd/evm/                        @holiman @MariusVanDerWijden @lightclient
-core/state/                     @rjl493456442 @holiman
-crypto/                         @gballet @jwasinger @holiman @fjl
-core/                           @holiman @rjl493456442
-eth/                            @holiman @rjl493456442
+cmd/evm/                        @MariusVanDerWijden @lightclient
+core/state/                     @rjl493456442
+crypto/                         @gballet @jwasinger @fjl
+core/                           @rjl493456442
+eth/                            @rjl493456442
 eth/catalyst/                   @MariusVanDerWijden @lightclient @fjl @jwasinger
 eth/tracers/                    @s1na
 ethclient/                      @fjl
@@ -26,11 +25,9 @@ core/tracing/                   @s1na
 graphql/                        @s1na
 internal/ethapi/                @fjl @s1na @lightclient
 internal/era/                   @lightclient
-metrics/                        @holiman
-miner/                          @MariusVanDerWijden @holiman @fjl @rjl493456442
+miner/                          @MariusVanDerWijden @fjl @rjl493456442
 node/                           @fjl
 p2p/                            @fjl @zsfelfoldi
 rlp/                            @fjl
-params/                         @fjl @holiman @karalabe @gballet @rjl493456442 @zsfelfoldi
-rpc/                            @fjl @holiman
-signer/                         @holiman
+params/                         @fjl @karalabe @gballet @rjl493456442 @zsfelfoldi
+rpc/                            @fjl

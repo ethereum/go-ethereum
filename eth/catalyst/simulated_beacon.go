@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -124,9 +125,13 @@ func NewSimulatedBeacon(period uint64, feeRecipient common.Address, eth *eth.Eth
 			return nil, err
 		}
 	}
+
+	// cap the dev mode period to a reasonable maximum value to avoid
+	// overflowing the time.Duration (int64) that it will occupy
+	const maxPeriod = uint64(math.MaxInt64 / time.Second)
 	return &SimulatedBeacon{
 		eth:                eth,
-		period:             period,
+		period:             min(period, maxPeriod),
 		shutdownCh:         make(chan struct{}),
 		engineAPI:          engineAPI,
 		lastBlockTime:      block.Time,

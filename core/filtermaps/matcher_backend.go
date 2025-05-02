@@ -75,6 +75,9 @@ func (fm *FilterMapsMatcherBackend) Close() {
 // on write.
 // GetFilterMapRow implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) GetFilterMapRow(ctx context.Context, mapIndex, rowIndex uint32, baseLayerOnly bool) (FilterRow, error) {
+	fm.f.indexLock.RLock()
+	defer fm.f.indexLock.RUnlock()
+
 	return fm.f.getFilterMapRow(mapIndex, rowIndex, baseLayerOnly)
 }
 
@@ -108,24 +111,24 @@ func (fm *FilterMapsMatcherBackend) GetLogByLvIndex(ctx context.Context, lvIndex
 // synced signals to the matcher that has triggered a synchronisation that it
 // has been finished and the log index is consistent with the chain head passed
 // as a parameter.
+//
 // Note that if the log index head was far behind the chain head then it might not
 // be synced up to the given head in a single step. Still, the latest chain head
 // should be passed as a parameter and the existing log index should be consistent
 // with that chain.
+//
+// Note: acquiring the indexLock read lock is unnecessary here, as this function
+// is always called within the indexLoop.
 func (fm *FilterMapsMatcherBackend) synced() {
-	fm.f.indexLock.RLock()
 	fm.f.matchersLock.Lock()
-	defer func() {
-		fm.f.matchersLock.Unlock()
-		fm.f.indexLock.RUnlock()
-	}()
+	defer fm.f.matchersLock.Unlock()
 
 	indexedBlocks := fm.f.indexedRange.blocks
 	if !fm.f.indexedRange.headIndexed && !indexedBlocks.IsEmpty() {
 		indexedBlocks.SetAfterLast(indexedBlocks.Last()) // remove partially indexed last block
 	}
 	fm.syncCh <- SyncRange{
-		HeadNumber:    fm.f.targetView.headNumber,
+		IndexedView:   fm.f.indexedView,
 		ValidBlocks:   fm.validBlocks,
 		IndexedBlocks: indexedBlocks,
 	}
@@ -151,7 +154,9 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
 	case <-fm.f.disabledCh:
-		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
+		// Note: acquiring the indexLock read lock is unnecessary here,
+		// as the indexer has already been terminated.
+		return SyncRange{IndexedView: fm.f.indexedView}, nil
 	}
 	select {
 	case vr := <-syncCh:
@@ -159,7 +164,9 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
 	case <-fm.f.disabledCh:
-		return SyncRange{HeadNumber: fm.f.targetView.headNumber}, nil
+		// Note: acquiring the indexLock read lock is unnecessary here,
+		// as the indexer has already been terminated.
+		return SyncRange{IndexedView: fm.f.indexedView}, nil
 	}
 }
 
@@ -167,7 +174,9 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 // valid range with the current indexed range. This function should be called
 // whenever a part of the log index has been removed, before adding new blocks
 // to it.
-// Note that this function assumes that the index read lock is being held.
+//
+// Note: acquiring the indexLock read lock is unnecessary here, as this function
+// is always called within the indexLoop.
 func (f *FilterMaps) updateMatchersValidRange() {
 	f.matchersLock.Lock()
 	defer f.matchersLock.Unlock()

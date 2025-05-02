@@ -58,9 +58,10 @@ type txIndexer struct {
 
 // newTxIndexer initializes the transaction indexer.
 func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
+	cutoff, _ := chain.HistoryPruningCutoff()
 	indexer := &txIndexer{
 		limit:    limit,
-		cutoff:   chain.HistoryPruningCutoff(),
+		cutoff:   cutoff,
 		db:       chain.db,
 		progress: make(chan chan TxIndexProgress),
 		term:     make(chan chan struct{}),
@@ -195,6 +196,19 @@ func (indexer *txIndexer) repair(head uint64) {
 	}
 }
 
+// resolveHead resolves the block number of the current chain head.
+func (indexer *txIndexer) resolveHead() uint64 {
+	headBlockHash := rawdb.ReadHeadBlockHash(indexer.db)
+	if headBlockHash == (common.Hash{}) {
+		return 0
+	}
+	headBlockNumber := rawdb.ReadHeaderNumber(indexer.db, headBlockHash)
+	if headBlockNumber == nil {
+		return 0
+	}
+	return *headBlockNumber
+}
+
 // loop is the scheduler of the indexer, assigning indexing/unindexing tasks depending
 // on the received chain event.
 func (indexer *txIndexer) loop(chain *BlockChain) {
@@ -202,9 +216,9 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
-		stop chan struct{}                                 // Non-nil if background routine is active
-		done chan struct{}                                 // Non-nil if background routine is active
-		head = rawdb.ReadHeadBlock(indexer.db).NumberU64() // The latest announced chain head
+		stop chan struct{}           // Non-nil if background routine is active
+		done chan struct{}           // Non-nil if background routine is active
+		head = indexer.resolveHead() // The latest announced chain head
 
 		headCh = make(chan ChainHeadEvent)
 		sub    = chain.SubscribeChainHeadEvent(headCh)

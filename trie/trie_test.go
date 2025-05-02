@@ -1330,3 +1330,171 @@ func printSet(set *trienode.NodeSet) string {
 	}
 	return out.String()
 }
+
+func TestTrieCopy(t *testing.T) {
+	testTrieCopy(t, []kv{
+		{k: []byte("do"), v: []byte("verb")},
+		{k: []byte("ether"), v: []byte("wookiedoo")},
+		{k: []byte("horse"), v: []byte("stallion")},
+		{k: []byte("shaman"), v: []byte("horse")},
+		{k: []byte("doge"), v: []byte("coin")},
+		{k: []byte("dog"), v: []byte("puppy")},
+	})
+
+	var entries []kv
+	for i := 0; i < 256; i++ {
+		entries = append(entries, kv{k: testrand.Bytes(32), v: testrand.Bytes(32)})
+	}
+	testTrieCopy(t, entries)
+}
+
+func testTrieCopy(t *testing.T, entries []kv) {
+	tr := NewEmpty(nil)
+	for _, entry := range entries {
+		tr.Update(entry.k, entry.v)
+	}
+	trCpy := tr.Copy()
+
+	if tr.Hash() != trCpy.Hash() {
+		t.Errorf("Hash mismatch: old %v, copy %v", tr.Hash(), trCpy.Hash())
+	}
+
+	// Check iterator
+	it, _ := tr.NodeIterator(nil)
+	itCpy, _ := trCpy.NodeIterator(nil)
+
+	for it.Next(false) {
+		hasNext := itCpy.Next(false)
+		if !hasNext {
+			t.Fatal("Iterator is not matched")
+		}
+		if !bytes.Equal(it.Path(), itCpy.Path()) {
+			t.Fatal("Iterator is not matched")
+		}
+		if it.Leaf() != itCpy.Leaf() {
+			t.Fatal("Iterator is not matched")
+		}
+		if it.Leaf() && !bytes.Equal(it.LeafBlob(), itCpy.LeafBlob()) {
+			t.Fatal("Iterator is not matched")
+		}
+	}
+
+	// Check commit
+	root, nodes := tr.Commit(false)
+	rootCpy, nodesCpy := trCpy.Commit(false)
+	if root != rootCpy {
+		t.Fatal("root mismatch")
+	}
+	if len(nodes.Nodes) != len(nodesCpy.Nodes) {
+		t.Fatal("commit node mismatch")
+	}
+	for p, n := range nodes.Nodes {
+		nn, exists := nodesCpy.Nodes[p]
+		if !exists {
+			t.Fatalf("node not exists: %v", p)
+		}
+		if !reflect.DeepEqual(n, nn) {
+			t.Fatalf("node mismatch: %v", p)
+		}
+	}
+}
+
+func TestTrieCopyOldTrie(t *testing.T) {
+	testTrieCopyOldTrie(t, []kv{
+		{k: []byte("do"), v: []byte("verb")},
+		{k: []byte("ether"), v: []byte("wookiedoo")},
+		{k: []byte("horse"), v: []byte("stallion")},
+		{k: []byte("shaman"), v: []byte("horse")},
+		{k: []byte("doge"), v: []byte("coin")},
+		{k: []byte("dog"), v: []byte("puppy")},
+	})
+
+	var entries []kv
+	for i := 0; i < 256; i++ {
+		entries = append(entries, kv{k: testrand.Bytes(32), v: testrand.Bytes(32)})
+	}
+	testTrieCopyOldTrie(t, entries)
+}
+
+func testTrieCopyOldTrie(t *testing.T, entries []kv) {
+	tr := NewEmpty(nil)
+	for _, entry := range entries {
+		tr.Update(entry.k, entry.v)
+	}
+	hash := tr.Hash()
+
+	trCpy := tr.Copy()
+	for _, val := range entries {
+		if rand.Intn(2) == 0 {
+			trCpy.Delete(val.k)
+		} else {
+			trCpy.Update(val.k, testrand.Bytes(32))
+		}
+	}
+	for i := 0; i < 10; i++ {
+		trCpy.Update(testrand.Bytes(32), testrand.Bytes(32))
+	}
+	trCpy.Hash()
+	trCpy.Commit(false)
+
+	// Traverse the original tree, the changes made on the copy one shouldn't
+	// affect the old one
+	for _, entry := range entries {
+		d, _ := tr.Get(entry.k)
+		if !bytes.Equal(d, entry.v) {
+			t.Errorf("Unexpected data, key: %v, want: %v, got: %v", entry.k, entry.v, d)
+		}
+	}
+	if tr.Hash() != hash {
+		t.Errorf("Hash mismatch: old %v, new %v", hash, tr.Hash())
+	}
+}
+
+func TestTrieCopyNewTrie(t *testing.T) {
+	testTrieCopyNewTrie(t, []kv{
+		{k: []byte("do"), v: []byte("verb")},
+		{k: []byte("ether"), v: []byte("wookiedoo")},
+		{k: []byte("horse"), v: []byte("stallion")},
+		{k: []byte("shaman"), v: []byte("horse")},
+		{k: []byte("doge"), v: []byte("coin")},
+		{k: []byte("dog"), v: []byte("puppy")},
+	})
+
+	var entries []kv
+	for i := 0; i < 256; i++ {
+		entries = append(entries, kv{k: testrand.Bytes(32), v: testrand.Bytes(32)})
+	}
+	testTrieCopyNewTrie(t, entries)
+}
+
+func testTrieCopyNewTrie(t *testing.T, entries []kv) {
+	tr := NewEmpty(nil)
+	for _, entry := range entries {
+		tr.Update(entry.k, entry.v)
+	}
+	trCpy := tr.Copy()
+	hash := trCpy.Hash()
+
+	for _, val := range entries {
+		if rand.Intn(2) == 0 {
+			tr.Delete(val.k)
+		} else {
+			tr.Update(val.k, testrand.Bytes(32))
+		}
+	}
+	for i := 0; i < 10; i++ {
+		tr.Update(testrand.Bytes(32), testrand.Bytes(32))
+	}
+
+	// Traverse the original tree, the changes made on the copy one shouldn't
+	// affect the old one
+	for _, entry := range entries {
+		d, _ := trCpy.Get(entry.k)
+		if !bytes.Equal(d, entry.v) {
+			t.Errorf("Unexpected data, key: %v, want: %v, got: %v", entry.k, entry.v, d)
+		}
+	}
+	if trCpy.Hash() != hash {
+		t.Errorf("Hash mismatch: old %v, new %v", hash, tr.Hash())
+	}
+}
