@@ -334,11 +334,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		}
 		// EIP-7002
 		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		// EIP-7251
 		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if requests != nil {
@@ -349,7 +349,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	chainHeadReader := &simChainHeadReader{ctx, sim.b}
 	b, err := sim.b.Engine().FinalizeAndAssemble(chainHeadReader, header, sim.state, blockBody, receipts)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	repairLogs(callResults, b.Hash())
 	return b, callResults, senders, nil
