@@ -28,7 +28,7 @@ import (
 // maxTrackedPayloads is the maximum number of prepared payloads the execution
 // engine tracks before evicting old ones. Ideally we should only ever track the
 // latest one; but have a slight wiggle room for non-ideal conditions.
-const maxTrackedPayloads = 768 // CHANGE(taiko): change to use `maxBlocksPerBatch`
+const maxTrackedPayloads = 3 * 768 // CHANGE(taiko): change to use 3 * `maxBlocksPerBatch`
 
 // maxTrackedHeaders is the maximum number of executed payloads the execution
 // engine tracks before evicting old ones. These are tracked outside the chain
