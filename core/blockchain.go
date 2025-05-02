@@ -1856,7 +1856,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
 		var followupInterrupt atomic.Bool
-		if !bc.cacheConfig.TrieCleanNoPrefetch {
+		if !bc.cacheConfig.TrieCleanNoPrefetch && block.Transactions().Len() > 0 {
 			if followup, err := it.peek(); followup != nil && err == nil {
 				throwaway, _ := state.New(parent.Root, bc.statedb)
 
