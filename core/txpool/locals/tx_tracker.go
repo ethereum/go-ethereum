@@ -18,6 +18,7 @@
 package locals
 
 import (
+	"slices"
 	"sync"
 	"time"
 
@@ -28,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -92,8 +92,12 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 		if _, ok := tracker.all[tx.Hash()]; ok {
 			continue
 		}
+		// Theoretically, checking the error here is unnecessary since sender recovery
+		// is already part of basic validation. However, retrieving the sender address
+		// from the transaction cache is effectively a no-op if it was previously verified.
+		// Therefore, the error is still checked just in case.
 		addr, err := types.Sender(tracker.signer, tx)
-		if err != nil { // Ignore this tx
+		if err != nil {
 			continue
 		}
 		tracker.all[tx.Hash()] = tx

@@ -46,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -520,8 +520,12 @@ func (b testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) 
 	if number == rpc.PendingBlockNumber {
 		return b.pending, nil
 	}
+	if number == rpc.EarliestBlockNumber {
+		number = 0
+	}
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
+
 func (b testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.chain.GetBlockByHash(hash), nil
 }
@@ -615,9 +619,16 @@ func (b testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) 
 func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
-func (b testBackend) BloomStatus() (uint64, uint64) { panic("implement me") }
-func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
+func (b testBackend) CurrentView() *filtermaps.ChainView {
 	panic("implement me")
+}
+func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+	panic("implement me")
+}
+
+func (b testBackend) HistoryPruningCutoff() uint64 {
+	bn, _ := b.chain.HistoryPruningCutoff()
+	return bn
 }
 
 func TestEstimateGas(t *testing.T) {
@@ -656,6 +667,11 @@ func TestEstimateGas(t *testing.T) {
 		b.AddTx(tx)
 		b.SetPoS()
 	}))
+
+	setCodeAuthorization, _ := types.SignSetCode(accounts[0].key, types.SetCodeAuthorization{
+		Address: accounts[0].addr,
+		Nonce:   uint64(genBlocks + 1),
+	})
 
 	var testSuite = []struct {
 		blockNumber    rpc.BlockNumber
@@ -835,6 +851,50 @@ func TestEstimateGas(t *testing.T) {
 			},
 			want: 21000,
 		},
+		// Should be able to estimate SetCodeTx.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[1].addr,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			want: 46000,
+		},
+		// Should retrieve the code of 0xef0001 || accounts[0].addr and return an invalid opcode error.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[0].addr,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			expectErr: errors.New("invalid opcode: opcode 0xef not defined"),
+		},
+		// SetCodeTx with empty authorization list should fail.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &common.Address{},
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{},
+			},
+			expectErr: core.ErrEmptyAuthList,
+		},
+		// SetCodeTx with nil `to` should fail.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                nil,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			expectErr: core.ErrSetCodeTxCreate,
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
@@ -844,7 +904,7 @@ func TestEstimateGas(t *testing.T) {
 				continue
 			}
 			if !errors.Is(err, tc.expectErr) {
-				if !reflect.DeepEqual(err, tc.expectErr) {
+				if err.Error() != tc.expectErr.Error() {
 					t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
 				}
 			}
@@ -1135,6 +1195,24 @@ func TestCall(t *testing.T) {
 				},
 			},
 			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:        "unsupported block override beaconRoot",
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			blockOverrides: override.BlockOverrides{
+				BeaconRoot: &common.Hash{0, 1, 2},
+			},
+			expectErr: errors.New(`block override "beaconRoot" is not supported for this RPC method`),
+		},
+		{
+			name:        "unsupported block override withdrawals",
+			blockNumber: rpc.LatestBlockNumber,
+			call:        TransactionArgs{},
+			blockOverrides: override.BlockOverrides{
+				Withdrawals: &types.Withdrawals{},
+			},
+			expectErr: errors.New(`block override "withdrawals" is not supported for this RPC method`),
 		},
 	}
 	for _, tc := range testSuite {
@@ -3512,4 +3590,77 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 
 func addressToHash(a common.Address) common.Hash {
 	return common.BytesToHash(a.Bytes())
+}
+
+func TestCreateAccessListWithStateOverrides(t *testing.T) {
+	// Initialize test backend
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7"): {Balance: big.NewInt(1000000000000000000)},
+		},
+	}
+	backend := newTestBackend(t, 1, genesis, ethash.NewFaker(), nil)
+
+	// Create a new BlockChainAPI instance
+	api := NewBlockChainAPI(backend)
+
+	// Create test contract code - a simple storage contract
+	//
+	// SPDX-License-Identifier: MIT
+	// pragma solidity ^0.8.0;
+	//
+	// contract SimpleStorage {
+	//     uint256 private value;
+	//
+	//     function retrieve() public view returns (uint256) {
+	//         return value;
+	//     }
+	// }
+	var (
+		contractCode = hexutil.Bytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80632e64cec114602d575b600080fd5b60336047565b604051603e91906067565b60405180910390f35b60008054905090565b6000819050919050565b6061816050565b82525050565b6000602082019050607a6000830184605a565b9291505056"))
+		// Create state overrides with more complete state
+		contractAddr = common.HexToAddress("0x1234567890123456789012345678901234567890")
+		nonce        = hexutil.Uint64(1)
+		overrides    = &override.StateOverride{
+			contractAddr: override.OverrideAccount{
+				Code:    &contractCode,
+				Balance: (*hexutil.Big)(big.NewInt(1000000000000000000)),
+				Nonce:   &nonce,
+				State: map[common.Hash]common.Hash{
+					common.Hash{}: common.HexToHash("0x000000000000000000000000000000000000000000000000000000000000002a"),
+				},
+			},
+		}
+	)
+
+	// Create transaction arguments with gas and value
+	var (
+		from = common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7")
+		data = hexutil.Bytes(common.Hex2Bytes("2e64cec1")) // retrieve()
+		gas  = hexutil.Uint64(100000)
+		args = TransactionArgs{
+			From:  &from,
+			To:    &contractAddr,
+			Data:  &data,
+			Gas:   &gas,
+			Value: new(hexutil.Big),
+		}
+	)
+	// Call CreateAccessList
+	result, err := api.CreateAccessList(context.Background(), args, nil, overrides)
+	if err != nil {
+		t.Fatalf("Failed to create access list: %v", err)
+	}
+	if err != nil || result == nil {
+		t.Fatalf("Failed to create access list: %v", err)
+	}
+	require.NotNil(t, result.Accesslist)
+
+	// Verify access list contains the contract address and storage slot
+	expected := &types.AccessList{{
+		Address:     contractAddr,
+		StorageKeys: []common.Hash{{}},
+	}}
+	require.Equal(t, expected, result.Accesslist)
 }

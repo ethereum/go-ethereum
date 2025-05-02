@@ -59,8 +59,9 @@ func (s *Suite) AllTests() []utesting.Test {
 	}
 }
 
-// TestPing sends PING and expects a PONG response.
 func (s *Suite) TestPing(t *utesting.T) {
+	t.Log(`This test is just a sanity check. It sends PING and expects a PONG response.`)
+
 	conn, l1 := s.listen1(t)
 	defer conn.close()
 
@@ -85,9 +86,10 @@ func checkPong(t *utesting.T, pong *v5wire.Pong, ping *v5wire.Ping, c net.Packet
 	}
 }
 
-// TestPingLargeRequestID sends PING with a 9-byte request ID, which isn't allowed by the spec.
-// The remote node should not respond.
 func (s *Suite) TestPingLargeRequestID(t *utesting.T) {
+	t.Log(`This test sends PING with a 9-byte request ID, which isn't allowed by the spec.
+The remote node should not respond.`)
+
 	conn, l1 := s.listen1(t)
 	defer conn.close()
 
@@ -104,10 +106,11 @@ func (s *Suite) TestPingLargeRequestID(t *utesting.T) {
 	}
 }
 
-// TestPingMultiIP establishes a session from one IP as usual. The session is then reused
-// on another IP, which shouldn't work. The remote node should respond with WHOAREYOU for
-// the attempt from a different IP.
 func (s *Suite) TestPingMultiIP(t *utesting.T) {
+	t.Log(`This test establishes a session from one IP as usual. The session is then reused
+on another IP, which shouldn't work. The remote node should respond with WHOAREYOU for
+the attempt from a different IP.`)
+
 	conn, l1, l2 := s.listen2(t)
 	defer conn.close()
 
@@ -120,6 +123,7 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 	checkPong(t, resp.(*v5wire.Pong), ping, l1)
 
 	// Send on l2. This reuses the session because there is only one codec.
+	t.Log("sending ping from alternate IP", l2.LocalAddr())
 	ping2 := &v5wire.Ping{ReqID: conn.nextReqID()}
 	conn.write(l2, ping2, nil)
 	switch resp := conn.read(l2).(type) {
@@ -158,6 +162,10 @@ func (s *Suite) TestPingMultiIP(t *utesting.T) {
 // packet instead of a handshake message packet. The remote node should respond with
 // another WHOAREYOU challenge for the second packet.
 func (s *Suite) TestPingHandshakeInterrupted(t *utesting.T) {
+	t.Log(`TestPingHandshakeInterrupted starts a handshake, but doesn't finish it and sends a second ordinary message
+packet instead of a handshake message packet. The remote node should respond with
+another WHOAREYOU challenge for the second packet.`)
+
 	conn, l1 := s.listen1(t)
 	defer conn.close()
 
@@ -181,8 +189,10 @@ func (s *Suite) TestPingHandshakeInterrupted(t *utesting.T) {
 	}
 }
 
-// TestTalkRequest sends TALKREQ and expects an empty TALKRESP response.
 func (s *Suite) TestTalkRequest(t *utesting.T) {
+	t.Log(`This test sends some examples of TALKREQ with a protocol-id of "test-protocol"
+and expects an empty TALKRESP response.`)
+
 	conn, l1 := s.listen1(t)
 	defer conn.close()
 
@@ -202,6 +212,7 @@ func (s *Suite) TestTalkRequest(t *utesting.T) {
 	}
 
 	// Empty request ID.
+	t.Log("sending TALKREQ with empty request-id")
 	resp = conn.reqresp(l1, &v5wire.TalkRequest{Protocol: "test-protocol"})
 	switch resp := resp.(type) {
 	case *v5wire.TalkResponse:
@@ -216,8 +227,9 @@ func (s *Suite) TestTalkRequest(t *utesting.T) {
 	}
 }
 
-// TestFindnodeZeroDistance checks that the remote node returns itself for FINDNODE with distance zero.
 func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
+	t.Log(`This test checks that the remote node returns itself for FINDNODE with distance zero.`)
+
 	conn, l1 := s.listen1(t)
 	defer conn.close()
 
@@ -233,9 +245,11 @@ func (s *Suite) TestFindnodeZeroDistance(t *utesting.T) {
 	}
 }
 
-// TestFindnodeResults pings the node under test from multiple nodes. After waiting for them to be
-// accepted into the remote table, the test checks that they are returned by FINDNODE.
 func (s *Suite) TestFindnodeResults(t *utesting.T) {
+	t.Log(`This test pings the node under test from multiple other endpoints and node identities
+(the 'bystanders'). After waiting for them to be accepted into the remote table, the test checks
+that they are returned by FINDNODE.`)
+
 	// Create bystanders.
 	nodes := make([]*bystander, 5)
 	added := make(chan enode.ID, len(nodes))
@@ -273,6 +287,7 @@ func (s *Suite) TestFindnodeResults(t *utesting.T) {
 	}
 
 	// Send FINDNODE for all distances.
+	t.Log("requesting nodes")
 	conn, l1 := s.listen1(t)
 	defer conn.close()
 	foundNodes, err := conn.findnode(l1, dists)
