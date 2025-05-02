@@ -579,19 +579,7 @@ func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis 
 		return nil, err
 	}
 
-	// Open trie database with provided config
-	triedb := bc.triedb
-
-	chainConfig, _, _, genesisErr := SetupGenesisBlockWithOverride(db, triedb, genesis, overrides)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
-		return nil, genesisErr
-	}
-
-	bc.parallelProcessor = NewParallelStateProcessor(chainConfig, bc, engine)
+	bc.parallelProcessor = NewParallelStateProcessor(bc.chainConfig, bc, engine)
 	bc.parallelSpeculativeProcesses = numprocs
 	bc.enforceParallelProcessor = enforce
 

@@ -184,16 +184,16 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
-	if config.OverrideCancun != nil {
-		overrides.OverrideCancun = config.OverrideCancun
+	if config.OverridePrague != nil {
+		overrides.OverridePrague = config.OverridePrague
 	}
 	if config.OverrideVerkle != nil {
 		overrides.OverrideVerkle = config.OverrideVerkle
 	}
 
-	chainConfig, _, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, triedb.NewDatabase(chainDb, triedb.HashDefaults), config.Genesis, &overrides)
-	if _, isCompat := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !isCompat {
-		return nil, genesisErr
+	chainConfig, _, compatErr, err := core.SetupGenesisBlockWithOverride(chainDb, triedb.NewDatabase(chainDb, triedb.HashDefaults), config.Genesis, &overrides)
+	if err != nil {
+		return nil, err
 	}
 
 	blockChainAPI := ethapi.NewBlockChainAPI(eth.APIBackend)
@@ -201,6 +201,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.engine = engine
 	if err != nil {
 		return nil, err
+	}
+
+	if compatErr != nil {
+		return nil, compatErr
 	}
 	// END: Bor changes
 
@@ -544,7 +548,7 @@ func (s *Ethereum) StartMining() error {
 					return fmt.Errorf("signer missing: %v", err)
 				}
 
-				cli.Authorize(eb, wallet.SignData)
+				cli.Authorize(eb)
 			}
 
 			if bor, ok := s.engine.(*bor.Bor); ok {

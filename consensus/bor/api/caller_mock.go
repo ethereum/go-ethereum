@@ -6,7 +6,6 @@ package api
 
 import (
 	context "context"
-	"math/big"
 	reflect "reflect"
 
 	common "github.com/ethereum/go-ethereum/common"
@@ -72,10 +71,10 @@ func (mr *MockCallerMockRecorder) CallWithState(ctx, args, blockNrOrHash, state,
 }
 
 // GetBalance mocks base method.
-func (m *MockCaller) GetBalance(ctx context.Context, address common.Address, blockNrOrHash *rpc.BlockNumberOrHash) (*big.Int, error) {
+func (m *MockCaller) GetBalance(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", ctx, address, blockNrOrHash)
-	ret0, _ := ret[0].(*big.Int)
+	ret0, _ := ret[0].(*hexutil.Big)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

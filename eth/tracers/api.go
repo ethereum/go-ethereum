@@ -1055,8 +1055,6 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		txHash = config.TxHash
 	}
 
-	logConfig.Debug = true
-
 	// Execute transaction, either tracing all or just the requested one
 	var (
 		dumps       []string
@@ -1200,8 +1198,8 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		// For BorTransaction, there will be no trace available
 		tx, _, _, _ := rawdb.ReadBorTransaction(api.backend.ChainDb(), hash)
 		if tx != nil {
-			return &ethapi.ExecutionResult{
-				StructLogs: make([]ethapi.StructLogRes, 0),
+			return &logger.ExecutionResult{
+				StructLogs: make([]json.RawMessage, 0),
 			}, nil
 		} else {
 			return nil, errTxNotFound
@@ -1410,7 +1408,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		config.BorTx = newBoolPtr(false)
 	}
 
-	_, err = core.ApplyTransactionWithEVM(message, new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm)
+	_, err = core.ApplyTransactionWithEVM(message, new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm, context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
@@ -1424,7 +1422,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 	} else {
 		// Call Prepare to clear out the statedb access list
 		statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-		_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm, context.Background())
+		_, err = core.ApplyTransactionWithEVM(message, new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm, context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %w", err)
 		}

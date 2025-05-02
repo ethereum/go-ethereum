@@ -106,16 +106,11 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 			}
 		}
 
-		returnVal := fmt.Sprintf("%x", execRes.Return())
-		if len(execRes.Revert()) > 0 {
-			returnVal = fmt.Sprintf("%x", execRes.Revert())
-		}
-
-		result := &ethapi.ExecutionResult{
+		result := &logger.ExecutionResult{
 			Gas:         execRes.UsedGas,
 			Failed:      execRes.Failed(),
-			ReturnValue: returnVal,
-			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
+			ReturnValue: execRes.Return(),
+			StructLogs:  tracer.StructLogs(),
 		}
 		res := &TxTraceResult{
 			Result:           result,

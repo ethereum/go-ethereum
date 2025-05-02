@@ -99,7 +99,6 @@ func BenchmarkTransactionTraceV2(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		tracer.OnTxEnd(&types.Receipt{GasUsed: res.UsedGas}, nil)
 		state.StateDB.RevertToSnapshot(snap)
 	}
 }

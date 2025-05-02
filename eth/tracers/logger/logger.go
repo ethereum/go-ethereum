@@ -395,6 +395,9 @@ func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 }
 
+// StructLogs returns the captured log entries.
+func (l *StructLogger) StructLogs() []json.RawMessage { return l.logs }
+
 // Error returns the VM error captured by the trace.
 func (l *StructLogger) Error() error { return l.err }
 

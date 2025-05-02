@@ -240,9 +240,12 @@ func TestTxIndexerRepair(t *testing.T) {
 			expTail: tailPointer(65),
 		},
 	}
+
+	borReceipts := make([]types.Receipts, len(receipts))
+
 	for _, c := range cases {
-		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
-		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), big.NewInt(0))
+		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false)
+		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), append([]types.Receipts{{}}, borReceipts...), big.NewInt(0))
 
 		// Index the initial blocks from ancient store
 		indexer := &txIndexer{
@@ -431,9 +434,12 @@ func TestTxIndexerReport(t *testing.T) {
 			expRemaining: 0,
 		},
 	}
+
+	borReceipts := make([]types.Receipts, len(receipts))
+
 	for _, c := range cases {
-		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
-		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...))
+		db, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false)
+		rawdb.WriteAncientBlocks(db, append([]*types.Block{gspec.ToBlock()}, blocks...), append([]types.Receipts{{}}, receipts...), append([]types.Receipts{{}}, borReceipts...), big.NewInt(0))
 
 		// Index the initial blocks from ancient store
 		indexer := &txIndexer{
@@ -453,6 +459,6 @@ func TestTxIndexerReport(t *testing.T) {
 			t.Fatalf("Unexpected remaining: %d, expected: %d", p.Remaining, c.expRemaining)
 		}
 		db.Close()
-		os.RemoveAll(frdir)
+		os.RemoveAll("")
 	}
 }

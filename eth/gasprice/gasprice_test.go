@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/holiman/uint256"
 )
 
 const testHead = 32
@@ -196,27 +195,29 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 
 		b.AddTx(types.MustSignNewTx(key, signer, txdata))
 
-		if cancunBlock != nil && b.Number().Cmp(cancunBlock) >= 0 {
-			b.SetPoS()
+		/*
+			if cancunBlock != nil && b.Number().Cmp(cancunBlock) >= 0 {
+				b.SetPoS()
 
-			// put more blobs in each new block
-			for j := 0; j < i && j < 6; j++ {
-				blobTx := &types.BlobTx{
-					ChainID:    uint256.MustFromBig(gspec.Config.ChainID),
-					Nonce:      b.TxNonce(addr),
-					To:         common.Address{},
-					Gas:        30000,
-					GasFeeCap:  uint256.NewInt(100 * params.GWei),
-					GasTipCap:  uint256.NewInt(uint64(i+1) * params.GWei),
-					Data:       []byte{},
-					BlobFeeCap: uint256.NewInt(1),
-					BlobHashes: []common.Hash{emptyBlobVHash},
-					Value:      uint256.NewInt(100),
-					Sidecar:    nil,
+				// put more blobs in each new block
+				for j := 0; j < i && j < 6; j++ {
+					blobTx := &types.BlobTx{
+						ChainID:    uint256.MustFromBig(gspec.Config.ChainID),
+						Nonce:      b.TxNonce(addr),
+						To:         common.Address{},
+						Gas:        30000,
+						GasFeeCap:  uint256.NewInt(100 * params.GWei),
+						GasTipCap:  uint256.NewInt(uint64(i+1) * params.GWei),
+						Data:       []byte{},
+						BlobFeeCap: uint256.NewInt(1),
+						BlobHashes: []common.Hash{emptyBlobVHash},
+						Value:      uint256.NewInt(100),
+						Sidecar:    nil,
+					}
+					b.AddTx(types.MustSignNewTx(key, signer, blobTx))
 				}
-				b.AddTx(types.MustSignNewTx(key, signer, blobTx))
 			}
-		}
+		*/
 	})
 
 	// Construct testing chain

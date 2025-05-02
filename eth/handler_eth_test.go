@@ -513,7 +513,7 @@ func testSendTransactionAnnouncementsOnly(t *testing.T, protocol uint) {
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 		txs[nonce] = tx
 	}
-	source.txpool.Add(txs, false, false)
+	source.txpool.Add(txs, false)
 
 	// Make sure we get all the transactions as announcements
 	seen := make(map[common.Hash]struct{})
