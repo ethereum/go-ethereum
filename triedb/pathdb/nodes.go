@@ -279,9 +279,7 @@ func (s *nodeSet) write(batch ethdb.Batch, clean *fastcache.Cache) int {
 	if len(s.accountNodes) > 0 {
 		nodes[common.Hash{}] = s.accountNodes
 	}
-	for owner, subset := range s.storageNodes {
-		nodes[owner] = subset
-	}
+	maps.Copy(nodes, s.storageNodes)
 	return writeNodes(batch, nodes, clean)
 }
 
