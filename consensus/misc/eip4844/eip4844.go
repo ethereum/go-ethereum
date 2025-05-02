@@ -76,6 +76,9 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 	if excessBlobGas < targetGas {
 		return 0
 	}
+	if config.IsOsaka(new(big.Int).Add(big.NewInt(1), parent.Number), headTimestamp) {
+		return excessBlobGas / 3
+	}
 	return excessBlobGas - targetGas
 }
 
