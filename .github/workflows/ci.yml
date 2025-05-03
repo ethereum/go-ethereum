@@ -300,7 +300,7 @@ jobs:
 
       - name: Upload code and chain data
         if: always()
-      - uses: PaloAltoNetworks/upload-secure-artifact@main
+        uses: PaloAltoNetworks/upload-secure-artifact@main
         with:
           name: code_${{ github.run_id }}
           path: code.tar.gz
