@@ -411,7 +411,7 @@ func (s *Ethereum) Start() error {
 }
 
 func (s *Ethereum) setMaxPeers(max int) {
-	s.p2pServer.MaxPeers = max
+	s.p2pServer.SetMaxPeers(max)
 	s.handler.SetMaxPeers(max)
 	s.dropper.SetMaxPeers(s.p2pServer.MaxDialedConns(), s.p2pServer.MaxInboundConns())
 }
