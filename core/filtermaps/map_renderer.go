@@ -468,15 +468,25 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 			r.f.filterMapCache.Remove(mapIndex)
 		}
 	}
+	var blockNumber uint64
+	if r.finished.First() > 0 {
+		// in order to always ensure continuous block pointers, initialize
+		// blockNumber based on the last block of the previous map, then verify
+		// against the first block associated with each rendered map
+		lastBlock, _, err := r.f.getLastBlockOfMap(r.finished.First() - 1)
+		if err != nil {
+			return fmt.Errorf("failed to get last block of previous map %d: %v", r.finished.First()-1, err)
+		}
+		blockNumber = lastBlock + 1
+	}
 	// add or update block pointers
-	blockNumber := r.finishedMaps[r.finished.First()].firstBlock()
 	for mapIndex := range r.finished.Iter() {
 		renderedMap := r.finishedMaps[mapIndex]
+		if blockNumber != renderedMap.firstBlock() {
+			return fmt.Errorf("non-continuous block numbers in rendered map %d (next expected: %d  first rendered: %d)", mapIndex, blockNumber, renderedMap.firstBlock())
+		}
 		r.f.storeLastBlockOfMap(batch, mapIndex, renderedMap.lastBlock, renderedMap.lastBlockId)
 		checkWriteCnt()
-		if blockNumber != renderedMap.firstBlock() {
-			panic("non-continuous block numbers")
-		}
 		for _, lvPtr := range renderedMap.blockLvPtrs {
 			r.f.storeBlockLvPointer(batch, blockNumber, lvPtr)
 			checkWriteCnt()
