@@ -135,14 +135,6 @@ func (cv *ChainView) SharedRange(cv2 *ChainView) common.Range[uint64] {
 	return common.NewRange(0, sharedLen)
 }
 
-// limitedView returns a new chain view that is a truncated version of the parent view.
-func (cv *ChainView) limitedView(newHead uint64) *ChainView {
-	if newHead >= cv.headNumber {
-		return cv
-	}
-	return NewChainView(cv.chain, newHead, cv.BlockHash(newHead))
-}
-
 // equalViews returns true if the two chain views are equivalent.
 func equalViews(cv1, cv2 *ChainView) bool {
 	if cv1 == nil || cv2 == nil {
