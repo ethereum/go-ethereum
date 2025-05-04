@@ -383,7 +383,7 @@ func (b *backendMock) SendTx(ctx context.Context, signedTx *types.Transaction) e
 func (b *backendMock) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
 	return false, nil, [32]byte{}, 0, 0
 }
-func (b *backendMock) TxIndexDone(ctx context.Context) bool                     { return true }
+func (b *backendMock) TxIndexDone() bool                                        { return true }
 func (b *backendMock) GetPoolTransactions() (types.Transactions, error)         { return nil, nil }
 func (b *backendMock) GetPoolTransaction(txHash common.Hash) *types.Transaction { return nil }
 func (b *backendMock) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {

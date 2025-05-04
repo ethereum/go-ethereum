@@ -1340,7 +1340,7 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 			return NewRPCPendingTransaction(tx, api.b.CurrentHeader(), api.b.ChainConfig()), nil
 		}
 		// If also not in the pool there is a chance the tx indexer is still in progress.
-		if !api.b.TxIndexDone(ctx) {
+		if !api.b.TxIndexDone() {
 			return nil, NewTxIndexingError()
 		}
 		// If the transaction is not found in the pool and the indexer is done, return nil
@@ -1362,7 +1362,7 @@ func (api *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash com
 			return tx.MarshalBinary()
 		}
 		// If also not in the pool there is a chance the tx indexer is still in progress.
-		if !api.b.TxIndexDone(ctx) {
+		if !api.b.TxIndexDone() {
 			return nil, NewTxIndexingError()
 		}
 		// If the transaction is not found in the pool and the indexer is done, return nil
@@ -1376,7 +1376,7 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	found, tx, blockHash, blockNumber, index := api.b.GetTransaction(hash)
 	if !found {
 		// Make sure indexer is done.
-		if !api.b.TxIndexDone(ctx) {
+		if !api.b.TxIndexDone() {
 			return nil, NewTxIndexingError()
 		}
 		// No such tx.
@@ -1786,7 +1786,7 @@ func (api *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (h
 			return tx.MarshalBinary()
 		}
 		// If also not in the pool there is a chance the tx indexer is still in progress.
-		if !api.b.TxIndexDone(ctx) {
+		if !api.b.TxIndexDone() {
 			return nil, NewTxIndexingError()
 		}
 		// Transaction is not found in the pool and the indexer is done.

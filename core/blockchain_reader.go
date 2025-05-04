@@ -17,7 +17,6 @@
 package core
 
 import (
-	"context"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -299,8 +298,8 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 }
 
 // TxIndexDone returns true if the transaction indexer has finished indexing.
-func (bc *BlockChain) TxIndexDone(ctx context.Context) bool {
-	progress, err := bc.TxIndexProgress(ctx)
+func (bc *BlockChain) TxIndexDone() bool {
+	progress, err := bc.TxIndexProgress()
 	if err != nil {
 		// No error is returned if the transaction indexing progress is unreachable
 		// due to unexpected internal errors. In such cases, it is impossible to
@@ -403,11 +402,11 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 }
 
 // TxIndexProgress returns the transaction indexing progress.
-func (bc *BlockChain) TxIndexProgress(ctx context.Context) (TxIndexProgress, error) {
+func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 	if bc.txIndexer == nil {
 		return TxIndexProgress{}, errors.New("tx indexer is not enabled")
 	}
-	return bc.txIndexer.txIndexProgress(ctx)
+	return bc.txIndexer.txIndexProgress(), nil
 }
 
 // HistoryPruningCutoff returns the configured history pruning point.

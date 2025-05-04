@@ -595,7 +595,7 @@ func (b testBackend) GetTransaction(txHash common.Hash) (bool, *types.Transactio
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.db, txHash)
 	return true, tx, blockHash, blockNumber, index
 }
-func (b testBackend) TxIndexDone(ctx context.Context) bool {
+func (b testBackend) TxIndexDone() bool {
 	return true
 }
 func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { panic("implement me") }

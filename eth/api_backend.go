@@ -361,8 +361,8 @@ func (b *EthAPIBackend) GetTransaction(txHash common.Hash) (bool, *types.Transac
 }
 
 // TxIndexDone returns true if the transaction indexer has finished indexing.
-func (b *EthAPIBackend) TxIndexDone(ctx context.Context) bool {
-	return b.eth.blockchain.TxIndexDone(ctx)
+func (b *EthAPIBackend) TxIndexDone() bool {
+	return b.eth.blockchain.TxIndexDone()
 }
 
 func (b *EthAPIBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
@@ -391,7 +391,7 @@ func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.S
 
 func (b *EthAPIBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
 	prog := b.eth.Downloader().Progress()
-	if txProg, err := b.eth.blockchain.TxIndexProgress(ctx); err == nil {
+	if txProg, err := b.eth.blockchain.TxIndexProgress(); err == nil {
 		prog.TxIndexFinishedBlocks = txProg.Indexed
 		prog.TxIndexRemainingBlocks = txProg.Remaining
 	}

@@ -77,7 +77,7 @@ func (api *DownloaderAPI) eventLoop() {
 
 		getProgress = func() ethereum.SyncProgress {
 			prog := api.d.Progress()
-			if txProg, err := api.chain.TxIndexProgress(context.Background()); err == nil {
+			if txProg, err := api.chain.TxIndexProgress(); err == nil {
 				prog.TxIndexFinishedBlocks = txProg.Indexed
 				prog.TxIndexRemainingBlocks = txProg.Remaining
 			}

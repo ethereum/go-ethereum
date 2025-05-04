@@ -17,9 +17,8 @@
 package core
 
 import (
-	"context"
-	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -48,26 +47,35 @@ type txIndexer struct {
 	//       and all others shouldn't.
 	limit uint64
 
+	// The current tail of the indexed transactions, null indicates
+	// that no transactions have been indexed yet.
+	//
+	// This field is accessed by both the indexer and the indexing
+	// progress queries.
+	tail atomic.Pointer[uint64]
+
 	// cutoff denotes the block number before which the chain segment should
 	// be pruned and not available locally.
-	cutoff   uint64
-	db       ethdb.Database
-	progress chan chan TxIndexProgress
-	term     chan chan struct{}
-	closed   chan struct{}
+	cutoff uint64
+	chain  *BlockChain
+	db     ethdb.Database
+	term   chan chan struct{}
+	closed chan struct{}
 }
 
 // newTxIndexer initializes the transaction indexer.
 func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 	cutoff, _ := chain.HistoryPruningCutoff()
 	indexer := &txIndexer{
-		limit:    limit,
-		cutoff:   cutoff,
-		db:       chain.db,
-		progress: make(chan chan TxIndexProgress),
-		term:     make(chan chan struct{}),
-		closed:   make(chan struct{}),
+		limit:  limit,
+		cutoff: cutoff,
+		chain:  chain,
+		db:     chain.db,
+		term:   make(chan chan struct{}),
+		closed: make(chan struct{}),
 	}
+	indexer.tail.Store(rawdb.ReadTxIndexTail(chain.db))
+
 	go indexer.loop(chain)
 
 	var msg string
@@ -217,10 +225,9 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
-		stop     chan struct{}                       // Non-nil if background routine is active
-		done     chan struct{}                       // Non-nil if background routine is active
-		head     = indexer.resolveHead()             // The latest announced chain head
-		lastTail = rawdb.ReadTxIndexTail(indexer.db) // The oldest indexed block, nil means nothing indexed
+		stop chan struct{}           // Non-nil if background routine is active
+		done chan struct{}           // Non-nil if background routine is active
+		head = indexer.resolveHead() // The latest announced chain head
 
 		headCh = make(chan ChainHeadEvent)
 		sub    = chain.SubscribeChainHeadEvent(headCh)
@@ -245,13 +252,10 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 				done = make(chan struct{})
 				go indexer.run(h.Header.Number.Uint64(), stop, done)
 			}
-			head = h.Header.Number.Uint64()
 		case <-done:
 			stop = nil
 			done = nil
-			lastTail = rawdb.ReadTxIndexTail(indexer.db)
-		case ch := <-indexer.progress:
-			ch <- indexer.report(head, lastTail)
+			indexer.tail.Store(rawdb.ReadTxIndexTail(indexer.db))
 		case ch := <-indexer.term:
 			if stop != nil {
 				close(stop)
@@ -302,25 +306,12 @@ func (indexer *txIndexer) report(head uint64, tail *uint64) TxIndexProgress {
 	}
 }
 
-// txIndexProgress retrieves the tx indexing progress, or an error if the
-// background tx indexer is already stopped.
-func (indexer *txIndexer) txIndexProgress(ctx context.Context) (TxIndexProgress, error) {
-	ch := make(chan TxIndexProgress, 1)
-	select {
-	case indexer.progress <- ch:
-		select {
-		case prog := <-ch:
-			return prog, nil
-		case <-ctx.Done():
-			// Since the channel is buffered the loop will not block
-			// eventually when it prepares the response.
-			return TxIndexProgress{}, ctx.Err()
-		}
-	case <-indexer.closed:
-		return TxIndexProgress{}, errors.New("indexer is closed")
-	case <-ctx.Done():
-		return TxIndexProgress{}, ctx.Err()
-	}
+// txIndexProgress retrieves the transaction indexing progress. The reported
+// progress may slightly lag behind the actual indexing state, as the tail is
+// only updated at the end of each indexing operation. However, this delay is
+// considered acceptable.
+func (indexer *txIndexer) txIndexProgress() TxIndexProgress {
+	return indexer.report(indexer.resolveHead(), indexer.tail.Load())
 }
 
 // close shutdown the indexer. Safe to be called for multiple times.

@@ -121,7 +121,7 @@ func (b *testBackend) GetTransaction(txHash common.Hash) (bool, *types.Transacti
 	return tx != nil, tx, hash, blockNumber, index
 }
 
-func (b *testBackend) TxIndexDone(ctx context.Context) bool {
+func (b *testBackend) TxIndexDone() bool {
 	return true
 }
 

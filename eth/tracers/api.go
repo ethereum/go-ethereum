@@ -83,7 +83,7 @@ type Backend interface {
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64)
-	TxIndexDone(ctx context.Context) bool
+	TxIndexDone() bool
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -862,7 +862,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	found, _, blockHash, blockNumber, index := api.backend.GetTransaction(hash)
 	if !found {
 		// Warn in case tx indexer is not done.
-		if !api.backend.TxIndexDone(ctx) {
+		if !api.backend.TxIndexDone() {
 			return nil, ethapi.NewTxIndexingError()
 		}
 		// Only mined txes are supported

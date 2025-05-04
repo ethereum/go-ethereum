@@ -121,9 +121,8 @@ func TestTxIndexer(t *testing.T) {
 
 		// Index the initial blocks from ancient store
 		indexer := &txIndexer{
-			limit:    0,
-			db:       db,
-			progress: make(chan chan TxIndexProgress),
+			limit: 0,
+			db:    db,
 		}
 		for i, limit := range c.limits {
 			indexer.limit = limit
@@ -241,9 +240,8 @@ func TestTxIndexerRepair(t *testing.T) {
 
 		// Index the initial blocks from ancient store
 		indexer := &txIndexer{
-			limit:    c.limit,
-			db:       db,
-			progress: make(chan chan TxIndexProgress),
+			limit: c.limit,
+			db:    db,
 		}
 		indexer.run(chainHead, make(chan struct{}), make(chan struct{}))
 
@@ -432,13 +430,9 @@ func TestTxIndexerReport(t *testing.T) {
 
 		// Index the initial blocks from ancient store
 		indexer := &txIndexer{
-			limit:    c.limit,
-			cutoff:   c.cutoff,
-			db:       db,
-			progress: make(chan chan TxIndexProgress),
-		}
-		if c.tail != nil {
-			rawdb.WriteTxIndexTail(db, *c.tail)
+			limit:  c.limit,
+			cutoff: c.cutoff,
+			db:     db,
 		}
 		p := indexer.report(c.head, c.tail)
 		if p.Indexed != c.expIndexed {
