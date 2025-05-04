@@ -163,6 +163,7 @@ func (indexer *txIndexer) repair(head uint64) {
 		// A crash may occur between the two delete operations,
 		// potentially leaving dangling indexes in the database.
 		// However, this is considered acceptable.
+		indexer.tail.Store(nil)
 		rawdb.DeleteTxIndexTail(indexer.db)
 		rawdb.DeleteAllTxLookupEntries(indexer.db, nil)
 		log.Warn("Purge transaction indexes", "head", head, "tail", *tail)
@@ -183,6 +184,7 @@ func (indexer *txIndexer) repair(head uint64) {
 		// Traversing the database directly within the transaction
 		// index namespace might be slow and expensive, but we
 		// have no choice.
+		indexer.tail.Store(nil)
 		rawdb.DeleteTxIndexTail(indexer.db)
 		rawdb.DeleteAllTxLookupEntries(indexer.db, nil)
 		log.Warn("Purge transaction indexes", "head", head, "cutoff", indexer.cutoff)
@@ -196,6 +198,7 @@ func (indexer *txIndexer) repair(head uint64) {
 		// A crash may occur between the two delete operations,
 		// potentially leaving dangling indexes in the database.
 		// However, this is considered acceptable.
+		indexer.tail.Store(&indexer.cutoff)
 		rawdb.WriteTxIndexTail(indexer.db, indexer.cutoff)
 		rawdb.DeleteAllTxLookupEntries(indexer.db, func(txhash common.Hash, blob []byte) bool {
 			n := rawdb.DecodeTxLookupEntry(blob, indexer.db)
