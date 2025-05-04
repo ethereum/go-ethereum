@@ -47,6 +47,10 @@ type txIndexer struct {
 	//       and all others shouldn't.
 	limit uint64
 
+	// The current head of blockchain for transaction indexing. This field
+	// is accessed by both the indexer and the indexing progress queries.
+	head atomic.Uint64
+
 	// The current tail of the indexed transactions, null indicates
 	// that no transactions have been indexed yet.
 	//
@@ -74,6 +78,7 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 		term:   make(chan chan struct{}),
 		closed: make(chan struct{}),
 	}
+	indexer.head.Store(indexer.resolveHead())
 	indexer.tail.Store(rawdb.ReadTxIndexTail(chain.db))
 
 	go indexer.loop(chain)
@@ -228,16 +233,15 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 
 	// Listening to chain events and manipulate the transaction indexes.
 	var (
-		stop chan struct{}           // Non-nil if background routine is active
-		done chan struct{}           // Non-nil if background routine is active
-		head = indexer.resolveHead() // The latest announced chain head
-
+		stop   chan struct{} // Non-nil if background routine is active
+		done   chan struct{} // Non-nil if background routine is active
 		headCh = make(chan ChainHeadEvent)
 		sub    = chain.SubscribeChainHeadEvent(headCh)
 	)
 	defer sub.Unsubscribe()
 
 	// Validate the transaction indexes and repair if necessary
+	head := indexer.head.Load()
 	indexer.repair(head)
 
 	// Launch the initial processing if chain is not empty (head != genesis).
@@ -250,15 +254,18 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 	for {
 		select {
 		case h := <-headCh:
+			indexer.head.Store(h.Header.Number.Uint64())
 			if done == nil {
 				stop = make(chan struct{})
 				done = make(chan struct{})
 				go indexer.run(h.Header.Number.Uint64(), stop, done)
 			}
+
 		case <-done:
 			stop = nil
 			done = nil
 			indexer.tail.Store(rawdb.ReadTxIndexTail(indexer.db))
+
 		case ch := <-indexer.term:
 			if stop != nil {
 				close(stop)
@@ -314,7 +321,7 @@ func (indexer *txIndexer) report(head uint64, tail *uint64) TxIndexProgress {
 // only updated at the end of each indexing operation. However, this delay is
 // considered acceptable.
 func (indexer *txIndexer) txIndexProgress() TxIndexProgress {
-	return indexer.report(indexer.resolveHead(), indexer.tail.Load())
+	return indexer.report(indexer.head.Load(), indexer.tail.Load())
 }
 
 // close shutdown the indexer. Safe to be called for multiple times.
