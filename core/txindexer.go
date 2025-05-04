@@ -61,7 +61,6 @@ type txIndexer struct {
 	// cutoff denotes the block number before which the chain segment should
 	// be pruned and not available locally.
 	cutoff uint64
-	chain  *BlockChain
 	db     ethdb.Database
 	term   chan chan struct{}
 	closed chan struct{}
@@ -73,7 +72,6 @@ func newTxIndexer(limit uint64, chain *BlockChain) *txIndexer {
 	indexer := &txIndexer{
 		limit:  limit,
 		cutoff: cutoff,
-		chain:  chain,
 		db:     chain.db,
 		term:   make(chan chan struct{}),
 		closed: make(chan struct{}),
