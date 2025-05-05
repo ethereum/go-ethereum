@@ -217,7 +217,13 @@ func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexe
 	return eth.pathState(block)
 }
 
-// stateAtTransaction returns the execution environment of a certain transaction.
+// stateAtTransaction returns the execution environment of a certain
+// transaction.
+//
+// Note: when a block is empty and the state for tx index 0 is requested, this
+// function will return the state of block after the pre-block operations have
+// been completed (e.g. updating system contracts), but before post-block
+// operations are completed (e.g. processing withdrawals).
 func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
