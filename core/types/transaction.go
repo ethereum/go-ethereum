@@ -356,11 +356,13 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 // the actual negative value, _and_ ErrGasFeeCapTooLow
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 	dst := new(big.Int)
-	err := tx.effectiveGasTipInto(dst, baseFee)
+	err := tx.calcEffectiveGasTip(dst, baseFee)
 	return dst, err
 }
 
-func (tx *Transaction) effectiveGasTipInto(dst *big.Int, baseFee *big.Int) error {
+// calcEffectiveGasTip calculates the effective gas tip of the transaction and
+// saves the result to dst.
+func (tx *Transaction) calcEffectiveGasTip(dst *big.Int, baseFee *big.Int) error {
 	if baseFee == nil {
 		dst.Set(tx.inner.gasTipCap())
 		return nil
@@ -385,10 +387,10 @@ func (tx *Transaction) EffectiveGasTipCmp(other *Transaction, baseFee *big.Int) 
 	if baseFee == nil {
 		return tx.GasTipCapCmp(other)
 	}
-	txTip := new(big.Int)
-	otherTip := new(big.Int)
-	tx.effectiveGasTipInto(txTip, baseFee)
-	other.effectiveGasTipInto(otherTip, baseFee)
+	// Use more efficient internal method.
+	txTip, otherTip := new(big.Int), new(big.Int)
+	tx.calcEffectiveGasTip(txTip, baseFee)
+	other.calcEffectiveGasTip(otherTip, baseFee)
 	return txTip.Cmp(otherTip)
 }
 
@@ -398,7 +400,7 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 		return tx.GasTipCapIntCmp(other)
 	}
 	txTip := new(big.Int)
-	tx.effectiveGasTipInto(txTip, baseFee)
+	tx.calcEffectiveGasTip(txTip, baseFee)
 	return txTip.Cmp(other)
 }
 
