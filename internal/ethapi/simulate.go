@@ -259,12 +259,13 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracingStateDB = state.NewHookedState(sim.state, hooks)
 	}
 	evm := vm.NewEVM(blockContext, tracingStateDB, sim.chainConfig, *vmConfig)
+	rules := evm.Rules()
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	if sim.chainConfig.IsPrague(header.Number, header.Time) || sim.chainConfig.IsVerkle(header.Number, header.Time) {
+	if rules.IsPrague || rules.IsVerkle {
 		core.ProcessParentBlockHash(header.ParentHash, evm)
 	}
 	if header.ParentBeaconRoot != nil {
@@ -287,7 +288,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracer.reset(txHash, uint(i))
 		sim.state.SetTxContext(txHash, i)
 		// EoA check is always skipped, even in validation mode.
-		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
+		msg := call.ToMessage(rules, header.BaseFee, !sim.validate, true)
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, sim.gp)
 		if err != nil {
 			txErr := txValidationError(err)
