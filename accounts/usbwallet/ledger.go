@@ -531,6 +531,12 @@ func (w *ledgerDriver) ledgerSignTypedMessage(derivationPath []uint32, domainHas
 //	APDU length              | 1 byte
 //	Optional APDU data       | arbitrary
 func (w *ledgerDriver) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 ledgerParam2, data []byte) ([]byte, error) {
+	// max safe length check
+	const maxDataLength = 128 * 1024 * 1024 // 128 MB
+	if len(data) > maxDataLength {
+		return nil, errors.New("data too large")
+	}
+
 	// Construct the message payload, possibly split into multiple chunks
 	apdu := make([]byte, 2, 7+len(data))
 

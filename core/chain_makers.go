@@ -507,11 +507,12 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		// Save pre state for proof generation
 		// preState := statedb.Copy()
 
-		// EIP-2935 / 7709
-		blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-		blockContext.Random = &common.Hash{} // enable post-merge instruction set
-		evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
-		ProcessParentBlockHash(b.header.ParentHash, evm)
+		if config.Bor == nil { // EIP-2935 / 7709
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			blockContext.Random = &common.Hash{} // enable post-merge instruction set
+			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+			ProcessParentBlockHash(b.header.ParentHash, evm)
+		}
 
 		// Execute any user modifications to the block.
 		if gen != nil {

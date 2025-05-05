@@ -16,6 +16,8 @@
 
 package trie
 
+import "math"
+
 // Trie keys are dealt with in three distinct encodings:
 //
 // KEYBYTES encoding contains the actual key and nothing else. This encoding is the
@@ -104,6 +106,9 @@ func compactToHex(compact []byte) []byte {
 }
 
 func keybytesToHex(str []byte) []byte {
+	if len(str) > math.MaxInt/2 {
+		panic("input too large")
+	}
 	l := len(str)*2 + 1
 
 	var nibbles = make([]byte, l)

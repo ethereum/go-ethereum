@@ -586,7 +586,7 @@ func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis 
 	return bc, nil
 }
 
-func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ types.Receipts, _ []*types.Log, _ uint64, _ *state.StateDB, vtime time.Duration, blockEndErr error) {
+func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header, witness *stateless.Witness) (_ types.Receipts, _ []*types.Log, _ uint64, _ *state.StateDB, vtime time.Duration, blockEndErr error) {
 	// Process the block using processor and parallelProcessor at the same time, take the one which finishes first, cancel the other, and return the result
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -631,14 +631,11 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		if err != nil {
 			return nil, nil, 0, nil, 0, err
 		}
-		// TODO(manav): confirm if not setting logger here affects block-stm or not as it's removed
-		// from upstream
-		// parallelStatedb.SetLogger(bc.logger)
 
 		processorCount++
 
 		go func() {
-			parallelStatedb.StartPrefetcher("chain", nil)
+			parallelStatedb.StartPrefetcher("chain", witness)
 			pstart := time.Now()
 			res, err := bc.parallelProcessor.Process(block, parallelStatedb, bc.vmConfig, ctx)
 			blockExecutionParallelTimer.UpdateSince(pstart)
@@ -663,7 +660,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		processorCount++
 
 		go func() {
-			statedb.StartPrefetcher("chain", nil)
+			statedb.StartPrefetcher("chain", witness)
 			pstart := time.Now()
 			res, err := bc.processor.Process(block, statedb, bc.vmConfig, ctx)
 			blockExecutionSerialTimer.UpdateSince(pstart)
@@ -2355,7 +2352,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 					return nil, it.index, err
 				}
 			}
-			statedb.StartPrefetcher("chain", witness)
+			// Bor: We start the prefetcher in process block function called below
+			// and not here as we copy state for block-stm in that function. Also,
+			// we don't want to start duplicate prefetchers per block.
+			// statedb.StartPrefetcher("chain", witness)
 		}
 		activeState = statedb
 
@@ -2384,7 +2384,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 
 		// Process block using the parent state as reference point
 		pstart := time.Now()
-		receipts, logs, usedGas, statedb, vtime, err := bc.ProcessBlock(block, parent)
+		receipts, logs, usedGas, statedb, vtime, err := bc.ProcessBlock(block, parent, witness)
 		activeState = statedb
 
 		if err != nil {

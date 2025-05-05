@@ -539,7 +539,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 				head.BlobGasUsed = new(uint64)
 			}
 		}
-		if conf.IsPrague(num) {
+		if conf.IsPrague(num) && conf.Bor == nil {
 			head.RequestsHash = &types.EmptyRequestsHash
 		}
 	}
