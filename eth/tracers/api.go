@@ -813,6 +813,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 				Tracer:                  logger.NewJSONLogger(&logConfig, writer),
 				EnablePreimageRecording: true,
 			}
+			evm = vm.NewEVM(vmctx, statedb, chainConfig, vmConf)
 		}
 		// Execute the transaction and flush any traces to disk
 		statedb.SetTxContext(tx.Hash(), i)
