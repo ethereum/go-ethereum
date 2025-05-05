@@ -35,7 +35,7 @@ const (
 	subscribeMethodSuffix    = "_subscribe"
 	unsubscribeMethodSuffix  = "_unsubscribe"
 	notificationMethodSuffix = "_subscription"
-	maxMethodNameLength      = 256
+	maxMethodNameLength      = 2048
 
 	defaultWriteTimeout = 10 * time.Second // used if context has no deadline
 )
