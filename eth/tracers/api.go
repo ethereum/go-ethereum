@@ -822,10 +822,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		if tracer.OnTxStart != nil {
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
-		vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
-		if tracer.OnTxEnd != nil {
-			tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, err)
-		}
+		_, err = core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if writer != nil {
 			writer.Flush()
 		}
