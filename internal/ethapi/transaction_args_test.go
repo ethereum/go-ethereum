@@ -323,7 +323,9 @@ func (b *backendMock) CurrentHeader() *types.Header     { return b.current }
 func (b *backendMock) ChainConfig() *params.ChainConfig { return b.config }
 
 // Other methods needed to implement Backend interface.
-func (b *backendMock) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
+func (b *backendMock) SyncProgress(ctx context.Context) ethereum.SyncProgress {
+	return ethereum.SyncProgress{}
+}
 func (b *backendMock) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
 	return nil, nil, nil, nil, nil, nil, nil
 }
@@ -378,9 +380,10 @@ func (b *backendMock) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) eve
 	return nil
 }
 func (b *backendMock) SendTx(ctx context.Context, signedTx *types.Transaction) error { return nil }
-func (b *backendMock) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
-	return false, nil, [32]byte{}, 0, 0, nil
+func (b *backendMock) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
+	return false, nil, [32]byte{}, 0, 0
 }
+func (b *backendMock) TxIndexDone() bool                                        { return true }
 func (b *backendMock) GetPoolTransactions() (types.Transactions, error)         { return nil, nil }
 func (b *backendMock) GetPoolTransaction(txHash common.Hash) *types.Transaction { return nil }
 func (b *backendMock) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
