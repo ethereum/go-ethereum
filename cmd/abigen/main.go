@@ -67,6 +67,10 @@ var (
 		Name:  "alias",
 		Usage: "Comma separated aliases for function and event renaming.  If --v2 is set, errors are aliased as well. e.g. original1=alias1, original2=alias2",
 	}
+	templateFlag = &cli.StringFlag{
+		Name:  "template",
+		Usage: "Input file to use as template for generating bindings",
+	}
 	v2Flag = &cli.BoolFlag{
 		Name:  "v2",
 		Usage: "Generates v2 bindings",
@@ -86,6 +90,7 @@ func init() {
 		pkgFlag,
 		outFlag,
 		aliasFlag,
+		templateFlag,
 		v2Flag,
 	}
 	app.Action = generate
@@ -99,6 +104,9 @@ func generate(c *cli.Context) error {
 	}
 	if c.String(abiFlag.Name) == "" && c.String(jsonFlag.Name) == "" {
 		utils.Fatalf("Either contract ABI source (--abi) or combined-json (--combined-json) are required")
+	}
+	if !c.Bool(v2Flag.Name) && c.IsSet(templateFlag.Name) {
+		utils.Fatalf("Template configurabion only works with abigen v2")
 	}
 	// If the entire solidity code was specified, build and bind based on that
 	var (
@@ -216,7 +224,16 @@ func generate(c *cli.Context) error {
 		err  error
 	)
 	if c.IsSet(v2Flag.Name) {
-		code, err = abigen.BindV2(types, abis, bins, c.String(pkgFlag.Name), libs, aliases)
+		template := abigen.TmplSourceV2
+		if c.IsSet(templateFlag.Name) {
+			templateLoc := c.String(templateFlag.Name)
+			templateData, err := os.ReadFile(templateLoc)
+			if err != nil {
+				utils.Fatalf("Error reading template file: %s, error: %", templateLoc, err)
+			}
+			template = string(templateData)
+		}
+		code, err = abigen.BindV2(types, abis, bins, c.String(pkgFlag.Name), libs, aliases, template)
 	} else {
 		code, err = abigen.Bind(types, abis, bins, sigs, c.String(pkgFlag.Name), libs, aliases)
 	}

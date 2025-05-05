@@ -58,7 +58,7 @@ func bindCombinedJSON(test *bindV2Test) (string, error) {
 	if test.aliases == nil {
 		test.aliases = make(map[string]string)
 	}
-	code, err := BindV2(types, abis, bins, "bindtests", libs, test.aliases)
+	code, err := BindV2(types, abis, bins, "bindtests", libs, test.aliases, TmplSourceV2)
 	if err != nil {
 		return "", fmt.Errorf("error creating bindings: %v", err)
 	}

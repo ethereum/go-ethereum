@@ -40,6 +40,26 @@ import (
 // TestBindingGeneration tests that re-running generation of bindings does not result in
 // mutations to the binding code.
 func TestBindingGeneration(t *testing.T) {
+	BindGenerationWithExpectedOutput(t, abigen.TmplSourceV2, getCodeFromBindingsDotGo)
+}
+
+func TestBindingGenerationWithDifferentTemplate(t *testing.T) {
+	BindGenerationWithExpectedOutput(t, "package {{.Package}} //test template", getHarcodedCodeFromBindingsDotGo)
+}
+
+func getHarcodedCodeFromBindingsDotGo(t *testing.T, basePath string) string {
+	return "package " + strings.Replace(basePath, "internal/contracts/", "", -1) + " //test template\n"
+}
+
+func getCodeFromBindingsDotGo(t *testing.T, basePath string) string {
+	existingBindings, err := os.ReadFile(filepath.Join(basePath, "bindings.go"))
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	return string(existingBindings)
+}
+
+func BindGenerationWithExpectedOutput(t *testing.T, templateContent string, getExpectedCodeFunc func(t *testing.T, basePath string) string) {
 	matches, _ := filepath.Glob("internal/contracts/*")
 	var dirs []string
 	for _, match := range matches {
@@ -86,16 +106,13 @@ func TestBindingGeneration(t *testing.T) {
 			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36] // the first 2 chars are 0x
 			libs[libPattern] = typeName
 		}
-		code, err := abigen.BindV2(types, abis, bins, dir, libs, make(map[string]string))
+		code, err := abigen.BindV2(types, abis, bins, dir, libs, make(map[string]string), templateContent)
 		if err != nil {
 			t.Fatalf("error creating bindings for package %s: %v", dir, err)
 		}
 
-		existingBindings, err := os.ReadFile(filepath.Join(basePath, "bindings.go"))
-		if err != nil {
-			t.Fatalf("ReadFile returned error: %v", err)
-		}
-		if code != string(existingBindings) {
+		expectedCode := getExpectedCodeFunc(t, basePath)
+		if code != expectedCode {
 			t.Fatalf("code mismatch for %s", dir)
 		}
 	}

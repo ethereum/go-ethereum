@@ -133,4 +133,4 @@ var tmplSource string
 // for abigen v2 is based on.
 //
 //go:embed source2.go.tpl
-var tmplSourceV2 string
+var TmplSourceV2 string

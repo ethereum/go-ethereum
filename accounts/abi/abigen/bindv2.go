@@ -294,7 +294,7 @@ func iterSorted[V any](inp map[string]V, onItem func(string, V) error) error {
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention as opposed to having to
 // manually maintain hard coded strings that break on runtime.
-func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs map[string]string, aliases map[string]string) (string, error) {
+func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs map[string]string, aliases map[string]string, templateContent string) (string, error) {
 	b := binder{
 		contracts: make(map[string]*tmplContractV2),
 		structs:   make(map[string]*tmplStruct),
@@ -360,7 +360,7 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		"ispointertype":      isPointerType,
 		"underlyingbindtype": underlyingBindType,
 	}
-	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSourceV2))
+	tmpl := template.Must(template.New("").Funcs(funcs).Parse(templateContent))
 	if err := tmpl.Execute(buffer, data); err != nil {
 		return "", err
 	}
