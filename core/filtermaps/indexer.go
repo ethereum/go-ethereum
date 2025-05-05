@@ -254,7 +254,7 @@ func (f *FilterMaps) tryIndexHead() error {
 			((!f.loggedHeadIndex && time.Since(f.startedHeadIndexAt) > headLogDelay) ||
 				time.Since(f.lastLogHeadIndex) > logFrequency) {
 			log.Info("Log index head rendering in progress",
-				"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
+				"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
 				"processed", f.indexedRange.blocks.AfterLast()-f.ptrHeadIndex,
 				"remaining", f.indexedView.HeadNumber()-f.indexedRange.blocks.Last(),
 				"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
@@ -266,7 +266,7 @@ func (f *FilterMaps) tryIndexHead() error {
 	}
 	if f.loggedHeadIndex && f.indexedRange.hasIndexedBlocks() {
 		log.Info("Log index head rendering finished",
-			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
+			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
 			"processed", f.indexedRange.blocks.AfterLast()-f.ptrHeadIndex,
 			"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
 	}
@@ -323,7 +323,7 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 			if f.indexedRange.hasIndexedBlocks() && f.ptrTailIndex >= f.indexedRange.blocks.First() &&
 				(!f.loggedTailIndex || time.Since(f.lastLogTailIndex) > logFrequency) {
 				log.Info("Log index tail rendering in progress",
-					"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
+					"firstblock", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
 					"processed", f.ptrTailIndex-f.indexedRange.blocks.First()+tpb,
 					"remaining", remaining,
 					"next tail epoch percentage", f.indexedRange.tailPartialEpoch*100/f.mapsPerEpoch,
@@ -346,7 +346,7 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 	}
 	if f.loggedTailIndex && f.indexedRange.hasIndexedBlocks() {
 		log.Info("Log index tail rendering finished",
-			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
+			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
 			"processed", f.ptrTailIndex-f.indexedRange.blocks.First(),
 			"elapsed", common.PrettyDuration(time.Since(f.startedTailIndexAt)))
 		f.loggedTailIndex = false
