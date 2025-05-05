@@ -1287,7 +1287,8 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 			// test that all traces in the block were outputted if no trace config is specified
 			blockNumber: rpc.LatestBlockNumber,
 			config:      nil,
-			want: []string{`{"pc":0,"op":96,"gas":"0x7148","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1"}
+			want: []string{
+				`{"pc":0,"op":96,"gas":"0x7148","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1"}
 {"pc":2,"op":80,"gas":"0x7145","gasCost":"0x2","memSize":0,"stack":["0x0"],"depth":1,"refund":0,"opName":"POP"}
 {"pc":3,"op":0,"gas":"0x7143","gasCost":"0x0","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"STOP"}
 {"output":"","gasUsed":"0x5"}
@@ -1328,10 +1329,7 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 				t.Fatalf("could not read trace file: %v", err)
 			}
 			if tc.want[j] != string(traceReceived) {
-				fmt.Println(tc.want[j])
-				fmt.Println("foobar")
-				fmt.Println(string(traceReceived))
-				t.Fatalf("fuck")
+				t.Fatalf("unexpected trace result.  expected\n'%s'\n\nreceived\n'%s'\n", tc.want[j], string(traceReceived))
 			}
 		}
 	}
