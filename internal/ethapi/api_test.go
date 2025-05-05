@@ -472,7 +472,9 @@ func (b *testBackend) setPendingBlock(block *types.Block) {
 	b.pending = block
 }
 
-func (b testBackend) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
+func (b testBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
+	return ethereum.SyncProgress{}
+}
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil
 }
@@ -589,9 +591,12 @@ func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) even
 func (b testBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	panic("implement me")
 }
-func (b testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
+func (b testBackend) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.db, txHash)
-	return true, tx, blockHash, blockNumber, index, nil
+	return true, tx, blockHash, blockNumber, index
+}
+func (b testBackend) TxIndexDone() bool {
+	return true
 }
 func (b testBackend) GetPoolTransactions() (types.Transactions, error)         { panic("implement me") }
 func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction { panic("implement me") }
