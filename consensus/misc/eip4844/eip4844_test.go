@@ -60,6 +60,7 @@ func TestCalcExcessBlobGas(t *testing.T) {
 		header := &types.Header{
 			ExcessBlobGas: &tt.excess,
 			BlobGasUsed:   &blobGasUsed,
+			Number:        big.NewInt(1),
 		}
 		result := CalcExcessBlobGas(config, header, *config.CancunTime)
 		if result != tt.want {
