@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"runtime"
@@ -778,7 +779,13 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Note: This copies the config, to not screw up the main config
 		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
 	}
-	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
+
+	writer := bufio.NewWriter(io.Discard)
+	tracer := logger.NewJSONLogger(&logConfig, writer)
+	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{
+		Tracer:                  tracer,
+		EnablePreimageRecording: true,
+	})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
@@ -789,9 +796,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Prepare the transaction for un-traced execution
 		var (
 			msg, _ = core.TransactionToMessage(tx, signer, block.BaseFee())
-			vmConf vm.Config
 			dump   *os.File
-			writer *bufio.Writer
 			err    error
 		)
 		// If the transaction needs tracing, swap out the configs
@@ -809,19 +814,20 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 
 			// Swap out the noop logger to the standard tracer
 			writer = bufio.NewWriter(dump)
-			vmConf = vm.Config{
-				Tracer:                  logger.NewJSONLogger(&logConfig, writer),
-				EnablePreimageRecording: true,
-			}
+			*tracer = *logger.NewJSONLogger(&logConfig, writer)
+		} else {
+			writer = bufio.NewWriter(io.Discard)
+			*tracer = *logger.NewJSONLogger(&logConfig, writer)
 		}
+
 		// Execute the transaction and flush any traces to disk
 		statedb.SetTxContext(tx.Hash(), i)
-		if vmConf.Tracer.OnTxStart != nil {
-			vmConf.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		if tracer.OnTxStart != nil {
+			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
-		if vmConf.Tracer.OnTxEnd != nil {
-			vmConf.Tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, err)
+		if tracer.OnTxEnd != nil {
+			tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, err)
 		}
 		if writer != nil {
 			writer.Flush()
