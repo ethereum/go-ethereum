@@ -738,35 +738,11 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
-	if err != nil {
-		return nil, err
-	}
-	reexec := defaultTraceReexec
-	if config != nil && config.Reexec != nil {
-		reexec = *config.Reexec
-	}
-	statedb, release, err := api.backend.StateAtBlock(ctx, parent, reexec, nil, true, false)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
-	// Retrieve the tracing configurations, or use default values
-	var (
-		logConfig logger.Config
-		txHash    common.Hash
-	)
-	if config != nil {
-		logConfig = config.Config
-		txHash = config.TxHash
-	}
 
-	// Execute transaction, either tracing all or just the requested one
 	var (
 		dumps       []string
 		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		chainConfig = api.backend.ChainConfig()
-		vmctx       = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		canon       = true
 	)
 	// Check if there are any overrides: the caller may wish to enable a future
@@ -779,71 +755,104 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
 	}
 
-	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
-	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
-	}
-	if chainConfig.IsPrague(block.Number(), block.Time()) {
-		core.ProcessParentBlockHash(block.ParentHash(), evm)
-	}
-	for i, tx := range block.Transactions() {
-		// Prepare the transaction for un-traced execution
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		if txHash != (common.Hash{}) && tx.Hash() != txHash {
-			// Process the tx to update state, but don't trace it.
-			_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
-			if err != nil {
-				return dumps, err
-			}
-			// Finalize the state so any modifications are written to the trie
-			// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-			statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
-			continue
-		}
+	writeTxTrace := func(vmctx vm.BlockContext, index int, statedb *state.StateDB, evm *vm.EVM) (*vm.EVM, error) {
 		// The transaction should be traced.
 		// Generate a unique temporary file to dump it into.
-		prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], i, tx.Hash().Bytes()[:4])
+		tx := block.Transactions()[index]
+		prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], index, tx.Hash().Bytes()[:4])
 		if !canon {
 			prefix = fmt.Sprintf("%valt-", prefix)
 		}
-		var dump *os.File
 		dump, err := os.CreateTemp(os.TempDir(), prefix)
 		if err != nil {
 			return nil, err
 		}
 		dumps = append(dumps, dump.Name())
-		// Set up the tracer and EVM for the transaction.
-		var (
-			writer = bufio.NewWriter(dump)
-			tracer = logger.NewJSONLogger(&logConfig, writer)
-			evm    = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{
+		var logConfig logger.Config
+		// Retrieve the tracing configurations, or use default values
+		if config != nil {
+			logConfig = config.Config
+		}
+		writer := bufio.NewWriter(dump)
+		defer func() {
+			writer.Flush()
+			dump.Close()
+		}()
+
+		tracer := logger.NewJSONLogger(&logConfig, writer)
+		// If evm is nil, create it, else cover the tracer and reuse it again.
+		if evm == nil {
+			evm = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{
 				Tracer:    tracer,
 				NoBaseFee: true,
 			})
-		)
+			if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+				core.ProcessBeaconBlockRoot(*beaconRoot, evm)
+			}
+			if chainConfig.IsPrague(block.Number(), block.Time()) {
+				core.ProcessParentBlockHash(block.ParentHash(), evm)
+			}
+		} else {
+			evm.Config.Tracer = tracer
+		}
+
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		// Execute the transaction and flush any traces to disk
-		statedb.SetTxContext(tx.Hash(), i)
+		statedb.SetTxContext(tx.Hash(), index)
 		if tracer.OnTxStart != nil {
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
+		// Process the tx to update state.
 		_, err = core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
-		if writer != nil {
-			writer.Flush()
-		}
-		if dump != nil {
-			dump.Close()
-			log.Info("Wrote standard trace", "file", dump.Name())
-		}
 		if err != nil {
-			return dumps, err
+			return nil, err
 		}
 		// Finalize the state so any modifications are written to the trie
 		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
 		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
 
-		// If we've traced the transaction we were looking for, abort
-		if tx.Hash() == txHash {
-			break
+		log.Info("Wrote standard trace", "file", dump.Name())
+
+		return evm, nil
+	}
+
+	reexec := defaultTraceReexec
+	if config != nil && config.Reexec != nil {
+		reexec = *config.Reexec
+	}
+
+	// If txHash is specified, only trace this transaction.
+	if config != nil && config.TxHash != (common.Hash{}) {
+		// Get the transaction index.
+		var index int
+		for i, tx := range block.Transactions() {
+			if tx.Hash() == config.TxHash {
+				index = i
+				break
+			}
+		}
+		_, vmctx, statedb, release, err := api.backend.StateAtTransaction(ctx, block, index, reexec)
+		if err != nil {
+			return nil, err
+		}
+		defer release()
+
+		_, err = writeTxTrace(vmctx, index, statedb, nil)
+		return dumps, err
+	}
+
+	// If txHash is empty, trace all transactions in the block.
+	_, vmctx, statedb, release, err := api.backend.StateAtTransaction(ctx, block, 0, reexec)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	var evm *vm.EVM
+	for index := range block.Transactions() {
+		evm, err = writeTxTrace(vmctx, index, statedb, evm)
+		if err != nil {
+			return dumps, err
 		}
 	}
 	return dumps, nil
