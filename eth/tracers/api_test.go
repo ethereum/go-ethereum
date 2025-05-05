@@ -1227,9 +1227,11 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 		address = crypto.PubkeyToAddress(key.PublicKey)
 		funds   = big.NewInt(1000000000000000)
 
+		// first contract the sender transacts with
 		aa     = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
 		aaCode = []byte{byte(vm.PUSH1), 0x00, byte(vm.POP)}
 
+		// second contract the sender transacts with
 		bb     = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f44")
 		bbCode = []byte{byte(vm.PUSH2), 0x00, 0x01, byte(vm.POP)}
 	)
@@ -1317,11 +1319,11 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 	api := NewAPI(backend)
 	for i, tc := range testSuite {
 		block, _ := api.blockByNumber(context.Background(), tc.blockNumber)
-		results, err := api.StandardTraceBlockToFile(context.Background(), block.Hash(), tc.config)
+		txTraces, err := api.StandardTraceBlockToFile(context.Background(), block.Hash(), tc.config)
 		if err != nil {
 			t.Fatalf("test index %d received error %v", i, err)
 		}
-		for j, traceFileName := range results {
+		for j, traceFileName := range txTraces {
 			traceReceived, err := os.ReadFile(traceFileName)
 			if err != nil {
 				t.Fatalf("could not read trace file: %v", err)
