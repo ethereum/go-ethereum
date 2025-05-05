@@ -1319,10 +1319,8 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 		block, _ := api.blockByNumber(context.Background(), tc.blockNumber)
 		results, err := api.StandardTraceBlockToFile(context.Background(), block.Hash(), tc.config)
 		if err != nil {
-			t.Errorf("test %d, want no error, have %v", i, err)
-			continue
+			t.Fatalf("test index %d received error %v", i, err)
 		}
-
 		for j, traceFileName := range results {
 			traceReceived, err := os.ReadFile(traceFileName)
 			if err != nil {
