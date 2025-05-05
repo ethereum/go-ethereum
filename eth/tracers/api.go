@@ -778,6 +778,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Note: This copies the config, to not screw up the main config
 		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
 	}
+
 	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
@@ -787,42 +788,45 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	}
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
-		var (
-			msg, _ = core.TransactionToMessage(tx, signer, block.BaseFee())
-			vmConf vm.Config
-			dump   *os.File
-			writer *bufio.Writer
-			err    error
-		)
-		// If the transaction needs tracing, swap out the configs
-		if tx.Hash() == txHash || txHash == (common.Hash{}) {
-			// Generate a unique temporary file to dump it into
-			prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], i, tx.Hash().Bytes()[:4])
-			if !canon {
-				prefix = fmt.Sprintf("%valt-", prefix)
-			}
-			dump, err = os.CreateTemp(os.TempDir(), prefix)
+		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+		if txHash != (common.Hash{}) && tx.Hash() != txHash {
+			// Process the tx to update state, but don't trace it.
+			_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
 			if err != nil {
-				return nil, err
+				return dumps, err
 			}
-			dumps = append(dumps, dump.Name())
-
-			// Swap out the noop logger to the standard tracer
-			writer = bufio.NewWriter(dump)
-			vmConf = vm.Config{
-				Tracer:                  logger.NewJSONLogger(&logConfig, writer),
-				EnablePreimageRecording: true,
-			}
+			// Finalize the state so any modifications are written to the trie
+			// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
+			statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+			continue
 		}
+		// The transaction should be traced.
+		// Generate a unique temporary file to dump it into.
+		prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], i, tx.Hash().Bytes()[:4])
+		if !canon {
+			prefix = fmt.Sprintf("%valt-", prefix)
+		}
+		var dump *os.File
+		dump, err := os.CreateTemp(os.TempDir(), prefix)
+		if err != nil {
+			return nil, err
+		}
+		dumps = append(dumps, dump.Name())
+		// Set up the tracer and EVM for the transaction.
+		var (
+			writer = bufio.NewWriter(dump)
+			tracer = logger.NewJSONLogger(&logConfig, writer)
+			evm    = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{
+				Tracer:    tracer,
+				NoBaseFee: true,
+			})
+		)
 		// Execute the transaction and flush any traces to disk
 		statedb.SetTxContext(tx.Hash(), i)
-		if vmConf.Tracer.OnTxStart != nil {
-			vmConf.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		if tracer.OnTxStart != nil {
+			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
-		vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
-		if vmConf.Tracer.OnTxEnd != nil {
-			vmConf.Tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, err)
-		}
+		_, err = core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if writer != nil {
 			writer.Flush()
 		}
