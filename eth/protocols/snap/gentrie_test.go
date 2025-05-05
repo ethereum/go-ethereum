@@ -551,3 +551,145 @@ func TestTinyPartialTree(t *testing.T) {
 		}
 	}
 }
+
+func TestTrieDelete(t *testing.T) {
+	var entries []*kv
+	for i := 0; i < 1024; i++ {
+		entries = append(entries, &kv{
+			k: testrand.Bytes(32),
+			v: testrand.Bytes(32),
+		})
+	}
+	slices.SortFunc(entries, (*kv).cmp)
+
+	nodes := make(map[string]common.Hash)
+	tr := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+		nodes[string(path)] = hash
+	})
+	for i := 0; i < len(entries); i++ {
+		tr.Update(entries[i].k, entries[i].v)
+	}
+	tr.Hash()
+
+	check := func(index []int) {
+		var (
+			db        = rawdb.NewMemoryDatabase()
+			batch     = db.NewBatch()
+			marks     = map[int]struct{}{}
+			neighbors = map[int]struct{}{}
+		)
+		for _, n := range index {
+			marks[n] = struct{}{}
+		}
+		for _, n := range index {
+			if n != 0 {
+				if _, ok := marks[n-1]; !ok {
+					neighbors[n-1] = struct{}{}
+				}
+			}
+			if n != len(entries)-1 {
+				if _, ok := neighbors[n+1]; !ok {
+					neighbors[n+1] = struct{}{}
+				}
+			}
+		}
+		// Write the junk nodes as the dangling
+		var injects []string
+		for _, n := range index {
+			nibbles := byteToHex(entries[n].k)
+			for i := 0; i <= len(nibbles); i++ {
+				injects = append(injects, string(nibbles[:i]))
+			}
+		}
+		for _, path := range injects {
+			rawdb.WriteAccountTrieNode(db, []byte(path), testrand.Bytes(32))
+		}
+		tr := newPathTrie(common.Hash{}, false, db, batch)
+		for i := 0; i < len(entries); i++ {
+			if _, ok := marks[i]; ok {
+				tr.delete(entries[i].k)
+			} else {
+				tr.update(entries[i].k, entries[i].v)
+			}
+		}
+		tr.commit(true)
+
+		r := newBatchReplay()
+		batch.Replay(r)
+		batch.Write()
+
+		for _, path := range injects {
+			if rawdb.HasAccountTrieNode(db, []byte(path)) {
+				t.Fatalf("Unexpected leftover node %v", []byte(path))
+			}
+		}
+
+		// ensure all the written nodes match with the complete tree
+		set := make(map[string]common.Hash)
+		for path, hash := range r.modifies() {
+			if hash == (common.Hash{}) {
+				continue
+			}
+			n, ok := nodes[path]
+			if !ok {
+				t.Fatalf("Unexpected trie node: %v", []byte(path))
+			}
+			if n != hash {
+				t.Fatalf("Unexpected trie node content: %v, want: %x, got: %x", []byte(path), n, hash)
+			}
+			set[path] = hash
+		}
+
+		// ensure all the missing nodes either on the deleted path, or
+		// on the neighbor paths.
+		isMissing := func(path []byte) bool {
+			for n := range marks {
+				key := byteToHex(entries[n].k)
+				if bytes.HasPrefix(key, path) {
+					return true
+				}
+			}
+			for n := range neighbors {
+				key := byteToHex(entries[n].k)
+				if bytes.HasPrefix(key, path) {
+					return true
+				}
+			}
+			return false
+		}
+		for path := range nodes {
+			if _, ok := set[path]; ok {
+				continue
+			}
+			if !isMissing([]byte(path)) {
+				t.Fatalf("Missing node %v", []byte(path))
+			}
+		}
+	}
+	var cases = []struct {
+		index []int
+	}{
+		// delete the first
+		{[]int{0}},
+
+		// delete the last
+		{[]int{len(entries) - 1}},
+
+		// delete the first two
+		{[]int{0, 1}},
+
+		// delete the last two
+		{[]int{len(entries) - 2, len(entries) - 1}},
+
+		{[]int{
+			0, 2, 4, 6,
+			len(entries) - 1,
+			len(entries) - 3,
+			len(entries) - 5,
+			len(entries) - 7,
+		}},
+	}
+	for _, c := range cases {
+		check(c.index)
+	}
+}

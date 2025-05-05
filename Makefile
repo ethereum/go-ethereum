@@ -35,9 +35,8 @@ protoc:
 
 generate-mocks:
 	go generate mockgen -destination=./tests/bor/mocks/IHeimdallClient.go -package=mocks ./consensus/bor IHeimdallClient
-	go generate mockgen -destination=./eth/filters/IDatabase.go -package=filters ./ethdb Database
 	go generate mockgen -destination=./eth/filters/IBackend.go -package=filters ./eth/filters Backend
-	go generate mockgen -destination=../eth/filters/IDatabase.go -package=filters ./ethdb Database
+	go generate mockgen -destination=./eth/filters/IDatabase.go -package=filters ./ethdb Database
 
 #? geth: Build geth.
 geth:

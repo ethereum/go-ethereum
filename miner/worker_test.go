@@ -707,9 +707,10 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	}
 }
 
-// nolint : paralleltest
-// TestCommitInterruptExperimentBor tests the commit interrupt experiment for bor consensus by inducing an artificial delay at transaction level.
-func TestCommitInterruptExperimentBor(t *testing.T) {
+// nolint: paralleltest
+// TestCommitInterruptExperimentBor_NormalFlow tests the commit interrupt experiment for bor consensus by inducing
+// an artificial delay at transaction level. It runs the normal mining flow triggered via new head.
+func TestCommitInterruptExperimentBor_NormalFlow(t *testing.T) {
 	// with 1 sec block time and 200 millisec tx delay we should get 5 txs per block
 	testCommitInterruptExperimentBor(t, 200, 5, 0)
 
@@ -832,6 +833,96 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 	currentBlockNumber := w.current.header.Number.Uint64()
 	assert.Check(t, txCount >= w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
 	assert.Check(t, 0 < w.chain.GetBlockByNumber(currentBlockNumber-1).Transactions().Len())
+}
+
+// TestCommitInterruptExperimentBor_NewTxFlow tests the commit interrupt experiment for bor consensus by inducing
+// an artificial delay at transaction level. It runs the mining flow triggered via new transactions channel. The tests
+// are a bit unconventional compared to normal flow as the situations are only possible in non-validator mode.
+func TestCommitInterruptExperimentBor_NewTxFlow(t *testing.T) {
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+		ctrl        *gomock.Controller
+	)
+
+	chainConfig = params.BorUnittestChainConfig
+
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+
+	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
+
+	w, b, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), true, uint(0), uint(0))
+	defer func() {
+		w.close()
+		engine.Close()
+		db.Close()
+		ctrl.Finish()
+	}()
+
+	// Create random transactions (contract interaction)
+	tx1, addr := b.newStorageCreateContractTx()
+	tx2 := b.newStorageContractCallTx(addr, 1)
+	tx3 := b.newStorageContractCallTx(addr, 2)
+
+	// Create a chain head subscription for tests
+	chainHeadCh := make(chan core.ChainHeadEvent, 10)
+	w.chain.SubscribeChainHeadEvent(chainHeadCh)
+
+	// Start mining!
+	w.start()
+	go func() {
+		for {
+			head := <-chainHeadCh
+			// We skip the initial 2 blocks as the mining timings are a bit skewed up
+			if head.Block.NumberU64() == 2 {
+				// Stop the miner so that worker assumes it's a sentry and not a validator
+				w.stop()
+
+				// Add the first transaction to be mined normally via `txsCh`
+				b.TxPool().Add([]*types.Transaction{tx1}, false, false)
+
+				// Set it to syncing mode so that it doesn't mine via the `commitWork` flow
+				w.syncing.Store(true)
+
+				// Wait until the mining window (2s) is almost about to reach leaving
+				// a very small time (~10ms) to try to commit transaction before timing out.
+				delay := time.Until(time.Unix(int64(w.current.header.Time), 0))
+				delay -= 10 * time.Millisecond
+
+				// Case 1: This transaction should not be included due to commit interrupt
+				// at opcode level. It will start the EVM execution but will end in between.
+				<-time.After(delay)
+
+				// Set an artificial delay at opcode level
+				w.setInterruptCtx(vm.InterruptCtxOpcodeDelayKey, uint(500))
+
+				// Send the second transaction
+				b.TxPool().Add([]*types.Transaction{tx2}, false, false)
+
+				// Reset the delay again. By this time, we're sure that it has timed out.
+				delay = time.Until(time.Unix(int64(w.current.header.Time), 0))
+
+				// Case 2: This transaction should not be included because the miner loop
+				// won't accept any transactions post the deadline (i.e. header.Timestamp).
+				<-time.After(delay)
+
+				// Reset the artificial opcode delay just to be sure of the exclusion of tx
+				w.setInterruptCtx(vm.InterruptCtxOpcodeDelayKey, uint(0))
+
+				// Send the third transaction
+				b.TxPool().Add([]*types.Transaction{tx3}, false, false)
+			}
+		}
+	}()
+
+	// Wait for enough time to mine 3 blocks
+	time.Sleep(6 * time.Second)
+
+	// Ensure that the last block was 3 and only 1 transactions out of 3 were included
+	assert.Equal(t, w.current.header.Number.Uint64(), uint64(3))
+	assert.Equal(t, w.current.tcount, 1)
+	assert.Equal(t, len(w.current.txs), 1)
 }
 
 func BenchmarkBorMining(b *testing.B) {

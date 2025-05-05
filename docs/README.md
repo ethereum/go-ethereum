@@ -15,7 +15,7 @@
 
 - The `bor dumpconfig` sub-command prints the default configurations, in the TOML format, on the terminal. One can `pipe (>)` this to a file (say `config.toml`) and use it to start bor. 
 
-- A toml file now can be used instead of flags and can contain all configuration for the node to run. To simply run bor with a configuration file, the following command can be used. 
+- A toml file now can be used instead of flags and can contain all configurations for the node to run. To simply run bor with a configuration file, the following command can be used. 
 
   ```
   $ bor server --config <path_to_config.toml>
