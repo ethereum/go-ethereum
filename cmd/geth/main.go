@@ -224,6 +224,7 @@ func init() {
 		importPreimagesCommand,
 		removedbCommand,
 		dumpCommand,
+		dumpBalancesCommand,
 		dumpGenesisCommand,
 		pruneCommand,
 		// See accountcmd.go:
