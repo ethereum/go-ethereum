@@ -1124,7 +1124,7 @@ func TestTraceChain(t *testing.T) {
 			next += 1
 		}
 		if next != c.end+1 {
-			t.Error("Missing tracing block")
+			t.Fatal("Missing tracing block")
 		}
 
 		if nref, nrel := ref.Load(), rel.Load(); nref != nrel {

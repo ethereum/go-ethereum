@@ -632,9 +632,6 @@ func envFromLoggerConfig(api *API, config *logger.Config) *traceEnv {
 }
 
 func (api *API) retrieveBlockState(ctx context.Context, block *types.Block, execOpt *traceExecOptions, readOnly, preferDisk bool) (db *state.StateDB, blockCtx *vm.BlockContext, stateRelease StateReleaseFunc, err error) {
-	if block.NumberU64() == 0 {
-		return nil, nil, nil, errors.New("genesis is not traceable")
-	}
 	// Prepare base state
 	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
 	if err != nil {
@@ -695,6 +692,9 @@ func (api *API) execBlockTrace(ctx context.Context, block *types.Block, blockCtx
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
 func (api *API) traceBlock(ctx context.Context, block *types.Block, env *traceEnv, execOpt *traceExecOptions, instantiateTracer func(*Context) (*Tracer, error)) ([]*txTraceResult, error) {
+	if block.NumberU64() == 0 {
+		return nil, fmt.Errorf("cannot trace genesis block")
+	}
 	statedb, blockCtx, release, err := api.retrieveBlockState(ctx, block, execOpt, true, false)
 	if err != nil {
 		return nil, err
@@ -805,7 +805,7 @@ func createTraceDumpFile(blockHash, txHash common.Hash, txIdx int, canon bool) (
 	return dump, nil
 }
 
-func (api *API) standardTraceTxToFile(ctx context.Context, block *types.Block, tx *types.Transaction, txIdx int, config *logger.Config, signer types.Signer, canon bool) ([]string, error) {
+func (api *API) standardTraceTxToFile(ctx context.Context, block *types.Block, tx *types.Transaction, txIdx int, config *logger.Config, signer types.Signer, canon bool) (string, error) {
 	msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 	txctx := &Context{
 		BlockHash:   block.Hash(),
@@ -815,18 +815,16 @@ func (api *API) standardTraceTxToFile(ctx context.Context, block *types.Block, t
 	}
 	_, blockCtx, statedb, release, err := api.backend.StateAtTransaction(ctx, block, txIdx, defaultTraceReexec)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer release()
 
-	var dumps []string
 	var dump *os.File
 
 	dump, err = createTraceDumpFile(block.Hash(), tx.Hash(), txIdx, canon)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	dumps = append(dumps, dump.Name())
 
 	// Swap out the noop logger to the standard traces
 	writer := bufio.NewWriter(dump)
@@ -846,9 +844,14 @@ func (api *API) standardTraceTxToFile(ctx context.Context, block *types.Block, t
 	*traceTimeout = 1 * time.Hour
 	_, err = api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, &tracer, nil, *traceTimeout)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return dumps, nil
+	if err = writer.Flush(); err != nil {
+		return "", err
+	}
+	dump.Close()
+
+	return dump.Name(), nil
 }
 
 func traceCallExecOpt(config *TraceCallConfig) (*traceExecOptions, error) {
@@ -912,7 +915,11 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		if !ok {
 			return nil, fmt.Errorf("transaction %#x not found in block", config.TxHash)
 		}
-		return api.standardTraceTxToFile(ctx, block, block.Transactions()[idx], idx, &config.Config, signer, env.canon)
+		dump, err := api.standardTraceTxToFile(ctx, block, block.Transactions()[idx], idx, &config.Config, signer, env.canon)
+		if err != nil {
+			return nil, err
+		}
+		return []string{dump}, nil
 	}
 	// Retrieve the tracing configurations, or use default values
 	var (
