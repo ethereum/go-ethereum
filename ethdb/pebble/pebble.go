@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,8 +56,9 @@ const (
 // Apart from basic data storage functionality it also supports batch writes and
 // iterating over the keyspace in binary-alphabetical order.
 type Database struct {
-	fn string     // filename for reporting
-	db *pebble.DB // Underlying pebble storage engine
+	fn        string     // filename for reporting
+	db        *pebble.DB // Underlying pebble storage engine
+	namespace string     // Namespace for metrics
 
 	compTimeMeter       *metrics.Meter // Meter for measuring the total time spent in database compaction
 	compReadMeter       *metrics.Meter // Meter for measuring the data read during compaction
@@ -120,6 +122,10 @@ func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 	d.writeDelayStartTime = time.Now()
 	d.writeDelayCount.Add(1)
 	d.writeStalled.Store(true)
+
+	stall := "stall/" + toCamelCase(b.Reason)
+	gauge := metrics.GetOrRegisterGauge(d.namespace+stall, nil)
+	gauge.Inc(1)
 }
 
 func (d *Database) onWriteStallEnd() {
@@ -668,4 +674,20 @@ func (iter *pebbleIterator) Release() {
 		iter.iter.Close()
 		iter.released = true
 	}
+}
+
+// toCamelCase converts string to camel case.
+func toCamelCase(s string) string {
+	words := strings.FieldsFunc(s, func(r rune) bool {
+		return r == ' ' || r == '_' || r == '-' // split by space, underscore, or dash
+	})
+	for i := range words {
+		if i == 0 {
+			continue
+		}
+		if len(words[i]) > 0 {
+			words[i] = strings.ToUpper(words[i][:1]) + strings.ToLower(words[i][1:])
+		}
+	}
+	return strings.Join(words, "")
 }
