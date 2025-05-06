@@ -25,7 +25,8 @@ import (
 )
 
 func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.Back(0).Bytes32(), true)
+	slot := stack.Back(0)
+	gas := evm.AccessEvents.SlotGas(contract.Address(), slot.Bytes32(), true)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -33,7 +34,8 @@ func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 }
 
 func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas := evm.AccessEvents.SlotGas(contract.Address(), stack.Back(0).Bytes32(), false)
+	slot := stack.Back(0)
+	gas := evm.AccessEvents.SlotGas(contract.Address(), slot.Bytes32(), false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -44,7 +46,8 @@ func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	if contract.IsSystemCall {
 		return 0, nil
 	}
-	address := stack.peek().Bytes20()
+	addr := stack.Back(0)
+	address := addr.Bytes20()
 	gas := evm.AccessEvents.BasicDataGas(address, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
@@ -53,7 +56,8 @@ func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 }
 
 func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	address := stack.Back(0).Bytes20()
+	addr := stack.Back(0)
+	address := addr.Bytes20()
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
@@ -71,7 +75,8 @@ func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if contract.IsSystemCall {
 		return 0, nil
 	}
-	address := stack.peek().Bytes20()
+	addr := stack.Back(0)
+	address := addr.Bytes20()
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
@@ -110,7 +115,8 @@ var (
 )
 
 func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	beneficiaryAddr := common.Address(stack.Back(0).Bytes20())
+	addr := stack.Back(0)
+	beneficiaryAddr := common.Address(addr.Bytes20())
 	if _, isPrecompile := evm.precompile(beneficiaryAddr); isPrecompile {
 		return 0, nil
 	}
@@ -161,8 +167,9 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	if contract.IsSystemCall {
 		return gas, nil
 	}
-	addr := common.Address(stack.peek().Bytes20())
-	wgas := evm.AccessEvents.BasicDataGas(addr, false)
+	addr := stack.Back(0)
+	address := common.Address(addr.Bytes20())
+	wgas := evm.AccessEvents.BasicDataGas(address, false)
 	if wgas == 0 {
 		wgas = params.WarmStorageReadCostEIP2929
 	}

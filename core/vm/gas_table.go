@@ -72,7 +72,8 @@ func memoryCopierGas(stackpos int) gasFunc {
 			return 0, err
 		}
 		// And gas for copying data, charged per word at param.CopyGas
-		words, overflow := stack.Back(stackpos).Uint64WithOverflow()
+		size := stack.Back(stackpos)
+		words, overflow := size.Uint64WithOverflow()
 		if overflow {
 			return 0, ErrGasUintOverflow
 		}
@@ -225,7 +226,8 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 
 func makeGasLog(n uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		requestedSize, overflow := stack.Back(1).Uint64WithOverflow()
+		size := stack.Back(1)
+		requestedSize, overflow := size.Uint64WithOverflow()
 		if overflow {
 			return 0, ErrGasUintOverflow
 		}
@@ -258,7 +260,8 @@ func gasKeccak256(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	if err != nil {
 		return 0, err
 	}
-	wordGas, overflow := stack.Back(1).Uint64WithOverflow()
+	size := stack.Back(1)
+	wordGas, overflow := size.Uint64WithOverflow()
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
@@ -292,7 +295,8 @@ func gasCreate2(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memoryS
 	if err != nil {
 		return 0, err
 	}
-	wordGas, overflow := stack.Back(2).Uint64WithOverflow()
+	length := stack.Back(2)
+	wordGas, overflow := length.Uint64WithOverflow()
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
@@ -310,7 +314,8 @@ func gasCreateEip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if err != nil {
 		return 0, err
 	}
-	size, overflow := stack.Back(2).Uint64WithOverflow()
+	length := stack.Back(2)
+	size, overflow := length.Uint64WithOverflow()
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
@@ -329,7 +334,8 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 	if err != nil {
 		return 0, err
 	}
-	size, overflow := stack.Back(2).Uint64WithOverflow()
+	length := stack.Back(2)
+	size, overflow := length.Uint64WithOverflow()
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
@@ -345,7 +351,8 @@ func gasCreate2Eip3860(evm *EVM, contract *Contract, stack *Stack, mem *Memory, 
 }
 
 func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	expByteLen := uint64((stack.Back(1).BitLen() + 7) / 8)
+	bytes := stack.Back(1)
+	expByteLen := uint64((bytes.BitLen() + 7) / 8)
 
 	var (
 		gas      = expByteLen * params.ExpByteFrontier // no overflow check required. Max is 256 * ExpByte gas
@@ -358,7 +365,8 @@ func gasExpFrontier(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 }
 
 func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	expByteLen := uint64((stack.Back(1).BitLen() + 7) / 8)
+	bytes := stack.Back(1)
+	expByteLen := uint64((bytes.BitLen() + 7) / 8)
 
 	var (
 		gas      = expByteLen * params.ExpByteEIP158 // no overflow check required. Max is 256 * ExpByte gas
@@ -373,8 +381,9 @@ func gasExpEIP158(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		gas            uint64
-		transfersValue = !stack.Back(2).IsZero()
-		address        = common.Address(stack.Back(1).Bytes20())
+		value, addr    = stack.Back(2), stack.Back(1)
+		transfersValue = !value.IsZero()
+		address        = common.Address(addr.Bytes20())
 	)
 	if evm.chainRules.IsEIP158 {
 		if transfersValue && evm.StateDB.Empty(address) {
@@ -419,18 +428,19 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		return 0, err
 	}
 	var (
-		gas      uint64
-		overflow bool
+		gas         uint64
+		overflow    bool
+		value, addr = stack.Back(2), stack.Back(1)
 	)
-	if stack.Back(2).Sign() != 0 && !evm.chainRules.IsEIP4762 {
+	if value.Sign() != 0 && !evm.chainRules.IsEIP4762 {
 		gas += params.CallValueTransferGas
 	}
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
 		return 0, ErrGasUintOverflow
 	}
 	if evm.chainRules.IsEIP4762 && !contract.IsSystemCall {
-		address := common.Address(stack.Back(1).Bytes20())
-		transfersValue := !stack.Back(2).IsZero()
+		address := common.Address(addr.Bytes20())
+		transfersValue := !value.IsZero()
 		if transfersValue {
 			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address))
 			if overflow {
@@ -485,7 +495,8 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	// EIP150 homestead gas reprice fork:
 	if evm.chainRules.IsEIP150 {
 		gas = params.SelfdestructGasEIP150
-		var address = common.Address(stack.Back(0).Bytes20())
+		addr := stack.Back(0)
+		var address = common.Address(addr.Bytes20())
 
 		if evm.chainRules.IsEIP158 {
 			// if empty and transfers value

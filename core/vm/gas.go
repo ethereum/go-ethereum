@@ -35,7 +35,7 @@ const (
 //
 // The cost of gas was changed during the homestead price change HF.
 // As part of EIP 150 (TangerineWhistle), the returned gas is gas - base * 63 / 64.
-func callGas(isEip150 bool, availableGas, base uint64, callCost *uint256.Int) (uint64, error) {
+func callGas(isEip150 bool, availableGas, base uint64, callCost uint256.Int) (uint64, error) {
 	if isEip150 {
 		availableGas = availableGas - base
 		gas := availableGas - availableGas/64

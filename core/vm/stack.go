@@ -181,11 +181,7 @@ func (s *Stack) dup(n int) {
 	s.size++
 }
 
-func (s *Stack) peek() *uint256.Int {
-	return &s.inner.data[s.bottom+s.size-1]
-}
-
 // Back returns the n'th item in stack
-func (s *Stack) Back(n int) *uint256.Int {
-	return &s.inner.data[s.bottom+s.size-n-1]
+func (s *Stack) Back(n int) uint256.Int {
+	return s.inner.data[s.bottom+s.size-n-1]
 }
