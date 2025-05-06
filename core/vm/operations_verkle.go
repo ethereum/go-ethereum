@@ -19,7 +19,6 @@ package vm
 import (
 	gomath "math"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -46,9 +45,8 @@ func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 	if contract.IsSystemCall {
 		return 0, nil
 	}
-	addr := stack.Back(0)
-	address := addr.Bytes20()
-	gas := evm.AccessEvents.BasicDataGas(address, false)
+	addr := stack.Address(0)
+	gas := evm.AccessEvents.BasicDataGas(addr, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -56,15 +54,14 @@ func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, mem
 }
 
 func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	addr := stack.Back(0)
-	address := addr.Bytes20()
-	if _, isPrecompile := evm.precompile(address); isPrecompile {
+	addr := stack.Address(0)
+	if _, isPrecompile := evm.precompile(addr); isPrecompile {
 		return 0, nil
 	}
 	if contract.IsSystemCall {
 		return 0, nil
 	}
-	gas := evm.AccessEvents.BasicDataGas(address, false)
+	gas := evm.AccessEvents.BasicDataGas(addr, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -75,12 +72,11 @@ func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if contract.IsSystemCall {
 		return 0, nil
 	}
-	addr := stack.Back(0)
-	address := addr.Bytes20()
-	if _, isPrecompile := evm.precompile(address); isPrecompile {
+	addr := stack.Address(0)
+	if _, isPrecompile := evm.precompile(addr); isPrecompile {
 		return 0, nil
 	}
-	gas := evm.AccessEvents.CodeHashGas(address, false)
+	gas := evm.AccessEvents.CodeHashGas(addr, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -115,8 +111,7 @@ var (
 )
 
 func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	addr := stack.Back(0)
-	beneficiaryAddr := common.Address(addr.Bytes20())
+	beneficiaryAddr := stack.Address(0)
 	if _, isPrecompile := evm.precompile(beneficiaryAddr); isPrecompile {
 		return 0, nil
 	}
@@ -167,9 +162,8 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	if contract.IsSystemCall {
 		return gas, nil
 	}
-	addr := stack.Back(0)
-	address := common.Address(addr.Bytes20())
-	wgas := evm.AccessEvents.BasicDataGas(address, false)
+	addr := stack.Address(0)
+	wgas := evm.AccessEvents.BasicDataGas(addr, false)
 	if wgas == 0 {
 		wgas = params.WarmStorageReadCostEIP2929
 	}

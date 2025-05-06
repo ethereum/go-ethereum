@@ -19,6 +19,7 @@ package vm
 import (
 	"slices"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
 
@@ -184,4 +185,9 @@ func (s *Stack) dup(n int) {
 // Back returns the n'th item in stack
 func (s *Stack) Back(n int) uint256.Int {
 	return s.inner.data[s.bottom+s.size-n-1]
+}
+
+// Address returns the n'th item in stack turned into an address
+func (s *Stack) Address(n int) common.Address {
+	return common.Address(s.inner.data[s.bottom+s.size-n-1].Bytes20())
 }
