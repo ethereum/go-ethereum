@@ -162,18 +162,6 @@ func TestGethClient(t *testing.T) {
 			"TestCallContractWithBlockOverrides",
 			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
 		}, {
-			"TestTraceTransaction",
-			func(t *testing.T) { testTraceTransaction(t, client) },
-		}, {
-			"TestTraceCall",
-			func(t *testing.T) { testTraceCall(t, client) },
-		}, {
-			"TestTraceBlock",
-			func(t *testing.T) { testTraceBlock(t, client) },
-		}, {
-			"TestTraceChain",
-			func(t *testing.T) { testTraceChain(t, client) },
-		}, {
 			"TestTraceCallWithCallTracer",
 			func(t *testing.T) { testTraceCallWithCallTracer(t, client) },
 		}, {
@@ -637,30 +625,6 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 	if !bytes.Equal(res, common.FromHex("0x1111111111111111111111111111111111111111")) {
 		t.Fatalf("unexpected result: %x", res)
 	}
-}
-
-func testTraceTransaction(t *testing.T, client *rpc.Client) {
-	// These tests for tracing cannot be fully executed
-	// as they require the debug API to be enabled in the test environment
-	t.Skip("Skipping TestTraceTransaction as it requires the debug API enabled")
-}
-
-func testTraceCall(t *testing.T, client *rpc.Client) {
-	// These tests for tracing cannot be fully executed
-	// as they require the debug API to be enabled in the test environment
-	t.Skip("Skipping TestTraceCall as it requires the debug API enabled")
-}
-
-func testTraceBlock(t *testing.T, client *rpc.Client) {
-	// These tests for tracing cannot be fully executed
-	// as they require the debug API to be enabled in the test environment
-	t.Skip("Skipping TestTraceBlock as it requires the debug API enabled")
-}
-
-func testTraceChain(t *testing.T, client *rpc.Client) {
-	// These tests for tracing cannot be fully executed
-	// as they require the debug API to be enabled in the test environment
-	t.Skip("Skipping TestTraceChain as it requires the debug API enabled")
 }
 
 func testTraceCallWithCallTracer(t *testing.T, client *rpc.Client) {
