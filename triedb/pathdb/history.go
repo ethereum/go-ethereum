@@ -282,6 +282,7 @@ func (h *history) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common
 		accounts = make(map[common.Hash][]byte)
 		storages = make(map[common.Hash]map[common.Hash][]byte)
 	)
+	defer crypto.ReturnKeccakState(buff)
 	for addr, blob := range h.accounts {
 		addrHash := crypto.HashData(buff, addr.Bytes())
 		accounts[addrHash] = blob

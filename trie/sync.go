@@ -729,9 +729,7 @@ func (s *Sync) hasNode(owner common.Hash, path []byte, hash common.Hash) (exists
 	} else {
 		blob = rawdb.ReadStorageTrieNode(s.database, owner, path)
 	}
-	h := newBlobHasher()
-	defer h.release()
-	exists = hash == h.hash(blob)
+	exists = hash == crypto.Keccak256Hash(blob)
 	inconsistent = !exists && len(blob) != 0
 	return exists, inconsistent
 }
@@ -745,24 +743,4 @@ func ResolvePath(path []byte) (common.Hash, []byte) {
 		path = path[2*common.HashLength:]
 	}
 	return owner, path
-}
-
-// blobHasher is used to compute the sha256 hash of the provided data.
-type blobHasher struct{ state crypto.KeccakState }
-
-// blobHasherPool is the pool for reusing pre-allocated hash state.
-var blobHasherPool = sync.Pool{
-	New: func() interface{} { return &blobHasher{state: crypto.NewKeccakState()} },
-}
-
-func newBlobHasher() *blobHasher {
-	return blobHasherPool.Get().(*blobHasher)
-}
-
-func (h *blobHasher) hash(data []byte) common.Hash {
-	return crypto.HashData(h.state, data)
-}
-
-func (h *blobHasher) release() {
-	blobHasherPool.Put(h)
 }

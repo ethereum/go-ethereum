@@ -645,6 +645,7 @@ func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool,
 		buff                    = crypto.NewKeccakState()
 		startTime               = time.Now()
 	)
+	defer crypto.ReturnKeccakState(buff)
 
 	batch := db.NewBatch()
 	it := db.NewIterator(nil, start)
