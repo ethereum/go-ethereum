@@ -44,6 +44,9 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 	var (
 		now     = mclock.Now()
 		elapsed = now.Sub(st.startTime)
+		if elapsed == 0 { // prevent zero division
+			elapsed = 1
+		}	
 		mgasps  = float64(st.usedGas) * 1000 / float64(elapsed)
 	)
 	// Update the Mgas per second gauge
