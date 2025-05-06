@@ -70,6 +70,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "Status", Fn: s.TestStatus},
 		// get block headers
 		{Name: "GetBlockHeaders", Fn: s.TestGetBlockHeaders},
+		{Name: "GetNonexistentBlockHeaders", Fn: s.TestGetNonexistentBlockHeaders},
 		{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
 		{Name: "SameRequestID", Fn: s.TestSameRequestID},
 		{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
@@ -155,6 +156,48 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	}
 	if !headersMatch(expected, headers.BlockHeadersRequest) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected, headers)
+	}
+}
+
+func (s *Suite) TestGetNonexistentBlockHeaders(t *utesting.T) {
+	t.Log(`This test sends GetBlockHeaders requests for nonexistent blocks (using max uint64 value) 
+to check if the node disconnects after receiving multiple invalid requests.`)
+
+	conn, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	if err := conn.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+
+	// Create request with max uint64 value for a nonexistent block
+	badReq := &eth.GetBlockHeadersPacket{
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			Origin:  eth.HashOrNumber{Number: ^uint64(0)},
+			Amount:  1,
+			Skip:    0,
+			Reverse: false,
+		},
+	}
+
+	// Send request 10 times. Some clients are lient on the first few invalids.
+	for i := 0; i < 10; i++ {
+		badReq.RequestId = uint64(i)
+		if err := conn.Write(ethProto, eth.GetBlockHeadersMsg, badReq); err != nil {
+			if err == errDisc {
+				t.Fatalf("peer disconnected after %d requests", i+1)
+			}
+			t.Fatalf("write failed: %v", err)
+		}
+	}
+
+	// Check if peer disconnects at the end.
+	code, _, err := conn.Read()
+	if err == errDisc || code == discMsg {
+		t.Fatal("peer improperly disconnected")
 	}
 }
 
