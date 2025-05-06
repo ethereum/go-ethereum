@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -99,6 +100,8 @@ func NewSimulatedBackendWithDatabase(database ethdb.Database, alloc types.Genesi
 		config:     genesis.Config,
 	}
 
+	filterBackend := &filterBackend{database, blockchain, backend}
+	backend.filterSystem = filters.NewFilterSystem(filterBackend, filters.Config{})
 	backend.events = filters.NewEventSystem(backend.filterSystem)
 
 	header := backend.blockchain.CurrentBlock()
@@ -967,6 +970,10 @@ func (fb *filterBackend) ChainConfig() *params.ChainConfig {
 }
 
 func (fb *filterBackend) CurrentHeader() *types.Header {
+	panic("not supported")
+}
+
+func (fb *filterBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("not supported")
 }
 
