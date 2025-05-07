@@ -69,6 +69,9 @@ const (
 	// txGatherSlack is the interval used to collate almost-expired announces
 	// with network fetches.
 	txGatherSlack = 100 * time.Millisecond
+
+	// addTxsBatchSize it the max number of transactions to add in a single batch from a peer.
+	addTxsBatchSize = 128
 )
 
 var (
@@ -329,8 +332,8 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		metas = make([]txMetadata, 0, len(txs))
 	)
 	// proceed in batches
-	for i := 0; i < len(txs); i += 128 {
-		end := i + 128
+	for i := 0; i < len(txs); i += addTxsBatchSize {
+		end := i + addTxsBatchSize
 		if end > len(txs) {
 			end = len(txs)
 		}
@@ -372,7 +375,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		otherRejectMeter.Mark(otherreject)
 
 		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
-		if otherreject > 128/4 {
+		if otherreject > addTxsBatchSize/4 {
 			time.Sleep(200 * time.Millisecond)
 			log.Debug("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
 		}

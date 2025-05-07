@@ -515,6 +515,13 @@ func (tc *testChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return tc.receipts[hash]
 }
 
+func (tc *testChain) GetRawReceiptsByHash(hash common.Hash) types.Receipts {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+
+	return tc.receipts[hash]
+}
+
 func (tc *testChain) addBlocks(count, maxTxPerBlock, maxLogsPerReceipt, maxTopicsPerLog int, random bool) {
 	tc.lock.Lock()
 	blockGen := func(i int, gen *core.BlockGen) {

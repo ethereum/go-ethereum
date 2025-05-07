@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"slices"
 	"sync/atomic"
@@ -116,9 +117,13 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
 
-func (b *testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
+func (b *testBackend) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
 	tx, hash, blockNumber, index := rawdb.ReadTransaction(b.chaindb, txHash)
-	return tx != nil, tx, hash, blockNumber, index, nil
+	return tx != nil, tx, hash, blockNumber, index
+}
+
+func (b *testBackend) TxIndexDone() bool {
+	return true
 }
 
 func (b *testBackend) RPCGasCap() uint64 {
@@ -1211,6 +1216,121 @@ func TestTraceBlockWithBasefee(t *testing.T) {
 		want := tc.want
 		if string(have) != want {
 			t.Errorf("test %d, result mismatch\nhave: %v\nwant: %v\n", i, string(have), want)
+		}
+	}
+}
+
+func TestStandardTraceBlockToFile(t *testing.T) {
+	var (
+		// A sender who makes transactions, has some funds
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000000000)
+
+		// first contract the sender transacts with
+		aa     = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
+		aaCode = []byte{byte(vm.PUSH1), 0x00, byte(vm.POP)}
+
+		// second contract the sender transacts with
+		bb     = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f44")
+		bbCode = []byte{byte(vm.PUSH2), 0x00, 0x01, byte(vm.POP)}
+	)
+
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			address: {Balance: funds},
+			aa: {
+				Code:    aaCode,
+				Nonce:   1,
+				Balance: big.NewInt(0),
+			},
+			bb: {
+				Code:    bbCode,
+				Nonce:   1,
+				Balance: big.NewInt(0),
+			},
+		},
+	}
+	txHashs := make([]common.Hash, 0, 2)
+	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		b.SetCoinbase(common.Address{1})
+		// first tx to aa
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    0,
+			To:       &aa,
+			Value:    big.NewInt(0),
+			Gas:      50000,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		txHashs = append(txHashs, tx.Hash())
+		// second tx to bb
+		tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    1,
+			To:       &bb,
+			Value:    big.NewInt(1),
+			Gas:      100000,
+			GasPrice: b.BaseFee(),
+			Data:     nil,
+		}), types.HomesteadSigner{}, key)
+		b.AddTx(tx)
+		txHashs = append(txHashs, tx.Hash())
+	})
+	defer backend.chain.Stop()
+
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		config      *StdTraceConfig
+		want        []string
+	}{
+		{
+			// test that all traces in the block were outputted if no trace config is specified
+			blockNumber: rpc.LatestBlockNumber,
+			config:      nil,
+			want: []string{
+				`{"pc":0,"op":96,"gas":"0x7148","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1"}
+{"pc":2,"op":80,"gas":"0x7145","gasCost":"0x2","memSize":0,"stack":["0x0"],"depth":1,"refund":0,"opName":"POP"}
+{"pc":3,"op":0,"gas":"0x7143","gasCost":"0x0","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"STOP"}
+{"output":"","gasUsed":"0x5"}
+`,
+				`{"pc":0,"op":97,"gas":"0x13498","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH2"}
+{"pc":3,"op":80,"gas":"0x13495","gasCost":"0x2","memSize":0,"stack":["0x1"],"depth":1,"refund":0,"opName":"POP"}
+{"pc":4,"op":0,"gas":"0x13493","gasCost":"0x0","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"STOP"}
+{"output":"","gasUsed":"0x5"}
+`,
+			},
+		},
+		{
+			// test that only a specific tx is traced if specified
+			blockNumber: rpc.LatestBlockNumber,
+			config:      &StdTraceConfig{TxHash: txHashs[1]},
+			want: []string{
+				`{"pc":0,"op":97,"gas":"0x13498","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH2"}
+{"pc":3,"op":80,"gas":"0x13495","gasCost":"0x2","memSize":0,"stack":["0x1"],"depth":1,"refund":0,"opName":"POP"}
+{"pc":4,"op":0,"gas":"0x13493","gasCost":"0x0","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"STOP"}
+{"output":"","gasUsed":"0x5"}
+`,
+			},
+		},
+	}
+
+	api := NewAPI(backend)
+	for i, tc := range testSuite {
+		block, _ := api.blockByNumber(context.Background(), tc.blockNumber)
+		txTraces, err := api.StandardTraceBlockToFile(context.Background(), block.Hash(), tc.config)
+		if err != nil {
+			t.Fatalf("test index %d received error %v", i, err)
+		}
+		for j, traceFileName := range txTraces {
+			traceReceived, err := os.ReadFile(traceFileName)
+			if err != nil {
+				t.Fatalf("could not read trace file: %v", err)
+			}
+			if tc.want[j] != string(traceReceived) {
+				t.Fatalf("unexpected trace result.  expected\n'%s'\n\nreceived\n'%s'\n", tc.want[j], string(traceReceived))
+			}
 		}
 	}
 }
