@@ -262,7 +262,6 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 		log.Warn("invalid trace configuration", "err", err)
 		return nil
 	}
-	env := envFromTraceConfig(api, config)
 
 	instantiateTracer := func(ctx *Context) (*Tracer, error) {
 		return api.instantiateTracer(config, ctx)
@@ -275,7 +274,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 
 			// Fetch and execute the block trace taskCh
 			for task := range taskCh {
-				task.results, err = api.traceBlock(ctx, task.block, env, opt, instantiateTracer)
+				task.results, err = api.traceBlockWithState(ctx, task.block, task.statedb, opt, instantiateTracer)
 				if err != nil {
 					log.Warn("Tracing failed", "err", err)
 					break
@@ -325,7 +324,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			close(resCh)
 		}()
 		// Feed all the blocks both into the tracer, as well as fast process concurrently
-		for number = start.NumberU64(); number < end.NumberU64(); number++ {
+		for number = start.NumberU64() + 1; number <= end.NumberU64(); number++ {
 			// Stop tracing if interruption was requested
 			select {
 			case <-closed:
@@ -339,11 +338,6 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			}
 			// Retrieve the parent block and target block for tracing.
 			block, err := api.blockByNumber(ctx, rpc.BlockNumber(number))
-			if err != nil {
-				failed = err
-				break
-			}
-			next, err := api.blockByNumber(ctx, rpc.BlockNumber(number+1))
 			if err != nil {
 				failed = err
 				break
@@ -365,7 +359,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				s1, s2, s3 := statedb.Database().TrieDB().Size()
 				preferDisk = s1+s2+s3 > defaultTracechainMemLimit
 			}
-			statedb, _, release, err = api.retrieveBlockState(ctx, block, opt, false, preferDisk)
+			statedb, release, err = api.retrieveBlockPrestate(ctx, block, opt, false, preferDisk)
 			if err != nil {
 				failed = err
 				break
@@ -377,9 +371,9 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			tracker.callReleases()
 
 			// Send the block over to the concurrent tracers (if not in the fast-forward phase)
-			txs := next.Transactions()
+			txs := block.Transactions()
 			select {
-			case taskCh <- &blockTraceTask{statedb: statedb.Copy(), block: next, release: release, results: make([]*txTraceResult, len(txs))}:
+			case taskCh <- &blockTraceTask{statedb: statedb.Copy(), block: block, release: release, results: make([]*txTraceResult, len(txs))}:
 			case <-closed:
 				tracker.releaseState(number, release)
 				return
@@ -631,20 +625,26 @@ func envFromLoggerConfig(api *API, config *logger.Config) *traceEnv {
 	}
 }
 
-func (api *API) retrieveBlockState(ctx context.Context, block *types.Block, execOpt *traceExecOptions, readOnly, preferDisk bool) (db *state.StateDB, blockCtx *vm.BlockContext, stateRelease StateReleaseFunc, err error) {
+func (api *API) retrieveBlockPrestate(ctx context.Context, block *types.Block, execOpt *traceExecOptions, readOnly, preferDisk bool) (db *state.StateDB, stateRelease StateReleaseFunc, err error) {
+	if block.NumberU64() == 0 {
+		return nil, nil, fmt.Errorf("cannot trace genesis block")
+	}
 	// Prepare base state
 	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	statedb, release, err := api.backend.StateAtBlock(ctx, parent, execOpt.reexec, nil, readOnly, preferDisk)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
+	return statedb, release, nil
+}
 
-	// TODO: we can move these into execBlockTrace? it changes the internal semantics of traceChain but it shouldn't matter?
-	bCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-	evm := vm.NewEVM(bCtx, statedb, api.backend.ChainConfig(), vm.Config{})
+func (api *API) traceBlockWithState(ctx context.Context, block *types.Block, statedb *state.StateDB, execOpt *traceExecOptions, instantiateTracer func(*Context) (*Tracer, error)) ([]*txTraceResult, error) {
+	// TODO: this changes the semantics of traceChain a bit.  double-check that it's alright to call ProcessBeaconBlockRoot and ProcessParentBlockHash here
+	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	evm := vm.NewEVM(blockCtx, statedb, api.backend.ChainConfig(), vm.Config{})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
@@ -652,13 +652,10 @@ func (api *API) retrieveBlockState(ctx context.Context, block *types.Block, exec
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	return statedb, &bCtx, release, nil
-}
-
-func (api *API) execBlockTrace(ctx context.Context, block *types.Block, blockCtx *vm.BlockContext, statedb *state.StateDB, execOpt *traceExecOptions, instantiateTracer func(*Context) (*Tracer, error)) ([]*txTraceResult, error) {
 	if execOpt.parallel {
 		return api.traceBlockParallel(ctx, block, statedb, execOpt.txTimeout, instantiateTracer)
 	}
+
 	// Native tracers have low overhead
 	var (
 		txs       = block.Transactions()
@@ -679,7 +676,7 @@ func (api *API) execBlockTrace(ctx context.Context, block *types.Block, blockCtx
 		if err != nil {
 			return nil, err
 		}
-		res, err := api.traceTx(ctx, tx, msg, txctx, *blockCtx, statedb, tracer, nil, execOpt.txTimeout)
+		res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, tracer, nil, execOpt.txTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -695,12 +692,12 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, env *traceEn
 	if block.NumberU64() == 0 {
 		return nil, fmt.Errorf("cannot trace genesis block")
 	}
-	statedb, blockCtx, release, err := api.retrieveBlockState(ctx, block, execOpt, true, false)
+	statedb, release, err := api.retrieveBlockPrestate(ctx, block, execOpt, true, false)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-	return api.execBlockTrace(ctx, block, blockCtx, statedb, execOpt, instantiateTracer)
+	return api.traceBlockWithState(ctx, block, statedb, execOpt, instantiateTracer)
 }
 
 // traceBlockParallel is for tracers that have a high overhead (read JS tracers). One thread

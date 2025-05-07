@@ -1056,6 +1056,7 @@ func newStates(keys []common.Hash, vals []common.Hash) map[common.Hash]common.Ha
 	return m
 }
 
+// TODO: modify tracechain so that each transaction in the chain prints out a different trace dependent on the current state
 func TestTraceChain(t *testing.T) {
 	// Initialize test accounts
 	accounts := newAccounts(3)
