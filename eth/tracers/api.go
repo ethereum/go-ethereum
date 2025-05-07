@@ -1408,11 +1408,6 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		config.BorTx = newBoolPtr(false)
 	}
 
-	_, err = core.ApplyTransactionWithEVM(message, new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm, context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("tracing failed: %w", err)
-	}
-
 	if *config.BorTx {
 		callmsg := prepareCallMessage(*message)
 		// nolint : contextcheck

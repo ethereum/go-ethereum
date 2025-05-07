@@ -75,6 +75,8 @@ func TestSupplyOmittedFields(t *testing.T) {
 		}
 	)
 
+	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
+
 	out, _, err := testSupplyTracer(t, gspec, func(b *core.BlockGen) {
 		b.SetPoS()
 	})
@@ -83,10 +85,8 @@ func TestSupplyOmittedFields(t *testing.T) {
 	}
 
 	expected := supplyInfo{
-		Number: 0,
-		// kept the bor hash (commented) for reference.
-		// Hash:       common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
-		Hash:       common.HexToHash("0x3055fc27d6b4a08eb07033a0d1ee755a4b2988086f28a6189eac1b507525eeb1"),
+		Number:     0,
+		Hash:       common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 	actual := out[expected.Number]

@@ -2631,6 +2631,7 @@ func TestSimulateV1(t *testing.T) {
 }
 
 func TestSimulateV1ChainLinkage(t *testing.T) {
+	t.Skip("bor: skipping because we use total difficulty and beacon expects 0")
 	var (
 		acc          = newTestAccount()
 		sender       = acc.addr

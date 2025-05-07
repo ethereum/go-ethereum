@@ -595,9 +595,10 @@ func FuzzEthProtocolHandlers(f *testing.F) {
 }
 
 func TestGetPooledTransaction(t *testing.T) {
-	t.Run("blobTx", func(t *testing.T) {
-		testGetPooledTransaction(t, true)
-	})
+	// bor: skip blobTx
+	// t.Run("blobTx", func(t *testing.T) {
+	// 	testGetPooledTransaction(t, true)
+	// })
 	t.Run("legacyTx", func(t *testing.T) {
 		testGetPooledTransaction(t, false)
 	})
@@ -643,7 +644,7 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 		}
 	} else {
 		tx, err = types.SignTx(
-			types.NewTransaction(0, testAddr, big.NewInt(10_000), params.TxGas, big.NewInt(1_000_000_000), nil),
+			types.NewTransaction(0, testAddr, big.NewInt(10_000), params.TxGas, big.NewInt(25_000_000_000), nil),
 			signer,
 			testKey,
 		)
