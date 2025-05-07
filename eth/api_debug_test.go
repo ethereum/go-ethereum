@@ -60,7 +60,7 @@ func newAccounts(n int) (accounts []Account) {
 	return accounts
 }
 
-// newTestBackend creates a new test backend. OBS: After test is done, teardown must be
+// newTestBlockChain creates a new test blockchain. OBS: After test is done, teardown must be
 // invoked in order to release associated resources.
 func newTestBlockChain(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *core.BlockChain {
 	engine := ethash.NewFaker()
@@ -306,6 +306,9 @@ func TestGetModifiedAccounts(t *testing.T) {
 			b.AddTx(tx)
 		}
 	})
+	defer blockChain.Stop()
+
+	// Create a debug API instance.
 	api := NewDebugAPI(&Ethereum{blockchain: blockChain})
 
 	// Test GetModifiedAccountsByNumber
