@@ -208,12 +208,13 @@ This will generate something similar to the bindings generated in the previous s
 ```go
 // StorageMetaData contains all meta data concerning the Storage contract.
 var StorageMetaData = bind.MetaData{
-        ABI: "[{\"inputs\":[],\"name\":\"retrieve\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"number\",\"type\":\"uint256\"}],\"name\":\"store\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
-        Bin: "0x6080604052348015600e575f80fd5b506101438061001c5f395ff3fe608060405234801561000f575f80fd5b5060043610610034575f3560e01c80632e64cec1146100385780636057361d14610056575b5f80fd5b610040610072565b60405161004d919061009b565b60405180910390f35b610070600480360381019061006b91906100e2565b61007a565b005b5f8054905090565b805f8190555050565b5f819050919050565b61009581610083565b82525050565b5f6020820190506100ae5f83018461008c565b92915050565b5f80fd5b6100c181610083565b81146100cb575f80fd5b50565b5f813590506100dc816100b8565b92915050565b5f602082840312156100f7576100f66100b4565b5b5f610104848285016100ce565b9150509291505056fea26469706673582212205e1ed7d9c3baabd60ce3d1cea03bf2bb4acbd9007d6be2ec3ffaa363156feb9364736f6c634300081a0033",
+		ABI: "[{\"inputs\":[],\"name\":\"retrieve\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"number\",\"type\":\"uint256\"}],\"name\":\"store\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}]",
+		ID:  "e338b353ed1163ea35b3bea455d45b50d7",
+		Bin: "0x6080604052348015600e575f5ffd5b506101298061001c5f395ff3fe6080604052348015600e575f5ffd5b50600436106030575f3560e01c80632e64cec11460345780636057361d14604e575b5f5ffd5b603a6066565b60405160459190608d565b60405180910390f35b606460048036038101906060919060cd565b606e565b005b5f5f54905090565b805f8190555050565b5f819050919050565b6087816077565b82525050565b5f602082019050609e5f8301846080565b92915050565b5f5ffd5b60af816077565b811460b8575f5ffd5b50565b5f8135905060c78160a8565b92915050565b5f6020828403121560df5760de60a4565b5b5f60ea8482850160bb565b9150509291505056fea26469706673582212200857cb05506ae0a0b1cb7a5f2c713313775ab4ec0c0c8e02a0d5c9ce9dd77fd364736f6c634300081c0033",
 }
 ```
 
-View the full file [here](https://gist.github.com/jmcook1186/91124cfcbc7f22dcd3bb4f148d2868a8).
+View the full file [here](https://github.com/jwasinger/abigen2-examples/blob/main/example_1/Storage.go).
 
 The new `StorageMetaData` can can be used to deploy the contract to an Ethereum testnet from a Go application. To do this requires incorporating the bindings into a Go application that also handles account management, authorization and Ethereum backend to deploy the contract through. Specifically, this requires:
 
