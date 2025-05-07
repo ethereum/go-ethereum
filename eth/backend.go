@@ -548,7 +548,7 @@ func (s *Ethereum) StartMining() error {
 					return fmt.Errorf("signer missing: %v", err)
 				}
 
-				cli.Authorize(eb)
+				cli.Authorize(eb, wallet.SignData)
 			}
 
 			if bor, ok := s.engine.(*bor.Bor); ok {

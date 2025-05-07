@@ -231,7 +231,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 					return nil, fmt.Errorf("signer missing: %v", err)
 				}
 
-				cli.Authorize(eb)
+				cli.Authorize(eb, wallet.SignData)
 
 				authorized = true
 			}
