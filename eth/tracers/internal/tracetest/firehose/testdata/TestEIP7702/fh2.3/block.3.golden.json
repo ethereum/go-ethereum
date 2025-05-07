@@ -170,6 +170,7 @@
       "s": "UGXb+KJ8dparEBn0Wb2lX5fh1gB2+AiHfowzzmJWOkE=",
       "setCodeAuthorizations": [
         {
+          "address": "AAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           "authority": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
           "chainId": "AQ==",
           "nonce": "4",

@@ -260,6 +260,7 @@
       "s": "N9pmx9wBwi0vXsT283fImtj6D4zPzYK3ZFXwBhYmbBA=",
       "setCodeAuthorizations": [
         {
+          "address": "AAAAAAAAAAAAAAAAAAAAAAAAqqo=",
           "authority": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
           "chainId": "AQ==",
           "nonce": "1",
@@ -268,23 +269,27 @@
           "v": 1
         },
         {
+          "address": "AAAAAAAAAAAAAAAAAAAAAAAAzMw=",
           "authority": "cDxLK9cMFp9XFxAcruVDKZ/JRsc=",
           "r": "2uP1vwtGC/qSZin0z+PZ2kBZ/xY3445BRUpUUwr4UOc=",
           "s": "HhA+a0fj/u82ZZyD9gMoHso5vGditId+wkZrJcpo4UM="
         },
         {
+          "address": "AAAAAAAAAAAAAAAAAAAAAAAAzMw=",
           "discarded": true,
           "r": "2uP1vwtGC/qSZin0z+PZ2kBZ/xY3445BRUpUUwr4UOc=",
           "s": "HhA+a0fj/u82ZZyD9gMoHso5vGditId+wkZrJcpo4UM=",
           "v": 4
         },
         {
+          "address": "AAAAAAAAAAAAAAAAAAAAAAAAu7s=",
           "authority": "cDxLK9cMFp9XFxAcruVDKZ/JRsc=",
           "nonce": "1",
           "r": "aZRYP4l48gpWJSypjCxSptjK/kDFXmphIXOrnH6LlKs=",
           "s": "HLb0WRaaPuzez2ZbtK39Ch9vZGXNjm5AYg2i8X5MMwg="
         },
         {
+          "address": "AAAAAAAAAAAAAAAAAAAAAAAAu7s=",
           "authority": "cDxLK9cMFp9XFxAcruVDKZ/JRsc=",
           "discarded": true,
           "nonce": "1",

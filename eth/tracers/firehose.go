@@ -2107,6 +2107,7 @@ func newSetCodeAuthorizationsFromChain(authorizations []types.SetCodeAuthorizati
 	for i, authorization := range authorizations {
 		pbAuthorization := &pbeth.SetCodeAuthorization{
 			ChainId: authorization.ChainID.Bytes(),
+			Address: authorization.Address.Bytes(),
 			Nonce:   authorization.Nonce,
 			V:       uint32(authorization.V),
 			R:       normalizeSignaturePoint(authorization.R.Bytes()),
