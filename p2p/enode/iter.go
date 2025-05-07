@@ -38,7 +38,7 @@ type SourceIterator interface {
 }
 
 // WithSource attaches a 'source name' to an iterator.
-func WithSource(name string, it Iterator) SourceIterator {
+func WithSourceName(name string, it Iterator) SourceIterator {
 	return sourceIter{it, name}
 }
 
@@ -46,7 +46,7 @@ func ensureSourceIter(it Iterator) SourceIterator {
 	if si, ok := it.(SourceIterator); ok {
 		return si
 	}
-	return WithSource("", it)
+	return WithSourceName("", it)
 }
 
 type sourceIter struct {
