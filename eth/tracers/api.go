@@ -627,7 +627,7 @@ func envFromLoggerConfig(api *API, config *logger.Config) *traceEnv {
 
 func (api *API) retrieveBlockPrestate(ctx context.Context, block *types.Block, execOpt *traceExecOptions, readOnly, preferDisk bool) (db *state.StateDB, stateRelease StateReleaseFunc, err error) {
 	if block.NumberU64() == 0 {
-		return nil, nil, fmt.Errorf("cannot trace genesis block")
+		return nil, nil, fmt.Errorf("genesis is not traceable")
 	}
 	// Prepare base state
 	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
@@ -689,9 +689,6 @@ func (api *API) traceBlockWithState(ctx context.Context, block *types.Block, sta
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
 func (api *API) traceBlock(ctx context.Context, block *types.Block, env *traceEnv, execOpt *traceExecOptions, instantiateTracer func(*Context) (*Tracer, error)) ([]*txTraceResult, error) {
-	if block.NumberU64() == 0 {
-		return nil, fmt.Errorf("cannot trace genesis block")
-	}
 	statedb, release, err := api.retrieveBlockPrestate(ctx, block, execOpt, true, false)
 	if err != nil {
 		return nil, err
@@ -1094,6 +1091,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	defer release()
 
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+	var traceConfig TraceConfig
 	// Apply the customization rules if required.
 	if config != nil {
 		if overrideErr := config.BlockOverrides.Apply(&vmctx); overrideErr != nil {
@@ -1105,15 +1103,15 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		if err := config.StateOverrides.Apply(statedb, precompiles); err != nil {
 			return nil, err
 		}
+		traceConfig = config.TraceConfig
 	}
 	// Execute the trace
 	if err := args.CallDefaults(api.backend.RPCGasCap(), vmctx.BaseFee, api.backend.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
 	var (
-		msg         = args.ToMessage(vmctx.BaseFee, true, true)
-		tx          = args.ToTransaction(types.LegacyTxType)
-		traceConfig *TraceConfig
+		msg = args.ToMessage(vmctx.BaseFee, true, true)
+		tx  = args.ToTransaction(types.LegacyTxType)
 	)
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
@@ -1123,7 +1121,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
 		vmctx.BlobBaseFee = new(big.Int)
 	}
-	tracer, err := api.instantiateTracer(traceConfig, new(Context))
+	tracer, err := api.instantiateTracer(&traceConfig, new(Context))
 	if err != nil {
 		return nil, err
 	}
@@ -1134,6 +1132,7 @@ func (api *API) instantiateTracer(config *TraceConfig, txctx *Context) (*Tracer,
 	var tracer *Tracer
 	var err error
 	if config == nil {
+		// TODO: use this case to simplify the code below
 		config = &TraceConfig{}
 	}
 	// Default tracer is the struct logger
@@ -1146,7 +1145,7 @@ func (api *API) instantiateTracer(config *TraceConfig, txctx *Context) (*Tracer,
 		}
 	} else {
 		chainConfig := api.backend.ChainConfig()
-		if config.Config.Overrides != nil {
+		if config.Config != nil && config.Config.Overrides != nil {
 			chainConfig = config.Config.Overrides
 		}
 		tracer, err = DefaultDirectory.New(*config.Tracer, txctx, config.TracerConfig, chainConfig)
