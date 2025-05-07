@@ -25,8 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/bor/clerk"
-	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
-	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/milestone"
 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -40,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/tests/bor/mocks"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -379,39 +376,23 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
+	defer _bor.Close()
 
+	span0 := createMockSpan(addr, chain.Config().ChainID.String())
 	_, currentSpan := loadSpanFromFile(t)
 
-	h, ctrl := getMockedHeimdallClient(t, currentSpan)
-	defer func() {
-		_bor.Close()
-		ctrl.Finish()
-	}()
+	// Create mock heimdall client
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	h.EXPECT().Close().AnyTimes()
-
-	h.EXPECT().FetchCheckpoint(gomock.Any(), int64(-1)).Return(&checkpoint.Checkpoint{
-		Proposer:   currentSpan.SelectedProducers[0].Address,
-		StartBlock: big.NewInt(0),
-		EndBlock:   big.NewInt(int64(spanSize)),
-	}, nil).AnyTimes()
-
-	h.EXPECT().FetchMilestone(gomock.Any()).Return(&milestone.Milestone{
-		Proposer:   currentSpan.SelectedProducers[0].Address,
-		StartBlock: big.NewInt(0),
-		EndBlock:   big.NewInt(int64(spanSize)),
-	}, nil).AnyTimes()
-
-	h.EXPECT().FetchLastNoAckMilestone(gomock.Any()).Return("", nil).AnyTimes()
-
-	h.EXPECT().FetchNoAckMilestone(gomock.Any(), string("test")).Return(nil).AnyTimes()
-
+	h := createMockHeimdall(ctrl, &span0, currentSpan)
+	h.EXPECT().StateSyncEvents(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]*clerk.EventRecordWithTime{getSampleEventRecord(t)}, nil).AnyTimes()
 	_bor.SetHeimdallClient(h)
 
 	block := init.genesis.ToBlock()
-	// to := int64(block.Header().Time)
 
-	currentValidators := []*valset.Validator{valset.NewValidator(addr, 10)}
+	currentValidators := span0.ValidatorSet.Validators
 
 	spanner := getMockedSpanner(t, currentValidators)
 	_bor.SetSpanner(spanner)
@@ -446,48 +427,29 @@ func TestFetchStateSyncEvents(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
-
 	defer _bor.Close()
 
-	// A. Insert blocks for 0th sprint
+	// Insert blocks for 0th sprint
 	block := init.genesis.ToBlock()
 
-	// B.1 Mock /bor/span/1
+	// Create a mock span 0
+	span0 := createMockSpan(addr, chain.Config().ChainID.String())
+	currentValidators := span0.ValidatorSet.Validators
+
+	// Load mock span 0
 	res, _ := loadSpanFromFile(t)
 
-	currentValidators := []*valset.Validator{valset.NewValidator(addr, 10)}
-
+	// reate mock bor spanner
 	spanner := getMockedSpanner(t, currentValidators)
 	_bor.SetSpanner(spanner)
 
-	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
-	for i := uint64(1); i < sprintSize; i++ {
-		if IsSpanEnd(i) {
-			currentValidators = res.Result.ValidatorSet.Validators
-		}
-
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
-		insertNewBlock(t, chain, block)
-	}
-
-	// B. Before inserting 1st block of the next sprint, mock heimdall deps
+	// Create mock heimdall client
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	h := mocks.NewMockIHeimdallClient(ctrl)
-	h.EXPECT().Close().AnyTimes()
+	h := createMockHeimdall(ctrl, &span0, &res.Result)
 
-	h.EXPECT().Span(gomock.Any(), uint64(1)).Return(&res.Result, nil).AnyTimes()
-
-	h.EXPECT().FetchCheckpoint(gomock.Any(), int64(-1)).Return(&checkpoint.Checkpoint{}, nil).AnyTimes()
-
-	h.EXPECT().FetchMilestone(gomock.Any()).Return(&milestone.Milestone{}, nil).AnyTimes()
-
-	h.EXPECT().FetchLastNoAckMilestone(gomock.Any()).Return("", nil).AnyTimes()
-
-	h.EXPECT().FetchNoAckMilestone(gomock.Any(), string("test")).Return(nil).AnyTimes()
-
-	// B.2 Mock State Sync events
+	// Mock state sync events
 	fromID := uint64(1)
 	// at # sprintSize, events are fetched for [fromID, (block-sprint).Time)
 	to := int64(chain.GetHeaderByNumber(0).Time)
@@ -499,6 +461,16 @@ func TestFetchStateSyncEvents(t *testing.T) {
 
 	h.EXPECT().StateSyncEvents(gomock.Any(), fromID, to).Return(eventRecords, nil).AnyTimes()
 	_bor.SetHeimdallClient(h)
+
+	// Insert sprintSize # of blocks so that span is fetched at the start of a new sprint
+	for i := uint64(1); i < sprintSize; i++ {
+		if IsSpanEnd(i) {
+			currentValidators = res.Result.ValidatorSet.Validators
+		}
+
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
+		insertNewBlock(t, chain, block)
+	}
 
 	block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
 
@@ -525,11 +497,16 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
-
 	defer _bor.Close()
 
-	// Mock /bor/span/1
+	// Create a mock span 0
+	span0 := createMockSpan(addr, chain.Config().ChainID.String())
+
+	// Load mock span 1
 	res, _ := loadSpanFromFile(t)
+
+	spanner := getMockedSpanner(t, span0.ValidatorSet.Validators)
+	_bor.SetSpanner(spanner)
 
 	// add the block producer
 	res.Result.ValidatorSet.Validators = append(res.Result.ValidatorSet.Validators, valset.NewValidator(addr, 4500))
@@ -537,18 +514,7 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	h := mocks.NewMockIHeimdallClient(ctrl)
-	h.EXPECT().Close().AnyTimes()
-
-	h.EXPECT().Span(gomock.Any(), uint64(1)).Return(&res.Result, nil).AnyTimes()
-
-	h.EXPECT().FetchCheckpoint(gomock.Any(), int64(-1)).Return(&checkpoint.Checkpoint{}, nil).AnyTimes()
-
-	h.EXPECT().FetchMilestone(gomock.Any()).Return(&milestone.Milestone{}, nil).AnyTimes()
-
-	h.EXPECT().FetchLastNoAckMilestone(gomock.Any()).Return("", nil).AnyTimes()
-
-	h.EXPECT().FetchNoAckMilestone(gomock.Any(), string("test")).Return(nil).AnyTimes()
+	h := createMockHeimdall(ctrl, &span0, &res.Result)
 
 	// Mock State Sync events
 	// at # sprintSize, events are fetched for [fromID, (block-sprint).Time)
@@ -573,18 +539,9 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	// Insert blocks for 0th sprint
 	block := init.genesis.ToBlock()
 
-	var currentValidators []*valset.Validator
-
+	// Set the current validators from span0
+	currentValidators := span0.ValidatorSet.Validators
 	for i := uint64(1); i <= sprintSize; i++ {
-		if IsSpanEnd(i) {
-			currentValidators = res.Result.ValidatorSet.Validators
-		} else {
-			currentValidators = []*valset.Validator{valset.NewValidator(addr, 10)}
-		}
-
-		spanner := getMockedSpanner(t, currentValidators)
-		_bor.SetSpanner(spanner)
-
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
 		insertNewBlock(t, chain, block)
 	}
@@ -605,14 +562,21 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 	h.EXPECT().StateSyncEvents(gomock.Any(), fromID, to).Return(eventRecords, nil).AnyTimes()
 
 	for i := sprintSize + 1; i <= spanSize; i++ {
+		// Update the validator set at the end of span and update the respective mocks
 		if IsSpanEnd(i) {
 			currentValidators = res.Result.ValidatorSet.Validators
+
+			// Set the spanner to point to new validator set
+			spanner := getMockedSpanner(t, currentValidators)
+			_bor.SetSpanner(spanner)
+
+			// Update the span0's validator set to new validator set. This will be used in verify header when we query
+			// span to compare validator's set with header's extradata. Even though our span store has old validator set
+			// stored in cache, we're updating the underlying pointer here and hence we don't need to update the cache.
+			span0.ValidatorSet.Validators = currentValidators
 		} else {
 			currentValidators = []*valset.Validator{valset.NewValidator(addr, 10)}
 		}
-
-		spanner := getMockedSpanner(t, currentValidators)
-		_bor.SetSpanner(spanner)
 
 		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
 		insertNewBlock(t, chain, block)
@@ -631,31 +595,24 @@ func TestOutOfTurnSigning(t *testing.T) {
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
-
 	defer _bor.Close()
+
+	span0 := createMockSpan(addr, chain.Config().ChainID.String())
 
 	_, heimdallSpan := loadSpanFromFile(t)
 	proposer := valset.NewValidator(addr, 10)
 	heimdallSpan.ValidatorSet.Validators = append(heimdallSpan.ValidatorSet.Validators, proposer)
 
-	// add the block producer
-	h, ctrl := getMockedHeimdallClient(t, heimdallSpan)
+	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	h.EXPECT().Close().AnyTimes()
-
-	h.EXPECT().FetchCheckpoint(gomock.Any(), int64(-1)).Return(&checkpoint.Checkpoint{}, nil).AnyTimes()
-
-	h.EXPECT().FetchMilestone(gomock.Any()).Return(&milestone.Milestone{}, nil).AnyTimes()
-
-	h.EXPECT().FetchLastNoAckMilestone(gomock.Any()).Return("", nil).AnyTimes()
-
-	h.EXPECT().FetchNoAckMilestone(gomock.Any(), string("test")).Return(nil).AnyTimes()
+	h := createMockHeimdall(ctrl, &span0, heimdallSpan)
+	h.EXPECT().StateSyncEvents(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]*clerk.EventRecordWithTime{getSampleEventRecord(t)}, nil).AnyTimes()
+	_bor.SetHeimdallClient(h)
 
 	spanner := getMockedSpanner(t, heimdallSpan.ValidatorSet.Validators)
 	_bor.SetSpanner(spanner)
-
-	_bor.SetHeimdallClient(h)
 
 	block := init.genesis.ToBlock()
 
@@ -665,8 +622,19 @@ func TestOutOfTurnSigning(t *testing.T) {
 		}
 	}
 
+	currentValidators := span0.ValidatorSet.Validators
 	for i := uint64(1); i < spanSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, heimdallSpan.ValidatorSet.Validators, setDifficulty)
+		// Update the validator set before sprint end (so that it is returned when called for next block)
+		// E.g. In this case, update on block 3 as snapshot of block 3 will be called for block 4's verification
+		if i == sprintSize-1 {
+			currentValidators = heimdallSpan.ValidatorSet.Validators
+
+			// Update the span0's validator set to new validator set. This will be used in verify header when we query
+			// span to compare validator's set with header's extradata. Even though our span store has old validator set
+			// stored in cache, we're updating the underlying pointer here and hence we don't need to update the cache.
+			span0.ValidatorSet.Validators = currentValidators
+		}
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators, setDifficulty)
 		insertNewBlock(t, chain, block)
 	}
 
@@ -724,27 +692,23 @@ func TestSignerNotFound(t *testing.T) {
 	t.Parallel()
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	fdlimit.Raise(2048)
+
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
 	_bor := engine.(*bor.Bor)
-
 	defer _bor.Close()
+
+	span0 := createMockSpan(addr, chain.Config().ChainID.String())
 
 	_, heimdallSpan := loadSpanFromFile(t)
 
-	h, ctrl := getMockedHeimdallClient(t, heimdallSpan)
+	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	h.EXPECT().Close().AnyTimes()
-	h.EXPECT().FetchCheckpoint(gomock.Any(), int64(-1)).Return(&checkpoint.Checkpoint{}, nil).AnyTimes()
-
-	h.EXPECT().FetchMilestone(gomock.Any()).Return(&milestone.Milestone{}, nil).AnyTimes()
-
-	h.EXPECT().FetchLastNoAckMilestone(gomock.Any()).Return("", nil).AnyTimes()
-
-	h.EXPECT().FetchNoAckMilestone(gomock.Any(), string("test")).Return(nil).AnyTimes()
-
+	h := createMockHeimdall(ctrl, &span0, heimdallSpan)
+	h.EXPECT().StateSyncEvents(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]*clerk.EventRecordWithTime{getSampleEventRecord(t)}, nil).AnyTimes()
 	_bor.SetHeimdallClient(h)
 
 	block := init.genesis.ToBlock()
@@ -777,6 +741,7 @@ func TestSignerNotFound(t *testing.T) {
 //     gasFeeCap - gasTipCap < baseFee.
 //  6. Legacy transaction behave as expected (e.g. gasPrice = gasFeeCap = gasTipCap).
 func TestEIP1559Transition(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
 
@@ -995,6 +960,7 @@ func TestEIP1559Transition(t *testing.T) {
 
 func TestBurnContract(t *testing.T) {
 	t.Parallel()
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
 
@@ -1210,6 +1176,7 @@ func TestBurnContract(t *testing.T) {
 
 func TestBurnContractContractFetch(t *testing.T) {
 	t.Parallel()
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	config := params.BorUnittestChainConfig
 	config.Bor.BurntContract = map[string]string{
 		"10":  "0x000000000000000000000000000000000000aaab",
@@ -1281,6 +1248,7 @@ func TestBurnContractContractFetch(t *testing.T) {
 
 // EIP1559 is not supported without EIP155. An error is expected
 func TestEIP1559TransitionWithEIP155(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
 
@@ -1354,6 +1322,7 @@ func TestEIP1559TransitionWithEIP155(t *testing.T) {
 // it is up to a user to use protected transactions. so if a transaction is unprotected no errors related to chainID are expected.
 // transactions are checked in 2 places: transaction pool and blockchain processor.
 func TestTransitionWithoutEIP155(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
 
@@ -1440,22 +1409,41 @@ func TestTransitionWithoutEIP155(t *testing.T) {
 
 func TestJaipurFork(t *testing.T) {
 	t.Parallel()
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
-
 	_bor := engine.(*bor.Bor)
 	defer _bor.Close()
 
 	block := init.genesis.ToBlock()
 
+	span0 := createMockSpan(addr, chain.Config().ChainID.String())
 	res, _ := loadSpanFromFile(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	h := createMockHeimdall(ctrl, &span0, &res.Result)
+	_bor.SetHeimdallClient(h)
 
 	spanner := getMockedSpanner(t, res.Result.ValidatorSet.Validators)
 	_bor.SetSpanner(spanner)
 
+	currentValidators := span0.ValidatorSet.Validators
 	for i := uint64(1); i < sprintSize; i++ {
-		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, res.Result.ValidatorSet.Validators)
+		// Update the validator set before sprint end (so that it is returned when called for next block)
+		// E.g. In this case, update on block 3 as snapshot of block 3 will be called for block 4's verification
+		if i == sprintSize-1 {
+			currentValidators = res.Result.ValidatorSet.Validators
+
+			// Update the span0's validator set to new validator set. This will be used in verify header when we query
+			// span to compare validator's set with header's extradata. Even though our span store has old validator set
+			// stored in cache, we're updating the underlying pointer here and hence we don't need to update the cache.
+			span0.ValidatorSet.Validators = currentValidators
+		}
+		block = buildNextBlock(t, _bor, chain, block, nil, init.genesis.Config.Bor, nil, currentValidators)
 		insertNewBlock(t, chain, block)
 
 		if block.Number().Uint64() == init.genesis.Config.Bor.JaipurBlock.Uint64()-1 {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
-	"github.com/ethereum/go-ethereum/log"
 
 	lru "github.com/hashicorp/golang-lru"
 
@@ -161,9 +160,12 @@ func (s *Snapshot) apply(headers []*types.Header, c *Bor) (*Snapshot, error) {
 			v.IncrementProposerPriority(1)
 
 			if v.CheckEmptyId() {
-				log.Warn("Empty id found on validator set. Querying on the validatorSet contract")
-				valsWithId, _ := c.spanner.GetCurrentValidatorsByHash(context.Background(), header.Hash(), number+1)
-				v.IncludeIds(valsWithId)
+				// Fetch the validator set from span
+				span, err := c.spanStore.spanByBlockNumber(context.Background(), number+1)
+				if err != nil {
+					return nil, err
+				}
+				v.IncludeIds(span.ValidatorSet.Validators)
 			}
 			snap.ValidatorSet = v
 		}
