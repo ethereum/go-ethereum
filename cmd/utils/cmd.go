@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -54,13 +55,16 @@ const (
 	importBatchSize = 2500
 )
 
+// ErrImportInterrupted is returned when the user interrupts the import process.
+var ErrImportInterrupted = errors.New("interrupted")
+
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
 func Fatalf(format string, args ...interface{}) {
 	w := io.MultiWriter(os.Stdout, os.Stderr)
-	if runtime.GOOS == "windows" {
-		// The SameFile check below doesn't work on Windows.
+	if runtime.GOOS == "windows" || runtime.GOOS == "openbsd" {
+		// The SameFile check below doesn't work on Windows neither OpenBSD.
 		// stdout is unlikely to get redirected though, so just print there.
 		w = os.Stdout
 	} else {
@@ -190,7 +194,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	for batch := 0; ; batch++ {
 		// Load a batch of RLP blocks.
 		if checkInterrupt() {
-			return errors.New("interrupted")
+			return ErrImportInterrupted
 		}
 		i := 0
 		for ; i < importBatchSize; i++ {
@@ -242,8 +246,9 @@ func readList(filename string) ([]string, error) {
 }
 
 // ImportHistory imports Era1 files containing historical block information,
-// starting from genesis.
-func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, network string) error {
+// starting from genesis. The assumption is held that the provided chain
+// segment in Era1 file should all be canonical and verified.
+func ImportHistory(chain *core.BlockChain, dir string, network string) error {
 	if chain.CurrentSnapBlock().Number.BitLen() != 0 {
 		return errors.New("history import only supported when starting from genesis")
 	}
@@ -303,11 +308,6 @@ func ImportHistory(chain *core.BlockChain, db ethdb.Database, dir string, networ
 				receipts, err := it.Receipts()
 				if err != nil {
 					return fmt.Errorf("error reading receipts %d: %w", it.Number(), err)
-				}
-				if status, err := chain.HeaderChain().InsertHeaderChain([]*types.Header{block.Header()}, start); err != nil {
-					return fmt.Errorf("error inserting header %d: %w", it.Number(), err)
-				} else if status != core.CanonStatTy {
-					return fmt.Errorf("error inserting header %d, not canon: %v", it.Number(), status)
 				}
 				if _, err := chain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{receipts}, 2^64-1); err != nil {
 					return fmt.Errorf("error inserting body %d: %w", it.Number(), err)
@@ -422,6 +422,10 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 		buf       = bytes.NewBuffer(nil)
 		checksums []string
 	)
+	td := new(big.Int)
+	for i := uint64(0); i < first; i++ {
+		td.Add(td, bc.GetHeaderByNumber(i).Difficulty)
+	}
 	for i := first; i <= last; i += step {
 		err := func() error {
 			filename := filepath.Join(dir, era.Filename(network, int(i/step), common.Hash{}))
@@ -444,11 +448,8 @@ func ExportHistory(bc *core.BlockChain, dir string, first, last, step uint64) er
 				if receipts == nil {
 					return fmt.Errorf("export failed on #%d: receipts not found", n)
 				}
-				td := bc.GetTd(block.Hash(), block.NumberU64())
-				if td == nil {
-					return fmt.Errorf("export failed on #%d: total difficulty not found", n)
-				}
-				if err := w.Add(block, receipts, td); err != nil {
+				td.Add(td, block.Difficulty())
+				if err := w.Add(block, receipts, new(big.Int).Set(td)); err != nil {
 					return err
 				}
 			}

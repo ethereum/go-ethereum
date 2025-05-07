@@ -156,6 +156,9 @@ type CallMsg struct {
 	// For BlobTxType
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
+
+	// For SetCodeTxType
+	AuthorizationList []types.SetCodeAuthorization
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by

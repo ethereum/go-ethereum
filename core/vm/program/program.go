@@ -1,24 +1,25 @@
 // Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
-// The library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// This library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the goevmlab library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // package program is a utility to create EVM bytecode for testing, but _not_ for production. As such:
 //
 // - There are not package guarantees. We might iterate heavily on this package, and do backwards-incompatible changes without warning
 // - There are no quality-guarantees. These utilities may produce evm-code that is non-functional. YMMV.
 // - There are no stability-guarantees. The utility will `panic` if the inputs do not align / make sense.
+
 package program
 
 import (
@@ -204,7 +205,7 @@ func (p *Program) StaticCall(gas *uint256.Int, address, inOffset, inSize, outOff
 	return p.Op(vm.STATICCALL)
 }
 
-// StaticCall is a convenience function to make a callcode. If 'gas' is nil, the opcode GAS will
+// CallCode is a convenience function to make a callcode. If 'gas' is nil, the opcode GAS will
 // be used to provide all gas.
 func (p *Program) CallCode(gas *uint256.Int, address, value, inOffset, inSize, outOffset, outSize any) *Program {
 	if outOffset == outSize && inSize == outSize && inOffset == outSize {
@@ -263,7 +264,7 @@ func (p *Program) InputAddressToStack(inputOffset uint32) *Program {
 	return p.Op(vm.AND)
 }
 
-// MStore stores the provided data (into the memory area starting at memStart).
+// Mstore stores the provided data (into the memory area starting at memStart).
 func (p *Program) Mstore(data []byte, memStart uint32) *Program {
 	var idx = 0
 	// We need to store it in chunks of 32 bytes

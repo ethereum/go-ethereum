@@ -295,31 +295,17 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	if dl.id == 0 {
 		return nil, fmt.Errorf("%w: zero state id", errStateUnrecoverable)
 	}
-	var (
-		buff     = crypto.NewKeccakState()
-		hashes   = make(map[common.Address]common.Hash)
-		accounts = make(map[common.Hash][]byte)
-		storages = make(map[common.Hash]map[common.Hash][]byte)
-	)
-	for addr, blob := range h.accounts {
-		hash := crypto.HashData(buff, addr.Bytes())
-		hashes[addr] = hash
-		accounts[hash] = blob
-	}
-	for addr, storage := range h.storages {
-		hash, ok := hashes[addr]
-		if !ok {
-			panic(fmt.Errorf("storage history with no account %x", addr))
-		}
-		storages[hash] = storage
-	}
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
 	// layer.
-	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.accounts, h.storages)
+	nodes, err := apply(dl.db, h.meta.parent, h.meta.root, h.meta.version != stateHistoryV0, h.accounts, h.storages)
 	if err != nil {
 		return nil, err
 	}
+	// Derive the state modification set from the history, keyed by the hash
+	// of the account address and the storage key.
+	accounts, storages := h.stateSet()
+
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.lock.Lock()
 	defer dl.lock.Unlock()

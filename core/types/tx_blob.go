@@ -19,6 +19,7 @@ package types
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -47,9 +48,9 @@ type BlobTx struct {
 	Sidecar *BlobTxSidecar `rlp:"-"`
 
 	// Signature values
-	V *uint256.Int `json:"v" gencodec:"required"`
-	R *uint256.Int `json:"r" gencodec:"required"`
-	S *uint256.Int `json:"s" gencodec:"required"`
+	V *uint256.Int
+	R *uint256.Int
+	S *uint256.Int
 }
 
 // BlobTxSidecar contains the blobs of a blob transaction.
@@ -83,6 +84,22 @@ func (sc *BlobTxSidecar) encodedSize() uint64 {
 		proofs += rlp.BytesSize(sc.Proofs[i][:])
 	}
 	return rlp.ListSize(blobs) + rlp.ListSize(commitments) + rlp.ListSize(proofs)
+}
+
+// ValidateBlobCommitmentHashes checks whether the given hashes correspond to the
+// commitments in the sidecar
+func (sc *BlobTxSidecar) ValidateBlobCommitmentHashes(hashes []common.Hash) error {
+	if len(sc.Commitments) != len(hashes) {
+		return fmt.Errorf("invalid number of %d blob commitments compared to %d blob hashes", len(sc.Commitments), len(hashes))
+	}
+	hasher := sha256.New()
+	for i, vhash := range hashes {
+		computed := kzg4844.CalcBlobHashV1(hasher, &sc.Commitments[i])
+		if vhash != computed {
+			return fmt.Errorf("blob %d: computed hash %#x mismatches transaction one %#x", i, computed, vhash)
+		}
+	}
+	return nil
 }
 
 // blobTxWithBlobs is used for encoding of transactions when blobs are present.
@@ -241,4 +258,22 @@ func (tx *BlobTx) decode(input []byte) error {
 		Proofs:      inner.Proofs,
 	}
 	return nil
+}
+
+func (tx *BlobTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		BlobTxType,
+		[]any{
+			chainID,
+			tx.Nonce,
+			tx.GasTipCap,
+			tx.GasFeeCap,
+			tx.Gas,
+			tx.To,
+			tx.Value,
+			tx.Data,
+			tx.AccessList,
+			tx.BlobFeeCap,
+			tx.BlobHashes,
+		})
 }

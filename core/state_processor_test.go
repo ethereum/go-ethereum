@@ -46,25 +46,7 @@ func u64(val uint64) *uint64 { return &val }
 // contain invalid transactions
 func TestStateProcessorErrors(t *testing.T) {
 	var (
-		config = &params.ChainConfig{
-			ChainID:                 big.NewInt(1),
-			HomesteadBlock:          big.NewInt(0),
-			EIP150Block:             big.NewInt(0),
-			EIP155Block:             big.NewInt(0),
-			EIP158Block:             big.NewInt(0),
-			ByzantiumBlock:          big.NewInt(0),
-			ConstantinopleBlock:     big.NewInt(0),
-			PetersburgBlock:         big.NewInt(0),
-			IstanbulBlock:           big.NewInt(0),
-			MuirGlacierBlock:        big.NewInt(0),
-			BerlinBlock:             big.NewInt(0),
-			LondonBlock:             big.NewInt(0),
-			Ethash:                  new(params.EthashConfig),
-			TerminalTotalDifficulty: big.NewInt(0),
-			ShanghaiTime:            new(uint64),
-			CancunTime:              new(uint64),
-			PragueTime:              new(uint64),
-		}
+		config  = params.MergedTestChainConfig
 		signer  = types.LatestSigner(config)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("0202020202020202020202020202020202020202020202020202002020202020")
@@ -251,9 +233,9 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrMaxInitCodeSizeExceeded
 				txs: []*types.Transaction{
-					mkDynamicCreationTx(0, 500000, common.Big0, big.NewInt(params.InitialBaseFee), tooBigInitCode[:]),
+					mkDynamicCreationTx(0, 520000, common.Big0, big.NewInt(params.InitialBaseFee), tooBigInitCode[:]),
 				},
-				want: "could not apply tx 0 [0xd491405f06c92d118dd3208376fcee18a57c54bc52063ee4a26b1cf296857c25]: max initcode size exceeded: code size 49153 limit 49152",
+				want: "could not apply tx 0 [0x3a30404d42d6ccc843d7c391fd0c87b9b9795a0c174261b46d2ac95ca17b81cd]: max initcode size exceeded: code size 49153 limit 49152",
 			},
 			{ // ErrIntrinsicGas: Not enough gas to cover init code
 				txs: []*types.Transaction{
@@ -273,7 +255,8 @@ func TestStateProcessorErrors(t *testing.T) {
 				},
 				want: "could not apply tx 0 [0xc18d10f4c809dbdfa1a074c3300de9bc4b7f16a20f0ec667f6f67312b71b956a]: EIP-7702 transaction with empty auth list (sender 0x71562b71999873DB5b286dF957af199Ec94617F7)",
 			},
-			// ErrSetCodeTxCreate cannot be tested: it is impossible to create a SetCode-tx with nil `to`.
+			// ErrSetCodeTxCreate cannot be tested here: it is impossible to create a SetCode-tx with nil `to`.
+			// The EstimateGas API tests test this case.
 		} {
 			block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config, false)
 			_, err := blockchain.InsertChain(types.Blocks{block})
@@ -425,12 +408,7 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
 	if config.IsCancun(header.Number, header.Time) {
-		var pExcess, pUsed = uint64(0), uint64(0)
-		if parent.ExcessBlobGas() != nil {
-			pExcess = *parent.ExcessBlobGas()
-			pUsed = *parent.BlobGasUsed()
-		}
-		excess := eip4844.CalcExcessBlobGas(pExcess, pUsed)
+		excess := eip4844.CalcExcessBlobGas(config, parent.Header(), header.Time)
 		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
 		header.ExcessBlobGas = &excess
 		header.BlobGasUsed = &used

@@ -36,6 +36,11 @@ type openOptions struct {
 	Cache             int    // the capacity(in megabytes) of the data caching
 	Handles           int    // number of files to be open simultaneously
 	ReadOnly          bool
+
+	// Ephemeral means that filesystem sync operations should be avoided:
+	// data integrity in the face of a crash is not important. This option
+	// should typically be used in tests.
+	Ephemeral bool
 }
 
 // openDatabase opens both a disk-based key-value database such as leveldb or pebble, but also
@@ -78,7 +83,7 @@ func openKeyValueDatabase(o openOptions) (ethdb.Database, error) {
 	}
 	if o.Type == rawdb.DBPebble || existingDb == rawdb.DBPebble {
 		log.Info("Using pebble as the backing database")
-		return newPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+		return newPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
 	}
 	if o.Type == rawdb.DBLeveldb || existingDb == rawdb.DBLeveldb {
 		log.Info("Using leveldb as the backing database")
@@ -86,7 +91,7 @@ func openKeyValueDatabase(o openOptions) (ethdb.Database, error) {
 	}
 	// No pre-existing database, no user-requested one either. Default to Pebble.
 	log.Info("Defaulting to pebble as the backing database")
-	return newPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
+	return newPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
 }
 
 // newLevelDBDatabase creates a persistent key-value database without a freezer
@@ -102,8 +107,8 @@ func newLevelDBDatabase(file string, cache int, handles int, namespace string, r
 
 // newPebbleDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func newPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
-	db, err := pebble.New(file, cache, handles, namespace, readonly)
+func newPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool, ephemeral bool) (ethdb.Database, error) {
+	db, err := pebble.New(file, cache, handles, namespace, readonly, ephemeral)
 	if err != nil {
 		return nil, err
 	}

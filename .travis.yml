@@ -2,12 +2,6 @@ language: go
 go_import_path: github.com/ethereum/go-ethereum
 sudo: false
 jobs:
-  allow_failures:
-    - stage: build
-      os: osx
-      env:
-        - azure-osx
-
   include:
     # This builder create and push the Docker images for all architectures
     - stage: build
@@ -15,7 +9,7 @@ jobs:
       os: linux
       arch: amd64
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       env:
         - docker
       services:
@@ -25,7 +19,7 @@ jobs:
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
-        - go run build/ci.go dockerx -platform "linux/amd64,linux/arm64,linux/riscv64" -upload ethereum/client-go
+        - go run build/ci.go dockerx -platform "linux/amd64,linux/arm64,linux/riscv64" -hub ethereum/client-go -upload
 
     # This builder does the Linux Azure uploads
     - stage: build
@@ -33,7 +27,7 @@ jobs:
       os: linux
       dist: focal
       sudo: required
-      go: 1.23.x
+      go: 1.24.x
       env:
         - azure-linux
       git:
@@ -62,30 +56,13 @@ jobs:
         - go run build/ci.go install -dlgo -arch arm64 -cc aarch64-linux-gnu-gcc
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
-    # This builder does the OSX Azure uploads
-    - stage: build
-      if: type = push
-      os: osx
-      osx_image: xcode14.2
-      go: 1.23.1 # See https://github.com/ethereum/go-ethereum/pull/30478
-      env:
-        - azure-osx
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-        - ln -sf /Users/travis/gopath/bin/go1.23.1 /usr/local/bin/go # Work around travis go-setup bug
-        - go run build/ci.go install -dlgo
-        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
-        - go run build/ci.go install -dlgo -arch arm64
-        - go run build/ci.go archive -arch arm64 -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
-
     # These builders run the tests
     - stage: build
       if: type = push
       os: linux
       arch: amd64
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
@@ -93,7 +70,7 @@ jobs:
       if: type = push
       os: linux
       dist: focal
-      go: 1.22.x
+      go: 1.23.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
@@ -102,7 +79,7 @@ jobs:
       if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       env:
         - ubuntu-ppa
       git:
@@ -118,7 +95,7 @@ jobs:
       if: type = cron
       os: linux
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       env:
         - azure-purge
       git:
@@ -131,7 +108,7 @@ jobs:
       if: type = cron
       os: linux
       dist: focal
-      go: 1.23.x
+      go: 1.24.x
       env:
         - racetests
       script:

@@ -1,4 +1,4 @@
-// Copyright 2019 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package simulated
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -28,14 +29,19 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
+	"go.uber.org/goleak"
 )
 
 var _ bind.ContractBackend = (Client)(nil)
 
 var (
-	testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddr   = crypto.PubkeyToAddress(testKey.PublicKey)
+	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
+	testKey2, _ = crypto.HexToECDSA("7ee346e3f7efc685250053bfbafbfc880d58dc6145247053d4fb3cb0f66dfcb2")
+	testAddr2   = crypto.PubkeyToAddress(testKey2.PublicKey)
 )
 
 func simTestBackend(testAddr common.Address) *Backend {
@@ -44,6 +50,46 @@ func simTestBackend(testAddr common.Address) *Backend {
 			testAddr: {Balance: big.NewInt(10000000000000000)},
 		},
 	)
+}
+
+func newBlobTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
+	client := sim.Client()
+
+	testBlob := &kzg4844.Blob{0x00}
+	testBlobCommit, _ := kzg4844.BlobToCommitment(testBlob)
+	testBlobProof, _ := kzg4844.ComputeBlobProof(testBlob, testBlobCommit)
+	testBlobVHash := kzg4844.CalcBlobHashV1(sha256.New(), &testBlobCommit)
+
+	head, _ := client.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei))
+	gasPriceU256, _ := uint256.FromBig(gasPrice)
+	gasTipCapU256, _ := uint256.FromBig(big.NewInt(params.GWei))
+
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	chainid, _ := client.ChainID(context.Background())
+	nonce, err := client.PendingNonceAt(context.Background(), addr)
+	if err != nil {
+		return nil, err
+	}
+
+	chainidU256, _ := uint256.FromBig(chainid)
+	tx := types.NewTx(&types.BlobTx{
+		ChainID:    chainidU256,
+		GasTipCap:  gasTipCapU256,
+		GasFeeCap:  gasPriceU256,
+		BlobFeeCap: uint256.NewInt(1),
+		Gas:        21000,
+		Nonce:      nonce,
+		To:         addr,
+		AccessList: nil,
+		BlobHashes: []common.Hash{testBlobVHash},
+		Sidecar: &types.BlobTxSidecar{
+			Blobs:       []kzg4844.Blob{*testBlob},
+			Commitments: []kzg4844.Commitment{testBlobCommit},
+			Proofs:      []kzg4844.Proof{testBlobProof},
+		},
+	})
+	return types.SignTx(tx, types.LatestSignerForChainID(chainid), key)
 }
 
 func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
@@ -66,6 +112,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 		Gas:       21000,
 		To:        &addr,
 	})
+
 	return types.SignTx(tx, types.LatestSignerForChainID(chainid), key)
 }
 
@@ -302,4 +349,21 @@ func TestAdjustTimeAfterFork(t *testing.T) {
 	if head.Number.Uint64() == 2 && head.ParentHash != h1.Hash() {
 		t.Errorf("failed to build block on fork")
 	}
+}
+
+func createAndCloseSimBackend() {
+	genesisData := types.GenesisAlloc{}
+	simulatedBackend := NewBackend(genesisData)
+	defer simulatedBackend.Close()
+}
+
+// TestCheckSimBackendGoroutineLeak checks whether creation of a simulated backend leaks go-routines.  Any long-lived go-routines
+// spawned by global variables are not considered leaked.
+func TestCheckSimBackendGoroutineLeak(t *testing.T) {
+	createAndCloseSimBackend()
+	ignoreCur := goleak.IgnoreCurrent()
+	// ignore this leveldb function:  this go-routine is guaranteed to be terminated 1 second after closing db handle
+	ignoreLdb := goleak.IgnoreAnyFunction("github.com/syndtr/goleveldb/leveldb.(*DB).mpoolDrain")
+	createAndCloseSimBackend()
+	goleak.VerifyNone(t, ignoreCur, ignoreLdb)
 }

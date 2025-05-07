@@ -130,11 +130,16 @@ func (c *Conn) Write(proto Proto, code uint64, msg any) error {
 	return err
 }
 
+var errDisc error = fmt.Errorf("disconnect")
+
 // ReadEth reads an Eth sub-protocol wire message.
 func (c *Conn) ReadEth() (any, error) {
 	c.SetReadDeadline(time.Now().Add(timeout))
 	for {
 		code, data, _, err := c.Conn.Read()
+		if code == discMsg {
+			return nil, errDisc
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -315,9 +320,6 @@ loop:
 			if have, want := msg.Head, chain.blocks[chain.Len()-1].Hash(); have != want {
 				return fmt.Errorf("wrong head block in status, want:  %#x (block %d) have %#x",
 					want, chain.blocks[chain.Len()-1].NumberU64(), have)
-			}
-			if have, want := msg.TD.Cmp(chain.TD()), 0; have != want {
-				return fmt.Errorf("wrong TD in status: have %v want %v", have, want)
 			}
 			if have, want := msg.ForkID, chain.ForkID(); !reflect.DeepEqual(have, want) {
 				return fmt.Errorf("wrong fork ID in status: have %v, want %v", have, want)

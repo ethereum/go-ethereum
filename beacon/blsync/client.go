@@ -23,9 +23,11 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/light/sync"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -46,7 +48,13 @@ func NewClient(config params.ClientConfig) *Client {
 	var (
 		db             = memorydb.New()
 		committeeChain = light.NewCommitteeChain(db, &config.ChainConfig, config.Threshold, !config.NoFilter)
-		headTracker    = light.NewHeadTracker(committeeChain, config.Threshold)
+		headTracker    = light.NewHeadTracker(committeeChain, config.Threshold, func(checkpoint common.Hash) {
+			if saved, err := config.SaveCheckpointToFile(checkpoint); saved {
+				log.Debug("Saved beacon checkpoint", "file", config.CheckpointFile, "checkpoint", checkpoint)
+			} else if err != nil {
+				log.Error("Failed to save beacon checkpoint", "file", config.CheckpointFile, "checkpoint", checkpoint, "error", err)
+			}
+		})
 	)
 	headSync := sync.NewHeadSync(headTracker, committeeChain)
 

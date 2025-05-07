@@ -779,6 +779,7 @@ func TestCommitAfterHash(t *testing.T) {
 func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 	// Make the random benchmark deterministic
 	random := rand.New(rand.NewSource(0))
+
 	// Create a realistic account trie to hash
 	addresses = make([][20]byte, size)
 	for i := 0; i < len(addresses); i++ {
@@ -795,13 +796,18 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		)
 		// The big.Rand function is not deterministic with regards to 64 vs 32 bit systems,
 		// and will consume different amount of data from the rand source.
-		//balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
+		// balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
 		// Therefore, we instead just read via byte buffer
 		numBytes := random.Uint32() % 33 // [0, 32] bytes
 		balanceBytes := make([]byte, numBytes)
 		random.Read(balanceBytes)
 		balance := new(uint256.Int).SetBytes(balanceBytes)
-		data, _ := rlp.EncodeToBytes(&types.StateAccount{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
+		data, _ := rlp.EncodeToBytes(&types.StateAccount{
+			Nonce:    nonce,
+			Balance:  balance,
+			Root:     root,
+			CodeHash: code,
+		})
 		accounts[i] = data
 	}
 	return addresses, accounts
@@ -856,6 +862,7 @@ func (s *spongeDb) Flush() {
 		s.sponge.Write([]byte(key))
 		s.sponge.Write([]byte(s.values[key]))
 	}
+	fmt.Println(len(s.keys))
 }
 
 // spongeBatch is a dummy batch which immediately writes to the underlying spongedb
@@ -873,10 +880,12 @@ func (b *spongeBatch) Write() error                        { return nil }
 func (b *spongeBatch) Reset()                              {}
 func (b *spongeBatch) Replay(w ethdb.KeyValueWriter) error { return nil }
 
-// TestCommitSequence tests that the trie.Commit operation writes the elements of the trie
-// in the expected order.
-// The test data was based on the 'master' code, and is basically random. It can be used
-// to check whether changes to the trie modifies the write order or data in any way.
+// TestCommitSequence tests that the trie.Commit operation writes the elements
+// of the trie in the expected order.
+//
+// The test data was based on the 'master' code, and is basically random.
+// It can be used to check whether changes to the trie modifies the write order
+// or data in any way.
 func TestCommitSequence(t *testing.T) {
 	for i, tc := range []struct {
 		count           int
@@ -887,19 +896,23 @@ func TestCommitSequence(t *testing.T) {
 		{2000, common.FromHex("4574cd8e6b17f3fe8ad89140d1d0bf4f1bd7a87a8ac3fb623b33550544c77635")},
 	} {
 		addresses, accounts := makeAccounts(tc.count)
+
 		// This spongeDb is used to check the sequence of disk-db-writes
 		s := &spongeDb{sponge: crypto.NewKeccakState()}
 		db := newTestDatabase(rawdb.NewDatabase(s), rawdb.HashScheme)
-		trie := NewEmpty(db)
+
 		// Fill the trie with elements
+		trie := NewEmpty(db)
 		for i := 0; i < tc.count; i++ {
 			trie.MustUpdate(crypto.Keccak256(addresses[i][:]), accounts[i])
 		}
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
 		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+
 		// Flush memdb -> disk (sponge)
 		db.Commit(root)
+
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
 			t.Errorf("test %d, disk write sequence wrong:\ngot %x exp %x\n", i, got, exp)
 		}
@@ -917,12 +930,13 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		{200, common.FromHex("dde92ca9812e068e6982d04b40846dc65a61a9fd4996fc0f55f2fde172a8e13c")},
 		{2000, common.FromHex("ab553a7f9aff82e3929c382908e30ef7dd17a332933e92ba3fe873fc661ef382")},
 	} {
-		prng := rand.New(rand.NewSource(int64(i)))
 		// This spongeDb is used to check the sequence of disk-db-writes
+		prng := rand.New(rand.NewSource(int64(i)))
 		s := &spongeDb{sponge: crypto.NewKeccakState()}
 		db := newTestDatabase(rawdb.NewDatabase(s), rawdb.HashScheme)
-		trie := NewEmpty(db)
+
 		// Fill the trie with elements
+		trie := NewEmpty(db)
 		for i := 0; i < tc.count; i++ {
 			key := make([]byte, 32)
 			var val []byte
@@ -939,6 +953,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
 		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
+
 		// Flush memdb -> disk (sponge)
 		db.Commit(root)
 		if got, exp := s.sponge.Sum(nil), tc.expWriteSeqHash; !bytes.Equal(got, exp) {
@@ -974,19 +989,22 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 			// For the stack trie, we need to do inserts in proper order
 			key := make([]byte, 32)
 			binary.BigEndian.PutUint64(key, uint64(i))
-			var val []byte
+
 			// 50% short elements, 50% large elements
+			var val []byte
 			if prng.Intn(2) == 0 {
 				val = make([]byte, 1+prng.Intn(32))
 			} else {
 				val = make([]byte, 1+prng.Intn(1024))
 			}
 			prng.Read(val)
+
 			trie.Update(key, val)
 			stTrie.Update(key, val)
 		}
 		// Flush trie -> database
 		root, nodes := trie.Commit(false)
+
 		// Flush memdb -> disk (sponge)
 		db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 		db.Commit(root)
@@ -1045,6 +1063,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 
 	// Flush trie -> database
 	root, nodes := trie.Commit(false)
+
 	// Flush memdb -> disk (sponge)
 	db.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	db.Commit(root)
@@ -1310,4 +1329,172 @@ func printSet(set *trienode.NodeSet) string {
 		fmt.Fprintf(out, "[leaf]: %v\n", n)
 	}
 	return out.String()
+}
+
+func TestTrieCopy(t *testing.T) {
+	testTrieCopy(t, []kv{
+		{k: []byte("do"), v: []byte("verb")},
+		{k: []byte("ether"), v: []byte("wookiedoo")},
+		{k: []byte("horse"), v: []byte("stallion")},
+		{k: []byte("shaman"), v: []byte("horse")},
+		{k: []byte("doge"), v: []byte("coin")},
+		{k: []byte("dog"), v: []byte("puppy")},
+	})
+
+	var entries []kv
+	for i := 0; i < 256; i++ {
+		entries = append(entries, kv{k: testrand.Bytes(32), v: testrand.Bytes(32)})
+	}
+	testTrieCopy(t, entries)
+}
+
+func testTrieCopy(t *testing.T, entries []kv) {
+	tr := NewEmpty(nil)
+	for _, entry := range entries {
+		tr.Update(entry.k, entry.v)
+	}
+	trCpy := tr.Copy()
+
+	if tr.Hash() != trCpy.Hash() {
+		t.Errorf("Hash mismatch: old %v, copy %v", tr.Hash(), trCpy.Hash())
+	}
+
+	// Check iterator
+	it, _ := tr.NodeIterator(nil)
+	itCpy, _ := trCpy.NodeIterator(nil)
+
+	for it.Next(false) {
+		hasNext := itCpy.Next(false)
+		if !hasNext {
+			t.Fatal("Iterator is not matched")
+		}
+		if !bytes.Equal(it.Path(), itCpy.Path()) {
+			t.Fatal("Iterator is not matched")
+		}
+		if it.Leaf() != itCpy.Leaf() {
+			t.Fatal("Iterator is not matched")
+		}
+		if it.Leaf() && !bytes.Equal(it.LeafBlob(), itCpy.LeafBlob()) {
+			t.Fatal("Iterator is not matched")
+		}
+	}
+
+	// Check commit
+	root, nodes := tr.Commit(false)
+	rootCpy, nodesCpy := trCpy.Commit(false)
+	if root != rootCpy {
+		t.Fatal("root mismatch")
+	}
+	if len(nodes.Nodes) != len(nodesCpy.Nodes) {
+		t.Fatal("commit node mismatch")
+	}
+	for p, n := range nodes.Nodes {
+		nn, exists := nodesCpy.Nodes[p]
+		if !exists {
+			t.Fatalf("node not exists: %v", p)
+		}
+		if !reflect.DeepEqual(n, nn) {
+			t.Fatalf("node mismatch: %v", p)
+		}
+	}
+}
+
+func TestTrieCopyOldTrie(t *testing.T) {
+	testTrieCopyOldTrie(t, []kv{
+		{k: []byte("do"), v: []byte("verb")},
+		{k: []byte("ether"), v: []byte("wookiedoo")},
+		{k: []byte("horse"), v: []byte("stallion")},
+		{k: []byte("shaman"), v: []byte("horse")},
+		{k: []byte("doge"), v: []byte("coin")},
+		{k: []byte("dog"), v: []byte("puppy")},
+	})
+
+	var entries []kv
+	for i := 0; i < 256; i++ {
+		entries = append(entries, kv{k: testrand.Bytes(32), v: testrand.Bytes(32)})
+	}
+	testTrieCopyOldTrie(t, entries)
+}
+
+func testTrieCopyOldTrie(t *testing.T, entries []kv) {
+	tr := NewEmpty(nil)
+	for _, entry := range entries {
+		tr.Update(entry.k, entry.v)
+	}
+	hash := tr.Hash()
+
+	trCpy := tr.Copy()
+	for _, val := range entries {
+		if rand.Intn(2) == 0 {
+			trCpy.Delete(val.k)
+		} else {
+			trCpy.Update(val.k, testrand.Bytes(32))
+		}
+	}
+	for i := 0; i < 10; i++ {
+		trCpy.Update(testrand.Bytes(32), testrand.Bytes(32))
+	}
+	trCpy.Hash()
+	trCpy.Commit(false)
+
+	// Traverse the original tree, the changes made on the copy one shouldn't
+	// affect the old one
+	for _, entry := range entries {
+		d, _ := tr.Get(entry.k)
+		if !bytes.Equal(d, entry.v) {
+			t.Errorf("Unexpected data, key: %v, want: %v, got: %v", entry.k, entry.v, d)
+		}
+	}
+	if tr.Hash() != hash {
+		t.Errorf("Hash mismatch: old %v, new %v", hash, tr.Hash())
+	}
+}
+
+func TestTrieCopyNewTrie(t *testing.T) {
+	testTrieCopyNewTrie(t, []kv{
+		{k: []byte("do"), v: []byte("verb")},
+		{k: []byte("ether"), v: []byte("wookiedoo")},
+		{k: []byte("horse"), v: []byte("stallion")},
+		{k: []byte("shaman"), v: []byte("horse")},
+		{k: []byte("doge"), v: []byte("coin")},
+		{k: []byte("dog"), v: []byte("puppy")},
+	})
+
+	var entries []kv
+	for i := 0; i < 256; i++ {
+		entries = append(entries, kv{k: testrand.Bytes(32), v: testrand.Bytes(32)})
+	}
+	testTrieCopyNewTrie(t, entries)
+}
+
+func testTrieCopyNewTrie(t *testing.T, entries []kv) {
+	tr := NewEmpty(nil)
+	for _, entry := range entries {
+		tr.Update(entry.k, entry.v)
+	}
+	trCpy := tr.Copy()
+	hash := trCpy.Hash()
+
+	for _, val := range entries {
+		if rand.Intn(2) == 0 {
+			tr.Delete(val.k)
+		} else {
+			tr.Update(val.k, testrand.Bytes(32))
+		}
+	}
+	for i := 0; i < 10; i++ {
+		tr.Update(testrand.Bytes(32), testrand.Bytes(32))
+	}
+
+	// Traverse the original tree, the changes made on the copy one shouldn't
+	// affect the old one
+	for _, entry := range entries {
+		d, _ := trCpy.Get(entry.k)
+		if !bytes.Equal(d, entry.v) {
+			t.Errorf("Unexpected data, key: %v, want: %v, got: %v", entry.k, entry.v, d)
+		}
+	}
+	if trCpy.Hash() != hash {
+		t.Errorf("Hash mismatch: old %v, new %v", hash, tr.Hash())
+	}
 }

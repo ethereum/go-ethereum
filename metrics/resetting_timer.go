@@ -53,14 +53,14 @@ func (t *ResettingTimer) Snapshot() *ResettingTimerSnapshot {
 	return snapshot
 }
 
-// Record the duration of the execution of the given function.
+// Time records the duration of the execution of the given function.
 func (t *ResettingTimer) Time(f func()) {
 	ts := time.Now()
 	f()
 	t.Update(time.Since(ts))
 }
 
-// Record the duration of an event.
+// Update records the duration of an event.
 func (t *ResettingTimer) Update(d time.Duration) {
 	if !metricsEnabled {
 		return
@@ -71,7 +71,7 @@ func (t *ResettingTimer) Update(d time.Duration) {
 	t.sum += int64(d)
 }
 
-// Record the duration of an event that started at a time and ends now.
+// UpdateSince records the duration of an event that started at a time and ends now.
 func (t *ResettingTimer) UpdateSince(ts time.Time) {
 	t.Update(time.Since(ts))
 }

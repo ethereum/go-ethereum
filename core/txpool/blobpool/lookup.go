@@ -1,4 +1,4 @@
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,18 +20,24 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+type txMetadata struct {
+	id   uint64 // the billy id of transction
+	size uint64 // the RLP encoded size of transaction (blobs are included)
+}
+
 // lookup maps blob versioned hashes to transaction hashes that include them,
-// and transaction hashes to billy entries that include them.
+// transaction hashes to billy entries that include them, transaction hashes
+// to the transaction size
 type lookup struct {
 	blobIndex map[common.Hash]map[common.Hash]struct{}
-	txIndex   map[common.Hash]uint64
+	txIndex   map[common.Hash]*txMetadata
 }
 
 // newLookup creates a new index for tracking blob to tx; and tx to billy mappings.
 func newLookup() *lookup {
 	return &lookup{
 		blobIndex: make(map[common.Hash]map[common.Hash]struct{}),
-		txIndex:   make(map[common.Hash]uint64),
+		txIndex:   make(map[common.Hash]*txMetadata),
 	}
 }
 
@@ -43,8 +49,11 @@ func (l *lookup) exists(txhash common.Hash) bool {
 
 // storeidOfTx returns the datastore storage item id of a transaction.
 func (l *lookup) storeidOfTx(txhash common.Hash) (uint64, bool) {
-	id, ok := l.txIndex[txhash]
-	return id, ok
+	meta, ok := l.txIndex[txhash]
+	if !ok {
+		return 0, false
+	}
+	return meta.id, true
 }
 
 // storeidOfBlob returns the datastore storage item id of a blob.
@@ -61,6 +70,15 @@ func (l *lookup) storeidOfBlob(vhash common.Hash) (uint64, bool) {
 	return 0, false // Weird, don't choke
 }
 
+// sizeOfTx returns the RLP-encoded size of transaction
+func (l *lookup) sizeOfTx(txhash common.Hash) (uint64, bool) {
+	meta, ok := l.txIndex[txhash]
+	if !ok {
+		return 0, false
+	}
+	return meta.size, true
+}
+
 // track inserts a new set of mappings from blob versioned hashes to transaction
 // hashes; and from transaction hashes to datastore storage item ids.
 func (l *lookup) track(tx *blobTxMeta) {
@@ -71,8 +89,11 @@ func (l *lookup) track(tx *blobTxMeta) {
 		}
 		l.blobIndex[vhash][tx.hash] = struct{}{} // may be double mapped if a tx contains the same blob twice
 	}
-	// Map the transaction hash to the datastore id
-	l.txIndex[tx.hash] = tx.id
+	// Map the transaction hash to the datastore id and RLP-encoded transaction size
+	l.txIndex[tx.hash] = &txMetadata{
+		id:   tx.id,
+		size: tx.size,
+	}
 }
 
 // untrack removes a set of mappings from blob versioned hashes to transaction

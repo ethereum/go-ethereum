@@ -3,6 +3,7 @@
 // <https://github.com/rcrowley/go-metrics>
 //
 // Coda Hale's original work: <https://github.com/codahale/metrics>
+
 package metrics
 
 import (
@@ -29,6 +30,7 @@ func Enabled() bool {
 // the program, before any metrics collection will happen.
 func Enable() {
 	metricsEnabled = true
+	startMeterTickerLoop()
 }
 
 var threadCreateProfile = pprof.Lookup("threadcreate")

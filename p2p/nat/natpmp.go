@@ -49,6 +49,9 @@ func (n *pmp) AddMapping(protocol string, extport, intport int, name string, lif
 	if lifetime <= 0 {
 		return 0, errors.New("lifetime must not be <= 0")
 	}
+	if extport == 0 {
+		extport = intport
+	}
 	// Note order of port arguments is switched between our
 	// AddMapping and the client's AddPortMapping.
 	res, err := n.c.AddPortMapping(strings.ToLower(protocol), intport, extport, int(lifetime/time.Second))
@@ -68,6 +71,10 @@ func (n *pmp) DeleteMapping(protocol string, extport, intport int) (err error) {
 	// time of zero.
 	_, err = n.c.AddPortMapping(strings.ToLower(protocol), intport, 0, 0)
 	return err
+}
+
+func (n *pmp) MarshalText() ([]byte, error) {
+	return fmt.Appendf(nil, "natpmp:%v", n.gw), nil
 }
 
 func discoverPMP() Interface {

@@ -1,0 +1,129 @@
+// Code generated via abigen V2 - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
+package bindtests
+
+import (
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var (
+	_ = bytes.Equal
+	_ = errors.New
+	_ = big.NewInt
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = abi.ConvertType
+)
+
+// NumericMethodNameMetaData contains all meta data concerning the NumericMethodName contract.
+var NumericMethodNameMetaData = bind.MetaData{
+	ABI: "[{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"_param\",\"type\":\"address\"}],\"name\":\"_1TestEvent\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"_1test\",\"outputs\":[],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"__1test\",\"outputs\":[],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"__2test\",\"outputs\":[],\"stateMutability\":\"pure\",\"type\":\"function\"}]",
+	ID:  "a691b347afbc44b90dd9a1dfbc65661904",
+	Bin: "0x6080604052348015600f57600080fd5b5060958061001e6000396000f3fe6080604052348015600f57600080fd5b5060043610603c5760003560e01c80639d993132146041578063d02767c7146049578063ffa02795146051575b600080fd5b60476059565b005b604f605b565b005b6057605d565b005b565b565b56fea26469706673582212200382ca602dff96a7e2ba54657985e2b4ac423a56abe4a1f0667bc635c4d4371f64736f6c63430008110033",
+}
+
+// NumericMethodName is an auto generated Go binding around an Ethereum contract.
+type NumericMethodName struct {
+	abi abi.ABI
+}
+
+// NewNumericMethodName creates a new instance of NumericMethodName.
+func NewNumericMethodName() *NumericMethodName {
+	parsed, err := NumericMethodNameMetaData.ParseABI()
+	if err != nil {
+		panic(errors.New("invalid ABI: " + err.Error()))
+	}
+	return &NumericMethodName{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *NumericMethodName) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+}
+
+// PackE1test is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xffa02795.
+//
+// Solidity: function _1test() pure returns()
+func (numericMethodName *NumericMethodName) PackE1test() []byte {
+	enc, err := numericMethodName.abi.Pack("_1test")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackE1test0 is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xd02767c7.
+//
+// Solidity: function __1test() pure returns()
+func (numericMethodName *NumericMethodName) PackE1test0() []byte {
+	enc, err := numericMethodName.abi.Pack("__1test")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// PackE2test is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x9d993132.
+//
+// Solidity: function __2test() pure returns()
+func (numericMethodName *NumericMethodName) PackE2test() []byte {
+	enc, err := numericMethodName.abi.Pack("__2test")
+	if err != nil {
+		panic(err)
+	}
+	return enc
+}
+
+// NumericMethodNameE1TestEvent represents a _1TestEvent event raised by the NumericMethodName contract.
+type NumericMethodNameE1TestEvent struct {
+	Param common.Address
+	Raw   *types.Log // Blockchain specific contextual infos
+}
+
+const NumericMethodNameE1TestEventEventName = "_1TestEvent"
+
+// ContractEventName returns the user-defined event name.
+func (NumericMethodNameE1TestEvent) ContractEventName() string {
+	return NumericMethodNameE1TestEventEventName
+}
+
+// UnpackE1TestEventEvent is the Go binding that unpacks the event data emitted
+// by contract.
+//
+// Solidity: event _1TestEvent(address _param)
+func (numericMethodName *NumericMethodName) UnpackE1TestEventEvent(log *types.Log) (*NumericMethodNameE1TestEvent, error) {
+	event := "_1TestEvent"
+	if log.Topics[0] != numericMethodName.abi.Events[event].ID {
+		return nil, errors.New("event signature mismatch")
+	}
+	out := new(NumericMethodNameE1TestEvent)
+	if len(log.Data) > 0 {
+		if err := numericMethodName.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+			return nil, err
+		}
+	}
+	var indexed abi.Arguments
+	for _, arg := range numericMethodName.abi.Events[event].Inputs {
+		if arg.Indexed {
+			indexed = append(indexed, arg)
+		}
+	}
+	if err := abi.ParseTopics(out, indexed, log.Topics[1:]); err != nil {
+		return nil, err
+	}
+	out.Raw = log
+	return out, nil
+}
