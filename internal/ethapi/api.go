@@ -1536,10 +1536,33 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	// Retrieve the precompiles since they don't need to be added to the access list
 	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, header.Time))
 
+	// addressesToExclude contains sender, receiver, precompiles and valid authorizations
+	addressesToExclude := map[common.Address]struct{}{args.from(): {}, to: {}}
+	for _, addr := range precompiles {
+		addressesToExclude[addr] = struct{}{}
+	}
+
+	// Prevent redundant operations if args contain more authorizations than EVM may handle
+	maxAuthorizations := uint64(*args.Gas) / params.CallNewAccountGas
+	if uint64(len(args.AuthorizationList)) > maxAuthorizations {
+		return nil, 0, nil, errors.New("insufficient gas to process all authorizations")
+	}
+
+	for _, auth := range args.AuthorizationList {
+		// Duplicating stateTransition.validateAuthorization() logic
+		if (!auth.ChainID.IsZero() && auth.ChainID.CmpBig(b.ChainConfig().ChainID) != 0) || auth.Nonce+1 < auth.Nonce {
+			continue
+		}
+
+		if authority, err := auth.Authority(); err == nil {
+			addressesToExclude[authority] = struct{}{}
+		}
+	}
+
 	// Create an initial tracer
-	prevTracer := vm.NewAccessListTracer(nil, args.from(), to, precompiles)
+	prevTracer := vm.NewAccessListTracer(nil, addressesToExclude)
 	if args.AccessList != nil {
-		prevTracer = vm.NewAccessListTracer(*args.AccessList, args.from(), to, precompiles)
+		prevTracer = vm.NewAccessListTracer(*args.AccessList, addressesToExclude)
 	}
 	for {
 		// Retrieve the current access list to expand
@@ -1565,7 +1588,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 
 		// Apply the transaction with the access list tracer
-		tracer := vm.NewAccessListTracer(accessList, args.from(), to, precompiles)
+		tracer := vm.NewAccessListTracer(accessList, addressesToExclude)
 		config := vm.Config{Tracer: tracer, Debug: true, NoBaseFee: true}
 		vmenv, _, err := b.GetEVM(ctx, msg, statedb, header, &config)
 		if err != nil {

@@ -486,7 +486,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
 func (st *StateTransition) validateAuthorization(auth *types.SetCodeAuthorization) (authority common.Address, preCode []byte, err error) {
-	// Verify chain ID is 0 or equal to current chain ID.
+	// Verify chain ID is null or equal to current chain ID.
 	if !auth.ChainID.IsZero() && auth.ChainID.CmpBig(st.evm.ChainConfig().ChainID) != 0 {
 		return authority, nil, ErrAuthorizationWrongChainID
 	}

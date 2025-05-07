@@ -96,6 +96,10 @@ var (
 	// transactions is reached for specific accounts.
 	ErrInflightTxLimitReached = errors.New("in-flight transaction limit reached for delegated accounts")
 
+	// ErrOutOfOrderTxFromDelegated is returned when the transaction with gapped
+	// nonce received from the accounts with delegation or pending delegation.
+	ErrOutOfOrderTxFromDelegated = errors.New("gapped-nonce tx from delegated accounts")
+
 	// ErrAuthorityReserved is returned if a transaction has an authorization
 	// signed by an address which already has in-flight transactions known to the
 	// pool.
@@ -1909,36 +1913,50 @@ func (pool *TxPool) calculateTxsLifecycle(txs types.Transactions, t time.Time) {
 	}
 }
 
+// checkDelegationLimit determines if the tx sender is delegated or has a
+// pending delegation, and if so, ensures they have at most one in-flight
+// **executable** transaction, e.g. disallow stacked and gapped transactions
+// from the account.
+func (pool *TxPool) checkDelegationLimit(from common.Address, tx *types.Transaction) error {
+	// Short circuit if the sender has neither delegation nor pending delegation.
+	if pool.currentState.GetKeccakCodeHash(from) == codehash.EmptyKeccakCodeHash && len(pool.all.auths[from]) == 0 {
+		return nil
+	}
+	pending := pool.pending[from]
+	if pending == nil {
+		// Transaction with gapped nonce is not supported for delegated accounts
+		if pool.pendingNonces.get(from) != tx.Nonce() {
+			return ErrOutOfOrderTxFromDelegated
+		}
+		return nil
+	}
+	// Transaction replacement is supported
+	if pending.Overlaps(tx) {
+		return nil
+	}
+	return ErrInflightTxLimitReached
+}
+
 // validateAuth verifies that the transaction complies with code authorization
 // restrictions brought by SetCode transaction type.
 func (pool *TxPool) validateAuth(from common.Address, tx *types.Transaction) error {
 	// Allow at most one in-flight tx for delegated accounts or those with a
 	// pending authorization.
-	if pool.currentState.GetKeccakCodeHash(from) != codehash.EmptyKeccakCodeHash || len(pool.all.auths[from]) != 0 {
-		var (
-			count  int
-			exists bool
-		)
-		pending := pool.pending[from]
-		if pending != nil {
-			count += pending.Len()
-			exists = pending.Overlaps(tx)
-		}
-		queue := pool.queue[from]
-		if queue != nil {
-			count += queue.Len()
-			exists = exists || queue.Overlaps(tx)
-		}
-		// Replace the existing in-flight transaction for delegated accounts
-		// are still supported
-		if count >= 1 && !exists {
-			return ErrInflightTxLimitReached
-		}
+	if err := pool.checkDelegationLimit(from, tx); err != nil {
+		return err
 	}
-	// Authorities cannot conflict with any pending or queued transactions.
+	// For symmetry, allow at most one in-flight tx for any authority with a
+	// pending transaction.
 	if auths := tx.SetCodeAuthorities(); len(auths) > 0 {
 		for _, auth := range auths {
-			if pool.pending[auth] != nil || pool.queue[auth] != nil {
+			var count int
+			if pending := pool.pending[auth]; pending != nil {
+				count += pending.Len()
+			}
+			if queue := pool.queue[auth]; queue != nil {
+				count += queue.Len()
+			}
+			if count > 1 {
 				return ErrAuthorityReserved
 			}
 		}
