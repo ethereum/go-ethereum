@@ -23,6 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/bor/clerk"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall" //nolint:typecheck
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/milestone"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -356,6 +358,46 @@ func getMockedHeimdallClient(t *testing.T, heimdallSpan *span.HeimdallSpan) (*mo
 		Return([]*clerk.EventRecordWithTime{getSampleEventRecord(t)}, nil).AnyTimes()
 
 	return h, ctrl
+}
+
+func createMockSpan(address common.Address, chainId string) span.HeimdallSpan {
+	// Mock span 0 for heimdall calls
+	validator := valset.Validator{
+		ID:               0,
+		Address:          address,
+		VotingPower:      10,
+		ProposerPriority: 0,
+	}
+	validatorSet := valset.ValidatorSet{
+		Validators: []*valset.Validator{&validator},
+		Proposer:   &validator,
+	}
+	span0 := span.HeimdallSpan{
+		Span: span.Span{
+			ID:         0,
+			StartBlock: 0,
+			EndBlock:   255,
+		},
+		ValidatorSet:      validatorSet,
+		SelectedProducers: []valset.Validator{validator},
+		ChainID:           chainId,
+	}
+
+	return span0
+}
+
+func createMockHeimdall(ctrl *gomock.Controller, span0, span1 *span.HeimdallSpan) *mocks.MockIHeimdallClient {
+	h := mocks.NewMockIHeimdallClient(ctrl)
+
+	h.EXPECT().Close().AnyTimes()
+	h.EXPECT().Span(gomock.Any(), uint64(0)).Return(span0, nil).AnyTimes()
+	h.EXPECT().Span(gomock.Any(), uint64(1)).Return(span1, nil).AnyTimes()
+	h.EXPECT().FetchCheckpoint(gomock.Any(), int64(-1)).Return(&checkpoint.Checkpoint{}, nil).AnyTimes()
+	h.EXPECT().FetchMilestone(gomock.Any()).Return(&milestone.Milestone{}, nil).AnyTimes()
+	h.EXPECT().FetchLastNoAckMilestone(gomock.Any()).Return("", nil).AnyTimes()
+	h.EXPECT().FetchNoAckMilestone(gomock.Any(), string("test")).Return(nil).AnyTimes()
+
+	return h
 }
 
 func getMockedSpanner(t *testing.T, validators []*valset.Validator) *bor.MockSpanner {
