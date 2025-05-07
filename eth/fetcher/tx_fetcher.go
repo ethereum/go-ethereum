@@ -203,7 +203,7 @@ type TxFetcher struct {
 	// txFromPeer stores where we received a transaction from
 	txFromPeer map[common.Hash]string
 	// should be protected by mutex
-	txFromPeerMutex sync.Mutex
+	txFromPeerMutex sync.RWMutex
 
 	// Callbacks
 	hasTx    func(common.Hash) bool             // Retrieves a tx from the local txpool
@@ -1047,6 +1047,8 @@ func rotateStrings(slice []string, n int) {
 }
 
 func (f *TxFetcher) TxFromPeer(hash common.Hash) (string, bool) {
+	f.txFromPeerMutex.RLock()
+	defer f.txFromPeerMutex.RUnlock()
 	provenance, ok := f.txFromPeer[hash]
 	return provenance, ok
 }
