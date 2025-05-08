@@ -29,28 +29,24 @@ type stackArena struct {
 }
 
 func (sa *stackArena) push(value *uint256.Int) {
-	if len(sa.data) <= sa.top {
-		// we need to grow the arena
-		sa.data = slices.Grow(sa.data, 512)
-		sa.data = sa.data[:cap(sa.data)]
-	}
-	sa.data[sa.top] = *value
-	sa.top++
-}
 
-func (sa *stackArena) pop() {
-	sa.top--
 }
 
 func newArena() *stackArena {
 	return &stackArena{
-		data: make([]uint256.Int, 1024),
+		data: make([]uint256.Int, 1025),
 	}
 }
 
 // stack returns an instance of a stack which uses the underlying arena. The instance
 // must be released by invoking the (*Stack).release() method
 func (sa *stackArena) stack() *Stack {
+	// make sure every substack has at least 1024 elements
+	if len(sa.data) <= sa.top+1024 {
+		// we need to grow the arena
+		sa.data = slices.Grow(sa.data, 1024)
+		sa.data = sa.data[:cap(sa.data)]
+	}
 	return &Stack{
 		bottom: sa.top,
 		size:   0,
@@ -62,7 +58,7 @@ func (sa *stackArena) stack() *Stack {
 // backed by a newly allocated arena.
 func newStackForTesting() *Stack {
 	arena := &stackArena{
-		data: make([]uint256.Int, 256),
+		data: make([]uint256.Int, 1025),
 	}
 	return arena.stack()
 }
@@ -89,16 +85,22 @@ func (s *Stack) Data() []uint256.Int {
 }
 
 func (s *Stack) push(d *uint256.Int) {
-	// NOTE push limit (1024) is checked in baseCheck
-	s.inner.push(d)
+	s.inner.data[s.inner.top] = *d
+	s.inner.top++
 	s.size++
 }
 
+func (s *Stack) get() *uint256.Int {
+	elem := &s.inner.data[s.inner.top]
+	s.inner.top++
+	s.size++
+	return elem
+}
+
 func (s *Stack) pop() uint256.Int {
-	ret := s.inner.data[s.bottom+s.size-1]
-	s.inner.pop()
+	s.inner.top--
 	s.size--
-	return ret
+	return s.inner.data[s.inner.top]
 }
 
 func (s *Stack) len() int {
@@ -155,7 +157,6 @@ func (s *Stack) swap16() {
 }
 
 func (s *Stack) dup(n int) {
-	// TODO: check size of inner
 	s.inner.data[s.bottom+s.size] = s.inner.data[s.bottom+s.size-n]
 	s.size++
 	s.inner.top++

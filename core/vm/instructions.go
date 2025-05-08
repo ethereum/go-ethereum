@@ -991,13 +991,13 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 			start   = min(codeLen, int(*pc+1))
 			end     = min(codeLen, start+pushByteSize)
 		)
-		a := new(uint256.Int).SetBytes(scope.Contract.Code[start:end])
+		a := scope.Stack.get()
+		a.SetBytes(scope.Contract.Code[start:end])
 
 		// Missing bytes: pushByteSize - len(pushData)
 		if missing := pushByteSize - (end - start); missing > 0 {
 			a.Lsh(a, uint(8*missing))
 		}
-		scope.Stack.push(a)
 		*pc += size
 		return nil, nil
 	}
