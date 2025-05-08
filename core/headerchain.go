@@ -591,17 +591,50 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 				hashes = append(hashes, hdr.Hash())
 			}
 			for _, hash := range hashes {
+				// Remove the associated block body and receipts if required.
+				//
+				// If the block is in the chain freezer, then this delete operation
+				// is actually ineffective.
 				if delFn != nil {
 					delFn(batch, hash, num)
 				}
+				// Remove the hash->number mapping along with the header itself
 				rawdb.DeleteHeader(batch, hash, num)
 			}
+			// Remove the number->hash mapping
 			rawdb.DeleteCanonicalHash(batch, num)
 		}
 	}
 	// Flush all accumulated deletions.
 	if err := batch.Write(); err != nil {
-		log.Crit("Failed to rewind block", "error", err)
+		log.Crit("Failed to commit batch in setHead", "err", err)
+	}
+	// Explicitly flush the pending writes in the key-value store to disk, ensuring
+	// data durability of the previous deletions.
+	if err := hc.chainDb.SyncKeyValue(); err != nil {
+		log.Crit("Failed to sync the key-value store in setHead", "err", err)
+	}
+	// Truncate the excessive chain segments in the ancient store.
+	// These are actually deferred deletions from the loop above.
+	//
+	// This step must be performed after synchronizing the key-value store;
+	// otherwise, in the event of a panic, it's theoretically possible to
+	// lose recent key-value store writes while the ancient store deletions
+	// remain, leading to data inconsistency, e.g., the gap between the key
+	// value store and ancient can be created due to unclean shutdown.
+	if delFn != nil {
+		// Ignore the error here since light client won't hit this path
+		frozen, _ := hc.chainDb.Ancients()
+		header := hc.CurrentHeader()
+
+		// Truncate the excessive chain segment above the current chain head
+		// in the ancient store.
+		if header.Number.Uint64()+1 < frozen {
+			_, err := hc.chainDb.TruncateHead(header.Number.Uint64() + 1)
+			if err != nil {
+				log.Crit("Failed to truncate head block", "err", err)
+			}
+		}
 	}
 	// Clear out any stale content from the caches
 	hc.headerCache.Purge()
