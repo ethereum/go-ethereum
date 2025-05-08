@@ -386,7 +386,6 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 			return blob
 		}
 	)
-	defer crypto.ReturnKeccakState(buf)
 	for key, val := range s.pendingStorage {
 		// Skip the noop storage changes, it might be possible the value
 		// of tracked slot is same in originStorage and pendingStorage

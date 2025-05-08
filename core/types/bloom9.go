@@ -141,7 +141,6 @@ func Bloom9(data []byte) []byte {
 // bloomValues returns the bytes (index-value pairs) to set for the given data
 func bloomValues(data []byte, hashbuf []byte) (uint, byte, uint, byte, uint, byte) {
 	sha := crypto.NewKeccakState()
-	defer crypto.ReturnKeccakState(sha)
 	sha.Reset()
 	sha.Write(data)
 	sha.Read(hashbuf)

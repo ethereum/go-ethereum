@@ -51,7 +51,6 @@ func getPooledBuffer(size uint64) ([]byte, *bytes.Buffer, error) {
 // rlpHash encodes x and hashes the encoded bytes.
 func rlpHash(x interface{}) (h common.Hash) {
 	sha := crypto.NewKeccakState()
-	defer crypto.ReturnKeccakState(sha)
 	sha.Reset()
 	rlp.Encode(sha, x)
 	sha.Read(h[:])
@@ -62,7 +61,6 @@ func rlpHash(x interface{}) (h common.Hash) {
 // It's used for typed transactions.
 func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
 	sha := crypto.NewKeccakState()
-	defer crypto.ReturnKeccakState(sha)
 	sha.Reset()
 	sha.Write([]byte{prefix})
 	rlp.Encode(sha, x)

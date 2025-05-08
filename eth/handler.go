@@ -488,7 +488,6 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		hasher = crypto.NewKeccakState()
 		hash   = make([]byte, 32)
 	)
-	defer crypto.ReturnKeccakState(hasher)
 	for _, tx := range txs {
 		var maybeDirect bool
 		switch {

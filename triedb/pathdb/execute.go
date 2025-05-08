@@ -87,7 +87,6 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 	// The account was present in prev-state, decode it from the
 	// 'slim-rlp' format bytes.
 	h := crypto.NewKeccakState()
-	defer crypto.ReturnKeccakState(h)
 
 	addrHash := crypto.HashData(h, addr.Bytes())
 	prev, err := types.FullAccount(ctx.accounts[addr])
@@ -151,7 +150,6 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 func deleteAccount(ctx *context, db database.NodeDatabase, addr common.Address) error {
 	// The account must be existent in post-state, load the account.
 	h := crypto.NewKeccakState()
-	defer crypto.ReturnKeccakState(h)
 
 	addrHash := crypto.HashData(h, addr.Bytes())
 	blob, err := ctx.accountTrie.Get(addrHash.Bytes())

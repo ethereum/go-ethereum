@@ -1067,7 +1067,6 @@ func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*acco
 		buf     = crypto.NewKeccakState()
 		deletes = make(map[common.Hash]*accountDelete)
 	)
-	defer crypto.ReturnKeccakState(buf)
 	for addr, prevObj := range s.stateObjectsDestruct {
 		prev := prevObj.origin
 
