@@ -1089,13 +1089,13 @@ func makeLog(size int) executionFunc {
 func opPush1(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
 		codeLen = uint64(len(scope.Contract.Code))
-		integer = new(uint256.Int)
+		elem    = scope.Stack.get()
 	)
 	*pc += 1
 	if *pc < codeLen {
-		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
+		elem.SetUint64(uint64(scope.Contract.Code[*pc]))
 	} else {
-		scope.Stack.push(integer.Clear())
+		elem.Clear()
 	}
 	return nil, nil
 }
@@ -1104,14 +1104,14 @@ func opPush1(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 func opPush2(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 	var (
 		codeLen = uint64(len(scope.Contract.Code))
-		integer = new(uint256.Int)
+		elem    = scope.Stack.get()
 	)
 	if *pc+2 < codeLen {
-		scope.Stack.push(integer.SetBytes2(scope.Contract.Code[*pc+1 : *pc+3]))
+		elem.SetBytes2(scope.Contract.Code[*pc+1 : *pc+3])
 	} else if *pc+1 < codeLen {
-		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc+1]) << 8))
+		elem.SetUint64(uint64(scope.Contract.Code[*pc+1]) << 8)
 	} else {
-		scope.Stack.push(integer.Clear())
+		elem.Clear()
 	}
 	*pc += 2
 	return nil, nil
