@@ -97,7 +97,7 @@ func runGeth(t *testing.T, args ...string) *testgeth {
 // waitForEndpoint attempts to connect to an RPC endpoint until it succeeds.
 func waitForEndpoint(t *testing.T, endpoint string, timeout time.Duration) {
 	probe := func() bool {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		c, err := rpc.DialContext(ctx, endpoint)
 		if c != nil {
