@@ -257,7 +257,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 		tracker = newStateTracker(maximumPendingTraceStates, start.NumberU64())
 		err     error
 	)
-	opt, err := traceExecOpt(config)
+	opt, err := traceExecOpt(false, config)
 	if err != nil {
 		log.Warn("invalid trace configuration", "err", err)
 		return nil
@@ -420,7 +420,7 @@ func (api *API) traceBlockCustomTracer(ctx context.Context, block *types.Block, 
 	instantiateTracer := func(ctx *Context) (*Tracer, error) {
 		return api.instantiateTracer(config, ctx)
 	}
-	opt, err := traceExecOpt(config)
+	opt, err := traceExecOpt(true, config)
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +479,7 @@ func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *Tra
 		return api.instantiateTracer(config, ctx)
 	}
 
-	opt, err := traceExecOpt(config)
+	opt, err := traceExecOpt(true, config)
 	if err != nil {
 		return nil, err
 	}
@@ -572,12 +572,6 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 	return api.standardTraceBlockToFile(ctx, block, config)
 }
 
-type traceExecOptions struct {
-	txTimeout time.Duration
-	reexec    uint64
-	parallel  bool
-}
-
 func (api *API) retrieveBlockPrestate(ctx context.Context, block *types.Block, execOpt *traceExecOptions, readOnly, preferDisk bool) (db *state.StateDB, stateRelease StateReleaseFunc, err error) {
 	if block.NumberU64() == 0 {
 		return nil, nil, fmt.Errorf("genesis is not traceable")
@@ -595,7 +589,6 @@ func (api *API) retrieveBlockPrestate(ctx context.Context, block *types.Block, e
 }
 
 func (api *API) traceBlockWithState(ctx context.Context, block *types.Block, statedb *state.StateDB, execOpt *traceExecOptions, instantiateTracer func(*Context) (*Tracer, error)) ([]*txTraceResult, error) {
-	// TODO: this changes the semantics of traceChain a bit.  double-check that it's alright to call ProcessBeaconBlockRoot and ProcessParentBlockHash here
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	evm := vm.NewEVM(blockCtx, statedb, api.backend.ChainConfig(), vm.Config{})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
@@ -804,11 +797,18 @@ func (api *API) standardTraceTxToFile(ctx context.Context, block *types.Block, t
 
 func traceCallExecOpt(config *TraceCallConfig) (*traceExecOptions, error) {
 	if config == nil {
-		return traceExecOpt(nil)
+		return traceExecOpt(false, nil)
 	}
-	return traceExecOpt(&config.TraceConfig)
+	return traceExecOpt(false, &config.TraceConfig)
 }
-func traceExecOpt(config *TraceConfig) (*traceExecOptions, error) {
+
+type traceExecOptions struct {
+	txTimeout time.Duration
+	reexec    uint64
+	parallel  bool
+}
+
+func traceExecOpt(allowParallelTx bool, config *TraceConfig) (*traceExecOptions, error) {
 	opt := &traceExecOptions{
 		defaultTraceTimeout,
 		defaultTraceReexec,
@@ -828,7 +828,7 @@ func traceExecOpt(config *TraceConfig) (*traceExecOptions, error) {
 		// JS tracers have high overhead. In this case run a parallel
 		// process that generates states in one thread and traces txes
 		// in separate worker threads.
-		opt.parallel = config.Tracer != nil && *config.Tracer != "" && DefaultDirectory.IsJS(*config.Tracer)
+		opt.parallel = allowParallelTx && config.Tracer != nil && *config.Tracer != "" && DefaultDirectory.IsJS(*config.Tracer)
 	}
 	return opt, nil
 }
@@ -964,7 +964,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	if blockNumber == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
-	opt, err := traceExecOpt(config)
+	opt, err := traceExecOpt(false, config)
 	if err != nil {
 		return nil, err
 	}
