@@ -54,8 +54,6 @@ func TestDump(t *testing.T) {
 	obj3.SetBalance(uint256.NewInt(44))
 
 	// write some of them to the trie
-	s.state.updateStateObject(obj1)
-	s.state.updateStateObject(obj2)
 	root, _ := s.state.Commit(0, false, false)
 
 	// check that DumpToCollector contains the state objects that are in trie
@@ -114,8 +112,6 @@ func TestIterativeDump(t *testing.T) {
 	obj4.AddBalance(uint256.NewInt(1337))
 
 	// write some of them to the trie
-	s.state.updateStateObject(obj1)
-	s.state.updateStateObject(obj2)
 	root, _ := s.state.Commit(0, false, false)
 	s.state, _ = New(root, tdb)
 
