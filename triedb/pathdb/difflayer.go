@@ -156,7 +156,7 @@ func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes *no
 }
 
 // persist flushes the diff layer and all its parent layers to disk layer.
-func (dl *diffLayer) persist(force bool) (layer, error) {
+func (dl *diffLayer) persist(force bool) (*diskLayer, error) {
 	if parent, ok := dl.parentLayer().(*diffLayer); ok {
 		// Hold the lock to prevent any read operation until the new
 		// parent is linked correctly.
@@ -183,7 +183,7 @@ func (dl *diffLayer) size() uint64 {
 
 // diffToDisk merges a bottom-most diff into the persistent disk layer underneath
 // it. The method will panic if called onto a non-bottom-most diff layer.
-func diffToDisk(layer *diffLayer, force bool) (layer, error) {
+func diffToDisk(layer *diffLayer, force bool) (*diskLayer, error) {
 	disk, ok := layer.parentLayer().(*diskLayer)
 	if !ok {
 		panic(fmt.Sprintf("unknown layer type: %T", layer.parentLayer()))
