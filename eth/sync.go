@@ -190,43 +190,35 @@ func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 }
 
 func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
-	// TODO - uncomment when we (Polygon-PoS, bor) have snap sync/pbss
-	/*
-		// If we're in snap sync mode, return that directly
-		if cs.handler.snapSync.Load() {
-			block := cs.handler.chain.CurrentSnapBlock()
-			td := cs.handler.chain.GetTd(block.Hash(), block.Number.Uint64())
-			return downloader.SnapSync, td
-		}
-	*/
+	// If we're in snap sync mode, return that directly
+	if cs.handler.snapSync.Load() {
+		block := cs.handler.chain.CurrentSnapBlock()
+		td := cs.handler.chain.GetTd(block.Hash(), block.Number.Uint64())
+		return downloader.SnapSync, td
+	}
 
 	// We are probably in full sync, but we might have rewound to before the
 	// snap sync pivot, check if we should re-enable snap sync.
 	head := cs.handler.chain.CurrentBlock()
-	// TODO - uncomment when we (Polygon-PoS, bor) have snap sync/pbss
-	/*
-		if pivot := rawdb.ReadLastPivotNumber(cs.handler.database); pivot != nil {
-			if head.Number.Uint64() < *pivot {
-				block := cs.handler.chain.CurrentSnapBlock()
-				td := cs.handler.chain.GetTd(block.Hash(), block.Number.Uint64())
-				return downloader.SnapSync, td
-			}
-		}
-	*/
-
-	// TODO - uncomment when we (Polygon-PoS, bor) have snap sync/pbss
-	// For more info - https://github.com/ethereum/go-ethereum/pull/28171
-	/*
-		// We are in a full sync, but the associated head state is missing. To complete
-		// the head state, forcefully rerun the snap sync. Note it doesn't mean the
-		// persistent state is corrupted, just mismatch with the head block.
-		if !cs.handler.chain.HasState(head.Root) {
+	if pivot := rawdb.ReadLastPivotNumber(cs.handler.database); pivot != nil {
+		if head.Number.Uint64() < *pivot {
 			block := cs.handler.chain.CurrentSnapBlock()
 			td := cs.handler.chain.GetTd(block.Hash(), block.Number.Uint64())
-			log.Info("Reenabled snap sync as chain is stateless")
 			return downloader.SnapSync, td
 		}
-	*/
+	}
+
+	// For more info - https://github.com/ethereum/go-ethereum/pull/28171
+	// We are in a full sync, but the associated head state is missing. To complete
+	// the head state, forcefully rerun the snap sync. Note it doesn't mean the
+	// persistent state is corrupted, just mismatch with the head block.
+	if !cs.handler.chain.HasState(head.Root) {
+		block := cs.handler.chain.CurrentSnapBlock()
+		td := cs.handler.chain.GetTd(block.Hash(), block.Number.Uint64())
+		log.Info("Reenabled snap sync as chain is stateless")
+		return downloader.SnapSync, td
+	}
+
 	// Nope, we're really full syncing
 	td := cs.handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 
