@@ -39,9 +39,8 @@ type traceTest struct {
 }
 
 type traceTestSuite struct {
-	cfg   testConfig
-	tests traceTest
-
+	cfg        testConfig
+	tests      traceTest
 	invalidDir string
 }
 

@@ -117,23 +117,21 @@ func generateTraceTests(clictx *cli.Context) error {
 			result, err := client.Geth.TraceTransaction(ctx, tx.Hash(), config)
 			if err != nil {
 				failed += 1
-				continue
+				break
 			}
 			blob, err := json.Marshal(result)
 			if err != nil {
 				failed += 1
-				continue
+				break
 			}
 			test.TxHashes = append(test.TxHashes, tx.Hash())
 			test.TraceConfigs = append(test.TraceConfigs, *config)
 			test.ResultHashes = append(test.ResultHashes, crypto.Keccak256Hash(blob))
-
 			writeTraceResult(outputDir, tx.Hash(), result, configName)
-
-			if time.Since(logged) > time.Second*8 {
-				logged = time.Now()
-				log.Info("Tracing transactions", "executed", len(test.TxHashes), "failed", failed, "elapsed", common.PrettyDuration(time.Since(start)))
-			}
+		}
+		if time.Since(logged) > time.Second*8 {
+			logged = time.Now()
+			log.Info("Tracing transactions", "executed", len(test.TxHashes), "failed", failed, "elapsed", common.PrettyDuration(time.Since(start)))
 		}
 	}
 	log.Info("Traced transactions", "executed", len(test.TxHashes), "failed", failed, "elapsed", common.PrettyDuration(time.Since(start)))
