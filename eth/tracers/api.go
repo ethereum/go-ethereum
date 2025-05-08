@@ -416,6 +416,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 	return retCh
 }
 
+// traceBlockCustomTracer traces a block using a js/native tracer
 func (api *API) traceBlockCustomTracer(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error) {
 	instantiateTracer := func(ctx *Context) (*Tracer, error) {
 		return api.instantiateTracer(config, ctx)
@@ -486,7 +487,7 @@ func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *Tra
 	return api.traceBlock(ctx, block, opt, instantiateTracer)
 }
 
-// sstandardTraceBlockToFile dumps the structured logs created during the
+// StandardTraceBlockToFile dumps the structured logs created during the
 // execution of EVM to the local file system and returns a list of files
 // to the caller.
 func (api *API) StandardTraceBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error) {
@@ -634,6 +635,7 @@ func (api *API) traceBlockWithState(ctx context.Context, block *types.Block, sta
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
+// instantiateTracer is called before execution of each transaction in the block.
 func (api *API) traceBlock(ctx context.Context, block *types.Block, execOpt *traceExecOptions, instantiateTracer func(*Context) (*Tracer, error)) ([]*txTraceResult, error) {
 	statedb, release, err := api.retrieveBlockPrestate(ctx, block, execOpt, true, false)
 	if err != nil {
@@ -643,10 +645,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, execOpt *tra
 	return api.traceBlockWithState(ctx, block, statedb, execOpt, instantiateTracer)
 }
 
-// TODO: this function has no test coverage
 // traceBlockParallel is for tracers that have a high overhead (read JS tracers). One thread
 // runs along and executes txes without tracing enabled to generate their prestate.
 // Worker threads take the tasks and the prestate and trace them.
+// instantiateTracer is called before executing each transaction.
 func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, statedb *state.StateDB, txTimeout time.Duration, instantiateTracer func(*Context) (*Tracer, error)) ([]*txTraceResult, error) {
 	// Execute all the transaction contained within the block concurrently
 	var (
@@ -857,6 +859,11 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 
 	chainConfig := api.backend.ChainConfig()
 	canon := true
+	// Check if there are any overrides: the caller may wish to enable a future
+	// fork when executing this block. Note, such overrides are only applicable to the
+	// actual specified block, not any preceding blocks that we have to go through
+	// in order to obtain the state.
+	// Therefore, it's perfectly valid to specify `"futureForkBlock": 0`, to enable `futureFork`
 	if config != nil && config.Overrides != nil {
 		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
 	}
@@ -879,15 +886,8 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		logConfig = config.Config
 	}
 
-	var dumps []string
-	// TODO: move this comment somewhere more relevant
-	// Check if there are any overrides: the caller may wish to enable a future
-	// fork when executing this block. Note, such overrides are only applicable to the
-	// actual specified block, not any preceding blocks that we have to go through
-	// in order to obtain the state.
-	// Therefore, it's perfectly valid to specify `"futureForkBlock": 0`, to enable `futureFork`
-
 	var (
+		dumps  []string
 		dump   *os.File
 		writer *bufio.Writer
 	)
