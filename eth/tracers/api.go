@@ -420,12 +420,11 @@ func (api *API) traceBlockCustomTracer(ctx context.Context, block *types.Block, 
 	instantiateTracer := func(ctx *Context) (*Tracer, error) {
 		return api.instantiateTracer(config, ctx)
 	}
-	env := envFromTraceConfig(api, config)
 	opt, err := traceExecOpt(config)
 	if err != nil {
 		return nil, err
 	}
-	return api.traceBlock(ctx, block, env, opt, instantiateTracer)
+	return api.traceBlock(ctx, block, opt, instantiateTracer)
 }
 
 // TraceBlockByNumber returns the structured logs created during the execution of
@@ -480,12 +479,11 @@ func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *Tra
 		return api.instantiateTracer(config, ctx)
 	}
 
-	env := envFromTraceConfig(api, config)
 	opt, err := traceExecOpt(config)
 	if err != nil {
 		return nil, err
 	}
-	return api.traceBlock(ctx, block, env, opt, instantiateTracer)
+	return api.traceBlock(ctx, block, opt, instantiateTracer)
 }
 
 // sstandardTraceBlockToFile dumps the structured logs created during the
@@ -580,50 +578,6 @@ type traceExecOptions struct {
 	parallel  bool
 }
 
-// chain configuration and flag for whether the config is canonical
-type traceEnv struct {
-	canon       bool
-	chainConfig *params.ChainConfig
-}
-
-func envFromStdConfig(api *API, config *StdTraceConfig) *traceEnv {
-	if config == nil {
-		return &traceEnv{
-			canon:       true,
-			chainConfig: api.backend.ChainConfig(),
-		}
-	}
-	return envFromLoggerConfig(api, &config.Config)
-}
-
-func envFromTraceConfig(api *API, config *TraceConfig) *traceEnv {
-	if config == nil {
-		return &traceEnv{
-			canon:       true,
-			chainConfig: api.backend.ChainConfig(),
-		}
-	}
-	return envFromLoggerConfig(api, config.Config)
-}
-
-func envFromLoggerConfig(api *API, config *logger.Config) *traceEnv {
-	if config == nil {
-		return &traceEnv{
-			canon:       true,
-			chainConfig: api.backend.ChainConfig(),
-		}
-	}
-	chainConfig := api.backend.ChainConfig()
-	var canon bool
-	if config.Overrides != nil {
-		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
-	}
-	return &traceEnv{
-		canon,
-		chainConfig,
-	}
-}
-
 func (api *API) retrieveBlockPrestate(ctx context.Context, block *types.Block, execOpt *traceExecOptions, readOnly, preferDisk bool) (db *state.StateDB, stateRelease StateReleaseFunc, err error) {
 	if block.NumberU64() == 0 {
 		return nil, nil, fmt.Errorf("genesis is not traceable")
@@ -687,7 +641,7 @@ func (api *API) traceBlockWithState(ctx context.Context, block *types.Block, sta
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
-func (api *API) traceBlock(ctx context.Context, block *types.Block, env *traceEnv, execOpt *traceExecOptions, instantiateTracer func(*Context) (*Tracer, error)) ([]*txTraceResult, error) {
+func (api *API) traceBlock(ctx context.Context, block *types.Block, execOpt *traceExecOptions, instantiateTracer func(*Context) (*Tracer, error)) ([]*txTraceResult, error) {
 	statedb, release, err := api.retrieveBlockPrestate(ctx, block, execOpt, true, false)
 	if err != nil {
 		return nil, err
@@ -901,7 +855,11 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		return nil, errors.New("genesis is not traceable")
 	}
 
-	env := envFromStdConfig(api, config)
+	chainConfig := api.backend.ChainConfig()
+	canon := true
+	if config != nil && config.Overrides != nil {
+		chainConfig, canon = overrideConfig(chainConfig, config.Overrides)
+	}
 
 	var signer = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 	if config != nil && config.TxHash != (common.Hash{}) {
@@ -909,16 +867,14 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		if !ok {
 			return nil, fmt.Errorf("transaction %#x not found in block", config.TxHash)
 		}
-		dump, err := api.standardTraceTxToFile(ctx, block, block.Transactions()[idx], idx, &config.Config, signer, env.canon)
+		dump, err := api.standardTraceTxToFile(ctx, block, block.Transactions()[idx], idx, &config.Config, signer, canon)
 		if err != nil {
 			return nil, err
 		}
 		return []string{dump}, nil
 	}
 	// Retrieve the tracing configurations, or use default values
-	var (
-		logConfig logger.Config
-	)
+	var logConfig logger.Config
 	if config != nil {
 		logConfig = config.Config
 	}
@@ -946,7 +902,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		}
 
 		// instantiate a new logger for this tx which will dump the trace to a temp file
-		dump, err := createTraceDumpFile(ctx.BlockHash, ctx.TxHash, ctx.TxIndex, env.canon)
+		dump, err := createTraceDumpFile(ctx.BlockHash, ctx.TxHash, ctx.TxIndex, canon)
 		if err != nil {
 			return nil, err
 		}
@@ -966,7 +922,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 
 	execOpt := standardTraceExecOpt(config)
 	execOpt.txTimeout = 100 * time.Hour
-	if _, err := api.traceBlock(ctx, block, env, execOpt, instantiateTracer); err != nil {
+	if _, err := api.traceBlock(ctx, block, execOpt, instantiateTracer); err != nil {
 		return nil, err
 	}
 
@@ -1153,7 +1109,6 @@ func (api *API) instantiateTracer(config *TraceConfig, txctx *Context) (*Tracer,
 	return tracer, err
 }
 
-// TODO: the following function takes two contexts... see if one of them can be removed.
 // execTx executes a transaction against the given statedb, optionally configuring the execution to use a tracer
 // if tracer is non-nil.  The result is nil if a tracer is not configured or the value returned from the tracer if it is
 // configured.
