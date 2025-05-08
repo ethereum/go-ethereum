@@ -60,12 +60,11 @@ func NewSecure(stateRoot common.Hash, owner common.Hash, root common.Hash, db da
 //
 // StateTrie is not safe for concurrent use.
 type StateTrie struct {
-	trie             Trie
-	db               database.NodeDatabase
-	preimages        preimageStore
-	hashKeyBuf       [common.HashLength]byte
-	secKeyCache      map[string][]byte
-	secKeyCacheOwner *StateTrie // Pointer to self, replace the key cache on mismatch
+	trie        Trie
+	db          database.NodeDatabase
+	preimages   preimageStore
+	hashKeyBuf  [common.HashLength]byte
+	secKeyCache map[string][]byte
 }
 
 // NewStateTrie creates a trie with an existing root node from a backing database.
@@ -81,7 +80,11 @@ func NewStateTrie(id *ID, db database.NodeDatabase) (*StateTrie, error) {
 	if err != nil {
 		return nil, err
 	}
-	tr := &StateTrie{trie: *trie, db: db}
+	tr := &StateTrie{
+		trie:        *trie,
+		db:          db,
+		secKeyCache: make(map[string][]byte),
+	}
 
 	// link the preimage store if it's supported
 	preimages, ok := db.(preimageStore)
@@ -159,7 +162,7 @@ func (t *StateTrie) GetNode(path []byte) ([]byte, int, error) {
 func (t *StateTrie) MustUpdate(key, value []byte) {
 	hk := t.hashKey(key)
 	t.trie.MustUpdate(hk, value)
-	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	t.secKeyCache[string(hk)] = common.CopyBytes(key)
 }
 
 // UpdateStorage associates key with value in the trie. Subsequent calls to
@@ -177,7 +180,7 @@ func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	if err != nil {
 		return err
 	}
-	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	t.secKeyCache[string(hk)] = common.CopyBytes(key)
 	return nil
 }
 
@@ -191,7 +194,7 @@ func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccoun
 	if err := t.trie.Update(hk, data); err != nil {
 		return err
 	}
-	t.getSecKeyCache()[string(hk)] = address.Bytes()
+	t.secKeyCache[string(hk)] = address.Bytes()
 	return nil
 }
 
@@ -203,7 +206,7 @@ func (t *StateTrie) UpdateContractCode(_ common.Address, _ common.Hash, _ []byte
 // will omit any encountered error but just print out an error message.
 func (t *StateTrie) MustDelete(key []byte) {
 	hk := t.hashKey(key)
-	delete(t.getSecKeyCache(), string(hk))
+	delete(t.secKeyCache, string(hk))
 	t.trie.MustDelete(hk)
 }
 
@@ -212,21 +215,21 @@ func (t *StateTrie) MustDelete(key []byte) {
 // If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) DeleteStorage(_ common.Address, key []byte) error {
 	hk := t.hashKey(key)
-	delete(t.getSecKeyCache(), string(hk))
+	delete(t.secKeyCache, string(hk))
 	return t.trie.Delete(hk)
 }
 
 // DeleteAccount abstracts an account deletion from the trie.
 func (t *StateTrie) DeleteAccount(address common.Address) error {
 	hk := t.hashKey(address.Bytes())
-	delete(t.getSecKeyCache(), string(hk))
+	delete(t.secKeyCache, string(hk))
 	return t.trie.Delete(hk)
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was
 // previously used to store a value.
 func (t *StateTrie) GetKey(shaKey []byte) []byte {
-	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
+	if key, ok := t.secKeyCache[string(shaKey)]; ok {
 		return key
 	}
 	if t.preimages == nil {
@@ -249,7 +252,7 @@ func (t *StateTrie) Witness() map[string]struct{} {
 // be created with new root and updated trie database for following usage
 func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	// Write all the pre-images to the actual disk database
-	if len(t.getSecKeyCache()) > 0 {
+	if len(t.secKeyCache) > 0 {
 		if t.preimages != nil {
 			preimages := make(map[common.Hash][]byte, len(t.secKeyCache))
 			for hk, key := range t.secKeyCache {
@@ -274,7 +277,7 @@ func (t *StateTrie) Copy() *StateTrie {
 	return &StateTrie{
 		trie:        *t.trie.Copy(),
 		db:          t.db,
-		secKeyCache: t.secKeyCache,
+		secKeyCache: make(map[string][]byte),
 		preimages:   t.preimages,
 	}
 }
@@ -301,17 +304,6 @@ func (t *StateTrie) hashKey(key []byte) []byte {
 	h.sha.Read(t.hashKeyBuf[:])
 	returnHasherToPool(h)
 	return t.hashKeyBuf[:]
-}
-
-// getSecKeyCache returns the current secure key cache, creating a new one if
-// ownership changed (i.e. the current secure trie is a copy of another owning
-// the actual cache).
-func (t *StateTrie) getSecKeyCache() map[string][]byte {
-	if t != t.secKeyCacheOwner {
-		t.secKeyCacheOwner = t
-		t.secKeyCache = make(map[string][]byte)
-	}
-	return t.secKeyCache
 }
 
 func (t *StateTrie) IsVerkle() bool {
