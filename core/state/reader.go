@@ -472,7 +472,7 @@ func (r *readerWithCache) Storage(addr common.Address, slot common.Hash) (common
 	var (
 		value  common.Hash
 		ok     bool
-		bucket = &r.storageBuckets[addr[0]&0x04]
+		bucket = &r.storageBuckets[addr[0]&0x0f]
 	)
 	// Try to resolve the requested storage slot in the local cache
 	bucket.lock.RLock()

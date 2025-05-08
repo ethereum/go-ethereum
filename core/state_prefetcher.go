@@ -69,9 +69,12 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			}
 			// Preload the touched accounts and storage slots in advance
 			sender, err := types.Sender(signer, tx)
-			if err == nil {
-				reader.Account(sender)
+			if err != nil {
+				fails.Add(1)
+				return nil
 			}
+			reader.Account(sender)
+
 			if tx.To() != nil {
 				account, _ := reader.Account(*tx.To())
 
