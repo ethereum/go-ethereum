@@ -28,10 +28,6 @@ type stackArena struct {
 	top  int // first free slot
 }
 
-func (sa *stackArena) push(value *uint256.Int) {
-
-}
-
 func newArena() *stackArena {
 	return &stackArena{
 		data: make([]uint256.Int, 1025),
