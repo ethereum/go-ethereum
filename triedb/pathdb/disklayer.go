@@ -231,6 +231,8 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		oldest   uint64
 	)
 	if dl.db.freezer != nil {
+		// Bail out with an error if writing the state history fails.
+		// This can happen, for example, if the device is full.
 		err := writeHistory(dl.db.freezer, bottom)
 		if err != nil {
 			return nil, err
