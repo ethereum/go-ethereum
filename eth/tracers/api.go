@@ -480,7 +480,6 @@ func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *Tra
 		return api.instantiateTracer(config, ctx)
 	}
 
-	// TODO: investigate whether the canon field has different treatment when tracing bad blocks
 	env := envFromTraceConfig(api, config)
 	opt, err := traceExecOpt(config)
 	if err != nil {
@@ -676,7 +675,7 @@ func (api *API) traceBlockWithState(ctx context.Context, block *types.Block, sta
 		if err != nil {
 			return nil, err
 		}
-		res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, tracer, nil, execOpt.txTimeout)
+		res, err := api.execTx(ctx, tx, msg, txctx, blockCtx, statedb, tracer, nil, execOpt.txTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -697,6 +696,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, env *traceEn
 	return api.traceBlockWithState(ctx, block, statedb, execOpt, instantiateTracer)
 }
 
+// TODO: this function has no test coverage
 // traceBlockParallel is for tracers that have a high overhead (read JS tracers). One thread
 // runs along and executes txes without tracing enabled to generate their prestate.
 // Worker threads take the tasks and the prestate and trace them.
@@ -738,7 +738,7 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 				// concurrent use.
 				// See: https://github.com/ethereum/go-ethereum/issues/29114
 				blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-				res, err := api.traceTx(ctx, txs[task.index], msg, txctx, blockCtx, task.statedb, tracer, nil, txTimeout)
+				res, err := api.execTx(ctx, txs[task.index], msg, txctx, blockCtx, task.statedb, tracer, nil, txTimeout)
 				if err != nil {
 					results[task.index] = &txTraceResult{TxHash: txs[task.index].Hash(), Error: err.Error()}
 					continue
@@ -751,8 +751,6 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 	// Feed the transactions into the tracers and return
 	var failed error
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-	evm := vm.NewEVM(blockCtx, statedb, api.backend.ChainConfig(), vm.Config{})
-
 txloop:
 	for i, tx := range txs {
 		// Send the trace task over for execution
@@ -766,14 +764,16 @@ txloop:
 
 		// Generate the next state snapshot fast without tracing
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		statedb.SetTxContext(tx.Hash(), i)
-		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit)); err != nil {
+		traceCtx := Context{
+			block.Hash(),
+			block.Number(),
+			i,
+			tx.Hash(),
+		}
+		if _, err := api.execTx(ctx, tx, msg, &traceCtx, blockCtx, statedb, nil, nil, defaultTraceTimeout); err != nil {
 			failed = err
 			break txloop
 		}
-		// Finalize the state so any modifications are written to the trie
-		// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
-		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
 	}
 
 	close(jobs)
@@ -836,7 +836,7 @@ func (api *API) standardTraceTxToFile(ctx context.Context, block *types.Block, t
 	}
 	traceTimeout := new(time.Duration)
 	*traceTimeout = 1 * time.Hour
-	_, err = api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, &tracer, nil, *traceTimeout)
+	_, err = api.execTx(ctx, tx, msg, txctx, blockCtx, statedb, &tracer, nil, *traceTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -1036,7 +1036,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	if err != nil {
 		return nil, err
 	}
-	return api.traceTx(ctx, tx, msg, txctx, vmctx, statedb, tracer, nil, opt.txTimeout)
+	return api.execTx(ctx, tx, msg, txctx, vmctx, statedb, tracer, nil, opt.txTimeout)
 }
 
 // TraceCall lets you trace a given eth_call. It collects the structured logs
@@ -1125,7 +1125,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if err != nil {
 		return nil, err
 	}
-	return api.traceTx(ctx, tx, msg, new(Context), vmctx, statedb, tracer, precompiles, opt.txTimeout)
+	return api.execTx(ctx, tx, msg, new(Context), vmctx, statedb, tracer, precompiles, opt.txTimeout)
 }
 
 func (api *API) instantiateTracer(config *TraceConfig, txctx *Context) (*Tracer, error) {
@@ -1153,39 +1153,46 @@ func (api *API) instantiateTracer(config *TraceConfig, txctx *Context) (*Tracer,
 	return tracer, err
 }
 
-// TODO: modify traceTx to take a tracer directly.  move logic for instantiation from TraceConfig to a separate  function.
-// traceTx configures a new tracer according to the provided configuration, and
-// executes the given message in the provided environment. The return value will
-// be tracer dependent.
-func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, tracer *Tracer, precompiles vm.PrecompiledContracts, timeout time.Duration) (interface{}, error) {
+// TODO: the following function takes two contexts... see if one of them can be removed.
+// execTx executes a transaction against the given statedb, optionally configuring the execution to use a tracer
+// if tracer is non-nil.  The result is nil if a tracer is not configured or the value returned from the tracer if it is
+// configured.
+func (api *API) execTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, tracer *Tracer, precompiles vm.PrecompiledContracts, timeout time.Duration) (res interface{}, err error) {
 	var (
-		err     error
 		usedGas uint64
+		db      vm.StateDB = statedb
+		evm     *vm.EVM
+		vmConf  = vm.Config{NoBaseFee: true}
 	)
-	tracingStateDB := state.NewHookedState(statedb, tracer.Hooks)
-	evm := vm.NewEVM(vmctx, tracingStateDB, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
+	if tracer != nil {
+		db = state.NewHookedState(statedb, tracer.Hooks)
+
+		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+		go func() {
+			<-deadlineCtx.Done()
+			if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+				tracer.Stop(errors.New("execution timeout"))
+				// Stop evm execution. Note cancellation is not necessarily immediate.
+				evm.Cancel()
+			}
+		}()
+		defer cancel()
+		vmConf.Tracer = tracer.Hooks
+	}
+	evm = vm.NewEVM(vmctx, db, api.backend.ChainConfig(), vmConf)
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
 
-	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-	go func() {
-		<-deadlineCtx.Done()
-		if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
-			tracer.Stop(errors.New("execution timeout"))
-			// Stop evm execution. Note cancellation is not necessarily immediate.
-			evm.Cancel()
-		}
-	}()
-	defer cancel()
-
-	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
 	_, err = core.ApplyTransactionWithEVM(message, new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
-	return tracer.GetResult()
+	if tracer != nil {
+		res, err = tracer.GetResult()
+	}
+	return res, err
 }
 
 // APIs return the collection of RPC services the tracer package offers.
