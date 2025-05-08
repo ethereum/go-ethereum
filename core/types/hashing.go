@@ -27,6 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// hasherPool holds LegacyKeccak256 hashers for rlpHash.
+var hasherPool = sync.Pool{
+	New: func() interface{} { return crypto.NewKeccakState() },
+}
+
 // encodeBufferPool holds temporary encoder buffers for DeriveSha and TX encoding.
 var encodeBufferPool = sync.Pool{
 	New: func() interface{} { return new(bytes.Buffer) },
@@ -50,7 +55,8 @@ func getPooledBuffer(size uint64) ([]byte, *bytes.Buffer, error) {
 
 // rlpHash encodes x and hashes the encoded bytes.
 func rlpHash(x interface{}) (h common.Hash) {
-	sha := crypto.NewKeccakState()
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
 	sha.Reset()
 	rlp.Encode(sha, x)
 	sha.Read(h[:])
@@ -60,7 +66,8 @@ func rlpHash(x interface{}) (h common.Hash) {
 // prefixedRlpHash writes the prefix into the hasher before rlp-encoding x.
 // It's used for typed transactions.
 func prefixedRlpHash(prefix byte, x interface{}) (h common.Hash) {
-	sha := crypto.NewKeccakState()
+	sha := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(sha)
 	sha.Reset()
 	sha.Write([]byte{prefix})
 	rlp.Encode(sha, x)
