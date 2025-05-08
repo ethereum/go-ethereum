@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -281,25 +282,40 @@ func TestJsonTestcases(t *testing.T) {
 
 func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	var (
-		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-		stack = newStackForTesting()
-		scope = &ScopeContext{nil, stack, nil}
+		evm      = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		stack    = newStackForTesting()
+		code     = []byte{}
+		opPush32 = makePush(32, 32)
 	)
 	// convert args
 	intArgs := make([]*uint256.Int, len(args))
 	for i, arg := range args {
+		code = append(code, common.LeftPadBytes(common.Hex2Bytes(arg), 32)...)
 		intArgs[i] = new(uint256.Int).SetBytes(common.Hex2Bytes(arg))
 	}
 	pc := uint64(0)
+	scope := &ScopeContext{nil, stack, &Contract{Code: code}}
+	start := time.Now()
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		for _, arg := range intArgs {
-			stack.push(arg)
+		for range len(args) {
+			opPush32(&pc, evm.interpreter, scope)
+			pc += 32
 		}
 		op(&pc, evm.interpreter, scope)
-		stack.pop()
+		opPop(&pc, evm.interpreter, scope)
 	}
 	bench.StopTimer()
+	elapsed := uint64(time.Since(start))
+	if elapsed < 1 {
+		elapsed = 1
+	}
+	reqGas := uint64(len(args))*GasFastestStep + GasFastestStep + GasQuickStep
+	gasUsed := reqGas * uint64(bench.N)
+	bench.ReportMetric(float64(reqGas), "gas/op")
+	// Keep it as uint64, multiply 100 to get two digit float later
+	mgasps := (100 * 1000 * gasUsed) / elapsed
+	bench.ReportMetric(float64(mgasps)/100, "mgas/s")
 
 	for i, arg := range args {
 		want := new(uint256.Int).SetBytes(common.Hex2Bytes(arg))
