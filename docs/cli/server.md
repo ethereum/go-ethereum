@@ -90,7 +90,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```state.scheme```: Scheme to use for storing ethereum state ('hash' or 'path') (default: path)
 
-- ```syncmode```: Blockchain sync mode (only "full" sync supported) (default: full)
+- ```syncmode```: Blockchain sync mode ("full" or "snap") (default: full)
 
 - ```verbosity```: Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit) (default: 3)
 

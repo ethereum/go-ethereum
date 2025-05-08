@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/bor/api"
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -46,17 +47,14 @@ func NewBorDefaultMiner(t *testing.T) *DefaultBorMiner {
 	ethAPI := api.NewMockCaller(ctrl)
 	ethAPI.EXPECT().Call(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
+	// Mock span 0 for heimdall
+	span0 := createMockSpanForTest(common.Address{0x1}, "1337")
+
 	spanner := bor.NewMockSpanner(ctrl)
-	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*valset.Validator{
-		{
-			ID:               0,
-			Address:          common.Address{0x1},
-			VotingPower:      100,
-			ProposerPriority: 0,
-		},
-	}, nil).AnyTimes()
+	spanner.EXPECT().GetCurrentValidatorsByHash(gomock.Any(), gomock.Any(), gomock.Any()).Return(span0.ValidatorSet.Validators, nil).AnyTimes()
 
 	heimdallClient := mocks.NewMockIHeimdallClient(ctrl)
+	heimdallClient.EXPECT().Span(gomock.Any(), uint64(0)).Return(&span0, nil).AnyTimes()
 	heimdallClient.EXPECT().Close().Times(1)
 
 	genesisContracts := bor.NewMockGenesisContract(ctrl)
@@ -155,6 +153,32 @@ func NewFakeBor(t TensingObject, chainDB ethdb.Database, chainConfig *params.Cha
 	}
 
 	return bor.New(chainConfig, chainDB, ethAPIMock, spanner, heimdallClientMock, contractMock, false)
+}
+
+func createMockSpanForTest(address common.Address, chainId string) span.HeimdallSpan {
+	// Mock span 0 for heimdall calls
+	validator := valset.Validator{
+		ID:               0,
+		Address:          address,
+		VotingPower:      100,
+		ProposerPriority: 0,
+	}
+	validatorSet := valset.ValidatorSet{
+		Validators: []*valset.Validator{&validator},
+		Proposer:   &validator,
+	}
+	span0 := span.HeimdallSpan{
+		Span: span.Span{
+			ID:         0,
+			StartBlock: 0,
+			EndBlock:   255,
+		},
+		ValidatorSet:      validatorSet,
+		SelectedProducers: []valset.Validator{validator},
+		ChainID:           chainId,
+	}
+
+	return span0
 }
 
 var (
