@@ -117,6 +117,9 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		}
 		copy(gspec.ExtraData[32:], addr[:])
 
+		// chain_maker has no blockchain to retrieve the TTD from, setting to nil
+		// is a hack to signal it to generate pre-merge blocks
+		gspec.Config.TerminalTotalDifficulty = nil
 		td := 0
 		genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
 
@@ -154,7 +157,6 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 
 		preBlocks = blocks
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		t.Logf("Set ttd to %v\n", gspec.Config.TerminalTotalDifficulty)
 		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, func(i int, gen *BlockGen) {
 			gen.SetPoS()
 		})

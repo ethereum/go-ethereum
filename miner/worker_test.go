@@ -872,7 +872,7 @@ func TestCommitInterruptExperimentBor_NewTxFlow(t *testing.T) {
 		for {
 			head := <-chainHeadCh
 			// We skip the initial 2 blocks as the mining timings are a bit skewed up
-			if head.Block.NumberU64() == 2 {
+			if head.Header.Number.Uint64() == 2 {
 				// Wait until `w.current` is updated for next block (3)
 				time.Sleep(100 * time.Millisecond)
 

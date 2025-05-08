@@ -21,7 +21,11 @@ linters:
     - copyloopvar # replacement to exportloopref after go 1.22+
     - whitespace
     - revive # only certain checks enabled
-
+    - durationcheck
+    - gocheckcompilerdirectives
+    - reassign
+    - mirror
+    - tenv
     ### linters we tried and will not be using:
     ###
     # - structcheck # lots of false positives

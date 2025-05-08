@@ -17,7 +17,7 @@ var (
 
 // For tracking reorgs related information
 type Chain2HeadEvent struct {
-	NewChain []*types.Block
-	OldChain []*types.Block
+	NewChain []*types.Header
+	OldChain []*types.Header
 	Type     string
 }

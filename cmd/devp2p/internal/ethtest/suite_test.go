@@ -63,7 +63,6 @@ func TestEthSuite(t *testing.T) {
 	}
 
 	for _, test := range suite.EthTests() {
-		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
 

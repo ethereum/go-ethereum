@@ -1378,9 +1378,6 @@ func TestRemoteHeaderRequestSpan(t *testing.T) {
 	}
 
 	for i, tt := range testCases {
-		i := i
-		tt := tt
-
 		t.Run("", func(t *testing.T) {
 			from, count, span, max := calculateRequestSpan(tt.remoteHeight, tt.localHeight)
 			data := reqs(int(from), count, span)

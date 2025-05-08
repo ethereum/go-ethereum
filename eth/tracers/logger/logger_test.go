@@ -49,10 +49,11 @@ type dummyStatedb struct {
 	state.StateDB
 }
 
-func (*dummyStatedb) GetRefund() uint64                                       { return 1337 }
-func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash    { return common.Hash{} }
-func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
-func (*dummyStatedb) AddAddressToAccessList(address common.Address)           {}
+func (*dummyStatedb) GetRefund() uint64                                    { return 1337 }
+func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash { return common.Hash{} }
+func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) common.Hash {
+	return common.Hash{}
+}
 
 func TestStoreCapture(t *testing.T) {
 	var (
@@ -102,7 +103,6 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

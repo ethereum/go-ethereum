@@ -405,8 +405,6 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	}
 	// Interconnect all the sink handlers with the source handler
 	for i, sink := range sinks {
-		sink := sink // Closure for goroutine below
-
 		sourcePipe, sinkPipe := p2p.MsgPipe()
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()
@@ -581,8 +579,6 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 	)
 
 	for i, sink := range sinks {
-		sink := sink // Closure for goroutine below
-
 		sourcePipe, sinkPipe := p2p.MsgPipe()
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()
@@ -621,7 +617,6 @@ func testBroadcastBlock(t *testing.T, peers, bcasts int) {
 	done := make(chan struct{}, peers)
 
 	for _, ch := range blockChs {
-		ch := ch
 		go func() {
 			<-ch
 			done <- struct{}{}

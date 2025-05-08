@@ -57,7 +57,6 @@ func TestGeneratePOSChain(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 	)
 
-	config.TerminalTotalDifficultyPassed = true
 	config.TerminalTotalDifficulty = common.Big0
 	config.ShanghaiBlock = common.Big0
 	config.CancunBlock = common.Big0

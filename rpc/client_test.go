@@ -39,6 +39,8 @@ import (
 )
 
 func TestClientRequest(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -56,6 +58,8 @@ func TestClientRequest(t *testing.T) {
 }
 
 func TestClientResponseType(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -100,6 +104,8 @@ func TestClientNullResponse(t *testing.T) {
 
 // This test checks that server-returned errors with code and data come out of Client.Call.
 func TestClientErrorData(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -133,6 +139,8 @@ func TestClientErrorData(t *testing.T) {
 }
 
 func TestClientBatchRequest(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -205,6 +213,8 @@ func TestClientBatchRequest_len(t *testing.T) {
 	t.Cleanup(s.Close)
 
 	t.Run("too-few", func(t *testing.T) {
+		t.Parallel()
+
 		client, err := Dial(s.URL)
 		if err != nil {
 			t.Fatal("failed to dial test server:", err)
@@ -236,6 +246,8 @@ func TestClientBatchRequest_len(t *testing.T) {
 	})
 
 	t.Run("too-many", func(t *testing.T) {
+		t.Parallel()
+
 		client, err := Dial(s.URL)
 		if err != nil {
 			t.Fatal("failed to dial test server:", err)
@@ -268,6 +280,8 @@ func TestClientBatchRequest_len(t *testing.T) {
 // This checks that the client can handle the case where the server doesn't
 // respond to all requests in a batch.
 func TestClientBatchRequestLimit(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 	server.SetBatchLimits(2, 100000)
@@ -304,6 +318,8 @@ func TestClientBatchRequestLimit(t *testing.T) {
 }
 
 func TestClientNotify(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -422,6 +438,8 @@ func testClientCancel(transport string, t *testing.T) {
 }
 
 func TestClientSubscribeInvalidArg(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -456,6 +474,8 @@ func TestClientSubscribeInvalidArg(t *testing.T) {
 }
 
 func TestClientSubscribe(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -491,6 +511,8 @@ func TestClientSubscribe(t *testing.T) {
 
 // In this test, the connection drops while Subscribe is waiting for a response.
 func TestClientSubscribeClose(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	service := &notificationTestService{
 		gotHangSubscriptionReq:  make(chan struct{}),
@@ -539,6 +561,8 @@ func TestClientSubscribeClose(t *testing.T) {
 // This test reproduces https://github.com/ethereum/go-ethereum/issues/17837 where the
 // client hangs during shutdown when Unsubscribe races with Client.Close.
 func TestClientCloseUnsubscribeRace(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -583,7 +607,9 @@ func (b *unsubscribeBlocker) readBatch() ([]*jsonrpcMessage, bool, error) {
 // not respond.
 // It reproducers the issue https://github.com/ethereum/go-ethereum/issues/30156
 func TestUnsubscribeTimeout(t *testing.T) {
-	srv := NewServer("", 0, 0)
+	t.Parallel()
+
+	srv := NewServer("", 1, time.Second)
 	srv.RegisterName("nftest", new(notificationTestService))
 
 	// Setup middleware to block on unsubscribe.
@@ -728,6 +754,8 @@ func TestClientSubscriptionChannelClose(t *testing.T) {
 // This test checks that Client doesn't lock up when a single subscriber
 // doesn't read subscription events.
 func TestClientNotificationStorm(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -788,6 +816,8 @@ func TestClientNotificationStorm(t *testing.T) {
 }
 
 func TestClientSetHeader(t *testing.T) {
+	t.Parallel()
+
 	var gotHeader bool
 
 	srv := newTestServer()
@@ -830,6 +860,8 @@ func TestClientSetHeader(t *testing.T) {
 }
 
 func TestClientHTTP(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -844,8 +876,6 @@ func TestClientHTTP(t *testing.T) {
 		wantResult = echoResult{"a", 1, new(echoArgs)}
 	)
 	for i := range results {
-		i := i
-
 		go func() {
 			errc <- client.Call(&results[i], "test_echo", wantResult.String, wantResult.Int, wantResult.Args)
 		}()
@@ -875,6 +905,8 @@ func TestClientHTTP(t *testing.T) {
 }
 
 func TestClientReconnect(t *testing.T) {
+	t.Parallel()
+
 	startServer := func(addr string) (*Server, net.Listener) {
 		srv := newTestServer()
 		l, err := net.Listen("tcp", addr)

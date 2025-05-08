@@ -176,6 +176,9 @@ type newPayloadResult struct {
 	block    *types.Block
 	fees     *big.Int               // total block fees
 	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
+	stateDB  *state.StateDB         // StateDB after executing the transactions
+	receipts []*types.Receipt       // Receipts collected during construction
+	requests [][]byte               // Consensus layer requests collected during block construction
 	witness  *stateless.Witness     // Witness is an optional stateless proof
 
 }
@@ -523,7 +526,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
-			clearPending(head.Block.NumberU64())
+			clearPending(head.Header.Number.Uint64())
 
 			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
@@ -1407,13 +1410,28 @@ func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadR
 	for _, r := range work.receipts {
 		allLogs = append(allLogs, r.Logs...)
 	}
-	// Read requests if Prague is enabled.
+	// Collect consensus-layer requests if Prague is enabled and bor consensus is not active.
+	var requests [][]byte
 	if w.chainConfig.IsPrague(work.header.Number) && w.chainConfig.Bor == nil {
-		requests, err := core.ParseDepositLogs(allLogs, w.chainConfig)
+		// EIP-6110 deposits
+		depositRequests, err := core.ParseDepositLogs(allLogs, w.chainConfig)
 		if err != nil {
 			return &newPayloadResult{err: err}
 		}
-		body.Requests = requests
+		requests = append(requests, depositRequests)
+		// create EVM for system calls
+		blockContext := core.NewEVMBlockContext(work.header, w.chain, &work.header.Coinbase)
+		vmenv := vm.NewEVM(blockContext, vm.TxContext{}, work.state, w.chainConfig, vm.Config{})
+		// EIP-7002 withdrawals
+		withdrawalRequests := core.ProcessWithdrawalQueue(vmenv, work.state)
+		requests = append(requests, withdrawalRequests)
+		// EIP-7251 consolidations
+		consolidationRequests := core.ProcessConsolidationQueue(vmenv, work.state)
+		requests = append(requests, consolidationRequests)
+	}
+	if requests != nil {
+		reqHash := types.CalcRequestsHash(requests)
+		work.header.RequestsHash = &reqHash
 	}
 	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, &body, work.receipts)
 
@@ -1424,7 +1442,9 @@ func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadR
 		block:    block,
 		fees:     totalFees(block, work.receipts),
 		sidecars: work.sidecars,
-		witness:  work.witness,
+		stateDB:  work.state,
+		receipts: work.receipts,
+		requests: requests,
 	}
 }
 

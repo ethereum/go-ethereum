@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -833,14 +834,18 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body) {
+func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, wrappedState vm.StateDB, body *types.Body) {
 	headerNumber := header.Number.Uint64()
 	if body.Withdrawals != nil || header.WithdrawalsHash != nil {
 		return
 	}
-	if body.Requests != nil || header.RequestsHash != nil {
+	if header.RequestsHash != nil {
 		return
 	}
+
+	// Extract the underlying state to access methods like `IntermediateRoot` and `Copy`
+	// required for bor consensus operations
+	state := wrappedState.(*state.StateDB)
 
 	var (
 		stateSyncData []*types.StateSyncData
@@ -927,7 +932,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 	if body.Withdrawals != nil || header.WithdrawalsHash != nil {
 		return nil, consensus.ErrUnexpectedWithdrawals
 	}
-	if body.Requests != nil || header.RequestsHash != nil {
+	if header.RequestsHash != nil {
 		return nil, consensus.ErrUnexpectedRequests
 	}
 

@@ -21,10 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/holiman/uint256"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -82,9 +79,10 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
 		num.Div(num, denom.SetUint64(baseFeeChangeDenominatorUint64))
-		baseFeeDelta := math.BigMax(num, common.Big1)
-
-		return num.Add(parent.BaseFee, baseFeeDelta)
+		if num.Cmp(common.Big1) < 0 {
+			return num.Add(parent.BaseFee, common.Big1)
+		}
+		return num.Add(parent.BaseFee, num)
 	} else {
 		// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
 		// max(0, parentBaseFee * gasUsedDelta / parentGasTarget / baseFeeChangeDenominator)
@@ -92,59 +90,11 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		num.Mul(num, parent.BaseFee)
 		num.Div(num, denom.SetUint64(parentGasTarget))
 		num.Div(num, denom.SetUint64(baseFeeChangeDenominatorUint64))
+
 		baseFee := num.Sub(parent.BaseFee, num)
-
-		return math.BigMax(baseFee, common.Big0)
+		if baseFee.Cmp(common.Big0) < 0 {
+			baseFee = common.Big0
+		}
+		return baseFee
 	}
-}
-
-// CalcBaseFeeUint calculates the base fee of the header.
-func CalcBaseFeeUint(config *params.ChainConfig, parent *types.Header) *uint256.Int {
-	var (
-		initialBaseFeeUint             = uint256.NewInt(params.InitialBaseFee)
-		baseFeeChangeDenominatorUint64 = params.BaseFeeChangeDenominator(config.Bor, parent.Number)
-		baseFeeChangeDenominatorUint   = uint256.NewInt(baseFeeChangeDenominatorUint64)
-	)
-
-	// If the current block is the first EIP-1559 block, return the InitialBaseFee.
-	if !config.IsLondon(parent.Number) {
-		return initialBaseFeeUint.Clone()
-	}
-
-	var (
-		parentGasTarget    = parent.GasLimit / params.ElasticityMultiplier
-		parentGasTargetBig = uint256.NewInt(parentGasTarget)
-	)
-
-	// If the parent gasUsed is the same as the target, the baseFee remains unchanged.
-	if parent.GasUsed == parentGasTarget {
-		return math.FromBig(parent.BaseFee)
-	}
-
-	if parent.GasUsed > parentGasTarget {
-		// If the parent block used more gas than its target, the baseFee should increase.
-		gasUsedDelta := uint256.NewInt(parent.GasUsed - parentGasTarget)
-
-		parentBaseFee := math.FromBig(parent.BaseFee)
-		x := gasUsedDelta.Mul(parentBaseFee, gasUsedDelta)
-		y := x.Div(x, parentGasTargetBig)
-		baseFeeDelta := math.BigMaxUint(
-			x.Div(y, baseFeeChangeDenominatorUint),
-			math.U1,
-		)
-
-		return x.Add(parentBaseFee, baseFeeDelta)
-	}
-
-	// Otherwise if the parent block used less gas than its target, the baseFee should decrease.
-	gasUsedDelta := uint256.NewInt(parentGasTarget - parent.GasUsed)
-	parentBaseFee := math.FromBig(parent.BaseFee)
-	x := gasUsedDelta.Mul(parentBaseFee, gasUsedDelta)
-	y := x.Div(x, parentGasTargetBig)
-	baseFeeDelta := x.Div(y, baseFeeChangeDenominatorUint)
-
-	return math.BigMaxUint(
-		x.Sub(parentBaseFee, baseFeeDelta),
-		math.U0.Clone(),
-	)
 }

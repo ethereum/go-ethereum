@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/holiman/uint256"
 )
@@ -123,6 +124,11 @@ type SubPool interface {
 	// Get returns a transaction if it is contained in the pool, or nil otherwise.
 	Get(hash common.Hash) *types.Transaction
 
+	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
+	// This is a utility method for the engine API, enabling consensus clients to
+	// retrieve blobs from the pools directly instead of the network.
+	GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof)
+
 	// Add enqueues a batch of transactions into the pool if they are valid. Due
 	// to the large transaction churn, add may postpone fully integrating the tx
 	// to a later point to batch multiple ones together.
@@ -162,4 +168,7 @@ type SubPool interface {
 	// Status returns the known status (unknown/pending/queued) of a transaction
 	// identified by their hashes.
 	Status(hash common.Hash) TxStatus
+
+	// Clear removes all tracked transactions from the pool
+	Clear()
 }

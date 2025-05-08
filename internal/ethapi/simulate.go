@@ -187,7 +187,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		}
 		evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, sim.state, sim.chainConfig, *vmConfig)
 	)
-	sim.state.SetLogger(tracer.Hooks())
+	var tracingStateDB = vm.StateDB(sim.state)
+	if hooks := tracer.Hooks(); hooks != nil {
+		tracingStateDB = state.NewHookedState(sim.state, hooks)
+	}
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
 	if precompiles != nil {
@@ -205,8 +208,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracer.reset(tx.Hash(), uint(i))
 		// EoA check is always skipped, even in validation mode.
 		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
-		evm.Reset(core.NewEVMTxContext(msg), sim.state)
-		result, err := applyMessageWithEVM(ctx, evm, msg, sim.state, timeout, sim.gp)
+		evm.Reset(core.NewEVMTxContext(msg), tracingStateDB)
+		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, sim.gp)
 		if err != nil {
 			txErr := txValidationError(err)
 			return nil, nil, txErr
@@ -214,7 +217,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// Update the state with pending changes.
 		var root []byte
 		if sim.chainConfig.IsByzantium(blockContext.BlockNumber) {
-			sim.state.Finalise(true)
+			tracingStateDB.Finalise(true)
 		} else {
 			root = sim.state.IntermediateRoot(sim.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
 		}

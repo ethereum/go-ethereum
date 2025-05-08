@@ -17,42 +17,78 @@
 package asm
 
 import (
-	"testing"
-
 	"encoding/hex"
+	"fmt"
+	"strings"
+	"testing"
 )
 
 // Tests disassembling instructions
 func TestInstructionIterator(t *testing.T) {
 	for i, tc := range []struct {
-		want    int
-		code    string
-		wantErr string
+		code       string
+		legacyWant string
+		eofWant    string
 	}{
-		{2, "61000000", ""},                             // valid code
-		{0, "6100", "incomplete push instruction at 0"}, // invalid code
-		{2, "5900", ""},                                 // push0
-		{0, "", ""},                                     // empty
+		{"", "", ""}, // empty
+		{"6100", `err: incomplete instruction at 0`, `err: incomplete instruction at 0`},
+		{"61000000", `
+00000: PUSH2 0x0000
+00003: STOP`, `
+00000: PUSH2 0x0000
+00003: STOP`},
+		{"5F00", `
+00000: PUSH0
+00001: STOP`, `
+00000: PUSH0
+00001: STOP`},
+		{"d1aabb00", `00000: DATALOADN
+00001: opcode 0xaa not defined
+00002: opcode 0xbb not defined
+00003: STOP`, `
+00000: DATALOADN 0xaabb
+00003: STOP`}, // DATALOADN(aabb),STOP
+		{"d1aa", `
+00000: DATALOADN
+00001: opcode 0xaa not defined`, "err: incomplete instruction at 0\n"}, // DATALOADN(aa) invalid
+		{"e20211223344556600", `
+00000: RJUMPV
+00001: MUL
+00002: GT
+00003: opcode 0x22 not defined
+00004: CALLER
+00005: DIFFICULTY
+00006: SSTORE
+err: incomplete instruction at 7`, `
+00000: RJUMPV 0x02112233445566
+00008: STOP`}, // RJUMPV( 6 bytes), STOP
 
 	} {
 		var (
-			have    int
 			code, _ = hex.DecodeString(tc.code)
-			it      = NewInstructionIterator(code)
+			legacy  = strings.TrimSpace(disassembly(NewInstructionIterator(code)))
+			eof     = strings.TrimSpace(disassembly(NewEOFInstructionIterator(code)))
 		)
-		for it.Next() {
-			have++
+		if want := strings.TrimSpace(tc.legacyWant); legacy != want {
+			t.Errorf("test %d: wrong (legacy) output. have:\n%q\nwant:\n%q\n", i, legacy, want)
 		}
-		var haveErr = ""
-		if it.Error() != nil {
-			haveErr = it.Error().Error()
-		}
-		if haveErr != tc.wantErr {
-			t.Errorf("test %d: encountered error: %q want %q", i, haveErr, tc.wantErr)
-			continue
-		}
-		if have != tc.want {
-			t.Errorf("wrong instruction count, have %d want %d", have, tc.want)
+		if want := strings.TrimSpace(tc.eofWant); eof != want {
+			t.Errorf("test %d: wrong (eof) output. have:\n%q\nwant:\n%q\n", i, eof, want)
 		}
 	}
+}
+
+func disassembly(it *instructionIterator) string {
+	var out = new(strings.Builder)
+	for it.Next() {
+		if it.Arg() != nil && 0 < len(it.Arg()) {
+			fmt.Fprintf(out, "%05x: %v %#x\n", it.PC(), it.Op(), it.Arg())
+		} else {
+			fmt.Fprintf(out, "%05x: %v\n", it.PC(), it.Op())
+		}
+	}
+	if err := it.Error(); err != nil {
+		fmt.Fprintf(out, "err: %v\n", err)
+	}
+	return out.String()
 }

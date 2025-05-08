@@ -302,8 +302,15 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	context := NewEVMBlockContext(header, p.bc.hc, nil)
-	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 
+	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
+	var tracingStateDB = vm.StateDB(statedb)
+	if hooks := cfg.Tracer; hooks != nil {
+		tracingStateDB = state.NewHookedState(statedb, hooks)
+	}
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		ProcessBeaconBlockRoot(*beaconRoot, vmenv, tracingStateDB)
+	}
 	if p.config.IsPrague(block.Number()) {
 		ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
@@ -394,13 +401,21 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		return nil, err
 	}
 
-	// Read requests if Prague is enabled.
-	var requests types.Requests
+	// Read requests if Prague is enabled and bor consensus is not active.
+	var requests [][]byte
 	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {
-		requests, err = ParseDepositLogs(allLogs, p.config)
+		// EIP-6110 deposits
+		depositRequests, err := ParseDepositLogs(allLogs, p.config)
 		if err != nil {
 			return nil, err
 		}
+		requests = append(requests, depositRequests)
+		// EIP-7002 withdrawals
+		withdrawalRequests := ProcessWithdrawalQueue(vmenv, tracingStateDB)
+		requests = append(requests, withdrawalRequests)
+		// EIP-7251 consolidations
+		consolidationRequests := ProcessConsolidationQueue(vmenv, tracingStateDB)
+		requests = append(requests, consolidationRequests)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)

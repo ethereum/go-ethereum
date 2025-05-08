@@ -30,7 +30,7 @@ import (
 func emptyLayer() *diskLayer {
 	return &diskLayer{
 		db:     New(rawdb.NewMemoryDatabase(), nil, false),
-		buffer: newNodeBuffer(DefaultBufferSize, nil, 0),
+		buffer: newBuffer(defaultBufferSize, nil, 0),
 	}
 }
 
@@ -77,7 +77,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 				nblob = common.CopyBytes(blob)
 			}
 		}
-		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)
+		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), NewStateSetWithOrigin(nil, nil))
 	}
 	var layer layer
 	layer = emptyLayer()
@@ -119,7 +119,7 @@ func BenchmarkPersist(b *testing.B) {
 			)
 			nodes[common.Hash{}][string(path)] = node
 		}
-		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)
+		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), NewStateSetWithOrigin(nil, nil))
 	}
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -157,8 +157,7 @@ func BenchmarkJournal(b *testing.B) {
 			)
 			nodes[common.Hash{}][string(path)] = node
 		}
-		// TODO(rjl493456442) a non-nil state set is expected.
-		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)
+		return newDiffLayer(parent, common.Hash{}, 0, 0, newNodeSet(nodes), new(StateSetWithOrigin))
 	}
 	var layer layer
 	layer = emptyLayer()

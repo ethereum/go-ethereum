@@ -1304,7 +1304,6 @@ func TestUnpackRevert(t *testing.T) {
 	}
 
 	for index, c := range cases {
-		index, c := index, c
 		t.Run(fmt.Sprintf("case %d", index), func(t *testing.T) {
 			t.Parallel()
 			got, err := UnpackRevert(common.Hex2Bytes(c.input))

@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // layerTree is a group of state layers identified by the state root.
@@ -86,7 +85,7 @@ func (tree *layerTree) len() int {
 }
 
 // add inserts a new layer into the tree if it can be linked to an existing old parent.
-func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *StateSetWithOrigin) error {
 	// Reject noop updates to avoid self-loops. This is a special case that can
 	// happen for clique networks and proof-of-stake networks where empty blocks
 	// don't modify the state (0 block subsidy).
@@ -101,7 +100,7 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint6
 	if parent == nil {
 		return fmt.Errorf("triedb parent [%#x] layer missing", parentRoot)
 	}
-	l := parent.update(root, parent.stateID()+1, block, nodes.Flatten(), states)
+	l := parent.update(root, parent.stateID()+1, block, newNodeSet(nodes.Flatten()), states)
 
 	tree.lock.Lock()
 	tree.layers[l.rootHash()] = l

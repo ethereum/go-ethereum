@@ -491,7 +491,7 @@ func (f *BlockFetcher) loop() {
 				log.Trace("Fetching scheduled headers", "peer", peer, "list", hashes)
 
 				// Create a closure of the fetch and schedule in on a new thread
-				fetchHeader, hashes, announcedAt := f.fetching[hashes[0]].fetchHeader, hashes, f.fetching[hashes[0]].time
+				fetchHeader, announcedAt := f.fetching[hashes[0]].fetchHeader, f.fetching[hashes[0]].time
 				go func(peer string) {
 					if f.fetchingHook != nil {
 						f.fetchingHook(hashes)
@@ -576,7 +576,7 @@ func (f *BlockFetcher) loop() {
 					case res := <-resCh:
 						res.Done <- nil
 						// Ignoring withdrawals here, since the block fetcher is not used post-merge.
-						txs, uncles, _, _ := res.Res.(*eth.BlockBodiesResponse).Unpack()
+						txs, uncles, _ := res.Res.(*eth.BlockBodiesResponse).Unpack()
 						f.FilterBodies(peer, txs, uncles, time.Now(), announcedAt)
 
 					case <-timeout.C:

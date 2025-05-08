@@ -62,24 +62,34 @@ func confirmRequestValidationCode(t *testing.T, method, contentType, body string
 }
 
 func TestHTTPErrorResponseWithDelete(t *testing.T) {
+	t.Parallel()
+
 	confirmRequestValidationCode(t, http.MethodDelete, contentType, "", http.StatusMethodNotAllowed)
 }
 
 func TestHTTPErrorResponseWithPut(t *testing.T) {
+	t.Parallel()
+
 	confirmRequestValidationCode(t, http.MethodPut, contentType, "", http.StatusMethodNotAllowed)
 }
 
 func TestHTTPErrorResponseWithMaxContentLength(t *testing.T) {
+	t.Parallel()
+
 	body := make([]rune, defaultBodyLimit+1)
 	confirmRequestValidationCode(t,
 		http.MethodPost, contentType, string(body), http.StatusRequestEntityTooLarge)
 }
 
 func TestHTTPErrorResponseWithEmptyContentType(t *testing.T) {
+	t.Parallel()
+
 	confirmRequestValidationCode(t, http.MethodPost, "", "", http.StatusUnsupportedMediaType)
 }
 
 func TestHTTPErrorResponseWithValidRequest(t *testing.T) {
+	t.Parallel()
+
 	confirmRequestValidationCode(t, http.MethodPost, contentType, "", 0)
 }
 
@@ -110,11 +120,15 @@ func confirmHTTPRequestYieldsStatusCode(t *testing.T, method, contentType, body 
 }
 
 func TestHTTPResponseWithEmptyGet(t *testing.T) {
+	t.Parallel()
+
 	confirmHTTPRequestYieldsStatusCode(t, http.MethodGet, "", "", http.StatusOK)
 }
 
 // This checks that maxRequestContentLength is not applied to the response of a request.
 func TestHTTPRespBodyUnlimited(t *testing.T) {
+	t.Parallel()
+
 	const respLength = defaultBodyLimit * 3
 
 	s := NewServer("", 0, 0)
@@ -143,6 +157,8 @@ func TestHTTPRespBodyUnlimited(t *testing.T) {
 // Tests that an HTTP error results in an HTTPError instance
 // being returned with the expected attributes.
 func TestHTTPErrorResponse(t *testing.T) {
+	t.Parallel()
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "error has occurred!", http.StatusTeapot)
 	}))
@@ -183,6 +199,8 @@ func TestHTTPErrorResponse(t *testing.T) {
 }
 
 func TestHTTPPeerInfo(t *testing.T) {
+	t.Parallel()
+
 	s := newTestServer()
 	defer s.Stop()
 

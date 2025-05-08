@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -44,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
 const (
@@ -200,20 +198,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 	// Construct the downloader (long sync)
 	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, nil, h.removePeer, h.enableSyncedFeatures, config.checker)
-	if ttd := h.chain.Config().TerminalTotalDifficulty; ttd != nil {
-		if h.chain.Config().TerminalTotalDifficultyPassed {
-			log.Info("Chain post-merge, sync via beacon client")
-		} else {
-			head := h.chain.CurrentBlock()
-			if td := h.chain.GetTd(head.Hash(), head.Number.Uint64()); td.Cmp(ttd) >= 0 {
-				log.Info("Chain post-TTD, sync via beacon client")
-			} else {
-				log.Warn("Chain pre-merge, sync via PoW (ensure beacon client is ready)")
-			}
-		}
-	} else if h.chain.Config().TerminalTotalDifficultyPassed {
-		log.Error("Chain configured post-merge, but without TTD. Are you debugging sync?")
-	}
+
 	// Construct the fetcher (short sync)
 	validator := func(header *types.Header) error {
 		// Reject all the PoS style headers in the first place. No matter
@@ -718,9 +703,6 @@ func (h *handler) enableSyncedFeatures() {
 	if h.snapSync.Load() {
 		log.Info("Snap sync complete, auto disabling")
 		h.snapSync.Store(false)
-	}
-	if h.chain.TrieDB().Scheme() == rawdb.PathScheme {
-		h.chain.TrieDB().SetBufferSize(pathdb.DefaultBufferSize)
 	}
 }
 
