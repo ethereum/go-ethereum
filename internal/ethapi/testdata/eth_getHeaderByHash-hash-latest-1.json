@@ -15,6 +15,5 @@
   "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
   "stateRoot": "0x93818d689d9a3d71eddc80c3687bcbb1f45c8204d52614e1377921d389c62249",
   "timestamp": "0x5a",
-  "totalDifficulty": "0x1",
   "transactionsRoot": "0x0767ed8359337dc6a8fdc77fe52db611bed1be87aac73c4556b1bf1dd3d190a5"
 }

@@ -482,6 +482,12 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
 				core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 			}
+			// Insert parent hash in history contract.
+			if api.backend.ChainConfig().IsPrague(next.Number()) {
+				context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
+				vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
+				core.ProcessParentBlockHash(next.ParentHash(), vmenv, statedb)
+			}
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
 			// tracing state of block next depends on the parent state and construction
@@ -683,6 +689,9 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
+	if chainConfig.IsPrague(block.Number()) {
+		core.ProcessParentBlockHash(block.ParentHash(), vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{}), statedb)
 	}
 
 	txs, stateSyncPresent, stateSyncHash := api.getAllBlockTransactions(ctx, block)
@@ -1082,6 +1091,10 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
+	if chainConfig.IsPrague(block.Number()) {
+		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+	}
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
 		var (
@@ -1300,21 +1313,31 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 
 	// Apply the customization rules if required.
 	if config != nil {
-		if err := config.StateOverrides.Apply(statedb); err != nil {
+		config.BlockOverrides.Apply(&vmctx)
+		rules := api.backend.ChainConfig().Rules(vmctx.BlockNumber, vmctx.Random != nil, vmctx.Time)
+
+		precompiles := vm.ActivePrecompiledContracts(rules)
+		if err := config.StateOverrides.Apply(statedb, precompiles); err != nil {
 			return nil, err
 		}
-
-		config.BlockOverrides.Apply(&vmctx)
 	}
 	// Execute the trace
 	if err := args.CallDefaults(api.backend.RPCGasCap(), vmctx.BaseFee, api.backend.ChainConfig().ChainID); err != nil {
 		return nil, err
 	}
 	var (
-		msg         = args.ToMessage(vmctx.BaseFee)
-		tx          = args.ToTransaction()
+		msg         = args.ToMessage(vmctx.BaseFee, true, true)
+		tx          = args.ToTransaction(types.LegacyTxType)
 		traceConfig *TraceConfig
 	)
+	// Lower the basefee to 0 to avoid breaking EVM
+	// invariants (basefee < feecap).
+	if msg.GasPrice.Sign() == 0 {
+		vmctx.BaseFee = new(big.Int)
+	}
+	if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
+		vmctx.BlobBaseFee = new(big.Int)
+	}
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}

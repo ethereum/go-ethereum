@@ -9,26 +9,13 @@ jobs:
         - azure-osx
 
   include:
-    # This builder only tests code linters on latest version of Go
-    - stage: lint
-      os: linux
-      dist: bionic
-      go: 1.22.x
-      env:
-        - lint
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-        - go run build/ci.go lint
-
-    # These builders create the Docker sub-images for multi-arch push and each
-    # will attempt to push the multi-arch image if they are the last builder
+    # This builder create and push the Docker images for all architectures
     - stage: build
       if: type = push
       os: linux
       arch: amd64
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       env:
         - docker
       services:
@@ -38,24 +25,7 @@ jobs:
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
-
-    - stage: build
-      if: type = push
-      os: linux
-      arch: arm64
-      dist: noble
-      go: 1.22.x
-      env:
-        - docker
-      services:
-        - docker
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      before_install:
-        - export DOCKER_CLI_EXPERIMENTAL=enabled
-      script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
+        - go run build/ci.go dockerx -platform "linux/amd64,linux/arm64" -upload ethereum/client-go
 
     # This builder does the Ubuntu PPA upload
     - stage: build
@@ -85,9 +55,9 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      dist: noble
+      dist: focal
       sudo: required
-      go: 1.22.x
+      go: 1.23.x
       env:
         - azure-linux
       git:
@@ -99,6 +69,7 @@ jobs:
 
         # build 386
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+        - git status --porcelain
         - go run build/ci.go install -dlgo -arch 386
         - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
@@ -158,12 +129,13 @@ jobs:
       if: type = push
       os: osx
       osx_image: xcode14.2
-      go: 1.22.x
+      go: 1.23.1 # See https://github.com/ethereum/go-ethereum/pull/30478
       env:
         - azure-osx
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
+        - ln -sf /Users/travis/gopath/bin/go1.23.1 /usr/local/bin/go # Work around travis go-setup bug
         - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
         - go run build/ci.go install -dlgo -arch arm64
@@ -174,8 +146,8 @@ jobs:
       if: type = push
       os: linux
       arch: amd64
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
@@ -190,7 +162,7 @@ jobs:
 
     - stage: build
       os: linux
-      dist: noble
+      dist: focal
       go: 1.22.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
@@ -199,8 +171,8 @@ jobs:
     - stage: build
       if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       env:
         - ubuntu-ppa
       git:
@@ -215,8 +187,8 @@ jobs:
     - stage: build
       if: type = cron
       os: linux
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       env:
         - azure-purge
       git:
@@ -228,8 +200,8 @@ jobs:
     - stage: build
       if: type = cron
       os: linux
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       env:
         - racetests
       script:

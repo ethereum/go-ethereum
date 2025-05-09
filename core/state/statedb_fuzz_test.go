@@ -73,7 +73,7 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 			args: make([]int64, 1),
 		},
 		{
-			name: "SetState",
+			name: "SetStorage",
 			fn: func(a testAction, s *StateDB) {
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))
@@ -197,7 +197,6 @@ func (test *stateTest) run() bool {
 		}
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})
-		sdb       = NewDatabaseWithNodeDB(disk, tdb)
 		byzantium = rand.Intn(2) == 0
 	)
 	defer disk.Close()
@@ -217,7 +216,7 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, sdb, snaps)
+		state, err := New(root, NewDatabase(tdb, snaps))
 		if err != nil {
 			panic(err)
 		}

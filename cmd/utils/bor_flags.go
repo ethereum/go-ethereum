@@ -2,6 +2,7 @@ package utils
 
 import (
 	"os"
+	"time"
 
 	"github.com/urfave/cli/v2"
 
@@ -20,6 +21,13 @@ var (
 		Name:  "bor.heimdall",
 		Usage: "URL of Heimdall service",
 		Value: "http://localhost:1317",
+	}
+
+	// HeimdallTimeoutFlag flag for heimdall timeout
+	HeimdallTimeoutFlag = &cli.DurationFlag{
+		Name:  "bor.heimdalltimeout",
+		Usage: "Timeout of Heimdall service",
+		Value: 5 * time.Second,
 	}
 
 	// WithoutHeimdallFlag no heimdall (for testing purpose)
@@ -56,6 +64,7 @@ var (
 	// BorFlags all bor related flags
 	BorFlags = []cli.Flag{
 		HeimdallURLFlag,
+		HeimdallTimeoutFlag,
 		WithoutHeimdallFlag,
 		HeimdallgRPCAddressFlag,
 		RunHeimdallFlag,
@@ -67,6 +76,7 @@ var (
 // SetBorConfig sets bor config
 func SetBorConfig(ctx *cli.Context, cfg *eth.Config) {
 	cfg.HeimdallURL = ctx.String(HeimdallURLFlag.Name)
+	cfg.HeimdallTimeout = ctx.Duration(HeimdallTimeoutFlag.Name)
 	cfg.WithoutHeimdall = ctx.Bool(WithoutHeimdallFlag.Name)
 	cfg.HeimdallgRPCAddress = ctx.String(HeimdallgRPCAddressFlag.Name)
 	cfg.RunHeimdall = ctx.Bool(RunHeimdallFlag.Name)

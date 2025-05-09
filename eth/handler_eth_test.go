@@ -454,6 +454,102 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	}
 }
 
+// This test checks that transactions are only announced when txannouncementonly is enabled
+func TestSendTransactionAnnouncementsOnly67(t *testing.T) {
+	testSendTransactionAnnouncementsOnly(t, eth.ETH67)
+}
+func TestSendTransactionAnnouncementsOnly68(t *testing.T) {
+	testSendTransactionAnnouncementsOnly(t, eth.ETH68)
+}
+
+func testSendTransactionAnnouncementsOnly(t *testing.T, protocol uint) {
+	t.Parallel()
+
+	// Create a source handler that has txannouncementonly enabled
+	source := newTestHandler()
+	source.handler.txAnnouncementOnly = true
+	defer source.close()
+
+	sink := newTestHandler()
+	defer sink.close()
+
+	sourcePipe, sinkPipe := p2p.MsgPipe()
+	defer sourcePipe.Close()
+	defer sinkPipe.Close()
+
+	sourcePeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{1}, "", nil, sourcePipe), sourcePipe, source.txpool)
+	sinkPeer := eth.NewPeer(protocol, p2p.NewPeerPipe(enode.ID{2}, "", nil, sinkPipe), sinkPipe, sink.txpool)
+	defer sourcePeer.Close()
+	defer sinkPeer.Close()
+
+	go source.handler.runEthPeer(sourcePeer, func(peer *eth.Peer) error {
+		return eth.Handle((*ethHandler)(source.handler), peer)
+	})
+
+	// Run the handshake locally
+	var (
+		genesis = source.chain.Genesis()
+		head    = source.chain.CurrentBlock()
+		td      = source.chain.GetTd(head.Hash(), head.Number.Uint64())
+	)
+	if err := sinkPeer.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(source.chain), forkid.NewFilter(source.chain)); err != nil {
+		t.Fatalf("failed to run protocol handshake: %v", err)
+	}
+
+	// Subscribe to all inbound network events on the sink peer
+	backend := new(testEthHandler)
+
+	anns := make(chan []common.Hash)
+	annSub := backend.txAnnounces.Subscribe(anns)
+	defer annSub.Unsubscribe()
+
+	bcasts := make(chan []*types.Transaction)
+	bcastSub := backend.txBroadcasts.Subscribe(bcasts)
+	defer bcastSub.Unsubscribe()
+
+	go eth.Handle(backend, sinkPeer)
+
+	// Fill the source pool with transactions and wait for them at the sink
+	txs := make([]*types.Transaction, 1024)
+	for nonce := range txs {
+		tx := types.NewTransaction(uint64(nonce), common.Address{}, big.NewInt(0), 100000, big.NewInt(0), nil)
+		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
+		txs[nonce] = tx
+	}
+	source.txpool.Add(txs, false, false)
+
+	// Make sure we get all the transactions as announcements
+	seen := make(map[common.Hash]struct{})
+	timeout := false
+	for len(seen) < len(txs) && !timeout {
+		switch protocol {
+		case 67, 68:
+			select {
+			case hashes := <-anns:
+				for _, hash := range hashes {
+					if _, ok := seen[hash]; ok {
+						t.Errorf("duplicate transaction announced: %x", hash)
+					}
+					seen[hash] = struct{}{}
+				}
+			case <-bcasts:
+				t.Errorf("received tx broadcast when txannouncementonly is true")
+			case <-time.After(5 * time.Second):
+				t.Errorf("transaction propagation timed out")
+				timeout = true
+			}
+
+		default:
+			panic("unsupported protocol, please extend test")
+		}
+	}
+	for _, tx := range txs {
+		if _, ok := seen[tx.Hash()]; !ok {
+			t.Errorf("missing transaction: %x", tx.Hash())
+		}
+	}
+}
+
 // Tests that blocks are broadcast to a sqrt number of peers only.
 func TestBroadcastBlock1Peer(t *testing.T)    { testBroadcastBlock(t, 1, 1) }
 func TestBroadcastBlock2Peers(t *testing.T)   { testBroadcastBlock(t, 2, 1) }

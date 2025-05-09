@@ -20,11 +20,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/big"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
+	"gotest.tools/assert"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
@@ -433,4 +437,24 @@ func TestPrecompiledP256Verify(t *testing.T) {
 	t.Parallel()
 
 	testJson("p256Verify", "100", t)
+}
+
+// BOR: if this test failed, it means you should include PrecompiledP256Verify in the PrecompiledContracts
+// TODO: handle when common.BytesToAddress([]byte{0x01, 0x00}) will colide a new Ethereum's precompile
+func TestPrecompiledP256VerifyAlwaysAvailableInHFs(t *testing.T) {
+	latestHfRules := params.BorMainnetChainConfig.Rules(big.NewInt(math.MaxInt64), true, 0)
+	precompiledP256VerifyAddress := common.BytesToAddress([]byte{0x01, 0x00})
+
+	addresses := ActivePrecompiles(latestHfRules)
+	addressFound := false
+	for _, addr := range addresses {
+		if addr == precompiledP256VerifyAddress {
+			addressFound = true
+			break
+		}
+	}
+	assert.Equal(t, true, addressFound)
+
+	preCompiledContracts := ActivePrecompiledContracts(latestHfRules)
+	assert.Equal(t, &p256Verify{}, preCompiledContracts[precompiledP256VerifyAddress])
 }

@@ -65,8 +65,9 @@ func TestAccountRange(t *testing.T) {
 	t.Parallel()
 
 	var (
-		statedb = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &triedb.Config{Preimages: true})
-		sdb, _  = state.New(types.EmptyRootHash, statedb, nil)
+		mdb     = rawdb.NewMemoryDatabase()
+		statedb = state.NewDatabase(triedb.NewDatabase(mdb, &triedb.Config{Preimages: true}), nil)
+		sdb, _  = state.New(types.EmptyRootHash, statedb)
 		addrs   = [AccountRangeMaxResults * 2]common.Address{}
 		m       = map[common.Address]bool{}
 	)
@@ -83,7 +84,7 @@ func TestAccountRange(t *testing.T) {
 		}
 	}
 	root, _ := sdb.Commit(0, true)
-	sdb, _ = state.New(root, statedb, nil)
+	sdb, _ = state.New(root, statedb)
 
 	trie, err := statedb.OpenTrie(root)
 	if err != nil {
@@ -136,12 +137,12 @@ func TestEmptyAccountRange(t *testing.T) {
 	t.Parallel()
 
 	var (
-		statedb = state.NewDatabase(rawdb.NewMemoryDatabase())
-		st, _   = state.New(types.EmptyRootHash, statedb, nil)
+		statedb = state.NewDatabaseForTesting()
+		st, _   = state.New(types.EmptyRootHash, statedb)
 	)
 	// Commit(although nothing to flush) and re-init the statedb
 	st.Commit(0, true)
-	st, _ = state.New(types.EmptyRootHash, statedb, nil)
+	st, _ = state.New(types.EmptyRootHash, statedb)
 
 	results := st.RawDump(&state.DumpConfig{
 		SkipCode:          true,
@@ -163,8 +164,10 @@ func TestStorageRangeAt(t *testing.T) {
 
 	// Create a state where account 0x010000... has a few storage entries.
 	var (
-		db     = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &triedb.Config{Preimages: true})
-		sdb, _ = state.New(types.EmptyRootHash, db, nil)
+		mdb    = rawdb.NewMemoryDatabase()
+		tdb    = triedb.NewDatabase(mdb, &triedb.Config{Preimages: true})
+		db     = state.NewDatabase(tdb, nil)
+		sdb, _ = state.New(types.EmptyRootHash, db)
 		addr   = common.Address{0x01}
 		keys   = []common.Hash{ // hashes of Keys of storage
 			common.HexToHash("340dd630ad21bf010b4e676dbfa9ba9a02175262d1fa356232cfde6cb5b47ef2"),
@@ -184,7 +187,7 @@ func TestStorageRangeAt(t *testing.T) {
 		sdb.SetState(addr, *entry.Key, entry.Value)
 	}
 	root, _ := sdb.Commit(0, false)
-	sdb, _ = state.New(root, db, nil)
+	sdb, _ = state.New(root, db)
 
 	// Check a few combinations of limit and start/end.
 	tests := []struct {

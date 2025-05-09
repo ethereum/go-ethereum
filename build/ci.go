@@ -50,7 +50,6 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -126,8 +125,6 @@ var (
 		"focal",  // 20.04, EOL: 04/2030
 		"jammy",  // 22.04, EOL: 04/2032
 		"noble",  // 24.04, EOL: 04/2034
-
-		"mantic", // 23.10, EOL: 07/2024
 	}
 
 	// This is where the tests should be unpacked.
@@ -161,8 +158,8 @@ func main() {
 		doLint(os.Args[2:])
 	case "archive":
 		doArchive(os.Args[2:])
-	case "docker":
-		doDocker(os.Args[2:])
+	case "dockerx":
+		doDockerBuildx(os.Args[2:])
 	case "debsrc":
 		doDebianSource(os.Args[2:])
 	case "nsis":
@@ -239,6 +236,10 @@ func doInstall(cmdline []string) {
 // buildFlags returns the go tool flags for building.
 func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (flags []string) {
 	var ld []string
+	// See https://github.com/golang/go/issues/33772#issuecomment-528176001
+	// We need to set --buildid to the linker here, and also pass --build-id to the
+	// cgo-linker further down.
+	ld = append(ld, "--buildid=none")
 	if env.Commit != "" {
 		ld = append(ld, "-X", "github.com/maticnetwork/bor/internal/version.gitCommit="+env.Commit)
 		ld = append(ld, "-X", "github.com/maticnetwork/bor/internal/version.gitDate="+env.Date)
@@ -251,7 +252,11 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 	if runtime.GOOS == "linux" {
 		// Enforce the stacksize to 8M, which is the case on most platforms apart from
 		// alpine Linux.
-		extld := []string{"-Wl,-z,stack-size=0x800000"}
+		// See https://sourceware.org/binutils/docs-2.23.1/ld/Options.html#Options
+		// regarding the options --build-id=none and --strip-all. It is needed for
+		// reproducible builds; removing references to temporary files in C-land, and
+		// making build-id reproducably absent.
+		extld := []string{"-Wl,-z,stack-size=0x800000,--build-id=none,--strip-all"}
 		if staticLinking {
 			extld = append(extld, "-static")
 			// Under static linking, use of certain glibc features must be
@@ -298,7 +303,7 @@ func doTest(cmdline []string) {
 	gotest := tc.Go("test")
 
 	// CI needs a bit more time for the statetests (default 10m).
-	gotest.Args = append(gotest.Args, "-timeout=20m")
+	gotest.Args = append(gotest.Args, "-timeout=30m")
 
 	// Enable CKZG backend in CI.
 	gotest.Args = append(gotest.Args, "-tags=ckzg")
@@ -349,10 +354,10 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 	return filepath.Join(cachedir, base)
 }
 
-// hashSourceFiles iterates all files under the top-level project directory
+// hashAllSourceFiles iterates all files under the top-level project directory
 // computing the hash of each file (excluding files within the tests
 // subrepo)
-func hashSourceFiles() (map[string]common.Hash, error) {
+func hashAllSourceFiles() (map[string]common.Hash, error) {
 	res := make(map[string]common.Hash)
 	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if strings.HasPrefix(path, filepath.FromSlash("tests/testdata")) {
@@ -379,6 +384,56 @@ func hashSourceFiles() (map[string]common.Hash, error) {
 	return res, nil
 }
 
+// hashSourceFiles iterates the provided set of filepaths (relative to the top-level geth project directory)
+// computing the hash of each file.
+func hashSourceFiles(files []string) (map[string]common.Hash, error) {
+	res := make(map[string]common.Hash)
+	for _, filePath := range files {
+		f, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
+		if err != nil {
+			return nil, err
+		}
+		hasher := sha256.New()
+		if _, err := io.Copy(hasher, f); err != nil {
+			return nil, err
+		}
+		res[filePath] = common.Hash(hasher.Sum(nil))
+	}
+	return res, nil
+}
+
+// compareHashedFilesets compares two maps (key is relative file path to top-level geth directory, value is its hash)
+// and returns the list of file paths whose hashes differed.
+func compareHashedFilesets(preHashes map[string]common.Hash, postHashes map[string]common.Hash) []string {
+	updates := []string{}
+	for path, postHash := range postHashes {
+		preHash, ok := preHashes[path]
+		if !ok || preHash != postHash {
+			updates = append(updates, path)
+		}
+	}
+	return updates
+}
+
+func doGoModTidy() {
+	targetFiles := []string{"go.mod", "go.sum"}
+	preHashes, err := hashSourceFiles(targetFiles)
+	if err != nil {
+		log.Fatal("failed to hash go.mod/go.sum", "err", err)
+	}
+	tc := new(build.GoToolchain)
+	c := tc.Go("mod", "tidy")
+	build.MustRun(c)
+	postHashes, err := hashSourceFiles(targetFiles)
+	updates := compareHashedFilesets(preHashes, postHashes)
+	for _, updatedFile := range updates {
+		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
+	}
+	if len(updates) != 0 {
+		log.Fatal("go.sum and/or go.mod were updated by running 'go mod tidy'")
+	}
+}
+
 // doGenerate ensures that re-generating generated files does not cause
 // any mutations in the source file tree:  i.e. all generated files were
 // updated and committed.  Any stale generated files are updated.
@@ -395,7 +450,7 @@ func doGenerate() {
 	var preHashes map[string]common.Hash
 	if *verify {
 		var err error
-		preHashes, err = hashSourceFiles()
+		preHashes, err = hashAllSourceFiles()
 		if err != nil {
 			log.Fatal("failed to compute map of source hashes", "err", err)
 		}
@@ -410,17 +465,11 @@ func doGenerate() {
 		return
 	}
 	// Check if files were changed.
-	postHashes, err := hashSourceFiles()
+	postHashes, err := hashAllSourceFiles()
 	if err != nil {
 		log.Fatal("error computing source tree file hashes", "err", err)
 	}
-	updates := []string{}
-	for path, postHash := range postHashes {
-		preHash, ok := preHashes[path]
-		if !ok || preHash != postHash {
-			updates = append(updates, path)
-		}
-	}
+	updates := compareHashedFilesets(preHashes, postHashes)
 	for _, updatedFile := range updates {
 		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
 	}
@@ -443,6 +492,8 @@ func doLint(cmdline []string) {
 	linter := downloadLinter(*cachedir)
 	lflags := []string{"run", "--config", ".golangci.yml"}
 	build.MustRunCommandWithOutput(linter, append(lflags, packages...)...)
+
+	doGoModTidy()
 	fmt.Println("You have achieved perfection.")
 }
 
@@ -671,10 +722,9 @@ func maybeSkipArchive(env build.Environment) {
 }
 
 // Builds the docker images and optionally uploads them to Docker Hub.
-func doDocker(cmdline []string) {
+func doDockerBuildx(cmdline []string) {
 	var (
-		image    = flag.Bool("image", false, `Whether to build and push an arch specific docker image`)
-		manifest = flag.String("manifest", "", `Push a multi-arch docker image for the specified architectures (usually "amd64,arm64")`)
+		platform = flag.String("platform", "", `Push a multi-arch docker image for the specified architectures (usually "linux/amd64,linux/arm64")`)
 		upload   = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -709,129 +759,26 @@ func doDocker(cmdline []string) {
 	case strings.HasPrefix(env.Tag, "v1."):
 		tags = []string{"stable", fmt.Sprintf("release-1.%d", params.VersionMinor), "v" + params.Version}
 	}
-	// If architecture specific image builds are requested, build and push them
-	if *image {
-		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
-		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
+	// Need to create a mult-arch builder
+	build.MustRunCommand("docker", "buildx", "create", "--use", "--name", "multi-arch-builder", "--platform", *platform)
 
-		// Tag and upload the images to Docker Hub
-		for _, tag := range tags {
-			gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, runtime.GOARCH)
-			toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, runtime.GOARCH)
-
-			// If the image already exists (non version tag), check the build
-			// number to prevent overwriting a newer commit if concurrent builds
-			// are running. This is still a tiny bit racey if two published are
-			// done at the same time, but that's extremely unlikely even on the
-			// master branch.
-			for _, img := range []string{gethImage, toolImage} {
-				if exec.Command("docker", "pull", img).Run() != nil {
-					continue // Generally the only failure is a missing image, which is good
-				}
-				buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"buildnum\"}}", img).CombinedOutput()
-				if err != nil {
-					log.Fatalf("Failed to inspect container: %v\nOutput: %s", err, string(buildnum))
-				}
-				buildnum = bytes.TrimSpace(buildnum)
-
-				if len(buildnum) > 0 && len(env.Buildnum) > 0 {
-					oldnum, err := strconv.Atoi(string(buildnum))
-					if err != nil {
-						log.Fatalf("Failed to parse old image build number: %v", err)
-					}
-					newnum, err := strconv.Atoi(env.Buildnum)
-					if err != nil {
-						log.Fatalf("Failed to parse current build number: %v", err)
-					}
-					if oldnum > newnum {
-						log.Fatalf("Current build number %d not newer than existing %d", newnum, oldnum)
-					} else {
-						log.Printf("Updating %s from build %d to %d", img, oldnum, newnum)
-					}
-				}
-			}
-			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:TAG", *upload), gethImage)
-			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:alltools-TAG", *upload), toolImage)
-			build.MustRunCommand("docker", "push", gethImage)
-			build.MustRunCommand("docker", "push", toolImage)
-		}
-	}
-	// If multi-arch image manifest push is requested, assemble it
-	if len(*manifest) != 0 {
-		// Since different architectures are pushed by different builders, wait
-		// until all required images are updated.
-		var mismatch bool
-		for i := 0; i < 2; i++ { // 2 attempts, second is race check
-			mismatch = false // hope there's no mismatch now
-
-			for _, tag := range tags {
-				for _, arch := range strings.Split(*manifest, ",") {
-					gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, arch)
-					toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, arch)
-
-					for _, img := range []string{gethImage, toolImage} {
-						if out, err := exec.Command("docker", "pull", img).CombinedOutput(); err != nil {
-							log.Printf("Required image %s unavailable: %v\nOutput: %s", img, err, out)
-							mismatch = true
-							break
-						}
-						buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"buildnum\"}}", img).CombinedOutput()
-						if err != nil {
-							log.Fatalf("Failed to inspect container: %v\nOutput: %s", err, string(buildnum))
-						}
-						buildnum = bytes.TrimSpace(buildnum)
-
-						if string(buildnum) != env.Buildnum {
-							log.Printf("Build number mismatch on %s: want %s, have %s", img, env.Buildnum, buildnum)
-							mismatch = true
-							break
-						}
-					}
-					if mismatch {
-						break
-					}
-				}
-				if mismatch {
-					break
-				}
-			}
-			if mismatch {
-				// Build numbers mismatching, retry in a short time to
-				// avoid concurrent fails in both publisher images. If
-				// however the retry failed too, it means the concurrent
-				// builder is still crunching, let that do the publish.
-				if i == 0 {
-					time.Sleep(30 * time.Second)
-				}
-				continue
-			}
-			break
-		}
-		if mismatch {
-			log.Println("Relinquishing publish to other builder")
-			return
-		}
-		// Assemble and push the Geth manifest image
-		for _, tag := range tags {
-			gethImage := fmt.Sprintf("%s:%s", *upload, tag)
-
-			var gethSubImages []string
-			for _, arch := range strings.Split(*manifest, ",") {
-				gethSubImages = append(gethSubImages, gethImage+"-"+arch)
-			}
-			build.MustRunCommand("docker", append([]string{"manifest", "create", gethImage}, gethSubImages...)...)
-			build.MustRunCommand("docker", "manifest", "push", gethImage)
-		}
-		// Assemble and push the alltools manifest image
-		for _, tag := range tags {
-			toolImage := fmt.Sprintf("%s:alltools-%s", *upload, tag)
-
-			var toolSubImages []string
-			for _, arch := range strings.Split(*manifest, ",") {
-				toolSubImages = append(toolSubImages, toolImage+"-"+arch)
-			}
-			build.MustRunCommand("docker", append([]string{"manifest", "create", toolImage}, toolSubImages...)...)
-			build.MustRunCommand("docker", "manifest", "push", toolImage)
+	for _, spec := range []struct {
+		file string
+		base string
+	}{
+		{file: "Dockerfile", base: fmt.Sprintf("%s:", *upload)},
+		{file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *upload)},
+	} {
+		for _, tag := range tags { // latest, stable etc
+			gethImage := fmt.Sprintf("%s%s", spec.base, tag)
+			build.MustRunCommand("docker", "buildx", "build",
+				"--build-arg", "COMMIT="+env.Commit,
+				"--build-arg", "VERSION="+params.VersionWithMeta,
+				"--build-arg", "BUILDNUM="+env.Buildnum,
+				"--tag", gethImage,
+				"--platform", *platform,
+				"--push",
+				"--file", spec.file, ".")
 		}
 	}
 }

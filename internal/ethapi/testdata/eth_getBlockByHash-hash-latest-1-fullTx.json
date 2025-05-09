@@ -16,7 +16,6 @@
   "size": "0x26a",
   "stateRoot": "0x93818d689d9a3d71eddc80c3687bcbb1f45c8204d52614e1377921d389c62249",
   "timestamp": "0x5a",
-  "totalDifficulty": "0x1",
   "transactions": [
     {
       "blockHash": "0xf72973d179c425bcc46a56d1f90fc9ae036e09895bc732d238ecc776ad513671",

@@ -33,7 +33,6 @@ var (
 const (
 	heimdallAPIBodyLimit = 128 * 1024 * 1024 // 128 MB
 	stateFetchLimit      = 50
-	apiHeimdallTimeout   = 5 * time.Second
 	retryCall            = 5 * time.Second
 )
 
@@ -59,11 +58,11 @@ type Request struct {
 	start  time.Time
 }
 
-func NewHeimdallClient(urlString string) *HeimdallClient {
+func NewHeimdallClient(urlString string, timeout time.Duration) *HeimdallClient {
 	return &HeimdallClient{
 		urlString: urlString,
 		client: http.Client{
-			Timeout: apiHeimdallTimeout,
+			Timeout: timeout,
 		},
 		closeCh: make(chan struct{}),
 	}
@@ -294,7 +293,13 @@ func FetchWithRetry[T any](ctx context.Context, client http.Client, url *url.URL
 	log.Warn("an error while trying fetching from Heimdall", "path", url.Path, "attempt", attempt, "error", err)
 
 	// create a new ticker for retrying the request
-	ticker := time.NewTicker(retryCall)
+	var ticker *time.Ticker
+	if client.Timeout != 0 {
+		ticker = time.NewTicker(client.Timeout)
+	} else {
+		// only reach here when HeimdallClient is HeimdallGRPCClient or HeimdallAppClient
+		ticker = time.NewTicker(retryCall)
+	}
 	defer ticker.Stop()
 
 	const logEach = 5
@@ -469,7 +474,7 @@ func internalFetch(ctx context.Context, client http.Client, u *url.URL) ([]byte,
 }
 
 func internalFetchWithTimeout(ctx context.Context, client http.Client, url *url.URL) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, apiHeimdallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, client.Timeout)
 	defer cancel()
 
 	// request data once

@@ -16,7 +16,7 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/cespare/cp v1.1.1
 	github.com/cloudflare/cloudflare-go v0.97.0
-	github.com/cockroachdb/pebble v1.1.1
+	github.com/cockroachdb/pebble v1.1.2
 	github.com/consensys/gnark-crypto v0.12.1
 	github.com/cosmos/cosmos-sdk v0.50.6
 	github.com/crate-crypto/go-ipa v0.0.0-20240223125850-b1e8a79f509c
@@ -27,7 +27,7 @@ require (
 	github.com/dop251/goja v0.0.0-20240516125602-ccbae20bcec2
 	github.com/emirpasic/gods v1.18.1
 	github.com/ethereum/c-kzg-4844 v1.0.0
-	github.com/ethereum/go-verkle v0.1.1-0.20240306133620-7d920df305f0
+	github.com/ethereum/go-verkle v0.1.1-0.20240829091221-dffa7562dbe9
 	github.com/fatih/color v1.17.0
 	github.com/ferranbt/fastssz v0.1.2
 	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
@@ -78,7 +78,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/status-im/keycard-go v0.3.2
 	github.com/stretchr/testify v1.9.0
-	github.com/supranational/blst v0.3.12
+	github.com/supranational/blst v0.3.13
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/tendermint/tendermint v0.34.24
 	github.com/tyler-smith/go-bip39 v1.1.0
@@ -128,7 +128,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.28.12 // indirect
 	github.com/aws/smithy-go v1.20.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.10.0 // indirect
+	github.com/bits-and-blooms/bitset v1.13.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/errors v1.11.3 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
