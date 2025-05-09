@@ -78,6 +78,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnBlockStart:     tracer.OnBlockStart,
 		OnBlockEnd:       tracer.OnBlockEnd,
 		OnSkippedBlock:   tracer.OnSkippedBlock,
+		OnClose:          tracer.OnClose,
 		// TODO: OnClose
 
 		OnTxStart: tracer.OnTxStart,
@@ -498,13 +499,13 @@ func (f *Firehose) OnBlockEnd(err error) {
 			f.fixOrdinalsForEndOfBlockChanges()
 		}
 
-		// f.printBlockToFirehose(f.block, f.blockFinality)
-		f.ensureInBlockAndNotInTrx()
-		job := &blockPrintJob{
-			block:    f.block,
-			finality: f.blockFinality,
-		}
-		f.blockPrintQueue <- job
+		f.printBlockToFirehose(f.block, f.blockFinality)
+		//f.ensureInBlockAndNotInTrx()
+		//job := &blockPrintJob{
+		//	block:    f.block,
+		//	finality: f.blockFinality,
+		//}
+		//f.blockPrintQueue <- job
 
 	} else {
 		// An error occurred, could have happen in transaction/call context, we must not check if in trx/call, only check in block
@@ -621,6 +622,12 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 	call.EndOrdinal += ordinalBase
 
 	return call.EndOrdinal
+}
+
+func (f *Firehose) OnClose() {
+	log.Info("Firehose closing: waiting for worker goroutines to finish and shutting down channels")
+	close(f.blockPrintQueue)
+	f.workerWg.Wait()
 }
 
 func (f *Firehose) OnSystemCallStart() {
@@ -2825,9 +2832,4 @@ func (f *Firehose) blockPrintWorker() {
 	for job := range f.blockPrintQueue {
 		f.printBlockToFirehose(job.block, job.finality)
 	}
-}
-
-func (f *Firehose) Shutdown() {
-	close(f.blockPrintQueue)
-	f.workerWg.Wait()
 }
