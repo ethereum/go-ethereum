@@ -590,12 +590,12 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	// pull up the blob hashes
 	var (
 		res      = make([]*engine.BlobAndProofV2, len(hashes))
-		index    = make(map[common.Hash]int)
+		index    = make(map[common.Hash][]int)
 		sidecars = api.eth.TxPool().GetBlobs(hashes)
 	)
 
 	for i, hash := range hashes {
-		index[hash] = i
+		index[hash] = append(index[hash], i)
 	}
 	for i, sidecar := range sidecars {
 		if res[i] != nil {
@@ -611,15 +611,17 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		}
 		blobHashes := sidecar.BlobHashes()
 		for bIdx, hash := range blobHashes {
-			if idx, ok := index[hash]; ok {
+			if idxes, ok := index[hash]; ok {
 				proofs := sidecar.CellProofsAt(bIdx)
 				var cellProofs []hexutil.Bytes
 				for _, proof := range proofs {
 					cellProofs = append(cellProofs, proof[:])
 				}
-				res[idx] = &engine.BlobAndProofV2{
-					Blob:       sidecar.Blobs[bIdx][:],
-					CellProofs: cellProofs,
+				for _, idx := range idxes {
+					res[idx] = &engine.BlobAndProofV2{
+						Blob:       sidecar.Blobs[bIdx][:],
+						CellProofs: cellProofs,
+					}
 				}
 			}
 		}
