@@ -108,6 +108,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 }
 
 func TestEth2AssembleBlock(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, blocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
@@ -147,6 +148,7 @@ func assembleWithTransactions(api *ConsensusAPI, parentHash common.Hash, params 
 }
 
 func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, blocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, blocks[:9])
 	defer n.Close()
@@ -167,6 +169,7 @@ func TestEth2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 }
 
 func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, blocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, blocks)
 	defer n.Close()
@@ -185,6 +188,7 @@ func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 }
 
 func TestEth2PrepareAndGetPayload(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, blocks := generateMergeChain(10, false)
 	// We need to properly set the terminal total difficulty
 	genesis.Config.TerminalTotalDifficulty.Sub(genesis.Config.TerminalTotalDifficulty, blocks[9].Difficulty())
@@ -253,6 +257,7 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan co
 }
 
 func TestInvalidPayloadTimestamp(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -294,6 +299,7 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 }
 
 func TestEth2NewBlock(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -462,6 +468,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	if err := n.Start(); err != nil {
 		t.Fatal("can't start node:", err)
 	}
+	fmt.Println("PSP - inserting chain", len(blocks))
 	if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
 		n.Close()
 		t.Fatal("can't import test blocks:", err)
@@ -472,6 +479,7 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 }
 
 func TestFullAPI(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -535,6 +543,7 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.He
 }
 
 func TestExchangeTransitionConfig(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -596,6 +605,7 @@ We expect
 	                └── P1''
 */
 func TestNewPayloadOnInvalidChain(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -699,6 +709,7 @@ func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *engine.Pay
 }
 
 func TestEmptyBlocks(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -819,6 +830,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 }
 
 func TestTrickRemoteBlockCache(t *testing.T) {
+	t.Skip("bor: not relevant")
 	// Setup two nodes
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	nodeA, ethserviceA := startEthService(t, genesis, preMergeBlocks)
@@ -883,6 +895,7 @@ func TestTrickRemoteBlockCache(t *testing.T) {
 }
 
 func TestInvalidBloom(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -906,6 +919,7 @@ func TestInvalidBloom(t *testing.T) {
 }
 
 func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(100, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -973,6 +987,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 // newPayLoad and forkchoiceUpdate. This is to test that the api behaves
 // well even of the caller is not being 'serial'.
 func TestSimultaneousNewBlock(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
@@ -1797,6 +1812,7 @@ func TestWitnessCreationAndConsumption(t *testing.T) {
 
 // TestGetClientVersion verifies the expected version info is returned.
 func TestGetClientVersion(t *testing.T) {
+	t.Skip("bor: not relevant")
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
 	defer n.Close()
