@@ -907,19 +907,9 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 	return true
 }
 
-// addAsync is a convenience wrapper around Add. Tests use this method.
-func (pool *LegacyPool) addAsync(txs []*types.Transaction) []error {
-	return pool.Add(txs, false)
-}
-
 // addTxAsync is a convenience wrapper around Add. Tests use this method.
 func (pool *LegacyPool) addTxAsync(tx *types.Transaction) error {
 	return pool.Add([]*types.Transaction{tx}, false)[0]
-}
-
-// addSync is a convenience wrapper around Add. Tests use this method.
-func (pool *LegacyPool) addSync(txs []*types.Transaction) []error {
-	return pool.Add(txs, true)
 }
 
 // addTxSync is a convenience wrapper around Add. Tests use this method.

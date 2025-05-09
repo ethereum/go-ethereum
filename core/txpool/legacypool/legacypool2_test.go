@@ -58,8 +58,8 @@ func fillPool(t testing.TB, pool *LegacyPool) {
 		}
 	}
 	// Import the batch and verify that limits have been enforced
-	pool.addSync(executableTxs)
-	pool.addSync(nonExecutableTxs)
+	pool.Add(executableTxs, true)
+	pool.Add(nonExecutableTxs, true)
 	pending, queued := pool.Stats()
 	slots := pool.all.Slots()
 	// sanity-check that the test prerequisites are ok (pending full)
@@ -101,7 +101,7 @@ func TestTransactionFutureAttack(t *testing.T) {
 			futureTxs = append(futureTxs, pricedTransaction(1000+uint64(j), 100000, big.NewInt(500), key))
 		}
 		for i := 0; i < 5; i++ {
-			pool.addSync(futureTxs)
+			pool.Add(futureTxs, true)
 			newPending, newQueued := count(t, pool)
 			t.Logf("pending: %d queued: %d, all: %d\n", newPending, newQueued, pool.all.Slots())
 		}
@@ -137,7 +137,7 @@ func TestTransactionFuture1559(t *testing.T) {
 		for j := 0; j < int(pool.config.GlobalSlots+pool.config.GlobalQueue); j++ {
 			futureTxs = append(futureTxs, dynamicFeeTx(1000+uint64(j), 100000, big.NewInt(200), big.NewInt(101), key))
 		}
-		pool.addSync(futureTxs)
+		pool.Add(futureTxs, true)
 	}
 	newPending, _ := pool.Stats()
 	// Pending should not have been touched
@@ -190,7 +190,7 @@ func TestTransactionZAttack(t *testing.T) {
 		key, _ := crypto.GenerateKey()
 		pool.currentState.AddBalance(crypto.PubkeyToAddress(key.PublicKey), uint256.NewInt(100000000000), tracing.BalanceChangeUnspecified)
 		futureTxs = append(futureTxs, pricedTransaction(1000+uint64(j), 21000, big.NewInt(500), key))
-		pool.addSync(futureTxs)
+		pool.Add(futureTxs, true)
 	}
 
 	overDraftTxs := types.Transactions{}
@@ -201,11 +201,11 @@ func TestTransactionZAttack(t *testing.T) {
 			overDraftTxs = append(overDraftTxs, pricedValuedTransaction(uint64(j), 600000000000, 21000, big.NewInt(500), key))
 		}
 	}
-	pool.addSync(overDraftTxs)
-	pool.addSync(overDraftTxs)
-	pool.addSync(overDraftTxs)
-	pool.addSync(overDraftTxs)
-	pool.addSync(overDraftTxs)
+	pool.Add(overDraftTxs, true)
+	pool.Add(overDraftTxs, true)
+	pool.Add(overDraftTxs, true)
+	pool.Add(overDraftTxs, true)
+	pool.Add(overDraftTxs, true)
 
 	newPending, newQueued := count(t, pool)
 	newIvPending := countInvalidPending()
@@ -241,6 +241,6 @@ func BenchmarkFutureAttack(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < 5; i++ {
-		pool.addSync(futureTxs)
+		pool.Add(futureTxs, true)
 	}
 }

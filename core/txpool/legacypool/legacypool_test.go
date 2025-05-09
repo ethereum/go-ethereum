@@ -354,7 +354,7 @@ func TestStateChangeDuringReset(t *testing.T) {
 		t.Fatalf("Invalid nonce, want 0, got %d", nonce)
 	}
 
-	pool.addSync([]*types.Transaction{tx0, tx1})
+	pool.Add([]*types.Transaction{tx0, tx1}, true)
 
 	nonce = pool.Nonce(address)
 	if nonce != 2 {
@@ -789,7 +789,7 @@ func TestPostponing(t *testing.T) {
 			txs = append(txs, tx)
 		}
 	}
-	for i, err := range pool.addSync(txs) {
+	for i, err := range pool.Add(txs, true) {
 		if err != nil {
 			t.Fatalf("tx %d: failed to add transactions: %v", i, err)
 		}
@@ -885,10 +885,10 @@ func TestGapFilling(t *testing.T) {
 	defer sub.Unsubscribe()
 
 	// Create a pending and a queued transaction with a nonce-gap in between
-	pool.addSync([]*types.Transaction{
+	pool.Add([]*types.Transaction{
 		transaction(0, 100000, key),
 		transaction(2, 100000, key),
-	})
+	}, true)
 	pending, queued := pool.Stats()
 	if pending != 1 {
 		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 1)
@@ -995,7 +995,7 @@ func TestQueueGlobalLimiting(t *testing.T) {
 		nonces[addr]++
 	}
 	// Import the batch and verify that limits have been enforced
-	pool.addSync(txs)
+	pool.Add(txs, true)
 
 	queued := 0
 	for addr, list := range pool.queue {
@@ -1207,7 +1207,7 @@ func TestPendingGlobalLimiting(t *testing.T) {
 		}
 	}
 	// Import the batch and verify that limits have been enforced
-	pool.addSync(txs)
+	pool.Add(txs, true)
 
 	pending := 0
 	for _, list := range pool.pending {
@@ -1298,7 +1298,7 @@ func TestCapClearsFromAll(t *testing.T) {
 		txs = append(txs, transaction(uint64(j), 100000, key))
 	}
 	// Import the batch and verify that limits have been enforced
-	pool.addAsync(txs)
+	pool.Add(txs, false)
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
@@ -1339,7 +1339,7 @@ func TestPendingMinimumAllowance(t *testing.T) {
 		}
 	}
 	// Import the batch and verify that limits have been enforced
-	pool.addSync(txs)
+	pool.Add(txs, true)
 
 	for addr, list := range pool.pending {
 		if list.Len() != int(config.AccountSlots) {
@@ -1392,7 +1392,7 @@ func TestRepricing(t *testing.T) {
 	txs = append(txs, pricedTransaction(3, 100000, big.NewInt(2), keys[2]))
 
 	// Import the batch and that both pending and queued transactions match up
-	pool.addSync(txs)
+	pool.Add(txs, true)
 
 	pending, queued := pool.Stats()
 	if pending != 6 {
@@ -1527,7 +1527,7 @@ func TestRepricingDynamicFee(t *testing.T) {
 	txs = append(txs, dynamicFeeTx(3, 100000, big.NewInt(2), big.NewInt(2), keys[2]))
 
 	// Import the batch and that both pending and queued transactions match up
-	pool.addSync(txs)
+	pool.Add(txs, true)
 
 	pending, queued := pool.Stats()
 	if pending != 6 {
@@ -1639,7 +1639,7 @@ func TestUnderpricing(t *testing.T) {
 
 	txs = append(txs, pricedTransaction(1, 100000, big.NewInt(1), keys[1])) // queued
 	// Import the batch and that both pending and queued transactions match up
-	pool.addSync(txs)
+	pool.Add(txs, true)
 
 	pending, queued := pool.Stats()
 	if pending != 3 {
@@ -1725,7 +1725,7 @@ func TestStableUnderpricing(t *testing.T) {
 	for i := uint64(0); i < config.GlobalSlots; i++ {
 		txs = append(txs, pricedTransaction(i, 100000, big.NewInt(1), keys[0]))
 	}
-	pool.addSync(txs)
+	pool.Add(txs, true)
 
 	pending, queued := pool.Stats()
 	if pending != int(config.GlobalSlots) {
@@ -1792,7 +1792,7 @@ func TestUnderpricingDynamicFee(t *testing.T) {
 	txs = append(txs, dynamicFeeTx(0, 100000, big.NewInt(2), big.NewInt(1), keys[2])) // pending
 
 	// Import the batch and check that both pending and queued transactions match up
-	pool.addSync(txs) // Pend K0:0, K0:1; Que K1:1
+	pool.Add(txs, true) // Pend K0:0, K0:1; Que K1:1
 
 	pending, queued := pool.Stats()
 	if pending != 3 {
@@ -1878,7 +1878,7 @@ func TestDualHeapEviction(t *testing.T) {
 				tx = dynamicFeeTx(0, 100000, big.NewInt(int64(baseFee+200+i)), big.NewInt(1), key)
 				highCap = tx
 			}
-			pool.addSync([]*types.Transaction{tx})
+			pool.Add([]*types.Transaction{tx}, true)
 		}
 		pending, queued := pool.Stats()
 		if pending+queued != 20 {
@@ -1925,7 +1925,7 @@ func TestDeduplication(t *testing.T) {
 	for i := 0; i < len(txs); i += 2 {
 		firsts = append(firsts, txs[i])
 	}
-	errs := pool.addSync(firsts)
+	errs := pool.Add(firsts, true)
 	if len(errs) != len(firsts) {
 		t.Fatalf("first add mismatching result count: have %d, want %d", len(errs), len(firsts))
 	}
@@ -1942,7 +1942,7 @@ func TestDeduplication(t *testing.T) {
 		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, len(txs)/2-1)
 	}
 	// Try to add all of them now and ensure previous ones error out as knowns
-	errs = pool.addSync(txs)
+	errs = pool.Add(txs, true)
 	if len(errs) != len(txs) {
 		t.Fatalf("all add mismatching result count: have %d, want %d", len(errs), len(txs))
 	}
@@ -2186,7 +2186,7 @@ func TestStatusCheck(t *testing.T) {
 	txs = append(txs, pricedTransaction(2, 100000, big.NewInt(1), keys[2])) // Queued only
 
 	// Import the transaction and ensure they are correctly added
-	pool.addSync(txs)
+	pool.Add(txs, true)
 
 	pending, queued := pool.Stats()
 	if pending != 2 {
@@ -2663,7 +2663,7 @@ func benchmarkBatchInsert(b *testing.B, size int) {
 	// Benchmark importing the transactions into the queue
 	b.ResetTimer()
 	for _, batch := range batches {
-		pool.addAsync(batch)
+		pool.Add(batch, false)
 	}
 }
 
@@ -2684,6 +2684,6 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	// Benchmark importing the transactions into the queue
 	b.ResetTimer()
 	for _, tx := range batches {
-		pool.addSync([]*types.Transaction{tx})
+		pool.Add([]*types.Transaction{tx}, true)
 	}
 }
