@@ -30,14 +30,19 @@ import (
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
 type diskLayer struct {
-	root   common.Hash      // Immutable, root hash to which this layer was made for
-	id     uint64           // Immutable, corresponding state id
-	db     *Database        // Path-based trie database
+	root common.Hash // Immutable, root hash to which this layer was made for
+	id   uint64      // Immutable, corresponding state id
+	db   *Database   // Path-based trie database
+
+	// These two caches must be maintained separately, because the key
+	// for the root node of the storage trie (accountHash) is identical
+	// to the key for the account data.
 	nodes  *fastcache.Cache // GC friendly memory cache of clean nodes
 	states *fastcache.Cache // GC friendly memory cache of clean states
-	buffer *buffer          // Dirty buffer to aggregate writes of nodes and states
-	stale  bool             // Signals that the layer became stale (state progressed)
-	lock   sync.RWMutex     // Lock used to protect stale flag and genMarker
+
+	buffer *buffer      // Dirty buffer to aggregate writes of nodes and states
+	stale  bool         // Signals that the layer became stale (state progressed)
+	lock   sync.RWMutex // Lock used to protect stale flag and genMarker
 
 	// The generator is set if the state snapshot was not fully completed
 	generator *generator

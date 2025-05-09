@@ -80,9 +80,10 @@ func writeStates(batch ethdb.Batch, genMarker []byte, accountData map[common.Has
 		slots    int
 	)
 	for addrHash, blob := range accountData {
-		// Skip any account not covered yet by the snapshot. The account
-		// at generation position (addrHash == genMarker[:common.HashLength])
-		// should be updated.
+		// Skip any account not yet covered by the snapshot. The account
+		// at the generation marker position (addrHash == genMarker[:common.HashLength])
+		// should still be updated, as it would be skipped in the next
+		// generation cycle.
 		if genMarker != nil && bytes.Compare(addrHash[:], genMarker) > 0 {
 			continue
 		}
@@ -107,9 +108,10 @@ func writeStates(batch ethdb.Batch, genMarker []byte, accountData map[common.Has
 		midAccount := genMarker != nil && bytes.Equal(addrHash[:], genMarker[:common.HashLength])
 
 		for storageHash, blob := range storages {
-			// Skip any slot not covered yet by the snapshot. The storage slot
-			// at generation position (addrHash == genMarker[:common.HashLength]
-			// and storageHash == genMarker[common.HashLength:]) should be updated.
+			// Skip any storage slot not yet covered by the snapshot. The storage slot
+			// at the generation marker position (addrHash == genMarker[:common.HashLength]
+			// and storageHash == genMarker[common.HashLength:]) should still be updated,
+			// as it would be skipped in the next generation cycle.
 			if midAccount && bytes.Compare(storageHash[:], genMarker[common.HashLength:]) > 0 {
 				continue
 			}
