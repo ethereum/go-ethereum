@@ -394,16 +394,20 @@ func (s *RollupSyncService) getLocalChunksForBatch(chunkBlockRanges []*rawdb.Chu
 				return nil, fmt.Errorf("failed to get block by number: %v", i)
 			}
 			txData := encoding.TxsToTxsData(block.Transactions())
-			state, err := s.bc.StateAt(block.Root())
-			if err != nil {
-				return nil, fmt.Errorf("failed to get block state, block: %v, err: %w", block.Hash().Hex(), err)
-			}
-			withdrawRoot := withdrawtrie.ReadWTRSlot(rcfg.L2MessageQueueAddress, state)
 			chunks[i].Blocks[j-cr.StartBlockNumber] = &encoding.Block{
 				Header:       block.Header(),
 				Transactions: txData,
-				WithdrawRoot: withdrawRoot,
 			}
+
+			// read withdraw root, if available
+			// note: historical state is not available on full nodes
+			state, err := s.bc.StateAt(block.Root())
+			if err != nil {
+				log.Trace("State is not available, skipping withdraw trie validation", "blockNumber", block.NumberU64(), "blockHash", block.Hash().Hex(), "err", err)
+				continue
+			}
+			withdrawRoot := withdrawtrie.ReadWTRSlot(rcfg.L2MessageQueueAddress, state)
+			chunks[i].Blocks[j-cr.StartBlockNumber].WithdrawRoot = withdrawRoot
 		}
 	}
 
@@ -574,7 +578,9 @@ func validateBatch(batchIndex uint64, event *l1.FinalizeBatchEvent, parentFinali
 			os.Exit(1)
 		}
 
-		if localWithdrawRoot != event.WithdrawRoot() {
+		// note: this check is optional,
+		// withdraw root correctness is already implied by state root correctness.
+		if localWithdrawRoot != (common.Hash{}) && localWithdrawRoot != event.WithdrawRoot() {
 			log.Error("Withdraw root mismatch", "batch index", event.BatchIndex().Uint64(), "start block", startBlock.Header.Number.Uint64(), "end block", endBlock.Header.Number.Uint64(), "parent batch hash", parentFinalizedBatchMeta.BatchHash.Hex(), "l1 finalized withdraw root", event.WithdrawRoot().Hex(), "l2 withdraw root", localWithdrawRoot.Hex())
 			stack.Close()
 			os.Exit(1)
@@ -603,7 +609,7 @@ func validateBatch(batchIndex uint64, event *l1.FinalizeBatchEvent, parentFinali
 		BatchHash:            localBatchHash,
 		TotalL1MessagePopped: totalL1MessagePopped,
 		StateRoot:            localStateRoot,
-		WithdrawRoot:         localWithdrawRoot,
+		WithdrawRoot:         event.WithdrawRoot(),
 	}
 	return endBlock.Header.Number.Uint64(), finalizedBatchMeta, nil
 }
