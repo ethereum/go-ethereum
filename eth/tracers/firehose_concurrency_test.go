@@ -13,6 +13,7 @@ import (
 )
 
 func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
+
 	f := NewFirehose(&FirehoseConfig{
 		ApplyBackwardCompatibility: ptr(false),
 		private: &privateFirehoseConfig{
@@ -23,11 +24,9 @@ func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 	f.OnBlockchainInit(params.AllEthashProtocolChanges)
 
 	blockNumbers := []uint64{123, 124, 125}
-	blockHashes := make([]string, 3)
 
 	for i, blockNum := range blockNumbers {
 		f.OnBlockStart(blockEvent(blockNum))
-		blockHashes[i] = hex.EncodeToString(f.block.Hash) // Store the hash before it gets reset
 
 		f.onTxStart(txEvent(), hex2Hash(fmt.Sprintf("ABCD%d", i)), from, to)
 		f.OnCallEnter(0, byte(vm.CALL), from, to, nil, 0, nil)
@@ -42,23 +41,21 @@ func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 
 	output := f.InternalTestingBuffer().String()
 
-	require.Contains(t, output, "FIRE BLOCK", "expected FIRE BLOCK output not found")
+	outNumber := make([]string, 0)
+	for i, line := range strings.Split(output, "\n") {
+		if i == 0 {
+			require.Equal(t, "FIRE INIT 3.0 geth 1.15.10", line)
+			continue
+		}
 
-	for i, blockNum := range blockNumbers {
-		require.Contains(t, output, fmt.Sprintf("%d", blockNum),
-			"expected block number %d not found in output", blockNum)
-		require.Contains(t, output, blockHashes[i],
-			"expected block hash for block %d not found in output", blockNum)
+		fields := strings.SplitN(line, " ", 4)
+		if len(fields) >= 3 {
+			outNumber = append(outNumber, fields[2])
+		}
 	}
 
-	blockNumIndex123 := strings.Index(output, "123")
-	blockNumIndex124 := strings.Index(output, "124")
-	blockNumIndex125 := strings.Index(output, "125")
-
-	require.True(t, blockNumIndex123 < blockNumIndex124,
-		"Block 123 should appear before block 124 in output")
-	require.True(t, blockNumIndex124 < blockNumIndex125,
-		"Block 124 should appear before block 125 in output")
+	require.Contains(t, output, "FIRE BLOCK", "expected FIRE BLOCK output not found")
+	require.Equal(t, []string{"123", "124", "125"}, outNumber)
 }
 
 func TestFirehose_BlocksPrintToFirehose_MultipleBlocksInOrder(t *testing.T) {
