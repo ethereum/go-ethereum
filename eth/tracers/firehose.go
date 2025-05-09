@@ -186,6 +186,10 @@ type Firehose struct {
 	// Testing state, only used in tests and private configs
 	testingBuffer             *bytes.Buffer
 	testingIgnoreGenesisBlock bool
+
+	// Worker queuefor blockprinting
+	blockPrintQueue chan *blockPrintJob
+	workerWg        sync.WaitGroup
 }
 
 const FirehoseProtocolVersion = "3.0"
@@ -238,6 +242,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		callStack:               NewCallStack(),
 		deferredCallState:       NewDeferredCallState(),
 		latestCallEnterSuicided: false,
+
+		blockPrintQueue: make(chan *blockPrintJob, 100),
 	}
 
 	if config.private != nil {
@@ -245,6 +251,13 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		if config.private.FlushToTestBuffer {
 			firehose.testingBuffer = bytes.NewBuffer(nil)
 		}
+	}
+
+	// Worker goroutines
+	numWorkers := 1
+	firehose.workerWg.Add(numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		go firehose.blockPrintWorker()
 	}
 
 	return firehose
@@ -483,7 +496,13 @@ func (f *Firehose) OnBlockEnd(err error) {
 		}
 
 		f.ensureInBlockAndNotInTrx()
-		f.printBlockToFirehose(f.block, f.blockFinality)
+
+		job := &blockPrintJob{
+			block:    f.block,
+			finality: f.blockFinality,
+		}
+		f.blockPrintQueue <- job
+
 	} else {
 		// An error occurred, could have happen in transaction/call context, we must not check if in trx/call, only check in block
 		f.ensureInBlock(0)
@@ -2790,4 +2809,22 @@ func (m Memory) GetPtr(offset, size int64) []byte {
 	// In this situtation, we must pad with zeroes when the memory is not big enough.
 	reminder := m[offset:]
 	return append(reminder, make([]byte, int(size)-len(reminder))...)
+}
+
+type blockPrintJob struct {
+	block    *pbeth.Block
+	finality *FinalityStatus
+}
+
+func (f *Firehose) blockPrintWorker() {
+	defer f.workerWg.Done()
+
+	for job := range f.blockPrintQueue {
+		f.printBlockToFirehose(job.block, job.finality)
+	}
+}
+
+func (f *Firehose) Shutdown() {
+	close(f.blockPrintQueue)
+	f.workerWg.Wait()
 }
