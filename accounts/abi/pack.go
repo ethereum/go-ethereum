@@ -33,6 +33,8 @@ func packBytesSlice(bytes []byte, l int) []byte {
 	return append(len, common.RightPadBytes(bytes, (l+31)/32*32)...)
 }
 
+// validateNum returns an error if the underlying type of t is uint and the
+// value of reflectValue is a negative big.Int
 func validateNum(t Type, reflectValue reflect.Value) error {
 	if t.T == UintTy && reflectValue.Kind() == reflect.Ptr {
 		val := new(big.Int).Set(reflectValue.Interface().(*big.Int))
