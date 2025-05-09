@@ -468,7 +468,6 @@ func startEthService(t *testing.T, genesis *core.Genesis, blocks []*types.Block)
 	if err := n.Start(); err != nil {
 		t.Fatal("can't start node:", err)
 	}
-	fmt.Println("PSP - inserting chain", len(blocks))
 	if _, err := ethservice.BlockChain().InsertChain(blocks); err != nil {
 		n.Close()
 		t.Fatal("can't import test blocks:", err)

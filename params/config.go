@@ -69,9 +69,6 @@ var (
 		TerminalTotalDifficulty: MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000_000
 		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"),
 		Ethash:                  new(EthashConfig),
-		BlobScheduleConfig: &BlobScheduleConfig{
-			Cancun: DefaultCancunBlobConfig,
-		},
 	}
 	// HoleskyChainConfig contains the chain parameters to run a node on the Holesky test network.
 	HoleskyChainConfig = &ChainConfig{
@@ -94,11 +91,6 @@ var (
 		TerminalTotalDifficulty: big.NewInt(0),
 		MergeNetsplitBlock:      nil,
 		Ethash:                  new(EthashConfig),
-		DepositContractAddress:  common.HexToAddress("0x4242424242424242424242424242424242424242"),
-		BlobScheduleConfig: &BlobScheduleConfig{
-			Cancun: DefaultCancunBlobConfig,
-			Prague: DefaultPragueBlobConfig,
-		},
 	}
 	// SepoliaChainConfig contains the chain parameters to run a node on the Sepolia test network.
 	SepoliaChainConfig = &ChainConfig{
@@ -120,12 +112,7 @@ var (
 		GrayGlacierBlock:        nil,
 		TerminalTotalDifficulty: big.NewInt(17_000_000_000_000_000),
 		MergeNetsplitBlock:      big.NewInt(1735371),
-		DepositContractAddress:  common.HexToAddress("0x7f02c3e3c98b133055b8b348b2ac625669ed295d"),
 		Ethash:                  new(EthashConfig),
-		BlobScheduleConfig: &BlobScheduleConfig{
-			Cancun: DefaultCancunBlobConfig,
-			Prague: DefaultPragueBlobConfig,
-		},
 	}
 	// HoodiChainConfig contains the chain parameters to run a node on the Hoodi test network.
 	HoodiChainConfig = &ChainConfig{
@@ -147,12 +134,7 @@ var (
 		GrayGlacierBlock:        nil,
 		TerminalTotalDifficulty: big.NewInt(0),
 		MergeNetsplitBlock:      big.NewInt(0),
-		DepositContractAddress:  common.HexToAddress("0x00000000219ab540356cBB839Cbe05303d7705Fa"),
 		Ethash:                  new(EthashConfig),
-		BlobScheduleConfig: &BlobScheduleConfig{
-			Cancun: DefaultCancunBlobConfig,
-			Prague: DefaultPragueBlobConfig,
-		},
 	}
 	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
 	GoerliChainConfig = &ChainConfig{

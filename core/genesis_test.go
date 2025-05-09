@@ -189,7 +189,12 @@ func TestGenesisHashes(t *testing.T) {
 		{DefaultGenesisBlock(), params.MainnetGenesisHash},
 		{DefaultSepoliaGenesisBlock(), params.SepoliaGenesisHash},
 		{DefaultHoleskyGenesisBlock(), params.HoleskyGenesisHash},
-		{DefaultHoodiGenesisBlock(), params.HoodiGenesisHash},
+		// bor: hoodi expects a non-nil withdrawals hash
+		// {DefaultHoodiGenesisBlock(), params.HoodiGenesisHash},
+
+		{DefaultBorMainnetGenesisBlock(), params.BorMainnetGenesisHash},
+		{DefaultAmoyGenesisBlock(), params.AmoyGenesisHash},
+		{DefaultMumbaiGenesisBlock(), params.MumbaiGenesisHash},
 	} {
 		// Test via MustCommit
 		db := rawdb.NewMemoryDatabase()
