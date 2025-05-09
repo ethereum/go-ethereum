@@ -255,8 +255,9 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	// mandatory. This ensures that uncovered flat states are not accessed,
 	// even if background generation is not allowed. If permitted, the generation
 	// might be scheduled.
-	db.setStateGenerator()
-
+	if err := db.setStateGenerator(); err != nil {
+		log.Crit("Failed to setup the generator", "err", err)
+	}
 	fields := config.fields()
 	if db.isVerkle {
 		fields = append(fields, "verkle", true)
@@ -316,10 +317,13 @@ func (db *Database) repairHistory() error {
 
 // setStateGenerator loads the state generation progress marker and potentially
 // resume the state generation if it's permitted.
-func (db *Database) setStateGenerator() {
+func (db *Database) setStateGenerator() error {
 	// Load the state snapshot generation progress marker to prevent access
 	// to uncovered states.
-	generator, root := loadGenerator(db.diskdb)
+	generator, root, err := loadGenerator(db.diskdb, db.hasher)
+	if err != nil {
+		return err
+	}
 	if generator == nil {
 		// Initialize an empty generator to rebuild the state snapshot from scratch
 		generator = &journalGenerator{
@@ -330,7 +334,7 @@ func (db *Database) setStateGenerator() {
 	// The generator will be left as nil in disk layer for representing the whole
 	// state snapshot is available for accessing.
 	if generator.Done {
-		return
+		return nil
 	}
 	var origin uint64
 	if len(generator.Marker) >= 8 {
@@ -345,18 +349,24 @@ func (db *Database) setStateGenerator() {
 	}
 	dl := db.tree.bottom()
 
+	// Disable the background snapshot building in these circumstances:
+	// - the database is opened in read only mode
+	// - the snapshot build is explicitly disabled
+	// - the database is opened in verkle tree mode
+	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isVerkle
+
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
 	// regardless of whether background state snapshot generation is allowed.
-	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isVerkle
 	dl.setGenerator(newGenerator(db.diskdb, noBuild, generator.Marker, stats))
 
 	// Short circuit if the background generation is not permitted
 	if noBuild || db.waitSync {
-		return
+		return nil
 	}
 	stats.log("Starting snapshot generation", root, generator.Marker)
 	dl.generator.run(root)
+	return nil
 }
 
 // Update adds a new layer into the tree, if that can be linked to an existing

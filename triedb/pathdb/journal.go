@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -106,36 +105,40 @@ type journalGenerator struct {
 }
 
 // loadGenerator loads the state generation progress marker from the database.
-func loadGenerator(db ethdb.KeyValueReader) (*journalGenerator, common.Hash) {
-	trieRoot := types.EmptyRootHash
-	if blob := rawdb.ReadAccountTrieNode(db, nil); len(blob) > 0 {
-		trieRoot = crypto.Keccak256Hash(blob)
+func loadGenerator(db ethdb.KeyValueReader, hash nodeHasher) (*journalGenerator, common.Hash, error) {
+	trieRoot, err := hash(rawdb.ReadAccountTrieNode(db, nil))
+	if err != nil {
+		return nil, common.Hash{}, err
 	}
 	// State generation progress marker is lost, rebuild it
 	blob := rawdb.ReadSnapshotGenerator(db)
 	if len(blob) == 0 {
 		log.Info("State snapshot generator is not found")
-		return nil, trieRoot
+		return nil, trieRoot, nil
 	}
 	// State generation progress marker is not compatible, rebuild it
 	var generator journalGenerator
 	if err := rlp.DecodeBytes(blob, &generator); err != nil {
 		log.Info("State snapshot generator is not compatible")
-		return nil, trieRoot
+		return nil, trieRoot, nil
 	}
-	// The state snapshot is inconsistent with the trie data and needs to be rebuilt.
-	// Note: The SnapshotRoot and SnapshotGenerator are always consistent with each
-	// other, no matter in the legacy state snapshot or the path database.
+	// The state snapshot is inconsistent with the trie data and must
+	// be rebuilt.
+	//
+	// Note: The SnapshotRoot and SnapshotGenerator are always consistent
+	// with each other, both in the legacy state snapshot and the path database.
+	// Therefore, if the SnapshotRoot does not match the trie root,
+	// the entire generator is considered stale and must be discarded.
 	stateRoot := rawdb.ReadSnapshotRoot(db)
 	if trieRoot != stateRoot {
-		log.Info("State snapshot is not consistent with trie", "trie", trieRoot, "state", stateRoot)
-		return nil, trieRoot
+		log.Info("State snapshot is not consistent", "trie", trieRoot, "state", stateRoot)
+		return nil, trieRoot, nil
 	}
 	// Slice null-ness is lost after rlp decoding, reset it back to empty
 	if !generator.Done && generator.Marker == nil {
 		generator.Marker = []byte{}
 	}
-	return &generator, trieRoot
+	return &generator, trieRoot, nil
 }
 
 // loadLayers loads a pre-existing state layer backed by a key-value store.
