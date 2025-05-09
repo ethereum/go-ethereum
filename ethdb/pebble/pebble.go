@@ -98,6 +98,7 @@ type Database struct {
 
 	writeStalled        atomic.Bool  // Flag whether the write is stalled
 	writeDelayStartTime time.Time    // The start time of the latest write stall
+	writeDelayReason    string       // The reason of the latest write stall
 	writeDelayCount     atomic.Int64 // Total number of write stall counts
 	writeDelayTime      atomic.Int64 // Total time spent in write stalls
 
@@ -131,14 +132,29 @@ func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 	d.writeDelayCount.Add(1)
 	d.writeStalled.Store(true)
 
-	stall := "stall/" + toCamelCase(b.Reason)
-	gauge := metrics.GetOrRegisterGauge(d.namespace+stall, nil)
-	gauge.Inc(1)
+	// Take just the first word of the reason. These are two potential
+	// reasons for the write stall:
+	// - memtable count limit reached
+	// - L0 file count limit exceeded
+	reason := b.Reason
+	if i := strings.IndexByte(reason, ' '); i != -1 {
+		reason = reason[:i]
+	}
+	if reason == "L0" || reason == "memtable" {
+		d.writeDelayReason = reason
+		metrics.GetOrRegisterGauge(d.namespace+"stall/count/"+reason, nil).Inc(1)
+	}
 }
 
 func (d *Database) onWriteStallEnd() {
 	d.writeDelayTime.Add(int64(time.Since(d.writeDelayStartTime)))
 	d.writeStalled.Store(false)
+
+	if d.writeDelayReason != "" {
+		metrics.GetOrRegisterResettingTimer(d.namespace+"stall/time/"+d.writeDelayReason, nil).UpdateSince(d.writeDelayStartTime)
+		d.writeDelayReason = ""
+	}
+	d.writeDelayStartTime = time.Time{}
 }
 
 // panicLogger is just a noop logger to disable Pebble's internal logger.
@@ -701,20 +717,4 @@ func (iter *pebbleIterator) Release() {
 		iter.iter.Close()
 		iter.released = true
 	}
-}
-
-// toCamelCase converts string to camel case.
-func toCamelCase(s string) string {
-	words := strings.FieldsFunc(s, func(r rune) bool {
-		return r == ' ' || r == '_' || r == '-' // split by space, underscore, or dash
-	})
-	for i := range words {
-		if i == 0 {
-			continue
-		}
-		if len(words[i]) > 0 {
-			words[i] = strings.ToUpper(words[i][:1]) + strings.ToLower(words[i][1:])
-		}
-	}
-	return strings.Join(words, "")
 }
