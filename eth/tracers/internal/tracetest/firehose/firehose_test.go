@@ -48,6 +48,8 @@ func TestFirehosePrestate(t *testing.T) {
 
 				runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracingHooks)
 
+				tracer.CloseBlockPrintQueue()
+
 				genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
 				require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
 				require.NotNil(t, genesisLine)
@@ -202,6 +204,8 @@ func testBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine co
 			defer chain.Stop()
 			n, err := chain.InsertChain(blocks)
 			require.NoError(t, err, "failed to insert chain block %d", n)
+
+			tracer.CloseBlockPrintQueue()
 
 			assertBlockEquals(t, tracer, filepath.Join("testdata", goldenDir, string(model)), len(blocks))
 		})

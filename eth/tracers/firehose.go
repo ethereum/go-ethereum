@@ -79,7 +79,6 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnBlockEnd:       tracer.OnBlockEnd,
 		OnSkippedBlock:   tracer.OnSkippedBlock,
 		OnClose:          tracer.OnClose,
-		// TODO: OnClose
 
 		OnTxStart: tracer.OnTxStart,
 		OnTxEnd:   tracer.OnTxEnd,
@@ -193,7 +192,8 @@ type Firehose struct {
 
 	// Worker queuefor blockprinting
 	blockPrintQueue chan *blockPrintJob
-	workerWg        sync.WaitGroup
+	flushDone       sync.WaitGroup
+	closeOnce       sync.Once
 }
 
 const FirehoseProtocolVersion = "3.0"
@@ -257,12 +257,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		}
 	}
 
-	// Worker goroutines
-	numWorkers := 1
-	firehose.workerWg.Add(numWorkers)
-	for i := 0; i < numWorkers; i++ {
-		go firehose.blockPrintWorker()
-	}
+	firehose.flushDone.Add(1)
+	go firehose.blockPrintWorker()
 
 	return firehose
 }
@@ -499,13 +495,13 @@ func (f *Firehose) OnBlockEnd(err error) {
 			f.fixOrdinalsForEndOfBlockChanges()
 		}
 
-		f.printBlockToFirehose(f.block, f.blockFinality)
-		//f.ensureInBlockAndNotInTrx()
-		//job := &blockPrintJob{
-		//	block:    f.block,
-		//	finality: f.blockFinality,
-		//}
-		//f.blockPrintQueue <- job
+		f.ensureInBlockAndNotInTrx()
+		// f.printBlockToFirehose(f.block, f.blockFinality)
+		job := &blockPrintJob{
+			block:    f.block,
+			finality: f.blockFinality,
+		}
+		f.blockPrintQueue <- job
 
 	} else {
 		// An error occurred, could have happen in transaction/call context, we must not check if in trx/call, only check in block
@@ -626,8 +622,7 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 
 func (f *Firehose) OnClose() {
 	log.Info("Firehose closing: waiting for worker goroutines to finish and shutting down channels")
-	close(f.blockPrintQueue)
-	f.workerWg.Wait()
+	f.CloseBlockPrintQueue()
 }
 
 func (f *Firehose) OnSystemCallStart() {
@@ -2827,9 +2822,15 @@ type blockPrintJob struct {
 }
 
 func (f *Firehose) blockPrintWorker() {
-	defer f.workerWg.Done()
-
+	defer f.flushDone.Done()
 	for job := range f.blockPrintQueue {
 		f.printBlockToFirehose(job.block, job.finality)
 	}
+}
+
+func (f *Firehose) CloseBlockPrintQueue() {
+	f.closeOnce.Do(func() {
+		close(f.blockPrintQueue)
+		f.flushDone.Wait()
+	})
 }
