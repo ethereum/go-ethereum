@@ -39,7 +39,7 @@ func validateNum(t Type, reflectValue reflect.Value) error {
 	if t.T == UintTy && reflectValue.Kind() == reflect.Ptr {
 		val := new(big.Int).Set(reflectValue.Interface().(*big.Int))
 		if val.Sign() == -1 {
-			return fmt.Errorf("cannot pack negative big.Int value to a uint type")
+			return errInvalidSign
 		}
 	}
 	return nil
