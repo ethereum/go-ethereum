@@ -78,6 +78,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnBlockStart:     tracer.OnBlockStart,
 		OnBlockEnd:       tracer.OnBlockEnd,
 		OnSkippedBlock:   tracer.OnSkippedBlock,
+		// TODO: OnClose
 
 		OnTxStart: tracer.OnTxStart,
 		OnTxEnd:   tracer.OnTxEnd,
@@ -108,6 +109,8 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 
 type FirehoseConfig struct {
 	ApplyBackwardCompatibility *bool `json:"applyBackwardCompatibility"`
+	// TODO: Add LOGGING on init
+	ConcurrentBlockFlushing bool `json:"concurrentBlockFlushing"`
 
 	// Only used for testing, only possible through JSON configuration
 	private *privateFirehoseConfig
