@@ -177,6 +177,13 @@ func TestMethodPack(t *testing.T) {
 	if !bytes.Equal(packed, sig) {
 		t.Errorf("expected %x got %x", sig, packed)
 	}
+
+	_, err = abi.Pack("send", big.NewInt(-1))
+	if err == nil {
+		t.Fatal("expected error when trying to pack negative big.Int into uint256 value")
+	}
+
+	// TODO: examine what happens if we supply a negative non-big int to a method expect smaller uint val
 }
 
 func TestPackNumber(t *testing.T) {
