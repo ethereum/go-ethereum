@@ -33,24 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
-// bufferPool holds the buffers for keccak calculation.
-var bufferPool = sync.Pool{
-	New: func() interface{} {
-		return crypto.NewKeccakState()
-	},
-}
-
-// allocBuff allocates the keccak buffer from the pool
-func allocBuff() crypto.KeccakState {
-	return bufferPool.Get().(crypto.KeccakState)
-}
-
-// releaseBuff returns the provided keccak buffer to the pool. It's unnecessary
-// to clear the buffer, as it will be cleared before the calculation.
-func releaseBuff(buff crypto.KeccakState) {
-	bufferPool.Put(buff)
-}
-
 // ContractCodeReader defines the interface for accessing contract code.
 type ContractCodeReader interface {
 	// Code retrieves a particular contract's code.
@@ -167,10 +149,7 @@ func newFlatReader(reader database.StateReader) *flatReader {
 //
 // The returned account might be nil if it's not existent.
 func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
-	buff := allocBuff()
-	defer releaseBuff(buff)
-
-	account, err := r.reader.Account(crypto.HashData(buff, addr.Bytes()))
+	account, err := r.reader.Account(crypto.Keccak256Hash(addr.Bytes()))
 	if err != nil {
 		return nil, err
 	}
@@ -200,11 +179,8 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 //
 // The returned storage slot might be empty if it's not existent.
 func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
-	buff := allocBuff()
-	defer releaseBuff(buff)
-
-	addrHash := crypto.HashData(buff, addr.Bytes())
-	slotHash := crypto.HashData(buff, key.Bytes())
+	addrHash := crypto.Keccak256Hash(addr.Bytes())
+	slotHash := crypto.Keccak256Hash(key.Bytes())
 	ret, err := r.reader.Storage(addrHash, slotHash)
 	if err != nil {
 		return common.Hash{}, err
