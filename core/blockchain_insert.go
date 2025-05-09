@@ -43,10 +43,7 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 	// Fetch the timings for the batch
 	var (
 		now     = mclock.Now()
-		elapsed = now.Sub(st.startTime)
-		if elapsed == 0 { // prevent zero division
-			elapsed = 1
-		}	
+		elapsed = now.Sub(st.startTime) + 1 // prevent zero division
 		mgasps  = float64(st.usedGas) * 1000 / float64(elapsed)
 	)
 	// Update the Mgas per second gauge
