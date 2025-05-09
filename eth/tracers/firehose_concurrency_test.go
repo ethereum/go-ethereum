@@ -37,7 +37,7 @@ func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 		f.OnBlockEnd(nil)
 	}
 
-	f.Shutdown()
+	f.OnClose()
 
 	output := f.InternalTestingBuffer().String()
 
@@ -50,11 +50,12 @@ func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 
 		fields := strings.SplitN(line, " ", 4)
 		if len(fields) >= 3 {
+			require.Equal(t, "FIRE", fields[0])
+			require.Equal(t, "BLOCK", fields[1])
 			outNumber = append(outNumber, fields[2])
 		}
 	}
 
-	require.Contains(t, output, "FIRE BLOCK", "expected FIRE BLOCK output not found")
 	require.Equal(t, []string{"123", "124", "125"}, outNumber)
 }
 
@@ -89,7 +90,7 @@ func TestFirehose_BlocksPrintToFirehose_MultipleBlocksInOrder(t *testing.T) {
 		f.OnBlockEnd(nil)
 	}
 
-	f.Shutdown()
+	f.OnClose()
 
 	output := f.InternalTestingBuffer().String()
 	extractedBlocks := extractBlocksFromOutput(t, output)
