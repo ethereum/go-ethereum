@@ -27,14 +27,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/trie/utils"
+	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/holiman/uint256"
 )
 
-func updateTrie(db *Database, stateRoot common.Hash, addrHash common.Hash, root common.Hash, dirties map[common.Hash][]byte) (common.Hash, *trienode.NodeSet) {
+func updateMerkleTrie(db *Database, stateRoot common.Hash, addrHash common.Hash, root common.Hash, dirties map[common.Hash][]byte) (common.Hash, *trienode.NodeSet) {
 	var id *trie.ID
 	if addrHash == (common.Hash{}) {
 		id = trie.StateTrieID(stateRoot)
@@ -55,11 +58,11 @@ func updateTrie(db *Database, stateRoot common.Hash, addrHash common.Hash, root 
 	return tr.Commit(false)
 }
 
-func generateAccount(storageRoot common.Hash) types.StateAccount {
+func generateAccount(storageRoot common.Hash, codeHash []byte) types.StateAccount {
 	return types.StateAccount{
 		Nonce:    uint64(rand.Intn(100)),
 		Balance:  uint256.NewInt(rand.Uint64()),
-		CodeHash: testrand.Bytes(32),
+		CodeHash: codeHash,
 		Root:     storageRoot,
 	}
 }
@@ -72,23 +75,38 @@ const (
 )
 
 type genctx struct {
-	stateRoot     common.Hash
+	stateRoot     common.Hash                               // Parent state root
 	accounts      map[common.Hash][]byte                    // Keyed by the hash of account address
 	storages      map[common.Hash]map[common.Hash][]byte    // Keyed by the hash of account address and the hash of storage key
+	codes         map[common.Hash][]byte                    // Keyed by the contract code hash
 	accountOrigin map[common.Address][]byte                 // Keyed by the account address
 	storageOrigin map[common.Address]map[common.Hash][]byte // Keyed by the account address and the hash of storage key
-	nodes         *trienode.MergedNodeSet
+	nodes         *trienode.MergedNodeSet                   // Aggregated dirty trie nodes
+
+	// Verkle hasher fields
+	isVerkle bool
+	tr       *trie.VerkleTrie
 }
 
-func newCtx(stateRoot common.Hash) *genctx {
-	return &genctx{
+func newCtx(stateRoot common.Hash, db database.NodeDatabase, isVerkle bool) *genctx {
+	ctx := &genctx{
+		isVerkle:      isVerkle,
 		stateRoot:     stateRoot,
 		accounts:      make(map[common.Hash][]byte),
 		storages:      make(map[common.Hash]map[common.Hash][]byte),
+		codes:         make(map[common.Hash][]byte),
 		accountOrigin: make(map[common.Address][]byte),
 		storageOrigin: make(map[common.Address]map[common.Hash][]byte),
 		nodes:         trienode.NewMergedNodeSet(),
 	}
+	if isVerkle {
+		tr, err := trie.NewVerkleTrie(stateRoot, db, utils.NewPointCache(1024))
+		if err != nil {
+			panic(fmt.Errorf("failed to load trie, err: %w", err))
+		}
+		ctx.tr = tr
+	}
+	return ctx
 }
 
 func (ctx *genctx) storageOriginSet(rawStorageKey bool, t *tester) map[common.Address]map[common.Hash][]byte {
@@ -108,6 +126,7 @@ func (ctx *genctx) storageOriginSet(rawStorageKey bool, t *tester) map[common.Ad
 }
 
 type tester struct {
+	disk      ethdb.Database
 	db        *Database
 	roots     []common.Hash
 	preimages map[common.Hash][]byte
@@ -131,6 +150,7 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int) *te
 		}, isVerkle)
 
 		obj = &tester{
+			disk:         disk,
 			db:           db,
 			preimages:    make(map[common.Hash][]byte),
 			accounts:     make(map[common.Hash][]byte),
@@ -141,10 +161,18 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int) *te
 	)
 	for i := 0; i < layers; i++ {
 		var parent = types.EmptyRootHash
+		if isVerkle {
+			parent = types.EmptyVerkleHash
+		}
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
 		}
-		root, nodes, states := obj.generate(parent, i > 6)
+		// raw storage key is required in verkle for rollback
+		rawStorageKey := i > 6
+		if isVerkle {
+			rawStorageKey = true
+		}
+		root, nodes, states := obj.generate(parent, rawStorageKey, isVerkle)
 
 		if err := db.Update(root, parent, uint64(i), nodes, states); err != nil {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
@@ -167,13 +195,33 @@ func (t *tester) release() {
 	t.db.diskdb.Close()
 }
 
-func (t *tester) randAccount() (common.Address, []byte) {
+func (t *tester) randAccount() (common.Address, []byte, []byte) {
 	for addrHash, account := range t.accounts {
-		return t.accountPreimage(addrHash), account
+		acct, err := types.FullAccount(account)
+		if err != nil {
+			panic(fmt.Errorf("failed to decode account, %v", err))
+		}
+		return t.accountPreimage(addrHash), account, acct.CodeHash
 	}
-	return common.Address{}, nil
+	return common.Address{}, nil, nil
 }
 
+func (t *tester) generateCode(ctx *genctx, addr common.Address) common.Hash {
+	size := rand.Intn(128 * 1024)
+	code := testrand.Bytes(size)
+	hash := crypto.Keccak256Hash(code)
+	ctx.codes[hash] = code
+
+	if ctx.isVerkle {
+		if err := ctx.tr.UpdateContractCode(addr, hash, code); err != nil {
+			panic(fmt.Errorf("failed to update contract code, %v", err))
+		}
+	}
+	return hash
+}
+
+// generateStorage inserts a batch of new storage slots for the specified account.
+// The storage is assumed to be empty before insertion.
 func (t *tester) generateStorage(ctx *genctx, addr common.Address) common.Hash {
 	var (
 		addrHash = crypto.Keccak256Hash(addr.Bytes())
@@ -189,29 +237,52 @@ func (t *tester) generateStorage(ctx *genctx, addr common.Address) common.Hash {
 		storage[hash] = v
 		origin[hash] = nil
 	}
-	root, set := updateTrie(t.db, ctx.stateRoot, addrHash, types.EmptyRootHash, storage)
 
 	ctx.storages[addrHash] = storage
 	ctx.storageOrigin[addr] = origin
-	ctx.nodes.Merge(set)
-	return root
+
+	// Generate a merkle storage trie for the newly constructed storage.
+	if !ctx.isVerkle {
+		root, set := updateMerkleTrie(t.db, ctx.stateRoot, addrHash, types.EmptyRootHash, storage)
+		ctx.nodes.Merge(set)
+		return root
+	}
+	// Insert the storage slots in the global verkle trie
+	for key, val := range storage {
+		if err := ctx.tr.UpdateStorage(addr, t.preimages[key], val); err != nil {
+			panic(fmt.Errorf("failed to update storage, %v", err))
+		}
+	}
+	return common.Hash{}
 }
 
+// mutateStorage modifies existing storage slots by deleting/updating some and
+// creating new ones, simulating a typical storage mutation.
 func (t *tester) mutateStorage(ctx *genctx, addr common.Address, root common.Hash) common.Hash {
 	var (
+		deletes int
+		updates int
+
 		addrHash = crypto.Keccak256Hash(addr.Bytes())
 		storage  = make(map[common.Hash][]byte)
 		origin   = make(map[common.Hash][]byte)
 	)
 	for hash, val := range t.storages[addrHash] {
-		origin[hash] = val
-		storage[hash] = nil
-
-		if len(origin) == 3 {
+		if rand.Intn(2) == 0 {
+			origin[hash] = val
+			storage[hash] = nil
+			deletes++
+		} else {
+			origin[hash] = val
+			v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
+			storage[hash] = v
+			updates++
+		}
+		if deletes >= 3 && updates >= 3 {
 			break
 		}
 	}
-	for i := 0; i < 3; i++ {
+	for i := 0; i < deletes; i++ {
 		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
 		key := testrand.Bytes(32)
 		hash := crypto.Keccak256Hash(key)
@@ -220,14 +291,34 @@ func (t *tester) mutateStorage(ctx *genctx, addr common.Address, root common.Has
 		storage[hash] = v
 		origin[hash] = nil
 	}
-	root, set := updateTrie(t.db, ctx.stateRoot, crypto.Keccak256Hash(addr.Bytes()), root, storage)
 
 	ctx.storages[addrHash] = storage
 	ctx.storageOrigin[addr] = origin
-	ctx.nodes.Merge(set)
-	return root
+
+	// Update the merkle storage trie with the generated mutation set
+	if !ctx.isVerkle {
+		root, set := updateMerkleTrie(t.db, ctx.stateRoot, crypto.Keccak256Hash(addr.Bytes()), root, storage)
+		ctx.nodes.Merge(set)
+		return root
+	}
+	// Apply the storage mutation into the global verkle trie
+	for key, val := range storage {
+		if len(val) != 0 {
+			if err := ctx.tr.UpdateStorage(addr, t.preimages[key], val); err != nil {
+				panic(fmt.Errorf("failed to update storage, %v", err))
+			}
+		} else {
+			// TODO(rjl493456442) here the zero markers are written instead of
+			// wiping the nodes from the trie.
+			if err := ctx.tr.DeleteStorage(addr, t.preimages[key]); err != nil {
+				panic(fmt.Errorf("failed to delete storage, %v", err))
+			}
+		}
+	}
+	return common.Hash{}
 }
 
+// clearStorage removes the existing storage slots belonging to the specified account.
 func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash) common.Hash {
 	var (
 		addrHash = crypto.Keccak256Hash(addr.Bytes())
@@ -238,19 +329,32 @@ func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash
 		origin[hash] = val
 		storage[hash] = nil
 	}
-	root, set := updateTrie(t.db, ctx.stateRoot, addrHash, root, storage)
-	if root != types.EmptyRootHash {
-		panic("failed to clear storage trie")
-	}
 	ctx.storages[addrHash] = storage
 	ctx.storageOrigin[addr] = origin
-	ctx.nodes.Merge(set)
-	return root
+
+	// Clear the merkle storage trie with the generated deletion set
+	if !ctx.isVerkle {
+		root, set := updateMerkleTrie(t.db, ctx.stateRoot, addrHash, root, storage)
+		if root != types.EmptyRootHash {
+			panic("failed to clear storage trie")
+		}
+		ctx.nodes.Merge(set)
+		return root
+	}
+	// Apply the storage deletion into the global verkle trie
+	for key := range storage {
+		// TODO(rjl493456442) here the zero markers are written instead of
+		// wiping the nodes from the trie.
+		if err := ctx.tr.DeleteStorage(addr, t.preimages[key]); err != nil {
+			panic(fmt.Errorf("failed to delete storage, %v", err))
+		}
+	}
+	return common.Hash{}
 }
 
-func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, *trienode.MergedNodeSet, *StateSetWithOrigin) {
+func (t *tester) generate(parent common.Hash, rawStorageKey bool, isVerkle bool) (common.Hash, *trienode.MergedNodeSet, *StateSetWithOrigin) {
 	var (
-		ctx     = newCtx(parent)
+		ctx     = newCtx(parent, t.db, isVerkle)
 		dirties = make(map[common.Hash]struct{})
 	)
 	for i := 0; i < 20; i++ {
@@ -276,13 +380,14 @@ func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, 
 			dirties[addrHash] = struct{}{}
 
 			root := t.generateStorage(ctx, addr)
-			ctx.accounts[addrHash] = types.SlimAccountRLP(generateAccount(root))
+			codeHash := t.generateCode(ctx, addr)
+			ctx.accounts[addrHash] = types.SlimAccountRLP(generateAccount(root, codeHash.Bytes()))
 			ctx.accountOrigin[addr] = nil
 			t.preimages[addrHash] = addr.Bytes()
 
 		case modifyAccountOp:
 			// account mutation
-			addr, account := t.randAccount()
+			addr, account, codeHash := t.randAccount()
 			if addr == (common.Address{}) {
 				continue
 			}
@@ -296,14 +401,14 @@ func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, 
 
 			acct, _ := types.FullAccount(account)
 			stRoot := t.mutateStorage(ctx, addr, acct.Root)
-			newAccount := types.SlimAccountRLP(generateAccount(stRoot))
+			newAccount := types.SlimAccountRLP(generateAccount(stRoot, codeHash)) // TODO support contract code rewrite
 
 			ctx.accounts[addrHash] = newAccount
 			ctx.accountOrigin[addr] = account
 
 		case deleteAccountOp:
 			// account deletion
-			addr, account := t.randAccount()
+			addr, account, _ := t.randAccount()
 			if addr == (common.Address{}) {
 				continue
 			}
@@ -323,9 +428,6 @@ func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, 
 			ctx.accountOrigin[addr] = account
 		}
 	}
-	root, set := updateTrie(t.db, parent, common.Hash{}, parent, ctx.accounts)
-	ctx.nodes.Merge(set)
-
 	// Save state snapshot before commit
 	t.snapAccounts[parent] = copyAccounts(t.accounts)
 	t.snapStorages[parent] = copyStorages(t.storages)
@@ -353,8 +455,31 @@ func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, 
 			delete(t.storages, addrHash)
 		}
 	}
+	// Flush the contract code changes into the key value store
+	for codeHash, code := range ctx.codes {
+		rawdb.WriteCode(t.disk, codeHash, code)
+	}
+	// Flush the pending account changes into the global merkle trie
 	storageOrigin := ctx.storageOriginSet(rawStorageKey, t)
-	return root, ctx.nodes, NewStateSetWithOrigin(ctx.accounts, ctx.storages, ctx.accountOrigin, storageOrigin, rawStorageKey)
+	if !ctx.isVerkle {
+		root, set := updateMerkleTrie(t.db, parent, common.Hash{}, parent, ctx.accounts)
+		ctx.nodes.Merge(set)
+		return root, ctx.nodes, NewStateSetWithOrigin(ctx.accounts, ctx.storages, ctx.accountOrigin, storageOrigin, rawStorageKey)
+	}
+	// Flush the pending account changes into the global verkle trie
+	for addrHash, account := range ctx.accounts {
+		if len(account) == 0 {
+			// TODO(rjl493456442) here the zero markers are written instead of
+			// wiping the nodes from the trie.
+			ctx.tr.DeleteAccount(common.BytesToAddress(t.preimages[addrHash]))
+		} else {
+			ctx.tr.UpdateAccount(common.BytesToAddress(t.preimages[addrHash]), nil, 0)
+		}
+	}
+	root, nodes := ctx.tr.Commit(false)
+	merged := trienode.NewMergedNodeSet()
+	merged.Merge(nodes)
+	return root, merged, NewStateSetWithOrigin(ctx.accounts, ctx.storages, ctx.accountOrigin, storageOrigin, rawStorageKey)
 }
 
 // lastHash returns the latest root hash, or empty if nothing is cached.
@@ -365,7 +490,7 @@ func (t *tester) lastHash() common.Hash {
 	return t.roots[len(t.roots)-1]
 }
 
-func (t *tester) verifyState(root common.Hash) error {
+func (t *tester) verifyMerkleState(root common.Hash) error {
 	tr, err := trie.New(trie.StateTrieID(root), t.db)
 	if err != nil {
 		return err
@@ -465,7 +590,7 @@ func TestDatabaseRollback(t *testing.T) {
 			t.Fatalf("Failed to revert db, err: %v", err)
 		}
 		if i > 0 {
-			if err := tester.verifyState(parent); err != nil {
+			if err := tester.verifyMerkleState(parent); err != nil {
 				t.Fatalf("Failed to verify state, err: %v", err)
 			}
 		}
@@ -583,7 +708,7 @@ func TestCommit(t *testing.T) {
 		t.Fatal("Layer tree structure is invalid")
 	}
 	// Verify states
-	if err := tester.verifyState(tester.lastHash()); err != nil {
+	if err := tester.verifyMerkleState(tester.lastHash()); err != nil {
 		t.Fatalf("State is invalid, err: %v", err)
 	}
 	// Verify state histories
@@ -611,12 +736,12 @@ func TestJournal(t *testing.T) {
 	// Verify states including disk layer and all diff on top.
 	for i := 0; i < len(tester.roots); i++ {
 		if i >= tester.bottomIndex() {
-			if err := tester.verifyState(tester.roots[i]); err != nil {
+			if err := tester.verifyMerkleState(tester.roots[i]); err != nil {
 				t.Fatalf("Invalid state, err: %v", err)
 			}
 			continue
 		}
-		if err := tester.verifyState(tester.roots[i]); err == nil {
+		if err := tester.verifyMerkleState(tester.roots[i]); err == nil {
 			t.Fatal("Unexpected state")
 		}
 	}
@@ -647,12 +772,12 @@ func TestCorruptedJournal(t *testing.T) {
 	tester.db = New(tester.db.diskdb, nil, false)
 	for i := 0; i < len(tester.roots); i++ {
 		if tester.roots[i] == root {
-			if err := tester.verifyState(root); err != nil {
+			if err := tester.verifyMerkleState(root); err != nil {
 				t.Fatalf("Disk state is corrupted, err: %v", err)
 			}
 			continue
 		}
-		if err := tester.verifyState(tester.roots[i]); err == nil {
+		if err := tester.verifyMerkleState(tester.roots[i]); err == nil {
 			t.Fatal("Unexpected state")
 		}
 	}
