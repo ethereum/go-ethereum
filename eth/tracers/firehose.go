@@ -495,13 +495,13 @@ func (f *Firehose) OnBlockEnd(err error) {
 			f.fixOrdinalsForEndOfBlockChanges()
 		}
 
+		// f.printBlockToFirehose(f.block, f.blockFinality)
 		f.ensureInBlockAndNotInTrx()
-		f.printBlockToFirehose(f.block, f.blockFinality)
-		//job := &blockPrintJob{
-		//	block:    f.block,
-		//	finality: f.blockFinality,
-		//}
-		//f.blockPrintQueue <- job
+		job := &blockPrintJob{
+			block:    f.block,
+			finality: f.blockFinality,
+		}
+		f.blockPrintQueue <- job
 
 	} else {
 		// An error occurred, could have happen in transaction/call context, we must not check if in trx/call, only check in block

@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestFirehose_BlockPrintsToFirehoseInOrder(t *testing.T) {
+func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 	f := NewFirehose(&FirehoseConfig{
 		ApplyBackwardCompatibility: ptr(false),
 		private: &privateFirehoseConfig{
@@ -38,6 +38,8 @@ func TestFirehose_BlockPrintsToFirehoseInOrder(t *testing.T) {
 		f.OnBlockEnd(nil)
 	}
 
+	f.Shutdown()
+
 	output := f.InternalTestingBuffer().String()
 
 	require.Contains(t, output, "FIRE BLOCK", "expected FIRE BLOCK output not found")
@@ -59,7 +61,7 @@ func TestFirehose_BlockPrintsToFirehoseInOrder(t *testing.T) {
 		"Block 124 should appear before block 125 in output")
 }
 
-func TestFirehose_BlocksPrintToFirehoseInOrder(t *testing.T) {
+func TestFirehose_BlocksPrintToFirehose_MultipleBlocksInOrder(t *testing.T) {
 
 	const blockCount = 100
 	const baseBlockNum = 1000
