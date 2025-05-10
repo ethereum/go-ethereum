@@ -64,7 +64,8 @@ func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, f
 }
 
 // PackAmountRaised is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x7b3e5e7b.
+// the contract method with ID 0x7b3e5e7b.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function amountRaised() returns(uint256)
 func (crowdsale *Crowdsale) PackAmountRaised() []byte {
@@ -73,6 +74,15 @@ func (crowdsale *Crowdsale) PackAmountRaised() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackAmountRaised is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x7b3e5e7b.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function amountRaised() returns(uint256)
+func (crowdsale *Crowdsale) TryPackAmountRaised() ([]byte, error) {
+	return crowdsale.abi.Pack("amountRaised")
 }
 
 // UnpackAmountRaised is the Go binding that unpacks the parameters returned
@@ -85,11 +95,12 @@ func (crowdsale *Crowdsale) UnpackAmountRaised(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // PackBeneficiary is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x38af3eed.
+// the contract method with ID 0x38af3eed.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function beneficiary() returns(address)
 func (crowdsale *Crowdsale) PackBeneficiary() []byte {
@@ -98,6 +109,15 @@ func (crowdsale *Crowdsale) PackBeneficiary() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackBeneficiary is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x38af3eed.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function beneficiary() returns(address)
+func (crowdsale *Crowdsale) TryPackBeneficiary() ([]byte, error) {
+	return crowdsale.abi.Pack("beneficiary")
 }
 
 // UnpackBeneficiary is the Go binding that unpacks the parameters returned
@@ -110,11 +130,12 @@ func (crowdsale *Crowdsale) UnpackBeneficiary(data []byte) (common.Address, erro
 		return *new(common.Address), err
 	}
 	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
-	return out0, err
+	return out0, nil
 }
 
 // PackCheckGoalReached is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x01cb3b20.
+// the contract method with ID 0x01cb3b20.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function checkGoalReached() returns()
 func (crowdsale *Crowdsale) PackCheckGoalReached() []byte {
@@ -125,8 +146,18 @@ func (crowdsale *Crowdsale) PackCheckGoalReached() []byte {
 	return enc
 }
 
+// TryPackCheckGoalReached is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x01cb3b20.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function checkGoalReached() returns()
+func (crowdsale *Crowdsale) TryPackCheckGoalReached() ([]byte, error) {
+	return crowdsale.abi.Pack("checkGoalReached")
+}
+
 // PackDeadline is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x29dcb0cf.
+// the contract method with ID 0x29dcb0cf.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function deadline() returns(uint256)
 func (crowdsale *Crowdsale) PackDeadline() []byte {
@@ -135,6 +166,15 @@ func (crowdsale *Crowdsale) PackDeadline() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackDeadline is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x29dcb0cf.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function deadline() returns(uint256)
+func (crowdsale *Crowdsale) TryPackDeadline() ([]byte, error) {
+	return crowdsale.abi.Pack("deadline")
 }
 
 // UnpackDeadline is the Go binding that unpacks the parameters returned
@@ -147,11 +187,12 @@ func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // PackFunders is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xdc0d3dff.
+// the contract method with ID 0xdc0d3dff.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
 func (crowdsale *Crowdsale) PackFunders(arg0 *big.Int) []byte {
@@ -160,6 +201,15 @@ func (crowdsale *Crowdsale) PackFunders(arg0 *big.Int) []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackFunders is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xdc0d3dff.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
+func (crowdsale *Crowdsale) TryPackFunders(arg0 *big.Int) ([]byte, error) {
+	return crowdsale.abi.Pack("funders", arg0)
 }
 
 // FundersOutput serves as a container for the return parameters of contract
@@ -181,12 +231,12 @@ func (crowdsale *Crowdsale) UnpackFunders(data []byte) (FundersOutput, error) {
 	}
 	outstruct.Addr = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
 	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
-	return *outstruct, err
-
+	return *outstruct, nil
 }
 
 // PackFundingGoal is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x7a3a0e84.
+// the contract method with ID 0x7a3a0e84.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function fundingGoal() returns(uint256)
 func (crowdsale *Crowdsale) PackFundingGoal() []byte {
@@ -195,6 +245,15 @@ func (crowdsale *Crowdsale) PackFundingGoal() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackFundingGoal is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x7a3a0e84.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function fundingGoal() returns(uint256)
+func (crowdsale *Crowdsale) TryPackFundingGoal() ([]byte, error) {
+	return crowdsale.abi.Pack("fundingGoal")
 }
 
 // UnpackFundingGoal is the Go binding that unpacks the parameters returned
@@ -207,11 +266,12 @@ func (crowdsale *Crowdsale) UnpackFundingGoal(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // PackPrice is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xa035b1fe.
+// the contract method with ID 0xa035b1fe.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function price() returns(uint256)
 func (crowdsale *Crowdsale) PackPrice() []byte {
@@ -220,6 +280,15 @@ func (crowdsale *Crowdsale) PackPrice() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackPrice is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xa035b1fe.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function price() returns(uint256)
+func (crowdsale *Crowdsale) TryPackPrice() ([]byte, error) {
+	return crowdsale.abi.Pack("price")
 }
 
 // UnpackPrice is the Go binding that unpacks the parameters returned
@@ -232,11 +301,12 @@ func (crowdsale *Crowdsale) UnpackPrice(data []byte) (*big.Int, error) {
 		return new(big.Int), err
 	}
 	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
-	return out0, err
+	return out0, nil
 }
 
 // PackTokenReward is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x6e66f6e9.
+// the contract method with ID 0x6e66f6e9.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function tokenReward() returns(address)
 func (crowdsale *Crowdsale) PackTokenReward() []byte {
@@ -245,6 +315,15 @@ func (crowdsale *Crowdsale) PackTokenReward() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackTokenReward is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x6e66f6e9.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function tokenReward() returns(address)
+func (crowdsale *Crowdsale) TryPackTokenReward() ([]byte, error) {
+	return crowdsale.abi.Pack("tokenReward")
 }
 
 // UnpackTokenReward is the Go binding that unpacks the parameters returned
@@ -257,7 +336,7 @@ func (crowdsale *Crowdsale) UnpackTokenReward(data []byte) (common.Address, erro
 		return *new(common.Address), err
 	}
 	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
-	return out0, err
+	return out0, nil
 }
 
 // CrowdsaleFundTransfer represents a FundTransfer event raised by the Crowdsale contract.
