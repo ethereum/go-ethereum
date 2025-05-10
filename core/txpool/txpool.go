@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -311,17 +310,42 @@ func (p *TxPool) GetMetadata(hash common.Hash) *TxMetadata {
 // GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
-func (p *TxPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
+func (p *TxPool) GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar {
 	for _, subpool := range p.subpools {
 		// It's an ugly to assume that only one pool will be capable of returning
-		// anything meaningful for this call, but anythingh else requires merging
+		// anything meaningful for this call, but anything else requires merging
 		// partial responses and that's too annoying to do until we get a second
 		// blobpool (probably never).
-		if blobs, proofs := subpool.GetBlobs(vhashes); blobs != nil {
-			return blobs, proofs
+		if sidecars := subpool.GetBlobs(vhashes); sidecars != nil {
+			return sidecars
 		}
 	}
-	return nil, nil
+	return nil
+}
+
+// HasBlobs will return true if all the vhashes are available in the same subpool.
+func (p *TxPool) HasBlobs(vhashes []common.Hash) bool {
+	for _, subpool := range p.subpools {
+		// It's an ugly to assume that only one pool will be capable of returning
+		// anything meaningful for this call, but anything else requires merging
+		// partial responses and that's too annoying to do until we get a second
+		// blobpool (probably never).
+		if subpool.HasBlobs(vhashes) {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateTxBasics checks whether a transaction is valid according to the consensus
+// rules, but does not check state-dependent validation such as sufficient balance.
+func (p *TxPool) ValidateTxBasics(tx *types.Transaction) error {
+	for _, subpool := range p.subpools {
+		if subpool.Filter(tx) {
+			return subpool.ValidateTxBasics(tx)
+		}
+	}
+	return fmt.Errorf("%w: received type %d", core.ErrTxTypeNotSupported, tx.Type())
 }
 
 // Add enqueues a batch of transactions into the pool if they are valid. Due
