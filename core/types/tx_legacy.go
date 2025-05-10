@@ -64,7 +64,7 @@ func (tx *LegacyTx) copy() TxData {
 	cpy := &LegacyTx{
 		Nonce: tx.Nonce,
 		To:    copyAddressPtr(tx.To),
-		Data:  common.CopyBytes(tx.Data),
+		Data:  bytes.Clone(tx.Data),
 		Gas:   tx.Gas,
 		// These are initialized below.
 		Value:    new(big.Int),

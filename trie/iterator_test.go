@@ -140,8 +140,8 @@ func testNodeIteratorCoverage(t *testing.T, scheme string) {
 		if it.Hash() != (common.Hash{}) {
 			elements[it.Hash()] = iterationElement{
 				hash: it.Hash(),
-				path: common.CopyBytes(it.Path()),
-				blob: common.CopyBytes(it.NodeBlob()),
+				path: bytes.Clone(it.Path()),
+				blob: bytes.Clone(it.NodeBlob()),
 			}
 		}
 	}
@@ -618,7 +618,7 @@ func isTrieNode(scheme string, key, val []byte) (bool, []byte, common.Hash) {
 		if !ok {
 			return false, nil, common.Hash{}
 		}
-		path = common.CopyBytes(remain)
+		path = bytes.Clone(remain)
 		hash = crypto.Keccak256Hash(val)
 	}
 	return true, path, hash

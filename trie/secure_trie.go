@@ -17,6 +17,8 @@
 package trie
 
 import (
+	"bytes"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -159,7 +161,7 @@ func (t *StateTrie) GetNode(path []byte) ([]byte, int, error) {
 func (t *StateTrie) MustUpdate(key, value []byte) {
 	hk := t.hashKey(key)
 	t.trie.MustUpdate(hk, value)
-	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	t.getSecKeyCache()[string(hk)] = bytes.Clone(key)
 }
 
 // UpdateStorage associates key with value in the trie. Subsequent calls to
@@ -177,7 +179,7 @@ func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 	if err != nil {
 		return err
 	}
-	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	t.getSecKeyCache()[string(hk)] = bytes.Clone(key)
 	return nil
 }
 

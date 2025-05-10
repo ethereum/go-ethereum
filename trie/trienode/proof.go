@@ -17,10 +17,10 @@
 package trienode
 
 import (
+	"bytes"
 	"errors"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -53,7 +53,7 @@ func (db *ProofSet) Put(key []byte, value []byte) error {
 	}
 	keystr := string(key)
 
-	db.nodes[keystr] = common.CopyBytes(value)
+	db.nodes[keystr] = bytes.Clone(value)
 	db.order = append(db.order, keystr)
 	db.dataSize += len(value)
 

@@ -2546,7 +2546,7 @@ func (s *Syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 	// Reconstruct a partial trie from the response and verify it
 	keys := make([][]byte, len(hashes))
 	for i, key := range hashes {
-		keys[i] = common.CopyBytes(key[:])
+		keys[i] = bytes.Clone(key[:])
 	}
 	nodes := make(trienode.ProofList, len(proof))
 	for i, node := range proof {
@@ -2792,7 +2792,7 @@ func (s *Syncer) OnStorage(peer SyncPeer, id uint64, hashes [][]common.Hash, slo
 		// Convert the keys and proofs into an internal format
 		keys := make([][]byte, len(hashes[i]))
 		for j, key := range hashes[i] {
-			keys[j] = common.CopyBytes(key[:])
+			keys[j] = bytes.Clone(key[:])
 		}
 		nodes := make(trienode.ProofList, 0, len(proof))
 		if i == len(hashes)-1 {

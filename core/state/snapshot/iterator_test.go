@@ -81,7 +81,7 @@ func TestStorageIteratorBasics(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			crand.Read(value)
 			if rand.Intn(2) == 0 {
-				accStorage[randomHash()] = common.CopyBytes(value)
+				accStorage[randomHash()] = bytes.Clone(value)
 			} else {
 				accStorage[randomHash()] = nil // delete slot
 				nilstorage += 1

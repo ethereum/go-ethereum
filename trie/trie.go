@@ -576,12 +576,12 @@ func copyNode(n node) node {
 	case nil:
 		return nil
 	case valueNode:
-		return valueNode(common.CopyBytes(n))
+		return valueNode(bytes.Clone(n))
 
 	case *shortNode:
 		return &shortNode{
 			flags: n.flags.copy(),
-			Key:   common.CopyBytes(n.Key),
+			Key:   bytes.Clone(n.Key),
 			Val:   copyNode(n.Val),
 		}
 	case *fullNode:

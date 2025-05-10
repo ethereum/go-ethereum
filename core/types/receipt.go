@@ -106,7 +106,7 @@ type storedReceiptRLP struct {
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 	r := &Receipt{
 		Type:              LegacyTxType,
-		PostState:         common.CopyBytes(root),
+		PostState:         bytes.Clone(root),
 		CumulativeGasUsed: cumulativeGasUsed,
 	}
 	if failed {

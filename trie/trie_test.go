@@ -136,7 +136,7 @@ func testMissingNode(t *testing.T, memonly bool, scheme string) {
 	)
 	for p, n := range nodes.Nodes {
 		if n.Hash == hash {
-			path = common.CopyBytes([]byte(p))
+			path = bytes.Clone([]byte(p))
 			break
 		}
 	}
@@ -1275,7 +1275,7 @@ func TestCommitCorrect(t *testing.T) {
 		key := testrand.Bytes(32)
 		val := testrand.Bytes(32)
 		paraTrie.Update(key, val)
-		refTrie.Update(common.CopyBytes(key), common.CopyBytes(val))
+		refTrie.Update(bytes.Clone(key), bytes.Clone(val))
 	}
 	paraTrie.Hash()
 	refTrie.Hash()

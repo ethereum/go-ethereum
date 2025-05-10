@@ -341,7 +341,7 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 		// so if the stacktrie tries to append, it won't have to realloc
 		value := make([]byte, 1, 100)
 		value[0] = 0x2
-		want := common.CopyBytes(value)
+		want := bytes.Clone(value)
 		st.Update([]byte{0x01}, value)
 		st.Hash()
 		if have := value; !bytes.Equal(have, want) {
