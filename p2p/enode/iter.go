@@ -17,6 +17,7 @@
 package enode
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -121,6 +122,85 @@ func (f *filterIter) Next() bool {
 		}
 	}
 	return false
+}
+
+// AsyncFilterIter wraps an iterator such that Next only returns nodes for which
+// the 'check' function returns a (possibly modified) node.
+type AsyncFilterIter struct {
+	it        Iterator      // the iterator to filter
+	slots     chan struct{} // the slots for parallel checking
+	passed    chan *Node    // channel to collect passed nodes
+	buffer    *Node         // buffer to serve the Node call
+	cancel    context.CancelFunc
+	closeOnce sync.Once
+}
+type AsyncFilterFunc func(context.Context, *Node) *Node
+
+// AsyncFilter creates an iterator which checks nodes in parallel.
+func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
+	f := &AsyncFilterIter{
+		it:     it,
+		slots:  make(chan struct{}, workers+1),
+		passed: make(chan *Node),
+	}
+	for range cap(f.slots) {
+		f.slots <- struct{}{}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	f.cancel = cancel
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-f.slots:
+		}
+		// read from the iterator and start checking nodes in parallel
+		// when a node is checked, it will be sent to the passed channel
+		// and the slot will be released
+		for f.it.Next() {
+			n := f.it.Node()
+			<-f.slots
+			// check the node async, in a separate goroutine
+			go func() {
+				if nn := check(ctx, n); nn != nil {
+					select {
+					case f.passed <- nn:
+					case <-ctx.Done(): // bale out if downstream is already closed and not calling Next
+					}
+				}
+				f.slots <- struct{}{}
+			}()
+		}
+		// the iterator has ended
+		f.slots <- struct{}{}
+	}()
+
+	return f
+}
+
+// Next blocks until a node is available or the iterator is closed.
+func (f *AsyncFilterIter) Next() bool {
+	f.buffer = <-f.passed
+	return f.buffer != nil
+}
+
+// Node returns the current node.
+func (f *AsyncFilterIter) Node() *Node {
+	return f.buffer
+}
+
+// Close ends the iterator, also closing the wrapped iterator.
+func (f *AsyncFilterIter) Close() {
+	f.closeOnce.Do(func() {
+		f.it.Close()
+		f.cancel()
+		for range cap(f.slots) {
+			<-f.slots
+		}
+		close(f.slots)
+		close(f.passed)
+	})
 }
 
 // FairMix aggregates multiple node iterators. The mixer itself is an iterator which ends
