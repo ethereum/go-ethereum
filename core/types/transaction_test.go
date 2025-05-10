@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -592,4 +593,102 @@ func BenchmarkHash(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		signer.Hash(tx)
 	}
+}
+
+func BenchmarkEffectiveGasTip(b *testing.B) {
+	signer := LatestSigner(params.TestChainConfig)
+	key, _ := crypto.GenerateKey()
+	txdata := &DynamicFeeTx{
+		ChainID:   big.NewInt(1),
+		Nonce:     0,
+		GasTipCap: big.NewInt(2000000000),
+		GasFeeCap: big.NewInt(3000000000),
+		Gas:       21000,
+		To:        &common.Address{},
+		Value:     big.NewInt(0),
+		Data:      nil,
+	}
+	tx, _ := SignNewTx(key, signer, txdata)
+	baseFee := big.NewInt(1000000000) // 1 gwei
+
+	b.Run("Original", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_, err := tx.EffectiveGasTip(baseFee)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+
+	b.Run("IntoMethod", func(b *testing.B) {
+		b.ReportAllocs()
+		dst := new(big.Int)
+		for i := 0; i < b.N; i++ {
+			err := tx.calcEffectiveGasTip(dst, baseFee)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+func TestEffectiveGasTipInto(t *testing.T) {
+	signer := LatestSigner(params.TestChainConfig)
+	key, _ := crypto.GenerateKey()
+
+	testCases := []struct {
+		tipCap  int64
+		feeCap  int64
+		baseFee *int64
+	}{
+		{tipCap: 1, feeCap: 100, baseFee: intPtr(50)},
+		{tipCap: 10, feeCap: 100, baseFee: intPtr(50)},
+		{tipCap: 50, feeCap: 100, baseFee: intPtr(50)},
+		{tipCap: 100, feeCap: 100, baseFee: intPtr(50)},
+		{tipCap: 1, feeCap: 50, baseFee: intPtr(50)},
+		{tipCap: 1, feeCap: 20, baseFee: intPtr(50)}, // Base fee higher than fee cap
+		{tipCap: 50, feeCap: 100, baseFee: intPtr(0)},
+		{tipCap: 50, feeCap: 100, baseFee: nil}, // nil base fee
+	}
+
+	for i, tc := range testCases {
+		txdata := &DynamicFeeTx{
+			ChainID:   big.NewInt(1),
+			Nonce:     0,
+			GasTipCap: big.NewInt(tc.tipCap),
+			GasFeeCap: big.NewInt(tc.feeCap),
+			Gas:       21000,
+			To:        &common.Address{},
+			Value:     big.NewInt(0),
+			Data:      nil,
+		}
+		tx, _ := SignNewTx(key, signer, txdata)
+
+		var baseFee *big.Int
+		if tc.baseFee != nil {
+			baseFee = big.NewInt(*tc.baseFee)
+		}
+
+		// Get result from original method
+		orig, origErr := tx.EffectiveGasTip(baseFee)
+
+		// Get result from new method
+		dst := new(big.Int)
+		newErr := tx.calcEffectiveGasTip(dst, baseFee)
+
+		// Compare results
+		if (origErr != nil) != (newErr != nil) {
+			t.Fatalf("case %d: error mismatch: orig %v, new %v", i, origErr, newErr)
+		}
+
+		if orig.Cmp(dst) != 0 {
+			t.Fatalf("case %d: result mismatch: orig %v, new %v", i, orig, dst)
+		}
+	}
+}
+
+// Helper function to create integer pointer
+func intPtr(i int64) *int64 {
+	return &i
 }

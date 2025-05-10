@@ -66,6 +66,18 @@ var (
 
 	// capture the rest of errors that are not handled by the above meters
 	dialOtherError = metrics.NewRegisteredMeter("p2p/dials/error/other", nil)
+
+	// handshake error meters for inbound connections
+	serveTooManyPeers        = metrics.NewRegisteredMeter("p2p/serves/error/saturated", nil)
+	serveAlreadyConnected    = metrics.NewRegisteredMeter("p2p/serves/error/known", nil)
+	serveSelf                = metrics.NewRegisteredMeter("p2p/serves/error/self", nil)
+	serveUselessPeer         = metrics.NewRegisteredMeter("p2p/serves/error/useless", nil)
+	serveUnexpectedIdentity  = metrics.NewRegisteredMeter("p2p/serves/error/id/unexpected", nil)
+	serveEncHandshakeError   = metrics.NewRegisteredMeter("p2p/serves/error/rlpx/enc", nil) //EOF; connection reset during handshake; (message too big?)
+	serveProtoHandshakeError = metrics.NewRegisteredMeter("p2p/serves/error/rlpx/proto", nil)
+
+	// capture the rest of errors that are not handled by the above meters
+	serveOtherError = metrics.NewRegisteredMeter("p2p/serves/error/other", nil)
 )
 
 // markDialError matches errors that occur while setting up a dial connection to the
@@ -96,6 +108,36 @@ func markDialError(err error) {
 		dialEncHandshakeError.Mark(1)
 	default:
 		dialOtherError.Mark(1)
+	}
+}
+
+// markServeError matches errors that occur while serving an inbound connection
+// to the corresponding meter.
+func markServeError(err error) {
+	if !metrics.Enabled() {
+		return
+	}
+
+	var reason DiscReason
+	var handshakeErr *protoHandshakeError
+	d := errors.As(err, &reason)
+	switch {
+	case d && reason == DiscTooManyPeers:
+		serveTooManyPeers.Mark(1)
+	case d && reason == DiscAlreadyConnected:
+		serveAlreadyConnected.Mark(1)
+	case d && reason == DiscSelf:
+		serveSelf.Mark(1)
+	case d && reason == DiscUselessPeer:
+		serveUselessPeer.Mark(1)
+	case d && reason == DiscUnexpectedIdentity:
+		serveUnexpectedIdentity.Mark(1)
+	case errors.As(err, &handshakeErr):
+		serveProtoHandshakeError.Mark(1)
+	case errors.Is(err, errEncHandshakeError):
+		serveEncHandshakeError.Mark(1)
+	default:
+		serveOtherError.Mark(1)
 	}
 }
 

@@ -194,12 +194,12 @@ func (f *resettableFreezer) TruncateTail(tail uint64) (uint64, error) {
 	return f.freezer.TruncateTail(tail)
 }
 
-// Sync flushes all data tables to disk.
-func (f *resettableFreezer) Sync() error {
+// SyncAncient flushes all data tables to disk.
+func (f *resettableFreezer) SyncAncient() error {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	return f.freezer.Sync()
+	return f.freezer.SyncAncient()
 }
 
 // AncientDatadir returns the path of the ancient store.

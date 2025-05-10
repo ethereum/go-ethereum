@@ -135,10 +135,13 @@ func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, node
 		start = time.Now()
 		batch = db.NewBatchWithSize(b.nodes.dbsize() * 11 / 10) // extra 10% for potential pebble internal stuff
 	)
-	// Explicitly sync the state freezer, ensuring that all written
-	// data is transferred to disk before updating the key-value store.
+	// Explicitly sync the state freezer to ensure all written data is persisted to disk
+	// before updating the key-value store.
+	//
+	// This step is crucial to guarantee that the corresponding state history remains
+	// available for state rollback.
 	if freezer != nil {
-		if err := freezer.Sync(); err != nil {
+		if err := freezer.SyncAncient(); err != nil {
 			return err
 		}
 	}

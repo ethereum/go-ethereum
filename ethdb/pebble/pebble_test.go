@@ -17,6 +17,7 @@
 package pebble
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/cockroachdb/pebble"
@@ -53,4 +54,27 @@ func BenchmarkPebbleDB(b *testing.B) {
 			db: db,
 		}
 	})
+}
+
+func TestPebbleLogData(t *testing.T) {
+	db, err := pebble.Open("", &pebble.Options{
+		FS: vfs.NewMem(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = db.Get(nil)
+	if !errors.Is(err, pebble.ErrNotFound) {
+		t.Fatal("Unknown database entry")
+	}
+
+	b := db.NewBatch()
+	b.LogData(nil, nil)
+	db.Apply(b, pebble.Sync)
+
+	_, _, err = db.Get(nil)
+	if !errors.Is(err, pebble.ErrNotFound) {
+		t.Fatal("Unknown database entry")
+	}
 }
