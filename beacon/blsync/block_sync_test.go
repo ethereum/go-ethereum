@@ -151,7 +151,6 @@ func (h *testHeadTracker) ValidatedOptimistic() (types.OptimisticUpdate, bool) {
 	}, h.validated.Header != (types.Header{})
 }
 
-// TODO add test case for finality
 func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 	finalized := types.NewExecutionHeader(new(deneb.ExecutionPayloadHeader))
 	return types.FinalityUpdate{
@@ -160,4 +159,162 @@ func (h *testHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 		Signature:     h.validated.Signature,
 		SignatureSlot: h.validated.SignatureSlot,
 	}, h.validated.Header != (types.Header{})
+}
+
+func TestValidatedFinality(t *testing.T) {
+	tracker := &testHeadTracker{}
+
+	earlyBlock := types.NewBeaconBlock(&deneb.BeaconBlock{
+		Slot: 42,
+		Body: deneb.BeaconBlockBody{
+			ExecutionPayload: deneb.ExecutionPayload{
+				BlockNumber: 400,
+				BlockHash:   zrntcommon.Hash32(common.HexToHash("1111111111111111111111111111111111111111111111111111111111111111")),
+			},
+		},
+	})
+
+	tracker.validated.Header = earlyBlock.Header()
+	tracker.prefetch = blockHeadInfo(earlyBlock)
+
+	_, ok := tracker.ValidatedFinality()
+	if !ok {
+		t.Fatalf("ValidatedFinality failed for early block")
+	}
+
+	lateBlock := types.NewBeaconBlock(&deneb.BeaconBlock{
+		Slot: 200,
+		Body: deneb.BeaconBlockBody{
+			ExecutionPayload: deneb.ExecutionPayload{
+				BlockNumber: 457,
+				BlockHash:   zrntcommon.Hash32(common.HexToHash("011703f39c664efc1c6cf5f49ca09b595581eec572d4dfddd3d6179a9e63e655")),
+			},
+		},
+	})
+	tracker.validated.Header = lateBlock.Header()
+	tracker.prefetch = blockHeadInfo(lateBlock)
+
+	blockSync := newBeaconBlockSync(tracker)
+	headCh := make(chan types.ChainHeadEvent, 16)
+	blockSync.SubscribeChainHead(headCh)
+
+	execPayload, _ := lateBlock.ExecutionPayload()
+	payloadHash := common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")
+
+	blockSync.chainHeadFeed.Send(types.ChainHeadEvent{
+		Block:     execPayload,
+		Finalized: payloadHash,
+	})
+
+	select {
+	case event := <-headCh:
+		if event.Finalized != payloadHash {
+			t.Errorf("Wrong finalized hash: got %s, want %s",
+				event.Finalized.Hex(), payloadHash.Hex())
+		}
+	default:
+		t.Fatalf("No head event received")
+	}
+}
+
+func (h *testHeadTracker) ValidatedFinalityWithEpoch() (types.FinalityUpdate, bool) {
+	currentEpoch := h.validated.Header.Epoch()
+
+	if currentEpoch < 2 {
+		return types.FinalityUpdate{
+			Attested: types.HeaderWithExecProof{Header: h.validated.Header},
+		}, h.validated.Header != (types.Header{})
+	}
+
+	payloadHeader := &deneb.ExecutionPayloadHeader{
+		BlockNumber: 456,
+		BlockHash:   zrntcommon.Hash32(common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")),
+	}
+
+	finalized := types.NewExecutionHeader(payloadHeader)
+
+	return types.FinalityUpdate{
+		Attested: types.HeaderWithExecProof{Header: h.validated.Header},
+		Finalized: types.HeaderWithExecProof{
+			Header:        testBlock1.Header(),
+			PayloadHeader: finalized,
+		},
+		Signature:     h.validated.Signature,
+		SignatureSlot: h.validated.SignatureSlot,
+	}, true
+}
+
+func TestValidatedFinalityWithEpoch(t *testing.T) {
+	tracker := &testHeadTracker{}
+
+	earlyBlock := types.NewBeaconBlock(&deneb.BeaconBlock{
+		Slot: 42,
+		Body: deneb.BeaconBlockBody{
+			ExecutionPayload: deneb.ExecutionPayload{
+				BlockNumber: 400,
+				BlockHash:   zrntcommon.Hash32(common.HexToHash("1111111111111111111111111111111111111111111111111111111111111111")),
+			},
+		},
+	})
+	tracker.validated.Header = earlyBlock.Header()
+	tracker.prefetch = blockHeadInfo(earlyBlock)
+
+	finality, ok := tracker.ValidatedFinality()
+	if !ok {
+		t.Fatalf("ValidatedFinality failed for early block")
+	}
+
+	if finality.Finalized.PayloadHeader != nil &&
+		finality.Finalized.PayloadHeader.BlockHash() != (common.Hash{}) {
+		t.Errorf("Expected no finality for early block (epoch %d), got: %v",
+			earlyBlock.Slot()/64, finality.Finalized.PayloadHeader.BlockHash().Hex())
+	}
+
+	lateBlock := types.NewBeaconBlock(&deneb.BeaconBlock{
+		Slot: 200,
+		Body: deneb.BeaconBlockBody{
+			ExecutionPayload: deneb.ExecutionPayload{
+				BlockNumber: 457,
+				BlockHash:   zrntcommon.Hash32(common.HexToHash("011703f39c664efc1c6cf5f49ca09b595581eec572d4dfddd3d6179a9e63e655")),
+			},
+		},
+	})
+	tracker.validated.Header = lateBlock.Header()
+	tracker.prefetch = blockHeadInfo(lateBlock)
+
+	finality, ok = tracker.ValidatedFinalityWithEpoch()
+	if !ok {
+		t.Fatalf("ValidatedFinality failed for late block")
+	}
+
+	expectedHash := common.HexToHash("905ac721c4058d9ed40b27b6b9c1bdd10d4333e4f3d9769100bf9dfb80e5d1f6")
+	if finality.Finalized.PayloadHeader.BlockHash() != expectedHash {
+		t.Errorf("Expected finalized hash %s for late block (epoch %d), got %s",
+			expectedHash.Hex(), lateBlock.Slot()/64, finality.Finalized.PayloadHeader.BlockHash().Hex())
+	}
+
+	blockSync := newBeaconBlockSync(tracker)
+	headCh := make(chan types.ChainHeadEvent, 16)
+	blockSync.SubscribeChainHead(headCh)
+
+	execPayload, _ := lateBlock.ExecutionPayload()
+
+	blockSync.chainHeadFeed.Send(types.ChainHeadEvent{
+		Block:     execPayload,
+		Finalized: expectedHash,
+	})
+
+	select {
+	case event := <-headCh:
+		if event.Finalized != expectedHash {
+			t.Errorf("Event has wrong finalized hash: got %s, want %s",
+				event.Finalized.Hex(), expectedHash.Hex())
+		}
+		if event.Block.NumberU64() != execPayload.NumberU64() {
+			t.Errorf("Event has wrong block number: got %d, want %d",
+				event.Block.NumberU64(), execPayload.NumberU64())
+		}
+	default:
+		t.Fatalf("No head event received")
+	}
 }
