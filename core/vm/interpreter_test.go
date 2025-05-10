@@ -74,3 +74,32 @@ func TestLoopInterrupt(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkInterpreter(b *testing.B) {
+	var (
+		evm             = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		startGas uint64 = 30_000_000
+		value           = uint256.NewInt(0)
+		contract        = NewContract(common.Address{}, common.Address{}, value, startGas, nil)
+	)
+	contract.Code = common.Hex2Bytes(loopInterruptTests[0])
+	for i := 0; i < b.N; i++ {
+		evm.interpreter.Run(contract, []byte{}, false)
+	}
+}
+
+// BenchmarkInterpreter-14    	14613990	        79.01 ns/op	      32 B/op	       2 allocs/op
+
+func BenchmarkDup(b *testing.B) {
+	stack := newstack()
+	stack.push(uint256.NewInt(1234))
+	stack.push(uint256.NewInt(4321))
+	for range b.N {
+		for range 1_000_000 {
+			//stack.dup(1)
+			stack.dup1()
+		}
+	}
+}
+
+// BenchmarkDup-14    	      38	  31579698 ns/op	188685761 B/op	       2 allocs/op
