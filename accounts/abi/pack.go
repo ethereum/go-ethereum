@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/holiman/uint256"
 )
 
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation
@@ -78,6 +79,9 @@ func packNum(value reflect.Value) []byte {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return math.U256Bytes(big.NewInt(value.Int()))
 	case reflect.Ptr:
+		if v, ok := value.Interface().(*uint256.Int); ok {
+			return math.U256Bytes(v.ToBig())
+		}
 		return math.U256Bytes(new(big.Int).Set(value.Interface().(*big.Int)))
 	default:
 		panic("abi: fatal error")

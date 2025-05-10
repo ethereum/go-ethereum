@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -75,7 +76,7 @@ func TestDeploymentLibraries(t *testing.T) {
 	defer bindBackend.Backend.Close()
 
 	c := nested_libraries.NewC1()
-	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
+	constructorInput := c.PackConstructor(uint256.NewInt(42), uint256.NewInt(1))
 	deploymentParams := &bind.DeploymentParams{
 		Contracts: []*bind.MetaData{&nested_libraries.C1MetaData},
 		Inputs:    map[string][]byte{nested_libraries.C1MetaData.ID: constructorInput},
@@ -96,7 +97,7 @@ func TestDeploymentLibraries(t *testing.T) {
 		}
 	}
 
-	doInput := c.PackDo(big.NewInt(1))
+	doInput := c.PackDo(uint256.NewInt(1))
 	contractAddr := res.Addresses[nested_libraries.C1MetaData.ID]
 	callOpts := &bind.CallOpts{From: common.Address{}, Context: context.Background()}
 	instance := c.Instance(bindBackend, contractAddr)
@@ -139,7 +140,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 
 	c := nested_libraries.NewC1()
-	constructorInput := c.PackConstructor(big.NewInt(42), big.NewInt(1))
+	constructorInput := c.PackConstructor(uint256.NewInt(42), uint256.NewInt(1))
 	overrides := res.Addresses
 
 	// deploy the contract
@@ -165,7 +166,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 
 	// call the deployed contract and make sure it returns the correct result
-	doInput := c.PackDo(big.NewInt(1))
+	doInput := c.PackDo(uint256.NewInt(1))
 	instance := c.Instance(bindBackend, res.Addresses[nested_libraries.C1MetaData.ID])
 	callOpts := new(bind.CallOpts)
 	internalCallCount, err := bind.Call(instance, callOpts, doInput, c.UnpackDo)
@@ -346,13 +347,13 @@ func TestErrors(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected type for error")
 	}
-	if unpackedErr.Arg1.Cmp(big.NewInt(0)) != 0 {
+	if unpackedErr.Arg1.Cmp(uint256.NewInt(0)) != 0 {
 		t.Fatalf("bad unpacked error result: expected Arg1 field to be 0.  got %s", unpackedErr.Arg1.String())
 	}
-	if unpackedErr.Arg2.Cmp(big.NewInt(1)) != 0 {
+	if unpackedErr.Arg2.Cmp(uint256.NewInt(1)) != 0 {
 		t.Fatalf("bad unpacked error result: expected Arg2 field to be 1.  got %s", unpackedErr.Arg2.String())
 	}
-	if unpackedErr.Arg3.Cmp(big.NewInt(2)) != 0 {
+	if unpackedErr.Arg3.Cmp(uint256.NewInt(2)) != 0 {
 		t.Fatalf("bad unpacked error result: expected Arg3 to be 2.  got %s", unpackedErr.Arg3.String())
 	}
 	if unpackedErr.Arg4 != false {

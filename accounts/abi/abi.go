@@ -22,10 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 )
 
 // The ABI holds information about a contract's context and available
@@ -299,7 +299,7 @@ func UnpackRevert(data []byte) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		pCode := unpacked[0].(*big.Int)
+		pCode := unpacked[0].(*uint256.Int)
 		// uint64 safety check for future
 		// but the code is not bigger than MAX(uint64) now
 		if pCode.IsUint64() {

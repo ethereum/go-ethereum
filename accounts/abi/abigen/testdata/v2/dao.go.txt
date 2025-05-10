@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // DAOMetaData contains all meta data concerning the DAO contract.
@@ -55,7 +57,7 @@ func (c *DAO) Instance(backend bind.ContractBackend, addr common.Address) *bind.
 // contract deployment.
 //
 // Solidity: constructor(uint256 minimumQuorumForProposals, uint256 minutesForDebate, int256 marginOfVotesForMajority, address congressLeader) returns()
-func (dAO *DAO) PackConstructor(minimumQuorumForProposals *big.Int, minutesForDebate *big.Int, marginOfVotesForMajority *big.Int, congressLeader common.Address) []byte {
+func (dAO *DAO) PackConstructor(minimumQuorumForProposals *uint256.Int, minutesForDebate *uint256.Int, marginOfVotesForMajority *big.Int, congressLeader common.Address) []byte {
 	enc, err := dAO.abi.Pack("", minimumQuorumForProposals, minutesForDebate, marginOfVotesForMajority, congressLeader)
 	if err != nil {
 		panic(err)
@@ -79,7 +81,7 @@ func (dAO *DAO) PackChangeMembership(targetMember common.Address, canVote bool, 
 // the contract method with ID 0xbcca1fd3.
 //
 // Solidity: function changeVotingRules(uint256 minimumQuorumForProposals, uint256 minutesForDebate, int256 marginOfVotesForMajority) returns()
-func (dAO *DAO) PackChangeVotingRules(minimumQuorumForProposals *big.Int, minutesForDebate *big.Int, marginOfVotesForMajority *big.Int) []byte {
+func (dAO *DAO) PackChangeVotingRules(minimumQuorumForProposals *uint256.Int, minutesForDebate *uint256.Int, marginOfVotesForMajority *big.Int) []byte {
 	enc, err := dAO.abi.Pack("changeVotingRules", minimumQuorumForProposals, minutesForDebate, marginOfVotesForMajority)
 	if err != nil {
 		panic(err)
@@ -91,7 +93,7 @@ func (dAO *DAO) PackChangeVotingRules(minimumQuorumForProposals *big.Int, minute
 // the contract method with ID 0xeceb2945.
 //
 // Solidity: function checkProposalCode(uint256 proposalNumber, address beneficiary, uint256 etherAmount, bytes transactionBytecode) returns(bool codeChecksOut)
-func (dAO *DAO) PackCheckProposalCode(proposalNumber *big.Int, beneficiary common.Address, etherAmount *big.Int, transactionBytecode []byte) []byte {
+func (dAO *DAO) PackCheckProposalCode(proposalNumber *uint256.Int, beneficiary common.Address, etherAmount *uint256.Int, transactionBytecode []byte) []byte {
 	enc, err := dAO.abi.Pack("checkProposalCode", proposalNumber, beneficiary, etherAmount, transactionBytecode)
 	if err != nil {
 		panic(err)
@@ -128,12 +130,12 @@ func (dAO *DAO) PackDebatingPeriodInMinutes() []byte {
 // from invoking the contract method with ID 0x69bd3436.
 //
 // Solidity: function debatingPeriodInMinutes() returns(uint256)
-func (dAO *DAO) UnpackDebatingPeriodInMinutes(data []byte) (*big.Int, error) {
+func (dAO *DAO) UnpackDebatingPeriodInMinutes(data []byte) (*uint256.Int, error) {
 	out, err := dAO.abi.Unpack("debatingPeriodInMinutes", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -141,7 +143,7 @@ func (dAO *DAO) UnpackDebatingPeriodInMinutes(data []byte) (*big.Int, error) {
 // the contract method with ID 0x237e9492.
 //
 // Solidity: function executeProposal(uint256 proposalNumber, bytes transactionBytecode) returns(int256 result)
-func (dAO *DAO) PackExecuteProposal(proposalNumber *big.Int, transactionBytecode []byte) []byte {
+func (dAO *DAO) PackExecuteProposal(proposalNumber *uint256.Int, transactionBytecode []byte) []byte {
 	enc, err := dAO.abi.Pack("executeProposal", proposalNumber, transactionBytecode)
 	if err != nil {
 		panic(err)
@@ -203,12 +205,12 @@ func (dAO *DAO) PackMemberId(arg0 common.Address) []byte {
 // from invoking the contract method with ID 0x39106821.
 //
 // Solidity: function memberId(address ) returns(uint256)
-func (dAO *DAO) UnpackMemberId(data []byte) (*big.Int, error) {
+func (dAO *DAO) UnpackMemberId(data []byte) (*uint256.Int, error) {
 	out, err := dAO.abi.Unpack("memberId", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -216,7 +218,7 @@ func (dAO *DAO) UnpackMemberId(data []byte) (*big.Int, error) {
 // the contract method with ID 0x5daf08ca.
 //
 // Solidity: function members(uint256 ) returns(address member, bool canVote, string name, uint256 memberSince)
-func (dAO *DAO) PackMembers(arg0 *big.Int) []byte {
+func (dAO *DAO) PackMembers(arg0 *uint256.Int) []byte {
 	enc, err := dAO.abi.Pack("members", arg0)
 	if err != nil {
 		panic(err)
@@ -230,7 +232,7 @@ type MembersOutput struct {
 	Member      common.Address
 	CanVote     bool
 	Name        string
-	MemberSince *big.Int
+	MemberSince *uint256.Int
 }
 
 // UnpackMembers is the Go binding that unpacks the parameters returned
@@ -246,7 +248,7 @@ func (dAO *DAO) UnpackMembers(data []byte) (MembersOutput, error) {
 	outstruct.Member = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
 	outstruct.CanVote = *abi.ConvertType(out[1], new(bool)).(*bool)
 	outstruct.Name = *abi.ConvertType(out[2], new(string)).(*string)
-	outstruct.MemberSince = abi.ConvertType(out[3], new(big.Int)).(*big.Int)
+	outstruct.MemberSince = abi.ConvertType(out[3], new(uint256.Int)).(*uint256.Int)
 	return *outstruct, err
 
 }
@@ -267,12 +269,12 @@ func (dAO *DAO) PackMinimumQuorum() []byte {
 // from invoking the contract method with ID 0x8160f0b5.
 //
 // Solidity: function minimumQuorum() returns(uint256)
-func (dAO *DAO) UnpackMinimumQuorum(data []byte) (*big.Int, error) {
+func (dAO *DAO) UnpackMinimumQuorum(data []byte) (*uint256.Int, error) {
 	out, err := dAO.abi.Unpack("minimumQuorum", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -280,7 +282,7 @@ func (dAO *DAO) UnpackMinimumQuorum(data []byte) (*big.Int, error) {
 // the contract method with ID 0xb1050da5.
 //
 // Solidity: function newProposal(address beneficiary, uint256 etherAmount, string JobDescription, bytes transactionBytecode) returns(uint256 proposalID)
-func (dAO *DAO) PackNewProposal(beneficiary common.Address, etherAmount *big.Int, jobDescription string, transactionBytecode []byte) []byte {
+func (dAO *DAO) PackNewProposal(beneficiary common.Address, etherAmount *uint256.Int, jobDescription string, transactionBytecode []byte) []byte {
 	enc, err := dAO.abi.Pack("newProposal", beneficiary, etherAmount, jobDescription, transactionBytecode)
 	if err != nil {
 		panic(err)
@@ -292,12 +294,12 @@ func (dAO *DAO) PackNewProposal(beneficiary common.Address, etherAmount *big.Int
 // from invoking the contract method with ID 0xb1050da5.
 //
 // Solidity: function newProposal(address beneficiary, uint256 etherAmount, string JobDescription, bytes transactionBytecode) returns(uint256 proposalID)
-func (dAO *DAO) UnpackNewProposal(data []byte) (*big.Int, error) {
+func (dAO *DAO) UnpackNewProposal(data []byte) (*uint256.Int, error) {
 	out, err := dAO.abi.Unpack("newProposal", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -317,12 +319,12 @@ func (dAO *DAO) PackNumProposals() []byte {
 // from invoking the contract method with ID 0x400e3949.
 //
 // Solidity: function numProposals() returns(uint256)
-func (dAO *DAO) UnpackNumProposals(data []byte) (*big.Int, error) {
+func (dAO *DAO) UnpackNumProposals(data []byte) (*uint256.Int, error) {
 	out, err := dAO.abi.Unpack("numProposals", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -355,7 +357,7 @@ func (dAO *DAO) UnpackOwner(data []byte) (common.Address, error) {
 // the contract method with ID 0x013cf08b.
 //
 // Solidity: function proposals(uint256 ) returns(address recipient, uint256 amount, string description, uint256 votingDeadline, bool executed, bool proposalPassed, uint256 numberOfVotes, int256 currentResult, bytes32 proposalHash)
-func (dAO *DAO) PackProposals(arg0 *big.Int) []byte {
+func (dAO *DAO) PackProposals(arg0 *uint256.Int) []byte {
 	enc, err := dAO.abi.Pack("proposals", arg0)
 	if err != nil {
 		panic(err)
@@ -367,12 +369,12 @@ func (dAO *DAO) PackProposals(arg0 *big.Int) []byte {
 // method Proposals.
 type ProposalsOutput struct {
 	Recipient      common.Address
-	Amount         *big.Int
+	Amount         *uint256.Int
 	Description    string
-	VotingDeadline *big.Int
+	VotingDeadline *uint256.Int
 	Executed       bool
 	ProposalPassed bool
-	NumberOfVotes  *big.Int
+	NumberOfVotes  *uint256.Int
 	CurrentResult  *big.Int
 	ProposalHash   [32]byte
 }
@@ -388,12 +390,12 @@ func (dAO *DAO) UnpackProposals(data []byte) (ProposalsOutput, error) {
 		return *outstruct, err
 	}
 	outstruct.Recipient = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
-	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
+	outstruct.Amount = abi.ConvertType(out[1], new(uint256.Int)).(*uint256.Int)
 	outstruct.Description = *abi.ConvertType(out[2], new(string)).(*string)
-	outstruct.VotingDeadline = abi.ConvertType(out[3], new(big.Int)).(*big.Int)
+	outstruct.VotingDeadline = abi.ConvertType(out[3], new(uint256.Int)).(*uint256.Int)
 	outstruct.Executed = *abi.ConvertType(out[4], new(bool)).(*bool)
 	outstruct.ProposalPassed = *abi.ConvertType(out[5], new(bool)).(*bool)
-	outstruct.NumberOfVotes = abi.ConvertType(out[6], new(big.Int)).(*big.Int)
+	outstruct.NumberOfVotes = abi.ConvertType(out[6], new(uint256.Int)).(*uint256.Int)
 	outstruct.CurrentResult = abi.ConvertType(out[7], new(big.Int)).(*big.Int)
 	outstruct.ProposalHash = *abi.ConvertType(out[8], new([32]byte)).(*[32]byte)
 	return *outstruct, err
@@ -416,7 +418,7 @@ func (dAO *DAO) PackTransferOwnership(newOwner common.Address) []byte {
 // the contract method with ID 0xd3c0715b.
 //
 // Solidity: function vote(uint256 proposalNumber, bool supportsProposal, string justificationText) returns(uint256 voteID)
-func (dAO *DAO) PackVote(proposalNumber *big.Int, supportsProposal bool, justificationText string) []byte {
+func (dAO *DAO) PackVote(proposalNumber *uint256.Int, supportsProposal bool, justificationText string) []byte {
 	enc, err := dAO.abi.Pack("vote", proposalNumber, supportsProposal, justificationText)
 	if err != nil {
 		panic(err)
@@ -428,19 +430,19 @@ func (dAO *DAO) PackVote(proposalNumber *big.Int, supportsProposal bool, justifi
 // from invoking the contract method with ID 0xd3c0715b.
 //
 // Solidity: function vote(uint256 proposalNumber, bool supportsProposal, string justificationText) returns(uint256 voteID)
-func (dAO *DAO) UnpackVote(data []byte) (*big.Int, error) {
+func (dAO *DAO) UnpackVote(data []byte) (*uint256.Int, error) {
 	out, err := dAO.abi.Unpack("vote", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
 // DAOChangeOfRules represents a ChangeOfRules event raised by the DAO contract.
 type DAOChangeOfRules struct {
-	MinimumQuorum           *big.Int
-	DebatingPeriodInMinutes *big.Int
+	MinimumQuorum           *uint256.Int
+	DebatingPeriodInMinutes *uint256.Int
 	MajorityMargin          *big.Int
 	Raw                     *types.Log // Blockchain specific contextual infos
 }
@@ -524,9 +526,9 @@ func (dAO *DAO) UnpackMembershipChangedEvent(log *types.Log) (*DAOMembershipChan
 
 // DAOProposalAdded represents a ProposalAdded event raised by the DAO contract.
 type DAOProposalAdded struct {
-	ProposalID  *big.Int
+	ProposalID  *uint256.Int
 	Recipient   common.Address
-	Amount      *big.Int
+	Amount      *uint256.Int
 	Description string
 	Raw         *types.Log // Blockchain specific contextual infos
 }
@@ -568,9 +570,9 @@ func (dAO *DAO) UnpackProposalAddedEvent(log *types.Log) (*DAOProposalAdded, err
 
 // DAOProposalTallied represents a ProposalTallied event raised by the DAO contract.
 type DAOProposalTallied struct {
-	ProposalID *big.Int
+	ProposalID *uint256.Int
 	Result     *big.Int
-	Quorum     *big.Int
+	Quorum     *uint256.Int
 	Active     bool
 	Raw        *types.Log // Blockchain specific contextual infos
 }
@@ -612,7 +614,7 @@ func (dAO *DAO) UnpackProposalTalliedEvent(log *types.Log) (*DAOProposalTallied,
 
 // DAOVoted represents a Voted event raised by the DAO contract.
 type DAOVoted struct {
-	ProposalID    *big.Int
+	ProposalID    *uint256.Int
 	Position      bool
 	Voter         common.Address
 	Justification string

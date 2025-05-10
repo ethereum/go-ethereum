@@ -304,6 +304,9 @@ func bindBasicType(kind abi.Type) string {
 		case "8", "16", "32", "64":
 			return fmt.Sprintf("%sint%s", parts[1], parts[2])
 		}
+		if parts[1] == "u" {
+			return "*uint256.Int"
+		}
 		return "*big.Int"
 	case abi.FixedBytesTy:
 		return fmt.Sprintf("[%d]byte", kind.Size)

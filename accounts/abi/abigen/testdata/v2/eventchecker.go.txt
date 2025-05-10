@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // EventCheckerMetaData contains all meta data concerning the EventChecker contract.
@@ -220,8 +222,8 @@ func (eventChecker *EventChecker) UnpackMixedEvent(log *types.Log) (*EventChecke
 
 // EventCheckerUnnamed represents a unnamed event raised by the EventChecker contract.
 type EventCheckerUnnamed struct {
-	Arg0 *big.Int
-	Arg1 *big.Int
+	Arg0 *uint256.Int
+	Arg1 *uint256.Int
 	Raw  *types.Log // Blockchain specific contextual infos
 }
 

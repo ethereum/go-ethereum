@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -22,6 +23,7 @@ var (
 	_ = common.Big1
 	_ = types.BloomLookup
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 // CrowdsaleMetaData contains all meta data concerning the Crowdsale contract.
@@ -55,7 +57,7 @@ func (c *Crowdsale) Instance(backend bind.ContractBackend, addr common.Address) 
 // contract deployment.
 //
 // Solidity: constructor(address ifSuccessfulSendTo, uint256 fundingGoalInEthers, uint256 durationInMinutes, uint256 etherCostOfEachToken, address addressOfTokenUsedAsReward) returns()
-func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, fundingGoalInEthers *big.Int, durationInMinutes *big.Int, etherCostOfEachToken *big.Int, addressOfTokenUsedAsReward common.Address) []byte {
+func (crowdsale *Crowdsale) PackConstructor(ifSuccessfulSendTo common.Address, fundingGoalInEthers *uint256.Int, durationInMinutes *uint256.Int, etherCostOfEachToken *uint256.Int, addressOfTokenUsedAsReward common.Address) []byte {
 	enc, err := crowdsale.abi.Pack("", ifSuccessfulSendTo, fundingGoalInEthers, durationInMinutes, etherCostOfEachToken, addressOfTokenUsedAsReward)
 	if err != nil {
 		panic(err)
@@ -79,12 +81,12 @@ func (crowdsale *Crowdsale) PackAmountRaised() []byte {
 // from invoking the contract method with ID 0x7b3e5e7b.
 //
 // Solidity: function amountRaised() returns(uint256)
-func (crowdsale *Crowdsale) UnpackAmountRaised(data []byte) (*big.Int, error) {
+func (crowdsale *Crowdsale) UnpackAmountRaised(data []byte) (*uint256.Int, error) {
 	out, err := crowdsale.abi.Unpack("amountRaised", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -141,12 +143,12 @@ func (crowdsale *Crowdsale) PackDeadline() []byte {
 // from invoking the contract method with ID 0x29dcb0cf.
 //
 // Solidity: function deadline() returns(uint256)
-func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
+func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*uint256.Int, error) {
 	out, err := crowdsale.abi.Unpack("deadline", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -154,7 +156,7 @@ func (crowdsale *Crowdsale) UnpackDeadline(data []byte) (*big.Int, error) {
 // the contract method with ID 0xdc0d3dff.
 //
 // Solidity: function funders(uint256 ) returns(address addr, uint256 amount)
-func (crowdsale *Crowdsale) PackFunders(arg0 *big.Int) []byte {
+func (crowdsale *Crowdsale) PackFunders(arg0 *uint256.Int) []byte {
 	enc, err := crowdsale.abi.Pack("funders", arg0)
 	if err != nil {
 		panic(err)
@@ -166,7 +168,7 @@ func (crowdsale *Crowdsale) PackFunders(arg0 *big.Int) []byte {
 // method Funders.
 type FundersOutput struct {
 	Addr   common.Address
-	Amount *big.Int
+	Amount *uint256.Int
 }
 
 // UnpackFunders is the Go binding that unpacks the parameters returned
@@ -180,7 +182,7 @@ func (crowdsale *Crowdsale) UnpackFunders(data []byte) (FundersOutput, error) {
 		return *outstruct, err
 	}
 	outstruct.Addr = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
-	outstruct.Amount = abi.ConvertType(out[1], new(big.Int)).(*big.Int)
+	outstruct.Amount = abi.ConvertType(out[1], new(uint256.Int)).(*uint256.Int)
 	return *outstruct, err
 
 }
@@ -201,12 +203,12 @@ func (crowdsale *Crowdsale) PackFundingGoal() []byte {
 // from invoking the contract method with ID 0x7a3a0e84.
 //
 // Solidity: function fundingGoal() returns(uint256)
-func (crowdsale *Crowdsale) UnpackFundingGoal(data []byte) (*big.Int, error) {
+func (crowdsale *Crowdsale) UnpackFundingGoal(data []byte) (*uint256.Int, error) {
 	out, err := crowdsale.abi.Unpack("fundingGoal", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -226,12 +228,12 @@ func (crowdsale *Crowdsale) PackPrice() []byte {
 // from invoking the contract method with ID 0xa035b1fe.
 //
 // Solidity: function price() returns(uint256)
-func (crowdsale *Crowdsale) UnpackPrice(data []byte) (*big.Int, error) {
+func (crowdsale *Crowdsale) UnpackPrice(data []byte) (*uint256.Int, error) {
 	out, err := crowdsale.abi.Unpack("price", data)
 	if err != nil {
-		return new(big.Int), err
+		return new(uint256.Int), err
 	}
-	out0 := abi.ConvertType(out[0], new(big.Int)).(*big.Int)
+	out0 := abi.ConvertType(out[0], new(uint256.Int)).(*uint256.Int)
 	return out0, err
 }
 
@@ -263,7 +265,7 @@ func (crowdsale *Crowdsale) UnpackTokenReward(data []byte) (common.Address, erro
 // CrowdsaleFundTransfer represents a FundTransfer event raised by the Crowdsale contract.
 type CrowdsaleFundTransfer struct {
 	Backer         common.Address
-	Amount         *big.Int
+	Amount         *uint256.Int
 	IsContribution bool
 	Raw            *types.Log // Blockchain specific contextual infos
 }

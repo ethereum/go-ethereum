@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/holiman/uint256"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -27,6 +28,7 @@ var (
 	_ = types.BloomLookup
 	_ = event.NewSubscription
 	_ = abi.ConvertType
+	_ = uint256.NewInt
 )
 
 {{$structs := .Structs}}
