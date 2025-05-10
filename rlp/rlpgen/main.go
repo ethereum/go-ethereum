@@ -34,7 +34,7 @@ func main() {
 		pkgdir     = flag.String("dir", ".", "input package")
 		output     = flag.String("out", "-", "output file (default is stdout)")
 		genEncoder = flag.Bool("encoder", true, "generate EncodeRLP?")
-		genDecoder = flag.Bool("decoder", false, "generate DecodeRLP?")
+		genDecoder = flag.Bool("decoder", true, "generate DecodeRLP?")
 		typename   = flag.String("type", "", "type to generate methods for")
 	)
 	flag.Parse()

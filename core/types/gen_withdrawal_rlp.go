@@ -2,6 +2,7 @@
 
 package types
 
+import "github.com/ethereum/go-ethereum/common"
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
@@ -14,4 +15,42 @@ func (obj *Withdrawal) EncodeRLP(_w io.Writer) error {
 	w.WriteUint64(obj.Amount)
 	w.ListEnd(_tmp0)
 	return w.Flush()
+}
+
+func (obj *Withdrawal) DecodeRLP(dec *rlp.Stream) error {
+	var _tmp0 Withdrawal
+	{
+		if _, err := dec.List(); err != nil {
+			return err
+		}
+		// Index:
+		_tmp1, err := dec.Uint64()
+		if err != nil {
+			return err
+		}
+		_tmp0.Index = _tmp1
+		// Validator:
+		_tmp2, err := dec.Uint64()
+		if err != nil {
+			return err
+		}
+		_tmp0.Validator = _tmp2
+		// Address:
+		var _tmp3 common.Address
+		if err := dec.ReadBytes(_tmp3[:]); err != nil {
+			return err
+		}
+		_tmp0.Address = _tmp3
+		// Amount:
+		_tmp4, err := dec.Uint64()
+		if err != nil {
+			return err
+		}
+		_tmp0.Amount = _tmp4
+		if err := dec.ListEnd(); err != nil {
+			return err
+		}
+	}
+	*obj = _tmp0
+	return nil
 }
