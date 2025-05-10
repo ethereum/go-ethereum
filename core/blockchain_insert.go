@@ -43,8 +43,12 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 	// Fetch the timings for the batch
 	var (
 		now     = mclock.Now()
-		elapsed = now.Sub(st.startTime)
+		elapsed = now.Sub(st.startTime) + 1 // prevent zero division
+		mgasps  = float64(st.usedGas) * 1000 / float64(elapsed)
 	)
+	// Update the Mgas per second gauge
+	chainMgaspsGauge.Update(int64(mgasps))
+
 	// If we're at the last block of the batch or report period reached, log
 	if index == len(chain)-1 || elapsed >= statsReportLimit {
 		// Count the number of transactions in this segment
@@ -58,7 +62,7 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 		context := []interface{}{
 			"number", end.Number(), "hash", end.Hash(),
 			"blocks", st.processed, "txs", txs, "mgas", float64(st.usedGas) / 1000000,
-			"elapsed", common.PrettyDuration(elapsed), "mgasps", float64(st.usedGas) * 1000 / float64(elapsed),
+			"elapsed", common.PrettyDuration(elapsed), "mgasps", mgasps,
 		}
 		if timestamp := time.Unix(int64(end.Time()), 0); time.Since(timestamp) > time.Minute {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
