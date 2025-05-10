@@ -1838,7 +1838,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		stats.report(chain, it.index, snapDiffItems, snapBufItems, trieDiffNodes, trieBufNodes, setHead)
 
 		// Print confirmation that a future fork is scheduled, but not yet active.
-		bc.logForkReadiness(block)
+		bc.logForkReadiness()
 
 		if !setHead {
 			// After merge we expect few side chains. Simply count
@@ -2541,15 +2541,21 @@ func (bc *BlockChain) reportBlock(block *types.Block, res *ProcessResult, err er
 
 // logForkReadiness will write a log when a future fork is scheduled, but not
 // active. This is useful so operators know their client is ready for the fork.
-func (bc *BlockChain) logForkReadiness(block *types.Block) {
+func (bc *BlockChain) logForkReadiness() {
 	c := bc.Config()
-	current, last := c.LatestFork(block.Time()), c.LatestFork(math.MaxUint64)
+	now := time.Now()
+	current, last := c.LatestFork(uint64(now.Unix())), c.LatestFork(math.MaxUint64)
 	t := c.Timestamp(last)
 	if t == nil {
 		return
 	}
 	at := time.Unix(int64(*t), 0)
-	if current < last && time.Now().After(bc.lastForkReadyAlert.Add(forkReadyInterval)) {
+
+	// Only log if:
+	// 1. Current fork is behind the latest fork
+	// 2. Current time is before the fork activation time
+	// 3. Enough time has passed since last alert
+	if current < last && now.Before(at) && now.After(bc.lastForkReadyAlert.Add(forkReadyInterval)) {
 		log.Info("Ready for fork activation", "fork", last, "date", at.Format(time.RFC822),
 			"remaining", time.Until(at).Round(time.Second), "timestamp", at.Unix())
 		bc.lastForkReadyAlert = time.Now()
