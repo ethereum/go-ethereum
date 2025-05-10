@@ -76,6 +76,15 @@ func CalcExcessBlobGas(config *params.ChainConfig, parent *types.Header, headTim
 	if excessBlobGas < targetGas {
 		return 0
 	}
+
+	isOsaka := config.IsOsaka(new(big.Int).Add(parent.Number, big.NewInt(1)), headTimestamp)
+	if isOsaka {
+		executionBaseFeePaid := new(big.Int).Mul(parent.BaseFee, big.NewInt(int64(params.TxGas)))
+		blobBaseFeePaid := new(big.Int).Mul(big.NewInt(int64(targetGas)), CalcBlobFee(config, parent))
+		if executionBaseFeePaid.Cmp(blobBaseFeePaid) > 0 {
+			return excessBlobGas / 3
+		}
+	}
 	return excessBlobGas - targetGas
 }
 
