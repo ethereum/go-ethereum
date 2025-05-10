@@ -31,11 +31,13 @@ var (
 	bodyReqTimer     = metrics.NewRegisteredTimer("eth/downloader/bodies/req", nil)
 	bodyDropMeter    = metrics.NewRegisteredMeter("eth/downloader/bodies/drop", nil)
 	bodyTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/bodies/timeout", nil)
+	pendingBodyGauge = metrics.NewRegisteredGauge("eth/downloader/bodies/pending", nil)
 
 	receiptInMeter      = metrics.NewRegisteredMeter("eth/downloader/receipts/in", nil)
 	receiptReqTimer     = metrics.NewRegisteredTimer("eth/downloader/receipts/req", nil)
 	receiptDropMeter    = metrics.NewRegisteredMeter("eth/downloader/receipts/drop", nil)
 	receiptTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/receipts/timeout", nil)
 
-	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
+	throttleCounter        = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
+	blockGasSizeRatioGauge = metrics.NewRegisteredGaugeFloat64("eth/downloader/gassizeratio", nil)
 )
