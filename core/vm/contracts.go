@@ -139,7 +139,7 @@ var PrecompiledContractsPrague = PrecompiledContracts{
 
 var PrecompiledContractsBLS = PrecompiledContractsPrague
 
-var PrecompiledContractsVerkle = PrecompiledContractsPrague
+var PrecompiledContractsVerkle = PrecompiledContractsBerlin
 
 var (
 	PrecompiledAddressesPrague    []common.Address
