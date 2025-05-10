@@ -82,9 +82,6 @@ func newDropper(maxDialPeers, maxInboundPeers int) *dropper {
 		peerDropTimer:   time.NewTimer(randomDuration(peerDropIntervalMin, peerDropIntervalMax)),
 		shutdownCh:      make(chan struct{}),
 	}
-	if peerDropIntervalMin > peerDropIntervalMax {
-		panic("peerDropIntervalMin duration must be less than or equal to peerDropIntervalMax duration")
-	}
 	return cm
 }
 
