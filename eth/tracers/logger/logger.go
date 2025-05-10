@@ -179,8 +179,12 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 	}
 	if len(s.Memory) > 0 {
 		memory := make([]string, 0, (len(s.Memory)+31)/32)
-		for i := 0; i+32 <= len(s.Memory); i += 32 {
-			memory = append(memory, fmt.Sprintf("%x", s.Memory[i:i+32]))
+		for i := 0; i < len(s.Memory); i += 32 {
+			end := i + 32
+			if end > len(s.Memory) {
+				end = len(s.Memory)
+			}
+			memory = append(memory, fmt.Sprintf("%x", s.Memory[i:end]))
 		}
 		msg.Memory = &memory
 	}

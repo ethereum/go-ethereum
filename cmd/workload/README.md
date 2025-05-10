@@ -26,4 +26,5 @@ the following commands (in this directory) against a synced mainnet node:
 ```shell
 > go run . filtergen --queries queries/filter_queries_mainnet.json http://host:8545
 > go run . historygen --history-tests queries/history_mainnet.json http://host:8545
+> go run . tracegen --trace-tests queries/trace_mainnet.json http://host:8545
 ```
