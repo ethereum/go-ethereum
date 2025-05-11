@@ -485,6 +485,12 @@ func (d *Downloader) syncToHead() (err error) {
 	if mode == ethconfig.SnapSync {
 		if height <= uint64(fsMinFullBlocks) {
 			origin = 0
+			// For genesis block, switch to full sync
+			if height == 0 {
+				mode = ethconfig.FullSync
+				d.mode.Store(uint32(mode))
+				log.Info("Switching to full sync for genesis block")
+			}
 		} else {
 			pivotNumber := pivot.Number.Uint64()
 			if pivotNumber <= origin {
