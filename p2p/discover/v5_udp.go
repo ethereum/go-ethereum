@@ -619,9 +619,15 @@ func (t *UDPv5) dispatch() {
 			t.send(r.destID, r.destAddr, r.msg, nil)
 
 		case p := <-t.packetInCh:
+			// Arm next read immediately to allow pipelining.
+			// The readLoop can start reading the next packet while this one is being handled.
+			// Backpressure is still maintained by packetInCh (buffer 1) and readNextCh (buffer 1).
+			select {
+			case t.readNextCh <- struct{}{}:
+			case <-t.closeCtx.Done(): // Avoid blocking on send if closing
+				return
+			}
 			t.handlePacket(p.Data, p.Addr)
-			// Arm next read.
-			t.readNextCh <- struct{}{}
 
 		case <-t.closeCtx.Done():
 			close(t.readNextCh)
