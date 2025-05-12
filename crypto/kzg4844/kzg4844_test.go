@@ -193,3 +193,32 @@ func benchmarkVerifyBlobProof(b *testing.B, ckzg bool) {
 		VerifyBlobProof(blob, commitment, proof)
 	}
 }
+
+func TestCKZGCells(t *testing.T)  { testKZGCells(t, true) }
+func TestGoKZGCells(t *testing.T) { testKZGCells(t, false) }
+func testKZGCells(t *testing.T, ckzg bool) {
+	if ckzg && !ckzgAvailable {
+		t.Skip("CKZG unavailable in this test build")
+	}
+	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
+	useCKZG.Store(ckzg)
+
+	blob := randBlob()
+
+	commitment, err := BlobToCommitment(blob)
+	if err != nil {
+		t.Fatalf("failed to create KZG commitment from blob: %v", err)
+	}
+	proof, err := ComputeCellProofs(blob)
+	if err != nil {
+		t.Fatalf("failed to create KZG proof at point: %v", err)
+	}
+
+	var commitments []Commitment
+	for range len(proof) {
+		commitments = append(commitments, commitment)
+	}
+	if err := VerifyCellProofs([]*Blob{blob}, commitments, proof); err != nil {
+		t.Fatalf("failed to verify KZG proof at point: %v", err)
+	}
+}

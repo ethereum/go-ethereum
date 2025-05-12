@@ -155,6 +155,13 @@ func VerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	return gokzgVerifyBlobProof(blob, commitment, proof)
 }
 
+func VerifyCellProofs(blobs []*Blob, commitments []Commitment, proofs []Proof) error {
+	if useCKZG.Load() {
+		return ckzgVerifyCellProofBatch(blobs, commitments, proofs)
+	}
+	return gokzgVerifyCellProofBatch(blobs, commitments, proofs)
+}
+
 // ComputeCellProofs returns the KZG cell proofs that are used to verify the blob against
 // the commitment.
 //

@@ -114,3 +114,32 @@ func gokzgComputeCellProofs(blob *Blob) ([]Proof, error) {
 	}
 	return p, nil
 }
+
+// gokzgVerifyCellProofs verifies that the blob data corresponds to the provided commitment.
+func gokzgVerifyCellProofBatch(blobs []*Blob, commitments []Commitment, proofs []Proof) error {
+	gokzgIniter.Do(gokzgInit)
+
+	var cellIndices []uint64
+	var cells []*gokzg4844.Cell
+	for i, blob := range blobs {
+		cellsI, err := context.ComputeCells((*gokzg4844.Blob)(blob), 2)
+		if err != nil {
+			return err
+		}
+		cells = append(cells, cellsI[:]...)
+		for range len(cellsI) {
+			cellIndices = append(cellIndices, uint64(i))
+		}
+	}
+
+	comms := make([]gokzg4844.KZGCommitment, len(commitments))
+	for i, commitment := range commitments {
+		comms[i] = gokzg4844.KZGCommitment(commitment)
+	}
+	pr := make([]gokzg4844.KZGProof, len(proofs))
+	for i, proof := range proofs {
+		pr[i] = gokzg4844.KZGProof(proof)
+	}
+
+	return context.VerifyCellKZGProofBatch(comms, cellIndices, cells[:], pr)
+}

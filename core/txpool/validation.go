@@ -210,14 +210,13 @@ func validateBlobSidecarOsaka(hashes []common.Hash, sidecar *types.BlobTxSidecar
 	}
 	// Blob commitments match with the hashes in the transaction, verify the
 	// blobs themselves via KZG
-	for i := range sidecar.Blobs {
-		// TODO verify the cell proof here
-		_ = i
-		/*
-			if err := kzg4844.VerifyBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i], sidecar.Proofs[i]); err != nil {
-				return fmt.Errorf("invalid blob %d: %v", i, err)
-			}
-		*/
+	var blobs []*kzg4844.Blob
+	for _, blob := range sidecar.Blobs {
+		blobs = append(blobs, &blob)
+	}
+
+	if err := kzg4844.VerifyCellProofs(blobs, sidecar.Commitments, sidecar.Proofs); err != nil {
+		return err
 	}
 	return nil
 }
