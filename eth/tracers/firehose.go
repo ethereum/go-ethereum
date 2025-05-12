@@ -632,7 +632,7 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 func (f *Firehose) OnClose() {
 	log.Info("Firehose closing...")
 	if f.concurrentBlockFlushing {
-		log.Info("waiting for worker goroutines to finish and shutting down channels")
+		log.Info("Closing channel: flushing the remaining blocks to firehose")
 		f.CloseBlockPrintQueue()
 	}
 }
@@ -1860,6 +1860,7 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 		panic(fmt.Errorf("failed to marshal block: %w", err))
 	}
 
+	// TODO: If multiple goroutine, this becomes shared resource
 	f.outputBuffer.Reset()
 
 	previousHash := block.PreviousID()
@@ -2843,7 +2844,6 @@ func (f *Firehose) blockPrintWorker() {
 func (f *Firehose) CloseBlockPrintQueue() {
 	if f.concurrentBlockFlushing {
 		f.closeOnce.Do(func() {
-			log.Info("Closing channel: flushing the remaining blocks to firehose")
 			close(f.blockPrintQueue)
 			f.flushDone.Wait()
 		})

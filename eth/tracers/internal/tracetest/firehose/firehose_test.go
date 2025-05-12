@@ -38,26 +38,28 @@ func TestFirehosePrestate(t *testing.T) {
 		"./testdata/TestFirehosePrestate/extra_account_creations",
 	}
 
-	for _, folder := range testFolders {
-		name := filepath.Base(folder)
+	// TODO: have goroutine config on AND off
+	for _, concurrent := range []bool{true, false} {
+		for _, folder := range testFolders {
+			name := filepath.Base(folder)
 
-		for _, model := range tracingModels {
-			t.Run(string(model)+"/"+name, func(t *testing.T) {
-				tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model)
-				defer onClose()
+			for _, model := range tracingModels {
+				t.Run(string(model)+"/"+name, func(t *testing.T) {
+					tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, concurrent)
+					defer onClose()
 
-				runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracingHooks)
+					runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracingHooks)
 
-				tracer.CloseBlockPrintQueue()
+					tracer.CloseBlockPrintQueue()
 
-				genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
-				require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
-				require.NotNil(t, genesisLine)
-				blockLines.assertOnlyBlockEquals(t, filepath.Join(folder, string(model)), 1)
-			})
+					genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
+					require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
+					require.NotNil(t, genesisLine)
+					blockLines.assertOnlyBlockEquals(t, filepath.Join(folder, string(model)), 1)
+				})
+			}
 		}
 	}
-
 }
 func TestFirehose_EIP7702(t *testing.T) {
 	// Copied from ./core/blockchain_test.go#L4180 (TestEIP7702)
@@ -187,26 +189,28 @@ func TestFirehose_SystemCalls(t *testing.T) {
 func testBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine consensus.Engine, blocks []*types.Block, goldenDir string) {
 	t.Helper()
 
-	for _, model := range tracingModels {
-		t.Run(string(model), func(t *testing.T) {
-			tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model)
-			defer onClose()
+	for _, concurrent := range []bool{true, false} {
+		for _, model := range tracingModels {
+			t.Run(string(model), func(t *testing.T) {
+				tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, concurrent)
+				defer onClose()
 
-			chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesisSpec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
-			require.NoError(t, err, "failed to create tester chain")
+				chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesisSpec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
+				require.NoError(t, err, "failed to create tester chain")
 
-			chain.SetBlockValidatorAndProcessorForTesting(
-				ignoreValidateStateValidator{core.NewBlockValidator(genesisSpec.Config, chain)},
-				core.NewStateProcessor(genesisSpec.Config, chain.HeaderChain()),
-			)
+				chain.SetBlockValidatorAndProcessorForTesting(
+					ignoreValidateStateValidator{core.NewBlockValidator(genesisSpec.Config, chain)},
+					core.NewStateProcessor(genesisSpec.Config, chain.HeaderChain()),
+				)
 
-			defer chain.Stop()
-			n, err := chain.InsertChain(blocks)
-			require.NoError(t, err, "failed to insert chain block %d", n)
+				defer chain.Stop()
+				n, err := chain.InsertChain(blocks)
+				require.NoError(t, err, "failed to insert chain block %d", n)
 
-			tracer.CloseBlockPrintQueue()
+				tracer.CloseBlockPrintQueue()
 
-			assertBlockEquals(t, tracer, filepath.Join("testdata", goldenDir, string(model)), len(blocks))
-		})
+				assertBlockEquals(t, tracer, filepath.Join("testdata", goldenDir, string(model)), len(blocks))
+			})
+		}
 	}
 }

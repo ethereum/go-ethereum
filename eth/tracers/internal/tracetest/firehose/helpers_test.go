@@ -29,17 +29,17 @@ type firehoseInitLine struct {
 
 type firehoseBlockLines []firehoseBlockLine
 
-func newFirehoseTestTracer(t *testing.T, model tracingModel) (*tracers.Firehose, *tracing.Hooks, func()) {
+func newFirehoseTestTracer(t *testing.T, model tracingModel, concurrentBlockFlushing bool) (*tracers.Firehose, *tracing.Hooks, func()) {
 	t.Helper()
 
 	tracer, err := tracers.NewFirehoseFromRawJSON([]byte(fmt.Sprintf(`{
-		"concurrentBlockFlushing": true,
+		"concurrentBlockFlushing": %t,
 		"_private": {
 			"flushToTestBuffer": true,
 			"ignoreGenesisBlock": true,
 			"forcedBackwardCompatibility": %t
 		}
-	}`, model == tracingModelFirehose2_3)))
+	}`, concurrentBlockFlushing, model == tracingModelFirehose2_3)))
 	require.NoError(t, err)
 
 	hooks := tracers.NewTracingHooksFromFirehose(tracer)
