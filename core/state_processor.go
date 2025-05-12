@@ -97,7 +97,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		statedb.SetTxContext(tx.Hash(), i)
 
-		receipt, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, tx, usedGas, evm, true)
+		receipt, err := ApplyTransactionWithEVM(msg, gp, statedb, blockNumber, blockHash, tx, usedGas, evm)
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -136,17 +136,23 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
-func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM, fullReceipts bool) (receipt *types.Receipt, err error) {
+func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
+	var result *ExecutionResult
 	if hooks := evm.Config.Tracer; hooks != nil {
 		if hooks.OnTxStart != nil {
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		if hooks.OnTxEnd != nil {
-			defer func() { hooks.OnTxEnd(receipt, err) }()
+			defer func() {
+				if receipt != nil {
+					receipt = deriveFullReceipt(receipt, evm, result, statedb, blockNumber, blockHash, tx)
+				}
+				hooks.OnTxEnd(receipt, err)
+			}()
 		}
 	}
 	// Apply the transaction to the current state (included in the env).
-	result, err := ApplyMessage(evm, msg, gp)
+	result, err = ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return nil, err
 	}
@@ -165,15 +171,13 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 		statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
 
-	if fullReceipts {
-		return MakeFullReceipt(evm, result, statedb, blockNumber, blockHash, tx, *usedGas, root), nil
-	}
-	return makeConsensusReceipt(result, statedb, tx, *usedGas, root), nil
+	receipt = MakeReceipt(result, statedb, tx, *usedGas, root)
+	return receipt, nil
 }
 
-// makeConsensusReceipt generates the receipt object for a transaction given its execution result.
+// MakeReceipt generates the receipt object for a transaction given its execution result.
 // It only populates the fields strictly required for consensus.
-func makeConsensusReceipt(result *ExecutionResult, statedb *state.StateDB, tx *types.Transaction, usedGas uint64, root []byte) *types.Receipt {
+func MakeReceipt(result *ExecutionResult, statedb *state.StateDB, tx *types.Transaction, usedGas uint64, root []byte) *types.Receipt {
 	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: usedGas}
 	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
@@ -185,12 +189,10 @@ func makeConsensusReceipt(result *ExecutionResult, statedb *state.StateDB, tx *t
 	return receipt
 }
 
-// MakeFullReceipt generates the receipt object for a transaction given its execution result.
-// It also populates non-consensus fields.
-func MakeFullReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas uint64, root []byte) *types.Receipt {
+// deriveFullReceipt populates non-consensus fields.
+func deriveFullReceipt(receipt *types.Receipt, evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction) *types.Receipt {
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
-	receipt := makeConsensusReceipt(result, statedb, tx, usedGas, root)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = result.UsedGas
 
@@ -225,7 +227,7 @@ func ApplyTransaction(evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *
 		return nil, err
 	}
 	// Create a new context to be used in the EVM environment
-	return ApplyTransactionWithEVM(msg, gp, statedb, header.Number, common.Hash{}, tx, usedGas, evm, false)
+	return ApplyTransactionWithEVM(msg, gp, statedb, header.Number, common.Hash{}, tx, usedGas, evm)
 }
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root

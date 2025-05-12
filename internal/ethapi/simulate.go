@@ -301,8 +301,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			root = sim.state.IntermediateRoot(sim.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
 		}
 		gasUsed += result.UsedGas
-		receipts[i] = core.MakeFullReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, tx, gasUsed, root)
-		blobGasUsed += receipts[i].BlobGasUsed
+		receipts[i] = core.MakeReceipt(result, sim.state, tx, gasUsed, root)
+		blobGasUsed += uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
 		logs := tracer.Logs()
 		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
 		if result.Failed() {
