@@ -17,6 +17,7 @@
 package eradb
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -47,4 +48,58 @@ func TestEraDatabase(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, receipts, "receipts not found")
 	assert.Equal(t, 0, len(receipts), "receipts length mismatch")
+}
+
+func TestEraDatabaseConcurrentOpen(t *testing.T) {
+	db, err := New("testdata")
+	require.NoError(t, err)
+	defer db.Close()
+
+	const N = 25
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for range N {
+		go func() {
+			defer wg.Done()
+			r, err := db.GetRawBody(1024)
+			if err != nil {
+				t.Error("err:", err)
+			}
+			if len(r) == 0 {
+				t.Error("empty body")
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestEraDatabaseConcurrentOpenClose(t *testing.T) {
+	db, err := New("testdata")
+	require.NoError(t, err)
+	defer db.Close()
+
+	const N = 10
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for range N {
+		go func() {
+			defer wg.Done()
+			r, err := db.GetRawBody(1024)
+			if err == errClosed {
+				return
+			}
+			if err != nil {
+				t.Error("err:", err)
+			}
+			if len(r) == 0 {
+				t.Error("empty body")
+			}
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		db.Close()
+	}()
+	wg.Wait()
 }
