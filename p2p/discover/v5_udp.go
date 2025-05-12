@@ -620,9 +620,6 @@ func (t *UDPv5) dispatch() {
 
 		case p := <-t.packetInCh:
 			t.handlePacket(p.Data, p.Addr)
-			// Arm next read.
-			t.readNextCh <- struct{}{}
-
 		case <-t.closeCtx.Done():
 			close(t.readNextCh)
 			for id, queue := range t.callQueue {
@@ -811,6 +808,11 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	addr := fromAddr.String()
 	t.log.Trace("<< "+addr, "rawPacket", hexutil.Encode(rawpacket))
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
+	select {
+	case t.readNextCh <- struct{}{}:
+	case <-t.closeCtx.Done():
+	}
+
 	if err != nil {
 		if t.unhandled != nil && v5wire.IsInvalidHeader(err) {
 			// The packet seems unrelated to discv5, send it to the next protocol.
