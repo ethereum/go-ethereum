@@ -82,6 +82,8 @@ type Database struct {
 	filterHitGauge         *metrics.Gauge   // Gauge for tracking the number of total hit in bloom filter
 	filterMissGauge        *metrics.Gauge   // Gauge for tracking the number of total miss in bloom filter
 	estimatedCompDebtGauge *metrics.Gauge   // Gauge for tracking the number of bytes that need to be compacted
+	liveCompGauge          *metrics.Gauge   // Gauge for tracking the number of in-progress compactions
+	liveCompSizeGauge      *metrics.Gauge   // Gauge for tracking the size of in-progress compactions
 	levelsGauge            []*metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
@@ -302,13 +304,15 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	db.manualMemAllocGauge = metrics.GetOrRegisterGauge(namespace+"memory/manualalloc", nil)
 	db.liveMemTablesGauge = metrics.GetOrRegisterGauge(namespace+"table/live", nil)
 	db.zombieMemTablesGauge = metrics.GetOrRegisterGauge(namespace+"table/zombie", nil)
-	db.estimatedCompDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/estimateDebt", nil)
 	db.blockCacheHitGauge = metrics.GetOrRegisterGauge(namespace+"cache/block/hit", nil)
 	db.blockCacheMissGauge = metrics.GetOrRegisterGauge(namespace+"cache/block/miss", nil)
 	db.tableCacheHitGauge = metrics.GetOrRegisterGauge(namespace+"cache/table/hit", nil)
 	db.tableCacheMissGauge = metrics.GetOrRegisterGauge(namespace+"cache/table/miss", nil)
 	db.filterHitGauge = metrics.GetOrRegisterGauge(namespace+"filter/hit", nil)
 	db.filterMissGauge = metrics.GetOrRegisterGauge(namespace+"filter/miss", nil)
+	db.estimatedCompDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/estimateDebt", nil)
+	db.liveCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/count", nil)
+	db.liveCompSizeGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/size", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
@@ -556,6 +560,8 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.nonlevel0CompGauge.Update(nonLevel0CompCount)
 		d.level0CompGauge.Update(level0CompCount)
 		d.seekCompGauge.Update(stats.Compact.ReadCount)
+		d.liveCompGauge.Update(stats.Compact.NumInProgress)
+		d.liveCompSizeGauge.Update(stats.Compact.InProgressBytes)
 
 		d.liveMemTablesGauge.Update(stats.MemTable.Count)
 		d.zombieMemTablesGauge.Update(stats.MemTable.ZombieCount)
