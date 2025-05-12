@@ -297,7 +297,7 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	env.receipts = append(env.receipts, receipt)
 	env.sidecars = append(env.sidecars, sc)
 	env.blobs += len(sc.Blobs)
-	*env.header.BlobGasUsed += receipt.BlobGasUsed
+	*env.header.BlobGasUsed += uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
 	env.tcount++
 	return nil
 }

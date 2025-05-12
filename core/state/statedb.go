@@ -250,15 +250,9 @@ func (s *StateDB) AddLog(log *types.Log) {
 	s.logSize++
 }
 
-// GetLogs returns the logs matching the specified transaction hash, and annotates
-// them with the given blockNumber and blockHash.
-func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log {
-	logs := s.logs[hash]
-	for _, l := range logs {
-		l.BlockNumber = blockNumber
-		l.BlockHash = blockHash
-	}
-	return logs
+// GetLogs returns the logs matching the specified transaction hash.
+func (s *StateDB) GetLogs(hash common.Hash) []*types.Log {
+	return s.logs[hash]
 }
 
 func (s *StateDB) Logs() []*types.Log {
