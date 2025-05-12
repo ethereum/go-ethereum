@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -55,24 +56,35 @@ const (
 // Apart from basic data storage functionality it also supports batch writes and
 // iterating over the keyspace in binary-alphabetical order.
 type Database struct {
-	fn string     // filename for reporting
-	db *pebble.DB // Underlying pebble storage engine
+	fn        string     // filename for reporting
+	db        *pebble.DB // Underlying pebble storage engine
+	namespace string     // Namespace for metrics
 
-	compTimeMeter       *metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter       *metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter      *metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter    *metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter     *metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskSizeGauge       *metrics.Gauge // Gauge for tracking the size of all the levels in the database
-	diskReadMeter       *metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter      *metrics.Meter // Meter for measuring the effective amount of data written
-	memCompGauge        *metrics.Gauge // Gauge for tracking the number of memory compaction
-	level0CompGauge     *metrics.Gauge // Gauge for tracking the number of table compaction in level0
-	nonlevel0CompGauge  *metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
-	seekCompGauge       *metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
-	manualMemAllocGauge *metrics.Gauge // Gauge for tracking amount of non-managed memory currently allocated
-
-	levelsGauge []*metrics.Gauge // Gauge for tracking the number of tables in levels
+	compTimeMeter          *metrics.Meter   // Meter for measuring the total time spent in database compaction
+	compReadMeter          *metrics.Meter   // Meter for measuring the data read during compaction
+	compWriteMeter         *metrics.Meter   // Meter for measuring the data written during compaction
+	writeDelayNMeter       *metrics.Meter   // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter        *metrics.Meter   // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge          *metrics.Gauge   // Gauge for tracking the size of all the levels in the database
+	diskReadMeter          *metrics.Meter   // Meter for measuring the effective amount of data read
+	diskWriteMeter         *metrics.Meter   // Meter for measuring the effective amount of data written
+	memCompGauge           *metrics.Gauge   // Gauge for tracking the number of memory compaction
+	level0CompGauge        *metrics.Gauge   // Gauge for tracking the number of table compaction in level0
+	nonlevel0CompGauge     *metrics.Gauge   // Gauge for tracking the number of table compaction in non0 level
+	seekCompGauge          *metrics.Gauge   // Gauge for tracking the number of table compaction caused by read opt
+	manualMemAllocGauge    *metrics.Gauge   // Gauge for tracking amount of non-managed memory currently allocated
+	liveMemTablesGauge     *metrics.Gauge   // Gauge for tracking the number of live memory tables
+	zombieMemTablesGauge   *metrics.Gauge   // Gauge for tracking the number of zombie memory tables
+	blockCacheHitGauge     *metrics.Gauge   // Gauge for tracking the number of total hit in the block cache
+	blockCacheMissGauge    *metrics.Gauge   // Gauge for tracking the number of total miss in the block cache
+	tableCacheHitGauge     *metrics.Gauge   // Gauge for tracking the number of total hit in the table cache
+	tableCacheMissGauge    *metrics.Gauge   // Gauge for tracking the number of total miss in the table cache
+	filterHitGauge         *metrics.Gauge   // Gauge for tracking the number of total hit in bloom filter
+	filterMissGauge        *metrics.Gauge   // Gauge for tracking the number of total miss in bloom filter
+	estimatedCompDebtGauge *metrics.Gauge   // Gauge for tracking the number of bytes that need to be compacted
+	liveCompGauge          *metrics.Gauge   // Gauge for tracking the number of in-progress compactions
+	liveCompSizeGauge      *metrics.Gauge   // Gauge for tracking the size of in-progress compactions
+	levelsGauge            []*metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -88,6 +100,7 @@ type Database struct {
 
 	writeStalled        atomic.Bool  // Flag whether the write is stalled
 	writeDelayStartTime time.Time    // The start time of the latest write stall
+	writeDelayReason    string       // The reason of the latest write stall
 	writeDelayCount     atomic.Int64 // Total number of write stall counts
 	writeDelayTime      atomic.Int64 // Total time spent in write stalls
 
@@ -120,11 +133,30 @@ func (d *Database) onWriteStallBegin(b pebble.WriteStallBeginInfo) {
 	d.writeDelayStartTime = time.Now()
 	d.writeDelayCount.Add(1)
 	d.writeStalled.Store(true)
+
+	// Take just the first word of the reason. These are two potential
+	// reasons for the write stall:
+	// - memtable count limit reached
+	// - L0 file count limit exceeded
+	reason := b.Reason
+	if i := strings.IndexByte(reason, ' '); i != -1 {
+		reason = reason[:i]
+	}
+	if reason == "L0" || reason == "memtable" {
+		d.writeDelayReason = reason
+		metrics.GetOrRegisterGauge(d.namespace+"stall/count/"+reason, nil).Inc(1)
+	}
 }
 
 func (d *Database) onWriteStallEnd() {
 	d.writeDelayTime.Add(int64(time.Since(d.writeDelayStartTime)))
 	d.writeStalled.Store(false)
+
+	if d.writeDelayReason != "" {
+		metrics.GetOrRegisterResettingTimer(d.namespace+"stall/time/"+d.writeDelayReason, nil).UpdateSince(d.writeDelayStartTime)
+		d.writeDelayReason = ""
+	}
+	d.writeDelayStartTime = time.Time{}
 }
 
 // panicLogger is just a noop logger to disable Pebble's internal logger.
@@ -270,6 +302,17 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	db.nonlevel0CompGauge = metrics.GetOrRegisterGauge(namespace+"compact/nonlevel0", nil)
 	db.seekCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/seek", nil)
 	db.manualMemAllocGauge = metrics.GetOrRegisterGauge(namespace+"memory/manualalloc", nil)
+	db.liveMemTablesGauge = metrics.GetOrRegisterGauge(namespace+"table/live", nil)
+	db.zombieMemTablesGauge = metrics.GetOrRegisterGauge(namespace+"table/zombie", nil)
+	db.blockCacheHitGauge = metrics.GetOrRegisterGauge(namespace+"cache/block/hit", nil)
+	db.blockCacheMissGauge = metrics.GetOrRegisterGauge(namespace+"cache/block/miss", nil)
+	db.tableCacheHitGauge = metrics.GetOrRegisterGauge(namespace+"cache/table/hit", nil)
+	db.tableCacheMissGauge = metrics.GetOrRegisterGauge(namespace+"cache/table/miss", nil)
+	db.filterHitGauge = metrics.GetOrRegisterGauge(namespace+"filter/hit", nil)
+	db.filterMissGauge = metrics.GetOrRegisterGauge(namespace+"filter/miss", nil)
+	db.estimatedCompDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/estimateDebt", nil)
+	db.liveCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/count", nil)
+	db.liveCompSizeGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/size", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
@@ -517,6 +560,18 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.nonlevel0CompGauge.Update(nonLevel0CompCount)
 		d.level0CompGauge.Update(level0CompCount)
 		d.seekCompGauge.Update(stats.Compact.ReadCount)
+		d.liveCompGauge.Update(stats.Compact.NumInProgress)
+		d.liveCompSizeGauge.Update(stats.Compact.InProgressBytes)
+
+		d.liveMemTablesGauge.Update(stats.MemTable.Count)
+		d.zombieMemTablesGauge.Update(stats.MemTable.ZombieCount)
+		d.estimatedCompDebtGauge.Update(int64(stats.Compact.EstimatedDebt))
+		d.tableCacheHitGauge.Update(stats.TableCache.Hits)
+		d.tableCacheMissGauge.Update(stats.TableCache.Misses)
+		d.blockCacheHitGauge.Update(stats.BlockCache.Hits)
+		d.blockCacheMissGauge.Update(stats.BlockCache.Misses)
+		d.filterHitGauge.Update(stats.Filter.Hits)
+		d.filterMissGauge.Update(stats.Filter.Misses)
 
 		for i, level := range stats.Levels {
 			// Append metrics for additional layers
