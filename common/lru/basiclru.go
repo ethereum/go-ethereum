@@ -22,11 +22,9 @@ package lru
 // This type is not safe for concurrent use.
 // The zero value is not valid, instances must be created using NewCache.
 type BasicLRU[K comparable, V any] struct {
-	list       *list[K]
-	items      map[K]cacheItem[K, V]
-	cap        int
-	onEvicted  func(key K, value V)
-	onReplaced func(key K, value V)
+	list  *list[K]
+	items map[K]cacheItem[K, V]
+	cap   int
 }
 
 type cacheItem[K any, V any] struct {
@@ -49,27 +47,27 @@ func NewBasicLRU[K comparable, V any](capacity int) BasicLRU[K, V] {
 
 // Add adds a value to the cache. Returns true if an item was evicted to store the new item.
 func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
+	_, _, evicted = c.Add3(key, value)
+	return evicted
+}
+
+// Add3 adds a value to the cache. If an item was evicted to store the new one, it returns the evicted item.
+func (c *BasicLRU[K, V]) Add3(key K, value V) (evKey K, evItem V, evicted bool) {
 	item, ok := c.items[key]
 	if ok {
-		// Already exists in cache.
-		if c.onReplaced != nil {
-			c.onReplaced(key, item.value)
-		}
 		item.value = value
 		c.items[key] = item
 		c.list.moveToFront(item.elem)
-		return false
+		return evKey, evItem, false
 	}
 
 	var elem *listElem[K]
 	if c.Len() >= c.cap {
 		elem = c.list.removeLast()
-		if c.onEvicted != nil {
-			v := c.items[elem.v]
-			c.onEvicted(elem.v, v.value)
-		}
-		delete(c.items, elem.v)
 		evicted = true
+		evKey = elem.v
+		evItem = c.items[evKey].value
+		delete(c.items, evKey)
 	} else {
 		elem = new(listElem[K])
 	}
@@ -79,7 +77,7 @@ func (c *BasicLRU[K, V]) Add(key K, value V) (evicted bool) {
 	elem.v = key
 	c.items[key] = cacheItem[K, V]{elem, value}
 	c.list.pushElem(elem)
-	return evicted
+	return evKey, evItem, evicted
 }
 
 // Contains reports whether the given key exists in the cache.
@@ -149,16 +147,6 @@ func (c *BasicLRU[K, V]) RemoveOldest() (key K, value V, ok bool) {
 	delete(c.items, key)
 	c.list.remove(lastElem)
 	return key, item.value, true
-}
-
-// OnEvicted sets a callback function to be called when an item is evicted from the cache.
-func (c *BasicLRU[K, V]) OnEvicted(fn func(k K, v V)) {
-	c.onEvicted = fn
-}
-
-// OnReplaced sets a callback function to be called when an item is replaced in the cache.
-func (c *BasicLRU[K, V]) OnReplaced(fn func(k K, v V)) {
-	c.onReplaced = fn
 }
 
 // Keys returns all keys in the cache.
