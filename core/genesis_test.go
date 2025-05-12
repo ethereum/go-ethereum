@@ -104,15 +104,18 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			},
 			wantErr: &GenesisMismatchError{Stored: customghash, New: params.SepoliaGenesisHash},
 		},
-		{
-			name: "custom block in DB, genesis == hoodi",
-			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
-				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
-				customg.Commit(db, tdb)
-				return SetupGenesisBlock(db, tdb, DefaultHoodiGenesisBlock())
+		// bor: hoodi expects a non-nil withdrawals hash
+		/*
+			{
+				name: "custom block in DB, genesis == hoodi",
+				fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
+					tdb := triedb.NewDatabase(db, newDbConfig(scheme))
+					customg.Commit(db, tdb)
+					return SetupGenesisBlock(db, tdb, DefaultHoodiGenesisBlock())
+				},
+				wantErr: &GenesisMismatchError{Stored: customghash, New: params.HoodiGenesisHash},
 			},
-			wantErr: &GenesisMismatchError{Stored: customghash, New: params.HoodiGenesisHash},
-		},
+		*/
 		{
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, *params.ConfigCompatError, error) {
