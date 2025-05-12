@@ -93,19 +93,3 @@ func (c *Cache[K, V]) Keys() []K {
 
 	return c.cache.Keys()
 }
-
-// OnEvicted sets a callback function to be called when an item is evicted from the cache.
-func (c *Cache[K, V]) OnEvicted(fn func(key K, value V)) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.cache.OnEvicted(fn)
-}
-
-// OnReplaced sets a callback function to be called when an item is replaced in the cache.
-func (c *Cache[K, V]) OnReplaced(fn func(key K, value V)) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.cache.OnReplaced(fn)
-}
