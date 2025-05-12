@@ -109,8 +109,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 
 type FirehoseConfig struct {
 	ApplyBackwardCompatibility *bool `json:"applyBackwardCompatibility"`
-	// TODO: Add LOGGING on init
-	ConcurrentBlockFlushing bool `json:"concurrentBlockFlushing"`
+	ConcurrentBlockFlushing    bool  `json:"concurrentBlockFlushing"`
 
 	// Only used for testing, only possible through JSON configuration
 	private *privateFirehoseConfig
@@ -131,6 +130,7 @@ func (c *FirehoseConfig) LogKeyValues() []any {
 
 	return []any{
 		"config.applyBackwardCompatibility", applyBackwardCompatibility,
+		"config.concurrentBlockFlushing", c.ConcurrentBlockFlushing,
 	}
 }
 
@@ -160,6 +160,7 @@ type Firehose struct {
 	// here. If not set in the config, then we inspect `OnBlockchainInit` the chain config to determine
 	// if it's a network for which we must reproduce the legacy bugs.
 	applyBackwardCompatibility *bool
+	concurrentBlockFlushing    bool
 
 	// Block state
 	block                       *pbeth.Block
@@ -190,7 +191,7 @@ type Firehose struct {
 	testingBuffer             *bytes.Buffer
 	testingIgnoreGenesisBlock bool
 
-	// Worker queuefor blockprinting
+	// Worker queue for block printing
 	blockPrintQueue chan *blockPrintJob
 	flushDone       sync.WaitGroup
 	closeOnce       sync.Once
@@ -233,6 +234,7 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		hasher:                     crypto.NewKeccakState(),
 		tracerID:                   "global",
 		applyBackwardCompatibility: config.ApplyBackwardCompatibility,
+		concurrentBlockFlushing:    config.ConcurrentBlockFlushing,
 
 		// Block state
 		blockOrdinal:        &Ordinal{},
@@ -246,8 +248,6 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		callStack:               NewCallStack(),
 		deferredCallState:       NewDeferredCallState(),
 		latestCallEnterSuicided: false,
-
-		blockPrintQueue: make(chan *blockPrintJob, 100),
 	}
 
 	if config.private != nil {
@@ -257,8 +257,12 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		}
 	}
 
-	firehose.flushDone.Add(1)
-	go firehose.blockPrintWorker()
+	if config.ConcurrentBlockFlushing {
+		log.Info("Concurrent block flushing enabled: starting goroutine...")
+		firehose.blockPrintQueue = make(chan *blockPrintJob, 100)
+		firehose.flushDone.Add(1)
+		go firehose.blockPrintWorker()
+	}
 
 	return firehose
 }
@@ -496,12 +500,17 @@ func (f *Firehose) OnBlockEnd(err error) {
 		}
 
 		f.ensureInBlockAndNotInTrx()
-		// f.printBlockToFirehose(f.block, f.blockFinality)
-		job := &blockPrintJob{
-			block:    f.block,
-			finality: f.blockFinality,
+
+		// Flush block to firehose and optionally use goroutine
+		if f.concurrentBlockFlushing {
+			job := &blockPrintJob{
+				block:    f.block,
+				finality: f.blockFinality,
+			}
+			f.blockPrintQueue <- job
+		} else {
+			f.printBlockToFirehose(f.block, f.blockFinality)
 		}
-		f.blockPrintQueue <- job
 
 	} else {
 		// An error occurred, could have happen in transaction/call context, we must not check if in trx/call, only check in block
@@ -621,8 +630,11 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 }
 
 func (f *Firehose) OnClose() {
-	log.Info("Firehose closing: waiting for worker goroutines to finish and shutting down channels")
-	f.CloseBlockPrintQueue()
+	log.Info("Firehose closing...")
+	if f.concurrentBlockFlushing {
+		log.Info("waiting for worker goroutines to finish and shutting down channels")
+		f.CloseBlockPrintQueue()
+	}
 }
 
 func (f *Firehose) OnSystemCallStart() {
@@ -2829,8 +2841,11 @@ func (f *Firehose) blockPrintWorker() {
 }
 
 func (f *Firehose) CloseBlockPrintQueue() {
-	f.closeOnce.Do(func() {
-		close(f.blockPrintQueue)
-		f.flushDone.Wait()
-	})
+	if f.concurrentBlockFlushing {
+		f.closeOnce.Do(func() {
+			log.Info("Closing channel: flushing the remaining blocks to firehose")
+			close(f.blockPrintQueue)
+			f.flushDone.Wait()
+		})
+	}
 }

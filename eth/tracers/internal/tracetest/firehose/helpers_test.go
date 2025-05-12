@@ -33,6 +33,7 @@ func newFirehoseTestTracer(t *testing.T, model tracingModel) (*tracers.Firehose,
 	t.Helper()
 
 	tracer, err := tracers.NewFirehoseFromRawJSON([]byte(fmt.Sprintf(`{
+		"concurrentBlockFlushing": true,
 		"_private": {
 			"flushToTestBuffer": true,
 			"ignoreGenesisBlock": true,

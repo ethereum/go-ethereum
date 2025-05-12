@@ -56,7 +56,6 @@ func TestFirehosePrestate(t *testing.T) {
 				blockLines.assertOnlyBlockEquals(t, filepath.Join(folder, string(model)), 1)
 			})
 		}
-
 	}
 
 }
