@@ -19,23 +19,35 @@ package eradb
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
-	openFileLimit = 64
-)
+const openFileLimit = 64
+
+var errClosed = errors.New("era store is closed")
 
 // EraDatabase manages read access to a directory of era1 files.
 // The getter methods are thread-safe.
 type EraDatabase struct {
 	datadir string
-	cache   *lru.Cache[uint64, *era.Era]
+	mu      sync.Mutex
+	lru     lru.BasicLRU[uint64, *fileCacheEntry]
+	opening map[uint64]*fileCacheEntry
+}
+
+type fileCacheEntry struct {
+	ref    atomic.Int32
+	opened chan struct{}
+	file   *era.Era
+	err    error
 }
 
 // New creates a new EraDatabase instance.
@@ -56,74 +68,152 @@ func New(datadir string) (*EraDatabase, error) {
 	}
 	db := &EraDatabase{
 		datadir: datadir,
-		cache:   lru.NewCache[uint64, *era.Era](openFileLimit),
+		lru:     lru.NewBasicLRU[uint64, *fileCacheEntry](openFileLimit),
+		opening: make(map[uint64]*fileCacheEntry),
 	}
-	closeEra := func(epoch uint64, e *era.Era) {
-		if e == nil {
-			log.Warn("Era1 cache contained nil value", "epoch", epoch)
-			return
-		}
-		if err := e.Close(); err != nil {
-			log.Warn("Error closing era1 file", "epoch", epoch, "err", err)
-		}
-	}
-	// Take care to close era1 files when they are evicted from cache.
-	db.cache.OnEvicted(closeEra)
-
-	// Concurrently calling GetRaw* methods can cause the same era1 file to be
-	// opened multiple times.
-	db.cache.OnReplaced(closeEra)
-
 	log.Info("Opened Era store", "datadir", datadir)
 	return db, nil
 }
 
 // Close closes all open era1 files in the cache.
-func (db *EraDatabase) Close() error {
-	// Close all open era1 files in the cache.
-	keys := db.cache.Keys()
-	errs := make([]error, len(keys))
-	for _, key := range keys {
-		if e, ok := db.cache.Get(key); ok {
-			if err := e.Close(); err != nil {
-				errs = append(errs, err)
-			}
-		}
+func (db *EraDatabase) Close() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	keys := db.lru.Keys()
+	for _, epoch := range keys {
+		entry, _ := db.lru.Get(epoch)
+		entry.done(epoch)
 	}
-	return errors.Join(errs...)
+	db.opening = nil
 }
 
 // GetRawBody returns the raw body for a given block number.
 func (db *EraDatabase) GetRawBody(number uint64) ([]byte, error) {
 	// Lookup the table by epoch.
 	epoch := number / uint64(era.MaxEra1Size)
-	e, err := db.getEraByEpoch(epoch)
-	if err != nil {
-		return nil, err
+	entry := db.getEraByEpoch(epoch)
+	if entry.err != nil {
+		if errors.Is(entry.err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, entry.err
 	}
-	// The era1 file for given epoch may not exist.
-	if e == nil {
-		return nil, nil
-	}
-	return e.GetRawBodyByNumber(number)
+	defer entry.done(epoch)
+	return entry.file.GetRawBodyByNumber(number)
 }
 
 // GetRawReceipts returns the raw receipts for a given block number.
 func (db *EraDatabase) GetRawReceipts(number uint64) ([]byte, error) {
 	epoch := number / uint64(era.MaxEra1Size)
-	e, err := db.getEraByEpoch(epoch)
+	entry := db.getEraByEpoch(epoch)
+	if entry.err != nil {
+		if errors.Is(entry.err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, entry.err
+	}
+	defer entry.done(epoch)
+	return entry.file.GetRawReceiptsByNumber(number)
+}
+
+// getEraByEpoch opens an era file or gets it from the cache. The caller can access
+// entry.file and entry.err and must call entry.done when done reading the file.
+func (db *EraDatabase) getEraByEpoch(epoch uint64) *fileCacheEntry {
+	// Add the requested epoch to the cache.
+	entry := db.getCacheEntry(epoch)
+	if entry == nil {
+		return &fileCacheEntry{err: errClosed}
+	}
+
+	// First goroutine to use the file has to open it.
+	if entry.ref.Add(1) == 1 {
+		e, err := db.openEraFile(epoch)
+		if err != nil {
+			db.fileFailedToOpen(epoch, entry, err)
+		} else {
+			db.fileOpened(epoch, entry, e)
+		}
+		close(entry.opened)
+	}
+
+	// Bump the refcount and wait for the file to be opened.
+	entry.ref.Add(1)
+	<-entry.opened
+	return entry
+}
+
+// getCacheEntry gets an open era file from the cache.
+func (db *EraDatabase) getCacheEntry(epoch uint64) *fileCacheEntry {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// Check if this epoch is already being opened.
+	if db.opening == nil {
+		return nil
+	}
+	if entry, ok := db.opening[epoch]; ok {
+		return entry
+	}
+	// Check if it's in the cache.
+	if entry, ok := db.lru.Get(epoch); ok {
+		return entry
+	}
+	// It's a new file, create an entry in the 'opening' table.
+	entry := &fileCacheEntry{opened: make(chan struct{})}
+	db.opening[epoch] = entry
+	return entry
+}
+
+// fileOpened is called after an era file has been successfully opened.
+func (db *EraDatabase) fileOpened(epoch uint64, entry *fileCacheEntry, file *era.Era) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	// The database may have been closed while opening the file. When that happens,
+	// db.opening will be set to nil, so we need to handle that here and ensure the caller
+	// knows.
+	if db.opening == nil {
+		entry.err = errClosed
+		return
+	}
+
+	// Remove from 'opening' table and add to the LRU.
+	// This may evict an existing item, which we have to close.
+	entry.file = file
+	delete(db.opening, epoch)
+	if _, evictedEntry, _ := db.lru.Add3(epoch, entry); evictedEntry != nil {
+		evictedEntry.done(epoch)
+	}
+}
+
+// fileFailedToOpen is called when an era file could not be opened.
+func (db *EraDatabase) fileFailedToOpen(epoch uint64, entry *fileCacheEntry, err error) {
+	entry.err = err
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if db.opening != nil {
+		delete(db.opening, epoch)
+	}
+}
+
+func (db *EraDatabase) openEraFile(epoch uint64) (*era.Era, error) {
+	// File name scheme is <network>-<epoch>-<root>.
+	glob := fmt.Sprintf("*-%05d-*.era1", epoch)
+	matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
 	if err != nil {
 		return nil, err
 	}
-	// The era1 file for given epoch may not exist.
-	if e == nil {
+	if len(matches) > 1 {
+		return nil, fmt.Errorf("multiple era1 files found for epoch %d", epoch)
+	}
+	if len(matches) == 0 {
 		return nil, nil
 	}
-	return e.GetRawReceiptsByNumber(number)
-}
+	filename := matches[0]
 
-func (db *EraDatabase) openEra(name string) (*era.Era, error) {
-	e, err := era.Open(name)
+	e, err := era.Open(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -137,29 +227,18 @@ func (db *EraDatabase) openEra(name string) (*era.Era, error) {
 	return e, nil
 }
 
-func (db *EraDatabase) getEraByEpoch(epoch uint64) (*era.Era, error) {
-	// Check the cache first.
-	if e, ok := db.cache.Get(epoch); ok {
-		return e, nil
+// done signals that the caller has finished using a file.
+// This decrements the refcount and ensures the file is closed by the last user.
+func (f *fileCacheEntry) done(epoch uint64) {
+	if f.err != nil {
+		return
 	}
-	// file name scheme is <network>-<epoch>-<root>.
-	glob := fmt.Sprintf("*-%05d-*.era1", epoch)
-	matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
-	if err != nil {
-		return nil, err
+	if f.ref.Add(-1) == 0 {
+		err := f.file.Close()
+		if err == nil {
+			log.Debug("Closed era1 file", "epoch", epoch)
+		} else {
+			log.Warn("Error closing era1 file", "epoch", epoch, "err", err)
+		}
 	}
-	if len(matches) > 1 {
-		return nil, fmt.Errorf("multiple era1 files found for epoch %d", epoch)
-	}
-	if len(matches) == 0 {
-		return nil, nil
-	}
-	filename := matches[0]
-	e, err := db.openEra(filename)
-	if err != nil {
-		return nil, err
-	}
-	// Add the era to the cache.
-	db.cache.Add(epoch, e)
-	return e, nil
 }
