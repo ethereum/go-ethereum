@@ -429,7 +429,7 @@ func (b *Block) BlobGasUsed() *uint64 {
 	return blobGasUsed
 }
 
-// ExecutionWitness returns the verkle execution witneess + proof for a block
+// ExecutionWitness returns the verkle execution witness + proof for a block
 func (b *Block) ExecutionWitness() *ExecutionWitness { return b.witness }
 
 // Size returns the true RLP encoded storage size of the block, either by encoding

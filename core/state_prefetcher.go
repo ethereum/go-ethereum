@@ -38,7 +38,7 @@ type statePrefetcher struct {
 	chain  *HeaderChain        // Canonical block chain
 }
 
-// newStatePrefetcher initialises a new statePrefetcher.
+// newStatePrefetcher initializes a new statePrefetcher.
 func newStatePrefetcher(config *params.ChainConfig, chain *HeaderChain) *statePrefetcher {
 	return &statePrefetcher{
 		config: config,

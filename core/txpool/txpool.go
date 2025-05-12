@@ -481,7 +481,7 @@ func (p *TxPool) Status(hash common.Hash) TxStatus {
 // Sync is a helper method for unit tests or simulator runs where the chain events
 // are arriving in quick succession, without any time in between them to run the
 // internal background reset operations. This method will run an explicit reset
-// operation to ensure the pool stabilises, thus avoiding flakey behavior.
+// operation to ensure the pool stabilizes, thus avoiding flakey behavior.
 //
 // Note, this method is only used for testing and is susceptible to DoS vectors.
 // In production code, the pool is meant to reset on a separate thread.

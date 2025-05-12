@@ -104,7 +104,7 @@ type EVM struct {
 	// chain rules contains the chain rules for the current epoch
 	chainRules params.Rules
 
-	// virtual machine configuration options used to initialise the evm
+	// virtual machine configuration options used to initialize the evm
 	Config Config
 
 	// global (to this context) ethereum virtual machine used throughout
@@ -226,7 +226,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
 	} else {
-		// Initialise a new contract and set the code that is to be used by the EVM.
+		// Initialize a new contract and set the code that is to be used by the EVM.
 		code := evm.resolveCode(addr)
 		if len(code) == 0 {
 			ret, err = nil, nil // gas is unchanged
@@ -290,7 +290,7 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
 	} else {
-		// Initialise a new contract and set the code that is to be used by the EVM.
+		// Initialize a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, caller, value, gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
@@ -333,7 +333,7 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
 	} else {
-		// Initialise a new contract and make initialise the delegate values
+		// Initialize a new contract and make initialize the delegate values
 		//
 		// Note: The value refers to the original value from the parent call.
 		contract := NewContract(originCaller, caller, value, gas, evm.jumpDests)
@@ -385,7 +385,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
 	} else {
-		// Initialise a new contract and set the code that is to be used by the EVM.
+		// Initialize a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, addr, new(uint256.Int), gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
@@ -492,7 +492,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	}
 	evm.Context.Transfer(evm.StateDB, caller, address, value)
 
-	// Initialise a new contract and set the code that is to be used by the EVM.
+	// Initialize a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, address, value, gas, evm.jumpDests)
 

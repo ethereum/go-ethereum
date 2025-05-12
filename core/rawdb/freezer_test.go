@@ -382,7 +382,7 @@ func TestFreezerCloseSync(t *testing.T) {
 	f, _ := newFreezerForTesting(t, map[string]freezerTableConfig{"a": {noSnappy: true}, "b": {noSnappy: true}})
 	defer f.Close()
 
-	// Now, close and sync. This mimics the behaviour if the node is shut down,
+	// Now, close and sync. This mimics the behavior if the node is shut down,
 	// just as the chain freezer is writing.
 	// 1: thread-1: chain treezer writes, via freezeRange (holds lock)
 	// 2: thread-2: Close called, waits for write to finish

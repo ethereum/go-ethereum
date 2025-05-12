@@ -240,7 +240,7 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 // header as the chain head.
 //
 // Note: This method is not concurrent-safe with inserting blocks simultaneously
-// into the chain, as side effects caused by reorganisations cannot be emulated
+// into the chain, as side effects caused by reorganizations cannot be emulated
 // without the real blocks. Hence, writing headers directly should only be done
 // in two scenarios: pure-header mode of operation (light clients), or properly
 // separated header/block phases (non-archive clients).
@@ -308,7 +308,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header) (int, error) {
 	return 0, nil
 }
 
-// InsertHeaderChain inserts the given headers and does the reorganisations.
+// InsertHeaderChain inserts the given headers and does the reorganizations.
 //
 // The validity of the headers is NOT CHECKED by this method, i.e. they need to be
 // validated by ValidateHeaderChain before calling InsertHeaderChain.

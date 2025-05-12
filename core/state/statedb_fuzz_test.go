@@ -216,7 +216,7 @@ func (test *stateTest) run() bool {
 		for i, action := range actions {
 			if i%test.chunk == 0 && i != 0 {
 				if byzantium {
-					state.Finalise(true) // call finalise at the transaction boundary
+					state.Finalise(true) // call finalize at the transaction boundary
 				} else {
 					state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
 				}
@@ -224,7 +224,7 @@ func (test *stateTest) run() bool {
 			action.fn(action, state)
 		}
 		if byzantium {
-			state.Finalise(true) // call finalise at the transaction boundary
+			state.Finalise(true) // call finalize at the transaction boundary
 		} else {
 			state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
 		}

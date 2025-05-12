@@ -785,7 +785,7 @@ func testLongShallowSetHead(t *testing.T, snapshots bool) {
 // Tests a sethead for a long canonical chain with frozen blocks where a recent
 // block - older than the ancient limit - was already committed to disk and then
 // sethead was called. In this case we expect the full chain to be rolled back
-// to the committed block. Since the ancient limit was underflown, everything
+// to the committed block. Since the ancient limit was underflow, everything
 // needs to be deleted onwards to avoid creating a gap.
 func TestLongDeepSetHead(t *testing.T)              { testLongDeepSetHead(t, false) }
 func TestLongDeepSetHeadWithSnapshots(t *testing.T) { testLongDeepSetHead(t, true) }
@@ -883,7 +883,7 @@ func testLongSnapSyncedShallowSetHead(t *testing.T, snapshots bool) {
 // Tests a sethead for a long canonical chain with frozen blocks where the fast
 // sync pivot point - older than the ancient limit - was already committed, after
 // which sethead was called. In this case we expect the full chain to be rolled
-// back to the committed block. Since the ancient limit was underflown, everything
+// back to the committed block. Since the ancient limit was underflow, everything
 // needs to be deleted onwards to avoid creating a gap.
 func TestLongSnapSyncedDeepSetHead(t *testing.T)              { testLongSnapSyncedDeepSetHead(t, false) }
 func TestLongSnapSyncedDeepSetHeadWithSnapshots(t *testing.T) { testLongSnapSyncedDeepSetHead(t, true) }
@@ -1085,7 +1085,7 @@ func testLongOldForkedShallowSetHead(t *testing.T, snapshots bool) {
 // chain, where a recent block - older than the ancient limit - was already committed
 // to disk and then sethead was called. In this case we expect the canonical full
 // chain to be rolled back to the committed block. Since the ancient limit was
-// underflown, everything needs to be deleted onwards to avoid creating a gap. The
+// underflow, everything needs to be deleted onwards to avoid creating a gap. The
 // side chain is nuked by the freezer.
 func TestLongOldForkedDeepSetHead(t *testing.T)              { testLongOldForkedDeepSetHead(t, false) }
 func TestLongOldForkedDeepSetHeadWithSnapshots(t *testing.T) { testLongOldForkedDeepSetHead(t, true) }
@@ -1189,7 +1189,7 @@ func testLongOldForkedSnapSyncedShallowSetHead(t *testing.T, snapshots bool) {
 // was already committed to disk and then sethead was called. In this test scenario
 // the side chain is below the committed block. In this case we expect the canonical
 // full chain to be rolled back to the committed block. Since the ancient limit was
-// underflown, everything needs to be deleted onwards to avoid creating a gap. The
+// underflow, everything needs to be deleted onwards to avoid creating a gap. The
 // side chain is nuked by the freezer.
 func TestLongOldForkedSnapSyncedDeepSetHead(t *testing.T) {
 	testLongOldForkedSnapSyncedDeepSetHead(t, false)

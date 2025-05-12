@@ -439,7 +439,7 @@ func (m *singleMatcherInstance) cleanMapIndices() {
 	m.mapIndices = m.mapIndices[:j]
 }
 
-// matchAny combinines a set of matchers and returns a match for every position
+// matchAny combines a set of matchers and returns a match for every position
 // where any of the underlying matchers signaled a match. A zero-length matchAny
 // acts as a "wild card" that signals a potential match at every position.
 type matchAny []matcher

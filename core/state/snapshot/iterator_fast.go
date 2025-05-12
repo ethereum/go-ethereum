@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// weightedIterator is an iterator with an assigned weight. It is used to prioritise
+// weightedIterator is an iterator with an assigned weight. It is used to prioritize
 // which account or storage slot is the correct one if multiple iterators find the
 // same one (modified in multiple consecutive blocks).
 type weightedIterator struct {

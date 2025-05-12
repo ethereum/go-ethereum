@@ -733,8 +733,8 @@ func (s *StateDB) GetRefund() uint64 {
 	return s.refund
 }
 
-// Finalise finalises the state by removing the destructed objects and clears
-// the journal as well as the refunds. Finalise, however, will not push any updates
+// Finalize finalizes the state by removing the destructed objects and clears
+// the journal as well as the refunds. Finalize, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
@@ -780,7 +780,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
-	// Finalise all the dirty storage states and write them into the tries
+	// Finalize all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
 	// If there was a trie prefetcher operating, terminate it async so that the

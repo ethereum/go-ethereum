@@ -233,7 +233,7 @@ func (s *stateObject) setState(key common.Hash, value common.Hash, origin common
 	s.dirtyStorage[key] = value
 }
 
-// finalise moves all dirty storage slots into the pending area to be hashed or
+// finalize moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
 func (s *stateObject) finalise() {
 	slotsToPrefetch := make([]common.Hash, 0, len(s.dirtyStorage))

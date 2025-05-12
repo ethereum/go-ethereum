@@ -332,7 +332,7 @@ func (p *Program) MemToStorage(memStart, memSize, startSlot int) *Program {
 	return p
 }
 
-// ReturnViaCodeCopy utilises CODECOPY to place the given data in the bytecode of
+// ReturnViaCodeCopy utilizes CODECOPY to place the given data in the bytecode of
 // p, loads into memory (offset 0) and returns the code.
 // This is a typical "constructor".
 // Note: since all indexing is calculated immediately, the preceding bytecode

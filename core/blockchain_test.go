@@ -183,7 +183,7 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 		if err := blockchain.engine.VerifyHeader(blockchain, header); err != nil {
 			return err
 		}
-		// Manually insert the header into the database, but don't reorganise (allows subsequent testing)
+		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
 		blockchain.chainmu.MustLock()
 		rawdb.WriteHeader(blockchain.db, header)
 		blockchain.chainmu.Unlock()
@@ -521,7 +521,7 @@ func testBrokenChain(t *testing.T, full bool, scheme string) {
 	}
 }
 
-// Tests that reorganising a long difficult chain after a short easy one
+// Tests that reorganizing a long difficult chain after a short easy one
 // overwrites the canonical numbers and links in the database.
 func TestReorgLongHeaders(t *testing.T) {
 	testReorgLong(t, false, rawdb.HashScheme)
@@ -536,7 +536,7 @@ func testReorgLong(t *testing.T, full bool, scheme string) {
 	testReorg(t, []int64{0, 0, -9}, []int64{0, 0, 0, -9}, 393280+params.GenesisDifficulty.Int64(), full, scheme)
 }
 
-// Tests that reorganising a short difficult chain after a long easy one
+// Tests that reorganizing a short difficult chain after a long easy one
 // overwrites the canonical numbers and links in the database.
 func TestReorgShortHeaders(t *testing.T) {
 	testReorgShort(t, false, rawdb.HashScheme)
@@ -913,7 +913,7 @@ func testLightVsFastVsFullChainHeads(t *testing.T, scheme string) {
 	assert(t, "light", light, height/2, 0, 0)
 }
 
-// Tests that chain reorganisations handle transaction removals and reinsertions.
+// Tests that chain reorganizations handle transaction removals and reinsertions.
 func TestChainTxReorgs(t *testing.T) {
 	testChainTxReorgs(t, rawdb.HashScheme)
 	testChainTxReorgs(t, rawdb.PathScheme)

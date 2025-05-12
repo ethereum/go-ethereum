@@ -109,7 +109,7 @@ func (m *SortedMap) Forward(threshold uint64) types.Transactions {
 
 // Filter iterates over the list of transactions and removes all of them for which
 // the specified function evaluates to true.
-// Filter, as opposed to 'filter', re-initialises the heap after the operation is done.
+// Filter, as opposed to 'filter', re-initializes the heap after the operation is done.
 // If you want to do several consecutive filterings, it's therefore better to first
 // do a .filter(func1) followed by .Filter(func2) or reheap()
 func (m *SortedMap) Filter(filter func(*types.Transaction) bool) types.Transactions {

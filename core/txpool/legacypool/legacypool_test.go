@@ -814,7 +814,7 @@ func TestPostponing(t *testing.T) {
 	if pool.all.Count() != len(txs) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs))
 	}
-	// Reduce the balance of the account, and check that transactions are reorganised
+	// Reduce the balance of the account, and check that transactions are reorganized
 	for _, addr := range accs {
 		testAddBalance(pool, addr, big.NewInt(-1))
 	}

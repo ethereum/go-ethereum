@@ -25,9 +25,9 @@ import (
 // Contract represents an ethereum contract in the state database. It contains
 // the contract code, calling arguments. Contract implements ContractRef
 type Contract struct {
-	// caller is the result of the caller which initialised this
+	// caller is the result of the caller which initialized this
 	// contract. However, when the "call method" is delegated this
-	// value needs to be initialised to that of the caller's caller.
+	// value needs to be initialized to that of the caller's caller.
 	caller  common.Address
 	address common.Address
 

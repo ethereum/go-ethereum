@@ -103,7 +103,7 @@ type EVMInterpreter struct {
 
 // NewEVMInterpreter returns a new instance of the Interpreter.
 func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
-	// If jump table was not initialised we set the default one.
+	// If jump table was not initialized we set the default one.
 	var table *JumpTable
 	switch {
 	case evm.chainRules.IsVerkle:
@@ -189,7 +189,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			Stack:    stack,
 			Contract: contract,
 		}
-		// For optimisation reason we're using uint64 as the program counter.
+		// For optimization reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
 		pc   = uint64(0) // program counter

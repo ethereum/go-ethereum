@@ -72,7 +72,7 @@ var (
 	// the bloom offsets are runtime constants which determines which part of the
 	// account/storage hash the hasher functions looks at, to determine the
 	// bloom key for an account/slot. This is randomized at init(), so that the
-	// global population of nodes do not all display the exact same behaviour with
+	// global population of nodes do not all display the exact same behavior with
 	// regards to bloom content
 	bloomAccountHasherOffset = 0
 	bloomStorageHasherOffset = 0

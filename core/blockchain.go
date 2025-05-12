@@ -218,7 +218,7 @@ type txLookup struct {
 }
 
 // BlockChain represents the canonical chain given a database with a genesis
-// block. The Blockchain manages chain imports, reverts, chain reorganisations.
+// block. The Blockchain manages chain imports, reverts, chain reorganizations.
 //
 // Importing blocks in to the block chain happens according to the set of rules
 // defined by the two stage Validator. Processing of blocks is done using the
@@ -287,8 +287,8 @@ type BlockChain struct {
 	lastForkReadyAlert time.Time // Last time there was a fork readiness print out
 }
 
-// NewBlockChain returns a fully initialised block chain using information
-// available in the database. It initialises the default Ethereum Validator
+// NewBlockChain returns a fully initialized block chain using information
+// available in the database. It initializes the default Ethereum Validator
 // and Processor.
 func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
 	if cacheConfig == nil {
@@ -916,7 +916,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		rootNumber uint64 // (no root == always 0)
 
 		// Retrieve the last pivot block to short circuit rollbacks beyond it
-		// and the current freezer limit to start nuking it's underflown.
+		// and the current freezer limit to start nuking it's underflow.
 		pivot = rawdb.ReadLastPivotNumber(bc.db)
 	)
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
@@ -967,7 +967,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			headHeader = bc.CurrentBlock()
 			headNumber = headHeader.Number.Uint64()
 		)
-		// If setHead underflown the freezer threshold and the block processing
+		// If setHead underflow the freezer threshold and the block processing
 		// intent afterwards is full block importing, delete the chain segment
 		// between the stateful-block and the sethead target.
 		var wipe bool
@@ -1085,7 +1085,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	}
 	defer bc.chainmu.Unlock()
 
-	// Prepare the genesis block and reinitialise the chain
+	// Prepare the genesis block and reinitialize the chain
 	batch := bc.db.NewBatch()
 	rawdb.WriteBlock(batch, genesis)
 	if err := batch.Write(); err != nil {
@@ -1596,7 +1596,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	}
 	currentBlock := bc.CurrentBlock()
 
-	// Reorganise the chain if the parent is not the head block
+	// Reorganize the chain if the parent is not the head block
 	if block.ParentHash() != currentBlock.Hash() {
 		if err := bc.reorg(currentBlock, block.Header()); err != nil {
 			return NonStatTy, err
@@ -1661,7 +1661,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 //
 // This method is split out so that import batches that require re-injecting
 // historical blocks can do so without releasing the lock, which could lead to
-// racey behaviour. If a sidechain import is in progress, and the historic state
+// racey behavior. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
 func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness bool) (*stateless.Witness, int, error) {

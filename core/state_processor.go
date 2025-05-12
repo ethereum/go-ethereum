@@ -39,7 +39,7 @@ type StateProcessor struct {
 	chain  *HeaderChain        // Canonical header chain
 }
 
-// NewStateProcessor initialises a new StateProcessor.
+// NewStateProcessor initializes a new StateProcessor.
 func NewStateProcessor(config *params.ChainConfig, chain *HeaderChain) *StateProcessor {
 	return &StateProcessor{
 		config: config,

@@ -121,7 +121,7 @@ func (fm *FilterMapsMatcherBackend) GetLogByLvIndex(ctx context.Context, lvIndex
 	return fm.f.getLogByLvIndex(lvIndex)
 }
 
-// synced signals to the matcher that has triggered a synchronisation that it
+// synced signals to the matcher that has triggered a synchronization that it
 // has been finished and the log index is consistent with the chain head passed
 // as a parameter.
 //

@@ -134,7 +134,7 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //
 // Blob transactions are special snowflakes that are designed for a very specific
 // purpose (rollups) and are expected to adhere to that specific use case. These
-// behavioural expectations allow us to design a transaction pool that is more robust
+// behavioral expectations allow us to design a transaction pool that is more robust
 // (i.e. resending issues) and more resilient to DoS attacks (e.g. replace-flush
 // attacks) than the generic tx pool. These improvements will also mean, however,
 // that we enforce a significantly more aggressive strategy on entering and exiting
@@ -193,7 +193,7 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //     are immediately evicted from the pool since they are contained in the
 //     including block. Blobs however are not included in the execution chain,
 //     so a mini reorg cannot re-pool "lost" blob transactions. To support reorgs,
-//     blobs are retained on disk until they are finalised.
+//     blobs are retained on disk until they are finalized.
 //
 //   - Blobs can arrive via flashbots. Blocks might contain blob transactions we
 //     have never seen on the network. Since we cannot recover them from blocks
@@ -288,7 +288,7 @@ func newBlobTxMeta(id uint64, size uint64, storageSize uint32, tx *types.Transac
 //
 //     priority = min(deltaBasefee, deltaBlobfee, 0)
 //
-// Optimisation tradeoffs:
+// Optimization tradeoffs:
 //
 //   - Eviction relies on 3 fee minimums per account (exec tip, exec cap and blob
 //     cap). Maintaining these values across all transactions from the account is

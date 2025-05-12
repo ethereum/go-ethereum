@@ -79,7 +79,7 @@ func copyFrom(srcPath, destPath string, offset uint64, before func(f *os.File) e
 // openFreezerFileForAppend opens a freezer table file and seeks to the end
 func openFreezerFileForAppend(filename string) (*os.File, error) {
 	// Open the file without the O_APPEND flag
-	// because it has differing behaviour during Truncate operations
+	// because it has differing behavior during Truncate operations
 	// on different OS's
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
