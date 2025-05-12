@@ -203,22 +203,29 @@ func testKZGCells(t *testing.T, ckzg bool) {
 	defer func(old bool) { useCKZG.Store(old) }(useCKZG.Load())
 	useCKZG.Store(ckzg)
 
-	blob := randBlob()
+	blob1 := randBlob()
+	blob2 := randBlob()
 
-	commitment, err := BlobToCommitment(blob)
+	commitment1, err := BlobToCommitment(blob1)
 	if err != nil {
 		t.Fatalf("failed to create KZG commitment from blob: %v", err)
 	}
-	proof, err := ComputeCellProofs(blob)
+	commitment2, err := BlobToCommitment(blob2)
+	if err != nil {
+		t.Fatalf("failed to create KZG commitment from blob: %v", err)
+	}
+
+	proofs1, err := ComputeCellProofs(blob1)
 	if err != nil {
 		t.Fatalf("failed to create KZG proof at point: %v", err)
 	}
 
-	var commitments []Commitment
-	for range len(proof) {
-		commitments = append(commitments, commitment)
+	proofs2, err := ComputeCellProofs(blob2)
+	if err != nil {
+		t.Fatalf("failed to create KZG proof at point: %v", err)
 	}
-	if err := VerifyCellProofs([]*Blob{blob}, commitments, proof); err != nil {
+	proofs := append(proofs1, proofs2...)
+	if err := VerifyCellProofs([]*Blob{blob1, blob2}, []Commitment{commitment1, commitment2}, proofs); err != nil {
 		t.Fatalf("failed to verify KZG proof at point: %v", err)
 	}
 }

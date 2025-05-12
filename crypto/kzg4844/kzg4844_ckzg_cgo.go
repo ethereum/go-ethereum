@@ -151,23 +151,37 @@ func ckzgComputeCellProofs(blob *Blob) ([]Proof, error) {
 }
 
 // ckzgVerifyCellProofs verifies that the blob data corresponds to the provided commitment.
-func ckzgVerifyCellProofBatch(blobs []*Blob, commitments []Commitment, proofs []Proof) error {
+func ckzgVerifyCellProofBatch(blobs []*Blob, commitments []Commitment, cellProofs []Proof) error {
 	ckzgIniter.Do(ckzgInit)
+	var (
+		proofs      = make([]ckzg4844.Bytes48, len(cellProofs))
+		commits     = make([]ckzg4844.Bytes48, 0, len(cellProofs))
+		cellIndices = make([]uint64, 0, len(cellProofs))
+		cells       = make([]ckzg4844.Cell, 0, len(cellProofs))
+	)
+	// Copy over the cell proofs
+	for i, proof := range cellProofs {
+		proofs[i] = (ckzg4844.Bytes48)(proof)
+	}
+	// Blow up the commitments to be the same length as the proofs
+	for _, commitment := range commitments {
+		for range gokzg4844.CellsPerExtBlob {
+			commits = append(commits, (ckzg4844.Bytes48)(commitment))
+		}
+	}
+	// Compute the cells and cell indices
+	for _, blob := range blobs {
+		cellsI, err := ckzg4844.ComputeCells((*ckzg4844.Blob)(blob))
+		if err != nil {
+			return err
+		}
+		cells = append(cells, cellsI[:]...)
+		for idx := range len(cellsI) {
+			cellIndices = append(cellIndices, uint64(idx))
+		}
+	}
 
-	cells, err := ckzg.ComputeCells(blob)
-	if err != nil {
-		return err
-	}
-	cellIndices := make([]uint64, 0, len(cells))
-	for range len(cells) {
-		cellIndices = append(cellIndices, 0)
-	}
-	kzgProofs := make([]ckzg4844.Bytes48, len(proofs))
-	for _, proof := range proofs {
-		kzgProofs = append(kzgProofs, (ckzg4844.Bytes48)(proof))
-	}
-
-	valid, err := ckzg4844.VerifyCellKZGProofBatch(([]ckzg4844.Bytes48)(commitment), cells, cellIndices, kzgProofs)
+	valid, err := ckzg4844.VerifyCellKZGProofBatch(commits, cellIndices, cells, proofs)
 	if err != nil {
 		return err
 	}

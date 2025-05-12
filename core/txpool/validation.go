@@ -202,6 +202,9 @@ func validateBlobSidecarOsaka(hashes []common.Hash, sidecar *types.BlobTxSidecar
 	if len(sidecar.Blobs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
 	}
+	if len(sidecar.Commitments) != len(hashes) {
+		return fmt.Errorf("invalid number of %d commitments compared to %d blob hashes", len(sidecar.Commitments), len(hashes))
+	}
 	if len(sidecar.Proofs) != len(hashes)*kzg4844.CellProofsPerBlob {
 		return fmt.Errorf("invalid number of %d blob proofs expected %d", len(sidecar.Proofs), len(hashes)*kzg4844.CellProofsPerBlob)
 	}
