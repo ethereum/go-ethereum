@@ -729,7 +729,7 @@ func TestIOdump(t *testing.T) {
 				IOFlag: ioflag,
 			},
 			blockNumber: rpc.BlockNumber(genBlocks),
-			want:        `[{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"","structLogs":[]}}]`,
+			want:        `[{"result":{"gas":21000,"failed":false,"returnValue":"0x","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"0x","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"0x","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"0x","structLogs":[]}},{"result":{"gas":21000,"failed":false,"returnValue":"0x","structLogs":[]}}]`,
 		},
 	}
 
