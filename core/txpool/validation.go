@@ -202,6 +202,9 @@ func validateBlobSidecarOsaka(hashes []common.Hash, sidecar *types.BlobTxSidecar
 	if len(sidecar.Blobs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
 	}
+	if len(sidecar.Commitments) != len(hashes) {
+		return fmt.Errorf("invalid number of %d commitments compared to %d blob hashes", len(sidecar.Commitments), len(hashes))
+	}
 	if len(sidecar.Proofs) != len(hashes)*kzg4844.CellProofsPerBlob {
 		return fmt.Errorf("invalid number of %d blob proofs expected %d", len(sidecar.Proofs), len(hashes)*kzg4844.CellProofsPerBlob)
 	}
@@ -210,14 +213,13 @@ func validateBlobSidecarOsaka(hashes []common.Hash, sidecar *types.BlobTxSidecar
 	}
 	// Blob commitments match with the hashes in the transaction, verify the
 	// blobs themselves via KZG
-	for i := range sidecar.Blobs {
-		// TODO verify the cell proof here
-		_ = i
-		/*
-			if err := kzg4844.VerifyBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i], sidecar.Proofs[i]); err != nil {
-				return fmt.Errorf("invalid blob %d: %v", i, err)
-			}
-		*/
+	var blobs []*kzg4844.Blob
+	for _, blob := range sidecar.Blobs {
+		blobs = append(blobs, &blob)
+	}
+
+	if err := kzg4844.VerifyCellProofs(blobs, sidecar.Commitments, sidecar.Proofs); err != nil {
+		return err
 	}
 	return nil
 }
