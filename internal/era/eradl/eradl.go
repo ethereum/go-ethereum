@@ -88,7 +88,7 @@ func (l *Loader) DownloadAll(destDir string) error {
 func (l *Loader) DownloadBlockRange(start, end uint64, destDir string) error {
 	startEpoch := int(start / uint64(era.MaxEra1Size))
 	endEpoch := int(end / uint64(era.MaxEra1Size))
-	pat := regexp.MustCompile(regexp.QuoteMeta(l.network) + "-([0-9]+)-[0-9a-f]\\.era1")
+	pat := regexp.MustCompile(regexp.QuoteMeta(l.network) + "-([0-9]+)-[0-9a-f]+\\.era1")
 	for file := range l.csdb.Files() {
 		m := pat.FindStringSubmatch(file)
 		if len(m) == 2 {
