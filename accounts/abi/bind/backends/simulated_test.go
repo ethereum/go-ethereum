@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -40,7 +41,9 @@ import (
 )
 
 func TestSimulatedBackend(t *testing.T) {
-	defer goleak.VerifyNone(t, leak.IgnoreList()...)
+	// The goroutine leak we're ignoring is actually not a real leak
+	// it's a known behavior of the OpenCensus package that we're using for metrics and monitoring
+	defer goleak.VerifyNone(t, append(leak.IgnoreList(), goleak.IgnoreTopFunction("go.opencensus.io/stats/view.(*worker).start"))...)
 	var gasLimit uint64 = 8000029
 
 	key, _ := crypto.GenerateKey() // nolint: gosec
@@ -99,6 +102,8 @@ func TestSimulatedBackend(t *testing.T) {
 	if isPending {
 		t.Fatal("transaction should not have pending status")
 	}
+
+	fmt.Println("PSP - here")
 }
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
