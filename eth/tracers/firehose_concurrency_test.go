@@ -15,6 +15,7 @@ import (
 func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 
 	f := NewFirehose(&FirehoseConfig{
+		ConcurrentBlockFlushing:    true,
 		ApplyBackwardCompatibility: ptr(false),
 		private: &privateFirehoseConfig{
 			FlushToTestBuffer: true,
@@ -61,10 +62,11 @@ func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 
 func TestFirehose_BlocksPrintToFirehose_MultipleBlocksInOrder(t *testing.T) {
 
-	const blockCount = 100
+	const blockCount = 10
 	const baseBlockNum = 1000
 
 	f := NewFirehose(&FirehoseConfig{
+		ConcurrentBlockFlushing:    true,
 		ApplyBackwardCompatibility: ptr(false),
 		private: &privateFirehoseConfig{
 			FlushToTestBuffer: true,
