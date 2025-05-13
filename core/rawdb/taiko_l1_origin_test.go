@@ -33,10 +33,12 @@ func randomHash() common.Hash {
 func TestL1Origin(t *testing.T) {
 	db := NewMemoryDatabase()
 	testL1Origin := &L1Origin{
-		BlockID:       randomBigInt(),
-		L2BlockHash:   randomHash(),
-		L1BlockHeight: randomBigInt(),
-		L1BlockHash:   randomHash(),
+		BlockID:     randomBigInt(),
+		L2BlockHash: randomHash(),
+		// L1BlockHeight is intentionally set to nil to represent a value of zero for legacy behavior.
+		L1BlockHeight:      nil,
+		L1BlockHash:        randomHash(),
+		BuildPayloadArgsID: [8]byte{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8},
 	}
 	WriteL1Origin(db, testL1Origin.BlockID, testL1Origin)
 	l1Origin, err := ReadL1Origin(db, testL1Origin.BlockID)
@@ -44,8 +46,9 @@ func TestL1Origin(t *testing.T) {
 	require.NotNil(t, l1Origin)
 	assert.Equal(t, testL1Origin.BlockID, l1Origin.BlockID)
 	assert.Equal(t, testL1Origin.L2BlockHash, l1Origin.L2BlockHash)
-	assert.Equal(t, testL1Origin.L1BlockHeight, l1Origin.L1BlockHeight)
+	assert.True(t, l1Origin.L1BlockHeight.Cmp(common.Big0) == 0)
 	assert.Equal(t, testL1Origin.L1BlockHash, l1Origin.L1BlockHash)
+	assert.Equal(t, testL1Origin.BuildPayloadArgsID, l1Origin.BuildPayloadArgsID)
 }
 
 func TestHeadL1Origin(t *testing.T) {
