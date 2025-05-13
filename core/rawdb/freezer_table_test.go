@@ -589,7 +589,7 @@ func TestFreezerOffset(t *testing.T) {
 	t.Log(f.dumpIndexString(0, 100))
 
 	// It should allow writing item 6.
-	batch = f.newBatch(6)
+	batch = f.newBatch(0)
 	require.NoError(t, batch.AppendRaw(6, getChunk(20, 0x99)))
 	require.NoError(t, batch.commit())
 
