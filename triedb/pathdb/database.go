@@ -675,6 +675,12 @@ func (db *Database) waitGeneration() {
 // AccountIterator creates a new account iterator for the specified root hash and
 // seeks to a starting account hash.
 func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
+	db.lock.RLock()
+	wait := db.waitSync
+	db.lock.RUnlock()
+	if wait {
+		return nil, errDatabaseWaitSync
+	}
 	if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
 		return nil, errNotConstructed
 	}
@@ -684,6 +690,12 @@ func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (Account
 // StorageIterator creates a new storage iterator for the specified root hash and
 // account. The iterator will be moved to the specific start position.
 func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+	db.lock.RLock()
+	wait := db.waitSync
+	db.lock.RUnlock()
+	if wait {
+		return nil, errDatabaseWaitSync
+	}
 	if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
 		return nil, errNotConstructed
 	}
