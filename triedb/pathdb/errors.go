@@ -47,5 +47,5 @@ var (
 
 	// errNotConstructed is returned if the callers want to iterate the snapshot
 	// while the generation is not finished yet.
-	errNotConstructed = errors.New("state snapshot is not constructed")
+	errNotConstructed = errors.New("snapshot is not constructed")
 )

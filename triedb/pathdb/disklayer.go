@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -365,7 +366,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		if dl.generator != nil {
 			dl.generator.stop()
 			progress = dl.generator.progressMarker()
-			log.Info("Terminated state snapshot generation")
+			log.Info("Terminated snapshot generation")
 
 			// If the snapshot has been fully generated, unset the generator
 			if progress == nil {
@@ -380,7 +381,6 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		// Resume the background generation if it's not completed yet
 		if progress != nil {
 			dl.generator.run(bottom.root)
-			log.Info("Resumed state snapshot generation", "root", bottom.root)
 		}
 	}
 	// Link the generator if snapshot is not yet completed
@@ -402,6 +402,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 // revert applies the given state history and return a reverted disk layer.
 func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
+	start := time.Now()
 	if h.meta.root != dl.rootHash() {
 		return nil, errUnexpectedHistory
 	}
@@ -441,6 +442,7 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 		if dl.generator != nil {
 			ndl.setGenerator(dl.generator)
 		}
+		log.Debug("Reverted data in write buffer", "oldroot", h.meta.root, "newroot", h.meta.parent, "elapsed", common.PrettyDuration(time.Since(start)))
 		return ndl, nil
 	}
 	// Terminate the generation before writing any data into database
@@ -465,8 +467,8 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	if dl.generator != nil && !dl.generator.completed() {
 		ndl.generator = dl.generator
 		ndl.generator.run(h.meta.parent)
-		log.Info("Resumed state snapshot generation", "root", h.meta.parent)
 	}
+	log.Debug("Reverted data in persistent state", "oldroot", h.meta.root, "newroot", h.meta.parent, "elapsed", common.PrettyDuration(time.Since(start)))
 	return ndl, nil
 }
 

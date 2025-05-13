@@ -361,7 +361,7 @@ func (g *generator) proveRange(ctx *generatorContext, trieId *trie.ID, prefix []
 	// Snap state is chunked, generate edge proofs for verification.
 	tr, err := trie.New(trieId, &diskStore{db: g.db})
 	if err != nil {
-		log.Info("Trie missing, state snapshotting paused", "state", ctx.root, "kind", kind, "root", trieId.Root)
+		log.Info("Trie missing, snapshotting paused", "state", ctx.root, "kind", kind, "root", trieId.Root)
 		return nil, errMissingTrie
 	}
 	// Generate the Merkle proofs for the first and last element
@@ -483,7 +483,7 @@ func (g *generator) generateRange(ctx *generatorContext, trieId *trie.ID, prefix
 	if tr == nil {
 		tr, err = trie.New(trieId, &diskStore{db: g.db})
 		if err != nil {
-			log.Info("Trie missing, state snapshotting paused", "state", ctx.root, "kind", kind, "root", trieId.Root)
+			log.Info("Trie missing, snapshotting paused", "state", ctx.root, "kind", kind, "root", trieId.Root)
 			return false, nil, errMissingTrie
 		}
 	}
@@ -609,7 +609,7 @@ func (g *generator) checkAndFlush(ctx *generatorContext, current []byte) error {
 
 		// Abort the generation if it's required
 		if abort != nil {
-			g.stats.log("Aborting state snapshot generation", ctx.root, g.progress)
+			g.stats.log("Aborting snapshot generation", ctx.root, g.progress)
 			return newAbortErr(abort) // bubble up an error for interruption
 		}
 		// Don't hold the iterators too long, release them to let compactor works
@@ -617,7 +617,7 @@ func (g *generator) checkAndFlush(ctx *generatorContext, current []byte) error {
 		ctx.reopenIterator(snapStorage)
 	}
 	if time.Since(ctx.logged) > 8*time.Second {
-		g.stats.log("Generating state snapshot", ctx.root, g.progress)
+		g.stats.log("Generating snapshot", ctx.root, g.progress)
 		ctx.logged = time.Now()
 	}
 	return nil
@@ -766,7 +766,7 @@ func (g *generator) generateAccounts(ctx *generatorContext, accMarker []byte) er
 // gathering and logging, since the method surfs the blocks as they arrive, often
 // being restarted.
 func (g *generator) generate(ctx *generatorContext) {
-	g.stats.log("Resuming state snapshot generation", ctx.root, g.progress)
+	g.stats.log("Resuming snapshot generation", ctx.root, g.progress)
 	defer ctx.close()
 
 	// Persist the initial marker and state snapshot root if progress is none
@@ -815,7 +815,7 @@ func (g *generator) generate(ctx *generatorContext) {
 	}
 	ctx.batch.Reset()
 
-	log.Info("Generated state snapshot", "accounts", g.stats.accounts, "slots", g.stats.slots,
+	log.Info("Generated snapshot", "accounts", g.stats.accounts, "slots", g.stats.slots,
 		"storage", g.stats.storage, "dangling", g.stats.dangling, "elapsed", common.PrettyDuration(time.Since(g.stats.start)))
 
 	// Update the generation progress marker
