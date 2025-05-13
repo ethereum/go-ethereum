@@ -1051,6 +1051,7 @@ func TestOpenCap(t *testing.T) {
 // new fork is added with a max blob count higher than the previous fork. We
 // want to make sure transactions a persisted between those runs.
 func TestChangingSlotterSize(t *testing.T) {
+	t.Skip("bor: skipping as it's not relevant to bor")
 	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
