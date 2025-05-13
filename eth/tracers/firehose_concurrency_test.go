@@ -102,7 +102,9 @@ func TestFirehose_BlocksPrintToFirehose_MultipleBlocksInOrder(t *testing.T) {
 		"Expected %d blocks in output, found %d", blockCount, len(extractedBlocks))
 
 	// Verify blocks in order
-	verifyBlockSequence(t, extractedBlocks, baseBlockNum)
+	for i, block := range extractedBlocks {
+		require.Equal(t, baseBlockNum+uint64(i), block.number, "Blocks out of order at position %d", i)
+	}
 
 	// Verify block hashes
 	for _, block := range extractedBlocks {
@@ -146,25 +148,4 @@ func extractBlocksFromOutput(t *testing.T, output string) []extractedBlock {
 	}
 
 	return blocks
-}
-
-func verifyBlockSequence(t *testing.T, blocks []extractedBlock, baseBlockNum uint64) {
-	t.Helper()
-
-	// First block should be the base block number
-	require.Equal(t, baseBlockNum, blocks[0].number,
-		"First block should be %d, got %d", baseBlockNum, blocks[0].number)
-
-	// Last block should be base + count - 1
-	expectedLast := baseBlockNum + uint64(len(blocks)) - 1
-	require.Equal(t, expectedLast, blocks[len(blocks)-1].number,
-		"Last block should be %d, got %d", expectedLast, blocks[len(blocks)-1].number)
-
-	// Verify sequence
-	for i := 0; i < len(blocks)-1; i++ {
-		current := blocks[i].number
-		next := blocks[i+1].number
-		require.Equal(t, current+1, next,
-			"Blocks out of order at position %d: %d followed by %d", i, current, next)
-	}
 }

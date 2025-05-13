@@ -144,13 +144,14 @@ func (c *FirehoseConfig) ForcedBackwardCompatibility() bool {
 
 type Firehose struct {
 	// Global state
-	outputBuffer *bytes.Buffer
-	initSent     *atomic.Bool
-	config       *FirehoseConfig
-	chainConfig  *params.ChainConfig
-	hasher       crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
-	hasherBuf    common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
-	tracerID     string
+	outputBuffer  *bytes.Buffer
+	initSent      *atomic.Bool
+	config        *FirehoseConfig
+	chainConfig   *params.ChainConfig
+	hasher        crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
+	hasherBuf     common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
+	tracerID      string
+	closeChannels sync.Once
 	// The FirehoseTracer is used in multiple chains, some for which were produced using a legacy version
 	// of the whole tracing infrastructure. This legacy version had many small bugs here and there that
 	// we must "reproduce" on some chain to ensure that the FirehoseTracer produces the same output
@@ -173,6 +174,8 @@ type Firehose struct {
 	blockReorderOrdinalSnapshot uint64
 	blockReorderOrdinalOnce     sync.Once
 	blockIsGenesis              bool
+	blockPrintQueue             chan *blockPrintJob
+	blockFlushDone              sync.WaitGroup
 
 	// Transaction state
 	evm                  *tracing.VMContext
@@ -190,11 +193,6 @@ type Firehose struct {
 	// Testing state, only used in tests and private configs
 	testingBuffer             *bytes.Buffer
 	testingIgnoreGenesisBlock bool
-
-	// Worker queue for block printing
-	blockPrintQueue chan *blockPrintJob
-	flushDone       sync.WaitGroup
-	closeOnce       sync.Once
 }
 
 const FirehoseProtocolVersion = "3.0"
@@ -258,9 +256,10 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 	}
 
 	if config.ConcurrentBlockFlushing {
-		log.Info("Concurrent block flushing enabled: starting goroutine...")
+		log.Info("Firehose concurrent block flushing enabled, starting block " +
+			"print worker goroutine")
 		firehose.blockPrintQueue = make(chan *blockPrintJob, 100)
-		firehose.flushDone.Add(1)
+		firehose.blockFlushDone.Add(1)
 		go firehose.blockPrintWorker()
 	}
 
@@ -630,9 +629,8 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 }
 
 func (f *Firehose) OnClose() {
-	log.Info("Firehose closing...")
 	if f.concurrentBlockFlushing {
-		log.Info("Closing channel: flushing the remaining blocks to firehose")
+		log.Info("Firehose closing, flushing queued blocks to standard output")
 		f.CloseBlockPrintQueue()
 	}
 }
@@ -2835,17 +2833,20 @@ type blockPrintJob struct {
 }
 
 func (f *Firehose) blockPrintWorker() {
-	defer f.flushDone.Done()
+	defer f.blockFlushDone.Done()
 	for job := range f.blockPrintQueue {
 		f.printBlockToFirehose(job.block, job.finality)
 	}
 }
 
+// CloseBlockPrintQueue signals block printing goroutines to shut down and waits for them.
+// It blocks until all concurrent block flushing operations are completed, ensuring a clean
+// shutdown of the printing pipeline.
 func (f *Firehose) CloseBlockPrintQueue() {
 	if f.concurrentBlockFlushing {
-		f.closeOnce.Do(func() {
+		f.closeChannels.Do(func() {
 			close(f.blockPrintQueue)
-			f.flushDone.Wait()
+			f.blockFlushDone.Wait()
 		})
 	}
 }
