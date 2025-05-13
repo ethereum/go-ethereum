@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
@@ -91,6 +92,8 @@ func TestFirehose_BlocksPrintToFirehose_MultipleBlocksInOrder(t *testing.T) {
 
 		f.OnBlockEnd(nil)
 	}
+
+	time.Sleep(5 * time.Second)
 
 	f.OnClose()
 

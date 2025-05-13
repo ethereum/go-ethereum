@@ -192,9 +192,10 @@ type Firehose struct {
 	testingIgnoreGenesisBlock bool
 
 	// Worker queue for block printing
-	blockPrintQueue chan *blockPrintJob
-	flushDone       sync.WaitGroup
-	closeOnce       sync.Once
+	blockPrintQueue  chan *blockPrintJob
+	blockOutputQueue chan *blockOutput
+	flushDone        sync.WaitGroup
+	closeOnce        sync.Once
 }
 
 const FirehoseProtocolVersion = "3.0"
@@ -261,11 +262,32 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		log.Info("Concurrent block flushing enabled: starting goroutine...")
 		const numWorkers = 10                                     // TODO: This becomes a parameter
 		firehose.blockPrintQueue = make(chan *blockPrintJob, 100) // TODO: Optimal buffer size tbd
+		firehose.blockOutputQueue = make(chan *blockOutput, 100)
 
 		for i := 0; i < numWorkers; i++ {
 			firehose.flushDone.Add(1)
 			go firehose.blockPrintWorker()
 		}
+
+		// Output channel to order the flushing linearly
+		go func() {
+			expected := uint64(1000) // TODO: We will need to determine at which block it starts
+			buffer := make(map[uint64][]byte)
+
+			for result := range firehose.blockOutputQueue {
+				buffer[result.blockNum] = result.data
+
+				for {
+					data, ok := buffer[expected]
+					if !ok {
+						break
+					}
+					firehose.flushToFirehose(data)
+					delete(buffer, expected)
+					expected++ // TODO: Assuming block numbers are linear
+				}
+			}
+		}()
 	}
 
 	return firehose
@@ -1859,12 +1881,12 @@ func (f *Firehose) panicInvalidState(msg string, callerSkip int) string {
 
 // printBlockToFirehose is a helper function to print a block to Firehose protocl format.
 func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *FinalityStatus) {
+	var buf bytes.Buffer
+
 	marshalled, err := proto.Marshal(block)
 	if err != nil {
 		panic(fmt.Errorf("failed to marshal block: %w", err))
 	}
-
-	var buf bytes.Buffer
 
 	previousHash := block.PreviousID()
 	previousNum := 0
@@ -1897,7 +1919,14 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 
 	buf.WriteString("\n")
 
-	f.flushToFirehose(buf.Bytes())
+	if f.concurrentBlockFlushing {
+		f.blockOutputQueue <- &blockOutput{
+			blockNum: block.Number,
+			data:     buf.Bytes(),
+		}
+	} else {
+		f.flushToFirehose(buf.Bytes())
+	}
 }
 
 // printToFirehose is an easy way to print to Firehose format, it essentially
@@ -2851,4 +2880,9 @@ func (f *Firehose) CloseBlockPrintQueue() {
 			f.flushDone.Wait()
 		})
 	}
+}
+
+type blockOutput struct {
+	blockNum uint64
+	data     []byte
 }
