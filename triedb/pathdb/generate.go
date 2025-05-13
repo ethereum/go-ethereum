@@ -571,7 +571,7 @@ func (g *generator) generateRange(ctx *generatorContext, trieId *trie.ID, prefix
 	} else {
 		accountTrieReadCounter.Inc((time.Since(start) - internal).Nanoseconds())
 	}
-	logger.Debug("Regenerated state range", "root", trieId.Root, "last", hexutil.Encode(last),
+	logger.Trace("Regenerated state range", "root", trieId.Root, "last", hexutil.Encode(last),
 		"count", count, "created", created, "updated", updated, "untouched", untouched, "deleted", deleted)
 
 	// If there are either more trie items, or there are more snap items
