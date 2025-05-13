@@ -38,7 +38,6 @@ func TestFirehosePrestate(t *testing.T) {
 		"./testdata/TestFirehosePrestate/extra_account_creations",
 	}
 
-	// TODO: have goroutine config on AND off
 	for _, concurrent := range []bool{true, false} {
 		for _, folder := range testFolders {
 			name := filepath.Base(folder)

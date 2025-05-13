@@ -259,9 +259,13 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 
 	if config.ConcurrentBlockFlushing {
 		log.Info("Concurrent block flushing enabled: starting goroutine...")
-		firehose.blockPrintQueue = make(chan *blockPrintJob, 100)
-		firehose.flushDone.Add(1)
-		go firehose.blockPrintWorker()
+		const numWorkers = 10                                     // TODO: This becomes a parameter
+		firehose.blockPrintQueue = make(chan *blockPrintJob, 100) // TODO: Optimal buffer size tbd
+
+		for i := 0; i < numWorkers; i++ {
+			firehose.flushDone.Add(1)
+			go firehose.blockPrintWorker()
+		}
 	}
 
 	return firehose
@@ -1860,8 +1864,7 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 		panic(fmt.Errorf("failed to marshal block: %w", err))
 	}
 
-	// TODO: If multiple goroutine, this becomes shared resource
-	f.outputBuffer.Reset()
+	var buf bytes.Buffer
 
 	previousHash := block.PreviousID()
 	previousNum := 0
@@ -1881,9 +1884,9 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 	}
 
 	// **Important* The final space in the Sprintf template is mandatory!
-	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
+	buf.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
 
-	encoder := base64.NewEncoder(base64.StdEncoding, f.outputBuffer)
+	encoder := base64.NewEncoder(base64.StdEncoding, &buf)
 	if _, err = encoder.Write(marshalled); err != nil {
 		panic(fmt.Errorf("write to encoder should have been infaillible: %w", err))
 	}
@@ -1892,9 +1895,9 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 		panic(fmt.Errorf("closing encoder should have been infaillible: %w", err))
 	}
 
-	f.outputBuffer.WriteString("\n")
+	buf.WriteString("\n")
 
-	f.flushToFirehose(f.outputBuffer.Bytes())
+	f.flushToFirehose(buf.Bytes())
 }
 
 // printToFirehose is an easy way to print to Firehose format, it essentially
