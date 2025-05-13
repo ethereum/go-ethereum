@@ -463,6 +463,9 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
 		v    []byte
 	)
+	if max(max(baseLen, expLen), max(baseLen, modLen)) > 1024 {
+		return nil, fmt.Errorf("one or more of base/exponent/modulus length exceeded 1024 bytes")
+	}
 	switch {
 	case mod.BitLen() == 0:
 		// Modulo 0 is undefined, return zero
