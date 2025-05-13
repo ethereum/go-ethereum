@@ -28,7 +28,7 @@ import (
 )
 
 // This is a limit for the number of concurrent talk requests.
-const maxActiveTalkRequests = 2048
+const maxActiveTalkRequests = 1024
 
 // This is the timeout for acquiring a handler execution slot for a talk request.
 // The timeout should be short enough to fit within the request timeout.

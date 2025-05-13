@@ -197,7 +197,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		sendNoRespCh:  make(chan *sendNoRespRequest),
 		respTimeoutCh: make(chan *callTimeout),
 		unhandled:     cfg.Unhandled,
-		writeCh:       make(chan pendingWrite, 256), // Buffered channel for outgoing packets
+		writeCh:       make(chan pendingWrite, 1024), // Buffered channel for outgoing packets
 		// state of dispatch
 		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock, cfg.V5ProtocolID),
 		activeCallByNode: make(map[enode.ID]*callV5),
