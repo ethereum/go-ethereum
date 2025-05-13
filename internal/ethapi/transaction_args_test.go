@@ -216,20 +216,23 @@ func TestSetFeeDefaults(t *testing.T) {
 			nil,
 			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
-		{
-			"fill maxFeePerBlobGas",
-			"cancun",
-			&TransactionArgs{BlobHashes: []common.Hash{}},
-			&TransactionArgs{BlobHashes: []common.Hash{}, BlobFeeCap: (*hexutil.Big)(big.NewInt(4)), MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
-			nil,
-		},
-		{
-			"fill maxFeePerBlobGas when dynamic fees are set",
-			"cancun",
-			&TransactionArgs{BlobHashes: []common.Hash{}, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
-			&TransactionArgs{BlobHashes: []common.Hash{}, BlobFeeCap: (*hexutil.Big)(big.NewInt(4)), MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
-			nil,
-		},
+		// bor: skipping as it's not relevant to bor
+		/*
+			{
+				"fill maxFeePerBlobGas",
+				"cancun",
+				&TransactionArgs{BlobHashes: []common.Hash{}},
+				&TransactionArgs{BlobHashes: []common.Hash{}, BlobFeeCap: (*hexutil.Big)(big.NewInt(4)), MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
+				nil,
+			},
+			{
+				"fill maxFeePerBlobGas when dynamic fees are set",
+				"cancun",
+				&TransactionArgs{BlobHashes: []common.Hash{}, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
+				&TransactionArgs{BlobHashes: []common.Hash{}, BlobFeeCap: (*hexutil.Big)(big.NewInt(4)), MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
+				nil,
+			},
+		*/
 	}
 
 	ctx := context.Background()
