@@ -783,9 +783,8 @@ func (api *API) standardTraceTxToFile(ctx context.Context, block *types.Block, t
 		Stop:      func(err error) {},
 		GetResult: func() (json.RawMessage, error) { return nil, nil },
 	}
-	traceTimeout := new(time.Duration)
-	*traceTimeout = 1 * time.Hour
-	_, err = api.execTx(ctx, tx, msg, txctx, blockCtx, statedb, &tracer, nil, *traceTimeout, api.backend.ChainConfig())
+	traceTimeout := 1 * time.Hour
+	_, err = api.execTx(ctx, tx, msg, txctx, blockCtx, statedb, &tracer, nil, traceTimeout, api.backend.ChainConfig())
 	if err != nil {
 		return "", err
 	}
