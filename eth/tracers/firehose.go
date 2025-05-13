@@ -195,6 +195,7 @@ type Firehose struct {
 	blockPrintQueue  chan *blockPrintJob
 	blockOutputQueue chan *blockOutput
 	flushDone        sync.WaitGroup
+	flushOutputDone  sync.WaitGroup
 	closeOnce        sync.Once
 }
 
@@ -270,24 +271,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		}
 
 		// Output channel to order the flushing linearly
-		go func() {
-			expected := uint64(1000) // TODO: We will need to determine at which block it starts
-			buffer := make(map[uint64][]byte)
+		firehose.flushOutputDone.Add(1)
 
-			for result := range firehose.blockOutputQueue {
-				buffer[result.blockNum] = result.data
-
-				for {
-					data, ok := buffer[expected]
-					if !ok {
-						break
-					}
-					firehose.flushToFirehose(data)
-					delete(buffer, expected)
-					expected++ // TODO: Assuming block numbers are linear
-				}
-			}
-		}()
 	}
 
 	return firehose
@@ -2878,6 +2863,9 @@ func (f *Firehose) CloseBlockPrintQueue() {
 		f.closeOnce.Do(func() {
 			close(f.blockPrintQueue)
 			f.flushDone.Wait()
+
+			close(f.blockOutputQueue)
+			f.flushOutputDone.Wait()
 		})
 	}
 }
