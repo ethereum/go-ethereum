@@ -2,6 +2,7 @@ package firehose_test
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"math/big"
 	"path/filepath"
 	"strings"
@@ -49,7 +50,11 @@ func TestFirehosePrestate(t *testing.T) {
 
 			for _, model := range tracingModels {
 				t.Run(fmt.Sprintf("%s/%s/%s", model, name, concurrencyLabel), func(t *testing.T) {
-					tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, concurrent)
+					config := &tracers.FirehoseConfig{
+						ConcurrentBlockFlushing: concurrent,
+					}
+
+					tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, config)
 					defer onClose()
 
 					runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracingHooks)
@@ -202,7 +207,11 @@ func testBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine co
 
 		for _, model := range tracingModels {
 			t.Run(fmt.Sprintf("%s/%s", model, concurrencyLabel), func(t *testing.T) {
-				tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, concurrent)
+				config := &tracers.FirehoseConfig{
+					ConcurrentBlockFlushing: concurrent,
+				}
+
+				tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, config)
 				defer onClose()
 
 				chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesisSpec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
