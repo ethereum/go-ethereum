@@ -44,7 +44,8 @@ type diskLayer struct {
 	stale  bool         // Signals that the layer became stale (state progressed)
 	lock   sync.RWMutex // Lock used to protect stale flag and genMarker
 
-	// The generator is set if the state snapshot was not fully completed
+	// The generator is set if the state snapshot was not fully completed,
+	// regardless of whether the background generation is running or not.
 	generator *generator
 }
 
