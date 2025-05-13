@@ -84,6 +84,12 @@ The implementation was validated at multiple levels to ensure correctness, confi
 
 ## Section 4: Analysis
 
+The specifications of the operating system used for testing are as follows:
+
+Model: Macbook Air \
+Processor: Apple M1 chip \
+Memory: 8 GB
+
 ### 4.1 Results
 
 The following outlines the results for metric three:
@@ -92,18 +98,14 @@ The following outlines the results for metric three:
 
 **No concurrency**
 
-Run 1: 71.49s user 15.56s system 56% cpu 2:34.28 total
-
-Run 2: 69.77s user 15.60s system 54% cpu 2:37.73 total
-
+Run 1: 71.49s user 15.56s system 56% cpu 2:34.28 total\
+Run 2: 69.77s user 15.60s system 54% cpu 2:37.73 total\
 Run 3: 68.81s user 15.12s system 53% cpu 2:38.18 total
 
 **Concurrency**
 
-Run 1: 69.61s user 14.97s system 55% cpu 2:32.85 total
-
-Run 2: 67.94s user 15.13s system 54% cpu 2:33.59 total
-
+Run 1: 69.61s user 14.97s system 55% cpu 2:32.85 total\
+Run 2: 67.94s user 15.13s system 54% cpu 2:33.59 total\
 Run 3: 68.60s user 16.37s system 48% cpu 2:54.22 total (Not sure what happened here)
 
 **Until Block 100000**
@@ -133,8 +135,7 @@ Run 3: 68.60s user 16.37s system 48% cpu 2:54.22 total (Not sure what happened h
 
 ### 4.2 Discussion
 
-Run 3 with concurrency seems to be an outlier. Without it, the general trend would be that every block saves around 0.0006 second, or 0.6 millisecond.
-
+Run 3 with concurrency seems to be an outlier. Without it, the general trend would be that every block saves around 0.0006 second, or 0.6 millisecond. \
 User seems slightly lower, whereas system and cpu are relatively the same.
 
 ## Section 5: Conclusion
