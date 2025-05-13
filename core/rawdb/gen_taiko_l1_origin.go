@@ -16,26 +16,29 @@ var _ = (*l1OriginMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (l L1Origin) MarshalJSON() ([]byte, error) {
 	type L1Origin struct {
-		BlockID       *math.HexOrDecimal256 `json:"blockID" gencodec:"required"`
-		L2BlockHash   common.Hash           `json:"l2BlockHash"`
-		L1BlockHeight *math.HexOrDecimal256 `json:"l1BlockHeight" rlp:"optional"`
-		L1BlockHash   common.Hash           `json:"l1BlockHash" rlp:"optional"`
+		BlockID            *math.HexOrDecimal256 `json:"blockID" gencodec:"required"`
+		L2BlockHash        common.Hash           `json:"l2BlockHash"`
+		L1BlockHeight      *math.HexOrDecimal256 `json:"l1BlockHeight" rlp:"optional"`
+		L1BlockHash        common.Hash           `json:"l1BlockHash" rlp:"optional"`
+		BuildPayloadArgsID [8]byte               `json:"buildPayloadArgsID" rlp:"optional"`
 	}
 	var enc L1Origin
 	enc.BlockID = (*math.HexOrDecimal256)(l.BlockID)
 	enc.L2BlockHash = l.L2BlockHash
 	enc.L1BlockHeight = (*math.HexOrDecimal256)(l.L1BlockHeight)
 	enc.L1BlockHash = l.L1BlockHash
+	enc.BuildPayloadArgsID = l.BuildPayloadArgsID
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (l *L1Origin) UnmarshalJSON(input []byte) error {
 	type L1Origin struct {
-		BlockID       *math.HexOrDecimal256 `json:"blockID" gencodec:"required"`
-		L2BlockHash   *common.Hash          `json:"l2BlockHash"`
-		L1BlockHeight *math.HexOrDecimal256 `json:"l1BlockHeight" rlp:"optional"`
-		L1BlockHash   *common.Hash          `json:"l1BlockHash" rlp:"optional"`
+		BlockID            *math.HexOrDecimal256 `json:"blockID" gencodec:"required"`
+		L2BlockHash        *common.Hash          `json:"l2BlockHash"`
+		L1BlockHeight      *math.HexOrDecimal256 `json:"l1BlockHeight" rlp:"optional"`
+		L1BlockHash        *common.Hash          `json:"l1BlockHash" rlp:"optional"`
+		BuildPayloadArgsID *[8]byte              `json:"buildPayloadArgsID" rlp:"optional"`
 	}
 	var dec L1Origin
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -53,6 +56,9 @@ func (l *L1Origin) UnmarshalJSON(input []byte) error {
 	}
 	if dec.L1BlockHash != nil {
 		l.L1BlockHash = *dec.L1BlockHash
+	}
+	if dec.BuildPayloadArgsID != nil {
+		l.BuildPayloadArgsID = *dec.BuildPayloadArgsID
 	}
 	return nil
 }
