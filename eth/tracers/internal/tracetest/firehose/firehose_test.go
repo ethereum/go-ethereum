@@ -1,6 +1,7 @@
 package firehose_test
 
 import (
+	"fmt"
 	"math/big"
 	"path/filepath"
 	"strings"
@@ -37,13 +38,17 @@ func TestFirehosePrestate(t *testing.T) {
 		"./testdata/TestFirehosePrestate/suicide_double_withdraw",
 		"./testdata/TestFirehosePrestate/extra_account_creations",
 	}
-	
+
 	for _, concurrent := range []bool{true, false} {
 		for _, folder := range testFolders {
 			name := filepath.Base(folder)
+			concurrencyLabel := "sequential"
+			if concurrent {
+				concurrencyLabel = "concurrent"
+			}
 
 			for _, model := range tracingModels {
-				t.Run(string(model)+"/"+name, func(t *testing.T) {
+				t.Run(fmt.Sprintf("%s/%s/%s", model, name, concurrencyLabel), func(t *testing.T) {
 					tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, concurrent)
 					defer onClose()
 
@@ -52,7 +57,8 @@ func TestFirehosePrestate(t *testing.T) {
 					tracer.CloseBlockPrintQueue()
 
 					genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
-					require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
+					require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(
+						slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
 					require.NotNil(t, genesisLine)
 					blockLines.assertOnlyBlockEquals(t, filepath.Join(folder, string(model)), 1)
 				})
@@ -189,8 +195,13 @@ func testBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine co
 	t.Helper()
 
 	for _, concurrent := range []bool{true, false} {
+		concurrencyLabel := "sequential"
+		if concurrent {
+			concurrencyLabel = "concurrent"
+		}
+
 		for _, model := range tracingModels {
-			t.Run(string(model), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/%s", model, concurrencyLabel), func(t *testing.T) {
 				tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, concurrent)
 				defer onClose()
 

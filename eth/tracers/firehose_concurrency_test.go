@@ -24,7 +24,7 @@ func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 
 	f.OnBlockchainInit(params.AllEthashProtocolChanges)
 
-	blockNumbers := []uint64{123, 124, 125}
+	blockNumbers := []uint64{0}
 
 	for i, blockNum := range blockNumbers {
 		f.OnBlockStart(blockEvent(blockNum))
@@ -40,24 +40,16 @@ func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 
 	f.OnClose()
 
-	output := f.InternalTestingBuffer().String()
+	lines := strings.Split(strings.TrimSpace(f.InternalTestingBuffer().String()), "\n")
+	require.Len(t, lines, 2)
 
-	outNumber := make([]string, 0)
-	for i, line := range strings.Split(output, "\n") {
-		if i == 0 {
-			require.Equal(t, "FIRE INIT 3.0 geth 1.15.10", line)
-			continue
-		}
+	require.Equal(t, "FIRE INIT 3.0 geth 1.15.10", lines[0])
 
-		fields := strings.SplitN(line, " ", 4)
-		if len(fields) >= 3 {
-			require.Equal(t, "FIRE", fields[0])
-			require.Equal(t, "BLOCK", fields[1])
-			outNumber = append(outNumber, fields[2])
-		}
-	}
-
-	require.Equal(t, []string{"123", "124", "125"}, outNumber)
+	fields := strings.SplitN(lines[1], " ", 4)
+	require.GreaterOrEqual(t, len(fields), 3)
+	require.Equal(t, "FIRE", fields[0])
+	require.Equal(t, "BLOCK", fields[1])
+	require.Equal(t, "0", fields[2])
 }
 
 func TestFirehose_BlocksPrintToFirehose_MultipleBlocksInOrder(t *testing.T) {
