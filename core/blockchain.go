@@ -2541,21 +2541,23 @@ func (bc *BlockChain) reportBlock(block *types.Block, res *ProcessResult, err er
 
 // logForkReadiness will write a log when a future fork is scheduled, but not
 // active. This is useful so operators know their client is ready for the fork.
-func (bc *BlockChain) logForkReadiness() {
-	c := bc.Config()
-	now := time.Now()
-	current, last := c.LatestFork(uint64(now.Unix())), c.LatestFork(math.MaxUint64)
-	t := c.Timestamp(last)
-	if t == nil {
+func (bc *BlockChain) logForkReadiness(block *types.Block) {
+	config := bc.Config()
+	current, last := config.LatestFork(block.Time()), config.LatestFork(math.MaxUint64)
+
+	// Short circuit if the timestamp of the last fork is undefined,
+	// or if the network has already passed the last configured fork.
+	t := config.Timestamp(last)
+	if t == nil || current >= last {
 		return
 	}
 	at := time.Unix(int64(*t), 0)
 
 	// Only log if:
-	// 1. Current fork is behind the latest fork
-	// 2. Current time is before the fork activation time
-	// 3. Enough time has passed since last alert
-	if current < last && now.Before(at) && now.After(bc.lastForkReadyAlert.Add(forkReadyInterval)) {
+	// - Current time is before the fork activation time
+	// - Enough time has passed since last alert
+	now := time.Now()
+	if now.Before(at) && now.After(bc.lastForkReadyAlert.Add(forkReadyInterval)) {
 		log.Info("Ready for fork activation", "fork", last, "date", at.Format(time.RFC822),
 			"remaining", time.Until(at).Round(time.Second), "timestamp", at.Unix())
 		bc.lastForkReadyAlert = time.Now()
