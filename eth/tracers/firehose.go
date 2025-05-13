@@ -272,7 +272,26 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 
 		// Output channel to order the flushing linearly
 		firehose.flushOutputDone.Add(1)
+		go func() {
+			defer firehose.flushOutputDone.Done()
 
+			expected := uint64(0)
+			buffer := make(map[uint64][]byte)
+
+			for result := range firehose.blockOutputQueue {
+				buffer[result.blockNum] = result.data
+
+				for {
+					data, ok := buffer[expected]
+					if !ok {
+						break
+					}
+					firehose.flushToFirehose(data)
+					delete(buffer, expected)
+					expected++
+				}
+			}
+		}()
 	}
 
 	return firehose

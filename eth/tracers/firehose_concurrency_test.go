@@ -54,7 +54,7 @@ func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 
 func TestFirehose_BlocksPrintToFirehose_MultipleBlocksInOrder(t *testing.T) {
 
-	const blockCount = 10
+	const blockCount = 100
 	const baseBlockNum = 0
 
 	f := NewFirehose(&FirehoseConfig{
