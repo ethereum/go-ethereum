@@ -1838,7 +1838,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		stats.report(chain, it.index, snapDiffItems, snapBufItems, trieDiffNodes, trieBufNodes, setHead)
 
 		// Print confirmation that a future fork is scheduled, but not yet active.
-		bc.logForkReadiness()
+		bc.logForkReadiness(block)
 
 		if !setHead {
 			// After merge we expect few side chains. Simply count
