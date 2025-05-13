@@ -1760,7 +1760,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	case ctx.Bool(DeveloperFlag.Name):
 		cfg.NetworkId = 1337
 		cfg.SyncMode = ethconfig.FullSync
-		// force-enable this in --dev mode
 		cfg.EnablePreimageRecording = true
 		// Create new developer account or reuse existing one
 		var (
