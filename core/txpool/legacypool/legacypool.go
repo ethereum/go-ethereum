@@ -254,6 +254,8 @@ type LegacyPool struct {
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+
+	isFusaka *bool // nil until we receive a pre-fusaka head event, false after we do, set to true when we receive a post-fusaka head event
 }
 
 type txpoolResetRequest struct {
@@ -574,6 +576,7 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load().ToBig(),
 	}
+	// TODO: validate that the tx doesn't have a gas limit higher than 30 million
 	return txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts)
 }
 

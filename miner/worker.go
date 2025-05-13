@@ -464,6 +464,12 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 			prioBlobTxs[account] = txs
 		}
 	}
+
+	// TODO: if we are at fusaka and any transactions exceed 30_000_000 gas limit, don't include them.
+	// there's no way to ensure they are purged from the mempool before we can get them here
+	// because of the asynchronous nature:  the mempool may not receive notification of a head
+	// change past the fusaka fork before we start building the payload here.
+
 	// Fill the block with all available pending transactions.
 	if len(prioPlainTxs) > 0 || len(prioBlobTxs) > 0 {
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, prioPlainTxs, env.header.BaseFee)

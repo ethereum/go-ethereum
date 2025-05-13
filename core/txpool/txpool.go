@@ -186,6 +186,9 @@ func (p *TxPool) loop(head *types.Header) {
 			// Try to inject a busy marker and start a reset if successful
 			select {
 			case resetBusy <- struct{}{}:
+				// TODO: if we've just passed the fusaka fork, purge any transactions
+				// in the pool that have a gas limit of >= 30_000_000
+
 				// Updates the statedb with the new chain head. The head state may be
 				// unavailable if the initial state sync has not yet completed.
 				if statedb, err := p.chain.StateAt(newHead.Root); err != nil {
