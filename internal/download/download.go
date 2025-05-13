@@ -24,8 +24,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"iter"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -44,7 +46,7 @@ type versionEntry struct {
 }
 
 type urlEntry struct {
-	url string
+	url *url.URL
 }
 
 type hashEntry struct {
@@ -100,7 +102,11 @@ func ParseChecksums(input []byte) (*ChecksumDB, error) {
 			case strings.HasPrefix(content, "https://") || strings.HasPrefix(content, "http://"):
 				// URL comments define the URL where the following files are found. Here
 				// we keep track of the last found urlEntry and attach it to each file later.
-				lastURL = &urlEntry{content}
+				u, err := url.Parse(content)
+				if err != nil {
+					return nil, fmt.Errorf("line %d: invalid URL: %v", lineNum, err)
+				}
+				lastURL = &urlEntry{u}
 			}
 
 		default:
@@ -113,6 +119,17 @@ func ParseChecksums(input []byte) (*ChecksumDB, error) {
 		}
 	}
 	return csdb, nil
+}
+
+// Files returns an iterator over all file names.
+func (db *ChecksumDB) Files() iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for _, e := range db.hashes {
+			if !yield(e.file) {
+				return
+			}
+		}
+	}
 }
 
 // Verify checks whether the given file is valid according to the checksum database.
@@ -185,7 +202,7 @@ func (db *ChecksumDB) FindURL(basename string) (string, error) {
 			if e.u == nil {
 				return "", fmt.Errorf("file %q has no URL defined", e.file)
 			}
-			return e.u.url + e.file, nil
+			return e.u.url.JoinPath(e.file).String(), nil
 		}
 	}
 	return "", fmt.Errorf("file %q does not exist in checksum database", basename)
@@ -202,7 +219,7 @@ func (db *ChecksumDB) VerifyAll() {
 			log.Printf("Skipping verification of %s: no URL defined in checksum database", e.file)
 			continue
 		}
-		url := e.u.url + e.file
+		url := e.u.url.JoinPath(e.file).String()
 		dst := filepath.Join(tmp, e.file)
 		if err := db.DownloadFile(url, dst); err != nil {
 			log.Print(err)
