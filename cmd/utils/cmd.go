@@ -52,7 +52,7 @@ import (
 )
 
 const (
-	importBatchSize = 2500
+	importBatchSize = 1
 )
 
 // ErrImportInterrupted is returned when the user interrupts the import process.
