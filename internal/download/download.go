@@ -147,6 +147,16 @@ func (db *ChecksumDB) Verify(path string) error {
 	return nil
 }
 
+// DownloadFileFromKnownURL downloads a file from the URL defined in the checksum database.
+func (db *ChecksumDB) DownloadFileFromKnownURL(dstPath string) error {
+	base := filepath.Base(dstPath)
+	url, err := db.FindURL(base)
+	if err != nil {
+		return err
+	}
+	return db.DownloadFile(url, dstPath)
+}
+
 // DownloadFile downloads a file and verifies its checksum.
 func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 	if err := db.Verify(dstPath); err == nil {
