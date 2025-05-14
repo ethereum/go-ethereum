@@ -128,8 +128,46 @@ func (db *ChecksumDB) Files() iter.Seq[string] {
 	}
 }
 
+// findHash returns the known hash of a file.
+func (db *ChecksumDB) findHash(basename string) string {
+	for _, e := range db.hashes {
+		if e.file == basename {
+			return e.hash
+		}
+	}
+	return ""
+}
+
 // Verify checks whether the given file is valid according to the checksum database.
 func (db *ChecksumDB) Verify(path string) error {
+	basename := filepath.Base(path)
+	hash := db.findHash(basename)
+	if hash == "" {
+		return fmt.Errorf("no known hash for file %q", basename)
+	}
+	return verifyHash(path, hash)
+}
+
+// VerifyAll downloads all files and checks that they match the checksum given in
+// the database. This task can be used to sanity-check new checksums.
+func (db *ChecksumDB) VerifyAll() {
+	var (
+		tmp = os.TempDir()
+	)
+	for _, e := range db.hashes {
+		if e.url == nil {
+			log.Printf("Skipping verification of %s: no URL defined in checksum database", e.file)
+			continue
+		}
+		url := e.url.JoinPath(e.file).String()
+		dst := filepath.Join(tmp, e.file)
+		if err := db.DownloadFile(url, dst); err != nil {
+			log.Print(err)
+		}
+	}
+}
+
+func verifyHash(path, expectedHash string) error {
 	fd, err := os.Open(path)
 	if err != nil {
 		return err
@@ -141,10 +179,11 @@ func (db *ChecksumDB) Verify(path string) error {
 		return err
 	}
 	fileHash := hex.EncodeToString(h.Sum(nil))
-	if !db.containsHash(filepath.Base(path), fileHash) {
+	if fileHash != expectedHash {
 		return fmt.Errorf("invalid file hash: %s %s", fileHash, filepath.Base(path))
 	}
 	return nil
+
 }
 
 // DownloadFileFromKnownURL downloads a file from the URL defined in the checksum database.
@@ -159,26 +198,34 @@ func (db *ChecksumDB) DownloadFileFromKnownURL(dstPath string) error {
 
 // DownloadFile downloads a file and verifies its checksum.
 func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
-	if err := db.Verify(dstPath); err == nil {
+	basename := filepath.Base(dstPath)
+	hash := db.findHash(basename)
+	if hash == "" {
+		return fmt.Errorf("no known hash for file %q", basename)
+	}
+	// Shortcut if already downloaded.
+	if verifyHash(dstPath, hash) == nil {
 		fmt.Printf("%s is up-to-date\n", dstPath)
 		return nil
 	}
+
 	fmt.Printf("%s is stale\n", dstPath)
 	fmt.Printf("downloading from %s\n", url)
-
 	resp, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("download error: %v", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download error: status %d", resp.StatusCode)
 	}
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
 		return err
 	}
-	fd, err := os.OpenFile(dstPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+
+	// Download to a temporary file.
+	tmpfile := dstPath + ".tmp"
+	fd, err := os.OpenFile(tmpfile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
@@ -186,9 +233,15 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 	_, err = io.Copy(dst, resp.Body)
 	dst.Close()
 	if err != nil {
+		os.Remove(tmpfile)
 		return err
 	}
-	return db.Verify(dstPath)
+	if err := verifyHash(tmpfile, hash); err != nil {
+		os.Remove(tmpfile)
+		return err
+	}
+	// It's valid, rename to dstPath to complete the download.
+	return os.Rename(tmpfile, dstPath)
 }
 
 // FindVersion returns the current known version of a tool, if it is defined in the file.
@@ -212,25 +265,6 @@ func (db *ChecksumDB) FindURL(basename string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("file %q does not exist in checksum database", basename)
-}
-
-// VerifyAll downloads all files and checks that they match the checksum given in
-// the database. This task can be used to sanity-check new checksums.
-func (db *ChecksumDB) VerifyAll() {
-	var (
-		tmp = os.TempDir()
-	)
-	for _, e := range db.hashes {
-		if e.url == nil {
-			log.Printf("Skipping verification of %s: no URL defined in checksum database", e.file)
-			continue
-		}
-		url := e.url.JoinPath(e.file).String()
-		dst := filepath.Join(tmp, e.file)
-		if err := db.DownloadFile(url, dst); err != nil {
-			log.Print(err)
-		}
-	}
 }
 
 func (db *ChecksumDB) containsHash(basename, hash string) bool {
