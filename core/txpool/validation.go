@@ -86,7 +86,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if rules.IsShanghai && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
 		return fmt.Errorf("%w: code size %v, limit %v", core.ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)
 	}
-	if rules.IsOsaka && tx.Gas() > 30_000_000 {
+	if rules.IsOsaka && tx.Gas() > params.MaxTxGas {
 		return fmt.Errorf("transaction gas exceeded max allowed (30_000_000): %d", tx.Gas())
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded

@@ -54,7 +54,6 @@ type environment struct {
 	evm      *vm.EVM
 
 	header   *types.Header
-	parent   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	sidecars []*types.BlobTxSidecar
@@ -255,12 +254,13 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
-		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
-		state:    state,
-		coinbase: coinbase,
-		header:   header,
-		witness:  state.Witness(),
-		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		signer:      types.MakeSigner(miner.chainConfig, header.Number, header.Time),
+		state:       state,
+		coinbase:    coinbase,
+		header:      header,
+		witness:     state.Witness(),
+		evm:         vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		chainConfig: miner.chainConfig,
 	}, nil
 }
 
@@ -427,10 +427,6 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 	return nil
 }
 
-func (e *environment) isOsakaForkBlock() bool {
-	return e.chainConfig.IsOsaka(e.header.Number, e.header.Time) && !e.chainConfig.IsOsaka(e.header.Number, e.header.Time)
-}
-
 // fiterTxsAboveGas removes any transactions from a sender which exceed masGas.
 // If a transaction is removed, all higher-nonce transactions from the same account
 // will also be filtered out.
@@ -478,13 +474,13 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	prioBlobTxs, normalBlobTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingBlobTxs
 
 	// if we have just entered the Osaka fork, it is possible due to the async
-	// nature of txpool resets that the state of the pool has not reset to a point
-	// past the fork block.  We need to filter out any transactions that exceed the
-	// eip 7823 tx gas threshold.
+	// nature of txpool resets that the state of the pool has not finished resetting
+	// to a post-fork block.  If so, it may not have removed txs that exceed the
+	// eip-7825 transaction maximum gas limit.
 	poolHead := miner.txpool.Head()
 	if env.chainConfig.IsOsaka(env.header.Number, env.header.Time) && !env.chainConfig.IsOsaka(poolHead.Number, poolHead.Time) {
-		filterTxsAboveGas(prioPlainTxs, 30_000_000)
-		filterTxsAboveGas(prioBlobTxs, 30_000_000)
+		filterTxsAboveGas(prioPlainTxs, params.MaxTxGas)
+		filterTxsAboveGas(prioBlobTxs, params.MaxTxGas)
 	}
 
 	for _, account := range prio {
@@ -497,11 +493,6 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 			prioBlobTxs[account] = txs
 		}
 	}
-
-	// TODO: if we are at fusaka and any transactions exceed 30_000_000 gas limit, don't include them.
-	// there's no way to ensure they are purged from the mempool before we can get them here
-	// because of the asynchronous nature:  the mempool may not receive notification of a head
-	// change past the fusaka fork before we start building the payload here.
 
 	// Fill the block with all available pending transactions.
 	if len(prioPlainTxs) > 0 || len(prioBlobTxs) > 0 {
