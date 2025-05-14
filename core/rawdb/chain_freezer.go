@@ -47,7 +47,7 @@ type chainFreezer struct {
 	ethdb.AncientStore // Ancient store for storing cold chain segment
 
 	// Optional Era database used as a backup for the pruned chain.
-	eradb *eradb.EraDatabase
+	eradb *eradb.Store
 
 	quit    chan struct{}
 	wg      sync.WaitGroup
@@ -72,7 +72,7 @@ func newChainFreezer(datadir string, namespace string, readonly bool, eraDir str
 	if err != nil {
 		return nil, err
 	}
-	var edb *eradb.EraDatabase
+	var edb *eradb.Store
 	if eraDir != "" {
 		edb, err = eradb.New(eraDir)
 		if err != nil {
