@@ -1262,7 +1262,6 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	}
 	pool.mu.Lock()
 	if reset != nil {
-		// TODO: ensure oldHead refers to a head block that we were previously synced to
 		if pool.chainconfig.IsOsaka(reset.newHead.Number, reset.newHead.Time) && !pool.chainconfig.IsOsaka(reset.oldHead.Number, reset.oldHead.Time) {
 			var removeHashes []common.Hash
 			pool.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
