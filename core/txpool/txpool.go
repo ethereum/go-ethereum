@@ -107,6 +107,7 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 		quit:     make(chan chan error),
 		term:     make(chan struct{}),
 		sync:     make(chan chan error),
+		head:     head,
 	}
 	reserver := NewReservationTracker()
 	for i, subpool := range subpools {
