@@ -150,7 +150,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 		}
 	}
 	evm.Config.ExtraEips = extraEips
-	return &EVMInterpreter{evm: evm, table: table}
+	return &EVMInterpreter{evm: evm, table: table, hasher: crypto.NewKeccakState()}
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
