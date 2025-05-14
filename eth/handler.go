@@ -177,7 +177,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 	} else {
 		head := h.chain.CurrentBlock()
-		if head.Number.Uint64() > 0 && h.chain.HasState(head.Root) {
+		if head.Number.Uint64() == 0 && head.Time > uint64(time.Now().Unix()) {
+			// Print warning log if the genesis block is in the future.
+			h.snapSync.Store(false)
+			log.Warn("Switch sync mode from snap sync to full sync", "reason", "in the future genesis block")
+		} else if head.Number.Uint64() > 0 && h.chain.HasState(head.Root) {
 			// Print warning log if database is not empty to run snap sync.
 			log.Warn("Switch sync mode from snap sync to full sync", "reason", "snap sync complete")
 		} else {
