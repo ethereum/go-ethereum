@@ -574,7 +574,6 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 		MaxSize: txMaxSize,
 		MinTip:  pool.gasTip.Load().ToBig(),
 	}
-	// TODO: validate that the tx doesn't have a gas limit higher than 30 million
 	return txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts)
 }
 
