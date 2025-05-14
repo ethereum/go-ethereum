@@ -45,14 +45,10 @@ type versionEntry struct {
 	version string
 }
 
-type urlEntry struct {
-	url *url.URL
-}
-
 type hashEntry struct {
 	hash string
 	file string
-	u    *urlEntry
+	url  *url.URL
 }
 
 // MustLoadChecksums loads a file containing checksums.
@@ -73,7 +69,7 @@ func ParseChecksums(input []byte) (*ChecksumDB, error) {
 	var (
 		csdb    = new(ChecksumDB)
 		rd      = bytes.NewBuffer(input)
-		lastURL *urlEntry
+		lastURL *url.URL
 	)
 	for lineNum := 1; ; lineNum++ {
 		line, err := rd.ReadString('\n')
@@ -106,7 +102,7 @@ func ParseChecksums(input []byte) (*ChecksumDB, error) {
 				if err != nil {
 					return nil, fmt.Errorf("line %d: invalid URL: %v", lineNum, err)
 				}
-				lastURL = &urlEntry{u}
+				lastURL = u
 			}
 
 		default:
@@ -199,10 +195,10 @@ func (db *ChecksumDB) FindVersion(tool string) (string, error) {
 func (db *ChecksumDB) FindURL(basename string) (string, error) {
 	for _, e := range db.hashes {
 		if e.file == basename {
-			if e.u == nil {
+			if e.url == nil {
 				return "", fmt.Errorf("file %q has no URL defined", e.file)
 			}
-			return e.u.url.JoinPath(e.file).String(), nil
+			return e.url.JoinPath(e.file).String(), nil
 		}
 	}
 	return "", fmt.Errorf("file %q does not exist in checksum database", basename)
@@ -215,11 +211,11 @@ func (db *ChecksumDB) VerifyAll() {
 		tmp = os.TempDir()
 	)
 	for _, e := range db.hashes {
-		if e.u == nil {
+		if e.url == nil {
 			log.Printf("Skipping verification of %s: no URL defined in checksum database", e.file)
 			continue
 		}
-		url := e.u.url.JoinPath(e.file).String()
+		url := e.url.JoinPath(e.file).String()
 		dst := filepath.Join(tmp, e.file)
 		if err := db.DownloadFile(url, dst); err != nil {
 			log.Print(err)
