@@ -29,6 +29,7 @@ import (
 // TestTransactionRollbackBehavior tests that calling Rollback on the simulated backend doesn't prevent subsequent
 // addition of new transactions
 func TestTransactionRollbackBehavior(t *testing.T) {
+	t.Skip("bor: rollback is for beacon chain")
 	sim := NewBackend(
 		types.GenesisAlloc{
 			testAddr:  {Balance: big.NewInt(10000000000000000)},
