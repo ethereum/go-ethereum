@@ -1344,9 +1344,12 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(w.chainConfig, env.header))
 	}
 
-	var (
-		localPlainTxs, remotePlainTxs, localBlobTxs, remoteBlobTxs map[common.Address][]*txpool.LazyTransaction
-	)
+	// bor: kept for reference, can remove later
+	/*
+		var (
+			localPlainTxs, remotePlainTxs, localBlobTxs, remoteBlobTxs map[common.Address][]*txpool.LazyTransaction
+		)
+	*/
 
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
 	pendingPlainTxs := w.eth.TxPool().Pending(filter)
@@ -1374,8 +1377,9 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, prioPlainTxs, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, prioBlobTxs, env.header.BaseFee)
 
-		plainTxs = newTransactionsByPriceAndNonce(env.signer, localPlainTxs, env.header.BaseFee)
-		blobTxs = newTransactionsByPriceAndNonce(env.signer, localBlobTxs, env.header.BaseFee)
+		// bor: kept for reference, can remove later
+		// plainTxs = newTransactionsByPriceAndNonce(env.signer, localPlainTxs, env.header.BaseFee)
+		// blobTxs = newTransactionsByPriceAndNonce(env.signer, localBlobTxs, env.header.BaseFee)
 
 		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int)); err != nil {
 			return err
@@ -1385,8 +1389,9 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, normalPlainTxs, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, normalBlobTxs, env.header.BaseFee)
 
-		plainTxs = newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, env.header.BaseFee)
-		blobTxs = newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, env.header.BaseFee)
+		// bor: kept for reference, can remove later
+		// plainTxs = newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, env.header.BaseFee)
+		// blobTxs = newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, env.header.BaseFee)
 
 		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int)); err != nil {
 			return err

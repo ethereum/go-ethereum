@@ -1395,7 +1395,6 @@ func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 
 	cfg.Miner.Etherbase = common.BytesToAddress(b)
-
 }
 
 func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {

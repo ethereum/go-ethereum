@@ -75,6 +75,7 @@ func New(ethone consensus.Engine) *Beacon {
 // isPostMerge reports whether the given block number is assumed to be post-merge.
 // Here we check the MergeNetsplitBlock to allow configuring networks with a PoW or
 // PoA chain for unit testing purposes.
+// nolint : unused
 func isPostMerge(config *params.ChainConfig, blockNum uint64, timestamp uint64) bool {
 	mergedAtGenesis := config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Sign() == 0
 	return mergedAtGenesis ||

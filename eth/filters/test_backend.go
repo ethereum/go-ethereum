@@ -14,6 +14,7 @@ import (
 	rpc "github.com/ethereum/go-ethereum/rpc"
 )
 
+// nolint : unused
 type TestBackend struct {
 	DB              ethdb.Database
 	sections        uint64
