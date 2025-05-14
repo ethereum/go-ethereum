@@ -331,15 +331,10 @@ func doTest(cmdline []string) {
 
 // downloadSpecTestFixtures downloads and extracts the execution-spec-tests fixtures.
 func downloadSpecTestFixtures(csdb *download.ChecksumDB, cachedir string) string {
-	executionSpecTestsVersion, err := csdb.FindVersion("spec-tests")
-	if err != nil {
-		log.Fatal(err)
-	}
 	ext := ".tar.gz"
 	base := "fixtures_pectra-devnet-6" // TODO(s1na) rename once the version becomes part of the filename
-	url := fmt.Sprintf("https://github.com/ethereum/execution-spec-tests/releases/download/%s/%s%s", executionSpecTestsVersion, base, ext)
 	archivePath := filepath.Join(cachedir, base+ext)
-	if err := csdb.DownloadFile(url, archivePath); err != nil {
+	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
 		log.Fatal(err)
 	}
 	if err := build.ExtractArchive(archivePath, executionSpecTestsDir); err != nil {
@@ -452,7 +447,6 @@ func downloadLinter(cachedir string) string {
 	}
 	arch := runtime.GOARCH
 	ext := ".tar.gz"
-
 	if runtime.GOOS == "windows" {
 		ext = ".zip"
 	}
@@ -460,9 +454,8 @@ func downloadLinter(cachedir string) string {
 		arch += "v" + os.Getenv("GOARM")
 	}
 	base := fmt.Sprintf("golangci-lint-%s-%s-%s", version, runtime.GOOS, arch)
-	url := fmt.Sprintf("https://github.com/golangci/golangci-lint/releases/download/v%s/%s%s", version, base, ext)
 	archivePath := filepath.Join(cachedir, base+ext)
-	if err := csdb.DownloadFile(url, archivePath); err != nil {
+	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
 		log.Fatal(err)
 	}
 	if err := build.ExtractArchive(archivePath, cachedir); err != nil {
@@ -511,10 +504,8 @@ func downloadProtocGenGo(cachedir string) string {
 		archiveName += ".tar.gz"
 	}
 
-	url := fmt.Sprintf("https://github.com/protocolbuffers/protobuf-go/releases/download/v%s/%s", version, archiveName)
-
 	archivePath := path.Join(cachedir, archiveName)
-	if err := csdb.DownloadFile(url, archivePath); err != nil {
+	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
 		log.Fatal(err)
 	}
 	extractDest := filepath.Join(cachedir, baseName)
@@ -544,10 +535,8 @@ func downloadProtoc(cachedir string) string {
 
 	fileName := fmt.Sprintf("protoc-%s-%s", version, baseName)
 	archiveFileName := fileName + ".zip"
-	url := fmt.Sprintf("https://github.com/protocolbuffers/protobuf/releases/download/v%s/%s", version, archiveFileName)
 	archivePath := filepath.Join(cachedir, archiveFileName)
-
-	if err := csdb.DownloadFile(url, archivePath); err != nil {
+	if err := csdb.DownloadFileFromKnownURL(archivePath); err != nil {
 		log.Fatal(err)
 	}
 	extractDest := filepath.Join(cachedir, fileName)
@@ -836,9 +825,8 @@ func downloadGoBootstrapSources(cachedir string) []string {
 			log.Fatal(err)
 		}
 		file := fmt.Sprintf("go%s.src.tar.gz", gobootVersion)
-		url := "https://dl.google.com/go/" + file
 		dst := filepath.Join(cachedir, file)
-		if err := csdb.DownloadFile(url, dst); err != nil {
+		if err := csdb.DownloadFileFromKnownURL(dst); err != nil {
 			log.Fatal(err)
 		}
 		bundles = append(bundles, dst)
@@ -854,9 +842,8 @@ func downloadGoSources(cachedir string) string {
 		log.Fatal(err)
 	}
 	file := fmt.Sprintf("go%s.src.tar.gz", dlgoVersion)
-	url := "https://dl.google.com/go/" + file
 	dst := filepath.Join(cachedir, file)
-	if err := csdb.DownloadFile(url, dst); err != nil {
+	if err := csdb.DownloadFileFromKnownURL(dst); err != nil {
 		log.Fatal(err)
 	}
 	return dst
