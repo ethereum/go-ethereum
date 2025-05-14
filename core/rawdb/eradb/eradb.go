@@ -34,15 +34,6 @@ const openFileLimit = 64
 
 var errClosed = errors.New("era store is closed")
 
-type fileCacheStat byte
-
-const (
-	storeClosing fileCacheStat = iota
-	fileIsNew
-	fileIsOpening
-	fileIsCached
-)
-
 // Store manages read access to a directory of era1 files.
 // The getter methods are thread-safe.
 type Store struct {
@@ -62,6 +53,15 @@ type fileCacheEntry struct {
 	file     *era.Era      // the file
 	err      error         // error from opening the file
 }
+
+type fileCacheStatus byte
+
+const (
+	storeClosing fileCacheStatus = iota
+	fileIsNew
+	fileIsOpening
+	fileIsCached
+)
 
 // New opens the store directory.
 func New(datadir string) (*Store, error) {
@@ -144,7 +144,6 @@ func (db *Store) GetRawReceipts(number uint64) ([]byte, error) {
 // The caller can freely access the returned entry's .file and .err
 // db.doneWithFile must be called when it is done reading the file.
 func (db *Store) getEraByEpoch(epoch uint64) *fileCacheEntry {
-	// Add the requested epoch to the cache.
 	stat, entry := db.getCacheEntry(epoch)
 
 	switch stat {
@@ -175,7 +174,7 @@ func (db *Store) getEraByEpoch(epoch uint64) *fileCacheEntry {
 }
 
 // getCacheEntry gets an open era file from the cache.
-func (db *Store) getCacheEntry(epoch uint64) (stat fileCacheStat, entry *fileCacheEntry) {
+func (db *Store) getCacheEntry(epoch uint64) (stat fileCacheStatus, entry *fileCacheEntry) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
