@@ -87,7 +87,6 @@ func (db *Store) Close() {
 
 // GetRawBody returns the raw body for a given block number.
 func (db *Store) GetRawBody(number uint64) ([]byte, error) {
-	// Lookup the table by epoch.
 	epoch := number / uint64(era.MaxEra1Size)
 	entry := db.getEraByEpoch(epoch)
 	if entry.err != nil {
