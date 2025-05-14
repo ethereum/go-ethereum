@@ -86,21 +86,25 @@ func (l *Loader) DownloadAll(destDir string) error {
 
 // DownloadBlockRange fetches the era1 files for the given block range.
 func (l *Loader) DownloadBlockRange(start, end uint64, destDir string) error {
-	startEpoch := int(start / uint64(era.MaxEra1Size))
-	endEpoch := int(end / uint64(era.MaxEra1Size))
+	startEpoch := start / uint64(era.MaxEra1Size)
+	endEpoch := end / uint64(era.MaxEra1Size)
+	return l.DownloadEpochRange(startEpoch, endEpoch, destDir)
+}
+
+// DownloadEpochRange fetches the era1 files in the given epoch range.
+func (l *Loader) DownloadEpochRange(start, end uint64, destDir string) error {
 	pat := regexp.MustCompile(regexp.QuoteMeta(l.network) + "-([0-9]+)-[0-9a-f]+\\.era1")
 	for file := range l.csdb.Files() {
 		m := pat.FindStringSubmatch(file)
 		if len(m) == 2 {
 			fileEpoch, _ := strconv.Atoi(m[1])
-			if fileEpoch >= startEpoch && fileEpoch <= endEpoch {
+			if uint64(fileEpoch) >= start && uint64(fileEpoch) <= end {
 				if err := l.download(file, destDir); err != nil {
 					return err
 				}
 			}
 		}
 	}
-	// TODO: detect if blocks are out available era1 range.
 	return nil
 }
 
