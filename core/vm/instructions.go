@@ -246,6 +246,14 @@ func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	if evm.Config.EnablePreimageRecording {
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
+
+	// Firehose requirements.
+	//
+	// Search 11471b22bb0b within the repository to find all the details
+	if evm.Config.Tracer != nil && evm.Config.Tracer.OnKeccakPreimage != nil {
+		evm.Config.Tracer.OnKeccakPreimage(interpreter.hasherBuf, data)
+	}
+
 	size.SetBytes(interpreter.hasherBuf[:])
 	return nil, nil
 }
