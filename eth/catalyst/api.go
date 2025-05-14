@@ -162,9 +162,14 @@ type ConsensusAPI struct {
 }
 
 var (
-	getBlobsV2RequestedTotal  = metrics.NewRegisteredCounter("execution_get_blobs_requested_from_cl_total", nil)
-	getBlobsV2RequestedHit    = metrics.NewRegisteredCounter("execution_get_blobs_requested_from_cl_hit", nil)
-	getBlobsV2RequestDuration = metrics.NewRegisteredHistogram("execution_get_blobs_request_duration_milliseconds", nil, metrics.NewExpDecaySample(1028, 0.015))
+	// Number of blobs requested via getBlobsV2
+	getBlobsV2BlobsRequestedTotal = metrics.NewRegisteredCounter("get_blobs_requests_blobs_total", nil)
+	// Number of blobs requested via getBlobsV2 that are present in the blobpool
+	getBlobsV2BlobsInPoolTottal = metrics.NewRegisteredCounter("get_blobs_requests_blobs_in_blobpool_total", nil)
+	// Number of times getBlobsV2 responded with “hit”
+	getBlobsV2RequestHit = metrics.NewRegisteredCounter("get_blobs_requests_success_total", nil)
+	// Number of times getBlobsV2 responded with “miss”
+	getBlobsV2RequestMiss = metrics.NewRegisteredCounter("get_blobs_requests_failure_total", nil)
 )
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -589,19 +594,16 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
 
-	start := time.Now()
-	defer func() {
-		duration := time.Since(start)
-		getBlobsV2RequestDuration.Update(duration.Milliseconds())
-	}()
-
-	getBlobsV2RequestedTotal.Inc(int64(len(hashes)))
+	getBlobsV2BlobsRequestedTotal.Inc(int64(len(hashes)))
 
 	// Optimization: check first if all blobs are available, if not, return empty response
 	blobCounts := api.eth.TxPool().GetBlobCounts(hashes)
-	getBlobsV2RequestedHit.Inc(int64(blobCounts))
+	getBlobsV2BlobsInPoolTottal.Inc(int64(blobCounts))
 
-	if blobCounts != len(hashes) {
+	if blobCounts == len(hashes) {
+		getBlobsV2RequestHit.Inc(1)
+	} else {
+		getBlobsV2RequestMiss.Inc(1)
 		return nil, nil
 	}
 
