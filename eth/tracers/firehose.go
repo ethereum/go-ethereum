@@ -174,8 +174,6 @@ type Firehose struct {
 	blockReorderOrdinalSnapshot uint64
 	blockReorderOrdinalOnce     sync.Once
 	blockIsGenesis              bool
-	blockPrintQueue             chan *blockPrintJob
-	blockFlushDone              sync.WaitGroup
 
 	// Transaction state
 	evm                  *tracing.VMContext
@@ -194,12 +192,14 @@ type Firehose struct {
 	testingBuffer             *bytes.Buffer
 	testingIgnoreGenesisBlock bool
 
-	// Worker queue for block printing
-	blockOutputQueue      chan *blockOutput
-	flushOutputDone       sync.WaitGroup
-	startBlockInitialized bool
-	startBlockNum         uint64
-	startBlockCond        *sync.Cond
+	// Flushing mechanisms
+	flushJobQueue           chan *blockPrintJob
+	flushOrderedOutputQueue chan *blockOutput
+	flushJobWG              sync.WaitGroup
+	flushOrderedOutputWG    sync.WaitGroup
+	flushStarted            bool
+	flushStartBlockNum      uint64
+	flushStartCond          *sync.Cond
 }
 
 const FirehoseProtocolVersion = "3.0"
@@ -254,7 +254,7 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		deferredCallState:       NewDeferredCallState(),
 		latestCallEnterSuicided: false,
 
-		startBlockCond: sync.NewCond(&sync.Mutex{}),
+		flushStartCond: sync.NewCond(&sync.Mutex{}),
 	}
 
 	if config.private != nil {
@@ -268,29 +268,29 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		log.Info("Firehose concurrent block flushing enabled, starting", config.ConcurrentBlockFlushing,
 			"block print worker goroutine")
 
-		firehose.blockPrintQueue = make(chan *blockPrintJob, 100) // TODO: Optimal buffer size tbd
-		firehose.blockOutputQueue = make(chan *blockOutput, 100)
+		firehose.flushJobQueue = make(chan *blockPrintJob, 100) // TODO: Optimal buffer size tbd
+		firehose.flushOrderedOutputQueue = make(chan *blockOutput, 100)
 		for i := 0; i < config.ConcurrentBlockFlushing; i++ {
-			firehose.blockFlushDone.Add(1)
+			firehose.flushJobWG.Add(1)
 			go firehose.blockPrintWorker()
 		}
 
 		// Output channel to order the flushing linearly
-		firehose.flushOutputDone.Add(1)
+		firehose.flushOrderedOutputWG.Add(1)
 		go func() {
-			defer firehose.flushOutputDone.Done()
+			defer firehose.flushOrderedOutputWG.Done()
 
 			buffer := make(map[uint64][]byte)
 
-			firehose.startBlockCond.L.Lock()
-			for !firehose.startBlockInitialized {
-				firehose.startBlockCond.Wait()
+			firehose.flushStartCond.L.Lock()
+			for !firehose.flushStarted {
+				firehose.flushStartCond.Wait()
 			}
 
-			nextExpected := firehose.startBlockNum
-			firehose.startBlockCond.L.Unlock()
+			nextExpected := firehose.flushStartBlockNum
+			firehose.flushStartCond.L.Unlock()
 
-			for result := range firehose.blockOutputQueue {
+			for result := range firehose.flushOrderedOutputQueue {
 				buffer[result.blockNum] = result.data
 
 				for {
@@ -546,19 +546,19 @@ func (f *Firehose) OnBlockEnd(err error) {
 
 		// Flush block to firehose and optionally use goroutine
 		if f.concurrentBlockFlushing > 0 {
-			f.startBlockCond.L.Lock()
-			if !f.startBlockInitialized {
-				f.startBlockNum = f.block.Number
-				f.startBlockInitialized = true
-				f.startBlockCond.Broadcast()
+			f.flushStartCond.L.Lock()
+			if !f.flushStarted {
+				f.flushStartBlockNum = f.block.Number
+				f.flushStarted = true
+				f.flushStartCond.Broadcast()
 			}
-			f.startBlockCond.L.Unlock()
+			f.flushStartCond.L.Unlock()
 
 			job := &blockPrintJob{
 				block:    f.block,
 				finality: f.blockFinality,
 			}
-			f.blockPrintQueue <- job
+			f.flushJobQueue <- job
 		} else {
 			f.printBlockToFirehose(f.block, f.blockFinality)
 		}
@@ -1947,7 +1947,7 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 	buf.WriteString("\n")
 
 	if f.concurrentBlockFlushing > 0 {
-		f.blockOutputQueue <- &blockOutput{
+		f.flushOrderedOutputQueue <- &blockOutput{
 			blockNum: block.Number,
 			data:     buf.Bytes(),
 		}
@@ -2894,8 +2894,8 @@ type blockPrintJob struct {
 }
 
 func (f *Firehose) blockPrintWorker() {
-	defer f.blockFlushDone.Done()
-	for job := range f.blockPrintQueue {
+	defer f.flushJobWG.Done()
+	for job := range f.flushJobQueue {
 		f.printBlockToFirehose(job.block, job.finality)
 	}
 }
@@ -2906,11 +2906,11 @@ func (f *Firehose) blockPrintWorker() {
 func (f *Firehose) CloseBlockPrintQueue() {
 	if f.concurrentBlockFlushing > 0 {
 		f.closeChannels.Do(func() {
-			close(f.blockPrintQueue)
-			f.blockFlushDone.Wait()
+			close(f.flushJobQueue)
+			f.flushJobWG.Wait()
 
-			close(f.blockOutputQueue)
-			f.flushOutputDone.Wait()
+			close(f.flushOrderedOutputQueue)
+			f.flushOrderedOutputWG.Wait()
 		})
 	}
 }
