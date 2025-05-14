@@ -473,7 +473,6 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
 	pendingBlobTxs := miner.txpool.Pending(filter)
 
-	// if this is the fusaka fork block, filter all txs w/ gas >= 30_000_000 from the pending ones
 
 	// Split the pending transactions into locals and remotes.
 	prioPlainTxs, normalPlainTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
