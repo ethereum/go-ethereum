@@ -47,6 +47,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/clique"
 	"github.com/scroll-tech/go-ethereum/consensus/ethash"
+	"github.com/scroll-tech/go-ethereum/consensus/misc"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/vm"
@@ -934,6 +935,18 @@ var (
 		Name:  "da.recovery.produceblocks",
 		Usage: "Produce unsigned blocks after L1 recovery for permissionless batch submission",
 	}
+
+	// L2 base fee settings
+	L2BaseFeeScalarFlag = BigFlag{
+		Name:  "basefee.scalar",
+		Usage: "Scalar used in the l2 base fee formula. Signer nodes will use this for computing the next block's base fee. Follower nodes will use this in RPC.",
+		Value: misc.DefaultBaseFeeScalar,
+	}
+	L2BaseFeeOverheadFlag = BigFlag{
+		Name:  "basefee.overhead",
+		Usage: "Overhead used in the l2 base fee formula. Signer nodes will use this for computing the next block's base fee. Follower nodes will use this in RPC.",
+		Value: misc.DefaultBaseFeeOverhead,
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1709,6 +1722,29 @@ func setDA(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
+func setBaseFee(ctx *cli.Context, cfg *ethconfig.Config) {
+	cfg.BaseFeeScalar = misc.DefaultBaseFeeScalar
+	if ctx.GlobalIsSet(L2BaseFeeScalarFlag.Name) {
+		cfg.BaseFeeScalar = GlobalBig(ctx, L2BaseFeeScalarFlag.Name)
+	}
+	cfg.BaseFeeOverhead = misc.DefaultBaseFeeOverhead
+	if ctx.GlobalIsSet(L2BaseFeeOverheadFlag.Name) {
+		cfg.BaseFeeOverhead = GlobalBig(ctx, L2BaseFeeOverheadFlag.Name)
+	}
+
+	log.Info("L2 base fee coefficients", "scalar", cfg.BaseFeeScalar, "overhead", cfg.BaseFeeOverhead)
+
+	var minBaseFee uint64
+	if fee := misc.MinBaseFee(cfg.BaseFeeScalar, cfg.BaseFeeOverhead); fee.IsUint64() {
+		minBaseFee = fee.Uint64()
+	}
+
+	if cfg.TxPool.PriceLimit < minBaseFee {
+		log.Warn("Updating txpool price limit to min L2 base fee", "provided", cfg.TxPool.PriceLimit, "updated", minBaseFee)
+		cfg.TxPool.PriceLimit = minBaseFee
+	}
+}
+
 func setMaxBlockRange(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(MaxBlockRangeFlag.Name) {
 		cfg.MaxBlockRange = ctx.GlobalInt64(MaxBlockRangeFlag.Name)
@@ -1785,6 +1821,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setCircuitCapacityCheck(ctx, cfg)
 	setEnableRollupVerify(ctx, cfg)
 	setDA(ctx, cfg)
+	setBaseFee(ctx, cfg)
 	setMaxBlockRange(ctx, cfg)
 	if ctx.GlobalIsSet(ShadowforkPeersFlag.Name) {
 		cfg.ShadowForkPeerIDs = ctx.GlobalStringSlice(ShadowforkPeersFlag.Name)

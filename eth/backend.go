@@ -148,6 +148,13 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client l1.Client) (*Ether
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
+
+	// Hacky workaround:
+	// It's hard to pass these fields to `CalcBaseFee`, etc.
+	// So pass them as part of the genesis config instead.
+	chainConfig.Scroll.BaseFeeScalar = config.BaseFeeScalar
+	chainConfig.Scroll.BaseFeeOverhead = config.BaseFeeOverhead
+
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {

@@ -704,6 +704,11 @@ type ScrollConfig struct {
 
 	// Genesis State Root for MPT clients
 	GenesisStateRoot *common.Hash `json:"genesisStateRoot,omitempty"`
+
+	// L2 base fee coefficients for the formula: `l2BaseFee = (l1BaseFee * scalar) / PRECISION + overhead`.
+	// These fields are populated from configuration flags, and passed to `CalcBaseFee`.
+	BaseFeeScalar   *big.Int `json:"-"`
+	BaseFeeOverhead *big.Int `json:"-"`
 }
 
 // L1Config contains the l1 parameters needed to sync l1 contract events (e.g., l1 messages, commit/revert/finalize batches) in the sequencer
@@ -753,8 +758,18 @@ func (s ScrollConfig) String() string {
 		genesisStateRoot = fmt.Sprintf("%v", *s.GenesisStateRoot)
 	}
 
-	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, MaxTxPayloadBytesPerBlock: %v, feeVaultAddress: %v, l1Config: %v, genesisStateRoot: %v}",
-		s.UseZktrie, maxTxPerBlock, maxTxPayloadBytesPerBlock, s.FeeVaultAddress, s.L1Config.String(), genesisStateRoot)
+	baseFeeScalar := "<nil>"
+	if s.BaseFeeScalar != nil {
+		baseFeeScalar = s.BaseFeeScalar.String()
+	}
+
+	baseFeeOverhead := "<nil>"
+	if s.BaseFeeOverhead != nil {
+		baseFeeOverhead = s.BaseFeeOverhead.String()
+	}
+
+	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, MaxTxPayloadBytesPerBlock: %v, feeVaultAddress: %v, l1Config: %v, genesisStateRoot: %v, baseFeeScalar: %v, baseFeeOverhead: %v}",
+		s.UseZktrie, maxTxPerBlock, maxTxPayloadBytesPerBlock, s.FeeVaultAddress, s.L1Config.String(), genesisStateRoot, baseFeeScalar, baseFeeOverhead)
 }
 
 // IsValidTxCount returns whether the given block's transaction count is below the limit.

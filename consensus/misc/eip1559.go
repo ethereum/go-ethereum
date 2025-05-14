@@ -28,6 +28,16 @@ import (
 // We would only go above this if L1 base fee hits 2931 Gwei.
 const MaximumL2BaseFee = 10000000000
 
+// L2 base fee formula constants and defaults.
+// l2BaseFee = (l1BaseFee * scalar) / PRECISION + overhead.
+// `scalar` accounts for finalization costs. `overhead` accounts for sequencing and proving costs.
+// we use 1e18 for precision to match the contract implementation.
+var (
+	BaseFeePrecision       = new(big.Int).SetUint64(1e18)
+	DefaultBaseFeeScalar   = new(big.Int).SetUint64(34000000000000)
+	DefaultBaseFeeOverhead = new(big.Int).SetUint64(15680000)
+)
+
 // VerifyEip1559Header verifies some header attributes which were changed in EIP-1559,
 // - gas limit check
 // - basefee check
@@ -54,18 +64,29 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, parentL1BaseF
 	if config.Clique != nil && config.Clique.ShadowForkHeight != 0 && parent.Number.Uint64() >= config.Clique.ShadowForkHeight {
 		return big.NewInt(10000000) // 0.01 Gwei
 	}
-	l2SequencerFee := big.NewInt(1000000) // 0.001 Gwei
-	provingFee := big.NewInt(14680000)    // 0.01468 Gwei
 
-	// L1_base_fee * 0.000034
-	verificationFee := parentL1BaseFee
-	verificationFee = new(big.Int).Mul(verificationFee, big.NewInt(34))
-	verificationFee = new(big.Int).Div(verificationFee, big.NewInt(1000000))
+	scalar := config.Scroll.BaseFeeScalar
+	if scalar == nil {
+		scalar = DefaultBaseFeeScalar
+	}
+	overhead := config.Scroll.BaseFeeOverhead
+	if overhead == nil {
+		overhead = DefaultBaseFeeOverhead
+	}
 
-	baseFee := big.NewInt(0)
-	baseFee.Add(baseFee, l2SequencerFee)
-	baseFee.Add(baseFee, provingFee)
-	baseFee.Add(baseFee, verificationFee)
+	return calcBaseFee(scalar, overhead, parentL1BaseFee)
+}
+
+// MinBaseFee calculates the minimum L2 base fee based on the configured coefficients.
+func MinBaseFee(scalar, overhead *big.Int) *big.Int {
+	return calcBaseFee(scalar, overhead, big.NewInt(0))
+}
+
+func calcBaseFee(scalar, overhead, parentL1BaseFee *big.Int) *big.Int {
+	baseFee := new(big.Int).Set(parentL1BaseFee)
+	baseFee.Mul(baseFee, scalar)
+	baseFee.Div(baseFee, BaseFeePrecision)
+	baseFee.Add(baseFee, overhead)
 
 	if baseFee.Cmp(big.NewInt(MaximumL2BaseFee)) > 0 {
 		baseFee = big.NewInt(MaximumL2BaseFee)
