@@ -63,9 +63,6 @@ func New(datadir string) (*Store, error) {
 			return nil, errors.New("symbolic link datadir is not supported")
 		}
 	}
-	if err := os.MkdirAll(datadir, 0755); err != nil {
-		return nil, err
-	}
 	db := &Store{
 		datadir: datadir,
 		lru:     lru.NewBasicLRU[uint64, *fileCacheEntry](openFileLimit),
