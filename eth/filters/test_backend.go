@@ -5,6 +5,7 @@ import (
 
 	common "github.com/ethereum/go-ethereum/common"
 	core "github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	types "github.com/ethereum/go-ethereum/core/types"
@@ -192,4 +193,8 @@ func (b *TestBackend) GetBody(context.Context, common.Hash, rpc.BlockNumber) (*t
 
 func (b *TestBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	panic("not implemented")
+}
+
+func (b *TestBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+	panic("implement me")
 }

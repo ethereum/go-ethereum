@@ -230,7 +230,7 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 	}
 
 	// Write state changes to db
-	root, err := state.Commit(block.NumberU64(), chain.Config().IsEIP158(b.header.Number))
+	root, err := state.Commit(block.NumberU64(), chain.Config().IsEIP158(b.header.Number), false)
 	if err != nil {
 		panic(fmt.Sprintf("state write error: %v", err))
 	}
@@ -265,7 +265,9 @@ func (b *blockGen) addTxWithChain(bc *core.BlockChain, statedb *state.StateDB, t
 
 	statedb.SetTxContext(tx.Hash(), len(b.txs))
 
-	receipt, err := core.ApplyTransaction(bc.Config(), bc, &b.header.Coinbase, b.gasPool, statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, nil)
+	context := core.NewEVMBlockContext(b.header, bc, nil)
+	evm := vm.NewEVM(context, statedb, bc.Config(), vm.Config{})
+	receipt, err := core.ApplyTransaction(evm, b.gasPool, statedb, b.header, tx, &b.header.GasUsed, nil)
 	if err != nil {
 		panic(err)
 	}
