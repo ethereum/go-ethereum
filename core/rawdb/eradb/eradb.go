@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sync"
 
@@ -65,17 +64,6 @@ const (
 
 // New opens the store directory.
 func New(datadir string) (*Store, error) {
-	// Ensure the datadir is not a symbolic link if it exists.
-	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
-		if info == nil {
-			log.Warn("Could not Lstat the database", "path", datadir)
-			return nil, errors.New("lstat failed")
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			log.Warn("Symbolic link erastore is not supported", "path", datadir)
-			return nil, errors.New("symbolic link datadir is not supported")
-		}
-	}
 	db := &Store{
 		datadir: datadir,
 		lru:     lru.NewBasicLRU[uint64, *fileCacheEntry](openFileLimit),
