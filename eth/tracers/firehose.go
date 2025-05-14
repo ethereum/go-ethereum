@@ -2844,7 +2844,7 @@ func (m Memory) GetPtr(offset, size int64) []byte {
 	// work because the memory is going to be expanded before the operation is actually
 	// executed so the memory will be of the correct size.
 	//
-	// In this situtation, we must pad with zeroes when the memory is not big enough.
-	reminder := m[offset:]
+	// In this situation, we must pad with zeroes when the memory is not big enough.
+	reminder := m[min(offset, int64(len(m))):]
 	return append(reminder, make([]byte, int(size)-len(reminder))...)
 }
