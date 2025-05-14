@@ -98,7 +98,7 @@ func (f *chainFreezer) Close() error {
 
 	var errs []error
 	if f.eradb != nil {
-		errs = append(errs, f.eradb.Close())
+		f.eradb.Close()
 	}
 	errs = append(errs, f.AncientStore.Close())
 
