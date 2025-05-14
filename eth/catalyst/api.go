@@ -165,7 +165,7 @@ var (
 	// Number of blobs requested via getBlobsV2
 	getBlobsV2BlobsRequestedTotal = metrics.NewRegisteredCounter("get_blobs_requests_blobs_total", nil)
 	// Number of blobs requested via getBlobsV2 that are present in the blobpool
-	getBlobsV2BlobsInPoolTottal = metrics.NewRegisteredCounter("get_blobs_requests_blobs_in_blobpool_total", nil)
+	getBlobsV2BlobsInPoolTotal = metrics.NewRegisteredCounter("get_blobs_requests_blobs_in_blobpool_total", nil)
 	// Number of times getBlobsV2 responded with “hit”
 	getBlobsV2RequestHit = metrics.NewRegisteredCounter("get_blobs_requests_success_total", nil)
 	// Number of times getBlobsV2 responded with “miss”
@@ -598,7 +598,7 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 
 	// Optimization: check first if all blobs are available, if not, return empty response
 	blobCounts := api.eth.TxPool().GetBlobCounts(hashes)
-	getBlobsV2BlobsInPoolTottal.Inc(int64(blobCounts))
+	getBlobsV2BlobsInPoolTotal.Inc(int64(blobCounts))
 
 	if blobCounts == len(hashes) {
 		getBlobsV2RequestHit.Inc(1)
