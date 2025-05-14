@@ -193,6 +193,13 @@ type Firehose struct {
 	// Testing state, only used in tests and private configs
 	testingBuffer             *bytes.Buffer
 	testingIgnoreGenesisBlock bool
+
+	// Worker queue for block printing
+	blockOutputQueue      chan *blockOutput
+	flushOutputDone       sync.WaitGroup
+	startBlockInitialized bool
+	startBlockNum         uint64
+	startBlockCond        *sync.Cond
 }
 
 const FirehoseProtocolVersion = "3.0"
@@ -246,6 +253,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		callStack:               NewCallStack(),
 		deferredCallState:       NewDeferredCallState(),
 		latestCallEnterSuicided: false,
+
+		startBlockCond: sync.NewCond(&sync.Mutex{}),
 	}
 
 	if config.private != nil {
@@ -258,9 +267,44 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 	if config.ConcurrentBlockFlushing {
 		log.Info("Firehose concurrent block flushing enabled, starting block " +
 			"print worker goroutine")
-		firehose.blockPrintQueue = make(chan *blockPrintJob, 100)
-		firehose.blockFlushDone.Add(1)
-		go firehose.blockPrintWorker()
+		const numWorkers = 10                                     // TODO: This becomes a parameter
+		firehose.blockPrintQueue = make(chan *blockPrintJob, 100) // TODO: Optimal buffer size tbd
+		firehose.blockOutputQueue = make(chan *blockOutput, 100)
+		for i := 0; i < numWorkers; i++ {
+			firehose.blockFlushDone.Add(1)
+			go firehose.blockPrintWorker()
+		}
+
+		// Output channel to order the flushing linearly
+		firehose.flushOutputDone.Add(1)
+		go func() {
+			defer firehose.flushOutputDone.Done()
+
+			buffer := make(map[uint64][]byte)
+
+			firehose.startBlockCond.L.Lock()
+			for !firehose.startBlockInitialized {
+				firehose.startBlockCond.Wait()
+			}
+
+			nextExpected := firehose.startBlockNum
+			firehose.startBlockCond.L.Unlock()
+
+			for result := range firehose.blockOutputQueue {
+				buffer[result.blockNum] = result.data
+
+				for {
+					data, ok := buffer[nextExpected]
+					if !ok {
+						break
+					}
+
+					firehose.flushToFirehose(data)
+					delete(buffer, nextExpected)
+					nextExpected++
+				}
+			}
+		}()
 	}
 
 	return firehose
@@ -502,6 +546,14 @@ func (f *Firehose) OnBlockEnd(err error) {
 
 		// Flush block to firehose and optionally use goroutine
 		if f.concurrentBlockFlushing {
+			f.startBlockCond.L.Lock()
+			if !f.startBlockInitialized {
+				f.startBlockNum = f.block.Number
+				f.startBlockInitialized = true
+				f.startBlockCond.Broadcast()
+			}
+			f.startBlockCond.L.Unlock()
+
 			job := &blockPrintJob{
 				block:    f.block,
 				finality: f.blockFinality,
@@ -1856,13 +1908,12 @@ func (f *Firehose) panicInvalidState(msg string, callerSkip int) string {
 
 // printBlockToFirehose is a helper function to print a block to Firehose protocl format.
 func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *FinalityStatus) {
+	var buf bytes.Buffer
+
 	marshalled, err := proto.Marshal(block)
 	if err != nil {
 		panic(fmt.Errorf("failed to marshal block: %w", err))
 	}
-
-	// TODO: If multiple goroutine, this becomes shared resource
-	f.outputBuffer.Reset()
 
 	previousHash := block.PreviousID()
 	previousNum := 0
@@ -1882,9 +1933,9 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 	}
 
 	// **Important* The final space in the Sprintf template is mandatory!
-	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
+	buf.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
 
-	encoder := base64.NewEncoder(base64.StdEncoding, f.outputBuffer)
+	encoder := base64.NewEncoder(base64.StdEncoding, &buf)
 	if _, err = encoder.Write(marshalled); err != nil {
 		panic(fmt.Errorf("write to encoder should have been infaillible: %w", err))
 	}
@@ -1893,9 +1944,16 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 		panic(fmt.Errorf("closing encoder should have been infaillible: %w", err))
 	}
 
-	f.outputBuffer.WriteString("\n")
+	buf.WriteString("\n")
 
-	f.flushToFirehose(f.outputBuffer.Bytes())
+	if f.concurrentBlockFlushing {
+		f.blockOutputQueue <- &blockOutput{
+			blockNum: block.Number,
+			data:     buf.Bytes(),
+		}
+	} else {
+		f.flushToFirehose(buf.Bytes())
+	}
 }
 
 // printToFirehose is an easy way to print to Firehose format, it essentially
@@ -2850,6 +2908,14 @@ func (f *Firehose) CloseBlockPrintQueue() {
 		f.closeChannels.Do(func() {
 			close(f.blockPrintQueue)
 			f.blockFlushDone.Wait()
+
+			close(f.blockOutputQueue)
+			f.flushOutputDone.Wait()
 		})
 	}
+}
+
+type blockOutput struct {
+	blockNum uint64
+	data     []byte
 }
