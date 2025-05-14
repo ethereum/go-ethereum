@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/dop251/goja"
@@ -470,7 +472,26 @@ func wrapError(context string, err error) error {
 // It depends on type converters having been set up.
 func (t *jsTracer) setBuiltinFunctions() {
 	vm := t.vm
-	// TODO: load console from goja-nodejs
+	// Initialize console object with log and error methods
+	console := vm.NewObject()
+	console.Set("log", func(call goja.FunctionCall) goja.Value {
+		var output []string
+		for _, argument := range call.Arguments {
+			output = append(output, fmt.Sprintf("%v", argument))
+		}
+		fmt.Fprintln(os.Stdout, strings.Join(output, " "))
+		return goja.Undefined()
+	})
+	console.Set("error", func(call goja.FunctionCall) goja.Value {
+		var output []string
+		for _, argument := range call.Arguments {
+			output = append(output, fmt.Sprintf("%v", argument))
+		}
+		fmt.Fprintln(os.Stderr, strings.Join(output, " "))
+		return goja.Undefined()
+	})
+	vm.Set("console", console)
+
 	vm.Set("toHex", func(v goja.Value) string {
 		b, err := t.fromBuf(vm, v, false)
 		if err != nil {
