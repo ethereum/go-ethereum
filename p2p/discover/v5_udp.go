@@ -774,8 +774,8 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 	t.logcontext = append(t.logcontext, "rawpacket", hexutil.Encode(enc))
 	t.log.Trace(">> "+packet.Name(), t.logcontext...)
 
-	dataForSend := bufferpool.Get(len(enc))
-	copy(dataForSend, enc)
+	dataForSend := bufferpool.Get(len(enc))[:0]
+	dataForSend = append(dataForSend, enc...)
 
 	pw := pendingWrite{
 		toAddr: toAddr,
