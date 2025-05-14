@@ -211,12 +211,16 @@ helps reduce storage requirements for nodes that don't need full historical data
 		Name:      "download-era",
 		Usage:     "Fetches era1 files (pre-merge history) from an HTTP endpoint",
 		ArgsUsage: "",
-		Flags: slices.Concat(utils.DatabaseFlags, []cli.Flag{
-			eraBlockFlag,
-			eraEpochFlag,
-			eraAllFlag,
-			eraServerFlag,
-		}),
+		Flags: slices.Concat(
+			utils.DatabaseFlags,
+			utils.NetworkFlags,
+			[]cli.Flag{
+				eraBlockFlag,
+				eraEpochFlag,
+				eraAllFlag,
+				eraServerFlag,
+			},
+		),
 	}
 )
 
