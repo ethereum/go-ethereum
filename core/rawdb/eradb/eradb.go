@@ -34,9 +34,9 @@ const openFileLimit = 64
 
 var errClosed = errors.New("era store is closed")
 
-// EraDatabase manages read access to a directory of era1 files.
+// Store manages read access to a directory of era1 files.
 // The getter methods are thread-safe.
-type EraDatabase struct {
+type Store struct {
 	datadir string
 	mu      sync.Mutex
 	lru     lru.BasicLRU[uint64, *fileCacheEntry]
@@ -50,8 +50,8 @@ type fileCacheEntry struct {
 	err    error
 }
 
-// New creates a new EraDatabase instance.
-func New(datadir string) (*EraDatabase, error) {
+// New opens the store directory.
+func New(datadir string) (*Store, error) {
 	// Ensure the datadir is not a symbolic link if it exists.
 	if info, err := os.Lstat(datadir); !os.IsNotExist(err) {
 		if info == nil {
@@ -66,7 +66,7 @@ func New(datadir string) (*EraDatabase, error) {
 	if err := os.MkdirAll(datadir, 0755); err != nil {
 		return nil, err
 	}
-	db := &EraDatabase{
+	db := &Store{
 		datadir: datadir,
 		lru:     lru.NewBasicLRU[uint64, *fileCacheEntry](openFileLimit),
 		opening: make(map[uint64]*fileCacheEntry),
@@ -76,7 +76,7 @@ func New(datadir string) (*EraDatabase, error) {
 }
 
 // Close closes all open era1 files in the cache.
-func (db *EraDatabase) Close() {
+func (db *Store) Close() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -89,7 +89,7 @@ func (db *EraDatabase) Close() {
 }
 
 // GetRawBody returns the raw body for a given block number.
-func (db *EraDatabase) GetRawBody(number uint64) ([]byte, error) {
+func (db *Store) GetRawBody(number uint64) ([]byte, error) {
 	// Lookup the table by epoch.
 	epoch := number / uint64(era.MaxEra1Size)
 	entry := db.getEraByEpoch(epoch)
@@ -104,7 +104,7 @@ func (db *EraDatabase) GetRawBody(number uint64) ([]byte, error) {
 }
 
 // GetRawReceipts returns the raw receipts for a given block number.
-func (db *EraDatabase) GetRawReceipts(number uint64) ([]byte, error) {
+func (db *Store) GetRawReceipts(number uint64) ([]byte, error) {
 	epoch := number / uint64(era.MaxEra1Size)
 	entry := db.getEraByEpoch(epoch)
 	if entry.err != nil {
@@ -119,7 +119,7 @@ func (db *EraDatabase) GetRawReceipts(number uint64) ([]byte, error) {
 
 // getEraByEpoch opens an era file or gets it from the cache. The caller can access
 // entry.file and entry.err and must call entry.done when done reading the file.
-func (db *EraDatabase) getEraByEpoch(epoch uint64) *fileCacheEntry {
+func (db *Store) getEraByEpoch(epoch uint64) *fileCacheEntry {
 	// Add the requested epoch to the cache.
 	entry := db.getCacheEntry(epoch)
 	if entry == nil {
@@ -144,7 +144,7 @@ func (db *EraDatabase) getEraByEpoch(epoch uint64) *fileCacheEntry {
 }
 
 // getCacheEntry gets an open era file from the cache.
-func (db *EraDatabase) getCacheEntry(epoch uint64) *fileCacheEntry {
+func (db *Store) getCacheEntry(epoch uint64) *fileCacheEntry {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -166,7 +166,7 @@ func (db *EraDatabase) getCacheEntry(epoch uint64) *fileCacheEntry {
 }
 
 // fileOpened is called after an era file has been successfully opened.
-func (db *EraDatabase) fileOpened(epoch uint64, entry *fileCacheEntry, file *era.Era) {
+func (db *Store) fileOpened(epoch uint64, entry *fileCacheEntry, file *era.Era) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -188,7 +188,7 @@ func (db *EraDatabase) fileOpened(epoch uint64, entry *fileCacheEntry, file *era
 }
 
 // fileFailedToOpen is called when an era file could not be opened.
-func (db *EraDatabase) fileFailedToOpen(epoch uint64, entry *fileCacheEntry, err error) {
+func (db *Store) fileFailedToOpen(epoch uint64, entry *fileCacheEntry, err error) {
 	entry.err = err
 
 	db.mu.Lock()
@@ -198,7 +198,7 @@ func (db *EraDatabase) fileFailedToOpen(epoch uint64, entry *fileCacheEntry, err
 	}
 }
 
-func (db *EraDatabase) openEraFile(epoch uint64) (*era.Era, error) {
+func (db *Store) openEraFile(epoch uint64) (*era.Era, error) {
 	// File name scheme is <network>-<epoch>-<root>.
 	glob := fmt.Sprintf("*-%05d-*.era1", epoch)
 	matches, err := filepath.Glob(filepath.Join(db.datadir, glob))
