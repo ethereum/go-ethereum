@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/urfave/cli/v2"
 )
 
@@ -131,9 +130,7 @@ func generateHistoryTests(clictx *cli.Context) error {
 }
 
 func calcReceiptsHash(rcpt []*types.Receipt) common.Hash {
-	h := crypto.NewKeccakState()
-	rlp.Encode(h, rcpt)
-	return common.Hash(h.Sum(nil))
+	return crypto.Keccak256RLPHash(rcpt)
 }
 
 func writeJSON(fileName string, value any) {

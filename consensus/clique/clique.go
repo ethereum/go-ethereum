@@ -43,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -651,11 +650,10 @@ func (c *Clique) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
-func SealHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
-	encodeSigHeader(hasher, header)
-	hasher.(crypto.KeccakState).Read(hash[:])
-	return hash
+func SealHash(header *types.Header) common.Hash {
+	buf := bytes.NewBuffer(nil)
+	encodeSigHeader(buf, header)
+	return crypto.Keccak256Hash(buf.Bytes())
 }
 
 // CliqueRLP returns the rlp bytes which needs to be signed for the proof-of-authority
