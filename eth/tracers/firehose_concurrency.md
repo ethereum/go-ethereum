@@ -80,6 +80,7 @@ The implementation was validated at multiple levels to ensure correctness, confi
     * With `concurrentBlockFlushing: false`, the node was synced to block 10,000, the data directory (`./geth`) was removed, and then resynced up to block 100,000.
     * The same steps were repeated with `concurrentBlockFlushing: true`.
 
+    Note: A channel with a buffer of 100 was created to allow the tasks to queue without blocking the producer. \
     The `time` command outputs wall-clock time and system/user CPU usage upon completion, providing a baseline for comparing performance between the linear and concurrent implementations. This methodology enables a controlled, reproducible environment for evaluating the effectiveness of the concurrent block flushing feature.
 
 ## Section 4: Analysis
