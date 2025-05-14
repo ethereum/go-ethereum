@@ -156,6 +156,7 @@ func (db *ChecksumDB) VerifyAll() {
 	}
 }
 
+// verifyHash checks that the file at 'path' has the expected hash.
 func verifyHash(path, expectedHash string) error {
 	fd, err := os.Open(path)
 	if err != nil {
@@ -172,7 +173,6 @@ func verifyHash(path, expectedHash string) error {
 		return fmt.Errorf("invalid file hash: %s %s", fileHash, filepath.Base(path))
 	}
 	return nil
-
 }
 
 // DownloadFileFromKnownURL downloads a file from the URL defined in the checksum database.
