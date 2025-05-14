@@ -493,7 +493,6 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 			prioBlobTxs[account] = txs
 		}
 	}
-
 	// Fill the block with all available pending transactions.
 	if len(prioPlainTxs) > 0 || len(prioBlobTxs) > 0 {
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, prioPlainTxs, env.header.BaseFee)
