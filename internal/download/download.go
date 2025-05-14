@@ -30,7 +30,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 )
 
@@ -126,16 +125,6 @@ func (db *ChecksumDB) Files() iter.Seq[string] {
 			}
 		}
 	}
-}
-
-// findHash returns the known hash of a file.
-func (db *ChecksumDB) findHash(basename string) string {
-	for _, e := range db.hashes {
-		if e.file == basename {
-			return e.hash
-		}
-	}
-	return ""
 }
 
 // Verify checks whether the given file is valid according to the checksum database.
@@ -244,6 +233,16 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 	return os.Rename(tmpfile, dstPath)
 }
 
+// findHash returns the known hash of a file.
+func (db *ChecksumDB) findHash(basename string) string {
+	for _, e := range db.hashes {
+		if e.file == basename {
+			return e.hash
+		}
+	}
+	return ""
+}
+
 // FindVersion returns the current known version of a tool, if it is defined in the file.
 func (db *ChecksumDB) FindVersion(tool string) (string, error) {
 	for _, e := range db.versions {
@@ -265,12 +264,6 @@ func (db *ChecksumDB) FindURL(basename string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("file %q does not exist in checksum database", basename)
-}
-
-func (db *ChecksumDB) containsHash(basename, hash string) bool {
-	return slices.ContainsFunc(db.hashes, func(e hashEntry) bool {
-		return e.file == basename && e.hash == hash
-	})
 }
 
 type downloadWriter struct {
