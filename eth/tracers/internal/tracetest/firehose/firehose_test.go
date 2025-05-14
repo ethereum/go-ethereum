@@ -40,11 +40,11 @@ func TestFirehosePrestate(t *testing.T) {
 		"./testdata/TestFirehosePrestate/extra_account_creations",
 	}
 
-	for _, concurrent := range []bool{true, false} {
+	for _, concurrent := range []int{0, 1} {
 		for _, folder := range testFolders {
 			name := filepath.Base(folder)
 			concurrencyLabel := "sequential"
-			if concurrent {
+			if concurrent == 1 {
 				concurrencyLabel = "concurrent"
 			}
 
@@ -199,9 +199,9 @@ func TestFirehose_SystemCalls(t *testing.T) {
 func testBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine consensus.Engine, blocks []*types.Block, goldenDir string) {
 	t.Helper()
 
-	for _, concurrent := range []bool{true, false} {
+	for _, concurrent := range []int{0, 1} {
 		concurrencyLabel := "sequential"
-		if concurrent {
+		if concurrent == 1 {
 			concurrencyLabel = "concurrent"
 		}
 

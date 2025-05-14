@@ -109,7 +109,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 
 type FirehoseConfig struct {
 	ApplyBackwardCompatibility *bool `json:"applyBackwardCompatibility"`
-	ConcurrentBlockFlushing    bool  `json:"concurrentBlockFlushing"`
+	ConcurrentBlockFlushing    int   `json:"concurrentBlockFlushing"`
 
 	// Only used for testing, only possible through JSON configuration
 	private *privateFirehoseConfig
@@ -161,7 +161,7 @@ type Firehose struct {
 	// here. If not set in the config, then we inspect `OnBlockchainInit` the chain config to determine
 	// if it's a network for which we must reproduce the legacy bugs.
 	applyBackwardCompatibility *bool
-	concurrentBlockFlushing    bool
+	concurrentBlockFlushing    int
 
 	// Block state
 	block                       *pbeth.Block
@@ -264,13 +264,13 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		}
 	}
 
-	if config.ConcurrentBlockFlushing {
-		log.Info("Firehose concurrent block flushing enabled, starting block " +
-			"print worker goroutine")
-		const numWorkers = 10                                     // TODO: This becomes a parameter
+	if config.ConcurrentBlockFlushing > 0 {
+		log.Info("Firehose concurrent block flushing enabled, starting", config.ConcurrentBlockFlushing,
+			"block print worker goroutine")
+
 		firehose.blockPrintQueue = make(chan *blockPrintJob, 100) // TODO: Optimal buffer size tbd
 		firehose.blockOutputQueue = make(chan *blockOutput, 100)
-		for i := 0; i < numWorkers; i++ {
+		for i := 0; i < config.ConcurrentBlockFlushing; i++ {
 			firehose.blockFlushDone.Add(1)
 			go firehose.blockPrintWorker()
 		}
@@ -545,7 +545,7 @@ func (f *Firehose) OnBlockEnd(err error) {
 		f.ensureInBlockAndNotInTrx()
 
 		// Flush block to firehose and optionally use goroutine
-		if f.concurrentBlockFlushing {
+		if f.concurrentBlockFlushing > 0 {
 			f.startBlockCond.L.Lock()
 			if !f.startBlockInitialized {
 				f.startBlockNum = f.block.Number
@@ -681,7 +681,7 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 }
 
 func (f *Firehose) OnClose() {
-	if f.concurrentBlockFlushing {
+	if f.concurrentBlockFlushing > 0 {
 		log.Info("Firehose closing, flushing queued blocks to standard output")
 		f.CloseBlockPrintQueue()
 	}
@@ -1946,7 +1946,7 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 
 	buf.WriteString("\n")
 
-	if f.concurrentBlockFlushing {
+	if f.concurrentBlockFlushing > 0 {
 		f.blockOutputQueue <- &blockOutput{
 			blockNum: block.Number,
 			data:     buf.Bytes(),
@@ -2904,7 +2904,7 @@ func (f *Firehose) blockPrintWorker() {
 // It blocks until all concurrent block flushing operations are completed, ensuring a clean
 // shutdown of the printing pipeline.
 func (f *Firehose) CloseBlockPrintQueue() {
-	if f.concurrentBlockFlushing {
+	if f.concurrentBlockFlushing > 0 {
 		f.closeChannels.Do(func() {
 			close(f.blockPrintQueue)
 			f.blockFlushDone.Wait()
