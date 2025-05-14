@@ -901,14 +901,6 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 			"old", oldHead.Hash(), "oldnum", oldNum, "new", newHead.Hash(), "newnum", newNum)
 		return nil, nil
 	}
-	// TODO: I'm not really sure where to put this logic.  need to understand the function implementation better...
-	// TODO: is it necessary to filter out blob txs here, can they exceed 30 mil gas?
-	chainConfig := p.chain.Config()
-	if chainConfig.IsOsaka(add.Number(), add.Time()) && !chainConfig.IsOsaka(rem.Number(), rem.Time()) {
-		p.filterTransactions(func(tx *blobTxMeta, sender common.Address) bool {
-			return tx.blobGas > 30_000_000
-		})
-	}
 	// Both old and new blocks exist, traverse through the progression chain
 	// and accumulate the transactors and transactions
 	for rem.NumberU64() > add.NumberU64() {
@@ -1032,54 +1024,6 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 	return nil
 }
 
-func (p *BlobPool) filterTransactions(filter func(tx *blobTxMeta, sender common.Address) bool) {
-	for addr, txs := range p.index {
-		for i, tx := range txs {
-			if filter(tx, addr) {
-				// Drop the offending transaction
-				var (
-					ids    = []uint64{tx.id}
-					nonces = []uint64{tx.nonce}
-				)
-				p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], txs[i].costCap)
-				p.stored -= uint64(tx.storageSize)
-				p.lookup.untrack(tx)
-				txs[i] = nil
-
-				// Drop everything afterwards, no gaps allowed
-				for j, tx := range txs[i+1:] {
-					ids = append(ids, tx.id)
-					nonces = append(nonces, tx.nonce)
-
-					p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], tx.costCap)
-					p.stored -= uint64(tx.storageSize)
-					p.lookup.untrack(tx)
-					txs[i+1+j] = nil
-				}
-				// Clear out the dropped transactions from the index
-				if i > 0 {
-					p.index[addr] = txs[:i]
-					heap.Fix(p.evict, p.evict.index[addr])
-				} else {
-					delete(p.index, addr)
-					delete(p.spent, addr)
-
-					heap.Remove(p.evict, p.evict.index[addr])
-					p.reserver.Release(addr)
-				}
-				// Clear out the transactions from the data store
-
-				for _, id := range ids {
-					if err := p.store.Delete(id); err != nil {
-						log.Error("Failed to delete dropped transaction", "id", id, "err", err)
-					}
-				}
-				break
-			}
-		}
-	}
-}
-
 // SetGasTip implements txpool.SubPool, allowing the blob pool's gas requirements
 // to be kept in sync with the main transaction pool's gas requirements.
 func (p *BlobPool) SetGasTip(tip *big.Int) {
@@ -1092,20 +1036,53 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 
 	// If the min miner fee increased, remove transactions below the new threshold
 	if old == nil || p.gasTip.Cmp(old) > 0 {
-		p.filterTransactions(func(tx *blobTxMeta, sender common.Address) bool {
-			if tx.execTipCap.Cmp(p.gasTip) < 0 {
-				var dropCount int
-				for i, t := range p.index[sender] {
-					if tx.hash == t.hash {
-						dropCount = len(p.index[sender][i+1:])
+		for addr, txs := range p.index {
+			for i, tx := range txs {
+				if tx.execTipCap.Cmp(p.gasTip) < 0 {
+					// Drop the offending transaction
+					var (
+						ids    = []uint64{tx.id}
+						nonces = []uint64{tx.nonce}
+					)
+					p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], txs[i].costCap)
+					p.stored -= uint64(tx.storageSize)
+					p.lookup.untrack(tx)
+					txs[i] = nil
+
+					// Drop everything afterwards, no gaps allowed
+					for j, tx := range txs[i+1:] {
+						ids = append(ids, tx.id)
+						nonces = append(nonces, tx.nonce)
+
+						p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], tx.costCap)
+						p.stored -= uint64(tx.storageSize)
+						p.lookup.untrack(tx)
+						txs[i+1+j] = nil
 					}
+					// Clear out the dropped transactions from the index
+					if i > 0 {
+						p.index[addr] = txs[:i]
+						heap.Fix(p.evict, p.evict.index[addr])
+					} else {
+						delete(p.index, addr)
+						delete(p.spent, addr)
+
+						heap.Remove(p.evict, p.evict.index[addr])
+						p.reserver.Release(addr)
+					}
+					// Clear out the transactions from the data store
+					log.Warn("Dropping underpriced blob transaction", "from", addr, "rejected", tx.nonce, "tip", tx.execTipCap, "want", tip, "drop", nonces, "ids", ids)
+					dropUnderpricedMeter.Mark(int64(len(ids)))
+
+					for _, id := range ids {
+						if err := p.store.Delete(id); err != nil {
+							log.Error("Failed to delete dropped transaction", "id", id, "err", err)
+						}
+					}
+					break
 				}
-				log.Warn("Dropping underpriced blob transaction", "from", sender, "rejected", tx.nonce, "tip", tx.execTipCap, "want" /*TODO: tip, "drop", nonces, "ids", ids*/)
-				dropUnderpricedMeter.Mark(int64(dropCount))
-				return true
 			}
-			return false
-		})
+		}
 	}
 	log.Debug("Blobpool tip threshold updated", "tip", tip)
 	pooltipGauge.Update(tip.Int64())
