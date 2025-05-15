@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -54,11 +53,11 @@ type hashEntry struct {
 func MustLoadChecksums(file string) *ChecksumDB {
 	content, err := os.ReadFile(file)
 	if err != nil {
-		log.Fatal("can't load checksum file: " + err.Error())
+		panic("can't load checksum file: " + err.Error())
 	}
 	db, err := ParseChecksums(content)
 	if err != nil {
-		log.Fatalf("invalid checksums in %s: %v", file, err)
+		panic(fmt.Sprintf("invalid checksums in %s: %v", file, err))
 	}
 	return db
 }
@@ -133,13 +132,13 @@ func (db *ChecksumDB) DownloadAndVerifyAll() {
 	var tmp = os.TempDir()
 	for _, e := range db.hashes {
 		if e.url == nil {
-			log.Printf("Skipping verification of %s: no URL defined in checksum database", e.file)
+			fmt.Printf("Skipping verification of %s: no URL defined in checksum database", e.file)
 			continue
 		}
 		url := e.url.JoinPath(e.file).String()
 		dst := filepath.Join(tmp, e.file)
 		if err := db.DownloadFile(url, dst); err != nil {
-			log.Print(err)
+			fmt.Println("error:", err)
 		}
 	}
 }
