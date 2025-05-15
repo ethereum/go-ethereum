@@ -234,6 +234,14 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return receipts
 }
 
+func (bc *BlockChain) GetRawReceiptsByHash(hash common.Hash) types.Receipts {
+	number := rawdb.ReadHeaderNumber(bc.db, hash)
+	if number == nil {
+		return nil
+	}
+	return rawdb.ReadRawReceipts(bc.db, hash, *number)
+}
+
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
 func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
@@ -262,42 +270,20 @@ func (bc *BlockChain) GetAncestor(hash common.Hash, number, ancestor uint64, max
 // GetTransactionLookup retrieves the lookup along with the transaction
 // itself associate with the given transaction hash.
 //
-// An error will be returned if the transaction is not found, and background
-// indexing for transactions is still in progress. The transaction might be
-// reachable shortly once it's indexed.
-//
-// A null will be returned in the transaction is not found and background
-// transaction indexing is already finished. The transaction is not existent
-// from the node's perspective.
-func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction, error) {
+// A null will be returned if the transaction is not found. This can be due to
+// the transaction indexer not being finished. The caller must explicitly check
+// the indexer progress.
+func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLookupEntry, *types.Transaction) {
 	bc.txLookupLock.RLock()
 	defer bc.txLookupLock.RUnlock()
 
 	// Short circuit if the txlookup already in the cache, retrieve otherwise
 	if item, exist := bc.txLookupCache.Get(hash); exist {
-		return item.lookup, item.transaction, nil
+		return item.lookup, item.transaction
 	}
 	tx, blockHash, blockNumber, txIndex := rawdb.ReadTransaction(bc.db, hash)
 	if tx == nil {
-		progress, err := bc.TxIndexProgress()
-		if err != nil {
-			// No error is returned if the transaction indexing progress is unreachable
-			// due to unexpected internal errors. In such cases, it is impossible to
-			// determine whether the transaction does not exist or has simply not been
-			// indexed yet without a progress marker.
-			//
-			// In such scenarios, the transaction is treated as unreachable, though
-			// this is clearly an unintended and unexpected situation.
-			return nil, nil, nil
-		}
-		// The transaction indexing is not finished yet, returning an
-		// error to explicitly indicate it.
-		if !progress.Done() {
-			return nil, nil, errors.New("transaction indexing still in progress")
-		}
-		// The transaction is already indexed, the transaction is either
-		// not existent or not in the range of index, returning null.
-		return nil, nil, nil
+		return nil, nil
 	}
 	lookup := &rawdb.LegacyTxLookupEntry{
 		BlockHash:  blockHash,
@@ -308,7 +294,23 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 		lookup:      lookup,
 		transaction: tx,
 	})
-	return lookup, tx, nil
+	return lookup, tx
+}
+
+// TxIndexDone returns true if the transaction indexer has finished indexing.
+func (bc *BlockChain) TxIndexDone() bool {
+	progress, err := bc.TxIndexProgress()
+	if err != nil {
+		// No error is returned if the transaction indexing progress is unreachable
+		// due to unexpected internal errors. In such cases, it is impossible to
+		// determine whether the transaction does not exist or has simply not been
+		// indexed yet without a progress marker.
+		//
+		// In such scenarios, the transaction is treated as unreachable, though
+		// this is clearly an unintended and unexpected situation.
+		return true
+	}
+	return progress.Done()
 }
 
 // HasState checks if state trie is fully present in the database or not.
@@ -404,7 +406,7 @@ func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 	if bc.txIndexer == nil {
 		return TxIndexProgress{}, errors.New("tx indexer is not enabled")
 	}
-	return bc.txIndexer.txIndexProgress()
+	return bc.txIndexer.txIndexProgress(), nil
 }
 
 // HistoryPruningCutoff returns the configured history pruning point.
