@@ -99,10 +99,35 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnSystemCallStart: tracer.OnSystemCallStart,
 		OnSystemCallEnd:   tracer.OnSystemCallEnd,
 
+		// For a reason yet to be discovered, some transactions panics when trying to
+		// compute the keccak hash from a preimage when it comes the time to retrieve
+		// the memory location by inspecting the opcode's EVM stack arguments. The panic
+		// is an index out of bound error.
+		//
+		// To avoid the problem altogether, we return to our old Firehose tracer hook directly
+		// when the instructions is called within the EVM. That has the added benefit of
+		// avoiding re-computing the keccak results of the preimage again since at this location,
+		// we have both the result and the preimage.
+		//
+		// The cons of this is that we need to keep some Geth internal changes to have the hook
+		// called. But this is minimal as we do have to maintain a fork and the changes are actually
+		// minimal.
+		//
+		// Comment 11471b22bb0b (search '11471b22bb0b' within the repository to see all related code locations)
+		OnKeccakPreimage: tracer.OnKeccakPreimage,
+
+		// Firehose backward compatibility
+		//
+		// This hook exist because some current Firehose supported chains requires it
+		// but this field is going to be deprecated and newer chains will not produced
+		// those events anymore.
+		//
 		// This should actually be conditional but it's not possible to do it in the hooks
 		// directly because the chain ID will be known only after the `OnBlockchainInit` call.
 		// So we register it unconditionally and the actual `OnNewAccount` hook will decide
 		// what it needs to do.
+		//
+		// Comment a368bc8a3737 (search 'a368bc8a3737' within the repository to see all related code locations)
 		OnNewAccount: tracer.OnNewAccount,
 	}
 }
@@ -1186,8 +1211,9 @@ func (f *Firehose) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 		}
 
 		switch opCode {
-		case vm.KECCAK256:
-			f.onOpcodeKeccak256(activeCall, scope.StackData(), Memory(scope.MemoryData()))
+		// Bogus, search 11471b22bb0b within the repository to find all the details
+		// case vm.KECCAK256:
+		// 	f.onOpcodeKeccak256(activeCall, scope.StackData(), Memory(scope.MemoryData()))
 
 		case vm.SELFDESTRUCT:
 			f.ensureInCall()
@@ -1195,6 +1221,33 @@ func (f *Firehose) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 		}
 	}
 }
+
+func (f *Firehose) OnKeccakPreimage(hash common.Hash, preImage []byte) {
+	f.ensureInBlockAndInTrxAndInCall()
+
+	activeCall := f.callStack.Peek()
+	if activeCall.KeccakPreimages == nil {
+		activeCall.KeccakPreimages = make(map[string]string)
+	}
+
+	encodedData := hex.EncodeToString(preImage)
+	if *f.applyBackwardCompatibility {
+		// Known Firehose issue: It appears the old Firehose instrumentation have a bug
+		// where when the keccak256 preimage is empty, it is written as "." which is
+		// completely wrong.
+		//
+		// To keep the same behavior, we will write the preimage as a "." when the encoded
+		// data is an empty string.
+		if encodedData == "" {
+			encodedData = "."
+		}
+	}
+
+	activeCall.KeccakPreimages[hex.EncodeToString(hash[:])] = encodedData
+}
+
+// Unused due to bogus behavior, search 11471b22bb0b within the repository to find all the details
+var _ any = new(Firehose).onOpcodeKeccak256
 
 // onOpcodeKeccak256 is called during the SHA3 (a.k.a KECCAK256) opcode it's known
 // in Firehose tracer as Keccak preimages. The preimage is the input data that
@@ -2884,8 +2937,8 @@ func (m Memory) GetPtr(offset, size int64) []byte {
 	// work because the memory is going to be expanded before the operation is actually
 	// executed so the memory will be of the correct size.
 	//
-	// In this situtation, we must pad with zeroes when the memory is not big enough.
-	reminder := m[offset:]
+	// In this situation, we must pad with zeroes when the memory is not big enough.
+	reminder := m[min(offset, int64(len(m))):]
 	return append(reminder, make([]byte, int(size)-len(reminder))...)
 }
 

@@ -216,12 +216,15 @@ type Hooks struct {
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
 
-	// Firehose backward compatibility
-	// This hook exist because some current Firehose supported chains requires it
-	// but this field is going to be deprecated and newer chains will not produced
-	// those events anymore. The hook is registered conditionally based on the
-	// tracer configuration.
+	// Firehose requirements.
+	//
+	// Search a368bc8a3737 within the repository to find all the details
 	OnNewAccount func(address common.Address)
+
+	// Firehose requirements.
+	//
+	// Search 11471b22bb0b within the repository to find all the details
+	OnKeccakPreimage func(hash common.Hash, preimage []byte)
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
