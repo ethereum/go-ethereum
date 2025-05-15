@@ -1905,6 +1905,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 			return nil, err
 		}
 	} else {
+		fmt.Println("prefetch enabled===========================")
 		// If prefetching is enabled, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.
 		//

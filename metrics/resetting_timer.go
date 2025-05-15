@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -74,6 +75,10 @@ func (t *ResettingTimer) Update(d time.Duration) {
 // UpdateSince records the duration of an event that started at a time and ends now.
 func (t *ResettingTimer) UpdateSince(ts time.Time) {
 	t.Update(time.Since(ts))
+}
+
+func (t *ResettingTimer) Total() string {
+	return fmt.Sprintf("%.1f", time.Duration(t.sum).Seconds())
 }
 
 // ResettingTimerSnapshot is a point-in-time copy of another ResettingTimer.

@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
@@ -349,6 +350,7 @@ func importChain(ctx *cli.Context) error {
 
 	// Output pre-compaction stats mostly to see the import trashing
 	showDBStats(db)
+	showMetrics()
 
 	// Print the memory statistics used by the importing
 	mem := new(runtime.MemStats)
@@ -373,6 +375,54 @@ func importChain(ctx *cli.Context) error {
 
 	showDBStats(db)
 	return importErr
+}
+
+func showMetrics() {
+	accountReadTimer := metrics.GetOrRegisterResettingTimer("chain/account/reads", nil)
+	accountHashTimer := metrics.GetOrRegisterResettingTimer("chain/account/hashes", nil)
+	accountUpdateTimer := metrics.GetOrRegisterResettingTimer("chain/account/updates", nil)
+	accountCommitTimer := metrics.GetOrRegisterResettingTimer("chain/account/commits", nil)
+
+	storageReadTimer := metrics.GetOrRegisterResettingTimer("chain/storage/reads", nil)
+	storageUpdateTimer := metrics.GetOrRegisterResettingTimer("chain/storage/updates", nil)
+	storageCommitTimer := metrics.GetOrRegisterResettingTimer("chain/storage/commits", nil)
+
+	accountReadSingleTimer := metrics.GetOrRegisterResettingTimer("chain/account/single/reads", nil)
+	storageReadSingleTimer := metrics.GetOrRegisterResettingTimer("chain/storage/single/reads", nil)
+
+	snapshotCommitTimer := metrics.GetOrRegisterResettingTimer("chain/snapshot/commits", nil)
+	triedbCommitTimer := metrics.GetOrRegisterResettingTimer("chain/triedb/commits", nil)
+
+	blockInsertTimer := metrics.GetOrRegisterResettingTimer("chain/inserts", nil)
+	blockValidationTimer := metrics.GetOrRegisterResettingTimer("chain/validation", nil)
+	blockCrossValidationTimer := metrics.GetOrRegisterResettingTimer("chain/crossvalidation", nil)
+	blockExecutionTimer := metrics.GetOrRegisterResettingTimer("chain/execution", nil)
+	blockWriteTimer := metrics.GetOrRegisterResettingTimer("chain/write", nil)
+
+	// not important
+	fmt.Println("accountReadSingleTimer", accountReadSingleTimer.Total())
+	fmt.Println("storageReadSingleTimer", storageReadSingleTimer.Total())
+	fmt.Println("blockCrossValidationTimer", blockCrossValidationTimer.Total())
+
+	// execution
+	fmt.Println("accountReadTimer", accountReadTimer.Total())
+	fmt.Println("storageReadTimer", storageReadTimer.Total())
+	fmt.Println("blockExecutionTimer", blockExecutionTimer.Total())
+
+	// validation
+	fmt.Println("trieAccountUpdateTimer", accountUpdateTimer.Total())
+	fmt.Println("trieStorageUpdateTimer", storageUpdateTimer.Total())
+	fmt.Println("trieHashTimer", accountHashTimer.Total())
+	fmt.Println("blockValidationTimer", blockValidationTimer.Total()) // only for computation
+
+	// commit
+	fmt.Println("account/storageCommitTimer", max(accountCommitTimer.Total(), storageCommitTimer.Total()))
+	fmt.Println("snapshotCommitTimer", snapshotCommitTimer.Total())
+	fmt.Println("triedbCommitTimer", triedbCommitTimer.Total())
+	fmt.Println("blockWriteTimer", blockWriteTimer.Total())
+
+	// total
+	fmt.Println("blockInsertTimer", blockInsertTimer.Total())
 }
 
 func exportChain(ctx *cli.Context) error {
