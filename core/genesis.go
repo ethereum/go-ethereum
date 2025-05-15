@@ -18,7 +18,6 @@ package core
 
 import (
 	"bytes"
-	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -289,14 +288,12 @@ func saveVerkleTransitionStatusAtVerlkeGenesis(db ethdb.Database) {
 }
 
 func saveVerkleTransitionStatus(db ethdb.Database, root common.Hash, ts *overlay.TransitionState) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(ts)
+	enc, err := rlp.EncodeToBytes(ts)
 	if err != nil {
 		log.Error("failed to encode transition state", "err", err)
 		return
 	}
-	rawdb.WriteVerkleTransitionState(db, root, buf.Bytes())
+	rawdb.WriteVerkleTransitionState(db, root, enc)
 }
 
 // SetupGenesisBlock writes or updates the genesis block in db.

@@ -21,7 +21,7 @@ import "github.com/ethereum/go-ethereum/common"
 // TransitionState is a structure that holds the progress markers of the
 // translation process.
 type TransitionState struct {
-	CurrentAccountAddress *common.Address // addresss of the last translated account
+	CurrentAccountAddress *common.Address `rlp:"nil"` // addresss of the last translated account
 	CurrentSlotHash       common.Hash     // hash of the last translated storage slot
 	CurrentPreimageOffset uint64          // next byte to read from the preimage file
 	Started, Ended        bool

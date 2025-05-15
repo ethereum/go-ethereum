@@ -17,8 +17,6 @@
 package state
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"reflect"
 
@@ -31,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/utils"
@@ -300,9 +299,7 @@ func (db *CachingDB) SaveTransitionState(root common.Hash, ts *overlay.Transitio
 		panic("nil transition state")
 	}
 
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(ts)
+	enc, err := rlp.EncodeToBytes(ts)
 	if err != nil {
 		log.Error("failed to encode transition state", "err", err)
 		return
@@ -312,7 +309,7 @@ func (db *CachingDB) SaveTransitionState(root common.Hash, ts *overlay.Transitio
 		// Copy so that the address pointer isn't updated after
 		// it has been saved.
 		db.TransitionStatePerRoot.Add(root, ts.Copy())
-		rawdb.WriteVerkleTransitionState(db.TrieDB().Disk(), root, buf.Bytes())
+		rawdb.WriteVerkleTransitionState(db.TrieDB().Disk(), root, enc)
 	} else {
 		// Check that the state is consistent with what is in the cache,
 		// which is not strictly necessary but a good sanity check. Can
@@ -337,13 +334,10 @@ func (db *CachingDB) LoadTransitionState(root common.Hash) *overlay.TransitionSt
 
 		// if a state could be read from the db, attempt to decode it
 		if len(data) > 0 {
-			var (
-				newts overlay.TransitionState
-				buf   = bytes.NewBuffer(data[:])
-				dec   = gob.NewDecoder(buf)
-			)
+			var newts overlay.TransitionState
+
 			// Decode transition state
-			err := dec.Decode(&newts)
+			err := rlp.DecodeBytes(data, &newts)
 			if err != nil {
 				log.Error("failed to decode transition state", "err", err)
 				return nil
