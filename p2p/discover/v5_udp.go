@@ -30,7 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
@@ -768,11 +767,10 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 		return nonce, err
 	}
 
-	t.logcontext = append(t.logcontext, "rawpacket", hexutil.Encode(enc))
 	t.log.Trace(">> "+packet.Name(), t.logcontext...)
 
-	dataForSend := bufferpool.Get(len(enc))[:0]
-	dataForSend = append(dataForSend, enc...)
+	dataForSend := make([]byte, len(enc))
+	copy(dataForSend, enc)
 
 	pw := pendingWrite{
 		toAddr: toAddr,
@@ -784,7 +782,6 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 		// Packet successfully queued.
 		return nonce, nil
 	case <-t.closeCtx.Done():
-		bufferpool.Put(dataForSend)
 		return nonce, errClosed
 	}
 }
@@ -808,13 +805,7 @@ func (t *UDPv5) writeLoop() {
 					t.log.Warn("UDP write error", "addr", pw.toAddr, "err", err)
 				}
 			}
-		} else {
-			// Minimal trace log confirming the actual send.
-			// The detailed packet-specific trace was done in the 'send' method.
-			t.log.Trace("UDP packet data sent", "addr", pw.toAddr, "len", len(pw.data))
 		}
-
-		bufferpool.Put(pw.data)
 	}
 }
 
@@ -822,26 +813,21 @@ func (t *UDPv5) writeLoop() {
 func (t *UDPv5) readLoop() {
 	defer t.wg.Done()
 
+	buf := bufferpool.Get(maxPacketSize)
 	for {
-		select {
-		case <-t.closeCtx.Done():
-			t.log.Trace("UDP read loop shutdown")
-		default:
-			buf := bufferpool.Get(maxPacketSize)
-			nbytes, from, err := t.conn.ReadFromUDPAddrPort(buf)
-			if netutil.IsTemporaryError(err) {
-				// Ignore temporary read errors.
-				t.log.Debug("Temporary UDP read error", "err", err)
-				continue
-			} else if err != nil {
-				// Shut down the loop for permanent errors.
-				if !errors.Is(err, io.EOF) {
-					t.log.Debug("UDP read error", "err", err)
-				}
-				return
+		nbytes, from, err := t.conn.ReadFromUDPAddrPort(buf)
+		if netutil.IsTemporaryError(err) {
+			// Ignore temporary read errors.
+			t.log.Debug("Temporary UDP read error", "err", err)
+			continue
+		} else if err != nil {
+			// Shut down the loop for permanent errors.
+			if !errors.Is(err, io.EOF) {
+				t.log.Debug("UDP read error", "err", err)
 			}
-			t.dispatchReadPacket(from, buf[:nbytes])
+			return
 		}
+		t.dispatchReadPacket(from, buf[:nbytes])
 	}
 }
 
@@ -851,11 +837,12 @@ func (t *UDPv5) dispatchReadPacket(from netip.AddrPort, content []byte) bool {
 	if from.Addr().Is4In6() {
 		from = netip.AddrPortFrom(netip.AddrFrom4(from.Addr().As4()), from.Port())
 	}
+	data := make([]byte, len(content))
+	copy(data, content)
 	select {
-	case t.packetInCh <- ReadPacket{content, from}:
+	case t.packetInCh <- ReadPacket{data, from}:
 		return true
 	case <-t.closeCtx.Done():
-		bufferpool.Put(content)
 		return false
 	}
 }
@@ -863,9 +850,7 @@ func (t *UDPv5) dispatchReadPacket(from netip.AddrPort, content []byte) bool {
 // handlePacket decodes and processes an incoming packet from the network.
 func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	addr := fromAddr.String()
-	t.log.Trace("<< "+addr, "rawPacket", hexutil.Encode(rawpacket))
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
-	bufferpool.Put(rawpacket)
 
 	if err != nil {
 		if t.unhandled != nil && v5wire.IsInvalidHeader(err) {
