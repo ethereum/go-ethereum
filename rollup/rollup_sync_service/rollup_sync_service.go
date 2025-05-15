@@ -17,6 +17,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/node"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/da_syncer"
@@ -43,7 +44,10 @@ const (
 	defaultLogInterval = 5 * time.Minute
 )
 
-var ErrShouldResetSyncHeight = errors.New("ErrShouldResetSyncHeight")
+var (
+	finalizedBlockGauge      = metrics.NewRegisteredGauge("chain/head/finalized", nil)
+	ErrShouldResetSyncHeight = errors.New("ErrShouldResetSyncHeight")
+)
 
 // RollupSyncService collects ScrollChain batch commit/revert/finalize events and stores metadata into db.
 type RollupSyncService struct {
@@ -134,6 +138,11 @@ func (s *RollupSyncService) Start() {
 	}
 
 	log.Info("Starting rollup event sync background service", "latest processed block", s.callDataBlobSource.L1Height())
+
+	finalizedBlockHeightPtr := rawdb.ReadFinalizedL2BlockNumber(s.db)
+	if finalizedBlockHeightPtr != nil {
+		finalizedBlockGauge.Update(int64(*finalizedBlockHeightPtr))
+	}
 
 	go func() {
 		syncTicker := time.NewTicker(defaultSyncInterval)
@@ -321,6 +330,7 @@ func (s *RollupSyncService) updateRollupEvents(daEntries da.Entries) error {
 				return fmt.Errorf("failed to batch write finalized batch meta to database: %w", err)
 			}
 			rawdb.WriteFinalizedL2BlockNumber(s.db, highestFinalizedBlockNumber)
+			finalizedBlockGauge.Update(int64(highestFinalizedBlockNumber))
 			rawdb.WriteLastFinalizedBatchIndex(s.db, batchIndex)
 			log.Debug("write finalized l2 block number", "batch index", batchIndex, "finalized l2 block height", highestFinalizedBlockNumber)
 
