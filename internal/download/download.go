@@ -127,12 +127,10 @@ func (db *ChecksumDB) Files() iter.Seq[string] {
 	}
 }
 
-// VerifyAll downloads all files and checks that they match the checksum given in
+// DownloadAndVerifyAll downloads all files and checks that they match the checksum given in
 // the database. This task can be used to sanity-check new checksums.
-func (db *ChecksumDB) VerifyAll() {
-	var (
-		tmp = os.TempDir()
-	)
+func (db *ChecksumDB) DownloadAndVerifyAll() {
+	var tmp = os.TempDir()
 	for _, e := range db.hashes {
 		if e.url == nil {
 			log.Printf("Skipping verification of %s: no URL defined in checksum database", e.file)

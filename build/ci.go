@@ -1170,5 +1170,5 @@ func doPurge(cmdline []string) {
 
 func doSanityCheck() {
 	csdb := download.MustLoadChecksums("build/checksums.txt")
-	csdb.VerifyAll()
+	csdb.DownloadAndVerifyAll()
 }
