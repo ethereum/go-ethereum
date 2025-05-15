@@ -619,3 +619,10 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 func (evm *EVM) GetDepth() int {
 	return evm.depth
 }
+
+func (evm *EVM) GetPrecompiles() (res []common.Address) {
+	for addr := range evm.dynamicPrecompiles {
+		res = append(res, addr)
+	}
+	return
+}

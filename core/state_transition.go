@@ -425,7 +425,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// Execute the preparatory steps for state transition which includes:
 	// - prepare accessList(post-berlin)
 	// - reset transient storage(eip 1153)
-	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
+	precompiles := st.evm.GetPrecompiles()
+	precompiles = append(precompiles, vm.ActivePrecompiles(rules)...)
+	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, precompiles, msg.AccessList)
 
 	var (
 		ret   []byte
