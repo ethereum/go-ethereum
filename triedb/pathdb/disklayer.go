@@ -366,11 +366,12 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		if dl.generator != nil {
 			dl.generator.stop()
 			progress = dl.generator.progressMarker()
-			log.Info("Terminated snapshot generation")
 
 			// If the snapshot has been fully generated, unset the generator
 			if progress == nil {
 				dl.setGenerator(nil)
+			} else {
+				log.Info("Paused snapshot generation")
 			}
 		}
 		// Flush the content in combined buffer. Any state data after the progress

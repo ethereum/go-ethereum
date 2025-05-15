@@ -131,7 +131,7 @@ func (g *generator) run(root common.Hash) {
 	}
 	if g.running {
 		g.stop()
-		log.Warn("Terminated the leftover generation cycle")
+		log.Warn("Paused the leftover generation cycle")
 	}
 	g.running = true
 	go g.generate(newGeneratorContext(root, g.progress, g.db))
