@@ -232,7 +232,7 @@ func (db *Store) openEraFile(epoch uint64) (*era.Era, error) {
 		return nil, fmt.Errorf("multiple era1 files found for epoch %d", epoch)
 	}
 	if len(matches) == 0 {
-		return nil, nil
+		return nil, fs.ErrNotExist
 	}
 	filename := matches[0]
 
