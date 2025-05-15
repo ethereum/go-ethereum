@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -99,4 +100,52 @@ func BenchmarkTransactionTraceV2(b *testing.B) {
 		}
 		state.StateDB.RevertToSnapshot(snap)
 	}
+}
+
+func TestSafeTracer(t *testing.T) {
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	from := crypto.PubkeyToAddress(key.PublicKey)
+	gas := uint64(1000000) // 1M gas
+	context := vm.BlockContext{
+		CanTransfer: core.CanTransfer,
+		Transfer:    core.Transfer,
+		Coinbase:    common.Address{},
+		BlockNumber: new(big.Int).SetUint64(uint64(5)),
+		Time:        5,
+		Difficulty:  big.NewInt(0xffffffff),
+		GasLimit:    gas,
+		BaseFee:     big.NewInt(8),
+	}
+	alloc := types.GenesisAlloc{}
+	// The code pushes 'deadbeef' into memory, then the other params, and calls CREATE2, then returns
+	// the address
+	loop := []byte{
+		byte(vm.JUMPDEST), //  [ count ]
+		byte(vm.PUSH1), 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+	alloc[common.HexToAddress("0x00000000000000000000000000000000deadbeef")] = types.Account{
+		Nonce:   1,
+		Code:    loop,
+		Balance: big.NewInt(1),
+	}
+	alloc[from] = types.Account{
+		Nonce:   1,
+		Code:    []byte{},
+		Balance: big.NewInt(500000000000000),
+	}
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme)
+	defer state.Close()
+
+	evm := vm.NewEVM(context, state.StateDB, params.AllEthashProtocolChanges, vm.Config{})
+
+	faultyTracer := &tracing.Hooks{OnTxStart: func(*tracing.VMContext, *types.Transaction, common.Address) {
+		panic("someone mispronounced clef")
+	}}
+	safeHooks, err := NewRecoverTracer(nil, faultyTracer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evm.Config.Tracer = safeHooks
+	evm.Config.Tracer.OnTxStart(nil, nil, common.Address{})
 }
