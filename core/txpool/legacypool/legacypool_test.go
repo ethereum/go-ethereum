@@ -1079,7 +1079,7 @@ func TestQueueTimeLimiting(t *testing.T) {
 
 	// remove current transactions and increase nonce to prepare for a reset and cleanup
 	statedb.SetNonce(crypto.PubkeyToAddress(remote.PublicKey), 2, tracing.NonceChangeUnspecified)
-	<-pool.requestReset(pool.currentHead.Load(), pool.currentHead.Load())
+	<-pool.requestReset(nil, nil)
 
 	// make sure queue, pending are cleared
 	pending, queued = pool.Stats()
