@@ -380,3 +380,17 @@ func (f *chainFreezer) Ancient(kind string, number uint64) ([]byte, error) {
 	}
 	return nil, errUnknownTable
 }
+
+// AncientRange retrieves multiple items in sequence, starting from the index 'start'.
+// It will return
+//   - at most 'count' items,
+//   - if maxBytes is specified: at least 1 item (even if exceeding the maxByteSize),
+//     but will otherwise return as many items as fit into maxByteSize.
+//   - if maxBytes is not specified, 'count' items will be returned if they are present.
+func (f *chainFreezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
+	if store, ok := f.AncientStore.(*Freezer); ok {
+		store.writeLock.Lock()
+		defer store.writeLock.Unlock()
+	}
+	return fn(f)
+}
