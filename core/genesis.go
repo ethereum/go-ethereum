@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/overlay"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -284,10 +285,10 @@ func (o *ChainOverrides) apply(cfg *params.ChainConfig) error {
 // representing a converted state, which is used in devnets that activate
 // verkle at genesis.
 func saveVerkleTransitionStatusAtVerlkeGenesis(db ethdb.Database) {
-	saveVerkleTransitionStatus(db, common.Hash{}, &state.TransitionState{Ended: true})
+	saveVerkleTransitionStatus(db, common.Hash{}, &overlay.TransitionState{Ended: true})
 }
 
-func saveVerkleTransitionStatus(db ethdb.Database, root common.Hash, ts *state.TransitionState) {
+func saveVerkleTransitionStatus(db ethdb.Database, root common.Hash, ts *overlay.TransitionState) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(ts)
@@ -575,7 +576,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 		return nil, err
 	}
 	if g.IsVerkle() {
-		saveVerkleTransitionStatus(db, block.Root(), &state.TransitionState{Ended: true})
+		saveVerkleTransitionStatus(db, block.Root(), &overlay.TransitionState{Ended: true})
 	}
 	batch := db.NewBatch()
 	rawdb.WriteGenesisStateSpec(batch, block.Hash(), blob)
