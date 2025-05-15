@@ -127,16 +127,6 @@ func (db *ChecksumDB) Files() iter.Seq[string] {
 	}
 }
 
-// Verify checks whether the given file is valid according to the checksum database.
-func (db *ChecksumDB) Verify(path string) error {
-	basename := filepath.Base(path)
-	hash := db.findHash(basename)
-	if hash == "" {
-		return fmt.Errorf("no known hash for file %q", basename)
-	}
-	return verifyHash(path, hash)
-}
-
 // VerifyAll downloads all files and checks that they match the checksum given in
 // the database. This task can be used to sanity-check new checksums.
 func (db *ChecksumDB) VerifyAll() {
