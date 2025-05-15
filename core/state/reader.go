@@ -145,7 +145,7 @@ func newFlatReader(reader database.StateReader) *flatReader {
 //
 // The returned account might be nil if it's not existent.
 func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
-	account, err := r.reader.Account(crypto.HashData(r.buff, addr.Bytes()))
+	account, err := r.reader.Account(crypto.HashData(crypto.NewKeccakState(), addr.Bytes()))
 	if err != nil {
 		return nil, err
 	}
@@ -175,8 +175,8 @@ func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 //
 // The returned storage slot might be empty if it's not existent.
 func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
-	addrHash := crypto.HashData(r.buff, addr.Bytes())
-	slotHash := crypto.HashData(r.buff, key.Bytes())
+	addrHash := crypto.HashData(crypto.NewKeccakState(), addr.Bytes())
+	slotHash := crypto.HashData(crypto.NewKeccakState(), key.Bytes())
 	ret, err := r.reader.Storage(addrHash, slotHash)
 	if err != nil {
 		return common.Hash{}, err
@@ -281,7 +281,7 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 				root = r.subRoots[addr]
 			}
 			var err error
-			tr, err = trie.NewStateTrie(trie.StorageTrieID(r.root, crypto.HashData(r.buff, addr.Bytes()), root), r.db)
+			tr, err = trie.NewStateTrie(trie.StorageTrieID(r.root, crypto.HashData(crypto.NewKeccakState(), addr.Bytes()), root), r.db)
 			if err != nil {
 				return common.Hash{}, err
 			}

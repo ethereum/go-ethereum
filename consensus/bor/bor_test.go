@@ -84,7 +84,7 @@ func TestGenesisContractChange(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, statedb.Database().TrieDB().Commit(root, true))
 
-		statedb, err := state.New(h.Root, state.NewDatabase(triedb.NewDatabase(db, triedb.HashDefaults), nil))
+		statedb, err := state.New(root, state.NewDatabase(triedb.NewDatabase(db, triedb.HashDefaults), nil))
 		require.NoError(t, err)
 
 		return root, statedb
