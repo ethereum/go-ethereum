@@ -23,7 +23,7 @@ import "github.com/ethereum/go-ethereum/common"
 type TransitionState struct {
 	CurrentAccountAddress *common.Address // addresss of the last translated account
 	CurrentSlotHash       common.Hash     // hash of the last translated storage slot
-	CurrentPreimageOffset int64           // next byte to read from the preimage file
+	CurrentPreimageOffset uint64          // next byte to read from the preimage file
 	Started, Ended        bool
 
 	// Mark whether the storage for an account has been processed. This is useful if the
