@@ -1,9 +1,7 @@
 {
   "genesis": {
     "baseFeePerGas": "7",
-    "blobGasUsed": "0",
     "difficulty": "0",
-    "excessBlobGas": "36306944",
     "extraData": "0xd983010e00846765746888676f312e32312e308664617277696e",
     "gasLimit": "15639172",
     "hash": "0xc682259fda061bb9ce8ccb491d5b2d436cb73daf04e1025dd116d045ce4ad28c",
@@ -54,6 +52,9 @@
       "cancunTime": 0,
       "pragueTime": 0,
       "terminalTotalDifficulty": 0,
+      "shanghaiBlock": 0,
+      "cancunBlock": 0,
+      "pragueBlock": 0,
       "blobSchedule": {
         "cancun": {
           "target": 3,
@@ -64,6 +65,13 @@
           "target": 3,
           "max": 6,
           "baseFeeUpdateFraction": 5007716
+        }
+      },
+      "bor": {
+        "validatorContract": "0x0000000000000000000000000000000000001000",
+        "stateReceiverContract": "0x0000000000000000000000000000000000001001",
+        "burntContract": {
+          "0": "0x00000000000000000000000000000000000000000"
         }
       }
     }
