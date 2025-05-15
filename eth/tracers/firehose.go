@@ -200,6 +200,7 @@ type Firehose struct {
 	flushStarted            bool
 	flushStartBlockNum      uint64
 	flushStartCond          *sync.Cond
+	flushBufferSize         int
 }
 
 const FirehoseProtocolVersion = "3.0"
@@ -254,7 +255,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		deferredCallState:       NewDeferredCallState(),
 		latestCallEnterSuicided: false,
 
-		flushStartCond: sync.NewCond(&sync.Mutex{}),
+		flushStartCond:  sync.NewCond(&sync.Mutex{}),
+		flushBufferSize: 100, // TODO: Optimal buffer size tbd
 	}
 
 	if config.private != nil {
@@ -268,8 +270,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		log.Info("Firehose concurrent block flushing enabled, starting", config.ConcurrentBlockFlushing,
 			"block print worker goroutine")
 
-		firehose.flushJobQueue = make(chan *blockPrintJob, 100) // TODO: Optimal buffer size tbd
-		firehose.flushOrderedOutputQueue = make(chan *blockOutput, 100)
+		firehose.flushJobQueue = make(chan *blockPrintJob, firehose.flushBufferSize)
+		firehose.flushOrderedOutputQueue = make(chan *blockOutput, firehose.flushBufferSize)
 		for i := 0; i < config.ConcurrentBlockFlushing; i++ {
 			firehose.flushJobWG.Add(1)
 			go firehose.blockPrintWorker()
