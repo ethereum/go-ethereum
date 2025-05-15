@@ -267,8 +267,7 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 	}
 
 	if config.ConcurrentBlockFlushing > 0 {
-		log.Info("Firehose concurrent block flushing enabled, starting", config.ConcurrentBlockFlushing,
-			"block print worker goroutine")
+		log.Info(fmt.Sprintf("Firehose concurrent block flushing enabled, starting %d worker goroutine", config.ConcurrentBlockFlushing))
 
 		firehose.flushJobQueue = make(chan *blockPrintJob, firehose.flushBufferSize)
 		firehose.flushOrderedOutputQueue = make(chan *blockOutput, firehose.flushBufferSize)
