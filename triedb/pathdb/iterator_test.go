@@ -132,7 +132,7 @@ func TestAccountIteratorBasics(t *testing.T) {
 		}
 	}
 	states := newStates(accounts, storage, false)
-	it := newDiffAccountIterator(common.Hash{}, states, nil)
+	it := newDiffAccountIterator(common.Hash{}, states.accountList(), nil)
 	verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 
 	db := rawdb.NewMemoryDatabase()
@@ -170,7 +170,7 @@ func TestStorageIteratorBasics(t *testing.T) {
 	}
 	states := newStates(accounts, storage, false)
 	for account := range accounts {
-		it := newDiffStorageIterator(account, common.Hash{}, states, nil)
+		it := newDiffStorageIterator(account, common.Hash{}, states.storageList(account), nil)
 		verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 	}
 
@@ -273,7 +273,7 @@ func TestAccountIteratorTraversal(t *testing.T) {
 	head := db.tree.get(common.HexToHash("0x04"))
 
 	// singleLayer: 0xcc, 0xf0, 0xff
-	it := newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet, nil)
+	it := newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet.accountList(), nil)
 	verifyIterator(t, 3, it, verifyNothing)
 
 	// binaryIterator: 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xf0, 0xff
@@ -317,7 +317,7 @@ func TestStorageIteratorTraversal(t *testing.T) {
 	head := db.tree.get(common.HexToHash("0x04"))
 
 	// singleLayer: 0x1, 0x2, 0x3
-	diffIter := newDiffStorageIterator(common.HexToHash("0xaa"), common.Hash{}, head.(*diffLayer).states.stateSet, nil)
+	diffIter := newDiffStorageIterator(common.HexToHash("0xaa"), common.Hash{}, head.(*diffLayer).states.stateSet.storageList(common.HexToHash("0xaa")), nil)
 	verifyIterator(t, 3, diffIter, verifyNothing)
 
 	// binaryIterator: 0x1, 0x2, 0x3, 0x4, 0x5, 0x6
@@ -606,7 +606,7 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 	}
 	// Iterate the entire stack and ensure everything is hit only once
 	head := db.tree.get(common.HexToHash("0x80"))
-	verifyIterator(t, 200, newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet, nil), verifyNothing)
+	verifyIterator(t, 200, newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet.accountList(), nil), verifyNothing)
 	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator(common.Hash{}), verifyAccount)
 
 	it, _ := db.AccountIterator(common.HexToHash("0x80"), common.Hash{})
