@@ -3168,8 +3168,6 @@ func TestPoolMultiAccountBatchInsertRace(t *testing.T) {
 			pending = pool.Pending(txpool.PendingFilter{})
 			total = len(pending)
 
-			// _ = pool.Locals()
-
 			if total >= n {
 				close(done)
 

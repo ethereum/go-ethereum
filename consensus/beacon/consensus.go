@@ -80,7 +80,7 @@ func isPostMerge(config *params.ChainConfig, blockNum uint64, timestamp uint64) 
 	mergedAtGenesis := config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Sign() == 0
 	return mergedAtGenesis ||
 		config.MergeNetsplitBlock != nil && blockNum >= config.MergeNetsplitBlock.Uint64() ||
-		config.ShanghaiBlock != nil
+		config.ShanghaiBlock != nil && blockNum >= config.ShanghaiBlock.Uint64()
 }
 
 // Author implements consensus.Engine, returning the verified author of the block.
