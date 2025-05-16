@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
 )
@@ -142,7 +144,16 @@ func TestSafeTracer(t *testing.T) {
 	faultyTracer := &tracing.Hooks{OnTxStart: func(*tracing.VMContext, *types.Transaction, common.Address) {
 		panic("someone mispronounced clef")
 	}}
-	safeHooks, err := NewRecoverTracer(nil, faultyTracer, false)
+	stack, err := node.New(&node.Config{
+		P2P: p2p.Config{
+			ListenAddr:  "0.0.0.0:0",
+			NoDiscovery: true,
+			MaxPeers:    25,
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	safeHooks, err := NewRecoverTracer(stack, faultyTracer, false)
 	if err != nil {
 		t.Fatal(err)
 	}
