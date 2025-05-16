@@ -484,6 +484,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 			}
 			// Insert parent hash in history contract.
+			// EIP-2935
 			if api.backend.ChainConfig().IsPrague(next.Number()) {
 				core.ProcessParentBlockHash(next.ParentHash(), evm)
 			}

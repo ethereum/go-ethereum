@@ -163,6 +163,7 @@ func Transaction(ctx *cli.Context) error {
 			continue
 		}
 		// For Prague txs, validate the floor data gas.
+		// EIP-7623
 		if rules.IsPrague {
 			floorDataGas, err := core.FloorDataGas(tx.Data())
 			if err != nil {

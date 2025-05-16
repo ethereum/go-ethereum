@@ -324,7 +324,8 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		statedb = statedb.Copy()
 	}
 
-	if b.cm.config.IsPrague(b.header.Number) {
+	// Polygon/bor: EIP-6110, EIP-7002, and EIP-7251 are not supported
+	if b.cm.config.IsPrague(b.header.Number) && b.cm.config.Bor == nil {
 		requests = [][]byte{}
 		// EIP-6110 deposits
 		var blockLogs []*types.Log

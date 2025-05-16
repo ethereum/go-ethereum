@@ -90,6 +90,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	if (p.config.IsPrague(block.Number()) || p.config.IsVerkle(block.Number())) && p.config.Bor == nil {
+		// EIP-2935
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
@@ -117,6 +118,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+
+	// Polygon/bor: EIP-6110, EIP-7002, and EIP-7251 are not supported
 	// Read requests if Prague is enabled.
 	var requests [][]byte
 	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {

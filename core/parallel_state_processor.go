@@ -309,6 +309,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv)
 	}
 	if p.config.IsPrague(block.Number()) {
+		// EIP-2935
 		ProcessParentBlockHash(block.ParentHash(), vmenv)
 	}
 	// Iterate over and process the individual transactions
@@ -398,21 +399,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		return nil, err
 	}
 
-	// Read requests if Prague is enabled and bor consensus is not active.
+	// Polygon/bor: EIP-6110, EIP-7002, and EIP-7251 are not supported
 	var requests [][]byte
-	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {
-		// EIP-6110 deposits
-		err := ParseDepositLogs(&requests, allLogs, p.config)
-		if err != nil {
-			return nil, err
-		}
-
-		// EIP-7002 withdrawals
-		ProcessWithdrawalQueue(&requests, vmenv)
-
-		// EIP-7251 consolidations
-		ProcessConsolidationQueue(&requests, vmenv)
-	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Body())

@@ -1312,6 +1312,7 @@ func (w *worker) prepareWork(genParams *generateParams, witness bool) (*environm
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv)
 	}
 	if w.chainConfig.IsPrague(header.Number) {
+		// EIP-2935
 		context := core.NewEVMBlockContext(header, w.chain, nil)
 		vmenv := vm.NewEVM(context, env.state, w.chainConfig, vm.Config{})
 		core.ProcessParentBlockHash(header.ParentHash, vmenv)
@@ -1429,6 +1430,8 @@ func (w *worker) generateWork(params *generateParams, witness bool) *newPayloadR
 	for _, r := range work.receipts {
 		allLogs = append(allLogs, r.Logs...)
 	}
+
+	// Polygon/bor: EIP-6110, EIP-7002, and EIP-7251 are not supported
 	// Collect consensus-layer requests if Prague is enabled and bor consensus is not active.
 	var requests [][]byte
 	if w.chainConfig.IsPrague(work.header.Number) && w.chainConfig.Bor == nil {

@@ -251,6 +251,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		evm.SetPrecompiles(precompiles)
 	}
 	if sim.chainConfig.IsPrague(header.Number) || sim.chainConfig.IsVerkle(header.Number) {
+		// EIP-2935
 		core.ProcessParentBlockHash(header.ParentHash, evm)
 	}
 	if header.ParentBeaconRoot != nil {
@@ -309,9 +310,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if sim.chainConfig.IsCancun(header.Number) {
 		header.BlobGasUsed = &blobGasUsed
 	}
+
+	// Polygon/bor: EIP-6110, EIP-7002, and EIP-7251 are not supported
 	var requests [][]byte
 	// Process EIP-7685 requests
-	if sim.chainConfig.IsPrague(header.Number) {
+	if sim.chainConfig.IsPrague(header.Number) && sim.chainConfig.Bor == nil {
 		requests = [][]byte{}
 		// EIP-6110
 		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {

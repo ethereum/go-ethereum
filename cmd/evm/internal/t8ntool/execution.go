@@ -362,6 +362,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 	}
 
+	// Polygon/bor: EIP-6110, EIP-7002, and EIP-7251 are not supported
 	// Gather the execution-layer triggered requests.
 	var requests [][]byte
 	if chainConfig.IsPrague(vmContext.BlockNumber) && chainConfig.Bor == nil {

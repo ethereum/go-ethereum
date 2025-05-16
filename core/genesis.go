@@ -539,6 +539,8 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 				head.BlobGasUsed = new(uint64)
 			}
 		}
+
+		// Polygon/bor: EIP-7685 not supported
 		if conf.IsPrague(num) && conf.Bor == nil {
 			head.RequestsHash = &types.EmptyRequestsHash
 		}
