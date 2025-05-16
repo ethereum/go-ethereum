@@ -74,8 +74,9 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "SimultaneousRequests", Fn: s.TestSimultaneousRequests},
 		{Name: "SameRequestID", Fn: s.TestSameRequestID},
 		{Name: "ZeroRequestID", Fn: s.TestZeroRequestID},
-		// get block bodies
+		// get history
 		{Name: "GetBlockBodies", Fn: s.TestGetBlockBodies},
+		{Name: "GetReceipts", Fn: s.TestGetReceipts},
 		// // malicious handshakes + status
 		{Name: "MaliciousHandshake", Fn: s.TestMaliciousHandshake},
 		// test transactions
@@ -418,6 +419,41 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	}
 }
 
+func (s *Suite) TestGetReceipts(t *utesting.T) {
+	t.Log(`This test sends GetReceipts requests to the node for known blocks in the test chain.`)
+
+	conn, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+	if err := conn.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+	// Create block bodies request.
+	req := &eth.GetReceiptsPacket{
+		RequestId: 66,
+		GetReceiptsRequest: eth.GetReceiptsRequest{
+			s.chain.blocks[54].Hash(),
+			s.chain.blocks[75].Hash(),
+		},
+	}
+	if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
+		t.Fatalf("could not write to connection: %v", err)
+	}
+	// Wait for response.
+	resp := new(eth.ReceiptsPacket[*eth.ReceiptList69])
+	if err := conn.ReadMsg(ethProto, eth.ReceiptsMsg, &resp); err != nil {
+		t.Fatalf("error reading block bodies msg: %v", err)
+	}
+	if got, want := resp.RequestId, req.RequestId; got != want {
+		t.Fatalf("unexpected request id in respond", got, want)
+	}
+	if len(resp.List) != len(req.GetReceiptsRequest) {
+		t.Fatalf("wrong bodies in response: expected %d bodies, got %d", len(req.GetReceiptsRequest), len(resp.List))
+	}
+}
+
 // randBuf makes a random buffer size kilobytes large.
 func randBuf(size int) []byte {
 	buf := make([]byte, size*1024)
@@ -497,6 +533,31 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 				t.Fatalf("unexpected msg: code %d", code)
 			}
 		}
+	}
+}
+
+func (s *Suite) TestInvalidBlockRangeUpdate(t *utesting.T) {
+	t.Log(`This test sends an invalid BlockRangeUpdate message to the node and expects to be disconnected.`)
+
+	conn, err := s.dial()
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+	if err := conn.peer(s.chain, nil); err != nil {
+		t.Fatalf("peering failed: %v", err)
+	}
+
+	conn.Write(ethProto, eth.BlockRangeUpdateMsg, &eth.BlockRangeUpdatePacket{
+		EarliestBlock:   10,
+		LatestBlock:     8,
+		LatestBlockHash: s.chain.GetBlock(8).Hash(),
+	})
+
+	if code, _, err := conn.Read(); err != nil {
+		t.Fatalf("expected disconnect, got err: %v", err)
+	} else if code != discMsg {
+		t.Fatalf("expected disconnect message, got msg code %d", code)
 	}
 }
 
