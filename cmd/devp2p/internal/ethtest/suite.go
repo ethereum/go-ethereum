@@ -430,13 +430,23 @@ func (s *Suite) TestGetReceipts(t *utesting.T) {
 	if err := conn.peer(s.chain, nil); err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
+
+	// Find some blocks containing receipts.
+	var hashes = make([]common.Hash, 0, 3)
+	for i := range s.chain.Len() {
+		block := s.chain.GetBlock(i)
+		if len(block.Transactions()) > 0 {
+			hashes = append(hashes, block.Hash())
+		}
+		if len(hashes) == cap(hashes) {
+			break
+		}
+	}
+
 	// Create block bodies request.
 	req := &eth.GetReceiptsPacket{
-		RequestId: 66,
-		GetReceiptsRequest: eth.GetReceiptsRequest{
-			s.chain.blocks[54].Hash(),
-			s.chain.blocks[75].Hash(),
-		},
+		RequestId:          66,
+		GetReceiptsRequest: (eth.GetReceiptsRequest)(hashes),
 	}
 	if err := conn.Write(ethProto, eth.GetReceiptsMsg, req); err != nil {
 		t.Fatalf("could not write to connection: %v", err)
