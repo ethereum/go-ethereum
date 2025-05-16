@@ -790,20 +790,13 @@ func (t *UDPv5) writeLoop() {
 	defer t.wg.Done()
 	for pw := range t.writeCh { // Loop continues until writeCh is closed and empty.
 		_, err := t.conn.WriteToUDPAddrPort(pw.data, pw.toAddr)
-		if err != nil {
-			// Generic error logging, as we don't have packetName or rich context here.
-			select {
-			case <-t.closeCtx.Done():
-				// Log trace level if error occurs during or after shutdown initiation.
-				t.log.Trace("UDP write error during/after shutdown", "addr", pw.toAddr, "err", err)
-			default:
-				// Not closing, so it's a more unexpected error.
-				if netutil.IsTemporaryError(err) {
-					t.log.Debug("Temporary UDP write error", "addr", pw.toAddr, "err", err)
-				} else if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) { // Avoid logging common "closed" errors if not caught by closeCtx.
-					t.log.Warn("UDP write error", "addr", pw.toAddr, "err", err)
-				}
+		if netutil.IsTemporaryError(err) {
+			t.log.Debug("Temporary UDP write error", "addr", pw.toAddr, "err", err)
+		} else if err != nil {
+			if !errors.Is(err, net.ErrClosed) || !errors.Is(err, io.EOF) {
+				t.log.Warn("UDP write error", "addr", pw.toAddr, "err", err)
 			}
+			return
 		}
 	}
 }
