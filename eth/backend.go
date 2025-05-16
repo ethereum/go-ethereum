@@ -210,7 +210,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tracer %s: %v", config.VMTrace, err)
 		}
-		safeHooks, err := tracers.NewRecoverTracer(stack, t)
+		safeHooks, err := tracers.NewRecoverTracer(stack, t, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create safety wrappers for %s tracer: %v", config.VMTrace, err)
 		}

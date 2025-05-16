@@ -35,16 +35,19 @@ import (
 type recoverTracer struct {
 	node  *node.Node
 	child *tracing.Hooks
+
+	// false in tests, to prevent stack printing and misatribution of a bug
+	printStack bool
 }
 
 // NewRecoverTracer instantiates a recoverTracer and returns a wrapped tracing.Hooks.
 // Only hook fields which are non-nil in the child are replaced with the corresponding
 // recoverTracer method.
-func NewRecoverTracer(node *node.Node, child *tracing.Hooks) (*tracing.Hooks, error) {
+func NewRecoverTracer(node *node.Node, child *tracing.Hooks, printStack bool) (*tracing.Hooks, error) {
 	if child == nil {
 		return nil, fmt.Errorf("child tracer is nil")
 	}
-	rt := &recoverTracer{node: node, child: child}
+	rt := &recoverTracer{node, child, printStack}
 	return rt.wrapHooks()
 }
 
@@ -90,7 +93,9 @@ func (rt *recoverTracer) safeCall(name string, shutdown bool, fn func()) {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprintf("panic in child tracer during %s: %v", name, r))
 			if shutdown {
-				debug.PrintStack()
+				if rt.printStack {
+					debug.PrintStack()
+				}
 				go rt.node.Close()
 			}
 		}

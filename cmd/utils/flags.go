@@ -2181,7 +2181,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 			if err != nil {
 				Fatalf("Failed to create tracer %q: %v", name, err)
 			}
-			safeHooks, err := tracers.NewRecoverTracer(stack, t)
+			safeHooks, err := tracers.NewRecoverTracer(stack, t, true)
 			if err != nil {
 				Fatalf("Failed to create safety wrapper for tracer %q: %v", name, err)
 			}

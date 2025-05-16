@@ -142,7 +142,7 @@ func TestSafeTracer(t *testing.T) {
 	faultyTracer := &tracing.Hooks{OnTxStart: func(*tracing.VMContext, *types.Transaction, common.Address) {
 		panic("someone mispronounced clef")
 	}}
-	safeHooks, err := NewRecoverTracer(nil, faultyTracer)
+	safeHooks, err := NewRecoverTracer(nil, faultyTracer, false)
 	if err != nil {
 		t.Fatal(err)
 	}
