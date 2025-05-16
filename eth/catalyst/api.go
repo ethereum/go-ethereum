@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params/forks"
@@ -159,6 +160,17 @@ type ConsensusAPI struct {
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
 }
+
+var (
+	// Number of blobs requested via getBlobsV2
+	getBlobsV2BlobsRequestedTotal = metrics.NewRegisteredCounter("get_blobs_requests_blobs_total", nil)
+	// Number of blobs requested via getBlobsV2 that are present in the blobpool
+	getBlobsV2BlobsInPoolTotal = metrics.NewRegisteredCounter("get_blobs_requests_blobs_in_blobpool_total", nil)
+	// Number of times getBlobsV2 responded with “hit”
+	getBlobsV2RequestHit = metrics.NewRegisteredCounter("get_blobs_requests_success_total", nil)
+	// Number of times getBlobsV2 responded with “miss”
+	getBlobsV2RequestMiss = metrics.NewRegisteredCounter("get_blobs_requests_failure_total", nil)
+)
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
@@ -558,6 +570,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	for i, hash := range hashes {
 		index[hash] = i
 	}
+
 	for i, sidecar := range sidecars {
 		if res[i] != nil || sidecar == nil {
 			// already filled
@@ -582,8 +595,16 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
 
+	getBlobsV2BlobsRequestedTotal.Inc(int64(len(hashes)))
+
 	// Optimization: check first if all blobs are available, if not, return empty response
-	if !api.eth.TxPool().HasBlobs(hashes) {
+	blobCounts := api.eth.TxPool().GetBlobCounts(hashes)
+	getBlobsV2BlobsInPoolTotal.Inc(int64(blobCounts))
+
+	if blobCounts == len(hashes) {
+		getBlobsV2RequestHit.Inc(1)
+	} else {
+		getBlobsV2RequestMiss.Inc(1)
 		return nil, nil
 	}
 
