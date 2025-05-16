@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/internal/cli/server/chains"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -676,7 +677,7 @@ func DefaultConfig() *Config {
 		Sealer: &SealerConfig{
 			Enabled:             false,
 			Etherbase:           "",
-			GasCeil:             30_000_000,                                 // geth's default
+			GasCeil:             miner.DefaultConfig.GasCeil,
 			GasPrice:            big.NewInt(params.BorDefaultMinerGasPrice), // bor's default
 			ExtraData:           "",
 			Recommit:            125 * time.Second,
