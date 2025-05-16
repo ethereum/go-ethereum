@@ -84,6 +84,10 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Blob transactions may be present after the Cancun fork.
 	var blobs int
 	for i, tx := range block.Transactions() {
+		if v.config.IsOsaka(block.Number(), block.Time()) && tx.Gas() > params.MaxTxGas {
+			return fmt.Errorf("transaction exceeds maximum allowed gas limit (has %d gas)", tx.Gas())
+		}
+
 		// Count the number of blobs to validate against the header's blobGasUsed
 		blobs += len(tx.BlobHashes())
 
