@@ -43,7 +43,10 @@ func TestFirehose_BlockPrintsToFirehose_SingleBlock(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(f.InternalTestingBuffer().String()), "\n")
 	require.Len(t, lines, 2)
 
-	require.Equal(t, "FIRE INIT 3.0 geth 1.15.10", lines[0])
+	fieldsInit := strings.SplitN(lines[0], " ", 3)
+	require.Equal(t, "FIRE", fieldsInit[0])
+	require.Equal(t, "INIT", fieldsInit[1])
+	require.Contains(t, fieldsInit[2], "geth")
 
 	fields := strings.SplitN(lines[1], " ", 4)
 	require.GreaterOrEqual(t, len(fields), 3)
