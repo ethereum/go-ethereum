@@ -234,9 +234,17 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return receipts
 }
 
-// GetRawReceiptsByHash retrieves the receipts for all transactions in a given block
+// GetRawReceipts retrieves the receipts for all transactions in a given block
 // without deriving the internal fields and the Bloom.
-func (bc *BlockChain) GetRawReceiptsByHash(hash common.Hash) rlp.RawValue {
+func (bc *BlockChain) GetRawReceipts(hash common.Hash, number uint64) types.Receipts {
+	if receipts, ok := bc.receiptsCache.Get(hash); ok {
+		return receipts
+	}
+	return rawdb.ReadRawReceipts(bc.db, hash, number)
+}
+
+// GetReceiptsRLP retrieves the receipts of a block.
+func (bc *BlockChain) GetReceiptsRLP(hash common.Hash) rlp.RawValue {
 	number := rawdb.ReadHeaderNumber(bc.db, hash)
 	if number == nil {
 		return nil

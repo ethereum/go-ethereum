@@ -282,7 +282,7 @@ func ServiceGetReceiptsQuery68(chain *core.BlockChain, query GetReceiptsRequest)
 			break
 		}
 		// Retrieve the requested block's receipts
-		results := chain.GetRawReceiptsByHash(hash)
+		results := chain.GetReceiptsRLP(hash)
 		if results == nil {
 			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
 				continue
@@ -319,7 +319,7 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 			break
 		}
 		// Retrieve the requested block's receipts
-		results := chain.GetRawReceiptsByHash(hash)
+		results := chain.GetReceiptsRLP(hash)
 		if results == nil {
 			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
 				continue
