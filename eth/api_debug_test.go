@@ -19,6 +19,7 @@ package eth
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"reflect"
 	"slices"
 	"strings"
@@ -26,13 +27,18 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -223,4 +229,58 @@ func TestStorageRangeAt(t *testing.T) {
 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
 		}
 	}
+}
+
+func TestExecutionWitness(t *testing.T) {
+	t.Parallel()
+
+	var (
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000000000000)}},
+		}
+		chain, _ = core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+		signer   = types.LatestSigner(gspec.Config)
+	)
+	// Create a database pre-initialize with a genesis block
+
+	blockNum := 10
+	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), blockNum, func(i int, g *core.BlockGen) {
+		if i == 0 {
+			return
+		}
+
+		// add more transactions to the block
+		for j := 0; j < 10; j++ {
+			tx, err := types.SignNewTx(testKey, signer, &types.DynamicFeeTx{
+				ChainID:    gspec.Config.ChainID,
+				Nonce:      uint64((i-1)*10 + j),
+				GasTipCap:  common.Big0,
+				GasFeeCap:  g.PrevBlock(0).BaseFee(),
+				Gas:        50000,
+				To:         &common.Address{0xaa},
+				Value:      big.NewInt(int64(i)),
+				Data:       nil,
+				AccessList: nil,
+			})
+			if err != nil {
+				t.Fatalf("error creating tx: %v", err)
+			}
+			g.AddTx(tx)
+		}
+	})
+
+	if _, err := chain.InsertChain(bs); err != nil {
+		panic(err)
+	}
+
+	block := chain.GetBlockByNumber(uint64(blockNum - 1))
+	require.NotNil(t, block)
+
+	witness, err := generateWitness(chain, block)
+	require.NoError(t, err)
+
+	_, _, err = core.ExecuteStateless(params.TestChainConfig, block, witness)
+	require.NoError(t, err)
 }
