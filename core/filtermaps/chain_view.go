@@ -29,7 +29,7 @@ type blockchain interface {
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetCanonicalHash(number uint64) common.Hash
 	GetReceiptsByHash(hash common.Hash) types.Receipts
-	GetRawReceiptsByHash(hash common.Hash) types.Receipts
+	GetRawReceipts(hash common.Hash, number uint64) types.Receipts
 }
 
 // ChainView represents an immutable view of a chain with a block id and a set
@@ -117,7 +117,7 @@ func (cv *ChainView) RawReceipts(number uint64) types.Receipts {
 		log.Error("Chain view: block hash unavailable", "number", number, "head", cv.headNumber)
 		return nil
 	}
-	return cv.chain.GetRawReceiptsByHash(blockHash)
+	return cv.chain.GetRawReceipts(blockHash, number)
 }
 
 // SharedRange returns the block range shared by two chain views.

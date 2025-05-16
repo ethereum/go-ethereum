@@ -515,7 +515,7 @@ func (tc *testChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return tc.receipts[hash]
 }
 
-func (tc *testChain) GetRawReceiptsByHash(hash common.Hash) types.Receipts {
+func (tc *testChain) GetRawReceipts(hash common.Hash, number uint64) types.Receipts {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 
