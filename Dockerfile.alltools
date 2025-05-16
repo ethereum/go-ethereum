@@ -1,5 +1,5 @@
 # Build Geth in a stock Go builder container
-FROM golang:1.22.1-alpine as builder
+FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers git
 
@@ -11,7 +11,7 @@ FROM alpine:latest
 
 RUN set -x \
     && apk add --update --no-cache \
-       ca-certificates \
+    ca-certificates \
     && rm -rf /var/cache/apk/*
 COPY --from=builder /bor/build/bin/* /usr/bin/
 

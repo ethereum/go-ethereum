@@ -28,13 +28,13 @@ import (
 )
 
 const (
-	// The spec of verkle key encoding can be found here.
-	// https://notes.ethereum.org/@vbuterin/verkle_tree_eip#Tree-embedding
-	VersionLeafKey    = 0
-	BalanceLeafKey    = 1
-	NonceLeafKey      = 2
-	CodeKeccakLeafKey = 3
-	CodeSizeLeafKey   = 4
+	BasicDataLeafKey = 0
+	CodeHashLeafKey  = 1
+
+	BasicDataVersionOffset  = 0
+	BasicDataCodeSizeOffset = 5
+	BasicDataNonceOffset    = 8
+	BasicDataBalanceOffset  = 16
 )
 
 var (
@@ -177,31 +177,16 @@ func GetTreeKeyWithEvaluatedAddress(evaluated *verkle.Point, treeIndex *uint256.
 	return pointToHash(ret, subIndex)
 }
 
-// VersionKey returns the verkle tree key of the version field for the specified account.
-func VersionKey(address []byte) []byte {
-	return GetTreeKey(address, zero, VersionLeafKey)
-}
-
-// BalanceKey returns the verkle tree key of the balance field for the specified account.
-func BalanceKey(address []byte) []byte {
-	return GetTreeKey(address, zero, BalanceLeafKey)
-}
-
-// NonceKey returns the verkle tree key of the nonce field for the specified account.
-func NonceKey(address []byte) []byte {
-	return GetTreeKey(address, zero, NonceLeafKey)
-}
-
-// CodeKeccakKey returns the verkle tree key of the code keccak field for
+// BasicDataKey returns the verkle tree key of the basic data field for
 // the specified account.
-func CodeKeccakKey(address []byte) []byte {
-	return GetTreeKey(address, zero, CodeKeccakLeafKey)
+func BasicDataKey(address []byte) []byte {
+	return GetTreeKey(address, zero, BasicDataLeafKey)
 }
 
-// CodeSizeKey returns the verkle tree key of the code size field for the
-// specified account.
-func CodeSizeKey(address []byte) []byte {
-	return GetTreeKey(address, zero, CodeSizeLeafKey)
+// CodeHashKey returns the verkle tree key of the code hash field for
+// the specified account.
+func CodeHashKey(address []byte) []byte {
+	return GetTreeKey(address, zero, CodeHashLeafKey)
 }
 
 func codeChunkIndex(chunk *uint256.Int) (*uint256.Int, byte) {
@@ -249,39 +234,18 @@ func StorageSlotKey(address []byte, storageKey []byte) []byte {
 	return GetTreeKey(address, treeIndex, subIndex)
 }
 
-// VersionKeyWithEvaluatedAddress returns the verkle tree key of the version
-// field for the specified account. The difference between VersionKey is the
+// BasicDataKeyWithEvaluatedAddress returns the verkle tree key of the basic data
+// field for the specified account. The difference between BasicDataKey is the
 // address evaluation is already computed to minimize the computational overhead.
-func VersionKeyWithEvaluatedAddress(evaluated *verkle.Point) []byte {
-	return GetTreeKeyWithEvaluatedAddress(evaluated, zero, VersionLeafKey)
+func BasicDataKeyWithEvaluatedAddress(evaluated *verkle.Point) []byte {
+	return GetTreeKeyWithEvaluatedAddress(evaluated, zero, BasicDataLeafKey)
 }
 
-// BalanceKeyWithEvaluatedAddress returns the verkle tree key of the balance
-// field for the specified account. The difference between BalanceKey is the
+// CodeHashKeyWithEvaluatedAddress returns the verkle tree key of the code
+// hash for the specified account. The difference between CodeHashKey is the
 // address evaluation is already computed to minimize the computational overhead.
-func BalanceKeyWithEvaluatedAddress(evaluated *verkle.Point) []byte {
-	return GetTreeKeyWithEvaluatedAddress(evaluated, zero, BalanceLeafKey)
-}
-
-// NonceKeyWithEvaluatedAddress returns the verkle tree key of the nonce
-// field for the specified account. The difference between NonceKey is the
-// address evaluation is already computed to minimize the computational overhead.
-func NonceKeyWithEvaluatedAddress(evaluated *verkle.Point) []byte {
-	return GetTreeKeyWithEvaluatedAddress(evaluated, zero, NonceLeafKey)
-}
-
-// CodeKeccakKeyWithEvaluatedAddress returns the verkle tree key of the code
-// keccak for the specified account. The difference between CodeKeccakKey is the
-// address evaluation is already computed to minimize the computational overhead.
-func CodeKeccakKeyWithEvaluatedAddress(evaluated *verkle.Point) []byte {
-	return GetTreeKeyWithEvaluatedAddress(evaluated, zero, CodeKeccakLeafKey)
-}
-
-// CodeSizeKeyWithEvaluatedAddress returns the verkle tree key of the code
-// size for the specified account. The difference between CodeSizeKey is the
-// address evaluation is already computed to minimize the computational overhead.
-func CodeSizeKeyWithEvaluatedAddress(evaluated *verkle.Point) []byte {
-	return GetTreeKeyWithEvaluatedAddress(evaluated, zero, CodeSizeLeafKey)
+func CodeHashKeyWithEvaluatedAddress(evaluated *verkle.Point) []byte {
+	return GetTreeKeyWithEvaluatedAddress(evaluated, zero, CodeHashLeafKey)
 }
 
 // CodeChunkKeyWithEvaluatedAddress returns the verkle tree key of the code

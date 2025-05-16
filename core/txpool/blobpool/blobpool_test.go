@@ -32,14 +32,12 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -54,9 +52,6 @@ var (
 	emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 )
 
-// Chain configuration with Cancun enabled.
-//
-// TODO(karalabe): replace with params.MainnetChainConfig after Cancun.
 var testChainConfig *params.ChainConfig
 
 func init() {
@@ -73,6 +68,8 @@ type testBlockChain struct {
 	basefee *uint256.Int
 	blobfee *uint256.Int
 	statedb *state.StateDB
+
+	blocks map[uint64]*types.Block
 }
 
 func (bc *testBlockChain) Config() *params.ChainConfig {
@@ -80,7 +77,7 @@ func (bc *testBlockChain) Config() *params.ChainConfig {
 }
 
 func (bc *testBlockChain) CurrentBlock() *types.Header {
-	// Yolo, life is too short to invert mist.CalcBaseFee and misc.CalcBlobFee,
+	// Yolo, life is too short to invert misc.CalcBaseFee and misc.CalcBlobFee,
 	// just binary search it them.
 
 	// The base fee at 5714 ETH translates into the 21000 base gas higher than
@@ -144,7 +141,14 @@ func (bc *testBlockChain) CurrentFinalBlock() *types.Header {
 }
 
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return nil
+	// This is very yolo for the tests. If the number is the origin block we use
+	// to init the pool, return an empty block with the correct starting header.
+	//
+	// If it is something else, return some baked in mock data.
+	if number == bc.config.LondonBlock.Uint64()+1 {
+		return types.NewBlockWithHeader(bc.CurrentBlock())
+	}
+	return bc.blocks[number]
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
@@ -235,12 +239,16 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	for hash := range seen {
 		t.Errorf("indexed transaction hash #%x missing from lookup table", hash)
 	}
-	// Verify that transactions are sorted per account and contain no nonce gaps
+	// Verify that transactions are sorted per account and contain no nonce gaps,
+	// and that the first nonce is the next expected one based on the state.
 	for addr, txs := range pool.index {
 		for i := 1; i < len(txs); i++ {
 			if txs[i].nonce != txs[i-1].nonce+1 {
 				t.Errorf("addr %v, tx %d nonce mismatch: have %d, want %d", addr, i, txs[i].nonce, txs[i-1].nonce+1)
 			}
+		}
+		if txs[0].nonce != pool.state.GetNonce(addr) {
+			t.Errorf("addr %v, first tx nonce mismatch: have %d, want %d", addr, txs[0].nonce, pool.state.GetNonce(addr))
 		}
 	}
 	// Verify that calculated evacuation thresholds are correct
@@ -324,8 +332,7 @@ func TestOpenDrops(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
@@ -549,7 +556,7 @@ func TestOpenDrops(t *testing.T) {
 	store.Close()
 
 	// Create a blob pool out of the pre-seeded data
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(crypto.PubkeyToAddress(gapper.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(dangler.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(filler.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
@@ -647,8 +654,7 @@ func TestOpenIndex(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
@@ -680,7 +686,7 @@ func TestOpenIndex(t *testing.T) {
 	store.Close()
 
 	// Create a blob pool out of the pre-seeded data
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.Commit(0, true)
 
@@ -736,8 +742,7 @@ func TestOpenHeap(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
@@ -780,7 +785,7 @@ func TestOpenHeap(t *testing.T) {
 	store.Close()
 
 	// Create a blob pool out of the pre-seeded data
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
@@ -823,8 +828,8 @@ func TestOpenCap(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
 	// Create a temporary folder for the persistent backend
-	storage, _ := os.MkdirTemp("", "blobpool-")
-	defer os.RemoveAll(storage)
+
+	storage := t.TempDir()
 
 	os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 	store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
@@ -860,7 +865,7 @@ func TestOpenCap(t *testing.T) {
 	// with a high cap to ensure everything was persisted previously
 	for _, datacap := range []uint64{2 * (txAvgSize + blobSize), 100 * (txAvgSize + blobSize)} {
 		// Create a blob pool out of the pre-seeded data, but cap it to 2 blob transaction
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
@@ -914,13 +919,12 @@ func TestOpenCap(t *testing.T) {
 func TestAdd(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
-	// seed is a helper tumpe to seed an initial state db and pool
+	// seed is a helper tuple to seed an initial state db and pool
 	type seed struct {
 		balance uint64
 		nonce   uint64
 		txs     []*types.BlobTx
 	}
-
 	// addtx is a helper sender/tx tuple to represent a new tx addition
 	type addtx struct {
 		from string
@@ -931,6 +935,7 @@ func TestAdd(t *testing.T) {
 	tests := []struct {
 		seeds map[string]seed
 		adds  []addtx
+		block []addtx
 	}{
 		// Transactions from new accounts should be accepted if their initial
 		// nonce matches the expected one from the statedb. Higher or lower must
@@ -1256,11 +1261,29 @@ func TestAdd(t *testing.T) {
 				},
 			},
 		},
+		// Tests issue #30518 where a refactor broke internal state invariants,
+		// causing included transactions not to be properly accounted and thus
+		// account states going our of sync with the chain.
+		{
+			seeds: map[string]seed{
+				"alice": {
+					balance: 1000000,
+					txs: []*types.BlobTx{
+						makeUnsignedTx(0, 1, 1, 1),
+					},
+				},
+			},
+			block: []addtx{
+				{
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, 1),
+				},
+			},
+		},
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend
-		storage, _ := os.MkdirTemp("", "blobpool-")
-		defer os.RemoveAll(storage) // late defer, still ok
+		storage := t.TempDir()
 
 		os.MkdirAll(filepath.Join(storage, pendingTransactionStore), 0700)
 		store, _ := billy.Open(billy.Options{Path: filepath.Join(storage, pendingTransactionStore)}, newSlotter(), nil)
@@ -1270,7 +1293,7 @@ func TestAdd(t *testing.T) {
 			keys  = make(map[string]*ecdsa.PrivateKey)
 			addrs = make(map[string]common.Address)
 		)
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		for acc, seed := range tt.seeds {
 			// Generate a new random key/address for the seed account
 			keys[acc], _ = crypto.GenerateKey()
@@ -1311,8 +1334,34 @@ func TestAdd(t *testing.T) {
 			}
 			verifyPoolInternals(t, pool)
 		}
-		// Verify the pool internals and close down the test
 		verifyPoolInternals(t, pool)
+
+		// If the test contains a chain head event, run that and gain verify the internals
+		if tt.block != nil {
+			// Fake a header for the new set of transactions
+			header := &types.Header{
+				Number:  big.NewInt(int64(chain.CurrentBlock().Number.Uint64() + 1)),
+				BaseFee: chain.CurrentBlock().BaseFee, // invalid, but nothing checks it, yolo
+			}
+			// Inject the fake block into the chain
+			txs := make([]*types.Transaction, len(tt.block))
+			for j, inc := range tt.block {
+				txs[j] = types.MustSignNewTx(keys[inc.from], types.LatestSigner(testChainConfig), inc.tx)
+			}
+			chain.blocks = map[uint64]*types.Block{
+				header.Number.Uint64(): types.NewBlockWithHeader(header).WithBody(types.Body{
+					Transactions: txs,
+				}),
+			}
+			// Apply the nonce updates to the state db
+			for _, tx := range txs {
+				sender, _ := types.Sender(types.LatestSigner(testChainConfig), tx)
+				chain.statedb.SetNonce(sender, tx.Nonce()+1)
+			}
+			pool.Reset(chain.CurrentBlock(), header)
+			verifyPoolInternals(t, pool)
+		}
+		// Close down the test
 		pool.Close()
 	}
 }
@@ -1332,7 +1381,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		basefee    = uint64(1050)
 		blobfee    = uint64(105)
 		signer     = types.LatestSigner(testChainConfig)
-		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		chain      = &testBlockChain{
 			config:  testChainConfig,
 			basefee: uint256.NewInt(basefee),

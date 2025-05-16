@@ -66,7 +66,7 @@ func TestGenesisContractChange(t *testing.T) {
 
 	genesis := genspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 
-	statedb, err := state.New(genesis.Root(), state.NewDatabase(db), nil)
+	statedb, err := state.New(genesis.Root(), state.NewDatabase(triedb.NewDatabase(db, triedb.HashDefaults), nil))
 	require.NoError(t, err)
 
 	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genspec, nil, b, vm.Config{}, nil, nil, nil)
@@ -84,7 +84,7 @@ func TestGenesisContractChange(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, statedb.Database().TrieDB().Commit(root, true))
 
-		statedb, err := state.New(h.Root, state.NewDatabase(db), nil)
+		statedb, err := state.New(h.Root, state.NewDatabase(triedb.NewDatabase(db, triedb.HashDefaults), nil))
 		require.NoError(t, err)
 
 		return root, statedb

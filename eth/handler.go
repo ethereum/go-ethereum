@@ -99,6 +99,7 @@ type handlerConfig struct {
 	RequiredBlocks      map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
 	EthAPI              *ethapi.BlockChainAPI  // EthAPI to interact
 	enableBlockTracking bool                   // Whether to log information collected while tracking block lifecycle
+	txAnnouncementOnly  bool                   // Whether to only announce txs to peers
 }
 
 type handler struct {
@@ -129,6 +130,7 @@ type handler struct {
 	requiredBlocks map[uint64]common.Hash
 
 	enableBlockTracking bool
+	txAnnouncementOnly  bool
 
 	// channels for fetcher, syncer, txsyncLoop
 	quitSync chan struct{}
@@ -159,6 +161,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		ethAPI:              config.EthAPI,
 		requiredBlocks:      config.RequiredBlocks,
 		enableBlockTracking: config.enableBlockTracking,
+		txAnnouncementOnly:  config.txAnnouncementOnly,
 		quitSync:            make(chan struct{}),
 		handlerDoneCh:       make(chan struct{}),
 		handlerStartCh:      make(chan struct{}),
@@ -633,7 +636,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		case tx.Size() > txMaxBroadcastSize:
 			largeTxs++
 		default:
-			maybeDirect = true
+			maybeDirect = !h.txAnnouncementOnly
 		}
 		// Send the transaction (if it's small enough) directly to a subset of
 		// the peers that have not received it yet, ensuring that the flow of

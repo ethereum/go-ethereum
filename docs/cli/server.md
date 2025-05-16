@@ -10,6 +10,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.heimdallgRPC```: Address of Heimdall gRPC service
 
+- ```bor.heimdalltimeout```: Timeout period for bor's outgoing requests to heimdall (default: 5s)
+
 - ```bor.logs```: Enables bor log retrieval (default: false)
 
 - ```bor.runheimdall```: Run Heimdall service as a child process (default: false)
@@ -238,11 +240,13 @@ The ```bor server``` command runs the Bor client.
 
 - ```port```: Network listening port (default: 30303)
 
+- ```txannouncementonly```: Whether to only announce transactions to peers (default: false)
+
 - ```txarrivalwait```: Maximum duration to wait for a transaction before explicitly requesting it (default: 500ms)
 
 - ```v4disc```: Enables the V4 discovery mechanism (default: true)
 
-- ```v5disc```: Enables the experimental RLPx V5 (Topic Discovery) mechanism (default: false)
+- ```v5disc```: Enables the V5 discovery mechanism (default: true)
 
 ### Sealer Options
 

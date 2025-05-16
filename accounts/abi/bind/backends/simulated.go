@@ -154,7 +154,7 @@ func (b *SimulatedBackend) rollback(parent *types.Block) {
 	blocks, _ := core.GenerateChain(b.config, parent, ethash.NewFaker(), b.database, 1, func(int, *core.BlockGen) {})
 
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache(), nil)
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.blockchain.StateCache())
 }
 
 // Fork creates a side-chain that can be used to simulate reorgs.
@@ -690,16 +690,16 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 
 	// Execute the call.
 	msg := &core.Message{
-		From:              call.From,
-		To:                call.To,
-		Value:             call.Value,
-		GasLimit:          call.Gas,
-		GasPrice:          call.GasPrice,
-		GasFeeCap:         call.GasFeeCap,
-		GasTipCap:         call.GasTipCap,
-		Data:              call.Data,
-		AccessList:        call.AccessList,
-		SkipAccountChecks: true,
+		From:            call.From,
+		To:              call.To,
+		Value:           call.Value,
+		GasLimit:        call.Gas,
+		GasPrice:        call.GasPrice,
+		GasFeeCap:       call.GasFeeCap,
+		GasTipCap:       call.GasTipCap,
+		Data:            call.Data,
+		AccessList:      call.AccessList,
+		SkipNonceChecks: true,
 	}
 
 	// Create a new environment which holds all relevant information
@@ -744,7 +744,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		return err
 	}
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database())
 	b.pendingReceipts = receipts[0]
 	return nil
 }
@@ -867,7 +867,7 @@ func (b *SimulatedBackend) AdjustTime(adjustment time.Duration) error {
 		return err
 	}
 	b.pendingBlock = blocks[0]
-	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database(), nil)
+	b.pendingState, _ = state.New(b.pendingBlock.Root(), stateDB.Database())
 	return nil
 }
 

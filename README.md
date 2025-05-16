@@ -1,9 +1,7 @@
 # Bor Overview
-Bor is the Official Golang implementation of the Polygon PoS blockchain. It is a fork of [geth](https://github.com/ethereum/go-ethereum) and is EVM compatible (upto London fork).
+Bor is the official Golang implementation of the Polygon PoS blockchain. It is a fork of [geth](https://github.com/ethereum/go-ethereum) and is EVM compatible (upto London fork).
 
-[![API Reference](
-https://pkg.go.dev/badge/github.com/maticnetwork/bor
-)](https://pkg.go.dev/github.com/maticnetwork/bor)
+[![API Reference](https://pkg.go.dev/badge/github.com/maticnetwork/bor)](https://pkg.go.dev/github.com/maticnetwork/bor)
 [![Go Report Card](https://goreportcard.com/badge/github.com/maticnetwork/bor)](https://goreportcard.com/report/github.com/maticnetwork/bor)
 ![MIT License](https://img.shields.io/github/license/maticnetwork/bor)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.com/invite/0xpolygonrnd)
@@ -13,15 +11,15 @@ https://pkg.go.dev/badge/github.com/maticnetwork/bor
 
 The easiest way to get started with bor is to install the packages using the command below. Please take a look at the [releases](https://github.com/maticnetwork/bor/releases) section to find the latest stable version of bor.
     
-    curl -L https://raw.githubusercontent.com/maticnetwork/install/main/bor.sh | bash -s -- v0.4.0 <network> <node_type>
+    curl -L https://raw.githubusercontent.com/maticnetwork/install/main/bor.sh | bash -s -- v2.0.0 <network> <node_type>
 
-The network accepts `mainnet`,`amoy` or `mumbai` and the node type accepts `validator` or `sentry` or `archive`. The installation script does the following things:
+The network accepts `mainnet`, or `amoy` and the node type accepts `validator` or `sentry` or `archive`. The installation script does the following things:
 - Create a new user named `bor`.
 - Install the bor binary at `/usr/bin/bor`.
 - Dump the suitable config file (based on the network and node type provided) at `/var/lib/bor` and use it as the home dir.
 - Create a systemd service named `bor` at `/lib/systemd/system/bor.service` which starts bor using the config file as `bor` user.
 
-The releases supports both the networks i.e. Polygon Mainnet, Amoy and Mumbai (Testnet) unless explicitly specified. Before the stable release for mainnet, pre-releases will be available marked with `beta` tag for deploying on Mumbai/Amoy (testnet). On sufficient testing, stable release for mainnet will be announced with a forum post.
+The releases supports both the networks i.e. Polygon Mainnet, and Amoy (Testnet) unless explicitly specified. Before the stable release for mainnet, pre-releases will be available marked with `beta` tag for deploying on Amoy (testnet). On sufficient testing, stable release for mainnet will be announced with a forum post.
 
 ### Building from source
 

@@ -394,6 +394,7 @@ var Forks = map[string]*params.ChainConfig{
 		ShanghaiBlock:           big.NewInt(0),
 		CancunBlock:             big.NewInt(0),
 		PragueBlock:             big.NewInt(0),
+		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
 	},
 	"CancunToPragueAtTime15k": {
 		ChainID:                 big.NewInt(1),
@@ -414,6 +415,7 @@ var Forks = map[string]*params.ChainConfig{
 		ShanghaiBlock:           big.NewInt(0),
 		CancunBlock:             big.NewInt(0),
 		PragueBlock:             big.NewInt(0),
+		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
 	},
 }
 

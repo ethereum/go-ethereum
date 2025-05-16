@@ -15,7 +15,7 @@ jobs:
     permissions:
       id-token: write
       contents: write
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,7 +28,6 @@ jobs:
         run: |
           NUMERIC_VERSION=$( echo ${{ env.GIT_TAG }} | sed 's/[^0-9.]//g' ) 
           echo "VERSION=$NUMERIC_VERSION" >> $GITHUB_ENV
-
 
       - name: Making directory structure for yaml
         run: mkdir -p packaging/deb/bor/var/lib/bor
@@ -386,8 +385,6 @@ jobs:
           ARCH: all
           NODE: archive
           NETWORK: mainnet
-
-
 
       ############ Check and Upload ##########################
       - name: Confirming package built
