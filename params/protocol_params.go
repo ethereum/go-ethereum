@@ -128,8 +128,9 @@ const (
 	// Introduced in Tangerine Whistle (Eip 150)
 	CreateBySelfdestructGas uint64 = 25000
 
-	BaseFeeChangeDenominatorPreDelhi  = 8  // Bounds the amount the base fee can change between blocks before Delhi Hard Fork.
-	BaseFeeChangeDenominatorPostDelhi = 16 // Bounds the amount the base fee can change between blocks after Delhi Hard Fork.
+	BaseFeeChangeDenominatorPreDelhi   = 8  // Bounds the amount the base fee can change between blocks before Delhi Hard Fork.
+	BaseFeeChangeDenominatorPostDelhi  = 16 // Bounds the amount the base fee can change between blocks after Delhi Hard Fork.
+	BaseFeeChangeDenominatorPostBhilai = 64 // Bounds the amount the base fee can change between blocks after Bhilai Hard Fork.
 
 	ElasticityMultiplier = 2          // Bounds the maximum gas limit an EIP-1559 block may have.
 	InitialBaseFee       = 1000000000 // Initial base fee for EIP-1559 blocks.
@@ -230,12 +231,20 @@ var (
 	ConsolidationQueueCode    = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe1460d35760115f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1461019a57600182026001905f5b5f82111560685781019083028483029004916001019190604d565b9093900492505050366060146088573661019a573461019a575f5260205ff35b341061019a57600154600101600155600354806004026004013381556001015f358155600101602035815560010160403590553360601b5f5260605f60143760745fa0600101600355005b6003546002548082038060021160e7575060025b5f5b8181146101295782810160040260040181607402815460601b815260140181600101548152602001816002015481526020019060030154905260010160e9565b910180921461013b5790600255610146565b90505f6002555f6003555b5f54807fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff141561017357505f5b6001546001828201116101885750505f61018e565b01600190035b5f555f6001556074025ff35b5f5ffd")
 )
 
+// BaseFeeChangeDenominator returns the denominator used to bound the amount the base fee can change between blocks.
+// The value varies based on the hard fork:
+// - Pre-Delhi: 8 (default)
+// - Post-Delhi: 16
+// - Post-Bhilai: 64
+// If borConfig is nil, returns the default value of 8.
 func BaseFeeChangeDenominator(borConfig *BorConfig, number *big.Int) uint64 {
 	// Handle cases where bor consensus isn't available to avoid panic
 	if borConfig == nil {
 		return DefaultBaseFeeChangeDenominator
 	}
-	if borConfig.IsDelhi(number) {
+	if borConfig.IsBhilai(number) {
+		return BaseFeeChangeDenominatorPostBhilai
+	} else if borConfig.IsDelhi(number) {
 		return BaseFeeChangeDenominatorPostDelhi
 	} else {
 		return BaseFeeChangeDenominatorPreDelhi
