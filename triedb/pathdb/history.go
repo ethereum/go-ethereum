@@ -278,12 +278,11 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map
 // and the hash of the storage slot key.
 func (h *history) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte) {
 	var (
-		buff     = crypto.NewKeccakState()
 		accounts = make(map[common.Hash][]byte)
 		storages = make(map[common.Hash]map[common.Hash][]byte)
 	)
 	for addr, blob := range h.accounts {
-		addrHash := crypto.HashData(buff, addr.Bytes())
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
 		accounts[addrHash] = blob
 
 		storage, exist := h.storages[addr]
@@ -295,7 +294,7 @@ func (h *history) stateSet() (map[common.Hash][]byte, map[common.Hash]map[common
 		} else {
 			subset := make(map[common.Hash][]byte)
 			for key, slot := range storage {
-				subset[crypto.HashData(buff, key.Bytes())] = slot
+				subset[crypto.Keccak256Hash(key.Bytes())] = slot
 			}
 			storages[addrHash] = subset
 		}
