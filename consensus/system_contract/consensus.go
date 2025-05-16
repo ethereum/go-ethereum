@@ -86,13 +86,18 @@ func (s *SystemContract) VerifyHeader(chain consensus.ChainHeaderReader, header 
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications (the order is that of
 // the input slice).
-func (s *SystemContract) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (s *SystemContract) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool, parent *types.Header) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
 	go func() {
 		for i, header := range headers {
-			err := s.verifyHeader(chain, header, headers[:i])
+			parents := headers[:i]
+			if len(parents) == 0 && parent != nil {
+				parents = []*types.Header{parent}
+			}
+
+			err := s.verifyHeader(chain, header, parents)
 			if err != nil {
 				log.Error("Error verifying headers", "err", err)
 			}

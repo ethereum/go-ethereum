@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -33,6 +34,8 @@ import (
 	"github.com/scroll-tech/go-ethereum/consensus"
 	"github.com/scroll-tech/go-ethereum/consensus/clique"
 	"github.com/scroll-tech/go-ethereum/consensus/ethash"
+	"github.com/scroll-tech/go-ethereum/consensus/system_contract"
+	"github.com/scroll-tech/go-ethereum/consensus/wrapper"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/types"
@@ -76,6 +79,14 @@ var (
 		GasCeil:        params.GenesisGasLimit,
 		MaxAccountsNum: math.MaxInt,
 		CCCMaxWorkers:  2,
+	}
+
+	testConfigAllowEmpty = &Config{
+		Recommit:       time.Second,
+		GasCeil:        params.GenesisGasLimit,
+		MaxAccountsNum: math.MaxInt,
+		CCCMaxWorkers:  2,
+		AllowEmpty:     true,
 	}
 )
 
@@ -136,6 +147,15 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 		gspec.Timestamp = uint64(time.Now().Unix())
 		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
 		e.Authorize(testBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
+			return crypto.Sign(crypto.Keccak256(data), testBankKey)
+		})
+	case *wrapper.UpgradableEngine:
+		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
+		gspec.Timestamp = uint64(time.Now().Unix())
+		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
+		e.Authorize(testBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
+			return crypto.Sign(crypto.Keccak256(data), testBankKey)
+		}, func(account accounts.Account, s string, data []byte) ([]byte, error) {
 			return crypto.Sign(crypto.Keccak256(data), testBankKey)
 		})
 	case *ethash.Ethash:
@@ -207,12 +227,24 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	return tx
 }
 
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
+func testWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int, allowEmpty bool) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
 	backend.txPool.AddLocals(pendingTxs)
-	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, false)
+	config := testConfig
+	if allowEmpty {
+		config = testConfigAllowEmpty
+	}
+	w := newWorker(config, chainConfig, engine, backend, new(event.TypeMux), nil, false, false)
 	w.setEtherbase(testBankAddress)
 	return w, backend
+}
+
+func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
+	return testWorker(t, chainConfig, engine, db, blocks, false)
+}
+
+func newTestWorkerWithEmptyBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
+	return testWorker(t, chainConfig, engine, db, blocks, true)
 }
 
 func TestGenerateBlockAndImportClique(t *testing.T) {
@@ -1354,4 +1386,84 @@ func TestEuclidV2HardForkMessageQueue(t *testing.T) {
 			t.Fatalf("timeout")
 		}
 	}
+}
+
+// TestEuclidV2TransitionVerification tests that the upgradable consensus engine
+// can successfully verify the EuclidV2 transition chain.
+func TestEuclidV2TransitionVerification(t *testing.T) {
+	// patch time.Now() to be able to simulate hard fork time
+	patches := gomonkey.NewPatches()
+	defer patches.Reset()
+	var timeCount int64
+	patches.ApplyFunc(time.Now, func() time.Time {
+		timeCount++
+		return time.Unix(timeCount, 0)
+	})
+
+	// init chain config
+	chainConfig := params.AllCliqueProtocolChanges.Clone()
+	chainConfig.EuclidTime = newUint64(0)
+	chainConfig.EuclidV2Time = newUint64(10000)
+	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	chainConfig.SystemContract = &params.SystemContractConfig{Period: 1}
+
+	// init worker
+	db := rawdb.NewMemoryDatabase()
+	cliqueEngine := clique.New(chainConfig.Clique, db)
+	sysEngine := system_contract.New(context.Background(), chainConfig.SystemContract, &system_contract.FakeEthClient{Value: testBankAddress})
+	engine := wrapper.NewUpgradableEngine(chainConfig.IsEuclidV2, cliqueEngine, sysEngine)
+	w, b := newTestWorkerWithEmptyBlock(t, chainConfig, engine, db, 0)
+	defer w.close()
+	b.genesis.MustCommit(db)
+
+	// collect mined blocks
+	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+	defer sub.Unsubscribe()
+	w.start()
+
+	blocks := []*types.Block{}
+	headers := []*types.Header{}
+
+	for i := 0; i < 6; i++ {
+		select {
+		case ev := <-sub.Chan():
+			// activate EuclidV2 at next block
+			if i == 2 {
+				timeCount = int64(*chainConfig.EuclidV2Time)
+			}
+
+			block := ev.Data.(core.NewMinedBlockEvent).Block
+			blocks = append(blocks, block)
+			headers = append(headers, block.Header())
+
+		case <-time.After(3 * time.Second):
+			t.Fatalf("timeout")
+		}
+	}
+
+	// sanity check: we generated the EuclidV2 transition block
+	assert.False(t, chainConfig.IsEuclidV2(headers[0].Time))
+	assert.True(t, chainConfig.IsEuclidV2(headers[len(headers)-1].Time))
+
+	// import headers into new chain
+	chainDb := rawdb.NewMemoryDatabase()
+	b.genesis.MustCommit(chainDb)
+	chain, err := core.NewBlockChain(chainDb, nil, b.chain.Config(), engine, vm.Config{}, nil, nil)
+	assert.NoError(t, err)
+	defer chain.Stop()
+
+	// previously this would fail with `unknown ancestor`
+	_, err = chain.InsertHeaderChain(headers, 0)
+	assert.NoError(t, err)
+
+	// import headers into new chain
+	chainDb = rawdb.NewMemoryDatabase()
+	b.genesis.MustCommit(chainDb)
+	chain, err = core.NewBlockChain(chainDb, nil, b.chain.Config(), engine, vm.Config{}, nil, nil)
+	assert.NoError(t, err)
+	defer chain.Stop()
+
+	// previously this would fail with `unknown ancestor`
+	_, err = chain.InsertChain(blocks)
+	assert.NoError(t, err)
 }
