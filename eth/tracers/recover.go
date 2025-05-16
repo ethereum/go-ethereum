@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"reflect"
 	"runtime/debug"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -35,8 +36,9 @@ import (
 type recoverTracer struct {
 	node  *node.Node
 	child *tracing.Hooks
-
-	// false in tests, to prevent stack printing and misatribution of a bug
+	// set to true when the node is in shutdown sequence.
+	stopping atomic.Bool
+	// false in tests, to prevent stack printing and misattribution of a bug.
 	printStack bool
 }
 
@@ -47,7 +49,7 @@ func NewRecoverTracer(node *node.Node, child *tracing.Hooks, printStack bool) (*
 	if child == nil {
 		return nil, fmt.Errorf("child tracer is nil")
 	}
-	rt := &recoverTracer{node, child, printStack}
+	rt := &recoverTracer{node, child, atomic.Bool{}, printStack}
 	return rt.wrapHooks()
 }
 
@@ -72,7 +74,6 @@ func (rt *recoverTracer) wrapHooks() (*tracing.Hooks, error) {
 			methodVal := rtVal.MethodByName(field.Name)
 			// If the method exists and its type matches the hook's type, use it.
 			if methodVal.IsValid() && methodVal.Type() == field.Type {
-				fmt.Printf("Setting method %s for field %s\n", methodVal, field.Name)
 				newHooks.Field(i).Set(methodVal)
 			} else {
 				return nil, fmt.Errorf("method %s not available on recovery tracer", field.Name)
@@ -89,9 +90,14 @@ func (rt *recoverTracer) wrapHooks() (*tracing.Hooks, error) {
 // If the call panics, it logs the panic. If shutdown is true, it also initiates
 // node shutdown.
 func (rt *recoverTracer) safeCall(name string, shutdown bool, fn func()) {
+	// Skip the call if tracer has paniced before.
+	if rt.stopping.Load() {
+		return
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprintf("panic in child tracer during %s: %v", name, r))
+			rt.stopping.Store(true)
 			if shutdown {
 				if rt.printStack {
 					debug.PrintStack()
