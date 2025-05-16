@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/billy"
 	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -1140,6 +1141,63 @@ func TestChangingSlotterSize(t *testing.T) {
 
 		pool.Close()
 	}
+}
+
+// TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
+func TestBlobCountLimit(t *testing.T) {
+	// Create a temporary folder for the persistent backend
+	storage := t.TempDir()
+
+	// Create transactions from a few accounts.
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 7, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 8, key2)
+	)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	// Make Prague-enabled custom chain config.
+	cancunTime := uint64(0)
+	pragueTime := uint64(0)
+	config := &params.ChainConfig{
+		ChainID:     big.NewInt(1),
+		LondonBlock: big.NewInt(0),
+		BerlinBlock: big.NewInt(0),
+		CancunTime:  &cancunTime,
+		PragueTime:  &pragueTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+		},
+	}
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+
+	// Attempt to add transactions.
+	errs := pool.Add([]*types.Transaction{tx1, tx2}, true)
+	assert.Equal(t, 2, len(errs))
+	assert.NoError(t, errs[0])
+	assert.EqualError(t, errs[1], "too many blobs in transaction: have 8, permitted 7")
+
+	verifyPoolInternals(t, pool)
+	pool.Close()
 }
 
 // Tests that adding transaction will correctly store it in the persistent store
