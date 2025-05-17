@@ -358,7 +358,7 @@ var (
 		Max:            9,
 		UpdateFraction: 5007716,
 	}
-	// DefaultBlobSchedule is the latest configured blob schedule for test chains.
+	// DefaultBlobSchedule is the latest configured blob schedule for Ethereum mainnet.
 	DefaultBlobSchedule = &BlobScheduleConfig{
 		Cancun: DefaultCancunBlobConfig,
 		Prague: DefaultPragueBlobConfig,

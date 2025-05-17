@@ -43,8 +43,10 @@ func (f *FilterMaps) indexerLoop() {
 	log.Info("Started log indexer")
 
 	for !f.stop {
+		// Note: acquiring the indexLock read lock is unnecessary here,
+		// as the `indexedRange` is accessed within the indexerLoop.
 		if !f.indexedRange.initialized {
-			if f.targetView.headNumber == 0 {
+			if f.targetView.HeadNumber() == 0 {
 				// initialize when chain head is available
 				f.processSingleEvent(true)
 				continue
@@ -105,7 +107,7 @@ type targetUpdate struct {
 	historyCutoff, finalBlock uint64
 }
 
-// SetTargetView sets a new target chain view for the indexer to render.
+// SetTarget sets a new target chain view for the indexer to render.
 // Note that SetTargetView never blocks.
 func (f *FilterMaps) SetTarget(targetView *ChainView, historyCutoff, finalBlock uint64) {
 	if targetView == nil {
@@ -165,6 +167,9 @@ func (f *FilterMaps) waitForNewHead() {
 // processEvents processes all events, blocking only if a block processing is
 // happening and indexing should be suspended.
 func (f *FilterMaps) processEvents() {
+	if f.testProcessEventsHook != nil {
+		f.testProcessEventsHook()
+	}
 	for f.processSingleEvent(f.blockProcessing) {
 	}
 }
@@ -175,6 +180,8 @@ func (f *FilterMaps) processSingleEvent(blocking bool) bool {
 	if f.stop {
 		return false
 	}
+	// Note: acquiring the indexLock read lock is unnecessary here,
+	// as this function is always called within the indexLoop.
 	if !f.hasTempRange {
 		for _, mb := range f.matcherSyncRequests {
 			mb.synced()
@@ -247,9 +254,9 @@ func (f *FilterMaps) tryIndexHead() error {
 			((!f.loggedHeadIndex && time.Since(f.startedHeadIndexAt) > headLogDelay) ||
 				time.Since(f.lastLogHeadIndex) > logFrequency) {
 			log.Info("Log index head rendering in progress",
-				"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
+				"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
 				"processed", f.indexedRange.blocks.AfterLast()-f.ptrHeadIndex,
-				"remaining", f.indexedView.headNumber-f.indexedRange.blocks.Last(),
+				"remaining", f.indexedView.HeadNumber()-f.indexedRange.blocks.Last(),
 				"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
 			f.loggedHeadIndex = true
 			f.lastLogHeadIndex = time.Now()
@@ -259,7 +266,7 @@ func (f *FilterMaps) tryIndexHead() error {
 	}
 	if f.loggedHeadIndex && f.indexedRange.hasIndexedBlocks() {
 		log.Info("Log index head rendering finished",
-			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
+			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
 			"processed", f.indexedRange.blocks.AfterLast()-f.ptrHeadIndex,
 			"elapsed", common.PrettyDuration(time.Since(f.startedHeadIndexAt)))
 	}
@@ -316,7 +323,7 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 			if f.indexedRange.hasIndexedBlocks() && f.ptrTailIndex >= f.indexedRange.blocks.First() &&
 				(!f.loggedTailIndex || time.Since(f.lastLogTailIndex) > logFrequency) {
 				log.Info("Log index tail rendering in progress",
-					"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
+					"firstblock", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
 					"processed", f.ptrTailIndex-f.indexedRange.blocks.First()+tpb,
 					"remaining", remaining,
 					"next tail epoch percentage", f.indexedRange.tailPartialEpoch*100/f.mapsPerEpoch,
@@ -339,7 +346,7 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 	}
 	if f.loggedTailIndex && f.indexedRange.hasIndexedBlocks() {
 		log.Info("Log index tail rendering finished",
-			"first block", f.indexedRange.blocks.First(), "last block", f.indexedRange.blocks.Last(),
+			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
 			"processed", f.ptrTailIndex-f.indexedRange.blocks.First(),
 			"elapsed", common.PrettyDuration(time.Since(f.startedTailIndexAt)))
 		f.loggedTailIndex = false
@@ -418,10 +425,10 @@ func (f *FilterMaps) needTailEpoch(epoch uint32) bool {
 // tailTargetBlock returns the target value for the tail block number according
 // to the log history parameter and the current index head.
 func (f *FilterMaps) tailTargetBlock() uint64 {
-	if f.history == 0 || f.indexedView.headNumber < f.history {
+	if f.history == 0 || f.indexedView.HeadNumber() < f.history {
 		return 0
 	}
-	return f.indexedView.headNumber + 1 - f.history
+	return f.indexedView.HeadNumber() + 1 - f.history
 }
 
 // tailPartialBlocks returns the number of rendered blocks in the partially

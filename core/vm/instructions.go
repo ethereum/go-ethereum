@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -234,11 +233,7 @@ func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	offset, size := scope.Stack.pop(), scope.Stack.peek()
 	data := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 
-	if interpreter.hasher == nil {
-		interpreter.hasher = crypto.NewKeccakState()
-	} else {
-		interpreter.hasher.Reset()
-	}
+	interpreter.hasher.Reset()
 	interpreter.hasher.Write(data)
 	interpreter.hasher.Read(interpreter.hasherBuf[:])
 

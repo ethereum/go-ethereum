@@ -365,6 +365,9 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 		return nil, common.Hash{}, nil, errors.New("missing head header")
 	}
 	newCfg := genesis.chainConfigOrDefault(ghash, storedCfg)
+	if err := overrides.apply(newCfg); err != nil {
+		return nil, common.Hash{}, nil, err
+	}
 
 	// Sanity-check the new configuration.
 	if err := newCfg.CheckConfigForkOrder(); err != nil {

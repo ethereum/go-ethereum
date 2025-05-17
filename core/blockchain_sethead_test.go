@@ -1969,7 +1969,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	datadir := t.TempDir()
 	ancient := filepath.Join(datadir, "ancient")
 
-	pdb, err := pebble.New(datadir, 0, 0, "", false, true)
+	pdb, err := pebble.New(datadir, 0, 0, "", false)
 	if err != nil {
 		t.Fatalf("Failed to create persistent key-value database: %v", err)
 	}
@@ -2023,7 +2023,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	}
 	if tt.commitBlock > 0 {
 		chain.triedb.Commit(canonblocks[tt.commitBlock-1].Root(), false)
-		if snapshots {
+		if snapshots && scheme == rawdb.HashScheme {
 			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
 			}

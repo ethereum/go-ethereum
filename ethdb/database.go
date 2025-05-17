@@ -57,6 +57,13 @@ type KeyValueStater interface {
 	Stat() (string, error)
 }
 
+// KeyValueSyncer wraps the SyncKeyValue method of a backing data store.
+type KeyValueSyncer interface {
+	// SyncKeyValue ensures that all pending writes are flushed to disk,
+	// guaranteeing data durability up to the point.
+	SyncKeyValue() error
+}
+
 // Compacter wraps the Compact method of a backing data store.
 type Compacter interface {
 	// Compact flattens the underlying data store for the given key range. In essence,
@@ -75,6 +82,7 @@ type KeyValueStore interface {
 	KeyValueReader
 	KeyValueWriter
 	KeyValueStater
+	KeyValueSyncer
 	KeyValueRangeDeleter
 	Batcher
 	Iteratee
@@ -126,6 +134,9 @@ type AncientWriter interface {
 	// The integer return value is the total size of the written data.
 	ModifyAncients(func(AncientWriteOp) error) (int64, error)
 
+	// SyncAncient flushes all in-memory ancient store data to disk.
+	SyncAncient() error
+
 	// TruncateHead discards all but the first n ancient data from the ancient store.
 	// After the truncation, the latest item can be accessed it item_n-1(start from 0).
 	TruncateHead(n uint64) (uint64, error)
@@ -138,9 +149,6 @@ type AncientWriter interface {
 	//
 	// Note that data marked as non-prunable will still be retained and remain accessible.
 	TruncateTail(n uint64) (uint64, error)
-
-	// Sync flushes all in-memory ancient store data to disk.
-	Sync() error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.

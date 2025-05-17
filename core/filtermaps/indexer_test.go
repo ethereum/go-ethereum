@@ -219,6 +219,58 @@ func testIndexerMatcherView(t *testing.T, concurrentRead bool) {
 	}
 }
 
+func TestLogsByIndex(t *testing.T) {
+	ts := newTestSetup(t)
+	defer func() {
+		ts.fm.testProcessEventsHook = nil
+		ts.close()
+	}()
+
+	ts.chain.addBlocks(1000, 10, 3, 4, true)
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+	firstLog := make([]uint64, 1001) // first valid log position per block
+	lastLog := make([]uint64, 1001)  // last valid log position per block
+	for i := uint64(0); i <= ts.fm.indexedRange.headDelimiter; i++ {
+		log, err := ts.fm.getLogByLvIndex(i)
+		if err != nil {
+			t.Fatalf("Error getting log by index %d: %v", i, err)
+		}
+		if log != nil {
+			if firstLog[log.BlockNumber] == 0 {
+				firstLog[log.BlockNumber] = i
+			}
+			lastLog[log.BlockNumber] = i
+		}
+	}
+	var failed bool
+	ts.fm.testProcessEventsHook = func() {
+		if ts.fm.indexedRange.blocks.IsEmpty() {
+			return
+		}
+		if lvi := firstLog[ts.fm.indexedRange.blocks.First()]; lvi != 0 {
+			log, err := ts.fm.getLogByLvIndex(lvi)
+			if log == nil || err != nil {
+				t.Errorf("Error getting first log of indexed block range: %v", err)
+				failed = true
+			}
+		}
+		if lvi := lastLog[ts.fm.indexedRange.blocks.Last()]; lvi != 0 {
+			log, err := ts.fm.getLogByLvIndex(lvi)
+			if log == nil || err != nil {
+				t.Errorf("Error getting last log of indexed block range: %v", err)
+				failed = true
+			}
+		}
+	}
+	chain := ts.chain.getCanonicalChain()
+	for i := 0; i < 1000 && !failed; i++ {
+		head := rand.Intn(len(chain))
+		ts.chain.setCanonicalChain(chain[:head+1])
+		ts.fm.WaitIdle()
+	}
+}
+
 func TestIndexerCompareDb(t *testing.T) {
 	ts := newTestSetup(t)
 	defer ts.close()
@@ -457,6 +509,13 @@ func (tc *testChain) GetCanonicalHash(number uint64) common.Hash {
 }
 
 func (tc *testChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+
+	return tc.receipts[hash]
+}
+
+func (tc *testChain) GetRawReceipts(hash common.Hash, number uint64) types.Receipts {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 

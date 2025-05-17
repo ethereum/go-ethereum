@@ -91,13 +91,7 @@ var (
 		utils.LogNoHistoryFlag,
 		utils.LogExportCheckpointsFlag,
 		utils.StateHistoryFlag,
-		utils.LightServeFlag,    // deprecated
-		utils.LightIngressFlag,  // deprecated
-		utils.LightEgressFlag,   // deprecated
-		utils.LightMaxPeersFlag, // deprecated
-		utils.LightNoPruneFlag,  // deprecated
 		utils.LightKDFFlag,
-		utils.LightNoSyncServeFlag, // deprecated
 		utils.EthRequiredBlocksFlag,
 		utils.LegacyWhitelistFlag, // deprecated
 		utils.CacheFlag,
@@ -225,7 +219,8 @@ func init() {
 		removedbCommand,
 		dumpCommand,
 		dumpGenesisCommand,
-		pruneCommand,
+		pruneHistoryCommand,
+		downloadEraCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
