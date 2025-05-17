@@ -1097,7 +1097,7 @@ func (p *BlobPool) ValidateTxBasics(tx *types.Transaction) error {
 	opts := &txpool.ValidationOptions{
 		Config:  p.chain.Config(),
 		Accept:  1 << types.BlobTxType,
-		MaxSize: txMaxSize,
+		MaxSize: txMaxSize + uint64(eip4844.LatestMaxBlobsPerBlock(p.chain.Config())*blobSize),
 		MinTip:  p.gasTip.ToBig(),
 	}
 	return txpool.ValidateTransaction(tx, p.head, p.signer, opts)
