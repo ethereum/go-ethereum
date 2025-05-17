@@ -585,8 +585,6 @@ The node should accept the update and should not disonnect.`)
 	defer conn.Close()
 
 	head := s.chain.Head()
-	var hash common.Hash
-	rand.Read(hash[:])
 	conn.Write(ethProto, eth.BlockRangeUpdateMsg, &eth.BlockRangeUpdatePacket{
 		EarliestBlock:   head.NumberU64() - 10,
 		LatestBlock:     head.NumberU64(),
