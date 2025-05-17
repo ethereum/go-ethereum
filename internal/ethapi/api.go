@@ -819,6 +819,11 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		return 0, err
 	}
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	if blockOverrides != nil {
+		if err := blockOverrides.Apply(&blockCtx); err != nil {
+			return 0, err
+		}
+	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
 	precompiles := vm.ActivePrecompiledContracts(rules)
 	if err := overrides.Apply(state, precompiles); err != nil {
