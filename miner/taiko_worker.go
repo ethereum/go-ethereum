@@ -46,7 +46,16 @@ func (w *Miner) buildTransactionsLists(
 		currentHead = w.chain.CurrentBlock()
 	)
 
+	log.Info("buildTransactionsLists",
+		"blockMaxGasLimit", blockMaxGasLimit,
+		"maxBytesPerTxList", maxBytesPerTxList,
+		"maxTransactionsLists", maxTransactionsLists,
+		"localAccounts", localAccounts,
+		"minTip", minTip,
+	)
+
 	if currentHead == nil {
+		log.Error("buildTransactionsLists failed to find current head")
 		return nil, fmt.Errorf("failed to find current head")
 	}
 
@@ -58,6 +67,10 @@ func (w *Miner) buildTransactionsLists(
 			OnlyPlainTxs: true,
 		},
 	)) == 0 {
+		log.Warn("buildTransactionsLists: tx pool is empty",
+			"minTip", minTip,
+			"onlyPlainTxs", true,
+		)
 		return txsLists, nil
 	}
 
@@ -70,6 +83,15 @@ func (w *Miner) buildTransactionsLists(
 		noTxs:         false,
 		baseFeePerGas: baseFee,
 	}
+
+	log.Info("buildTransactionsLists: prepare work",
+		"timestamp", params.timestamp,
+		"forceTime", params.forceTime,
+		"parentHash", params.parentHash,
+		"coinbase", params.coinbase,
+		"random", params.random,
+		"noTxs", params.noTxs,
+	)
 
 	env, err := w.prepareWork(params, false)
 	if err != nil {
@@ -99,8 +121,22 @@ func (w *Miner) buildTransactionsLists(
 			minTip,
 		)
 		if err != nil {
+			log.Error("buildTransactionsLists: commit transactions failed", "error", err)
+
 			return nil, nil, err
 		}
+
+		log.Info("buildTransactionsLists: commit transactions",
+			"localTxs", len(localTxs),
+			"remoteTxs", len(remoteTxs),
+			"txsPruned", len(pruningResult.TxsPruned),
+			"receiptsPruned", len(pruningResult.ReceiptsPruned),
+			"txsRemaining", len(result.TxsRemaining),
+			"receiptsRemaining", len(result.ReceiptsRemaining),
+			"size", result.Size,
+			"gasUsed", accumulateGasUsed(result.ReceiptsRemaining),
+			"bytesLength", uint64(result.Size),
+		)
 
 		return result, &PreBuiltTxList{
 			TxList:           result.TxsRemaining,
@@ -124,6 +160,10 @@ func (w *Miner) buildTransactionsLists(
 
 		txsLists = append(txsLists, preBuiltTxList)
 	}
+
+	log.Info("buildTransactionsLists: commit transactions finished",
+		"txLists", len(txsLists),
+	)
 
 	return txsLists, nil
 }
