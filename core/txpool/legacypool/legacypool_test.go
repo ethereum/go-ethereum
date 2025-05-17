@@ -108,16 +108,9 @@ func pricedTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ec
 	return tx
 }
 
-func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey, bytes uint64) *types.Transaction {
-	data := make([]byte, bytes)
-	crand.Read(data)
-
-	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(0), gaslimit, gasprice, data), types.HomesteadSigner{}, key)
-	return tx
-}
-
-// pricedDataTransactionWithFixedSignature generates a signed transaction with fixed-size data,
-// and ensures that the resulting signature components (r and s) are exactly 32 bytes each.
+// pricedDataTransaction generates a signed transaction with fixed-size data,
+// and ensures that the resulting signature components (r and s) are exactly 32 bytes each,
+// producing transactions with deterministic size.
 //
 // This avoids variability in transaction size caused by leading zeros being omitted in
 // RLP encoding of r/s. Since r and s are derived from ECDSA, they occasionally have leading
@@ -127,16 +120,16 @@ func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key
 //
 //	r: 0 leading zeros, bytesSize: 32, bytes: [221 ... 101]
 //	s: 1 leading zeros, bytesSize: 31, bytes: [0 75 ... 47]
-//
-// This function retries signing up to 10 times to find a signature where both r and s are
-// exactly 32 bytes long.
-// 10 attempts is statistically sufficient since leading zeros in ECDSA signatures are rare and randomly distributed.
-//
-//	This ensures consistent transaction size (especially important when testing tx size limits).
-func pricedDataTransactionWithFixedSignature(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey, bytes uint64) *types.Transaction {
+func pricedDataTransaction(nonce uint64, gaslimit uint64, gasprice *big.Int, key *ecdsa.PrivateKey, dataBytes uint64) *types.Transaction {
 	var tx *types.Transaction
-	for i := 0; i < 10; i++ {
-		tx = pricedDataTransaction(nonce, gaslimit, gasprice, key, bytes)
+
+	// 10 attempts is statistically sufficient since leading zeros in ECDSA signatures are rare and randomly distributed.
+	var retryTimes = 10
+	for i := 0; i < retryTimes; i++ {
+		data := make([]byte, dataBytes)
+		crand.Read(data)
+
+		tx, _ = types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(0), gaslimit, gasprice, data), types.HomesteadSigner{}, key)
 		_, r, s := tx.RawSignatureValues()
 		if len(r.Bytes()) == 32 && len(s.Bytes()) == 32 {
 			break
@@ -1266,12 +1259,12 @@ func TestAllowedTxSize(t *testing.T) {
 	// Find the maximum data length for the kind of transaction which will
 	// be generated in the pool.addRemoteSync calls below.
 	const largeDataLength = txMaxSize - 200 // enough to have a 5 bytes RLP encoding of the data length number
-	txWithLargeData := pricedDataTransactionWithFixedSignature(0, pool.currentHead.Load().GasLimit, big.NewInt(1), key, largeDataLength)
+	txWithLargeData := pricedDataTransaction(0, pool.currentHead.Load().GasLimit, big.NewInt(1), key, largeDataLength)
 	maxTxLengthWithoutData := txWithLargeData.Size() - largeDataLength // 103 bytes
 	maxTxDataLength := txMaxSize - maxTxLengthWithoutData              // 131072 - 103 = 130969 bytes
 
 	// Try adding a transaction with maximal allowed size
-	tx := pricedDataTransactionWithFixedSignature(0, pool.currentHead.Load().GasLimit, big.NewInt(1), key, maxTxDataLength)
+	tx := pricedDataTransaction(0, pool.currentHead.Load().GasLimit, big.NewInt(1), key, maxTxDataLength)
 	if err := pool.addRemoteSync(tx); err != nil {
 		t.Fatalf("failed to add transaction of size %d, close to maximal: %v", int(tx.Size()), err)
 	}
@@ -1280,7 +1273,7 @@ func TestAllowedTxSize(t *testing.T) {
 		t.Fatalf("failed to add transaction of random allowed size: %v", err)
 	}
 	// Try adding a transaction above maximum size by one
-	if err := pool.addRemoteSync(pricedDataTransactionWithFixedSignature(2, pool.currentHead.Load().GasLimit, big.NewInt(1), key, maxTxDataLength+1)); err == nil {
+	if err := pool.addRemoteSync(pricedDataTransaction(2, pool.currentHead.Load().GasLimit, big.NewInt(1), key, maxTxDataLength+1)); err == nil {
 		t.Fatalf("expected rejection on slightly oversize transaction")
 	}
 	// Try adding a transaction above maximum size by more than one
