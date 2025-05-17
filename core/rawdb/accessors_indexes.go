@@ -446,7 +446,7 @@ type FilterMapsRange struct {
 // database entry is not present, that is interpreted as a valid non-initialized
 // state and returns a blank range structure and no error.
 func ReadFilterMapsRange(db ethdb.KeyValueReader) (FilterMapsRange, bool, error) {
-	if has, err := db.Has(filterMapsRangeKey); !has || err != nil {
+	if has, err := db.Has(filterMapsRangeKey); err != nil || !has {
 		return FilterMapsRange{}, false, err
 	}
 	encRange, err := db.Get(filterMapsRangeKey)
@@ -457,7 +457,8 @@ func ReadFilterMapsRange(db ethdb.KeyValueReader) (FilterMapsRange, bool, error)
 	if err := rlp.DecodeBytes(encRange, &fmRange); err != nil {
 		return FilterMapsRange{}, false, err
 	}
-	return fmRange, true, err
+
+	return fmRange, true, nil
 }
 
 // WriteFilterMapsRange stores the filter maps range data.

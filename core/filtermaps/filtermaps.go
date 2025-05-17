@@ -227,7 +227,7 @@ type Config struct {
 // NewFilterMaps creates a new FilterMaps and starts the indexer.
 func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, finalBlock uint64, params Params, config Config) *FilterMaps {
 	rs, initialized, err := rawdb.ReadFilterMapsRange(db)
-	if err != nil || rs.Version != databaseVersion {
+	if err != nil || (initialized && rs.Version != databaseVersion) {
 		rs, initialized = rawdb.FilterMapsRange{}, false
 		log.Warn("Invalid log index database version; resetting log index")
 	}
