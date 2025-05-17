@@ -228,6 +228,18 @@ func (c *Conn) ReadSnap() (any, error) {
 	}
 }
 
+// dialAndPeer creates a peer connection and runs the handshake.
+func (s *Suite) dialAndPeer(status *eth.StatusPacket69) (*Conn, error) {
+	c, err := s.dial()
+	if err != nil {
+		return nil, err
+	}
+	if err = c.peer(s.chain, status); err != nil {
+		c.Close()
+	}
+	return c, err
+}
+
 // peer performs both the protocol handshake and the status message
 // exchange with the node in order to peer with it.
 func (c *Conn) peer(chain *Chain, status *eth.StatusPacket69) error {
