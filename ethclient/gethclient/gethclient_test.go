@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -47,13 +48,16 @@ var (
 	testSlot     = common.HexToHash("0xdeadbeef")
 	testValue    = crypto.Keccak256Hash(testSlot[:])
 	testBalance  = big.NewInt(2e15)
+	testTxHashes []common.Hash
 )
 
 func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	// Generate test chain.
 	genesis, blocks := generateTestChain()
 	// Create node
-	n, err := node.New(&node.Config{})
+	n, err := node.New(&node.Config{
+		HTTPModules: []string{"debug", "eth", "admin"},
+	})
 	if err != nil {
 		t.Fatalf("can't create new node: %v", err)
 	}
@@ -63,6 +67,8 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
 	}
+	n.RegisterAPIs(tracers.APIs(ethservice.APIBackend))
+
 	filterSystem := filters.NewFilterSystem(ethservice.APIBackend, filters.Config{})
 	n.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
@@ -93,6 +99,19 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
+
+		to := common.BytesToAddress([]byte{byte(i + 1)})
+		tx := types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &to,
+			Value:    big.NewInt(int64(2*i + 1)),
+			Gas:      params.TxGas,
+			GasPrice: big.NewInt(params.InitialBaseFee),
+			Data:     nil,
+		})
+		tx, _ = types.SignTx(tx, types.LatestSignerForChainID(genesis.Config.ChainID), testKey)
+		g.AddTx(tx)
+		testTxHashes = append(testTxHashes, tx.Hash())
 	}
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, generate)
 	blocks = append([]*types.Block{genesis.ToBlock()}, blocks...)
@@ -137,9 +156,6 @@ func TestGethClient(t *testing.T) {
 			"TestSubscribePendingTxHashes",
 			func(t *testing.T) { testSubscribePendingTransactions(t, client) },
 		}, {
-			"TestSubscribePendingTxs",
-			func(t *testing.T) { testSubscribeFullPendingTransactions(t, client) },
-		}, {
 			"TestCallContract",
 			func(t *testing.T) { testCallContract(t, client) },
 		}, {
@@ -153,7 +169,12 @@ func TestGethClient(t *testing.T) {
 		{
 			"TestAccessList",
 			func(t *testing.T) { testAccessList(t, client) },
-		}, {
+		},
+		{
+			"TestTraceTransaction",
+			func(t *testing.T) { testTraceTransactions(t, client) },
+		},
+		{
 			"TestSetHead",
 			func(t *testing.T) { testSetHead(t, client) },
 		},
@@ -197,7 +218,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 			wantVMErr: "execution reverted",
 			wantAL: `[
   {
-    "address": "0x3a220f351252089d385b29beca14e27f204c296a",
+    "address": "0xdb7d6ab1f17c6b31909ae466702703daef9269cf",
     "storageKeys": [
       "0x0000000000000000000000000000000000000000000000000000000000000081"
     ]
@@ -389,16 +410,26 @@ func testSetHead(t *testing.T, client *rpc.Client) {
 func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
+
 	// Subscribe to Transactions
-	ch := make(chan common.Hash)
-	ec.SubscribePendingTransactions(context.Background(), ch)
+	ch1 := make(chan common.Hash)
+	ec.SubscribePendingTransactions(context.Background(), ch1)
+
+	// Subscribe to Transactions
+	ch2 := make(chan *types.Transaction)
+	ec.SubscribeFullPendingTransactions(context.Background(), ch2)
+
 	// Send a transaction
 	chainID, err := ethcl.ChainID(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
+	nonce, err := ethcl.NonceAt(context.Background(), testAddr, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Create transaction
-	tx := types.NewTransaction(0, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
+	tx := types.NewTransaction(nonce, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
 	signer := types.LatestSignerForChainID(chainID)
 	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 	if err != nil {
@@ -414,41 +445,12 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 		t.Fatal(err)
 	}
 	// Check that the transaction was sent over the channel
-	hash := <-ch
+	hash := <-ch1
 	if hash != signedTx.Hash() {
 		t.Fatalf("Invalid tx hash received, got %v, want %v", hash, signedTx.Hash())
 	}
-}
-
-func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
-	ec := New(client)
-	ethcl := ethclient.NewClient(client)
-	// Subscribe to Transactions
-	ch := make(chan *types.Transaction)
-	ec.SubscribeFullPendingTransactions(context.Background(), ch)
-	// Send a transaction
-	chainID, err := ethcl.ChainID(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Create transaction
-	tx := types.NewTransaction(1, common.Address{1}, big.NewInt(1), 22000, big.NewInt(1), nil)
-	signer := types.LatestSignerForChainID(chainID)
-	signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	signedTx, err := tx.WithSignature(signer, signature)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Send transaction
-	err = ethcl.SendTransaction(context.Background(), signedTx)
-	if err != nil {
-		t.Fatal(err)
-	}
 	// Check that the transaction was sent over the channel
-	tx = <-ch
+	tx = <-ch2
 	if tx.Hash() != signedTx.Hash() {
 		t.Fatalf("Invalid tx hash received, got %v, want %v", tx.Hash(), signedTx.Hash())
 	}
@@ -475,6 +477,25 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	mapAcc[testAddr] = override
 	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func testTraceTransactions(t *testing.T, client *rpc.Client) {
+	ec := New(client)
+	for _, txHash := range testTxHashes {
+		// Struct logger
+		_, err := ec.TraceTransaction(context.Background(), txHash, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Struct logger
+		_, err = ec.TraceTransaction(context.Background(), txHash,
+			&tracers.TraceConfig{},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
