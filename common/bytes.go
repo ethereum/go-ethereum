@@ -37,6 +37,7 @@ func FromHex(s string) []byte {
 }
 
 // CopyBytes returns an exact copy of the provided bytes.
+// Deprecated: use bytes.Clone instead.
 func CopyBytes(b []byte) (copiedBytes []byte) {
 	if b == nil {
 		return nil

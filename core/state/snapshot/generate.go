@@ -191,10 +191,10 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 			diskMore = true
 			break
 		}
-		keys = append(keys, common.CopyBytes(key[len(prefix):]))
+		keys = append(keys, bytes.Clone(key[len(prefix):]))
 
 		if valueConvertFn == nil {
-			vals = append(vals, common.CopyBytes(iter.Value()))
+			vals = append(vals, bytes.Clone(iter.Value()))
 		} else {
 			val, err := valueConvertFn(iter.Value())
 			if err != nil {
@@ -204,7 +204,7 @@ func (dl *diskLayer) proveRange(ctx *generatorContext, trieId *trie.ID, prefix [
 				//
 				// Here append the original value to ensure that the number of key and
 				// value are aligned.
-				vals = append(vals, common.CopyBytes(iter.Value()))
+				vals = append(vals, bytes.Clone(iter.Value()))
 				log.Error("Failed to convert account state data", "err", err)
 			} else {
 				vals = append(vals, val)
@@ -534,7 +534,7 @@ func generateStorages(ctx *generatorContext, dl *diskLayer, stateRoot common.Has
 		return nil
 	}
 	// Loop for re-generating the missing storage slots.
-	var origin = common.CopyBytes(storeMarker)
+	var origin = bytes.Clone(storeMarker)
 	for {
 		id := trie.StorageTrieID(stateRoot, account, storageRoot)
 		exhausted, last, err := dl.generateRange(ctx, id, append(rawdb.SnapshotStoragePrefix, account.Bytes()...), snapStorage, origin, storageCheckRange, onStorage, nil)
@@ -624,7 +624,7 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		accMarker = nil
 		return nil
 	}
-	origin := common.CopyBytes(accMarker)
+	origin := bytes.Clone(accMarker)
 	for {
 		id := trie.StateTrieID(dl.root)
 		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountCheckRange, onAccount, types.FullAccountRLP)

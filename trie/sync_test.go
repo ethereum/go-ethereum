@@ -836,7 +836,7 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 				}
 			}
 			tr.Update(key, val)
-			states[string(key)] = common.CopyBytes(val)
+			states[string(key)] = bytes.Clone(val)
 		}
 	)
 	stateA := make(map[string][]byte)
@@ -933,7 +933,7 @@ func testSyncAbort(t *testing.T, scheme string) {
 				val = randBytes(32)
 			}
 			tr.Update(key, val)
-			states[string(key)] = common.CopyBytes(val)
+			states[string(key)] = bytes.Clone(val)
 		}
 	)
 	var (

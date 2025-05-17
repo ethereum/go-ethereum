@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
@@ -382,7 +383,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
 			if b.header.Number.Cmp(daoBlock) >= 0 && b.header.Number.Cmp(limit) < 0 {
 				if config.DAOForkSupport {
-					b.header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+					b.header.Extra = bytes.Clone(params.DAOForkBlockExtra)
 				}
 			}
 		}

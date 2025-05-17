@@ -115,7 +115,7 @@ func (tx *BlobTx) copy() TxData {
 	cpy := &BlobTx{
 		Nonce: tx.Nonce,
 		To:    tx.To,
-		Data:  common.CopyBytes(tx.Data),
+		Data:  bytes.Clone(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),

@@ -18,12 +18,12 @@
 package memorydb
 
 import (
+	"bytes"
 	"errors"
 	"sort"
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -92,7 +92,7 @@ func (db *Database) Get(key []byte) ([]byte, error) {
 		return nil, errMemorydbClosed
 	}
 	if entry, ok := db.db[string(key)]; ok {
-		return common.CopyBytes(entry), nil
+		return bytes.Clone(entry), nil
 	}
 	return nil, errMemorydbNotFound
 }
@@ -105,7 +105,7 @@ func (db *Database) Put(key []byte, value []byte) error {
 	if db.db == nil {
 		return errMemorydbClosed
 	}
-	db.db[string(key)] = common.CopyBytes(value)
+	db.db[string(key)] = bytes.Clone(value)
 	return nil
 }
 
@@ -234,7 +234,7 @@ type batch struct {
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
-	b.writes = append(b.writes, keyvalue{string(key), common.CopyBytes(value), false})
+	b.writes = append(b.writes, keyvalue{string(key), bytes.Clone(value), false})
 	b.size += len(key) + len(value)
 	return nil
 }

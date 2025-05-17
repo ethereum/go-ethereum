@@ -800,7 +800,7 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	// Reconstruct a partial trie from the response and verify it
 	keys := make([][]byte, len(hashes))
 	for i, key := range hashes {
-		keys[i] = common.CopyBytes(key[:])
+		keys[i] = bytes.Clone(key[:])
 	}
 	nodes := make(trienode.ProofList, len(proof))
 	for i, node := range proof {

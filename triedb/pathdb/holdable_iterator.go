@@ -17,7 +17,8 @@
 package pathdb
 
 import (
-	"github.com/ethereum/go-ethereum/common"
+	"bytes"
+
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -42,8 +43,8 @@ func (it *holdableIterator) Hold() {
 	if it.it.Key() == nil {
 		return // nothing to hold
 	}
-	it.key = common.CopyBytes(it.it.Key())
-	it.val = common.CopyBytes(it.it.Value())
+	it.key = bytes.Clone(it.it.Key())
+	it.val = bytes.Clone(it.it.Value())
 	it.atHeld = false
 }
 

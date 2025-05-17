@@ -25,7 +25,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -62,7 +61,7 @@ func FuzzEofParsing(f *testing.F) {
 			jt = vm.NewEOFInstructionSetForTesting()
 			c  vm.Container
 		)
-		cpy := common.CopyBytes(data)
+		cpy := bytes.Clone(data)
 		if err := c.UnmarshalBinary(data, true); err == nil {
 			c.ValidateCode(&jt, true)
 			if have := c.MarshalBinary(); !bytes.Equal(have, data) {

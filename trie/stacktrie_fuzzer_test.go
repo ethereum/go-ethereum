@@ -109,7 +109,7 @@ func fuzz(data []byte, debugging bool) {
 			if crypto.Keccak256Hash(blob) != hash {
 				panic("invalid node blob")
 			}
-			nodeset[string(path)] = common.CopyBytes(blob)
+			nodeset[string(path)] = bytes.Clone(blob)
 		})
 		checked int
 	)

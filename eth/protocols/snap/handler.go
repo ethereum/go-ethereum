@@ -302,7 +302,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		last     common.Hash
 	)
 	for it.Next() {
-		hash, account := it.Hash(), common.CopyBytes(it.Account())
+		hash, account := it.Hash(), bytes.Clone(it.Account())
 
 		// Track the returned interval for the Merkle proofs
 		last = hash
@@ -398,7 +398,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 				abort = true
 				break
 			}
-			hash, slot := it.Hash(), common.CopyBytes(it.Slot())
+			hash, slot := it.Hash(), bytes.Clone(it.Slot())
 
 			// Track the returned interval for the Merkle proofs
 			last = hash

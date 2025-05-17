@@ -17,12 +17,12 @@
 package rawdb
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -180,7 +180,7 @@ func (b *memoryBatch) AppendRaw(kind string, number uint64, blob []byte) error {
 	if b.next[kind] != number {
 		return errOutOrderInsertion
 	}
-	b.data[kind] = append(b.data[kind], common.CopyBytes(blob))
+	b.data[kind] = append(b.data[kind], bytes.Clone(blob))
 	b.next[kind]++
 	b.size[kind] += int64(len(blob))
 	return nil

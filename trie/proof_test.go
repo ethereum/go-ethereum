@@ -213,7 +213,7 @@ func TestRangeProofWithNonExistentProof(t *testing.T) {
 		proof := memorydb.New()
 
 		// Short circuit if the decreased key is same with the previous key
-		first := decreaseKey(common.CopyBytes(entries[start].k))
+		first := decreaseKey(bytes.Clone(entries[start].k))
 		if start != 0 && bytes.Equal(first, entries[start-1].k) {
 			continue
 		}
@@ -252,7 +252,7 @@ func TestRangeProofWithInvalidNonExistentProof(t *testing.T) {
 
 	// Case 1
 	start, end := 100, 200
-	first := decreaseKey(common.CopyBytes(entries[start].k))
+	first := decreaseKey(bytes.Clone(entries[start].k))
 
 	proof := memorydb.New()
 	if err := trie.Prove(first, proof); err != nil {
@@ -299,7 +299,7 @@ func TestOneElementRangeProof(t *testing.T) {
 
 	// One element with left non-existent edge proof
 	start = 1000
-	first := decreaseKey(common.CopyBytes(entries[start].k))
+	first := decreaseKey(bytes.Clone(entries[start].k))
 	proof = memorydb.New()
 	if err := trie.Prove(first, proof); err != nil {
 		t.Fatalf("Failed to prove the first node %v", err)
@@ -314,7 +314,7 @@ func TestOneElementRangeProof(t *testing.T) {
 
 	// One element with right non-existent edge proof
 	start = 1000
-	last := increaseKey(common.CopyBytes(entries[start].k))
+	last := increaseKey(bytes.Clone(entries[start].k))
 	proof = memorydb.New()
 	if err := trie.Prove(entries[start].k, proof); err != nil {
 		t.Fatalf("Failed to prove the first node %v", err)
@@ -329,7 +329,7 @@ func TestOneElementRangeProof(t *testing.T) {
 
 	// One element with two non-existent edge proofs
 	start = 1000
-	first, last = decreaseKey(common.CopyBytes(entries[start].k)), increaseKey(common.CopyBytes(entries[start].k))
+	first, last = decreaseKey(bytes.Clone(entries[start].k)), increaseKey(bytes.Clone(entries[start].k))
 	proof = memorydb.New()
 	if err := trie.Prove(first, proof); err != nil {
 		t.Fatalf("Failed to prove the first node %v", err)
@@ -560,7 +560,7 @@ func TestSameSideProofs(t *testing.T) {
 	slices.SortFunc(entries, (*kv).cmp)
 
 	pos := 1000
-	first := common.CopyBytes(entries[0].k)
+	first := bytes.Clone(entries[0].k)
 
 	proof := memorydb.New()
 	if err := trie.Prove(first, proof); err != nil {
@@ -574,8 +574,8 @@ func TestSameSideProofs(t *testing.T) {
 		t.Fatalf("Expected error, got nil")
 	}
 
-	first = increaseKey(common.CopyBytes(entries[pos].k))
-	last := increaseKey(common.CopyBytes(entries[pos].k))
+	first = increaseKey(bytes.Clone(entries[pos].k))
+	last := increaseKey(bytes.Clone(entries[pos].k))
 	last = increaseKey(last)
 
 	proof = memorydb.New()
@@ -671,7 +671,7 @@ func TestEmptyRangeProof(t *testing.T) {
 	}
 	for _, c := range cases {
 		proof := memorydb.New()
-		first := increaseKey(common.CopyBytes(entries[c.pos].k))
+		first := increaseKey(bytes.Clone(entries[c.pos].k))
 		if err := trie.Prove(first, proof); err != nil {
 			t.Fatalf("Failed to prove the first node %v", err)
 		}
@@ -733,7 +733,7 @@ func TestEmptyValueRangeProof(t *testing.T) {
 
 	// Create a new entry with a slightly modified key
 	mid := len(entries) / 2
-	key := common.CopyBytes(entries[mid-1].k)
+	key := bytes.Clone(entries[mid-1].k)
 	for n := len(key) - 1; n >= 0; n-- {
 		if key[n] < 0xff {
 			key[n]++
@@ -777,7 +777,7 @@ func TestAllElementsEmptyValueRangeProof(t *testing.T) {
 
 	// Create a new entry with a slightly modified key
 	mid := len(entries) / 2
-	key := common.CopyBytes(entries[mid-1].k)
+	key := bytes.Clone(entries[mid-1].k)
 	for n := len(key) - 1; n >= 0; n-- {
 		if key[n] < 0xff {
 			key[n]++

@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"maps"
@@ -960,7 +961,7 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 		nodes.AddNode(path, trienode.NewDeleted())
 	})
 	for iter.Next() {
-		slot := common.CopyBytes(iter.Slot())
+		slot := bytes.Clone(iter.Slot())
 		if err := iter.Error(); err != nil { // error might occur after Slot function
 			return nil, nil, nil, err
 		}
@@ -1002,7 +1003,7 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 		if it.Leaf() {
 			key := common.BytesToHash(it.LeafKey())
 			storages[key] = nil
-			storageOrigins[key] = common.CopyBytes(it.LeafBlob())
+			storageOrigins[key] = bytes.Clone(it.LeafBlob())
 			continue
 		}
 		if it.Hash() == (common.Hash{}) {

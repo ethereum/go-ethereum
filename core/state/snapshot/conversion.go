@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -325,7 +326,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 			}
 			leaf = trieKV{it.Hash(), fullData}
 		} else {
-			leaf = trieKV{it.Hash(), common.CopyBytes(it.(StorageIterator).Slot())}
+			leaf = trieKV{it.Hash(), bytes.Clone(it.(StorageIterator).Slot())}
 		}
 		in <- leaf
 

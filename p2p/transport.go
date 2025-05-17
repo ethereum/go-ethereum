@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/rlpx"
@@ -67,7 +66,7 @@ func (t *rlpxTransport) ReadMsg() (Msg, error) {
 		// Protocol messages are dispatched to subprotocol handlers asynchronously,
 		// but package rlpx may reuse the returned 'data' buffer on the next call
 		// to Read. Copy the message data to avoid this being an issue.
-		data = common.CopyBytes(data)
+		data = bytes.Clone(data)
 		msg = Msg{
 			ReceivedAt: time.Now(),
 			Code:       code,
