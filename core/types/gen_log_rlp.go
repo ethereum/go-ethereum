@@ -2,6 +2,7 @@
 
 package types
 
+import "github.com/ethereum/go-ethereum/common"
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
@@ -17,4 +18,46 @@ func (obj *Log) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.Data)
 	w.ListEnd(_tmp0)
 	return w.Flush()
+}
+
+func (obj *Log) DecodeRLP(dec *rlp.Stream) error {
+	var _tmp0 Log
+	{
+		if _, err := dec.List(); err != nil {
+			return err
+		}
+		// Address:
+		var _tmp1 common.Address
+		if err := dec.ReadBytes(_tmp1[:]); err != nil {
+			return err
+		}
+		_tmp0.Address = _tmp1
+		// Topics:
+		var _tmp2 []common.Hash
+		if _, err := dec.List(); err != nil {
+			return err
+		}
+		for dec.MoreDataInList() {
+			var _tmp3 common.Hash
+			if err := dec.ReadBytes(_tmp3[:]); err != nil {
+				return err
+			}
+			_tmp2 = append(_tmp2, _tmp3)
+		}
+		if err := dec.ListEnd(); err != nil {
+			return err
+		}
+		_tmp0.Topics = _tmp2
+		// Data:
+		_tmp4, err := dec.Bytes()
+		if err != nil {
+			return err
+		}
+		_tmp0.Data = _tmp4
+		if err := dec.ListEnd(); err != nil {
+			return err
+		}
+	}
+	*obj = _tmp0
+	return nil
 }

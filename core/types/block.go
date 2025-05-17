@@ -69,7 +69,7 @@ type ExecutionWitness struct {
 }
 
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
-//go:generate go run ../../rlp/rlpgen -type Header -out gen_header_rlp.go
+//go:generate go run ../../rlp/rlpgen -type Header -decoder=false -out gen_header_rlp.go
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
@@ -553,4 +553,125 @@ func HeaderParentHashFromRLP(header []byte) common.Hash {
 		return common.Hash{}
 	}
 	return common.BytesToHash(parentHash)
+}
+
+func (h *Header) DecodeRLP(dec *rlp.Stream) error {
+	var err error
+	{
+		if _, err := dec.List(); err != nil {
+			return err
+		}
+		// ParentHash:
+		if err := dec.ReadBytes(h.ParentHash[:]); err != nil {
+			return err
+		}
+		// UncleHash:
+		if err := dec.ReadBytes(h.UncleHash[:]); err != nil {
+			return err
+		}
+		// Coinbase:
+		if err := dec.ReadBytes(h.Coinbase[:]); err != nil {
+			return err
+		}
+		// Root:
+		if err := dec.ReadBytes(h.Root[:]); err != nil {
+			return err
+		}
+		// TxHash:
+		if err := dec.ReadBytes(h.TxHash[:]); err != nil {
+			return err
+		}
+		// ReceiptHash:
+		if err := dec.ReadBytes(h.ReceiptHash[:]); err != nil {
+			return err
+		}
+		// Bloom:
+		if err := dec.ReadBytes(h.Bloom[:]); err != nil {
+			return err
+		}
+		// Difficulty:
+		h.Difficulty, err = dec.BigInt()
+		if err != nil {
+			return err
+		}
+		// Number:
+		h.Number, err = dec.BigInt()
+		if err != nil {
+			return err
+		}
+		var err error
+		// GasLimit:
+		h.GasLimit, err = dec.Uint64()
+		if err != nil {
+			return err
+		}
+		// GasUsed:
+		h.GasUsed, err = dec.Uint64()
+		if err != nil {
+			return err
+		}
+		// Time:
+		h.Time, err = dec.Uint64()
+		if err != nil {
+			return err
+		}
+		// Extra:
+		h.Extra, err = dec.Bytes()
+		if err != nil {
+			return err
+		}
+		// MixDigest:
+		if err := dec.ReadBytes(h.MixDigest[:]); err != nil {
+			return err
+		}
+		// Nonce:
+		if err := dec.ReadBytes(h.Nonce[:]); err != nil {
+			return err
+		}
+		// BaseFee:
+		if dec.MoreDataInList() {
+			h.BaseFee, err = dec.BigInt()
+			if err != nil {
+				return err
+			}
+			// WithdrawalsHash:
+			if dec.MoreDataInList() {
+				if err := dec.ReadBytes(h.WithdrawalsHash[:]); err != nil {
+					return err
+				}
+				// BlobGasUsed:
+				if dec.MoreDataInList() {
+					_tmp18, err := dec.Uint64()
+					if err != nil {
+						return err
+					}
+					h.BlobGasUsed = &_tmp18
+					// ExcessBlobGas:
+					if dec.MoreDataInList() {
+						_tmp19, err := dec.Uint64()
+						if err != nil {
+							return err
+						}
+						h.ExcessBlobGas = &_tmp19
+						// ParentBeaconRoot:
+						if dec.MoreDataInList() {
+							if err := dec.ReadBytes(h.ParentBeaconRoot[:]); err != nil {
+								return err
+							}
+							// RequestsHash:
+							if dec.MoreDataInList() {
+								if err := dec.ReadBytes(h.RequestsHash[:]); err != nil {
+									return err
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		if err := dec.ListEnd(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
