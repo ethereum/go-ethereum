@@ -39,22 +39,7 @@ func (e *UnexpectedCodeError) Error() string {
 	return e.Message
 }
 
-func waitForClient(port int, timeout time.Duration) (*ethclient.Client, error) {
-	endpoint := fmt.Sprintf("ws://127.0.0.1:%d", port)
-	start := time.Now()
-
-	for time.Since(start) < timeout {
-		client, err := ethclient.Dial(endpoint)
-		if err == nil {
-			return client, nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	return nil, fmt.Errorf("failed to connect to client at %s within %s", endpoint, timeout)
-}
-
-func TestLagBetweenTxInclusionAndAccessibleState(t *testing.T) {
+func TestLag(t *testing.T) {
 	t.Parallel()
 	tasks := make(chan int, numTasks)
 
@@ -71,13 +56,13 @@ func TestLagBetweenTxInclusionAndAccessibleState(t *testing.T) {
 					taskID:   taskID,
 				}
 				go func() {
-					chErr <- task.Run(t)
+					chErr <- task.run(t)
 				}()
 
 				select {
 				case <-ctx.Done():
 					t.Logf("Worker %d cancel task %d", workerID, taskID)
-					task.Cleanup(t)
+					task.cleanup(t)
 					return nil
 
 				case err := <-chErr:
@@ -112,7 +97,7 @@ type task struct {
 	testGethRef atomic.Pointer[testgeth]
 }
 
-func (task *task) Cleanup(t *testing.T) {
+func (task *task) cleanup(t *testing.T) {
 	if g := task.testGethRef.Load(); g != nil && task.testGethRef.CompareAndSwap(g, nil) {
 		t.Logf("Worker %d cleanup", task.workerID)
 		g.Kill()
@@ -120,39 +105,8 @@ func (task *task) Cleanup(t *testing.T) {
 	}
 }
 
-func (task *task) Run(t *testing.T) (returnErr error) {
-	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("geth-node-%d-%d-", task.workerID, task.taskID))
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpDir)
-
-	password := "123456"
-	pwdFilePath := filepath.Join(tmpDir, "password.txt")
-	pwdFile, err := os.Create(pwdFilePath)
-	if err != nil {
-		return err
-	}
-	defer os.Remove(pwdFilePath)
-	if _, err := pwdFile.WriteString(password + "\n"); err != nil {
-		return err
-	}
-	pwdFile.Close()
-	datadir := filepath.Join(tmpDir, "datadir")
-	ks := keystore.NewKeyStore(filepath.Join(datadir, "keystore"), keystore.LightScryptN, keystore.LightScryptP)
-	keyfileAcct, err := ks.NewAccount(password)
-	if err != nil {
-		return err
-	}
-	keyJson, err := os.ReadFile(keyfileAcct.URL.Path)
-	if err != nil {
-		return err
-	}
-	key, err := keystore.DecryptKey(keyJson, password)
-	if err != nil {
-		return err
-	}
-
+func (task *task) run(t *testing.T) (returnErr error) {
+	datadir := t.TempDir()
 	port := basePort + task.workerID*100 + task.taskID
 	args := []string{
 		"--datadir",
@@ -165,10 +119,29 @@ func (task *task) Run(t *testing.T) (returnErr error) {
 		fmt.Sprintf("%d", port),
 		"--ws.api",
 		"admin,eth,web3,debug",
-		"--unlock", keyfileAcct.Address.Hex(),
-		"--password", pwdFilePath,
 	}
 	g := runGeth(t, args...)
+
+	keydir := filepath.Join(datadir, "keystore")
+	keyFiles, err := getFilesInKeystore(keydir)
+	if err != nil {
+		return err
+	}
+	if len(keyFiles) == 0 {
+		return errors.New("no key files found")
+	}
+	keyJson, err := os.ReadFile(keyFiles[0])
+	if err != nil {
+		return err
+	}
+	ks := keystore.NewKeyStore(keydir, keystore.LightScryptN, keystore.LightScryptP)
+	keyfileAcct := ks.Accounts()[0]
+	password := ""
+	key, err := keystore.DecryptKey(keyJson, password)
+	if err != nil {
+		return err
+	}
+
 	if !task.testGethRef.CompareAndSwap(nil, g) {
 		// task cancelled
 		go g.Kill()
@@ -176,7 +149,7 @@ func (task *task) Run(t *testing.T) (returnErr error) {
 	}
 
 	defer func() {
-		task.Cleanup(t)
+		task.cleanup(t)
 	}()
 
 	client, err := waitForClient(port, 20*time.Second)
@@ -287,6 +260,50 @@ func (task *task) Run(t *testing.T) (returnErr error) {
 		return &UnexpectedCodeError{Message: "Code was not cleared!"}
 	}
 	return nil
+}
+
+func getFilesInKeystore(keyFolder string) ([]string, error) {
+	var entries []os.DirEntry
+	var err error
+
+	maxRetries := 5
+	retryDelay := 500 * time.Millisecond
+
+	for i := 0; i < maxRetries; i++ {
+		entries, err = os.ReadDir(keyFolder)
+		if err == nil {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	var filePaths []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			filePaths = append(filePaths, filepath.Join(keyFolder, entry.Name()))
+		}
+	}
+
+	return filePaths, nil
+}
+
+func waitForClient(port int, timeout time.Duration) (*ethclient.Client, error) {
+	endpoint := fmt.Sprintf("ws://127.0.0.1:%d", port)
+	start := time.Now()
+
+	for time.Since(start) < timeout {
+		client, err := ethclient.Dial(endpoint)
+		if err == nil {
+			return client, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return nil, fmt.Errorf("failed to connect to client at %s within %s", endpoint, timeout)
 }
 
 func sendSignedTransaction(
