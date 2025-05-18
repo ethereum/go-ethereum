@@ -71,10 +71,10 @@ func TestLag(t *testing.T) {
 						case *UnexpectedCodeError:
 							fmt.Print(RED_X)
 							cancel()
-							t.Errorf("Worker %d failed on task %d with: %s", workerID, taskID, err.Error())
 						default:
-							fmt.Print(YELLOW_S, err)
+							fmt.Print(YELLOW_S)
 						}
+						t.Errorf("Worker %d failed on task %d with: %s", workerID, taskID, err.Error())
 					} else {
 						fmt.Print(GREEN_DOT)
 					}
@@ -108,6 +108,30 @@ func (task *task) cleanup(t *testing.T) {
 func (task *task) run(t *testing.T) (returnErr error) {
 	datadir := t.TempDir()
 	port := basePort + task.workerID*100 + task.taskID
+	password := "123456"
+	pwdFilePath := filepath.Join(datadir, "password.txt")
+	pwdFile, err := os.Create(pwdFilePath)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(pwdFilePath)
+	if _, err := pwdFile.WriteString(password + "\n"); err != nil {
+		return err
+	}
+	pwdFile.Close()
+	ks := keystore.NewKeyStore(filepath.Join(datadir, "keystore"), keystore.LightScryptN, keystore.LightScryptP)
+	keyfileAcct, err := ks.NewAccount(password)
+	if err != nil {
+		return err
+	}
+	keyJson, err := os.ReadFile(keyfileAcct.URL.Path)
+	if err != nil {
+		return err
+	}
+	key, err := keystore.DecryptKey(keyJson, password)
+	if err != nil {
+		return err
+	}
 	args := []string{
 		"--datadir",
 		datadir, // passing in a `datadir` is required to reproduce
@@ -121,29 +145,10 @@ func (task *task) run(t *testing.T) (returnErr error) {
 		"admin,eth,web3,debug",
 		"--ipcpath",
 		filepath.Join(datadir, "geth.ipc"),
+		"--unlock", keyfileAcct.Address.Hex(),
+		"--password", pwdFilePath,
 	}
 	g := runGeth(t, args...)
-
-	keydir := filepath.Join(datadir, "keystore")
-	keyFiles, err := getFilesInKeystore(keydir)
-	if err != nil {
-		return err
-	}
-	if len(keyFiles) == 0 {
-		return errors.New("no key files found")
-	}
-	keyJson, err := os.ReadFile(keyFiles[0])
-	if err != nil {
-		return err
-	}
-	ks := keystore.NewKeyStore(keydir, keystore.LightScryptN, keystore.LightScryptP)
-	keyfileAcct := ks.Accounts()[0]
-	password := ""
-	key, err := keystore.DecryptKey(keyJson, password)
-	if err != nil {
-		return err
-	}
-
 	if !task.testGethRef.CompareAndSwap(nil, g) {
 		// task cancelled
 		go g.Kill()
@@ -262,35 +267,6 @@ func (task *task) run(t *testing.T) (returnErr error) {
 		return &UnexpectedCodeError{Message: "Code was not cleared!"}
 	}
 	return nil
-}
-
-func getFilesInKeystore(keyFolder string) ([]string, error) {
-	var entries []os.DirEntry
-	var err error
-
-	maxRetries := 5
-	retryDelay := 500 * time.Millisecond
-
-	for i := 0; i < maxRetries; i++ {
-		entries, err = os.ReadDir(keyFolder)
-		if err == nil {
-			break
-		}
-		time.Sleep(retryDelay)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	var filePaths []string
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			filePaths = append(filePaths, filepath.Join(keyFolder, entry.Name()))
-		}
-	}
-
-	return filePaths, nil
 }
 
 func waitForClient(port int, timeout time.Duration) (*ethclient.Client, error) {
