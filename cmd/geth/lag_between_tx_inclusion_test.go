@@ -119,6 +119,8 @@ func (task *task) run(t *testing.T) (returnErr error) {
 		fmt.Sprintf("%d", port),
 		"--ws.api",
 		"admin,eth,web3,debug",
+		"--ipcpath",
+		filepath.Join(datadir, "geth.ipc"),
 	}
 	g := runGeth(t, args...)
 
