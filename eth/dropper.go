@@ -33,7 +33,7 @@ const (
 	// Interval between peer drop events (uniform between min and max)
 	peerDropIntervalMin = 3 * time.Minute
 	// Interval between peer drop events (uniform between min and max)
-	peerDropIntervalMax = 7 * time.Minute
+	peerDropIntervalMax = peerDropIntervalMin + 4*time.Minute
 	// Avoid dropping peers for some time after connection
 	doNotDropBefore = 10 * time.Minute
 	// How close to max should we initiate the drop timer. O should be fine,
@@ -81,9 +81,6 @@ func newDropper(maxDialPeers, maxInboundPeers int) *dropper {
 		maxInboundPeers: maxInboundPeers,
 		peerDropTimer:   time.NewTimer(randomDuration(peerDropIntervalMin, peerDropIntervalMax)),
 		shutdownCh:      make(chan struct{}),
-	}
-	if peerDropIntervalMin > peerDropIntervalMax {
-		panic("peerDropIntervalMin duration must be less than or equal to peerDropIntervalMax duration")
 	}
 	return cm
 }
