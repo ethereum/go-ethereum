@@ -4,10 +4,65 @@ All notable changes to the tracing interface will be documented in this file.
 
 ## [Unreleased]
 
+The tracing interface has been extended with backwards-compatible changes to support more use-cases and simplify tracer code. The most notable change is a state journaling library which emits reverse events when a call is reverted.
+
+### Deprecated methods
+
+- `OnSystemCallStart()`: This hook is deprecated in favor of `OnSystemCallStartV2(vm *VMContext)`.
+- `OnNonceChange(addr common.Address, prev, new uint64)`: This hook is deprecated in favor of `OnNonceChangeV2(addr common.Address, prev, new uint64, reason NonceChangeReason)`.
+
+### New methods
+
+- `OnBlockHashRead(blockNum uint64, hash common.Hash)`: This hook is called when a block hash is read by EVM.
+- `OnSystemCallStartV2(vm *VMContext)`. This allows access to EVM context during system calls. It is a successor to `OnSystemCallStart`.
+- `OnNonceChangeV2(addr common.Address, prev, new uint64, reason NonceChangeReason)`: This hook is called when a nonce change occurs. It is a successor to `OnNonceChange`.
+
+### New types
+
+- `NonceChangeReason` is a new type used to provide a reason for nonce changes. Notably it includes `NonceChangeRevert` which will be emitted by the state journaling library when a nonce change is due to a revert.
+
+### Modified types
+
+- `VMContext.StateDB` has been extended with `GetCodeHash(addr common.Address) common.Hash` method used to retrieve the code hash an account.
+- `BalanceChangeReason` has been extended with the `BalanceChangeRevert` reason. More on that below.
+
+### State journaling
+
+Tracers receive state changes events from the node. The tracer was so far expected to keep track of modified accounts and slots and revert those changes when a call frame failed. Now a utility tracer wrapper is provided which will emit "reverse change" events when a call frame fails. To use this feature the hooks have to be wrapped prior to registering the tracer. The following example demonstrates how to use the state journaling library:
+
+```go
+func init() {
+    tracers.LiveDirectory.Register("test", func (cfg json.RawMessage) (*tracing.Hooks, error) {
+        hooks, err := newTestTracer(cfg)
+        if err != nil {
+            return nil, err
+        }
+        return tracing.WrapWithJournal(hooks)
+    })
+}
+```
+
+The state changes that are covered by the journaling library are:
+
+- `OnBalanceChange`. Note that `OnBalanceChange` will carry the `BalanceChangeRevert` reason.
+- `OnNonceChange`, `OnNonceChangeV2`
+- `OnCodeChange`
+- `OnStorageChange`
+
+## [v1.14.9](https://github.com/ethereum/go-ethereum/releases/tag/v1.14.9)
+
 ### Modified types
 
 - `GasChangeReason` has been extended with the following reasons which will be enabled only post-Verkle. There shouldn't be any gas changes with those reasons prior to the fork.
   - `GasChangeWitnessContractCollisionCheck` flags the event of adding to the witness when checking for contract address collision.
+
+## [v1.14.12]
+
+This release contains a change in behavior for `OnCodeChange` hook.
+
+### `OnCodeChange` change
+
+The `OnCodeChange` hook is now called when the code of a contract is removed due to a selfdestruct. Previously, no code change was emitted on such occasions.
 
 ## [v1.14.4]
 

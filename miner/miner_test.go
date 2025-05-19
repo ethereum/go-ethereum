@@ -145,7 +145,7 @@ func createMiner(t *testing.T) *Miner {
 	chainDB := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(chainDB, nil)
 	genesis := minerTestGenesisBlock(15, 11_500_000, common.HexToAddress("12345"))
-	chainConfig, _, err := core.SetupGenesisBlock(chainDB, triedb, genesis)
+	chainConfig, _, _, err := core.SetupGenesisBlock(chainDB, triedb, genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
 	}

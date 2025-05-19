@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -39,4 +39,13 @@ var (
 	// errStateUnrecoverable is returned if state is required to be reverted to
 	// a destination without associated state history available.
 	errStateUnrecoverable = errors.New("state is unrecoverable")
+
+	// errNotCoveredYet is returned from data accessors if the underlying snapshot
+	// is being generated currently and the requested data item is not yet in the
+	// range of accounts covered.
+	errNotCoveredYet = errors.New("not covered yet")
+
+	// errNotConstructed is returned if the callers want to iterate the snapshot
+	// while the generation is not finished yet.
+	errNotConstructed = errors.New("snapshot is not constructed")
 )

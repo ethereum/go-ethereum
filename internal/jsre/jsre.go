@@ -67,7 +67,19 @@ type evalReq struct {
 	done chan bool
 }
 
-// runtime must be stopped with Stop() after use and cannot be used after stopping
+// New creates and initializes a new JavaScript runtime environment (JSRE).
+// The runtime is configured with the provided assetPath for loading scripts and
+// an output writer for logging or printing results.
+//
+// The returned JSRE must be stopped by calling Stop() after use to release resources.
+// Attempting to use the JSRE after stopping it will result in undefined behavior.
+//
+// Parameters:
+//   - assetPath: The path to the directory containing script assets.
+//   - output: The writer used for logging or printing runtime output.
+//
+// Returns:
+//   - A pointer to the newly created JSRE instance.
 func New(assetPath string, output io.Writer) *JSRE {
 	re := &JSRE{
 		assetPath:     assetPath,
@@ -251,8 +263,15 @@ func (re *JSRE) Stop(waitForCallbacks bool) {
 	}
 }
 
-// Exec(file) loads and runs the contents of a file
-// if a relative path is given, the jsre's assetPath is used
+// Exec loads and executes the contents of a JavaScript file.
+// If a relative path is provided, the file is resolved relative to the JSRE's assetPath.
+// The file is read, compiled, and executed in the JSRE's runtime environment.
+//
+// Parameters:
+//   - file: The path to the JavaScript file to execute. Can be an absolute path or relative to assetPath.
+//
+// Returns:
+//   - error: An error if the file cannot be read, compiled, or executed.
 func (re *JSRE) Exec(file string) error {
 	code, err := os.ReadFile(common.AbsolutePath(re.assetPath, file))
 	if err != nil {

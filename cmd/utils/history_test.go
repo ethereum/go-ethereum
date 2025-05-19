@@ -87,11 +87,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 
 	// Make temp directory for era files.
-	dir, err := os.MkdirTemp("", "history-export-test")
-	if err != nil {
-		t.Fatalf("error creating temp test directory: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Export history to temp directory.
 	if err := ExportHistory(chain, dir, 0, count, step); err != nil {
@@ -170,12 +166,12 @@ func TestHistoryImportAndExport(t *testing.T) {
 		db2.Close()
 	})
 
-	genesis.MustCommit(db2, triedb.NewDatabase(db, triedb.HashDefaults))
+	genesis.MustCommit(db2, triedb.NewDatabase(db2, triedb.HashDefaults))
 	imported, err := core.NewBlockChain(db2, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}
-	if err := ImportHistory(imported, db2, dir, "mainnet"); err != nil {
+	if err := ImportHistory(imported, dir, "mainnet"); err != nil {
 		t.Fatalf("failed to import chain: %v", err)
 	}
 	if have, want := imported.CurrentHeader(), chain.CurrentHeader(); have.Hash() != want.Hash() {

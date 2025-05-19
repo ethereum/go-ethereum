@@ -37,9 +37,9 @@ type DynamicFeeTx struct {
 	AccessList AccessList
 
 	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
+	V *big.Int
+	R *big.Int
+	S *big.Int
 }
 
 // copy creates a deep copy of the transaction data and initializes all fields.
@@ -122,4 +122,20 @@ func (tx *DynamicFeeTx) encode(b *bytes.Buffer) error {
 
 func (tx *DynamicFeeTx) decode(input []byte) error {
 	return rlp.DecodeBytes(input, tx)
+}
+
+func (tx *DynamicFeeTx) sigHash(chainID *big.Int) common.Hash {
+	return prefixedRlpHash(
+		DynamicFeeTxType,
+		[]any{
+			chainID,
+			tx.Nonce,
+			tx.GasTipCap,
+			tx.GasFeeCap,
+			tx.Gas,
+			tx.To,
+			tx.Value,
+			tx.Data,
+			tx.AccessList,
+		})
 }

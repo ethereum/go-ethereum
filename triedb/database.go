@@ -64,10 +64,6 @@ type backend interface {
 	// state. An error will be returned if the specified state is not available.
 	StateReader(root common.Hash) (database.StateReader, error)
 
-	// Initialized returns an indicator if the state data is already initialized
-	// according to the state scheme.
-	Initialized(genesisRoot common.Hash) bool
-
 	// Size returns the current storage size of the diff layers on top of the
 	// disk layer and the storage size of the nodes cached in the disk layer.
 	//
@@ -176,12 +172,6 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize, common.Stora
 		preimages = db.preimages.size()
 	}
 	return diffs, nodes, preimages
-}
-
-// Initialized returns an indicator if the state data is already initialized
-// according to the state scheme.
-func (db *Database) Initialized(genesisRoot common.Hash) bool {
-	return db.backend.Initialized(genesisRoot)
 }
 
 // Scheme returns the node scheme used in the database.
@@ -320,6 +310,26 @@ func (db *Database) Journal(root common.Hash) error {
 		return errors.New("not supported")
 	}
 	return pdb.Journal(root)
+}
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (pathdb.AccountIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.AccountIterator(root, seek)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be move to the specific start position.
+func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (pathdb.StorageIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.StorageIterator(root, account, seek)
 }
 
 // IsVerkle returns the indicator if the database is holding a verkle tree.

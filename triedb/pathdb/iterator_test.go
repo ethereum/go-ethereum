@@ -131,19 +131,16 @@ func TestAccountIteratorBasics(t *testing.T) {
 			storage[hash] = accStorage
 		}
 	}
-	states := newStates(accounts, storage)
-	it := newDiffAccountIterator(common.Hash{}, states, nil)
+	states := newStates(accounts, storage, false)
+	it := newDiffAccountIterator(common.Hash{}, states.accountList(), nil)
 	verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
-	//db := rawdb.NewMemoryDatabase()
-	//batch := db.NewBatch()
-	//states.write(db, batch, nil, nil)
-	//batch.Write()
-	//it = newDiskAccountIterator(db, common.Hash{})
-	//verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
+	db := rawdb.NewMemoryDatabase()
+	batch := db.NewBatch()
+	states.write(batch, nil, nil)
+	batch.Write()
+	it = newDiskAccountIterator(db, common.Hash{})
+	verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 }
 
 // TestStorageIteratorBasics tests some simple single-layer(diff and disk) iteration for storage
@@ -171,23 +168,20 @@ func TestStorageIteratorBasics(t *testing.T) {
 		storage[hash] = accStorage
 		nilStorage[hash] = nilstorage
 	}
-	states := newStates(accounts, storage)
+	states := newStates(accounts, storage, false)
 	for account := range accounts {
-		it := newDiffStorageIterator(account, common.Hash{}, states, nil)
+		it := newDiffStorageIterator(account, common.Hash{}, states.storageList(account), nil)
 		verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 	}
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
-	//db := rawdb.NewMemoryDatabase()
-	//batch := db.NewBatch()
-	//states.write(db, batch, nil, nil)
-	//batch.Write()
-	//for account := range accounts {
-	//	it := newDiskStorageIterator(db, account, common.Hash{})
-	//	verifyIterator(t, 100-nilStorage[account], it, verifyNothing) // Nil is allowed for single layer iterator
-	//}
+	db := rawdb.NewMemoryDatabase()
+	batch := db.NewBatch()
+	states.write(batch, nil, nil)
+	batch.Write()
+	for account := range accounts {
+		it := newDiskStorageIterator(db, account, common.Hash{})
+		verifyIterator(t, 100-nilStorage[account], it, verifyNothing) // Nil is allowed for single layer iterator
+	}
 }
 
 type testIterator struct {
@@ -263,23 +257,23 @@ func TestAccountIteratorTraversal(t *testing.T) {
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 0, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil, nil, nil, false))
 
 	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 0, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xbb", "0xdd", "0xf0"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xbb", "0xdd", "0xf0"), nil, nil, nil, false))
 
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 0, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xcc", "0xf0", "0xff"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xcc", "0xf0", "0xff"), nil, nil, nil, false))
 
 	// Verify the single and multi-layer iterators
 	head := db.tree.get(common.HexToHash("0x04"))
 
 	// singleLayer: 0xcc, 0xf0, 0xff
-	it := newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet, nil)
+	it := newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet.accountList(), nil)
 	verifyIterator(t, 3, it, verifyNothing)
 
 	// binaryIterator: 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xf0, 0xff
@@ -290,19 +284,16 @@ func TestAccountIteratorTraversal(t *testing.T) {
 	verifyIterator(t, 7, it, verifyAccount)
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x04"), 2)
+	db.tree.cap(common.HexToHash("0x04"), 2)
 
-	//head = db.tree.get(common.HexToHash("0x04"))
-	//verifyIterator(t, 7, head.(*diffLayer).newBinaryAccountIterator(), verifyAccount)
-	//
-	//it, _ = db.AccountIterator(common.HexToHash("0x04"), common.Hash{})
-	//verifyIterator(t, 7, it, verifyAccount)
-	//it.Release()
+	head = db.tree.get(common.HexToHash("0x04"))
+	verifyIterator(t, 7, head.(*diffLayer).newBinaryAccountIterator(common.Hash{}), verifyAccount)
+
+	it, _ = db.AccountIterator(common.HexToHash("0x04"), common.Hash{})
+	verifyIterator(t, 7, it, verifyAccount)
+	it.Release()
 }
 
 func TestStorageIteratorTraversal(t *testing.T) {
@@ -310,23 +301,23 @@ func TestStorageIteratorTraversal(t *testing.T) {
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 0, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x02", "0x03"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x02", "0x03"}}, nil), nil, nil, false))
 
 	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 0, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x04", "0x05", "0x06"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x04", "0x05", "0x06"}}, nil), nil, nil, false))
 
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 0, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x02", "0x03"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x02", "0x03"}}, nil), nil, nil, false))
 
 	// Verify the single and multi-layer iterators
 	head := db.tree.get(common.HexToHash("0x04"))
 
 	// singleLayer: 0x1, 0x2, 0x3
-	diffIter := newDiffStorageIterator(common.HexToHash("0xaa"), common.Hash{}, head.(*diffLayer).states.stateSet, nil)
+	diffIter := newDiffStorageIterator(common.HexToHash("0xaa"), common.Hash{}, head.(*diffLayer).states.stateSet.storageList(common.HexToHash("0xaa")), nil)
 	verifyIterator(t, 3, diffIter, verifyNothing)
 
 	// binaryIterator: 0x1, 0x2, 0x3, 0x4, 0x5, 0x6
@@ -337,17 +328,14 @@ func TestStorageIteratorTraversal(t *testing.T) {
 	verifyIterator(t, 6, it, verifyStorage)
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x04"), 2)
-	//verifyIterator(t, 6, head.(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa")), verifyStorage)
-	//
-	//it, _ = db.StorageIterator(common.HexToHash("0x04"), common.HexToHash("0xaa"), common.Hash{})
-	//verifyIterator(t, 6, it, verifyStorage)
-	//it.Release()
+	db.tree.cap(common.HexToHash("0x04"), 2)
+	verifyIterator(t, 6, head.(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{}), verifyStorage)
+
+	it, _ = db.StorageIterator(common.HexToHash("0x04"), common.HexToHash("0xaa"), common.Hash{})
+	verifyIterator(t, 6, it, verifyStorage)
+	it.Release()
 }
 
 // TestAccountIteratorTraversalValues tests some multi-layer iteration, where we
@@ -357,7 +345,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	// Create a batch of account sets to seed subsequent layers with
 	var (
@@ -371,38 +359,38 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 		h = make(map[common.Hash][]byte)
 	)
 	for i := byte(2); i < 0xff; i++ {
-		a[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 0, i))
+		a[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 0, i)
 		if i > 20 && i%2 == 0 {
-			b[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 1, i))
+			b[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 1, i)
 		}
 		if i%4 == 0 {
-			c[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 2, i))
+			c[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 2, i)
 		}
 		if i%7 == 0 {
-			d[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 3, i))
+			d[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 3, i)
 		}
 		if i%8 == 0 {
-			e[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 4, i))
+			e[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 4, i)
 		}
 		if i > 50 || i < 85 {
-			f[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 5, i))
+			f[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 5, i)
 		}
 		if i%64 == 0 {
-			g[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 6, i))
+			g[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 6, i)
 		}
 		if i%128 == 0 {
-			h[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 7, i))
+			h[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 7, i)
 		}
 	}
 	// Assemble a stack of snapshots from the account layers
-	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 2, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(a, nil, nil, nil))
-	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 3, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(b, nil, nil, nil))
-	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 4, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(c, nil, nil, nil))
-	db.Update(common.HexToHash("0x05"), common.HexToHash("0x04"), 5, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(d, nil, nil, nil))
-	db.Update(common.HexToHash("0x06"), common.HexToHash("0x05"), 6, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(e, nil, nil, nil))
-	db.Update(common.HexToHash("0x07"), common.HexToHash("0x06"), 7, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(f, nil, nil, nil))
-	db.Update(common.HexToHash("0x08"), common.HexToHash("0x07"), 8, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(g, nil, nil, nil))
-	db.Update(common.HexToHash("0x09"), common.HexToHash("0x08"), 9, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(h, nil, nil, nil))
+	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 2, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(a, nil, nil, nil, false))
+	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 3, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(b, nil, nil, nil, false))
+	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 4, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(c, nil, nil, nil, false))
+	db.Update(common.HexToHash("0x05"), common.HexToHash("0x04"), 5, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(d, nil, nil, nil, false))
+	db.Update(common.HexToHash("0x06"), common.HexToHash("0x05"), 6, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(e, nil, nil, nil, false))
+	db.Update(common.HexToHash("0x07"), common.HexToHash("0x06"), 7, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(f, nil, nil, nil, false))
+	db.Update(common.HexToHash("0x08"), common.HexToHash("0x07"), 8, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(g, nil, nil, nil, false))
+	db.Update(common.HexToHash("0x09"), common.HexToHash("0x08"), 9, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(h, nil, nil, nil, false))
 
 	// binaryIterator
 	r, _ := db.StateReader(common.HexToHash("0x09"))
@@ -434,26 +422,38 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	}
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x09"), 2)
-	//
-	//it, _ = db.AccountIterator(common.HexToHash("0x09"), common.Hash{})
-	//for it.Next() {
-	//	hash := it.Hash()
-	//	account, err := head.Account(hash)
-	//	if err != nil {
-	//		t.Fatalf("failed to retrieve expected account: %v", err)
-	//	}
-	//	want, _ := rlp.EncodeToBytes(account)
-	//	if have := it.Account(); !bytes.Equal(want, have) {
-	//		t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
-	//	}
-	//}
-	//it.Release()
+	db.tree.cap(common.HexToHash("0x09"), 2)
+
+	// binaryIterator
+	head = db.tree.get(common.HexToHash("0x09"))
+	it = head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := r.(*reader).AccountRLP(hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected account: %v", err)
+		}
+		if have := it.Account(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
+
+	// fastIterator
+	it, _ = db.AccountIterator(common.HexToHash("0x09"), common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := r.(*reader).AccountRLP(hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected account: %v", err)
+		}
+		if have := it.Account(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
 }
 
 func TestStorageIteratorTraversalValues(t *testing.T) {
@@ -461,7 +461,7 @@ func TestStorageIteratorTraversalValues(t *testing.T) {
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	wrapStorage := func(storage map[common.Hash][]byte) map[common.Hash]map[common.Hash][]byte {
 		return map[common.Hash]map[common.Hash][]byte{
@@ -480,38 +480,38 @@ func TestStorageIteratorTraversalValues(t *testing.T) {
 		h = make(map[common.Hash][]byte)
 	)
 	for i := byte(2); i < 0xff; i++ {
-		a[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 0, i))
+		a[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 0, i)
 		if i > 20 && i%2 == 0 {
-			b[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 1, i))
+			b[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 1, i)
 		}
 		if i%4 == 0 {
-			c[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 2, i))
+			c[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 2, i)
 		}
 		if i%7 == 0 {
-			d[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 3, i))
+			d[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 3, i)
 		}
 		if i%8 == 0 {
-			e[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 4, i))
+			e[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 4, i)
 		}
 		if i > 50 || i < 85 {
-			f[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 5, i))
+			f[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 5, i)
 		}
 		if i%64 == 0 {
-			g[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 6, i))
+			g[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 6, i)
 		}
 		if i%128 == 0 {
-			h[common.Hash{i}] = []byte(fmt.Sprintf("layer-%d, key %d", 7, i))
+			h[common.Hash{i}] = fmt.Appendf(nil, "layer-%d, key %d", 7, i)
 		}
 	}
 	// Assemble a stack of snapshots from the account layers
-	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 2, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(a), nil, nil))
-	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 3, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(b), nil, nil))
-	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 4, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(c), nil, nil))
-	db.Update(common.HexToHash("0x05"), common.HexToHash("0x04"), 5, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(d), nil, nil))
-	db.Update(common.HexToHash("0x06"), common.HexToHash("0x05"), 6, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(e), nil, nil))
-	db.Update(common.HexToHash("0x07"), common.HexToHash("0x06"), 7, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(f), nil, nil))
-	db.Update(common.HexToHash("0x08"), common.HexToHash("0x07"), 8, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(g), nil, nil))
-	db.Update(common.HexToHash("0x09"), common.HexToHash("0x08"), 9, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(h), nil, nil))
+	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 2, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(a), nil, nil, false))
+	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 3, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(b), nil, nil, false))
+	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 4, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(c), nil, nil, false))
+	db.Update(common.HexToHash("0x05"), common.HexToHash("0x04"), 5, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(d), nil, nil, false))
+	db.Update(common.HexToHash("0x06"), common.HexToHash("0x05"), 6, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(e), nil, nil, false))
+	db.Update(common.HexToHash("0x07"), common.HexToHash("0x06"), 7, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(f), nil, nil, false))
+	db.Update(common.HexToHash("0x08"), common.HexToHash("0x07"), 8, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(g), nil, nil, false))
+	db.Update(common.HexToHash("0x09"), common.HexToHash("0x08"), 9, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(randomAccountSet("0xaa"), wrapStorage(h), nil, nil, false))
 
 	// binaryIterator
 	r, _ := db.StateReader(common.HexToHash("0x09"))
@@ -543,25 +543,38 @@ func TestStorageIteratorTraversalValues(t *testing.T) {
 	}
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x09"), 2)
-	//
-	//it, _ = db.StorageIterator(common.HexToHash("0x09"), common.HexToHash("0xaa"), common.Hash{})
-	//for it.Next() {
-	//	hash := it.Hash()
-	//	want, err := head.Storage(common.HexToHash("0xaa"), hash)
-	//	if err != nil {
-	//		t.Fatalf("failed to retrieve expected slot: %v", err)
-	//	}
-	//	if have := it.Slot(); !bytes.Equal(want, have) {
-	//		t.Fatalf("hash %x: slot mismatch: have %x, want %x", hash, have, want)
-	//	}
-	//}
-	//it.Release()
+	db.tree.cap(common.HexToHash("0x09"), 2)
+
+	// binaryIterator
+	head = db.tree.get(common.HexToHash("0x09"))
+	it = head.(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa"), common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := r.Storage(common.HexToHash("0xaa"), hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected account: %v", err)
+		}
+		if have := it.Slot(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: account mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
+
+	// fastIterator
+	it, _ = db.StorageIterator(common.HexToHash("0x09"), common.HexToHash("0xaa"), common.Hash{})
+	for it.Next() {
+		hash := it.Hash()
+		want, err := r.Storage(common.HexToHash("0xaa"), hash)
+		if err != nil {
+			t.Fatalf("failed to retrieve expected storage slot: %v", err)
+		}
+		if have := it.Slot(); !bytes.Equal(want, have) {
+			t.Fatalf("hash %x: slot mismatch: have %x, want %x", hash, have, want)
+		}
+	}
+	it.Release()
 }
 
 // This testcase is notorious, all layers contain the exact same 200 accounts.
@@ -581,36 +594,34 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
+
 	for i := 1; i < 128; i++ {
 		parent := types.EmptyRootHash
 		if i == 1 {
 			parent = common.HexToHash(fmt.Sprintf("0x%02x", i))
 		}
 		db.Update(common.HexToHash(fmt.Sprintf("0x%02x", i+1)), parent, uint64(i), trienode.NewMergedNodeSet(),
-			NewStateSetWithOrigin(makeAccounts(200), nil, nil, nil))
+			NewStateSetWithOrigin(makeAccounts(200), nil, nil, nil, false))
 	}
 	// Iterate the entire stack and ensure everything is hit only once
 	head := db.tree.get(common.HexToHash("0x80"))
-	verifyIterator(t, 200, newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet, nil), verifyNothing)
+	verifyIterator(t, 200, newDiffAccountIterator(common.Hash{}, head.(*diffLayer).states.stateSet.accountList(), nil), verifyNothing)
 	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator(common.Hash{}), verifyAccount)
 
 	it, _ := db.AccountIterator(common.HexToHash("0x80"), common.Hash{})
 	verifyIterator(t, 200, it, verifyAccount)
 	it.Release()
 
-	// TODO reenable these tests once the persistent state iteration
-	// is implemented.
-
 	// Test after persist some bottom-most layers into the disk,
 	// the functionalities still work.
-	//db.tree.cap(common.HexToHash("0x80"), 2)
-	//
-	//verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator(), verifyAccount)
-	//
-	//it, _ = db.AccountIterator(common.HexToHash("0x80"), common.Hash{})
-	//verifyIterator(t, 200, it, verifyAccount)
-	//it.Release()
+	db.tree.cap(common.HexToHash("0x80"), 2)
+
+	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator(common.Hash{}), verifyAccount)
+
+	it, _ = db.AccountIterator(common.HexToHash("0x80"), common.Hash{})
+	verifyIterator(t, 200, it, verifyAccount)
+	it.Release()
 }
 
 // TestAccountIteratorFlattening tests what happens when we
@@ -622,17 +633,17 @@ func TestAccountIteratorFlattening(t *testing.T) {
 		WriteBufferSize: 10 * 1024,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	// Create a stack of diffs on top
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil, nil, nil, false))
 
 	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 2, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xbb", "0xdd", "0xf0"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xbb", "0xdd", "0xf0"), nil, nil, nil, false))
 
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 3, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xcc", "0xf0", "0xff"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xcc", "0xf0", "0xff"), nil, nil, nil, false))
 
 	// Create a binary iterator and flatten the data from underneath it
 	head := db.tree.get(common.HexToHash("0x04"))
@@ -655,16 +666,16 @@ func TestAccountIteratorSeek(t *testing.T) {
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa", "0xee", "0xff", "0xf0"), nil, nil, nil, false))
 
 	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 2, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xbb", "0xdd", "0xf0"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xbb", "0xdd", "0xf0"), nil, nil, nil, false))
 
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 3, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xcc", "0xf0", "0xff"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xcc", "0xf0", "0xff"), nil, nil, nil, false))
 
 	// Account set is now
 	// 02: aa, ee, f0, ff
@@ -727,17 +738,17 @@ func testStorageIteratorSeek(t *testing.T, newIterator func(db *Database, root, 
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x03", "0x05"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x03", "0x05"}}, nil), nil, nil, false))
 
 	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 2, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x02", "0x05", "0x06"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x02", "0x05", "0x06"}}, nil), nil, nil, false))
 
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 3, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x05", "0x08"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x05", "0x08"}}, nil), nil, nil, false))
 
 	// Account set is now
 	// 02: 01, 03, 05
@@ -799,20 +810,20 @@ func testAccountIteratorDeletions(t *testing.T, newIterator func(db *Database, r
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0x11", "0x22", "0x33"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0x11", "0x22", "0x33"), nil, nil, nil, false))
 
 	deleted := common.HexToHash("0x22")
 	accounts := randomAccountSet("0x11", "0x33")
 	accounts[deleted] = nil
 	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 2, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(accounts, nil, nil, nil))
+		NewStateSetWithOrigin(accounts, nil, nil, nil, false))
 
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 3, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0x33", "0x44", "0x55"), nil, nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0x33", "0x44", "0x55"), nil, nil, nil, false))
 
 	// The output should be 11,33,44,55
 	it := newIterator(db, common.HexToHash("0x04"), common.Hash{})
@@ -839,14 +850,14 @@ func TestStorageIteratorDeletions(t *testing.T) {
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	// Stack three diff layers on top with various overlaps
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x03", "0x05"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01", "0x03", "0x05"}}, nil), nil, nil, false))
 
 	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 2, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x02", "0x04", "0x06"}}, [][]string{{"0x01", "0x03"}}), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x02", "0x04", "0x06"}}, [][]string{{"0x01", "0x03"}}), nil, nil, false))
 
 	// The output should be 02,04,05,06
 	it, _ := db.StorageIterator(common.HexToHash("0x03"), common.HexToHash("0xaa"), common.Hash{})
@@ -863,7 +874,7 @@ func TestStorageIteratorDeletions(t *testing.T) {
 		common.HexToHash("0xaa"): nil,
 	}
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 3, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(accounts, randomStorageSet([]string{"0xaa"}, nil, [][]string{{"0x02", "0x04", "0x05", "0x06"}}), nil, nil))
+		NewStateSetWithOrigin(accounts, randomStorageSet([]string{"0xaa"}, nil, [][]string{{"0x02", "0x04", "0x05", "0x06"}}), nil, nil, false))
 
 	it, _ = db.StorageIterator(common.HexToHash("0x04"), common.HexToHash("0xaa"), common.Hash{})
 	verifyIterator(t, 0, it, verifyStorage)
@@ -871,7 +882,7 @@ func TestStorageIteratorDeletions(t *testing.T) {
 
 	// Re-insert the slots of the same account
 	db.Update(common.HexToHash("0x05"), common.HexToHash("0x04"), 4, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x07", "0x08", "0x09"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x07", "0x08", "0x09"}}, nil), nil, nil, false))
 
 	// The output should be 07,08,09
 	it, _ = db.StorageIterator(common.HexToHash("0x05"), common.HexToHash("0xaa"), common.Hash{})
@@ -880,7 +891,7 @@ func TestStorageIteratorDeletions(t *testing.T) {
 
 	// Destruct the whole storage but re-create the account in the same layer
 	db.Update(common.HexToHash("0x06"), common.HexToHash("0x05"), 5, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x11", "0x12"}}, [][]string{{"0x07", "0x08", "0x09"}}), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x11", "0x12"}}, [][]string{{"0x07", "0x08", "0x09"}}), nil, nil, false))
 
 	it, _ = db.StorageIterator(common.HexToHash("0x06"), common.HexToHash("0xaa"), common.Hash{})
 	verifyIterator(t, 2, it, verifyStorage) // The output should be 11,12
@@ -907,23 +918,23 @@ func testStaleIterator(t *testing.T, newIter func(db *Database, hash common.Hash
 		WriteBufferSize: 16 * 1024 * 1024,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	// [02 (disk), 03]
 	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x01"}}, nil), nil, nil, false))
 	db.Update(common.HexToHash("0x03"), common.HexToHash("0x02"), 2, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x02"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x02"}}, nil), nil, nil, false))
 	db.tree.cap(common.HexToHash("0x03"), 1)
 
 	// [02 (disk), 03, 04]
 	db.Update(common.HexToHash("0x04"), common.HexToHash("0x03"), 3, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x03"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x03"}}, nil), nil, nil, false))
 	iter := newIter(db, common.HexToHash("0x04"))
 
 	// [04 (disk), 05]
 	db.Update(common.HexToHash("0x05"), common.HexToHash("0x04"), 3, trienode.NewMergedNodeSet(),
-		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x04"}}, nil), nil, nil))
+		NewStateSetWithOrigin(randomAccountSet("0xaa"), randomStorageSet([]string{"0xaa"}, [][]string{{"0x04"}}, nil), nil, nil, false))
 	db.tree.cap(common.HexToHash("0x05"), 1)
 
 	// Iterator can't finish the traversal as the layer 02 has becoming stale.
@@ -962,14 +973,14 @@ func BenchmarkAccountIteratorTraversal(b *testing.B) {
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
 	for i := 1; i <= 100; i++ {
 		parent := types.EmptyRootHash
 		if i == 1 {
 			parent = common.HexToHash(fmt.Sprintf("0x%02x", i))
 		}
-		db.Update(common.HexToHash(fmt.Sprintf("0x%02x", i+1)), parent, uint64(i), trienode.NewMergedNodeSet(), NewStateSetWithOrigin(makeAccounts(200), nil, nil, nil))
+		db.Update(common.HexToHash(fmt.Sprintf("0x%02x", i+1)), parent, uint64(i), trienode.NewMergedNodeSet(), NewStateSetWithOrigin(makeAccounts(200), nil, nil, nil, false))
 	}
 	// We call this once before the benchmark, so the creation of
 	// sorted accountlists are not included in the results.
@@ -1057,11 +1068,11 @@ func BenchmarkAccountIteratorLargeBaselayer(b *testing.B) {
 		WriteBufferSize: 0,
 	}
 	db := New(rawdb.NewMemoryDatabase(), config, false)
-	// db.WaitGeneration()
+	db.waitGeneration()
 
-	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(makeAccounts(2000), nil, nil, nil))
+	db.Update(common.HexToHash("0x02"), types.EmptyRootHash, 1, trienode.NewMergedNodeSet(), NewStateSetWithOrigin(makeAccounts(2000), nil, nil, nil, false))
 	for i := 2; i <= 100; i++ {
-		db.Update(common.HexToHash(fmt.Sprintf("0x%02x", i+1)), common.HexToHash(fmt.Sprintf("0x%02x", i)), uint64(i), trienode.NewMergedNodeSet(), NewStateSetWithOrigin(makeAccounts(20), nil, nil, nil))
+		db.Update(common.HexToHash(fmt.Sprintf("0x%02x", i+1)), common.HexToHash(fmt.Sprintf("0x%02x", i)), uint64(i), trienode.NewMergedNodeSet(), NewStateSetWithOrigin(makeAccounts(20), nil, nil, nil, false))
 	}
 	// We call this once before the benchmark, so the creation of
 	// sorted accountlists are not included in the results.

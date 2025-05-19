@@ -63,11 +63,11 @@ type jsonWriter interface {
 type BlockNumber int64
 
 const (
+	EarliestBlockNumber  = BlockNumber(-5)
 	SafeBlockNumber      = BlockNumber(-4)
 	FinalizedBlockNumber = BlockNumber(-3)
 	LatestBlockNumber    = BlockNumber(-2)
 	PendingBlockNumber   = BlockNumber(-1)
-	EarliestBlockNumber  = BlockNumber(0)
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:

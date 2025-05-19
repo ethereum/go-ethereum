@@ -1108,7 +1108,7 @@ func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 			doTxNotify{peer: "C",
 				hashes: []common.Hash{{0x07}, {0x08}},
 				types:  []byte{types.BlobTxType, types.BlobTxType},
-				sizes:  []uint32{params.MaxBlobGasPerBlock, params.MaxBlobGasPerBlock},
+				sizes:  []uint32{params.BlobTxBlobGasPerBlob * 10, params.BlobTxBlobGasPerBlob * 10},
 			},
 			doWait{time: txArriveTimeout, step: true},
 			isWaiting(nil),
@@ -1125,8 +1125,8 @@ func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 						{common.Hash{0x06}, types.LegacyTxType, maxTxRetrievalSize},
 					},
 					"C": {
-						{common.Hash{0x07}, types.BlobTxType, params.MaxBlobGasPerBlock},
-						{common.Hash{0x08}, types.BlobTxType, params.MaxBlobGasPerBlock},
+						{common.Hash{0x07}, types.BlobTxType, params.BlobTxBlobGasPerBlob * 10},
+						{common.Hash{0x08}, types.BlobTxType, params.BlobTxBlobGasPerBlob * 10},
 					},
 				},
 				fetching: map[string][]common.Hash{
@@ -1244,10 +1244,12 @@ func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 				func(txs []*types.Transaction) []error {
 					errs := make([]error, len(txs))
 					for i := 0; i < len(errs); i++ {
-						if i%2 == 0 {
+						if i%3 == 0 {
 							errs[i] = txpool.ErrUnderpriced
-						} else {
+						} else if i%3 == 1 {
 							errs[i] = txpool.ErrReplaceUnderpriced
+						} else {
+							errs[i] = txpool.ErrTxGasPriceTooLow
 						}
 					}
 					return errs
@@ -2150,9 +2152,22 @@ func containsHashInAnnounces(slice []announce, hash common.Hash) bool {
 	return false
 }
 
-// Tests that a transaction is forgotten after the timeout.
+// TestTransactionForgotten verifies that underpriced transactions are properly
+// forgotten after the timeout period, testing both the exact timeout boundary
+// and the cleanup of the underpriced cache.
 func TestTransactionForgotten(t *testing.T) {
-	fetcher := NewTxFetcher(
+	// Test ensures that underpriced transactions are properly forgotten after a timeout period,
+	// including checks for timeout boundary and cache cleanup.
+	t.Parallel()
+
+	// Create a mock clock for deterministic time control
+	mockClock := new(mclock.Simulated)
+	mockTime := func() time.Time {
+		nanoTime := int64(mockClock.Now())
+		return time.Unix(nanoTime/1000000000, nanoTime%1000000000)
+	}
+
+	fetcher := NewTxFetcherForTests(
 		func(common.Hash) bool { return false },
 		func(txs []*types.Transaction) []error {
 			errs := make([]error, len(txs))
@@ -2163,24 +2178,83 @@ func TestTransactionForgotten(t *testing.T) {
 		},
 		func(string, []common.Hash) error { return nil },
 		func(string) {},
+		mockClock,
+		mockTime,
+		rand.New(rand.NewSource(0)), // Use fixed seed for deterministic behavior
 	)
 	fetcher.Start()
 	defer fetcher.Stop()
-	// Create one TX which is 5 minutes old, and one which is recent
-	tx1 := types.NewTx(&types.LegacyTx{Nonce: 0})
-	tx1.SetTime(time.Now().Add(-maxTxUnderpricedTimeout - 1*time.Second))
-	tx2 := types.NewTx(&types.LegacyTx{Nonce: 1})
 
-	// Enqueue both in the fetcher. They will be immediately tagged as underpriced
-	if err := fetcher.Enqueue("asdf", []*types.Transaction{tx1, tx2}, false); err != nil {
+	// Create two test transactions with the same timestamp
+	tx1 := types.NewTransaction(0, common.Address{}, big.NewInt(100), 21000, big.NewInt(1), nil)
+	tx2 := types.NewTransaction(1, common.Address{}, big.NewInt(100), 21000, big.NewInt(1), nil)
+
+	now := mockTime()
+	tx1.SetTime(now)
+	tx2.SetTime(now)
+
+	// Initial state: both transactions should be marked as underpriced
+	if err := fetcher.Enqueue("peer", []*types.Transaction{tx1, tx2}, false); err != nil {
 		t.Fatal(err)
 	}
-	// isKnownUnderpriced should trigger removal of the first tx (no longer be known underpriced)
-	if fetcher.isKnownUnderpriced(tx1.Hash()) {
-		t.Fatal("transaction should be forgotten by now")
+	if !fetcher.isKnownUnderpriced(tx1.Hash()) {
+		t.Error("tx1 should be underpriced")
 	}
-	// isKnownUnderpriced should not trigger removal of the second
 	if !fetcher.isKnownUnderpriced(tx2.Hash()) {
-		t.Fatal("transaction should be known underpriced")
+		t.Error("tx2 should be underpriced")
+	}
+
+	// Verify cache size
+	if size := fetcher.underpriced.Len(); size != 2 {
+		t.Errorf("wrong underpriced cache size: got %d, want %d", size, 2)
+	}
+
+	// Just before timeout: transactions should still be underpriced
+	mockClock.Run(maxTxUnderpricedTimeout - time.Second)
+	if !fetcher.isKnownUnderpriced(tx1.Hash()) {
+		t.Error("tx1 should still be underpriced before timeout")
+	}
+	if !fetcher.isKnownUnderpriced(tx2.Hash()) {
+		t.Error("tx2 should still be underpriced before timeout")
+	}
+
+	// Exactly at timeout boundary: transactions should still be present
+	mockClock.Run(time.Second)
+	if !fetcher.isKnownUnderpriced(tx1.Hash()) {
+		t.Error("tx1 should be present exactly at timeout")
+	}
+	if !fetcher.isKnownUnderpriced(tx2.Hash()) {
+		t.Error("tx2 should be present exactly at timeout")
+	}
+
+	// After timeout: transactions should be forgotten
+	mockClock.Run(time.Second)
+	if fetcher.isKnownUnderpriced(tx1.Hash()) {
+		t.Error("tx1 should be forgotten after timeout")
+	}
+	if fetcher.isKnownUnderpriced(tx2.Hash()) {
+		t.Error("tx2 should be forgotten after timeout")
+	}
+
+	// Verify cache is empty
+	if size := fetcher.underpriced.Len(); size != 0 {
+		t.Errorf("wrong underpriced cache size after timeout: got %d, want 0", size)
+	}
+
+	// Re-enqueue tx1 with updated timestamp
+	tx1.SetTime(mockTime())
+	if err := fetcher.Enqueue("peer", []*types.Transaction{tx1}, false); err != nil {
+		t.Fatal(err)
+	}
+	if !fetcher.isKnownUnderpriced(tx1.Hash()) {
+		t.Error("tx1 should be underpriced after re-enqueueing with new timestamp")
+	}
+	if fetcher.isKnownUnderpriced(tx2.Hash()) {
+		t.Error("tx2 should remain forgotten")
+	}
+
+	// Verify final cache state
+	if size := fetcher.underpriced.Len(); size != 1 {
+		t.Errorf("wrong final underpriced cache size: got %d, want 1", size)
 	}
 }

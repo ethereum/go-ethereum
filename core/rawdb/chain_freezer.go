@@ -62,9 +62,9 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 		freezer ethdb.AncientStore
 	)
 	if datadir == "" {
-		freezer = NewMemoryFreezer(readonly, chainFreezerNoSnappy)
+		freezer = NewMemoryFreezer(readonly, chainFreezerTableConfigs)
 	} else {
-		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerNoSnappy)
+		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs)
 	}
 	if err != nil {
 		return nil, err
@@ -205,7 +205,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		// Batch of blocks have been frozen, flush them before wiping from key-value store
-		if err := f.Sync(); err != nil {
+		if err := f.SyncAncient(); err != nil {
 			log.Crit("Failed to flush frozen tables", "err", err)
 		}
 		// Wipe out all data from the active database
@@ -315,11 +315,6 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if len(receipts) == 0 {
 				return fmt.Errorf("block receipts missing, can't freeze block %d", number)
 			}
-			td := ReadTdRLP(nfdb, hash, number)
-			if len(td) == 0 {
-				return fmt.Errorf("total difficulty missing, can't freeze block %d", number)
-			}
-
 			// Write to the batch.
 			if err := op.AppendRaw(ChainFreezerHashTable, number, hash[:]); err != nil {
 				return fmt.Errorf("can't write hash to Freezer: %v", err)
@@ -332,9 +327,6 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			}
 			if err := op.AppendRaw(ChainFreezerReceiptTable, number, receipts); err != nil {
 				return fmt.Errorf("can't write receipts to Freezer: %v", err)
-			}
-			if err := op.AppendRaw(ChainFreezerDifficultyTable, number, td); err != nil {
-				return fmt.Errorf("can't write td to Freezer: %v", err)
 			}
 			hashes = append(hashes, hash)
 		}

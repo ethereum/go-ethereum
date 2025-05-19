@@ -17,9 +17,7 @@
 package t8ntool
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -130,9 +127,7 @@ type rejectedTx struct {
 }
 
 // Apply applies a set of transactions to a pre-state
-func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
-	txIt txIterator, miningReward int64,
-	getTracerFn func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error)) (*state.StateDB, *ExecutionResult, []byte, error) {
+func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, txIt txIterator, miningReward int64) (*state.StateDB, *ExecutionResult, []byte, error) {
 	// Capture errors for BLOCKHASH operation, if we haven't been supplied the
 	// required blockhashes
 	var hashError error
@@ -183,15 +178,28 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	var excessBlobGas uint64
 	if pre.Env.ExcessBlobGas != nil {
 		excessBlobGas = *pre.Env.ExcessBlobGas
-		vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+		header := &types.Header{
+			Time:          pre.Env.Timestamp,
+			ExcessBlobGas: pre.Env.ExcessBlobGas,
+		}
+		vmContext.BlobBaseFee = eip4844.CalcBlobFee(chainConfig, header)
 	} else {
 		// If it is not explicitly defined, but we have the parent values, we try
 		// to calculate it ourselves.
 		parentExcessBlobGas := pre.Env.ParentExcessBlobGas
 		parentBlobGasUsed := pre.Env.ParentBlobGasUsed
 		if parentExcessBlobGas != nil && parentBlobGasUsed != nil {
-			excessBlobGas = eip4844.CalcExcessBlobGas(*parentExcessBlobGas, *parentBlobGasUsed)
-			vmContext.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
+			parent := &types.Header{
+				Time:          pre.Env.ParentTimestamp,
+				ExcessBlobGas: pre.Env.ParentExcessBlobGas,
+				BlobGasUsed:   pre.Env.ParentBlobGasUsed,
+			}
+			header := &types.Header{
+				Time:          pre.Env.Timestamp,
+				ExcessBlobGas: &excessBlobGas,
+			}
+			excessBlobGas = eip4844.CalcExcessBlobGas(chainConfig, parent, header.Time)
+			vmContext.BlobBaseFee = eip4844.CalcBlobFee(chainConfig, header)
 		}
 	}
 	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
@@ -234,30 +242,21 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		txBlobGas := uint64(0)
 		if tx.Type() == types.BlobTxType {
 			txBlobGas = uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
-			if used, max := blobGasUsed+txBlobGas, uint64(params.MaxBlobGasPerBlock); used > max {
+			max := eip4844.MaxBlobGasPerBlock(chainConfig, pre.Env.Timestamp)
+			if used := blobGasUsed + txBlobGas; used > max {
 				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", used, max)
 				log.Warn("rejected tx", "index", i, "err", err)
 				rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 				continue
 			}
 		}
-		tracer, traceOutput, err := getTracerFn(txIndex, tx.Hash(), chainConfig)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		// TODO (rjl493456442) it's a bit weird to reset the tracer in the
-		// middle of block execution, please improve it somehow.
-		if tracer != nil {
-			evm.SetTracer(tracer.Hooks)
-		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
-
 		var (
 			snapshot = statedb.Snapshot()
 			prevGas  = gaspool.Gas()
 		)
-		if tracer != nil && tracer.OnTxStart != nil {
-			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
+			evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		// (ret []byte, usedGas uint64, failed bool, err error)
 		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
@@ -266,13 +265,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
-			if tracer != nil {
-				if tracer.OnTxEnd != nil {
-					tracer.OnTxEnd(nil, err)
-				}
-				if err := writeTraceResult(tracer, traceOutput); err != nil {
-					log.Warn("Error writing tracer output", "err", err)
-				}
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxEnd != nil {
+				evm.Config.Tracer.OnTxEnd(nil, err)
 			}
 			continue
 		}
@@ -310,19 +304,15 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 			// Set the receipt logs and create the bloom filter.
 			receipt.Logs = statedb.GetLogs(tx.Hash(), vmContext.BlockNumber.Uint64(), blockHash)
-			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+			receipt.Bloom = types.CreateBloom(receipt)
+
 			// These three are non-consensus fields:
 			//receipt.BlockHash
 			//receipt.BlockNumber
 			receipt.TransactionIndex = uint(txIndex)
 			receipts = append(receipts, receipt)
-			if tracer != nil {
-				if tracer.Hooks.OnTxEnd != nil {
-					tracer.Hooks.OnTxEnd(receipt, nil)
-				}
-				if err = writeTraceResult(tracer, traceOutput); err != nil {
-					log.Warn("Error writing tracer output", "err", err)
-				}
+			if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxEnd != nil {
+				evm.Config.Tracer.OnTxEnd(receipt, nil)
 			}
 		}
 
@@ -373,13 +363,17 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
 		// EIP-7002
-		core.ProcessWithdrawalQueue(&requests, evm)
+		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process withdrawal requests: %v", err))
+		}
 		// EIP-7251
-		core.ProcessConsolidationQueue(&requests, evm)
+		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not process consolidation requests: %v", err))
+		}
 	}
 
 	// Commit block
-	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber))
+	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber), chainConfig.IsCancun(vmContext.BlockNumber, vmContext.Time))
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
 	}
@@ -387,7 +381,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		StateRoot:   root,
 		TxRoot:      types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
 		ReceiptRoot: types.DeriveSha(receipts, trie.NewStackTrie(nil)),
-		Bloom:       types.CreateBloom(receipts),
+		Bloom:       types.MergeBloom(receipts),
 		LogsHash:    rlpHash(statedb.Logs()),
 		Receipts:    receipts,
 		Rejected:    rejectedTxs,
@@ -430,14 +424,14 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
-		statedb.SetNonce(addr, a.Nonce)
+		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeGenesis)
 		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance), tracing.BalanceIncreaseGenesisBalance)
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}
 	}
 	// Commit and re-open to start with a clean state.
-	root, _ := statedb.Commit(0, false)
+	root, _ := statedb.Commit(0, false, false)
 	statedb, _ = state.New(root, sdb)
 	return statedb
 }
@@ -467,17 +461,4 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 		Time:       parentTime,
 	}
 	return ethash.CalcDifficulty(config, currentTime, parent)
-}
-
-func writeTraceResult(tracer *tracers.Tracer, f io.WriteCloser) error {
-	defer f.Close()
-	result, err := tracer.GetResult()
-	if err != nil || result == nil {
-		return err
-	}
-	err = json.NewEncoder(f).Encode(result)
-	if err != nil {
-		return err
-	}
-	return nil
 }

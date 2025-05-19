@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -43,28 +43,25 @@ type account struct {
 	Storage map[common.Hash]common.Hash `json:"storage"`
 }
 
-// testcase defines a single test to check the stateDiff tracer against.
-type testcase struct {
-	Genesis      *core.Genesis   `json:"genesis"`
-	Context      *callContext    `json:"context"`
-	Input        string          `json:"input"`
-	TracerConfig json.RawMessage `json:"tracerConfig"`
-	Result       interface{}     `json:"result"`
+// prestateTracerTest defines a single test to check the stateDiff tracer against.
+type prestateTracerTest struct {
+	tracerTestEnv
+	Result interface{} `json:"result"`
 }
 
 func TestPrestateTracerLegacy(t *testing.T) {
-	testPrestateDiffTracer("prestateTracerLegacy", "prestate_tracer_legacy", t)
+	testPrestateTracer("prestateTracerLegacy", "prestate_tracer_legacy", t)
 }
 
 func TestPrestateTracer(t *testing.T) {
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer", t)
+	testPrestateTracer("prestateTracer", "prestate_tracer", t)
 }
 
 func TestPrestateWithDiffModeTracer(t *testing.T) {
-	testPrestateDiffTracer("prestateTracer", "prestate_tracer_with_diff_mode", t)
+	testPrestateTracer("prestateTracer", "prestate_tracer_with_diff_mode", t)
 }
 
-func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
+func testPrestateTracer(tracerName string, dirPath string, t *testing.T) {
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
@@ -77,7 +74,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			t.Parallel()
 
 			var (
-				test = new(testcase)
+				test = new(prestateTracerTest)
 				tx   = new(types.Transaction)
 			)
 			// Call tracer test found, read if from disk

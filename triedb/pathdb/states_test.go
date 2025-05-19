@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -44,6 +44,7 @@ func TestStatesMerge(t *testing.T) {
 				common.Hash{0x1}: {0x10},
 			},
 		},
+		false,
 	)
 	b := newStates(
 		map[common.Hash][]byte{
@@ -64,6 +65,7 @@ func TestStatesMerge(t *testing.T) {
 				common.Hash{0x1}: nil, // delete slot
 			},
 		},
+		false,
 	)
 	a.merge(b)
 
@@ -132,6 +134,7 @@ func TestStatesRevert(t *testing.T) {
 				common.Hash{0x1}: {0x10},
 			},
 		},
+		false,
 	)
 	b := newStates(
 		map[common.Hash][]byte{
@@ -152,6 +155,7 @@ func TestStatesRevert(t *testing.T) {
 				common.Hash{0x1}: nil,
 			},
 		},
+		false,
 	)
 	a.merge(b)
 	a.revertTo(
@@ -224,12 +228,13 @@ func TestStatesRevert(t *testing.T) {
 // before and was created during transition w, reverting w will retain an x=nil
 // entry in the set.
 func TestStateRevertAccountNullMarker(t *testing.T) {
-	a := newStates(nil, nil) // empty initial state
+	a := newStates(nil, nil, false) // empty initial state
 	b := newStates(
 		map[common.Hash][]byte{
 			{0xa}: {0xa},
 		},
 		nil,
+		false,
 	)
 	a.merge(b) // create account 0xa
 	a.revertTo(
@@ -254,7 +259,7 @@ func TestStateRevertAccountNullMarker(t *testing.T) {
 func TestStateRevertStorageNullMarker(t *testing.T) {
 	a := newStates(map[common.Hash][]byte{
 		{0xa}: {0xa},
-	}, nil) // initial state with account 0xa
+	}, nil, false) // initial state with account 0xa
 
 	b := newStates(
 		nil,
@@ -263,6 +268,7 @@ func TestStateRevertStorageNullMarker(t *testing.T) {
 				common.Hash{0x1}: {0x1},
 			},
 		},
+		false,
 	)
 	a.merge(b) // create slot 0x1
 	a.revertTo(
@@ -284,6 +290,11 @@ func TestStateRevertStorageNullMarker(t *testing.T) {
 }
 
 func TestStatesEncode(t *testing.T) {
+	testStatesEncode(t, false)
+	testStatesEncode(t, true)
+}
+
+func testStatesEncode(t *testing.T, rawStorageKey bool) {
 	s := newStates(
 		map[common.Hash][]byte{
 			{0x1}: {0x1},
@@ -293,6 +304,7 @@ func TestStatesEncode(t *testing.T) {
 				common.Hash{0x1}: {0x1},
 			},
 		},
+		rawStorageKey,
 	)
 	buf := bytes.NewBuffer(nil)
 	if err := s.encode(buf); err != nil {
@@ -308,9 +320,17 @@ func TestStatesEncode(t *testing.T) {
 	if !reflect.DeepEqual(s.storageData, dec.storageData) {
 		t.Fatal("Unexpected storage data")
 	}
+	if s.rawStorageKey != dec.rawStorageKey {
+		t.Fatal("Unexpected rawStorageKey flag")
+	}
 }
 
 func TestStateWithOriginEncode(t *testing.T) {
+	testStateWithOriginEncode(t, false)
+	testStateWithOriginEncode(t, true)
+}
+
+func testStateWithOriginEncode(t *testing.T, rawStorageKey bool) {
 	s := NewStateSetWithOrigin(
 		map[common.Hash][]byte{
 			{0x1}: {0x1},
@@ -328,6 +348,7 @@ func TestStateWithOriginEncode(t *testing.T) {
 				common.Hash{0x1}: {0x1},
 			},
 		},
+		rawStorageKey,
 	)
 	buf := bytes.NewBuffer(nil)
 	if err := s.encode(buf); err != nil {
@@ -348,6 +369,9 @@ func TestStateWithOriginEncode(t *testing.T) {
 	}
 	if !reflect.DeepEqual(s.storageOrigin, dec.storageOrigin) {
 		t.Fatal("Unexpected storage origin data")
+	}
+	if s.rawStorageKey != dec.rawStorageKey {
+		t.Fatal("Unexpected rawStorageKey flag")
 	}
 }
 
@@ -375,6 +399,7 @@ func TestStateSizeTracking(t *testing.T) {
 				common.Hash{0x1}: {0x10}, // 2*common.HashLength+1
 			},
 		},
+		false,
 	)
 	if a.size != uint64(expSizeA) {
 		t.Fatalf("Unexpected size, want: %d, got: %d", expSizeA, a.size)
@@ -406,6 +431,7 @@ func TestStateSizeTracking(t *testing.T) {
 				common.Hash{0x3}: nil, // 2*common.HashLength, slot deletion
 			},
 		},
+		false,
 	)
 	if b.size != uint64(expSizeB) {
 		t.Fatalf("Unexpected size, want: %d, got: %d", expSizeB, b.size)

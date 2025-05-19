@@ -152,7 +152,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
 		// Finalize the state so any modifications are written to the trie
-		root, err := statedb.Commit(current.NumberU64(), eth.blockchain.Config().IsEIP158(current.Number()))
+		root, err := statedb.Commit(current.NumberU64(), eth.blockchain.Config().IsEIP158(current.Number()), eth.blockchain.Config().IsCancun(current.Number(), current.Time()))
 		if err != nil {
 			return nil, nil, fmt.Errorf("stateAtBlock commit failed, number %d root %v: %w",
 				current.NumberU64(), current.Root().Hex(), err)
@@ -217,7 +217,13 @@ func (eth *Ethereum) stateAtBlock(ctx context.Context, block *types.Block, reexe
 	return eth.pathState(block)
 }
 
-// stateAtTransaction returns the execution environment of a certain transaction.
+// stateAtTransaction returns the execution environment of a certain
+// transaction.
+//
+// Note: when a block is empty and the state for tx index 0 is requested, this
+// function will return the state of block after the pre-block operations have
+// been completed (e.g. updating system contracts), but before post-block
+// operations are completed (e.g. processing withdrawals).
 func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, tracers.StateReleaseFunc, error) {
 	// Short circuit if it's genesis block.
 	if block.NumberU64() == 0 {
@@ -245,7 +251,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
-		return nil, vm.BlockContext{}, statedb, release, nil
+		return nil, context, statedb, release, nil
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(eth.blockchain.Config(), block.Number(), block.Time())

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build ckzg && !nacl && !js && cgo && !gofuzz
+//go:build ckzg && !nacl && !js && !wasip1 && cgo && !gofuzz
 
 package kzg4844
 
@@ -23,8 +23,8 @@ import (
 	"errors"
 	"sync"
 
-	gokzg4844 "github.com/crate-crypto/go-kzg-4844"
-	ckzg4844 "github.com/ethereum/c-kzg-4844/bindings/go"
+	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
+	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -47,15 +47,21 @@ func ckzgInit() {
 	if err = gokzg4844.CheckTrustedSetupIsWellFormed(params); err != nil {
 		panic(err)
 	}
-	g1s := make([]byte, len(params.SetupG1Lagrange)*(len(params.SetupG1Lagrange[0])-2)/2)
+	g1Lag := make([]byte, len(params.SetupG1Lagrange)*(len(params.SetupG1Lagrange[0])-2)/2)
 	for i, g1 := range params.SetupG1Lagrange {
+		copy(g1Lag[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
+	}
+	g1s := make([]byte, len(params.SetupG1Monomial)*(len(params.SetupG1Monomial[0])-2)/2)
+	for i, g1 := range params.SetupG1Monomial {
 		copy(g1s[i*(len(g1)-2)/2:], hexutil.MustDecode(g1))
 	}
 	g2s := make([]byte, len(params.SetupG2)*(len(params.SetupG2[0])-2)/2)
 	for i, g2 := range params.SetupG2 {
 		copy(g2s[i*(len(g2)-2)/2:], hexutil.MustDecode(g2))
 	}
-	if err = ckzg4844.LoadTrustedSetup(g1s, g2s); err != nil {
+	// The last parameter determines the multiplication table, see https://notes.ethereum.org/@jtraglia/windowed_multiplications
+	// I think 6 is an decent compromise between size and speed
+	if err = ckzg4844.LoadTrustedSetup(g1s, g1Lag, g2s, 6); err != nil {
 		panic(err)
 	}
 }
@@ -124,4 +130,22 @@ func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 		return errors.New("invalid proof")
 	}
 	return nil
+}
+
+// ckzgComputeCellProofs returns the KZG cell proofs that are used to verify the blob against
+// the commitment.
+//
+// This method does not verify that the commitment is correct with respect to blob.
+func ckzgComputeCellProofs(blob *Blob) ([]Proof, error) {
+	ckzgIniter.Do(ckzgInit)
+
+	_, proofs, err := ckzg4844.ComputeCellsAndKZGProofs((*ckzg4844.Blob)(blob))
+	if err != nil {
+		return []Proof{}, err
+	}
+	var p []Proof
+	for _, proof := range proofs {
+		p = append(p, (Proof)(proof))
+	}
+	return p, nil
 }

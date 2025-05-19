@@ -49,7 +49,7 @@ type resettableFreezer struct {
 //
 // The reset function will delete directory atomically and re-create the
 // freezer from scratch.
-func newResettableFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*resettableFreezer, error) {
+func newResettableFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]freezerTableConfig) (*resettableFreezer, error) {
 	if err := cleanup(datadir); err != nil {
 		return nil, err
 	}
@@ -194,12 +194,12 @@ func (f *resettableFreezer) TruncateTail(tail uint64) (uint64, error) {
 	return f.freezer.TruncateTail(tail)
 }
 
-// Sync flushes all data tables to disk.
-func (f *resettableFreezer) Sync() error {
+// SyncAncient flushes all data tables to disk.
+func (f *resettableFreezer) SyncAncient() error {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
-	return f.freezer.Sync()
+	return f.freezer.SyncAncient()
 }
 
 // AncientDatadir returns the path of the ancient store.

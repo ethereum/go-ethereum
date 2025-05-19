@@ -17,9 +17,8 @@
 package eth
 
 import (
-	"math/big"
 	"math/rand"
-	"sync"
+	"sync/atomic"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
@@ -49,9 +48,7 @@ type Peer struct {
 	*p2p.Peer                   // The embedded P2P package peer
 	rw        p2p.MsgReadWriter // Input/output streams for snap
 	version   uint              // Protocol version negotiated
-
-	head common.Hash // Latest advertised head block hash
-	td   *big.Int    // Latest advertised head block total difficulty
+	lastRange atomic.Pointer[BlockRangeUpdatePacket]
 
 	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
 	knownTxs    *knownCache        // Set of transaction hashes known to be known by this peer
@@ -63,7 +60,6 @@ type Peer struct {
 	resDispatch chan *response // Dispatch channel to fulfil pending requests and untrack them
 
 	term chan struct{} // Termination channel to stop the broadcasters
-	lock sync.RWMutex  // Mutex protecting the internal fields
 }
 
 // NewPeer creates a wrapper for a network connection and negotiated  protocol
@@ -108,22 +104,10 @@ func (p *Peer) Version() uint {
 	return p.version
 }
 
-// Head retrieves the current head hash and total difficulty of the peer.
-func (p *Peer) Head() (hash common.Hash, td *big.Int) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	copy(hash[:], p.head[:])
-	return hash, new(big.Int).Set(p.td)
-}
-
-// SetHead updates the head hash and total difficulty of the peer.
-func (p *Peer) SetHead(hash common.Hash, td *big.Int) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	copy(p.head[:], hash[:])
-	p.td.Set(td)
+// BlockRange returns the latest announced block range.
+// This will be nil for peers below protocol version eth/69.
+func (p *Peer) BlockRange() *BlockRangeUpdatePacket {
+	return p.lastRange.Load()
 }
 
 // KnownTransaction returns whether peer is known to already have a transaction.
@@ -365,6 +349,14 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 		RequestId:                    id,
 		GetPooledTransactionsRequest: hashes,
 	})
+}
+
+// SendBlockRangeUpdate sends a notification about our available block range to the peer.
+func (p *Peer) SendBlockRangeUpdate(msg BlockRangeUpdatePacket) error {
+	if p.version < ETH69 {
+		return nil
+	}
+	return p2p.Send(p.rw, BlockRangeUpdateMsg, &msg)
 }
 
 // knownCache is a cache for known hashes.

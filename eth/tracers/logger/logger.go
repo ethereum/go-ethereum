@@ -19,6 +19,7 @@ package logger
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -176,14 +177,14 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 	if len(s.ReturnData) > 0 {
 		msg.ReturnData = hexutil.Bytes(s.ReturnData).String()
 	}
-	if s.Memory != nil {
+	if len(s.Memory) > 0 {
 		memory := make([]string, 0, (len(s.Memory)+31)/32)
 		for i := 0; i+32 <= len(s.Memory); i += 32 {
 			memory = append(memory, fmt.Sprintf("%x", s.Memory[i:i+32]))
 		}
 		msg.Memory = &memory
 	}
-	if s.Storage != nil {
+	if len(s.Storage) > 0 {
 		storage := make(map[string]string)
 		for i, storageValue := range s.Storage {
 			storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
@@ -349,14 +350,13 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	failed := l.err != nil
 	returnData := common.CopyBytes(l.output)
 	// Return data when successful and revert reason when reverted, otherwise empty.
-	returnVal := fmt.Sprintf("%x", returnData)
-	if failed && l.err != vm.ErrExecutionReverted {
-		returnVal = ""
+	if failed && !errors.Is(l.err, vm.ErrExecutionReverted) {
+		returnData = []byte{}
 	}
 	return json.Marshal(&ExecutionResult{
 		Gas:         l.usedGas,
 		Failed:      failed,
-		ReturnValue: returnVal,
+		ReturnValue: returnData,
 		StructLogs:  l.logs,
 	})
 }
@@ -526,6 +526,6 @@ func (t *mdLogger) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.O
 type ExecutionResult struct {
 	Gas         uint64            `json:"gas"`
 	Failed      bool              `json:"failed"`
-	ReturnValue string            `json:"returnValue"`
+	ReturnValue hexutil.Bytes     `json:"returnValue"`
 	StructLogs  []json.RawMessage `json:"structLogs"`
 }

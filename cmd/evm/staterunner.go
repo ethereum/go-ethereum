@@ -51,8 +51,11 @@ var stateTestCommand = &cli.Command{
 	Usage:     "Executes the given state tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
 	ArgsUsage: "<file>",
 	Flags: slices.Concat([]cli.Flag{
+		BenchFlag,
 		DumpFlag,
+		forkFlag,
 		HumanReadableFlag,
+		idxFlag,
 		RunFlag,
 	}, traceFlags),
 }

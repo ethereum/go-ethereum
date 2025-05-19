@@ -39,7 +39,7 @@ func NewRegisteredGaugeInfo(name string, r Registry) *GaugeInfo {
 	return c
 }
 
-// gaugeInfoSnapshot is a read-only copy of another GaugeInfo.
+// GaugeInfoSnapshot is a read-only copy of another GaugeInfo.
 type GaugeInfoSnapshot GaugeInfoValue
 
 // Value returns the value at the time the snapshot was taken.

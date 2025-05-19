@@ -57,11 +57,6 @@ func initMatcher(st *testMatcher) {
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
-
-	// The tests under Pyspecs are the ones that are published as execution-spec tests.
-	// We run these tests separately, no need to _also_ run them as part of the
-	// reference tests.
-	st.skipLoad(`^Pyspecs/`)
 }
 
 func TestState(t *testing.T) {
@@ -299,15 +294,14 @@ func runBenchmark(b *testing.B, t *StateTest) {
 
 			// Prepare the EVM.
 			txContext := core.NewEVMTxContext(msg)
-			context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
+			context := core.NewEVMBlockContext(block.Header(), &dummyChain{config: config}, &t.json.Env.Coinbase)
 			context.GetHash = vmTestBlockHash
 			context.BaseFee = baseFee
 			evm := vm.NewEVM(context, state.StateDB, config, vmconfig)
 			evm.SetTxContext(txContext)
 
 			// Create "contract" for sender to cache code analysis.
-			sender := vm.NewContract(vm.AccountRef(msg.From), vm.AccountRef(msg.From),
-				nil, 0)
+			sender := vm.NewContract(msg.From, msg.From, nil, 0, nil)
 
 			var (
 				gasUsed uint64
@@ -322,7 +316,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				start := time.Now()
 
 				// Execute the message.
-				_, leftOverGas, err := evm.Call(sender, *msg.To, msg.Data, msg.GasLimit, uint256.MustFromBig(msg.Value))
+				_, leftOverGas, err := evm.Call(sender.Address(), *msg.To, msg.Data, msg.GasLimit, uint256.MustFromBig(msg.Value))
 				if err != nil {
 					b.Error(err)
 					return

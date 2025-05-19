@@ -100,6 +100,9 @@ type TxData interface {
 
 	encode(*bytes.Buffer) error
 	decode([]byte) error
+
+	// sigHash returns the hash of the transaction that is ought to be signed
+	sigHash(*big.Int) common.Hash
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -352,28 +355,31 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 // Note: if the effective gasTipCap is negative, this method returns both error
 // the actual negative value, _and_ ErrGasFeeCapTooLow
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
+	dst := new(big.Int)
+	err := tx.calcEffectiveGasTip(dst, baseFee)
+	return dst, err
+}
+
+// calcEffectiveGasTip calculates the effective gas tip of the transaction and
+// saves the result to dst.
+func (tx *Transaction) calcEffectiveGasTip(dst *big.Int, baseFee *big.Int) error {
 	if baseFee == nil {
-		return tx.GasTipCap(), nil
+		dst.Set(tx.inner.gasTipCap())
+		return nil
 	}
+
 	var err error
-	gasFeeCap := tx.GasFeeCap()
+	gasFeeCap := tx.inner.gasFeeCap()
 	if gasFeeCap.Cmp(baseFee) < 0 {
 		err = ErrGasFeeCapTooLow
 	}
-	gasFeeCap = gasFeeCap.Sub(gasFeeCap, baseFee)
 
-	gasTipCap := tx.GasTipCap()
-	if gasTipCap.Cmp(gasFeeCap) < 0 {
-		return gasTipCap, err
+	dst.Sub(gasFeeCap, baseFee)
+	gasTipCap := tx.inner.gasTipCap()
+	if gasTipCap.Cmp(dst) < 0 {
+		dst.Set(gasTipCap)
 	}
-	return gasFeeCap, err
-}
-
-// EffectiveGasTipValue is identical to EffectiveGasTip, but does not return an
-// error in case the effective gasTipCap is negative
-func (tx *Transaction) EffectiveGasTipValue(baseFee *big.Int) *big.Int {
-	effectiveTip, _ := tx.EffectiveGasTip(baseFee)
-	return effectiveTip
+	return err
 }
 
 // EffectiveGasTipCmp compares the effective gasTipCap of two transactions assuming the given base fee.
@@ -381,7 +387,11 @@ func (tx *Transaction) EffectiveGasTipCmp(other *Transaction, baseFee *big.Int) 
 	if baseFee == nil {
 		return tx.GasTipCapCmp(other)
 	}
-	return tx.EffectiveGasTipValue(baseFee).Cmp(other.EffectiveGasTipValue(baseFee))
+	// Use more efficient internal method.
+	txTip, otherTip := new(big.Int), new(big.Int)
+	tx.calcEffectiveGasTip(txTip, baseFee)
+	other.calcEffectiveGasTip(otherTip, baseFee)
+	return txTip.Cmp(otherTip)
 }
 
 // EffectiveGasTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.
@@ -389,7 +399,9 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) i
 	if baseFee == nil {
 		return tx.GasTipCapIntCmp(other)
 	}
-	return tx.EffectiveGasTipValue(baseFee).Cmp(other)
+	txTip := new(big.Int)
+	tx.calcEffectiveGasTip(txTip, baseFee)
+	return txTip.Cmp(other)
 }
 
 // BlobGas returns the blob gas limit of the transaction for blob transactions, 0 otherwise.
@@ -481,6 +493,29 @@ func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
 		return nil
 	}
 	return setcodetx.AuthList
+}
+
+// SetCodeAuthorities returns a list of unique authorities from the
+// authorization list.
+func (tx *Transaction) SetCodeAuthorities() []common.Address {
+	setcodetx, ok := tx.inner.(*SetCodeTx)
+	if !ok {
+		return nil
+	}
+	var (
+		marks = make(map[common.Address]bool)
+		auths = make([]common.Address, 0, len(setcodetx.AuthList))
+	)
+	for _, auth := range setcodetx.AuthList {
+		if addr, err := auth.Authority(); err == nil {
+			if marks[addr] {
+				continue
+			}
+			marks[addr] = true
+			auths = append(auths, addr)
+		}
+	}
+	return auths
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set

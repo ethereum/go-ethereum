@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -30,11 +31,12 @@ import (
 
 // context wraps all fields for executing state diffs.
 type context struct {
-	prevRoot common.Hash
-	postRoot common.Hash
-	accounts map[common.Address][]byte
-	storages map[common.Address]map[common.Hash][]byte
-	nodes    *trienode.MergedNodeSet
+	prevRoot      common.Hash
+	postRoot      common.Hash
+	accounts      map[common.Address][]byte
+	storages      map[common.Address]map[common.Hash][]byte
+	nodes         *trienode.MergedNodeSet
+	rawStorageKey bool
 
 	// TODO (rjl493456442) abstract out the state hasher
 	// for supporting verkle tree.
@@ -43,18 +45,19 @@ type context struct {
 
 // apply processes the given state diffs, updates the corresponding post-state
 // and returns the trie nodes that have been modified.
-func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) (map[common.Hash]map[string]*trienode.Node, error) {
+func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash, rawStorageKey bool, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) (map[common.Hash]map[string]*trienode.Node, error) {
 	tr, err := trie.New(trie.TrieID(postRoot), db)
 	if err != nil {
 		return nil, err
 	}
 	ctx := &context{
-		prevRoot:    prevRoot,
-		postRoot:    postRoot,
-		accounts:    accounts,
-		storages:    storages,
-		accountTrie: tr,
-		nodes:       trienode.NewMergedNodeSet(),
+		prevRoot:      prevRoot,
+		postRoot:      postRoot,
+		accounts:      accounts,
+		storages:      storages,
+		accountTrie:   tr,
+		rawStorageKey: rawStorageKey,
+		nodes:         trienode.NewMergedNodeSet(),
 	}
 	for addr, account := range accounts {
 		var err error
@@ -83,10 +86,9 @@ func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash,
 func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) error {
 	// The account was present in prev-state, decode it from the
 	// 'slim-rlp' format bytes.
-	h := newHasher()
-	defer h.release()
+	h := crypto.NewKeccakState()
 
-	addrHash := h.hash(addr.Bytes())
+	addrHash := crypto.HashData(h, addr.Bytes())
 	prev, err := types.FullAccount(ctx.accounts[addr])
 	if err != nil {
 		return err
@@ -109,11 +111,15 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 		return err
 	}
 	for key, val := range ctx.storages[addr] {
+		tkey := key
+		if ctx.rawStorageKey {
+			tkey = crypto.HashData(h, key.Bytes())
+		}
 		var err error
 		if len(val) == 0 {
-			err = st.Delete(key.Bytes())
+			err = st.Delete(tkey.Bytes())
 		} else {
-			err = st.Update(key.Bytes(), val)
+			err = st.Update(tkey.Bytes(), val)
 		}
 		if err != nil {
 			return err
@@ -143,10 +149,9 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 // account and storage is wiped out correctly.
 func deleteAccount(ctx *context, db database.NodeDatabase, addr common.Address) error {
 	// The account must be existent in post-state, load the account.
-	h := newHasher()
-	defer h.release()
+	h := crypto.NewKeccakState()
 
-	addrHash := h.hash(addr.Bytes())
+	addrHash := crypto.HashData(h, addr.Bytes())
 	blob, err := ctx.accountTrie.Get(addrHash.Bytes())
 	if err != nil {
 		return err
@@ -166,7 +171,11 @@ func deleteAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 		if len(val) != 0 {
 			return errors.New("expect storage deletion")
 		}
-		if err := st.Delete(key.Bytes()); err != nil {
+		tkey := key
+		if ctx.rawStorageKey {
+			tkey = crypto.HashData(h, key.Bytes())
+		}
+		if err := st.Delete(tkey.Bytes()); err != nil {
 			return err
 		}
 	}

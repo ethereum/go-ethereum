@@ -33,19 +33,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-type account struct{}
-
-func (account) SubBalance(amount *big.Int)                          {}
-func (account) AddBalance(amount *big.Int)                          {}
-func (account) SetAddress(common.Address)                           {}
-func (account) Value() *big.Int                                     { return nil }
-func (account) SetBalance(*uint256.Int)                             {}
-func (account) SetNonce(uint64)                                     {}
-func (account) Balance() *uint256.Int                               { return nil }
-func (account) Address() common.Address                             { return common.Address{} }
-func (account) SetCode(common.Hash, []byte)                         {}
-func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
-
 type dummyStatedb struct {
 	state.StateDB
 }
@@ -68,7 +55,7 @@ func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCo
 		gasLimit uint64 = 31000
 		startGas uint64 = 10000
 		value           = uint256.NewInt(0)
-		contract        = vm.NewContract(account{}, account{}, value, startGas)
+		contract        = vm.NewContract(common.Address{}, common.Address{}, value, startGas, nil)
 	)
 	evm.SetTxContext(vmctx.txCtx)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
@@ -190,7 +177,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 	scope := &vm.ScopeContext{
-		Contract: vm.NewContract(&account{}, &account{}, uint256.NewInt(0), 0),
+		Contract: vm.NewContract(common.Address{}, common.Address{}, uint256.NewInt(0), 0, nil),
 	}
 	evm := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, chainConfig, vm.Config{Tracer: tracer.Hooks})
 	evm.SetTxContext(vm.TxContext{GasPrice: big.NewInt(1)})
@@ -288,7 +275,7 @@ func TestEnterExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	scope := &vm.ScopeContext{
-		Contract: vm.NewContract(&account{}, &account{}, uint256.NewInt(0), 0),
+		Contract: vm.NewContract(common.Address{}, common.Address{}, uint256.NewInt(0), 0, nil),
 	}
 	tracer.OnEnter(1, byte(vm.CALL), scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
 	tracer.OnExit(1, []byte{}, 400, nil, false)

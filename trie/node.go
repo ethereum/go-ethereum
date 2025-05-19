@@ -45,6 +45,27 @@ type (
 	}
 	hashNode  []byte
 	valueNode []byte
+
+	// fullnodeEncoder is a type used exclusively for encoding fullNode.
+	// Briefly instantiating a fullnodeEncoder and initializing with
+	// existing slices is less memory intense than using the fullNode type.
+	fullnodeEncoder struct {
+		Children [17][]byte
+	}
+
+	// extNodeEncoder is a type used exclusively for encoding extension node.
+	// Briefly instantiating a extNodeEncoder and initializing with existing
+	// slices is less memory intense than using the shortNode type.
+	extNodeEncoder struct {
+		Key []byte
+		Val []byte
+	}
+
+	// leafNodeEncoder is a type used exclusively for encoding leaf node.
+	leafNodeEncoder struct {
+		Key []byte
+		Val []byte
+	}
 )
 
 // nilValueNode is used when collapsing internal trie nodes for hashing, since
@@ -58,13 +79,17 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 	return eb.Flush()
 }
 
-func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
-func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
-
 // nodeFlag contains caching-related metadata about a node.
 type nodeFlag struct {
 	hash  hashNode // cached hash of the node (may be nil)
 	dirty bool     // whether the node has changes that must be written to the database
+}
+
+func (n nodeFlag) copy() nodeFlag {
+	return nodeFlag{
+		hash:  common.CopyBytes(n.hash),
+		dirty: n.dirty,
+	}
 }
 
 func (n *fullNode) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirty }
@@ -89,6 +114,7 @@ func (n *fullNode) fstring(ind string) string {
 	}
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
+
 func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
 }
@@ -97,19 +123,6 @@ func (n hashNode) fstring(ind string) string {
 }
 func (n valueNode) fstring(ind string) string {
 	return fmt.Sprintf("%x ", []byte(n))
-}
-
-// rawNode is a simple binary blob used to differentiate between collapsed trie
-// nodes and already encoded RLP binary blobs (while at the same time store them
-// in the same cache fields).
-type rawNode []byte
-
-func (n rawNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
-func (n rawNode) fstring(ind string) string { panic("this should never end up in a live trie") }
-
-func (n rawNode) EncodeRLP(w io.Writer) error {
-	_, err := w.Write(n)
-	return err
 }
 
 // mustDecodeNode is a wrapper of decodeNode and panic if any error is encountered.
@@ -219,7 +232,9 @@ func decodeRef(buf []byte) (node, []byte, error) {
 			err := fmt.Errorf("oversized embedded node (size is %d bytes, want size < %d)", size, hashLen)
 			return nil, buf, err
 		}
-		n, err := decodeNode(nil, buf)
+		// The buffer content has already been copied or is safe to use;
+		// no additional copy is required.
+		n, err := decodeNodeUnsafe(nil, buf)
 		return n, rest, err
 	case kind == rlp.String && len(val) == 0:
 		// empty node
