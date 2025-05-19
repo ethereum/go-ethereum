@@ -1194,7 +1194,7 @@ func TestBlobCountLimit(t *testing.T) {
 	errs := pool.Add([]*types.Transaction{tx1, tx2}, true)
 	assert.Equal(t, 2, len(errs))
 	assert.NoError(t, errs[0])
-	assert.EqualError(t, errs[1], "too many blobs in transaction: have 8, permitted 7")
+	assert.EqualError(t, errs[1], "transaction blob limit exceeded: blob count 8, limit 7")
 
 	verifyPoolInternals(t, pool)
 	pool.Close()
