@@ -193,22 +193,41 @@ func resolveChainEraDir(chainFreezerDir string, era string) string {
 	}
 }
 
-// NewDatabaseWithFreezer creates a high level database on top of a given key-
-// value data store with a freezer moving immutable chain segments into cold
-// storage. The passed ancient indicates the path of root ancient directory
-// where the chain freezer can be opened.
-func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool, eraDir string) (ethdb.Database, error) {
+// NewDatabaseWithFreezer creates a high level database on top of a given key-value store.
+// The passed ancient indicates the path of root ancient directory where the chain freezer
+// can be opened.
+//
+// Deprecated: use Open.
+func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+	return Open(db, OpenOptions{
+		Ancient:          ancient,
+		MetricsNamespace: namespace,
+		ReadOnly:         readonly,
+	})
+}
+
+// OpenOptions specifies options for opening the database.
+type OpenOptions struct {
+	Ancient          string // ancients directory
+	Era              string // era files directory
+	MetricsNamespace string // prefix added to freezer metric names
+	ReadOnly         bool
+}
+
+// Open creates a high-level database wrapper for the given key-value store.
+func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 	// Create the idle freezer instance. If the given ancient directory is empty,
 	// in-memory chain freezer is used (e.g. dev mode); otherwise the regular
 	// file-based freezer is created.
-	chainFreezerDir := ancient
+	chainFreezerDir := opts.Ancient
 	if chainFreezerDir != "" {
 		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
 	}
+	var eraDir string
 	if chainFreezerDir != "" {
-		eraDir = resolveChainEraDir(chainFreezerDir, eraDir)
+		eraDir = resolveChainEraDir(chainFreezerDir, opts.Era)
 	}
-	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly, eraDir)
+	frdb, err := newChainFreezer(chainFreezerDir, opts.MetricsNamespace, opts.ReadOnly, eraDir)
 	if err != nil {
 		printChainMetadata(db)
 		return nil, err
@@ -292,7 +311,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !readonly {
+	if !opts.ReadOnly {
 		frdb.wg.Add(1)
 		go func() {
 			frdb.freeze(db)
@@ -300,7 +319,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}()
 	}
 	return &freezerdb{
-		ancientRoot:   ancient,
+		ancientRoot:   opts.Ancient,
 		KeyValueStore: db,
 		chainFreezer:  frdb,
 	}, nil
