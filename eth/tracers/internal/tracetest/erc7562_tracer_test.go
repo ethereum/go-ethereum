@@ -72,11 +72,8 @@ type erc7562Trace struct {
 
 // erc7562TracerTest defines a single test to check the erc7562 tracer against.
 type erc7562TracerTest struct {
-	Genesis      *core.Genesis   `json:"genesis"`
-	Context      *callContext    `json:"context"`
-	Input        string          `json:"input"`
-	TracerConfig json.RawMessage `json:"tracerConfig"`
-	Result       *erc7562Trace   `json:"result"`
+	tracerTestEnv
+	Result *erc7562Trace `json:"result"`
 }
 
 func TestErc7562Tracer(t *testing.T) {
