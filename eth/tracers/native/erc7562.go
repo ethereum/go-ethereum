@@ -17,9 +17,11 @@
 package native
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"math/big"
+	"slices"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -29,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/internal"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -63,7 +67,10 @@ type callFrameWithOpcodes struct {
 	UsedOpcodes       map[vm.OpCode]uint64                       `json:"usedOpcodes"`
 	ContractSize      map[common.Address]*contractSizeWithOpcode `json:"contractSize"`
 	OutOfGas          bool                                       `json:"outOfGas"`
-	Calls             []callFrameWithOpcodes                     `json:"calls,omitempty" rlp:"optional"`
+	// Keccak preimages for the whole transaction are stored in the
+	// root call frame.
+	KeccakPreimages [][]byte               `json:"keccak,omitempty"`
+	Calls           []callFrameWithOpcodes `json:"calls,omitempty" rlp:"optional"`
 }
 
 func (f callFrameWithOpcodes) TypeString() string {
@@ -103,19 +110,21 @@ func (f *callFrameWithOpcodes) processOutput(output []byte, err error, reverted 
 }
 
 type callFrameWithOpcodesMarshaling struct {
-	TypeString string `json:"type"`
-	Gas        hexutil.Uint64
-	GasUsed    hexutil.Uint64
-	Value      *hexutil.Big
-	Input      hexutil.Bytes
-	Output     hexutil.Bytes
+	TypeString      string `json:"type"`
+	Gas             hexutil.Uint64
+	GasUsed         hexutil.Uint64
+	Value           *hexutil.Big
+	Input           hexutil.Bytes
+	Output          hexutil.Bytes
+	UsedOpcodes     map[hexutil.Uint64]uint64
+	KeccakPreimages []hexutil.Bytes
 }
 
 type accessedSlots struct {
-	Reads           map[string][]string `json:"reads"`
-	Writes          map[string]uint64   `json:"writes"`
-	TransientReads  map[string]uint64   `json:"transientReads"`
-	TransientWrites map[string]uint64   `json:"transientWrites"`
+	Reads           map[common.Hash][]common.Hash `json:"reads"`
+	Writes          map[common.Hash]uint64        `json:"writes"`
+	TransientReads  map[common.Hash]uint64        `json:"transientReads"`
+	TransientWrites map[common.Hash]uint64        `json:"transientWrites"`
 }
 
 type opcodeWithPartialStack struct {
@@ -126,7 +135,6 @@ type opcodeWithPartialStack struct {
 type erc7562Tracer struct {
 	config    erc7562TracerConfig
 	gasLimit  uint64
-	depth     int
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
 	env       *tracing.VMContext
@@ -134,8 +142,7 @@ type erc7562Tracer struct {
 	ignoredOpcodes       map[vm.OpCode]struct{}
 	callstackWithOpcodes []callFrameWithOpcodes
 	lastOpWithStack      *opcodeWithPartialStack
-	Keccak               map[string]struct{} `json:"keccak"`
-	transactionType      uint8
+	keccakPreimages      map[string]struct{}
 }
 
 // newErc7562Tracer returns a native go tracer which tracks
@@ -160,9 +167,9 @@ func newErc7562Tracer(ctx *tracers.Context, cfg json.RawMessage, _ *params.Chain
 }
 
 type erc7562TracerConfig struct {
-	StackTopItemsSize int                    `json:"stackTopItemsSize"`
-	IgnoredOpcodes    map[vm.OpCode]struct{} `json:"ignoredOpcodes"` // Opcodes to ignore during OnOpcode hook execution
-	WithLog           bool                   `json:"withLog"`        // If true, erc7562 tracer will collect event logs
+	StackTopItemsSize int              `json:"stackTopItemsSize"`
+	IgnoredOpcodes    []hexutil.Uint64 `json:"ignoredOpcodes"` // Opcodes to ignore during OnOpcode hook execution
+	WithLog           bool             `json:"withLog"`        // If true, erc7562 tracer will collect event logs
 }
 
 func getFullConfiguration(partial erc7562TracerConfig) erc7562TracerConfig {
@@ -185,24 +192,29 @@ func newErc7562TracerObject(cfg json.RawMessage) (*erc7562Tracer, error) {
 			return nil, err
 		}
 	}
+	fullConfig := getFullConfiguration(config)
+	// Create a map of ignored opcodes for fast lookup
+	ignoredOpcodes := make(map[vm.OpCode]struct{}, len(fullConfig.IgnoredOpcodes))
+	for _, op := range fullConfig.IgnoredOpcodes {
+		ignoredOpcodes[vm.OpCode(op)] = struct{}{}
+	}
 	// First callframe contains tx context info
 	// and is populated on start and end.
 	return &erc7562Tracer{
 		callstackWithOpcodes: make([]callFrameWithOpcodes, 0, 1),
-		Keccak:               make(map[string]struct{}),
-		config:               getFullConfiguration(config),
+		config:               fullConfig,
+		keccakPreimages:      make(map[string]struct{}),
+		ignoredOpcodes:       ignoredOpcodes,
 	}, nil
 }
 
 func (t *erc7562Tracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.env = env
 	t.gasLimit = tx.Gas()
-	t.transactionType = tx.Type()
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *erc7562Tracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	t.depth = depth
 	// Skip if tracing was interrupted
 	if t.interrupt.Load() {
 		return
@@ -217,10 +229,10 @@ func (t *erc7562Tracer) OnEnter(depth int, typ byte, from common.Address, to com
 		Gas:   gas,
 		Value: value,
 		AccessedSlots: accessedSlots{
-			Reads:           map[string][]string{},
-			Writes:          map[string]uint64{},
-			TransientReads:  map[string]uint64{},
-			TransientWrites: map[string]uint64{},
+			Reads:           map[common.Hash][]common.Hash{},
+			Writes:          map[common.Hash]uint64{},
+			TransientReads:  map[common.Hash]uint64{},
+			TransientWrites: map[common.Hash]uint64{},
 		},
 		UsedOpcodes:       map[vm.OpCode]uint64{},
 		ExtCodeAccessInfo: make([]common.Address, 0),
@@ -242,12 +254,13 @@ func (t *erc7562Tracer) captureEnd(output []byte, err error, reverted bool) {
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *erc7562Tracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if t.interrupt.Load() {
+		return
+	}
 	if depth == 0 {
 		t.captureEnd(output, err, reverted)
 		return
 	}
-
-	t.depth = depth - 1
 
 	size := len(t.callstackWithOpcodes)
 	if size <= 1 {
@@ -268,6 +281,9 @@ func (t *erc7562Tracer) OnExit(depth int, output []byte, gasUsed uint64, err err
 }
 
 func (t *erc7562Tracer) OnTxEnd(receipt *types.Receipt, err error) {
+	if t.interrupt.Load() {
+		return
+	}
 	// Error happened during tx validation.
 	if err != nil {
 		return
@@ -300,36 +316,28 @@ func (t *erc7562Tracer) OnLog(log1 *types.Log) {
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *erc7562Tracer) GetResult() (json.RawMessage, error) {
+	if t.interrupt.Load() {
+		return nil, t.reason
+	}
 	if len(t.callstackWithOpcodes) != 1 {
 		return nil, errors.New("incorrect number of top-level calls")
 	}
 
-	callFrameJSON, err := json.Marshal(t.callstackWithOpcodes[0])
+	keccak := make([][]byte, 0, len(t.callstackWithOpcodes[0].KeccakPreimages))
+	for k := range t.keccakPreimages {
+		keccak = append(keccak, []byte(k))
+	}
+	t.callstackWithOpcodes[0].KeccakPreimages = keccak
+	slices.SortFunc(keccak, func(a, b []byte) int {
+		return bytes.Compare(a, b)
+	})
+
+	enc, err := json.Marshal(t.callstackWithOpcodes[0])
 	if err != nil {
 		return nil, err
 	}
 
-	// Unmarshal the generated JSON into a map
-	var resultMap map[string]interface{}
-	if err := json.Unmarshal(callFrameJSON, &resultMap); err != nil {
-		return nil, err
-	}
-
-	// Converting keccak mapping to array
-	keccakArray := make([]hexutil.Bytes, len(t.Keccak))
-	i := 0
-	for k := range t.Keccak {
-		keccakArray[i] = hexutil.Bytes(k)
-		i++
-	}
-	resultMap["keccak"] = keccakArray
-
-	// Marshal the final map back to JSON
-	finalJSON, err := json.Marshal(resultMap)
-	if err != nil {
-		return nil, err
-	}
-	return finalJSON, t.reason
+	return enc, t.reason
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
@@ -352,12 +360,18 @@ func (t *erc7562Tracer) clearFailedLogs(cf *callFrameWithOpcodes, parentFailed b
 }
 
 func (t *erc7562Tracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-	opcode := vm.OpCode(op)
-	var opcodeWithStack *opcodeWithPartialStack
-	stackSize := len(scope.StackData())
-	var stackTopItems []uint256.Int
-	for i := 0; i < t.config.StackTopItemsSize && i < stackSize; i++ {
-		stackTopItems = append(stackTopItems, *peepStack(scope.StackData(), i))
+	if t.interrupt.Load() {
+		return
+	}
+	var (
+		opcode          = vm.OpCode(op)
+		opcodeWithStack *opcodeWithPartialStack
+		stackSize       = len(scope.StackData())
+		stackLimit      = min(stackSize, t.config.StackTopItemsSize)
+		stackTopItems   = make([]uint256.Int, stackLimit)
+	)
+	for i := 0; i < stackLimit; i++ {
+		stackTopItems[i] = *peepStack(scope.StackData(), i)
 	}
 	opcodeWithStack = &opcodeWithPartialStack{
 		Opcode:        opcode,
@@ -403,23 +417,22 @@ func (t *erc7562Tracer) storeUsedOpcode(opcode vm.OpCode, currentCallFrame *call
 func (t *erc7562Tracer) handleStorageAccess(opcode vm.OpCode, scope tracing.OpContext, currentCallFrame *callFrameWithOpcodes) {
 	if opcode == vm.SLOAD || opcode == vm.SSTORE || opcode == vm.TLOAD || opcode == vm.TSTORE {
 		slot := common.BytesToHash(peepStack(scope.StackData(), 0).Bytes())
-		slotHex := slot.Hex()
 		addr := scope.Address()
 
 		if opcode == vm.SLOAD {
 			// read slot values before this UserOp was created
 			// (so saving it if it was written before the first read)
-			_, rOk := currentCallFrame.AccessedSlots.Reads[slotHex]
-			_, wOk := currentCallFrame.AccessedSlots.Writes[slotHex]
+			_, rOk := currentCallFrame.AccessedSlots.Reads[slot]
+			_, wOk := currentCallFrame.AccessedSlots.Writes[slot]
 			if !rOk && !wOk {
-				currentCallFrame.AccessedSlots.Reads[slotHex] = append(currentCallFrame.AccessedSlots.Reads[slotHex], t.env.StateDB.GetState(addr, slot).Hex())
+				currentCallFrame.AccessedSlots.Reads[slot] = append(currentCallFrame.AccessedSlots.Reads[slot], t.env.StateDB.GetState(addr, slot))
 			}
 		} else if opcode == vm.SSTORE {
-			currentCallFrame.AccessedSlots.Writes[slotHex]++
+			currentCallFrame.AccessedSlots.Writes[slot]++
 		} else if opcode == vm.TLOAD {
-			currentCallFrame.AccessedSlots.TransientReads[slotHex]++
+			currentCallFrame.AccessedSlots.TransientReads[slot]++
 		} else {
-			currentCallFrame.AccessedSlots.TransientWrites[slotHex]++
+			currentCallFrame.AccessedSlots.TransientWrites[slot]++
 		}
 	}
 }
@@ -428,10 +441,12 @@ func (t *erc7562Tracer) storeKeccak(opcode vm.OpCode, scope tracing.OpContext) {
 	if opcode == vm.KECCAK256 {
 		dataOffset := peepStack(scope.StackData(), 0).Uint64()
 		dataLength := peepStack(scope.StackData(), 1).Uint64()
-		memory := scope.MemoryData()
-		keccak := make([]byte, dataLength)
-		copy(keccak, memory[dataOffset:dataOffset+dataLength])
-		t.Keccak[string(keccak)] = struct{}{}
+		preimage, err := internal.GetMemoryCopyPadded(scope.MemoryData(), int64(dataOffset), int64(dataLength))
+		if err != nil {
+			log.Warn("erc7562Tracer: failed to copy keccak preimage from memory", "err", err)
+			return
+		}
+		t.keccakPreimages[string(preimage)] = struct{}{}
 	}
 }
 
@@ -494,12 +509,12 @@ func (t *erc7562Tracer) isIgnoredOpcode(opcode vm.OpCode) bool {
 	return false
 }
 
-func defaultIgnoredOpcodes() map[vm.OpCode]struct{} {
-	ignored := make(map[vm.OpCode]struct{})
+func defaultIgnoredOpcodes() []hexutil.Uint64 {
+	ignored := make([]hexutil.Uint64, 0, 64)
 
 	// Allow all PUSHx, DUPx and SWAPx opcodes as they have sequential codes
 	for op := vm.PUSH0; op < vm.SWAP16; op++ {
-		ignored[op] = struct{}{}
+		ignored = append(ignored, hexutil.Uint64(op))
 	}
 
 	for _, op := range []vm.OpCode{
@@ -508,7 +523,7 @@ func defaultIgnoredOpcodes() map[vm.OpCode]struct{} {
 		vm.SLT, vm.SGT, vm.SHL, vm.SHR,
 		vm.AND, vm.OR, vm.NOT, vm.ISZERO,
 	} {
-		ignored[op] = struct{}{}
+		ignored = append(ignored, hexutil.Uint64(op))
 	}
 
 	return ignored

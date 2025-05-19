@@ -29,9 +29,10 @@ func (c callFrameWithOpcodes) MarshalJSON() ([]byte, error) {
 		Value             *hexutil.Big                               `json:"value,omitempty" rlp:"optional"`
 		AccessedSlots     accessedSlots                              `json:"accessedSlots"`
 		ExtCodeAccessInfo []common.Address                           `json:"extCodeAccessInfo"`
-		UsedOpcodes       map[vm.OpCode]uint64                       `json:"usedOpcodes"`
+		UsedOpcodes       map[hexutil.Uint64]uint64                  `json:"usedOpcodes"`
 		ContractSize      map[common.Address]*contractSizeWithOpcode `json:"contractSize"`
 		OutOfGas          bool                                       `json:"outOfGas"`
+		KeccakPreimages   []hexutil.Bytes                            `json:"keccak,omitempty"`
 		Calls             []callFrameWithOpcodes                     `json:"calls,omitempty" rlp:"optional"`
 		TypeString        string                                     `json:"type"`
 	}
@@ -49,9 +50,20 @@ func (c callFrameWithOpcodes) MarshalJSON() ([]byte, error) {
 	enc.Value = (*hexutil.Big)(c.Value)
 	enc.AccessedSlots = c.AccessedSlots
 	enc.ExtCodeAccessInfo = c.ExtCodeAccessInfo
-	enc.UsedOpcodes = c.UsedOpcodes
+	if c.UsedOpcodes != nil {
+		enc.UsedOpcodes = make(map[hexutil.Uint64]uint64, len(c.UsedOpcodes))
+		for k, v := range c.UsedOpcodes {
+			enc.UsedOpcodes[hexutil.Uint64(k)] = v
+		}
+	}
 	enc.ContractSize = c.ContractSize
 	enc.OutOfGas = c.OutOfGas
+	if c.KeccakPreimages != nil {
+		enc.KeccakPreimages = make([]hexutil.Bytes, len(c.KeccakPreimages))
+		for k, v := range c.KeccakPreimages {
+			enc.KeccakPreimages[k] = v
+		}
+	}
 	enc.Calls = c.Calls
 	enc.TypeString = c.TypeString()
 	return json.Marshal(&enc)
@@ -73,9 +85,10 @@ func (c *callFrameWithOpcodes) UnmarshalJSON(input []byte) error {
 		Value             *hexutil.Big                               `json:"value,omitempty" rlp:"optional"`
 		AccessedSlots     *accessedSlots                             `json:"accessedSlots"`
 		ExtCodeAccessInfo []common.Address                           `json:"extCodeAccessInfo"`
-		UsedOpcodes       map[vm.OpCode]uint64                       `json:"usedOpcodes"`
+		UsedOpcodes       map[hexutil.Uint64]uint64                  `json:"usedOpcodes"`
 		ContractSize      map[common.Address]*contractSizeWithOpcode `json:"contractSize"`
 		OutOfGas          *bool                                      `json:"outOfGas"`
+		KeccakPreimages   []hexutil.Bytes                            `json:"keccak,omitempty"`
 		Calls             []callFrameWithOpcodes                     `json:"calls,omitempty" rlp:"optional"`
 	}
 	var dec callFrameWithOpcodes0
@@ -122,13 +135,22 @@ func (c *callFrameWithOpcodes) UnmarshalJSON(input []byte) error {
 		c.ExtCodeAccessInfo = dec.ExtCodeAccessInfo
 	}
 	if dec.UsedOpcodes != nil {
-		c.UsedOpcodes = dec.UsedOpcodes
+		c.UsedOpcodes = make(map[vm.OpCode]uint64, len(dec.UsedOpcodes))
+		for k, v := range dec.UsedOpcodes {
+			c.UsedOpcodes[vm.OpCode(k)] = v
+		}
 	}
 	if dec.ContractSize != nil {
 		c.ContractSize = dec.ContractSize
 	}
 	if dec.OutOfGas != nil {
 		c.OutOfGas = *dec.OutOfGas
+	}
+	if dec.KeccakPreimages != nil {
+		c.KeccakPreimages = make([][]byte, len(dec.KeccakPreimages))
+		for k, v := range dec.KeccakPreimages {
+			c.KeccakPreimages[k] = v
+		}
 	}
 	if dec.Calls != nil {
 		c.Calls = dec.Calls
