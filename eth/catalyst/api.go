@@ -248,7 +248,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
 		case params.BeaconRoot == nil:
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
-		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka):
+		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.Eip7805):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun or prague payloads")
 		}
 	}
@@ -669,7 +669,7 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 		return invalidStatus, paramsErr("nil beaconRoot post-cancun")
 	case executionRequests == nil:
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
-	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka):
+	case !api.checkFork(params.Timestamp, forks.Prague, forks.Osaka, forks.Eip7805):
 		return invalidStatus, unsupportedForkErr("newPayloadV4 must only be called for prague payloads")
 	}
 	requests := convertRequests(executionRequests)
