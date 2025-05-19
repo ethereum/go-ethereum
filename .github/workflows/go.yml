@@ -1,5 +1,5 @@
 name: i386 linux tests
-Romeo Rosete
+
 on:
   push:
     branches: [ master ]
