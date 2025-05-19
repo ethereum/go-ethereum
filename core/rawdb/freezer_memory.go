@@ -232,17 +232,6 @@ func NewMemoryFreezer(readonly bool, tableName map[string]freezerTableConfig) *M
 	}
 }
 
-// HasAncient returns an indicator whether the specified data exists.
-func (f *MemoryFreezer) HasAncient(kind string, number uint64) (bool, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
-	if table := f.tables[kind]; table != nil {
-		return table.has(number), nil
-	}
-	return false, nil
-}
-
 // Ancient retrieves an ancient binary blob from the in-memory freezer.
 func (f *MemoryFreezer) Ancient(kind string, number uint64) ([]byte, error) {
 	f.lock.RLock()

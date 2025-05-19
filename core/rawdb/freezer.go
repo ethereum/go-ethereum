@@ -180,15 +180,6 @@ func (f *Freezer) AncientDatadir() (string, error) {
 	return f.datadir, nil
 }
 
-// HasAncient returns an indicator whether the specified ancient data exists
-// in the freezer.
-func (f *Freezer) HasAncient(kind string, number uint64) (bool, error) {
-	if table := f.tables[kind]; table != nil {
-		return table.has(number), nil
-	}
-	return false, nil
-}
-
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
 func (f *Freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	if table := f.tables[kind]; table != nil {
