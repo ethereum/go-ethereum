@@ -65,7 +65,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return fmt.Errorf("%w: tx type %v not supported by this pool", core.ErrTxTypeNotSupported, tx.Type())
 	}
 	if blobCount := len(tx.BlobHashes()); blobCount > opts.MaxBlobCount {
-		return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", blobCount, opts.MaxBlobCount)
+		return fmt.Errorf("%w: blob count %v, limit %v", ErrTxBlobLimitExceeded, blobCount, opts.MaxBlobCount)
 	}
 	// Before performing any expensive validations, sanity check that the tx is
 	// smaller than the maximum limit the pool can meaningfully handle
