@@ -27,27 +27,25 @@ import (
 )
 
 func TestEraDatabase(t *testing.T) {
-	// Create the database
 	db, err := New("testdata")
 	require.NoError(t, err)
 	defer db.Close()
 
-	r, err := db.GetRawBody(1024)
+	r, err := db.GetRawBody(175881)
 	require.NoError(t, err)
 	var body *types.Body
 	err = rlp.DecodeBytes(r, &body)
 	require.NoError(t, err)
 	require.NotNil(t, body, "block body not found")
-	assert.Equal(t, 0, len(body.Transactions))
+	assert.Equal(t, 3, len(body.Transactions))
 
-	// Get Receipts
-	r, err = db.GetRawReceipts(1024)
+	r, err = db.GetRawReceipts(175881)
 	require.NoError(t, err)
-	var receipts types.Receipts
+	var receipts []*types.ReceiptForStorage
 	err = rlp.DecodeBytes(r, &receipts)
 	require.NoError(t, err)
 	require.NotNil(t, receipts, "receipts not found")
-	assert.Equal(t, 0, len(receipts), "receipts length mismatch")
+	assert.Equal(t, 3, len(receipts), "receipts length mismatch")
 }
 
 func TestEraDatabaseConcurrentOpen(t *testing.T) {

@@ -18,6 +18,7 @@
 package eradb
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const openFileLimit = 64
@@ -125,7 +127,66 @@ func (db *Store) GetRawReceipts(number uint64) ([]byte, error) {
 	}
 	defer db.doneWithFile(epoch, entry)
 
-	return entry.file.GetRawReceiptsByNumber(number)
+	data, err := entry.file.GetRawReceiptsByNumber(number)
+	if err != nil {
+		return nil, err
+	}
+	return convertReceipts(data)
+}
+
+// convertReceipts transforms an encoded block receipts list from the format
+// used by era1 into the 'storage' format used by the go-ethereum ancients database.
+func convertReceipts(input []byte) ([]byte, error) {
+	var (
+		out bytes.Buffer
+		enc = rlp.NewEncoderBuffer(&out)
+	)
+	blockListIter, err := rlp.NewListIterator(input)
+	if err != nil {
+		return nil, fmt.Errorf("invalid block receipts list: %v", err)
+	}
+	outerList := enc.List()
+	for i := 0; blockListIter.Next(); i++ {
+		kind, content, _, err := rlp.Split(blockListIter.Value())
+		if err != nil {
+			return nil, fmt.Errorf("receipt %d invalid: %v", i, err)
+		}
+		var receiptData []byte
+		switch kind {
+		case rlp.Byte:
+			return nil, fmt.Errorf("receipt %d is single byte", i)
+		case rlp.String:
+			// Typed receipt - skip type.
+			receiptData = content[1:]
+		case rlp.List:
+			// Legacy receipt
+			receiptData = blockListIter.Value()
+		}
+		// Convert data list.
+		// Input is  [status, gas-used, bloom, logs]
+		// Output is [status, gas-used, logs], i.e. we need to skip the bloom.
+		dataIter, err := rlp.NewListIterator(receiptData)
+		if err != nil {
+			return nil, fmt.Errorf("receipt %d has invalid data: %v", i, err)
+		}
+		innerList := enc.List()
+		for field := 0; dataIter.Next(); field++ {
+			if field == 2 {
+				continue // skip bloom
+			}
+			enc.Write(dataIter.Value())
+		}
+		enc.ListEnd(innerList)
+		if dataIter.Err() != nil {
+			return nil, fmt.Errorf("receipt %d iterator error: %v", i, dataIter.Err())
+		}
+	}
+	enc.ListEnd(outerList)
+	if blockListIter.Err() != nil {
+		return nil, fmt.Errorf("block receipt list iterator error: %v", blockListIter.Err())
+	}
+	enc.Flush()
+	return out.Bytes(), nil
 }
 
 // getEraByEpoch opens an era file or gets it from the cache.
@@ -240,13 +301,11 @@ func (db *Store) openEraFile(epoch uint64) (*era.Era, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Assign an epoch to the table.
-	if e.Count() != uint64(era.MaxEra1Size) {
-		return nil, fmt.Errorf("pre-merge era1 files must be full. Want: %d, have: %d", era.MaxEra1Size, e.Count())
-	}
+	// Sanity-check start block.
 	if e.Start()%uint64(era.MaxEra1Size) != 0 {
 		return nil, fmt.Errorf("pre-merge era1 file has invalid boundary. %d %% %d != 0", e.Start(), era.MaxEra1Size)
 	}
+	log.Debug("Opened era1 file", "epoch", epoch)
 	return e, nil
 }
 
