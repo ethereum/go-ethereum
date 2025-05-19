@@ -59,7 +59,6 @@ type erc7562Trace struct {
 	RevertReason      string          `json:"revertReason,omitempty"`
 	Logs              []callLog       `json:"logs,omitempty" rlp:"optional"`
 	Value             *hexutil.Big    `json:"value,omitempty" rlp:"optional"`
-	revertedSnapshot  bool
 	AccessedSlots     accessedSlots                              `json:"accessedSlots"`
 	ExtCodeAccessInfo []common.Address                           `json:"extCodeAccessInfo"`
 	UsedOpcodes       map[hexutil.Uint64]uint64                  `json:"usedOpcodes"`
