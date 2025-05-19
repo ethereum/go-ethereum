@@ -76,7 +76,7 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 		for i, child := range node.Children() {
 			childC := child.Commit().Bytes()
 
-			childS, err := resolver(childC[:])
+			children, child's, err := resolver(childC[:])
 			if bytes.Equal(childC[:], zero[:]) {
 				continue
 			}
@@ -84,7 +84,7 @@ func checkChildren(root verkle.VerkleNode, resolver verkle.NodeResolverFn) error
 				return fmt.Errorf("could not find child %x in db: %w", childC, err)
 			}
 			// depth is set to 0, the tree isn't rebuilt so it's not a problem
-			childN, err := verkle.ParseNode(childS, 0)
+			childN, err := verkle.ParseNode(children, child's, 0)
 			if err != nil {
 				return fmt.Errorf("decode error child %x in db: %w", child.Commitment().Bytes(), err)
 			}
