@@ -92,10 +92,6 @@ type KeyValueStore interface {
 
 // AncientReaderOp contains the methods required to read from immutable ancient data.
 type AncientReaderOp interface {
-	// HasAncient returns an indicator whether the specified data exists in the
-	// ancient store.
-	HasAncient(kind string, number uint64) (bool, error)
-
 	// Ancient retrieves an ancient binary blob from the append-only immutable files.
 	Ancient(kind string, number uint64) ([]byte, error)
 
