@@ -740,7 +740,7 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
-		db, err = rawdb.NewDatabaseWithFreezer(memorydb.New(), "", namespace, readonly, "")
+		db, err = rawdb.Open(memorydb.New(), rawdb.OpenOptions{MetricsNamespace: namespace, ReadOnly: readonly})
 	} else {
 		db, err = openDatabase(openOptions{
 			Type:              n.config.DBEngine,

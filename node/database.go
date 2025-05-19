@@ -55,7 +55,13 @@ func openDatabase(o openOptions) (ethdb.Database, error) {
 	if len(o.AncientsDirectory) == 0 {
 		return kvdb, nil
 	}
-	frdb, err := rawdb.NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly, o.EraDirectory)
+	opts := rawdb.OpenOptions{
+		Ancient:          o.AncientsDirectory,
+		Era:              o.EraDirectory,
+		MetricsNamespace: o.Namespace,
+		ReadOnly:         o.ReadOnly,
+	}
+	frdb, err := rawdb.Open(kvdb, opts)
 	if err != nil {
 		kvdb.Close()
 		return nil, err
