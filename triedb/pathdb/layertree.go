@@ -304,8 +304,8 @@ func (tree *layerTree) bottom() *diskLayer {
 	return tree.base
 }
 
-// lookupAccount returns the layer that is confirmed to contain the account data
-// being searched for.
+// lookupAccount returns the layer that is guaranteed to contain the account data
+// corresponding to the specified state root being queried.
 func (tree *layerTree) lookupAccount(accountHash common.Hash, state common.Hash) (layer, error) {
 	// Hold the read lock to prevent the unexpected layer changes
 	tree.lock.RLock()
@@ -322,8 +322,8 @@ func (tree *layerTree) lookupAccount(accountHash common.Hash, state common.Hash)
 	return l, nil
 }
 
-// lookupStorage returns the layer that is confirmed to contain the storage slot
-// data being searched for.
+// lookupStorage returns the layer that is guaranteed to contain the storage slot
+// data corresponding to the specified state root being queried.
 func (tree *layerTree) lookupStorage(accountHash common.Hash, slotHash common.Hash, state common.Hash) (layer, error) {
 	// Hold the read lock to prevent the unexpected layer changes
 	tree.lock.RLock()
