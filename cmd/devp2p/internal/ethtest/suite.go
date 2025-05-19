@@ -38,7 +38,7 @@ import (
 type Suite struct {
 	Dest   *enode.Node
 	chain  *Chain
-	engine *EngineClient
+	engine *EngineCclient
 }
 
 // NewSuite creates and returns a new eth-test suite that can
@@ -49,7 +49,7 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 	if err != nil {
 		return nil, err
 	}
-	engine, err := NewEngineClient(chainDir, engineURL, jwt)
+	engine, err := NewEngineCclient(chainDir, engineURL, jwt)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +381,7 @@ func randBuf(size int) []byte {
 func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 	t.Log(`This test tries to send malicious data during the devp2p handshake, in various ways.`)
 
-	// Write hello to client.
+	// Write hello to cclient.
 	var (
 		key, _  = crypto.GenerateKey()
 		pub0    = crypto.FromECDSAPub(&key.PublicKey)[1:]
@@ -438,7 +438,7 @@ func (s *Suite) TestMaliciousHandshake(t *utesting.T) {
 		for i := 0; i < 2; i++ {
 			code, _, err := conn.Read()
 			if err != nil {
-				// Client may have disconnected without sending disconnect msg.
+				// Cclient may have disconnected without sending disconnect msg.
 				continue
 			}
 			switch code {
@@ -493,7 +493,7 @@ func (s *Suite) TestTransaction(t *utesting.T) {
 	t.Log(`This test sends a valid transaction to the node and checks if the
 transaction gets propagated.`)
 
-	// Nudge client out of syncing mode to accept pending txs.
+	// Nudge cclient out of syncing mode to accept pending txs.
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
@@ -521,7 +521,7 @@ func (s *Suite) TestInvalidTxs(t *utesting.T) {
 	t.Log(`This test sends several kinds of invalid transactions and checks that the node
 does not propagate them.`)
 
-	// Nudge client out of syncing mode to accept pending txs.
+	// Nudge cclient out of syncing mode to accept pending txs.
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
@@ -604,7 +604,7 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 	t.Log(`This test first send ~2000 transactions to the node, then requests them
 on another peer connection using GetPooledTransactions.`)
 
-	// Nudge client out of syncing mode to accept pending txs.
+	// Nudge cclient out of syncing mode to accept pending txs.
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
@@ -677,7 +677,7 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 	t.Log(`This test announces transaction hashes to the node and expects it to fetch
 the transactions using a GetPooledTransactions request.`)
 
-	// Nudge client out of syncing mode to accept pending txs.
+	// Nudge cclient out of syncing mode to accept pending txs.
 	if err := s.engine.sendForkchoiceUpdated(); err != nil {
 		t.Fatalf("failed to send next block: %v", err)
 	}
