@@ -2266,8 +2266,11 @@ var isAddress = function (address) {
  * @return {Boolean}
 */
 var isChecksumAddress = function (address) {
+    if (typeof address === 'undefined') return false;
+
     // Check each case
     address = address.replace('0x','');
+    if (address.length !== 40) return false;
     var addressHash = sha3(address.toLowerCase());
 
     for (var i = 0; i < 40; i++ ) {
