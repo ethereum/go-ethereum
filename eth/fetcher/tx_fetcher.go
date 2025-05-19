@@ -794,7 +794,7 @@ func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, 
 			return true // continue in the for-each
 		})
 
-		log.Debug("Scheduling transaction retrieval", "peer", peer, "len(f.announces[peer])", len(f.announces[peer]), "len(hashes)", len(hashes))
+		log.Trace("Scheduling transaction retrieval", "peer", peer, "len(f.announces[peer])", len(f.announces[peer]), "len(hashes)", len(hashes))
 		peerAnnounceTxsLenGauge.Update(int64(len(f.announces[peer])))
 		peerRetrievalTxsLenGauge.Update(int64(len(hashes)))
 

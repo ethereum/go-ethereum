@@ -455,6 +455,8 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	hash := block.Hash()
 	peers := onlyShadowForkPeers(h.shadowForkPeerIDs, h.peers.peersWithoutBlock(hash))
 
+	log.Debug("Broadcasting block", "hash", hash.Hex(), "number", block.NumberU64(), "size", block.Size())
+
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
@@ -470,7 +472,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block, td)
 		}
-		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Trace("Propagated block", "hash", hash.Hex(), "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
@@ -478,7 +480,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range peers {
 			peer.AsyncSendNewBlockHash(block)
 		}
-		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Trace("Announced block", "hash", hash.Hex(), "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 
@@ -503,6 +505,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		if tx.IsL1MessageTx() {
 			continue
 		}
+		log.Debug("Broadcasting transaction", "hash", tx.Hash().Hex(), "size", tx.Size())
 		peers := onlyShadowForkPeers(h.shadowForkPeerIDs, h.peers.peersWithoutTransaction(tx.Hash()))
 		// Send the tx unconditionally to a subset of our peers
 		numDirect := int(math.Sqrt(float64(len(peers))))
@@ -518,13 +521,13 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		directPeers++
 		directCount += len(hashes)
 		peer.AsyncSendTransactions(hashes)
-		log.Debug("Transactions being broadcasted to", "peer", peer.String(), "len", len(hashes))
+		log.Trace("Transactions being broadcasted to", "peer", peer.String(), "len", len(hashes))
 	}
 	for peer, hashes := range annos {
 		annoPeers++
 		annoCount += len(hashes)
 		peer.AsyncSendPooledTransactionHashes(hashes)
-		log.Debug("Transactions being announced to", "peer", peer.String(), "len", len(hashes))
+		log.Trace("Transactions being announced to", "peer", peer.String(), "len", len(hashes))
 	}
 	log.Debug("Transaction broadcast", "txs", len(txs),
 		"announce packs", annoPeers, "announced hashes", annoCount,

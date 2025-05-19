@@ -294,6 +294,7 @@ func handleNewBlock(backend Backend, msg Decoder, peer *Peer) error {
 
 	// Mark the peer as owning the block
 	peer.markBlock(ann.Block.Hash())
+	log.Debug("Received new block via gossip", "blockHash", ann.Block.Hash().Hex(), "blockNumber", ann.Block.NumberU64(), "peer", peer.String())
 
 	return backend.Handle(peer, ann)
 }
@@ -362,12 +363,12 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 	}
 	ann := new(NewPooledTransactionHashesPacket)
 	if err := msg.Decode(ann); err != nil {
-		log.Debug("Failed to decode `NewPooledTransactionHashesPacket`", "peer", peer.String(), "err", err)
+		log.Trace("Failed to decode `NewPooledTransactionHashesPacket`", "peer", peer.String(), "err", err)
 		newPooledTxHashesFailMeter.Mark(1)
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	// Schedule all the unknown hashes for retrieval
-	log.Debug("handleNewPooledTransactionHashes", "peer", peer.String(), "len(ann)", len(*ann))
+	log.Trace("handleNewPooledTransactionHashes", "peer", peer.String(), "len(ann)", len(*ann))
 	newPooledTxHashesLenGauge.Update(int64(len(*ann)))
 	for _, hash := range *ann {
 		peer.markTransaction(hash)
@@ -379,12 +380,15 @@ func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) err
 	// Decode the pooled transactions retrieval message
 	var query GetPooledTransactionsPacket66
 	if err := msg.Decode(&query); err != nil {
-		log.Debug("Failed to decode `GetPooledTransactionsPacket66`", "peer", peer.String(), "err", err)
+		log.Trace("Failed to decode `GetPooledTransactionsPacket66`", "peer", peer.String(), "err", err)
 		getPooledTxsFailMeter.Mark(1)
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsPacket, peer)
-	log.Debug("handleGetPooledTransactions", "peer", peer.String(), "RequestId", query.RequestId, "len(query)", len(query.GetPooledTransactionsPacket), "retrieved", len(hashes))
+	log.Trace("handleGetPooledTransactions", "peer", peer.String(), "RequestId", query.RequestId, "len(query)", len(query.GetPooledTransactionsPacket), "retrieved", len(hashes))
+	for _, hash := range hashes {
+		log.Debug("Received new pooled transaction", "hash", hash.Hex(), "peer", peer.String())
+	}
 	getPooledTxsQueryLenGauge.Update(int64(len(query.GetPooledTransactionsPacket)))
 	getPooledTxsRetrievedLenGauge.Update(int64(len(hashes)))
 	return peer.ReplyPooledTransactionsRLP(query.RequestId, hashes, txs)
@@ -427,16 +431,16 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	var txs TransactionsPacket
 	if err := msg.Decode(&txs); err != nil {
 		handleTxsFailMeter.Mark(1)
-		log.Debug("Failed to decode `TransactionsPacket`", "peer", peer.String(), "err", err)
+		log.Trace("Failed to decode `TransactionsPacket`", "peer", peer.String(), "err", err)
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	log.Debug("handleTransactions", "peer", peer.String(), "len(txs)", len(txs))
+	log.Trace("handleTransactions", "peer", peer.String(), "len(txs)", len(txs))
 	handleTxsLenGauge.Update(int64(len(txs)))
 	for i, tx := range txs {
 		// Validate and mark the remote transaction
 		if tx == nil {
 			handleTxsNilMeter.Mark(1)
-			log.Debug("handleTransactions: transaction is nil", "peer", peer.String(), "i", i)
+			log.Trace("handleTransactions: transaction is nil", "peer", peer.String(), "i", i)
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
 		peer.markTransaction(tx.Hash())
@@ -453,16 +457,16 @@ func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error 
 	var txs PooledTransactionsPacket66
 	if err := msg.Decode(&txs); err != nil {
 		pooledTxs66FailMeter.Mark(1)
-		log.Debug("Failed to decode `PooledTransactionsPacket66`", "peer", peer.String(), "err", err)
+		log.Trace("Failed to decode `PooledTransactionsPacket66`", "peer", peer.String(), "err", err)
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	log.Debug("handlePooledTransactions66", "peer", peer.String(), "len(txs)", len(txs.PooledTransactionsPacket))
+	log.Trace("handlePooledTransactions66", "peer", peer.String(), "len(txs)", len(txs.PooledTransactionsPacket))
 	pooledTxs66LenGauge.Update(int64(len(txs.PooledTransactionsPacket)))
 	for i, tx := range txs.PooledTransactionsPacket {
 		// Validate and mark the remote transaction
 		if tx == nil {
 			pooledTxs66NilMeter.Mark(1)
-			log.Debug("handlePooledTransactions: transaction is nil", "peer", peer.String(), "i", i)
+			log.Trace("handlePooledTransactions: transaction is nil", "peer", peer.String(), "i", i)
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
 		peer.markTransaction(tx.Hash())
