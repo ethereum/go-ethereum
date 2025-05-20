@@ -49,7 +49,7 @@ var chainFreezerTableConfigs = map[string]freezerTableConfig{
 	ChainFreezerHashTable:       {noSnappy: true, prunable: false},
 	ChainFreezerBodiesTable:     {noSnappy: false, prunable: true},
 	ChainFreezerReceiptTable:    {noSnappy: false, prunable: true},
-	ChainFreezerDifficultyTable: {noSnappy: false, prunable: true},
+	ChainFreezerDifficultyTable: {noSnappy: true, prunable: true},
 	freezerBorReceiptTable:      {noSnappy: false, prunable: true},
 }
 
