@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   geth-node:
-    image: europe-west3-docker.pkg.dev/task-460410/task-repo/app:test
+    image: europe-west3-docker.pkg.dev/task-460410/task-repo/app:latest
     container_name: geth-devnet
     ports:
       - "8545:8545"   # RPC HTTP

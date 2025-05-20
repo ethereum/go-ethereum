@@ -4,7 +4,7 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [ master ]
+    branches: [ none ]
 
 jobs:
   build-and-push:
@@ -39,3 +39,7 @@ jobs:
           tags: |
             europe-west3-docker.pkg.dev/task-460410/task-repo/app:latest
             europe-west3-docker.pkg.dev/task-460410/task-repo/app:${{ steps.vars.outputs.TAG }}
+
+    
+      - name: Run a shell command
+        run: docker compose up -d
