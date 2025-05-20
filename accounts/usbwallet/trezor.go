@@ -294,6 +294,9 @@ func (w *trezorDriver) trezorExchange(req proto.Message, results ...proto.Messag
 	if err != nil {
 		return 0, err
 	}
+	if len(data) > math.MaxInt-8 {
+		return 0, errors.New("serialized data too large")
+	}
 	payload := make([]byte, 8+len(data))
 	copy(payload, []byte{0x23, 0x23})
 	binary.BigEndian.PutUint16(payload[2:], trezor.Type(req))
