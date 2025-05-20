@@ -336,7 +336,7 @@ func parseExtAddr(spec string) (ip net.IP, port int, ok bool) {
 		return nil, 0, false
 	}
 	port, err = strconv.Atoi(portstr)
-	if err != nil {
+	if err != nil || port < 0 || port > 65535 {
 		return nil, 0, false
 	}
 	return ip, port, true
