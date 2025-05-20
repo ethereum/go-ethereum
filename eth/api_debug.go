@@ -245,7 +245,7 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 	}
 	it := trie.NewIterator(trieIt)
 	result := StorageRangeResult{Storage: storageMap{}}
-	for i := 0; i < maxResult && it.Next(); i++ {
+	for range maxResult {
 		_, content, _, err := rlp.Split(it.Value)
 		if err != nil {
 			return StorageRangeResult{}, err
@@ -256,6 +256,9 @@ func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Add
 			e.Key = &preimage
 		}
 		result.Storage[common.BytesToHash(it.Key)] = e
+		if !it.Next() {
+			break
+		}
 	}
 	// Add the 'next key' so clients can continue downloading.
 	if it.Next() {
