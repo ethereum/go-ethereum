@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  geth-node:
+    image: europe-west3-docker.pkg.dev/task-460410/task-repo/app:test
+    container_name: geth-devnet
+    ports:
+      - "8545:8545"   # RPC HTTP
+      - "8546:8546"   # WebSocket
+      - "30303:30303" # P2P
+      - "30303:30303/udp"
+    volumes:
+      - ./data:/root/.ethereum
+    command: >
+      --dev
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api personal,eth,net,web3,miner
+      --ws
+      --ws.addr 0.0.0.0
+      --ws.port 8546
+      --ws.api personal,eth,net,web3,miner
+      --allow-insecure-unlock
+      --mine
+      --miner.threads=1
+      --nodiscover
+    restart: unless-stopped
