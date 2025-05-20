@@ -62,9 +62,9 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 		freezer ethdb.AncientStore
 	)
 	if datadir == "" {
-		freezer = NewMemoryFreezer(readonly, chainFreezerNoSnappy)
+		freezer = NewMemoryFreezer(readonly, chainFreezerTableConfigs)
 	} else {
-		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerNoSnappy)
+		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerTableConfigs)
 	}
 	if err != nil {
 		return nil, err
@@ -205,7 +205,7 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 			continue
 		}
 		// Batch of blocks have been frozen, flush them before wiping from key-value store
-		if err := f.Sync(); err != nil {
+		if err := f.SyncAncient(); err != nil {
 			log.Crit("Failed to flush frozen tables", "err", err)
 		}
 		// Wipe out all data from the active database

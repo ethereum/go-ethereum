@@ -18,6 +18,7 @@ package tests
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -65,11 +66,11 @@ func (tt *TransactionTest) validateFork(fork *ttFork) error {
 	return nil
 }
 
-func (tt *TransactionTest) Run(config *params.ChainConfig) error {
+func (tt *TransactionTest) Run() error {
 	if err := tt.validate(); err != nil {
 		return err
 	}
-	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, isHomestead, isIstanbul, isShanghai bool) (sender common.Address, hash common.Hash, requiredGas uint64, err error) {
+	validateTx := func(rlpData hexutil.Bytes, signer types.Signer, rules *params.Rules) (sender common.Address, hash common.Hash, requiredGas uint64, err error) {
 		tx := new(types.Transaction)
 		if err = tx.UnmarshalBinary(rlpData); err != nil {
 			return
@@ -79,62 +80,75 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 			return
 		}
 		// Intrinsic gas
-		requiredGas, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, isHomestead, isIstanbul, isShanghai)
+		requiredGas, err = core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 		if err != nil {
 			return
 		}
 		if requiredGas > tx.Gas() {
 			return sender, hash, 0, fmt.Errorf("insufficient gas ( %d < %d )", tx.Gas(), requiredGas)
 		}
+
+		if rules.IsPrague {
+			var floorDataGas uint64
+			floorDataGas, err = core.FloorDataGas(tx.Data())
+			if err != nil {
+				return
+			}
+			if tx.Gas() < floorDataGas {
+				return sender, hash, 0, fmt.Errorf("%w: have %d, want %d", core.ErrFloorDataGas, tx.Gas(), floorDataGas)
+			}
+		}
 		hash = tx.Hash()
 		return sender, hash, requiredGas, nil
 	}
 	for _, testcase := range []struct {
-		name        string
-		signer      types.Signer
-		fork        *ttFork
-		isHomestead bool
-		isIstanbul  bool
-		isShanghai  bool
+		name    string
+		isMerge bool
 	}{
-		{"Frontier", types.FrontierSigner{}, tt.Result["Frontier"], false, false, false},
-		{"Homestead", types.HomesteadSigner{}, tt.Result["Homestead"], true, false, false},
-		{"EIP150", types.HomesteadSigner{}, tt.Result["EIP150"], true, false, false},
-		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.Result["EIP158"], true, false, false},
-		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Result["Byzantium"], true, false, false},
-		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Result["Constantinople"], true, false, false},
-		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Result["Istanbul"], true, true, false},
-		{"Berlin", types.NewEIP2930Signer(config.ChainID), tt.Result["Berlin"], true, true, false},
-		{"London", types.NewLondonSigner(config.ChainID), tt.Result["London"], true, true, false},
-		{"Paris", types.NewLondonSigner(config.ChainID), tt.Result["Paris"], true, true, false},
-		{"Shanghai", types.NewLondonSigner(config.ChainID), tt.Result["Shanghai"], true, true, true},
-		{"Cancun", types.NewCancunSigner(config.ChainID), tt.Result["Cancun"], true, true, true},
-		{"Prague", types.NewPragueSigner(config.ChainID), tt.Result["Prague"], true, true, true},
+		{"Frontier", false},
+		{"Homestead", false},
+		{"EIP150", false},
+		{"EIP158", false},
+		{"Byzantium", false},
+		{"Constantinople", false},
+		{"Istanbul", false},
+		{"Berlin", false},
+		{"London", false},
+		{"Paris", true},
+		{"Shanghai", true},
+		{"Cancun", true},
+		{"Prague", true},
 	} {
-		if testcase.fork == nil {
+		expected := tt.Result[testcase.name]
+		if expected == nil {
 			continue
 		}
-		sender, hash, gas, err := validateTx(tt.Txbytes, testcase.signer, testcase.isHomestead, testcase.isIstanbul, testcase.isShanghai)
+		config, ok := Forks[testcase.name]
+		if !ok || config == nil {
+			return UnsupportedForkError{Name: testcase.name}
+		}
+		var (
+			rules  = config.Rules(new(big.Int), testcase.isMerge, 0)
+			signer = types.MakeSigner(config, new(big.Int), 0)
+		)
+		sender, hash, gas, err := validateTx(tt.Txbytes, signer, &rules)
 		if err != nil {
-			if testcase.fork.Hash != nil {
-				return fmt.Errorf("unexpected error: %v", err)
+			if expected.Hash != nil {
+				return fmt.Errorf("unexpected error fork %s: %v", testcase.name, err)
 			}
 			continue
 		}
-		if testcase.fork.Exception != nil {
-			return fmt.Errorf("expected error %v, got none (%v)", *testcase.fork.Exception, err)
+		if expected.Exception != nil {
+			return fmt.Errorf("expected error %v, got none (%v), fork %s", *expected.Exception, err, testcase.name)
 		}
-		if common.Hash(*testcase.fork.Hash) != hash {
-			return fmt.Errorf("hash mismatch: got %x, want %x", hash, common.Hash(*testcase.fork.Hash))
+		if common.Hash(*expected.Hash) != hash {
+			return fmt.Errorf("hash mismatch: got %x, want %x", hash, common.Hash(*expected.Hash))
 		}
-		if common.Address(*testcase.fork.Sender) != sender {
-			return fmt.Errorf("sender mismatch: got %x, want %x", sender, testcase.fork.Sender)
+		if common.Address(*expected.Sender) != sender {
+			return fmt.Errorf("sender mismatch: got %x, want %x", sender, expected.Sender)
 		}
-		if hash != common.Hash(*testcase.fork.Hash) {
-			return fmt.Errorf("hash mismatch: got %x, want %x", hash, testcase.fork.Hash)
-		}
-		if uint64(testcase.fork.IntrinsicGas) != gas {
-			return fmt.Errorf("intrinsic gas mismatch: got %d, want %d", gas, uint64(testcase.fork.IntrinsicGas))
+		if uint64(expected.IntrinsicGas) != gas {
+			return fmt.Errorf("intrinsic gas mismatch: got %d, want %d", gas, uint64(expected.IntrinsicGas))
 		}
 	}
 	return nil

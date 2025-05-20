@@ -159,11 +159,17 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database) (*StateDB, error) {
-	tr, err := db.OpenTrie(root)
+	reader, err := db.Reader(root)
 	if err != nil {
 		return nil, err
 	}
-	reader, err := db.Reader(root)
+	return NewWithReader(root, db, reader)
+}
+
+// NewWithReader creates a new state for the specified state root. Unlike New,
+// this function accepts an additional Reader which is bound to the given root.
+func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, error) {
+	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +298,7 @@ func (s *StateDB) SubRefund(gas uint64) {
 }
 
 // Exist reports whether the given account address exists in the state.
-// Notably this also returns true for self-destructed accounts.
+// Notably this also returns true for self-destructed accounts within the current transaction.
 func (s *StateDB) Exist(addr common.Address) bool {
 	return s.getStateObject(addr) != nil
 }
@@ -390,6 +396,12 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 // Database retrieves the low level database supporting the lower level trie ops.
 func (s *StateDB) Database() Database {
 	return s.db
+}
+
+// Reader retrieves the low level database reader supporting the
+// lower level operations.
+func (s *StateDB) Reader() Reader {
+	return s.reader
 }
 
 func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
@@ -600,7 +612,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	// Insert into the live set
 	obj := newObject(s, addr, acct)
 	s.setStateObject(obj)
-	s.AccountLoaded++
 	return obj
 }
 
@@ -651,11 +662,10 @@ func (s *StateDB) CreateContract(addr common.Address) {
 // Snapshots of the copied state cannot be applied to the copy.
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
-	reader, _ := s.db.Reader(s.originalRoot) // impossible to fail
 	state := &StateDB{
 		db:                   s.db,
 		trie:                 mustCopyTrie(s.trie),
-		reader:               reader,
+		reader:               s.reader,
 		originalRoot:         s.originalRoot,
 		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
 		stateObjectsDestruct: make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),
