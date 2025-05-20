@@ -205,6 +205,10 @@ func (ln *LocalNode) SetFallbackIP(ip net.IP) {
 // SetFallbackUDP sets the last-resort UDP-on-IPv4 port. This port is used
 // if no endpoint prediction can be made.
 func (ln *LocalNode) SetFallbackUDP(port int) {
+	if port < 0 || port > 65535 {
+		log.Error("Invalid port value, must be in range 0-65535", "port", port)
+		return
+	}
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
