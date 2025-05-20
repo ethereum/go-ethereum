@@ -2,8 +2,9 @@ name: Build and Push to Google Artifact Registry
 
 on:
   push:
-    branches:
-      - main
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
 
 jobs:
   build-and-push:
