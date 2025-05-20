@@ -15,6 +15,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Set image tag (timestamp)
+        id: vars
+        run: echo "TAG=$(date +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
@@ -32,4 +36,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: europe-west3-docker.pkg.dev/task-460410/task-repo/app:latest
+          tags: |
+            europe-west3-docker.pkg.dev/task-460410/task-repo/app:latest
+            europe-west3-docker.pkg.dev/task-460410/task-repo/app:${{ steps.vars.outputs.TAG }}
