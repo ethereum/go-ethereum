@@ -10,7 +10,7 @@
 # supported CodeQL languages.
 #
 name: "CodeQL Advanced"
-Romeo Rosete
+
 on:
   push:
     branches: [ "master" ]
