@@ -439,12 +439,15 @@ func showMetrics() {
 	blockExecutionTimer := metrics.GetOrRegisterResettingTimer("chain/execution", nil)
 	blockWriteTimer := metrics.GetOrRegisterResettingTimer("chain/write", nil)
 
+	blockPrefetchExecuteTimer := metrics.GetOrRegisterResettingTimer("chain/prefetch/executes", nil)
+
 	// not important
 	fmt.Println("accountReadSingleTimer", accountReadSingleTimer.Total())
 	fmt.Println("storageReadSingleTimer", storageReadSingleTimer.Total())
 	fmt.Println("blockCrossValidationTimer", blockCrossValidationTimer.Total())
 
 	// execution
+	fmt.Println("prefetchTimer", blockPrefetchExecuteTimer.Total())
 	fmt.Println("accountReadTimer", accountReadTimer.Total())
 	fmt.Println("storageReadTimer", storageReadTimer.Total())
 	fmt.Println("blockExecutionTimer", blockExecutionTimer.Total())
