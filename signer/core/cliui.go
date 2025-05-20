@@ -31,6 +31,12 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// sanitizeMessage redacts sensitive information from the input string.
+func sanitizeMessage(message string) string {
+	// Example: Replace occurrences of "password: <value>" with "password: [REDACTED]"
+	return strings.ReplaceAll(message, "password:", "password: [REDACTED]")
+}
+
 type CommandlineUI struct {
 	in  *bufio.Reader
 	mu  sync.Mutex
@@ -237,7 +243,8 @@ func (ui *CommandlineUI) ShowError(message string) {
 
 // ShowInfo displays info message to user
 func (ui *CommandlineUI) ShowInfo(message string) {
-	fmt.Printf("## Info \n%s\n", message)
+	sanitizedMessage := sanitizeMessage(message)
+	fmt.Printf("## Info \n%s\n", sanitizedMessage)
 }
 
 func (ui *CommandlineUI) OnApprovedTx(tx ethapi.SignTransactionResult) {
