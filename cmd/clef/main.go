@@ -1086,8 +1086,20 @@ func GenDoc(ctx *cli.Context) error {
 		output []string
 		add    = func(name, desc string, v interface{}) {
 			// Sanitize sensitive fields before logging
-			if req, ok := v.(*core.UserInputRequest); ok && req.IsPassword {
-				req.IsPassword = false // Obfuscate sensitive metadata
+			switch req := v.(type) {
+			case *core.UserInputRequest:
+				if req.IsPassword {
+					req.IsPassword = false // Obfuscate sensitive metadata
+				}
+			case *core.SignDataRequest:
+				req.Rawdata = nil // Remove raw data to avoid logging sensitive information
+				for i := range req.Messages {
+					req.Messages[i].Value = "[REDACTED]" // Obfuscate message content
+				}
+			case *core.ListRequest:
+				for i := range req.Accounts {
+					req.Accounts[i].URL.Path = "[REDACTED]" // Obfuscate account paths
+				}
 			}
 			if data, err := json.MarshalIndent(v, "", "  "); err == nil {
 				output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
