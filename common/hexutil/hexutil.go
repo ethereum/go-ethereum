@@ -82,6 +82,9 @@ func MustDecode(input string) []byte {
 
 // Encode encodes b as a hex string with 0x prefix.
 func Encode(b []byte) string {
+	if len(b) > (int(^uint(0) >> 1))/2 {
+		panic("input too large to encode as hex string")
+	}
 	enc := make([]byte, len(b)*2+2)
 	copy(enc, "0x")
 	hex.Encode(enc[2:], b)
