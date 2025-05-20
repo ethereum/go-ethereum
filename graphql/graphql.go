@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sort"
 	"strconv"
@@ -58,8 +59,14 @@ func (b *Long) UnmarshalGraphQL(input interface{}) error {
 		if strings.HasPrefix(input, "0x") {
 			// apply leniency and support hex representations of longs.
 			value, err := hexutil.DecodeUint64(input)
+			if err != nil {
+				return err
+			}
+			if value > math.MaxInt64 {
+				return fmt.Errorf("value %d exceeds int64 range", value)
+			}
 			*b = Long(value)
-			return err
+			return nil
 		} else {
 			value, err := strconv.ParseInt(input, 10, 64)
 			*b = Long(value)
