@@ -40,7 +40,7 @@ func (f *FilterMaps) indexerLoop() {
 		close(f.disabledCh)
 		return
 	}
-	log.Info("Started log indexer")
+	log.Info("Log indexer started")
 
 	for !f.stop {
 		// Note: acquiring the indexLock read lock is unnecessary here,
