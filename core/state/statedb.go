@@ -119,7 +119,6 @@ type StateDB struct {
 	thash   common.Hash
 	txIndex int
 	logs    map[common.Hash][]*types.Log
-	logSize uint
 
 	// Preimages occurred seen by VM in the scope of block.
 	preimages map[common.Hash][]byte
@@ -243,11 +242,7 @@ func (s *StateDB) Error() error {
 func (s *StateDB) AddLog(log *types.Log) {
 	s.journal.logChange(s.thash)
 
-	log.TxHash = s.thash
-	log.TxIndex = uint(s.txIndex)
-	log.Index = s.logSize
 	s.logs[s.thash] = append(s.logs[s.thash], log)
-	s.logSize++
 }
 
 // GetLogs returns the logs matching the specified transaction hash.
@@ -669,7 +664,6 @@ func (s *StateDB) Copy() *StateDB {
 		thash:                s.thash,
 		txIndex:              s.txIndex,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
-		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
 
 		// Do we need to copy the access list and transient storage?

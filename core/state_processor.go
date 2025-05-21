@@ -206,8 +206,11 @@ func deriveFullReceipt(receipt *types.Receipt, evm *vm.EVM, result *ExecutionRes
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
-	// Annotate the logs with blockhash and blocknumber.
-	for _, log := range receipt.Logs {
+	// Annotate the logs
+	for index, log := range receipt.Logs {
+		log.TxHash = tx.Hash()
+		log.TxIndex = uint(statedb.TxIndex())
+		log.Index = uint(index)
 		log.BlockHash = blockHash
 		log.BlockNumber = blockNumber.Uint64()
 	}
