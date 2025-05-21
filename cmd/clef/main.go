@@ -1108,7 +1108,7 @@ func GenDoc(ctx *cli.Context) error {
 				if strings.Contains(string(data), "[REDACTED]") {
 					output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
 				} else {
-					log.Error("Sensitive data detected in output, skipping logging")
+					log.Error("Sensitive data detected in output, skipping logging", "entry", name)
 				}
 			} else {
 				log.Error("Error generating output", "err", err)
