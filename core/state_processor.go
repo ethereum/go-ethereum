@@ -312,6 +312,11 @@ func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte
 	return nil
 }
 
+// depositTopic is the sha3 hash of the event
+//
+//	DepositEvent(bytes pubkey, bytes withdrawal_credentials, bytes amount, bytes signature, bytes index)
+//
+// refer https://etherscan.io/address/0x00000000219ab540356cbb839cbe05303d7705fa#code for more detail
 var depositTopic = common.HexToHash("0x649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c5")
 
 // ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
