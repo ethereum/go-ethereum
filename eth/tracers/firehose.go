@@ -78,6 +78,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnBlockStart:     tracer.OnBlockStart,
 		OnBlockEnd:       tracer.OnBlockEnd,
 		OnSkippedBlock:   tracer.OnSkippedBlock,
+		OnClose:          tracer.OnClose,
 
 		OnTxStart: tracer.OnTxStart,
 		OnTxEnd:   tracer.OnTxEnd,
@@ -133,6 +134,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 
 type FirehoseConfig struct {
 	ApplyBackwardCompatibility *bool `json:"applyBackwardCompatibility"`
+	ConcurrentBlockFlushing    bool  `json:"concurrentBlockFlushing"`
 
 	// Only used for testing, only possible through JSON configuration
 	private *privateFirehoseConfig
@@ -153,6 +155,7 @@ func (c *FirehoseConfig) LogKeyValues() []any {
 
 	return []any{
 		"config.applyBackwardCompatibility", applyBackwardCompatibility,
+		"config.concurrentBlockFlushing", c.ConcurrentBlockFlushing,
 	}
 }
 
@@ -166,13 +169,14 @@ func (c *FirehoseConfig) ForcedBackwardCompatibility() bool {
 
 type Firehose struct {
 	// Global state
-	outputBuffer *bytes.Buffer
-	initSent     *atomic.Bool
-	config       *FirehoseConfig
-	chainConfig  *params.ChainConfig
-	hasher       crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
-	hasherBuf    common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
-	tracerID     string
+	outputBuffer  *bytes.Buffer
+	initSent      *atomic.Bool
+	config        *FirehoseConfig
+	chainConfig   *params.ChainConfig
+	hasher        crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
+	hasherBuf     common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
+	tracerID      string
+	closeChannels sync.Once
 	// The FirehoseTracer is used in multiple chains, some for which were produced using a legacy version
 	// of the whole tracing infrastructure. This legacy version had many small bugs here and there that
 	// we must "reproduce" on some chain to ensure that the FirehoseTracer produces the same output
@@ -182,6 +186,7 @@ type Firehose struct {
 	// here. If not set in the config, then we inspect `OnBlockchainInit` the chain config to determine
 	// if it's a network for which we must reproduce the legacy bugs.
 	applyBackwardCompatibility *bool
+	concurrentBlockFlushing    bool
 
 	// Block state
 	block                       *pbeth.Block
@@ -194,6 +199,8 @@ type Firehose struct {
 	blockReorderOrdinalSnapshot uint64
 	blockReorderOrdinalOnce     sync.Once
 	blockIsGenesis              bool
+	blockPrintQueue             chan *blockPrintJob
+	blockFlushDone              sync.WaitGroup
 
 	// Transaction state
 	evm                  *tracing.VMContext
@@ -250,6 +257,7 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		hasher:                     crypto.NewKeccakState(),
 		tracerID:                   "global",
 		applyBackwardCompatibility: config.ApplyBackwardCompatibility,
+		concurrentBlockFlushing:    config.ConcurrentBlockFlushing,
 
 		// Block state
 		blockOrdinal:        &Ordinal{},
@@ -270,6 +278,14 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		if config.private.FlushToTestBuffer {
 			firehose.testingBuffer = bytes.NewBuffer(nil)
 		}
+	}
+
+	if config.ConcurrentBlockFlushing {
+		log.Info("Firehose concurrent block flushing enabled, starting block " +
+			"print worker goroutine")
+		firehose.blockPrintQueue = make(chan *blockPrintJob, 100)
+		firehose.blockFlushDone.Add(1)
+		go firehose.blockPrintWorker()
 	}
 
 	return firehose
@@ -508,7 +524,18 @@ func (f *Firehose) OnBlockEnd(err error) {
 		}
 
 		f.ensureInBlockAndNotInTrx()
-		f.printBlockToFirehose(f.block, f.blockFinality)
+
+		// Flush block to firehose and optionally use goroutine
+		if f.concurrentBlockFlushing {
+			job := &blockPrintJob{
+				block:    f.block,
+				finality: f.blockFinality,
+			}
+			f.blockPrintQueue <- job
+		} else {
+			f.printBlockToFirehose(f.block, f.blockFinality)
+		}
+
 	} else {
 		// An error occurred, could have happen in transaction/call context, we must not check if in trx/call, only check in block
 		f.ensureInBlock(0)
@@ -624,6 +651,13 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 	call.EndOrdinal += ordinalBase
 
 	return call.EndOrdinal
+}
+
+func (f *Firehose) OnClose() {
+	if f.concurrentBlockFlushing {
+		log.Info("Firehose closing, flushing queued blocks to standard output")
+		f.CloseBlockPrintQueue()
+	}
 }
 
 func (f *Firehose) OnSystemCallStart() {
@@ -1877,6 +1911,7 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 		panic(fmt.Errorf("failed to marshal block: %w", err))
 	}
 
+	// TODO: If multiple goroutine, this becomes shared resource
 	f.outputBuffer.Reset()
 
 	previousHash := block.PreviousID()
@@ -2843,4 +2878,28 @@ func (m Memory) GetPtr(offset, size int64) []byte {
 	// In this situation, we must pad with zeroes when the memory is not big enough.
 	reminder := m[min(offset, int64(len(m))):]
 	return append(reminder, make([]byte, int(size)-len(reminder))...)
+}
+
+type blockPrintJob struct {
+	block    *pbeth.Block
+	finality *FinalityStatus
+}
+
+func (f *Firehose) blockPrintWorker() {
+	defer f.blockFlushDone.Done()
+	for job := range f.blockPrintQueue {
+		f.printBlockToFirehose(job.block, job.finality)
+	}
+}
+
+// CloseBlockPrintQueue signals block printing goroutines to shut down and waits for them.
+// It blocks until all concurrent block flushing operations are completed, ensuring a clean
+// shutdown of the printing pipeline.
+func (f *Firehose) CloseBlockPrintQueue() {
+	if f.concurrentBlockFlushing {
+		f.closeChannels.Do(func() {
+			close(f.blockPrintQueue)
+			f.blockFlushDone.Wait()
+		})
+	}
 }
