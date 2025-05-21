@@ -571,9 +571,8 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 			1<<types.AccessListTxType |
 			1<<types.DynamicFeeTxType |
 			1<<types.SetCodeTxType,
-		MaxSize:      txMaxSize,
-		MinTip:       pool.gasTip.Load().ToBig(),
-		MaxBlobCount: 0,
+		MaxSize: txMaxSize,
+		MinTip:  pool.gasTip.Load().ToBig(),
 	}
 	return txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts)
 }
