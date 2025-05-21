@@ -1104,7 +1104,12 @@ func GenDoc(ctx *cli.Context) error {
 				req.Meta = core.Metadata{} // Clear metadata to avoid leaking sensitive information
 			}
 			if data, err := json.MarshalIndent(v, "", "  "); err == nil {
-				output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
+				// Final validation to ensure no sensitive data is logged
+				if strings.Contains(string(data), "[REDACTED]") {
+					output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
+				} else {
+					log.Error("Sensitive data detected in output, skipping logging")
+				}
 			} else {
 				log.Error("Error generating output", "err", err)
 			}
@@ -1232,11 +1237,10 @@ func GenDoc(ctx *cli.Context) error {
 				}})
 	}
 
-	fmt.Println(`## UI Client interface
-
-These data types are defined in the channel between clef and the UI`)
+	log.Info("## UI Client interface")
+	log.Info("These data types are defined in the channel between clef and the UI")
 	for _, elem := range output {
-		fmt.Println(elem)
+		log.Info(elem)
 	}
 	return nil
 }
