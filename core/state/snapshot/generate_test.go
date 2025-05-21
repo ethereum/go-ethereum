@@ -166,7 +166,9 @@ func newHelper(scheme string) *testHelper {
 	diskdb := rawdb.NewMemoryDatabase()
 	config := &triedb.Config{}
 	if scheme == rawdb.PathScheme {
-		config.PathDB = &pathdb.Config{} // disable caching
+		config.PathDB = &pathdb.Config{
+			SnapshotNoBuild: true,
+		} // disable caching
 	} else {
 		config.HashDB = &hashdb.Config{} // disable caching
 	}
