@@ -1844,6 +1844,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		// Report the import stats before returning the various results
 		stats.processed++
 		stats.usedGas += res.usedGas
+		stats.gasLimit += block.GasLimit()
 		witness = res.witness
 
 		var snapDiffItems, snapBufItems common.StorageSize

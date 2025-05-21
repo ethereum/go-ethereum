@@ -17,6 +17,7 @@
 package core
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,6 +30,7 @@ import (
 type insertStats struct {
 	queued, processed, ignored int
 	usedGas                    uint64
+	gasLimit                   uint64
 	lastIndex                  int
 	startTime                  mclock.AbsTime
 }
@@ -45,6 +47,7 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 		now     = mclock.Now()
 		elapsed = now.Sub(st.startTime) + 1 // prevent zero division
 		mgasps  = float64(st.usedGas) * 1000 / float64(elapsed)
+		gasUsed = fmt.Sprintf("%.2f%%", float64(st.usedGas)/float64(st.gasLimit)*100)
 	)
 	// Update the Mgas per second gauge
 	chainMgaspsGauge.Update(int64(mgasps))
@@ -62,7 +65,7 @@ func (st *insertStats) report(chain []*types.Block, index int, snapDiffItems, sn
 		context := []interface{}{
 			"number", end.Number(), "hash", end.Hash(),
 			"blocks", st.processed, "txs", txs, "mgas", float64(st.usedGas) / 1000000,
-			"elapsed", common.PrettyDuration(elapsed), "mgasps", mgasps,
+			"elapsed", common.PrettyDuration(elapsed), "mgasps", mgasps, "gasused", gasUsed,
 		}
 		if timestamp := time.Unix(int64(end.Time()), 0); time.Since(timestamp) > time.Minute {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
