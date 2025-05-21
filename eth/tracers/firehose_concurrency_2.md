@@ -95,6 +95,8 @@ Model: Macbook Air \
 Processor: Apple M1 chip \
 Memory: 8 GB
 
+Geth version used is 1.15.10
+
 ### 4.1 Results
 
 The following outlines the results for metric three:
