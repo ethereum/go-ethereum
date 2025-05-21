@@ -170,6 +170,12 @@ func (evm *EVM) Cancel() {
 	evm.abort.Store(true)
 }
 
+// Free returns some memory allocated by the EVM, should be called after the EVM was used
+// for the last time. Not necessary, but an improvement.
+func (evm *EVM) Free() {
+	returnStack(evm.arena)
+}
+
 // Cancelled returns true if Cancel has been called
 func (evm *EVM) Cancelled() bool {
 	return evm.abort.Load()

@@ -18,6 +18,7 @@ package vm
 
 import (
 	"slices"
+	"sync"
 
 	"github.com/holiman/uint256"
 )
@@ -29,9 +30,19 @@ type stackArena struct {
 }
 
 func newArena() *stackArena {
-	return &stackArena{
-		data: make([]uint256.Int, 1025),
-	}
+	return stackPool.New().(*stackArena)
+}
+
+var stackPool = sync.Pool{
+	New: func() any {
+		return &stackArena{
+			data: make([]uint256.Int, 1025),
+		}
+	},
+}
+
+func returnStack(arena *stackArena) {
+	stackPool.Put(arena)
 }
 
 // stack returns an instance of a stack which uses the underlying arena. The instance
