@@ -43,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/billy"
 	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -1155,9 +1154,6 @@ func TestBlobCountLimit(t *testing.T) {
 
 		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
-
-		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 7, key1)
-		tx2 = makeMultiBlobTx(0, 1, 800, 70, 8, key2)
 	)
 
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
@@ -1190,11 +1186,19 @@ func TestBlobCountLimit(t *testing.T) {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 
+	var (
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 7, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 8, key2)
+	)
+
 	// Attempt to add transactions.
 	errs := pool.Add([]*types.Transaction{tx1, tx2}, true)
-	assert.Equal(t, 2, len(errs))
-	assert.NoError(t, errs[0])
-	assert.EqualError(t, errs[1], "transaction blob limit exceeded: blob count 8, limit 7")
+	if errs[0] != nil {
+		t.Fatalf("expected tx with 7 blobs to succeed")
+	}
+	if !errors.Is(errs[1], txpool.ErrTxBlobLimitExceeded) {
+		t.Fatalf("expected tx with 8 blobs to fail, got: %v", errs[1])
+	}
 
 	verifyPoolInternals(t, pool)
 	pool.Close()
