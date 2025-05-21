@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -33,8 +34,9 @@ import (
 
 // sanitizeMessage redacts sensitive information from the input string.
 func sanitizeMessage(message string) string {
-	// Example: Replace occurrences of "password: <value>" with "password: [REDACTED]"
-	return strings.ReplaceAll(message, "password:", "password: [REDACTED]")
+	// Use regular expressions to redact sensitive information.
+	re := regexp.MustCompile(`(?i)(password\s*:\s*\S+|private\s*key\s*:\s*\S+|email\s*:\s*\S+@\S+)`)
+	return re.ReplaceAllString(message, "[REDACTED]")
 }
 
 type CommandlineUI struct {
