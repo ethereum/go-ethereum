@@ -265,6 +265,7 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		hasher:                     crypto.NewKeccakState(),
 		tracerID:                   "global",
 		applyBackwardCompatibility: config.ApplyBackwardCompatibility,
+		concurrentBlockFlushing:    config.ConcurrentBlockFlushing,
 
 		// Block state
 		blockOrdinal:        &Ordinal{},
