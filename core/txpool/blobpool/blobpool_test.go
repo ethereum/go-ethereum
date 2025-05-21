@@ -1144,10 +1144,6 @@ func TestChangingSlotterSize(t *testing.T) {
 
 // TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
 func TestBlobCountLimit(t *testing.T) {
-	// Create a temporary folder for the persistent backend
-	storage := t.TempDir()
-
-	// Create transactions from a few accounts.
 	var (
 		key1, _ = crypto.GenerateKey()
 		key2, _ = crypto.GenerateKey()
@@ -1181,18 +1177,19 @@ func TestBlobCountLimit(t *testing.T) {
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,
 	}
-	pool := New(Config{Datadir: storage}, chain, nil)
+	pool := New(Config{Datadir: t.TempDir()}, chain, nil)
 	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
 		t.Fatalf("failed to create blob pool: %v", err)
 	}
 
+	// Attempt to add transactions.
 	var (
 		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 7, key1)
 		tx2 = makeMultiBlobTx(0, 1, 800, 70, 8, key2)
 	)
-
-	// Attempt to add transactions.
 	errs := pool.Add([]*types.Transaction{tx1, tx2}, true)
+
+	// Check that first succeeds second fails.
 	if errs[0] != nil {
 		t.Fatalf("expected tx with 7 blobs to succeed")
 	}
