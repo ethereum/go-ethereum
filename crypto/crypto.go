@@ -74,17 +74,9 @@ func NewKeccakState() KeccakState {
 	return sha3.NewLegacyKeccak256().(KeccakState)
 }
 
-type keccakState struct {
-	KeccakState
-	hashBuf common.Hash
-}
-
 var hasherPool = sync.Pool{
 	New: func() any {
-		return &keccakState{
-			hashBuf:     common.Hash{},
-			KeccakState: sha3.NewLegacyKeccak256().(KeccakState),
-		}
+		return sha3.NewLegacyKeccak256().(KeccakState)
 	},
 }
 
@@ -110,26 +102,26 @@ func Keccak256RLP(x interface{}) []byte {
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
-func Keccak256Hash(data ...[]byte) common.Hash {
-	d := hasherPool.Get().(*keccakState)
+func Keccak256Hash(data ...[]byte) (h common.Hash) {
+	d := hasherPool.Get().(KeccakState)
 	d.Reset()
 	for _, b := range data {
 		d.Write(b)
 	}
-	d.Read(d.hashBuf[:])
+	d.Read(h[:])
 	hasherPool.Put(d)
-	return d.hashBuf
+	return h
 }
 
 // Keccak256RLPHash calculates and returns the Keccak256 hash of the input interface,
 // converting it to an internal Hash data structure.
-func Keccak256RLPHash(x interface{}) common.Hash {
-	d := hasherPool.Get().(*keccakState)
+func Keccak256RLPHash(x interface{}) (h common.Hash) {
+	d := hasherPool.Get().(KeccakState)
 	d.Reset()
 	rlp.Encode(d, x)
-	d.Read(d.hashBuf[:])
+	d.Read(h[:])
 	hasherPool.Put(d)
-	return d.hashBuf
+	return h
 }
 
 // Keccak512 calculates and returns the Keccak512 hash of the input data.
