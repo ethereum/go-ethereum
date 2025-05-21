@@ -1096,10 +1096,12 @@ func GenDoc(ctx *cli.Context) error {
 				for i := range req.Messages {
 					req.Messages[i].Value = "[REDACTED]" // Obfuscate message content
 				}
+				req.Meta = core.Metadata{} // Clear metadata to avoid leaking sensitive information
 			case *core.ListRequest:
 				for i := range req.Accounts {
 					req.Accounts[i].URL.Path = "[REDACTED]" // Obfuscate account paths
 				}
+				req.Meta = core.Metadata{} // Clear metadata to avoid leaking sensitive information
 			}
 			if data, err := json.MarshalIndent(v, "", "  "); err == nil {
 				output = append(output, fmt.Sprintf("### %s\n\n%s\n\nExample:\n```json\n%s\n```", name, desc, data))
