@@ -96,7 +96,8 @@ type Backend interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error)
+	GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64)
+	TxIndexDone() bool
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -1117,7 +1118,33 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 				Tracer:                  logger.NewJSONLogger(&logConfig, writer),
 				EnablePreimageRecording: true,
 			}
+
+			// Finalize the state so any modifications are written to the trie
+			// Only delete empty objects if EIP158/161 (a.k.a Spurious Dragon) is in effect
+			statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
+			continue
 		}
+		// The transaction should be traced.
+		// Generate a unique temporary file to dump it into.
+		prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], i, tx.Hash().Bytes()[:4])
+		if !canon {
+			prefix = fmt.Sprintf("%valt-", prefix)
+		}
+
+		dump, err = os.CreateTemp(os.TempDir(), prefix)
+		if err != nil {
+			return nil, err
+		}
+		dumps = append(dumps, dump.Name())
+		// Set up the tracer and EVM for the transaction.
+		var (
+			writer = bufio.NewWriter(dump)
+			tracer = logger.NewJSONLogger(&logConfig, writer)
+			evm    = vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{
+				Tracer:    tracer,
+				NoBaseFee: true,
+			})
+		)
 		// Execute the transaction and flush any traces to disk
 		//nolint: nestif
 		if stateSyncPresent && i == len(txs)-1 {
@@ -1194,7 +1221,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
 
-	found, _, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
+	found, _, blockHash, blockNumber, index := api.backend.GetTransaction(hash)
 	if !found {
 		// For BorTransaction, there will be no trace available
 		tx, _, _, _ := rawdb.ReadBorTransaction(api.backend.ChainDb(), hash)
@@ -1203,14 +1230,13 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 				StructLogs: make([]json.RawMessage, 0),
 			}, nil
 		} else {
+			// Warn in case tx indexer is not done.
+			if !api.backend.TxIndexDone() {
+				return nil, ethapi.NewTxIndexingError()
+			}
 			return nil, errTxNotFound
 		}
 	}
-
-	if err != nil {
-		return nil, ethapi.NewTxIndexingError()
-	}
-
 	// It shouldn't happen in practice.
 	if blockNumber == 0 {
 		return nil, errors.New("genesis is not traceable")

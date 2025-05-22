@@ -131,7 +131,7 @@ type executionPayloadEnvelopeMarshaling struct {
 
 type PayloadStatusV1 struct {
 	Status          string         `json:"status"`
-	Witness         *hexutil.Bytes `json:"witness"`
+	Witness         *hexutil.Bytes `json:"witness,omitempty"`
 	LatestValidHash *common.Hash   `json:"latestValidHash"`
 	ValidationError *string        `json:"validationError"`
 }

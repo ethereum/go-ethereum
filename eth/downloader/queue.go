@@ -72,7 +72,7 @@ type fetchResult struct {
 	Withdrawals  types.Withdrawals
 }
 
-func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
+func newFetchResult(header *types.Header, snapSync bool) *fetchResult {
 	item := &fetchResult{
 		Header: header,
 	}
@@ -81,8 +81,7 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 	} else if header.WithdrawalsHash != nil {
 		item.Withdrawals = make(types.Withdrawals, 0)
 	}
-
-	if fastSync && !header.EmptyReceipts() {
+	if snapSync && !header.EmptyReceipts() {
 		item.pending.Store(item.pending.Load() | (1 << receiptType))
 	}
 
@@ -126,19 +125,8 @@ func (f *fetchResult) Done(kind uint) bool {
 
 // queue represents hashes that are either need fetching or are being fetched
 type queue struct {
-	mode SyncMode // Synchronisation mode to decide on the block parts to schedule for fetching
-
-	// Headers are "special", they download in batches, supported by a skeleton chain
-	headerHead      common.Hash                    // Hash of the last queued header to verify order
-	headerTaskPool  map[uint64]*types.Header       // Pending header retrieval tasks, mapping starting indexes to skeleton headers
-	headerTaskQueue *prque.Prque[int64, uint64]    // Priority queue of the skeleton indexes to fetch the filling headers for
-	headerPeerMiss  map[string]map[uint64]struct{} // Set of per-peer header batches known to be unavailable
-	headerPendPool  map[string]*fetchRequest       // Currently pending header retrieval operations
-	headerResults   []*types.Header                // Result cache accumulating the completed headers
-	headerHashes    []common.Hash                  // Result cache accumulating the completed header hashes
-	headerProced    int                            // Number of headers already processed from the results
-	headerOffset    uint64                         // Number of the first header in the result cache
-	headerContCh    chan bool                      // Channel to notify when header download finishes
+	mode       SyncMode    // Synchronisation mode to decide on the block parts to schedule for fetching
+	headerHead common.Hash // Hash of the last queued header to verify order
 
 	// All data retrievals below are based on an already assembles header chain
 	blockTaskPool  map[common.Hash]*types.Header      // Pending block (body) retrieval tasks, mapping hashes to headers
@@ -165,7 +153,6 @@ type queue struct {
 func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 	lock := new(sync.RWMutex)
 	q := &queue{
-		headerContCh:     make(chan bool, 1),
 		blockTaskQueue:   prque.New[int64, *types.Header](nil),
 		blockWakeCh:      make(chan bool, 1),
 		receiptTaskQueue: prque.New[int64, *types.Header](nil),
@@ -187,7 +174,6 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 	q.mode = FullSync
 
 	q.headerHead = common.Hash{}
-	q.headerPendPool = make(map[string]*fetchRequest)
 
 	q.blockTaskPool = make(map[common.Hash]*types.Header)
 	q.blockTaskQueue.Reset()
@@ -208,14 +194,6 @@ func (q *queue) Close() {
 	q.closed = true
 	q.active.Signal()
 	q.lock.Unlock()
-}
-
-// PendingHeaders retrieves the number of header requests pending for retrieval.
-func (q *queue) PendingHeaders() int {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	return q.headerTaskQueue.Size()
 }
 
 // PendingBodies retrieves the number of block body requests pending for retrieval.
@@ -263,55 +241,14 @@ func (q *queue) Idle() bool {
 	return (queued + pending) == 0
 }
 
-// ScheduleSkeleton adds a batch of header retrieval tasks to the queue to fill
-// up an already retrieved header skeleton.
-func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	// No skeleton retrieval can be in progress, fail hard if so (huge implementation bug)
-	if q.headerResults != nil {
-		panic("skeleton assembly already in progress")
-	}
-	// Schedule all the header retrieval tasks for the skeleton assembly
-	q.headerTaskPool = make(map[uint64]*types.Header)
-	q.headerTaskQueue = prque.New[int64, uint64](nil)
-	q.headerPeerMiss = make(map[string]map[uint64]struct{}) // Reset availability to correct invalid chains
-	q.headerResults = make([]*types.Header, len(skeleton)*MaxHeaderFetch)
-	q.headerHashes = make([]common.Hash, len(skeleton)*MaxHeaderFetch)
-	q.headerProced = 0
-	q.headerOffset = from
-	q.headerContCh = make(chan bool, 1)
-
-	for i, header := range skeleton {
-		index := from + uint64(i*MaxHeaderFetch)
-
-		q.headerTaskPool[index] = header
-		q.headerTaskQueue.Push(index, -int64(index))
-	}
-}
-
-// RetrieveHeaders retrieves the header chain assemble based on the scheduled
-// skeleton.
-func (q *queue) RetrieveHeaders() ([]*types.Header, []common.Hash, int) {
-	q.lock.Lock()
-	defer q.lock.Unlock()
-
-	headers, hashes, proced := q.headerResults, q.headerHashes, q.headerProced
-	q.headerResults, q.headerHashes, q.headerProced = nil, nil, 0
-
-	return headers, hashes, proced
-}
-
 // Schedule adds a set of headers for the download queue for scheduling, returning
 // the new headers encountered.
-func (q *queue) Schedule(headers []*types.Header, hashes []common.Hash, from uint64) []*types.Header {
+func (q *queue) Schedule(headers []*types.Header, hashes []common.Hash, from uint64) int {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
 	// Insert all the headers prioritised by the contained block number
-	inserts := make([]*types.Header, 0, len(headers))
-
+	var inserts int
 	for i, header := range headers {
 		// Make sure chain order is honoured and preserved throughout
 		hash := hashes[i]
@@ -342,8 +279,7 @@ func (q *queue) Schedule(headers []*types.Header, hashes []common.Hash, from uin
 				q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
 			}
 		}
-
-		inserts = append(inserts, header)
+		inserts++
 		q.headerHead = hash
 		from++
 	}
@@ -400,7 +336,7 @@ func (q *queue) Results(block bool) []*fetchResult {
 		q.resultSize = common.StorageSize(blockCacheSizeWeight)*size +
 			(1-common.StorageSize(blockCacheSizeWeight))*q.resultSize
 	}
-	// Using the newly calibrated resultsize, figure out the new throttle limit
+	// Using the newly calibrated result size, figure out the new throttle limit
 	// on the result cache
 	throttleThreshold := uint64((common.StorageSize(blockCacheMemory) + q.resultSize - 1) / q.resultSize)
 	throttleThreshold = q.resultCache.SetThrottleThreshold(throttleThreshold)
@@ -439,6 +375,8 @@ func (q *queue) stats() []interface{} {
 	}
 }
 
+// This was removed from geth
+/*
 // ReserveHeaders reserves a set of headers for the given peer, skipping any
 // previously failed batches.
 func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
@@ -481,6 +419,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 
 	return request
 }
+*/
 
 // ReserveBodies reserves a set of body fetches for the given peer, skipping any
 // previously failed downloads. Beside the next batch of needed fetches, it also
@@ -623,11 +562,6 @@ func (q *queue) Revoke(peerID string) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	if request, ok := q.headerPendPool[peerID]; ok {
-		q.headerTaskQueue.Push(request.From, -int64(request.From))
-		delete(q.headerPendPool, peerID)
-	}
-
 	if request, ok := q.blockPendPool[peerID]; ok {
 		for _, header := range request.Headers {
 			q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))
@@ -645,6 +579,8 @@ func (q *queue) Revoke(peerID string) {
 	}
 }
 
+// This was removed from geth
+/*
 // ExpireHeaders cancels a request that timed out and moves the pending fetch
 // task back into the queue for rescheduling.
 func (q *queue) ExpireHeaders(peer string) int {
@@ -655,6 +591,7 @@ func (q *queue) ExpireHeaders(peer string) int {
 
 	return q.expire(peer, q.headerPendPool, q.headerTaskQueue)
 }
+*/
 
 // ExpireBodies checks for in flight block body requests that exceeded a timeout
 // allowance, canceling them and returning the responsible peers for penalisation.
@@ -709,6 +646,8 @@ func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue
 	return len(req.Headers)
 }
 
+// This was removed from geth
+/*
 // DeliverHeaders injects a header retrieval response into the header results
 // cache. This method either accepts all headers it received, or none of them
 // if they do not map correctly to the skeleton.
@@ -832,6 +771,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 
 	return len(headers), nil
 }
+*/
 
 // DeliverBodies injects a block body retrieval response into the results queue.
 // The method returns the number of blocks bodies accepted from the delivery and
