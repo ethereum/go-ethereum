@@ -1,9 +1,9 @@
 # This file contains sha256 checksums of optional build dependencies.
 
-# version:spec-tests pectra-devnet-6@v1.0.0
+# version:spec-tests v4.5.0
 # https://github.com/ethereum/execution-spec-tests/releases
-# https://github.com/ethereum/execution-spec-tests/releases/download/pectra-devnet-6%40v1.0.0/
-b69211752a3029083c020dc635fe12156ca1a6725a08559da540a0337586a77e  fixtures_pectra-devnet-6.tar.gz
+# https://github.com/ethereum/execution-spec-tests/releases/download/v4.5.0/
+58afb92a0075a2cb7c4dec1281f7cb88b21b02afbedad096b580f3f8cc14c54c  fixtures_develop.tar.gz
 
 # version:golang 1.24.3
 # https://go.dev/dl/
