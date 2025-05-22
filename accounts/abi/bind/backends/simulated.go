@@ -982,7 +982,7 @@ func (fb *filterBackend) CurrentView() *filtermaps.ChainView {
 }
 
 func (fb *filterBackend) HistoryPruningCutoff() uint64 {
-	panic("implement me")
+	return 0
 }
 
 func nullSubscription() event.Subscription {
