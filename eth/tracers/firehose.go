@@ -222,9 +222,7 @@ type Firehose struct {
 	flushOrderedOutputQueue chan *blockOutput
 	flushJobWG              sync.WaitGroup
 	flushOrderedOutputWG    sync.WaitGroup
-	flushStarted            bool
-	flushStartBlockNum      uint64
-	flushStartCond          *sync.Cond
+	flushStartSignal        chan uint64
 	flushBufferSize         int
 }
 
@@ -280,8 +278,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		deferredCallState:       NewDeferredCallState(),
 		latestCallEnterSuicided: false,
 
-		flushStartCond:  sync.NewCond(&sync.Mutex{}),
-		flushBufferSize: 100, // TODO: Optimal buffer size tbd
+		flushStartSignal: make(chan uint64, 1),
+		flushBufferSize:  100, // TODO: Optimal buffer size tbd
 	}
 
 	if config.private != nil {
@@ -308,13 +306,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 
 			buffer := make(map[uint64][]byte)
 
-			firehose.flushStartCond.L.Lock()
-			for !firehose.flushStarted {
-				firehose.flushStartCond.Wait()
-			}
-
-			nextExpected := firehose.flushStartBlockNum
-			firehose.flushStartCond.L.Unlock()
+			// Blocks until tracer sends first block number to flush
+			nextExpected := <-firehose.flushStartSignal
 
 			for result := range firehose.flushOrderedOutputQueue {
 				buffer[result.blockNum] = result.data
@@ -572,13 +565,10 @@ func (f *Firehose) OnBlockEnd(err error) {
 
 		// Flush block to firehose and optionally use goroutine
 		if f.concurrentBlockFlushing > 0 {
-			f.flushStartCond.L.Lock()
-			if !f.flushStarted {
-				f.flushStartBlockNum = f.block.Number
-				f.flushStarted = true
-				f.flushStartCond.Broadcast()
+			select {
+			case f.flushStartSignal <- f.block.Number:
+			default:
 			}
-			f.flushStartCond.L.Unlock()
 
 			job := &blockPrintJob{
 				block:    f.block,
@@ -1962,7 +1952,7 @@ func (f *Firehose) panicInvalidState(msg string, callerSkip int) string {
 
 // printBlockToFirehose is a helper function to print a block to Firehose protocl format.
 func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *FinalityStatus) {
-	var buf bytes.Buffer
+	buf := bytes.NewBuffer(make([]byte, 0, 128*1024)) // 128 KB
 
 	marshalled, err := proto.Marshal(block)
 	if err != nil {
@@ -1989,7 +1979,7 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 	// **Important* The final space in the Sprintf template is mandatory!
 	buf.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
 
-	encoder := base64.NewEncoder(base64.StdEncoding, &buf)
+	encoder := base64.NewEncoder(base64.StdEncoding, buf)
 	if _, err = encoder.Write(marshalled); err != nil {
 		panic(fmt.Errorf("write to encoder should have been infaillible: %w", err))
 	}
