@@ -2125,13 +2125,13 @@ func testInsertReceiptChainRollback(t *testing.T, scheme string) {
 	}
 
 	// Set up a BlockChain that uses the ancient store.
-	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
+	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false)
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
 	}
 	defer ancientDb.Close()
 
-	ancientChain, _ := NewBlockChain(ancientDb, DefaultCacheConfigWithScheme(scheme), gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+	ancientChain, _ := NewBlockChain(ancientDb, DefaultCacheConfigWithScheme(scheme), gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 	defer ancientChain.Stop()
 
 	// Import the canonical header chain.

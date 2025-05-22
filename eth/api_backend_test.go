@@ -61,7 +61,7 @@ func initBackend(withLocal bool) *EthAPIBackend {
 		db     = rawdb.NewMemoryDatabase()
 		engine = beacon.New(ethash.NewFaker())
 	)
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil)
+	chain, _ := core.NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 
 	txconfig := legacypool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals

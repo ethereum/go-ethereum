@@ -716,7 +716,7 @@ func (b testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Sub
 }
 
 func (b testBackend) HistoryPruningCutoff() uint64 {
-	bn := b.chain.HistoryPruningCutoff()
+	bn, _ := b.chain.HistoryPruningCutoff()
 	return bn
 }
 

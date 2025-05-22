@@ -977,6 +977,14 @@ func (fb *filterBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("not supported")
 }
 
+func (fb *filterBackend) CurrentView() *filtermaps.ChainView {
+	panic("implement me")
+}
+
+func (fb *filterBackend) HistoryPruningCutoff() uint64 {
+	panic("implement me")
+}
+
 func nullSubscription() event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit

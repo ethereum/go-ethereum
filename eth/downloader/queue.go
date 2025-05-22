@@ -436,8 +436,6 @@ func (q *queue) stats() []interface{} {
 	}
 }
 
-// This was removed from geth
-/*
 // ReserveHeaders reserves a set of headers for the given peer, skipping any
 // previously failed batches.
 func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
@@ -480,7 +478,6 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 
 	return request
 }
-*/
 
 // ReserveBodies reserves a set of body fetches for the given peer, skipping any
 // previously failed downloads. Beside the next batch of needed fetches, it also
@@ -644,8 +641,6 @@ func (q *queue) Revoke(peerID string) {
 	}
 }
 
-// This was removed from geth
-/*
 // ExpireHeaders cancels a request that timed out and moves the pending fetch
 // task back into the queue for rescheduling.
 func (q *queue) ExpireHeaders(peer string) int {
@@ -656,7 +651,6 @@ func (q *queue) ExpireHeaders(peer string) int {
 
 	return q.expire(peer, q.headerPendPool, q.headerTaskQueue)
 }
-*/
 
 // ExpireBodies checks for in flight block body requests that exceeded a timeout
 // allowance, canceling them and returning the responsible peers for penalisation.
@@ -711,8 +705,6 @@ func (q *queue) expire(peer string, pendPool map[string]*fetchRequest, taskQueue
 	return len(req.Headers)
 }
 
-// This was removed from geth
-/*
 // DeliverHeaders injects a header retrieval response into the header results
 // cache. This method either accepts all headers it received, or none of them
 // if they do not map correctly to the skeleton.
@@ -836,7 +828,6 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 
 	return len(headers), nil
 }
-*/
 
 // DeliverBodies injects a block body retrieval response into the results queue.
 // The method returns the number of blocks bodies accepted from the delivery and

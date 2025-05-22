@@ -218,10 +218,6 @@ func (r *reserver) Has(address common.Address) bool {
 	return exists
 }
 
-func MakeAddressReserver() {
-	makeAddressReserver()
-}
-
 // makeTx is a utility method to construct a random blob transaction and sign it
 // with a valid key, only setting the interesting fields from the perspective of
 // the blob pool.

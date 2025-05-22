@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"runtime"
 	"slices"
@@ -2548,8 +2547,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		trieDiffNodes, trieBufNodes, _ := bc.triedb.Size()
 		stats.report(chain, it.index, snapDiffItems, snapBufItems, trieDiffNodes, trieBufNodes, setHead)
 
-		// Print confirmation that a future fork is scheduled, but not yet active.
-		bc.logForkReadiness(block)
+		/*
+			// Print confirmation that a future fork is scheduled, but not yet active.
+			bc.logForkReadiness(block)
+		*/
 
 		if !setHead {
 			// After merge we expect few side chains. Simply count
@@ -3295,6 +3296,7 @@ func (bc *BlockChain) reportBlock(block *types.Block, res *ProcessResult, err er
 	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
 }
 
+/*
 // logForkReadiness will write a log when a future fork is scheduled, but not
 // active. This is useful so operators know their client is ready for the fork.
 func (bc *BlockChain) logForkReadiness(block *types.Block) {
@@ -3311,6 +3313,7 @@ func (bc *BlockChain) logForkReadiness(block *types.Block) {
 		bc.lastForkReadyAlert = time.Now()
 	}
 }
+*/
 
 // summarizeBadBlock returns a string summarizing the bad block and other
 // relevant information.
@@ -3387,10 +3390,4 @@ func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 
 func (bc *BlockChain) SubscribeChain2HeadEvent(ch chan<- Chain2HeadEvent) event.Subscription {
 	return bc.scope.Track(bc.chain2HeadFeed.Subscribe(ch))
-}
-
-// HistoryPruningCutoff returns the configured history pruning point.
-// Blocks before this might not be available in the database.
-func (bc *BlockChain) HistoryPruningCutoff() uint64 {
-	return bc.cacheConfig.HistoryPruningCutoff
 }

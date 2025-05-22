@@ -1384,6 +1384,7 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	}
 }
 
+/*
 // Timestamp returns the timestamp associated with the fork or returns nil if
 // the fork isn't defined or isn't a time-based fork.
 func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
@@ -1400,6 +1401,7 @@ func (c *ChainConfig) Timestamp(fork forks.Fork) *uint64 {
 		return nil
 	}
 }
+*/
 
 // isForkBlockIncompatible returns true if a fork scheduled at block s1 cannot be
 // rescheduled to block s2 because head is already past the fork.

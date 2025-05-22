@@ -227,18 +227,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			EnablePreimageRecording: config.EnablePreimageRecording,
 		}
 		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:       config.TrieCleanCache,
-			TrieCleanNoPrefetch:  config.NoPrefetch,
-			TrieDirtyLimit:       config.TrieDirtyCache,
-			TrieDirtyDisabled:    config.NoPruning,
-			TrieTimeLimit:        config.TrieTimeout,
-			SnapshotLimit:        config.SnapshotCache,
-			Preimages:            config.Preimages,
-			StateHistory:         config.StateHistory,
-			StateScheme:          scheme,
-			TriesInMemory:        config.TriesInMemory,
-			ChainHistoryMode:     config.HistoryMode,
-			HistoryPruningCutoff: historyPruningCutoff,
+			TrieCleanLimit:      config.TrieCleanCache,
+			TrieCleanNoPrefetch: config.NoPrefetch,
+			TrieDirtyLimit:      config.TrieDirtyCache,
+			TrieDirtyDisabled:   config.NoPruning,
+			TrieTimeLimit:       config.TrieTimeout,
+			SnapshotLimit:       config.SnapshotCache,
+			Preimages:           config.Preimages,
+			StateHistory:        config.StateHistory,
+			StateScheme:         scheme,
+			TriesInMemory:       config.TriesInMemory,
+			ChainHistoryMode:    config.HistoryMode,
 		}
 	)
 
@@ -296,7 +295,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		HashScheme:     scheme == rawdb.HashScheme,
 	}
 	chainView := eth.newChainView(eth.blockchain.CurrentBlock())
-	historyCutoff := eth.blockchain.HistoryPruningCutoff()
+	historyCutoff, _ := eth.blockchain.HistoryPruningCutoff()
 	var finalBlock uint64
 	if fb := eth.blockchain.CurrentFinalBlock(); fb != nil {
 		finalBlock = fb.Number.Uint64()
@@ -867,7 +866,7 @@ func (s *Ethereum) updateFilterMapsHeads() {
 		if head == nil || newHead.Hash() != head.Hash() {
 			head = newHead
 			chainView := s.newChainView(head)
-			historyCutoff := s.blockchain.HistoryPruningCutoff()
+			historyCutoff, _ := s.blockchain.HistoryPruningCutoff()
 			var finalBlock uint64
 			if fb := s.blockchain.CurrentFinalBlock(); fb != nil {
 				finalBlock = fb.Number.Uint64()
