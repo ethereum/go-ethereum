@@ -1142,6 +1142,65 @@ func TestChangingSlotterSize(t *testing.T) {
 	}
 }
 
+// TestBlobCountLimit tests the blobpool enforced limits on the max blob count.
+func TestBlobCountLimit(t *testing.T) {
+	var (
+		key1, _ = crypto.GenerateKey()
+		key2, _ = crypto.GenerateKey()
+
+		addr1 = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2 = crypto.PubkeyToAddress(key2.PublicKey)
+	)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(0, true, false)
+
+	// Make Prague-enabled custom chain config.
+	cancunTime := uint64(0)
+	pragueTime := uint64(0)
+	config := &params.ChainConfig{
+		ChainID:     big.NewInt(1),
+		LondonBlock: big.NewInt(0),
+		BerlinBlock: big.NewInt(0),
+		CancunTime:  &cancunTime,
+		PragueTime:  &pragueTime,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+		},
+	}
+	chain := &testBlockChain{
+		config:  config,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: t.TempDir()}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+
+	// Attempt to add transactions.
+	var (
+		tx1 = makeMultiBlobTx(0, 1, 1000, 100, 7, key1)
+		tx2 = makeMultiBlobTx(0, 1, 800, 70, 8, key2)
+	)
+	errs := pool.Add([]*types.Transaction{tx1, tx2}, true)
+
+	// Check that first succeeds second fails.
+	if errs[0] != nil {
+		t.Fatalf("expected tx with 7 blobs to succeed")
+	}
+	if !errors.Is(errs[1], txpool.ErrTxBlobLimitExceeded) {
+		t.Fatalf("expected tx with 8 blobs to fail, got: %v", errs[1])
+	}
+
+	verifyPoolInternals(t, pool)
+	pool.Close()
+}
+
 // Tests that adding transaction will correctly store it in the persistent store
 // and update all the indices.
 //
