@@ -15,7 +15,6 @@ linters:
     - govet
     - ineffassign
     - mirror
-    - tenv
     - misspell
     - reassign
     - revive # only certain checks enabled

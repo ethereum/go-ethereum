@@ -115,10 +115,6 @@ var (
 	errInvalidNewChain      = errors.New("invalid new chain")
 )
 
-var (
-	forkReadyInterval = 3 * time.Minute
-)
-
 const (
 	bodyCacheLimit      = 256
 	blockCacheLimit     = 256
@@ -849,6 +845,7 @@ func (bc *BlockChain) initializeHistoryPruning(latest uint64) error {
 		bc.historyPrunePoint.Store(predefinedPoint)
 		return nil
 
+	// nolint:gosimple
 	case history.KeepPostMerge:
 		if freezerTail == 0 && latest != 0 {
 			// This is the case where a user is trying to run with --history.chain
