@@ -180,9 +180,10 @@ type CacheConfig struct {
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 
+	ChainHistoryMode history.HistoryMode
 	// This defines the cutoff block for history expiry.
 	// Blocks before this number may be unavailable in the chain database.
-	ChainHistoryMode history.HistoryMode
+	HistoryPruningCutoff uint64
 }
 
 // triedbConfig derives the configures for trie database.
@@ -391,10 +392,10 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.processor = NewStateProcessor(chainConfig, bc.hc, bc)
 
 	genesisHeader := bc.GetHeaderByNumber(0)
-	if genesisHeader == nil {
+	bc.genesisBlock = types.NewBlockWithHeader(genesisHeader)
+	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
 	}
-	bc.genesisBlock = types.NewBlockWithHeader(genesisHeader)
 
 	bc.currentBlock.Store(nil)
 	bc.currentSnapBlock.Store(nil)
@@ -1446,6 +1447,7 @@ func (bc *BlockChain) stopWithoutSaving() {
 	// the mutex should become available quickly. It cannot be taken again after Close has
 	// returned.
 	bc.chainmu.Close()
+	bc.wg.Wait()
 }
 
 // Stop stops the blockchain service. If any imports are currently in progress
@@ -1534,36 +1536,45 @@ const (
 	SideStatTy
 )
 
-// InsertReceiptChain inserts a batch of blocks along with their receipts into
-// the database. Unlike InsertChain, this function does not verify the state root
-// in the blocks. It is used exclusively for snap sync. All the inserted blocks
-// will be regarded as canonical, chain reorg is not supported.
-//
-// The optional ancientLimit can also be specified and chain segment before that
-// will be directly stored in the ancient, getting rid of the chain migration.
+// InsertReceiptChain attempts to complete an already existing header chain with
+// transaction and receipt data.
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts, ancientLimit uint64) (int, error) {
-	// Verify the supplied headers before insertion without lock
-	var headers []*types.Header
-	for _, block := range blockChain {
-		headers = append(headers, block.Header())
+	// We don't require the chainMu here since we want to maximize the
+	// concurrency of header insertion and receipt insertion.
+	bc.wg.Add(1)
+	defer bc.wg.Done()
 
-		// Here we also validate that blob transactions in the block do not
-		// contain a sidecar. While the sidecar does not affect the block hash
-		// or tx hash, sending blobs within a block is not allowed.
+	var (
+		ancientBlocks, liveBlocks     types.Blocks
+		ancientReceipts, liveReceipts []types.Receipts
+	)
+	// Do a sanity check that the provided chain is actually ordered and linked
+	for i, block := range blockChain {
+		if i != 0 {
+			prev := blockChain[i-1]
+			if block.NumberU64() != prev.NumberU64()+1 || block.ParentHash() != prev.Hash() {
+				log.Error("Non contiguous receipt insert",
+					"number", block.Number(), "hash", block.Hash(), "parent", block.ParentHash(),
+					"prevnumber", prev.Number(), "prevhash", prev.Hash())
+				return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])",
+					i-1, prev.NumberU64(), prev.Hash().Bytes()[:4],
+					i, block.NumberU64(), block.Hash().Bytes()[:4], block.ParentHash().Bytes()[:4])
+			}
+		}
+		if block.NumberU64() <= ancientLimit {
+			ancientBlocks, ancientReceipts = append(ancientBlocks, block), append(ancientReceipts, receiptChain[i])
+		} else {
+			liveBlocks, liveReceipts = append(liveBlocks, block), append(liveReceipts, receiptChain[i])
+		}
+
+		// Here we also validate that blob transactions in the block do not contain a sidecar.
+		// While the sidecar does not affect the block hash / tx hash, sending blobs within a block is not allowed.
 		for txIndex, tx := range block.Transactions() {
 			if tx.Type() == types.BlobTxType && tx.BlobTxSidecar() != nil {
 				return 0, fmt.Errorf("block #%d contains unexpected blob sidecar in tx at index %d", block.NumberU64(), txIndex)
 			}
 		}
 	}
-	if n, err := bc.hc.ValidateHeaderChain(headers); err != nil {
-		return n, err
-	}
-	// Hold the mutation lock
-	if !bc.chainmu.TryLock() {
-		return 0, errChainStopped
-	}
-	defer bc.chainmu.Unlock()
 
 	var (
 		stats = struct{ processed, ignored int32 }{}
@@ -1611,8 +1622,11 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	// this function only accepts canonical chain data. All side chain will be reverted
 	// eventually.
 	writeAncient := func(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
-		// Ensure genesis is in the ancient store
-		if blockChain[0].NumberU64() == 1 {
+		first := blockChain[0]
+		last := blockChain[len(blockChain)-1]
+
+		// Ensure genesis is in ancients.
+		if first.NumberU64() == 1 {
 			if frozen, _ := bc.db.Ancients(); frozen == 0 {
 				td := bc.genesisBlock.Difficulty()
 				writeSize, err := rawdb.WriteAncientBlocks(bc.db, []*types.Block{bc.genesisBlock}, []types.Receipts{nil}, []types.Receipts{nil}, td)
@@ -1728,12 +1742,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		return 0, nil
 	}
 
-	// writeLive writes the blockchain and corresponding receipt chain to the active store.
-	//
-	// Notably, in different snap sync cycles, the supplied chain may partially reorganize
-	// existing local chain segments (reorg around the chain tip). The reorganized part
-	// will be included in the provided chain segment, and stale canonical markers will be
-	// silently rewritten. Therefore, no explicit reorg logic is needed.
+	// writeLive writes blockchain and corresponding receipt chain into active store.
 	writeLive := func(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
 		headers := make([]*types.Header, 0, len(blockChain))
 		var (
@@ -1766,8 +1775,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 				}
 			}
 			// Write all the data out into the database
-			rawdb.WriteCanonicalHash(batch, block.Hash(), block.NumberU64())
-			rawdb.WriteBlock(batch, block)
+			rawdb.WriteBody(batch, block.Hash(), block.NumberU64(), block.Body())
 			rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receiptChain[i])
 
 			// Write everything belongs to the blocks into the database. So that
@@ -1800,13 +1808,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		return 0, nil
 	}
 
-	// Split the supplied blocks into two groups, according to the
-	// given ancient limit.
-	index := sort.Search(len(blockChain), func(i int) bool {
-		return blockChain[i].NumberU64() >= ancientLimit
-	})
-	if index > 0 {
-		if n, err := writeAncient(blockChain[:index], receiptChain[:index]); err != nil {
+	// Write downloaded chain data and corresponding receipt chain data
+	if len(ancientBlocks) > 0 {
+		if n, err := writeAncient(ancientBlocks, ancientReceipts); err != nil {
 			if err == errInsertionInterrupted {
 				return 0, nil
 			}
@@ -1814,8 +1818,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return n, err
 		}
 	}
-	if index != len(blockChain) {
-		if n, err := writeLive(blockChain[index:], receiptChain[index:]); err != nil {
+	if len(liveBlocks) > 0 {
+		if n, err := writeLive(liveBlocks, liveReceipts); err != nil {
 			if err == errInsertionInterrupted {
 				return 0, nil
 			}
@@ -1837,6 +1841,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 	}
 
 	log.Debug("Imported new block receipts", context...)
+
 	return 0, nil
 }
 
@@ -3347,6 +3352,7 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 	if i, err := bc.hc.ValidateHeaderChain(chain); err != nil {
 		return i, err
 	}
+
 	if !bc.chainmu.TryLock() {
 		return 0, errChainStopped
 	}
@@ -3357,74 +3363,6 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header) (int, error) {
 
 func (bc *BlockChain) GetChainConfig() *params.ChainConfig {
 	return bc.chainConfig
-}
-
-// InsertHeadersBeforeCutoff inserts the given headers into the ancient store
-// as they are claimed older than the configured chain cutoff point. All the
-// inserted headers are regarded as canonical and chain reorg is not supported.
-func (bc *BlockChain) InsertHeadersBeforeCutoff(headers []*types.Header) (int, error) {
-	if len(headers) == 0 {
-		return 0, nil
-	}
-	// TODO(rjl493456442): Headers before the configured cutoff have already
-	// been verified by the hash of cutoff header. Theoretically, header validation
-	// could be skipped here.
-	if n, err := bc.hc.ValidateHeaderChain(headers); err != nil {
-		return n, err
-	}
-	if !bc.chainmu.TryLock() {
-		return 0, errChainStopped
-	}
-	defer bc.chainmu.Unlock()
-
-	// Initialize the ancient store with genesis block if it's empty.
-	var (
-		frozen, _ = bc.db.Ancients()
-		first     = headers[0].Number.Uint64()
-	)
-	if first == 1 && frozen == 0 {
-		_, err := rawdb.WriteAncientBlocks(bc.db, []*types.Block{bc.genesisBlock}, []types.Receipts{nil})
-		if err != nil {
-			log.Error("Error writing genesis to ancients", "err", err)
-			return 0, err
-		}
-		log.Info("Wrote genesis to ancient store")
-	} else if frozen != first {
-		return 0, fmt.Errorf("headers are gapped with the ancient store, first: %d, ancient: %d", first, frozen)
-	}
-
-	// Write headers to the ancient store, with block bodies and receipts set to nil
-	// to ensure consistency across tables in the freezer.
-	_, err := rawdb.WriteAncientHeaderChain(bc.db, headers)
-	if err != nil {
-		return 0, err
-	}
-	if err := bc.db.Sync(); err != nil {
-		return 0, err
-	}
-	// Write hash to number mappings
-	batch := bc.db.NewBatch()
-	for _, header := range headers {
-		rawdb.WriteHeaderNumber(batch, header.Hash(), header.Number.Uint64())
-	}
-	// Write head header and head snap block flags
-	last := headers[len(headers)-1]
-	rawdb.WriteHeadHeaderHash(batch, last.Hash())
-	rawdb.WriteHeadFastBlockHash(batch, last.Hash())
-	if err := batch.Write(); err != nil {
-		return 0, err
-	}
-	// Truncate the useless chain segment (zero bodies and receipts) in the
-	// ancient store.
-	if _, err := bc.db.TruncateTail(last.Number.Uint64() + 1); err != nil {
-		return 0, err
-	}
-	// Last step update all in-memory markers
-	bc.hc.currentHeader.Store(last)
-	bc.currentSnapBlock.Store(last)
-	headHeaderGauge.Update(last.Number.Int64())
-	headFastBlockGauge.Update(last.Number.Int64())
-	return 0, nil
 }
 
 // SetBlockValidatorAndProcessorForTesting sets the current validator and processor.
