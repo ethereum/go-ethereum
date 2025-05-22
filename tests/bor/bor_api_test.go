@@ -109,27 +109,27 @@ func testGetTransactionReceiptsByBlock(t *testing.T, publicBlockchainAPI *ethapi
 // Test for GetTransactionByBlockNumberAndIndex
 func testGetTransactionByBlockNumberAndIndex(t *testing.T, publicTransactionPoolAPI *ethapi.TransactionAPI) {
 	// check 1 : False ( no transaction )
-	tx := publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(1), 0)
+	tx, _ := publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(1), 0)
 	assert.Nil(t, tx)
 
 	// check 2 : Normal Transaction
-	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(2), 0)
+	tx, _ = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(2), 0)
 	assert.Equal(t, common.HexToAddress("0x24"), *tx.To)
 
 	// check 3 : Normal Transaction
-	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(3), 0)
+	tx, _ = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(3), 0)
 	assert.Equal(t, common.HexToAddress("0x992"), *tx.To)
 
 	// check 4 : Normal Transaction
-	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(3), 1)
+	tx, _ = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(3), 1)
 	assert.Equal(t, common.HexToAddress("0x993"), *tx.To)
 
 	// check 5 : Normal Transaction
-	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(4), 0)
+	tx, _ = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(4), 0)
 	assert.Equal(t, common.HexToAddress("0x1000"), *tx.To)
 
 	// check 5 : State Sync Transaction
-	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(4), 1)
+	tx, _ = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(4), 1)
 	assert.Equal(t, common.HexToAddress("0x0"), *tx.To)
 }
 

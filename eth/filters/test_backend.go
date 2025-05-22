@@ -198,3 +198,11 @@ func (b *TestBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 func (b *TestBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("implement me")
 }
+
+func (b *TestBackend) CurrentView() *filtermaps.ChainView {
+	panic("implement me")
+}
+
+func (b *TestBackend) HistoryPruningCutoff() uint64 {
+	return 0
+}
