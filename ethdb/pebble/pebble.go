@@ -60,31 +60,37 @@ type Database struct {
 	db        *pebble.DB // Underlying pebble storage engine
 	namespace string     // Namespace for metrics
 
-	compTimeMeter          *metrics.Meter   // Meter for measuring the total time spent in database compaction
-	compReadMeter          *metrics.Meter   // Meter for measuring the data read during compaction
-	compWriteMeter         *metrics.Meter   // Meter for measuring the data written during compaction
-	writeDelayNMeter       *metrics.Meter   // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter        *metrics.Meter   // Meter for measuring the write delay duration due to database compaction
-	diskSizeGauge          *metrics.Gauge   // Gauge for tracking the size of all the levels in the database
-	diskReadMeter          *metrics.Meter   // Meter for measuring the effective amount of data read
-	diskWriteMeter         *metrics.Meter   // Meter for measuring the effective amount of data written
-	memCompGauge           *metrics.Gauge   // Gauge for tracking the number of memory compaction
-	level0CompGauge        *metrics.Gauge   // Gauge for tracking the number of table compaction in level0
-	nonlevel0CompGauge     *metrics.Gauge   // Gauge for tracking the number of table compaction in non0 level
-	seekCompGauge          *metrics.Gauge   // Gauge for tracking the number of table compaction caused by read opt
-	manualMemAllocGauge    *metrics.Gauge   // Gauge for tracking amount of non-managed memory currently allocated
-	liveMemTablesGauge     *metrics.Gauge   // Gauge for tracking the number of live memory tables
-	zombieMemTablesGauge   *metrics.Gauge   // Gauge for tracking the number of zombie memory tables
-	blockCacheHitGauge     *metrics.Gauge   // Gauge for tracking the number of total hit in the block cache
-	blockCacheMissGauge    *metrics.Gauge   // Gauge for tracking the number of total miss in the block cache
-	tableCacheHitGauge     *metrics.Gauge   // Gauge for tracking the number of total hit in the table cache
-	tableCacheMissGauge    *metrics.Gauge   // Gauge for tracking the number of total miss in the table cache
-	filterHitGauge         *metrics.Gauge   // Gauge for tracking the number of total hit in bloom filter
-	filterMissGauge        *metrics.Gauge   // Gauge for tracking the number of total miss in bloom filter
-	estimatedCompDebtGauge *metrics.Gauge   // Gauge for tracking the number of bytes that need to be compacted
-	liveCompGauge          *metrics.Gauge   // Gauge for tracking the number of in-progress compactions
-	liveCompSizeGauge      *metrics.Gauge   // Gauge for tracking the size of in-progress compactions
-	levelsGauge            []*metrics.Gauge // Gauge for tracking the number of tables in levels
+	compTimeMeter          *metrics.Meter          // Meter for measuring the total time spent in database compaction
+	compReadMeter          *metrics.Meter          // Meter for measuring the data read during compaction
+	compWriteMeter         *metrics.Meter          // Meter for measuring the data written during compaction
+	writeDelayNMeter       *metrics.Meter          // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter        *metrics.Meter          // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge          *metrics.Gauge          // Gauge for tracking the size of all the levels in the database
+	diskReadMeter          *metrics.Meter          // Meter for measuring the effective amount of data read
+	diskWriteMeter         *metrics.Meter          // Meter for measuring the effective amount of data written
+	memCompGauge           *metrics.Gauge          // Gauge for tracking the number of memory compaction
+	level0CompGauge        *metrics.Gauge          // Gauge for tracking the number of table compaction in level0
+	nonlevel0CompGauge     *metrics.Gauge          // Gauge for tracking the number of table compaction in non0 level
+	seekCompGauge          *metrics.Gauge          // Gauge for tracking the number of table compaction caused by read opt
+	manualMemAllocGauge    *metrics.Gauge          // Gauge for tracking amount of non-managed memory currently allocated
+	liveMemTablesGauge     *metrics.Gauge          // Gauge for tracking the number of live memory tables
+	zombieMemTablesGauge   *metrics.Gauge          // Gauge for tracking the number of zombie memory tables
+	blockCacheHitGauge     *metrics.Gauge          // Gauge for tracking the number of total hit in the block cache
+	blockCacheMissGauge    *metrics.Gauge          // Gauge for tracking the number of total miss in the block cache
+	tableCacheHitGauge     *metrics.Gauge          // Gauge for tracking the number of total hit in the table cache
+	tableCacheMissGauge    *metrics.Gauge          // Gauge for tracking the number of total miss in the table cache
+	filterHitGauge         *metrics.Gauge          // Gauge for tracking the number of total hit in bloom filter
+	filterMissGauge        *metrics.Gauge          // Gauge for tracking the number of total miss in bloom filter
+	estimatedCompDebtGauge *metrics.Gauge          // Gauge for tracking the number of bytes that need to be compacted
+	liveCompGauge          *metrics.Gauge          // Gauge for tracking the number of in-progress compactions
+	liveCompSizeGauge      *metrics.Gauge          // Gauge for tracking the size of in-progress compactions
+	levelsGauge            []*metrics.Gauge        // Gauge for tracking the number of tables in levels
+	readExistedCount       *metrics.Counter        // Counter for tracking the number of existed keys readed
+	readNotfoundCount      *metrics.Counter        // Counter for tracking the number of notfound keys readed
+	writeCount             *metrics.Counter        // Counter for tracking the number of written
+	readExistedTime        *metrics.ResettingTimer // Timer for tracking the time spent on reading existed keys
+	readNotfoundTime       *metrics.ResettingTimer // Timer for tracking the time spent on reading notfound keys
+	writeTime              *metrics.ResettingTimer // Timer for tracking the time spent on writing
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -313,6 +319,12 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 	db.estimatedCompDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/estimateDebt", nil)
 	db.liveCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/count", nil)
 	db.liveCompSizeGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/size", nil)
+	db.readExistedCount = metrics.GetOrRegisterCounter(namespace+"read/existed/count", nil)
+	db.readNotfoundCount = metrics.GetOrRegisterCounter(namespace+"read/notfound/count", nil)
+	db.writeCount = metrics.GetOrRegisterCounter(namespace+"write/count", nil)
+	db.readExistedTime = metrics.NewRegisteredResettingTimer(namespace+"read/existed/duration", nil)
+	db.readNotfoundTime = metrics.NewRegisteredResettingTimer(namespace+"read/notfound/duration", nil)
+	db.writeTime = metrics.NewRegisteredResettingTimer(namespace+"write/duration", nil)
 
 	// Start up the metrics gathering and return
 	go db.meter(metricsGatheringInterval, namespace)
@@ -347,7 +359,16 @@ func (d *Database) Has(key []byte) (bool, error) {
 	if d.closed {
 		return false, pebble.ErrClosed
 	}
+	st := time.Now()
 	_, closer, err := d.db.Get(key)
+	if err == nil {
+		d.readExistedTime.Update(time.Since(st))
+		d.readExistedCount.Inc(1)
+	} else if err == pebble.ErrNotFound {
+		d.readNotfoundTime.Update(time.Since(st))
+		d.readNotfoundCount.Inc(1)
+	}
+
 	if err == pebble.ErrNotFound {
 		return false, nil
 	} else if err != nil {
@@ -366,7 +387,17 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 	if d.closed {
 		return nil, pebble.ErrClosed
 	}
+
+	st := time.Now()
 	dat, closer, err := d.db.Get(key)
+	if err == nil {
+		d.readExistedTime.Update(time.Since(st))
+		d.readExistedCount.Inc(1)
+	} else if err == pebble.ErrNotFound {
+		d.readNotfoundTime.Update(time.Since(st))
+		d.readNotfoundCount.Inc(1)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -385,6 +416,8 @@ func (d *Database) Put(key []byte, value []byte) error {
 	if d.closed {
 		return pebble.ErrClosed
 	}
+	d.writeCount.Inc(1)
+	defer func(st time.Time) { d.writeTime.Update(time.Since(st)) }(time.Now())
 	return d.db.Set(key, value, d.writeOptions)
 }
 
@@ -395,6 +428,8 @@ func (d *Database) Delete(key []byte) error {
 	if d.closed {
 		return pebble.ErrClosed
 	}
+	d.writeCount.Inc(1)
+	defer func(st time.Time) { d.writeTime.Update(time.Since(st)) }(time.Now())
 	return d.db.Delete(key, d.writeOptions)
 }
 
@@ -631,6 +666,8 @@ func (b *batch) Write() error {
 	if b.db.closed {
 		return pebble.ErrClosed
 	}
+	b.db.writeCount.Inc(1)
+	defer func(st time.Time) { b.db.writeTime.Update(time.Since(st)) }(time.Now())
 	return b.b.Commit(b.db.writeOptions)
 }
 
