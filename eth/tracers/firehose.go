@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"os"
 	"regexp"
@@ -169,14 +170,13 @@ func (c *FirehoseConfig) ForcedBackwardCompatibility() bool {
 
 type Firehose struct {
 	// Global state
-	outputBuffer  *bytes.Buffer
-	initSent      *atomic.Bool
-	config        *FirehoseConfig
-	chainConfig   *params.ChainConfig
-	hasher        crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
-	hasherBuf     common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
-	tracerID      string
-	closeChannels sync.Once
+	outputBuffer *bytes.Buffer
+	initSent     *atomic.Bool
+	config       *FirehoseConfig
+	chainConfig  *params.ChainConfig
+	hasher       crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
+	hasherBuf    common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
+	tracerID     string
 	// The FirehoseTracer is used in multiple chains, some for which were produced using a legacy version
 	// of the whole tracing infrastructure. This legacy version had many small bugs here and there that
 	// we must "reproduce" on some chain to ensure that the FirehoseTracer produces the same output
@@ -199,6 +199,8 @@ type Firehose struct {
 	blockReorderOrdinalSnapshot uint64
 	blockReorderOrdinalOnce     sync.Once
 	blockIsGenesis              bool
+	BlockFlushQueue             *BlockFlushQueue
+	blockFlushBufferSize        int
 
 	// Transaction state
 	evm                  *tracing.VMContext
@@ -216,14 +218,6 @@ type Firehose struct {
 	// Testing state, only used in tests and private configs
 	testingBuffer             *bytes.Buffer
 	testingIgnoreGenesisBlock bool
-
-	// Flushing mechanisms
-	flushJobQueue           chan *blockPrintJob
-	flushOrderedOutputQueue chan *blockOutput
-	flushJobWG              sync.WaitGroup
-	flushOrderedOutputWG    sync.WaitGroup
-	flushStartSignal        chan uint64
-	flushBufferSize         int
 }
 
 const FirehoseProtocolVersion = "3.0"
@@ -266,9 +260,10 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		concurrentBlockFlushing:    config.ConcurrentBlockFlushing,
 
 		// Block state
-		blockOrdinal:        &Ordinal{},
-		blockFinality:       &FinalityStatus{},
-		blockReorderOrdinal: false,
+		blockOrdinal:         &Ordinal{},
+		blockFinality:        &FinalityStatus{},
+		blockReorderOrdinal:  false,
+		blockFlushBufferSize: 100,
 
 		// Transaction state
 		transactionLogIndex: 0,
@@ -277,9 +272,6 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		callStack:               NewCallStack(),
 		deferredCallState:       NewDeferredCallState(),
 		latestCallEnterSuicided: false,
-
-		flushStartSignal: make(chan uint64, 1),
-		flushBufferSize:  100, // TODO: Optimal buffer size tbd
 	}
 
 	if config.private != nil {
@@ -287,43 +279,6 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		if config.private.FlushToTestBuffer {
 			firehose.testingBuffer = bytes.NewBuffer(nil)
 		}
-	}
-
-	if config.ConcurrentBlockFlushing > 0 {
-		log.Info(fmt.Sprintf("Firehose concurrent block flushing enabled, starting %d worker goroutine", config.ConcurrentBlockFlushing))
-
-		firehose.flushJobQueue = make(chan *blockPrintJob, firehose.flushBufferSize)
-		firehose.flushOrderedOutputQueue = make(chan *blockOutput, firehose.flushBufferSize)
-		for i := 0; i < config.ConcurrentBlockFlushing; i++ {
-			firehose.flushJobWG.Add(1)
-			go firehose.blockPrintWorker()
-		}
-
-		// Output channel to order the flushing linearly
-		firehose.flushOrderedOutputWG.Add(1)
-		go func() {
-			defer firehose.flushOrderedOutputWG.Done()
-
-			buffer := make(map[uint64][]byte)
-
-			// Blocks until tracer sends first block number to flush
-			nextExpected := <-firehose.flushStartSignal
-
-			for result := range firehose.flushOrderedOutputQueue {
-				buffer[result.blockNum] = result.data
-
-				for {
-					data, ok := buffer[nextExpected]
-					if !ok {
-						break
-					}
-
-					firehose.flushToFirehose(data)
-					delete(buffer, nextExpected)
-					nextExpected++
-				}
-			}
-		}()
 	}
 
 	return firehose
@@ -417,6 +372,15 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 		}
 	} else {
 		applyBackwardCompatibilityLogSuffix = " (disabled)"
+	}
+
+	if f.config.ConcurrentBlockFlushing > 0 {
+		f.BlockFlushQueue = NewBlockFlushQueue(
+			f.config.ConcurrentBlockFlushing,
+			f.blockFlushBufferSize,
+			f.printBlockToFirehose,
+			f.flushToFirehose,
+		)
 	}
 
 	log.Info("Firehose tracer initialized",
@@ -565,16 +529,7 @@ func (f *Firehose) OnBlockEnd(err error) {
 
 		// Flush block to firehose and optionally use goroutine
 		if f.concurrentBlockFlushing > 0 {
-			select {
-			case f.flushStartSignal <- f.block.Number:
-			default:
-			}
-
-			job := &blockPrintJob{
-				block:    f.block,
-				finality: f.blockFinality,
-			}
-			f.flushJobQueue <- job
+			f.BlockFlushQueue.Enqueue(f.block, f.blockFinality)
 		} else {
 			f.printBlockToFirehose(f.block, f.blockFinality)
 		}
@@ -697,9 +652,9 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 }
 
 func (f *Firehose) OnClose() {
-	if f.concurrentBlockFlushing > 0 {
+	if f.BlockFlushQueue != nil {
 		log.Info("Firehose closing, flushing queued blocks to standard output")
-		f.CloseBlockPrintQueue()
+		f.BlockFlushQueue.Close()
 	}
 }
 
@@ -1952,9 +1907,11 @@ func (f *Firehose) panicInvalidState(msg string, callerSkip int) string {
 
 // printBlockToFirehose is a helper function to print a block to Firehose protocl format.
 func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *FinalityStatus) {
-	buf := bytes.NewBuffer(make([]byte, 0, 128*1024)) // 128 KB
+	channelSize := int(math.Ceil(20000 * 8 / 6))
+	buf := bytes.NewBuffer(make([]byte, 0, channelSize))
 
 	marshalled, err := proto.Marshal(block)
+
 	if err != nil {
 		panic(fmt.Errorf("failed to marshal block: %w", err))
 	}
@@ -1991,7 +1948,7 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 	buf.WriteString("\n")
 
 	if f.concurrentBlockFlushing > 0 {
-		f.flushOrderedOutputQueue <- &blockOutput{
+		f.BlockFlushQueue.outputQueue <- &outputJob{
 			blockNum: block.Number,
 			data:     buf.Bytes(),
 		}
@@ -2930,36 +2887,4 @@ func (m Memory) GetPtr(offset, size int64) []byte {
 	// In this situation, we must pad with zeroes when the memory is not big enough.
 	reminder := m[min(offset, int64(len(m))):]
 	return append(reminder, make([]byte, int(size)-len(reminder))...)
-}
-
-type blockPrintJob struct {
-	block    *pbeth.Block
-	finality *FinalityStatus
-}
-
-func (f *Firehose) blockPrintWorker() {
-	defer f.flushJobWG.Done()
-	for job := range f.flushJobQueue {
-		f.printBlockToFirehose(job.block, job.finality)
-	}
-}
-
-// CloseBlockPrintQueue signals block printing goroutines to shut down and waits for them.
-// It blocks until all concurrent block flushing operations are completed, ensuring a clean
-// shutdown of the printing pipeline.
-func (f *Firehose) CloseBlockPrintQueue() {
-	if f.concurrentBlockFlushing > 0 {
-		f.closeChannels.Do(func() {
-			close(f.flushJobQueue)
-			f.flushJobWG.Wait()
-
-			close(f.flushOrderedOutputQueue)
-			f.flushOrderedOutputWG.Wait()
-		})
-	}
-}
-
-type blockOutput struct {
-	blockNum uint64
-	data     []byte
 }
