@@ -123,6 +123,11 @@ type BlobAndProofV1 struct {
 	Proof hexutil.Bytes `json:"proof"`
 }
 
+type BlobAndProofV2 struct {
+	Blob       hexutil.Bytes   `json:"blob"`
+	CellProofs []hexutil.Bytes `json:"proofs"`
+}
+
 // JSON type overrides for ExecutionPayloadEnvelope.
 type executionPayloadEnvelopeMarshaling struct {
 	BlockValue *hexutil.Big
@@ -331,7 +336,9 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		for j := range sidecar.Blobs {
 			bundle.Blobs = append(bundle.Blobs, hexutil.Bytes(sidecar.Blobs[j][:]))
 			bundle.Commitments = append(bundle.Commitments, hexutil.Bytes(sidecar.Commitments[j][:]))
-			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(sidecar.Proofs[j][:]))
+		}
+		for _, proof := range sidecar.Proofs {
+			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(proof[:]))
 		}
 	}
 
