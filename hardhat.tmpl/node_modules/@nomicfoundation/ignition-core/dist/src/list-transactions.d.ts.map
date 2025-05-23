@@ -1,1 +1,0 @@
-{"version":3,"file":"list-transactions.d.ts","sourceRoot":"","sources":["../../src/list-transactions.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,gBAAgB,EAAE,MAAM,kBAAkB,CAAC;AAuBzD,OAAO,EACL,KAAK,sBAAsB,EAE5B,MAAM,2BAA2B,CAAC;AAEnC;;;;;;;;GAQG;AACH,wBAAsB,gBAAgB,CACpC,aAAa,EAAE,MAAM,EACrB,iBAAiB,EAAE,IAAI,CAAC,gBAAgB,EAAE,cAAc,CAAC,GACxD,OAAO,CAAC,sBAAsB,CAAC,CA+GjC"}

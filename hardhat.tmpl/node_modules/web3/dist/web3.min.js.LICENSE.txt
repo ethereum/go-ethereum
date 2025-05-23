@@ -1,5 +1,0 @@
-/*! crc32.js (C) 2014-present SheetJS -- http://sheetjs.com */
-
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-
-/*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */

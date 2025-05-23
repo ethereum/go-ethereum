@@ -1,1 +1,0 @@
-{"version":3,"file":"metadata.d.ts","sourceRoot":"","sources":["../../src/internal/solc/metadata.ts"],"names":[],"mappings":";;AAKA,eAAO,MAAM,eAAe,IAAI,CAAC;AACjC,eAAO,MAAM,wCAAwC,kBAAkB,CAAC;AACxE,eAAO,MAAM,8BAA8B,WAAW,CAAC;AAIvD;;;;;;;;;;;;GAYG;AACH,wBAAgB,oBAAoB,CAAC,QAAQ,EAAE,MAAM,GAAG,MAAM,CA2B7D;AAED,wBAAgB,wBAAwB,CAAC,QAAQ,EAAE,MAAM,GAAG,MAAM,CAEjE"}

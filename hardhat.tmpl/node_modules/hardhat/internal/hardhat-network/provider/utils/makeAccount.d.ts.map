@@ -1,1 +1,0 @@
-{"version":3,"file":"makeAccount.d.ts","sourceRoot":"","sources":["../../../../src/internal/hardhat-network/provider/utils/makeAccount.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,OAAO,EAA6B,MAAM,kBAAkB,CAAC;AAE/E,OAAO,EAAE,cAAc,EAAE,MAAM,eAAe,CAAC;AAI/C,wBAAgB,WAAW,CAAC,EAAE,EAAE,cAAc;;;EAa7C"}

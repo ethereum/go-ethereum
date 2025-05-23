@@ -1,1 +1,0 @@
-{"version":3,"file":"adjacency-list-converter.d.ts","sourceRoot":"","sources":["../../../../src/internal/utils/adjacency-list-converter.ts"],"names":[],"mappings":"AACA,OAAO,EACL,MAAM,EAGP,MAAM,oBAAoB,CAAC;AAE5B,OAAO,EAAE,aAAa,EAAE,MAAM,kBAAkB,CAAC;AAGjD,qBAAa,sBAAsB;WACnB,6BAA6B,CACzC,OAAO,EAAE,MAAM,EAAE,GAChB,aAAa;IAsBhB;;;;OAIG;IACH,OAAO,CAAC,MAAM,CAAC,wCAAwC;CAuBxD"}

@@ -1,1 +1,0 @@
-{"version":3,"file":"lock.d.ts","sourceRoot":"","sources":["../src/lock.ts"],"names":[],"mappings":"AACA,qBAAa,IAAI;IACf,OAAO,CAAC,OAAO,CAAY;IAC3B,OAAO,CAAC,oBAAoB,CAAkC;IAE9D;;;OAGG;IACU,OAAO,IAAI,OAAO,CAAC,OAAO,CAAC;IAWxC;;;OAGG;IACI,OAAO,IAAI,IAAI;CAiBvB"}
