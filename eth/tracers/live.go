@@ -44,7 +44,11 @@ func (d *liveDirectory) New(name string, config json.RawMessage) (*tracing.Hooks
 		config = json.RawMessage("{}")
 	}
 	if f, ok := d.elems[name]; ok {
-		return f(config)
+		hooks, err := f(config)
+		if err != nil {
+			return nil, err
+		}
+		return tracing.Upgrade(hooks)
 	}
 	return nil, errors.New("not found")
 }
