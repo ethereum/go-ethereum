@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/tracersutils"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -278,11 +279,11 @@ func (b *backendMock) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rp
 	return nil, nil
 }
 func (b *backendMock) CurrentBlock() *types.Header { return nil }
-func (b *backendMock) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
-	return nil, nil
+func (b *backendMock) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
+	return nil, nil, nil
 }
-func (b *backendMock) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return nil, nil
+func (b *backendMock) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
+	return nil, nil, nil
 }
 func (b *backendMock) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	return nil, nil

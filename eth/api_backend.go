@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/tracersutils"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/lib/ethapi"
@@ -115,39 +116,39 @@ func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*ty
 	return b.eth.blockchain.GetHeaderByHash(hash), nil
 }
 
-func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
+func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {
 		block := b.eth.miner.PendingBlock()
 		if block == nil {
-			return nil, errors.New("pending block is not available")
+			return nil, nil, errors.New("pending block is not available")
 		}
-		return block, nil
+		return block, nil, nil
 	}
 	// Otherwise resolve and return the block
 	if number == rpc.LatestBlockNumber {
 		header := b.eth.blockchain.CurrentBlock()
-		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil, nil
 	}
 	if number == rpc.FinalizedBlockNumber {
 		header := b.eth.blockchain.CurrentFinalBlock()
 		if header == nil {
-			return nil, errors.New("finalized block not found")
+			return nil, nil, errors.New("finalized block not found")
 		}
-		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil, nil
 	}
 	if number == rpc.SafeBlockNumber {
 		header := b.eth.blockchain.CurrentSafeBlock()
 		if header == nil {
-			return nil, errors.New("safe block not found")
+			return nil, nil, errors.New("safe block not found")
 		}
-		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil, nil
 	}
-	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
+	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil, nil
 }
 
-func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(hash), nil
+func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
+	return b.eth.blockchain.GetBlockByHash(hash), nil, nil
 }
 
 // GetBody returns body of a block. It does not resolve special block numbers.
@@ -163,7 +164,8 @@ func (b *EthAPIBackend) GetBody(ctx context.Context, hash common.Hash, number rp
 
 func (b *EthAPIBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
-		return b.BlockByNumber(ctx, blockNr)
+		b, _, err := b.BlockByNumber(ctx, blockNr)
+		return b, err
 	}
 	if hash, ok := blockNrOrHash.Hash(); ok {
 		header := b.eth.blockchain.GetHeaderByHash(hash)

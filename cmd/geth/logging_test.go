@@ -21,6 +21,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -28,9 +29,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/internal/reexec"
+	"github.com/ethereum/go-ethereum/lib/reexec"
 )
 
 func runSelf(args ...string) ([]byte, error) {

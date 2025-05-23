@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/tracersutils"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/lib/blocktest"
@@ -475,25 +476,27 @@ func (b testBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc
 }
 func (b testBackend) CurrentHeader() *types.Header { return b.chain.CurrentBlock() }
 func (b testBackend) CurrentBlock() *types.Header  { return b.chain.CurrentBlock() }
-func (b testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
+func (b testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
 	if number == rpc.LatestBlockNumber {
 		head := b.chain.CurrentBlock()
-		return b.chain.GetBlock(head.Hash(), head.Number.Uint64()), nil
+		return b.chain.GetBlock(head.Hash(), head.Number.Uint64()), nil, nil
 	}
 	if number == rpc.PendingBlockNumber {
-		return b.pending, nil
+		return b.pending, nil, nil
 	}
-	return b.chain.GetBlockByNumber(uint64(number)), nil
+	return b.chain.GetBlockByNumber(uint64(number)), nil, nil
 }
-func (b testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.chain.GetBlockByHash(hash), nil
+func (b testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
+	return b.chain.GetBlockByHash(hash), nil, nil
 }
 func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
-		return b.BlockByNumber(ctx, blockNr)
+		b, _, err := b.BlockByNumber(ctx, blockNr)
+		return b, err
 	}
 	if blockHash, ok := blockNrOrHash.Hash(); ok {
-		return b.BlockByHash(ctx, blockHash)
+		b, _, err := b.BlockByHash(ctx, blockHash)
+		return b, err
 	}
 	panic("unknown type rpc.BlockNumberOrHash")
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/tracersutils"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -67,9 +68,9 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 	return b.chain.GetHeaderByNumber(uint64(number)), nil
 }
 
-func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
+func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
 	if number > testHead {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if number == rpc.EarliestBlockNumber {
 		number = 0
@@ -87,10 +88,10 @@ func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber)
 		if b.pending {
 			number = testHead + 1
 		} else {
-			return nil, nil
+			return nil, nil, nil
 		}
 	}
-	return b.chain.GetBlockByNumber(uint64(number)), nil
+	return b.chain.GetBlockByNumber(uint64(number)), nil, nil
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
