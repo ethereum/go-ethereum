@@ -94,15 +94,6 @@ func (dl *diskLayer) setGenerator(generator *generator) {
 	dl.generator = generator
 }
 
-// isStale return whether this layer has become stale (was flattened across) or if
-// it's still live.
-func (dl *diskLayer) isStale() bool {
-	dl.lock.RLock()
-	defer dl.lock.RUnlock()
-
-	return dl.stale
-}
-
 // markStale sets the stale flag as true.
 func (dl *diskLayer) markStale() {
 	dl.lock.Lock()
