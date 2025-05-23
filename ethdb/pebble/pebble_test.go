@@ -29,15 +29,17 @@ import (
 func TestPebbleDB(t *testing.T) {
 	t.Run("DatabaseSuite", func(t *testing.T) {
 		dbtest.TestDatabaseSuite(t, func() ethdb.KeyValueStore {
-			db, err := pebble.Open("", &pebble.Options{
+			idb, err := pebble.Open("", &pebble.Options{
 				FS: vfs.NewMem(),
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			return &Database{
-				db: db,
+			db := &Database{
+				db: idb,
 			}
+			db.registerMetrics("")
+			return db
 		})
 	})
 }
