@@ -390,10 +390,6 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			continue
 		}
 
-		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance in the transaction pool.
-		from, _ := types.Sender(env.signer, tx)
-
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !miner.chainConfig.IsEIP155(env.header.Number) {
@@ -407,6 +403,9 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		err := miner.commitTransaction(env, tx)
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
+			// Error may be ignored here. The error has already been checked
+			// during transaction acceptance in the transaction pool.
+			from, _ := types.Sender(env.signer, tx)
 			// New head notification data race between the transaction pool and miner, shift
 			log.Trace("Skipping transaction with low nonce", "hash", ltx.Hash, "sender", from, "nonce", tx.Nonce())
 			txs.Shift()
