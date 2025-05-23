@@ -1,10 +1,30 @@
-name: Release Builds
+name: Release Builds (push)
 
 on:
   push:
     branches: [ master ]
 
 jobs:
+  linux:
+    name: Linux Build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: 1.24
+        cache: false
+
+    - name: display environment
+      run: |
+        env
+
+    - name: Run build
+      run: |
+        go run build/ci.go install
+
   docker:
     name: Docker Image
     runs-on: ubuntu-latest
@@ -26,19 +46,3 @@ jobs:
     - name: Run docker build
       run: |
         go run build/ci.go dockerx -platform linux/amd64,linux/arm64,linux/riscv64
-
-  linux:
-    name: Linux Build
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 1.24
-        cache: false
-
-    - name: Run build
-      run: |
-        go run build/ci.go install
