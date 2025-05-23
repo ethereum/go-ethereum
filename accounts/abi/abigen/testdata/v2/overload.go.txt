@@ -52,7 +52,8 @@ func (c *Overload) Instance(backend bind.ContractBackend, addr common.Address) *
 }
 
 // PackFoo is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x04bc52f8.
+// the contract method with ID 0x04bc52f8.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function foo(uint256 i, uint256 j) returns()
 func (overload *Overload) PackFoo(i *big.Int, j *big.Int) []byte {
@@ -63,8 +64,18 @@ func (overload *Overload) PackFoo(i *big.Int, j *big.Int) []byte {
 	return enc
 }
 
+// TryPackFoo is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x04bc52f8.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function foo(uint256 i, uint256 j) returns()
+func (overload *Overload) TryPackFoo(i *big.Int, j *big.Int) ([]byte, error) {
+	return overload.abi.Pack("foo", i, j)
+}
+
 // PackFoo0 is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x2fbebd38.
+// the contract method with ID 0x2fbebd38.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function foo(uint256 i) returns()
 func (overload *Overload) PackFoo0(i *big.Int) []byte {
@@ -73,6 +84,15 @@ func (overload *Overload) PackFoo0(i *big.Int) []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackFoo0 is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x2fbebd38.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function foo(uint256 i) returns()
+func (overload *Overload) TryPackFoo0(i *big.Int) ([]byte, error) {
+	return overload.abi.Pack("foo0", i)
 }
 
 // OverloadBar represents a bar event raised by the Overload contract.
