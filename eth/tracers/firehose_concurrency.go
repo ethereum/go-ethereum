@@ -78,6 +78,7 @@ func (q *BlockFlushQueue) Close() {
 	})
 }
 
+// Instantiates a worker that listens for jobs
 func (q *BlockFlushQueue) worker() {
 	defer q.jobWG.Done()
 	for job := range q.jobQueue {
@@ -85,6 +86,7 @@ func (q *BlockFlushQueue) worker() {
 	}
 }
 
+// Channel ensuring that blocks are linearly flushed out in order
 func (q *BlockFlushQueue) outputOrderer() {
 	defer q.outputWG.Done()
 	buffer := make(map[uint64][]byte)

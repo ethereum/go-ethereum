@@ -375,6 +375,7 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 	}
 
 	if f.config.ConcurrentBlockFlushing > 0 {
+		log.Info("Firehose concurrent block flushing enabled, starting goroutines")
 		f.BlockFlushQueue = NewBlockFlushQueue(
 			f.config.ConcurrentBlockFlushing,
 			f.blockFlushBufferSize,
