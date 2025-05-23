@@ -452,7 +452,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// from the subtrie. Child can never be nil here since the
 		// subtrie must contain at least two other values with keys
 		// longer than n.Key.
-		dirty, child, err := t.delete(n.Val, append(prefix, key[:len(n.Key)]...), key[len(n.Key):])
+		dirty, child, err := t.delete(n.Val, append(prefix, key[:matchlen]...), key[matchlen:])
 		if !dirty || err != nil {
 			return false, n, err
 		}
