@@ -23,6 +23,5 @@ services:
       --ws.api personal,eth,net,web3,miner
       --allow-insecure-unlock
       --mine
-      --miner.threads=1
       --nodiscover
     restart: unless-stopped

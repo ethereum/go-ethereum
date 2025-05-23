@@ -1,0 +1,58 @@
+name: Build and Push to Google Artifact Registry
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ none ]
+
+jobs:
+  build-and-push:
+    if: contains(github.event.head_commit.message, 'CI:Deploy')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set image tag (timestamp)
+        id: vars
+        run: echo "TAG=$(date +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.DOCKER_PASSWORD }}'
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker europe-west3-docker.pkg.dev
+
+      - name: Start Geth Devnet container
+        run: |
+          docker compose -f ./docker-compose.yml up -d
+          sleep 5 # Give Geth time to initialize
+
+      - name: Install dependencies
+        run: |
+          apt update
+          apt install -y curl
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          apt install -y nodejs
+
+      - name: Deploy contract to devnet
+        run: |
+          cd hardhat.tmpl
+          node deploy.js
+
+      - name: Commit container state
+        run: |
+          docker stop geth-devnet
+          docker commit geth-devnet europe-west3-docker.pkg.dev/task-460410/task-repo/app:with-contracts
+
+      - name: Push image to Artifact Registry
+        run: |
+          docker push europe-west3-docker.pkg.dev/task-460410/task-repo/app:with-contracts
