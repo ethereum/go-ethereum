@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -202,6 +203,56 @@ func (ec *Client) SubscribeFullPendingTransactions(ctx context.Context, ch chan<
 // SubscribePendingTransactions subscribes to new pending transaction hashes.
 func (ec *Client) SubscribePendingTransactions(ctx context.Context, ch chan<- common.Hash) (*rpc.ClientSubscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "newPendingTransactions")
+}
+
+// TxTraceResult is the result of a single transaction trace.
+type TxTraceResult struct {
+	TxHash common.Hash `json:"txHash"`           // Transaction hash
+	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
+	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+}
+
+// BlockTraceResult represents the results of tracing a single block.
+type BlockTraceResult struct {
+	Block  hexutil.Uint64   `json:"block"`  // Block number corresponding to this trace
+	Hash   common.Hash      `json:"hash"`   // Block hash corresponding to this trace
+	Traces []*TxTraceResult `json:"traces"` // Trace results produced by the task
+}
+
+// CallTracerResult contains the results of a call tracer.
+type CallTracerResult struct {
+	Type    string             `json:"type"`
+	From    common.Address     `json:"from"`
+	To      common.Address     `json:"to"`
+	Value   *hexutil.Big       `json:"value"`
+	Gas     hexutil.Uint64     `json:"gas"`
+	GasUsed hexutil.Uint64     `json:"gasUsed"`
+	Input   hexutil.Bytes      `json:"input"`
+	Output  hexutil.Bytes      `json:"output"`
+	Error   string             `json:"error,omitempty"`
+	Calls   []CallTracerResult `json:"calls,omitempty"`
+}
+
+// TraceCallWithCallTracer returns the structured logs created during the execution of EVM
+// using the callTracer to collect them.
+func (ec *Client) TraceCallWithCallTracer(ctx context.Context, msg ethereum.CallMsg, blockNrOrHash rpc.BlockNumberOrHash) (*CallTracerResult, error) {
+	var result CallTracerResult
+	config := tracers.TraceCallConfig{
+		Tracer: "callTracer",
+	}
+	err := ec.c.CallContext(ctx, &result, "debug_traceCall", toCallArg(msg), blockNrOrHash, config)
+	return &result, err
+}
+
+// TraceTransactionWithCallTracer returns the structured logs created during the execution of EVM
+// using the callTracer to collect them.
+func (ec *Client) TraceTransactionWithCallTracer(ctx context.Context, txHash common.Hash) (*CallTracerResult, error) {
+	var result CallTracerResult
+	config := tracers.TraceConfig{
+		Tracer: "callTracer",
+	}
+	err := ec.c.CallContext(ctx, &result, "debug_traceTransaction", txHash, config)
+	return &result, err
 }
 
 func toBlockNumArg(number *big.Int) string {
