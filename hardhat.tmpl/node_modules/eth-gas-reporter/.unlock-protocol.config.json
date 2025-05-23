@@ -1,0 +1,12 @@
+{
+  "persistentCheckout": true,
+  "icon": "",
+  "callToAction": {
+      "default": "Support the Eth Gas Reporter team and unlock your membership today! \n\nYou can make a donation by purchasing a key using your Ethereum wallet. The key is a non fungible token which represents your membership. "
+  },
+  "locks": {
+      "0x2E6caf50CEEC531d60818cd85029C2cf3a398842": {
+          "name": "Eth Gas Reporter Community"
+      }
+  }
+}

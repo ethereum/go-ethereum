@@ -1,0 +1,4 @@
+{
+  "module": "../dist/zod/index.mjs",
+  "main": "../dist/zod/index.js"
+}

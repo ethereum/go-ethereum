@@ -1,0 +1,4 @@
+{
+  "module": "../dist/test/index.mjs",
+  "main": "../dist/test/index.js"
+}

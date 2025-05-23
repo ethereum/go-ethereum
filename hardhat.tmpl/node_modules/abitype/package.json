@@ -1,0 +1,60 @@
+{
+  "name": "abitype",
+  "description": "Strict TypeScript types for Ethereum ABIs",
+  "license": "MIT",
+  "version": "0.7.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wagmi-dev/abitype.git"
+  },
+  "ethereum": "wagmi-dev.eth",
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "module": "./dist/index.mjs",
+      "default": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "module": "./dist/config.mjs",
+      "default": "./dist/config.js"
+    },
+    "./test": {
+      "types": "./dist/test/index.d.ts",
+      "module": "./dist/test/index.mjs",
+      "default": "./dist/test/index.js"
+    },
+    "./zod": {
+      "types": "./dist/zod/index.d.ts",
+      "module": "./dist/zod/index.mjs",
+      "default": "./dist/zod/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "/config",
+    "/test",
+    "/zod",
+    "/dist"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "typescript": ">=4.9.4",
+    "zod": "^3 >=3.19.1"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "abi",
+    "eth",
+    "ethereum",
+    "typescript",
+    "web3"
+  ]
+}

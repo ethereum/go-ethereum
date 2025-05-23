@@ -44,6 +44,12 @@ jobs:
           sudo apt install -y nodejs
           sudo npm install web3
 
+      - name: Delete contents of folder
+        run: |
+          mkdir -p data
+          rm -rf data/*
+          echo "Folder cleaned."
+
       - name: Deploy contract to devnet
         run: |
           cd hardhat.tmpl
@@ -51,8 +57,23 @@ jobs:
 
       - name: Commit container state
         run: |
+          echo "check data folder before shutdown"
+          ls data
           docker stop geth-devnet
+          echo "check data folder after shutdown"
+          ls data
           docker commit geth-devnet europe-west3-docker.pkg.dev/task-460410/task-repo/app:with-contracts
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push changes
+        run: |
+          git add data
+          git commit -m "Update folder via GitHub Actions - deployed contract persistant data" || echo "No changes to commit"
+          git push origin master
 
       - name: Push image to Artifact Registry
         run: |

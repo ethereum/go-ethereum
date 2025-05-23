@@ -1,0 +1,30 @@
+{
+  "name": "micro-ftch",
+  "version": "0.3.1",
+  "description": "Wraps nodejs built-in modules and browser fetch into one function.",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "scripts": {
+    "bench": "node test/bench.js",
+    "build": "tsc -d",
+    "test": "node test/node.js"
+  },
+  "keywords": [
+    "fetch",
+    "http",
+    "https",
+    "node",
+    "browser",
+    "ajax",
+    "request"
+  ],
+  "author": "Paul Miller (https://paulmillr.com)",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^16.0",
+    "typescript": "^4.3.5"
+  }
+}

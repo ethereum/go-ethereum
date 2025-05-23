@@ -1,0 +1,1 @@
+{"version":3,"file":"web3_base_wallet.js","sourceRoot":"","sources":["../../src/web3_base_wallet.ts"],"names":[],"mappings":"AAkGA,MAAM,OAAgB,cAAgD,SAAQ,KAAQ;IAGrF,YAAmB,eAAuC;QACzD,KAAK,EAAE,CAAC;QACR,IAAI,CAAC,gBAAgB,GAAG,eAAe,CAAC;IACzC,CAAC;CAkBD"}

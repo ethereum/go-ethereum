@@ -1,0 +1,19 @@
+[package]
+edition = "2021"
+name = "nomicfoundation_solidity-analyzer"
+version = "0.0.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+solang-parser = "=0.1.13"
+# Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
+napi = { version = "=2.16.6", default-features = false, features = ["napi4"] }
+napi-derive = "=2.16.5"
+
+[build-dependencies]
+napi-build = "=2.1.3"
+
+[profile.release]
+lto = true

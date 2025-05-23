@@ -1,0 +1,14 @@
+import { EventArgDeclaration, EventDeclaration } from 'typechain';
+export declare function generateEventFilters(events: EventDeclaration[]): string;
+export declare function generateEventTypeExports(events: EventDeclaration[]): string;
+export declare function generateEventTypeExport(event: EventDeclaration, includeArgTypes: boolean): string;
+export declare function generateInterfaceEventDescription(event: EventDeclaration): string;
+export declare function generateEventSignature(event: EventDeclaration): string;
+export declare function generateEventInputs(eventArgs: EventArgDeclaration[]): string;
+export declare function generateEventArgType(eventArg: EventArgDeclaration): string;
+export declare function generateEventNameOrSignature(event: EventDeclaration, useSignature: boolean): string;
+export declare function generateGetEventForInterface(args: string[]): string;
+export declare function generateTypedContractEvent(event: EventDeclaration, useSignature: boolean): string;
+export declare function generateGetEventForContract(event: EventDeclaration, useSignature: boolean): string;
+export declare const EVENT_METHOD_OVERRIDES = "\n  queryFilter<TCEvent extends TypedContractEvent>(\n    event: TCEvent,\n    fromBlockOrBlockhash?: string | number | undefined,\n    toBlock?: string | number | undefined,\n  ): Promise<Array<TypedEventLog<TCEvent>>>\n  queryFilter<TCEvent extends TypedContractEvent>(\n    filter: TypedDeferredTopicFilter<TCEvent>,\n    fromBlockOrBlockhash?: string | number | undefined,\n    toBlock?: string | number | undefined\n  ): Promise<Array<TypedEventLog<TCEvent>>>;\n\n  on<TCEvent extends TypedContractEvent>(event: TCEvent, listener: TypedListener<TCEvent>): Promise<this>\n  on<TCEvent extends TypedContractEvent>(filter: TypedDeferredTopicFilter<TCEvent>, listener: TypedListener<TCEvent>): Promise<this>\n  \n  once<TCEvent extends TypedContractEvent>(event: TCEvent, listener: TypedListener<TCEvent>): Promise<this>\n  once<TCEvent extends TypedContractEvent>(filter: TypedDeferredTopicFilter<TCEvent>, listener: TypedListener<TCEvent>): Promise<this>\n\n  listeners<TCEvent extends TypedContractEvent>(\n    event: TCEvent\n  ): Promise<Array<TypedListener<TCEvent>>>;\n  listeners(eventName?: string): Promise<Array<Listener>>\n  removeAllListeners<TCEvent extends TypedContractEvent>(event?: TCEvent): Promise<this>\n";
+export declare const EVENT_IMPORTS: string[];

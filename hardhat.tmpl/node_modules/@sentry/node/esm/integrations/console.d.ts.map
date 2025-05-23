@@ -1,0 +1,1 @@
+{"version":3,"file":"console.d.ts","sourceRoot":"","sources":["../../src/integrations/console.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,WAAW,EAAY,MAAM,eAAe,CAAC;AAItD,iCAAiC;AACjC,qBAAa,OAAQ,YAAW,WAAW;IACzC;;OAEG;IACH,OAAc,EAAE,EAAE,MAAM,CAAa;IAErC;;OAEG;IACI,IAAI,EAAE,MAAM,CAAc;IAEjC;;OAEG;IACI,SAAS,IAAI,IAAI;CAMzB"}

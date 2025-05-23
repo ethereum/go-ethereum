@@ -1,0 +1,16 @@
+// @flow
+// Generated using flowgen2
+
+import {URL} from 'url';
+import type {HttpVerb} from 'then-request';
+import type {Response} from 'then-request';
+import type {Options} from './Options';
+declare var fd: any;
+export {fd as FormData};
+
+declare function doRequest(
+  method: HttpVerb,
+  url: string | URL,
+  options?: Options,
+): Response;
+export default doRequest;

@@ -1,0 +1,60 @@
+import { DeploymentParameters } from "../../../../types/deploy";
+import { AccountRuntimeValue, AddressResolvableFuture, ArgumentType, ContractFuture, EncodeFunctionCallFuture, Future, ModuleParameterRuntimeValue, ReadEventArgumentFuture, SolidityParameterType, StaticCallFuture } from "../../../../types/module";
+import { DeploymentLoader } from "../../../deployment-loader/types";
+import { DeploymentState } from "../../types/deployment-state";
+/**
+ * Resolve a futures value to a bigint.
+ *
+ * @param givenValue - either a bigint or a module parameter runtime value
+ * @param deploymentParameters - the user provided deployment parameters
+ * @returns the resolved bigint
+ */
+export declare function resolveValue(givenValue: bigint | ModuleParameterRuntimeValue<bigint> | StaticCallFuture<string, string> | ReadEventArgumentFuture, deploymentParameters: DeploymentParameters, deploymentState: DeploymentState, accounts: string[]): bigint;
+/**
+ * Recursively resolve an arguments array, replacing any runtime values
+ * or futures with their resolved values.
+ */
+export declare function resolveArgs(args: ArgumentType[], deploymentState: DeploymentState, deploymentParameters: DeploymentParameters, accounts: string[]): SolidityParameterType[];
+/**
+ * Resolve a future's from field to either undefined (meaning defer until execution)
+ * or a string address.
+ */
+export declare function resolveFutureFrom(from: string | AccountRuntimeValue | undefined, accounts: string[], defaultSender: string): string;
+/**
+ * Resolve a `send` future's data parameter to a string.
+ */
+export declare function resolveFutureData(data: string | EncodeFunctionCallFuture<string, string> | undefined, deploymentState: DeploymentState): string;
+/**
+ * Resolves an account runtime value to an address.
+ */
+export declare function resolveAccountRuntimeValue(arv: AccountRuntimeValue, accounts: string[]): string;
+/**
+ * Resolve a futures dependent libraries to a map of library names to addresses.
+ */
+export declare function resolveLibraries(libraries: Record<string, ContractFuture<string>>, deploymentState: DeploymentState): {
+    [libName: string]: string;
+};
+/**
+ * Resolve a contract future down to the address it is deployed at.
+ */
+export declare function resolveAddressForContractFuture(contract: ContractFuture<string>, deploymentState: DeploymentState): string;
+/**
+ * Resolve a SendDataFuture's "to" field to a valid ethereum address.
+ */
+export declare function resolveSendToAddress(to: string | AddressResolvableFuture | ModuleParameterRuntimeValue<string> | AccountRuntimeValue, deploymentState: DeploymentState, deploymentParameters: DeploymentParameters, accounts: string[]): string;
+/**
+ * Resolve the given address like to a valid ethereum address. Futures
+ * will be resolved to their result then runtime checked to ensure
+ * they are a valid address.
+ */
+export declare function resolveAddressLike(addressLike: string | AddressResolvableFuture | ModuleParameterRuntimeValue<string>, deploymentState: DeploymentState, deploymentParameters: DeploymentParameters, accounts: string[]): string;
+/**
+ * Resolves a read event argument result to a SolidityParameterType.
+ */
+export declare function resolveReadEventArgumentResult(future: Future, emitter: ContractFuture<string>, eventName: string, eventIndex: number, nameOrIndex: string | number, deploymentState: DeploymentState, deploymentLoader: DeploymentLoader): Promise<{
+    result: SolidityParameterType;
+    emitterAddress: string;
+    txToReadFrom: string;
+}>;
+export declare function resolveEncodeFunctionCallResult(artifactId: string, functionName: string, args: SolidityParameterType[], deploymentLoader: DeploymentLoader): Promise<string>;
+//# sourceMappingURL=future-resolvers.d.ts.map

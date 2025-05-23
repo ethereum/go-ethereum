@@ -1,0 +1,48 @@
+{
+  "author": "Richard Moore <me@ricmoo.com>",
+  "dependencies": {
+    "@ethersproject/bignumber": "^5.8.0",
+    "@ethersproject/bytes": "^5.8.0",
+    "@ethersproject/logger": "^5.8.0",
+    "@ethersproject/networks": "^5.8.0",
+    "@ethersproject/properties": "^5.8.0",
+    "@ethersproject/transactions": "^5.8.0",
+    "@ethersproject/web": "^5.8.0"
+  },
+  "description": "An Abstract Class for describing an Ethereum Provider for ethers.",
+  "ethereum": "donations.ethers.eth",
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://gitcoin.co/grants/13/ethersjs-complete-simple-and-tiny-2"
+    },
+    {
+      "type": "individual",
+      "url": "https://www.buymeacoffee.com/ricmoo"
+    }
+  ],
+  "gitHead": "fa5f647bb2cde63dd0b9664c42cbfbdc1515e800",
+  "keywords": [
+    "Ethereum",
+    "ethers"
+  ],
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "module": "./lib.esm/index.js",
+  "name": "@ethersproject/abstract-provider",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/abstract-provider",
+    "type": "git",
+    "url": "git://github.com/ethers-io/ethers.js.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "sideEffects": false,
+  "tarballHash": "0xa328a84101dd75804488c3b1e786a6c168adeab392a811baf4bb32b150f26d55",
+  "types": "./lib/index.d.ts",
+  "version": "5.8.0"
+}

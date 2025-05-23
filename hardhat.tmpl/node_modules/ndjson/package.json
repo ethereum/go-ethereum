@@ -1,0 +1,40 @@
+{
+  "name": "ndjson",
+  "version": "2.0.0",
+  "description": "Streaming newline delimited json parser + serializer",
+  "main": "index.js",
+  "scripts": {
+    "test": "tape test/index.js"
+  },
+  "bin": {
+    "ndjson": "cli.js"
+  },
+  "author": "max ogden",
+  "license": "BSD-3-Clause",
+  "engines": {
+    "node": ">=10"
+  },
+  "dependencies": {
+    "json-stringify-safe": "^5.0.1",
+    "minimist": "^1.2.5",
+    "readable-stream": "^3.6.0",
+    "split2": "^3.0.0",
+    "through2": "^4.0.0"
+  },
+  "devDependencies": {
+    "concat-stream": "^2.0.0",
+    "tape": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/ndjson/ndjson.js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ndjson/ndjson.js/issues"
+  },
+  "homepage": "https://github.com/ndjson/ndjson.js",
+  "keywords": [
+    "ndjson",
+    "ldjson"
+  ]
+}

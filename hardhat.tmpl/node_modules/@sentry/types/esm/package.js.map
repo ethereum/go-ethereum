@@ -1,0 +1,1 @@
+{"version":3,"file":"package.js","sourceRoot":"","sources":["../src/package.ts"],"names":[],"mappings":"","sourcesContent":["/** JSDoc */\nexport interface Package {\n  name: string;\n  version: string;\n}\n"]}

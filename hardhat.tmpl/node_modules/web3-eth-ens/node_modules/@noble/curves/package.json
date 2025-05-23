@@ -1,0 +1,159 @@
+{
+  "name": "@noble/curves",
+  "version": "1.4.2",
+  "description": "Audited & minimal JS implementation of elliptic curve cryptography",
+  "files": [
+    "abstract",
+    "esm",
+    "src",
+    "*.js",
+    "*.js.map",
+    "*.d.ts",
+    "*.d.ts.map"
+  ],
+  "scripts": {
+    "bench": "cd benchmark; node secp256k1.js; node curves.js; node ecdh.js; node hash-to-curve.js; node modular.js; node bls.js; node ristretto255.js; node decaf448.js",
+    "build": "tsc && tsc -p tsconfig.esm.json",
+    "build:release": "cd build && npm i && npm run build",
+    "build:clean": "rm *.{js,d.ts,d.ts.map,js.map} esm/*.{js,d.ts,d.ts.map,js.map} 2> /dev/null",
+    "lint": "prettier --check 'src/**/*.{js,ts}' 'test/*.js'",
+    "format": "prettier --write 'src/**/*.{js,ts}' 'test/*.js'",
+    "test": "node test/index.test.js"
+  },
+  "author": "Paul Miller (https://paulmillr.com)",
+  "homepage": "https://paulmillr.com/noble/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulmillr/noble-curves.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@noble/hashes": "1.4.0"
+  },
+  "devDependencies": {
+    "@paulmillr/jsbt": "0.2.1",
+    "fast-check": "3.0.0",
+    "micro-bmark": "0.3.1",
+    "micro-should": "0.4.0",
+    "prettier": "3.3.2",
+    "typescript": "5.5.2"
+  },
+  "sideEffects": false,
+  "main": "index.js",
+  "exports": {
+    ".": {
+      "import": "./esm/index.js",
+      "require": "./index.js"
+    },
+    "./abstract/edwards": {
+      "import": "./esm/abstract/edwards.js",
+      "require": "./abstract/edwards.js"
+    },
+    "./abstract/modular": {
+      "import": "./esm/abstract/modular.js",
+      "require": "./abstract/modular.js"
+    },
+    "./abstract/montgomery": {
+      "import": "./esm/abstract/montgomery.js",
+      "require": "./abstract/montgomery.js"
+    },
+    "./abstract/weierstrass": {
+      "import": "./esm/abstract/weierstrass.js",
+      "require": "./abstract/weierstrass.js"
+    },
+    "./abstract/bls": {
+      "import": "./esm/abstract/bls.js",
+      "require": "./abstract/bls.js"
+    },
+    "./abstract/hash-to-curve": {
+      "import": "./esm/abstract/hash-to-curve.js",
+      "require": "./abstract/hash-to-curve.js"
+    },
+    "./abstract/curve": {
+      "import": "./esm/abstract/curve.js",
+      "require": "./abstract/curve.js"
+    },
+    "./abstract/utils": {
+      "import": "./esm/abstract/utils.js",
+      "require": "./abstract/utils.js"
+    },
+    "./abstract/poseidon": {
+      "import": "./esm/abstract/poseidon.js",
+      "require": "./abstract/poseidon.js"
+    },
+    "./_shortw_utils": {
+      "import": "./esm/_shortw_utils.js",
+      "require": "./_shortw_utils.js"
+    },
+    "./bls12-381": {
+      "import": "./esm/bls12-381.js",
+      "require": "./bls12-381.js"
+    },
+    "./bn254": {
+      "import": "./esm/bn254.js",
+      "require": "./bn254.js"
+    },
+    "./ed25519": {
+      "import": "./esm/ed25519.js",
+      "require": "./ed25519.js"
+    },
+    "./ed448": {
+      "import": "./esm/ed448.js",
+      "require": "./ed448.js"
+    },
+    "./index": {
+      "import": "./esm/index.js",
+      "require": "./index.js"
+    },
+    "./jubjub": {
+      "import": "./esm/jubjub.js",
+      "require": "./jubjub.js"
+    },
+    "./p256": {
+      "import": "./esm/p256.js",
+      "require": "./p256.js"
+    },
+    "./p384": {
+      "import": "./esm/p384.js",
+      "require": "./p384.js"
+    },
+    "./p521": {
+      "import": "./esm/p521.js",
+      "require": "./p521.js"
+    },
+    "./pasta": {
+      "import": "./esm/pasta.js",
+      "require": "./pasta.js"
+    },
+    "./secp256k1": {
+      "import": "./esm/secp256k1.js",
+      "require": "./secp256k1.js"
+    }
+  },
+  "keywords": [
+    "elliptic",
+    "curve",
+    "cryptography",
+    "secp256k1",
+    "ed25519",
+    "p256",
+    "p384",
+    "p521",
+    "secp256r1",
+    "ed448",
+    "x25519",
+    "ed25519",
+    "bls12-381",
+    "bn254",
+    "bls",
+    "noble",
+    "ecc",
+    "ecdsa",
+    "eddsa",
+    "weierstrass",
+    "montgomery",
+    "edwards",
+    "schnorr"
+  ],
+  "funding": "https://paulmillr.com/funding/"
+}

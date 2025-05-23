@@ -1,0 +1,6 @@
+language: node_js
+node_js:
+  - node  # latest stable
+  - 6
+script: 
+  - npm test

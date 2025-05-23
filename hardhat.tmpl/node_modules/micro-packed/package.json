@@ -1,0 +1,72 @@
+{
+  "name": "micro-packed",
+  "version": "0.7.3",
+  "description": "Define complex binary structures using composable primitives",
+  "dependencies": {
+    "@scure/base": "~1.2.5"
+  },
+  "files": [
+    "!lib/_type_test.js",
+    "!lib/_type_test.js.map",
+    "!lib/_type_test.d.ts",
+    "!lib/_type_test.d.ts.map",
+    "!lib/esm/_type_test.js",
+    "!lib/esm/_type_test.js.map",
+    "!lib/esm/_type_test.d.ts",
+    "!lib/esm/_type_test.d.ts.map",
+    "!src/_type_test.ts",
+    "lib",
+    "src"
+  ],
+  "main": "lib/index.js",
+  "module": "lib/esm/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/esm/index.js",
+      "require": "./lib/index.js"
+    },
+    "./debugger": {
+      "import": "./lib/esm/debugger.js",
+      "require": "./lib/debugger.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "bench": "node benchmark/index.js noble",
+    "bench:all": "node benchmark/index.js",
+    "build": "tsc && tsc -p tsconfig.cjs.json",
+    "build:release": "npx jsbt esbuild test/build",
+    "lint": "prettier --check src",
+    "format": "prettier --write src",
+    "test": "node test/index.js",
+    "test:bun": "bun test/index.js",
+    "test:deno": "deno --allow-env --allow-read test/index.js",
+    "test:slow": "node test/slow.test.js"
+  },
+  "author": "Paul Miller (https://paulmillr.com)",
+  "license": "MIT",
+  "homepage": "https://github.com/paulmillr/micro-packed",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulmillr/micro-packed.git"
+  },
+  "devDependencies": {
+    "@paulmillr/jsbt": "0.3.3",
+    "fast-check": "3.0.0",
+    "micro-bmark": "0.4.1",
+    "micro-should": "0.5.2",
+    "prettier": "3.5.3",
+    "typescript": "5.8.3"
+  },
+  "keywords": [
+    "encode",
+    "encoder",
+    "binary",
+    "bytes",
+    "struct",
+    "tuple",
+    "enum"
+  ],
+  "funding": "https://paulmillr.com/funding/"
+}

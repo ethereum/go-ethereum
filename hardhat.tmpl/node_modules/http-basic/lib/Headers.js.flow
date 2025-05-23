@@ -1,0 +1,7 @@
+// @flow
+// Generated using flowgen2
+
+type IncomingHttpHeaders = Object;
+
+type Headers = IncomingHttpHeaders;
+export type {Headers};

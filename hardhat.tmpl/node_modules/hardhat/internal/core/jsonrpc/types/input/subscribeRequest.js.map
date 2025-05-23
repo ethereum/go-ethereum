@@ -1,0 +1,1 @@
+{"version":3,"file":"subscribeRequest.js","sourceRoot":"","sources":["../../../../../src/internal/core/jsonrpc/types/input/subscribeRequest.ts"],"names":[],"mappings":";;;;;;;;;;;;;;;;;;;;;;;;;;AAAA,yCAA2B;AAad,QAAA,mBAAmB,GAAG,CAAC,CAAC,KAAK,CACxC;IACE,QAAQ,EAAE,IAAI;IACd,sBAAsB,EAAE,IAAI;IAC5B,IAAI,EAAE,IAAI;CACX,EACD,cAAc,CACf,CAAC"}

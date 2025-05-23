@@ -1,0 +1,11 @@
+import { Web3RequestManager } from 'web3-core';
+import { Address, EthPersonalAPI, HexString, Transaction } from 'web3-types';
+export declare const getAccounts: (requestManager: Web3RequestManager<EthPersonalAPI>) => Promise<string[]>;
+export declare const newAccount: (requestManager: Web3RequestManager<EthPersonalAPI>, password: string) => Promise<string>;
+export declare const unlockAccount: (requestManager: Web3RequestManager<EthPersonalAPI>, address: Address, password: string, unlockDuration: number) => Promise<boolean>;
+export declare const lockAccount: (requestManager: Web3RequestManager<EthPersonalAPI>, address: Address) => Promise<boolean>;
+export declare const importRawKey: (requestManager: Web3RequestManager<EthPersonalAPI>, keyData: HexString, passphrase: string) => Promise<string>;
+export declare const sendTransaction: (requestManager: Web3RequestManager<EthPersonalAPI>, tx: Transaction, passphrase: string) => Promise<string>;
+export declare const signTransaction: (requestManager: Web3RequestManager<EthPersonalAPI>, tx: Transaction, passphrase: string) => Promise<string>;
+export declare const sign: (requestManager: Web3RequestManager<EthPersonalAPI>, data: HexString, address: Address, passphrase: string) => Promise<string>;
+export declare const ecRecover: (requestManager: Web3RequestManager<EthPersonalAPI>, signedData: HexString, signature: string) => Promise<string>;
