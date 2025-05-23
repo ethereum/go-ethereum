@@ -45,14 +45,6 @@ func newMemoryTable(name string, config freezerTableConfig) *memoryTable {
 	return &memoryTable{name: name, config: config}
 }
 
-// has returns an indicator whether the specified data exists.
-func (t *memoryTable) has(number uint64) bool {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-
-	return number >= t.offset && number < t.items
-}
-
 // retrieve retrieves multiple items in sequence, starting from the index 'start'.
 // It will return:
 //   - at most 'count' items,
