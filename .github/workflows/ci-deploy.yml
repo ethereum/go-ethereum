@@ -38,10 +38,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt update
-          apt install -y curl
+          sudo apt update
+          sudo apt install -y curl
           curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-          apt install -y nodejs
+          sudo apt install -y nodejs
 
       - name: Deploy contract to devnet
         run: |
