@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/era/eradl"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
@@ -277,10 +278,7 @@ func initGenesis(ctx *cli.Context) error {
 		overrides.OverrideVerkle = &v
 	}
 
-	chaindb, err := stack.OpenDatabaseWithFreezer("chaindata", 0, 0, ctx.String(utils.AncientFlag.Name), "", false, "")
-	if err != nil {
-		utils.Fatalf("Failed to open database: %v", err)
-	}
+	chaindb := utils.MakeChainDatabase(ctx, stack, false)
 	defer chaindb.Close()
 
 	triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
@@ -317,7 +315,7 @@ func dumpGenesis(ctx *cli.Context) error {
 	// dump whatever already exists in the datadir
 	stack, _ := makeConfigNode(ctx)
 
-	db, err := stack.OpenDatabase("chaindata", 0, 0, "", true)
+	db, err := stack.OpenDatabaseWithOptions("chaindata", node.DatabaseOptions{ReadOnly: true})
 	if err != nil {
 		return err
 	}
