@@ -90,7 +90,7 @@ func startLocalhostV5(t *testing.T, cfg Config) *UDPv5 {
 	}
 	realaddr := socket.LocalAddr().(*net.UDPAddr)
 	ln.SetStaticIP(realaddr.IP)
-	ln.Set(enr.UDP(realaddr.Port))
+	ln.SetFallbackUDP(realaddr.Port)
 	udp, err := ListenV5(socket, ln, cfg)
 	if err != nil {
 		t.Fatal(err)
