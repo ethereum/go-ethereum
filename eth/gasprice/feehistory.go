@@ -273,7 +273,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 						results <- fees
 					} else {
 						if len(rewardPercentiles) != 0 {
-							fees.block, fees.err = oracle.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNumber))
+							fees.block, _, fees.err = oracle.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNumber))
 							if fees.block != nil && fees.err == nil {
 								fees.receipts, fees.err = oracle.backend.GetReceipts(ctx, fees.block.Hash())
 								fees.header = fees.block.Header()

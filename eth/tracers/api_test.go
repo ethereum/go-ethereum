@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/eth/tracers/tracersutils"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/lib/ethapi"
 	"github.com/ethereum/go-ethereum/params"
@@ -101,15 +102,15 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber
 	return b.chain.GetHeaderByNumber(uint64(number)), nil
 }
 
-func (b *testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return b.chain.GetBlockByHash(hash), nil
+func (b *testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
+	return b.chain.GetBlockByHash(hash), nil, nil
 }
 
-func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
+func (b *testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
 	if number == rpc.PendingBlockNumber || number == rpc.LatestBlockNumber {
-		return b.chain.GetBlockByNumber(b.chain.CurrentBlock().Number.Uint64()), nil
+		return b.chain.GetBlockByNumber(b.chain.CurrentBlock().Number.Uint64()), nil, nil
 	}
-	return b.chain.GetBlockByNumber(uint64(number)), nil
+	return b.chain.GetBlockByNumber(uint64(number)), nil, nil
 }
 
 func (b *testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
@@ -1043,8 +1044,8 @@ func TestTraceChain(t *testing.T) {
 		ref.Store(0)
 		rel.Store(0)
 
-		from, _ := api.blockByNumber(context.Background(), rpc.BlockNumber(c.start))
-		to, _ := api.blockByNumber(context.Background(), rpc.BlockNumber(c.end))
+		from, _, _ := api.blockByNumber(context.Background(), rpc.BlockNumber(c.start))
+		to, _, _ := api.blockByNumber(context.Background(), rpc.BlockNumber(c.end))
 		resCh := api.traceChain(from, to, c.config, nil)
 
 		next := c.start + 1

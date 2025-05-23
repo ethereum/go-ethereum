@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/eth/tracers/tracersutils"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/lib/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -80,8 +81,8 @@ type StateReleaseFunc func()
 type Backend interface {
 	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
-	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
-	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, []tracersutils.TraceBlockMetadata, error)
+	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, []tracersutils.TraceBlockMetadata, error)
 	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
@@ -112,28 +113,28 @@ func (api *API) chainContext(ctx context.Context) core.ChainContext {
 
 // blockByNumber is the wrapper of the chain access function offered by the backend.
 // It will return an error if the block is not found.
-func (api *API) blockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
-	block, err := api.backend.BlockByNumber(ctx, number)
+func (api *API) blockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
+	block, metadata, err := api.backend.BlockByNumber(ctx, number)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if block == nil {
-		return nil, fmt.Errorf("block #%d not found", number)
+		return nil, nil, fmt.Errorf("block #%d not found", number)
 	}
-	return block, nil
+	return block, metadata, nil
 }
 
 // blockByHash is the wrapper of the chain access function offered by the backend.
 // It will return an error if the block is not found.
-func (api *API) blockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	block, err := api.backend.BlockByHash(ctx, hash)
+func (api *API) blockByHash(ctx context.Context, hash common.Hash) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
+	block, metadata, err := api.backend.BlockByHash(ctx, hash)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if block == nil {
-		return nil, fmt.Errorf("block %s not found", hash.Hex())
+		return nil, nil, fmt.Errorf("block %s not found", hash.Hex())
 	}
-	return block, nil
+	return block, metadata, nil
 }
 
 // blockByNumberAndHash is the wrapper of the chain access function offered by
@@ -141,13 +142,13 @@ func (api *API) blockByHash(ctx context.Context, hash common.Hash) (*types.Block
 //
 // Note this function is friendly for the light client which can only retrieve the
 // historical(before the CHT) header/block by number.
-func (api *API) blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber, hash common.Hash) (*types.Block, error) {
-	block, err := api.blockByNumber(ctx, number)
+func (api *API) blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber, hash common.Hash) (*types.Block, []tracersutils.TraceBlockMetadata, error) {
+	block, metadata, err := api.blockByNumber(ctx, number)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if block.Hash() == hash {
-		return block, nil
+		return block, metadata, nil
 	}
 	return api.blockByHash(ctx, hash)
 }
@@ -213,11 +214,11 @@ type txTraceTask struct {
 // TraceChain returns the structured logs created during the execution of EVM
 // between two blocks (excluding start) and returns them as a JSON object.
 func (api *API) TraceChain(ctx context.Context, start, end rpc.BlockNumber, config *TraceConfig) (*rpc.Subscription, error) { // Fetch the block interval that we want to trace
-	from, err := api.blockByNumber(ctx, start)
+	from, _, err := api.blockByNumber(ctx, start)
 	if err != nil {
 		return nil, err
 	}
-	to, err := api.blockByNumber(ctx, end)
+	to, _, err := api.blockByNumber(ctx, end)
 	if err != nil {
 		return nil, err
 	}
@@ -348,12 +349,12 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				log.Info("Tracing chain segment", "start", start.NumberU64(), "end", end.NumberU64(), "current", number, "transactions", traced, "elapsed", time.Since(begin))
 			}
 			// Retrieve the parent block and target block for tracing.
-			block, err := api.blockByNumber(ctx, rpc.BlockNumber(number))
+			block, _, err := api.blockByNumber(ctx, rpc.BlockNumber(number))
 			if err != nil {
 				failed = err
 				break
 			}
-			next, err := api.blockByNumber(ctx, rpc.BlockNumber(number+1))
+			next, _, err := api.blockByNumber(ctx, rpc.BlockNumber(number+1))
 			if err != nil {
 				failed = err
 				break
@@ -435,21 +436,21 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 // TraceBlockByNumber returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
 func (api *API) TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, config *TraceConfig) ([]*TxTraceResult, error) {
-	block, err := api.blockByNumber(ctx, number)
+	block, metadata, err := api.blockByNumber(ctx, number)
 	if err != nil {
 		return nil, err
 	}
-	return api.traceBlock(ctx, block, config)
+	return api.traceBlock(ctx, block, metadata, config)
 }
 
 // TraceBlockByHash returns the structured logs created during the execution of
 // EVM and returns them as a JSON object.
 func (api *API) TraceBlockByHash(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*TxTraceResult, error) {
-	block, err := api.blockByHash(ctx, hash)
+	block, metadata, err := api.blockByHash(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
-	return api.traceBlock(ctx, block, config)
+	return api.traceBlock(ctx, block, metadata, config)
 }
 
 // TraceBlock returns the structured logs created during the execution of EVM
@@ -459,7 +460,7 @@ func (api *API) TraceBlock(ctx context.Context, blob hexutil.Bytes, config *Trac
 	if err := rlp.DecodeBytes(blob, block); err != nil {
 		return nil, fmt.Errorf("could not decode block: %v", err)
 	}
-	return api.traceBlock(ctx, block, config)
+	return api.traceBlock(ctx, block, nil, config)
 }
 
 // TraceBlockFromFile returns the structured logs created during the execution of
@@ -480,14 +481,14 @@ func (api *API) TraceBadBlock(ctx context.Context, hash common.Hash, config *Tra
 	if block == nil {
 		return nil, fmt.Errorf("bad block %#x not found", hash)
 	}
-	return api.traceBlock(ctx, block, config)
+	return api.traceBlock(ctx, block, nil, config)
 }
 
 // StandardTraceBlockToFile dumps the structured logs created during the
 // execution of EVM to the local file system and returns a list of files
 // to the caller.
 func (api *API) StandardTraceBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error) {
-	block, err := api.blockByHash(ctx, hash)
+	block, _, err := api.blockByHash(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -497,7 +498,7 @@ func (api *API) StandardTraceBlockToFile(ctx context.Context, hash common.Hash, 
 // IntermediateRoots executes a block (bad- or canon- or side-), and returns a list
 // of intermediate roots: the stateroot after each transaction.
 func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config *TraceConfig) ([]common.Hash, error) {
-	block, _ := api.blockByHash(ctx, hash)
+	block, _, _ := api.blockByHash(ctx, hash)
 	if block == nil {
 		// Check in the bad blocks
 		block = rawdb.ReadBadBlock(api.backend.ChainDb(), hash)
@@ -508,7 +509,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
+	parent, _, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
 	if err != nil {
 		return nil, err
 	}
@@ -570,12 +571,12 @@ func (api *API) StandardTraceBadBlockToFile(ctx context.Context, hash common.Has
 // traceBlock configures a new tracer according to the provided configuration, and
 // executes all the transactions contained within. The return value will be one item
 // per transaction, dependent on the requested tracer.
-func (api *API) traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*TxTraceResult, error) {
+func (api *API) traceBlock(ctx context.Context, block *types.Block, metadata []tracersutils.TraceBlockMetadata, config *TraceConfig) ([]*TxTraceResult, error) {
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
 	// Prepare base state
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
+	parent, _, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
 	if err != nil {
 		return nil, err
 	}
@@ -608,20 +609,47 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		results   = make([]*TxTraceResult, len(txs))
 	)
-	for i, tx := range txs {
-		// Generate the next state snapshot fast without tracing
-		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		txctx := &Context{
-			BlockHash:   blockHash,
-			BlockNumber: block.Number(),
-			TxIndex:     i,
-			TxHash:      tx.Hash(),
+	if len(metadata) == 0 {
+		for i, tx := range txs {
+			// Generate the next state snapshot fast without tracing
+			msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+			txctx := &Context{
+				BlockHash:   blockHash,
+				BlockNumber: block.Number(),
+				TxIndex:     i,
+				TxHash:      tx.Hash(),
+			}
+			res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, config)
+			if err != nil {
+				results[i] = &TxTraceResult{TxHash: tx.Hash(), Error: err.Error()}
+			} else {
+				results[i] = &TxTraceResult{TxHash: tx.Hash(), Result: res}
+			}
 		}
-		res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, config)
-		if err != nil {
-			results[i] = &TxTraceResult{TxHash: tx.Hash(), Error: err.Error()}
+		return results, nil
+	}
+	for _, md := range metadata {
+		if md.ShouldIncludeInTraceResult {
+			i := md.IdxInEthBlock
+			tx := txs[i]
+			// Generate the next state snapshot fast without tracing
+			msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
+			txctx := &Context{
+				BlockHash:   blockHash,
+				BlockNumber: block.Number(),
+				TxIndex:     i,
+				TxHash:      tx.Hash(),
+			}
+			res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, config)
+			if err != nil {
+				results[i] = &TxTraceResult{TxHash: tx.Hash(), Error: err.Error()}
+			} else {
+				results[i] = &TxTraceResult{TxHash: tx.Hash(), Result: res}
+			}
 		} else {
-			results[i] = &TxTraceResult{TxHash: tx.Hash(), Result: res}
+			// should not be included in result but still needs to be run because
+			// these txs may affect cumulative state
+			md.TraceRunnable(statedb)
 		}
 	}
 	return results, nil
@@ -729,7 +757,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	if block.NumberU64() == 0 {
 		return nil, errors.New("genesis is not traceable")
 	}
-	parent, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
+	parent, _, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(block.NumberU64()-1), block.ParentHash())
 	if err != nil {
 		return nil, err
 	}
@@ -868,7 +896,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	block, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(blockNumber), blockHash)
+	block, _, err := api.blockByNumberAndHash(ctx, rpc.BlockNumber(blockNumber), blockHash)
 	if err != nil {
 		return nil, err
 	}
@@ -913,7 +941,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		release StateReleaseFunc
 	)
 	if hash, ok := blockNrOrHash.Hash(); ok {
-		block, err = api.blockByHash(ctx, hash)
+		block, _, err = api.blockByHash(ctx, hash)
 	} else if number, ok := blockNrOrHash.Number(); ok {
 		if number == rpc.PendingBlockNumber {
 			// We don't have access to the miner here. For tracing 'future' transactions,
@@ -923,7 +951,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 			// of what the next actual block is likely to contain.
 			return nil, errors.New("tracing on top of pending is not supported")
 		}
-		block, err = api.blockByNumber(ctx, number)
+		block, _, err = api.blockByNumber(ctx, number)
 	} else {
 		return nil, errors.New("invalid arguments; neither block nor hash specified")
 	}
