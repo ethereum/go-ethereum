@@ -1908,8 +1908,11 @@ func (f *Firehose) panicInvalidState(msg string, callerSkip int) string {
 
 // printBlockToFirehose is a helper function to print a block to Firehose protocl format.
 func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *FinalityStatus) {
-	channelSize := int(math.Ceil(20000 * 8 / 6))
-	buf := bytes.NewBuffer(make([]byte, 0, channelSize))
+
+	headerSize := 225 // FIRE BLOCK:11 <blockNum:20> <blockHash:64> <prevNum:20> <prevHash:64> <libNum:20> <timestamp:20>
+	base64Size := math.Ceil(float64(proto.Size(block)) * 8 / 6)
+	bufferSize := headerSize + int(base64Size)
+	buf := bytes.NewBuffer(make([]byte, 0, bufferSize))
 
 	marshalled, err := proto.Marshal(block)
 
