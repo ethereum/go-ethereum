@@ -58,9 +58,10 @@ type Transaction struct {
 	time  time.Time // Time first seen locally (spam avoidance)
 
 	// caches
-	hash atomic.Pointer[common.Hash]
-	size atomic.Uint64
-	from atomic.Pointer[sigCache]
+	hash  atomic.Pointer[common.Hash]
+	size  atomic.Uint64
+	from  atomic.Pointer[sigCache]
+	auths atomic.Pointer[authCache]
 }
 
 // NewTx creates a new transaction.
@@ -512,32 +513,36 @@ func (tx *Transaction) SetCodeAuthorizations() []SetCodeAuthorization {
 	return setcodetx.AuthList
 }
 
-// SetCodeAuthorities returns a list of unique authorities from the
-// authorization list.
-func (tx *Transaction) SetCodeAuthorities() []common.Address {
+// SetCodeAuthorities returns a list of authorities from the authorization list.
+// Nil is used to represent authorizations that fail derivation.
+func (tx *Transaction) SetCodeAuthorities() []*common.Address {
 	setcodetx, ok := tx.inner.(*SetCodeTx)
 	if !ok {
 		return nil
 	}
-	if authorityCache := setcodetx.authorityCache.Load(); authorityCache != nil {
-		return authorityCache.authorities
+	if cache := tx.auths.Load(); cache != nil {
+		return *cache
 	}
-	cache := ToAuthorityCache(setcodetx.AuthList)
-	setcodetx.authorityCache.Store(cache)
-	return cache.authorities
+	cache := setcodetx.deriveAuthorities()
+	tx.auths.Store(&cache)
+	return cache
 }
 
-func (tx *Transaction) AuthorityCache() *AuthorityCache {
-	setcodetx, ok := tx.inner.(*SetCodeTx)
-	if !ok {
-		return nil
+// UniqueSetCodeAuthorities returns a list of unique authorities from the
+// authorization list.
+func (tx *Transaction) UniqueSetCodeAuthorities() []common.Address {
+	var (
+		auths   = tx.SetCodeAuthorities()
+		marks   = make(map[common.Address]bool)
+		uniques []common.Address
+	)
+	for _, auth := range auths {
+		if auth != nil && !marks[*auth] {
+			marks[*auth] = true
+			uniques = append(uniques, *auth)
+		}
 	}
-	if authorityCache := setcodetx.authorityCache.Load(); authorityCache != nil {
-		return authorityCache
-	}
-	cache := ToAuthorityCache(setcodetx.AuthList)
-	setcodetx.authorityCache.Store(cache)
-	return cache
+	return uniques
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set

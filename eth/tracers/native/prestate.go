@@ -185,7 +185,7 @@ func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 	t.lookupAccount(env.Coinbase)
 
 	// Add accounts with authorizations to the prestate before they get applied.
-	for _, addr := range tx.SetCodeAuthorities() {
+	for _, addr := range tx.UniqueSetCodeAuthorities() {
 		t.lookupAccount(addr)
 	}
 }

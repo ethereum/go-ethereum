@@ -156,7 +156,7 @@ type Message struct {
 	BlobGasFeeCap         *big.Int
 	BlobHashes            []common.Hash
 	SetCodeAuthorizations []types.SetCodeAuthorization
-	AuthorityCache        *types.AuthorityCache
+	Authorities           []*common.Address // Recovered authority addresses
 
 	// When SkipNonceChecks is true, the message nonce is not checked against the
 	// account nonce in state.
@@ -186,7 +186,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Data:                  tx.Data(),
 		AccessList:            tx.AccessList(),
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
-		AuthorityCache:        tx.AuthorityCache(),
+		Authorities:           tx.SetCodeAuthorities(),
 		SkipNonceChecks:       false,
 		SkipTransactionChecks: false,
 		BlobHashes:            tx.BlobHashes(),
@@ -507,12 +507,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// Apply EIP-7702 authorizations.
 		if msg.SetCodeAuthorizations != nil {
 			for i, auth := range msg.SetCodeAuthorizations {
-				// Note errors are ignored, we simply skip invalid authorizations here.
-				authority, err := msg.AuthorityCache.Authority(i)
-				if err != nil {
+				addr := msg.Authorities[i]
+				if addr == nil {
+					// Skip invalid authorizations.
 					continue
 				}
-				st.applyAuthorization(&auth, authority)
+				st.applyAuthorization(&auth, *addr)
 			}
 		}
 
@@ -580,17 +580,15 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 }
 
 // validateAuthorization validates an EIP-7702 authorization against the state.
-func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorization, preDerivedAuthority common.Address) (authority common.Address, err error) {
+func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorization, authority common.Address) error {
 	// Verify chain ID is null or equal to current chain ID.
 	if !auth.ChainID.IsZero() && auth.ChainID.CmpBig(st.evm.ChainConfig().ChainID) != 0 {
-		return authority, ErrAuthorizationWrongChainID
+		return ErrAuthorizationWrongChainID
 	}
 	// Limit nonce to 2^64-1 per EIP-2681.
 	if auth.Nonce+1 < auth.Nonce {
-		return authority, ErrAuthorizationNonceOverflow
+		return ErrAuthorizationNonceOverflow
 	}
-
-	authority = preDerivedAuthority
 
 	// Check the authority account
 	//  1) doesn't have code or has exisiting delegation
@@ -600,17 +598,17 @@ func (st *stateTransition) validateAuthorization(auth *types.SetCodeAuthorizatio
 	st.state.AddAddressToAccessList(authority)
 	code := st.state.GetCode(authority)
 	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
-		return authority, ErrAuthorizationDestinationHasCode
+		return ErrAuthorizationDestinationHasCode
 	}
 	if have := st.state.GetNonce(authority); have != auth.Nonce {
-		return authority, ErrAuthorizationNonceMismatch
+		return ErrAuthorizationNonceMismatch
 	}
-	return authority, nil
+	return nil
 }
 
 // applyAuthorization applies an EIP-7702 code delegation to the state.
-func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization, preDerivedAuthority common.Address) error {
-	authority, err := st.validateAuthorization(auth, preDerivedAuthority)
+func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization, authority common.Address) error {
+	err := st.validateAuthorization(auth, authority)
 	if err != nil {
 		return err
 	}
