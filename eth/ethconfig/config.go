@@ -120,6 +120,7 @@ type Config struct {
 	DatabaseHandles    int  `toml:"-"`
 	DatabaseCache      int
 	DatabaseFreezer    string
+	DatabaseEra        string
 
 	TrieCleanCache int
 	TrieDirtyCache int
