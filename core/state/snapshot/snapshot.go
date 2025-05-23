@@ -388,17 +388,8 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	if !ok {
 		return fmt.Errorf("snapshot [%#x] is disk layer", root)
 	}
-	// If the generator is still running, use a more aggressive cap
-	diff.origin.lock.RLock()
-	if diff.origin.genMarker != nil && layers > 8 {
-		layers = 8
-	}
-	diff.origin.lock.RUnlock()
 
-	// Run the internal capping and discard all stale layers
-	t.lock.Lock()
-
-	defer t.lock.Unlock()
+	// Update the cache stats
 	var stats fastcache.Stats
 	diff.origin.cache.UpdateStats(&stats)
 	snapshotCacheGetGauge.Update(int64(stats.GetCalls))
@@ -408,6 +399,17 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	snapshotCacheCapacityGauge.Update(int64(stats.MaxBytesSize))
 	snapshotCacheEntriesGauge.Update(int64(stats.EntriesCount))
 	snapshotCacheCollisionGauge.Update(int64(stats.Collisions))
+
+	// If the generator is still running, use a more aggressive cap
+	diff.origin.lock.RLock()
+	if diff.origin.genMarker != nil && layers > 8 {
+		layers = 8
+	}
+	diff.origin.lock.RUnlock()
+
+	// Run the internal capping and discard all stale layers
+	t.lock.Lock()
+	defer t.lock.Unlock()
 
 	// Flattening the bottom-most diff layer requires special casing since there's
 	// no child to rewire to the grandparent. In that case we can fake a temporary
