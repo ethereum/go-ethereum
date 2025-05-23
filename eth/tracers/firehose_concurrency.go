@@ -15,7 +15,7 @@ type outputJob struct {
 	data     []byte
 }
 
-type BlockFlushQueue struct {
+type ConcurrentFlushQueue struct {
 	bufferSize int
 
 	startSignal    chan uint64
@@ -29,12 +29,8 @@ type BlockFlushQueue struct {
 	closeOnce sync.Once
 }
 
-func NewBlockFlushQueue(concurrency int, bufferSize int, printBlockFunc func(*pbeth.Block, *FinalityStatus), outputFunc func([]byte)) *BlockFlushQueue {
-	if concurrency <= 0 {
-		panic("BlockFlushQueue requires concurrency > 0")
-	}
-
-	q := &BlockFlushQueue{
+func NewConcurrentFlushQueue(bufferSize int, printBlockFunc func(*pbeth.Block, *FinalityStatus), outputFunc func([]byte)) *ConcurrentFlushQueue {
+	return &ConcurrentFlushQueue{
 		startSignal:    make(chan uint64, 1),
 		jobQueue:       make(chan *blockPrintJob, bufferSize),
 		outputQueue:    make(chan *outputJob, bufferSize),
@@ -42,7 +38,9 @@ func NewBlockFlushQueue(concurrency int, bufferSize int, printBlockFunc func(*pb
 		bufferSize:     bufferSize,
 		printBlockFunc: printBlockFunc,
 	}
+}
 
+func (q *ConcurrentFlushQueue) Start(concurrency int) {
 	for i := 0; i < concurrency; i++ {
 		q.jobWG.Add(1)
 		go q.worker()
@@ -50,11 +48,9 @@ func NewBlockFlushQueue(concurrency int, bufferSize int, printBlockFunc func(*pb
 
 	q.outputWG.Add(1)
 	go q.outputOrderer()
-
-	return q
 }
 
-func (q *BlockFlushQueue) Enqueue(block *pbeth.Block, finality *FinalityStatus) {
+func (q *ConcurrentFlushQueue) Enqueue(block *pbeth.Block, finality *FinalityStatus) {
 	select {
 	case q.startSignal <- block.Number:
 	default:
@@ -66,10 +62,10 @@ func (q *BlockFlushQueue) Enqueue(block *pbeth.Block, finality *FinalityStatus) 
 	}
 }
 
-// Close CloseBlockPrintQueue signals block printing goroutines to shut down and waits for them.
+// CloseChannels signals goroutines to shut down and waits for them.
 // It blocks until all concurrent block flushing operations are completed, ensuring a clean
 // shutdown of the printing pipeline.
-func (q *BlockFlushQueue) Close() {
+func (q *ConcurrentFlushQueue) CloseChannels() {
 	q.closeOnce.Do(func() {
 		close(q.jobQueue)
 		q.jobWG.Wait()
@@ -79,7 +75,7 @@ func (q *BlockFlushQueue) Close() {
 }
 
 // Instantiates a worker that listens for jobs
-func (q *BlockFlushQueue) worker() {
+func (q *ConcurrentFlushQueue) worker() {
 	defer q.jobWG.Done()
 	for job := range q.jobQueue {
 		q.printBlockFunc(job.block, job.finality)
@@ -87,7 +83,7 @@ func (q *BlockFlushQueue) worker() {
 }
 
 // Channel ensuring that blocks are linearly flushed out in order
-func (q *BlockFlushQueue) outputOrderer() {
+func (q *ConcurrentFlushQueue) outputOrderer() {
 	defer q.outputWG.Done()
 	buffer := make(map[uint64][]byte)
 	next := <-q.startSignal

@@ -170,13 +170,15 @@ func (c *FirehoseConfig) ForcedBackwardCompatibility() bool {
 
 type Firehose struct {
 	// Global state
-	outputBuffer *bytes.Buffer
-	initSent     *atomic.Bool
-	config       *FirehoseConfig
-	chainConfig  *params.ChainConfig
-	hasher       crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
-	hasherBuf    common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
-	tracerID     string
+	outputBuffer              *bytes.Buffer
+	initSent                  *atomic.Bool
+	config                    *FirehoseConfig
+	chainConfig               *params.ChainConfig
+	hasher                    crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
+	hasherBuf                 common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
+	tracerID                  string
+	concurrentFlushQueue      *ConcurrentFlushQueue
+	concurrentFlushBufferSize int
 	// The FirehoseTracer is used in multiple chains, some for which were produced using a legacy version
 	// of the whole tracing infrastructure. This legacy version had many small bugs here and there that
 	// we must "reproduce" on some chain to ensure that the FirehoseTracer produces the same output
@@ -199,8 +201,6 @@ type Firehose struct {
 	blockReorderOrdinalSnapshot uint64
 	blockReorderOrdinalOnce     sync.Once
 	blockIsGenesis              bool
-	BlockFlushQueue             *BlockFlushQueue
-	blockFlushBufferSize        int
 
 	// Transaction state
 	evm                  *tracing.VMContext
@@ -260,10 +260,10 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		concurrentBlockFlushing:    config.ConcurrentBlockFlushing,
 
 		// Block state
-		blockOrdinal:         &Ordinal{},
-		blockFinality:        &FinalityStatus{},
-		blockReorderOrdinal:  false,
-		blockFlushBufferSize: 100,
+		blockOrdinal:              &Ordinal{},
+		blockFinality:             &FinalityStatus{},
+		blockReorderOrdinal:       false,
+		concurrentFlushBufferSize: 100,
 
 		// Transaction state
 		transactionLogIndex: 0,
@@ -375,13 +375,13 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 	}
 
 	if f.config.ConcurrentBlockFlushing > 0 {
-		log.Info("Firehose concurrent block flushing enabled, starting goroutines")
-		f.BlockFlushQueue = NewBlockFlushQueue(
-			f.config.ConcurrentBlockFlushing,
-			f.blockFlushBufferSize,
+		log.Info("Firehose concurrent block flushing enabled, starting goroutine")
+		f.concurrentFlushQueue = NewConcurrentFlushQueue(
+			f.concurrentFlushBufferSize,
 			f.printBlockToFirehose,
 			f.flushToFirehose,
 		)
+		f.concurrentFlushQueue.Start(f.config.ConcurrentBlockFlushing)
 	}
 
 	log.Info("Firehose tracer initialized",
@@ -530,7 +530,7 @@ func (f *Firehose) OnBlockEnd(err error) {
 
 		// Flush block to firehose and optionally use goroutine
 		if f.concurrentBlockFlushing > 0 {
-			f.BlockFlushQueue.Enqueue(f.block, f.blockFinality)
+			f.concurrentFlushQueue.Enqueue(f.block, f.blockFinality)
 		} else {
 			f.printBlockToFirehose(f.block, f.blockFinality)
 		}
@@ -653,9 +653,9 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 }
 
 func (f *Firehose) OnClose() {
-	if f.BlockFlushQueue != nil {
+	if f.concurrentFlushQueue != nil {
 		log.Info("Firehose closing, flushing queued blocks to standard output")
-		f.BlockFlushQueue.Close()
+		f.concurrentFlushQueue.CloseChannels()
 	}
 }
 
@@ -1949,7 +1949,7 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 	buf.WriteString("\n")
 
 	if f.concurrentBlockFlushing > 0 {
-		f.BlockFlushQueue.outputQueue <- &outputJob{
+		f.concurrentFlushQueue.outputQueue <- &outputJob{
 			blockNum: block.Number,
 			data:     buf.Bytes(),
 		}

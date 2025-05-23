@@ -55,15 +55,11 @@ func TestFirehosePrestate(t *testing.T) {
 						ConcurrentBlockFlushing: concurrent,
 					}
 
-					tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, config)
-					defer onClose()
+					tracer, tracingHooks, _ := newFirehoseTestTracer(t, model, config)
 
 					runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracingHooks)
 
-					if tracer.BlockFlushQueue != nil {
-						tracer.BlockFlushQueue.Close()
-					}
-
+					tracer.OnClose()
 					genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
 					require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(
 						slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
@@ -214,8 +210,7 @@ func testBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine co
 					ConcurrentBlockFlushing: concurrent,
 				}
 
-				tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model, config)
-				defer onClose()
+				tracer, tracingHooks, _ := newFirehoseTestTracer(t, model, config)
 
 				chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesisSpec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
 				require.NoError(t, err, "failed to create tester chain")
@@ -229,10 +224,7 @@ func testBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine co
 				n, err := chain.InsertChain(blocks)
 				require.NoError(t, err, "failed to insert chain block %d", n)
 
-				if tracer.BlockFlushQueue != nil {
-					tracer.BlockFlushQueue.Close()
-				}
-
+				tracer.OnClose()
 				assertBlockEquals(t, tracer, filepath.Join("testdata", goldenDir, string(model)), len(blocks))
 			})
 		}
