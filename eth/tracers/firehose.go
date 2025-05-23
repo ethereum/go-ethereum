@@ -258,12 +258,12 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		tracerID:                   "global",
 		applyBackwardCompatibility: config.ApplyBackwardCompatibility,
 		concurrentBlockFlushing:    config.ConcurrentBlockFlushing,
+		concurrentFlushBufferSize:  100,
 
 		// Block state
-		blockOrdinal:              &Ordinal{},
-		blockFinality:             &FinalityStatus{},
-		blockReorderOrdinal:       false,
-		concurrentFlushBufferSize: 100,
+		blockOrdinal:        &Ordinal{},
+		blockFinality:       &FinalityStatus{},
+		blockReorderOrdinal: false,
 
 		// Transaction state
 		transactionLogIndex: 0,
