@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // Ethash is a consensus engine based on proof-of-work implementing the ethash
@@ -69,12 +68,6 @@ func NewFullFaker() *Ethash {
 // Close closes the exit channel to notify all backend threads exiting.
 func (ethash *Ethash) Close() error {
 	return nil
-}
-
-// APIs implements consensus.Engine, returning no APIs as ethash is an empty
-// shell in the post-merge world.
-func (ethash *Ethash) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	return []rpc.API{}
 }
 
 // Seal generates a new sealing request for the given input block and pushes
