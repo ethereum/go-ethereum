@@ -38,6 +38,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
@@ -1707,9 +1709,43 @@ type DebugAPI struct {
 	b Backend
 }
 
-// NewDebugAPI creates a new instance of DebugAPI.
+// NewDebugAPI creates a new DebugAPI instance.
 func NewDebugAPI(b Backend) *DebugAPI {
 	return &DebugAPI{b: b}
+}
+
+// SetSyncTarget manually sets the target hash for full sync.
+// This is primarily intended for debugging and testing purposes, allowing
+// simulation of syncing to specific forks or targets without restarting the node.
+func (api *DebugAPI) SetSyncTarget(ctx context.Context, target common.Hash) error {
+	// Note: BeaconDevSync might block; running in a goroutine to avoid blocking RPC/console.
+	// Also, passing nil for the cancel channel as we don't provide a way to cancel via API.
+	type Downloader interface {
+		Downloader() *downloader.Downloader
+	}
+	backend, ok := api.b.(Downloader)
+	if !ok {
+		log.Error("Could not get downloader")
+	}
+	// retry 20 times to retrieve the header from random peers
+	for range 20 {
+		header, err := backend.Downloader().GetHeader(target)
+		if err != nil {
+			continue
+		}
+		if err := backend.Downloader().BeaconSync(ethconfig.FullSync, header, header); err != nil {
+			return err
+		} else {
+			// Sync target set successfully, return
+			return nil
+		}
+	}
+	return errors.New("could not set sync target")
+}
+
+// ChainConfig returns the active chain configuration.
+func (api *DebugAPI) ChainConfig() *params.ChainConfig {
+	return api.b.ChainConfig()
 }
 
 // GetRawHeader retrieves the RLP encoding for a single header.
