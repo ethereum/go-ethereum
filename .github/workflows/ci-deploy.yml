@@ -31,6 +31,12 @@ jobs:
         run: |
           gcloud auth configure-docker europe-west3-docker.pkg.dev
 
+      - name: Delete contents of folder
+        run: |
+          sudo mkdir -p data
+          sudo rm -rf data/*
+          echo "Folder cleaned."
+
       - name: Start Geth Devnet container
         run: |
           docker compose -f ./docker-compose.yml up -d
@@ -43,12 +49,6 @@ jobs:
           curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
           sudo apt install -y nodejs
           sudo npm install web3
-
-      - name: Delete contents of folder
-        run: |
-          mkdir -p data
-          rm -rf data/*
-          echo "Folder cleaned."
 
       - name: Deploy contract to devnet
         run: |
