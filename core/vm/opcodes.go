@@ -17,7 +17,9 @@
 package vm
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // OpCode is an EVM opcode
@@ -457,6 +459,27 @@ func (op OpCode) String() string {
 		return s
 	}
 	return fmt.Sprintf("opcode %#x not defined", int(op))
+}
+
+func (op OpCode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(op.String())
+}
+
+// UnmarshalJSON implements json.Unmarshaler
+func (op *OpCode) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("OpCode must be a string, got: %v", err)
+	}
+
+	// Case-insensitive lookup
+	code, exists := stringToOp[strings.ToUpper(s)]
+	if !exists {
+		return fmt.Errorf("unknown OpCode: %s", s)
+	}
+
+	*op = code
+	return nil
 }
 
 var stringToOp = map[string]OpCode{
