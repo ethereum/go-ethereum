@@ -12,6 +12,7 @@ services:
     volumes:
       - ./data:/root/.ethereum
     command: >
+      --datadir /root/.ethereum
       --dev
       --http
       --http.addr 0.0.0.0
