@@ -157,7 +157,7 @@ func (api *adminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) 
 }
 
 // StartHTTP starts the HTTP RPC API server.
-func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
+func (api *adminAPI) StartHTTP(proto *string, host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
@@ -202,7 +202,7 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 		}
 	}
 
-	if err := api.node.http.setListenAddr(*host, *port); err != nil {
+	if err := api.node.http.setListenAddr(*proto, *host, *port); err != nil {
 		return false, err
 	}
 	if err := api.node.http.enableRPC(api.node.rpcAPIs, config); err != nil {
@@ -216,9 +216,9 @@ func (api *adminAPI) StartHTTP(host *string, port *int, cors *string, apis *stri
 
 // StartRPC starts the HTTP RPC API server.
 // Deprecated: use StartHTTP instead.
-func (api *adminAPI) StartRPC(host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
+func (api *adminAPI) StartRPC(proto *string, host *string, port *int, cors *string, apis *string, vhosts *string) (bool, error) {
 	log.Warn("Deprecation warning", "method", "admin.StartRPC", "use-instead", "admin.StartHTTP")
-	return api.StartHTTP(host, port, cors, apis, vhosts)
+	return api.StartHTTP(proto, host, port, cors, apis, vhosts)
 }
 
 // StopHTTP shuts down the HTTP server.
@@ -235,7 +235,7 @@ func (api *adminAPI) StopRPC() (bool, error) {
 }
 
 // StartWS starts the websocket RPC API server.
-func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, apis *string) (bool, error) {
+func (api *adminAPI) StartWS(proto *string, host *string, port *int, allowedOrigins *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
@@ -276,7 +276,7 @@ func (api *adminAPI) StartWS(host *string, port *int, allowedOrigins *string, ap
 
 	// Enable WebSocket on the server.
 	server := api.node.wsServerForPort(*port, false)
-	if err := server.setListenAddr(*host, *port); err != nil {
+	if err := server.setListenAddr(*proto, *host, *port); err != nil {
 		return false, err
 	}
 	openApis, _ := api.node.getAPIs()
