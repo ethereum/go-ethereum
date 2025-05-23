@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -76,6 +77,14 @@ var (
 	snapshotBloomStorageTrueHitMeter  = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/truehit", nil)
 	snapshotBloomStorageFalseHitMeter = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/falsehit", nil)
 	snapshotBloomStorageMissMeter     = metrics.NewRegisteredMeter("state/snapshot/bloom/storage/miss", nil)
+
+	snapshotCacheGetGauge       = metrics.NewRegisteredGauge("state/snapshot/cache/get", nil)
+	snapshotCacheSetGauge       = metrics.NewRegisteredGauge("state/snapshot/cache/set", nil)
+	snapshotCacheMissGauge      = metrics.NewRegisteredGauge("state/snapshot/cache/miss", nil)
+	snapshotCacheSizeGauge      = metrics.NewRegisteredGauge("state/snapshot/cache/size", nil)
+	snapshotCacheCapacityGauge  = metrics.NewRegisteredGauge("state/snapshot/cache/capacity", nil)
+	snapshotCacheCollisionGauge = metrics.NewRegisteredGauge("state/snapshot/cache/collision", nil)
+	snapshotCacheEntriesGauge   = metrics.NewRegisteredGauge("state/snapshot/cache/entries", nil)
 
 	// ErrSnapshotStale is returned from data accessors if the underlying snapshot
 	// layer had been invalidated due to the chain progressing forward far enough
@@ -379,6 +388,20 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	if !ok {
 		return fmt.Errorf("snapshot [%#x] is disk layer", root)
 	}
+
+	// Update the cache stats
+	if diff.origin != nil && diff.origin.cache != nil {
+		var stats fastcache.Stats
+		diff.origin.cache.UpdateStats(&stats)
+		snapshotCacheGetGauge.Update(int64(stats.GetCalls))
+		snapshotCacheSetGauge.Update(int64(stats.SetCalls))
+		snapshotCacheMissGauge.Update(int64(stats.Misses))
+		snapshotCacheSizeGauge.Update(int64(stats.BytesSize))
+		snapshotCacheCapacityGauge.Update(int64(stats.MaxBytesSize))
+		snapshotCacheEntriesGauge.Update(int64(stats.EntriesCount))
+		snapshotCacheCollisionGauge.Update(int64(stats.Collisions))
+	}
+
 	// If the generator is still running, use a more aggressive cap
 	diff.origin.lock.RLock()
 	if diff.origin.genMarker != nil && layers > 8 {

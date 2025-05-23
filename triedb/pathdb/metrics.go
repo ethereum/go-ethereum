@@ -72,6 +72,14 @@ var (
 	historyBuildTimeMeter  = metrics.NewRegisteredResettingTimer("pathdb/history/time", nil)
 	historyDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/bytes/data", nil)
 	historyIndexBytesMeter = metrics.NewRegisteredMeter("pathdb/history/bytes/index", nil)
+
+	snapshotCacheGetGauge       = metrics.NewRegisteredGauge("pathdb/snapshot/cache/get", nil)
+	snapshotCacheSetGauge       = metrics.NewRegisteredGauge("pathdb/snapshot/cache/set", nil)
+	snapshotCacheMissGauge      = metrics.NewRegisteredGauge("pathdb/snapshot/cache/miss", nil)
+	snapshotCacheSizeGauge      = metrics.NewRegisteredGauge("pathdb/snapshot/cache/size", nil)
+	snapshotCacheCapacityGauge  = metrics.NewRegisteredGauge("pathdb/snapshot/cache/capacity", nil)
+	snapshotCacheCollisionGauge = metrics.NewRegisteredGauge("pathdb/snapshot/cache/collision", nil)
+	snapshotCacheEntriesGauge   = metrics.NewRegisteredGauge("pathdb/snapshot/cache/entries", nil)
 )
 
 // Metrics in generation
