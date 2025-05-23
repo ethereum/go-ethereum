@@ -130,7 +130,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
 	if b.header.BlobGasUsed != nil {
-		*b.header.BlobGasUsed += receipt.BlobGasUsed
+		*b.header.BlobGasUsed += uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
 	}
 }
 
