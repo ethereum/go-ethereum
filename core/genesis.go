@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"crypto/ecdsa"
-	"encoding/hex"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -647,27 +646,43 @@ func DefaultHoodiGenesisBlock() *Genesis {
 	}
 }
 
-// DeveloperGenesisBlock returns the 'geth --dev' genesis block.
-func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
-	config := *params.AllDevChainProtocolChanges
+const (
+	devAccountCount      = 10
+	devAccountSeedPrefix = "dev-account-seed-"
+	devAccountBalance    = 10000
+)
 
-	// Generate 10 deterministic dev accounts
-	type DevAccount struct {
-		Address    common.Address
-		PrivateKey *ecdsa.PrivateKey
-		Balance    *big.Int
-	}
+type DevAccount struct {
+	Address    common.Address
+	PrivateKey *ecdsa.PrivateKey
+	Balance    *big.Int
+}
+
+func GenerateDevAccounts() ([]DevAccount, error) {
 	var devAccounts []DevAccount
-	for i := 0; i < 10; i++ {
-		seed := []byte("dev-account-seed-")
-		seed = append(seed, byte(i))
-		key, _ := crypto.ToECDSA(crypto.Keccak256(seed))
+	for i := 0; i < devAccountCount; i++ {
+		seed := append([]byte(devAccountSeedPrefix), byte(i))
+		key, err := crypto.ToECDSA(crypto.Keccak256(seed))
+		if err != nil {
+			return nil, err
+		}
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		devAccounts = append(devAccounts, DevAccount{
 			Address:    addr,
 			PrivateKey: key,
-			Balance:    new(big.Int).Mul(big.NewInt(10000), big.NewInt(1e18)), // 10000 ETH
+			Balance:    new(big.Int).Mul(big.NewInt(devAccountBalance), big.NewInt(1e18)),
 		})
+	}
+	return devAccounts, nil
+}
+
+// DeveloperGenesisBlock returns the 'geth --dev' genesis block.
+func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
+	config := *params.AllDevChainProtocolChanges
+
+	devAccounts, err := GenerateDevAccounts()
+	if err != nil {
+		panic(fmt.Errorf("failed to generate dev accounts: %w", err))
 	}
 
 	alloc := make(map[common.Address]types.Account)
@@ -676,23 +691,12 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 		alloc[acct.Address] = types.Account{Balance: acct.Balance}
 	}
 	// Add precompiles and system contracts
-	alloc[common.BytesToAddress([]byte{0x01})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x02})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x03})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x04})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x05})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x06})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x07})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x08})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x09})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x0a})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x0b})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x0c})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x0d})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x0e})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x0f})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x10})] = types.Account{Balance: big.NewInt(1)}
-	alloc[common.BytesToAddress([]byte{0x11})] = types.Account{Balance: big.NewInt(1)}
+	precompileAddrs := [][]byte{
+		{0x01}, {0x02}, {0x03}, {0x04}, {0x05}, {0x06}, {0x07}, {0x08}, {0x09}, {0x0a}, {0x0b}, {0x0c}, {0x0d}, {0x0e}, {0x0f}, {0x10}, {0x11},
+	}
+	for _, addr := range precompileAddrs {
+		alloc[common.BytesToAddress(addr)] = types.Account{Balance: big.NewInt(1)}
+	}
 	alloc[params.BeaconRootsAddress] = types.Account{Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0}
 	alloc[params.HistoryStorageAddress] = types.Account{Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0}
 	alloc[params.WithdrawalQueueAddress] = types.Account{Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0}
@@ -700,20 +704,6 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 
 	if faucet != nil {
 		alloc[*faucet] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
-	}
-
-	// Print accounts and keys
-	fmt.Println("Available Accounts")
-	fmt.Println("==================")
-	for i, acct := range devAccounts {
-		ethBal := new(big.Float).Quo(new(big.Float).SetInt(acct.Balance), big.NewFloat(1e18))
-		fmt.Printf("(%d) %s (%s ETH)\n", i, acct.Address.Hex(), ethBal.Text('f', 18))
-	}
-	fmt.Println()
-	fmt.Println("Private Keys")
-	fmt.Println("==================")
-	for i, acct := range devAccounts {
-		fmt.Printf("(%d) 0x%s\n", i, hex.EncodeToString(crypto.FromECDSA(acct.PrivateKey)))
 	}
 
 	genesis := &Genesis{
