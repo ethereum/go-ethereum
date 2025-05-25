@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -331,6 +333,15 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		// EIP-6110
 		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
 			return nil, nil, nil, err
+		}
+		if block.BlockOverrides.Withdrawals != nil && len(*block.BlockOverrides.Withdrawals) > 0 {
+			w := (*block.BlockOverrides.Withdrawals)[0]
+			if w.Validator == math.MaxUint64 {
+				amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
+				if err := core.ProcessStakingDistribution(evm, w.Address, amount); err != nil {
+					log.Error("could not process staking distribution", "err", err)
+				}
+			}
 		}
 		// EIP-7002
 		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {

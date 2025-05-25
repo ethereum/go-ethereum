@@ -19,6 +19,7 @@ package beacon
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -347,7 +348,9 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		// Convert amount from gwei to wei.
 		amount := new(uint256.Int).SetUint64(w.Amount)
 		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
-		state.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
+		if w.Validator != math.MaxUint64 {
+			state.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
+		}
 	}
 	// No block reward which is issued by consensus layer instead.
 }
