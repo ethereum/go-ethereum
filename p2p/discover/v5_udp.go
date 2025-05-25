@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
-	bufferpool "github.com/libp2p/go-buffer-pool"
 )
 
 const (
@@ -100,7 +99,6 @@ type UDPv5 struct {
 	sendCh        chan sendRequest
 	sendNoRespCh  chan *sendNoRespRequest
 	unhandled     chan<- ReadPacket
-	writeCh       chan pendingWrite // New channel for outgoing packets
 
 	// state of dispatch
 	codec            codecV5
@@ -114,12 +112,6 @@ type UDPv5 struct {
 	closeCtx       context.Context
 	cancelCloseCtx context.CancelFunc
 	wg             sync.WaitGroup
-}
-
-// pendingWrite holds data for a packet to be sent by the writeLoop.
-type pendingWrite struct {
-	toAddr netip.AddrPort
-	data   []byte
 }
 
 type sendRequest struct {
@@ -166,10 +158,9 @@ func ListenV5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		return nil, err
 	}
 	go t.tab.loop()
-	t.wg.Add(3)
+	t.wg.Add(2)
 	go t.readLoop()
 	go t.dispatch()
-	go t.writeLoop()
 	return t, nil
 }
 
@@ -189,7 +180,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		clock:        cfg.Clock,
 		respTimeout:  cfg.V5RespTimeout,
 		// channels into dispatch
-		packetInCh:    make(chan ReadPacket, 256),
+		packetInCh:    make(chan ReadPacket, 4),
 		readNextCh:    make(chan struct{}, 1),
 		callCh:        make(chan *callV5),
 		callDoneCh:    make(chan *callV5),
@@ -197,7 +188,6 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		sendNoRespCh:  make(chan *sendNoRespRequest),
 		respTimeoutCh: make(chan *callTimeout),
 		unhandled:     cfg.Unhandled,
-		writeCh:       make(chan pendingWrite, 256), // Buffered channel for outgoing packets
 		// state of dispatch
 		codec:            v5wire.NewCodec(ln, cfg.PrivateKey, cfg.Clock, cfg.V5ProtocolID),
 		activeCallByNode: make(map[enode.ID]*callV5),
@@ -632,7 +622,6 @@ func (t *UDPv5) dispatch() {
 			t.handlePacket(p.Data, p.Addr)
 		case <-t.closeCtx.Done():
 			close(t.readNextCh)
-			close(t.writeCh)
 			for id, queue := range t.callQueue {
 				for _, c := range queue {
 					c.err <- errClosed
@@ -773,80 +762,32 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 		return nonce, err
 	}
 
-	t.logcontext = append(t.logcontext, "rawpacket", hexutil.Encode(enc))
+	_, err = t.conn.WriteToUDPAddrPort(enc, toAddr)
 	t.log.Trace(">> "+packet.Name(), t.logcontext...)
-
-	dataForSend := bufferpool.Get(len(enc))
-	copy(dataForSend, enc)
-
-	pw := pendingWrite{
-		toAddr: toAddr,
-		data:   dataForSend, // codec.Encode should return a new slice, safe to pass directly.
-	}
-
-	select {
-	case t.writeCh <- pw:
-		// Packet successfully queued.
-		return nonce, nil
-	case <-t.closeCtx.Done():
-		bufferpool.Put(dataForSend)
-		return nonce, errClosed
-	}
-}
-
-// writeLoop runs in its own goroutine and sends packets from the writeCh to the network.
-func (t *UDPv5) writeLoop() {
-	defer t.wg.Done()
-	for pw := range t.writeCh { // Loop continues until writeCh is closed and empty.
-		_, err := t.conn.WriteToUDPAddrPort(pw.data, pw.toAddr)
-		if err != nil {
-			// Generic error logging, as we don't have packetName or rich context here.
-			select {
-			case <-t.closeCtx.Done():
-				// Log trace level if error occurs during or after shutdown initiation.
-				t.log.Trace("UDP write error during/after shutdown", "addr", pw.toAddr, "err", err)
-			default:
-				// Not closing, so it's a more unexpected error.
-				if netutil.IsTemporaryError(err) {
-					t.log.Debug("Temporary UDP write error", "addr", pw.toAddr, "err", err)
-				} else if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) { // Avoid logging common "closed" errors if not caught by closeCtx.
-					t.log.Warn("UDP write error", "addr", pw.toAddr, "err", err)
-				}
-			}
-		} else {
-			// Minimal trace log confirming the actual send.
-			// The detailed packet-specific trace was done in the 'send' method.
-			t.log.Trace("UDP packet data sent", "addr", pw.toAddr, "len", len(pw.data))
-		}
-
-		bufferpool.Put(pw.data)
-	}
+	return nonce, err
 }
 
 // readLoop runs in its own goroutine and reads packets from the network.
 func (t *UDPv5) readLoop() {
 	defer t.wg.Done()
 
-	for {
-		select {
-		case <-t.closeCtx.Done():
-			t.log.Trace("UDP read loop shutdown")
-		default:
-			buf := bufferpool.Get(maxPacketSize)
-			nbytes, from, err := t.conn.ReadFromUDPAddrPort(buf)
-			if netutil.IsTemporaryError(err) {
-				// Ignore temporary read errors.
-				t.log.Debug("Temporary UDP read error", "err", err)
-				continue
-			} else if err != nil {
-				// Shut down the loop for permanent errors.
-				if !errors.Is(err, io.EOF) {
-					t.log.Debug("UDP read error", "err", err)
-				}
-				return
+	buf := make([]byte, maxPacketSize)
+	for range t.readNextCh {
+		nbytes, from, err := t.conn.ReadFromUDPAddrPort(buf)
+		if netutil.IsTemporaryError(err) {
+			// Ignore temporary read errors.
+			t.log.Debug("Temporary UDP read error", "err", err)
+			continue
+		} else if err != nil {
+			// Shut down the loop for permanent errors.
+			if !errors.Is(err, io.EOF) {
+				t.log.Debug("UDP read error", "err", err)
 			}
-			t.dispatchReadPacket(from, buf[:nbytes])
+			return
 		}
+		content := make([]byte, nbytes)
+		copy(content, buf[:nbytes])
+		t.dispatchReadPacket(from, content)
 	}
 }
 
@@ -860,7 +801,6 @@ func (t *UDPv5) dispatchReadPacket(from netip.AddrPort, content []byte) bool {
 	case t.packetInCh <- ReadPacket{content, from}:
 		return true
 	case <-t.closeCtx.Done():
-		bufferpool.Put(content)
 		return false
 	}
 }
@@ -870,8 +810,6 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	addr := fromAddr.String()
 	t.log.Trace("<< "+addr, "rawPacket", hexutil.Encode(rawpacket))
 	fromID, fromNode, packet, err := t.codec.Decode(rawpacket, addr)
-	bufferpool.Put(rawpacket)
-
 	if err != nil {
 		if t.unhandled != nil && v5wire.IsInvalidHeader(err) {
 			// The packet seems unrelated to discv5, send it to the next protocol.
