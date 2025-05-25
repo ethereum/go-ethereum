@@ -110,10 +110,19 @@ func (h *hasher) encodeShortNode(n *shortNode) []byte {
 	return h.encodedBytes()
 }
 
+var fnEncoderPool = sync.Pool{
+	New: func() interface{} {
+		var enc fullnodeEncoder
+		return &enc
+	},
+}
+
 // encodeFullNode returns a copy of the supplied fullNode, with its child
 // being replaced by either the hash or an embedded node if the child is small.
 func (h *hasher) encodeFullNode(n *fullNode) []byte {
-	var fn fullnodeEncoder
+	fn := fnEncoderPool.Get().(*fullnodeEncoder)
+	fn.reset()
+
 	if h.parallel {
 		var wg sync.WaitGroup
 		for i := 0; i < 16; i++ {
@@ -142,6 +151,8 @@ func (h *hasher) encodeFullNode(n *fullNode) []byte {
 		fn.Children[16] = n.Children[16].(valueNode)
 	}
 	fn.encode(h.encbuf)
+	fnEncoderPool.Put(fn)
+
 	return h.encodedBytes()
 }
 
