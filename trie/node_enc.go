@@ -43,7 +43,7 @@ func (n *fullNode) encode(w rlp.EncoderBuffer) {
 func (n *fullnodeEncoder) encode(w rlp.EncoderBuffer) {
 	offset := w.List()
 	for i, c := range n.Children {
-		if c == nil {
+		if len(c) == 0 {
 			w.Write(rlp.EmptyString)
 		} else {
 			if i == 16 {
@@ -58,6 +58,14 @@ func (n *fullnodeEncoder) encode(w rlp.EncoderBuffer) {
 		}
 	}
 	w.ListEnd(offset)
+}
+
+func (n *fullnodeEncoder) reset() {
+	for i, c := range n.Children {
+		if len(c) != 0 {
+			n.Children[i] = n.Children[i][:0]
+		}
+	}
 }
 
 func (n *shortNode) encode(w rlp.EncoderBuffer) {
