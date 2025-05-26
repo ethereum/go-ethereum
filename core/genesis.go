@@ -24,6 +24,8 @@ import (
 	"math/big"
 	"strings"
 
+	"crypto/ecdsa"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -644,11 +646,26 @@ func DefaultHoodiGenesisBlock() *Genesis {
 	}
 }
 
-// DeveloperGenesisBlock returns the 'geth --dev' genesis block.
-func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
+// DeveloperGenesisBlock returns the 'geth --dev' genesis block, faucet address, and key.
+func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) (*Genesis, common.Address, *ecdsa.PrivateKey) {
 	config := *params.AllDevChainProtocolChanges
 
 	alloc := make(map[common.Address]types.Account)
+
+	var faucetAddr common.Address
+	var faucetKey *ecdsa.PrivateKey
+	if faucet == nil {
+		// Generate a new dev account for the faucet
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			panic(fmt.Errorf("failed to generate dev faucet key: %w", err))
+		}
+		faucetAddr = crypto.PubkeyToAddress(key.PublicKey)
+		faucetKey = key
+	} else {
+		faucetAddr = *faucet
+	}
+	alloc[faucetAddr] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
 
 	// Add precompiles and system contracts
 	precompileAddrs := [][]byte{
@@ -662,18 +679,15 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 	alloc[params.WithdrawalQueueAddress] = types.Account{Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0}
 	alloc[params.ConsolidationQueueAddress] = types.Account{Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0}
 
-	if faucet != nil {
-		alloc[*faucet] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
-	}
-
 	genesis := &Genesis{
 		Config:     &config,
 		GasLimit:   gasLimit,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(0),
 		Alloc:      alloc,
+		Coinbase:   faucetAddr,
 	}
-	return genesis
+	return genesis, faucetAddr, faucetKey
 }
 
 func decodePrealloc(data string) types.GenesisAlloc {
