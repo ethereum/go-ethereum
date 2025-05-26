@@ -250,31 +250,28 @@ func TestConvertAddressDataToSlice(t *testing.T) {
 func TestTypedDataArrayValidate(t *testing.T) {
 	t.Parallel()
 
-	type testDataInput struct {
-		Name        string           `json:"name"`
-		Domain      TypedDataDomain  `json:"domain"`
-		PrimaryType string           `json:"primaryType"`
-		Types       Types            `json:"types"`
-		Message     TypedDataMessage `json:"data"`
-		Digest      string           `json:"digest"`
+	type TestDataInput struct {
+		Name        string    `json:"name"`
+		TypedData   TypedData `json:"typedData"`
+		DomainHash  string    `json:"domainHash"`
+		MessageHash string    `json:"messageHash"`
+		Digest      string    `json:"digest"`
 	}
+
 	fc, err := os.ReadFile("./testdata/typed-data.json")
 	require.NoError(t, err, "error reading test data file")
 
-	var tests []testDataInput
+	var tests []TestDataInput
 	err = json.Unmarshal(fc, &tests)
 	require.NoError(t, err, "error unmarshalling test data file contents")
 
-	for _, tc := range tests {
+	for _, tt := range tests {
+		tc := tt
+
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 
-			td := TypedData{
-				Types:       tc.Types,
-				PrimaryType: tc.PrimaryType,
-				Domain:      tc.Domain,
-				Message:     tc.Message,
-			}
+			td := tc.TypedData
 
 			domainSeparator, tErr := td.HashStruct("EIP712Domain", td.Domain.Map())
 			assert.NoError(t, tErr, "failed to hash domain separator: %v", tErr)
@@ -282,10 +279,13 @@ func TestTypedDataArrayValidate(t *testing.T) {
 			messageHash, tErr := td.HashStruct(td.PrimaryType, td.Message)
 			assert.NoError(t, tErr, "failed to hash message: %v", tErr)
 
-			digest := crypto.Keccak256Hash(fmt.Appendf(nil, "%s%s%s", "\x19\x01", string(domainSeparator), string(messageHash)))
-			assert.Equal(t, tc.Digest, digest.String(), "digest doesn't not match")
+			digest := crypto.Keccak256Hash([]byte(fmt.Sprintf("%s%s%s", "\x19\x01", string(domainSeparator), string(messageHash))))
 
-			assert.NoError(t, td.validate(), "validation failed", tErr)
+			assert.Equal(t, tc.Digest, digest.String(), "digest doesn't not match")
+			assert.Equal(t, tc.DomainHash, domainSeparator.String(), "domain separator hashes do not match")
+			assert.Equal(t, tc.MessageHash, messageHash.String(), "message hashes do not match")
+
+			assert.NoError(t, td.validate(), "expected typed data to pass validation, got: %v", tErr)
 		})
 	}
 }
