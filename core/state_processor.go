@@ -89,7 +89,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
-	if (p.config.IsPrague(block.Number()) || p.config.IsVerkle(block.Number())) && p.config.Bor == nil {
+	if p.config.IsPrague(block.Number()) || p.config.IsVerkle(block.Number()) {
 		// EIP-2935
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}

@@ -252,7 +252,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	// If prague hardfork, insert parent block hash in the state as per EIP-2935.
-	if eth.blockchain.Config().IsPrague(block.Number()) && eth.blockchain.Config().Bor != nil {
+	if eth.blockchain.Config().IsPrague(block.Number()) {
 		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
