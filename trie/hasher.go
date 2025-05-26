@@ -65,9 +65,11 @@ func (h *hasher) hash(n node, force bool) []byte {
 	case *shortNode:
 		enc := h.encodeShortNode(n)
 		if len(enc) < 32 && !force {
+			// Nodes smaller than 32 bytes are embedded directly in their parent.
+			// In such cases, return the raw encoded blob instead of the node hash.
 			buf := make([]byte, len(enc))
 			copy(buf, enc)
-			return buf // Nodes smaller than 32 bytes are stored inside their parent
+			return buf
 		}
 		hash := h.hashData(enc)
 		n.flags.hash = hash
@@ -76,9 +78,11 @@ func (h *hasher) hash(n node, force bool) []byte {
 	case *fullNode:
 		enc := h.encodeFullNode(n)
 		if len(enc) < 32 && !force {
+			// Nodes smaller than 32 bytes are embedded directly in their parent.
+			// In such cases, return the raw encoded blob instead of the node hash.
 			buf := make([]byte, len(enc))
 			copy(buf, enc)
-			return buf // Nodes smaller than 32 bytes are stored inside their parent
+			return buf
 		}
 		hash := h.hashData(enc)
 		n.flags.hash = hash
@@ -110,6 +114,8 @@ func (h *hasher) encodeShortNode(n *shortNode) []byte {
 	return h.encodedBytes()
 }
 
+// fnEncoderPool is the pool for storing shared fullNode encoder to mitigate
+// the significant memory allocation overhead.
 var fnEncoderPool = sync.Pool{
 	New: func() interface{} {
 		var enc fullnodeEncoder
@@ -189,10 +195,7 @@ func (h *hasher) hashDataTo(dst, data []byte) {
 	h.sha.Read(dst)
 }
 
-// proofHash is used to construct trie proofs, and returns the 'collapsed'
-// node (for later RLP encoding) as well as the hashed node -- unless the
-// node is smaller than 32 bytes, in which case it will be returned as is.
-// This method does not do anything on value- or hash-nodes.
+// proofHash is used to construct trie proofs, returning the rlp-encoded node blobs.
 func (h *hasher) proofHash(original node) []byte {
 	switch n := original.(type) {
 	case *shortNode:

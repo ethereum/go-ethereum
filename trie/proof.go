@@ -87,9 +87,6 @@ func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 
 	for i, n := range nodes {
 		enc := hasher.proofHash(n)
-		if len(enc) == 32 {
-			fmt.Println("DEBUG")
-		}
 		if len(enc) >= 32 || i == 0 {
 			proofDb.Put(crypto.Keccak256(enc), enc)
 		}
