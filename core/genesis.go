@@ -685,7 +685,6 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) (*Genesis, c
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(0),
 		Alloc:      alloc,
-		Coinbase:   faucetAddr,
 	}
 	return genesis, faucetAddr, faucetKey
 }
