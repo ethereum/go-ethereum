@@ -1912,7 +1912,6 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 		statedb   *state.StateDB
 		interrupt atomic.Bool
 	)
-	defer interrupt.Store(true) // terminate the prefetch at the end
 
 	if bc.cacheConfig.TrieCleanNoPrefetch {
 		statedb, err = state.New(parentRoot, bc.statedb)
@@ -1984,6 +1983,8 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	// Process block using the parent state as reference point
 	pstart := time.Now()
 	res, err := bc.processor.Process(block, statedb, bc.vmConfig)
+	// Terminate the prefetch immediately after the block has been processed
+	interrupt.Store(true)
 	if err != nil {
 		bc.reportBlock(block, res, err)
 		return nil, err
