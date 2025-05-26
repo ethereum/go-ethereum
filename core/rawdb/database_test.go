@@ -53,18 +53,3 @@ func setupRangeDB(b *testing.B, db ethdb.KeyValueStore, numEntries int) ([]byte,
 	}
 	return firstKey, append(lastKey, 0) // append 0 to make range exclusive for lastKey
 }
-
-func BenchmarkSafeDeleteRange(b *testing.B) {
-	db := NewMemoryDatabase()
-	defer db.Close()
-
-	const numEntries = 10000
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		start, end := setupRangeDB(b, db, numEntries)
-		if err := SafeDeleteRange(db, start, end, true, func(bool) bool { return false }); err != nil {
-			b.Fatalf("Failed to delete range: %v", err)
-		}
-	}
-}
