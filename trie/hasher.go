@@ -67,6 +67,8 @@ func (h *hasher) hash(n node, force bool) []byte {
 		if len(enc) < 32 && !force {
 			// Nodes smaller than 32 bytes are embedded directly in their parent.
 			// In such cases, return the raw encoded blob instead of the node hash.
+			// It's essential to deep-copy the node blob, as the underlying buffer
+			// of enc will be reused later.
 			buf := make([]byte, len(enc))
 			copy(buf, enc)
 			return buf
@@ -80,6 +82,8 @@ func (h *hasher) hash(n node, force bool) []byte {
 		if len(enc) < 32 && !force {
 			// Nodes smaller than 32 bytes are embedded directly in their parent.
 			// In such cases, return the raw encoded blob instead of the node hash.
+			// It's essential to deep-copy the node blob, as the underlying buffer
+			// of enc will be reused later.
 			buf := make([]byte, len(enc))
 			copy(buf, enc)
 			return buf
@@ -137,12 +141,11 @@ func (h *hasher) encodeFullNode(n *fullNode) []byte {
 			}
 			wg.Add(1)
 			go func(i int) {
-				hasher := newHasher(false)
-				if child := n.Children[i]; child != nil {
-					fn.Children[i] = hasher.hash(child, false)
-				}
-				returnHasherToPool(hasher)
-				wg.Done()
+				defer wg.Done()
+
+				h := newHasher(false)
+				defer returnHasherToPool(h)
+				fn.Children[i] = h.hash(n.Children[i], false)
 			}(i)
 		}
 		wg.Wait()
@@ -196,6 +199,7 @@ func (h *hasher) hashDataTo(dst, data []byte) {
 }
 
 // proofHash is used to construct trie proofs, returning the rlp-encoded node blobs.
+// Note, only resolved node (shortNode or fullNode) is expected for proofing.
 func (h *hasher) proofHash(original node) []byte {
 	switch n := original.(type) {
 	case *shortNode:
