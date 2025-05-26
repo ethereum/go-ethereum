@@ -57,9 +57,6 @@ func openDatabase(o internalOpenOptions) (ethdb.Database, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(o.AncientsDirectory) == 0 {
-		return kvdb, nil
-	}
 	opts := rawdb.OpenOptions{
 		Ancient:          o.AncientsDirectory,
 		Era:              o.EraDirectory,
@@ -80,7 +77,7 @@ func openDatabase(o internalOpenOptions) (ethdb.Database, error) {
 //					   +----------------------------------------
 //	db is non-existent |  pebble default  |  specified type
 //	db is existent     |  from db         |  specified type (if compatible)
-func openKeyValueDatabase(o internalOpenOptions) (ethdb.Database, error) {
+func openKeyValueDatabase(o internalOpenOptions) (ethdb.KeyValueStore, error) {
 	// Reject any unsupported database type
 	if len(o.dbEngine) != 0 && o.dbEngine != rawdb.DBLeveldb && o.dbEngine != rawdb.DBPebble {
 		return nil, fmt.Errorf("unknown db.engine %v", o.dbEngine)
@@ -106,7 +103,7 @@ func openKeyValueDatabase(o internalOpenOptions) (ethdb.Database, error) {
 
 // newLevelDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func newLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
+func newLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.KeyValueStore, error) {
 	db, err := leveldb.New(file, cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
@@ -117,7 +114,7 @@ func newLevelDBDatabase(file string, cache int, handles int, namespace string, r
 
 // newPebbleDBDatabase creates a persistent key-value database without a freezer
 // moving immutable chain segments into cold storage.
-func newPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
+func newPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.KeyValueStore, error) {
 	db, err := pebble.New(file, cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
