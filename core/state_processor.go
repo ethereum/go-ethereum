@@ -325,7 +325,6 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(params.HistoryStorageAddress)
-	// Note(bor): It's okay to pass nil interrupt context as this is only for eth related things.
 	_, _, err := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560, nil)
 	if err != nil {
 		panic(err)
