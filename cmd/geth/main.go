@@ -42,11 +42,6 @@ import (
 	_ "github.com/ethereum/go-ethereum/eth/tracers/live"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 
-	"encoding/hex"
-	"math/big"
-
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/urfave/cli/v2"
 )
 
@@ -333,22 +328,6 @@ func prepare(ctx *cli.Context) {
 		}
 	}
 }
-
-func PrintDevAccounts(devAccounts []core.DevAccount) {
-	fmt.Println("Available Accounts")
-	fmt.Println("==================")
-	for i, acct := range devAccounts {
-		ethBal := new(big.Float).Quo(new(big.Float).SetInt(acct.Balance), big.NewFloat(1e18))
-		fmt.Printf("(%d) %s (%s ETH)\n", i, acct.Address.Hex(), ethBal.Text('f', 18))
-	}
-	fmt.Println()
-	fmt.Println("Private Keys")
-	fmt.Println("==================")
-	for i, acct := range devAccounts {
-		fmt.Printf("(%d) 0x%s\n", i, hex.EncodeToString(crypto.FromECDSA(acct.PrivateKey)))
-	}
-}
-
 // geth is the main entry point into the system if no special subcommand is run.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
@@ -358,13 +337,6 @@ func geth(ctx *cli.Context) error {
 	}
 
 	prepare(ctx)
-
-	if ctx.IsSet(utils.DeveloperFlag.Name) {
-		devAccounts, err := core.GenerateDevAccounts()
-		if err == nil {
-			PrintDevAccounts(devAccounts)
-		}
-	}
 
 	stack := makeFullNode(ctx)
 	defer stack.Close()
