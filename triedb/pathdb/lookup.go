@@ -202,6 +202,10 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 			for i := 0; i < len(list); i++ {
 				if list[i] == state {
 					if i == 0 {
+						// Remove the first element by shifting the slice forward.
+						// Pros: zero-copy.
+						// Cons: may retain large backing array, causing memory leaks.
+						// Mitigation: release the array if capacity exceeds threshold.
 						list = list[1:]
 						if cap(list) > 1024 {
 							list = append(make([]common.Hash, 0, len(list)), list...)
@@ -241,6 +245,10 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 				for i := 0; i < len(list); i++ {
 					if list[i] == state {
 						if i == 0 {
+							// Remove the first element by shifting the slice forward.
+							// Pros: zero-copy.
+							// Cons: may retain large backing array, causing memory leaks.
+							// Mitigation: release the array if capacity exceeds threshold.
 							list = list[1:]
 							if cap(list) > 1024 {
 								list = append(make([]common.Hash, 0, len(list)), list...)

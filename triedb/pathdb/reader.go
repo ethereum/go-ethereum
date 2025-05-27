@@ -103,7 +103,12 @@ func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 	}
 	// If the located layer is stale, fall back to the slow path to retrieve
 	// the account data. This is an edge case where the located layer is the
-	// disk layer, and it becomes stale within a very short time window.
+	// disk layer (e.g., the requested account was not changed in all the diff
+	// layers), and it becomes stale within a very short time window.
+	//
+	// This fallback mechanism is essential, because the traversal starts from
+	// the entry point layer and goes down, the staleness of the disk layer does
+	// not affect the result unless the entry point layer is also stale.
 	blob, err := l.account(hash, 0)
 	if errors.Is(err, errSnapshotStale) {
 		return r.layer.account(hash, 0)
@@ -146,8 +151,13 @@ func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
 		return nil, err
 	}
 	// If the located layer is stale, fall back to the slow path to retrieve
-	// the account data. This is an edge case where the located layer is the
-	// disk layer, and it becomes stale within a very short time window.
+	// the storage data. This is an edge case where the located layer is the
+	// disk layer (e.g., the requested account was not changed in all the diff
+	// layers), and it becomes stale within a very short time window.
+	//
+	// This fallback mechanism is essential, because the traversal starts from
+	// the entry point layer and goes down, the staleness of the disk layer does
+	// not affect the result unless the entry point layer is also stale.
 	blob, err := l.storage(accountHash, storageHash, 0)
 	if errors.Is(err, errSnapshotStale) {
 		return r.layer.storage(accountHash, storageHash, 0)
