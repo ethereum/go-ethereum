@@ -83,8 +83,30 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 // layer specified by the stateID: fallback to the disk layer for data retrieval,
 // (b) or the layer specified by the stateID is stale: reject the data retrieval.
 func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base common.Hash) common.Hash {
+	// Traverse the mutation history from latest to oldest one. Several
+	// scenarios are possible:
+	//
+	// Chain:
+	//     D->C1->C2->C3->C4 (HEAD)
+	//      ->C1'->C2'->C3'
+	// State:
+	//     x: [C1, C1', C3', C3]
+	//     y: []
+	//
+	// - (x, C4) => C3
+	// - (x, C3) => C3
+	// - (x, C2) => C1
+	// - (x, C3') => C3'
+	// - (x, C2') => C1'
+	// - (y, C4) => D
+	// - (y, C3') => D
+	// - (y, C0) => null
 	list := l.accounts[accountHash]
 	for i := len(list) - 1; i >= 0; i-- {
+		// If the current state matches the stateID, or the requested state is a
+		// descendant of it, return the current state as the most recent one
+		// containing the modified data. Otherwise, the current state may be ahead
+		// of the requested one or belong to a different branch.
 		if list[i] == stateID || l.descendant(stateID, list[i]) {
 			return list[i]
 		}
@@ -115,6 +137,10 @@ func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, state
 	if exists {
 		list := subset[slotHash]
 		for i := len(list) - 1; i >= 0; i-- {
+			// If the current state matches the stateID, or the requested state is a
+			// descendant of it, return the current state as the most recent one
+			// containing the modified data. Otherwise, the current state may be ahead
+			// of the requested one or belong to a different branch.
 			if list[i] == stateID || l.descendant(stateID, list[i]) {
 				return list[i]
 			}
