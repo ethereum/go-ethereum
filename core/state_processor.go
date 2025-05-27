@@ -299,22 +299,23 @@ func ProcessStakingDistribution(evm *vm.EVM, address common.Address, amount *big
 			defer tracer.OnSystemCallEnd()
 		}
 	}
-	input := make([]byte, 32)
-	copy(input[12:], address.Bytes())
-	addr := params.StakingContractAddress
+	data := make([]byte, 32)
+	amount.FillBytes(data)
+	addr := address
 	msg := &Message{
-		From:      params.SystemAddress,
+		From: params.SystemAddress,
+		// Value:     amount,
 		GasLimit:  30_000_000,
 		GasPrice:  common.Big0,
 		GasFeeCap: common.Big0,
 		GasTipCap: common.Big0,
 		To:        &addr,
-		Data:      append(params.StakingContractCallData, input...),
+		Data:      data,
 	}
 	evm.SetTxContext(NewEVMTxContext(msg))
 	evm.StateDB.AddAddressToAccessList(addr)
 	evm.StateDB.AddBalance(
-		params.StakingContractAddress,
+		address,
 		uint256.NewInt(0).SetBytes(amount.Bytes()),
 		tracing.BalanceIncreaseRewardMineBlock,
 	)
