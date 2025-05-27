@@ -29,10 +29,10 @@ import (
 
 // The types of locations where the node is found.
 const (
-	locDirtyCache = "dirty" // dirty cache
-	locCleanCache = "clean" // clean cache
-	locDiskLayer  = "disk"  // persistent state
-	locDiffLayer  = "diff"  // diff layers
+	locDiffCache  = "diff"  // in-memory cache for nodes from the diff layer
+	locDirtyCache = "dirty" // not yet persisted write buffer for modified nodes
+	locCleanCache = "clean" // fastcache for clean nodes from the disk layer
+	locDiskLayer  = "disk"  // on-disk persistent state
 )
 
 // nodeLoc is a helpful structure that contains the location where the node
@@ -67,12 +67,12 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 		// Location is always available even if the node
 		// is not found.
 		switch loc.loc {
-		case locCleanCache:
-			nodeCleanFalseMeter.Mark(1)
+		case locDiffCache:
+			nodeDiffFalseMeter.Mark(1)
 		case locDirtyCache:
 			nodeDirtyFalseMeter.Mark(1)
-		case locDiffLayer:
-			nodeDiffFalseMeter.Mark(1)
+		case locCleanCache:
+			nodeCleanFalseMeter.Mark(1)
 		case locDiskLayer:
 			nodeDiskFalseMeter.Mark(1)
 		}
