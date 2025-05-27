@@ -59,7 +59,7 @@ var (
 	commitTimeTimer     = metrics.NewRegisteredResettingTimer("pathdb/commit/time", nil)
 	commitNodesMeter    = metrics.NewRegisteredMeter("pathdb/commit/nodes", nil)
 	commitAccountsMeter = metrics.NewRegisteredMeter("pathdb/commit/accounts", nil)
-	commitStoragesMeter = metrics.NewRegisteredMeter("pathdb/commit/slots", nil)
+	commitStoragesMeter = metrics.NewRegisteredMeter("pathdb/commit/storages", nil)
 	commitBytesMeter    = metrics.NewRegisteredMeter("pathdb/commit/bytes", nil)
 
 	gcTrieNodeMeter      = metrics.NewRegisteredMeter("pathdb/gc/node/count", nil)
