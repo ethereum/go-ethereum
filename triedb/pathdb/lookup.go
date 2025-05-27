@@ -206,6 +206,30 @@ func (l *lookup) addLayer(diff *diffLayer) {
 	wg.Wait()
 }
 
+// removeFromList removes the specified element from the provided list.
+// It returns a flag indicating whether the element was found and removed.
+func removeFromList(list []common.Hash, element common.Hash) (bool, []common.Hash) {
+	// Traverse the list from oldest to newest to quickly locate the element.
+	for i := 0; i < len(list); i++ {
+		if list[i] == element {
+			if i != 0 {
+				list = append(list[:i], list[i+1:]...)
+			} else {
+				// Remove the first element by shifting the slice forward.
+				// Pros: zero-copy.
+				// Cons: may retain large backing array, causing memory leaks.
+				// Mitigation: release the array if capacity exceeds threshold.
+				list = list[1:]
+				if cap(list) > 1024 {
+					list = append(make([]common.Hash, 0, len(list)), list...)
+				}
+			}
+			return true, list
+		}
+	}
+	return false, nil
+}
+
 // removeLayer traverses the state data retained in the specified diff layer and
 // unlink them from the lookup set.
 func (l *lookup) removeLayer(diff *diffLayer) error {
@@ -219,30 +243,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 	)
 	wg.Go(func() error {
 		for accountHash := range diff.states.accountData {
-			var (
-				found bool
-				list  = l.accounts[accountHash]
-			)
-			// Traverse the list from oldest to newest to quickly locate the ID
-			// of the stale layer.
-			for i := 0; i < len(list); i++ {
-				if list[i] == state {
-					if i == 0 {
-						// Remove the first element by shifting the slice forward.
-						// Pros: zero-copy.
-						// Cons: may retain large backing array, causing memory leaks.
-						// Mitigation: release the array if capacity exceeds threshold.
-						list = list[1:]
-						if cap(list) > 1024 {
-							list = append(make([]common.Hash, 0, len(list)), list...)
-						}
-					} else {
-						list = append(list[:i], list[i+1:]...)
-					}
-					found = true
-					break
-				}
-			}
+			found, list := removeFromList(l.accounts[accountHash], state)
 			if !found {
 				return fmt.Errorf("account lookup is not found, %x, state: %x", accountHash, state)
 			}
@@ -262,30 +263,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 				return fmt.Errorf("storage lookup is not found, %x", accountHash)
 			}
 			for slotHash := range slots {
-				var (
-					found bool
-					list  = subset[slotHash]
-				)
-				// Traverse the list from oldest to newest to quickly locate the ID
-				// of the stale layer.
-				for i := 0; i < len(list); i++ {
-					if list[i] == state {
-						if i == 0 {
-							// Remove the first element by shifting the slice forward.
-							// Pros: zero-copy.
-							// Cons: may retain large backing array, causing memory leaks.
-							// Mitigation: release the array if capacity exceeds threshold.
-							list = list[1:]
-							if cap(list) > 1024 {
-								list = append(make([]common.Hash, 0, len(list)), list...)
-							}
-						} else {
-							list = append(list[:i], list[i+1:]...)
-						}
-						found = true
-						break
-					}
-				}
+				found, list := removeFromList(subset[slotHash], state)
 				if !found {
 					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, slotHash, state)
 				}
