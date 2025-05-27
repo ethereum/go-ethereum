@@ -285,6 +285,13 @@ func (b *EthAPIBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	return nil
 }
 
+func (b *EthAPIBackend) GetTdByNumber(ctx context.Context, blockNr rpc.BlockNumber) *big.Int {
+	if header, err := b.HeaderByNumber(ctx, blockNr); header != nil && err == nil {
+		return b.eth.blockchain.GetTd(header.Hash(), uint64(blockNr.Int64()))
+	}
+	return nil
+}
+
 func (b *EthAPIBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = b.eth.blockchain.GetVMConfig()

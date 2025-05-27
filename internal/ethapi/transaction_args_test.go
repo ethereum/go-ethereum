@@ -470,3 +470,7 @@ func (b *backendMock) PurgeWhitelistedMilestone() {}
 func (b backendMock) PeerStats() interface{} {
 	return nil
 }
+
+func (b backendMock) GetTdByNumber(ctx context.Context, blockNr rpc.BlockNumber) *big.Int {
+	panic("not implemented")
+}
