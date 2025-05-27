@@ -223,11 +223,7 @@ func Open(db ethdb.KeyValueStore, opts OpenOptions) (ethdb.Database, error) {
 	if chainFreezerDir != "" {
 		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
 	}
-	var eraDir string
-	if chainFreezerDir != "" {
-		eraDir = resolveChainEraDir(chainFreezerDir, opts.Era)
-	}
-	frdb, err := newChainFreezer(chainFreezerDir, opts.MetricsNamespace, opts.ReadOnly, eraDir)
+	frdb, err := newChainFreezer(chainFreezerDir, opts.Era, opts.MetricsNamespace, opts.ReadOnly)
 	if err != nil {
 		printChainMetadata(db)
 		return nil, err

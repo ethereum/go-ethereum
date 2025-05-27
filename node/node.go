@@ -713,6 +713,7 @@ func (n *Node) OpenDatabaseWithOptions(name string, opt DatabaseOptions) (ethdb.
 			ReadOnly:         opt.ReadOnly,
 		})
 	} else {
+		opt.AncientsDirectory = n.ResolveAncient(name, opt.AncientsDirectory)
 		db, err = openDatabase(internalOpenOptions{
 			directory:       n.ResolvePath(name),
 			dbEngine:        n.config.DBEngine,
