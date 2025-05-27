@@ -85,11 +85,11 @@ type Database struct {
 	liveCompGauge          *metrics.Gauge          // Gauge for tracking the number of in-progress compactions
 	liveCompSizeGauge      *metrics.Gauge          // Gauge for tracking the size of in-progress compactions
 	levelsGauge            []*metrics.Gauge        // Gauge for tracking the number of tables in levels
-	readExistedCount       *metrics.Counter        // Counter for tracking the number of existed keys readed
-	readNotfoundCount      *metrics.Counter        // Counter for tracking the number of notfound keys readed
+	readExistCount         *metrics.Counter        // Counter for tracking the number of existed keys readed
+	readInexCount          *metrics.Counter        // Counter for tracking the number of notfound keys readed
 	writeCount             *metrics.Counter        // Counter for tracking the number of written
-	readExistedTime        *metrics.ResettingTimer // Timer for tracking the time spent on reading existed keys
-	readNotfoundTime       *metrics.ResettingTimer // Timer for tracking the time spent on reading notfound keys
+	readExistTime          *metrics.ResettingTimer // Timer for tracking the time spent on reading existed keys
+	readInexTime           *metrics.ResettingTimer // Timer for tracking the time spent on reading notfound keys
 	writeTime              *metrics.ResettingTimer // Timer for tracking the time spent on writing
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
@@ -332,11 +332,11 @@ func (d *Database) Has(key []byte) (bool, error) {
 	st := time.Now()
 	_, closer, err := d.db.Get(key)
 	if err == nil {
-		d.readExistedTime.Update(time.Since(st))
-		d.readExistedCount.Inc(1)
+		d.readExistTime.Update(time.Since(st))
+		d.readExistCount.Inc(1)
 	} else if err == pebble.ErrNotFound {
-		d.readNotfoundTime.Update(time.Since(st))
-		d.readNotfoundCount.Inc(1)
+		d.readInexTime.Update(time.Since(st))
+		d.readInexCount.Inc(1)
 	}
 
 	if err == pebble.ErrNotFound {
@@ -361,11 +361,11 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 	st := time.Now()
 	dat, closer, err := d.db.Get(key)
 	if err == nil {
-		d.readExistedTime.Update(time.Since(st))
-		d.readExistedCount.Inc(1)
+		d.readExistTime.Update(time.Since(st))
+		d.readExistCount.Inc(1)
 	} else if err == pebble.ErrNotFound {
-		d.readNotfoundTime.Update(time.Since(st))
-		d.readNotfoundCount.Inc(1)
+		d.readInexTime.Update(time.Since(st))
+		d.readInexCount.Inc(1)
 	}
 
 	if err != nil {
@@ -517,11 +517,11 @@ func (d *Database) registerMetrics(namespace string) {
 	d.estimatedCompDebtGauge = metrics.GetOrRegisterGauge(namespace+"compact/estimateDebt", nil)
 	d.liveCompGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/count", nil)
 	d.liveCompSizeGauge = metrics.GetOrRegisterGauge(namespace+"compact/live/size", nil)
-	d.readExistedCount = metrics.GetOrRegisterCounter(namespace+"read/existed/count", nil)
-	d.readNotfoundCount = metrics.GetOrRegisterCounter(namespace+"read/notfound/count", nil)
+	d.readExistCount = metrics.GetOrRegisterCounter(namespace+"read/exist/count", nil)
+	d.readInexCount = metrics.GetOrRegisterCounter(namespace+"read/inex/count", nil)
 	d.writeCount = metrics.GetOrRegisterCounter(namespace+"write/count", nil)
-	d.readExistedTime = metrics.NewRegisteredResettingTimer(namespace+"read/existed/duration", nil)
-	d.readNotfoundTime = metrics.NewRegisteredResettingTimer(namespace+"read/notfound/duration", nil)
+	d.readExistTime = metrics.NewRegisteredResettingTimer(namespace+"read/exist/duration", nil)
+	d.readInexTime = metrics.NewRegisteredResettingTimer(namespace+"read/inex/duration", nil)
 	d.writeTime = metrics.NewRegisteredResettingTimer(namespace+"write/duration", nil)
 }
 
