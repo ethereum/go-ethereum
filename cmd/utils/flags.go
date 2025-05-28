@@ -1792,12 +1792,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		log.Info("Using developer account", "address", developer.Address)
 
-		// Create a new developer genesis block or reuse existing one
+		// configure default developer genesis which will be used unless a
+		// datadir is specified and a chain is preexisting at that location.
+		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &developer.Address)
+
+		// If a datadir is specified, ensure that any preexisting chain in that location
+		// has a configuration that is compatible with dev mode: it must be merged at genesis.
 		if ctx.IsSet(DataDirFlag.Name) {
 			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
-				// validate that the stored genesis config compatible with dev-mode:
-				// it must be merged at genesis
 				genesis, err := core.ReadGenesis(chaindb)
 				if err != nil {
 					Fatalf("Could not read genesis from database: %v", err)
@@ -1812,9 +1815,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 				}
 			}
 			chaindb.Close()
-		} else {
-			// if no datadir is specified, dev mode runs ephemerally in memory
-			cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &developer.Address)
 		}
 		if !ctx.IsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
