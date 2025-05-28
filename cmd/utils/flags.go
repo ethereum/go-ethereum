@@ -984,6 +984,12 @@ var (
 	}
 )
 
+// default account to prefund when running Geth in ephemeral development mode
+var (
+	DeveloperKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	DeveloperAddr   = crypto.PubkeyToAddress(DeveloperKey.PublicKey)
+)
+
 // MakeDataDir retrieves the currently requested data directory, terminating
 // if none (or the empty string) is specified. If the node is starting a testnet,
 // then a subdirectory of the specified datadir will be used.
@@ -1769,7 +1775,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else if accs := ks.Accounts(); len(accs) > 0 {
 			developer = ks.Accounts()[0]
 		} else {
-			developer, err = ks.NewAccount(passphrase)
+			developer, err = ks.ImportECDSA(DeveloperKey, passphrase)
 			if err != nil {
 				Fatalf("Failed to create developer account: %v", err)
 			}
@@ -1808,30 +1814,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			chaindb.Close()
 		} else {
 			// if no datadir is specified, dev mode runs ephemerally in memory
-			var (
-				devAddr = developer.Address
-				devKey  *ecdsa.PrivateKey
-			)
-			if devAddr != (common.Address{}) {
-				devKey, err = crypto.GenerateKey()
-				if err != nil {
-					panic(fmt.Errorf("failed to generate dev mode prefunded account key: %v", err))
-				}
-				devAddr = crypto.PubkeyToAddress(devKey.PublicKey)
-
-				devModeAccountsDescr := fmt.Sprintf(`Available Accounts\n
-==================
-(0) 0x%x (10000.000000000000000000 ETH)
-
-Private Keys
-==================
-(0) 0x%x (10000.000000000000000000 ETH)
-`, devAddr, crypto.FromECDSA(devKey))
-				for _, line := range strings.Split(devModeAccountsDescr, "\n") {
-					log.Info(line)
-				}
-			}
-			cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &devAddr)
+			cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &developer.Address)
 		}
 		if !ctx.IsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
