@@ -19,18 +19,18 @@ jobs:
 
     - name: Run build (amd64)
       env:
-        LINUX_SIGNING_KEY: "{{ secrets.LINUX_SIGNING_KEY }}"
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
       run: |
         go run build/ci.go install -arch amd64 -dlgo
-        go run build/ci.go archive -arch amd64 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        go run build/ci.go archive -arch amd64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     - name: Run build (386)
       env:
-        LINUX_SIGNING_KEY: "{{ secrets.LINUX_SIGNING_KEY }}"
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
       run: |
         apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
         go run build/ci.go install -arch 386 -dlgo
-        go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
   linux-arm:
     name: Linux Build (arm)
@@ -51,34 +51,34 @@ jobs:
 
     - name: Run build (arm64)
       env:
-        LINUX_SIGNING_KEY: "{{ secrets.LINUX_SIGNING_KEY }}"
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
       run: |
         go run build/ci.go install -dlgo -arch arm64 -cc arm-linux-gnueabi-gcc
-        go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     - name: Run build (armv5)
       env:
         GOARM: "5"
-        LINUX_SIGNING_KEY: "{{ secrets.LINUX_SIGNING_KEY }}"
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
       run: |
         go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
-        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     - name: Run build (armv6)
       env:
         GOARM: "6"
-        LINUX_SIGNING_KEY: "{{ secrets.LINUX_SIGNING_KEY }}"
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
       run: |
         go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
-        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     - name: Run build (armv7)
       env:
         GOARM: "7"
-        LINUX_SIGNING_KEY: "{{ secrets.LINUX_SIGNING_KEY }}"
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
       run: |
         go run build/ci.go install -dlgo -arch arm -cc arm-linux-gnueabi-gcc
-        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
+        go run build/ci.go archive -arch arm -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
   docker:
     name: Docker Image
@@ -100,7 +100,7 @@ jobs:
 
     - name: Run docker build
       env:
-        DOCKER_HUB_USERNAME: "{{ secrets.DOCKER_HUB_USERNAME }}"
-        DOCKER_HUB_PASSWORD: "{{ secrets.DOCKER_HUB_PASSWORD }}"
+        DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+        DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
       run: |
         go run build/ci.go dockerx -platform linux/amd64,linux/arm64,linux/riscv64 -upload
