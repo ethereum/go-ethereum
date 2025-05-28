@@ -107,10 +107,20 @@ func IntrinsicGas(data []byte, accessList types.AccessList, authList []types.Set
 		}
 	}
 	if accessList != nil {
+		if (math.MaxUint64-gas)/params.TxAccessListAddressGas < uint64(len(accessList)) {
+			return 0, ErrGasUintOverflow
+		}
 		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
+
+		if (math.MaxUint64-gas)/params.TxAccessListStorageKeyGas < uint64(accessList.StorageKeys()) {
+			return 0, ErrGasUintOverflow
+		}
 		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
 	if authList != nil {
+		if (math.MaxUint64-gas)/params.CallNewAccountGas < uint64(len(authList)) {
+			return 0, ErrGasUintOverflow
+		}
 		gas += uint64(len(authList)) * params.CallNewAccountGas
 	}
 	return gas, nil
