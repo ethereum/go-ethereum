@@ -650,7 +650,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 		}
 		nodes := trienode.NewNodeSet(t.owner)
 		for _, path := range paths {
-			nodes.AddNode([]byte(path), trienode.NewDeleted())
+			nodes.AddNode([]byte(path), trienode.NewDeleted(len(t.tracer.accessList[path])))
 		}
 		return types.EmptyRootHash, nodes // case (b)
 	}
@@ -668,7 +668,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	}
 	nodes := trienode.NewNodeSet(t.owner)
 	for _, path := range t.tracer.deletedNodes() {
-		nodes.AddNode([]byte(path), trienode.NewDeleted())
+		nodes.AddNode([]byte(path), trienode.NewDeleted(len(t.tracer.accessList[path])))
 	}
 	// If the number of changes is below 100, we let one thread handle it
 	t.root = newCommitter(nodes, t.tracer, collectLeaf).Commit(t.root, t.uncommitted > 100)
