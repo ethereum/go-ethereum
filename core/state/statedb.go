@@ -956,7 +956,7 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot
 	)
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-		nodes.AddNode(path, trienode.NewDeleted())
+		nodes.AddNode(path, trienode.NewDeleted(len(blob)))
 	})
 	for iter.Next() {
 		slot := common.CopyBytes(iter.Slot())
@@ -1007,7 +1007,7 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 		if it.Hash() == (common.Hash{}) {
 			continue
 		}
-		nodes.AddNode(it.Path(), trienode.NewDeleted())
+		nodes.AddNode(it.Path(), trienode.NewDeleted(len(it.NodeBlob())))
 	}
 	if err := it.Error(); err != nil {
 		return nil, nil, nil, err
