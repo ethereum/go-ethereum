@@ -86,7 +86,7 @@ func (s *stateTracer) onGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 		}
 	}
 	update := &tracing.StateUpdate{
-		Number:      0,
+		Number:      b.NumberU64(),
 		Hash:        b.Hash(),
 		Time:        b.Time(),
 		Accounts:    int64(accounts),
