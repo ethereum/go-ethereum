@@ -133,6 +133,8 @@ func (api *PrivateMinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
 	api.e.gasPrice = (*big.Int)(&gasPrice)
 	api.e.lock.Unlock()
 
+	// This will override the min base fee configuration.
+	// That is fine, it only happens if we explicitly set gas price via the console.
 	api.e.txPool.SetGasPrice((*big.Int)(&gasPrice))
 	return true
 }

@@ -230,10 +230,6 @@ type Config struct {
 
 	// DA syncer options
 	DA da_syncer.Config
-
-	// L2 base fee coefficients for the formula: `l2BaseFee = (l1BaseFee * scalar) / PRECISION + overhead`.
-	BaseFeeScalar   *big.Int
-	BaseFeeOverhead *big.Int
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

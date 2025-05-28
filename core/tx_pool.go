@@ -424,6 +424,8 @@ func (pool *TxPool) loop() {
 		journal = time.NewTicker(pool.config.Rejournal)
 		// Track the previous head headers for transaction reorgs
 		head = pool.chain.CurrentBlock()
+		// Track the min L2 base fee
+		minBaseFee = big.NewInt(0)
 	)
 	defer report.Stop()
 	defer evict.Stop()
@@ -441,6 +443,13 @@ func (pool *TxPool) loop() {
 				for _, tx := range head.Transactions() {
 					log.Debug("TX is included in a block", "hash", tx.Hash().Hex())
 				}
+			}
+
+			newMinBaseFee := misc.MinBaseFee()
+			if minBaseFee.Cmp(newMinBaseFee) != 0 {
+				log.Debug("Updating min base fee in txpool", "old", minBaseFee, "new", newMinBaseFee)
+				minBaseFee = newMinBaseFee
+				pool.SetGasPrice(minBaseFee)
 			}
 
 		// System shutdown.
