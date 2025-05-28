@@ -17,20 +17,32 @@ jobs:
         go-version: 1.24
         cache: false
 
-    - name: Run build (amd64)
-      env:
-        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+    - name: Install cross toolchain
+      run: |
+        apt-get update
+        apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+
+    - name: Build (amd64)
       run: |
         go run build/ci.go install -arch amd64 -dlgo
-        go run build/ci.go archive -arch amd64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
-    - name: Run build (386)
+    - name: Create archive (amd64)
       env:
         LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
       run: |
-        apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+        go run build/ci.go archive -arch amd64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        rm -f build/bin/*
+
+    - name: Build (386)
+      run: |
         go run build/ci.go install -arch 386 -dlgo
+
+    - name: Create archive (386)
+      env:
+        LINUX_SIGNING_KEY: ${{ secrets.LINUX_SIGNING_KEY }}
+      run: |
         go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+        rm -f build/bin/*
 
   linux-arm:
     name: Linux Build (arm)
@@ -46,7 +58,8 @@ jobs:
 
     - name: Set up cross toolchain
       run: |
-        apt-get -yq --no-install-suggests --no-install-recommends --force-yes install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+        apt-get update
+        apt-get -yq --no-install-suggests --no-install-recommends install gcc-arm-linux-gnueabi libc6-dev-armel-cross gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
         ln -s /usr/include/asm-generic /usr/include/asm
 
     - name: Run build (arm64)
