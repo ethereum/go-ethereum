@@ -1348,12 +1348,12 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 // Since self-destruction was deprecated with the Cancun fork and there are
 // no empty accounts left that could be deleted by EIP-158, storage wiping
 // should not occur.
-func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (*StateUpdate, error) {
+func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error) {
 	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
 	if err != nil {
-		return nil, err
+		return common.Hash{}, err
 	}
-	return ret, nil
+	return ret.Root, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.
