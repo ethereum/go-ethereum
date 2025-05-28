@@ -37,6 +37,7 @@ jobs:
 
     - name: Install deb toolchain
       run: |
+        apt-get update
         apt-get -yq --no-install-suggests --no-install-recommends install devscripts debhelper dput fakeroot
 
     - name: Run ci.go
