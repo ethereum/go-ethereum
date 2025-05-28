@@ -476,7 +476,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 	for i := 0; i < len(blobs); i++ {
 		if blobs[i] != nil {
 			res[i] = &engine.BlobAndProofV1{
-				Blob:  (*blobs[i])[:],
+				Blob:  ([]byte)(*(blobs[i])),
 				Proof: (*proofs[i])[:],
 			}
 		}

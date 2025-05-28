@@ -56,13 +56,14 @@ const testMaxBlobsPerBlock = 6
 
 func init() {
 	for i := 0; i < 24; i++ {
-		testBlob := &kzg4844.Blob{byte(i)}
-		testBlobs = append(testBlobs, testBlob)
+		testBlob := kzg4844.NewBlob()
+		testBlob[0] = byte(i)
+		testBlobs = append(testBlobs, &testBlob)
 
-		testBlobCommit, _ := kzg4844.BlobToCommitment(testBlob)
+		testBlobCommit, _ := kzg4844.BlobToCommitment(&testBlob)
 		testBlobCommits = append(testBlobCommits, testBlobCommit)
 
-		testBlobProof, _ := kzg4844.ComputeBlobProof(testBlob, testBlobCommit)
+		testBlobProof, _ := kzg4844.ComputeBlobProof(&testBlob, testBlobCommit)
 		testBlobProofs = append(testBlobProofs, testBlobProof)
 
 		testBlobVHash := kzg4844.CalcBlobHashV1(sha256.New(), &testBlobCommit)
@@ -433,7 +434,7 @@ func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
 			continue
 		}
 		// Item retrieved, make sure it matches the expectation
-		if *blobs[i] != *testBlobs[i] || *proofs[i] != testBlobProofs[i] {
+		if !bytes.Equal(*blobs[i], *testBlobs[i]) || *proofs[i] != testBlobProofs[i] {
 			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
 			continue
 		}

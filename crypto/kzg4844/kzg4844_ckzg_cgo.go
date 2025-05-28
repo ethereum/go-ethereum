@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"unsafe"
 
 	gokzg4844 "github.com/crate-crypto/go-eth-kzg"
 	ckzg4844 "github.com/ethereum/c-kzg-4844/v2/bindings/go"
@@ -69,8 +70,8 @@ func ckzgInit() {
 // ckzgBlobToCommitment creates a small commitment out of a data blob.
 func ckzgBlobToCommitment(blob *Blob) (Commitment, error) {
 	ckzgIniter.Do(ckzgInit)
-
-	commitment, err := ckzg4844.BlobToKZGCommitment((*ckzg4844.Blob)(blob))
+	blobPtr := (*ckzg4844.Blob)(unsafe.Pointer(&(*blob)[0]))
+	commitment, err := ckzg4844.BlobToKZGCommitment(blobPtr)
 	if err != nil {
 		return Commitment{}, err
 	}
@@ -81,8 +82,8 @@ func ckzgBlobToCommitment(blob *Blob) (Commitment, error) {
 // represented by the blob.
 func ckzgComputeProof(blob *Blob, point Point) (Proof, Claim, error) {
 	ckzgIniter.Do(ckzgInit)
-
-	proof, claim, err := ckzg4844.ComputeKZGProof((*ckzg4844.Blob)(blob), (ckzg4844.Bytes32)(point))
+	blobPtr := (*ckzg4844.Blob)(unsafe.Pointer(&(*blob)[0]))
+	proof, claim, err := ckzg4844.ComputeKZGProof(blobPtr, (ckzg4844.Bytes32)(point))
 	if err != nil {
 		return Proof{}, Claim{}, err
 	}
@@ -110,8 +111,8 @@ func ckzgVerifyProof(commitment Commitment, point Point, claim Claim, proof Proo
 // This method does not verify that the commitment is correct with respect to blob.
 func ckzgComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 	ckzgIniter.Do(ckzgInit)
-
-	proof, err := ckzg4844.ComputeBlobKZGProof((*ckzg4844.Blob)(blob), (ckzg4844.Bytes48)(commitment))
+	blobPtr := (*ckzg4844.Blob)(unsafe.Pointer(&(*blob)[0]))
+	proof, err := ckzg4844.ComputeBlobKZGProof(blobPtr, (ckzg4844.Bytes48)(commitment))
 	if err != nil {
 		return Proof{}, err
 	}
@@ -121,8 +122,8 @@ func ckzgComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 // ckzgVerifyBlobProof verifies that the blob data corresponds to the provided commitment.
 func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	ckzgIniter.Do(ckzgInit)
-
-	valid, err := ckzg4844.VerifyBlobKZGProof((*ckzg4844.Blob)(blob), (ckzg4844.Bytes48)(commitment), (ckzg4844.Bytes48)(proof))
+	blobPtr := (*ckzg4844.Blob)(unsafe.Pointer(&(*blob)[0]))
+	valid, err := ckzg4844.VerifyBlobKZGProof(blobPtr, (ckzg4844.Bytes48)(commitment), (ckzg4844.Bytes48)(proof))
 	if err != nil {
 		return err
 	}
@@ -138,8 +139,8 @@ func ckzgVerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 // This method does not verify that the commitment is correct with respect to blob.
 func ckzgComputeCellProofs(blob *Blob) ([]Proof, error) {
 	ckzgIniter.Do(ckzgInit)
-
-	_, proofs, err := ckzg4844.ComputeCellsAndKZGProofs((*ckzg4844.Blob)(blob))
+	blobPtr := (*ckzg4844.Blob)(unsafe.Pointer(&(*blob)[0]))
+	_, proofs, err := ckzg4844.ComputeCellsAndKZGProofs(blobPtr)
 	if err != nil {
 		return []Proof{}, err
 	}

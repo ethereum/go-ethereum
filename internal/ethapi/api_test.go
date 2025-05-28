@@ -2671,10 +2671,10 @@ func TestFillBlobTransaction(t *testing.T) {
 			Config: params.MergedTestChainConfig,
 			Alloc:  types.GenesisAlloc{},
 		}
-		emptyBlob                      = new(kzg4844.Blob)
-		emptyBlobs                     = []kzg4844.Blob{*emptyBlob}
-		emptyBlobCommit, _             = kzg4844.BlobToCommitment(emptyBlob)
-		emptyBlobProof, _              = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+		emptyBlob                      = kzg4844.NewBlob()
+		emptyBlobs                     = []kzg4844.Blob{emptyBlob}
+		emptyBlobCommit, _             = kzg4844.BlobToCommitment(&emptyBlob)
+		emptyBlobProof, _              = kzg4844.ComputeBlobProof(&emptyBlob, emptyBlobCommit)
 		emptyBlobHash      common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 	)
 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
@@ -2697,7 +2697,7 @@ func TestFillBlobTransaction(t *testing.T) {
 				From:   &b.acc.Address,
 				To:     &to,
 				Value:  (*hexutil.Big)(big.NewInt(1)),
-				Blobs:  []kzg4844.Blob{{}},
+				Blobs:  []kzg4844.Blob{emptyBlob},
 				Proofs: []kzg4844.Proof{{}},
 			},
 			err: `blob proofs provided while commitments were not`,
@@ -2708,7 +2708,7 @@ func TestFillBlobTransaction(t *testing.T) {
 				From:        &b.acc.Address,
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{{}},
+				Blobs:       []kzg4844.Blob{emptyBlob},
 				Commitments: []kzg4844.Commitment{{}},
 			},
 			err: `blob commitments provided while proofs were not`,
@@ -2719,7 +2719,7 @@ func TestFillBlobTransaction(t *testing.T) {
 				From:        &b.acc.Address,
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{{}},
+				Blobs:       []kzg4844.Blob{emptyBlob},
 				Commitments: []kzg4844.Commitment{{}, {}},
 				Proofs:      []kzg4844.Proof{{}, {}},
 			},
@@ -2731,7 +2731,7 @@ func TestFillBlobTransaction(t *testing.T) {
 				From:        &b.acc.Address,
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{{}, {}},
+				Blobs:       []kzg4844.Blob{emptyBlob, emptyBlob},
 				Commitments: []kzg4844.Commitment{{}, {}},
 				Proofs:      []kzg4844.Proof{{}},
 			},
@@ -2743,7 +2743,7 @@ func TestFillBlobTransaction(t *testing.T) {
 				From:        &b.acc.Address,
 				To:          &to,
 				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{{}, {}},
+				Blobs:       []kzg4844.Blob{emptyBlob, emptyBlob},
 				Commitments: []kzg4844.Commitment{{}, {}},
 				Proofs:      []kzg4844.Proof{{}, {}},
 			},

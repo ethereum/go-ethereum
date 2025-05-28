@@ -635,7 +635,7 @@ func TestGetPooledTransaction(t *testing.T) {
 
 func testGetPooledTransaction(t *testing.T, blobTx bool) {
 	var (
-		emptyBlob          = kzg4844.Blob{}
+		emptyBlob          = kzg4844.NewBlob()
 		emptyBlobs         = []kzg4844.Blob{emptyBlob}
 		emptyBlobCommit, _ = kzg4844.BlobToCommitment(&emptyBlob)
 		emptyBlobProof, _  = kzg4844.ComputeBlobProof(&emptyBlob, emptyBlobCommit)

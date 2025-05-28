@@ -873,6 +873,7 @@ func makeSidecar(data ...byte) *types.BlobTxSidecar {
 		proofs      []kzg4844.Proof
 	)
 	for i := range blobs {
+		blobs[i] = kzg4844.NewBlob()
 		blobs[i][0] = data[i]
 		c, _ := kzg4844.BlobToCommitment(&blobs[i])
 		p, _ := kzg4844.ComputeBlobProof(&blobs[i], c)
