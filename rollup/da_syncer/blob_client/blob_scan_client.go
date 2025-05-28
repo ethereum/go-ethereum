@@ -8,10 +8,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/crypto/kzg4844"
+)
+
+const (
+	BlobScanDefaultTimeout = 15 * time.Second
 )
 
 type BlobScanClient struct {
@@ -21,7 +26,7 @@ type BlobScanClient struct {
 
 func NewBlobScanClient(apiEndpoint string) *BlobScanClient {
 	return &BlobScanClient{
-		client:      http.DefaultClient,
+		client:      &http.Client{Timeout: BlobScanDefaultTimeout},
 		apiEndpoint: apiEndpoint,
 	}
 }

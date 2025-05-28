@@ -8,18 +8,25 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/crypto/kzg4844"
 )
 
+const (
+	BlockNativeDefaultTimeout = 15 * time.Second
+)
+
 type BlockNativeClient struct {
+	client      *http.Client
 	apiEndpoint string
 }
 
 func NewBlockNativeClient(apiEndpoint string) *BlockNativeClient {
 	return &BlockNativeClient{
+		client:      &http.Client{Timeout: BlockNativeDefaultTimeout},
 		apiEndpoint: apiEndpoint,
 	}
 }
@@ -34,7 +41,7 @@ func (c *BlockNativeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Conte
 	if err != nil {
 		return nil, fmt.Errorf("cannot create request, err: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("cannot do request, err: %w", err)
 	}

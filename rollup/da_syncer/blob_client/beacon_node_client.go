@@ -9,12 +9,18 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/crypto/kzg4844"
 )
 
+const (
+	BeaconNodeDefaultTimeout = 15 * time.Second
+)
+
 type BeaconNodeClient struct {
+	client         *http.Client
 	apiEndpoint    string
 	genesisTime    uint64
 	secondsPerSlot uint64
@@ -27,12 +33,14 @@ var (
 )
 
 func NewBeaconNodeClient(apiEndpoint string) (*BeaconNodeClient, error) {
+	client := &http.Client{Timeout: BeaconNodeDefaultTimeout}
+
 	// get genesis time
 	genesisPath, err := url.JoinPath(apiEndpoint, beaconNodeGenesisEndpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to join path, err: %w", err)
 	}
-	resp, err := http.Get(genesisPath)
+	resp, err := client.Get(genesisPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot do request, err: %w", err)
 	}
@@ -62,7 +70,7 @@ func NewBeaconNodeClient(apiEndpoint string) (*BeaconNodeClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to join path, err: %w", err)
 	}
-	resp, err = http.Get(specPath)
+	resp, err = client.Get(specPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot do request, err: %w", err)
 	}
@@ -91,6 +99,7 @@ func NewBeaconNodeClient(apiEndpoint string) (*BeaconNodeClient, error) {
 	}
 
 	return &BeaconNodeClient{
+		client:         client,
 		apiEndpoint:    apiEndpoint,
 		genesisTime:    genesisTime,
 		secondsPerSlot: secondsPerSlot,
@@ -105,7 +114,7 @@ func (c *BeaconNodeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Contex
 	if err != nil {
 		return nil, fmt.Errorf("failed to join path, err: %w", err)
 	}
-	resp, err := http.Get(blobSidecarPath)
+	resp, err := c.client.Get(blobSidecarPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot do request, err: %w", err)
 	}
