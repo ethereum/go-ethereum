@@ -984,7 +984,7 @@ var (
 	}
 )
 
-// default account to prefund when running Geth in ephemeral development mode
+// default account to prefund when running Geth in dev mode
 var (
 	DeveloperKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	DeveloperAddr   = crypto.PubkeyToAddress(DeveloperKey.PublicKey)
@@ -1777,7 +1777,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		} else {
 			developer, err = ks.ImportECDSA(DeveloperKey, passphrase)
 			if err != nil {
-				Fatalf("Failed to create developer account: %v", err)
+				Fatalf("Failed to import developer account: %v", err)
 			}
 		}
 		// Make sure the address is configured as fee recipient, otherwise

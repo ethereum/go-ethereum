@@ -644,8 +644,7 @@ func DefaultHoodiGenesisBlock() *Genesis {
 	}
 }
 
-// DeveloperGenesisBlock returns the genesis block for dev mode, with initial
-// gas limit and optional prefunded address
+// DeveloperGenesisBlock returns the 'geth --dev' genesis block.
 func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 	// Override the default period to the user requested one
 	config := *params.AllDevChainProtocolChanges
