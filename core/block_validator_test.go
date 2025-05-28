@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -50,7 +49,8 @@ func testHeaderVerification(t *testing.T, scheme string) {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+	options := BlockchainOptionsWithScheme(scheme)
+	chain, err := NewBlockChain(options, rawdb.NewMemoryDatabase(), gspec, ethash.NewFaker())
 	defer chain.Stop()
 	if err != nil {
 		t.Fatal(err)
@@ -166,7 +166,7 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		postHeaders[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil)
+	chain, err := NewBlockChain(nil, rawdb.NewMemoryDatabase(), gspec, engine)
 	defer chain.Stop()
 	if err != nil {
 		t.Fatal(err)

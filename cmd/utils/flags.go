@@ -2164,36 +2164,36 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if err != nil {
 		Fatalf("%v", err)
 	}
-	cache := &core.CacheConfig{
-		TrieCleanLimit:      ethconfig.Defaults.TrieCleanCache,
-		TrieCleanNoPrefetch: ctx.Bool(CacheNoPrefetchFlag.Name),
-		TrieDirtyLimit:      ethconfig.Defaults.TrieDirtyCache,
-		TrieDirtyDisabled:   ctx.String(GCModeFlag.Name) == "archive",
-		TrieTimeLimit:       ethconfig.Defaults.TrieTimeout,
-		SnapshotLimit:       ethconfig.Defaults.SnapshotCache,
-		Preimages:           ctx.Bool(CachePreimagesFlag.Name),
-		StateScheme:         scheme,
-		StateHistory:        ctx.Uint64(StateHistoryFlag.Name),
+	options := &core.BlockchainOptions{
+		TrieCleanLimit: ethconfig.Defaults.TrieCleanCache,
+		NoPrefetch:     ctx.Bool(CacheNoPrefetchFlag.Name),
+		TrieDirtyLimit: ethconfig.Defaults.TrieDirtyCache,
+		ArchiveMode:    ctx.String(GCModeFlag.Name) == "archive",
+		TrieTimeLimit:  ethconfig.Defaults.TrieTimeout,
+		SnapshotLimit:  ethconfig.Defaults.SnapshotCache,
+		Preimages:      ctx.Bool(CachePreimagesFlag.Name),
+		StateScheme:    scheme,
+		StateHistory:   ctx.Uint64(StateHistoryFlag.Name),
 	}
-	if cache.TrieDirtyDisabled && !cache.Preimages {
-		cache.Preimages = true
+	if options.ArchiveMode && !options.Preimages {
+		options.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
 	}
 	if !ctx.Bool(SnapshotFlag.Name) {
-		cache.SnapshotLimit = 0 // Disabled
+		options.SnapshotLimit = 0 // Disabled
 	} else if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
-		cache.SnapshotLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
+		options.SnapshotLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
 	}
 	// If we're in readonly, do not bother generating snapshot data.
 	if readonly {
-		cache.SnapshotNoBuild = true
+		options.SnapshotNoBuild = true
 	}
 
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
-		cache.TrieCleanLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
+		options.TrieCleanLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
 	}
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
-		cache.TrieDirtyLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
+		options.TrieDirtyLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
 	vmcfg := vm.Config{
 		EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name),
@@ -2208,8 +2208,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 			vmcfg.Tracer = t
 		}
 	}
+	options.VmConfig = vmcfg
+
 	// Disable transaction indexing/unindexing by default.
-	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil)
+	chain, err := core.NewBlockChain(options, chainDb, gspec, engine)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

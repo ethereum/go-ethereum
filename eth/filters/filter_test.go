@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -278,7 +277,9 @@ func testFilters(t *testing.T, history uint64, noHistory bool) {
 		}
 	})
 	var l uint64
-	bc, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, &l)
+	options := core.BlockchainOptionsWithScheme(rawdb.HashScheme)
+	options.TxLookupLimit = &l
+	bc, err := core.NewBlockChain(options, db, gspec, ethash.NewFaker())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,8 +435,11 @@ func TestRangeLogs(t *testing.T) {
 		t.Fatal(err)
 	}
 	chain, _ := core.GenerateChain(gspec.Config, gspec.ToBlock(), ethash.NewFaker(), db, 1000, func(i int, gen *core.BlockGen) {})
+
 	var l uint64
-	bc, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, &l)
+	options := core.BlockchainOptionsWithScheme(rawdb.HashScheme)
+	options.TxLookupLimit = &l
+	bc, err := core.NewBlockChain(options, db, gspec, ethash.NewFaker())
 	if err != nil {
 		t.Fatal(err)
 	}

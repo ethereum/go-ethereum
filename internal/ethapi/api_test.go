@@ -443,20 +443,22 @@ type testBackend struct {
 
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.Engine, generator func(i int, b *core.BlockGen)) *testBackend {
 	var (
-		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:    256,
-			TrieDirtyLimit:    256,
-			TrieTimeLimit:     5 * time.Minute,
-			SnapshotLimit:     0,
-			TrieDirtyDisabled: true, // Archive mode
+		txLookupLimit = uint64(0)
+		options       = &core.BlockchainOptions{
+			TrieCleanLimit: 256,
+			TrieDirtyLimit: 256,
+			TrieTimeLimit:  5 * time.Minute,
+			SnapshotLimit:  0,
+			ArchiveMode:    true, // Archive mode
+			TxLookupLimit:  &txLookupLimit,
 		}
 	)
 	accman, acc := newTestAccountManager(t)
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
-	txlookupLimit := uint64(0)
-	chain, err := core.NewBlockChain(db, cacheConfig, gspec, nil, engine, vm.Config{}, &txlookupLimit)
+
+	chain, err := core.NewBlockChain(options, db, gspec, engine)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
