@@ -1652,7 +1652,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 }
 
 func (bc *BlockChain) handleStateUpdates(block *types.Block, update *state.StateUpdate) {
-	if bc.logger == nil || bc.logger.OnStateCommit != nil {
+	if bc.logger == nil || bc.logger.OnStateCommit == nil {
 		return
 	}
 
