@@ -765,6 +765,32 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	return result, nil
 }
 
+// GetTdByHash returns a map containing the total difficulty (hex-encoded) for the given block hash.
+func (api *BlockChainAPI) GetTdByHash(ctx context.Context, hash common.Hash) map[string]interface{} {
+	td := api.b.GetTd(ctx, hash)
+	if td == nil {
+		return nil
+	}
+
+	resp := make(map[string]interface{}, 2)
+	resp["blockHash"] = hash.Hex()
+	resp["totalDifficulty"] = hexutil.EncodeBig(td)
+	return resp
+}
+
+// GetTdByNumber returns a map containing the total difficulty (hex-encoded) for the given block number.
+func (api *BlockChainAPI) GetTdByNumber(ctx context.Context, blockNr rpc.BlockNumber) map[string]interface{} {
+	td := api.b.GetTdByNumber(ctx, blockNr)
+	if td == nil {
+		return nil
+	}
+
+	resp := make(map[string]interface{}, 2)
+	resp["blockNumber"] = hexutil.EncodeUint64(uint64(blockNr.Int64()))
+	resp["totalDifficulty"] = hexutil.EncodeBig(td)
+	return resp
+}
+
 // ChainContextBackend provides methods required to implement ChainContext.
 type ChainContextBackend interface {
 	Engine() consensus.Engine
