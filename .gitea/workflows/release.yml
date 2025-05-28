@@ -2,7 +2,8 @@ on:
   push:
     branches:
       - "master"
-      - "release/*"
+    tags:
+      - "v*"
 
 jobs:
   linux-intel:
