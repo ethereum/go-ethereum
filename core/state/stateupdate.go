@@ -20,6 +20,8 @@ import (
 	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -190,5 +192,103 @@ func (sc *StateUpdate) stateSet() *triedb.StateSet {
 		Storages:       sc.Storages,
 		StoragesOrigin: sc.StoragesOrigin,
 		RawStorageKey:  sc.RawStorageKey,
+	}
+}
+
+// StateChangeset represents a state mutations that occurred during the execution of a block.
+type StateChangeset struct {
+	Accounts     int // Total number of accounts present in the state at this block
+	Storages     int // Total number of storage entries across all accounts in the state at this block
+	Trienodes    int // Total number of trie nodes present in the state at this block
+	Codes        int // Total number of contract codes present in the state at this block, with 32 bytes hash as the identifier
+	AccountSize  int // Combined size of all accounts in the state, with 20 bytes address as the identifier
+	StorageSize  int // Combined size of all storage entries, with 32 bytes key as the identifier
+	TrienodeSize int // Combined size of all trie nodes, with varying size node path as the identifier (up to 64 bytes)
+	CodeSize     int // Combined size of all contract codes in the state, with 20 bytes address as the identifier
+}
+
+// IntoChangeset converts the current StateUpdate into a StateChangeset.
+func (sc *StateUpdate) IntoChangeset() *StateChangeset {
+	var (
+		accountSize, storageSize, nodeSize, codeSize int
+		accounts, storages, nodes, codes             int
+	)
+
+	for addr, oldValue := range sc.AccountsOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		newValue, exists := sc.Accounts[addrHash]
+		if !exists {
+			log.Warn("State update missing account", "address", addr)
+			continue
+		}
+		if len(newValue) == 0 {
+			accounts -= 1
+			accountSize -= common.AddressLength
+		}
+		if len(oldValue) == 0 {
+			accounts += 1
+			accountSize += common.AddressLength
+		}
+		accountSize += len(newValue) - len(oldValue)
+	}
+	for addr, slots := range sc.StoragesOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		subset, exists := sc.Storages[addrHash]
+		if !exists {
+			log.Warn("State update missing storage", "address", addr)
+			continue
+		}
+		for key, oldValue := range slots {
+			var (
+				exists   bool
+				newValue []byte
+			)
+			if sc.RawStorageKey {
+				newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
+			} else {
+				newValue, exists = subset[key]
+			}
+			if !exists {
+				log.Warn("State update missing storage slot", "address", addr, "key", key)
+				continue
+			}
+			if len(newValue) == 0 {
+				storages -= 1
+				storageSize -= common.HashLength
+			}
+			if len(oldValue) == 0 {
+				storages += 1
+				storageSize += common.HashLength
+			}
+			storageSize += len(newValue) - len(oldValue)
+		}
+	}
+	for _, subset := range sc.Nodes.Sets {
+		for path, n := range subset.Nodes {
+			if len(n.Blob) == 0 {
+				nodes -= 1
+				nodeSize -= len(path) + common.HashLength
+			}
+			if n.OriginLen() == 0 {
+				nodes += 1
+				nodeSize += len(path) + common.HashLength
+			}
+			nodeSize += len(n.Blob) - n.OriginLen()
+		}
+	}
+	for _, code := range sc.Codes {
+		codes += 1
+		codeSize += code.CodeLen() + common.HashLength // no deduplication
+	}
+
+	return &StateChangeset{
+		Accounts:     accounts,
+		AccountSize:  accountSize,
+		Storages:     storages,
+		StorageSize:  storageSize,
+		Trienodes:    nodes,
+		TrienodeSize: nodeSize,
+		Codes:        codes,
+		CodeSize:     codeSize,
 	}
 }
