@@ -182,11 +182,11 @@ func (test *stateTest) run() bool {
 		accountOrigin []map[common.Address][]byte
 		storages      []map[common.Hash]map[common.Hash][]byte
 		storageOrigin []map[common.Address]map[common.Hash][]byte
-		copyUpdate    = func(update *stateUpdate) {
-			accounts = append(accounts, maps.Clone(update.accounts))
-			accountOrigin = append(accountOrigin, maps.Clone(update.accountsOrigin))
-			storages = append(storages, maps.Clone(update.storages))
-			storageOrigin = append(storageOrigin, maps.Clone(update.storagesOrigin))
+		copyUpdate    = func(update *StateUpdate) {
+			accounts = append(accounts, maps.Clone(update.Accounts))
+			accountOrigin = append(accountOrigin, maps.Clone(update.AccountsOrigin))
+			storages = append(storages, maps.Clone(update.Storages))
+			storageOrigin = append(storageOrigin, maps.Clone(update.StoragesOrigin))
 		}
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})
@@ -236,7 +236,7 @@ func (test *stateTest) run() bool {
 			return true
 		}
 		copyUpdate(ret)
-		roots = append(roots, ret.root)
+		roots = append(roots, ret.Root)
 	}
 	for i := 0; i < len(test.actions); i++ {
 		root := types.EmptyRootHash

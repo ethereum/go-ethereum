@@ -1133,7 +1133,7 @@ func (s *StateDB) GetTrie() Trie {
 
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
-func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
+func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*StateUpdate, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1290,15 +1290,15 @@ func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateU
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
 // to the configured data stores.
-func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
+func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (*StateUpdate, error) {
 	ret, err := s.commit(deleteEmptyObjects, noStorageWiping)
 	if err != nil {
 		return nil, err
 	}
 	// Commit dirty contract code if any exists
-	if db := s.db.TrieDB().Disk(); db != nil && len(ret.codes) > 0 {
+	if db := s.db.TrieDB().Disk(); db != nil && len(ret.Codes) > 0 {
 		batch := db.NewBatch()
-		for _, code := range ret.codes {
+		for _, code := range ret.Codes {
 			rawdb.WriteCode(batch, code.hash, code.blob)
 		}
 		if err := batch.Write(); err != nil {
@@ -1307,24 +1307,24 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorag
 	}
 	if !ret.empty() {
 		// If snapshotting is enabled, update the snapshot tree with this new version
-		if snap := s.db.Snapshot(); snap != nil && snap.Snapshot(ret.originRoot) != nil {
+		if snap := s.db.Snapshot(); snap != nil && snap.Snapshot(ret.OriginRoot) != nil {
 			start := time.Now()
-			if err := snap.Update(ret.root, ret.originRoot, ret.accounts, ret.storages); err != nil {
-				log.Warn("Failed to update snapshot tree", "from", ret.originRoot, "to", ret.root, "err", err)
+			if err := snap.Update(ret.Root, ret.OriginRoot, ret.Accounts, ret.Storages); err != nil {
+				log.Warn("Failed to update snapshot tree", "from", ret.OriginRoot, "to", ret.Root, "err", err)
 			}
 			// Keep 128 diff layers in the memory, persistent layer is 129th.
 			// - head layer is paired with HEAD state
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := snap.Cap(ret.root, TriesInMemory); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", ret.root, "layers", TriesInMemory, "err", err)
+			if err := snap.Cap(ret.Root, TriesInMemory); err != nil {
+				log.Warn("Failed to cap snapshot tree", "root", ret.Root, "layers", TriesInMemory, "err", err)
 			}
 			s.SnapshotCommits += time.Since(start)
 		}
 		// If trie database is enabled, commit the state update as a new layer
 		if db := s.db.TrieDB(); db != nil {
 			start := time.Now()
-			if err := db.Update(ret.root, ret.originRoot, block, ret.nodes, ret.stateSet()); err != nil {
+			if err := db.Update(ret.Root, ret.OriginRoot, block, ret.Nodes, ret.stateSet()); err != nil {
 				return nil, err
 			}
 			s.TrieDBCommits += time.Since(start)
@@ -1353,7 +1353,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping 
 	if err != nil {
 		return common.Hash{}, err
 	}
-	return ret.root, nil
+	return ret.Root, nil
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.
