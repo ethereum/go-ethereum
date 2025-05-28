@@ -477,3 +477,7 @@ func (b backendMock) NewMatcherBackend() filtermaps.MatcherBackend {
 func (b backendMock) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
+
+func (b backendMock) GetTdByNumber(ctx context.Context, blockNr rpc.BlockNumber) *big.Int {
+	panic("not implemented")
+}

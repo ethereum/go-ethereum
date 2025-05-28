@@ -570,6 +570,10 @@ func (b testBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	}
 	return big.NewInt(1)
 }
+func (b testBackend) GetTdByNumber(ctx context.Context, blockNr rpc.BlockNumber) *big.Int {
+	panic("not implemented")
+}
+
 func (b testBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = b.chain.GetVMConfig()
