@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/syncx"
@@ -1583,15 +1584,18 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, err := statedb.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
+	update, err := statedb.CommitWithUpdate(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
 	if err != nil {
 		return err
 	}
+	// Tracing the state changes if the logger is enabled.
+	bc.handleStateUpdates(block, update)
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		return nil
 	}
+	root := update.Root
 	// If we're running an archive node, always flush
 	if bc.cfg.ArchiveMode {
 		return bc.triedb.Commit(root, false)
@@ -1645,6 +1649,98 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		bc.triedb.Dereference(root)
 	}
 	return nil
+}
+
+func (bc *BlockChain) handleStateUpdates(block *types.Block, update *state.StateUpdate) {
+	if bc.logger == nil || bc.logger.OnStateCommit != nil {
+		return
+	}
+
+	var (
+		accountSize, storageSize, nodeSize, codeSize int
+		accounts, storages, nodes, codes             int
+	)
+
+	for addr, oldValue := range update.AccountsOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		newValue, exists := update.Accounts[addrHash]
+		if !exists {
+			log.Warn("State update missing account", "address", addr)
+			continue
+		}
+		if len(newValue) == 0 {
+			accounts -= 1
+			accountSize -= common.AddressLength
+		}
+		if len(oldValue) == 0 {
+			accounts += 1
+			accountSize += common.AddressLength
+		}
+		accountSize += len(newValue) - len(oldValue)
+	}
+	for addr, slots := range update.StoragesOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		subset, exists := update.Storages[addrHash]
+		if !exists {
+			log.Warn("State update missing storage", "address", addr)
+			continue
+		}
+		for key, oldValue := range slots {
+			var (
+				exists   bool
+				newValue []byte
+			)
+			if update.RawStorageKey {
+				newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
+			} else {
+				newValue, exists = subset[key]
+			}
+			if !exists {
+				log.Warn("State update missing storage slot", "address", addr, "key", key)
+				continue
+			}
+			if len(newValue) == 0 {
+				storages -= 1
+				storageSize -= common.HashLength
+			}
+			if len(oldValue) == 0 {
+				storages += 1
+				storageSize += common.HashLength
+			}
+			storageSize += len(newValue) - len(oldValue)
+		}
+	}
+	for _, subset := range update.Nodes.Sets {
+		for path, n := range subset.Nodes {
+			if len(n.Blob) == 0 {
+				nodes -= 1
+				nodeSize -= len(path) + common.HashLength
+			}
+			if n.OriginLen() == 0 {
+				nodes += 1
+				nodeSize += len(path) + common.HashLength
+			}
+			nodeSize += len(n.Blob) - n.OriginLen()
+		}
+	}
+	for _, code := range update.Codes {
+		codes += 1
+		codeSize += code.CodeLen() + common.HashLength // no deduplication
+	}
+
+	bc.logger.OnStateCommit(&tracing.StateUpdate{
+		Number:       block.NumberU64(),
+		Hash:         block.Hash(),
+		Time:         block.Time(),
+		Accounts:     int64(accounts),
+		AccountSize:  int64(accountSize),
+		Storages:     int64(storages),
+		StorageSize:  int64(storageSize),
+		Trienodes:    int64(nodes),
+		TrienodeSize: int64(nodeSize),
+		Codes:        int64(codes),
+		CodeSize:     int64(codeSize),
+	})
 }
 
 // writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
