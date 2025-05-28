@@ -31,6 +31,8 @@ import (
 type Node struct {
 	Hash common.Hash // Node hash, empty for deleted node
 	Blob []byte      // Encoded node blob, nil for the deleted node
+
+	length int // The length of the original value of the node
 }
 
 // Size returns the total memory size used by this node.
@@ -43,13 +45,18 @@ func (n *Node) IsDeleted() bool {
 	return len(n.Blob) == 0
 }
 
+// OriginLen returns the length of the original value of the node.
+func (n *Node) OriginLen() int {
+	return n.length
+}
+
 // New constructs a node with provided node information.
-func New(hash common.Hash, blob []byte) *Node {
-	return &Node{Hash: hash, Blob: blob}
+func New(hash common.Hash, blob []byte, length int) *Node {
+	return &Node{Hash: hash, Blob: blob, length: length}
 }
 
 // NewDeleted constructs a node which is deleted.
-func NewDeleted() *Node { return New(common.Hash{}, nil) }
+func NewDeleted(length int) *Node { return New(common.Hash{}, nil, length) }
 
 // NodeWithPrev is a wrapper over Node by tracking the original value of node.
 type NodeWithPrev struct {

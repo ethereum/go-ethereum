@@ -68,7 +68,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 			var (
 				path = testrand.Bytes(32)
 				blob = testrand.Bytes(100)
-				node = trienode.New(crypto.Keccak256Hash(blob), blob)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob, 0)
 			)
 			nodes[common.Hash{}][string(path)] = node
 			if npath == nil && depth == index {
@@ -114,7 +114,7 @@ func BenchmarkPersist(b *testing.B) {
 			var (
 				path = testrand.Bytes(32)
 				blob = testrand.Bytes(100)
-				node = trienode.New(crypto.Keccak256Hash(blob), blob)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob, 0)
 			)
 			nodes[common.Hash{}][string(path)] = node
 		}
@@ -152,7 +152,7 @@ func BenchmarkJournal(b *testing.B) {
 			var (
 				path = testrand.Bytes(32)
 				blob = testrand.Bytes(100)
-				node = trienode.New(crypto.Keccak256Hash(blob), blob)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob, 0)
 			)
 			nodes[common.Hash{}][string(path)] = node
 		}
