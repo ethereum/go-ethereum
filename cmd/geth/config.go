@@ -241,26 +241,40 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		catalyst.RegisterSimulatedBeaconAPIs(stack, simBeacon)
 		stack.RegisterLifecycle(simBeacon)
 
-		devModeBanner := `You are running Geth in development mode.  Please note the following:
-    1. Unless --dev.period is specified, the client will mine blocks as soon as there 
-       are transactions in the pool.  It will mine as fast as possible until the pool is empty.
-    2. Networking is disabled.`
-		// if we are running in ephemeral dev mode and a keystore is not set,
-		// the default developer address will be prefunded.  Let the user know
-		// about this account and its corresponding private key.
-		if !ctx.IsSet(utils.DataDirFlag.Name) && cfg.Eth.Miner.PendingFeeRecipient == utils.DeveloperAddr {
+		// TODO: move banner construction into its own function
+		devModeBanner := `You are running Geth in --dev mode. Please note the following:
+
+  1. This mode is only intended for fast, iterative development without assumptions on
+     security or persistence.
+  2. The database is created in memory unless specified otherwise. Therefore, shutting down
+     your computer or losing power will wipe your entire block data and chain state for
+     your dev environment.
+  3. A random, pre-allocated developer account will be available and unlocked as
+     eth.coinbase, which can be used for testing. The random dev account is temporary,
+     stored on a ramdisk, and will be lost if your machine is restarted.
+  4. Mining is enabled by default. However, the client will only seal blocks if transactions
+     are pending in the mempool. The miner's minimum accepted gas price is 1.
+  5. Networking is disabled; there is no listen-address, the maximum number of peers is set
+     to 0, and discovery is disabled.
+`
+		if !ctx.IsSet(utils.DataDirFlag.Name) {
 			devModeBanner += fmt.Sprintf(`
-    3. --datadir has not been specified. The chain will be kept in memory and not persisted 
-       after client shutdown.  The following account has been prefunded in the Genesis:
+
+ Running in ephemeral mode.  The following account has been prefunded in the genesis:
 
        Account
        ------------------
        0x%x (10^49 ETH)
-
+`, cfg.Eth.Miner.PendingFeeRecipient)
+			// TODO: check that pendingfeerecipient is overriden when custom keystore is specifieid,
+			// and that it is the developer addr otherwise.
+			if cfg.Eth.Miner.PendingFeeRecipient == utils.DeveloperAddr {
+				devModeBanner += fmt.Sprintf(` 
        Private Key
        ------------------
        0x%x
-`, utils.DeveloperAddr, crypto.FromECDSA(utils.DeveloperKey))
+`, crypto.FromECDSA(utils.DeveloperKey))
+			}
 		}
 		for _, line := range strings.Split(devModeBanner, "\n") {
 			log.Warn(line)
