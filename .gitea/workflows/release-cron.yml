@@ -6,23 +6,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  azure-cleanup:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: 1.24
-        cache: false
-
-    - name: Run cleanup script
-      env:
-        AZURE_BLOBSTORE_TOKEN: ${{ secrets.AZURE_BLOBSTORE_TOKEN }}
-      run: |
-        go run build/ci.go purge -store gethstore/builds -days 14
-
   ppa:
     name: PPA Upload (master)
     runs-on: ubuntu-latest
@@ -35,7 +18,16 @@ jobs:
         go-version: 1.24
         cache: false
 
-    - name: Install deb toolchain
+    - name: Show package repo list
+      run: |
+        cat /etc/apt/sources.list
+        ls -l /etc/apt/sources.list.d
+
+    - name: Add repository
+      run: |
+        add-apt-repository -s "deb http://archive.ubuntu.com/ubuntu/ $(lsb_release -sc) main restricted"
+
+    - name: Install debian package toolchain
       run: |
         apt-get update
         apt-get -yq --no-install-suggests --no-install-recommends install devscripts debhelper dput fakeroot
