@@ -20,13 +20,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"os"
 	"reflect"
 	"runtime"
 	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
