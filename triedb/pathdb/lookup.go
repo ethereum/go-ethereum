@@ -25,6 +25,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// storageKey returns a key for uniquely identifying the storage slot.
+func storageKey(accountHash common.Hash, slotHash common.Hash) [64]byte {
+	var key [64]byte
+	copy(key[:32], accountHash[:])
+	copy(key[32:], slotHash[:])
+	return key
+}
+
 // lookup is an internal structure used to efficiently determine the layer in
 // which a state entry resides.
 type lookup struct {
@@ -38,7 +46,7 @@ type lookup struct {
 	// slot. The key is the account address hash and the storage key
 	// hash, the value is a slice of **diff layer** IDs indicating
 	// where the slot was modified, with the order from oldest to newest.
-	storages map[common.Hash]map[common.Hash][]common.Hash
+	storages map[[64]byte][]common.Hash
 
 	// descendant is the callback indicating whether the layer with
 	// given root is a descendant of the one specified by `ancestor`.
@@ -57,7 +65,7 @@ func newLookup(head layer, descendant func(state common.Hash, ancestor common.Ha
 	}
 	l := &lookup{
 		accounts:   make(map[common.Hash][]common.Hash),
-		storages:   make(map[common.Hash]map[common.Hash][]common.Hash),
+		storages:   make(map[[64]byte][]common.Hash),
 		descendant: descendant,
 	}
 	// Apply the diff layers from bottom to top
@@ -133,17 +141,14 @@ func (l *lookup) accountTip(accountHash common.Hash, stateID common.Hash, base c
 // data retrieval, (b) or the layer specified by the stateID is stale: reject
 // the data retrieval.
 func (l *lookup) storageTip(accountHash common.Hash, slotHash common.Hash, stateID common.Hash, base common.Hash) common.Hash {
-	subset, exists := l.storages[accountHash]
-	if exists {
-		list := subset[slotHash]
-		for i := len(list) - 1; i >= 0; i-- {
-			// If the current state matches the stateID, or the requested state is a
-			// descendant of it, return the current state as the most recent one
-			// containing the modified data. Otherwise, the current state may be ahead
-			// of the requested one or belong to a different branch.
-			if list[i] == stateID || l.descendant(stateID, list[i]) {
-				return list[i]
-			}
+	list := l.storages[storageKey(accountHash, slotHash)]
+	for i := len(list) - 1; i >= 0; i-- {
+		// If the current state matches the stateID, or the requested state is a
+		// descendant of it, return the current state as the most recent one
+		// containing the modified data. Otherwise, the current state may be ahead
+		// of the requested one or belong to a different branch.
+		if list[i] == stateID || l.descendant(stateID, list[i]) {
+			return list[i]
 		}
 	}
 	// No layer matching the stateID or its descendants was found. Use the
@@ -188,18 +193,14 @@ func (l *lookup) addLayer(diff *diffLayer) {
 	go func() {
 		defer wg.Done()
 		for accountHash, slots := range diff.states.storageData {
-			subset := l.storages[accountHash]
-			if subset == nil {
-				subset = make(map[common.Hash][]common.Hash)
-				l.storages[accountHash] = subset
-			}
 			for slotHash := range slots {
-				list, exists := subset[slotHash]
+				key := storageKey(accountHash, slotHash)
+				list, exists := l.storages[key]
 				if !exists {
 					list = make([]common.Hash, 0, 16) // TODO(rjl493456442) use sync pool
 				}
 				list = append(list, state)
-				subset[slotHash] = list
+				l.storages[key] = list
 			}
 		}
 	}()
@@ -238,10 +239,10 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 	}(time.Now())
 
 	var (
-		wg    errgroup.Group
+		eg    errgroup.Group
 		state = diff.rootHash()
 	)
-	wg.Go(func() error {
+	eg.Go(func() error {
 		for accountHash := range diff.states.accountData {
 			found, list := removeFromList(l.accounts[accountHash], state)
 			if !found {
@@ -256,28 +257,22 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 		return nil
 	})
 
-	wg.Go(func() error {
+	eg.Go(func() error {
 		for accountHash, slots := range diff.states.storageData {
-			subset := l.storages[accountHash]
-			if subset == nil {
-				return fmt.Errorf("storage lookup is not found, %x", accountHash)
-			}
 			for slotHash := range slots {
-				found, list := removeFromList(subset[slotHash], state)
+				key := storageKey(accountHash, slotHash)
+				found, list := removeFromList(l.storages[key], state)
 				if !found {
 					return fmt.Errorf("storage lookup is not found, %x %x, state: %x", accountHash, slotHash, state)
 				}
 				if len(list) != 0 {
-					subset[slotHash] = list
+					l.storages[key] = list
 				} else {
-					delete(subset, slotHash)
+					delete(l.storages, key)
 				}
-			}
-			if len(subset) == 0 {
-				delete(l.storages, accountHash)
 			}
 		}
 		return nil
 	})
-	return wg.Wait()
+	return eg.Wait()
 }
