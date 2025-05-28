@@ -111,10 +111,8 @@ func (s *stateTracer) onClose() {
 
 func (s *stateTracer) write(update *tracing.StateUpdate) {
 	out, _ := json.Marshal(update)
+	out = append(out, '\n')
 	if _, err := s.logger.Write(out); err != nil {
-		log.Warn("failed to write to state tracer log file", "error", err)
-	}
-	if _, err := s.logger.Write([]byte{'\n'}); err != nil {
 		log.Warn("failed to write to state tracer log file", "error", err)
 	}
 }
