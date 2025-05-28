@@ -30,6 +30,11 @@ type contractCode struct {
 	blob []byte      // blob is the binary representation of the contract code.
 }
 
+// CodeLen returns the length of the contract code blob.
+func (c *contractCode) CodeLen() int {
+	return len(c.blob)
+}
+
 // accountDelete represents an operation for deleting an Ethereum account.
 type accountDelete struct {
 	address common.Address // address is the unique account identifier
