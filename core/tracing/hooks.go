@@ -75,6 +75,21 @@ type BlockEvent struct {
 	Safe      *types.Header
 }
 
+// StateUpdate represents a state mutations that occurred during the execution of a block.
+type StateUpdate struct {
+	Number       uint64      // Block number corresponding to this state snapshot
+	Hash         common.Hash // Block hash corresponding to this state snapshot
+	Time         uint64      // Timestamp indicating when the block was produced
+	Accounts     int64       // Total number of accounts present in the state at this block
+	Storages     int64       // Total number of storage entries across all accounts in the state at this block
+	Trienodes    int64       // Total number of trie nodes present in the state at this block
+	Codes        int64       // Total number of contract codes present in the state at this block, with 32 bytes hash as the identifier
+	AccountSize  int64       // Combined size of all accounts in the state, with 20 bytes address as the identifier
+	StorageSize  int64       // Combined size of all storage entries, with 32 bytes key as the identifier
+	TrienodeSize int64       // Combined size of all trie nodes, with varying size node path as the identifier (up to 64 bytes)
+	CodeSize     int64       // Combined size of all contract codes in the state, with 20 bytes address as the identifier
+}
+
 type (
 	/*
 		- VM events -
@@ -183,6 +198,9 @@ type (
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
 
+	// StateCommitHook is called when the state is committed.
+	StateCommitHook = func(update *StateUpdate)
+
 	// BlockHashReadHook is called when EVM reads the blockhash of a block.
 	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
 )
@@ -213,6 +231,7 @@ type Hooks struct {
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+	OnStateCommit   StateCommitHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
 }
