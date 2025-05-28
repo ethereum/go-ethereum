@@ -56,6 +56,7 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 		OnNonceChange:    t.OnNonceChange,
 		OnCodeChange:     t.OnCodeChange,
 		OnStorageChange:  t.OnStorageChange,
+		OnStateCommit:    t.OnStateCommit,
 		OnLog:            t.OnLog,
 		OnBlockHashRead:  t.OnBlockHashRead,
 	}, nil
@@ -103,6 +104,9 @@ func (t *noop) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []b
 }
 
 func (t *noop) OnStorageChange(a common.Address, k, prev, new common.Hash) {
+}
+
+func (t *noop) OnStateCommit(u *tracing.StateUpdate) {
 }
 
 func (t *noop) OnLog(l *types.Log) {
