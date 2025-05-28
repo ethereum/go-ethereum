@@ -1356,6 +1356,16 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping 
 	return ret.Root, nil
 }
 
+// CommitWithUpdate is similar to Commit, commits the state mutations,
+// it returns the state update instead of the root hash.
+func (s *StateDB) CommitWithUpdate(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (*StateUpdate, error) {
+	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
 // Prepare handles the preparatory steps for executing a state transition with.
 // This method must be invoked before state transition.
 //
