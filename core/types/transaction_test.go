@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 // The values in those tests are from the Transaction Tests
@@ -609,12 +610,12 @@ func BenchmarkEffectiveGasTip(b *testing.B) {
 		Data:      nil,
 	}
 	tx, _ := SignNewTx(key, signer, txdata)
-	baseFee := big.NewInt(1000000000) // 1 gwei
+	baseFee := uint256.NewInt(1000000000) // 1 gwei
 
 	b.Run("Original", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			_, err := tx.EffectiveGasTip(baseFee)
+			_, err := tx.EffectiveGasTip(baseFee.ToBig())
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -623,7 +624,7 @@ func BenchmarkEffectiveGasTip(b *testing.B) {
 
 	b.Run("IntoMethod", func(b *testing.B) {
 		b.ReportAllocs()
-		dst := new(big.Int)
+		dst := new(uint256.Int)
 		for i := 0; i < b.N; i++ {
 			err := tx.calcEffectiveGasTip(dst, baseFee)
 			if err != nil {
@@ -666,23 +667,25 @@ func TestEffectiveGasTipInto(t *testing.T) {
 		tx, _ := SignNewTx(key, signer, txdata)
 
 		var baseFee *big.Int
+		var baseFee2 *uint256.Int
 		if tc.baseFee != nil {
 			baseFee = big.NewInt(*tc.baseFee)
+			baseFee2 = uint256.NewInt(uint64(*tc.baseFee))
 		}
 
 		// Get result from original method
 		orig, origErr := tx.EffectiveGasTip(baseFee)
 
 		// Get result from new method
-		dst := new(big.Int)
-		newErr := tx.calcEffectiveGasTip(dst, baseFee)
+		dst := new(uint256.Int)
+		newErr := tx.calcEffectiveGasTip(dst, baseFee2)
 
 		// Compare results
 		if (origErr != nil) != (newErr != nil) {
 			t.Fatalf("case %d: error mismatch: orig %v, new %v", i, origErr, newErr)
 		}
 
-		if orig.Cmp(dst) != 0 {
+		if origErr == nil && orig.Cmp(dst.ToBig()) != 0 {
 			t.Fatalf("case %d: result mismatch: orig %v, new %v", i, orig, dst)
 		}
 	}
@@ -691,4 +694,29 @@ func TestEffectiveGasTipInto(t *testing.T) {
 // Helper function to create integer pointer
 func intPtr(i int64) *int64 {
 	return &i
+}
+
+func BenchmarkEffectiveGasTipCmp(b *testing.B) {
+	signer := LatestSigner(params.TestChainConfig)
+	key, _ := crypto.GenerateKey()
+	txdata := &DynamicFeeTx{
+		ChainID:   big.NewInt(1),
+		Nonce:     0,
+		GasTipCap: big.NewInt(2000000000),
+		GasFeeCap: big.NewInt(3000000000),
+		Gas:       21000,
+		To:        &common.Address{},
+		Value:     big.NewInt(0),
+		Data:      nil,
+	}
+	tx, _ := SignNewTx(key, signer, txdata)
+	other, _ := SignNewTx(key, signer, txdata)
+	baseFee := uint256.NewInt(1000000000) // 1 gwei
+
+	b.Run("Original", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			tx.EffectiveGasTipCmp(other, baseFee)
+		}
+	})
 }
