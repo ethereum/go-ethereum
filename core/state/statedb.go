@@ -134,6 +134,8 @@ type StateDB struct {
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal *journal
+	//
+	updateJournal *journal
 
 	// State witness if cross validation is needed
 	witness *stateless.Witness
@@ -184,6 +186,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
 		journal:              newJournal(),
+		updateJournal:        newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 	}
@@ -285,6 +288,42 @@ func (s *StateDB) Preimages() map[common.Hash][]byte {
 func (s *StateDB) AddRefund(gas uint64) {
 	s.journal.refundChange(s.refund)
 	s.refund += gas
+}
+
+func (s *StateDB) JournalEntriesCopy() []JournalEntry {
+	return s.updateJournal.copyEntries()
+}
+
+func (s *StateDB) MergeState(entries []JournalEntry) {
+	for _, entry := range entries {
+		if entry == nil {
+			continue
+		}
+		switch v := entry.(type) {
+		case createObjectChange:
+			s.CreateAccount(v.account)
+		case createContractChange:
+			s.CreateContract(v.account)
+		case selfDestructChange:
+			s.SelfDestruct(v.account)
+		case balanceChange:
+			{
+				s.SetBalance(v.account, v.prev, tracing.BalanceChangeUnspecified)
+
+			}
+		case nonceChange:
+			s.SetNonce(v.account, v.prev, tracing.NonceChangeUnspecified)
+		case storageChange:
+			{
+				obj := s.getOrNewStateObject(v.account)
+				obj.SetState(v.key, v.prevvalue)
+			}
+		case codeChange:
+			s.SetCode(v.account, v.prevCode)
+		default:
+
+		}
+	}
 }
 
 // SubRefund removes gas from the refund counter.
@@ -516,6 +555,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 	// for journalling a second time.
 	if !stateObject.selfDestructed {
 		s.journal.destruct(addr)
+		s.updateJournal.destruct(addr)
 		stateObject.markSelfdestructed()
 	}
 	return prevBalance
@@ -633,6 +673,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 func (s *StateDB) createObject(addr common.Address) *stateObject {
 	obj := newObject(s, addr, nil)
 	s.journal.createObject(addr)
+	s.updateJournal.createObject(addr)
 	s.setStateObject(obj)
 	return obj
 }
@@ -655,6 +696,7 @@ func (s *StateDB) CreateContract(addr common.Address) {
 	if !obj.newContract {
 		obj.newContract = true
 		s.journal.createContract(addr)
+		s.updateJournal.createContract(addr)
 	}
 }
 
@@ -687,6 +729,8 @@ func (s *StateDB) Copy() *StateDB {
 		accessList:       s.accessList.Copy(),
 		transientStorage: s.transientStorage.Copy(),
 		journal:          s.journal.copy(),
+		// The update journal is not copies to avoid duplicated updates in later transactions.
+		updateJournal: newJournal(),
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()

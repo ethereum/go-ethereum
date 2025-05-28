@@ -342,7 +342,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.statedb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
-	bc.processor = NewStateProcessor(chainConfig, bc.hc)
+	// bc.processor = NewStateProcessor(chainConfig, bc.hc)
+	bc.processor = NewParallelStateProcessor(chainConfig, bc.hc)
 
 	genesisHeader := bc.GetHeaderByNumber(0)
 	if genesisHeader == nil {
@@ -1899,6 +1900,7 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 	)
 	defer interrupt.Store(true) // terminate the prefetch at the end
 
+	bc.cacheConfig.TrieCleanNoPrefetch = true
 	if bc.cacheConfig.TrieCleanNoPrefetch {
 		statedb, err = state.New(parentRoot, bc.statedb)
 		if err != nil {

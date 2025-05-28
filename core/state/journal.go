@@ -45,6 +45,17 @@ type journalEntry interface {
 	copy() journalEntry
 }
 
+type JournalEntry interface {
+	// revert undoes the changes introduced by this journal entry.
+	revert(*StateDB)
+
+	// dirtied returns the Ethereum address modified by this journal entry.
+	dirtied() *common.Address
+
+	// copy returns a deep-copied journal entry.
+	copy() journalEntry
+}
+
 // journal contains the list of state modifications applied since the last state
 // commit. These are tracked to be able to be reverted in the case of an execution
 // exception or request for reversal.
@@ -146,6 +157,14 @@ func (j *journal) copy() *journal {
 		validRevisions: slices.Clone(j.validRevisions),
 		nextRevisionId: j.nextRevisionId,
 	}
+}
+
+func (j *journal) copyEntries() []JournalEntry {
+	entries := make([]JournalEntry, j.length())
+	for i := range j.length() {
+		entries[i] = j.entries[i].copy()
+	}
+	return entries
 }
 
 func (j *journal) logChange(txHash common.Hash) {

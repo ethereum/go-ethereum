@@ -218,6 +218,7 @@ func (s *stateObject) SetState(key, value common.Hash) common.Hash {
 	}
 	// New value is different, update and journal the change
 	s.db.journal.storageChange(s.address, key, prev, origin)
+	s.db.updateJournal.storageChange(s.address, key, value, prev)
 	s.setState(key, value, origin)
 	return prev
 }
@@ -470,6 +471,7 @@ func (s *stateObject) AddBalance(amount *uint256.Int) uint256.Int {
 func (s *stateObject) SetBalance(amount *uint256.Int) uint256.Int {
 	prev := *s.data.Balance
 	s.db.journal.balanceChange(s.address, s.data.Balance)
+	s.db.updateJournal.balanceChange(s.address, amount)
 	s.setBalance(amount)
 	return prev
 }
@@ -551,6 +553,7 @@ func (s *stateObject) CodeSize() int {
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
 	prev = slices.Clone(s.code)
 	s.db.journal.setCode(s.address, prev)
+	s.db.updateJournal.setCode(s.address, code)
 	s.setCode(codeHash, code)
 	return prev
 }
@@ -563,6 +566,7 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 
 func (s *stateObject) SetNonce(nonce uint64) {
 	s.db.journal.nonceChange(s.address, s.data.Nonce)
+	s.db.updateJournal.nonceChange(s.address, nonce)
 	s.setNonce(nonce)
 }
 
