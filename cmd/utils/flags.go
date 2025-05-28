@@ -1787,13 +1787,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Info("Using developer account", "address", developer.Address)
 
 		// Create a new developer genesis block or reuse existing one
-		cfg.Genesis, _, _ = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &developer.Address)
 		if ctx.IsSet(DataDirFlag.Name) {
 			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
-				cfg.Genesis = nil // fallback to db content
-
-				//validate genesis has PoS enabled in block 0
+				// validate that the stored genesis config compatible with dev-mode:
+				// it must be merged at genesis
 				genesis, err := core.ReadGenesis(chaindb)
 				if err != nil {
 					Fatalf("Could not read genesis from database: %v", err)
@@ -1808,6 +1806,22 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 				}
 			}
 			chaindb.Close()
+		} else {
+			// if no datadir is specified, dev mode runs ephemerally in memory
+			var (
+				devAddr = developer.Address
+				devKey  *ecdsa.PrivateKey
+			)
+			if devAddr != (common.Address{}) {
+				devKey, err = crypto.GenerateKey()
+				if err != nil {
+					panic(fmt.Errorf("failed to generate dev mode prefunded account key: %v", err))
+				}
+				devAddr = crypto.PubkeyToAddress(devKey.PublicKey)
+
+				log.Info("running dev mode with prefunded account", "address", devAddr, "private key", crypto.FromECDSA(devKey))
+			}
+			cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &devAddr)
 		}
 		if !ctx.IsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)

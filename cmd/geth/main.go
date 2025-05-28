@@ -18,7 +18,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"os"
 	"slices"
@@ -30,8 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -331,6 +328,7 @@ func prepare(ctx *cli.Context) {
 		}
 	}
 }
+
 // geth is the main entry point into the system if no special subcommand is run.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
@@ -344,18 +342,6 @@ func geth(ctx *cli.Context) error {
 	defer stack.Close()
 
 	startNode(ctx, stack, false)
-
-	if ctx.IsSet(utils.DeveloperFlag.Name) && !ctx.IsSet(utils.DataDirFlag.Name) {
-		_, faucetAddr, faucetKey := core.DeveloperGenesisBlock(0, nil)
-		fmt.Println("Developer Faucet Account")
-		fmt.Println("========================")
-		fmt.Printf("Address: %s\n", faucetAddr.Hex())
-		if faucetKey != nil {
-			fmt.Printf("Private Key: 0x%s\n", hex.EncodeToString(crypto.FromECDSA(faucetKey)))
-		}
-		fmt.Println()
-	}
-
 	stack.Wait()
 
 	return nil

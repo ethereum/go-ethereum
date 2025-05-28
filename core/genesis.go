@@ -24,8 +24,6 @@ import (
 	"math/big"
 	"strings"
 
-	"crypto/ecdsa"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -646,47 +644,47 @@ func DefaultHoodiGenesisBlock() *Genesis {
 	}
 }
 
-// DeveloperGenesisBlock returns the 'geth --dev' genesis block, faucet address, and key.
-func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) (*Genesis, common.Address, *ecdsa.PrivateKey) {
+// DeveloperGenesisBlock returns the genesis block for dev mode, with initial
+// gas limit and optional prefunded address
+func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
+	// Override the default period to the user requested one
 	config := *params.AllDevChainProtocolChanges
 
-	alloc := make(map[common.Address]types.Account)
-
-	var faucetAddr common.Address
-	var faucetKey *ecdsa.PrivateKey
-	if faucet == nil {
-		// Generate a new dev account for the faucet
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			panic(fmt.Errorf("failed to generate dev faucet key: %w", err))
-		}
-		faucetAddr = crypto.PubkeyToAddress(key.PublicKey)
-		faucetKey = key
-	} else {
-		faucetAddr = *faucet
-	}
-	alloc[faucetAddr] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
-
-	// Add precompiles and system contracts
-	precompileAddrs := [][]byte{
-		{0x01}, {0x02}, {0x03}, {0x04}, {0x05}, {0x06}, {0x07}, {0x08}, {0x09}, {0x0a}, {0x0b}, {0x0c}, {0x0d}, {0x0e}, {0x0f}, {0x10}, {0x11},
-	}
-	for _, addr := range precompileAddrs {
-		alloc[common.BytesToAddress(addr)] = types.Account{Balance: big.NewInt(1)}
-	}
-	alloc[params.BeaconRootsAddress] = types.Account{Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0}
-	alloc[params.HistoryStorageAddress] = types.Account{Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0}
-	alloc[params.WithdrawalQueueAddress] = types.Account{Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0}
-	alloc[params.ConsolidationQueueAddress] = types.Account{Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0}
-
+	// Assemble and return the genesis with the precompiles and faucet pre-funded
 	genesis := &Genesis{
 		Config:     &config,
 		GasLimit:   gasLimit,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(0),
-		Alloc:      alloc,
+		Alloc: map[common.Address]types.Account{
+			common.BytesToAddress([]byte{0x01}): {Balance: big.NewInt(1)}, // ECRecover
+			common.BytesToAddress([]byte{0x02}): {Balance: big.NewInt(1)}, // SHA256
+			common.BytesToAddress([]byte{0x03}): {Balance: big.NewInt(1)}, // RIPEMD
+			common.BytesToAddress([]byte{0x04}): {Balance: big.NewInt(1)}, // Identity
+			common.BytesToAddress([]byte{0x05}): {Balance: big.NewInt(1)}, // ModExp
+			common.BytesToAddress([]byte{0x06}): {Balance: big.NewInt(1)}, // ECAdd
+			common.BytesToAddress([]byte{0x07}): {Balance: big.NewInt(1)}, // ECScalarMul
+			common.BytesToAddress([]byte{0x08}): {Balance: big.NewInt(1)}, // ECPairing
+			common.BytesToAddress([]byte{0x09}): {Balance: big.NewInt(1)}, // BLAKE2b
+			common.BytesToAddress([]byte{0x0a}): {Balance: big.NewInt(1)}, // KZGPointEval
+			common.BytesToAddress([]byte{0x0b}): {Balance: big.NewInt(1)}, // BLSG1Add
+			common.BytesToAddress([]byte{0x0c}): {Balance: big.NewInt(1)}, // BLSG1MultiExp
+			common.BytesToAddress([]byte{0x0d}): {Balance: big.NewInt(1)}, // BLSG2Add
+			common.BytesToAddress([]byte{0x0e}): {Balance: big.NewInt(1)}, // BLSG2MultiExp
+			common.BytesToAddress([]byte{0x0f}): {Balance: big.NewInt(1)}, // BLSG1Pairing
+			common.BytesToAddress([]byte{0x10}): {Balance: big.NewInt(1)}, // BLSG1MapG1
+			common.BytesToAddress([]byte{0x11}): {Balance: big.NewInt(1)}, // BLSG2MapG2
+			// Pre-deploy system contracts
+			params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
+			params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
+			params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
+			params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
+		},
 	}
-	return genesis, faucetAddr, faucetKey
+	if faucet != nil {
+		genesis.Alloc[*faucet] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
+	}
+	return genesis
 }
 
 func decodePrealloc(data string) types.GenesisAlloc {
