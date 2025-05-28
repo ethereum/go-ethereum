@@ -1819,7 +1819,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 				}
 				devAddr = crypto.PubkeyToAddress(devKey.PublicKey)
 
-				log.Info("running dev mode with prefunded account", "address", devAddr, "private key", crypto.FromECDSA(devKey))
+				devModeAccountsDescr := fmt.Sprintf(`Available Accounts\n
+==================
+(0) 0x%x (10000.000000000000000000 ETH)
+
+Private Keys
+==================
+(0) 0x%x (10000.000000000000000000 ETH)
+`, devAddr, crypto.FromECDSA(devKey))
+				for _, line := range strings.Split(devModeAccountsDescr, "\n") {
+					log.Info(line)
+				}
 			}
 			cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &devAddr)
 		}
