@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 	"math/big"
-	"sync"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -11,7 +11,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
+	"golang.org/x/sync/errgroup"
 )
+
+type PreStateType int
+
+const (
+	BALPreState PreStateType = iota
+	SeqPreState              // Only for debug
+)
+
+const preStateType = SeqPreState
 
 type ParallelStateProcessor struct {
 	config *params.ChainConfig // Chain configuration options
@@ -61,35 +71,50 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *state.StateDB, blockContext *vm.BlockContext, cfg vm.Config, gp *GasPool, signer types.Signer) (*ProcessResult, error) {
 	var (
-		receipts      = make(types.Receipts, len(block.Transactions()))
-		header        = block.Header()
-		blockHash     = block.Hash()
-		blockNumber   = block.Number()
-		allLogs       []*types.Log
-		wg            sync.WaitGroup
-		preStatedb    = statedb.Copy()
-		sequentialEvm = vm.NewEVM(*blockContext, preStatedb, p.config, cfg)
-		seqUsedGas    = new(uint64)
+		receipts         = make(types.Receipts, len(block.Transactions()))
+		header           = block.Header()
+		blockHash        = block.Hash()
+		blockNumber      = block.Number()
+		allLogs          []*types.Log
+		preStatedb       = statedb.Copy()
+		preStateProvider PreStateProvider
+		workers          errgroup.Group
 	)
+	workers.SetLimit(runtime.NumCPU() / 2)
 	// Fetch prestate for each tx
 
+	// todo: handle gp with RW lock
+	switch preStateType {
+	case BALPreState:
+		panic("unimplemented")
+	case SeqPreState:
+		{
+			gpcp := *gp
+			preStateProvider = &SequentialPrestateProvider{
+				statedb: preStatedb,
+				block:   block,
+				gp:      &gpcp,
+				signer:  signer,
+				usedGas: new(uint64),
+				evm:     vm.NewEVM(*blockContext, preStatedb, p.config, cfg),
+			}
+		}
+	}
+
 	// Parallel executing the transaction
-	postStates := make([]*state.StateDB, len(block.Transactions()))
 	postEntries := make([][]state.JournalEntry, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
-		postStates[i] = preStatedb.Copy() // Copy the state for each transaction
-		cleanStatedb := postStates[i]
+		cleanStatedb, err := preStateProvider.PrestateAtIndex(i)
+		if err != nil {
+			return nil, err
+		}
+
 		i := i
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		workers.Go(func() error {
 			usedGas := new(uint64)
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
-			// todo: handle error: break all routines and return error
 			if err != nil {
-				fmt.Printf("could not apply tx %d [%v]: %v", i, tx.Hash().Hex(), err)
+				return err
 			}
 			cleanStatedb.SetTxContext(tx.Hash(), i)
 
@@ -97,26 +122,22 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 
 			receipt, entries, err := ApplyTransactionWithParallelEVM(msg, gp, cleanStatedb, blockNumber, blockHash, tx, usedGas, evm)
 			if err != nil {
-				fmt.Printf("could not apply parallel tx %d [%v]: %v", i, tx.Hash().Hex(), err)
+				return err
 			}
 			receipts[i] = receipt
 			postEntries[i] = entries
-		}()
 
-		// execute the transaction again to simulate the state changes
-		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
-		if err != nil {
-			return nil, fmt.Errorf("could not apply tx to msg %d [%v]: %w", i, tx.Hash().Hex(), err)
-		}
-		preStatedb.SetTxContext(tx.Hash(), i)
-
-		_, err = ApplyTransactionWithEVM(msg, gp, preStatedb, blockNumber, blockHash, tx, seqUsedGas, sequentialEvm)
-		if err != nil {
-			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
-		}
+			// if i == len(block.Transactions())-1 {
+			// 	*statedb = *cleanStatedb
+			// }
+			return nil
+		})
 	}
 
-	wg.Wait()
+	err := workers.Wait()
+	if err != nil {
+		return nil, err
+	}
 	// Merge state changes
 	// - Append receipts
 	// - Sum usedGas
@@ -195,4 +216,46 @@ func ApplyTransactionWithParallelEVM(msg *Message, gp *GasPool, statedb *state.S
 	}
 
 	return MakeReceipt(evm, result, statedb, blockNumber, blockHash, tx, *usedGas, root), entries, nil
+}
+
+type PreStateProvider interface {
+	PrestateAtIndex(i int) (*state.StateDB, error)
+}
+
+type SequentialPrestateProvider struct {
+	statedb *state.StateDB
+	block   *types.Block
+	gp      *GasPool
+	signer  types.Signer
+	// contex
+	usedGas *uint64
+	evm     *vm.EVM
+}
+
+func (s *SequentialPrestateProvider) PrestateAtIndex(i int) (*state.StateDB, error) {
+	if i < 0 || i > len(s.block.Transactions()) {
+		return nil, fmt.Errorf("tx index %d out of range [0, %d)", i, len(s.block.Transactions()))
+	}
+	if i == 0 {
+		return s.statedb.Copy(), nil // first transaction uses the original state
+	}
+	i = i - 1
+	tx := s.block.Transactions()[i]
+	signer := s.signer
+	header := s.block.Header()
+	statedb := s.statedb
+	blockHash := s.block.Hash()
+	blockNumber := s.block.Number()
+	// execute the transaction again to simulate the state changes
+	msg, err := TransactionToMessage(tx, signer, header.BaseFee)
+	if err != nil {
+		return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+	}
+	statedb.SetTxContext(tx.Hash(), i)
+
+	_, err = ApplyTransactionWithEVM(msg, s.gp, statedb, blockNumber, blockHash, tx, s.usedGas, s.evm)
+	if err != nil {
+		return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+	}
+	return statedb.Copy(), nil
 }

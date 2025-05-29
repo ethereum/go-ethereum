@@ -74,6 +74,34 @@ func newJournal() *journal {
 	}
 }
 
+func PrintJournal(entries []JournalEntry) {
+	for _, entry := range entries {
+		if entry == nil {
+			continue
+		}
+		switch v := entry.(type) {
+		case createObjectChange:
+			fmt.Println("createObjectChange")
+		case createContractChange:
+			fmt.Println("createContractChange", v)
+		case selfDestructChange:
+			fmt.Println("selfDestructChange")
+		case balanceChange:
+			fmt.Println("balanceChange", v)
+		case nonceChange:
+			fmt.Println("nonceChange", v)
+		case storageChange:
+			fmt.Println("storageChange", v)
+		case codeChange:
+			fmt.Println("codeChange")
+		case refundChange:
+			fmt.Println("refundChange")
+		default:
+
+		}
+	}
+}
+
 // reset clears the journal, after this operation the journal can be used anew.
 // It is semantically similar to calling 'newJournal', but the underlying slices
 // can be reused.
@@ -108,6 +136,21 @@ func (j *journal) revertToSnapshot(revid int, s *StateDB) {
 	j.validRevisions = j.validRevisions[:idx]
 }
 
+func (j *journal) revertToSnapshotWithoutRevertState(revid int, s *StateDB) {
+	// Find the snapshot in the stack of valid snapshots.
+	idx := sort.Search(len(j.validRevisions), func(i int) bool {
+		return j.validRevisions[i].id >= revid
+	})
+	if idx == len(j.validRevisions) || j.validRevisions[idx].id != revid {
+		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
+	}
+	snapshot := j.validRevisions[idx].journalIndex
+
+	// Replay the journal to undo journal changes and remove invalidated snapshots
+	j.revertWithoutRevertState(s, snapshot)
+	j.validRevisions = j.validRevisions[:idx]
+}
+
 // append inserts a new modification entry to the end of the change journal.
 func (j *journal) append(entry journalEntry) {
 	j.entries = append(j.entries, entry)
@@ -123,6 +166,18 @@ func (j *journal) revert(statedb *StateDB, snapshot int) {
 		// Undo the changes made by the operation
 		j.entries[i].revert(statedb)
 
+		// Drop any dirty tracking induced by the change
+		if addr := j.entries[i].dirtied(); addr != nil {
+			if j.dirties[*addr]--; j.dirties[*addr] == 0 {
+				delete(j.dirties, *addr)
+			}
+		}
+	}
+	j.entries = j.entries[:snapshot]
+}
+
+func (j *journal) revertWithoutRevertState(statedb *StateDB, snapshot int) {
+	for i := len(j.entries) - 1; i >= snapshot; i-- {
 		// Drop any dirty tracking induced by the change
 		if addr := j.entries[i].dirtied(); addr != nil {
 			if j.dirties[*addr]--; j.dirties[*addr] == 0 {

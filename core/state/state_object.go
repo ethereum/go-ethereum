@@ -115,6 +115,7 @@ func (s *stateObject) markSelfdestructed() {
 
 func (s *stateObject) touch() {
 	s.db.journal.touchChange(s.address)
+	s.db.updateJournal.touchChange(s.address)
 }
 
 // getTrie returns the associated storage trie. The trie will be opened if it's

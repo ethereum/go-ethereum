@@ -18,9 +18,11 @@
 package state
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -159,6 +161,84 @@ type StateDB struct {
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
 }
 
+type BALType int
+
+const (
+	OnlyKey BALType = iota
+	WithAddrKeySlotV
+	WithAllKV
+	BalKeyConstruction
+	BalKeyValConstruction
+	BalPreblockKeysPostValues
+)
+
+type BALs struct {
+	Pre  map[uint64]types.AccessList     `json:"pre"`
+	Post map[uint64]map[int]TxPostValues `json:"post"`
+}
+
+type AcctPostValues struct {
+	Nonce     uint64                      `json:"nonce"`
+	Balance   *uint256.Int                `json:"balance"`
+	Code      []byte                      `json:"code"`
+	StorageKV map[common.Hash]common.Hash `json:"storageKV"`
+	Destruct  bool                        `json:"destruct"`
+}
+
+// For acccount destruct or storage clearing corresponding values would be 0
+type TxPostValues map[common.Address]*AcctPostValues
+
+var (
+	AllBlockBal         = BALs{}
+	AllBlockAccessLists = map[uint64]types.AccessList{}
+	// Blocknumber => TxIndex => TxPostValues
+	AllBlockTxPostValues = map[uint64]map[int]TxPostValues{}
+)
+
+const (
+	balType = BalPreblockKeysPostValues
+	// balType = OnlyKey
+)
+
+func init() {
+	// load the access lists for all blocks
+	println("Importing BAL:", balType)
+	var (
+		fileName string
+	)
+	switch balType {
+	case OnlyKey:
+		{
+			println("bal onlykey")
+			fileName = "access_lists.2000.json"
+		}
+	case WithAddrKeySlotV:
+	case WithAllKV:
+	case BalKeyConstruction:
+		{
+		}
+	case BalPreblockKeysPostValues:
+		{
+			println("bal preblock keys post values")
+			fileName = "access_lists_kpostv.json"
+			data, err := os.ReadFile(fileName)
+			if err != nil {
+				log.Error("Failed to load access lists", "err", err)
+				return
+			}
+			if err := json.Unmarshal(data, &AllBlockBal); err != nil {
+				panic("Failed to unmarshal access lists")
+			}
+
+			AllBlockAccessLists = AllBlockBal.Pre
+			AllBlockTxPostValues = AllBlockBal.Post
+		}
+	}
+
+	println("Imported BAL", fileName)
+	println("Access lists loaded:", len(AllBlockAccessLists), "blocks with pre-block-keys, ", len(AllBlockTxPostValues), "blocks with post values")
+}
+
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database) (*StateDB, error) {
 	reader, err := db.Reader(root)
@@ -245,6 +325,7 @@ func (s *StateDB) Error() error {
 
 func (s *StateDB) AddLog(log *types.Log) {
 	s.journal.logChange(s.thash)
+	s.updateJournal.logChange(s.thash)
 
 	log.TxHash = s.thash
 	log.TxIndex = uint(s.txIndex)
@@ -288,6 +369,7 @@ func (s *StateDB) Preimages() map[common.Hash][]byte {
 func (s *StateDB) AddRefund(gas uint64) {
 	s.journal.refundChange(s.refund)
 	s.refund += gas
+	s.updateJournal.refundChange(s.refund)
 }
 
 func (s *StateDB) JournalEntriesCopy() []JournalEntry {
@@ -320,16 +402,23 @@ func (s *StateDB) MergeState(entries []JournalEntry) {
 			}
 		case codeChange:
 			s.SetCode(v.account, v.prevCode)
+		case refundChange:
+			s.setRefund(v.prev)
 		default:
 
 		}
 	}
 }
 
+func (s *StateDB) setRefund(gas uint64) {
+	s.refund = gas
+}
+
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
 	s.journal.refundChange(s.refund)
+	s.updateJournal.refundChange(s.refund - gas)
 	if gas > s.refund {
 		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
 	}
@@ -581,6 +670,7 @@ func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash)
 		return
 	}
 	s.journal.transientStateChange(addr, key, prev)
+	s.updateJournal.transientStateChange(addr, key, prev)
 	s.setTransientState(addr, key, value)
 }
 
@@ -764,12 +854,15 @@ func (s *StateDB) Copy() *StateDB {
 
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
+	s.updateJournal.snapshot()
 	return s.journal.snapshot()
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
 func (s *StateDB) RevertToSnapshot(revid int) {
 	s.journal.revertToSnapshot(revid, s)
+	s.updateJournal.revertToSnapshotWithoutRevertState(revid, s)
+
 }
 
 // GetRefund returns the current value of the refund counter.
@@ -981,6 +1074,7 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 
 func (s *StateDB) clearJournalAndRefund() {
 	s.journal.reset()
+	s.updateJournal.reset()
 	s.refund = 0
 }
 
@@ -1429,6 +1523,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
 	if s.accessList.AddAddress(addr) {
 		s.journal.accessListAddAccount(addr)
+		s.updateJournal.accessListAddAccount(addr)
 	}
 }
 
@@ -1441,9 +1536,11 @@ func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 		// to the access list (via call-variant, create, etc).
 		// Better safe than sorry, though
 		s.journal.accessListAddAccount(addr)
+		s.updateJournal.accessListAddAccount(addr)
 	}
 	if slotMod {
 		s.journal.accessListAddSlot(addr, slot)
+		s.updateJournal.accessListAddSlot(addr, slot)
 	}
 }
 
