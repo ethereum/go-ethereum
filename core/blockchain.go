@@ -751,8 +751,10 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash) (*typ
 		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot point state
 		rootNumber uint64                             // Associated block number of requested root
 
-		start  = time.Now() // Timestamp the rewinding is restarted
-		logged = time.Now() // Timestamp last progress log was printed
+		start         = time.Now() // Timestamp the rewinding is restarted
+		logged        = time.Now() // Timestamp last progress log was printed
+		blocksScanned = 0          // Number of blocks scanned during recovery
+		initialLogged = false      // Whether initial recovery message was logged
 	)
 	// The oldest block to be searched is determined by the pivot block or a constant
 	// searching threshold. The rationale behind this is as follows:
@@ -772,12 +774,30 @@ func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash) (*typ
 		limit = head.Number.Uint64() - params.FullImmutabilityThreshold
 	}
 	for {
+		blocksScanned++
+
+		// Log initial recovery message once
+		if !initialLogged {
+			log.Info("State recovery after unexpected shutdown started",
+				"note", "This is normal and may take several minutes",
+				"action", "Please wait for completion")
+			initialLogged = true
+		}
+
 		logger := log.Trace
 		if time.Since(logged) > time.Second*8 {
 			logged = time.Now()
 			logger = log.Info
 		}
-		logger("Block state missing, rewinding further", "number", head.Number, "hash", head.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+
+		// Improved progress logging with scan rate
+		rate := float64(blocksScanned) / time.Since(start).Seconds()
+		logger("State recovery in progress",
+			"number", head.Number,
+			"hash", head.Hash(),
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"blocks_scanned", blocksScanned,
+			"scan_rate", fmt.Sprintf("%.1f blocks/sec", rate))
 
 		// If a root threshold was requested but not yet crossed, check
 		if !beyondRoot && head.Root == root {
@@ -833,17 +853,37 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 		// is unavailable and impossible to be recovered.
 		noState = !bc.HasState(root) && !bc.stateRecoverable(root)
 
-		start  = time.Now() // Timestamp the rewinding is restarted
-		logged = time.Now() // Timestamp last progress log was printed
+		start         = time.Now() // Timestamp the rewinding is restarted
+		logged        = time.Now() // Timestamp last progress log was printed
+		blocksScanned = 0          // Number of blocks scanned during recovery
+		initialLogged = false      // Whether initial recovery message was logged
 	)
 	// Rewind the head block tag until an available state is found.
 	for {
+		blocksScanned++
+
+		// Log initial recovery message once
+		if !initialLogged {
+			log.Info("State recovery after unexpected shutdown started",
+				"note", "This is normal and may take several minutes",
+				"action", "Please wait for completion")
+			initialLogged = true
+		}
+
 		logger := log.Trace
 		if time.Since(logged) > time.Second*8 {
 			logged = time.Now()
 			logger = log.Info
 		}
-		logger("Block state missing, rewinding further", "number", head.Number, "hash", head.Hash(), "elapsed", common.PrettyDuration(time.Since(start)))
+
+		// Improved progress logging with scan rate
+		rate := float64(blocksScanned) / time.Since(start).Seconds()
+		logger("State recovery in progress",
+			"number", head.Number,
+			"hash", head.Hash(),
+			"elapsed", common.PrettyDuration(time.Since(start)),
+			"blocks_scanned", blocksScanned,
+			"scan_rate", fmt.Sprintf("%.1f blocks/sec", rate))
 
 		// If a root threshold was requested but not yet crossed, check
 		if !beyondRoot && head.Root == root {
