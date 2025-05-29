@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -355,51 +356,55 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 // Note: if the effective gasTipCap is negative, this method returns both error
 // the actual negative value, _and_ ErrGasFeeCapTooLow
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
-	dst := new(big.Int)
-	err := tx.calcEffectiveGasTip(dst, baseFee)
-	return dst, err
+	dst := new(uint256.Int)
+	base := new(uint256.Int)
+	if baseFee != nil {
+		base.SetFromBig(baseFee)
+	}
+	err := tx.calcEffectiveGasTip(dst, base)
+	return dst.ToBig(), err
 }
 
 // calcEffectiveGasTip calculates the effective gas tip of the transaction and
 // saves the result to dst.
-func (tx *Transaction) calcEffectiveGasTip(dst *big.Int, baseFee *big.Int) error {
+func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.Int) error {
 	if baseFee == nil {
-		dst.Set(tx.inner.gasTipCap())
+		dst.SetFromBig(tx.inner.gasTipCap())
 		return nil
 	}
 
 	var err error
-	gasFeeCap := tx.inner.gasFeeCap()
-	if gasFeeCap.Cmp(baseFee) < 0 {
+	dst.SetFromBig(tx.inner.gasFeeCap())
+	if dst.Cmp(baseFee) < 0 {
 		err = ErrGasFeeCapTooLow
 	}
 
-	dst.Sub(gasFeeCap, baseFee)
-	gasTipCap := tx.inner.gasTipCap()
+	dst.Sub(dst, baseFee)
+	gasTipCap := new(uint256.Int)
+	gasTipCap.SetFromBig(tx.inner.gasTipCap())
 	if gasTipCap.Cmp(dst) < 0 {
 		dst.Set(gasTipCap)
 	}
 	return err
 }
 
-// EffectiveGasTipCmp compares the effective gasTipCap of two transactions assuming the given base fee.
-func (tx *Transaction) EffectiveGasTipCmp(other *Transaction, baseFee *big.Int) int {
+func (tx *Transaction) EffectiveGasTipCmp(other *Transaction, baseFee *uint256.Int) int {
 	if baseFee == nil {
 		return tx.GasTipCapCmp(other)
 	}
 	// Use more efficient internal method.
-	txTip, otherTip := new(big.Int), new(big.Int)
+	txTip, otherTip := new(uint256.Int), new(uint256.Int)
 	tx.calcEffectiveGasTip(txTip, baseFee)
 	other.calcEffectiveGasTip(otherTip, baseFee)
 	return txTip.Cmp(otherTip)
 }
 
 // EffectiveGasTipIntCmp compares the effective gasTipCap of a transaction to the given gasTipCap.
-func (tx *Transaction) EffectiveGasTipIntCmp(other *big.Int, baseFee *big.Int) int {
+func (tx *Transaction) EffectiveGasTipIntCmp(other *uint256.Int, baseFee *uint256.Int) int {
 	if baseFee == nil {
-		return tx.GasTipCapIntCmp(other)
+		return tx.GasTipCapIntCmp(other.ToBig())
 	}
-	txTip := new(big.Int)
+	txTip := new(uint256.Int)
 	tx.calcEffectiveGasTip(txTip, baseFee)
 	return txTip.Cmp(other)
 }
