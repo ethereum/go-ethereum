@@ -305,6 +305,7 @@ func (i *indexIniter) run(lastID uint64) {
 			if signal.newLastID == lastID+1 {
 				lastID = signal.newLastID
 				signal.result <- nil
+				log.Debug("Extended state history range", "last", lastID)
 				continue
 			}
 			// The index limit is shortened by one, interrupt the current background
@@ -315,22 +316,26 @@ func (i *indexIniter) run(lastID uint64) {
 			// If all state histories, including the one to be reverted, have
 			// been fully indexed, unindex it here and shut down the initializer.
 			if checkDone() {
+				log.Info("Truncate the extra history", "id", lastID)
 				if err := unindexSingle(lastID, i.disk, i.freezer); err != nil {
 					signal.result <- err
 					return
 				}
 				close(i.done)
 				signal.result <- nil
+				log.Info("State histories have been fully indexed", "last", lastID-1)
 				return
 			}
 			// Adjust the indexing target and relaunch the process
 			lastID = signal.newLastID
 			done, interrupt = make(chan struct{}), new(atomic.Int32)
 			go i.index(done, interrupt, lastID)
+			log.Debug("Shortened state history range", "last", lastID)
 
 		case <-done:
 			if checkDone() {
 				close(i.done)
+				log.Info("State histories have been fully indexed", "last", lastID)
 				return
 			}
 			// Relaunch the background runner if some tasks are left
@@ -361,10 +366,12 @@ func (i *indexIniter) next() (uint64, error) {
 	// Start indexing from scratch if nothing has been indexed
 	lastIndexed := rawdb.ReadLastStateHistoryIndex(i.disk)
 	if lastIndexed == nil {
+		log.Debug("Initialize state history indexing from scratch", "id", tailID)
 		return tailID, nil
 	}
 	// Resume indexing from the last interrupted position
 	if *lastIndexed+1 >= tailID {
+		log.Debug("Resume state history indexing", "id", *lastIndexed+1, "tail", tailID)
 		return *lastIndexed + 1, nil
 	}
 	// History has been shortened without indexing. Discard the gapped segment
@@ -389,6 +396,7 @@ func (i *indexIniter) index(done chan struct{}, interrupt *atomic.Int32, lastID 
 	// when the state is reverted manually (chain.SetHead) or the deep reorg is
 	// encountered. In such cases, no indexing should be scheduled.
 	if beginID > lastID {
+		log.Debug("State history is fully indexed", "last", lastID)
 		return
 	}
 	log.Info("Start history indexing", "beginID", beginID, "lastID", lastID)
