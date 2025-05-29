@@ -7,7 +7,7 @@ on:
     workflow_dispatch:
 
 jobs:
-  run-if-merged-and-has-label:
+  ci-build-on-merge:
     if: |
       github.event.pull_request.merged == true && 
       contains(github.event.pull_request.labels.*.name, 'CI:Build')
@@ -30,3 +30,24 @@ jobs:
           platforms: linux/amd64      # Add ,linux/arm64 if you need multi-arch
           push: true                  # Change to false to keep image local to runner
           tags: go-etherium-satan:latest        
+  ci-build-manual:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      # Pull the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Install Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build (and optionally push) the image
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile          # Path to the Dockerfile if not root
+          platforms: linux/amd64      # Add ,linux/arm64 if you need multi-arch
+          push: true                  # Change to false to keep image local to runner
+          tags: go-etherium-satan:latest    
