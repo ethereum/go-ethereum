@@ -643,6 +643,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, metadata []t
 			res, err := api.traceTx(ctx, tx, msg, txctx, blockCtx, statedb, config)
 			if err != nil {
 				results[i] = &TxTraceResult{TxHash: tx.Hash(), Error: err.Error()}
+				statedb.RevertToSnapshot(0)
 			} else {
 				results[i] = &TxTraceResult{TxHash: tx.Hash(), Result: res}
 			}
