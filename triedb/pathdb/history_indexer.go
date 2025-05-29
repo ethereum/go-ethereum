@@ -479,6 +479,9 @@ func (i *historyIndexer) close() {
 	i.initer.close()
 }
 
+// inited returns a flag indicating whether the existing state histories
+// have been fully indexed, in other words, whether they are available
+// for external access.
 func (i *historyIndexer) inited() bool {
 	return i.initer.inited()
 }

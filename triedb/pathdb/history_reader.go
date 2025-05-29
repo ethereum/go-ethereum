@@ -311,7 +311,8 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	lastIndexedID := rawdb.ReadLastStateHistoryIndex(r.disk)
 
 	// To serve the request, all state histories from stateID+1 to lastID
-	// must be indexed
+	// must be indexed. It's not supposed to happen unless system is very
+	// wrong.
 	if lastIndexedID == nil || *lastIndexedID < lastID {
 		indexed := "null"
 		if lastIndexedID != nil {
