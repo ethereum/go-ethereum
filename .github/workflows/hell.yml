@@ -1,0 +1,17 @@
+name: Triggers on merge with specified lable
+
+on:
+    pull_request:
+        types: 
+        - closed        
+    workflow_dispatch:
+
+jobs:
+  run-if-merged-and-has-label:
+    if: |
+      github.event.pull_request.merged == true && 
+      contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Do something
+        run: echo "PR was merged and has label CI:Build"
