@@ -20,6 +20,8 @@ import (
 	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -28,6 +30,11 @@ import (
 type contractCode struct {
 	hash common.Hash // hash is the cryptographic hash of the contract code.
 	blob []byte      // blob is the binary representation of the contract code.
+}
+
+// CodeLen returns the length of the contract code blob.
+func (c *contractCode) CodeLen() int {
+	return len(c.blob)
 }
 
 // accountDelete represents an operation for deleting an Ethereum account.
@@ -60,33 +67,33 @@ type accountUpdate struct {
 	storagesOriginByHash map[common.Hash][]byte
 }
 
-// stateUpdate represents the difference between two states resulting from state
+// StateUpdate represents the difference between two states resulting from state
 // execution. It contains information about mutated contract codes, accounts,
 // and storage slots, along with their original values.
-type stateUpdate struct {
-	originRoot     common.Hash               // hash of the state before applying mutation
-	root           common.Hash               // hash of the state after applying mutation
-	accounts       map[common.Hash][]byte    // accounts stores mutated accounts in 'slim RLP' encoding
-	accountsOrigin map[common.Address][]byte // accountsOrigin stores the original values of mutated accounts in 'slim RLP' encoding
+type StateUpdate struct {
+	OriginRoot     common.Hash               // hash of the state before applying mutation
+	Root           common.Hash               // hash of the state after applying mutation
+	Accounts       map[common.Hash][]byte    // accounts stores mutated accounts in 'slim RLP' encoding
+	AccountsOrigin map[common.Address][]byte // accountsOrigin stores the original values of mutated accounts in 'slim RLP' encoding
 
-	// storages stores mutated slots in 'prefix-zero-trimmed' RLP format.
+	// Storages stores mutated slots in 'prefix-zero-trimmed' RLP format.
 	// The value is keyed by account hash and **storage slot key hash**.
-	storages map[common.Hash]map[common.Hash][]byte
+	Storages map[common.Hash]map[common.Hash][]byte
 
-	// storagesOrigin stores the original values of mutated slots in
+	// StoragesOrigin stores the original values of mutated slots in
 	// 'prefix-zero-trimmed' RLP format.
 	// (a) the value is keyed by account hash and **storage slot key** if rawStorageKey is true;
 	// (b) the value is keyed by account hash and **storage slot key hash** if rawStorageKey is false;
-	storagesOrigin map[common.Address]map[common.Hash][]byte
-	rawStorageKey  bool
+	StoragesOrigin map[common.Address]map[common.Hash][]byte
+	RawStorageKey  bool
 
-	codes map[common.Address]contractCode // codes contains the set of dirty codes
-	nodes *trienode.MergedNodeSet         // Aggregated dirty nodes caused by state changes
+	Codes map[common.Address]contractCode // codes contains the set of dirty codes
+	Nodes *trienode.MergedNodeSet         // Aggregated dirty nodes caused by state changes
 }
 
 // empty returns a flag indicating the state transition is empty or not.
-func (sc *stateUpdate) empty() bool {
-	return sc.originRoot == sc.root
+func (sc *StateUpdate) empty() bool {
+	return sc.OriginRoot == sc.Root
 }
 
 // newStateUpdate constructs a state update object by identifying the differences
@@ -95,7 +102,7 @@ func (sc *stateUpdate) empty() bool {
 //
 // rawStorageKey is a flag indicating whether to use the raw storage slot key or
 // the hash of the slot key for constructing state update object.
-func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet) *stateUpdate {
+func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet) *StateUpdate {
 	var (
 		accounts       = make(map[common.Hash][]byte)
 		accountsOrigin = make(map[common.Address][]byte)
@@ -161,16 +168,16 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 			}
 		}
 	}
-	return &stateUpdate{
-		originRoot:     originRoot,
-		root:           root,
-		accounts:       accounts,
-		accountsOrigin: accountsOrigin,
-		storages:       storages,
-		storagesOrigin: storagesOrigin,
-		rawStorageKey:  rawStorageKey,
-		codes:          codes,
-		nodes:          nodes,
+	return &StateUpdate{
+		OriginRoot:     originRoot,
+		Root:           root,
+		Accounts:       accounts,
+		AccountsOrigin: accountsOrigin,
+		Storages:       storages,
+		StoragesOrigin: storagesOrigin,
+		RawStorageKey:  rawStorageKey,
+		Codes:          codes,
+		Nodes:          nodes,
 	}
 }
 
@@ -178,12 +185,110 @@ func newStateUpdate(rawStorageKey bool, originRoot common.Hash, root common.Hash
 // object. This function extracts the necessary data from the stateUpdate
 // struct and formats it into the StateSet structure consumed by the triedb
 // package.
-func (sc *stateUpdate) stateSet() *triedb.StateSet {
+func (sc *StateUpdate) stateSet() *triedb.StateSet {
 	return &triedb.StateSet{
-		Accounts:       sc.accounts,
-		AccountsOrigin: sc.accountsOrigin,
-		Storages:       sc.storages,
-		StoragesOrigin: sc.storagesOrigin,
-		RawStorageKey:  sc.rawStorageKey,
+		Accounts:       sc.Accounts,
+		AccountsOrigin: sc.AccountsOrigin,
+		Storages:       sc.Storages,
+		StoragesOrigin: sc.StoragesOrigin,
+		RawStorageKey:  sc.RawStorageKey,
+	}
+}
+
+// StateChangeset represents a state mutations that occurred during the execution of a block.
+type StateChangeset struct {
+	Accounts     int // Total number of accounts present in the state at this block
+	Storages     int // Total number of storage entries across all accounts in the state at this block
+	Trienodes    int // Total number of trie nodes present in the state at this block
+	Codes        int // Total number of contract codes present in the state at this block, with 32 bytes hash as the identifier
+	AccountSize  int // Combined size of all accounts in the state, with 20 bytes address as the identifier
+	StorageSize  int // Combined size of all storage entries, with 32 bytes key as the identifier
+	TrienodeSize int // Combined size of all trie nodes, with varying size node path as the identifier (up to 64 bytes)
+	CodeSize     int // Combined size of all contract codes in the state, with 20 bytes address as the identifier
+}
+
+// IntoChangeset converts the current StateUpdate into a StateChangeset.
+func (sc *StateUpdate) IntoChangeset() *StateChangeset {
+	var (
+		accountSize, storageSize, nodeSize, codeSize int
+		accounts, storages, nodes, codes             int
+	)
+
+	for addr, oldValue := range sc.AccountsOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		newValue, exists := sc.Accounts[addrHash]
+		if !exists {
+			log.Warn("State update missing account", "address", addr)
+			continue
+		}
+		if len(newValue) == 0 {
+			accounts -= 1
+			accountSize -= common.AddressLength
+		}
+		if len(oldValue) == 0 {
+			accounts += 1
+			accountSize += common.AddressLength
+		}
+		accountSize += len(newValue) - len(oldValue)
+	}
+	for addr, slots := range sc.StoragesOrigin {
+		addrHash := crypto.Keccak256Hash(addr.Bytes())
+		subset, exists := sc.Storages[addrHash]
+		if !exists {
+			log.Warn("State update missing storage", "address", addr)
+			continue
+		}
+		for key, oldValue := range slots {
+			var (
+				exists   bool
+				newValue []byte
+			)
+			if sc.RawStorageKey {
+				newValue, exists = subset[crypto.Keccak256Hash(key.Bytes())]
+			} else {
+				newValue, exists = subset[key]
+			}
+			if !exists {
+				log.Warn("State update missing storage slot", "address", addr, "key", key)
+				continue
+			}
+			if len(newValue) == 0 {
+				storages -= 1
+				storageSize -= common.HashLength
+			}
+			if len(oldValue) == 0 {
+				storages += 1
+				storageSize += common.HashLength
+			}
+			storageSize += len(newValue) - len(oldValue)
+		}
+	}
+	for _, subset := range sc.Nodes.Sets {
+		for path, n := range subset.Nodes {
+			if len(n.Blob) == 0 {
+				nodes -= 1
+				nodeSize -= len(path) + common.HashLength
+			}
+			if n.OriginLen() == 0 {
+				nodes += 1
+				nodeSize += len(path) + common.HashLength
+			}
+			nodeSize += len(n.Blob) - n.OriginLen()
+		}
+	}
+	for _, code := range sc.Codes {
+		codes += 1
+		codeSize += code.CodeLen() + common.HashLength // no deduplication
+	}
+
+	return &StateChangeset{
+		Accounts:     accounts,
+		AccountSize:  accountSize,
+		Storages:     storages,
+		StorageSize:  storageSize,
+		Trienodes:    nodes,
+		TrienodeSize: nodeSize,
+		Codes:        codes,
+		CodeSize:     codeSize,
 	}
 }

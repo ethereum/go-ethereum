@@ -1539,15 +1539,33 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		log.Crit("Failed to write block into disk", "err", err)
 	}
 	// Commit all cached state changes into underlying memory database.
-	root, err := statedb.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
+	update, err := statedb.CommitWithUpdate(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()), bc.chainConfig.IsCancun(block.Number(), block.Time()))
 	if err != nil {
 		return err
+	}
+	// Tracing the state changes if the logger is enabled.
+	if bc.logger != nil && bc.logger.OnStateCommit != nil {
+		sc := update.IntoChangeset()
+		bc.logger.OnStateCommit(&tracing.StateUpdate{
+			Number:       block.NumberU64(),
+			Hash:         block.Hash(),
+			Time:         block.Time(),
+			Accounts:     int64(sc.Accounts),
+			AccountSize:  int64(sc.AccountSize),
+			Storages:     int64(sc.Storages),
+			StorageSize:  int64(sc.StorageSize),
+			Trienodes:    int64(sc.Trienodes),
+			TrienodeSize: int64(sc.TrienodeSize),
+			Codes:        int64(sc.Codes),
+			CodeSize:     int64(sc.CodeSize),
+		})
 	}
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
 	if bc.triedb.Scheme() == rawdb.PathScheme {
 		return nil
 	}
+	root := update.Root
 	// If we're running an archive node, always flush
 	if bc.cacheConfig.TrieDirtyDisabled {
 		return bc.triedb.Commit(root, false)
