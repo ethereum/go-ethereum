@@ -1661,11 +1661,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.TransactionHistory = 0
 			log.Warn("Disabled transaction unindexing for archive node")
 		}
-
-		if cfg.StateScheme != rawdb.HashScheme {
-			cfg.StateScheme = rawdb.HashScheme
-			log.Warn("Forcing hash state-scheme for archive mode")
-		}
 	}
 	if ctx.IsSet(LogHistoryFlag.Name) {
 		cfg.LogHistory = ctx.Uint64(LogHistoryFlag.Name)
