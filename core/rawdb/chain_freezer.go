@@ -95,8 +95,8 @@ func (f *chainFreezer) readHeadNumber(db ethdb.KeyValueReader) uint64 {
 		log.Error("Head block is not reachable")
 		return 0
 	}
-	number := ReadHeaderNumber(db, hash)
-	if number == EmptyNumber {
+	number, ok := ReadHeaderNumber(db, hash)
+	if !ok {
 		log.Error("Number of head block is missing")
 		return 0
 	}
@@ -110,8 +110,8 @@ func (f *chainFreezer) readFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 	if hash == (common.Hash{}) {
 		return 0
 	}
-	number := ReadHeaderNumber(db, hash)
-	if number == EmptyNumber {
+	number, ok := ReadHeaderNumber(db, hash)
+	if !ok {
 		log.Error("Number of finalized block is missing")
 		return 0
 	}

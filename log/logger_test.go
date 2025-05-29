@@ -76,6 +76,18 @@ func BenchmarkTraceLogging(b *testing.B) {
 	}
 }
 
+func BenchmarkVmodule(b *testing.B) {
+	out := new(bytes.Buffer)
+	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false))
+	glog.Verbosity(LevelCrit)
+	logger := NewLogger(glog)
+	glog.Vmodule("logger_test.go=5")
+	for i := 0; i < b.N; i++ {
+		logger.Warn("This should not be seen", "ignored", "true")
+		logger.Trace("a message", "foo", "bar")
+	}
+}
+
 func BenchmarkTerminalHandler(b *testing.B) {
 	l := NewLogger(NewTerminalHandler(io.Discard, false))
 	benchmarkLogger(b, l)

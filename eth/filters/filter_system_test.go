@@ -92,15 +92,15 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 	switch blockNr {
 	case rpc.LatestBlockNumber:
 		hash = rawdb.ReadHeadBlockHash(b.db)
-		number := rawdb.ReadHeaderNumber(b.db, hash)
-		if number == rawdb.EmptyNumber {
+		number, ok := rawdb.ReadHeaderNumber(b.db, hash)
+		if !ok {
 			return nil, nil
 		}
 		num = number
 	case rpc.FinalizedBlockNumber:
 		hash = rawdb.ReadFinalizedBlockHash(b.db)
-		number := rawdb.ReadHeaderNumber(b.db, hash)
-		if number == rawdb.EmptyNumber {
+		number, ok := rawdb.ReadHeaderNumber(b.db, hash)
+		if !ok {
 			return nil, nil
 		}
 		num = number
@@ -114,8 +114,8 @@ func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumbe
 }
 
 func (b *testBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	number := rawdb.ReadHeaderNumber(b.db, hash)
-	if number == rawdb.EmptyNumber {
+	number, ok := rawdb.ReadHeaderNumber(b.db, hash)
+	if !ok {
 		return nil, nil
 	}
 	return rawdb.ReadHeader(b.db, hash, number), nil
@@ -129,7 +129,7 @@ func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.
 }
 
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
-	if number := rawdb.ReadHeaderNumber(b.db, hash); number != rawdb.EmptyNumber {
+	if number, ok := rawdb.ReadHeaderNumber(b.db, hash); ok {
 		if header := rawdb.ReadHeader(b.db, hash, number); header != nil {
 			return rawdb.ReadReceipts(b.db, hash, number, header.Time, params.TestChainConfig), nil
 		}

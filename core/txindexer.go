@@ -217,8 +217,8 @@ func (indexer *txIndexer) resolveHead() uint64 {
 	if headBlockHash == (common.Hash{}) {
 		return 0
 	}
-	headBlockNumber := rawdb.ReadHeaderNumber(indexer.db, headBlockHash)
-	if headBlockNumber == rawdb.EmptyNumber {
+	headBlockNumber, ok := rawdb.ReadHeaderNumber(indexer.db, headBlockHash)
+	if !ok {
 		return 0
 	}
 	return headBlockNumber
