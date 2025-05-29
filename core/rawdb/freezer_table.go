@@ -1106,12 +1106,6 @@ func (t *freezerTable) retrieveItems(start, count, maxBytes uint64) ([]byte, []i
 	return output, sizes, nil
 }
 
-// has returns an indicator whether the specified number data is still accessible
-// in the freezer table.
-func (t *freezerTable) has(number uint64) bool {
-	return t.items.Load() > number && t.itemHidden.Load() <= number
-}
-
 // size returns the total data size in the freezer table.
 func (t *freezerTable) size() (uint64, error) {
 	t.lock.RLock()

@@ -77,13 +77,6 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	}
 	for _, c := range cases {
 		for i := c.start; i < c.limit; i++ {
-			exist, err := db.HasAncient("a", uint64(i))
-			if err != nil {
-				t.Fatalf("Failed to check presence, %v", err)
-			}
-			if exist {
-				t.Fatalf("Item %d is already truncated", uint64(i))
-			}
 			_, err = db.Ancient("a", uint64(i))
 			if err == nil {
 				t.Fatal("Error is expected for non-existent item")
@@ -93,13 +86,6 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 
 	// Test the items in range should be reachable
 	for i := 10; i < 90; i++ {
-		exist, err := db.HasAncient("a", uint64(i))
-		if err != nil {
-			t.Fatalf("Failed to check presence, %v", err)
-		}
-		if !exist {
-			t.Fatalf("Item %d is missing", uint64(i))
-		}
 		blob, err := db.Ancient("a", uint64(i))
 		if err != nil {
 			t.Fatalf("Failed to retrieve item, %v", err)
@@ -110,13 +96,6 @@ func basicRead(t *testing.T, newFn func(kinds []string) ethdb.AncientStore) {
 	}
 
 	// Test the items in unknown table shouldn't be reachable
-	exist, err := db.HasAncient("b", uint64(0))
-	if err != nil {
-		t.Fatalf("Failed to check presence, %v", err)
-	}
-	if exist {
-		t.Fatal("Item in unknown table shouldn't be found")
-	}
 	_, err = db.Ancient("b", uint64(0))
 	if err == nil {
 		t.Fatal("Error is expected for unknown table")
