@@ -481,6 +481,10 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	if baseLen == 0 && modLen == 0 {
 		return []byte{}, nil
 	}
+	// enforce size cap for inputs
+	if c.eip7823 && max(max(baseLen, expLen), max(baseLen, modLen)) > 1024 {
+		return nil, fmt.Errorf("one or more of base/exponent/modulus length exceeded 1024 bytes")
+	}
 	// Retrieve the operands and execute the exponentiation
 	var (
 		base = new(big.Int).SetBytes(getData(input, 0, baseLen))
@@ -488,9 +492,6 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
 		v    []byte
 	)
-	if c.eip7823 && max(max(baseLen, expLen), modLen) > 1024 {
-		return nil, fmt.Errorf("one or more of base/exponent/modulus length exceeded 1024 bytes")
-	}
 	switch {
 	case mod.BitLen() == 0:
 		// Modulo 0 is undefined, return zero
