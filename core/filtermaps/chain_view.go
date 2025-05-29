@@ -175,7 +175,10 @@ func (cv *ChainView) extendNonCanonical() bool {
 		}
 		header := cv.chain.GetHeader(hash, number)
 		if header == nil {
-			log.Error("Header not found", "number", number, "hash", hash)
+			// Header not found - this can happen after debug_setHead operations
+			// where blocks have been deleted. Return false to indicate the chain view
+			// is no longer valid rather than logging repeated errors.
+			log.Debug("Header not found during chain view extension", "number", number, "hash", hash)
 			return false
 		}
 		cv.hashes = append(cv.hashes, header.ParentHash)
