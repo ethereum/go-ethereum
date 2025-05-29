@@ -179,13 +179,22 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 	if hash == "" {
 		return fmt.Errorf("no known hash for file %q", basename)
 	}
-	// Shortcut if already downloaded.
-	if verifyHash(dstPath, hash) == nil {
+
+	// Check if file exists and verify its hash
+	if err := verifyHash(dstPath, hash); err != nil {
+		// Check if the error is due to file not existing
+		if os.IsNotExist(err) {
+			fmt.Printf("%s not found, downloading...\n", dstPath)
+		} else {
+			// File exists but hash doesn't match
+			fmt.Printf("%s is stale (hash mismatch)\n", dstPath)
+		}
+	} else {
+		// File exists and hash matches
 		fmt.Printf("%s is up-to-date\n", dstPath)
 		return nil
 	}
 
-	fmt.Printf("%s is stale\n", dstPath)
 	fmt.Printf("downloading from %s\n", url)
 	resp, err := http.Get(url)
 	if err != nil {
