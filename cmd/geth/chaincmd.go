@@ -658,6 +658,24 @@ func hashish(x string) bool {
 	return err != nil
 }
 
+// calculateDirectorySize calculates the total size of all files in a directory
+// It skips subdirectories that are not relevant to reduce calculation time
+func calculateDirectorySize(dirPath string) (int64, error) {
+	var size int64
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			// Skip files that can't be accessed instead of failing
+			log.Debug("Skipping inaccessible file during size calculation", "path", path, "err", err)
+			return nil
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size, err
+}
+
 func pruneHistory(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -693,13 +711,38 @@ func pruneHistory(ctx *cli.Context) error {
 		return fmt.Errorf("merge block hash mismatch: got %s, want %s", hash.Hex(), mergeBlockHash)
 	}
 
+	// Calculate disk usage before pruning
+	dataDir := stack.ResolvePath("chaindata")
+	log.Info("Calculating disk usage before pruning", "datadir", dataDir)
+	sizeBefore, err := calculateDirectorySize(dataDir)
+	if err != nil {
+		log.Warn("Failed to calculate disk usage before pruning", "err", err)
+		sizeBefore = 0
+	} else {
+		log.Debug("Disk usage before pruning", "size", common.StorageSize(sizeBefore))
+	}
+
 	log.Info("Starting history pruning", "head", currentHeader.Number, "tail", mergeBlock, "tailHash", mergeBlockHash)
 	start := time.Now()
 	rawdb.PruneTransactionIndex(chaindb, mergeBlock)
 	if _, err := chaindb.TruncateTail(mergeBlock); err != nil {
 		return fmt.Errorf("failed to truncate ancient data: %v", err)
 	}
-	log.Info("History pruning completed", "tail", mergeBlock, "elapsed", common.PrettyDuration(time.Since(start)))
+
+	// Calculate disk usage after pruning
+	sizeAfter, err := calculateDirectorySize(dataDir)
+	if err != nil {
+		log.Warn("Failed to calculate disk usage after pruning", "err", err)
+		sizeAfter = sizeBefore // fallback to avoid negative values
+	}
+
+	// Calculate cleared space
+	var cleared common.StorageSize
+	if sizeBefore > sizeAfter {
+		cleared = common.StorageSize(sizeBefore - sizeAfter)
+	}
+
+	log.Info("History pruning completed", "tail", mergeBlock, "elapsed", common.PrettyDuration(time.Since(start)), "cleared", cleared)
 
 	// TODO(s1na): what if there is a crash between the two prune operations?
 
