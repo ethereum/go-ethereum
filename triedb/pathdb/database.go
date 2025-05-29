@@ -114,11 +114,12 @@ type layer interface {
 
 // Config contains the settings for database.
 type Config struct {
-	StateHistory    uint64 // Number of recent blocks to maintain state history for
-	TrieCleanSize   int    // Maximum memory allowance (in bytes) for caching clean trie nodes
-	StateCleanSize  int    // Maximum memory allowance (in bytes) for caching clean state data
-	WriteBufferSize int    // Maximum memory allowance (in bytes) for write buffer
-	ReadOnly        bool   // Flag whether the database is opened in read only mode
+	StateHistory        uint64 // Number of recent blocks to maintain state history for
+	EnableStateIndexing bool   // Whether to enable state history indexing for external state access
+	TrieCleanSize       int    // Maximum memory allowance (in bytes) for caching clean trie nodes
+	StateCleanSize      int    // Maximum memory allowance (in bytes) for caching clean state data
+	WriteBufferSize     int    // Maximum memory allowance (in bytes) for write buffer
+	ReadOnly            bool   // Flag whether the database is opened in read only mode
 
 	// Testing configurations
 	SnapshotNoBuild   bool // Flag Whether the state generation is allowed
@@ -149,7 +150,12 @@ func (c *Config) fields() []interface{} {
 	list = append(list, "triecache", common.StorageSize(c.TrieCleanSize))
 	list = append(list, "statecache", common.StorageSize(c.StateCleanSize))
 	list = append(list, "buffer", common.StorageSize(c.WriteBufferSize))
-	list = append(list, "history", c.StateHistory)
+
+	if c.StateHistory == 0 {
+		list = append(list, "history", "entire chain")
+	} else {
+		list = append(list, "history", fmt.Sprintf("last %d blocks", c.StateHistory))
+	}
 	return list
 }
 
@@ -264,8 +270,9 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 		log.Crit("Failed to setup the generator", "err", err)
 	}
 	// TODO (rjl493456442) disable the background indexing in read-only mode
-	if db.freezer != nil {
+	if db.freezer != nil && db.config.EnableStateIndexing {
 		db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID())
+		log.Info("Enabled state history indexing")
 	}
 	fields := config.fields()
 	if db.isVerkle {
