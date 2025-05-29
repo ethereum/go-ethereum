@@ -1,4 +1,4 @@
-name: Triggers on merge with specified lable
+name: docker build on merge
 
 on:
     pull_request:
@@ -13,5 +13,20 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'CI:Build')
     runs-on: ubuntu-latest
     steps:
-      - name: Do something
-        run: echo "PR was merged and has label CI:Build"
+      # Pull the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Install Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build (and optionally push) the image
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile          # Path to the Dockerfile if not root
+          platforms: linux/amd64      # Add ,linux/arm64 if you need multi-arch
+          push: true                  # Change to false to keep image local to runner
+          tags: go-etherium-satan:latest        
