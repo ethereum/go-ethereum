@@ -194,17 +194,19 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
 		}
-		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:      config.TrieCleanCache,
-			TrieCleanNoPrefetch: config.NoPrefetch,
-			TrieDirtyLimit:      config.TrieDirtyCache,
-			TrieDirtyDisabled:   config.NoPruning,
-			TrieTimeLimit:       config.TrieTimeout,
-			SnapshotLimit:       config.SnapshotCache,
-			Preimages:           config.Preimages,
-			StateHistory:        config.StateHistory,
-			StateScheme:         scheme,
-			ChainHistoryMode:    config.HistoryMode,
+		options = &core.BlockchainOptions{
+			TrieCleanLimit:   config.TrieCleanCache,
+			NoPrefetch:       config.NoPrefetch,
+			TrieDirtyLimit:   config.TrieDirtyCache,
+			ArchiveMode:      config.NoPruning,
+			TrieTimeLimit:    config.TrieTimeout,
+			SnapshotLimit:    config.SnapshotCache,
+			Preimages:        config.Preimages,
+			StateHistory:     config.StateHistory,
+			StateScheme:      scheme,
+			ChainHistoryMode: config.HistoryMode,
+			VmConfig:         vmConfig,
+			TxLookupLimit:    &config.TransactionHistory,
 		}
 	)
 	if config.VMTrace != "" {
@@ -226,7 +228,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if config.OverrideVerkle != nil {
 		overrides.OverrideVerkle = config.OverrideVerkle
 	}
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, &config.TransactionHistory)
+	options.Overrides = &overrides
+
+	eth.blockchain, err = core.NewBlockChain(options, chainDb, config.Genesis, eth.engine)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +278,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	// Permit the downloader to use the trie cache allowance during fast sync
-	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
+	cacheLimit := options.TrieCleanLimit + options.TrieDirtyLimit + options.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
 		NodeID:         eth.p2pServer.Self().ID(),
 		Database:       chainDb,
