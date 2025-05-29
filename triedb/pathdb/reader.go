@@ -210,8 +210,19 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	if db.indexer == nil || !db.indexer.inited() {
 		return nil, errors.New("state histories haven't been fully indexed yet")
 	}
-	// States older than current disk layer (disk layer is included) are available
-	// for accessing.
+	if db.freezer == nil {
+		return nil, errors.New("state histories are not available")
+	}
+	// States at the current disk layer or above are directly accessible via
+	// db.StateReader.
+	//
+	// States older than the current disk layer (including the disk layer
+	// itself) are available through historic state access.
+	//
+	// Note: the requested state may refer to a stale historic state that has
+	// already been pruned. This function does not validate availability, as
+	// underlying states may be pruned dynamically. Validity is checked during
+	// each actual state retrieval.
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
 		return nil, fmt.Errorf("state %#x is not available", root)
