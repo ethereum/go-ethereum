@@ -1,4 +1,4 @@
-name: docker build on merge
+name: docker build on merge (arm64)
 
 on:
     pull_request:
