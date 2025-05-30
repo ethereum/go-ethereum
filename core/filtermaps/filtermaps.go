@@ -578,9 +578,9 @@ func (f *FilterMaps) getFilterMapRows(mapIndices []uint32, rowIndex uint32, base
 	rows := make([]FilterRow, len(mapIndices))
 	var ptr int
 	for len(mapIndices) > ptr {
-		baseMapIndex := mapIndices[ptr] & -f.baseRowGroupLength
+		baseRowGroup := mapIndices[ptr] / f.baseRowGroupLength
 		groupLength := 1
-		for ptr+groupLength < len(mapIndices) && mapIndices[ptr+groupLength]&-f.baseRowGroupLength == baseMapIndex {
+		for ptr+groupLength < len(mapIndices) && mapIndices[ptr+groupLength]/f.baseRowGroupLength == baseRowGroup {
 			groupLength++
 		}
 		if err := f.getFilterMapRowsOfGroup(rows[ptr:ptr+groupLength], mapIndices[ptr:ptr+groupLength], rowIndex, baseLayerOnly); err != nil {
@@ -594,14 +594,14 @@ func (f *FilterMaps) getFilterMapRows(mapIndices []uint32, rowIndex uint32, base
 // getFilterMapRowsOfGroup fetches a set of filter map rows at map indices
 // belonging to the same base row group.
 func (f *FilterMaps) getFilterMapRowsOfGroup(target []FilterRow, mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) error {
-	baseMapIndex := mapIndices[0] & -f.baseRowGroupLength
-	baseMapRowIndex := f.mapRowIndex(baseMapIndex, rowIndex)
+	baseRowGroup := mapIndices[0] / f.baseRowGroupLength
+	baseMapRowIndex := f.mapRowIndex(baseRowGroup*f.baseRowGroupLength, rowIndex)
 	baseRows, err := rawdb.ReadFilterMapBaseRows(f.db, baseMapRowIndex, f.baseRowGroupLength, f.logMapWidth)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve filter map %d base rows %d: %v", baseMapIndex, rowIndex, err)
+		return fmt.Errorf("failed to retrieve base row group %d of row %d: %v", baseRowGroup, rowIndex, err)
 	}
 	for i, mapIndex := range mapIndices {
-		if mapIndex&-f.baseRowGroupLength != baseMapIndex {
+		if mapIndex/f.baseRowGroupLength != baseRowGroup {
 			panic("mapIndices are not in the same base row group")
 		}
 		row := baseRows[mapIndex&(f.baseRowGroupLength-1)]
@@ -621,9 +621,9 @@ func (f *FilterMaps) getFilterMapRowsOfGroup(target []FilterRow, mapIndices []ui
 // indices and a shared row index.
 func (f *FilterMaps) storeFilterMapRows(batch ethdb.Batch, mapIndices []uint32, rowIndex uint32, rows []FilterRow) error {
 	for len(mapIndices) > 0 {
-		baseMapIndex := mapIndices[0] & -f.baseRowGroupLength
+		baseRowGroup := mapIndices[0] / f.baseRowGroupLength
 		groupLength := 1
-		for groupLength < len(mapIndices) && mapIndices[groupLength]&-f.baseRowGroupLength == baseMapIndex {
+		for groupLength < len(mapIndices) && mapIndices[groupLength]/f.baseRowGroupLength == baseRowGroup {
 			groupLength++
 		}
 		if err := f.storeFilterMapRowsOfGroup(batch, mapIndices[:groupLength], rowIndex, rows[:groupLength]); err != nil {
@@ -637,20 +637,20 @@ func (f *FilterMaps) storeFilterMapRows(batch ethdb.Batch, mapIndices []uint32, 
 // storeFilterMapRowsOfGroup stores a set of filter map rows at map indices
 // belonging to the same base row group.
 func (f *FilterMaps) storeFilterMapRowsOfGroup(batch ethdb.Batch, mapIndices []uint32, rowIndex uint32, rows []FilterRow) error {
-	baseMapIndex := mapIndices[0] & -f.baseRowGroupLength
-	baseMapRowIndex := f.mapRowIndex(baseMapIndex, rowIndex)
+	baseRowGroup := mapIndices[0] / f.baseRowGroupLength
+	baseMapRowIndex := f.mapRowIndex(baseRowGroup*f.baseRowGroupLength, rowIndex)
 	var baseRows [][]uint32
 	if uint32(len(mapIndices)) != f.baseRowGroupLength { // skip base rows read if all rows are replaced
 		var err error
 		baseRows, err = rawdb.ReadFilterMapBaseRows(f.db, baseMapRowIndex, f.baseRowGroupLength, f.logMapWidth)
 		if err != nil {
-			return fmt.Errorf("failed to retrieve filter map %d base rows %d for modification: %v", baseMapIndex, rowIndex, err)
+			return fmt.Errorf("failed to retrieve base row group %d of row %d for modification: %v", baseRowGroup, rowIndex, err)
 		}
 	} else {
 		baseRows = make([][]uint32, f.baseRowGroupLength)
 	}
 	for i, mapIndex := range mapIndices {
-		if mapIndex&-f.baseRowGroupLength != baseMapIndex {
+		if mapIndex/f.baseRowGroupLength != baseRowGroup {
 			panic("mapIndices are not in the same base row group")
 		}
 		baseRow := []uint32(rows[i])
