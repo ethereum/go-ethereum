@@ -37,7 +37,7 @@ func randFieldElement() [32]byte {
 }
 
 func randBlob() *Blob {
-	var blob Blob
+	blob := NewBlob()
 	for i := 0; i < len(blob); i += gokzg4844.SerializedScalarSize {
 		fieldElementBytes := randFieldElement()
 		copy(blob[i:i+gokzg4844.SerializedScalarSize], fieldElementBytes[:])

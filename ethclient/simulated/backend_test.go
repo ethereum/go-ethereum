@@ -55,9 +55,9 @@ func simTestBackend(testAddr common.Address) *Backend {
 func newBlobTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 	client := sim.Client()
 
-	testBlob := &kzg4844.Blob{0x00}
-	testBlobCommit, _ := kzg4844.BlobToCommitment(testBlob)
-	testBlobProof, _ := kzg4844.ComputeBlobProof(testBlob, testBlobCommit)
+	testBlob := kzg4844.NewBlob()
+	testBlobCommit, _ := kzg4844.BlobToCommitment(&testBlob)
+	testBlobProof, _ := kzg4844.ComputeBlobProof(&testBlob, testBlobCommit)
 	testBlobVHash := kzg4844.CalcBlobHashV1(sha256.New(), &testBlobCommit)
 
 	head, _ := client.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
@@ -84,7 +84,7 @@ func newBlobTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) 
 		AccessList: nil,
 		BlobHashes: []common.Hash{testBlobVHash},
 		Sidecar: &types.BlobTxSidecar{
-			Blobs:       []kzg4844.Blob{*testBlob},
+			Blobs:       []kzg4844.Blob{testBlob},
 			Commitments: []kzg4844.Commitment{testBlobCommit},
 			Proofs:      []kzg4844.Proof{testBlobProof},
 		},

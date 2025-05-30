@@ -140,7 +140,7 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 		signer = types.LatestSigner(gspec.Config)
 
 		// Compute empty blob hash.
-		emptyBlob          = kzg4844.Blob{}
+		emptyBlob          = kzg4844.NewBlob()
 		emptyBlobCommit, _ = kzg4844.BlobToCommitment(&emptyBlob)
 		emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 	)

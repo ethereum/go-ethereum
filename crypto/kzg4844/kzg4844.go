@@ -36,12 +36,23 @@ var (
 	proofT      = reflect.TypeOf(Proof{})
 )
 
+// BlobSize is the expected size of a blob
+const BlobSize = 131072
+
 // Blob represents a 4844 data blob.
-type Blob [131072]byte
+type Blob []byte
+
+// NewBlob creates a new blob object on the heap
+func NewBlob() Blob {
+	return make([]byte, BlobSize)
+}
 
 // UnmarshalJSON parses a blob in hex syntax.
 func (b *Blob) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalFixedJSON(blobT, input, b[:])
+	if len(*b) != BlobSize {
+		*b = NewBlob()
+	}
+	return hexutil.UnmarshalFixedJSON(blobT, input, (*b)[:])
 }
 
 // MarshalText returns the hex representation of b.
