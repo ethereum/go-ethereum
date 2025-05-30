@@ -11,8 +11,7 @@ func getOrRegisterRuntimeHistogram(name string, scale float64, r Registry) *runt
 	if r == nil {
 		r = DefaultRegistry
 	}
-	constructor := func() Histogram { return newRuntimeHistogram(scale) }
-	return r.GetOrRegister(name, constructor).(*runtimeHistogram)
+	return r.GetOrRegister(name, newRuntimeHistogram(scale)).(*runtimeHistogram)
 }
 
 // runtimeHistogram wraps a runtime/metrics histogram.

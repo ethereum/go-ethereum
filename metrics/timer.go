@@ -13,7 +13,7 @@ func GetOrRegisterTimer(name string, r Registry) *Timer {
 	if nil == r {
 		r = DefaultRegistry
 	}
-	return r.GetOrRegister(name, NewTimer).(*Timer)
+	return r.GetOrRegister(name, NewTimer()).(*Timer)
 }
 
 // NewCustomTimer constructs a new Timer from a Histogram and a Meter.

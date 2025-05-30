@@ -26,7 +26,7 @@ func GetOrRegisterHistogram(name string, r Registry, s Sample) Histogram {
 	if nil == r {
 		r = DefaultRegistry
 	}
-	return r.GetOrRegister(name, func() Histogram { return NewHistogram(s) }).(Histogram)
+	return r.GetOrRegister(name, NewHistogram(s)).(Histogram)
 }
 
 // GetOrRegisterHistogramLazy returns an existing Histogram or constructs and
@@ -35,7 +35,7 @@ func GetOrRegisterHistogramLazy(name string, r Registry, s func() Sample) Histog
 	if nil == r {
 		r = DefaultRegistry
 	}
-	return r.GetOrRegister(name, func() Histogram { return NewHistogram(s()) }).(Histogram)
+	return r.GetOrRegister(name, NewHistogram(s())).(Histogram)
 }
 
 // NewHistogram constructs a new StandardHistogram from a Sample.
