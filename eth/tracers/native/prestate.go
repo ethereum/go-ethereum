@@ -75,6 +75,7 @@ type prestateTracerConfig struct {
 	DiffMode       bool `json:"diffMode"`       // If true, this tracer will return state modifications
 	DisableCode    bool `json:"disableCode"`    // If true, this tracer will not return the contract code
 	DisableStorage bool `json:"disableStorage"` // If true, this tracer will not return the contract storage
+	EnableEmpty    bool `json:"enableEmpty"`    // If true, this tracer will return empty state objects
 }
 
 func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
@@ -180,7 +181,7 @@ func (t *prestateTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	// the new created contracts' prestate were empty, so delete them
 	for a := range t.created {
 		// the created contract maybe exists in statedb before the creating tx
-		if s := t.pre[a]; s != nil && s.empty {
+		if s := t.pre[a]; s != nil && s.empty && !t.config.EnableEmpty {
 			delete(t.pre, a)
 		}
 	}
