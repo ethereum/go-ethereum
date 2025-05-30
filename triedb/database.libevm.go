@@ -51,6 +51,11 @@ type DBOverride interface {
 	ReaderProvider
 }
 
+// Backend returns the underlying backend of the trie database.
+func (db *Database) Backend() BackendDB {
+	return db.backend
+}
+
 func (db *Database) overrideBackend(diskdb ethdb.Database, config *Config) bool {
 	if config.DBOverride == nil {
 		return false
