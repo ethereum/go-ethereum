@@ -51,7 +51,8 @@ func (c *InputChecker) Instance(backend bind.ContractBackend, addr common.Addres
 }
 
 // PackAnonInput is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x3e708e82.
+// the contract method with ID 0x3e708e82.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function anonInput(string ) returns()
 func (inputChecker *InputChecker) PackAnonInput(arg0 string) []byte {
@@ -62,8 +63,18 @@ func (inputChecker *InputChecker) PackAnonInput(arg0 string) []byte {
 	return enc
 }
 
+// TryPackAnonInput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x3e708e82.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function anonInput(string ) returns()
+func (inputChecker *InputChecker) TryPackAnonInput(arg0 string) ([]byte, error) {
+	return inputChecker.abi.Pack("anonInput", arg0)
+}
+
 // PackAnonInputs is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x28160527.
+// the contract method with ID 0x28160527.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function anonInputs(string , string ) returns()
 func (inputChecker *InputChecker) PackAnonInputs(arg0 string, arg1 string) []byte {
@@ -74,8 +85,18 @@ func (inputChecker *InputChecker) PackAnonInputs(arg0 string, arg1 string) []byt
 	return enc
 }
 
+// TryPackAnonInputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x28160527.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function anonInputs(string , string ) returns()
+func (inputChecker *InputChecker) TryPackAnonInputs(arg0 string, arg1 string) ([]byte, error) {
+	return inputChecker.abi.Pack("anonInputs", arg0, arg1)
+}
+
 // PackMixedInputs is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0xc689ebdc.
+// the contract method with ID 0xc689ebdc.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function mixedInputs(string , string str) returns()
 func (inputChecker *InputChecker) PackMixedInputs(arg0 string, str string) []byte {
@@ -86,8 +107,18 @@ func (inputChecker *InputChecker) PackMixedInputs(arg0 string, str string) []byt
 	return enc
 }
 
+// TryPackMixedInputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0xc689ebdc.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function mixedInputs(string , string str) returns()
+func (inputChecker *InputChecker) TryPackMixedInputs(arg0 string, str string) ([]byte, error) {
+	return inputChecker.abi.Pack("mixedInputs", arg0, str)
+}
+
 // PackNamedInput is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x0d402005.
+// the contract method with ID 0x0d402005.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function namedInput(string str) returns()
 func (inputChecker *InputChecker) PackNamedInput(str string) []byte {
@@ -98,8 +129,18 @@ func (inputChecker *InputChecker) PackNamedInput(str string) []byte {
 	return enc
 }
 
+// TryPackNamedInput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x0d402005.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function namedInput(string str) returns()
+func (inputChecker *InputChecker) TryPackNamedInput(str string) ([]byte, error) {
+	return inputChecker.abi.Pack("namedInput", str)
+}
+
 // PackNamedInputs is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x63c796ed.
+// the contract method with ID 0x63c796ed.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function namedInputs(string str1, string str2) returns()
 func (inputChecker *InputChecker) PackNamedInputs(str1 string, str2 string) []byte {
@@ -110,8 +151,18 @@ func (inputChecker *InputChecker) PackNamedInputs(str1 string, str2 string) []by
 	return enc
 }
 
+// TryPackNamedInputs is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x63c796ed.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function namedInputs(string str1, string str2) returns()
+func (inputChecker *InputChecker) TryPackNamedInputs(str1 string, str2 string) ([]byte, error) {
+	return inputChecker.abi.Pack("namedInputs", str1, str2)
+}
+
 // PackNoInput is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x53539029.
+// the contract method with ID 0x53539029.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function noInput() returns()
 func (inputChecker *InputChecker) PackNoInput() []byte {
@@ -120,4 +171,13 @@ func (inputChecker *InputChecker) PackNoInput() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackNoInput is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x53539029.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function noInput() returns()
+func (inputChecker *InputChecker) TryPackNoInput() ([]byte, error) {
+	return inputChecker.abi.Pack("noInput")
 }
