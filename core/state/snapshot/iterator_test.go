@@ -27,6 +27,7 @@ import (
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 )
 
 // TestAccountIteratorBasics tests some simple single-layer(diff and disk) iteration
@@ -179,7 +180,7 @@ const (
 	verifyStorage
 )
 
-func verifyIterator(t *testing.T, expCount int, it Iterator, verify verifyContent) {
+func verifyIterator(t *testing.T, expCount int, it state.Iterator, verify verifyContent) {
 	t.Helper()
 
 	var (
@@ -192,9 +193,9 @@ func verifyIterator(t *testing.T, expCount int, it Iterator, verify verifyConten
 			t.Errorf("wrong order: %x >= %x", last, hash)
 		}
 		count++
-		if verify == verifyAccount && len(it.(AccountIterator).Account()) == 0 {
+		if verify == verifyAccount && len(it.(state.AccountIterator).Account()) == 0 {
 			t.Errorf("iterator returned nil-value for hash %x", hash)
-		} else if verify == verifyStorage && len(it.(StorageIterator).Slot()) == 0 {
+		} else if verify == verifyStorage && len(it.(state.StorageIterator).Slot()) == 0 {
 			t.Errorf("iterator returned nil-value for hash %x", hash)
 		}
 		last = hash
@@ -555,19 +556,19 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 // - continues iterating
 func TestAccountIteratorFlattening(t *testing.T) {
 	t.Run("fast", func(t *testing.T) {
-		testAccountIteratorFlattening(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
+		testAccountIteratorFlattening(t, func(snaps *Tree, root, seek common.Hash) state.AccountIterator {
 			it, _ := snaps.AccountIterator(root, seek)
 			return it
 		})
 	})
 	t.Run("binary", func(t *testing.T) {
-		testAccountIteratorFlattening(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
+		testAccountIteratorFlattening(t, func(snaps *Tree, root, seek common.Hash) state.AccountIterator {
 			return snaps.layers[root].(*diffLayer).newBinaryAccountIterator(seek)
 		})
 	})
 }
 
-func testAccountIteratorFlattening(t *testing.T, newIterator func(snaps *Tree, root, seek common.Hash) AccountIterator) {
+func testAccountIteratorFlattening(t *testing.T, newIterator func(snaps *Tree, root, seek common.Hash) state.AccountIterator) {
 	// Create an empty base layer and a snapshot tree out of it
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
@@ -601,20 +602,20 @@ func testAccountIteratorFlattening(t *testing.T, newIterator func(snaps *Tree, r
 
 func TestAccountIteratorSeek(t *testing.T) {
 	t.Run("fast", func(t *testing.T) {
-		testAccountIteratorSeek(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
+		testAccountIteratorSeek(t, func(snaps *Tree, root, seek common.Hash) state.AccountIterator {
 			it, _ := snaps.AccountIterator(root, seek)
 			return it
 		})
 	})
 	t.Run("binary", func(t *testing.T) {
-		testAccountIteratorSeek(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
+		testAccountIteratorSeek(t, func(snaps *Tree, root, seek common.Hash) state.AccountIterator {
 			it := snaps.layers[root].(*diffLayer).newBinaryAccountIterator(seek)
 			return it
 		})
 	})
 }
 
-func testAccountIteratorSeek(t *testing.T, newIterator func(snaps *Tree, root, seek common.Hash) AccountIterator) {
+func testAccountIteratorSeek(t *testing.T, newIterator func(snaps *Tree, root, seek common.Hash) state.AccountIterator) {
 	// Create a snapshot stack with some initial data
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
@@ -679,19 +680,19 @@ func testAccountIteratorSeek(t *testing.T, newIterator func(snaps *Tree, root, s
 
 func TestStorageIteratorSeek(t *testing.T) {
 	t.Run("fast", func(t *testing.T) {
-		testStorageIteratorSeek(t, func(snaps *Tree, root, account, seek common.Hash) StorageIterator {
+		testStorageIteratorSeek(t, func(snaps *Tree, root, account, seek common.Hash) state.StorageIterator {
 			it, _ := snaps.StorageIterator(root, account, seek)
 			return it
 		})
 	})
 	t.Run("binary", func(t *testing.T) {
-		testStorageIteratorSeek(t, func(snaps *Tree, root, account, seek common.Hash) StorageIterator {
+		testStorageIteratorSeek(t, func(snaps *Tree, root, account, seek common.Hash) state.StorageIterator {
 			return snaps.layers[root].(*diffLayer).newBinaryStorageIterator(account, seek)
 		})
 	})
 }
 
-func testStorageIteratorSeek(t *testing.T, newIterator func(snaps *Tree, root, account, seek common.Hash) StorageIterator) {
+func testStorageIteratorSeek(t *testing.T, newIterator func(snaps *Tree, root, account, seek common.Hash) state.StorageIterator) {
 	// Create a snapshot stack with some initial data
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
@@ -756,19 +757,19 @@ func testStorageIteratorSeek(t *testing.T, newIterator func(snaps *Tree, root, a
 // should not output any accounts or nil-values for those cases.
 func TestAccountIteratorDeletions(t *testing.T) {
 	t.Run("fast", func(t *testing.T) {
-		testAccountIteratorDeletions(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
+		testAccountIteratorDeletions(t, func(snaps *Tree, root, seek common.Hash) state.AccountIterator {
 			it, _ := snaps.AccountIterator(root, seek)
 			return it
 		})
 	})
 	t.Run("binary", func(t *testing.T) {
-		testAccountIteratorDeletions(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
+		testAccountIteratorDeletions(t, func(snaps *Tree, root, seek common.Hash) state.AccountIterator {
 			return snaps.layers[root].(*diffLayer).newBinaryAccountIterator(seek)
 		})
 	})
 }
 
-func testAccountIteratorDeletions(t *testing.T, newIterator func(snaps *Tree, root, seek common.Hash) AccountIterator) {
+func testAccountIteratorDeletions(t *testing.T, newIterator func(snaps *Tree, root, seek common.Hash) state.AccountIterator) {
 	// Create an empty base layer and a snapshot tree out of it
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),
@@ -812,19 +813,19 @@ func testAccountIteratorDeletions(t *testing.T, newIterator func(snaps *Tree, ro
 
 func TestStorageIteratorDeletions(t *testing.T) {
 	t.Run("fast", func(t *testing.T) {
-		testStorageIteratorDeletions(t, func(snaps *Tree, root, account, seek common.Hash) StorageIterator {
+		testStorageIteratorDeletions(t, func(snaps *Tree, root, account, seek common.Hash) state.StorageIterator {
 			it, _ := snaps.StorageIterator(root, account, seek)
 			return it
 		})
 	})
 	t.Run("binary", func(t *testing.T) {
-		testStorageIteratorDeletions(t, func(snaps *Tree, root, account, seek common.Hash) StorageIterator {
+		testStorageIteratorDeletions(t, func(snaps *Tree, root, account, seek common.Hash) state.StorageIterator {
 			return snaps.layers[root].(*diffLayer).newBinaryStorageIterator(account, seek)
 		})
 	})
 }
 
-func testStorageIteratorDeletions(t *testing.T, newIterator func(snaps *Tree, root, account, seek common.Hash) StorageIterator) {
+func testStorageIteratorDeletions(t *testing.T, newIterator func(snaps *Tree, root, account, seek common.Hash) state.StorageIterator) {
 	// Create an empty base layer and a snapshot tree out of it
 	base := &diskLayer{
 		diskdb: rawdb.NewMemoryDatabase(),

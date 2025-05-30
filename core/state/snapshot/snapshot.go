@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -96,28 +96,10 @@ var (
 	errSnapshotCycle = errors.New("snapshot cycle")
 )
 
-// Snapshot represents the functionality supported by a snapshot storage layer.
-type Snapshot interface {
-	// Root returns the root hash for which this snapshot was made.
-	Root() common.Hash
-
-	// Account directly retrieves the account associated with a particular hash in
-	// the snapshot slim data format.
-	Account(hash common.Hash) (*types.SlimAccount, error)
-
-	// AccountRLP directly retrieves the account RLP associated with a particular
-	// hash in the snapshot slim data format.
-	AccountRLP(hash common.Hash) ([]byte, error)
-
-	// Storage directly retrieves the storage data associated with a particular hash,
-	// within a particular account.
-	Storage(accountHash, storageHash common.Hash) ([]byte, error)
-}
-
 // snapshot is the internal version of the snapshot data layer that supports some
 // additional methods compared to the public API.
 type snapshot interface {
-	Snapshot
+	state.Snapshot
 
 	// Parent returns the subsequent layer of a snapshot, or nil if the base was
 	// reached.
@@ -142,10 +124,10 @@ type snapshot interface {
 	Stale() bool
 
 	// AccountIterator creates an account iterator over an arbitrary layer.
-	AccountIterator(seek common.Hash) AccountIterator
+	AccountIterator(seek common.Hash) state.AccountIterator
 
 	// StorageIterator creates a storage iterator over an arbitrary layer.
-	StorageIterator(account common.Hash, seek common.Hash) StorageIterator
+	StorageIterator(account common.Hash, seek common.Hash) state.StorageIterator
 }
 
 // Config includes the configurations for snapshots.
@@ -293,7 +275,7 @@ func (t *Tree) Disable() {
 
 // Snapshot retrieves a snapshot belonging to the given block root, or nil if no
 // snapshot is maintained for that block.
-func (t *Tree) Snapshot(blockRoot common.Hash) Snapshot {
+func (t *Tree) Snapshot(blockRoot common.Hash) state.Snapshot {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -303,7 +285,7 @@ func (t *Tree) Snapshot(blockRoot common.Hash) Snapshot {
 // Snapshots returns all visited layers from the topmost layer with specific
 // root and traverses downward. The layer amount is limited by the given number.
 // If nodisk is set, then disk layer is excluded.
-func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
+func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []state.Snapshot {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -314,7 +296,7 @@ func (t *Tree) Snapshots(root common.Hash, limits int, nodisk bool) []Snapshot {
 	if layer == nil {
 		return nil
 	}
-	var ret []Snapshot
+	var ret []state.Snapshot
 	for {
 		if _, isdisk := layer.(*diskLayer); isdisk && nodisk {
 			break
@@ -728,7 +710,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 
 // AccountIterator creates a new account iterator for the specified root hash and
 // seeks to a starting account hash.
-func (t *Tree) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
+func (t *Tree) AccountIterator(root common.Hash, seek common.Hash) (state.AccountIterator, error) {
 	ok, err := t.generating()
 	if err != nil {
 		return nil, err
@@ -741,7 +723,7 @@ func (t *Tree) AccountIterator(root common.Hash, seek common.Hash) (AccountItera
 
 // StorageIterator creates a new storage iterator for the specified root hash and
 // account. The iterator will be move to the specific start position.
-func (t *Tree) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+func (t *Tree) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (state.StorageIterator, error) {
 	ok, err := t.generating()
 	if err != nil {
 		return nil, err

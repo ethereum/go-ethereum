@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -61,7 +60,7 @@ type Database interface {
 	TrieDB() *triedb.Database
 
 	// Snapshot returns the underlying state snapshot.
-	Snapshot() *snapshot.Tree
+	Snapshot() SnapshotTree
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -147,14 +146,14 @@ type Trie interface {
 type CachingDB struct {
 	disk          ethdb.KeyValueStore
 	triedb        *triedb.Database
-	snap          *snapshot.Tree
+	snap          SnapshotTree
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	codeSizeCache *lru.Cache[common.Hash, int]
 	pointCache    *utils.PointCache
 }
 
 // NewDatabase creates a state database with the provided data sources.
-func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
+func NewDatabase(triedb *triedb.Database, snap SnapshotTree) *CachingDB {
 	return &CachingDB{
 		disk:          triedb.Disk(),
 		triedb:        triedb,
@@ -272,7 +271,7 @@ func (db *CachingDB) PointCache() *utils.PointCache {
 }
 
 // Snapshot returns the underlying state snapshot.
-func (db *CachingDB) Snapshot() *snapshot.Tree {
+func (db *CachingDB) Snapshot() SnapshotTree {
 	return db.snap
 }
 

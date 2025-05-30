@@ -24,13 +24,14 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 )
 
 // weightedIterator is an iterator with an assigned weight. It is used to prioritise
 // which account or storage slot is the correct one if multiple iterators find the
 // same one (modified in multiple consecutive blocks).
 type weightedIterator struct {
-	it       Iterator
+	it       state.Iterator
 	priority int
 }
 
@@ -162,9 +163,9 @@ func (fi *fastIterator) Next() bool {
 		// do the sorting already
 		fi.initiated = true
 		if fi.account {
-			fi.curAccount = fi.iterators[0].it.(AccountIterator).Account()
+			fi.curAccount = fi.iterators[0].it.(state.AccountIterator).Account()
 		} else {
-			fi.curSlot = fi.iterators[0].it.(StorageIterator).Slot()
+			fi.curSlot = fi.iterators[0].it.(state.StorageIterator).Slot()
 		}
 		if innerErr := fi.iterators[0].it.Error(); innerErr != nil {
 			fi.fail = innerErr
@@ -188,9 +189,9 @@ func (fi *fastIterator) Next() bool {
 			return false // exhausted
 		}
 		if fi.account {
-			fi.curAccount = fi.iterators[0].it.(AccountIterator).Account()
+			fi.curAccount = fi.iterators[0].it.(state.AccountIterator).Account()
 		} else {
-			fi.curSlot = fi.iterators[0].it.(StorageIterator).Slot()
+			fi.curSlot = fi.iterators[0].it.(state.StorageIterator).Slot()
 		}
 		if innerErr := fi.iterators[0].it.Error(); innerErr != nil {
 			fi.fail = innerErr
@@ -319,13 +320,13 @@ func (fi *fastIterator) Debug() {
 // newFastAccountIterator creates a new hierarchical account iterator with one
 // element per diff layer. The returned combo iterator can be used to walk over
 // the entire snapshot diff stack simultaneously.
-func newFastAccountIterator(tree *Tree, root common.Hash, seek common.Hash) (AccountIterator, error) {
+func newFastAccountIterator(tree *Tree, root common.Hash, seek common.Hash) (state.AccountIterator, error) {
 	return newFastIterator(tree, root, common.Hash{}, seek, true)
 }
 
 // newFastStorageIterator creates a new hierarchical storage iterator with one
 // element per diff layer. The returned combo iterator can be used to walk over
 // the entire snapshot diff stack simultaneously.
-func newFastStorageIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+func newFastStorageIterator(tree *Tree, root common.Hash, account common.Hash, seek common.Hash) (state.StorageIterator, error) {
 	return newFastIterator(tree, root, account, seek, false)
 }
