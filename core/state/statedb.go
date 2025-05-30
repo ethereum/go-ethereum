@@ -159,6 +159,9 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+
+	// The block number context for BALs
+	blockNumber uint64
 }
 
 type BALType int
@@ -274,6 +277,94 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) PrefetchStateBAL(blockNumber uint64) {
+	s.blockNumber = blockNumber
+	switch balType {
+	case BalPreblockKeysPostValues:
+		s.PrefetchBalPreblockKeys()
+	}
+}
+
+func (s *StateDB) PrefetchBalPreblockKeys() {
+	log.Info("PrefetchBalPreblockKeys...")
+	type StorageKV struct {
+		addr *common.Address
+		key  *common.Hash
+		val  *common.Hash
+	}
+	var (
+		preBal   = AllBlockAccessLists[s.blockNumber]
+		lenSlots = 0
+		workers  errgroup.Group
+	)
+
+	workers.SetLimit(25)
+	// Fetch pre-block acccount state
+	accounts := make(chan *stateObject, len(preBal))
+	for _, acl := range preBal {
+		addr := acl.Address
+		lenSlots += len(acl.StorageKeys)
+
+		workers.Go(func() error {
+			acct, err := s.reader.Account(addr)
+			obj := newObject(s, addr, acct)
+			accounts <- obj
+			if err != nil {
+				log.Error("fail to fetch account from BALs:", addr)
+				return err
+			}
+			return nil
+		})
+	}
+	workers.Wait()
+
+	for range len(preBal) {
+		obj := <-accounts
+		// must set it first to avoid accounts read later in storageBAL fetching
+		s.setStateObject(obj)
+	}
+
+	// Fetch pre-block storage state
+	storages := make(chan *StorageKV, lenSlots)
+	for _, acl := range preBal {
+		addr := acl.Address
+		keys := acl.StorageKeys
+		for _, key := range keys {
+			workers.Go(func() error {
+				val, err := s.reader.Storage(addr, key)
+				kv := &StorageKV{&addr, &key, &val}
+				storages <- kv
+				if err != nil {
+					log.Error("fail to fetch storage from BALs:", addr, key)
+					return err
+				}
+				return nil
+			})
+		}
+	}
+	workers.Wait()
+
+	for range lenSlots {
+		kv := <-storages
+		account := s.getStateObject(*kv.addr)
+		if account != nil {
+			account.originStorage[*kv.key] = *kv.val
+			s.setStateObject(account)
+		}
+	}
+}
+
+func (s *StateDB) PreStateAtTxIndex(index int) *StateDB {
+	// 1. Fetch all pre-block state
+	// 2. Merge with post-state
+	if balType != BalPreblockKeysPostValues {
+		panic("PreStateAtTxIndex is only supported with BalPreblockKeysPostValues")
+	}
+
+	// Merge with BALs post state
+	return nil
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
