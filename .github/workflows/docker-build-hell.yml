@@ -63,6 +63,6 @@ jobs:
         with:
           context: .
           file: ./Dockerfile          # Path to the Dockerfile if not root
-          platforms: linux/arm64/v8     # Add ,linux/arm64 if you need multi-arch
+          platforms: linux/amd64,linux/arm64      # Add ,linux/arm64 if you need multi-arch
           push: true                  # Change to false to keep image local to runner
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/go-etherium-satan:latest 
