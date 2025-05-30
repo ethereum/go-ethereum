@@ -346,11 +346,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 	// Apply withdrawals
 	for _, w := range pre.Env.Withdrawals {
+		if chainConfig.IsDelegationActive(vmContext.BlockNumber, vmContext.Time) {
+			if w.Validator == gomath.MaxUint64 {
+				continue
+			}
+		}
 		// Amount is in gwei, turn into wei
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-		if w.Validator != gomath.MaxUint64 {
-			statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
-		}
+		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 	}
 
 	// Gather the execution-layer triggered requests.
@@ -365,12 +368,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		if err := core.ParseDepositLogs(&requests, allLogs, chainConfig); err != nil {
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
-		if len(pre.Env.Withdrawals) > 0 {
-			w := pre.Env.Withdrawals[0]
-			if w.Validator == gomath.MaxUint64 {
-				amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-				if err := core.ProcessStakingDistribution(evm, w.Address, amount); err != nil {
-					log.Error("could not process staking distribution", "err", err)
+		if chainConfig.IsDelegationActive(vmContext.BlockNumber, vmContext.Time) {
+			if len(pre.Env.Withdrawals) > 0 {
+				w := pre.Env.Withdrawals[0]
+				if w.Validator == gomath.MaxUint64 {
+					amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
+					if err := core.ProcessStakingDistribution(evm, w.Address, amount); err != nil {
+						log.Error("could not process staking distribution", "err", err)
+					}
 				}
 			}
 		}

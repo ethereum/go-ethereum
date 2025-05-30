@@ -329,12 +329,14 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		// create EVM for system calls
 		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
-		if len(b.withdrawals) > 0 {
-			w := b.withdrawals[0]
-			if w.Validator == math.MaxUint64 {
-				amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-				if err := ProcessStakingDistribution(evm, w.Address, amount); err != nil {
-					log.Error("could not process staking distribution", "err", err)
+		if b.cm.config.IsDelegationActive(b.header.Number, b.header.Time) {
+			if len(b.withdrawals) > 0 {
+				w := b.withdrawals[0]
+				if w.Validator == math.MaxUint64 {
+					amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
+					if err := ProcessStakingDistribution(evm, w.Address, amount); err != nil {
+						log.Error("could not process staking distribution", "err", err)
+					}
 				}
 			}
 		}

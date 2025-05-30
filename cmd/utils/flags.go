@@ -248,6 +248,11 @@ var (
 		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
 		Category: flags.EthCategory,
 	}
+	OverrideDelegationActivation = &cli.Uint64Flag{
+		Name:     "override.delegationActivation",
+		Usage:    "Manually specify the Delegation Activation timestamp, overriding the bundled setting",
+		Category: flags.EthCategory,
+	}
 	SyncModeFlag = &cli.StringFlag{
 		Name:     "syncmode",
 		Usage:    `Blockchain sync mode ("snap" or "full")`,

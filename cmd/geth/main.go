@@ -64,6 +64,7 @@ var (
 		utils.SmartCardDaemonPathFlag,
 		utils.OverridePrague,
 		utils.OverrideVerkle,
+		utils.OverrideDelegationActivation,
 		utils.EnablePersonal, // deprecated
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
