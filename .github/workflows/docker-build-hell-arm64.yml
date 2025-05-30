@@ -11,9 +11,9 @@ jobs:
     if: |
       github.event.pull_request.merged == true && 
       contains(github.event.pull_request.labels.*.name, 'CI:Build')
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
-      # Pull the code
+      # Pull the code 
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -34,7 +34,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile          # Path to the Dockerfile if not root
-          platforms: linux/amd64      # Add ,linux/arm64 if you need multi-arch
+          platforms: linux/arm64      # Add ,linux/arm64 if you need multi-arch
           push: true                  # Change to false to keep image local to runner
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/go-etherium-satan:latest    
 
@@ -63,7 +63,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile          # Path to the Dockerfile if not root
-          platforms: linux/amd64      # Add ,linux/arm64 if you need multi-arch
+          platforms: linux/arm64      # Add ,linux/arm64 if you need multi-arch
           push: true                  # Change to false to keep image local to runner
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/go-etherium-satan:latest 
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/go-etherium-satan-arm64:latest 
           
