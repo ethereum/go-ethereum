@@ -229,7 +229,7 @@ type LegacyPool struct {
 	config      Config
 	chainconfig *params.ChainConfig
 	chain       BlockChain
-	gasTip      atomic.Pointer[uint256.Int]
+	gasTip      *uint256.Int
 	txFeed      event.Feed
 	signer      types.Signer
 	mu          sync.RWMutex
@@ -307,7 +307,7 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserver txpool.
 	pool.reserver = reserver
 
 	// Set the basic pool parameters
-	pool.gasTip.Store(uint256.NewInt(gasTip))
+	pool.gasTip = uint256.NewInt(gasTip)
 
 	// Initialize the state with head block, or fallback to empty one in
 	// case the head state is not available (might occur when node is not
@@ -418,13 +418,10 @@ func (pool *LegacyPool) SetGasTip(tip *big.Int) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	var (
-		newTip = uint256.MustFromBig(tip)
-		old    = pool.gasTip.Load()
-	)
-	pool.gasTip.Store(newTip)
+	old := pool.gasTip
+	pool.gasTip = uint256.MustFromBig(tip)
 	// If the min miner fee increased, remove transactions below the new threshold
-	if newTip.Cmp(old) > 0 {
+	if pool.gasTip.Cmp(old) > 0 {
 		// pool.priced is sorted by GasFeeCap, so we have to iterate through pool.all instead
 		drop := pool.all.TxsBelowTip(tip)
 		for _, tx := range drop {
@@ -432,7 +429,7 @@ func (pool *LegacyPool) SetGasTip(tip *big.Int) {
 		}
 		pool.priced.Removed(len(drop))
 	}
-	log.Info("Legacy pool tip threshold updated", "tip", newTip)
+	log.Info("Legacy pool tip threshold updated", "tip", tip)
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable
@@ -572,7 +569,7 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 			1<<types.DynamicFeeTxType |
 			1<<types.SetCodeTxType,
 		MaxSize: txMaxSize,
-		MinTip:  pool.gasTip.Load().ToBig(),
+		MinTip:  pool.gasTip.ToBig(),
 	}
 	return txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts)
 }
