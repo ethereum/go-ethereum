@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.16.0](https://github.com/taikoxyz/taiko-geth/compare/v1.15.0...v1.16.0) (2025-05-21)
+
+
+### Features
+
+* **core:** set `MainnetPacayaBlock` ([#428](https://github.com/taikoxyz/taiko-geth/issues/428)) ([7e0d8a0](https://github.com/taikoxyz/taiko-geth/commit/7e0d8a02c8966b9c14b2269084435e9a2d124d6d))
+* **core:** update `InternalDevnetPacayaBlock` to `0` ([#430](https://github.com/taikoxyz/taiko-geth/issues/430)) ([c3ec5f8](https://github.com/taikoxyz/taiko-geth/commit/c3ec5f88cb4a2aef1c62bc7a21beb6f2609f6e12))
+* **miner:** update logs in worker ([#429](https://github.com/taikoxyz/taiko-geth/issues/429)) ([6caf96f](https://github.com/taikoxyz/taiko-geth/commit/6caf96ffda260aef973b5874b4b3b5b53cf49637))
+* **rawdb:** introduce `BuildPayloadArgsID` to `L1Origin` ([#426](https://github.com/taikoxyz/taiko-geth/issues/426)) ([187f85d](https://github.com/taikoxyz/taiko-geth/commit/187f85d7725fbf510bb6e3bd5dd8d48e6776ed17))
+
+
+### Bug Fixes
+
+* **repo:** fix json-rpc docs autogen workflow ([#419](https://github.com/taikoxyz/taiko-geth/issues/419)) ([190d6af](https://github.com/taikoxyz/taiko-geth/commit/190d6afff7f199744adebf07c082898713d2fb73))
+
+
+### Chores
+
+* **catalyst:** increase `maxTrackedPayloads` ([#424](https://github.com/taikoxyz/taiko-geth/issues/424)) ([c091dd6](https://github.com/taikoxyz/taiko-geth/commit/c091dd6c8fe90c3797f84e97f55ace5124ff1d6b))
+* **params:** fix some comments ([#423](https://github.com/taikoxyz/taiko-geth/issues/423)) ([f4cb12a](https://github.com/taikoxyz/taiko-geth/commit/f4cb12a20321d93ebefeac3f44eaedf2fe40b90e))
+* **repo:** update `docker-build` workflow ([#421](https://github.com/taikoxyz/taiko-geth/issues/421)) ([19dca2f](https://github.com/taikoxyz/taiko-geth/commit/19dca2f0b981b6d3b113cc2865e8fd80680bc407))
+* **taiko:** update preconf devnet genesis jsons ([#381](https://github.com/taikoxyz/taiko-geth/issues/381)) ([965043b](https://github.com/taikoxyz/taiko-geth/commit/965043b97723de0286411430e20083b159cadddc))
+
+
+### Documentation
+
+* **taiko:** autogen json-rpc docs ([#417](https://github.com/taikoxyz/taiko-geth/issues/417)) ([2fc319d](https://github.com/taikoxyz/taiko-geth/commit/2fc319d9e74710faa8631ee6f1310c701f75d882))
+
+
+### Tests
+
+* **raw_db:** add more `L1Origin` tests ([#427](https://github.com/taikoxyz/taiko-geth/issues/427)) ([d0c33f5](https://github.com/taikoxyz/taiko-geth/commit/d0c33f5bafdeac62f356fd7ab81fd83cd5710261))
+
 ## [1.15.0](https://github.com/taikoxyz/taiko-geth/compare/v1.14.1...v1.15.0) (2025-04-01)
 
 
