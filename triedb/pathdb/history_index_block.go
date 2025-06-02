@@ -85,15 +85,19 @@ func (d *indexBlockDesc) decode(blob []byte) {
 //			| |   |      ChunkN      |
 //			| |   +------------------+
 //			+-|---|     Restart1     |
-//			  |   |     Restart...   |   4N bytes
+//			  |   |     Restart...   |   2N bytes
 //			  +---|     RestartN     |
 //			      +------------------+
-//			      |  Restart count   |    4 bytes
+//			      |  Restart count   |   1 byte
 //			      +------------------+
 //
 //	  - Chunk list: A list of data chunks
-//	  - Restart list: A list of 4-byte pointers, each pointing to the start position of a chunk
-//	  - Restart count: The number of restarts in the block, stored at the end of the block (4 bytes)
+//	  - Restart list: A list of 2-byte pointers, each pointing to the start position of a chunk
+//	  - Restart count: The number of restarts in the block, stored at the end of the block (1 byte)
+//
+// Note: the pointer is encoded as a uint16, which is sufficient within a chunk.
+// A uint16 can cover offsets in the range [0, 65536), which is more than enough
+// to store 4096 integers.
 //
 // Each chunk begins with the full value of the first integer, followed by
 // subsequent integers representing the differences between the current value
@@ -111,26 +115,26 @@ func (d *indexBlockDesc) decode(blob []byte) {
 //		               +----------------+
 //
 // Empty index block is regarded as invalid.
-func parseIndexBlock(blob []byte) ([]uint32, []byte, error) {
-	if len(blob) < 4 {
+func parseIndexBlock(blob []byte) ([]uint16, []byte, error) {
+	if len(blob) < 1 {
 		return nil, nil, fmt.Errorf("corrupted index block, len: %d", len(blob))
 	}
-	restartLen := binary.BigEndian.Uint32(blob[len(blob)-4:])
+	restartLen := blob[len(blob)-1]
 	if restartLen == 0 {
 		return nil, nil, errors.New("corrupted index block, no restart")
 	}
-	tailLen := int(restartLen+1) * 4
+	tailLen := int(restartLen)*2 + 1
 	if len(blob) < tailLen {
 		return nil, nil, fmt.Errorf("truncated restarts, size: %d, restarts: %d", len(blob), restartLen)
 	}
-	restarts := make([]uint32, 0, restartLen)
-	for i := restartLen; i > 0; i-- {
-		restart := binary.BigEndian.Uint32(blob[len(blob)-int(i+1)*4:])
+	restarts := make([]uint16, 0, restartLen)
+	for i := int(restartLen); i > 0; i-- {
+		restart := binary.BigEndian.Uint16(blob[len(blob)-1-2*i:])
 		restarts = append(restarts, restart)
 	}
 	// Validate that restart points are strictly ordered and within the valid
 	// data range.
-	var prev uint32
+	var prev uint16
 	for i := 0; i < len(restarts); i++ {
 		if i != 0 {
 			if restarts[i] <= prev {
@@ -147,7 +151,7 @@ func parseIndexBlock(blob []byte) ([]uint32, []byte, error) {
 
 // blockReader is the reader to access the element within a block.
 type blockReader struct {
-	restarts []uint32
+	restarts []uint16
 	data     []byte
 }
 
@@ -222,7 +226,7 @@ func (br *blockReader) readGreaterThan(id uint64) (uint64, error) {
 
 type blockWriter struct {
 	desc     *indexBlockDesc // Descriptor of the block
-	restarts []uint32        // Offsets into the data slice, marking the start of each section
+	restarts []uint16        // Offsets into the data slice, marking the start of each section
 	scratch  []byte          // Buffer used for encoding full integers or value differences
 	data     []byte          // Aggregated encoded data slice
 }
@@ -261,7 +265,7 @@ func (b *blockWriter) append(id uint64) error {
 	if b.desc.entries%indexBlockRestartLen == 0 {
 		// Save the offset within the data slice as the restart point
 		// for the next section.
-		b.restarts = append(b.restarts, uint32(len(b.data)))
+		b.restarts = append(b.restarts, uint16(len(b.data)))
 
 		// The restart point item can either be encoded in variable
 		// size or fixed size. Although variable-size encoding is
@@ -395,9 +399,10 @@ func (b *blockWriter) full() bool {
 // This function is safe to be called multiple times.
 func (b *blockWriter) finish() []byte {
 	var buf []byte
-	for _, number := range append(b.restarts, uint32(len(b.restarts))) {
-		binary.BigEndian.PutUint32(b.scratch[:4], number)
-		buf = append(buf, b.scratch[:4]...)
+	for _, number := range b.restarts {
+		binary.BigEndian.PutUint16(b.scratch[:2], number)
+		buf = append(buf, b.scratch[:2]...)
 	}
+	buf = append(buf, byte(len(b.restarts)))
 	return append(b.data, buf...)
 }
