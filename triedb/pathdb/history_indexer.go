@@ -51,6 +51,7 @@ func loadIndexMetadata(db ethdb.KeyValueReader) *indexMetadata {
 	}
 	var m indexMetadata
 	if err := rlp.DecodeBytes(blob, &m); err != nil {
+		log.Error("Failed to decode index metadata", "err", err)
 		return nil
 	}
 	return &m
@@ -507,17 +508,32 @@ type historyIndexer struct {
 	freezer ethdb.AncientStore
 }
 
+// checkVersion checks whether the index data in the database matches the version.
+func checkVersion(disk ethdb.KeyValueStore) {
+	blob := rawdb.ReadStateHistoryIndexMetadata(disk)
+	if len(blob) == 0 {
+		return
+	}
+	var m indexMetadata
+	err := rlp.DecodeBytes(blob, &m)
+	if err == nil && m.Version == stateIndexVersion {
+		return
+	}
+	// TODO(rjl493456442) would be better to group them into a batch.
+	rawdb.DeleteStateHistoryIndexMetadata(disk)
+	rawdb.DeleteStateHistoryIndex(disk)
+
+	version := "unknown"
+	if err == nil {
+		version = fmt.Sprintf("%d", m.Version)
+	}
+	log.Info("Cleaned up obsolete state history index", "version", version, "want", stateIndexVersion)
+}
+
 // newHistoryIndexer constructs the history indexer and launches the background
 // initer to complete the indexing of any remaining state histories.
 func newHistoryIndexer(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastHistoryID uint64) *historyIndexer {
-	// Purge the obsolete index data from the database.
-	metadata := loadIndexMetadata(disk)
-	if metadata != nil && metadata.Version != stateIndexVersion {
-		// TODO(rjl493456442) would be better to group them into a batch.
-		rawdb.DeleteStateHistoryIndexMetadata(disk)
-		rawdb.DeleteStateHistoryIndex(disk)
-		log.Info("Cleaned up obsolete state history index", "version", metadata.Version, "want", stateIndexVersion)
-	}
+	checkVersion(disk)
 	return &historyIndexer{
 		initer:  newIndexIniter(disk, freezer, lastHistoryID),
 		disk:    disk,
