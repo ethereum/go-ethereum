@@ -157,8 +157,8 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 // the return byte-slice and an error if one occurred.
 //
 // It's important to note that any errors returned by the interpreter should be
-// considered a revert-and-consume-all-gas operation except for
-// ErrExecutionReverted which means revert-and-keep-gas-left.
+// considered a revert-and-keep-gas-left operation. No error specific checks
+// should be handled to recover from the error.
 func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
@@ -240,7 +240,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			consumed, wanted := in.evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas)
 			contract.UseGas(consumed, in.evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 			if consumed < wanted {
-				return nil, ErrOutOfGas
+				return nil, NewGasError("code chunk access", wanted, consumed)
 			}
 		}
 
@@ -251,9 +251,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		cost = operation.constantGas // For tracing
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
-			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
+			return nil, NewStackError(op.String(), operation.minStack, sLen, nil)
 		} else if sLen > operation.maxStack {
-			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
+			return nil, NewStackError(op.String(), operation.maxStack, sLen, nil)
 		}
 		// for tracing: this gas consumption event is emitted below in the debug section.
 		if contract.Gas < cost {

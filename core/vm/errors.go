@@ -22,6 +22,42 @@ import (
 	"math"
 )
 
+// GasError represents an error related to gas operations
+type GasError struct {
+	Required  uint64
+	Available uint64
+	Operation string
+}
+
+func (e *GasError) Error() string {
+	return fmt.Sprintf("gas error in %s: required %d, available %d", e.Operation, e.Required, e.Available)
+}
+
+// StackError represents an error related to stack operations
+type StackError struct {
+	Operation  string
+	Required   int
+	Available  int
+	StackTrace []uint64
+}
+
+func (e *StackError) Error() string {
+	return fmt.Sprintf("stack error in %s: required %d items, available %d", e.Operation, e.Required, e.Available)
+}
+
+// MemoryError represents an error related to memory operations
+type MemoryError struct {
+	Operation string
+	Requested uint64
+	Available uint64
+	Offset    uint64
+}
+
+func (e *MemoryError) Error() string {
+	return fmt.Sprintf("memory error in %s: requested %d bytes at offset %d, available %d",
+		e.Operation, e.Requested, e.Offset, e.Available)
+}
+
 // List evm execution errors
 var (
 	ErrOutOfGas                 = errors.New("out of gas")
@@ -129,7 +165,7 @@ func (e *VMError) ErrorCode() int {
 const (
 	// We start the error code at 1 so that we can use 0 later for some possible extension. There
 	// is no unspecified value for the code today because it should always be set to a valid value
-	// that could be VMErrorCodeUnknown if the error is not mapped to a known error code.
+	// that could be set to VMErrorCodeUnknown if the error is not mapped to a known error code.
 
 	VMErrorCodeOutOfGas = 1 + iota
 	VMErrorCodeCodeStoreOutOfGas
@@ -147,6 +183,11 @@ const (
 	VMErrorCodeStackUnderflow
 	VMErrorCodeStackOverflow
 	VMErrorCodeInvalidOpCode
+
+	// New structured error codes
+	VMErrorCodeGasError
+	VMErrorCodeStackError
+	VMErrorCodeMemoryError
 
 	// VMErrorCodeUnknown explicitly marks an error as unknown, this is useful when error is converted
 	// from an actual `error` in which case if the mapping is not known, we can use this value to indicate that.
@@ -196,6 +237,48 @@ func vmErrorCodeFromErr(err error) int {
 			return VMErrorCodeInvalidOpCode
 		}
 
+		// New structured error types
+		if v := (*GasError)(nil); errors.As(err, &v) {
+			return VMErrorCodeGasError
+		}
+
+		if v := (*StackError)(nil); errors.As(err, &v) {
+			return VMErrorCodeStackError
+		}
+
+		if v := (*MemoryError)(nil); errors.As(err, &v) {
+			return VMErrorCodeMemoryError
+		}
+
 		return VMErrorCodeUnknown
+	}
+}
+
+// NewGasError creates a new GasError with the given parameters
+func NewGasError(operation string, required, available uint64) error {
+	return &GasError{
+		Operation: operation,
+		Required:  required,
+		Available: available,
+	}
+}
+
+// NewStackError creates a new StackError with the given parameters
+func NewStackError(operation string, required, available int, stackTrace []uint64) error {
+	return &StackError{
+		Operation:  operation,
+		Required:   required,
+		Available:  available,
+		StackTrace: stackTrace,
+	}
+}
+
+// NewMemoryError creates a new MemoryError with the given parameters
+func NewMemoryError(operation string, requested, available, offset uint64) error {
+	return &MemoryError{
+		Operation: operation,
+		Requested: requested,
+		Available: available,
+		Offset:    offset,
 	}
 }
