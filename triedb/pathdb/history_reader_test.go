@@ -28,8 +28,8 @@ import (
 
 func waitIndexing(db *Database) {
 	for {
-		id := rawdb.ReadLastStateHistoryIndex(db.diskdb)
-		if id != nil && *id >= db.tree.bottom().stateID() {
+		metadata := loadIndexMetadata(db.diskdb)
+		if metadata != nil && metadata.Last >= db.tree.bottom().stateID() {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)

@@ -17,35 +17,29 @@
 package rawdb
 
 import (
-	"encoding/binary"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// ReadLastStateHistoryIndex retrieves the number of latest indexed state history.
-func ReadLastStateHistoryIndex(db ethdb.KeyValueReader) *uint64 {
+// ReadStateHistoryIndexMetadata retrieves the metadata of state history index.
+func ReadStateHistoryIndexMetadata(db ethdb.KeyValueReader) []byte {
 	data, _ := db.Get(headStateHistoryIndexKey)
-	if len(data) != 8 {
-		return nil
-	}
-	number := binary.BigEndian.Uint64(data)
-	return &number
+	return data
 }
 
-// WriteLastStateHistoryIndex stores the number of latest indexed state history
+// WriteStateHistoryIndexMetadata stores the metadata of state history index
 // into database.
-func WriteLastStateHistoryIndex(db ethdb.KeyValueWriter, number uint64) {
-	if err := db.Put(headStateHistoryIndexKey, encodeBlockNumber(number)); err != nil {
-		log.Crit("Failed to store the state index tail", "err", err)
+func WriteStateHistoryIndexMetadata(db ethdb.KeyValueWriter, blob []byte) {
+	if err := db.Put(headStateHistoryIndexKey, blob); err != nil {
+		log.Crit("Failed to store the metadata of state history index", "err", err)
 	}
 }
 
-// DeleteLastStateHistoryIndex removes the number of latest indexed state history.
-func DeleteLastStateHistoryIndex(db ethdb.KeyValueWriter) {
+// DeleteStateHistoryIndexMetadata removes the metadata of state history index.
+func DeleteStateHistoryIndexMetadata(db ethdb.KeyValueWriter) {
 	if err := db.Delete(headStateHistoryIndexKey); err != nil {
-		log.Crit("Failed to delete the state index tail", "err", err)
+		log.Crit("Failed to delete the metadata of state history index", "err", err)
 	}
 }
 
@@ -158,12 +152,12 @@ func increaseKey(key []byte) []byte {
 	return nil
 }
 
-// DeleteHistoryIndex completely removes all history indexing data, including indexes
-// for accounts and storages.
+// DeleteStateHistoryIndex completely removes all history indexing data, including
+// indexes for accounts and storages.
 //
 // Note, this method assumes the storage space with prefix `StateHistoryIndexPrefix`
 // is exclusively occupied by the history indexing data!
-func DeleteHistoryIndex(db ethdb.KeyValueRangeDeleter) {
+func DeleteStateHistoryIndex(db ethdb.KeyValueRangeDeleter) {
 	if err := db.DeleteRange(StateHistoryIndexPrefix, increaseKey(StateHistoryIndexPrefix)); err != nil {
 		log.Crit("Failed to delete history index range", "err", err)
 	}

@@ -113,8 +113,8 @@ type indexReaderWithLimitTag struct {
 // newIndexReaderWithLimitTag constructs a index reader with indexing position.
 func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent) (*indexReaderWithLimitTag, error) {
 	// Read the last indexed ID before the index reader construction
-	indexed := rawdb.ReadLastStateHistoryIndex(db)
-	if indexed == nil {
+	metadata := loadIndexMetadata(db)
+	if metadata == nil {
 		return nil, errors.New("state history hasn't been indexed yet")
 	}
 	r, err := newIndexReader(db, state)
@@ -123,7 +123,7 @@ func newIndexReaderWithLimitTag(db ethdb.KeyValueReader, state stateIdent) (*ind
 	}
 	return &indexReaderWithLimitTag{
 		reader: r,
-		limit:  *indexed,
+		limit:  metadata.Last,
 		db:     db,
 	}, nil
 }
@@ -157,14 +157,14 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 		return res, nil
 	}
 	// Refresh the index reader and give another attempt
-	indexed := rawdb.ReadLastStateHistoryIndex(r.db)
-	if indexed == nil || *indexed < lastID {
+	metadata := loadIndexMetadata(r.db)
+	if metadata == nil || metadata.Last < lastID {
 		return 0, errors.New("state history hasn't been indexed yet")
 	}
 	if err := r.reader.refresh(); err != nil {
 		return 0, err
 	}
-	r.limit = *indexed
+	r.limit = metadata.Last
 
 	return r.reader.readGreaterThan(id)
 }
@@ -308,15 +308,15 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	if stateID < tail {
 		return nil, errors.New("historical state has been pruned")
 	}
-	lastIndexedID := rawdb.ReadLastStateHistoryIndex(r.disk)
 
 	// To serve the request, all state histories from stateID+1 to lastID
 	// must be indexed. It's not supposed to happen unless system is very
 	// wrong.
-	if lastIndexedID == nil || *lastIndexedID < lastID {
+	metadata := loadIndexMetadata(r.disk)
+	if metadata == nil || metadata.Last < lastID {
 		indexed := "null"
-		if lastIndexedID != nil {
-			indexed = fmt.Sprintf("%d", *lastIndexedID)
+		if metadata != nil {
+			indexed = fmt.Sprintf("%d", metadata.Last)
 		}
 		return nil, fmt.Errorf("state history is not fully indexed, requested: %d, indexed: %s", stateID, indexed)
 	}
