@@ -37,7 +37,6 @@ func parseIndex(blob []byte) ([]*indexBlockDesc, error) {
 	}
 	var (
 		lastID   uint32
-		lastMax  uint64
 		descList []*indexBlockDesc
 	)
 	for i := 0; i < len(blob)/indexBlockDescSize; i++ {
@@ -46,19 +45,23 @@ func parseIndex(blob []byte) ([]*indexBlockDesc, error) {
 		if desc.empty() {
 			return nil, errors.New("empty state history index block")
 		}
-		if desc.min > desc.max {
-			return nil, fmt.Errorf("indexBlockDesc: min %d > max %d", desc.min, desc.max)
-		}
 		if lastID != 0 {
 			if lastID+1 != desc.id {
 				return nil, fmt.Errorf("index block id is out of order, last-id: %d, this-id: %d", lastID, desc.id)
 			}
-			if desc.min <= lastMax {
+			// Theoretically, order should be validated between consecutive index blocks,
+			// ensuring that elements within them are strictly ordered. However, since
+			// tracking the minimum element in each block has non-trivial storage overhead,
+			// this check is optimistically omitted.
+			//
+			// TODO(rjl493456442) the minimal element can be resolved from the index block,
+			// evaluate the check cost (mostly IO overhead).
+
+			/*	if desc.min <= lastMax {
 				return nil, fmt.Errorf("index block range is out of order, last-max: %d, this-min: %d", lastMax, desc.min)
-			}
+			}*/
 		}
 		lastID = desc.id
-		lastMax = desc.max
 		descList = append(descList, &desc)
 	}
 	return descList, nil

@@ -155,7 +155,6 @@ func TestBlcokWriterDeleteWithData(t *testing.T) {
 	// Re-construct the block writer with data
 	desc := &indexBlockDesc{
 		id:      0,
-		min:     1,
 		max:     20,
 		entries: 5,
 	}
