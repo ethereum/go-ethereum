@@ -65,7 +65,7 @@ var (
 )
 
 var genesis = &core.Genesis{
-	Config: params.AllDevChainProtocolChanges,
+	Config: params.AllDevChainProtocolChanges1,
 	Alloc: types.GenesisAlloc{
 		testAddr:           {Balance: testBalance},
 		revertContractAddr: {Code: revertCode},
@@ -103,6 +103,7 @@ func newTestBackend(config *node.Config) (*node.Node, []*types.Block, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't create new node: %v", err)
 	}
+
 	// Create Ethereum Service
 	ecfg := &ethconfig.Config{Genesis: genesis, RPCGasCap: 1000000}
 	ethservice, err := eth.New(n, ecfg)
