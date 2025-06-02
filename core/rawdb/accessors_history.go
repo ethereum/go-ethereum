@@ -17,6 +17,8 @@
 package rawdb
 
 import (
+	"bytes"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -158,7 +160,9 @@ func increaseKey(key []byte) []byte {
 // Note, this method assumes the storage space with prefix `StateHistoryIndexPrefix`
 // is exclusively occupied by the history indexing data!
 func DeleteStateHistoryIndex(db ethdb.KeyValueRangeDeleter) {
-	if err := db.DeleteRange(StateHistoryIndexPrefix, increaseKey(StateHistoryIndexPrefix)); err != nil {
+	start := StateHistoryIndexPrefix
+	limit := increaseKey(bytes.Clone(StateHistoryIndexPrefix))
+	if err := db.DeleteRange(start, limit); err != nil {
 		log.Crit("Failed to delete history index range", "err", err)
 	}
 }
