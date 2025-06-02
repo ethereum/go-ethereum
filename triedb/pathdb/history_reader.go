@@ -156,7 +156,13 @@ func (r *indexReaderWithLimitTag) readGreaterThan(id uint64, lastID uint64) (uin
 	if r.limit == lastID {
 		return res, nil
 	}
-	// Refresh the index reader and give another attempt
+	// Refresh the index reader and attempt again. If the latest indexed position
+	// is even below the ID of the disk layer, it indicates that state histories
+	// are being removed. In this case, it would theoretically be better to block
+	// the state rollback operation synchronously until all readers are released.
+	// Given that it's very unlikely to occur and users try to perform historical
+	// state queries while reverting the states at the same time. Simply returning
+	// an error should be sufficient for now.
 	metadata := loadIndexMetadata(r.db)
 	if metadata == nil || metadata.Last < lastID {
 		return 0, errors.New("state history hasn't been indexed yet")
@@ -189,8 +195,11 @@ func newHistoryReader(disk ethdb.KeyValueReader, freezer ethdb.AncientReader) *h
 // state history.
 func (r *historyReader) readAccountMetadata(address common.Address, historyID uint64) ([]byte, error) {
 	blob := rawdb.ReadStateAccountIndex(r.freezer, historyID)
+	if len(blob) == 0 {
+		return nil, fmt.Errorf("account index is truncated, historyID: %d", historyID)
+	}
 	if len(blob)%accountIndexSize != 0 {
-		return nil, fmt.Errorf("account index is corrupted, historyID: %d", historyID)
+		return nil, fmt.Errorf("account index is corrupted, historyID: %d, size: %d", historyID, len(blob))
 	}
 	n := len(blob) / accountIndexSize
 
@@ -213,11 +222,14 @@ func (r *historyReader) readAccountMetadata(address common.Address, historyID ui
 func (r *historyReader) readStorageMetadata(storageKey common.Hash, storageHash common.Hash, historyID uint64, slotOffset, slotNumber int) ([]byte, error) {
 	// TODO(rj493456442) optimize it with partial read
 	blob := rawdb.ReadStateStorageIndex(r.freezer, historyID)
+	if len(blob) == 0 {
+		return nil, fmt.Errorf("storage index is truncated, historyID: %d", historyID)
+	}
 	if len(blob)%slotIndexSize != 0 {
-		return nil, fmt.Errorf("storage indices is corrupted, historyID: %d", historyID)
+		return nil, fmt.Errorf("storage indices is corrupted, historyID: %d, size: %d", historyID, len(blob))
 	}
 	if slotIndexSize*(slotOffset+slotNumber) > len(blob) {
-		return nil, errors.New("out of slice")
+		return nil, fmt.Errorf("storage indices is truncated, historyID: %d, size: %d, offset: %d, length: %d", historyID, len(blob), slotOffset, slotNumber)
 	}
 	subSlice := blob[slotIndexSize*slotOffset : slotIndexSize*(slotOffset+slotNumber)]
 
@@ -261,7 +273,7 @@ func (r *historyReader) readAccount(address common.Address, historyID uint64) ([
 	// TODO(rj493456442) optimize it with partial read
 	data := rawdb.ReadStateAccountHistory(r.freezer, historyID)
 	if len(data) < length+offset {
-		return nil, fmt.Errorf("account data is truncated, address: %#x, historyID: %d", address, historyID)
+		return nil, fmt.Errorf("account data is truncated, address: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, historyID, len(data), offset, length)
 	}
 	return data[offset : offset+length], nil
 }
@@ -289,7 +301,7 @@ func (r *historyReader) readStorage(address common.Address, storageKey common.Ha
 	// TODO(rj493456442) optimize it with partial read
 	data := rawdb.ReadStateStorageHistory(r.freezer, historyID)
 	if len(data) < offset+length {
-		return nil, errors.New("corrupted storage data")
+		return nil, fmt.Errorf("storage data is truncated, address: %#x, key: %#x, historyID: %d, size: %d, offset: %d, len: %d", address, storageKey, historyID, len(data), offset, length)
 	}
 	return data[offset : offset+length], nil
 }
@@ -340,6 +352,11 @@ func (r *historyReader) read(state stateIdentQuery, stateID uint64, lastID uint6
 	if historyID == math.MaxUint64 {
 		return latestValue, nil
 	}
+	// Resolve data from the specified state history object. Notably, since the history
+	// reader operates completely asynchronously with the indexer/unindexer, it's possible
+	// that the associated state histories are no longer available due to a rollback.
+	// Such truncation should be captured by the state resolver below, rather than returning
+	// invalid data.
 	if state.account {
 		return r.readAccount(state.address, historyID)
 	}
