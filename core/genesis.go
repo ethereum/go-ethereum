@@ -518,18 +518,15 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
-
-	var withdrawals []*types.Withdrawal
+	var (
+		withdrawals []*types.Withdrawal
+	)
 	if conf := g.Config; conf != nil {
 		num := big.NewInt(int64(g.Number))
-
-		// Polygon/bor: EIP-4895 (withdrawals) not supported. Only set empty
-		// withdrawal hash if we're not using bor consensus (e.g. dev mode).
-		if conf.IsShanghai(num) && conf.Bor == nil {
+		if conf.IsShanghai(num) {
 			head.WithdrawalsHash = &types.EmptyWithdrawalsHash
 			withdrawals = make([]*types.Withdrawal, 0)
 		}
-
 		if conf.IsCancun(num) {
 			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
 			// the zero hash. This is because the genesis block does not have a parent
@@ -546,8 +543,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 			}
 		}
 
-		// Polygon/bor: EIP-7685 (requests) not supported. Only set empty
-		// withdrawal hash if we're not using bor consensus (e.g. dev mode).
+		// Polygon/bor: EIP-7685 not supported
 		if conf.IsPrague(num) && conf.Bor == nil {
 			head.RequestsHash = &types.EmptyRequestsHash
 		}
