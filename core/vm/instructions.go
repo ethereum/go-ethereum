@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 func opAdd(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
@@ -244,7 +243,7 @@ func opKeccak256(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opAddress(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Address().Bytes()))
+	scope.Stack.get().SetBytes(scope.Contract.Address().Bytes())
 	return nil, nil
 }
 
@@ -256,17 +255,17 @@ func opBalance(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opOrigin(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(evm.Origin.Bytes()))
+	scope.Stack.get().SetBytes(evm.Origin.Bytes())
 	return nil, nil
 }
 
 func opCaller(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Caller().Bytes()))
+	scope.Stack.get().SetBytes(scope.Contract.Caller().Bytes())
 	return nil, nil
 }
 
 func opCallValue(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(scope.Contract.value)
+	scope.Stack.get().Set(scope.Contract.value)
 	return nil, nil
 }
 
@@ -282,7 +281,7 @@ func opCallDataLoad(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opCallDataSize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(scope.Contract.Input))))
+	scope.Stack.get().SetUint64(uint64(len(scope.Contract.Input)))
 	return nil, nil
 }
 
@@ -305,7 +304,7 @@ func opCallDataCopy(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opReturnDataSize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(evm.returnData))))
+	scope.Stack.get().SetUint64(uint64(len(evm.returnData)))
 	return nil, nil
 }
 
@@ -338,7 +337,7 @@ func opExtCodeSize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opCodeSize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(scope.Contract.Code))))
+	scope.Stack.get().SetUint64(uint64(len(scope.Contract.Code)))
 	return nil, nil
 }
 
@@ -416,7 +415,7 @@ func opExtCodeHash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opGasprice(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(evm.GasPrice.Clone())
+	scope.Stack.get().Set(evm.GasPrice)
 	return nil, nil
 }
 
@@ -451,35 +450,32 @@ func opBlockhash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opCoinbase(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(evm.Context.Coinbase.Bytes()))
+	scope.Stack.get().SetBytes(evm.Context.Coinbase.Bytes())
 	return nil, nil
 }
 
 func opTimestamp(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(evm.Context.Time))
+	scope.Stack.get().SetUint64(evm.Context.Time)
 	return nil, nil
 }
 
 func opNumber(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	v, _ := uint256.FromBig(evm.Context.BlockNumber)
-	scope.Stack.push(v)
+	scope.Stack.get().SetFromBig(evm.Context.BlockNumber)
 	return nil, nil
 }
 
 func opDifficulty(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	v, _ := uint256.FromBig(evm.Context.Difficulty)
-	scope.Stack.push(v)
+	scope.Stack.get().SetFromBig(evm.Context.Difficulty)
 	return nil, nil
 }
 
 func opRandom(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	v := new(uint256.Int).SetBytes(evm.Context.Random.Bytes())
-	scope.Stack.push(v)
+	scope.Stack.get().SetBytes(evm.Context.Random.Bytes())
 	return nil, nil
 }
 
 func opGasLimit(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(evm.Context.GasLimit))
+	scope.Stack.get().SetUint64(evm.Context.GasLimit)
 	return nil, nil
 }
 
@@ -556,17 +552,17 @@ func opJumpdest(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 }
 
 func opPc(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(*pc))
+	scope.Stack.get().SetUint64(*pc)
 	return nil, nil
 }
 
 func opMsize(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(uint64(scope.Memory.Len())))
+	scope.Stack.get().SetUint64(uint64(scope.Memory.Len()))
 	return nil, nil
 }
 
 func opGas(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(scope.Contract.Gas))
+	scope.Stack.get().SetUint64(scope.Contract.Gas)
 	return nil, nil
 }
 

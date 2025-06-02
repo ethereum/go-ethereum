@@ -91,8 +91,7 @@ func enable1884(jt *JumpTable) {
 }
 
 func opSelfBalance(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	balance := evm.StateDB.GetBalance(scope.Contract.Address())
-	scope.Stack.push(balance)
+	scope.Stack.get().Set(evm.StateDB.GetBalance(scope.Contract.Address()))
 	return nil, nil
 }
 
@@ -110,8 +109,7 @@ func enable1344(jt *JumpTable) {
 
 // opChainID implements CHAINID opcode
 func opChainID(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	chainId, _ := uint256.FromBig(evm.chainConfig.ChainID)
-	scope.Stack.push(chainId)
+	scope.Stack.get().SetFromBig(evm.chainConfig.ChainID)
 	return nil, nil
 }
 
@@ -221,8 +219,7 @@ func opTstore(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 // opBaseFee implements BASEFEE opcode
 func opBaseFee(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	baseFee, _ := uint256.FromBig(evm.Context.BaseFee)
-	scope.Stack.push(baseFee)
+	scope.Stack.get().SetFromBig(evm.Context.BaseFee)
 	return nil, nil
 }
 
@@ -239,7 +236,7 @@ func enable3855(jt *JumpTable) {
 
 // opPush0 implements the PUSH0 opcode
 func opPush0(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int))
+	scope.Stack.get().Clear()
 	return nil, nil
 }
 
@@ -290,8 +287,7 @@ func opBlobHash(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
 
 // opBlobBaseFee implements BLOBBASEFEE opcode
 func opBlobBaseFee(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	blobBaseFee, _ := uint256.FromBig(evm.Context.BlobBaseFee)
-	scope.Stack.push(blobBaseFee)
+	scope.Stack.get().SetFromBig(evm.Context.BlobBaseFee)
 	return nil, nil
 }
 
