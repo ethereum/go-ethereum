@@ -348,10 +348,24 @@ func (c *Bor) verifyHeader(chain consensus.ChainHeaderReader, header *types.Head
 	}
 
 	number := header.Number.Uint64()
+	now := uint64(time.Now().Unix())
 
-	// Don't waste time checking blocks from the future
-	if header.Time > uint64(time.Now().Unix()) {
-		return consensus.ErrFutureBlock
+	// Allow early blocks if Bhilai HF is enabled
+	if c.config.IsBhilai(header.Number) {
+		// Don't waste time checking blocks from the future but allow a buffer of block time for
+		// early block announcements. Note that this is a loose check and would allow early blocks
+		// from non-primary producer. Such blocks will be rejected later when we know the succession
+		// number of the signer in the current sprint.
+		if header.Time-c.config.CalculatePeriod(number) > now {
+			log.Error("Block announced too early post bhilai", "number", number, "headerTime", header.Time, "now", now)
+			return consensus.ErrFutureBlock
+		}
+	} else {
+		// Don't waste time checking blocks from the future
+		if header.Time > now {
+			log.Error("Block announced too early", "number", number, "headerTime", header.Time, "now", now)
+			return consensus.ErrFutureBlock
+		}
 	}
 
 	if err := validateHeaderExtraField(header.Extra); err != nil {
@@ -709,7 +723,16 @@ func (c *Bor) verifySeal(chain consensus.ChainHeaderReader, header *types.Header
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
 
-	if IsBlockOnTime(parent, header, number, succession, c.config) {
+	// Post Bhilai HF, reject blocks form non-primary producers if they're earlier than the expected time
+	if c.config.IsBhilai(header.Number) && succession != 0 {
+		now := uint64(time.Now().Unix())
+		if header.Time > now {
+			log.Error("Block announced too early by non-primary producer post bhilai", "number", number, "headerTime", header.Time, "now", now)
+			return consensus.ErrFutureBlock
+		}
+	}
+
+	if IsBlockEarly(parent, header, number, succession, c.config) {
 		return &BlockTooSoonError{number, succession}
 	}
 
@@ -724,7 +747,9 @@ func (c *Bor) verifySeal(chain consensus.ChainHeaderReader, header *types.Header
 	return nil
 }
 
-func IsBlockOnTime(parent *types.Header, header *types.Header, number uint64, succession int, cfg *params.BorConfig) bool {
+// IsBlockEarly returns true if the header time is earlier than expected (according to consensus rules). This
+// can happen if the producer maliciously updates the header time.
+func IsBlockEarly(parent *types.Header, header *types.Header, number uint64, succession int, cfg *params.BorConfig) bool {
 	return parent != nil && header.Time < parent.Time+CalcProducerDelay(number, succession, cfg)
 }
 
@@ -827,6 +852,16 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 	header.Time = parent.Time + CalcProducerDelay(number, succession, c.config)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
+	} else {
+		// For primary validators, wait until the current block production window
+		// starts. This prevents bor from starting to build next block before time
+		// as we'd like to wait for new transactions. Although this change doesn't
+		// need a check for hard fork as it doesn't change any consensus rules, we
+		// still keep it for safety and testing.
+		if c.config.IsBhilai(big.NewInt(int64(number))) && succession == 0 {
+			startTime := time.Unix(int64(header.Time-c.config.CalculatePeriod(number)), 0)
+			time.Sleep(time.Until(startTime))
+		}
 	}
 
 	return nil
@@ -1021,8 +1056,20 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, result
 		return err
 	}
 
+	var delay time.Duration
+
 	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
+	if c.config.IsBhilai(header.Number) {
+		delay = time.Until(time.Unix(int64(header.Time), 0)) // Wait until we reach header time for non-primary validators
+		if successionNumber == 0 {
+			// For primary producers, set the delay to `header.Time - block time` instead of `header.Time`
+			// for early block announcement instead of waiting for full block time.
+			delay = time.Until(time.Unix(int64(header.Time-c.config.CalculatePeriod(number)), 0))
+		}
+	} else {
+		delay = time.Until(time.Unix(int64(header.Time), 0)) // Wait until we reach header time
+	}
+
 	// wiggle was already accounted for in header.Time, this is just for logging
 	wiggle := time.Duration(successionNumber) * time.Duration(c.config.CalculateBackupMultiplier(number)) * time.Second
 

@@ -13,9 +13,15 @@
     "muirGlacierBlock": 0,
     "berlinBlock": 0,
     "londonBlock": 1,
+    "shanghaiBlock": 3,
+    "cancunBlock": 3,
+    "pragueBlock": 3,
     "bor": {
       "jaipurBlock": 2,
       "delhiBlock" :3,
+      "indoreBlock": 3,
+      "ahmedabadBlock": 3,
+      "bhilaiBlock": 3,
       "period": {
         "0": 1
       },
