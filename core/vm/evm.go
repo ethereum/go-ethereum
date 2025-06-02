@@ -480,7 +480,7 @@ func (evm *EVM) create(caller common.Address, code []byte, gas uint64, value *ui
 	// in the state trie or not, it _now_ becomes created as a _contract_ account.
 	// This is performed _prior_ to executing the initcode,  since the initcode
 	// acts inside that account.
-	evm.StateDB.CreateContract(address)
+	evm.StateDB.CreateContract(caller, address)
 
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1, tracing.NonceChangeNewContract)

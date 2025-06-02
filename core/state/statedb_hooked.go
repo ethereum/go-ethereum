@@ -49,8 +49,8 @@ func (s *hookedStateDB) CreateAccount(addr common.Address) {
 	s.inner.CreateAccount(addr)
 }
 
-func (s *hookedStateDB) CreateContract(addr common.Address) {
-	s.inner.CreateContract(addr)
+func (s *hookedStateDB) CreateContract(creator, addr common.Address) {
+	s.inner.CreateContract(creator, addr)
 }
 
 func (s *hookedStateDB) GetBalance(addr common.Address) *uint256.Int {

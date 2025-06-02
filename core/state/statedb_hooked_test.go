@@ -48,7 +48,7 @@ func TestBurn(t *testing.T) {
 	})
 	createAndDestroy := func(addr common.Address) {
 		hooked.AddBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
-		hooked.CreateContract(addr)
+		hooked.CreateContract(common.Address{}, addr)
 		hooked.SelfDestruct(addr)
 		// sanity-check that balance is now 0
 		if have, want := hooked.GetBalance(addr), new(uint256.Int); !have.Eq(want) {

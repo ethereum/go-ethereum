@@ -106,6 +106,8 @@ type Header struct {
 
 	// RequestsHash was added by EIP-7685 and is ignored in legacy headers.
 	RequestsHash *common.Hash `json:"requestsHash" rlp:"optional"`
+
+	BALHash *common.Hash `json:"balHash" rlp:"-"`
 }
 
 // field type overrides for gencodec
@@ -183,7 +185,8 @@ func (h *Header) EmptyReceipts() bool {
 type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
-	Withdrawals  []*Withdrawal `rlp:"optional"`
+	Withdrawals  []*Withdrawal    `rlp:"optional"`
+	AccessList   *BlockAccessList `rlp:"optional,nil"`
 }
 
 // Block represents an Ethereum block.
@@ -214,6 +217,8 @@ type Block struct {
 	// that process it.
 	witness *ExecutionWitness
 
+	accessList *BlockAccessList
+
 	// caches
 	hash atomic.Pointer[common.Hash]
 	size atomic.Uint64
@@ -230,6 +235,7 @@ type extblock struct {
 	Txs         []*Transaction
 	Uncles      []*Header
 	Withdrawals []*Withdrawal `rlp:"optional"`
+	BAL         []byte        `rlp:"optional"`
 }
 
 // NewBlock creates a new block. The input data is copied, changes to header and to the
@@ -290,6 +296,12 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher
 		b.withdrawals = slices.Clone(withdrawals)
 	}
 
+	if body.AccessList != nil {
+		balHash := body.AccessList.Hash()
+		b.header.BALHash = &balHash
+		b.accessList = body.AccessList
+	}
+
 	return b
 }
 
@@ -334,30 +346,54 @@ func CopyHeader(h *Header) *Header {
 
 // DecodeRLP decodes a block from RLP.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
-	var eb extblock
+	var (
+		eb  extblock
+		err error
+	)
 	_, size, _ := s.Kind()
 	if err := s.Decode(&eb); err != nil {
 		return err
 	}
 	b.header, b.uncles, b.transactions, b.withdrawals = eb.Header, eb.Uncles, eb.Txs, eb.Withdrawals
+	if eb.BAL != nil {
+		bal := new(encodingBlockAccessList)
+		if err := bal.UnmarshalSSZ(eb.BAL); err != nil {
+			return err
+		}
+		b.accessList, err = bal.ToBlockAccessList()
+		if err != nil {
+			return err
+		}
+	}
+	// TODO: ensure that BAL is accounted for in size
 	b.size.Store(rlp.ListSize(size))
 	return nil
 }
 
 // EncodeRLP serializes a block as RLP.
 func (b *Block) EncodeRLP(w io.Writer) error {
+	var alEnc []byte
+	var err error
+
+	if b.accessList != nil {
+		alEnc, err = b.accessList.encodeSSZ()
+		if err != nil {
+			return err
+		}
+	}
 	return rlp.Encode(w, &extblock{
 		Header:      b.header,
 		Txs:         b.transactions,
 		Uncles:      b.uncles,
 		Withdrawals: b.withdrawals,
+		BAL:         alEnc,
 	})
 }
 
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals}
+	return &Body{b.transactions, b.uncles, b.withdrawals, b.accessList}
 }
 
 // Accessors for body data. These do not return a copy because the content
@@ -507,6 +543,9 @@ func (b *Block) WithBody(body Body) *Block {
 		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  slices.Clone(body.Withdrawals),
 		witness:      b.witness,
+	}
+	if body.AccessList != nil {
+		block.accessList = body.AccessList.Copy()
 	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])

@@ -138,6 +138,9 @@ type StateDB struct {
 	// State witness if cross validation is needed
 	witness *stateless.Witness
 
+	// block access list, if bal construction is specified
+	b *types.BlockAccessList
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
 	AccountHashes   time.Duration
@@ -155,6 +158,14 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+}
+
+func (s *StateDB) EnableBALConstruction() {
+	s.b = types.NewBlockAccessList()
+}
+
+func (s *StateDB) BlockAccessList() *types.BlockAccessList {
+	return s.b
 }
 
 // New creates a new state from a given trie.
@@ -378,6 +389,9 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
+		if s.b != nil {
+			s.b.StorageRead(addr, hash)
+		}
 		return stateObject.GetState(hash)
 	}
 	return common.Hash{}
@@ -649,11 +663,16 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 // state due to funds sent beforehand.
 // This operation sets the 'newContract'-flag, which is required in order to
 // correctly handle EIP-6780 'delete-in-same-transaction' logic.
-func (s *StateDB) CreateContract(addr common.Address) {
+func (s *StateDB) CreateContract(creator, addr common.Address) {
 	obj := s.getStateObject(addr)
 	if !obj.newContract {
 		obj.newContract = true
 		s.journal.createContract(addr)
+
+		creator := s.getStateObject(creator)
+		if common.BytesToHash(creator.CodeHash()) != types.EmptyCodeHash {
+			obj.creatorContract = creator.address
+		}
 	}
 }
 
@@ -758,6 +777,43 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 				s.stateObjectsDestruct[obj.address] = obj
 			}
 		} else {
+			if s.b != nil {
+				// add written storage keys/values
+				for key, val := range obj.dirtyStorage {
+					s.b.StorageWrite(uint64(s.txIndex), obj.address, key, val)
+				}
+
+				// for addresses that changed balance, add the post-change value
+				hadBalanceChange := (obj.origin == nil && !obj.Balance().IsZero()) ||
+					(obj.origin != nil && obj.origin.Balance.Cmp(obj.Balance()) != 0)
+				if hadBalanceChange {
+					s.b.BalanceChange(uint64(s.txIndex), obj.address, obj.Balance())
+				}
+
+				// add block prestate nonces of contracts that created other contracts
+				isCreatedByContract := obj.newContract &&
+					obj.creatorContract != (common.Address{})
+
+				if isCreatedByContract {
+					var creatorNonce uint64
+					creatorObj, exists := s.stateObjects[obj.creatorContract]
+
+					if !exists {
+						log.Info("creator was self-destructed or created in the current tx")
+						creatorNonce = 0
+					} else {
+						creatorNonce = creatorObj.origin.Nonce
+					}
+					s.b.NonceDiff(obj.creatorContract, creatorNonce)
+				}
+
+				// include code of created contracts
+				// TODO: validate that this doesn't trigger on delegated EOAs
+				if obj.origin == nil && common.BytesToHash(obj.CodeHash()) != types.EmptyCodeHash {
+					s.b.CodeChange(uint64(s.txIndex), obj.address, obj.code)
+				}
+			}
+
 			obj.finalise()
 			s.markUpdate(addr)
 		}

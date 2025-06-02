@@ -244,10 +244,10 @@ func checkDest(code []byte, analysis *bitvec, imm, from, length int) error {
 //	for i := 0; i < len(code); i++ {
 //		var op string
 //		if args := immediates[code[i]]; args > 0 {
-//			op = fmt.Sprintf("%v(%#x)", OpCode(code[i]).String(), code[i+1:i+1+int(args)])
+//			op = fmt.Sprintf("%v(%#x)", OpCode(code[i]).PrettyPrint(), code[i+1:i+1+int(args)])
 //			i += int(args)
 //		} else {
-//			op = OpCode(code[i]).String()
+//			op = OpCode(code[i]).PrettyPrint()
 //		}
 //		ops = append(ops, op)
 //	}
