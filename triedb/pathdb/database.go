@@ -314,8 +314,8 @@ func (db *Database) repairHistory() error {
 			// TODO(rjl493456442) would be better to group them into a batch.
 			//
 			// Purge all state history indexing data first
-			rawdb.DeleteLastStateHistoryIndex(db.diskdb)
-			rawdb.DeleteHistoryIndex(db.diskdb)
+			rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
+			rawdb.DeleteStateHistoryIndex(db.diskdb)
 			err := db.freezer.Reset()
 			if err != nil {
 				log.Crit("Failed to reset state histories", "err", err)
@@ -507,8 +507,8 @@ func (db *Database) Enable(root common.Hash) error {
 		// TODO(rjl493456442) would be better to group them into a batch.
 		//
 		// Purge all state history indexing data first
-		rawdb.DeleteLastStateHistoryIndex(db.diskdb)
-		rawdb.DeleteHistoryIndex(db.diskdb)
+		rawdb.DeleteStateHistoryIndexMetadata(db.diskdb)
+		rawdb.DeleteStateHistoryIndex(db.diskdb)
 		if err := db.freezer.Reset(); err != nil {
 			return err
 		}

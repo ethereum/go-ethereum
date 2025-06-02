@@ -28,10 +28,44 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// The batch size for reading state histories
-const historyReadBatch = 1000
+const (
+	// The batch size for reading state histories
+	historyReadBatch = 1000
+
+	stateIndexV0      = uint8(0)     // initial version of state index structure
+	stateIndexVersion = stateIndexV0 // the current state index version
+)
+
+type indexMetadata struct {
+	Version uint8
+	Last    uint64
+}
+
+func loadIndexMetadata(db ethdb.KeyValueReader) *indexMetadata {
+	blob := rawdb.ReadStateHistoryIndexMetadata(db)
+	if len(blob) == 0 {
+		return nil
+	}
+	var m indexMetadata
+	if err := rlp.DecodeBytes(blob, &m); err != nil {
+		return nil
+	}
+	return &m
+}
+
+func storeIndexMetadata(db ethdb.KeyValueWriter, last uint64) {
+	var m indexMetadata
+	m.Version = stateIndexVersion
+	m.Last = last
+	blob, err := rlp.EncodeToBytes(m)
+	if err != nil {
+		log.Crit("Failed to encode index metadata", "err", err)
+	}
+	rawdb.WriteStateHistoryIndexMetadata(db, blob)
+}
 
 // batchIndexer is a structure designed to perform batch indexing or unindexing
 // of state histories atomically.
@@ -144,12 +178,12 @@ func (b *batchIndexer) finish(force bool) error {
 	}
 	// Update the position of last indexed state history
 	if !b.delete {
-		rawdb.WriteLastStateHistoryIndex(batch, b.lastID)
+		storeIndexMetadata(batch, b.lastID)
 	} else {
 		if b.lastID == 1 {
-			rawdb.DeleteLastStateHistoryIndex(batch)
+			rawdb.DeleteStateHistoryIndexMetadata(batch)
 		} else {
-			rawdb.WriteLastStateHistoryIndex(batch, b.lastID-1)
+			storeIndexMetadata(batch, b.lastID-1)
 		}
 	}
 	if err := batch.Write(); err != nil {
@@ -167,11 +201,11 @@ func indexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancient
 		indexHistoryTimer.UpdateSince(start)
 	}(time.Now())
 
-	indexed := rawdb.ReadLastStateHistoryIndex(db)
-	if indexed == nil || *indexed+1 != historyID {
+	metadata := loadIndexMetadata(db)
+	if metadata == nil || metadata.Last+1 != historyID {
 		last := "null"
-		if indexed != nil {
-			last = fmt.Sprintf("%v", *indexed)
+		if metadata != nil {
+			last = fmt.Sprintf("%v", metadata.Last)
 		}
 		return fmt.Errorf("history indexing is out of order, last: %s, requested: %d", last, historyID)
 	}
@@ -196,11 +230,11 @@ func unindexSingle(historyID uint64, db ethdb.KeyValueStore, freezer ethdb.Ancie
 		unindexHistoryTimer.UpdateSince(start)
 	}(time.Now())
 
-	indexed := rawdb.ReadLastStateHistoryIndex(db)
-	if indexed == nil || *indexed != historyID {
+	metadata := loadIndexMetadata(db)
+	if metadata == nil || metadata.Last != historyID {
 		last := "null"
-		if indexed != nil {
-			last = fmt.Sprintf("%v", *indexed)
+		if metadata != nil {
+			last = fmt.Sprintf("%v", metadata.Last)
 		}
 		return fmt.Errorf("history unindexing is out of order, last: %s, requested: %d", last, historyID)
 	}
@@ -286,8 +320,8 @@ func (i *indexIniter) run(lastID uint64) {
 		// checkDone indicates whether all requested state histories
 		// have been fully indexed.
 		checkDone = func() bool {
-			indexed := rawdb.ReadLastStateHistoryIndex(i.disk)
-			return indexed != nil && *indexed == lastID
+			metadata := loadIndexMetadata(i.disk)
+			return metadata != nil && metadata.Last == lastID
 		}
 	)
 	go i.index(done, interrupt, lastID)
@@ -364,22 +398,22 @@ func (i *indexIniter) next() (uint64, error) {
 	tailID := tail + 1 // compute the id of the oldest history
 
 	// Start indexing from scratch if nothing has been indexed
-	lastIndexed := rawdb.ReadLastStateHistoryIndex(i.disk)
-	if lastIndexed == nil {
+	metadata := loadIndexMetadata(i.disk)
+	if metadata == nil {
 		log.Debug("Initialize state history indexing from scratch", "id", tailID)
 		return tailID, nil
 	}
 	// Resume indexing from the last interrupted position
-	if *lastIndexed+1 >= tailID {
-		log.Debug("Resume state history indexing", "id", *lastIndexed+1, "tail", tailID)
-		return *lastIndexed + 1, nil
+	if metadata.Last+1 >= tailID {
+		log.Debug("Resume state history indexing", "id", metadata.Last+1, "tail", tailID)
+		return metadata.Last + 1, nil
 	}
 	// History has been shortened without indexing. Discard the gapped segment
 	// in the history and shift to the first available element.
 	//
 	// The missing indexes corresponding to the gapped histories won't be visible.
 	// It's fine to leave them unindexed.
-	log.Info("History gap detected, discard old segment", "oldHead", *lastIndexed, "newHead", tailID)
+	log.Info("History gap detected, discard old segment", "oldHead", metadata.Last, "newHead", tailID)
 	return tailID, nil
 }
 
@@ -476,6 +510,14 @@ type historyIndexer struct {
 // newHistoryIndexer constructs the history indexer and launches the background
 // initer to complete the indexing of any remaining state histories.
 func newHistoryIndexer(disk ethdb.KeyValueStore, freezer ethdb.AncientStore, lastHistoryID uint64) *historyIndexer {
+	// Purge the obsolete index data from the database.
+	metadata := loadIndexMetadata(disk)
+	if metadata != nil && metadata.Version != stateIndexVersion {
+		// TODO(rjl493456442) would be better to group them into a batch.
+		rawdb.DeleteStateHistoryIndexMetadata(disk)
+		rawdb.DeleteStateHistoryIndex(disk)
+		log.Info("Cleaned up obsolete state history index", "version", metadata.Version, "want", stateIndexVersion)
+	}
 	return &historyIndexer{
 		initer:  newIndexIniter(disk, freezer, lastHistoryID),
 		disk:    disk,

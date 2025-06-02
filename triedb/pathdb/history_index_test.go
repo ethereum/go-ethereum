@@ -189,8 +189,8 @@ func TestBatchIndexerWrite(t *testing.T) {
 	if err := batch.finish(true); err != nil {
 		t.Fatalf("Failed to finish batch indexer, %v", err)
 	}
-	indexed := rawdb.ReadLastStateHistoryIndex(db)
-	if indexed == nil || *indexed != uint64(10) {
+	metadata := loadIndexMetadata(db)
+	if metadata == nil || metadata.Last != uint64(10) {
 		t.Fatal("Unexpected index position")
 	}
 	var (
@@ -278,8 +278,8 @@ func TestBatchIndexerDelete(t *testing.T) {
 		t.Fatalf("Failed to finish batch indexer, %v", err)
 	}
 
-	indexed := rawdb.ReadLastStateHistoryIndex(db)
-	if indexed != nil {
+	metadata := loadIndexMetadata(db)
+	if metadata != nil {
 		t.Fatal("Unexpected index position")
 	}
 	it := db.NewIterator(rawdb.StateHistoryIndexPrefix, nil)
