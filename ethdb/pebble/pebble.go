@@ -619,6 +619,16 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange removes all keys in the range [start, end) from the batch for later committing.
+func (b *batch) DeleteRange(start, end []byte) error {
+	if err := b.b.DeleteRange(start, end, nil); err != nil {
+		return err
+	}
+	// Approximate size impact - just the keys
+	b.size += len(start) + len(end)
+	return nil
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *batch) ValueSize() int {
 	return b.size
@@ -656,6 +666,11 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 			}
 		} else if kind == pebble.InternalKeyKindDelete {
 			if err = w.Delete(k); err != nil {
+				return err
+			}
+		} else if kind == pebble.InternalKeyKindRangeDelete {
+			// For range deletion, k is the start key and v is the end key
+			if err = w.DeleteRange(k, v); err != nil {
 				return err
 			}
 		} else {

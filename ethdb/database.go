@@ -38,18 +38,15 @@ type KeyValueWriter interface {
 
 	// Delete removes the key from the key-value data store.
 	Delete(key []byte) error
-}
 
-var ErrTooManyKeys = errors.New("too many keys in deleted range")
-
-// KeyValueRangeDeleter wraps the DeleteRange method of a backing data store.
-type KeyValueRangeDeleter interface {
 	// DeleteRange deletes all of the keys (and values) in the range [start,end)
 	// (inclusive on start, exclusive on end).
 	// Some implementations of DeleteRange may return ErrTooManyKeys after
 	// partially deleting entries in the given range.
-	DeleteRange(start, end []byte) error
+	DeleteRange(start, end []byte) error	
 }
+
+var ErrTooManyKeys = errors.New("too many keys in deleted range")
 
 // KeyValueStater wraps the Stat method of a backing data store.
 type KeyValueStater interface {
@@ -83,7 +80,6 @@ type KeyValueStore interface {
 	KeyValueWriter
 	KeyValueStater
 	KeyValueSyncer
-	KeyValueRangeDeleter
 	Batcher
 	Iteratee
 	Compacter

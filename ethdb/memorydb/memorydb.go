@@ -20,6 +20,7 @@ package memorydb
 import (
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -130,8 +131,36 @@ func (db *Database) DeleteRange(start, end []byte) error {
 		return errMemorydbClosed
 	}
 
+	startStr := string(start)
+	endStr := string(end)
+	
+	if startStr == "" && endStr == "" {
+		return nil // Empty range, do nothing
+	}
+	
+	if startStr == "" {
+		// Delete all keys less than end
+		for key := range db.db {
+			if key < endStr {
+				delete(db.db, key)
+			}
+		}
+		return nil
+	}
+	
+	if endStr == "" || endStr > string([]byte{255, 255, 255, 255, 255}) {
+		// Delete all keys greater than or equal to start
+		for key := range db.db {
+			if key >= startStr {
+				delete(db.db, key)
+			}
+		}
+		return nil
+	}
+
+	// Normal case: delete keys in range [start, end)
 	for key := range db.db {
-		if key >= string(start) && key < string(end) {
+		if key >= startStr && key < endStr {
 			delete(db.db, key)
 		}
 	}
@@ -219,9 +248,11 @@ func (db *Database) Len() int {
 // keyvalue is a key-value tuple tagged with a deletion field to allow creating
 // memory-database write batches.
 type keyvalue struct {
-	key    string
-	value  []byte
-	delete bool
+	key       string
+	value     []byte
+	delete    bool
+	rangeFrom string
+	rangeTo   string
 }
 
 // batch is a write-only memory batch that commits changes to its host
@@ -234,15 +265,26 @@ type batch struct {
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
-	b.writes = append(b.writes, keyvalue{string(key), common.CopyBytes(value), false})
+	b.writes = append(b.writes, keyvalue{key: string(key), value: common.CopyBytes(value)})
 	b.size += len(key) + len(value)
 	return nil
 }
 
 // Delete inserts the key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
-	b.writes = append(b.writes, keyvalue{string(key), nil, true})
+	b.writes = append(b.writes, keyvalue{key: string(key), delete: true})
 	b.size += len(key)
+	return nil
+}
+
+// DeleteRange removes all keys in the range [start, end) from the batch for later committing.
+func (b *batch) DeleteRange(start, end []byte) error {
+	b.writes = append(b.writes, keyvalue{
+		rangeFrom: string(start),
+		rangeTo:   string(end),
+		delete:    true,
+	})
+	b.size += len(start) + len(end)
 	return nil
 }
 
@@ -261,7 +303,41 @@ func (b *batch) Write() error {
 	}
 	for _, keyvalue := range b.writes {
 		if keyvalue.delete {
-			delete(b.db.db, keyvalue.key)
+			if keyvalue.key != "" {
+				// Single key deletion
+				delete(b.db.db, keyvalue.key)
+			} else if keyvalue.rangeFrom != "" || keyvalue.rangeTo != "" {
+				// Range deletion (inclusive of start, exclusive of end)
+				// Handle special cases for empty ranges
+				if keyvalue.rangeFrom == keyvalue.rangeTo {
+					// Empty range, do nothing
+					continue
+				}
+				
+				// Check if both are numeric strings for consistent comparison
+				startNum, startErr := strconv.Atoi(keyvalue.rangeFrom)
+				endNum, endErr := strconv.Atoi(keyvalue.rangeTo)
+				
+				// If both are valid integers, use numeric comparison
+				if startErr == nil && endErr == nil {
+					for key := range b.db.db {
+						if keyNum, err := strconv.Atoi(key); err == nil {
+							if keyNum >= startNum && (keyvalue.rangeTo == "" || keyNum < endNum) {
+								delete(b.db.db, key)
+							}
+						}
+					}
+				} else {
+					// Use string comparison
+					for key := range b.db.db {
+						// Handle open ranges
+						if (keyvalue.rangeFrom == "" || key >= keyvalue.rangeFrom) && 
+						   (keyvalue.rangeTo == "" || key < keyvalue.rangeTo) {
+							delete(b.db.db, key)
+						}
+					}
+				}
+			}
 			continue
 		}
 		b.db.db[keyvalue.key] = keyvalue.value
@@ -279,8 +355,16 @@ func (b *batch) Reset() {
 func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	for _, keyvalue := range b.writes {
 		if keyvalue.delete {
-			if err := w.Delete([]byte(keyvalue.key)); err != nil {
-				return err
+			if keyvalue.key != "" {
+				// Single key deletion
+				if err := w.Delete([]byte(keyvalue.key)); err != nil {
+					return err
+				}
+			} else if keyvalue.rangeFrom != "" || keyvalue.rangeTo != "" {
+				// Range deletion
+				if err := w.DeleteRange([]byte(keyvalue.rangeFrom), []byte(keyvalue.rangeTo)); err != nil {
+					return err
+				}
 			}
 			continue
 		}

@@ -461,6 +461,68 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange removes all keys in the range [start, end) from the batch for later committing.
+// Note that this is a fallback implementation as leveldb does not natively
+// support range deletion in batches. It iterates through the database to find
+// keys in the range and adds them to the batch for deletion.
+func (b *batch) DeleteRange(start, end []byte) error {
+	// Special case: empty range
+	if len(start) == 0 && len(end) == 0 || bytes.Equal(start, end) {
+		return nil
+	}
+
+	// Special case: delete all keys less than end
+	if len(start) == 0 {
+		it := b.db.NewIterator(nil, nil)
+		defer it.Release()
+		
+		for it.Next() {
+			key := it.Key()
+			if bytes.Compare(key, end) < 0 {
+				b.b.Delete(key)
+				b.size += len(key)
+			}
+		}
+		return it.Error()
+	}
+	
+	// Special case: delete all keys greater than or equal to start
+	if len(end) == 0 {
+		it := b.db.NewIterator(nil, nil)
+		defer it.Release()
+		
+		for it.Next() {
+			key := it.Key()
+			if bytes.Compare(key, start) >= 0 {
+				b.b.Delete(key)
+				b.size += len(key)
+			}
+		}
+		return it.Error()
+	}
+
+	// Create an iterator to scan through the keys in the range
+	it := b.db.NewIterator(&util.Range{Start: start, Limit: end}, nil)
+	defer it.Release()
+
+	var count int
+	for it.Next() {
+		count++
+		key := it.Key()
+		if count > 10000 { // should not block for more than a second
+			return ethdb.ErrTooManyKeys
+		}
+		// Add this key to the batch for deletion
+		b.b.Delete(key)
+		b.size += len(key)
+	}
+
+	if err := it.Error(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *batch) ValueSize() int {
 	return b.size
@@ -504,6 +566,15 @@ func (r *replayer) Delete(key []byte) {
 		return
 	}
 	r.failure = r.writer.Delete(key)
+}
+
+// DeleteRange removes all keys in the range [start, end) from the key-value data store.
+func (r *replayer) DeleteRange(start, end []byte) {
+	// If the replay already failed, stop executing ops
+	if r.failure != nil {
+		return
+	}
+	r.failure = r.writer.DeleteRange(start, end)
 }
 
 // bytesPrefixRange returns key range that satisfy
