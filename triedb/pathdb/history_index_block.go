@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	indexBlockDescSize   = 22    // The size of index block descriptor
+	indexBlockDescSize   = 14    // The size of index block descriptor
 	indexBlockEntriesCap = 4096  // The maximum number of entries can be grouped in a block
 	indexBlockRestartLen = 256   // The restart interval length of index block
 	historyIndexBatch    = 65536 // The number of state histories for constructing or deleting indexes together
@@ -35,7 +35,6 @@ const (
 // list of state mutation records associated with a specific state (either an
 // account or a storage slot).
 type indexBlockDesc struct {
-	min     uint64 // The minimum state ID retained within the block
 	max     uint64 // The maximum state ID retained within the block
 	entries uint16 // The number of state mutation records retained within the block
 	id      uint32 // The id of the index block
@@ -59,19 +58,17 @@ func (d *indexBlockDesc) full() bool {
 // encode packs index block descriptor into byte stream.
 func (d *indexBlockDesc) encode() []byte {
 	var buf [indexBlockDescSize]byte
-	binary.BigEndian.PutUint64(buf[:8], d.min)
-	binary.BigEndian.PutUint64(buf[8:16], d.max)
-	binary.BigEndian.PutUint16(buf[16:18], d.entries)
-	binary.BigEndian.PutUint32(buf[18:22], d.id)
+	binary.BigEndian.PutUint64(buf[0:8], d.max)
+	binary.BigEndian.PutUint16(buf[8:10], d.entries)
+	binary.BigEndian.PutUint32(buf[10:14], d.id)
 	return buf[:]
 }
 
 // decode unpacks index block descriptor from byte stream.
 func (d *indexBlockDesc) decode(blob []byte) {
-	d.min = binary.BigEndian.Uint64(blob[:8])
-	d.max = binary.BigEndian.Uint64(blob[8:16])
-	d.entries = binary.BigEndian.Uint16(blob[16:18])
-	d.id = binary.BigEndian.Uint32(blob[18:22])
+	d.max = binary.BigEndian.Uint64(blob[:8])
+	d.entries = binary.BigEndian.Uint16(blob[8:10])
+	d.id = binary.BigEndian.Uint32(blob[10:14])
 }
 
 // parseIndexBlock parses the index block with the supplied byte stream.
@@ -287,9 +284,9 @@ func (b *blockWriter) append(id uint64) error {
 	b.desc.entries++
 
 	// The state history ID must be greater than 0.
-	if b.desc.min == 0 {
-		b.desc.min = id
-	}
+	//if b.desc.min == 0 {
+	//	b.desc.min = id
+	//}
 	b.desc.max = id
 	return nil
 }
@@ -357,7 +354,7 @@ func (b *blockWriter) pop(id uint64) error {
 	}
 	// If there is only one entry left, the entire block should be reset
 	if b.desc.entries == 1 {
-		b.desc.min = 0
+		//b.desc.min = 0
 		b.desc.max = 0
 		b.desc.entries = 0
 		b.restarts = nil
