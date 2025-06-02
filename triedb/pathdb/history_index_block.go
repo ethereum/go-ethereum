@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	indexBlockDescSize   = 24    // The size of index block descriptor
+	indexBlockDescSize   = 22    // The size of index block descriptor
 	indexBlockEntriesCap = 4096  // The maximum number of entries can be grouped in a block
 	indexBlockRestartLen = 256   // The restart interval length of index block
 	historyIndexBatch    = 65536 // The number of state histories for constructing or deleting indexes together
@@ -37,7 +37,7 @@ const (
 type indexBlockDesc struct {
 	min     uint64 // The minimum state ID retained within the block
 	max     uint64 // The maximum state ID retained within the block
-	entries uint32 // The number of state mutation records retained within the block
+	entries uint16 // The number of state mutation records retained within the block
 	id      uint32 // The id of the index block
 }
 
@@ -61,8 +61,8 @@ func (d *indexBlockDesc) encode() []byte {
 	var buf [indexBlockDescSize]byte
 	binary.BigEndian.PutUint64(buf[:8], d.min)
 	binary.BigEndian.PutUint64(buf[8:16], d.max)
-	binary.BigEndian.PutUint32(buf[16:20], d.entries)
-	binary.BigEndian.PutUint32(buf[20:24], d.id)
+	binary.BigEndian.PutUint16(buf[16:18], d.entries)
+	binary.BigEndian.PutUint32(buf[18:22], d.id)
 	return buf[:]
 }
 
@@ -70,8 +70,8 @@ func (d *indexBlockDesc) encode() []byte {
 func (d *indexBlockDesc) decode(blob []byte) {
 	d.min = binary.BigEndian.Uint64(blob[:8])
 	d.max = binary.BigEndian.Uint64(blob[8:16])
-	d.entries = binary.BigEndian.Uint32(blob[16:20])
-	d.id = binary.BigEndian.Uint32(blob[20:24])
+	d.entries = binary.BigEndian.Uint16(blob[16:18])
+	d.id = binary.BigEndian.Uint32(blob[18:22])
 }
 
 // parseIndexBlock parses the index block with the supplied byte stream.
