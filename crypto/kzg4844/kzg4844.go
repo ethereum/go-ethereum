@@ -45,7 +45,7 @@ func (b *Blob) UnmarshalJSON(input []byte) error {
 }
 
 // MarshalText returns the hex representation of b.
-func (b Blob) MarshalText() ([]byte, error) {
+func (b *Blob) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(b[:]).MarshalText()
 }
 
