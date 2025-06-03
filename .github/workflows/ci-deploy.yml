@@ -1,0 +1,49 @@
+name:  Deploy Contracts to Devnet
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  deploy_contracts:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Deploy')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Start Geth devnet from image
+        run: |
+          docker run -d --name geth-devnet -p 8545:8545 \
+            ghcr.io/${{ github.repository_owner }}/go-ethereum:dev-latest \
+            --http --http.addr 0.0.0.0 --http.port 8545 \
+            --http.api eth,net,web3 \
+            --dev
+
+      - name: Wait for devnet to be ready
+        run: |
+          sleep 10
+          curl --fail http://localhost:8545 || exit 1
+
+      - name: Install Hardhat dependencies
+        working-directory: hardhat
+        run: npm ci
+
+      - name: Deploy Hardhat contracts to local devnet
+        working-directory: hardhat
+        run: npx hardhat run scripts/deploy.js --network localhost
+
+      - name: Commit devnet container with contracts
+        run: |
+          docker commit geth-devnet ghcr.io/${{ github.repository_owner }}/go-ethereum:devnet-with-contracts
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image with deployed contracts
+        run: docker push ghcr.io/${{ github.repository_owner }}/go-ethereum:devnet-with-contracts
