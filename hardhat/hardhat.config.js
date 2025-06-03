@@ -4,10 +4,3 @@ require("@nomicfoundation/hardhat-toolbox");
 module.exports = {
   solidity: "0.8.28",
 };
-
-
-import "@nomicfoundation/hardhat-toolbox";
-
-export default {
-  solidity: "0.8.28",
-};
