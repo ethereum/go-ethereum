@@ -24,6 +24,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/internal/download"
 )
 
 type GoToolchain struct {
@@ -84,8 +86,8 @@ func (g *GoToolchain) goTool(command string, args ...string) *exec.Cmd {
 
 // DownloadGo downloads the Go binary distribution and unpacks it into a temporary
 // directory. It returns the GOROOT of the unpacked toolchain.
-func DownloadGo(csdb *ChecksumDB) string {
-	version, err := Version(csdb, "golang")
+func DownloadGo(csdb *download.ChecksumDB) string {
+	version, err := csdb.FindVersion("golang")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -129,52 +131,4 @@ func DownloadGo(csdb *ChecksumDB) string {
 		log.Fatal(err)
 	}
 	return goroot
-}
-
-// Version returns the versions defined in the checksumdb.
-func Version(csdb *ChecksumDB, version string) (string, error) {
-	for _, l := range csdb.allChecksums {
-		if !strings.HasPrefix(l, "# version:") {
-			continue
-		}
-		v := strings.Split(l, ":")[1]
-		parts := strings.Split(v, " ")
-		if len(parts) != 2 {
-			log.Print("Erroneous version-string", "v", l)
-			continue
-		}
-		if parts[0] == version {
-			return parts[1], nil
-		}
-	}
-	return "", fmt.Errorf("no version found for '%v'", version)
-}
-
-// DownloadAndVerifyChecksums downloads all files and checks that they match
-// the checksum given in checksums.txt.
-// This task can be used to sanity-check new checksums.
-func DownloadAndVerifyChecksums(csdb *ChecksumDB) {
-	var (
-		base   = ""
-		ucache = os.TempDir()
-	)
-	for _, l := range csdb.allChecksums {
-		if strings.HasPrefix(l, "# https://") {
-			base = l[2:]
-			continue
-		}
-		if strings.HasPrefix(l, "#") {
-			continue
-		}
-		hashFile := strings.Split(l, "  ")
-		if len(hashFile) != 2 {
-			continue
-		}
-		file := hashFile[1]
-		url := base + file
-		dst := filepath.Join(ucache, file)
-		if err := csdb.DownloadFile(url, dst); err != nil {
-			log.Print(err)
-		}
-	}
 }

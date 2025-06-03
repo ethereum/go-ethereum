@@ -545,8 +545,8 @@ func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawVa
 }
 
 // ReadRawReceipts retrieves all the transaction receipts belonging to a block.
-// The receipt metadata fields are not guaranteed to be populated, so they
-// should not be used. Use ReadReceipts instead if the metadata is needed.
+// The receipt metadata fields and the Bloom are not guaranteed to be populated,
+// so they should not be used. Use ReadReceipts instead if the metadata is needed.
 func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
@@ -617,6 +617,14 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rec
 	}
 	// Store the flattened receipt slice
 	if err := db.Put(blockReceiptsKey(number, hash), bytes); err != nil {
+		log.Crit("Failed to store block receipts", "err", err)
+	}
+}
+
+// WriteRawReceipts stores all the transaction receipts belonging to a block.
+func WriteRawReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, receipts rlp.RawValue) {
+	// Store the flattened receipt slice
+	if err := db.Put(blockReceiptsKey(number, hash), receipts); err != nil {
 		log.Crit("Failed to store block receipts", "err", err)
 	}
 }
@@ -701,18 +709,11 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 }
 
 // WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []types.Receipts) (int64, error) {
-	var stReceipts []*types.ReceiptForStorage
-
+func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []rlp.RawValue) (int64, error) {
 	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i, block := range blocks {
-			// Convert receipts to storage format and sum up total difficulty.
-			stReceipts = stReceipts[:0]
-			for _, receipt := range receipts[i] {
-				stReceipts = append(stReceipts, (*types.ReceiptForStorage)(receipt))
-			}
 			header := block.Header()
-			if err := writeAncientBlock(op, block, header, stReceipts); err != nil {
+			if err := writeAncientBlock(op, block, header, receipts[i]); err != nil {
 				return err
 			}
 		}
@@ -720,7 +721,7 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 	})
 }
 
-func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts []*types.ReceiptForStorage) error {
+func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts rlp.RawValue) error {
 	num := block.NumberU64()
 	if err := op.AppendRaw(ChainFreezerHashTable, num, block.Hash().Bytes()); err != nil {
 		return fmt.Errorf("can't add block %d hash: %v", num, err)

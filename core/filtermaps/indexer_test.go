@@ -428,10 +428,12 @@ func (ts *testSetup) matcherViewHash() common.Hash {
 		binary.LittleEndian.PutUint32(enc[:4], r)
 		for m := uint32(0); m <= headMap; m++ {
 			binary.LittleEndian.PutUint32(enc[4:8], m)
-			row, _ := mb.GetFilterMapRow(ctx, m, r, false)
-			for _, v := range row {
-				binary.LittleEndian.PutUint32(enc[8:], v)
-				hasher.Write(enc[:])
+			rows, _ := mb.GetFilterMapRows(ctx, []uint32{m}, r, false)
+			for _, row := range rows {
+				for _, v := range row {
+					binary.LittleEndian.PutUint32(enc[8:], v)
+					hasher.Write(enc[:])
+				}
 			}
 		}
 	}
@@ -515,7 +517,7 @@ func (tc *testChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return tc.receipts[hash]
 }
 
-func (tc *testChain) GetRawReceiptsByHash(hash common.Hash) types.Receipts {
+func (tc *testChain) GetRawReceipts(hash common.Hash, number uint64) types.Receipts {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 

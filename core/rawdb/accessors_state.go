@@ -258,13 +258,21 @@ func ReadStateHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []by
 // WriteStateHistory writes the provided state history to database. Compute the
 // position of state history in freezer by minus one since the id of first state
 // history starts from one(zero for initial state).
-func WriteStateHistory(db ethdb.AncientWriter, id uint64, meta []byte, accountIndex []byte, storageIndex []byte, accounts []byte, storages []byte) {
-	db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
-		op.AppendRaw(stateHistoryMeta, id-1, meta)
-		op.AppendRaw(stateHistoryAccountIndex, id-1, accountIndex)
-		op.AppendRaw(stateHistoryStorageIndex, id-1, storageIndex)
-		op.AppendRaw(stateHistoryAccountData, id-1, accounts)
-		op.AppendRaw(stateHistoryStorageData, id-1, storages)
-		return nil
+func WriteStateHistory(db ethdb.AncientWriter, id uint64, meta []byte, accountIndex []byte, storageIndex []byte, accounts []byte, storages []byte) error {
+	_, err := db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		if err := op.AppendRaw(stateHistoryMeta, id-1, meta); err != nil {
+			return err
+		}
+		if err := op.AppendRaw(stateHistoryAccountIndex, id-1, accountIndex); err != nil {
+			return err
+		}
+		if err := op.AppendRaw(stateHistoryStorageIndex, id-1, storageIndex); err != nil {
+			return err
+		}
+		if err := op.AppendRaw(stateHistoryAccountData, id-1, accounts); err != nil {
+			return err
+		}
+		return op.AppendRaw(stateHistoryStorageData, id-1, storages)
 	})
+	return err
 }

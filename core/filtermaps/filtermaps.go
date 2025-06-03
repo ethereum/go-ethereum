@@ -53,7 +53,6 @@ const (
 	databaseVersion       = 2    // reindexed if database version does not match
 	cachedLastBlocks      = 1000 // last block of map pointers
 	cachedLvPointers      = 1000 // first log value pointer of block pointers
-	cachedBaseRows        = 100  // groups of base layer filter row data
 	cachedFilterMaps      = 3    // complete filter maps (cached by map renderer)
 	cachedRenderSnapshots = 8    // saved map renderer data at block boundaries
 )
@@ -101,7 +100,6 @@ type FilterMaps struct {
 	filterMapCache *lru.Cache[uint32, filterMap]
 	lastBlockCache *lru.Cache[uint32, lastBlockOfMap]
 	lvPointerCache *lru.Cache[uint64, uint64]
-	baseRowsCache  *lru.Cache[uint64, [][]uint32]
 
 	// the matchers set and the fields of FilterMapsMatcherBackend instances are
 	// read and written both by exported functions and the indexer.
@@ -227,7 +225,7 @@ type Config struct {
 // NewFilterMaps creates a new FilterMaps and starts the indexer.
 func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, finalBlock uint64, params Params, config Config) *FilterMaps {
 	rs, initialized, err := rawdb.ReadFilterMapsRange(db)
-	if err != nil || rs.Version != databaseVersion {
+	if err != nil || (initialized && rs.Version != databaseVersion) {
 		rs, initialized = rawdb.FilterMapsRange{}, false
 		log.Warn("Invalid log index database version; resetting log index")
 	}
@@ -264,7 +262,6 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 		filterMapCache:  lru.NewCache[uint32, filterMap](cachedFilterMaps),
 		lastBlockCache:  lru.NewCache[uint32, lastBlockOfMap](cachedLastBlocks),
 		lvPointerCache:  lru.NewCache[uint64, uint64](cachedLvPointers),
-		baseRowsCache:   lru.NewCache[uint64, [][]uint32](cachedBaseRows),
 		renderSnapshots: lru.NewCache[uint64, *renderedMap](cachedRenderSnapshots),
 	}
 	f.checkRevertRange() // revert maps that are inconsistent with the current chain view
@@ -348,7 +345,6 @@ func (f *FilterMaps) reset() {
 	f.renderSnapshots.Purge()
 	f.lastBlockCache.Purge()
 	f.lvPointerCache.Purge()
-	f.baseRowsCache.Purge()
 	f.indexLock.Unlock()
 	// deleting the range first ensures that resetDb will be called again at next
 	// startup and any leftover data will be removed even if it cannot finish now.
@@ -565,47 +561,69 @@ func (f *FilterMaps) getFilterMap(mapIndex uint32) (filterMap, error) {
 	}
 	fm := make(filterMap, f.mapHeight)
 	for rowIndex := range fm {
-		var err error
-		fm[rowIndex], err = f.getFilterMapRow(mapIndex, uint32(rowIndex), false)
+		rows, err := f.getFilterMapRows([]uint32{mapIndex}, uint32(rowIndex), false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load filter map %d from database: %v", mapIndex, err)
 		}
+		fm[rowIndex] = rows[0]
 	}
 	f.filterMapCache.Add(mapIndex, fm)
 	return fm, nil
 }
 
-// getFilterMapRow fetches the given filter map row. If baseLayerOnly is true
-// then only the first baseRowLength entries are returned.
-func (f *FilterMaps) getFilterMapRow(mapIndex, rowIndex uint32, baseLayerOnly bool) (FilterRow, error) {
-	baseMapRowIndex := f.mapRowIndex(mapIndex&-f.baseRowGroupLength, rowIndex)
-	baseRows, ok := f.baseRowsCache.Get(baseMapRowIndex)
-	if !ok {
-		var err error
-		baseRows, err = rawdb.ReadFilterMapBaseRows(f.db, baseMapRowIndex, f.baseRowGroupLength, f.logMapWidth)
-		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve filter map %d base rows %d: %v", mapIndex, rowIndex, err)
+// getFilterMapRows fetches a set of filter map rows at the corresponding map
+// indices and a shared row index. If baseLayerOnly is true then only the first
+// baseRowLength entries are returned.
+func (f *FilterMaps) getFilterMapRows(mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) ([]FilterRow, error) {
+	rows := make([]FilterRow, len(mapIndices))
+	var ptr int
+	for len(mapIndices) > ptr {
+		baseRowGroup := mapIndices[ptr] / f.baseRowGroupLength
+		groupLength := 1
+		for ptr+groupLength < len(mapIndices) && mapIndices[ptr+groupLength]/f.baseRowGroupLength == baseRowGroup {
+			groupLength++
 		}
-		f.baseRowsCache.Add(baseMapRowIndex, baseRows)
+		if err := f.getFilterMapRowsOfGroup(rows[ptr:ptr+groupLength], mapIndices[ptr:ptr+groupLength], rowIndex, baseLayerOnly); err != nil {
+			return nil, err
+		}
+		ptr += groupLength
 	}
-	baseRow := slices.Clone(baseRows[mapIndex&(f.baseRowGroupLength-1)])
-	if baseLayerOnly {
-		return baseRow, nil
-	}
-	extRow, err := rawdb.ReadFilterMapExtRow(f.db, f.mapRowIndex(mapIndex, rowIndex), f.logMapWidth)
+	return rows, nil
+}
+
+// getFilterMapRowsOfGroup fetches a set of filter map rows at map indices
+// belonging to the same base row group.
+func (f *FilterMaps) getFilterMapRowsOfGroup(target []FilterRow, mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) error {
+	baseRowGroup := mapIndices[0] / f.baseRowGroupLength
+	baseMapRowIndex := f.mapRowIndex(baseRowGroup*f.baseRowGroupLength, rowIndex)
+	baseRows, err := rawdb.ReadFilterMapBaseRows(f.db, baseMapRowIndex, f.baseRowGroupLength, f.logMapWidth)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve filter map %d extended row %d: %v", mapIndex, rowIndex, err)
+		return fmt.Errorf("failed to retrieve base row group %d of row %d: %v", baseRowGroup, rowIndex, err)
 	}
-	return FilterRow(append(baseRow, extRow...)), nil
+	for i, mapIndex := range mapIndices {
+		if mapIndex/f.baseRowGroupLength != baseRowGroup {
+			panic("mapIndices are not in the same base row group")
+		}
+		row := baseRows[mapIndex&(f.baseRowGroupLength-1)]
+		if !baseLayerOnly {
+			extRow, err := rawdb.ReadFilterMapExtRow(f.db, f.mapRowIndex(mapIndex, rowIndex), f.logMapWidth)
+			if err != nil {
+				return fmt.Errorf("failed to retrieve filter map %d extended row %d: %v", mapIndex, rowIndex, err)
+			}
+			row = append(row, extRow...)
+		}
+		target[i] = row
+	}
+	return nil
 }
 
 // storeFilterMapRows stores a set of filter map rows at the corresponding map
 // indices and a shared row index.
 func (f *FilterMaps) storeFilterMapRows(batch ethdb.Batch, mapIndices []uint32, rowIndex uint32, rows []FilterRow) error {
 	for len(mapIndices) > 0 {
-		baseMapIndex := mapIndices[0] & -f.baseRowGroupLength
+		baseRowGroup := mapIndices[0] / f.baseRowGroupLength
 		groupLength := 1
-		for groupLength < len(mapIndices) && mapIndices[groupLength]&-f.baseRowGroupLength == baseMapIndex {
+		for groupLength < len(mapIndices) && mapIndices[groupLength]/f.baseRowGroupLength == baseRowGroup {
 			groupLength++
 		}
 		if err := f.storeFilterMapRowsOfGroup(batch, mapIndices[:groupLength], rowIndex, rows[:groupLength]); err != nil {
@@ -619,26 +637,20 @@ func (f *FilterMaps) storeFilterMapRows(batch ethdb.Batch, mapIndices []uint32, 
 // storeFilterMapRowsOfGroup stores a set of filter map rows at map indices
 // belonging to the same base row group.
 func (f *FilterMaps) storeFilterMapRowsOfGroup(batch ethdb.Batch, mapIndices []uint32, rowIndex uint32, rows []FilterRow) error {
-	baseMapIndex := mapIndices[0] & -f.baseRowGroupLength
-	baseMapRowIndex := f.mapRowIndex(baseMapIndex, rowIndex)
+	baseRowGroup := mapIndices[0] / f.baseRowGroupLength
+	baseMapRowIndex := f.mapRowIndex(baseRowGroup*f.baseRowGroupLength, rowIndex)
 	var baseRows [][]uint32
 	if uint32(len(mapIndices)) != f.baseRowGroupLength { // skip base rows read if all rows are replaced
-		var ok bool
-		baseRows, ok = f.baseRowsCache.Get(baseMapRowIndex)
-		if ok {
-			baseRows = slices.Clone(baseRows)
-		} else {
-			var err error
-			baseRows, err = rawdb.ReadFilterMapBaseRows(f.db, baseMapRowIndex, f.baseRowGroupLength, f.logMapWidth)
-			if err != nil {
-				return fmt.Errorf("failed to retrieve filter map %d base rows %d for modification: %v", mapIndices[0]&-f.baseRowGroupLength, rowIndex, err)
-			}
+		var err error
+		baseRows, err = rawdb.ReadFilterMapBaseRows(f.db, baseMapRowIndex, f.baseRowGroupLength, f.logMapWidth)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve base row group %d of row %d for modification: %v", baseRowGroup, rowIndex, err)
 		}
 	} else {
 		baseRows = make([][]uint32, f.baseRowGroupLength)
 	}
 	for i, mapIndex := range mapIndices {
-		if mapIndex&-f.baseRowGroupLength != baseMapIndex {
+		if mapIndex/f.baseRowGroupLength != baseRowGroup {
 			panic("mapIndices are not in the same base row group")
 		}
 		baseRow := []uint32(rows[i])
@@ -650,7 +662,6 @@ func (f *FilterMaps) storeFilterMapRowsOfGroup(batch ethdb.Batch, mapIndices []u
 		baseRows[mapIndex&(f.baseRowGroupLength-1)] = baseRow
 		rawdb.WriteFilterMapExtRow(batch, f.mapRowIndex(mapIndex, rowIndex), extRow, f.logMapWidth)
 	}
-	f.baseRowsCache.Add(baseMapRowIndex, baseRows)
 	rawdb.WriteFilterMapBaseRows(batch, baseMapRowIndex, baseRows, f.logMapWidth)
 	return nil
 }
