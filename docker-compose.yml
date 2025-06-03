@@ -9,11 +9,9 @@ services:
     volumes:
       - ./data:/root/.ethereum
     command: >
-      geth
       --http
       --http.addr 0.0.0.0
       --http.port 8545
       --http.api eth,net,web3,personal
-      --networkid 1337
       --nodiscover
       --dev
