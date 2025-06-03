@@ -418,7 +418,11 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	adjExpLen := new(big.Int)
 	if expLen.Cmp(big32) > 0 {
 		adjExpLen.Sub(expLen, big32)
-		adjExpLen.Lsh(adjExpLen, 3)
+		if c.eip7883 {
+			adjExpLen.Lsh(adjExpLen, 4)
+		} else {
+			adjExpLen.Lsh(adjExpLen, 3)
+		}
 	}
 	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
 	// Calculate the gas cost of the operation
