@@ -370,10 +370,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 		if chainConfig.IsDelegationActive(vmContext.BlockNumber, vmContext.Time) {
 			if len(pre.Env.Withdrawals) > 0 {
-				w := pre.Env.Withdrawals[0]
-				if w.Validator == gomath.MaxUint64 {
-					amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-					if err := core.ProcessStakingDistribution(evm, w.Address, amount); err != nil {
+				firstWithdrawal := pre.Env.Withdrawals[0]
+				if firstWithdrawal.Validator == gomath.MaxUint64 {
+					amount := new(big.Int).Mul(new(big.Int).SetUint64(firstWithdrawal.Amount), big.NewInt(params.GWei))
+					if err := core.ProcessStakingDistribution(evm, firstWithdrawal.Address, amount); err != nil {
 						log.Error("could not process staking distribution", "err", err)
 					}
 				}

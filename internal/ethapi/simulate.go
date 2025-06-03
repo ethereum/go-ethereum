@@ -336,10 +336,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		}
 		if sim.chainConfig.IsDelegationActive(header.Number, header.Time) {
 			if block.BlockOverrides.Withdrawals != nil && len(*block.BlockOverrides.Withdrawals) > 0 {
-				w := (*block.BlockOverrides.Withdrawals)[0]
-				if w.Validator == math.MaxUint64 {
-					amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-					if err := core.ProcessStakingDistribution(evm, w.Address, amount); err != nil {
+				firstWithdrawal := (*block.BlockOverrides.Withdrawals)[0]
+				if firstWithdrawal.Validator == math.MaxUint64 {
+					amount := new(big.Int).Mul(new(big.Int).SetUint64(firstWithdrawal.Amount), big.NewInt(params.GWei))
+					if err := core.ProcessStakingDistribution(evm, firstWithdrawal.Address, amount); err != nil {
 						log.Error("could not process staking distribution", "err", err)
 					}
 				}
