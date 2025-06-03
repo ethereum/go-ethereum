@@ -742,7 +742,7 @@ func (api *ConsensusAPI) checkInvalidAncestor(check common.Hash, head common.Has
 
 	api.invalidBlocksHits[badHash]++
 	if api.invalidBlocksHits[badHash] >= invalidBlockHitEviction {
-		log.Warn("Too many bad block import attempt, trying", "number", invalid.Number, "hash", badHash)
+		log.Error("Too many bad block import attempt, trying", "number", invalid.Number, "hash", badHash)
 		delete(api.invalidBlocksHits, badHash)
 
 		for descendant, badHeader := range api.invalidTipsets {
