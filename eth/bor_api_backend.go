@@ -64,7 +64,7 @@ func (b *EthAPIBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, e
 
 	// Check if end block exist
 	localEndBlock, err := b.BlockByNumber(ctx, rpc.BlockNumber(endBlockNr))
-	if err != nil {
+	if err != nil || localEndBlock == nil {
 		return false, errEndBlock
 	}
 
