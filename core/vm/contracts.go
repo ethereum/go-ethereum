@@ -128,7 +128,6 @@ var PrecompiledContractsPrague = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x07}):       &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{0x08}):       &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{0x09}):       &blake2F{},
-	common.BytesToAddress([]byte{0x0a}):       &kzgPointEvaluation{},
 	common.BytesToAddress([]byte{0x0b}):       &bls12381G1Add{},
 	common.BytesToAddress([]byte{0x0c}):       &bls12381G1MultiExp{},
 	common.BytesToAddress([]byte{0x0d}):       &bls12381G2Add{},
