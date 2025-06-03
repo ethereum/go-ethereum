@@ -1,5 +1,3 @@
-// nolint
-
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -1164,19 +1162,25 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 }
 
 // kzgPointEvaluation implements the EIP-4844 point evaluation precompile.
+//
+//nolint:unused
 type kzgPointEvaluation struct{}
 
 // RequiredGas estimates the gas required for running the point evaluation precompile.
+//
+//nolint:unused
 func (b *kzgPointEvaluation) RequiredGas(input []byte) uint64 {
 	return params.BlobTxPointEvaluationPrecompileGas
 }
 
+//nolint:unused
 const (
 	blobVerifyInputLength           = 192  // Max input length for the point evaluation precompile.
 	blobCommitmentVersionKZG  uint8 = 0x01 // Version byte for the point evaluation precompile.
 	blobPrecompileReturnValue       = "000000000000000000000000000000000000000000000000000000000000100073eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001"
 )
 
+//nolint:unused
 var (
 	errBlobVerifyInvalidInputLength = errors.New("invalid input length")
 	errBlobVerifyMismatchedVersion  = errors.New("mismatched versioned hash")
@@ -1184,6 +1188,8 @@ var (
 )
 
 // Run executes the point evaluation precompile.
+//
+//nolint:unused
 func (b *kzgPointEvaluation) Run(input []byte) ([]byte, error) {
 	if len(input) != blobVerifyInputLength {
 		return nil, errBlobVerifyInvalidInputLength
@@ -1220,6 +1226,8 @@ func (b *kzgPointEvaluation) Run(input []byte) ([]byte, error) {
 }
 
 // kZGToVersionedHash implements kzg_to_versioned_hash from EIP-4844
+//
+//nolint:unused
 func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 	h := sha256.Sum256(kzg[:])
 	h[0] = blobCommitmentVersionKZG
