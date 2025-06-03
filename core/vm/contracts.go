@@ -1,3 +1,5 @@
+// nolint
+
 // Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
