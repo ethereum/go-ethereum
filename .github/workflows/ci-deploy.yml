@@ -30,9 +30,10 @@ jobs:
         working-directory: hardhat
         run: npm install
 
-      - name: Deploy contracts to devnet
+      - name: Deploy contracts using Ignition
         working-directory: hardhat
-        run: npx hardhat run scripts/deploy.js --network localhost
+        run: npx hardhat ignition deploy ./ignition/modules/Lock.js --network localhost
+
 
       - name: Commit container as new image with contracts
         run: |
