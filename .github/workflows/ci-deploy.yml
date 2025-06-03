@@ -1,4 +1,4 @@
-name:  Deploy Contracts to Devnet
+name: Deploy Contracts to Devnet
 
 on:
   pull_request:
@@ -13,37 +13,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Start Geth devnet from image
+      - name: Start Geth devnet container
         run: |
           docker run -d --name geth-devnet -p 8545:8545 \
             ghcr.io/${{ github.repository_owner }}/go-ethereum:dev-latest \
-            geth --http --http.addr 0.0.0.0 --http.port 8545 \
-            --http.api eth,net,web3 \
-            --dev
+            geth --http --http.addr 0.0.0.0 --http.port 8545 --http.api eth,net,web3 --dev
 
-      - name: Wait for devnet to be ready
+      - name: Wait for Geth RPC to be available
         run: |
-          sleep 10
-          curl --fail http://localhost:8545 || exit 1
+          for i in {1..10}; do
+            curl -s http://localhost:8545 && break
+            echo "Waiting for Geth RPC..." && sleep 3
+          done
 
       - name: Install Hardhat dependencies
         working-directory: hardhat
-        run: npm ci
+        run: npm install
 
-      - name: Deploy Hardhat contracts to local devnet
+      - name: Deploy contracts to devnet
         working-directory: hardhat
         run: npx hardhat run scripts/deploy.js --network localhost
 
-      - name: Commit devnet container with contracts
+      - name: Commit container as new image with contracts
         run: |
           docker commit geth-devnet ghcr.io/${{ github.repository_owner }}/go-ethereum:devnet-with-contracts
 
-      - name: Login to GitHub Container Registry
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push image with deployed contracts
+      - name: Push new image
         run: docker push ghcr.io/${{ github.repository_owner }}/go-ethereum:devnet-with-contracts
