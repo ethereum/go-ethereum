@@ -127,3 +127,56 @@ func TestFakeExponential(t *testing.T) {
 		}
 	}
 }
+
+func TestCalcExcessBlobGasEIP7918(t *testing.T) {
+	// TODO: replace with a test config that has Osaka enabled.
+	c := *params.MainnetChainConfig
+	cfg := &c
+	cfg.OsakaTime = new(uint64)
+	pragueSchedule := *cfg.BlobScheduleConfig.Prague
+	cfg.BlobScheduleConfig.Osaka = &pragueSchedule
+
+	var (
+		targetBlobs    = targetBlobsPerBlock(cfg, *cfg.CancunTime)
+		blobGasPerBlob = uint64(params.BlobTxBlobGasPerBlob)
+		blobGasTarget  = uint64(targetBlobs) * blobGasPerBlob
+	)
+
+	makeHeader := func(
+		parentExcess uint64,
+		parentBaseFee uint64,
+		blobsUsed int,
+	) *types.Header {
+		blobGasUsed := uint64(blobsUsed) * blobGasPerBlob
+		return &types.Header{
+			BaseFee:       big.NewInt(int64(parentBaseFee)),
+			ExcessBlobGas: &parentExcess,
+			BlobGasUsed:   &blobGasUsed,
+		}
+	}
+
+	tests := []struct {
+		name          string
+		header        *types.Header
+		wantExcessGas uint64
+	}{
+		{
+			name:          "BelowReservePrice",
+			header:        makeHeader(0, 1_000_000_000, targetBlobs),
+			wantExcessGas: blobGasTarget * 3 / 9,
+		},
+		{
+			name:          "AboveReservePrice",
+			header:        makeHeader(0, 1, targetBlobs),
+			wantExcessGas: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		got := CalcExcessBlobGas(cfg, tc.header, *cfg.CancunTime)
+		if got != tc.wantExcessGas {
+			t.Fatalf("%s: excess-blob-gas mismatch – have %d, want %d",
+				tc.name, got, tc.wantExcessGas)
+		}
+	}
+}
