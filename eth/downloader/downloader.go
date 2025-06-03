@@ -1039,7 +1039,11 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.body())
 		receipts[i] = result.Receipts
+		if len(result.Receipts) == 0 {
+			panic("empty receipts in snap sync block")
+		}
 	}
+	fmt.Printf(">>>> Committing %d snap-sync blocks, first %d, last %d\n", len(results), first.Number.Uint64(), last.Number.Uint64())
 	if index, err := d.blockchain.InsertReceiptChain(blocks, receipts, d.ancientLimit); err != nil {
 		log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 		return fmt.Errorf("%w: %v", errInvalidChain, err)

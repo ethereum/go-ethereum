@@ -623,6 +623,9 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rec
 
 // WriteRawReceipts stores all the transaction receipts belonging to a block.
 func WriteRawReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, receipts rlp.RawValue) {
+	if len(receipts) == 0 {
+		panic("empty receipts in snap sync block")
+	}
 	// Store the flattened receipt slice
 	if err := db.Put(blockReceiptsKey(number, hash), receipts); err != nil {
 		log.Crit("Failed to store block receipts", "err", err)
