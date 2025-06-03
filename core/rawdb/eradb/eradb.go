@@ -327,6 +327,8 @@ func (db *Store) doneWithFile(epoch uint64, entry *fileCacheEntry) {
 	}
 }
 
+// derefAndClose decrements the reference counter and closes the file
+// when it hits zero.
 func (entry *fileCacheEntry) derefAndClose(epoch uint64) (closed bool) {
 	entry.refcount--
 	if entry.refcount > 0 {
