@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
@@ -287,7 +288,7 @@ func (c *ChainSpanner) GetCurrentValidatorsByHash(ctx context.Context, headerHas
 
 const method = "commitSpan"
 
-func (c *ChainSpanner) CommitSpan(ctx context.Context, heimdallSpan HeimdallSpan, state *state.StateDB, header *types.Header, chainContext core.ChainContext) error {
+func (c *ChainSpanner) CommitSpan(ctx context.Context, heimdallSpan HeimdallSpan, state *state.StateDB, header *types.Header, chainContext core.ChainContext, tracer *tracing.Hooks) error {
 	// get validators bytes
 	validators := make([]valset.MinimalVal, 0, len(heimdallSpan.ValidatorSet.Validators))
 	for _, val := range heimdallSpan.ValidatorSet.Validators {
@@ -335,7 +336,7 @@ func (c *ChainSpanner) CommitSpan(ctx context.Context, heimdallSpan HeimdallSpan
 	msg := statefull.GetSystemMessage(c.validatorContractAddress, data)
 
 	// apply message
-	_, err = statefull.ApplyMessage(ctx, msg, state, header, c.chainConfig, chainContext)
+	_, err = statefull.ApplyMessage(ctx, msg, state, header, c.chainConfig, chainContext, 0, tracer)
 
 	return err
 }

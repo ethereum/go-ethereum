@@ -711,7 +711,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 			if *config.BorTraceEnabled {
 				callmsg := prepareCallMessage(*msg)
 				statedb.SetTxContext(stateSyncHash, i)
-				if _, err := statefull.ApplyMessage(ctx, callmsg, statedb, block.Header(), api.backend.ChainConfig(), api.chainContext(ctx)); err != nil {
+				if _, err := statefull.ApplyMessage(ctx, callmsg, statedb, block.Header(), api.backend.ChainConfig(), api.chainContext(ctx), 0, nil); err != nil {
 					log.Warn("Tracing intermediate roots did not complete", "txindex", i, "txhash", stateSyncHash, "err", err)
 					// We intentionally don't return the error here: if we do, then the RPC server will not
 					// return the roots. Most likely, the caller already knows that a certain transaction fails to

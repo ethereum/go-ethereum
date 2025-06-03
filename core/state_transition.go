@@ -534,7 +534,7 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		burnAmount = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
 
 		if !st.noFeeBurnAndTip {
-			st.state.AddBalance(burntContractAddress, cmath.BigIntToUint256Int(burnAmount), tracing.BalanceChangeTransfer)
+			st.state.AddBalance(burntContractAddress, cmath.BigIntToUint256Int(burnAmount), tracing.BalanceChangePolygonBurn)
 		}
 	}
 

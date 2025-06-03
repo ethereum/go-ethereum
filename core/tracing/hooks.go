@@ -252,6 +252,11 @@ const (
 	// account within the same tx (captured at end of tx).
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
+
+	// Polygon specific balance changes
+
+	// BalanceChangePolygonBurn is ether burned on Polygon by sending it to a designated burn contract.
+	BalanceChangePolygonBurn BalanceChangeReason = 200
 )
 
 //go:generate go run golang.org/x/tools/cmd/stringer@latest -type=GasChangeReason -trimprefix=GasChange -output gen_gas_change_reason_stringer.go

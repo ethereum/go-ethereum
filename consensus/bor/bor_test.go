@@ -77,7 +77,7 @@ func TestGenesisContractChange(t *testing.T) {
 			ParentHash: root,
 			Number:     big.NewInt(num),
 		}
-		b.Finalize(chain, h, statedb, &types.Body{Withdrawals: nil, Transactions: nil, Uncles: nil})
+		b.Finalize(chain, h, statedb, &types.Body{Withdrawals: nil, Transactions: nil, Uncles: nil}, nil)
 
 		// write state to database
 		root, err := statedb.Commit(0, false)

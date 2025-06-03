@@ -111,7 +111,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.hc.engine.Finalize(p.bc, header, statedb, block.Body())
+	p.hc.engine.Finalize(p.bc, header, statedb, block.Body(), cfg.Tracer)
 
 	return &ProcessResult{
 		Receipts: receipts,
@@ -158,11 +158,11 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	statedb.SetMVHashmap(nil)
 
 	if evm.ChainConfig().IsLondon(blockNumber) {
-		statedb.AddBalance(result.BurntContractAddress, cmath.BigIntToUint256Int(result.FeeBurnt), tracing.BalanceChangeTransfer)
+		statedb.AddBalance(result.BurntContractAddress, cmath.BigIntToUint256Int(result.FeeBurnt), tracing.BalanceChangePolygonBurn)
 	}
 
 	// TODO(raneet10) Double check
-	statedb.AddBalance(evm.Context.Coinbase, cmath.BigIntToUint256Int(result.FeeTipped), tracing.BalanceChangeTransfer)
+	statedb.AddBalance(evm.Context.Coinbase, cmath.BigIntToUint256Int(result.FeeTipped), tracing.BalanceIncreaseRewardTransactionFee)
 	output1 := new(big.Int).SetBytes(result.SenderInitBalance.Bytes())
 	output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
 

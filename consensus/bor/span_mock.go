@@ -13,6 +13,7 @@ import (
 	valset "github.com/ethereum/go-ethereum/consensus/bor/valset"
 	core "github.com/ethereum/go-ethereum/core"
 	state "github.com/ethereum/go-ethereum/core/state"
+	tracing "github.com/ethereum/go-ethereum/core/tracing"
 	types "github.com/ethereum/go-ethereum/core/types"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 	gomock "github.com/golang/mock/gomock"
@@ -42,17 +43,17 @@ func (m *MockSpanner) EXPECT() *MockSpannerMockRecorder {
 }
 
 // CommitSpan mocks base method.
-func (m *MockSpanner) CommitSpan(arg0 context.Context, arg1 span.HeimdallSpan, arg2 *state.StateDB, arg3 *types.Header, arg4 core.ChainContext) error {
+func (m *MockSpanner) CommitSpan(arg0 context.Context, arg1 span.HeimdallSpan, arg2 *state.StateDB, arg3 *types.Header, arg4 core.ChainContext, arg5 *tracing.Hooks) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CommitSpan", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "CommitSpan", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CommitSpan indicates an expected call of CommitSpan.
-func (mr *MockSpannerMockRecorder) CommitSpan(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockSpannerMockRecorder) CommitSpan(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommitSpan", reflect.TypeOf((*MockSpanner)(nil).CommitSpan), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommitSpan", reflect.TypeOf((*MockSpanner)(nil).CommitSpan), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // GetCurrentSpan mocks base method.

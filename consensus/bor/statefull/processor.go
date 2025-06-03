@@ -3,6 +3,7 @@ package statefull
 import (
 	"bytes"
 	"context"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"math"
 	"math/big"
 
@@ -69,15 +70,51 @@ func ApplyMessage(
 	header *types.Header,
 	chainConfig *params.ChainConfig,
 	chainContext core.ChainContext,
+	spanID int64,
+	tracer *tracing.Hooks,
 ) (uint64, error) {
+
 	initialGas := msg.Gas()
 
-	// Create a new context to be used in the EVM environment
 	blockContext := core.NewEVMBlockContext(header, chainContext, &header.Coinbase)
 
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, state, chainConfig, vm.Config{})
+	msgForCtx := core.Message{
+		To:               msg.To(),
+		From:             msg.From(),
+		Nonce:            msg.Nonce(),
+		Value:            msg.Value(),
+		GasLimit:         msg.Gas(),
+		GasPrice:         msg.GasPrice(),
+		SkipNonceChecks:  false,
+		SkipFromEOACheck: false,
+	}
+	txContext := core.NewEVMTxContext(&msgForCtx)
+	vmenv := vm.NewEVM(blockContext, txContext, state, chainConfig, vm.Config{Tracer: tracer})
+
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    msg.Nonce(),
+		GasPrice: msg.GasPrice(),
+		Gas:      msg.Gas(),
+		To:       msg.To(),
+		Value:    msg.Value(),
+		Data:     msg.Data(),
+	})
+	state.SetTxContext(tx.Hash(), 0)
+
+	// Notify tracers about transaction start (system call is already started at Bor level)
+	if tracer != nil {
+		if tracer.OnTxStart != nil {
+			tracer.OnTxStart(vmenv.GetVMContext(), tx, msg.From())
+		}
+	}
+
+	defer func() {
+		if tracer != nil && tracer.OnTxEnd != nil {
+			tracer.OnTxEnd(nil, nil)
+		}
+	}()
 
 	// nolint : contextcheck
 	// Apply the transaction to the current state (included in the env)
