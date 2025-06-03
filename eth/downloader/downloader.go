@@ -1039,6 +1039,10 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 	for i, result := range results {
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.body())
 		receipts[i] = result.Receipts
+		// Blockchain expects the receipts to be properly encoded
+		// as they are inserted into the db as they are.
+		// This workaround makes sure that blocks with no receipts
+		// have a valid encoding.
 		if len(result.Receipts) == 0 {
 			receipts[i] = rlp.EmptyList
 		}
