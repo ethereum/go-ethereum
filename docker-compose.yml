@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  geth:
+    image: ghcr.io/radost5454/go-ethereum:dev-latest
+    ports:
+      - "8545:8545"
+      - "30303:30303"
+    volumes:
+      - ./data:/root/.ethereum
+    command: >
+      geth
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3,personal
+      --networkid 1337
+      --nodiscover
+      --dev
