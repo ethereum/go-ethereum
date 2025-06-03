@@ -158,7 +158,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 
 	// Now import Era.
-	db2, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
+	db2, err := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{})
 	if err != nil {
 		panic(err)
 	}

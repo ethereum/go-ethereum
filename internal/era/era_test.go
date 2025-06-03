@@ -101,17 +101,6 @@ func TestEra1Builder(t *testing.T) {
 		if !bytes.Equal(rawHeader, chain.headers[i]) {
 			t.Fatalf("mismatched header: want %s, got %s", chain.headers[i], rawHeader)
 		}
-		header, err := e.GetHeaderByNumber(i)
-		if err != nil {
-			t.Fatalf("error reading header: %v", err)
-		}
-		encHeader, err := rlp.EncodeToBytes(header)
-		if err != nil {
-			t.Fatalf("error encoding header: %v", err)
-		}
-		if !bytes.Equal(encHeader, chain.headers[i]) {
-			t.Fatalf("mismatched header: want %s, got %s", chain.headers[i], encHeader)
-		}
 
 		// Check bodies.
 		body, err := io.ReadAll(it.Body)
@@ -130,7 +119,7 @@ func TestEra1Builder(t *testing.T) {
 		if !bytes.Equal(rawReceipts, chain.receipts[i]) {
 			t.Fatalf("mismatched receipts: want %s, got %s", chain.receipts[i], rawReceipts)
 		}
-		receipts, err := e.GetReceiptsByNumber(i)
+		receipts, err := getReceiptsByNumber(e, i)
 		if err != nil {
 			t.Fatalf("error reading receipts: %v", err)
 		}
@@ -178,4 +167,16 @@ func mustEncode(obj any) []byte {
 		panic(fmt.Sprintf("failed in encode obj: %v", err))
 	}
 	return b
+}
+
+func getReceiptsByNumber(e *Era, number uint64) (types.Receipts, error) {
+	r, err := e.GetRawReceiptsByNumber(number)
+	if err != nil {
+		return nil, err
+	}
+	var receipts types.Receipts
+	if err := rlp.DecodeBytes(r, &receipts); err != nil {
+		return nil, err
+	}
+	return receipts, nil
 }

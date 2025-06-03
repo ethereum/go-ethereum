@@ -128,7 +128,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
-	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
+	dbOptions := node.DatabaseOptions{
+		Cache:             config.DatabaseCache,
+		Handles:           config.DatabaseHandles,
+		AncientsDirectory: config.DatabaseFreezer,
+		EraDirectory:      config.DatabaseEra,
+		MetricsNamespace:  "eth/db/chaindata/",
+	}
+	chainDb, err := stack.OpenDatabaseWithOptions("chaindata", dbOptions)
 	if err != nil {
 		return nil, err
 	}
