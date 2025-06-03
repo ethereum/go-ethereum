@@ -1040,7 +1040,7 @@ func (d *Downloader) commitSnapSyncData(results []*fetchResult, stateSync *state
 		blocks[i] = types.NewBlockWithHeader(result.Header).WithBody(result.body())
 		receipts[i] = result.Receipts
 		if len(result.Receipts) == 0 {
-			panic("empty receipts in snap sync block")
+			receipts[i] = rlp.EmptyList
 		}
 	}
 	fmt.Printf(">>>> Committing %d snap-sync blocks, first %d, last %d\n", len(results), first.Number.Uint64(), last.Number.Uint64())
