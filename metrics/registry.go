@@ -328,7 +328,7 @@ func Get(name string) interface{} {
 // GetOrRegister gets an existing metric or creates and registers a new one. Threadsafe
 // alternative to calling Get and Register on failure.
 func GetOrRegister[T any](name string, ctor func() T, r Registry) interface{} {
-	if nil == r {
+	if r == nil {
 		r = DefaultRegistry
 	}
 	return r.GetOrRegister(name, func() any { return ctor() })
