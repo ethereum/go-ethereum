@@ -1008,7 +1008,7 @@ func TestOpenCap(t *testing.T) {
 
 		keep = []common.Address{addr1, addr3}
 		drop = []common.Address{addr2}
-		size = uint64(2 * (txAvgSize + blobSize))
+		size = uint64(2 * (txAvgSize + blobSize + txBlobOverhead))
 	)
 	store.Put(blob1)
 	store.Put(blob2)
@@ -1017,7 +1017,7 @@ func TestOpenCap(t *testing.T) {
 
 	// Verify pool capping twice: first by reducing the data cap, then restarting
 	// with a high cap to ensure everything was persisted previously
-	for _, datacap := range []uint64{2 * (txAvgSize + blobSize), 100 * (txAvgSize + blobSize)} {
+	for _, datacap := range []uint64{2 * (txAvgSize + blobSize + txBlobOverhead), 100 * (txAvgSize + blobSize + txBlobOverhead)} {
 		// Create a blob pool out of the pre-seeded data, but cap it to 2 blob transaction
 		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
