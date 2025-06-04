@@ -358,6 +358,35 @@ func (p *BlobPool) Filter(tx *types.Transaction) bool {
 	return tx.Type() == types.BlobTxType
 }
 
+// migrateBilly migrates the blob data from one billy instance to another one
+// with a different slotter.
+func migrateBilly(path string, maxBlobs int) error {
+	oldSlotter := newSlotter(maxBlobs)
+	newSlotter := newSlotterEIP7594(maxBlobs)
+	// Open the new billy instance
+	newStore, err := billy.Open(billy.Options{Path: path, Repair: true}, newSlotter, nil)
+	if err != nil {
+		return err
+	}
+	// Iterate over the old billy instance and copy the data to the new instance
+	var indexingErr error
+	index := func(key uint64, size uint32, data []byte) {
+		_, indexingErr = newStore.Put(data)
+	}
+	oldStore, err := billy.Open(billy.Options{Path: path, Repair: true}, oldSlotter, index)
+	if err != nil {
+		return err
+	}
+	if indexingErr != nil {
+		return indexingErr
+	}
+	// TODO (MariusVanDerWijden)
+	// remove the old shelves here
+	oldStore.Close()
+	newStore.Close()
+	return nil
+}
+
 // Init sets the gas price needed to keep a transaction in the pool and the chain
 // head to allow balance / nonce checks. The transaction journal will be loaded
 // from disk and filtered based on the provided starting settings.
@@ -390,6 +419,19 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 	}
 	p.head, p.state = head, state
 
+	// Check if we need to migrate the blob database to a new format
+	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+	if p.chain.Config().IsOsaka(head.Number, head.Time) {
+		// Check if we need to migrate our blob db to the new slotter
+		oldSlotSize := 135168
+		if os.Stat(filepath.Join(queuedir, fmt.Sprintf("bkt_%08d.bag", oldSlotSize))); err == nil {
+			if err := migrateBilly(queuedir, eip4844.LatestMaxBlobsPerBlock(p.chain.Config())); err != nil {
+				return err
+			}
+		}
+		slotter = newSlotterEIP7594(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
+	}
+
 	// Index all transactions on disk and delete anything unprocessable
 	var fails []uint64
 	index := func(id uint64, size uint32, blob []byte) {
@@ -397,7 +439,6 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserver txpool.Reser
 			fails = append(fails, id)
 		}
 	}
-	slotter := newSlotter(eip4844.LatestMaxBlobsPerBlock(p.chain.Config()))
 	store, err := billy.Open(billy.Options{Path: queuedir, Repair: true}, slotter, index)
 	if err != nil {
 		return err
