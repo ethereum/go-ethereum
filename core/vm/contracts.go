@@ -164,6 +164,7 @@ var PrecompiledContractsOsaka = PrecompiledContracts{
 }
 
 var (
+	PrecompiledAddressesOsaka     []common.Address
 	PrecompiledAddressesPrague    []common.Address
 	PrecompiledAddressesCancun    []common.Address
 	PrecompiledAddressesBerlin    []common.Address
@@ -190,6 +191,9 @@ func init() {
 	}
 	for k := range PrecompiledContractsPrague {
 		PrecompiledAddressesPrague = append(PrecompiledAddressesPrague, k)
+	}
+	for k := range PrecompiledContractsOsaka {
+		PrecompiledAddressesOsaka = append(PrecompiledAddressesOsaka, k)
 	}
 }
 
@@ -222,6 +226,8 @@ func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsOsaka:
+		return PrecompiledAddressesOsaka
 	case rules.IsPrague:
 		return PrecompiledAddressesPrague
 	case rules.IsCancun:
@@ -432,7 +438,8 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	} else {
 		gas.Set(modLen)
 	}
-	maxLen := new(big.Int).Set(gas)
+
+	maxLenOver32 := gas.Cmp(big32) > 0
 	if c.eip2565 {
 		// EIP-2565 has three changes
 		// 1. Different multComplexity (inlined here)
@@ -449,8 +456,8 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		var minPrice uint64 = 200
 		if c.eip7883 {
 			minPrice = 500
-			if maxLen.Cmp(big32) > 0 {
-				gas.Mul(gas, big.NewInt(2))
+			if maxLenOver32 {
+				gas.Add(gas, gas)
 			}
 		}
 
