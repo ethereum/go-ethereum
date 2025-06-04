@@ -17,8 +17,6 @@
 package trie
 
 import (
-	"maps"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -275,7 +273,7 @@ func (t *StateTrie) Copy() *StateTrie {
 	return &StateTrie{
 		trie:        *t.trie.Copy(),
 		db:          t.db,
-		secKeyCache: maps.Clone(t.secKeyCache),
+		secKeyCache: make(map[common.Hash][]byte),
 		preimages:   t.preimages,
 	}
 }
