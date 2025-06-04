@@ -33,4 +33,4 @@ jobs:
 
       - name: Run Hardhat tests against devnet-with-contracts
         working-directory: hardhat
-        run: npx hardhat test --network localhost
+        run: npx hardhat test 
