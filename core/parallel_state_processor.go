@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -12,6 +13,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/sync/errgroup"
+)
+
+var (
+	PrefetchBALTime      = time.Duration(0)
+	PrefetchMergeBALTime = time.Duration(0)
+	ParallelExeTime      = time.Duration(0)
+	PostMergeTime        = time.Duration(0)
 )
 
 type ParallelStateProcessor struct {
@@ -42,6 +50,12 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 
+	if preStateType == BALPreState {
+		start := time.Now()
+		statedb.PrefetchStateBAL(block.NumberU64())
+		PrefetchBALTime += time.Since(start)
+	}
+
 	// Apply pre-execution system calls.
 	var tracingStateDB = vm.StateDB(statedb)
 	if hooks := cfg.Tracer; hooks != nil {
@@ -57,29 +71,36 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	return p.executeParallel(block, statedb, &context, cfg, gp, signer)
+	return p.executeParallel(block, statedb, cfg, gp, signer, context)
 }
 
-func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *state.StateDB, blockContext *vm.BlockContext, cfg vm.Config, gp *GasPool, signer types.Signer) (*ProcessResult, error) {
+func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *state.StateDB, cfg vm.Config, gp *GasPool, signer types.Signer, context vm.BlockContext) (*ProcessResult, error) {
 	var (
-		receipts         = make(types.Receipts, len(block.Transactions()))
-		header           = block.Header()
-		blockHash        = block.Hash()
-		blockNumber      = block.Number()
-		allLogs          []*types.Log
-		preStatedb       = statedb.Copy()
+		receipts    = make(types.Receipts, len(block.Transactions()))
+		header      = block.Header()
+		blockHash   = block.Hash()
+		blockNumber = block.Number()
+		allLogs     []*types.Log
+
 		preStateProvider PreStateProvider
 		workers          errgroup.Group
 	)
-	workers.SetLimit(runtime.NumCPU() / 2)
+	workers.SetLimit(runtime.NumCPU() - 6)
 	// Fetch prestate for each tx
 
 	// todo: handle gp with RW lock
 	switch preStateType {
 	case BALPreState:
-		panic("unimplemented")
+		{
+			start := time.Now()
+			statedb.MergePostBal()
+			PrefetchMergeBALTime += time.Since(start)
+			preStateProvider = statedb
+		}
+
 	case SeqPreState:
 		{
+			preStatedb := statedb.Copy()
 			gpcp := *gp
 			preStateProvider = &SequentialPrestateProvider{
 				statedb: preStatedb,
@@ -87,12 +108,13 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 				gp:      &gpcp,
 				signer:  signer,
 				usedGas: new(uint64),
-				evm:     vm.NewEVM(*blockContext, preStatedb, p.config, cfg),
+				evm:     vm.NewEVM(context, preStatedb, p.config, cfg),
 			}
 		}
 	}
 
 	// Parallel executing the transaction
+	exeStart := time.Now()
 	postEntries := make([][]state.JournalEntry, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
 		cleanStatedb, err := preStateProvider.PrestateAtIndex(i)
@@ -101,6 +123,7 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 		}
 
 		i := i
+		gpcp := *gp
 		workers.Go(func() error {
 			usedGas := new(uint64)
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -109,9 +132,9 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 			}
 			cleanStatedb.SetTxContext(tx.Hash(), i)
 
-			evm := vm.NewEVM(*blockContext, cleanStatedb, p.config, cfg)
+			evm := vm.NewEVM(context, cleanStatedb, p.config, cfg)
 
-			receipt, entries, err := ApplyTransactionWithParallelEVM(msg, gp, cleanStatedb, blockNumber, blockHash, tx, usedGas, evm)
+			receipt, entries, err := ApplyTransactionWithParallelEVM(msg, &gpcp, cleanStatedb, blockNumber, blockHash, tx, usedGas, evm)
 			if err != nil {
 				return err
 			}
@@ -126,12 +149,15 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	if err != nil {
 		return nil, err
 	}
+	ParallelExeTime += time.Since(exeStart)
 	// Merge state changes
 	// - Append receipts
 	// - Sum usedGas
 	// - Collect state state changes: simple overwrite
 	// - Ommit preimages for now
 	usedGas := uint64(0)
+
+	start := time.Now()
 	for i, receipt := range receipts {
 		if receipt == nil {
 			continue // Skip nil receipts
@@ -141,9 +167,10 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 		allLogs = append(allLogs, receipt.Logs...)
 		statedb.MergeState(postEntries[i])
 	}
+	PostMergeTime += time.Since(start)
 
 	// Read requests if Prague is enabled.
-	evm := vm.NewEVM(*blockContext, statedb, p.config, cfg)
+	evm := vm.NewEVM(context, statedb, p.config, cfg)
 	var requests [][]byte
 	if p.config.IsPrague(block.Number(), block.Time()) {
 		requests = [][]byte{}

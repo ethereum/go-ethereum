@@ -503,6 +503,27 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	return obj
 }
 
+func (s *stateObject) simpleCopy(db *StateDB) *stateObject {
+	obj := &stateObject{
+		db:                 db,
+		address:            s.address,
+		addrHash:           s.addrHash,
+		origin:             s.origin,
+		data:               s.data,
+		code:               s.code,
+		originStorage:      s.originStorage.Copy(),
+		pendingStorage:     make(Storage),
+		dirtyStorage:       make(Storage),
+		uncommittedStorage: make(Storage),
+		dirtyCode:          s.dirtyCode,
+		selfDestructed:     s.selfDestructed,
+		newContract:        s.newContract,
+	}
+
+	obj.trie = s.trie
+	return obj
+}
+
 //
 // Attribute accessors
 //

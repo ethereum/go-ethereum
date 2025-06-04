@@ -15,7 +15,7 @@ const (
 	SeqPreState              // Only for debug
 )
 
-const preStateType = SeqPreState
+const preStateType = BALPreState
 
 type PreStateProvider interface {
 	PrestateAtIndex(i int) (*state.StateDB, error)

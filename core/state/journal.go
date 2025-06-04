@@ -87,11 +87,11 @@ func PrintJournal(entries []JournalEntry) {
 		case selfDestructChange:
 			fmt.Println("selfDestructChange")
 		case balanceChange:
-			fmt.Println("balanceChange", v)
+			fmt.Println("balanceChange", v.account, v.prev)
 		case nonceChange:
-			fmt.Println("nonceChange", v)
+			fmt.Println("nonceChange", v.account, v.prev)
 		case storageChange:
-			fmt.Println("storageChange", v)
+			fmt.Println("storageChange", v.account, v.key, v.prevvalue)
 		case codeChange:
 			fmt.Println("codeChange")
 		case refundChange:

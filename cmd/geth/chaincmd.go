@@ -464,6 +464,18 @@ func showMetrics() {
 	fmt.Println("triedbCommitTimer", triedbCommitTimer.Total())
 	fmt.Println("blockWriteTimer", blockWriteTimer.Total())
 
+	// Parallel
+	fmt.Println("PrefetchBALTime:  ", core.PrefetchBALTime)
+	fmt.Println("PrefetchMergeTime:", core.PrefetchMergeBALTime)
+	fmt.Println("StateSetTime:     ", state.StateSetTime)
+	fmt.Println("StateLoadTime:    ", state.StateLoadTime)
+	fmt.Println("StateFinaliTime:  ", state.StateFinalizeTime)
+	fmt.Println("StateCopyTime:    ", state.StateCopyTime)
+	fmt.Println("StateCopyNewTime: ", state.StateNewTime)
+	fmt.Println("StateDeepCpTime:  ", state.StateDeepCpTime)
+	fmt.Println("ParalleleExeTime: ", core.ParallelExeTime)
+	fmt.Println("PostMergeTime:    ", core.PostMergeTime)
+
 	// total
 	fmt.Println("blockInsertTimer", blockInsertTimer.Total())
 }

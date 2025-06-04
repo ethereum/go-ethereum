@@ -162,6 +162,8 @@ type StateDB struct {
 
 	// The block number context for BALs
 	blockNumber uint64
+	// postState after appling tx
+	postStates map[int]*StateDB
 }
 
 type BALType int
@@ -223,7 +225,7 @@ func init() {
 	case BalPreblockKeysPostValues:
 		{
 			println("bal preblock keys post values")
-			fileName = "access_lists_kpostv.json"
+			fileName = "access_lists_kpostv.100.json"
 			data, err := os.ReadFile(fileName)
 			if err != nil {
 				log.Error("Failed to load access lists", "err", err)
@@ -272,6 +274,7 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		updateJournal:        newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
+		postStates:           make(map[int]*StateDB),
 	}
 	if db.TrieDB().IsVerkle() {
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
@@ -283,11 +286,13 @@ func (s *StateDB) PrefetchStateBAL(blockNumber uint64) {
 	s.blockNumber = blockNumber
 	switch balType {
 	case BalPreblockKeysPostValues:
-		s.PrefetchBalPreblockKeys()
+		{
+			s.prefetchBalPreblockKeys()
+		}
 	}
 }
 
-func (s *StateDB) PrefetchBalPreblockKeys() {
+func (s *StateDB) prefetchBalPreblockKeys() {
 	log.Info("PrefetchBalPreblockKeys...")
 	type StorageKV struct {
 		addr *common.Address
@@ -356,15 +361,121 @@ func (s *StateDB) PrefetchBalPreblockKeys() {
 	}
 }
 
-func (s *StateDB) PreStateAtTxIndex(index int) *StateDB {
-	// 1. Fetch all pre-block state
-	// 2. Merge with post-state
-	if balType != BalPreblockKeysPostValues {
-		panic("PreStateAtTxIndex is only supported with BalPreblockKeysPostValues")
-	}
+var (
+	StateFinalizeTime = time.Duration(0)
+	StateCopyTime     = time.Duration(0)
+	StateNewTime      = time.Duration(0)
+	StateDeepCpTime   = time.Duration(0)
+	StateSetTime      = time.Duration(0)
+	StateLoadTime     = time.Duration(0)
+)
 
-	// Merge with BALs post state
-	return nil
+func (s *StateDB) MergePostBal() {
+	if balType != BalPreblockKeysPostValues {
+		panic("MergePostBal is only supported with BalPreblockKeysPostValues")
+	}
+	start := time.Now()
+	var (
+		postBal = AllBlockTxPostValues[s.blockNumber]
+	)
+	StateLoadTime += time.Since(start)
+
+	postState := s.Copy()
+	postState.prefetcher = nil
+	for txIndex := range len(postBal) {
+		postVals := postBal[txIndex]
+		start := time.Now()
+		for addr, acct := range postVals {
+			account := postState.getStateObject(addr)
+			if account == nil {
+				return
+			}
+
+			if acct.Destruct {
+				account.markSelfdestructed()
+				continue
+			}
+
+			account.setNonce(acct.Nonce)
+			if acct.Balance != nil {
+				account.setBalance(acct.Balance)
+			}
+			if acct.Code != nil {
+				account.setCode(crypto.Keccak256Hash(acct.Code), acct.Code)
+			}
+			maps.Copy(account.originStorage, acct.StorageKV)
+			postState.setStateObject(account)
+		}
+		StateSetTime += time.Since(start)
+
+		start = time.Now()
+		s.postStates[txIndex] = postState.Copy()
+		StateCopyTime += time.Since(start)
+	}
+}
+
+func (s *StateDB) MergePostBalBuggy() {
+	if balType != BalPreblockKeysPostValues {
+		panic("MergePostBal is only supported with BalPreblockKeysPostValues")
+	}
+	start := time.Now()
+	var (
+		postBal = AllBlockTxPostValues[s.blockNumber]
+	)
+	StateLoadTime += time.Since(start)
+
+	postState := s.Copy()
+	postState.prefetcher = nil
+	for txIndex := range len(postBal) {
+		postVals := postBal[txIndex]
+		start := time.Now()
+		for addr, acct := range postVals {
+			account := postState.getStateObject(addr)
+			if account == nil {
+				return
+			}
+
+			if acct.Destruct {
+				account.markSelfdestructed()
+				continue
+			}
+
+			account.SetNonce(acct.Nonce)
+			if acct.Balance != nil {
+				account.SetBalance(acct.Balance)
+			}
+			if acct.Code != nil {
+				account.SetCode(crypto.Keccak256Hash(acct.Code), acct.Code)
+			}
+			// Will cause failure if postState.Finalise is not called.
+			for k, v := range acct.StorageKV {
+				account.SetState(k, v)
+			}
+		}
+		StateSetTime += time.Since(start)
+
+		start = time.Now()
+		// postState.Finalise(true)
+		StateFinalizeTime += time.Since(start)
+
+		start = time.Now()
+		s.postStates[txIndex] = postState.Copy()
+		StateCopyTime += time.Since(start)
+	}
+}
+
+func (s *StateDB) PrestateAtIndex(txIndex int) (*StateDB, error) {
+	if balType != BalPreblockKeysPostValues {
+		return nil, fmt.Errorf("PreStateAtTxIndex is only supported with BalPreblockKeysPostValues")
+	}
+	if txIndex == 0 {
+		return s.Copy(), nil
+	}
+	state, ok := s.postStates[txIndex-1]
+	if !ok {
+		return nil, fmt.Errorf("PreState at txIndex: %d doesn't exists, PrefetchStateBAL must be called first", txIndex)
+	}
+	return state, nil
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -940,6 +1051,57 @@ func (s *StateDB) Copy() *StateDB {
 		}
 		state.logs[hash] = cpy
 	}
+	return state
+}
+
+func (s *StateDB) CopyState() *StateDB {
+	// Copy all the basic fields, initialize the memory ones
+	start := time.Now()
+	state := &StateDB{
+		db:                   s.db,
+		trie:                 s.trie,
+		reader:               s.reader,
+		originalRoot:         s.originalRoot,
+		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
+		stateObjectsDestruct: make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),
+		mutations:            make(map[common.Address]*mutation),
+		logs:                 make(map[common.Hash][]*types.Log),
+		preimages:            make(map[common.Hash][]byte),
+		journal:              newJournal(),
+		updateJournal:        newJournal(),
+		accessList:           newAccessList(),
+		transientStorage:     newTransientStorage(),
+	}
+	StateNewTime += time.Since(start)
+	// if s.witness != nil {
+	// 	state.witness = s.witness.Copy()
+	// }
+	// if s.accessEvents != nil {
+	// 	state.accessEvents = s.accessEvents.Copy()
+	// }
+	// Deep copy cached state objects.
+	start = time.Now()
+	for addr, obj := range s.stateObjects {
+		state.stateObjects[addr] = obj.simpleCopy(state)
+	}
+	// Deep copy destructed state objects.
+	for addr, obj := range s.stateObjectsDestruct {
+		state.stateObjectsDestruct[addr] = obj.simpleCopy(state)
+	}
+	StateDeepCpTime += time.Since(start)
+	// Deep copy the object state markers.
+	// for addr, op := range s.mutations {
+	// 	state.mutations[addr] = op.copy()
+	// }
+	// Deep copy the logs occurred in the scope of block
+	// for hash, logs := range s.logs {
+	// 	cpy := make([]*types.Log, len(logs))
+	// 	for i, l := range logs {
+	// 		cpy[i] = new(types.Log)
+	// 		*cpy[i] = *l
+	// 	}
+	// 	state.logs[hash] = cpy
+	// }
 	return state
 }
 
