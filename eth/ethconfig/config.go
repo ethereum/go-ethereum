@@ -162,6 +162,9 @@ type Config struct {
 
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
+
+	// OverrideDelegationActivation (TODO: remove after the fork)
+	OverrideDelegationActivation *uint64 `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

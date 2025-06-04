@@ -191,6 +191,10 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		cfg.Eth.OverrideVerkle = &v
 	}
+	if ctx.IsSet(utils.OverrideDelegationActivation.Name) {
+		v := ctx.Uint64(utils.OverrideDelegationActivation.Name)
+		cfg.Eth.OverrideDelegationActivation = &v
+	}
 
 	// Start metrics export if enabled
 	utils.SetupMetrics(&cfg.Metrics)

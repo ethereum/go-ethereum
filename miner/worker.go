@@ -19,6 +19,7 @@ package miner
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -125,6 +127,17 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 		// EIP-6110 deposits
 		if err := core.ParseDepositLogs(&requests, allLogs, miner.chainConfig); err != nil {
 			return &newPayloadResult{err: err}
+		}
+		if miner.chainConfig.IsDelegationActive(work.header.Number, work.header.Time) {
+			if len(params.withdrawals) > 0 {
+				firstWithdrawal := params.withdrawals[0]
+				if firstWithdrawal.Validator == math.MaxUint64 {
+					amount := new(big.Int).Mul(new(big.Int).SetUint64(firstWithdrawal.Amount), big.NewInt(ethparams.GWei))
+					if err := core.ProcessStakingDistribution(work.evm, firstWithdrawal.Address, amount); err != nil {
+						log.Error("could not process staking distribution", "err", err)
+					}
+				}
+			}
 		}
 		// EIP-7002
 		if err := core.ProcessWithdrawalQueue(&requests, work.evm); err != nil {

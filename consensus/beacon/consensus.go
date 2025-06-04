@@ -19,6 +19,7 @@ package beacon
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -344,6 +345,11 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	}
 	// Withdrawals processing.
 	for _, w := range body.Withdrawals {
+		if chain.Config().IsDelegationActive(header.Number, header.Time) {
+			if w.Validator == math.MaxUint64 {
+				continue
+			}
+		}
 		// Convert amount from gwei to wei.
 		amount := new(uint256.Int).SetUint64(w.Amount)
 		amount = amount.Mul(amount, uint256.NewInt(params.GWei))

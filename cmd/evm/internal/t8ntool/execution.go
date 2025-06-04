@@ -18,6 +18,7 @@ package t8ntool
 
 import (
 	"fmt"
+	gomath "math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -345,6 +346,11 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	}
 	// Apply withdrawals
 	for _, w := range pre.Env.Withdrawals {
+		if chainConfig.IsDelegationActive(vmContext.BlockNumber, vmContext.Time) {
+			if w.Validator == gomath.MaxUint64 {
+				continue
+			}
+		}
 		// Amount is in gwei, turn into wei
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
 		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
@@ -361,6 +367,17 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 		if err := core.ParseDepositLogs(&requests, allLogs, chainConfig); err != nil {
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
+		}
+		if chainConfig.IsDelegationActive(vmContext.BlockNumber, vmContext.Time) {
+			if len(pre.Env.Withdrawals) > 0 {
+				firstWithdrawal := pre.Env.Withdrawals[0]
+				if firstWithdrawal.Validator == gomath.MaxUint64 {
+					amount := new(big.Int).Mul(new(big.Int).SetUint64(firstWithdrawal.Amount), big.NewInt(params.GWei))
+					if err := core.ProcessStakingDistribution(evm, firstWithdrawal.Address, amount); err != nil {
+						log.Error("could not process staking distribution", "err", err)
+					}
+				}
+			}
 		}
 		// EIP-7002
 		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {

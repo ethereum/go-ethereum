@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,7 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -111,6 +114,17 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		// EIP-6110
 		if err := ParseDepositLogs(&requests, allLogs, p.config); err != nil {
 			return nil, err
+		}
+		if p.config.IsDelegationActive(block.Number(), block.Time()) {
+			if len(block.Withdrawals()) > 0 {
+				firstWithdrawal := block.Withdrawals()[0]
+				if firstWithdrawal.Validator == math.MaxUint64 {
+					amount := new(big.Int).Mul(new(big.Int).SetUint64(firstWithdrawal.Amount), big.NewInt(params.GWei))
+					if err := ProcessStakingDistribution(evm, firstWithdrawal.Address, amount); err != nil {
+						log.Error("could not process staking distribution", "err", err)
+					}
+				}
+			}
 		}
 		// EIP-7002
 		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
@@ -277,6 +291,42 @@ func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM) error {
 // It returns the opaque request data returned by the contract.
 func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM) error {
 	return processRequestsSystemCall(requests, evm, 0x02, params.ConsolidationQueueAddress)
+}
+
+// ProcessStakingDistribution
+func ProcessStakingDistribution(evm *vm.EVM, address common.Address, amount *big.Int) error {
+	if tracer := evm.Config.Tracer; tracer != nil {
+		onSystemCallStart(tracer, evm.GetVMContext())
+		if tracer.OnSystemCallEnd != nil {
+			defer tracer.OnSystemCallEnd()
+		}
+	}
+	data := make([]byte, 32)
+	amount.FillBytes(data)
+	addr := address
+	msg := &Message{
+		From: params.SystemAddress,
+		// Value:     amount,
+		GasLimit:  30_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
+		To:        &addr,
+		Data:      data,
+	}
+	evm.SetTxContext(NewEVMTxContext(msg))
+	evm.StateDB.AddAddressToAccessList(addr)
+	evm.StateDB.AddBalance(
+		address,
+		uint256.NewInt(0).SetBytes(amount.Bytes()),
+		tracing.BalanceIncreaseRewardMineBlock,
+	)
+	_, _, err := evm.Call(msg.From, *msg.To, msg.Data, 30_000_000, common.U2560)
+	evm.StateDB.Finalise(true)
+	if err != nil {
+		return fmt.Errorf("system call failed to execute: %v", err)
+	}
+	return nil
 }
 
 func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address) error {
