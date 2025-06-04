@@ -22,15 +22,21 @@ jobs:
 
       - name: Wait for Geth RPC to be ready
         run: |
-          for i in {1..10}; do
+          for i in {1..15}; do
             curl -s http://localhost:8545 && break
             echo "Waiting for Geth RPC..." && sleep 3
           done
 
-      - name: Install Hardhat dependencies
-        working-directory: hardhat
-        run: npm install
 
-      - name: Run Hardhat tests against devnet-with-contracts
-        working-directory: hardhat
-        run: npx hardhat test 
+
+      - name: Download contract address artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-artifact
+          path: hardhat/
+
+      - name: Install dependencies and run test
+        run: |
+          cd hardhat
+          npm install
+          npx hardhat test test/Lock.external.js --network hell

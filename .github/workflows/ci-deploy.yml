@@ -38,6 +38,12 @@ jobs:
         working-directory: hardhat
         run: npx hardhat ignition deploy ./ignition/modules/Lock.js --network localhost
 
+      - name: Upload contract address artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-artifact
+          path: hardhat/deployment-output.json
+
       - name: Commit container as new image with contracts
         run: |
           docker commit geth-devnet ghcr.io/${{ github.repository_owner }}/go-ethereum:devnet-with-contracts
