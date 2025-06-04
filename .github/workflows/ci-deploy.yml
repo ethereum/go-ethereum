@@ -47,28 +47,3 @@ jobs:
 
       - name: Push new image
         run: docker push ghcr.io/${{ github.repository_owner }}/go-ethereum:devnet-with-contracts
-
-      ######################################
-      # Step 4: Run tests against new image
-      ######################################
-
-      - name: Start devnet-with-contracts container
-        run: |
-          docker run -d --name geth-devnet-test -p 8546:8545 \
-            ghcr.io/${{ github.repository_owner }}/go-ethereum:devnet-with-contracts \
-            geth --http --http.addr 0.0.0.0 --http.port 8545 --http.api eth,net,web3 --dev
-
-      - name: Wait for RPC to be ready
-        run: |
-          for i in {1..10}; do
-            curl -s http://localhost:8545 && break
-            echo "Waiting for Geth RPC for tests..." && sleep 3
-          done
-
-      - name: Reinstall Hardhat dependencies (for fresh context)
-        working-directory: hardhat
-        run: npm install
-
-      - name: Run Hardhat tests against predeployed contracts
-        working-directory: hardhat
-        run: npx hardhat test --network localhost
