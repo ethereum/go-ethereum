@@ -83,8 +83,13 @@ func newFetchResult(header *types.Header, snapSync bool) *fetchResult {
 	} else if header.WithdrawalsHash != nil {
 		item.Withdrawals = make(types.Withdrawals, 0)
 	}
-	if snapSync && !header.EmptyReceipts() {
-		item.pending.Store(item.pending.Load() | (1 << receiptType))
+	if snapSync {
+		if header.EmptyReceipts() {
+			// Ensure the receipts list is valid even if it isn't actively fetched.
+			item.Receipts = rlp.EmptyList
+		} else {
+			item.pending.Store(item.pending.Load() | (1 << receiptType))
+		}
 	}
 	return item
 }
