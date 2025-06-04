@@ -30,6 +30,10 @@ jobs:
         working-directory: hardhat
         run: npm install
 
+      - name: Compile contracts
+        working-directory: hardhat
+        run: npx hardhat compile
+
       - name: Deploy contracts using Ignition
         working-directory: hardhat
         run: npx hardhat ignition deploy ./ignition/modules/Lock.js --network localhost
