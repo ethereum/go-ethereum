@@ -33,26 +33,20 @@ func packBytesSlice(bytes []byte, l int) []byte {
 	return append(len, common.RightPadBytes(bytes, (l+31)/32*32)...)
 }
 
-// validateNum returns an error if the underlying type of t is uint and the
-// value of reflectValue is a negative big.Int
-func validateNum(t Type, reflectValue reflect.Value) error {
-	if t.T == UintTy && reflectValue.Kind() == reflect.Ptr {
-		val := new(big.Int).Set(reflectValue.Interface().(*big.Int))
-		if val.Sign() == -1 {
-			return errInvalidSign
-		}
-	}
-	return nil
-}
-
 // packElement packs the given reflect value according to the abi specification in
 // t.
 func packElement(t Type, reflectValue reflect.Value) ([]byte, error) {
 	switch t.T {
-	case IntTy, UintTy:
-		if err := validateNum(t, reflectValue); err != nil {
-			return nil, err
+	case UintTy:
+		// make sure to not pack a negative value into a uint type.
+		if reflectValue.Kind() == reflect.Ptr {
+			val := new(big.Int).Set(reflectValue.Interface().(*big.Int))
+			if val.Sign() == -1 {
+				return nil, errInvalidSign
+			}
 		}
+		return packNum(reflectValue), nil
+	case IntTy:
 		return packNum(reflectValue), nil
 	case StringTy:
 		return packBytesSlice([]byte(reflectValue.String()), reflectValue.Len()), nil

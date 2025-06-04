@@ -179,8 +179,7 @@ func TestMethodPack(t *testing.T) {
 	}
 
 	// test that we can't pack a negative value for a parameter that is specified as a uint
-	_, err = abi.Pack("send", big.NewInt(-1))
-	if err == nil {
+	if _, err := abi.Pack("send", big.NewInt(-1)); err == nil {
 		t.Fatal("expected error when trying to pack negative big.Int into uint256 value")
 	}
 }
