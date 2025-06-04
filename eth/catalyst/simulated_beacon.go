@@ -209,6 +209,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 
 	// If the payload was already known, we can skip the rest of the process.
+	// This edge case is possible due to a race condition between seal and debug.setHead.
 	if fcResponse.PayloadStatus.Status == engine.VALID && fcResponse.PayloadID == nil {
 		return nil
 	}
