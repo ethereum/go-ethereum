@@ -39,7 +39,7 @@ jobs:
         run: npx hardhat ignition deploy ./ignition/modules/Lock.js --network localhost
 
       - name: Upload contract address artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: deployment-artifact
           path: hardhat/deployment-output.json

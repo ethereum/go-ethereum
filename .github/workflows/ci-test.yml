@@ -30,7 +30,7 @@ jobs:
 
 
       - name: Download contract address artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v2
         with:
           name: deployment-artifact
           path: hardhat/
