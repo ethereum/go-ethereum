@@ -153,9 +153,9 @@ func (f *filterIter) Next() bool {
 	return false
 }
 
-// AsyncFilterIter wraps an iterator such that Next only returns nodes for which
+// asyncFilterIter wraps an iterator such that Next only returns nodes for which
 // the 'check' function returns a (possibly modified) node.
-type AsyncFilterIter struct {
+type asyncFilterIter struct {
 	it        Iterator      // the iterator to filter
 	slots     chan struct{} // the slots for parallel checking
 	passed    chan *Node    // channel to collect passed nodes
@@ -163,11 +163,12 @@ type AsyncFilterIter struct {
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 }
+
 type AsyncFilterFunc func(context.Context, *Node) *Node
 
 // AsyncFilter creates an iterator which checks nodes in parallel.
 func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
-	f := &AsyncFilterIter{
+	f := &asyncFilterIter{
 		it:     it,
 		slots:  make(chan struct{}, workers+1),
 		passed: make(chan *Node),
@@ -209,18 +210,18 @@ func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 }
 
 // Next blocks until a node is available or the iterator is closed.
-func (f *AsyncFilterIter) Next() bool {
+func (f *asyncFilterIter) Next() bool {
 	f.buffer = <-f.passed
 	return f.buffer != nil
 }
 
 // Node returns the current node.
-func (f *AsyncFilterIter) Node() *Node {
+func (f *asyncFilterIter) Node() *Node {
 	return f.buffer
 }
 
 // Close ends the iterator, also closing the wrapped iterator.
-func (f *AsyncFilterIter) Close() {
+func (f *asyncFilterIter) Close() {
 	f.closeOnce.Do(func() {
 		f.it.Close()
 		f.cancel()
@@ -232,9 +233,9 @@ func (f *AsyncFilterIter) Close() {
 	})
 }
 
-// BufferIter wraps an iterator and buffers the nodes it returns.
+// bufferIter wraps an iterator and buffers the nodes it returns.
 // The buffer is pre-filled with the given size from the wrapped iterator.
-type BufferIter struct {
+type bufferIter struct {
 	it        Iterator
 	buffer    chan *Node
 	head      *Node
@@ -243,7 +244,7 @@ type BufferIter struct {
 
 // NewBufferIter creates a new pre-fetch buffer of a given size.
 func NewBufferIter(it Iterator, size int) Iterator {
-	b := BufferIter{
+	b := bufferIter{
 		it:     it,
 		buffer: make(chan *Node, size),
 	}
@@ -259,16 +260,16 @@ func NewBufferIter(it Iterator, size int) Iterator {
 	return &b
 }
 
-func (b *BufferIter) Next() bool {
+func (b *bufferIter) Next() bool {
 	b.head = <-b.buffer
 	return b.head != nil
 }
 
-func (b *BufferIter) Node() *Node {
+func (b *bufferIter) Node() *Node {
 	return b.head
 }
 
-func (b *BufferIter) Close() {
+func (b *bufferIter) Close() {
 	b.closeOnce.Do(func() {
 		b.it.Close()
 		// Wait for Next to terminate.
