@@ -1,0 +1,36 @@
+name: Test Against Deployed Devnet
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test_contracts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Pull devnet-with-contracts image
+        run: docker pull ghcr.io/${{ github.repository_owner }}/go-ethereum:devnet-with-contracts
+
+      - name: Start devnet-with-contracts container
+        run: |
+          docker run -d --name geth-devnet-test -p 8545:8545 \
+            ghcr.io/${{ github.repository_owner }}/go-ethereum:devnet-with-contracts \
+            geth --http --http.addr 0.0.0.0 --http.port 8545 --http.api eth,net,web3 --dev
+
+      - name: Wait for Geth RPC to be ready
+        run: |
+          for i in {1..10}; do
+            curl -s http://localhost:8545 && break
+            echo "Waiting for Geth RPC..." && sleep 3
+          done
+
+      - name: Install Hardhat dependencies
+        working-directory: hardhat
+        run: npm install
+
+      - name: Run Hardhat tests against devnet-with-contracts
+        working-directory: hardhat
+        run: npx hardhat test --network localhost
