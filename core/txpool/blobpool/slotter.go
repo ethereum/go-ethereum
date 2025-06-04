@@ -27,6 +27,24 @@ package blobpool
 // of resources, but it makes stress testing with junk transactions simpler.
 func newSlotter(maxBlobsPerTransaction int) func() (uint32, bool) {
 	slotsize := uint32(txAvgSize)
+	slotsize -= uint32(blobSize) // underflows, it's ok, will overflow back in the first return
+
+	return func() (size uint32, done bool) {
+		slotsize += blobSize
+		finished := slotsize > uint32(maxBlobsPerTransaction)*blobSize+txMaxSize
+
+		return slotsize, finished
+	}
+}
+
+// newSlotterEIP7594 creates a different slotter for EIP-7594 transactions.
+// EIP-7594 (PeerDAS) changes the median transaction size which means the current
+// static 4KB average size is not enough anymore.
+// This slotter adds a dynamic overhead component to the slotter, which also
+// captures the notion that blob transactions with more blobs are also more likely to
+// to have more calldata.
+func newSlotterEIP7594(maxBlobsPerTransaction int) func() (uint32, bool) {
+	slotsize := uint32(txAvgSize)
 	slotsize -= uint32(blobSize) + txBlobOverhead // underflows, it's ok, will overflow back in the first return
 
 	return func() (size uint32, done bool) {
