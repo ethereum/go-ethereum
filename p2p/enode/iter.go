@@ -60,6 +60,11 @@ func (it sourceIter) NodeSource() string {
 	return it.name
 }
 
+type iteratorItem struct {
+	n      *Node
+	source string
+}
+
 // ReadNodes reads at most n nodes from the given iterator. The return value contains no
 // duplicates and no nil values. To prevent looping indefinitely for small repeating node
 // sequences, this function calls Next at most n times.
@@ -156,10 +161,10 @@ func (f *filterIter) Next() bool {
 // asyncFilterIter wraps an iterator such that Next only returns nodes for which
 // the 'check' function returns a (possibly modified) node.
 type asyncFilterIter struct {
-	it        Iterator      // the iterator to filter
-	slots     chan struct{} // the slots for parallel checking
-	passed    chan *Node    // channel to collect passed nodes
-	buffer    *Node         // buffer to serve the Node call
+	it        SourceIterator    // the iterator to filter
+	slots     chan struct{}     // the slots for parallel checking
+	passed    chan iteratorItem // channel to collect passed nodes
+	cur       iteratorItem      // buffer to serve the Node call
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 }
@@ -169,9 +174,9 @@ type AsyncFilterFunc func(context.Context, *Node) *Node
 // AsyncFilter creates an iterator which checks nodes in parallel.
 func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 	f := &asyncFilterIter{
-		it:     it,
+		it:     ensureSourceIter(it),
 		slots:  make(chan struct{}, workers+1),
-		passed: make(chan *Node),
+		passed: make(chan iteratorItem),
 	}
 	for range cap(f.slots) {
 		f.slots <- struct{}{}
@@ -189,13 +194,16 @@ func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 		// when a node is checked, it will be sent to the passed channel
 		// and the slot will be released
 		for f.it.Next() {
-			n := f.it.Node()
-			<-f.slots
+			node := f.it.Node()
+			nodeSource := f.it.NodeSource()
+
 			// check the node async, in a separate goroutine
+			<-f.slots
 			go func() {
-				if nn := check(ctx, n); nn != nil {
+				if nn := check(ctx, node); nn != nil {
+					item := iteratorItem{nn, nodeSource}
 					select {
-					case f.passed <- nn:
+					case f.passed <- item:
 					case <-ctx.Done(): // bale out if downstream is already closed and not calling Next
 					}
 				}
@@ -211,13 +219,19 @@ func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 
 // Next blocks until a node is available or the iterator is closed.
 func (f *asyncFilterIter) Next() bool {
-	f.buffer = <-f.passed
-	return f.buffer != nil
+	var ok bool
+	f.cur, ok = <-f.passed
+	return ok
 }
 
 // Node returns the current node.
 func (f *asyncFilterIter) Node() *Node {
-	return f.buffer
+	return f.cur.n
+}
+
+// NodeSource implements IteratorSource.
+func (f *asyncFilterIter) NodeSource() string {
+	return f.cur.source
 }
 
 // Close ends the iterator, also closing the wrapped iterator.
@@ -236,17 +250,17 @@ func (f *asyncFilterIter) Close() {
 // bufferIter wraps an iterator and buffers the nodes it returns.
 // The buffer is pre-filled with the given size from the wrapped iterator.
 type bufferIter struct {
-	it        Iterator
-	buffer    chan *Node
-	head      *Node
+	it        SourceIterator
+	buffer    chan iteratorItem
+	head      iteratorItem
 	closeOnce sync.Once
 }
 
 // NewBufferIter creates a new pre-fetch buffer of a given size.
 func NewBufferIter(it Iterator, size int) Iterator {
 	b := bufferIter{
-		it:     it,
-		buffer: make(chan *Node, size),
+		it:     ensureSourceIter(it),
+		buffer: make(chan iteratorItem, size),
 	}
 
 	go func() {
@@ -254,25 +268,31 @@ func NewBufferIter(it Iterator, size int) Iterator {
 		defer close(b.buffer)
 		// If instead the bufferIterator is closed, we bail out of the loop.
 		for b.it.Next() {
-			b.buffer <- b.it.Node()
+			item := iteratorItem{b.it.Node(), b.it.NodeSource()}
+			b.buffer <- item
 		}
 	}()
 	return &b
 }
 
 func (b *bufferIter) Next() bool {
-	b.head = <-b.buffer
-	return b.head != nil
+	var ok bool
+	b.head, ok = <-b.buffer
+	return ok
 }
 
 func (b *bufferIter) Node() *Node {
-	return b.head
+	return b.head.n
+}
+
+func (b *bufferIter) NodeSource() string {
+	return b.head.source
 }
 
 func (b *bufferIter) Close() {
 	b.closeOnce.Do(func() {
 		b.it.Close()
-		// Wait for Next to terminate.
+		// Drain buffer and wait for the goroutine to end.
 		for range b.buffer {
 		}
 	})
@@ -290,9 +310,9 @@ func (b *bufferIter) Close() {
 // It's safe to call AddSource and Close concurrently with Next.
 type FairMix struct {
 	wg      sync.WaitGroup
-	fromAny chan mixItem
+	fromAny chan iteratorItem
 	timeout time.Duration
-	cur     mixItem
+	cur     iteratorItem
 
 	mu      sync.Mutex
 	closed  chan struct{}
@@ -302,13 +322,8 @@ type FairMix struct {
 
 type mixSource struct {
 	it      SourceIterator
-	next    chan mixItem
+	next    chan iteratorItem
 	timeout time.Duration
-}
-
-type mixItem struct {
-	n      *Node
-	source string
 }
 
 // NewFairMix creates a mixer.
@@ -319,7 +334,7 @@ type mixItem struct {
 // timeout makes the mixer completely fair.
 func NewFairMix(timeout time.Duration) *FairMix {
 	m := &FairMix{
-		fromAny: make(chan mixItem),
+		fromAny: make(chan iteratorItem),
 		closed:  make(chan struct{}),
 		timeout: timeout,
 	}
@@ -337,7 +352,7 @@ func (m *FairMix) AddSource(it Iterator) {
 	m.wg.Add(1)
 	source := &mixSource{
 		it:      ensureSourceIter(it),
-		next:    make(chan mixItem),
+		next:    make(chan iteratorItem),
 		timeout: m.timeout,
 	}
 	m.sources = append(m.sources, source)
@@ -365,7 +380,7 @@ func (m *FairMix) Close() {
 
 // Next returns a node from a random source.
 func (m *FairMix) Next() bool {
-	m.cur = mixItem{}
+	m.cur = iteratorItem{}
 
 	for {
 		source := m.pickSource()
@@ -453,7 +468,7 @@ func (m *FairMix) runSource(closed chan struct{}, s *mixSource) {
 	defer m.wg.Done()
 	defer close(s.next)
 	for s.it.Next() {
-		item := mixItem{s.it.Node(), s.it.NodeSource()}
+		item := iteratorItem{s.it.Node(), s.it.NodeSource()}
 		select {
 		case s.next <- item:
 		case m.fromAny <- item:
