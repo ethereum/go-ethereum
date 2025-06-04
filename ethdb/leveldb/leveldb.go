@@ -574,7 +574,12 @@ func (r *replayer) DeleteRange(start, end []byte) {
 	if r.failure != nil {
 		return
 	}
-	r.failure = r.writer.DeleteRange(start, end)
+	// Check if the writer also supports range deletion
+	if rangeDeleter, ok := r.writer.(ethdb.KeyValueRangeDeleter); ok {
+		r.failure = rangeDeleter.DeleteRange(start, end)
+	} else {
+		r.failure = fmt.Errorf("ethdb.KeyValueWriter does not implement DeleteRange")
+	}
 }
 
 // bytesPrefixRange returns key range that satisfy

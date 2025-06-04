@@ -670,8 +670,12 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 			}
 		} else if kind == pebble.InternalKeyKindRangeDelete {
 			// For range deletion, k is the start key and v is the end key
-			if err = w.DeleteRange(k, v); err != nil {
-				return err
+			if rangeDeleter, ok := w.(ethdb.KeyValueRangeDeleter); ok {
+				if err = rangeDeleter.DeleteRange(k, v); err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("ethdb.KeyValueWriter does not implement DeleteRange")
 			}
 		} else {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)

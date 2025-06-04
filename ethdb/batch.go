@@ -24,10 +24,7 @@ const IdealBatchSize = 100 * 1024
 // when Write is called. A batch cannot be used concurrently.
 type Batch interface {
 	KeyValueWriter
-
-	// DeleteRange deletes all of the keys (and values) in the range [start,end)
-	// (inclusive on start, exclusive on end).
-	DeleteRange(start, end []byte) error
+	KeyValueRangeDeleter
 
 	// ValueSize retrieves the amount of data queued up for writing.
 	ValueSize() int

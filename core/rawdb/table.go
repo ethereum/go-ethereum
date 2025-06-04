@@ -223,6 +223,11 @@ func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
 }
 
+// DeleteRange removes all keys in the range [start, end) from the batch for later committing.
+func (b *tableBatch) DeleteRange(start, end []byte) error {
+	return b.batch.DeleteRange(append([]byte(b.prefix), start...), append([]byte(b.prefix), end...))
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *tableBatch) ValueSize() int {
 	return b.batch.ValueSize()

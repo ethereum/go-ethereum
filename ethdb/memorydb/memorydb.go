@@ -19,6 +19,7 @@ package memorydb
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -362,8 +363,12 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 				}
 			} else if keyvalue.rangeFrom != "" || keyvalue.rangeTo != "" {
 				// Range deletion
-				if err := w.DeleteRange([]byte(keyvalue.rangeFrom), []byte(keyvalue.rangeTo)); err != nil {
-					return err
+				if rangeDeleter, ok := w.(ethdb.KeyValueRangeDeleter); ok {
+					if err := rangeDeleter.DeleteRange([]byte(keyvalue.rangeFrom), []byte(keyvalue.rangeTo)); err != nil {
+						return err
+					}
+				} else {
+					return fmt.Errorf("ethdb.KeyValueWriter does not implement DeleteRange")
 				}
 			}
 			continue
