@@ -27,10 +27,10 @@ package blobpool
 // of resources, but it makes stress testing with junk transactions simpler.
 func newSlotter(maxBlobsPerTransaction int) func() (uint32, bool) {
 	slotsize := uint32(txAvgSize)
-	slotsize -= uint32(blobSize) // underflows, it's ok, will overflow back in the first return
+	slotsize -= uint32(blobSize) + txBlobOverhead // underflows, it's ok, will overflow back in the first return
 
 	return func() (size uint32, done bool) {
-		slotsize += blobSize
+		slotsize += blobSize + txBlobOverhead
 		finished := slotsize > uint32(maxBlobsPerTransaction)*blobSize+txMaxSize
 
 		return slotsize, finished

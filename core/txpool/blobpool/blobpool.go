@@ -55,6 +55,11 @@ const (
 	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
 	txAvgSize = 4 * 1024
 
+	// txBlobOverhead is an approximation of the overhead that an additional blob
+	// has on transaction size. This is added to the slotter to avoid
+	// tiny overflows causing all txs to move a shelf higher, wasting disk space.
+	txBlobOverhead = 2048
+
 	// txMaxSize is the maximum size a single transaction can have, outside
 	// the included blobs. Since blob transactions are pulled instead of pushed,
 	// and only a small metadata is kept in ram, the rest is on disk, there is
