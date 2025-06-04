@@ -98,6 +98,10 @@ func (w *Witness) AddState(nodes map[string]struct{}) {
 	maps.Copy(w.State, nodes)
 }
 
+func (w *Witness) AddKey() {
+	panic("not yet implemented")
+}
+
 // Copy deep-copies the witness object.  Witness.Block isn't deep-copied as it
 // is never mutated by Witness
 func (w *Witness) Copy() *Witness {

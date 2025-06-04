@@ -1837,7 +1837,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		}
 		// The traced section of block import.
 		start := time.Now()
-		res, err := bc.processBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1)
+		res, err := bc.ProcessBlock(parent.Root, block, setHead, makeWitness && len(chain) == 1)
 		if err != nil {
 			return nil, it.index, err
 		}
@@ -1903,9 +1903,9 @@ type blockProcessingResult struct {
 	witness  *stateless.Witness
 }
 
-// processBlock executes and validates the given block. If there was no error
+// ProcessBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
-func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (_ *blockProcessingResult, blockEndErr error) {
+func (bc *BlockChain) ProcessBlock(parentRoot common.Hash, block *types.Block, setHead bool, makeWitness bool) (_ *blockProcessingResult, blockEndErr error) {
 	var (
 		err       error
 		startTime = time.Now()
