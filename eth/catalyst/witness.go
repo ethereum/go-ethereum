@@ -280,9 +280,7 @@ func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, v
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID, ValidationError: &errorMsg}, nil
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
-	api.lastNewPayloadLock.Lock()
-	api.lastNewPayloadUpdate = time.Now()
-	api.lastNewPayloadLock.Unlock()
+	api.lastNewPayloadUpdate.Store(time.Now().Unix())
 
 	log.Trace("Executing block statelessly", "number", block.Number(), "hash", params.BlockHash)
 	stateRoot, receiptRoot, err := core.ExecuteStateless(api.config(), vm.Config{}, block, witness)

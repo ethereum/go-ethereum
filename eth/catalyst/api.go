@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -143,12 +144,9 @@ type ConsensusAPI struct {
 	// Geth can appear to be stuck or do strange things if the beacon client is
 	// offline or is sending us strange data. Stash some update stats away so
 	// that we can warn the user and not have them open issues on our tracker.
-	lastTransitionUpdate time.Time
-	lastTransitionLock   sync.Mutex
-	lastForkchoiceUpdate time.Time
-	lastForkchoiceLock   sync.Mutex
-	lastNewPayloadUpdate time.Time
-	lastNewPayloadLock   sync.Mutex
+	lastTransitionUpdate atomic.Int64
+	lastForkchoiceUpdate atomic.Int64
+	lastNewPayloadUpdate atomic.Int64
 
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
@@ -252,9 +250,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		return engine.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
-	api.lastForkchoiceLock.Lock()
-	api.lastForkchoiceUpdate = time.Now()
-	api.lastForkchoiceLock.Unlock()
+	api.lastForkchoiceUpdate.Store(time.Now().Unix())
 
 	// Check whether we have the block yet in our database or not. If not, we'll
 	// need to either trigger a sync, or to reject this forkchoice update for a
@@ -398,9 +394,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 		return nil, errors.New("invalid terminal total difficulty")
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
-	api.lastTransitionLock.Lock()
-	api.lastTransitionUpdate = time.Now()
-	api.lastTransitionLock.Unlock()
+	api.lastTransitionUpdate.Store(time.Now().Unix())
 
 	ttd := api.config().TerminalTotalDifficulty
 	if ttd == nil || ttd.Cmp(config.TerminalTotalDifficulty.ToInt()) != 0 {
@@ -611,9 +605,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		return api.invalid(err, nil), nil
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
-	api.lastNewPayloadLock.Lock()
-	api.lastNewPayloadUpdate = time.Now()
-	api.lastNewPayloadLock.Unlock()
+	api.lastNewPayloadUpdate.Store(time.Now().Unix())
 
 	// If we already have the block locally, ignore the entire execution and just
 	// return a fake success.
@@ -814,17 +806,9 @@ func (api *ConsensusAPI) heartbeat() {
 		// Sleep a bit and retrieve the last known consensus updates
 		time.Sleep(5 * time.Second)
 
-		api.lastTransitionLock.Lock()
-		lastTransitionUpdate := api.lastTransitionUpdate
-		api.lastTransitionLock.Unlock()
-
-		api.lastForkchoiceLock.Lock()
-		lastForkchoiceUpdate := api.lastForkchoiceUpdate
-		api.lastForkchoiceLock.Unlock()
-
-		api.lastNewPayloadLock.Lock()
-		lastNewPayloadUpdate := api.lastNewPayloadUpdate
-		api.lastNewPayloadLock.Unlock()
+		lastTransitionUpdate := time.Unix(api.lastTransitionUpdate.Load(), 0)
+		lastForkchoiceUpdate := time.Unix(api.lastForkchoiceUpdate.Load(), 0)
+		lastNewPayloadUpdate := time.Unix(api.lastNewPayloadUpdate.Load(), 0)
 
 		// If there have been no updates for the past while, warn the user
 		// that the beacon client is probably offline
