@@ -1,0 +1,31 @@
+{
+    "name": "web3-utils",
+    "version": "1.10.4",
+    "description": "Collection of utility functions used in web3.js.",
+    "repository": "https://github.com/ethereum/web3.js/tree/1.x/packages/web3-utils",
+    "license": "LGPL-3.0",
+    "engines": {
+        "node": ">=8.0.0"
+    },
+    "types": "types/index.d.ts",
+    "scripts": {
+        "compile": "tsc -b tsconfig.json",
+        "dtslint": "dtslint --localTs ../../node_modules/typescript/lib types"
+    },
+    "main": "lib/index.js",
+    "dependencies": {
+        "@ethereumjs/util": "^8.1.0",
+        "bn.js": "^5.2.1",
+        "ethereum-bloom-filters": "^1.0.6",
+        "ethereum-cryptography": "^2.1.2",
+        "ethjs-unit": "0.1.6",
+        "number-to-bn": "1.7.0",
+        "randombytes": "^2.1.0",
+        "utf8": "3.0.0"
+    },
+    "devDependencies": {
+        "dtslint": "^3.4.1",
+        "typescript": "4.9.5"
+    },
+    "gitHead": "56d35a4a9ec59c2735085dce1a5eebb0bb44fbce"
+}

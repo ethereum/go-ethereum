@@ -1,0 +1,35 @@
+{
+  "name": "http-response-object",
+  "version": "3.0.2",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "description": "A simple object to represent an http response",
+  "keywords": [
+    "http",
+    "https",
+    "response",
+    "request"
+  ],
+  "scripts": {
+    "prepublishOnly": "npm run build",
+    "build": "tsc && flowgen lib/**/*",
+    "pretest": "npm run build",
+    "test": "node test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ForbesLindesay/http-response-object.git"
+  },
+  "author": "ForbesLindesay",
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^10.0.3"
+  },
+  "devDependencies": {
+    "flowgen2": "^2.2.1",
+    "typescript": "^2.3.4"
+  }
+}

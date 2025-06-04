@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "lib": ["es6"],
+        "target": "es6",
+        "noImplicitAny": true,
+        "noImplicitThis": true,
+        "strictNullChecks": true,
+        "strictFunctionTypes": true,
+        "noEmit": true,
+        "allowSyntheticDefaultImports": false,
+        "baseUrl": ".",
+        "paths": {
+            "web3-utils": ["."]
+        }
+    }
+}

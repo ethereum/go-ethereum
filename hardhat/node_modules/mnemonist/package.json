@@ -1,0 +1,103 @@
+{
+  "name": "mnemonist",
+  "version": "0.38.5",
+  "description": "Curated collection of data structures for the JavaScript/TypeScript.",
+  "scripts": {
+    "lint": "eslint ./*.js ./utils ./test",
+    "prepublishOnly": "npm run lint && npm test && npm run test:types",
+    "test": "mocha",
+    "test:types": "tsc --target es2015 --noEmit --noImplicitAny --noImplicitReturns ./test/types.ts"
+  },
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "files": [
+    "sort",
+    "utils",
+    "*.d.ts",
+    "*.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yomguithereal/mnemonist.git"
+  },
+  "keywords": [
+    "bag",
+    "bimap",
+    "bit array",
+    "bit set",
+    "bit vector",
+    "bitset",
+    "bk tree",
+    "burkhard-keller tree",
+    "cache",
+    "circular buffer",
+    "counter",
+    "data structures",
+    "default map",
+    "deque",
+    "disjoint set",
+    "fibonacci heap",
+    "fuzzy map",
+    "hashed array tree",
+    "heap",
+    "interval tree",
+    "inverted index",
+    "kd tree",
+    "linked list",
+    "lru",
+    "lru cache",
+    "multimap",
+    "multiset",
+    "passjoin",
+    "queue",
+    "sparse map",
+    "sparse set",
+    "stack",
+    "structures",
+    "suffix tree",
+    "symspell",
+    "trie",
+    "union find",
+    "vantage point tree",
+    "vector",
+    "vp tree"
+  ],
+  "author": {
+    "name": "Guillaume Plique",
+    "url": "http://github.com/Yomguithereal"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yomguithereal/mnemonist/issues"
+  },
+  "homepage": "https://github.com/yomguithereal/mnemonist#readme",
+  "dependencies": {
+    "obliterator": "^2.0.0"
+  },
+  "devDependencies": {
+    "@yomguithereal/eslint-config": "^4.0.0",
+    "asciitree": "^1.0.2",
+    "damerau-levenshtein": "^1.0.6",
+    "eslint": "^7.21.0",
+    "leven": "^3.1.0",
+    "lodash": "^4.17.21",
+    "matcha": "^0.7.0",
+    "mocha": "^9.1.3",
+    "pandemonium": "^2.0.0",
+    "seedrandom": "^3.0.5",
+    "static-kdtree": "^1.0.2",
+    "typescript": "^4.2.2"
+  },
+  "eslintConfig": {
+    "extends": "@yomguithereal/eslint-config",
+    "parserOptions": {
+      "ecmaVersion": 6,
+      "ecmaFeatures": {
+        "forOf": true
+      }
+    },
+    "rules": {
+      "no-new": 0
+    }
+  }
+}

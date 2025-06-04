@@ -1,0 +1,10 @@
+{
+  "extends": "../../config/typescript/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "outDir": "dist",
+    "composite": true,
+    "incremental": true
+  },
+  "references": [{ "path": "../hardhat-core" }]
+}

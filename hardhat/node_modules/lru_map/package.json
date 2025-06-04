@@ -1,0 +1,31 @@
+{
+  "name": "lru_map",
+  "version": "0.3.3",
+  "description": "Finite key-value map using the Least Recently Used (LRU) algorithm where the most recently used objects are keept in the map while less recently used items are evicted to make room for new ones.",
+  "main": "lru.js",
+  "typings": "lru.d.ts",
+  "scripts": {
+    "test": "node test.js && echo 'Verifying TypeScript definition...' && tsc --noEmit",
+    "prepublish": "npm test",
+    "benchmark": "node --expose-gc benchmark.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rsms/js-lru.git"
+  },
+  "keywords": [
+    "cache",
+    "lru",
+    "buffer",
+    "map"
+  ],
+  "author": "Rasmus Andersson <me@rsms.me>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/rsms/js-lru/issues"
+  },
+  "homepage": "https://github.com/rsms/js-lru#readme",
+  "devDependencies": {
+    "typescript": "^2.0.10"
+  }
+}

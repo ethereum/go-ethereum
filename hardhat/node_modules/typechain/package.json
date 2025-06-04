@@ -1,0 +1,60 @@
+{
+  "name": "typechain",
+  "description": "🔌 TypeScript bindings for Ethereum smartcontracts",
+  "keywords": [
+    "ethereum",
+    "TypeScript",
+    "bindings",
+    "smartcontract",
+    "blockchain"
+  ],
+  "version": "8.3.2",
+  "license": "MIT",
+  "repository": "https://github.com/ethereum-ts/Typechain",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": "./dist/cli/cli.js",
+  "files": [
+    "dist/**/*"
+  ],
+  "dependencies": {
+    "@types/prettier": "^2.1.1",
+    "debug": "^4.3.1",
+    "fs-extra": "^7.0.0",
+    "glob": "7.1.7",
+    "js-sha3": "^0.8.0",
+    "lodash": "^4.17.15",
+    "mkdirp": "^1.0.4",
+    "ts-command-line-args": "^2.2.0",
+    "prettier": "^2.3.1",
+    "ts-essentials": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/bluebird": "^3.5.18",
+    "@types/command-line-args": "^4.0.2",
+    "@types/debug": "^4.1.5",
+    "@types/fs-extra": "^5.0.4",
+    "@types/glob": "^5.0.35",
+    "@types/lodash": "^4.14.139",
+    "@types/mkdirp": "^1.0.1",
+    "@types/node": "18.14.0",
+    "bluebird": "^3.5.1",
+    "coveralls": "^3.0.2"
+  },
+  "peerDependencies": {
+    "typescript": ">=4.3.0"
+  },
+  "scripts": {
+    "start": "ts-node -T ./src/index.ts",
+    "format": "prettier --config ../../.prettierrc --ignore-path ../../.prettierignore --check \"./**/*.ts\"",
+    "format:fix": "prettier --config ../../.prettierrc --ignore-path ../../.prettierignore --write \"./**/*.ts\"",
+    "lint": "eslint --ext .ts src test",
+    "lint:fix": "pnpm lint --fix",
+    "typecheck": "tsc --noEmit --incremental false --composite false",
+    "clean": "rm -rf dist && rm -f tsconfig.build.tsbuildinfo",
+    "post-build": "ts-node scripts/post-build",
+    "test": "mocha --config ../../.mocharc.js",
+    "test:fix": "pnpm lint:fix && pnpm format:fix && pnpm test && pnpm typecheck"
+  }
+}

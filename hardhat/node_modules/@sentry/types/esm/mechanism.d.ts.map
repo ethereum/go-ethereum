@@ -1,0 +1,1 @@
+{"version":3,"file":"mechanism.d.ts","sourceRoot":"","sources":["../src/mechanism.ts"],"names":[],"mappings":"AAAA,YAAY;AACZ,MAAM,WAAW,SAAS;IACxB,IAAI,EAAE,MAAM,CAAC;IACb,OAAO,EAAE,OAAO,CAAC;IACjB,IAAI,CAAC,EAAE;QACL,CAAC,GAAG,EAAE,MAAM,GAAG,MAAM,GAAG,OAAO,CAAC;KACjC,CAAC;IACF,SAAS,CAAC,EAAE,OAAO,CAAC;CACrB"}

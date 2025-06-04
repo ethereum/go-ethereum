@@ -1,0 +1,103 @@
+{
+  "name": "@ethereumjs/util",
+  "version": "9.1.0",
+  "description": "A collection of utility functions for Ethereum",
+  "keywords": [
+    "ethereum",
+    "utilities",
+    "utils"
+  ],
+  "homepage": "https://github.com/ethereumjs/ethereumjs-monorepo/tree/master/packages/util#readme",
+  "bugs": {
+    "url": "https://github.com/ethereumjs/ethereumjs-monorepo/issues?q=is%3Aissue+label%3A%22package%3A+util%22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethereumjs/ethereumjs-monorepo.git"
+  },
+  "license": "MPL-2.0",
+  "author": "EthereumJS Team",
+  "contributors": [
+    {
+      "name": "Tim Coulter",
+      "email": "tim@timothyjcoulter.com",
+      "url": "https://github.com/tcoulter"
+    },
+    {
+      "name": "Nick Dodson",
+      "url": "https://github.com/SilentCicero"
+    },
+    {
+      "name": "Mr. Chico",
+      "url": "https://github.com/MrChico"
+    },
+    {
+      "name": "Dũng Trần",
+      "email": "tad88.dev@gmail.com",
+      "url": "https://github.com/tad88dev"
+    },
+    {
+      "name": "Alex Beregszaszi",
+      "email": "alex@rtfs.hu",
+      "url": "https://github.com/axic"
+    },
+    {
+      "name": "Taylor Gerring",
+      "url": "https://github.com/tgerring"
+    },
+    {
+      "name": "Kirill Fomichev",
+      "email": "fanatid@ya.ru",
+      "url": "https://github.com/fanatid"
+    },
+    {
+      "name": "kumavis",
+      "email": "aaron@kumavis.me",
+      "url": "https://github.com/kumavis"
+    },
+    {
+      "name": "Alexander Sinyagin",
+      "email": "sinyagin.alexander@gmail.com",
+      "url": "https://github.com/asinyagin"
+    }
+  ],
+  "type": "commonjs",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "../../config/cli/ts-build.sh",
+    "clean": "../../config/cli/clean-package.sh",
+    "coverage": "DEBUG=ethjs npx vitest run --coverage.enabled --coverage.reporter=lcov",
+    "docs:build": "npx typedoc --options typedoc.cjs",
+    "examples": "tsx ../../scripts/examples-runner.ts -- util",
+    "examples:build": "npx embedme README.md",
+    "lint": "../../config/cli/lint.sh",
+    "lint:diff": "../../config/cli/lint-diff.sh",
+    "lint:fix": "../../config/cli/lint-fix.sh",
+    "prepublishOnly": "../../config/cli/prepublish.sh",
+    "test": "npm run test:node",
+    "test:browser": "npx vitest run --config=../../config/vitest.config.browser.mts",
+    "test:node": "npx vitest run",
+    "tsc": "../../config/cli/ts-compile.sh"
+  },
+  "dependencies": {
+    "@ethereumjs/rlp": "^5.0.2",
+    "ethereum-cryptography": "^2.2.1"
+  },
+  "devDependencies": {
+    "kzg-wasm": "^0.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

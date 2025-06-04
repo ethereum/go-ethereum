@@ -1,0 +1,1 @@
+export const SUPPORTED_SOLIDITY_VERSION_RANGE = "<=0.8.28";

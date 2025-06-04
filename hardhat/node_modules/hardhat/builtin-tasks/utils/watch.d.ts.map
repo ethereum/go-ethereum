@@ -1,0 +1,1 @@
+{"version":3,"file":"watch.d.ts","sourceRoot":"","sources":["../../src/builtin-tasks/utils/watch.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,SAAS,EAAE,MAAM,UAAU,CAAC;AAOrC,OAAO,EAAE,eAAe,EAAE,kBAAkB,EAAE,MAAM,aAAa,CAAC;AAIlE,MAAM,MAAM,OAAO,GAAG,SAAS,CAAC;AAEhC,wBAAsB,mBAAmB,CACvC,QAAQ,EAAE,eAAe,EACzB,KAAK,EAAE,kBAAkB,GACxB,OAAO,CAAC,OAAO,CAAC,CA8ClB"}

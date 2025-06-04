@@ -1,0 +1,11 @@
+{
+    "extends": "dtslint/dtslint.json",
+    "rules": {
+        "semicolon": false,
+        "no-import-default-of-export-equals": false,
+        "file-name-casing": [true, "kebab-case"],
+        "whitespace": false,
+        "no-redundant-jsdoc": false,
+        "max-line-length": false
+    }
+}

@@ -1,0 +1,99 @@
+{
+  "name": "@nomicfoundation/hardhat-toolbox",
+  "version": "5.0.0",
+  "description": "Nomic Foundation's recommended bundle of Hardhat plugins (ethers based)",
+  "repository": "github:nomicfoundation/hardhat",
+  "homepage": "https://github.com/nomicfoundation/hardhat/tree/main/packages/hardhat-toolbox",
+  "author": "Nomic Foundation",
+  "contributors": [
+    "Nomic Foundation"
+  ],
+  "license": "MIT",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "keywords": [
+    "ethereum",
+    "smart-contracts",
+    "hardhat",
+    "hardhat-plugin",
+    "hardhat-ethers"
+  ],
+  "files": [
+    "src/",
+    "*.d.ts",
+    "*.d.ts.map",
+    "*.js",
+    "*.js.map",
+    "LICENSE",
+    "README.md"
+  ],
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
+    "@types/chai": "^4.2.0",
+    "@types/mocha": ">=9.1.0",
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "5.61.0",
+    "@typescript-eslint/parser": "5.61.0",
+    "chai": "^4.4.1",
+    "eslint": "^8.44.0",
+    "eslint-config-prettier": "8.3.0",
+    "eslint-plugin-import": "2.27.5",
+    "eslint-plugin-no-only-tests": "3.0.0",
+    "eslint-plugin-prettier": "3.4.0",
+    "ethers": "^6.4.0",
+    "hardhat": "^2.11.0",
+    "hardhat-gas-reporter": "^1.0.8",
+    "mocha": "^10.0.0",
+    "prettier": "2.4.1",
+    "rimraf": "^3.0.2",
+    "solidity-coverage": "^0.8.1",
+    "ts-node": "^10.8.0",
+    "typechain": "^8.3.1",
+    "typescript": "~5.0.0",
+    "@nomicfoundation/eslint-plugin-hardhat-internal-rules": "^1.0.2",
+    "@nomicfoundation/eslint-plugin-slow-imports": "^1.0.0"
+  },
+  "peerDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
+    "@types/chai": "^4.2.0",
+    "@types/mocha": ">=9.1.0",
+    "@types/node": ">=18.0.0",
+    "chai": "^4.2.0",
+    "ethers": "^6.4.0",
+    "hardhat": "^2.11.0",
+    "hardhat-gas-reporter": "^1.0.8",
+    "solidity-coverage": "^0.8.1",
+    "ts-node": ">=8.0.0",
+    "typechain": "^8.3.0",
+    "typescript": ">=4.5.0"
+  },
+  "bugs": {
+    "url": "https://github.com/nomicfoundation/hardhat/issues"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "lint": "pnpm prettier --check && pnpm eslint",
+    "lint:fix": "pnpm prettier --write && pnpm eslint --fix",
+    "eslint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "prettier": "prettier \"**/*.{js,md,json}\"",
+    "pretest": "cd ../.. && pnpm build",
+    "test": "mocha --recursive \"test/**/*.ts\" --exit",
+    "prebuild": "cd ../../crates/edr_napi && yarn build",
+    "build": "tsc --build .",
+    "clean": "rimraf dist *.{d.ts,js}{,.map} build-test tsconfig.tsbuildinfo"
+  }
+}

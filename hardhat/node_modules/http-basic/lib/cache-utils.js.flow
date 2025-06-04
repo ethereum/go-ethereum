@@ -1,0 +1,18 @@
+// @flow
+// Generated using flowgen2
+
+const Response = require('http-response-object');
+import type {Headers} from './Headers';
+import type {CachedResponse} from './CachedResponse';
+
+declare function isMatch(
+  requestHeaders: Headers,
+  cachedResponse: CachedResponse,
+): boolean;
+export {isMatch};
+
+declare function isExpired(cachedResponse: CachedResponse): boolean;
+export {isExpired};
+
+declare function canCache<T>(res: Response<T>): boolean;
+export {canCache};

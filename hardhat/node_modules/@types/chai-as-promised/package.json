@@ -1,0 +1,52 @@
+{
+    "name": "@types/chai-as-promised",
+    "version": "7.1.8",
+    "description": "TypeScript definitions for chai-as-promised",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/chai-as-promised",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "jt000",
+            "githubUsername": "jt000",
+            "url": "https://github.com/jt000"
+        },
+        {
+            "name": "Yuki Kokubun",
+            "githubUsername": "Kuniwak",
+            "url": "https://github.com/Kuniwak"
+        },
+        {
+            "name": "Leonard Thieu",
+            "githubUsername": "leonard-thieu",
+            "url": "https://github.com/leonard-thieu"
+        },
+        {
+            "name": "Mike Lazer-Walker",
+            "githubUsername": "lazerwalker",
+            "url": "https://github.com/lazerwalker"
+        },
+        {
+            "name": "Matt Bishop",
+            "githubUsername": "mattbishop",
+            "url": "https://github.com/mattbishop"
+        },
+        {
+            "name": "William Orr",
+            "githubUsername": "worr",
+            "url": "https://github.com/worr"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/chai-as-promised"
+    },
+    "scripts": {},
+    "dependencies": {
+        "@types/chai": "*"
+    },
+    "typesPublisherContentHash": "f694f63eded646c3e7904222141fc7c5b6784b4fd3175d4e6635485d5d224900",
+    "typeScriptVersion": "4.5"
+}

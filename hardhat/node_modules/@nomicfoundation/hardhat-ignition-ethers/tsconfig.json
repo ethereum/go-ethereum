@@ -1,0 +1,15 @@
+{
+  "extends": "../../config/typescript/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "outDir": "dist",
+    "composite": true,
+    "jsx": "react-jsx"
+  },
+  "references": [
+    { "path": "../hardhat-ignition-core" },
+    { "path": "../hardhat-ignition" },
+    { "path": "../hardhat-ethers" },
+    { "path": "../hardhat-core" }
+  ]
+}

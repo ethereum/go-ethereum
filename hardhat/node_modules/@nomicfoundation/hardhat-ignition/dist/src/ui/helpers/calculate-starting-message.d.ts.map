@@ -1,0 +1,1 @@
+{"version":3,"file":"calculate-starting-message.d.ts","sourceRoot":"","sources":["../../../../src/ui/helpers/calculate-starting-message.ts"],"names":[],"mappings":"AAEA;;;;GAIG;AACH,wBAAgB,wBAAwB,CAAC,EACvC,UAAU,EACV,aAAa,GACd,EAAE;IACD,UAAU,EAAE,MAAM,GAAG,IAAI,CAAC;IAC1B,aAAa,EAAE,MAAM,GAAG,SAAS,GAAG,IAAI,CAAC;CAC1C,GAAG,MAAM,CAgBT"}

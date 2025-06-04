@@ -1,0 +1,46 @@
+{
+  "author": "Richard Moore <me@ricmoo.com>",
+  "dependencies": {
+    "@ethersproject/bytes": "^5.8.0",
+    "@ethersproject/constants": "^5.8.0",
+    "@ethersproject/logger": "^5.8.0"
+  },
+  "description": "String utility functions.",
+  "ethereum": "donations.ethers.eth",
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://gitcoin.co/grants/13/ethersjs-complete-simple-and-tiny-2"
+    },
+    {
+      "type": "individual",
+      "url": "https://www.buymeacoffee.com/ricmoo"
+    }
+  ],
+  "gitHead": "fa5f647bb2cde63dd0b9664c42cbfbdc1515e800",
+  "keywords": [
+    "Ethereum",
+    "ethers",
+    "strings",
+    "utf8"
+  ],
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "module": "./lib.esm/index.js",
+  "name": "@ethersproject/strings",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/strings",
+    "type": "git",
+    "url": "git://github.com/ethers-io/ethers.js.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "sideEffects": false,
+  "tarballHash": "0x52f4aba0585f674898e9e335b77e21b48670902dbd29806821ebc6f1fd74ca31",
+  "types": "./lib/index.d.ts",
+  "version": "5.8.0"
+}

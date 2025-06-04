@@ -1,0 +1,58 @@
+{
+  "name": "command-line-args",
+  "version": "5.2.1",
+  "description": "A mature, feature-complete library to parse command-line options.",
+  "repository": "https://github.com/75lb/command-line-args",
+  "scripts": {
+    "test": "npm run dist && npm run test:js && npm run test:mjs",
+    "test:js": "node dist/tests.js",
+    "test:mjs": "node --experimental-modules test/tests.mjs",
+    "test:ci": "npm run test:js",
+    "docs": "jsdoc2md -c jsdoc.conf index.mjs > doc/API.md && jsdoc2md -c jsdoc.conf lib/option-definition.mjs > doc/option-definition.md",
+    "cover": "nyc --reporter=text-lcov test-runner test/*.js test/internals/*.js | coveralls",
+    "dist": "rollup index.mjs -f cjs -e 'lodash.camelcase' -o dist/index.js && rollup index.mjs -f esm -e 'lodash.camelcase' -o dist/index.mjs && rollup test/tests.mjs -f cjs -e 'test-runner,assert,lodash.camelcase' -o dist/tests.js"
+  },
+  "main": "dist/index.js",
+  "keywords": [
+    "argv",
+    "parse",
+    "argument",
+    "args",
+    "option",
+    "options",
+    "parser",
+    "parsing",
+    "cli",
+    "command",
+    "line"
+  ],
+  "author": "Lloyd Brookes <75pound@gmail.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=4.0.0"
+  },
+  "files": [
+    "index.mjs",
+    "lib",
+    "dist/index.js",
+    "dist/index.mjs"
+  ],
+  "devDependencies": {
+    "coveralls": "^3.1.1",
+    "jsdoc-to-markdown": "^7.1.1",
+    "rollup": "~1.7.4",
+    "test-runner": "^0.5.1"
+  },
+  "dependencies": {
+    "array-back": "^3.1.0",
+    "find-replace": "^3.0.0",
+    "lodash.camelcase": "^4.3.0",
+    "typical": "^4.0.0"
+  },
+  "standard": {
+    "ignore": [
+      "dist"
+    ],
+    "envs": []
+  }
+}

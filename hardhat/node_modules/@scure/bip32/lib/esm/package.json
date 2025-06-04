@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "browser": {
+    "crypto": false
+  }
+}
