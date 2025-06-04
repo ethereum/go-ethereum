@@ -172,6 +172,9 @@ type asyncFilterIter struct {
 type AsyncFilterFunc func(context.Context, *Node) *Node
 
 // AsyncFilter creates an iterator which checks nodes in parallel.
+// The 'check' function is called on multiple goroutines to filter each node
+// from the upstream iterator. When check returns nil, the node will be skipped.
+// It can also return a new node to be returned by the iterator instead of the .
 func AsyncFilter(it Iterator, check AsyncFilterFunc, workers int) Iterator {
 	f := &asyncFilterIter{
 		it:     ensureSourceIter(it),
