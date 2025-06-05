@@ -723,8 +723,12 @@ func downloadEra(ctx *cli.Context) error {
 	// Resolve the destination directory.
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
+
 	ancients := stack.ResolveAncient("chaindata", "")
-	dir := filepath.Join(ancients, "era")
+	dir := filepath.Join(ancients, rawdb.ChainFreezerName, "era")
+	if ctx.IsSet(utils.EraFlag.Name) {
+		dir = filepath.Join(ancients, ctx.String(utils.EraFlag.Name))
+	}
 
 	baseURL := ctx.String(eraServerFlag.Name)
 	if baseURL == "" {
