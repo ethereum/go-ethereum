@@ -422,6 +422,10 @@ func (h *handler) unregisterPeer(id string) {
 	}
 }
 
+func (h *handler) SetMaxPeers(maxPeers int) {
+	h.maxPeers = maxPeers
+}
+
 func (h *handler) Start(maxPeers int) {
 	h.maxPeers = maxPeers
 
