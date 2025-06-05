@@ -317,19 +317,31 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 		dataOffset = scope.Stack.pop()
 		length     = scope.Stack.pop()
 	)
-
-	offset64, overflow := dataOffset.Uint64WithOverflow()
+	offset64, overflow := memOffset.Uint64WithOverflow()
 	if overflow {
-		return nil, ErrReturnDataOutOfBounds
+		return nil, NewMemoryError("RETURNDATACOPY", 0, 0, offset64)
 	}
 	// we can reuse dataOffset now (aliasing it for clarity)
 	var end = dataOffset
 	end.Add(&dataOffset, &length)
 	end64, overflow := end.Uint64WithOverflow()
-	if overflow || uint64(len(interpreter.returnData)) < end64 {
-		return nil, ErrReturnDataOutOfBounds
+	if overflow || end64 > uint64(len(interpreter.returnData)) {
+		return nil, NewMemoryError("RETURNDATACOPY", end64, uint64(len(interpreter.returnData)), 0)
 	}
-	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), interpreter.returnData[offset64:end64])
+	words64, overflow := length.Uint64WithOverflow()
+	if overflow {
+		return nil, NewMemoryError("RETURNDATACOPY", words64, 0, 0)
+	}
+	words := words64
+	if words == 0 {
+		return nil, nil
+	}
+	offset64, overflow = dataOffset.Uint64WithOverflow()
+	if overflow {
+		return nil, NewMemoryError("RETURNDATACOPY", 0, 0, offset64)
+	}
+	dataOffset64 := offset64
+	scope.Memory.Set(offset64, words, interpreter.returnData[dataOffset64:dataOffset64+words])
 	return nil, nil
 }
 
