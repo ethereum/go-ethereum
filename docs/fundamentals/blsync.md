@@ -29,9 +29,24 @@ A checkpoint is the block root of the first proposed slot of a finalized beacon 
 - Copy the block root field.
 ![Copy the block root](/images/docs/blsync3.png)
 
+## Testing a Beacon API Endpoint
+
+To verify that your Beacon API is reachable and returning valid data, you can use a simple `curl` command to request the light client bootstrap header for a given block root.
+
+Replace `<domain>` with your Beacon API domain, and `<block_hash>` with the hex-encoded block root you want to test.
+
+```terminal
+curl -H "Accept: application/json" http://<domain>/eth/v1/beacon/light_client/bootstrap/<block_root>
+```
+
 #### Example
+```terminal
+curl -H "Accept: application/json" http://testing.holesky.beacon-api.nimbus.team/eth/v1/beacon/light_client/bootstrap/0x82e6ba0e288db5eb79c328fc6cb03a6aec921b00af6888bd51d6b000e68e75ac
+```
 
 The following command can be used to start Geth with blsync on the Sepolia network. Note that the checkpoint root will be outdated two weeks after the writing of this page and a recent one will have to be picked according to the guide above:
+
+#### Example
 
 ```terminal
 ./build/bin/geth --sepolia --beacon.api https://sepolia.lightclient.xyz --beacon.checkpoint 0x0014732c89a02315d2ada0ed2f63b32ecb8d08751c01bea39011b31ad9ecee36
