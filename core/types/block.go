@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-verkle"
 )
@@ -366,6 +367,13 @@ func (b *Block) Body() *Body {
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
 func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
+
+func (b *Block) BlobCount() uint64 {
+	if b.header.BlobGasUsed == nil {
+		return 0
+	}
+	return *b.header.BlobGasUsed / params.BlobTxBlobGasPerBlob
+}
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
