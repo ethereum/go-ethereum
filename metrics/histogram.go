@@ -23,13 +23,13 @@ type Histogram interface {
 // GetOrRegisterHistogram returns an existing Histogram or constructs and
 // registers a new StandardHistogram.
 func GetOrRegisterHistogram(name string, r Registry, s Sample) Histogram {
-	return GetOrRegister(name, func() Histogram { return NewHistogram(s) }, r).(Histogram)
+	return getOrRegister(name, func() Histogram { return NewHistogram(s) }, r)
 }
 
 // GetOrRegisterHistogramLazy returns an existing Histogram or constructs and
 // registers a new StandardHistogram.
 func GetOrRegisterHistogramLazy(name string, r Registry, s func() Sample) Histogram {
-	return GetOrRegister(name, func() Histogram { return NewHistogram(s()) }, r).(Histogram)
+	return getOrRegister(name, func() Histogram { return NewHistogram(s()) }, r)
 }
 
 // NewHistogram constructs a new StandardHistogram from a Sample.

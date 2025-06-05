@@ -30,7 +30,7 @@ func benchmarkRegistryGetOrRegisterParallel(b *testing.B, amount int) {
 		wg.Add(1)
 		go func() {
 			for i := 0; i < b.N; i++ {
-				GetOrRegister("foo", NewMeter, r)
+				GetOrRegisterMeter("foo", r)
 			}
 			wg.Done()
 		}()
@@ -98,8 +98,8 @@ func TestRegistryGetOrRegister(t *testing.T) {
 	r := NewRegistry()
 
 	// First metric wins with GetOrRegister
-	c1 := GetOrRegister("foo", NewCounter, r)
-	c2 := GetOrRegister("foo", NewCounter, r)
+	c1 := GetOrRegisterCounter("foo", r)
+	c2 := GetOrRegisterCounter("foo", r)
 	if c1 != c2 {
 		t.Fatal("counters should've matched")
 	}
@@ -123,8 +123,8 @@ func TestRegistryGetOrRegisterWithLazyInstantiation(t *testing.T) {
 	r := NewRegistry()
 
 	// First metric wins with GetOrRegister
-	c1 := GetOrRegister("foo", NewCounter, r)
-	c2 := GetOrRegister("foo", NewCounter, r)
+	c1 := GetOrRegisterCounter("foo", r)
+	c2 := GetOrRegisterCounter("foo", r)
 	if c1 != c2 {
 		t.Fatal("counters should've matched")
 	}
@@ -165,7 +165,7 @@ func TestPrefixedChildRegistryGetOrRegister(t *testing.T) {
 	r := NewRegistry()
 	pr := NewPrefixedChildRegistry(r, "prefix.")
 
-	_ = GetOrRegister("foo", NewCounter, pr)
+	_ = GetOrRegisterCounter("foo", pr)
 
 	i := 0
 	r.Each(func(name string, m interface{}) {
@@ -182,7 +182,7 @@ func TestPrefixedChildRegistryGetOrRegister(t *testing.T) {
 func TestPrefixedRegistryGetOrRegister(t *testing.T) {
 	r := NewPrefixedRegistry("prefix.")
 
-	_ = GetOrRegister("foo", NewCounter, r)
+	_ = GetOrRegisterCounter("foo", r)
 
 	i := 0
 	r.Each(func(name string, m interface{}) {

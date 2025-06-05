@@ -9,7 +9,7 @@ import (
 
 func getOrRegisterRuntimeHistogram(name string, scale float64, r Registry) *runtimeHistogram {
 	constructor := func() Histogram { return newRuntimeHistogram(scale) }
-	return GetOrRegister(name, constructor, r).(*runtimeHistogram)
+	return getOrRegister(name, constructor, r).(*runtimeHistogram)
 }
 
 // runtimeHistogram wraps a runtime/metrics histogram.
