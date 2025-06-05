@@ -71,7 +71,6 @@ func ApplyMessage(
 	header *types.Header,
 	chainConfig *params.ChainConfig,
 	chainContext core.ChainContext,
-	spanID int64,
 	tracer *tracing.Hooks,
 ) (uint64, error) {
 
