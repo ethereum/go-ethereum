@@ -93,6 +93,11 @@ var (
 	snapshotCommitTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
 	triedbCommitTimer   = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
+	accountSizeMeter  = metrics.NewRegisteredMeter("chain/account/bytes", nil)
+	storageSizeMeter  = metrics.NewRegisteredMeter("chain/storage/bytes", nil)
+	triedbSizeMeter   = metrics.NewRegisteredMeter("chain/triedb/bytes", nil)
+	contractSizeMeter = metrics.NewRegisteredMeter("chain/contract/bytes", nil)
+
 	blockInsertTimer          = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
 	blockValidationTimer      = metrics.NewRegisteredResettingTimer("chain/validation", nil)
 	blockCrossValidationTimer = metrics.NewRegisteredResettingTimer("chain/crossvalidation", nil)
@@ -1587,9 +1592,15 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err != nil {
 		return err
 	}
+	// Update the statedb metrics with the committed changes.
+	sc := update.IntoChangeset()
+	accountSizeMeter.Mark(int64(sc.AccountSize))
+	storageSizeMeter.Mark(int64(sc.StorageSize))
+	triedbSizeMeter.Mark(int64(sc.TrienodeSize))
+	contractSizeMeter.Mark(int64(sc.CodeSize))
+
 	// Tracing the state changes if the logger is enabled.
 	if bc.logger != nil && bc.logger.OnStateCommit != nil {
-		sc := update.IntoChangeset()
 		bc.logger.OnStateCommit(&tracing.StateUpdate{
 			Number:       block.NumberU64(),
 			Hash:         block.Hash(),
@@ -1604,6 +1615,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			CodeSize:     int64(sc.CodeSize),
 		})
 	}
+
 	// If node is running in path mode, skip explicit gc operation
 	// which is unnecessary in this mode.
 	if bc.triedb.Scheme() == rawdb.PathScheme {
