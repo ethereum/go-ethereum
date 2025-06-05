@@ -342,6 +342,10 @@ func geth(ctx *cli.Context) error {
 	defer stack.Close()
 
 	startNode(ctx, stack, backend, false)
+
+	upgradeBlockHeight := uint64(10)
+	utils.ShutdownAtUpgradeBlockHeight(ctx, stack, upgradeBlockHeight)
+
 	stack.Wait()
 	return nil
 }
@@ -354,9 +358,6 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 
 	// Start up the node itself
 	utils.StartNode(ctx, stack, isConsole)
-
-	upgradeBlockHeight := uint64(10)
-	utils.ShutdownAtUpgradeBlockHeight(ctx, stack, upgradeBlockHeight)
 
 	// Unlock any account specifically requested
 	unlockAccounts(ctx, stack)
