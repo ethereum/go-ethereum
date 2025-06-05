@@ -48,7 +48,7 @@ type KeyValueRangeDeleter interface {
 	// (inclusive on start, exclusive on end).
 	// Some implementations of DeleteRange may return ErrTooManyKeys after
 	// partially deleting entries in the given range.
-	DeleteRange(start, end []byte) error
+	DeleteRange(start, end []byte) error	
 }
 
 // KeyValueStater wraps the Stat method of a backing data store.
