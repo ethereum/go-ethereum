@@ -98,10 +98,10 @@ func TestRegistryGetOrRegister(t *testing.T) {
 	r := NewRegistry()
 
 	// First metric wins with GetOrRegister
-	_ = GetOrRegister("foo", NewCounter, r)
-	m := GetOrRegister("foo", NewGauge, r)
-	if _, ok := m.(*Counter); !ok {
-		t.Fatal(m)
+	c1 := GetOrRegister("foo", NewCounter, r)
+	c2 := GetOrRegister("foo", NewCounter, r)
+	if c1 != c2 {
+		t.Fatal("counters should've matched")
 	}
 
 	i := 0
@@ -123,10 +123,10 @@ func TestRegistryGetOrRegisterWithLazyInstantiation(t *testing.T) {
 	r := NewRegistry()
 
 	// First metric wins with GetOrRegister
-	_ = GetOrRegister("foo", NewCounter, r)
-	m := GetOrRegister("foo", NewGauge, r)
-	if _, ok := m.(*Counter); !ok {
-		t.Fatal(m)
+	c1 := GetOrRegister("foo", NewCounter, r)
+	c2 := GetOrRegister("foo", NewCounter, r)
+	if c1 != c2 {
+		t.Fatal("counters should've matched")
 	}
 
 	i := 0

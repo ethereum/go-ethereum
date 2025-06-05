@@ -11,7 +11,7 @@ func (g GaugeSnapshot) Value() int64 { return int64(g) }
 // GetOrRegisterGauge returns an existing Gauge or constructs and registers a
 // new Gauge.
 func GetOrRegisterGauge(name string, r Registry) *Gauge {
-	return GetOrRegister(name, NewGauge, r).(*Gauge)
+	return GetOrRegister(name, NewGauge, r)
 }
 
 // NewGauge constructs a new Gauge.
