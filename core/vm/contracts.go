@@ -441,14 +441,15 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 
 	maxLenOver32 := gas.Cmp(big32) > 0
 	if c.eip2565 {
-		// EIP-2565 has three changes
+		// EIP-2565 (Berlin fork) has three changes:
+		//
 		// 1. Different multComplexity (inlined here)
 		// in EIP-2565 (https://eips.ethereum.org/EIPS/eip-2565):
 		//
 		// def mult_complexity(x):
 		//    ceiling(x/8)^2
 		//
-		//where is x is max(length_of_MODULUS, length_of_BASE)
+		// where is x is max(length_of_MODULUS, length_of_BASE)
 		gas.Add(gas, big7)
 		gas.Rsh(gas, 3)
 		gas.Mul(gas, gas)
@@ -472,7 +473,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		return max(minPrice, gas.Uint64())
 	}
 
-	// Pre-osaka logic.
+	// Pre-Berlin logic.
 	gas = modexpMultComplexity(gas)
 	if adjExpLen.Cmp(big1) > 0 {
 		gas.Mul(gas, adjExpLen)
