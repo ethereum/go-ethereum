@@ -469,18 +469,15 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		if gas.BitLen() > 64 {
 			return math.MaxUint64
 		}
-
-		if gas.Uint64() < minPrice {
-			return minPrice
-		}
-		return gas.Uint64()
+		return max(minPrice, gas.Uint64())
 	}
+
+	// Pre-osaka logic.
 	gas = modexpMultComplexity(gas)
 	if adjExpLen.Cmp(big1) > 0 {
 		gas.Mul(gas, adjExpLen)
 	}
 	gas.Div(gas, big20)
-
 	if gas.BitLen() > 64 {
 		return math.MaxUint64
 	}
