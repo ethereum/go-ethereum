@@ -59,6 +59,12 @@ func (c *BlockNativeClient) GetBlobByVersionedHashAndBlockTime(ctx context.Conte
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode result into struct, err: %w", err)
 	}
+
+	// check that blob data is not empty
+	if len(result.Blob.Data) < 2 {
+		return nil, fmt.Errorf("blob data is too short to be valid, expected at least 2 characters, got: %s, versioned hash: %s", result.Blob.Data, versionedHash.String())
+	}
+
 	blobBytes, err := hex.DecodeString(result.Blob.Data[2:])
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode data to bytes, err: %w", err)
