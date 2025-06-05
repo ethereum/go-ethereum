@@ -124,6 +124,7 @@ func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 }
 
 func ShutdownAtUpgradeBlockHeight(ctx *cli.Context, n *node.Node, upgradeBlockHeight uint64) {
+	log.Info("Starting goroutine to shutdown at upgrade block height", "upgradeBlockHeight", upgradeBlockHeight)
 	sub := n.EventMux().Subscribe(core.ChainHeadEvent{})
 	go func() {
 		defer sub.Unsubscribe()
