@@ -355,6 +355,9 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 	// Start up the node itself
 	utils.StartNode(ctx, stack, isConsole)
 
+	upgradeBlockHeight := uint64(10)
+	utils.ShutdownAtUpgradeBlockHeight(ctx, stack, upgradeBlockHeight)
+
 	// Unlock any account specifically requested
 	unlockAccounts(ctx, stack)
 

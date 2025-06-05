@@ -123,6 +123,35 @@ func StartNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	}()
 }
 
+func ShutdownAtUpgradeBlockHeight(ctx *cli.Context, n *node.Node, upgradeBlockHeight uint64) {
+	sub := n.EventMux().Subscribe(core.ChainHeadEvent{})
+	go func() {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info("ShutdownAtUpgradeBlockHeight: context cancelled, exiting goroutine")
+				return
+			case ev, ok := <-sub.Chan():
+				if !ok {
+					log.Error("ShutdownAtUpgradeBlockHeight: subscription closed, exiting goroutine")
+					return
+				}
+				ch, ok := ev.Data.(core.ChainHeadEvent)
+				if !ok {
+					log.Error("ShutdownAtUpgradeBlockHeight: failed to convert ChainHeadEvent, exiting goroutine")
+					continue
+				}
+				if ch.Block.Number().Uint64() >= upgradeBlockHeight {
+					log.Info("Target upgrade block height reached, initiating shutdown", "block", ch.Block.Number().Uint64())
+					n.Close()
+					return
+				}
+			}
+		}
+	}()
+}
+
 func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritical uint64) {
 	if path == "" {
 		return
