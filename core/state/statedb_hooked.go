@@ -42,6 +42,10 @@ func NewHookedState(stateDb *StateDB, hooks *tracing.Hooks) *hookedStateDB {
 	if s.hooks == nil {
 		s.hooks = new(tracing.Hooks)
 	}
+
+	// Requires to maintain Firehose 2.3 backward compatibility
+	stateDb.hooks = s.hooks
+
 	return s
 }
 

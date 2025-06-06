@@ -2641,7 +2641,11 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	}
 	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
 		defer func() {
-			bc.logger.OnBlockEnd(blockEndErr)
+			if recovered := recover(); recovered != nil {
+				panic(recovered)
+			} else {
+				bc.logger.OnBlockEnd(blockEndErr)
+			}
 		}()
 	}
 

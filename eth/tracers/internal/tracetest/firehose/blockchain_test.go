@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -30,7 +29,9 @@ func runPrestateBlock(t *testing.T, prestatePath string, hooks *tracing.Hooks) {
 	testState := tests.MakePreState(rawdb.NewMemoryDatabase(), prestate.Genesis.Alloc, false, rawdb.HashScheme)
 	defer testState.Close()
 
-	testState.StateDB.SetLogger(hooks)
+	state.NewHookedState(testState.StateDB, hooks)
+
+	// testState.StateDB.SetLogger(hooks)
 	testState.StateDB.SetTxContext(tx.Hash(), 0)
 
 	block := types.NewBlock(&types.Header{
@@ -60,14 +61,12 @@ func runPrestateBlock(t *testing.T, prestatePath string, hooks *tracing.Hooks) {
 	msg, err := core.TransactionToMessage(tx, types.MakeSigner(prestate.Genesis.Config, header.Number, header.Time), header.BaseFee)
 	require.NoError(t, err)
 
-	txContext := core.NewEVMTxContext(msg)
 	blockContext := core.NewEVMBlockContext(block.Header(), prestate, &context.Coinbase)
-	vmenv := vm.NewEVM(blockContext, txContext, testState.StateDB, prestate.Genesis.Config, vm.Config{Tracer: hooks})
+	vmenv := vm.NewEVM(blockContext, state.NewHookedState(testState.StateDB, hooks), prestate.Genesis.Config, vm.Config{Tracer: hooks})
 
 	usedGas := uint64(0)
 	_, err = core.ApplyTransactionWithEVM(
 		msg,
-		prestate.Config(),
 		new(core.GasPool).AddGas(block.GasLimit()),
 		testState.StateDB,
 		header.Number,
@@ -90,18 +89,10 @@ type ignoreValidateStateValidator struct {
 	core.Validator
 }
 
-// ValidateBody validates the given block's content.
 func (v ignoreValidateStateValidator) ValidateBody(block *types.Block) error {
-	return nil
+	return v.Validator.ValidateBody(block)
 }
 
-// ValidateState validates the given statedb and optionally the receipts and
-// gas used.
-func (v ignoreValidateStateValidator) ValidateState(block *types.Block, state *state.StateDB, receipts types.Receipts, usedGas uint64, stateless bool) error {
-	return nil
-}
-
-// ValidateWitness cross validates a block execution with stateless remote clients.
-func (v ignoreValidateStateValidator) ValidateWitness(witness *stateless.Witness, receiptRoot common.Hash, stateRoot common.Hash) error {
+func (v ignoreValidateStateValidator) ValidateState(block *types.Block, state *state.StateDB, res *core.ProcessResult, stateless bool) error {
 	return nil
 }

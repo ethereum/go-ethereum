@@ -25,6 +25,7 @@ var configByName = map[string]*params.ChainConfig{
 	"mainnet": params.MainnetChainConfig,
 	"sepolia": params.SepoliaChainConfig,
 	"holesky": params.HoleskyChainConfig,
+	"hoodi":   params.HoodiChainConfig,
 }
 
 func main() {

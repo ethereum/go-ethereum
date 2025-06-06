@@ -1,0 +1,23 @@
+ARG FIREHOSE_CORE="18bb86f"
+
+# Build Geth in a stock Go builder container
+FROM golang:1.24-alpine AS builder
+
+RUN apk add --no-cache gcc musl-dev linux-headers git
+
+# Get dependencies - will also be cached if we won't change go.mod/go.sum
+COPY go.mod /go-ethereum/
+COPY go.sum /go-ethereum/
+RUN cd /go-ethereum && go mod download
+
+ADD . /go-ethereum
+RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
+
+# FIXME: Actually put Firehose Ethereum when it's properly built
+# Pull Geth into Firehose Core container (geth is statically linked, we can copy it from alpine to ubuntu)
+FROM ghcr.io/streamingfast/firehose-core:${FIREHOSE_CORE}
+
+COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/geth
+RUN ln -s /usr/local/bin/geth /app/geth
+
+EXPOSE 8545 8546 30303 30303/udp

@@ -171,6 +171,9 @@ type StateDB struct {
 
 	// Bor metrics
 	BorConsensusTime time.Duration
+
+	// requires to maintain Firehose 2.3 backward compatibility
+	hooks *tracing.Hooks
 }
 
 // New creates a new state from a given trie.
@@ -1052,6 +1055,9 @@ func (s *StateDB) mvRecordWritten(object *stateObject) *stateObject {
 // existing account with the given address, otherwise it will be silently overwritten.
 func (s *StateDB) createObject(addr common.Address) *stateObject {
 	obj := newObject(s, addr, nil)
+	if s.hooks != nil && s.hooks.OnNewAccount != nil {
+		s.hooks.OnNewAccount(addr)
+	}
 
 	s.journal.append(createObjectChange{account: addr})
 	s.setStateObject(obj)

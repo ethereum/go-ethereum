@@ -13,7 +13,7 @@ import (
 )
 
 func TestPolygon_TracerBlockLevelOnCodeChange(t *testing.T) {
-	tracer, hooks, onClose := newFirehoseTestTracer(t, tracingModelFirehose2_3)
+	tracer, hooks, onClose := newFirehoseTestTracer(t, tracingModelFirehose2_3, nil)
 	defer onClose()
 
 	hooks.OnBlockchainInit(params.BorMainnetChainConfig)
