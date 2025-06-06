@@ -148,7 +148,7 @@ func ApplyMessage(
 		}
 
 		receipt.Logs = state.GetLogs(tx.Hash(), header.Number.Uint64(), blockHash)
-		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.Bloom = types.CreateBloom(receipt)
 		receipt.BlockHash = blockHash
 		receipt.BlockNumber = header.Number
 		receipt.TransactionIndex = 0
