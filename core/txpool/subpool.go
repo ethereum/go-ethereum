@@ -132,15 +132,6 @@ type SubPool interface {
 	// given transaction hash.
 	GetMetadata(hash common.Hash) *TxMetadata
 
-	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
-	// This is a utility method for the engine API, enabling consensus clients to
-	// retrieve blobs from the pools directly instead of the network.
-	GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar
-
-	// AvailableBlobs returns number of blobs corresponding to the  versioned hashes
-	// that are available in the sub pool.
-	AvailableBlobs(vhashes []common.Hash) int
-
 	// ValidateTxBasics checks whether a transaction is valid according to the consensus
 	// rules, but does not check state-dependent validation such as sufficient balance.
 	// This check is meant as a static check which can be performed without holding the

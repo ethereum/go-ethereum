@@ -492,7 +492,7 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 		res      = make([]*engine.BlobAndProofV1, len(hashes))
 		hasher   = sha256.New()
 		index    = make(map[common.Hash]int)
-		sidecars = api.eth.TxPool().GetBlobs(hashes)
+		sidecars = api.eth.BlobTxPool().GetBlobs(hashes)
 	)
 
 	for i, hash := range hashes {
@@ -522,7 +522,7 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
 	}
 
-	available := api.eth.TxPool().AvailableBlobs(hashes)
+	available := api.eth.BlobTxPool().AvailableBlobs(hashes)
 	getBlobsRequestedCounter.Inc(int64(len(hashes)))
 	getBlobsAvailableCounter.Inc(int64(available))
 	// Optimization: check first if all blobs are available, if not, return empty response
@@ -536,7 +536,7 @@ func (api *ConsensusAPI) GetBlobsV2(hashes []common.Hash) ([]*engine.BlobAndProo
 	var (
 		res      = make([]*engine.BlobAndProofV2, len(hashes))
 		index    = make(map[common.Hash][]int)
-		sidecars = api.eth.TxPool().GetBlobs(hashes)
+		sidecars = api.eth.BlobTxPool().GetBlobs(hashes)
 	)
 
 	for i, hash := range hashes {
