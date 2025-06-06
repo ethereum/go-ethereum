@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"os"
 	"regexp"
@@ -78,6 +79,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnBlockStart:     tracer.OnBlockStart,
 		OnBlockEnd:       tracer.OnBlockEnd,
 		OnSkippedBlock:   tracer.OnSkippedBlock,
+		OnClose:          tracer.OnClose,
 
 		OnTxStart: tracer.OnTxStart,
 		OnTxEnd:   tracer.OnTxEnd,
@@ -133,6 +135,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 
 type FirehoseConfig struct {
 	ApplyBackwardCompatibility *bool `json:"applyBackwardCompatibility"`
+	ConcurrentBlockFlushing    int   `json:"concurrentBlockFlushing"`
 
 	// Only used for testing, only possible through JSON configuration
 	private *privateFirehoseConfig
@@ -153,6 +156,7 @@ func (c *FirehoseConfig) LogKeyValues() []any {
 
 	return []any{
 		"config.applyBackwardCompatibility", applyBackwardCompatibility,
+		"config.concurrentBlockFlushing", c.ConcurrentBlockFlushing,
 	}
 }
 
@@ -166,13 +170,15 @@ func (c *FirehoseConfig) ForcedBackwardCompatibility() bool {
 
 type Firehose struct {
 	// Global state
-	outputBuffer *bytes.Buffer
-	initSent     *atomic.Bool
-	config       *FirehoseConfig
-	chainConfig  *params.ChainConfig
-	hasher       crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
-	hasherBuf    common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
-	tracerID     string
+	outputBuffer              *bytes.Buffer
+	initSent                  *atomic.Bool
+	config                    *FirehoseConfig
+	chainConfig               *params.ChainConfig
+	hasher                    crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
+	hasherBuf                 common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
+	tracerID                  string
+	concurrentFlushQueue      *ConcurrentFlushQueue
+	concurrentFlushBufferSize int
 	// The FirehoseTracer is used in multiple chains, some for which were produced using a legacy version
 	// of the whole tracing infrastructure. This legacy version had many small bugs here and there that
 	// we must "reproduce" on some chain to ensure that the FirehoseTracer produces the same output
@@ -182,6 +188,7 @@ type Firehose struct {
 	// here. If not set in the config, then we inspect `OnBlockchainInit` the chain config to determine
 	// if it's a network for which we must reproduce the legacy bugs.
 	applyBackwardCompatibility *bool
+	concurrentBlockFlushing    int
 
 	// Block state
 	block                       *pbeth.Block
@@ -250,6 +257,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		hasher:                     crypto.NewKeccakState(),
 		tracerID:                   "global",
 		applyBackwardCompatibility: config.ApplyBackwardCompatibility,
+		concurrentBlockFlushing:    config.ConcurrentBlockFlushing,
+		concurrentFlushBufferSize:  100,
 
 		// Block state
 		blockOrdinal:        &Ordinal{},
@@ -363,6 +372,16 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 		}
 	} else {
 		applyBackwardCompatibilityLogSuffix = " (disabled)"
+	}
+
+	if f.config.ConcurrentBlockFlushing > 0 {
+		log.Info("Firehose concurrent block flushing enabled, starting goroutine")
+		f.concurrentFlushQueue = NewConcurrentFlushQueue(
+			f.concurrentFlushBufferSize,
+			f.printBlockToFirehose,
+			f.flushToFirehose,
+		)
+		f.concurrentFlushQueue.Start(f.config.ConcurrentBlockFlushing)
 	}
 
 	log.Info("Firehose tracer initialized",
@@ -508,7 +527,14 @@ func (f *Firehose) OnBlockEnd(err error) {
 		}
 
 		f.ensureInBlockAndNotInTrx()
-		f.printBlockToFirehose(f.block, f.blockFinality)
+
+		// Flush block to firehose and optionally use goroutine
+		if f.concurrentBlockFlushing > 0 {
+			f.concurrentFlushQueue.Enqueue(f.block, f.blockFinality)
+		} else {
+			f.printBlockToFirehose(f.block, f.blockFinality)
+		}
+
 	} else {
 		// An error occurred, could have happen in transaction/call context, we must not check if in trx/call, only check in block
 		f.ensureInBlock(0)
@@ -624,6 +650,13 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 	call.EndOrdinal += ordinalBase
 
 	return call.EndOrdinal
+}
+
+func (f *Firehose) OnClose() {
+	if f.concurrentFlushQueue != nil {
+		log.Info("Firehose closing, flushing queued blocks to standard output")
+		f.concurrentFlushQueue.CloseChannels()
+	}
 }
 
 func (f *Firehose) OnSystemCallStart() {
@@ -1875,12 +1908,17 @@ func (f *Firehose) panicInvalidState(msg string, callerSkip int) string {
 
 // printBlockToFirehose is a helper function to print a block to Firehose protocl format.
 func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *FinalityStatus) {
+
+	headerSize := 225 // FIRE BLOCK:11 <blockNum:20> <blockHash:64> <prevNum:20> <prevHash:64> <libNum:20> <timestamp:20>
+	base64Size := math.Ceil(float64(proto.Size(block)) * 8 / 6)
+	bufferSize := headerSize + int(base64Size)
+	buf := bytes.NewBuffer(make([]byte, 0, bufferSize))
+
 	marshalled, err := proto.Marshal(block)
+
 	if err != nil {
 		panic(fmt.Errorf("failed to marshal block: %w", err))
 	}
-
-	f.outputBuffer.Reset()
 
 	previousHash := block.PreviousID()
 	previousNum := 0
@@ -1900,9 +1938,9 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 	}
 
 	// **Important* The final space in the Sprintf template is mandatory!
-	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
+	buf.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
 
-	encoder := base64.NewEncoder(base64.StdEncoding, f.outputBuffer)
+	encoder := base64.NewEncoder(base64.StdEncoding, buf)
 	if _, err = encoder.Write(marshalled); err != nil {
 		panic(fmt.Errorf("write to encoder should have been infaillible: %w", err))
 	}
@@ -1911,9 +1949,16 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 		panic(fmt.Errorf("closing encoder should have been infaillible: %w", err))
 	}
 
-	f.outputBuffer.WriteString("\n")
+	buf.WriteString("\n")
 
-	f.flushToFirehose(f.outputBuffer.Bytes())
+	if f.concurrentBlockFlushing > 0 {
+		f.concurrentFlushQueue.outputQueue <- &outputJob{
+			blockNum: block.Number,
+			data:     buf.Bytes(),
+		}
+	} else {
+		f.flushToFirehose(buf.Bytes())
+	}
 }
 
 // printToFirehose is an easy way to print to Firehose format, it essentially

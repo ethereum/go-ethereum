@@ -1,6 +1,8 @@
 package firehose_test
 
 import (
+	"fmt"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"math/big"
 	"path/filepath"
 	"strings"
@@ -39,25 +41,34 @@ func TestFirehosePrestate(t *testing.T) {
 		"./testdata/TestFirehosePrestate/keccak256_memory_out_of_bounds",
 	}
 
-	for _, folder := range testFolders {
-		name := filepath.Base(folder)
+	for _, concurrent := range []int{0, 1} {
+		for _, folder := range testFolders {
+			name := filepath.Base(folder)
+			concurrencyLabel := "sequential"
+			if concurrent == 1 {
+				concurrencyLabel = "concurrent"
+			}
 
-		for _, model := range tracingModels {
-			t.Run(string(model)+"/"+name, func(t *testing.T) {
-				tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model)
-				defer onClose()
+			for _, model := range tracingModels {
+				t.Run(fmt.Sprintf("%s/%s/%s", model, name, concurrencyLabel), func(t *testing.T) {
+					config := &tracers.FirehoseConfig{
+						ConcurrentBlockFlushing: concurrent,
+					}
 
-				runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracingHooks)
+					tracer, tracingHooks, _ := newFirehoseTestTracer(t, model, config)
 
-				genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
-				require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
-				require.NotNil(t, genesisLine)
-				blockLines.assertOnlyBlockEquals(t, filepath.Join(folder, string(model)), 1)
-			})
+					runPrestateBlock(t, filepath.Join(folder, "prestate.json"), tracingHooks)
+
+					tracer.OnClose()
+					genesisLine, blockLines, unknownLines := readTracerFirehoseLines(t, tracer)
+					require.Len(t, unknownLines, 0, "Lines:\n%s", strings.Join(
+						slicesMap(unknownLines, func(l unknownLine) string { return "- '" + string(l) + "'" }), "\n"))
+					require.NotNil(t, genesisLine)
+					blockLines.assertOnlyBlockEquals(t, filepath.Join(folder, string(model)), 1)
+				})
+			}
 		}
-
 	}
-
 }
 func TestFirehose_EIP7702(t *testing.T) {
 	// Copied from ./core/blockchain_test.go#L4180 (TestEIP7702)
@@ -187,24 +198,35 @@ func TestFirehose_SystemCalls(t *testing.T) {
 func testBlockTracesCorrectly(t *testing.T, genesisSpec *core.Genesis, engine consensus.Engine, blocks []*types.Block, goldenDir string) {
 	t.Helper()
 
-	for _, model := range tracingModels {
-		t.Run(string(model), func(t *testing.T) {
-			tracer, tracingHooks, onClose := newFirehoseTestTracer(t, model)
-			defer onClose()
+	for _, concurrent := range []int{0, 1} {
+		concurrencyLabel := "sequential"
+		if concurrent == 1 {
+			concurrencyLabel = "concurrent"
+		}
 
-			chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesisSpec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
-			require.NoError(t, err, "failed to create tester chain")
+		for _, model := range tracingModels {
+			t.Run(fmt.Sprintf("%s/%s", model, concurrencyLabel), func(t *testing.T) {
+				config := &tracers.FirehoseConfig{
+					ConcurrentBlockFlushing: concurrent,
+				}
 
-			chain.SetBlockValidatorAndProcessorForTesting(
-				ignoreValidateStateValidator{core.NewBlockValidator(genesisSpec.Config, chain)},
-				core.NewStateProcessor(genesisSpec.Config, chain.HeaderChain()),
-			)
+				tracer, tracingHooks, _ := newFirehoseTestTracer(t, model, config)
 
-			defer chain.Stop()
-			n, err := chain.InsertChain(blocks)
-			require.NoError(t, err, "failed to insert chain block %d", n)
+				chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genesisSpec, nil, engine, vm.Config{Tracer: tracingHooks}, nil)
+				require.NoError(t, err, "failed to create tester chain")
 
-			assertBlockEquals(t, tracer, filepath.Join("testdata", goldenDir, string(model)), len(blocks))
-		})
+				chain.SetBlockValidatorAndProcessorForTesting(
+					ignoreValidateStateValidator{core.NewBlockValidator(genesisSpec.Config, chain)},
+					core.NewStateProcessor(genesisSpec.Config, chain.HeaderChain()),
+				)
+
+				defer chain.Stop()
+				n, err := chain.InsertChain(blocks)
+				require.NoError(t, err, "failed to insert chain block %d", n)
+
+				tracer.OnClose()
+				assertBlockEquals(t, tracer, filepath.Join("testdata", goldenDir, string(model)), len(blocks))
+			})
+		}
 	}
 }
