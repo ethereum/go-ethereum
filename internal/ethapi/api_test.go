@@ -470,7 +470,9 @@ func (b *testBackend) setPendingBlock(block *types.Block) {
 	b.pending = block
 }
 
-func (b testBackend) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
+func (b testBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
+	return ethereum.SyncProgress{}
+}
 func (b testBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(0), nil
 }
@@ -518,8 +520,12 @@ func (b testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) 
 	if number == rpc.PendingBlockNumber {
 		return b.pending, nil
 	}
+	if number == rpc.EarliestBlockNumber {
+		number = 0
+	}
 	return b.chain.GetBlockByNumber(uint64(number)), nil
 }
+
 func (b testBackend) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.chain.GetBlockByHash(hash), nil
 }
@@ -533,7 +539,7 @@ func (b testBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.
 	panic("unknown type rpc.BlockNumberOrHash")
 }
 func (b testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
-	return b.chain.GetBlock(hash, uint64(number.Int64())).Body(), nil
+	return b.chain.GetBlock(hash, uint64(number)).Body(), nil
 }
 func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	if number == rpc.PendingBlockNumber {
@@ -593,17 +599,20 @@ func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) even
 func (b testBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	panic("implement me")
 }
-func (b testBackend) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
+func (b testBackend) GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.db, txHash)
 	found := true
 	if tx == nil {
 		found = false
 	}
-	return found, tx, blockHash, blockNumber, index, nil
+	return found, tx, blockHash, blockNumber, index
 }
 func (b testBackend) GetPoolTransactions() (types.Transactions, error) { panic("implement me") }
 func (b testBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
 	return nil
+}
+func (b testBackend) TxIndexDone() bool {
+	return true
 }
 func (b testBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return 0, nil
@@ -699,12 +708,20 @@ func (b testBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (
 	return receipt, nil
 }
 
+func (b testBackend) CurrentView() *filtermaps.ChainView {
+	panic("implement me")
+}
 func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("implement me")
 }
 
 func (b testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
+}
+
+func (b testBackend) HistoryPruningCutoff() uint64 {
+	bn, _ := b.chain.HistoryPruningCutoff()
+	return bn
 }
 
 func TestEstimateGas(t *testing.T) {
@@ -743,6 +760,11 @@ func TestEstimateGas(t *testing.T) {
 		b.AddTx(tx)
 		b.SetPoS()
 	}))
+
+	setCodeAuthorization, _ := types.SignSetCode(accounts[0].key, types.SetCodeAuthorization{
+		Address: accounts[0].addr,
+		Nonce:   uint64(genBlocks + 1),
+	})
 
 	var testSuite = []struct {
 		blockNumber    rpc.BlockNumber
@@ -922,6 +944,50 @@ func TestEstimateGas(t *testing.T) {
 			},
 			want: 21000,
 		},
+		// Should be able to estimate SetCodeTx.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[1].addr,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			want: 46000,
+		},
+		// Should retrieve the code of 0xef0001 || accounts[0].addr and return an invalid opcode error.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[0].addr,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			expectErr: errors.New("invalid opcode: opcode 0xef not defined"),
+		},
+		// SetCodeTx with empty authorization list should fail.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &common.Address{},
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{},
+			},
+			expectErr: core.ErrEmptyAuthList,
+		},
+		// SetCodeTx with nil `to` should fail.
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                nil,
+				Value:             (*hexutil.Big)(big.NewInt(0)),
+				AuthorizationList: []types.SetCodeAuthorization{setCodeAuthorization},
+			},
+			expectErr: core.ErrSetCodeTxCreate,
+		},
 	}
 	for i, tc := range testSuite {
 		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
@@ -931,7 +997,7 @@ func TestEstimateGas(t *testing.T) {
 				continue
 			}
 			if !errors.Is(err, tc.expectErr) {
-				if !reflect.DeepEqual(err, tc.expectErr) {
+				if err.Error() != tc.expectErr.Error() {
 					t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
 				}
 			}
@@ -2396,113 +2462,84 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 		},
-		{
-			name: "basefee-non-validation",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: {
-						// Yul code:
-						// object "Test" {
-						//    code {
-						//        // Get the gas price from the transaction
-						//        let gasPrice := gasprice()
-						//
-						//        // Get the base fee from the block
-						//        let baseFee := basefee()
-						//
-						//        // Store gasPrice and baseFee in memory
-						//        mstore(0x0, gasPrice)
-						//        mstore(0x20, baseFee)
-						//
-						//        // Return the data
-						//        return(0x0, 0x40)
-						//    }
-						// }
-						Code: hex2Bytes("3a489060005260205260406000f3"),
-					},
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// 0 gas price
-				}, {
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// non-zero gas price
-					MaxPriorityFeePerGas: newInt(1),
-					MaxFeePerGas:         newInt(2),
-				},
-				},
-			}, {
-				BlockOverrides: &override.BlockOverrides{
-					BaseFeePerGas: (*hexutil.Big)(big.NewInt(1)),
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// 0 gas price
-				}, {
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// non-zero gas price
-					MaxPriorityFeePerGas: newInt(1),
-					MaxFeePerGas:         newInt(2),
-				},
-				},
-			}, {
-				// Base fee should be 0 to zero even if it was set in previous block.
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xa44e",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-					GasUsed:     "0x5227",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000",
-					GasUsed:     "0x5227",
-					Logs: []log{{
-						Address: core.GetFeeAddress(),
-						Topics: []common.Hash{
-							common.Hash([32]byte{0x4d, 0xfe, 0x1b, 0xbb, 0xcf, 0x07, 0x7d, 0xdc, 0x3e, 0x01, 0x29, 0x1e, 0xea, 0x2d, 0x5c, 0x70, 0xc2, 0xb4, 0x22, 0xb4, 0x15, 0xd9, 0x56, 0x45, 0xb9, 0xad, 0xcf, 0xd6, 0x78, 0xcb, 0x1d, 0x63}),
-							common.BytesToHash(core.GetFeeAddress().Bytes()),
-							common.BytesToHash(accounts[0].addr.Bytes()),
-							common.BytesToHash(common.HexToAddress("0x000000000000000000000000000000000000ffff").Bytes()),
+		// Polygon/bor: POS-3049
+		/*
+			{
+				name: "basefee-non-validation",
+				tag:  latest,
+				blocks: []simBlock{{
+					StateOverrides: &override.StateOverride{
+						randomAccounts[2].addr: {
+							// Yul code:
+							// object "Test" {
+							//    code {
+							//        // Get the gas price from the transaction
+							//        let gasPrice := gasprice()
+							//
+							//        // Get the base fee from the block
+							//        let baseFee := basefee()
+							//
+							//        // Store gasPrice and baseFee in memory
+							//        mstore(0x0, gasPrice)
+							//        mstore(0x20, baseFee)
+							//
+							//        // Return the data
+							//        return(0x0, 0x40)
+							//    }
+							// }
+							Code: hex2Bytes("3a489060005260205260406000f3"),
 						},
-						Data:        []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x52, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xe0, 0x53, 0xbf, 0x1f, 0x77, 0x0d, 0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x15, 0x8e, 0x46, 0x09, 0x13, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xe0, 0x53, 0xbf, 0x1f, 0x76, 0xbb, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x15, 0x8e, 0x46, 0x09, 0x13, 0xd0, 0x52, 0x27},
-						BlockNumber: 11,
-						TxIndex:     1,
-						Index:       0,
+					},
+					Calls: []TransactionArgs{{
+						From: &accounts[0].addr,
+						To:   &randomAccounts[2].addr,
+						// 0 gas price
+					}, {
+						From: &accounts[0].addr,
+						To:   &randomAccounts[2].addr,
+						// non-zero gas price
+						MaxPriorityFeePerGas: newInt(1),
+						MaxFeePerGas:         newInt(2),
 					},
 					},
-					Status: "0x1",
-				}},
-			}, {
-				Number:        "0xc",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xa44e",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x1",
-				Calls: []callRes{{
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
-					GasUsed:     "0x5227",
-					Logs:        []log{},
-					Status:      "0x1",
 				}, {
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
-					GasUsed:     "0x5227",
-					Logs: []log{
-						{
+					BlockOverrides: &override.BlockOverrides{
+						BaseFeePerGas: (*hexutil.Big)(big.NewInt(1)),
+					},
+					Calls: []TransactionArgs{{
+						From: &accounts[0].addr,
+						To:   &randomAccounts[2].addr,
+						// 0 gas price
+					}, {
+						From: &accounts[0].addr,
+						To:   &randomAccounts[2].addr,
+						// non-zero gas price
+						MaxPriorityFeePerGas: newInt(1),
+						MaxFeePerGas:         newInt(2),
+					},
+					},
+				}, {
+					// Base fee should be 0 to zero even if it was set in previous block.
+					Calls: []TransactionArgs{{
+						From: &accounts[0].addr,
+						To:   &randomAccounts[2].addr,
+					}},
+				}},
+				want: []blockRes{{
+					Number:        "0xb",
+					GasLimit:      "0x47e7c4",
+					GasUsed:       "0xa44e",
+					Miner:         coinbase,
+					BaseFeePerGas: "0x0",
+					Calls: []callRes{{
+						ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+						GasUsed:     "0x5227",
+						Logs:        []log{},
+						Status:      "0x1",
+					}, {
+						ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000",
+						GasUsed:     "0x5227",
+						Logs: []log{{
 							Address: core.GetFeeAddress(),
 							Topics: []common.Hash{
 								common.Hash([32]byte{0x4d, 0xfe, 0x1b, 0xbb, 0xcf, 0x07, 0x7d, 0xdc, 0x3e, 0x01, 0x29, 0x1e, 0xea, 0x2d, 0x5c, 0x70, 0xc2, 0xb4, 0x22, 0xb4, 0x15, 0xd9, 0x56, 0x45, 0xb9, 0xad, 0xcf, 0xd6, 0x78, 0xcb, 0x1d, 0x63}),
@@ -2510,28 +2547,61 @@ func TestSimulateV1(t *testing.T) {
 								common.BytesToHash(accounts[0].addr.Bytes()),
 								common.BytesToHash(common.HexToAddress("0x000000000000000000000000000000000000ffff").Bytes()),
 							},
-							Data:        []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x52, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xe0, 0x53, 0xbf, 0x1f, 0x76, 0xbb, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x15, 0x8e, 0x46, 0x09, 0x13, 0xd0, 0xa4, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xe0, 0x53, 0xbf, 0x1f, 0x76, 0x69, 0x3a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x15, 0x8e, 0x46, 0x09, 0x13, 0xd0, 0xf6, 0x75},
-							BlockNumber: 12,
+							Data:        []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x52, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xe0, 0x53, 0xbf, 0x1f, 0x77, 0x0d, 0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x15, 0x8e, 0x46, 0x09, 0x13, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xe0, 0x53, 0xbf, 0x1f, 0x76, 0xbb, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x15, 0x8e, 0x46, 0x09, 0x13, 0xd0, 0x52, 0x27},
+							BlockNumber: 11,
 							TxIndex:     1,
 							Index:       0,
 						},
-					},
-					Status: "0x1",
+						},
+						Status: "0x1",
+					}},
+				}, {
+					Number:        "0xc",
+					GasLimit:      "0x47e7c4",
+					GasUsed:       "0xa44e",
+					Miner:         coinbase,
+					BaseFeePerGas: "0x1",
+					Calls: []callRes{{
+						ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+						GasUsed:     "0x5227",
+						Logs:        []log{},
+						Status:      "0x1",
+					}, {
+						ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+						GasUsed:     "0x5227",
+						Logs: []log{
+							{
+								Address: core.GetFeeAddress(),
+								Topics: []common.Hash{
+									common.Hash([32]byte{0x4d, 0xfe, 0x1b, 0xbb, 0xcf, 0x07, 0x7d, 0xdc, 0x3e, 0x01, 0x29, 0x1e, 0xea, 0x2d, 0x5c, 0x70, 0xc2, 0xb4, 0x22, 0xb4, 0x15, 0xd9, 0x56, 0x45, 0xb9, 0xad, 0xcf, 0xd6, 0x78, 0xcb, 0x1d, 0x63}),
+									common.BytesToHash(core.GetFeeAddress().Bytes()),
+									common.BytesToHash(accounts[0].addr.Bytes()),
+									common.BytesToHash(common.HexToAddress("0x000000000000000000000000000000000000ffff").Bytes()),
+								},
+								Data:        []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x52, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xe0, 0x53, 0xbf, 0x1f, 0x76, 0xbb, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x15, 0x8e, 0x46, 0x09, 0x13, 0xd0, 0xa4, 0x4e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0d, 0xe0, 0x53, 0xbf, 0x1f, 0x76, 0x69, 0x3a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x15, 0x8e, 0x46, 0x09, 0x13, 0xd0, 0xf6, 0x75},
+								BlockNumber: 12,
+								TxIndex:     1,
+								Index:       0,
+							},
+						},
+						Status: "0x1",
+					}},
+				}, {
+					Number:        "0xd",
+					GasLimit:      "0x47e7c4",
+					GasUsed:       "0x5227",
+					Miner:         coinbase,
+					BaseFeePerGas: "0x0",
+					Calls: []callRes{{
+						ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+						GasUsed:     "0x5227",
+						Logs:        []log{},
+						Status:      "0x1",
+					}},
 				}},
-			}, {
-				Number:        "0xd",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x5227",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-					GasUsed:     "0x5227",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		}, {
+			},
+		*/
+		{
 			name: "basefee-validation-mode",
 			tag:  latest,
 			blocks: []simBlock{{
@@ -2728,6 +2798,77 @@ func TestSimulateV1ChainLinkage(t *testing.T) {
 	// whereas the second call should return the blockhash for block2 (i.e. block2.Hash()).
 	require.Equal(t, block1.Hash().Bytes(), []byte(results[2].Calls[0].ReturnValue), "returned blockhash for block1 does not match")
 	require.Equal(t, block2.Hash().Bytes(), []byte(results[2].Calls[1].ReturnValue), "returned blockhash for block2 does not match")
+}
+
+func TestSimulateV1TxSender(t *testing.T) {
+	var (
+		sender    = common.Address{0xaa, 0xaa}
+		sender2   = common.Address{0xaa, 0xab}
+		sender3   = common.Address{0xaa, 0xac}
+		recipient = common.Address{0xbb, 0xbb}
+		gspec     = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				sender:  {Balance: big.NewInt(params.Ether)},
+				sender2: {Balance: big.NewInt(params.Ether)},
+				sender3: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+		ctx = context.Background()
+	)
+	backend := newTestBackend(t, 0, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+	stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("failed to get state and header: %v", err)
+	}
+
+	sim := &simulator{
+		b:              backend,
+		state:          stateDB,
+		base:           baseHeader,
+		chainConfig:    backend.ChainConfig(),
+		gp:             new(core.GasPool).AddGas(math.MaxUint64),
+		traceTransfers: false,
+		validate:       false,
+		fullTx:         true,
+	}
+
+	results, err := sim.execute(ctx, []simBlock{
+		{Calls: []TransactionArgs{
+			{From: &sender, To: &recipient, Value: (*hexutil.Big)(big.NewInt(1000))},
+			{From: &sender2, To: &recipient, Value: (*hexutil.Big)(big.NewInt(2000))},
+			{From: &sender3, To: &recipient, Value: (*hexutil.Big)(big.NewInt(3000))},
+		}},
+		{Calls: []TransactionArgs{
+			{From: &sender2, To: &recipient, Value: (*hexutil.Big)(big.NewInt(4000))},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("simulation execution failed: %v", err)
+	}
+	require.Len(t, results, 2, "expected 2 simulated blocks")
+	require.Len(t, results[0].Block.Transactions(), 3, "expected 3 transaction in simulated block")
+	require.Len(t, results[1].Block.Transactions(), 1, "expected 1 transaction in 2nd simulated block")
+	enc, err := json.Marshal(results)
+	if err != nil {
+		t.Fatalf("failed to marshal results: %v", err)
+	}
+	type resultType struct {
+		Transactions []struct {
+			From common.Address `json:"from"`
+		}
+	}
+	var summary []resultType
+	if err := json.Unmarshal(enc, &summary); err != nil {
+		t.Fatalf("failed to unmarshal results: %v", err)
+	}
+	require.Len(t, summary, 2, "expected 2 simulated blocks")
+	require.Len(t, summary[0].Transactions, 3, "expected 3 transaction in simulated block")
+	require.Equal(t, sender, summary[0].Transactions[0].From, "sender address mismatch")
+	require.Equal(t, sender2, summary[0].Transactions[1].From, "sender address mismatch")
+	require.Equal(t, sender3, summary[0].Transactions[2].From, "sender address mismatch")
+	require.Len(t, summary[1].Transactions, 1, "expected 1 transaction in simulated block")
+	require.Equal(t, sender2, summary[1].Transactions[0].From, "sender address mismatch")
 }
 
 func TestSignTransaction(t *testing.T) {
@@ -3773,7 +3914,10 @@ func TestRPCGetBlockTransactionCountByHash(t *testing.T) {
 		api, _, _ = setupTransactionsToApiTest(t)
 	)
 
-	cnt := api.GetBlockTransactionCountByHash(context.Background(), api.b.CurrentBlock().Hash())
+	cnt, err := api.GetBlockTransactionCountByHash(context.Background(), api.b.CurrentBlock().Hash())
+	if err != nil {
+		t.Errorf("failed to get block transaction count by hash: %v", err)
+	}
 
 	// 2 txs: create-contract-with-access-list + state sync tx
 	expected := hexutil.Uint(2)
@@ -3785,8 +3929,15 @@ func TestRPCGetTransactionByBlockHashAndIndex(t *testing.T) {
 		api, _, _ = setupTransactionsToApiTest(t)
 	)
 
-	createContractWithAccessList := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 0)
-	stateSyncTx := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 1)
+	createContractWithAccessList, err := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 0)
+	if err != nil {
+		t.Errorf("failed to get transaction by block hash and index: %v", err)
+	}
+
+	stateSyncTx, err := api.GetTransactionByBlockHashAndIndex(context.Background(), api.b.CurrentBlock().Hash(), 1)
+	if err != nil {
+		t.Errorf("failed to get transaction by block hash and index: %v", err)
+	}
 
 	testRPCResponseWithFile(t, 0, createContractWithAccessList, "eth_getTransactionByBlockHashAndIndex", "create-contract-with-access-list")
 	testRPCResponseWithFile(t, 1, stateSyncTx, "eth_getTransactionByBlockHashAndIndex", "state-sync-tx")

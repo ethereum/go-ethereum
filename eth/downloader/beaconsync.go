@@ -303,6 +303,29 @@ func (d *Downloader) fetchBeaconHeaders(from uint64) error {
 		log.Warn("Retrieved beacon headers from local", "from", from, "count", count)
 	}
 
+	/*
+		// Verify the header at configured chain cutoff, ensuring it's matched with
+		// the configured hash. Skip the check if the configured cutoff is even higher
+		// than the sync target, which is definitely not a common case.
+		if d.chainCutoffNumber != 0 && d.chainCutoffNumber >= from && d.chainCutoffNumber <= head.Number.Uint64() {
+			h := d.skeleton.Header(d.chainCutoffNumber)
+			if h == nil {
+				if d.chainCutoffNumber < tail.Number.Uint64() {
+					dist := tail.Number.Uint64() - d.chainCutoffNumber
+					if len(localHeaders) >= int(dist) {
+						h = localHeaders[dist-1]
+					}
+				}
+			}
+			if h == nil {
+				return fmt.Errorf("header at chain cutoff is not available, cutoff: %d", d.chainCutoffNumber)
+			}
+			if h.Hash() != d.chainCutoffHash {
+				return fmt.Errorf("header at chain cutoff mismatched, want: %v, got: %v", d.chainCutoffHash, h.Hash())
+			}
+		}
+	*/
+
 	for {
 		// Some beacon headers might have appeared since the last cycle, make
 		// sure we're always syncing to all available ones

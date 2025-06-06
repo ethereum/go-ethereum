@@ -128,7 +128,6 @@ var PrecompiledContractsPrague = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x07}):       &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{0x08}):       &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{0x09}):       &blake2F{},
-	common.BytesToAddress([]byte{0x0a}):       &kzgPointEvaluation{},
 	common.BytesToAddress([]byte{0x0b}):       &bls12381G1Add{},
 	common.BytesToAddress([]byte{0x0c}):       &bls12381G1MultiExp{},
 	common.BytesToAddress([]byte{0x0d}):       &bls12381G2Add{},
@@ -1163,19 +1162,25 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 }
 
 // kzgPointEvaluation implements the EIP-4844 point evaluation precompile.
+//
+//nolint:unused
 type kzgPointEvaluation struct{}
 
 // RequiredGas estimates the gas required for running the point evaluation precompile.
+//
+//nolint:unused
 func (b *kzgPointEvaluation) RequiredGas(input []byte) uint64 {
 	return params.BlobTxPointEvaluationPrecompileGas
 }
 
+//nolint:unused
 const (
 	blobVerifyInputLength           = 192  // Max input length for the point evaluation precompile.
 	blobCommitmentVersionKZG  uint8 = 0x01 // Version byte for the point evaluation precompile.
 	blobPrecompileReturnValue       = "000000000000000000000000000000000000000000000000000000000000100073eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001"
 )
 
+//nolint:unused
 var (
 	errBlobVerifyInvalidInputLength = errors.New("invalid input length")
 	errBlobVerifyMismatchedVersion  = errors.New("mismatched versioned hash")
@@ -1183,6 +1188,8 @@ var (
 )
 
 // Run executes the point evaluation precompile.
+//
+//nolint:unused
 func (b *kzgPointEvaluation) Run(input []byte) ([]byte, error) {
 	if len(input) != blobVerifyInputLength {
 		return nil, errBlobVerifyInvalidInputLength
@@ -1219,6 +1226,8 @@ func (b *kzgPointEvaluation) Run(input []byte) ([]byte, error) {
 }
 
 // kZGToVersionedHash implements kzg_to_versioned_hash from EIP-4844
+//
+//nolint:unused
 func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 	h := sha256.Sum256(kzg[:])
 	h[0] = blobCommitmentVersionKZG

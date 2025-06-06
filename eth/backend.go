@@ -83,6 +83,7 @@ type Ethereum struct {
 
 	handler *handler
 	discmix *enode.FairMix
+	dropper *dropper
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -156,11 +157,19 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 	}
 
-	// Here we determine active ChainConfig.
+	// Here we determine genesis hash and active ChainConfig.
+	// We need these to figure out the consensus parameters and to set up history pruning.
 	chainConfig, _, err := core.LoadChainConfig(chainDb, config.Genesis)
 	if err != nil {
 		return nil, err
 	}
+
+	/*
+		engine, err := ethconfig.CreateConsensusEngine(chainConfig, chainDb)
+		if err != nil {
+			return nil, err
+		}
+	*/
 
 	// Assemble the Ethereum object.
 	eth := &Ethereum{
@@ -202,6 +211,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
 
+	// Create BlockChain object.
 	if !config.SkipBcVersionCheck {
 		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
 			return nil, fmt.Errorf("database version is v%d, Geth %s only supports v%d", *bcVersion, version.WithMeta, core.BlockChainVersion)
@@ -227,6 +237,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateHistory:        config.StateHistory,
 			StateScheme:         scheme,
 			TriesInMemory:       config.TriesInMemory,
+			ChainHistoryMode:    config.HistoryMode,
 		}
 	)
 
@@ -276,6 +287,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.APIBackend.gpo.ProcessCache()
 	// BOR changes
 
+	// Initialize filtermaps log index.
 	fmConfig := filtermaps.Config{
 		History:        config.LogHistory,
 		Disabled:       config.LogNoHistory,
@@ -283,7 +295,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		HashScheme:     scheme == rawdb.HashScheme,
 	}
 	chainView := eth.newChainView(eth.blockchain.CurrentBlock())
-	historyCutoff := eth.blockchain.HistoryPruningCutoff()
+	historyCutoff, _ := eth.blockchain.HistoryPruningCutoff()
 	var finalBlock uint64
 	if fb := eth.blockchain.CurrentFinalBlock(); fb != nil {
 		finalBlock = fb.Number.Uint64()
@@ -320,6 +332,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		eth.localTxTracker = locals.New(config.TxPool.Journal, rejournal, eth.blockchain.Config(), eth.txPool)
 		stack.RegisterLifecycle(eth.localTxTracker)
 	}
+
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
@@ -340,6 +353,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		return nil, err
 	}
 
+	eth.dropper = newDropper(eth.p2pServer.MaxDialedConns(), eth.p2pServer.MaxInboundConns())
 	eth.miner = miner.New(eth, &config.Miner, eth.blockchain.Config(), eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 	eth.miner.SetPrioAddresses(config.TxPool.Locals)
@@ -636,6 +650,9 @@ func (s *Ethereum) Start() error {
 	// Start the networking layer and the light server if requested
 	s.handler.Start(s.p2pServer.MaxPeers)
 
+	// Start the connection manager
+	s.dropper.Start(s.p2pServer, func() bool { return !s.Synced() })
+
 	go s.startCheckpointWhitelistService()
 	go s.startMilestoneWhitelistService()
 	go s.startNoAckMilestoneService()
@@ -849,7 +866,7 @@ func (s *Ethereum) updateFilterMapsHeads() {
 		if head == nil || newHead.Hash() != head.Hash() {
 			head = newHead
 			chainView := s.newChainView(head)
-			historyCutoff := s.blockchain.HistoryPruningCutoff()
+			historyCutoff, _ := s.blockchain.HistoryPruningCutoff()
 			var finalBlock uint64
 			if fb := s.blockchain.CurrentFinalBlock(); fb != nil {
 				finalBlock = fb.Number.Uint64()
@@ -932,6 +949,7 @@ func (s *Ethereum) Stop() error {
 	// for a response and is unable to proceed to exit `Finalize` during
 	// block processing.
 	s.engine.Close()
+	s.dropper.Stop()
 	s.handler.Stop()
 
 	// Then stop everything else.

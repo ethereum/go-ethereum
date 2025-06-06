@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -69,6 +70,7 @@ type Backend interface {
 
 	CurrentHeader() *types.Header
 	ChainConfig() *params.ChainConfig
+	HistoryPruningCutoff() uint64
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
@@ -76,6 +78,7 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription
 
+	CurrentView() *filtermaps.ChainView
 	NewMatcherBackend() filtermaps.MatcherBackend
 }
 
@@ -342,6 +345,14 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 	// Pending logs are not supported anymore.
 	if from == rpc.PendingBlockNumber || to == rpc.PendingBlockNumber {
 		return nil, errPendingLogsUnsupported
+	}
+
+	if from == rpc.EarliestBlockNumber {
+		from = rpc.BlockNumber(es.backend.HistoryPruningCutoff())
+	}
+	// Queries beyond the pruning cutoff are not supported.
+	if uint64(from) < es.backend.HistoryPruningCutoff() {
+		return nil, &history.PrunedHistoryError{}
 	}
 
 	// only interested in new mined logs

@@ -96,7 +96,8 @@ type Backend interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error)
+	GetTransaction(txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64)
+	TxIndexDone() bool
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -1103,12 +1104,10 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			if !canon {
 				prefix = fmt.Sprintf("%valt-", prefix)
 			}
-
 			dump, err = os.CreateTemp(os.TempDir(), prefix)
 			if err != nil {
 				return nil, err
 			}
-
 			dumps = append(dumps, dump.Name())
 
 			// Swap out the noop logger to the standard tracer
@@ -1194,7 +1193,7 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
 
-	found, _, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
+	found, _, blockHash, blockNumber, index := api.backend.GetTransaction(hash)
 	if !found {
 		// For BorTransaction, there will be no trace available
 		tx, _, _, _ := rawdb.ReadBorTransaction(api.backend.ChainDb(), hash)
@@ -1203,14 +1202,13 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 				StructLogs: make([]json.RawMessage, 0),
 			}, nil
 		} else {
+			// Warn in case tx indexer is not done.
+			if !api.backend.TxIndexDone() {
+				return nil, ethapi.NewTxIndexingError()
+			}
 			return nil, errTxNotFound
 		}
 	}
-
-	if err != nil {
-		return nil, ethapi.NewTxIndexingError()
-	}
-
 	// It shouldn't happen in practice.
 	if blockNumber == 0 {
 		return nil, errors.New("genesis is not traceable")

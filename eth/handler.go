@@ -73,6 +73,10 @@ type txPool interface {
 	// with given tx hash.
 	GetRLP(hash common.Hash) []byte
 
+	// GetMetadata returns the transaction type and transaction size with the
+	// given transaction hash.
+	GetMetadata(hash common.Hash) *txpool.TxMetadata
+
 	// Add should add the given transactions to the pool.
 	Add(txs []*types.Transaction, sync bool) []error
 
@@ -608,7 +612,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	total := new(big.Int).Exp(direct, big.NewInt(2), nil) // Stabilise total peer count a bit based on sqrt peers
 
 	var (
-		signer = types.LatestSignerForChainID(h.chain.Config().ChainID) // Don't care about chain status, we just need *a* sender
+		signer = types.LatestSigner(h.chain.Config()) // Don't care about chain status, we just need *a* sender
 		hasher = crypto.NewKeccakState()
 		hash   = make([]byte, 32)
 	)

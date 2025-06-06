@@ -16,7 +16,9 @@
 
 package txpool
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	// ErrAlreadyKnown is returned if the transactions is already contained
@@ -26,13 +28,18 @@ var (
 	// ErrInvalidSender is returned if the transaction contains an invalid signature.
 	ErrInvalidSender = errors.New("invalid sender")
 
-	// ErrUnderpriced is returned if a transaction's gas price is below the minimum
-	// configured for the transaction pool.
+	// ErrUnderpriced is returned if a transaction's gas price is too low to be
+	// included in the pool. If the gas price is lower than the minimum configured
+	// one for the transaction pool, use ErrTxGasPriceTooLow instead.
 	ErrUnderpriced = errors.New("transaction underpriced")
 
 	// ErrReplaceUnderpriced is returned if a transaction is attempted to be replaced
 	// with a different one without the required price bump.
 	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
+
+	// ErrTxGasPriceTooLow is returned if a transaction's gas price is below the
+	// minimum configured for the transaction pool.
+	ErrTxGasPriceTooLow = errors.New("transaction gas price below minimum")
 
 	// ErrAccountLimitExceeded is returned if a transaction would exceed the number
 	// allowed by a pool for a single account.
@@ -56,4 +63,8 @@ var (
 	// input transaction of non-blob type when a blob transaction from this sender
 	// remains pending (and vice-versa).
 	ErrAlreadyReserved = errors.New("address already reserved")
+
+	// ErrInflightTxLimitReached is returned when the maximum number of in-flight
+	// transactions is reached for specific accounts.
+	ErrInflightTxLimitReached = errors.New("in-flight transaction limit reached for delegated accounts")
 )

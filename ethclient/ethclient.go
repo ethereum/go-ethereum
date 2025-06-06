@@ -139,7 +139,7 @@ func (ec *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumb
 }
 
 type rpcBlock struct {
-	Hash         common.Hash         `json:"hash"`
+	Hash         *common.Hash        `json:"hash"`
 	Transactions []rpcTransaction    `json:"transactions"`
 	UncleHashes  []common.Hash       `json:"uncles"`
 	Withdrawals  []*types.Withdrawal `json:"withdrawals,omitempty"`
@@ -165,6 +165,11 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	var body rpcBlock
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
+	}
+	// Pending blocks don't return a block hash, compute it for sender caching.
+	if body.Hash == nil {
+		tmp := head.Hash()
+		body.Hash = &tmp
 	}
 
 	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
@@ -220,7 +225,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 
 	for i, tx := range body.Transactions {
 		if tx.From != nil {
-			setSenderFromServer(tx.tx, *tx.From, body.Hash)
+			setSenderFromServer(tx.tx, *tx.From, *body.Hash)
 		}
 
 		txs[i] = tx.tx
@@ -816,6 +821,9 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	}
 	if msg.BlobHashes != nil {
 		arg["blobVersionedHashes"] = msg.BlobHashes
+	}
+	if msg.AuthorizationList != nil {
+		arg["authorizationList"] = msg.AuthorizationList
 	}
 	return arg
 }

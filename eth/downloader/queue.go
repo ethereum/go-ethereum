@@ -81,7 +81,6 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 	} else if header.WithdrawalsHash != nil {
 		item.Withdrawals = make(types.Withdrawals, 0)
 	}
-
 	if fastSync && !header.EmptyReceipts() {
 		item.pending.Store(item.pending.Load() | (1 << receiptType))
 	}
@@ -311,7 +310,6 @@ func (q *queue) Schedule(headers []*types.Header, hashes []common.Hash, from uin
 
 	// Insert all the headers prioritised by the contained block number
 	inserts := make([]*types.Header, 0, len(headers))
-
 	for i, header := range headers {
 		// Make sure chain order is honoured and preserved throughout
 		hash := hashes[i]
@@ -342,7 +340,6 @@ func (q *queue) Schedule(headers []*types.Header, hashes []common.Hash, from uin
 				q.receiptTaskQueue.Push(header, -int64(header.Number.Uint64()))
 			}
 		}
-
 		inserts = append(inserts, header)
 		q.headerHead = hash
 		from++
@@ -627,7 +624,6 @@ func (q *queue) Revoke(peerID string) {
 		q.headerTaskQueue.Push(request.From, -int64(request.From))
 		delete(q.headerPendPool, peerID)
 	}
-
 	if request, ok := q.blockPendPool[peerID]; ok {
 		for _, header := range request.Headers {
 			q.blockTaskQueue.Push(header, -int64(header.Number.Uint64()))

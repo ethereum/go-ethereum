@@ -911,7 +911,6 @@ func testFastVsFullChains(t *testing.T, scheme string) {
 	if n, err := fast.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-
 	if n, err := fast.InsertReceiptChain(blocks, receipts, 0); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
@@ -929,7 +928,6 @@ func testFastVsFullChains(t *testing.T, scheme string) {
 	if n, err := ancient.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-
 	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(len(blocks)/2)); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
@@ -1075,7 +1073,6 @@ func testLightVsFastVsFullChainHeads(t *testing.T, scheme string) {
 	if n, err := fast.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-
 	if n, err := fast.InsertReceiptChain(blocks, receipts, 0); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
@@ -1093,7 +1090,6 @@ func testLightVsFastVsFullChainHeads(t *testing.T, scheme string) {
 	if n, err := ancient.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-
 	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(3*len(blocks)/4)); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
@@ -2068,7 +2064,6 @@ func testBlockchainRecovery(t *testing.T, scheme string) {
 	if n, err := ancient.InsertHeaderChain(headers); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
 	}
-
 	if n, err := ancient.InsertReceiptChain(blocks, receipts, uint64(3*len(blocks)/4)); err != nil {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
@@ -2114,9 +2109,7 @@ func testInsertReceiptChainRollback(t *testing.T, scheme string) {
 	if _, err := tmpChain.InsertChain(sideblocks); err != nil {
 		t.Fatal("processing side chain failed:", err)
 	}
-
 	t.Log("sidechain head:", tmpChain.CurrentBlock().Number, tmpChain.CurrentBlock().Hash())
-
 	sidechainReceipts := make([]types.Receipts, len(sideblocks))
 	for i, block := range sideblocks {
 		sidechainReceipts[i] = tmpChain.GetReceiptsByHash(block.Hash())
@@ -2125,16 +2118,14 @@ func testInsertReceiptChainRollback(t *testing.T, scheme string) {
 	if _, err := tmpChain.InsertChain(canonblocks); err != nil {
 		t.Fatal("processing canon chain failed:", err)
 	}
-
 	t.Log("canon head:", tmpChain.CurrentBlock().Number, tmpChain.CurrentBlock().Hash())
-
 	canonReceipts := make([]types.Receipts, len(canonblocks))
 	for i, block := range canonblocks {
 		canonReceipts[i] = tmpChain.GetReceiptsByHash(block.Hash())
 	}
 
 	// Set up a BlockChain that uses the ancient store.
-	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false, false, false)
+	ancientDb, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false, false, false)
 	if err != nil {
 		t.Fatalf("failed to create temp freezer db: %v", err)
 	}
@@ -2157,11 +2148,9 @@ func testInsertReceiptChainRollback(t *testing.T, scheme string) {
 	if err == nil {
 		t.Fatal("expected error from InsertReceiptChain.")
 	}
-
 	if ancientChain.CurrentSnapBlock().Number.Uint64() != 0 {
 		t.Fatalf("failed to rollback ancient data, want %d, have %d", 0, ancientChain.CurrentSnapBlock().Number)
 	}
-
 	if frozen, err := ancientChain.db.Ancients(); err != nil || frozen != 1 {
 		t.Fatalf("failed to truncate ancient data, frozen index is %d", frozen)
 	}
@@ -2171,11 +2160,9 @@ func testInsertReceiptChainRollback(t *testing.T, scheme string) {
 	if err != nil {
 		t.Fatalf("can't import canon chain receipts: %v", err)
 	}
-
 	if ancientChain.CurrentSnapBlock().Number.Uint64() != canonblocks[len(canonblocks)-1].NumberU64() {
 		t.Fatalf("failed to insert ancient recept chain after rollback")
 	}
-
 	if frozen, _ := ancientChain.db.Ancients(); frozen != uint64(len(canonblocks))+1 {
 		t.Fatalf("wrong ancients count %d", frozen)
 	}
@@ -2477,7 +2464,6 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 			if err != nil {
 				return err
 			}
-
 			_, err = chain.InsertReceiptChain(blocks, receipts, 0)
 
 			return err
@@ -2666,7 +2652,6 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			if err != nil {
 				return fmt.Errorf("index %d: %w", i, err)
 			}
-
 			_, err = chain.InsertReceiptChain(blocks, receipts, 0)
 
 			return err
@@ -3046,7 +3031,7 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	datadir := t.TempDir()
 	ancient := path.Join(datadir, "ancient")
 
-	pdb, err := pebble.New(datadir, 0, 0, "", false)
+	pdb, err := pebble.New(datadir, 0, 0, "", false, true)
 	if err != nil {
 		t.Fatalf("Failed to create persistent key-value database: %v", err)
 	}
@@ -4745,7 +4730,7 @@ func TestEIP7702(t *testing.T) {
 	// The way the auths are combined, it becomes
 	// 1. tx -> addr1 which is delegated to 0xaaaa
 	// 2. addr1:0xaaaa calls into addr2:0xbbbb
-	// 3. addr2:0xbbbb  writes to storage
+	// 3. addr2:0xbbbb writes to storage
 	auth1, _ := types.SignSetCode(key1, types.SetCodeAuthorization{
 		ChainID: *uint256.MustFromBig(gspec.Config.ChainID),
 		Address: aa,

@@ -339,9 +339,13 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
 		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
 		// EIP-7002
-		ProcessWithdrawalQueue(&requests, evm)
+		if err := ProcessWithdrawalQueue(&requests, evm); err != nil {
+			panic(fmt.Sprintf("could not process withdrawal requests: %v", err))
+		}
 		// EIP-7251
-		ProcessConsolidationQueue(&requests, evm)
+		if err := ProcessConsolidationQueue(&requests, evm); err != nil {
+			panic(fmt.Sprintf("could not process consolidation requests: %v", err))
+		}
 	}
 	return requests
 }
@@ -508,12 +512,10 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		// Save pre state for proof generation
 		// preState := statedb.Copy()
 
-		if config.Bor == nil { // EIP-2935 / 7709
-			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-			blockContext.Random = &common.Hash{} // enable post-merge instruction set
-			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
-			ProcessParentBlockHash(b.header.ParentHash, evm)
-		}
+		blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+		blockContext.Random = &common.Hash{} // enable post-merge instruction set
+		evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+		ProcessParentBlockHash(b.header.ParentHash, evm)
 
 		// Execute any user modifications to the block.
 		if gen != nil {

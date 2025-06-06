@@ -66,10 +66,14 @@ const (
 )
 
 var (
-	errServerStopped       = errors.New("server stopped")
-	errEncHandshakeError   = errors.New("rlpx enc error")
-	errProtoHandshakeError = errors.New("rlpx proto error")
+	errServerStopped     = errors.New("server stopped")
+	errEncHandshakeError = errors.New("rlpx enc error")
 )
+
+type protoHandshakeError struct{ err error }
+
+func (e *protoHandshakeError) Error() string { return fmt.Sprintf("rlpx proto error: %v", e.err) }
+func (e *protoHandshakeError) Unwrap() error { return e.err }
 
 // Server manages all peer connections.
 type Server struct {
@@ -579,7 +583,7 @@ func (srv *Server) setupDiscovery() error {
 func (srv *Server) setupDialScheduler() {
 	config := dialConfig{
 		self:           srv.localnode.ID(),
-		maxDialPeers:   srv.maxDialedConns(),
+		maxDialPeers:   srv.MaxDialedConns(),
 		maxActiveDials: srv.MaxPendingPeers,
 		log:            srv.Logger,
 		netRestrict:    srv.NetRestrict,
@@ -600,11 +604,11 @@ func (srv *Server) setupDialScheduler() {
 	}
 }
 
-func (srv *Server) maxInboundConns() int {
-	return srv.MaxPeers - srv.maxDialedConns()
+func (srv *Server) MaxInboundConns() int {
+	return srv.MaxPeers - srv.MaxDialedConns()
 }
 
-func (srv *Server) maxDialedConns() (limit int) {
+func (srv *Server) MaxDialedConns() (limit int) {
 	if srv.NoDial || srv.MaxPeers == 0 {
 		return 0
 	}
@@ -814,7 +818,7 @@ func (srv *Server) postHandshakeChecks(peers map[enode.ID]*Peer, inboundCount in
 	switch {
 	case !c.is(trustedConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
-	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
+	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.MaxInboundConns():
 		return DiscTooManyPeers
 	case peers[c.node.ID()] != nil:
 		return DiscAlreadyConnected
@@ -1002,7 +1006,7 @@ func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
 		clog.Trace("Failed p2p handshake", "err", err)
-		return fmt.Errorf("%w: %v", errProtoHandshakeError, err)
+		return &protoHandshakeError{err: err}
 	}
 
 	if id := c.node.ID(); !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {

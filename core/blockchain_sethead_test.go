@@ -1969,7 +1969,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	datadir := t.TempDir()
 	ancient := filepath.Join(datadir, "ancient")
 
-	pdb, err := pebble.New(datadir, 0, 0, "", false)
+	pdb, err := pebble.New(datadir, 0, 0, "", false, true)
 	if err != nil {
 		t.Fatalf("Failed to create persistent key-value database: %v", err)
 	}

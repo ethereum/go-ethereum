@@ -10,10 +10,10 @@ import (
 
 	common "github.com/ethereum/go-ethereum/common"
 	core "github.com/ethereum/go-ethereum/core"
+	filtermaps "github.com/ethereum/go-ethereum/core/filtermaps"
 	types "github.com/ethereum/go-ethereum/core/types"
 	ethdb "github.com/ethereum/go-ethereum/ethdb"
 	event "github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/core/filtermaps"
 	params "github.com/ethereum/go-ethereum/params"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 	gomock "github.com/golang/mock/gomock"
@@ -40,21 +40,6 @@ func NewMockBackend(ctrl *gomock.Controller) *MockBackend {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockBackend) EXPECT() *MockBackendMockRecorder {
 	return m.recorder
-}
-
-// BloomStatus mocks base method.
-func (m *MockBackend) BloomStatus() (uint64, uint64) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BloomStatus")
-	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].(uint64)
-	return ret0, ret1
-}
-
-// BloomStatus indicates an expected call of BloomStatus.
-func (mr *MockBackendMockRecorder) BloomStatus() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BloomStatus", reflect.TypeOf((*MockBackend)(nil).BloomStatus))
 }
 
 // ChainConfig mocks base method.
@@ -97,6 +82,20 @@ func (m *MockBackend) CurrentHeader() *types.Header {
 func (mr *MockBackendMockRecorder) CurrentHeader() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentHeader", reflect.TypeOf((*MockBackend)(nil).CurrentHeader))
+}
+
+// CurrentView mocks base method.
+func (m *MockBackend) CurrentView() *filtermaps.ChainView {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CurrentView")
+	ret0, _ := ret[0].(*filtermaps.ChainView)
+	return ret0
+}
+
+// CurrentView indicates an expected call of CurrentView.
+func (mr *MockBackendMockRecorder) CurrentView() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentView", reflect.TypeOf((*MockBackend)(nil).CurrentView))
 }
 
 // GetBody mocks base method.
@@ -204,6 +203,33 @@ func (mr *MockBackendMockRecorder) HeaderByNumber(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumber", reflect.TypeOf((*MockBackend)(nil).HeaderByNumber), arg0, arg1)
 }
 
+// HistoryPruningCutoff mocks base method.
+func (m *MockBackend) HistoryPruningCutoff() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HistoryPruningCutoff")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// HistoryPruningCutoff indicates an expected call of HistoryPruningCutoff.
+func (mr *MockBackendMockRecorder) HistoryPruningCutoff() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HistoryPruningCutoff", reflect.TypeOf((*MockBackend)(nil).HistoryPruningCutoff))
+}
+
+// NewMatcherBackend mocks base method.
+func (m *MockBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewMatcherBackend")
+	ret0, _ := ret[0].(filtermaps.MatcherBackend)
+	return ret0
+}
+
+// NewMatcherBackend indicates an expected call of NewMatcherBackend.
+func (mr *MockBackendMockRecorder) NewMatcherBackend() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewMatcherBackend", reflect.TypeOf((*MockBackend)(nil).NewMatcherBackend))
+}
 
 // SubscribeChainEvent mocks base method.
 func (m *MockBackend) SubscribeChainEvent(arg0 chan<- core.ChainEvent) event.Subscription {
@@ -287,12 +313,4 @@ func (m *MockBackend) SubscribeStateSyncEvent(arg0 chan<- core.StateSyncEvent) e
 func (mr *MockBackendMockRecorder) SubscribeStateSyncEvent(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeStateSyncEvent", reflect.TypeOf((*MockBackend)(nil).SubscribeStateSyncEvent), arg0)
-}
-
-func (m *MockBackend) NewMatcherBackend() filtermaps.MatcherBackend {
-	panic("implement me")
-}
-
-func (mr *MockBackendMockRecorder) NewMatcherBackend() filtermaps.MatcherBackend {
-	panic("implement me")
 }

@@ -54,6 +54,7 @@ type ChainConfig struct {
 	GenesisValidatorsRoot common.Hash // Root hash of the genesis validator set, used for signature domain calculation
 	Forks                 Forks
 	Checkpoint            common.Hash
+	CheckpointFile        string
 }
 
 // ForkAtEpoch returns the latest active fork at the given epoch.
@@ -210,4 +211,37 @@ func (f Forks) Less(i, j int) bool {
 		return f[i].Epoch < f[j].Epoch
 	}
 	return f[i].knownIndex < f[j].knownIndex
+}
+
+// SetCheckpointFile sets the checkpoint import/export file name and attempts to
+// read the checkpoint from the file if it already exists. It returns true if
+// a checkpoint has been loaded.
+func (c *ChainConfig) SetCheckpointFile(checkpointFile string) (bool, error) {
+	c.CheckpointFile = checkpointFile
+	file, err := os.ReadFile(checkpointFile)
+	if os.IsNotExist(err) {
+		return false, nil // did not load checkpoint
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to read beacon checkpoint file: %v", err)
+	}
+	cp, err := hexutil.Decode(string(file))
+	if err != nil {
+		return false, fmt.Errorf("failed to decode hex string in beacon checkpoint file: %v", err)
+	}
+	if len(cp) != 32 {
+		return false, fmt.Errorf("invalid hex string length in beacon checkpoint file: %d", len(cp))
+	}
+	copy(c.Checkpoint[:len(cp)], cp)
+	return true, nil
+}
+
+// SaveCheckpointToFile saves the given checkpoint to file if a checkpoint
+// import/export file has been specified.
+func (c *ChainConfig) SaveCheckpointToFile(checkpoint common.Hash) (bool, error) {
+	if c.CheckpointFile == "" {
+		return false, nil
+	}
+	err := os.WriteFile(c.CheckpointFile, []byte(checkpoint.Hex()), 0600)
+	return err == nil, err
 }

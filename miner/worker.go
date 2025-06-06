@@ -1021,17 +1021,6 @@ mainloop:
 			continue
 		}
 
-		// Most of the blob gas logic here is agnostic as to if the chain supports
-		// blobs or not, however the max check panics when called on a chain without
-		// a defined schedule, so we need to verify it's safe to call.
-		if w.chainConfig.IsCancun(env.header.Number) {
-			left := eip4844.MaxBlobsPerBlock(w.chainConfig, env.header.Time) - env.blobs
-			if left < int(ltx.BlobGas/params.BlobTxBlobGasPerBlob) {
-				log.Trace("Not enough blob space left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas/params.BlobTxBlobGasPerBlob)
-				txs.Pop()
-				continue
-			}
-		}
 		// If we don't receive enough tip for the next transaction, skip the account
 		if ptip.Cmp(minTip) < 0 {
 			log.Trace("Not enough tip for transaction", "hash", ltx.Hash, "tip", ptip, "needed", minTip)

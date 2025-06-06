@@ -153,8 +153,8 @@ func (api *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
 // - highestBlock:  block number of the highest block header this node has received from peers
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
-func (api *EthereumAPI) Syncing() (interface{}, error) {
-	progress := api.b.SyncProgress()
+func (api *EthereumAPI) Syncing(ctx context.Context) (interface{}, error) {
+	progress := api.b.SyncProgress(ctx)
 
 	// Return not syncing if the synchronisation already completed
 	if progress.Done() {
@@ -681,23 +681,23 @@ func (api *BlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, block
 }
 
 // GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
-func (api *BlockChainAPI) GetUncleCountByBlockNumber(ctx context.Context, blockNr rpc.BlockNumber) *hexutil.Uint {
-	if block, _ := api.b.BlockByNumber(ctx, blockNr); block != nil {
+func (api *BlockChainAPI) GetUncleCountByBlockNumber(ctx context.Context, blockNr rpc.BlockNumber) (*hexutil.Uint, error) {
+	block, err := api.b.BlockByNumber(ctx, blockNr)
+	if block != nil {
 		n := hexutil.Uint(len(block.Uncles()))
-		return &n
+		return &n, nil
 	}
-
-	return nil
+	return nil, err
 }
 
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
-func (api *BlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, blockHash common.Hash) *hexutil.Uint {
-	if block, _ := api.b.BlockByHash(ctx, blockHash); block != nil {
+func (api *BlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, blockHash common.Hash) (*hexutil.Uint, error) {
+	block, err := api.b.BlockByHash(ctx, blockHash)
+	if block != nil {
 		n := hexutil.Uint(len(block.Uncles()))
-		return &n
+		return &n, nil
 	}
-
-	return nil
+	return nil, err
 }
 
 // GetCode returns the code stored at the given address in the state for the given block number.
@@ -734,9 +734,7 @@ func (api *BlockChainAPI) GetStorageAt(ctx context.Context, address common.Addre
 func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
 	block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if block == nil || err != nil {
-		// When the block doesn't exist, the RPC method should return JSON null
-		// as per specification.
-		return nil, nil
+		return nil, err
 	}
 	receipts, err := api.b.GetReceipts(ctx, block.Hash())
 	if err != nil {
@@ -1597,43 +1595,47 @@ func NewTransactionAPI(b Backend, nonceLock *AddrLocker) *TransactionAPI {
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
-func (api *TransactionAPI) GetBlockTransactionCountByNumber(ctx context.Context, blockNr rpc.BlockNumber) *hexutil.Uint {
-	if block, _ := api.b.BlockByNumber(ctx, blockNr); block != nil {
+func (api *TransactionAPI) GetBlockTransactionCountByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*hexutil.Uint, error) {
+	block, err := api.b.BlockByNumber(ctx, blockNr)
+	if block != nil {
 		txs, _ := api.getAllBlockTransactions(ctx, block)
 		n := hexutil.Uint(len(txs))
-		return &n
+		return &n, nil
 	}
 
-	return nil
+	return nil, err
 }
 
 // GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
-func (api *TransactionAPI) GetBlockTransactionCountByHash(ctx context.Context, blockHash common.Hash) *hexutil.Uint {
-	if block, _ := api.b.BlockByHash(ctx, blockHash); block != nil {
+func (api *TransactionAPI) GetBlockTransactionCountByHash(ctx context.Context, blockHash common.Hash) (*hexutil.Uint, error) {
+	block, err := api.b.BlockByHash(ctx, blockHash)
+	if block != nil {
 		txs, _ := api.getAllBlockTransactions(ctx, block)
 		n := hexutil.Uint(len(txs))
-		return &n
+		return &n, nil
 	}
 
-	return nil
+	return nil, err
 }
 
 // GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
-func (api *TransactionAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) *RPCTransaction {
-	if block, _ := api.b.BlockByNumber(ctx, blockNr); block != nil {
-		return newRPCTransactionFromBlockIndex(block, uint64(index), api.b.ChainConfig(), api.b.ChainDb())
+func (api *TransactionAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) (*RPCTransaction, error) {
+	block, err := api.b.BlockByNumber(ctx, blockNr)
+	if block != nil {
+		return newRPCTransactionFromBlockIndex(block, uint64(index), api.b.ChainConfig(), api.b.ChainDb()), nil
 	}
 
-	return nil
+	return nil, err
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
-func (api *TransactionAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) *RPCTransaction {
-	if block, _ := api.b.BlockByHash(ctx, blockHash); block != nil {
-		return newRPCTransactionFromBlockIndex(block, uint64(index), api.b.ChainConfig(), api.b.ChainDb())
+func (api *TransactionAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) (*RPCTransaction, error) {
+	block, err := api.b.BlockByHash(ctx, blockHash)
+	if block != nil {
+		return newRPCTransactionFromBlockIndex(block, uint64(index), api.b.ChainConfig(), api.b.ChainDb()), nil
 	}
 
-	return nil
+	return nil, err
 }
 
 // GetRawTransactionByBlockNumberAndIndex returns the bytes of the transaction for the given block number and index.
@@ -1680,11 +1682,10 @@ func (api *TransactionAPI) GetTransactionCount(ctx context.Context, address comm
 func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
 	borTx := false
 
+	var err error
+
 	// Try to return an already finalized transaction
-	found, tx, blockHash, blockNumber, index, err := api.b.GetTransaction(ctx, hash)
-	if err != nil {
-		return nil, err
-	}
+	found, tx, blockHash, blockNumber, index := api.b.GetTransaction(hash)
 
 	// fetch bor block tx if necessary
 	if !found {
@@ -1724,16 +1725,17 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
 func (api *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	// Retrieve a finalized transaction, or a pooled otherwise
-	found, tx, _, _, _, err := api.b.GetTransaction(ctx, hash)
+	found, tx, _, _, _ := api.b.GetTransaction(hash)
 	if !found {
 		if tx = api.b.GetPoolTransaction(hash); tx != nil {
 			return tx.MarshalBinary()
 		}
-		if err == nil {
-			return nil, nil
+		// If also not in the pool there is a chance the tx indexer is still in progress.
+		if !api.b.TxIndexDone() {
+			return nil, NewTxIndexingError()
 		}
-
-		return nil, NewTxIndexingError()
+		// If the transaction is not found in the pool and the indexer is done, return nil
+		return nil, nil
 	}
 	return tx.MarshalBinary()
 }
@@ -1742,17 +1744,19 @@ func (api *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash com
 func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	borTx := false
 
-	found, tx, blockHash, blockNumber, index, err := api.b.GetTransaction(ctx, hash)
-	if err != nil {
-		return nil, NewTxIndexingError() // transaction is not fully indexed
-	}
+	var err error
 
+	found, tx, blockHash, blockNumber, index := api.b.GetTransaction(hash)
 	if !found {
 		tx, blockHash, blockNumber, index, err = api.b.GetBorBlockTransaction(ctx, hash)
 		if err != nil {
 			return nil, err
 		}
 		borTx = true
+		// // Make sure indexer is done.
+		// if !api.b.TxIndexDone() {
+		// 	return nil, NewTxIndexingError()
+		// }
 	}
 
 	if tx == nil {
@@ -2216,15 +2220,17 @@ func (api *DebugAPI) GetRawReceipts(ctx context.Context, blockNrOrHash rpc.Block
 // GetRawTransaction returns the bytes of the transaction for the given hash.
 func (api *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	// Retrieve a finalized transaction, or a pooled otherwise
-	found, tx, _, _, _, err := api.b.GetTransaction(ctx, hash)
+	found, tx, _, _, _ := api.b.GetTransaction(hash)
 	if !found {
 		if tx = api.b.GetPoolTransaction(hash); tx != nil {
 			return tx.MarshalBinary()
 		}
-		if err == nil {
-			return nil, nil
+		// If also not in the pool there is a chance the tx indexer is still in progress.
+		if !api.b.TxIndexDone() {
+			return nil, NewTxIndexingError()
 		}
-		return nil, NewTxIndexingError()
+		// Transaction is not found in the pool and the indexer is done.
+		return nil, nil
 	}
 
 	return tx.MarshalBinary()

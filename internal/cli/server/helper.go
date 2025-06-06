@@ -12,6 +12,8 @@ func CreateMockServer(config *Config) (*Server, error) {
 		config = DefaultConfig()
 	}
 
+	config.DBEngine = "leveldb"
+
 	// get grpc port and listener
 	grpcPort, gRPCListener, err := network.FindAvailablePort()
 	if err != nil {

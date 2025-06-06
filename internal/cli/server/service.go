@@ -203,7 +203,7 @@ func (s *Server) Status(ctx context.Context, in *proto.StatusRequest) (*proto.St
 	}
 
 	apiBackend := s.backend.APIBackend
-	syncProgress := apiBackend.SyncProgress()
+	syncProgress := apiBackend.SyncProgress(ctx)
 
 	resp := &proto.StatusResponse{
 		CurrentHeader: headerToProtoHeader(apiBackend.CurrentHeader()),
