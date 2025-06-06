@@ -225,7 +225,8 @@ func testKZGCells(t *testing.T, ckzg bool) {
 		t.Fatalf("failed to create KZG proof at point: %v", err)
 	}
 	proofs := append(proofs1, proofs2...)
-	if err := VerifyCellProofs([]*Blob{blob1, blob2}, []Commitment{commitment1, commitment2}, proofs); err != nil {
+	blobs := []Blob{*blob1, *blob2}
+	if err := VerifyCellProofs(blobs, []Commitment{commitment1, commitment2}, proofs); err != nil {
 		t.Fatalf("failed to verify KZG proof at point: %v", err)
 	}
 }

@@ -151,7 +151,7 @@ func ckzgComputeCellProofs(blob *Blob) ([]Proof, error) {
 }
 
 // ckzgVerifyCellProofs verifies that the blob data corresponds to the provided commitment.
-func ckzgVerifyCellProofBatch(blobs []*Blob, commitments []Commitment, cellProofs []Proof) error {
+func ckzgVerifyCellProofBatch(blobs []Blob, commitments []Commitment, cellProofs []Proof) error {
 	ckzgIniter.Do(ckzgInit)
 	var (
 		proofs      = make([]ckzg4844.Bytes48, len(cellProofs))
@@ -170,8 +170,8 @@ func ckzgVerifyCellProofBatch(blobs []*Blob, commitments []Commitment, cellProof
 		}
 	}
 	// Compute the cells and cell indices
-	for _, blob := range blobs {
-		cellsI, err := ckzg4844.ComputeCells((*ckzg4844.Blob)(blob))
+	for i := range blobs {
+		cellsI, err := ckzg4844.ComputeCells((*ckzg4844.Blob)(&blobs[i]))
 		if err != nil {
 			return err
 		}

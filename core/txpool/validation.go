@@ -206,11 +206,7 @@ func validateBlobSidecarOsaka(sidecar *types.BlobTxSidecar, hashes []common.Hash
 	if err := sidecar.ValidateBlobCommitmentHashes(hashes); err != nil {
 		return err
 	}
-	var blobs []*kzg4844.Blob
-	for _, blob := range sidecar.Blobs {
-		blobs = append(blobs, &blob)
-	}
-	if err := kzg4844.VerifyCellProofs(blobs, sidecar.Commitments, sidecar.Proofs); err != nil {
+	if err := kzg4844.VerifyCellProofs(sidecar.Blobs, sidecar.Commitments, sidecar.Proofs); err != nil {
 		return err
 	}
 	return nil
