@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"slices"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
@@ -181,9 +183,9 @@ func (tx *BlobTx) copy() TxData {
 	}
 	if tx.Sidecar != nil {
 		cpy.Sidecar = &BlobTxSidecar{
-			Blobs:       append([]kzg4844.Blob(nil), tx.Sidecar.Blobs...),
-			Commitments: append([]kzg4844.Commitment(nil), tx.Sidecar.Commitments...),
-			Proofs:      append([]kzg4844.Proof(nil), tx.Sidecar.Proofs...),
+			Blobs:       slices.Clone(tx.Sidecar.Blobs),
+			Commitments: slices.Clone(tx.Sidecar.Commitments),
+			Proofs:      slices.Clone(tx.Sidecar.Proofs),
 		}
 	}
 	return cpy
