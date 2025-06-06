@@ -52,7 +52,8 @@ func (c *DeeplyNestedArray) Instance(backend bind.ContractBackend, addr common.A
 }
 
 // PackDeepUint64Array is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x98ed1856.
+// the contract method with ID 0x98ed1856.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function deepUint64Array(uint256 , uint256 , uint256 ) view returns(uint64)
 func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(arg0 *big.Int, arg1 *big.Int, arg2 *big.Int) []byte {
@@ -61,6 +62,15 @@ func (deeplyNestedArray *DeeplyNestedArray) PackDeepUint64Array(arg0 *big.Int, a
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackDeepUint64Array is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x98ed1856.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function deepUint64Array(uint256 , uint256 , uint256 ) view returns(uint64)
+func (deeplyNestedArray *DeeplyNestedArray) TryPackDeepUint64Array(arg0 *big.Int, arg1 *big.Int, arg2 *big.Int) ([]byte, error) {
+	return deeplyNestedArray.abi.Pack("deepUint64Array", arg0, arg1, arg2)
 }
 
 // UnpackDeepUint64Array is the Go binding that unpacks the parameters returned
@@ -73,11 +83,12 @@ func (deeplyNestedArray *DeeplyNestedArray) UnpackDeepUint64Array(data []byte) (
 		return *new(uint64), err
 	}
 	out0 := *abi.ConvertType(out[0], new(uint64)).(*uint64)
-	return out0, err
+	return out0, nil
 }
 
 // PackRetrieveDeepArray is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x8ed4573a.
+// the contract method with ID 0x8ed4573a.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function retrieveDeepArray() view returns(uint64[3][4][5])
 func (deeplyNestedArray *DeeplyNestedArray) PackRetrieveDeepArray() []byte {
@@ -86,6 +97,15 @@ func (deeplyNestedArray *DeeplyNestedArray) PackRetrieveDeepArray() []byte {
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackRetrieveDeepArray is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x8ed4573a.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function retrieveDeepArray() view returns(uint64[3][4][5])
+func (deeplyNestedArray *DeeplyNestedArray) TryPackRetrieveDeepArray() ([]byte, error) {
+	return deeplyNestedArray.abi.Pack("retrieveDeepArray")
 }
 
 // UnpackRetrieveDeepArray is the Go binding that unpacks the parameters returned
@@ -98,11 +118,12 @@ func (deeplyNestedArray *DeeplyNestedArray) UnpackRetrieveDeepArray(data []byte)
 		return *new([5][4][3]uint64), err
 	}
 	out0 := *abi.ConvertType(out[0], new([5][4][3]uint64)).(*[5][4][3]uint64)
-	return out0, err
+	return out0, nil
 }
 
 // PackStoreDeepUintArray is the Go binding used to pack the parameters required for calling
-// the contract method with ID 0x34424855.
+// the contract method with ID 0x34424855.  This method will panic if any
+// invalid/nil inputs are passed.
 //
 // Solidity: function storeDeepUintArray(uint64[3][4][5] arr) returns()
 func (deeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(arr [5][4][3]uint64) []byte {
@@ -111,4 +132,13 @@ func (deeplyNestedArray *DeeplyNestedArray) PackStoreDeepUintArray(arr [5][4][3]
 		panic(err)
 	}
 	return enc
+}
+
+// TryPackStoreDeepUintArray is the Go binding used to pack the parameters required for calling
+// the contract method with ID 0x34424855.  This method will return an error
+// if any inputs are invalid/nil.
+//
+// Solidity: function storeDeepUintArray(uint64[3][4][5] arr) returns()
+func (deeplyNestedArray *DeeplyNestedArray) TryPackStoreDeepUintArray(arr [5][4][3]uint64) ([]byte, error) {
+	return deeplyNestedArray.abi.Pack("storeDeepUintArray", arr)
 }
