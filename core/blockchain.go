@@ -166,6 +166,7 @@ type BlockChainConfig struct {
 	TrieDirtyLimit   int           // Memory limit (MB) at which to start flushing dirty trie nodes to disk
 	TrieTimeLimit    time.Duration // Time limit after which to flush the current in-memory trie to disk
 	TrieNoAsyncFlush bool          // Whether the asynchronous buffer flushing is disallowed
+	TrieJournal      string        // Path used to store the trie pathdb journal
 
 	Preimages    bool   // Whether to store preimage of trie key to the disk
 	StateHistory uint64 // Number of blocks from head whose state histories are reserved.
