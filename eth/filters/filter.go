@@ -463,7 +463,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	// such as tx index, block hash, etc.
 	// Notably tx hash is NOT filled in because it needs
 	// access to block body data.
-	cached, err := f.sys.cachedLogElem(ctx, hash, header.Number.Uint64())
+	cached, err := f.sys.cachedLogElem(ctx, hash, header.Number.Uint64(), header.Time)
 	if err != nil {
 		return nil, err
 	}
