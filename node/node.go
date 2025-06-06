@@ -519,6 +519,12 @@ func (n *Node) stopRPC() {
 	n.ws.stop()
 	n.httpAuth.stop()
 	n.wsAuth.stop()
+
+	n.http.wait()
+	n.ws.wait()
+	n.httpAuth.wait()
+	n.wsAuth.wait()
+
 	n.ipc.stop()
 	n.stopInProc()
 }
