@@ -61,14 +61,16 @@ func runPrestateBlock(t *testing.T, prestatePath string, hooks *tracing.Hooks) {
 	msg, err := core.TransactionToMessage(tx, types.MakeSigner(prestate.Genesis.Config, header.Number, header.Time), header.BaseFee)
 	require.NoError(t, err)
 
+	statedbHooked := state.NewHookedState(testState.StateDB, hooks)
+
 	blockContext := core.NewEVMBlockContext(block.Header(), prestate, &context.Coinbase)
-	vmenv := vm.NewEVM(blockContext, state.NewHookedState(testState.StateDB, hooks), prestate.Genesis.Config, vm.Config{Tracer: hooks})
+	vmenv := vm.NewEVM(blockContext, statedbHooked, prestate.Genesis.Config, vm.Config{Tracer: hooks})
 
 	usedGas := uint64(0)
 	_, err = core.ApplyTransactionWithEVM(
 		msg,
 		new(core.GasPool).AddGas(block.GasLimit()),
-		testState.StateDB,
+		statedbHooked,
 		header.Number,
 		header.Hash(),
 		tx,

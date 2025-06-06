@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -38,12 +39,50 @@ func readPrestateData(t *testing.T, path string) *prestateData {
 		test.TotalDifficulty = (*big.Int)(genesisWithTD.Genesis.TotalDifficulty)
 	}
 
+	// Polygon overrides time based hard fork with block number based hard fork, let's try to handle that
+	// here.
+	//
+	// We read the "old" genesis Ethereum format which is time based, and we try to infer
+	// if we should set the time based hard fork values or not based on current time.
+	var genesisTimeBased struct {
+		Genesis struct {
+			Config struct {
+				ShanghaiTime *math.HexOrDecimal64 `json:"shanghaiTime"`
+				CancunTime   *math.HexOrDecimal64 `json:"cancunTime"`
+				PragueTime   *math.HexOrDecimal64 `json:"pragueTime"`
+			} `json:"config"`
+		} `json:"genesis"`
+	}
+
+	if err := json.Unmarshal(blob, &genesisTimeBased); err == nil {
+		timeBasedConfig := genesisTimeBased.Genesis.Config
+		blockBasedConfig := test.Genesis.Config
+
+		blockBasedConfig.CancunBlock = timeBasedToBlockBasedHardFork(timeBasedConfig.CancunTime)
+		blockBasedConfig.ShanghaiBlock = timeBasedToBlockBasedHardFork(timeBasedConfig.ShanghaiTime)
+		blockBasedConfig.PragueBlock = timeBasedToBlockBasedHardFork(timeBasedConfig.PragueTime)
+	}
+
 	chain, err := chains.GetChain("mainnet")
 	require.NoError(t, err)
 
 	test.Genesis.Config.Bor = chain.Genesis.Config.Bor
 
 	return test
+}
+
+func timeBasedToBlockBasedHardFork(in *math.HexOrDecimal64) *big.Int {
+	if in == nil {
+		return nil
+	}
+
+	// If the fork is active, we return 0 as the block number to activate to
+	if time.Now().Unix() > int64(*in) {
+		return big.NewInt(0)
+	}
+
+	// Otherwise, we return the block number that would be mined at that time
+	return nil
 }
 
 var _ core.ChainContext = (*prestateData)(nil)
@@ -118,7 +157,7 @@ func (c *callContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 	}
 
 	if genesis.ExcessBlobGas != nil && genesis.BlobGasUsed != nil {
-		header := &types.Header{Number: genesis.Config.LondonBlock, Time: 0}
+		header := &types.Header{Number: genesis.Config.CancunBlock, Time: 0}
 		excess := eip4844.CalcExcessBlobGas(genesis.Config, header, genesis.Timestamp)
 		header.ExcessBlobGas = &excess
 		context.BlobBaseFee = eip4844.CalcBlobFee(genesis.Config, header)

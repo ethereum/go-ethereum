@@ -1,5 +1,5 @@
 {
-  "hash": "MB9zwAZVXhk468gzUEK5FvwOkqU2ZaNGxBPKpnfue1s=",
+  "hash": "y71D1kwLevzO3QM7Tb/HTbugkWunCsMQfX6tEDlYxvQ=",
   "header": {
     "baseFeePerGas": {
       "bytes": "Cqc="
@@ -9,12 +9,12 @@
       "bytes": "AA=="
     },
     "gasLimit": "30000000",
-    "hash": "MB9zwAZVXhk468gzUEK5FvwOkqU2ZaNGxBPKpnfue1s=",
+    "hash": "y71D1kwLevzO3QM7Tb/HTbugkWunCsMQfX6tEDlYxvQ=",
     "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "mixHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "number": "3733424",
     "parentBeaconRoot": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    "parentHash": "LhXr/4IXQ+xS5yVUFpu7rhC3/mIsrKbBpJvnSDKd0Tk=",
+    "parentHash": "tiPea7U9cF1d/n81G6Joc9l8W4QXaechfBMHho0LHBY=",
     "receiptRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
     "stateRoot": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "timestamp": "2023-06-20T21:02:36Z",
@@ -64,7 +64,7 @@
                 "bytes": "CEm7Ag=="
               },
               "ordinal": "22",
-              "reason": "REASON_TRANSFER"
+              "reason": "REASON_BURN"
             },
             {
               "address": "AAAAaRaoe4IzP0JFBGYjsjeUxlw=",
@@ -75,7 +75,7 @@
                 "bytes": "Aecpt9WGjDPX8TY="
               },
               "ordinal": "23",
-              "reason": "REASON_TRANSFER"
+              "reason": "REASON_REWARD_TRANSACTION_FEE"
             }
           ],
           "callType": "CALL",
