@@ -1567,6 +1567,10 @@ func (s *StateDB) GetTrie() Trie {
 	return s.trie
 }
 
+func (s *StateDB) IsVerkle() bool {
+	return s.GetTrie().IsVerkle()
+}
+
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
 func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {

@@ -18,6 +18,7 @@ package vm
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -101,4 +102,13 @@ type StateDB interface {
 
 	// Finalise must be invoked at the end of a transaction
 	Finalise(bool)
+
+	// Polygon Specific StateDB methods
+	GetMVHashmap() *blockstm.MVHashMap
+	SetMVHashmap(mvHashmap *blockstm.MVHashMap)
+	IntermediateRoot(deleteEmptyObjects bool) common.Hash
+	IsVerkle() bool
+	GetLogs(txHash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log
+	TxIndex() int
+	SetTxContext(txHash common.Hash, txIndex int)
 }
