@@ -120,6 +120,7 @@ type Config struct {
 	WriteBufferSize int    // Maximum memory allowance (in bytes) for write buffer
 	ReadOnly        bool   // Flag whether the database is opened in read only mode
 	SnapshotNoBuild bool   // Flag Whether the background generation is allowed
+	Journal         string
 }
 
 // sanitize checks the provided user configurations and changes anything that's
