@@ -251,7 +251,7 @@ func TestValidateCode(t *testing.T) {
 			data:          make([]byte, 0),
 			subContainers: make([]*Container, 0),
 		}
-		_, err := validateCode(test.code, test.section, container, &pragueEOFInstructionSet, false)
+		_, err := validateCode(test.code, test.section, container, &eofInstructionSet, false)
 		if !errors.Is(err, test.err) {
 			t.Errorf("test %d (%s): unexpected error (want: %v, got: %v)", i, common.Bytes2Hex(test.code), test.err, err)
 		}
@@ -277,7 +277,7 @@ func BenchmarkRJUMPI(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet, false)
+		_, err := validateCode(code, 0, container, &eofInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -309,7 +309,7 @@ func BenchmarkRJUMPV(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet, false)
+		_, err := validateCode(code, 0, container, &pragueInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -357,13 +357,13 @@ func BenchmarkEOFValidation(b *testing.B) {
 		if err := container2.UnmarshalBinary(bin, true); err != nil {
 			b.Fatal(err)
 		}
-		if err := container2.ValidateCode(&pragueEOFInstructionSet, false); err != nil {
+		if err := container2.ValidateCode(&pragueInstructionSet, false); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
-// BenchmarkEOFValidation tries to benchmark the code validation for the CALLF/RETF operation.
+// BenchmarkEOFValidation2 tries to benchmark the code validation for the CALLF/RETF operation.
 // For this we set up code that calls into 1024 code sections which
 // - contain calls to some other code sections.
 // We can't have all code sections calling each other, otherwise we would exceed 48KB.
@@ -412,7 +412,7 @@ func BenchmarkEOFValidation2(b *testing.B) {
 		if err := container2.UnmarshalBinary(bin, true); err != nil {
 			b.Fatal(err)
 		}
-		if err := container2.ValidateCode(&pragueEOFInstructionSet, false); err != nil {
+		if err := container2.ValidateCode(&pragueInstructionSet, false); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -468,7 +468,7 @@ func BenchmarkEOFValidation3(b *testing.B) {
 			if err := container2.UnmarshalBinary(bin, true); err != nil {
 				b.Fatal(err)
 			}
-			if err := container2.ValidateCode(&pragueEOFInstructionSet, false); err != nil {
+			if err := container2.ValidateCode(&pragueInstructionSet, false); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -494,7 +494,7 @@ func BenchmarkRJUMPI_2(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet, false)
+		_, err := validateCode(code, 0, container, &pragueInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -512,6 +512,6 @@ func FuzzValidate(f *testing.F) {
 	f.Fuzz(func(_ *testing.T, code []byte, maxStack uint16) {
 		var container Container
 		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: maxStack})
-		validateCode(code, 0, &container, &pragueEOFInstructionSet, true)
+		validateCode(code, 0, &container, &pragueInstructionSet, true)
 	})
 }

@@ -130,7 +130,7 @@ func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.Chai
 	addr := common.HexToAddress("12345")
 	genesis := core.DeveloperGenesisBlock(11_500_000, &addr)
 
-	chainConfig, _, err := core.SetupGenesisBlock(chainDB, triedb.NewDatabase(chainDB, triedb.HashDefaults), genesis)
+	chainConfig, _, err, _ := core.SetupGenesisBlock(chainDB, triedb.NewDatabase(chainDB, triedb.HashDefaults), genesis)
 	if err != nil {
 		t.Fatalf("can't create new chain config: %v", err)
 	}

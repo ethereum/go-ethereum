@@ -33,18 +33,18 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/holiman/uint256"
 )
 
 // BOR
@@ -66,6 +66,9 @@ var (
 // ChainReader, ChainStateReader, ContractBackend, ContractCaller, ContractFilterer, ContractTransactor,
 // DeployBackend, GasEstimator, GasPricer, LogFilterer, PendingContractCaller, TransactionReader, and TransactionSender
 type SimulatedBackend struct {
+	*simulated.Backend
+	simulated.Client
+
 	database   ethdb.Database   // In memory database to store our testing data
 	blockchain *core.BlockChain // Ethereum blockchain to handle the consensus
 
@@ -227,7 +230,7 @@ func (b *SimulatedBackend) CodeAtHash(ctx context.Context, contract common.Addre
 }
 
 // BalanceAt returns the wei balance of a certain account in the blockchain.
-func (b *SimulatedBackend) BalanceAt(ctx context.Context, contract common.Address, blockNumber *big.Int) (*uint256.Int, error) {
+func (b *SimulatedBackend) BalanceAt(ctx context.Context, contract common.Address, blockNumber *big.Int) (*big.Int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -235,7 +238,7 @@ func (b *SimulatedBackend) BalanceAt(ctx context.Context, contract common.Addres
 	if err != nil {
 		return nil, err
 	}
-	return stateDB.GetBalance(contract), nil
+	return stateDB.GetBalance(contract).ToBig(), nil
 }
 
 // NonceAt returns the nonce of a certain account in the blockchain.
@@ -707,9 +710,8 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	txContext := core.NewEVMTxContext(msg)
 	evmContext := core.NewEVMBlockContext(header, b.blockchain, nil)
-	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
+	vmEnv := vm.NewEVM(evmContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(gomath.MaxUint64)
 
 	return core.ApplyMessage(vmEnv, msg, gasPool, context.Background())
@@ -963,15 +965,15 @@ func (fb *filterBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event
 
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
 
-func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {
-	panic("not supported")
-}
-
 func (fb *filterBackend) ChainConfig() *params.ChainConfig {
 	panic("not supported")
 }
 
 func (fb *filterBackend) CurrentHeader() *types.Header {
+	panic("not supported")
+}
+
+func (fb *filterBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("not supported")
 }
 

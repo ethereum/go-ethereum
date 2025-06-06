@@ -114,7 +114,7 @@ type Header struct {
 	ParentBeaconRoot *common.Hash `json:"parentBeaconBlockRoot" rlp:"optional"`
 
 	// RequestsHash was added by EIP-7685 and is ignored in legacy headers.
-	RequestsHash *common.Hash `json:"requestsRoot" rlp:"optional"`
+	RequestsHash *common.Hash `json:"requestsHash" rlp:"optional"`
 }
 
 // Used for Encoding and Decoding of the Extra Data Field
@@ -300,6 +300,9 @@ type extblock struct {
 //
 // The body elements and the receipts are used to recompute and overwrite the
 // relevant portions of the header.
+//
+// The receipt's bloom must already calculated for the block's bloom to be
+// correctly calculated.
 func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher) *Block {
 	if body == nil {
 		body = &Body{}
@@ -323,7 +326,10 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher
 		b.header.ReceiptHash = EmptyReceiptsHash
 	} else {
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
-		b.header.Bloom = CreateBloom(receipts)
+		// Receipts must go through MakeReceipt to calculate the receipt's bloom
+		// already. Merge the receipt's bloom together instead of recalculating
+		// everything.
+		b.header.Bloom = MergeBloom(receipts)
 	}
 
 	if len(uncles) == 0 {
@@ -569,9 +575,11 @@ func CalcRequestsHash(requests [][]byte) common.Hash {
 	h1, h2 := sha256.New(), sha256.New()
 	var buf common.Hash
 	for _, item := range requests {
-		h1.Reset()
-		h1.Write(item)
-		h2.Write(h1.Sum(buf[:0]))
+		if len(item) > 1 { // skip items with only requestType and no data.
+			h1.Reset()
+			h1.Write(item)
+			h2.Write(h1.Sum(buf[:0]))
+		}
 	}
 	h2.Sum(buf[:0])
 	return buf

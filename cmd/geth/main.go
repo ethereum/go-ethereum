@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"go.uber.org/automaxprocs/maxprocs"
 
@@ -70,7 +69,7 @@ var (
 		utils.NoUSBFlag, // deprecated
 		utils.USBFlag,
 		utils.SmartCardDaemonPathFlag,
-		utils.OverrideCancun,
+		utils.OverridePrague,
 		utils.OverrideVerkle,
 		utils.EnablePersonal, // deprecated
 		utils.TxPoolLocalsFlag,
@@ -94,6 +93,10 @@ var (
 		utils.SnapshotFlag,
 		utils.TxLookupLimitFlag, // deprecated
 		utils.TransactionHistoryFlag,
+		utils.ChainHistoryFlag,
+		utils.LogHistoryFlag,
+		utils.LogNoHistoryFlag,
+		utils.LogExportCheckpointsFlag,
 		utils.StateHistoryFlag,
 		utils.LightServeFlag,    // deprecated
 		utils.LightIngressFlag,  // deprecated
@@ -148,7 +151,6 @@ var (
 		utils.VMTraceJsonConfigFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
-		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
 		utils.GpoPercentileFlag,
 		utils.GpoMaxGasPriceFlag,
@@ -232,6 +234,7 @@ func init() {
 		removedbCommand,
 		dumpCommand,
 		dumpGenesisCommand,
+		pruneCommand,
 		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
@@ -310,6 +313,9 @@ func prepare(ctx *cli.Context) {
 	case ctx.IsSet(utils.BorMainnetFlag.Name):
 		log.Info("Starting Bor on Bor mainnet...")
 
+	case ctx.IsSet(utils.HoodiFlag.Name):
+		log.Info("Starting Geth on Hoodi testnet...")
+
 	case ctx.IsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
 		log.Warn(`You are running Geth in --dev mode. Please note the following:
@@ -338,18 +344,13 @@ func prepare(ctx *cli.Context) {
 			!ctx.IsSet(utils.MumbaiFlag.Name) &&
 			!ctx.IsSet(utils.HoleskyFlag.Name) &&
 			!ctx.IsSet(utils.AmoyFlag.Name) &&
+			!ctx.IsSet(utils.HoodiFlag.Name) &&
 			!ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 4096)
 			_ = ctx.Set(utils.CacheFlag.Name, strconv.Itoa(4096))
 		}
 	}
-
-	// Start metrics export if enabled
-	utils.SetupMetrics(ctx)
-
-	// Start system runtime metrics collection
-	go metrics.CollectProcessMetrics(3 * time.Second)
 }
 
 // geth is the main entry point into the system if no special subcommand is run.
@@ -380,8 +381,7 @@ func geth(ctx *cli.Context) error {
 }
 
 // startNode boots up the system node and all registered protocols, after which
-// it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
-// miner.
+// it starts the RPC/IPC interfaces and the miner.
 
 // 1.14.8 - We don't use cmd/geth for cli purposes,
 // and to maintain compatibility with the future upstream merges,

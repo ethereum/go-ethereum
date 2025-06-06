@@ -3,113 +3,34 @@
 // <https://github.com/rcrowley/go-metrics>
 //
 // Coda Hale's original work: <https://github.com/codahale/metrics>
+
 package metrics
 
 import (
-	"fmt"
-	"os"
 	"runtime/metrics"
 	"runtime/pprof"
-	"strconv"
-	"strings"
-	"syscall"
 	"time"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-
-	"github.com/BurntSushi/toml"
 )
 
-// Enabled is checked by the constructor functions for all of the
-// standard metrics. If it is true, the metric returned is a stub.
-//
-// This global kill-switch helps quantify the observer effect and makes
-// for less cluttered pprof profiles.
-var Enabled = false
+var (
+	metricsEnabled = false
+)
 
-// enablerFlags is the CLI flag names to use to enable metrics collections.
-var enablerFlags = []string{"metrics"}
-
-// enablerEnvVars is the env var names to use to enable metrics collections.
-var enablerEnvVars = []string{"GETH_METRICS"}
-
-// configFlag is the CLI flag name to use to start node by providing a toml based config
-var configFlag = "config"
-
-// init enables or disables the metrics system. Since we need this to run before
-// any other code gets to create meters and timers, we'll actually do an ugly hack
-// and peek into the command line args for the metrics flag.
-func init() {
-	for _, enabler := range enablerEnvVars {
-		if val, found := syscall.Getenv(enabler); found && !Enabled {
-			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
-				log.Info("Enabling metrics collection")
-				Enabled = true
-			}
-		}
-	}
-
-	var configFile string
-
-	for i, arg := range os.Args {
-		flag := strings.TrimLeft(arg, "-")
-
-		// check for existence of `config` flag
-		if flag == configFlag && i < len(os.Args)-1 {
-			configFile = strings.TrimLeft(os.Args[i+1], "-") // find the value of flag
-		} else if len(flag) > 6 && flag[:6] == configFlag {
-			// Checks for `=` separated flag (e.g. config=path)
-			configFile = strings.TrimLeft(flag[6:], "=")
-		}
-
-		for _, enabler := range enablerFlags {
-			if !Enabled && flag == enabler {
-				log.Info("Enabling metrics collection")
-				Enabled = true
-			}
-		}
-	}
-
-	// Update the global metrics value, if they're provided in the config file
-	updateMetricsFromConfig(configFile)
+// Enabled is checked by functions that are deemed 'expensive', e.g. if a
+// meter-type does locking and/or non-trivial math operations during update.
+func Enabled() bool {
+	return metricsEnabled
 }
 
-func updateMetricsFromConfig(path string) {
-	// Don't act upon any errors here. They're already taken into
-	// consideration when the toml config file will be parsed in the cli.
-	canonicalPath, err := common.VerifyPath(path)
-	if err != nil {
-		fmt.Println("path not verified: " + err.Error())
-		return
-	}
-
-	data, err := os.ReadFile(canonicalPath)
-	tomlData := string(data)
-
-	if err != nil {
-		return
-	}
-
-	// Create a minimal config to decode
-	type TelemetryConfig struct {
-		Enabled   bool `hcl:"metrics,optional" toml:"metrics,optional"`
-		Expensive bool `hcl:"expensive,optional" toml:"expensive,optional"`
-	}
-
-	type CliConfig struct {
-		Telemetry *TelemetryConfig `hcl:"telemetry,block" toml:"telemetry,block"`
-	}
-
-	conf := &CliConfig{}
-
-	_, err = toml.Decode(tomlData, &conf)
-	if err != nil || conf == nil || conf.Telemetry == nil {
-		return
-	}
-
-	// We have the values now, update them
-	Enabled = conf.Telemetry.Enabled
+// Enable enables the metrics system.
+// The Enabled-flag is expected to be set, once, during startup, but toggling off and on
+// is not supported.
+//
+// Enable is not safe to call concurrently. You need to call this as early as possible in
+// the program, before any metrics collection will happen.
+func Enable() {
+	metricsEnabled = true
+	startMeterTickerLoop()
 }
 
 var threadCreateProfile = pprof.Lookup("threadcreate")
@@ -187,7 +108,7 @@ func readRuntimeStats(v *runtimeStats) {
 // CollectProcessMetrics periodically collects various metrics about the running process.
 func CollectProcessMetrics(refresh time.Duration) {
 	// Short circuit if the metrics system is disabled
-	if !Enabled {
+	if !metricsEnabled {
 		return
 	}
 

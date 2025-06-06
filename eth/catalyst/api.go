@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -581,6 +582,9 @@ func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.Payl
 	if api.eth.BlockChain().Config().IsCancun(new(big.Int).SetUint64(params.Number)) {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("newPayloadV2 called post-cancun"))
 	}
+	if params.BlobGasUsed != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil blobGasUsed pre-cancun"))
+	}
 	return api.newPayload(params, nil, nil, nil, false)
 }
 
@@ -635,6 +639,9 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadV4 must only be called for prague payloads"))
 	}
 	requests := convertRequests(executionRequests)
+	if err := validateRequests(requests); err != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
+	}
 	return api.newPayload(params, versionedHashes, beaconRoot, requests, false)
 }
 
@@ -724,6 +731,9 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV4(params engine.ExecutableData, v
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadWithWitnessV4 must only be called for prague payloads"))
 	}
 	requests := convertRequests(executionRequests)
+	if err := validateRequests(requests); err != nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
+	}
 	return api.newPayload(params, versionedHashes, beaconRoot, requests, true)
 }
 
@@ -993,7 +1003,7 @@ func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, v
 	api.lastNewPayloadLock.Unlock()
 
 	log.Trace("Executing block statelessly", "number", block.Number(), "hash", params.BlockHash)
-	stateRoot, receiptRoot, err := core.ExecuteStateless(api.eth.BlockChain().Config(), block, witness)
+	stateRoot, receiptRoot, err := core.ExecuteStateless(api.eth.BlockChain().Config(), vm.Config{}, block, witness)
 	if err != nil {
 		log.Warn("ExecuteStatelessPayload: execution failed", "err", err)
 		errorMsg := err.Error()
@@ -1283,4 +1293,20 @@ func convertRequests(hex []hexutil.Bytes) [][]byte {
 		req[i] = hex[i]
 	}
 	return req
+}
+
+// validateRequests checks that requests are ordered by their type and are not empty.
+func validateRequests(requests [][]byte) error {
+	for i, req := range requests {
+		// No empty requests.
+		if len(req) < 2 {
+			return fmt.Errorf("empty request: %v", req)
+		}
+		// Check that requests are ordered by their type.
+		// Each type must appear only once.
+		if i > 0 && req[0] <= requests[i-1][0] {
+			return fmt.Errorf("invalid request order: %v", req)
+		}
+	}
+	return nil
 }

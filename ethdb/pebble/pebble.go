@@ -59,21 +59,21 @@ type Database struct {
 	fn string     // filename for reporting
 	db *pebble.DB // Underlying pebble storage engine
 
-	compTimeMeter       metrics.Meter // Meter for measuring the total time spent in database compaction
-	compReadMeter       metrics.Meter // Meter for measuring the data read during compaction
-	compWriteMeter      metrics.Meter // Meter for measuring the data written during compaction
-	writeDelayNMeter    metrics.Meter // Meter for measuring the write delay number due to database compaction
-	writeDelayMeter     metrics.Meter // Meter for measuring the write delay duration due to database compaction
-	diskSizeGauge       metrics.Gauge // Gauge for tracking the size of all the levels in the database
-	diskReadMeter       metrics.Meter // Meter for measuring the effective amount of data read
-	diskWriteMeter      metrics.Meter // Meter for measuring the effective amount of data written
-	memCompGauge        metrics.Gauge // Gauge for tracking the number of memory compaction
-	level0CompGauge     metrics.Gauge // Gauge for tracking the number of table compaction in level0
-	nonlevel0CompGauge  metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
-	seekCompGauge       metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
-	manualMemAllocGauge metrics.Gauge // Gauge for tracking amount of non-managed memory currently allocated
+	compTimeMeter       *metrics.Meter // Meter for measuring the total time spent in database compaction
+	compReadMeter       *metrics.Meter // Meter for measuring the data read during compaction
+	compWriteMeter      *metrics.Meter // Meter for measuring the data written during compaction
+	writeDelayNMeter    *metrics.Meter // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter     *metrics.Meter // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge       *metrics.Gauge // Gauge for tracking the size of all the levels in the database
+	diskReadMeter       *metrics.Meter // Meter for measuring the effective amount of data read
+	diskWriteMeter      *metrics.Meter // Meter for measuring the effective amount of data written
+	memCompGauge        *metrics.Gauge // Gauge for tracking the number of memory compaction
+	level0CompGauge     *metrics.Gauge // Gauge for tracking the number of table compaction in level0
+	nonlevel0CompGauge  *metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
+	seekCompGauge       *metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
+	manualMemAllocGauge *metrics.Gauge // Gauge for tracking amount of non-managed memory currently allocated
 
-	levelsGauge []metrics.Gauge // Gauge for tracking the number of tables in levels
+	levelsGauge []*metrics.Gauge // Gauge for tracking the number of tables in levels
 
 	quitLock sync.RWMutex    // Mutex protecting the quit channel and the closed flag
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -485,13 +485,8 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		compReads[i%2] = compRead
 		nWrites[i%2] = nWrite
 
-		if d.writeDelayNMeter != nil {
-			d.writeDelayNMeter.Mark(writeDelayCounts[i%2] - writeDelayCounts[(i-1)%2])
-		}
-
-		if d.writeDelayMeter != nil {
-			d.writeDelayMeter.Mark(writeDelayTimes[i%2] - writeDelayTimes[(i-1)%2])
-		}
+		d.writeDelayNMeter.Mark(writeDelayCounts[i%2] - writeDelayCounts[(i-1)%2])
+		d.writeDelayMeter.Mark(writeDelayTimes[i%2] - writeDelayTimes[(i-1)%2])
 		// Print a warning log if writing has been stalled for a while. The log will
 		// be printed per minute to avoid overwhelming users.
 		if d.writeStalled.Load() && writeDelayCounts[i%2] == writeDelayCounts[(i-1)%2] &&
@@ -499,29 +494,13 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 			d.log.Warn("Database compacting, degraded performance")
 			lastWriteStallReport = time.Now()
 		}
-		if d.compTimeMeter != nil {
-			d.compTimeMeter.Mark(compTimes[i%2] - compTimes[(i-1)%2])
-		}
+		d.compTimeMeter.Mark(compTimes[i%2] - compTimes[(i-1)%2])
+		d.compReadMeter.Mark(compReads[i%2] - compReads[(i-1)%2])
+		d.compWriteMeter.Mark(compWrites[i%2] - compWrites[(i-1)%2])
+		d.diskSizeGauge.Update(int64(stats.DiskSpaceUsage()))
+		d.diskReadMeter.Mark(0) // pebble doesn't track non-compaction reads
+		d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
 
-		if d.compReadMeter != nil {
-			d.compReadMeter.Mark(compReads[i%2] - compReads[(i-1)%2])
-		}
-
-		if d.compWriteMeter != nil {
-			d.compWriteMeter.Mark(compWrites[i%2] - compWrites[(i-1)%2])
-		}
-
-		if d.diskSizeGauge != nil {
-			d.diskSizeGauge.Update(int64(stats.DiskSpaceUsage()))
-		}
-
-		if d.diskReadMeter != nil {
-			d.diskReadMeter.Mark(0) // pebble doesn't track non-compaction reads
-		}
-
-		if d.diskWriteMeter != nil {
-			d.diskWriteMeter.Mark(nWrites[i%2] - nWrites[(i-1)%2])
-		}
 		// See https://github.com/cockroachdb/pebble/pull/1628#pullrequestreview-1026664054
 		manuallyAllocated := stats.BlockCache.Size + int64(stats.MemTable.Size) + int64(stats.MemTable.ZombieSize)
 		d.manualMemAllocGauge.Update(manuallyAllocated)

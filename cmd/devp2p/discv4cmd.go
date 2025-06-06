@@ -164,8 +164,7 @@ func discv4Ping(ctx *cli.Context) error {
 	defer disc.Close()
 
 	start := time.Now()
-
-	if err := disc.Ping(n); err != nil {
+	if _, err := disc.Ping(n); err != nil {
 		return fmt.Errorf("node didn't respond: %v", err)
 	}
 

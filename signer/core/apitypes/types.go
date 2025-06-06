@@ -523,7 +523,16 @@ func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType strin
 	for _, item := range arrayValue {
 		if reflect.TypeOf(item).Kind() == reflect.Slice ||
 			reflect.TypeOf(item).Kind() == reflect.Array {
-			encodedData, err := typedData.encodeArrayValue(item, parsedType, depth+1)
+			var (
+				encodedData hexutil.Bytes
+				err         error
+			)
+			if reflect.TypeOf(item).Elem().Kind() == reflect.Uint8 {
+				// the item type is bytes.  encode the bytes array directly instead of recursing.
+				encodedData, err = typedData.EncodePrimitiveValue(parsedType, item, depth+1)
+			} else {
+				encodedData, err = typedData.encodeArrayValue(item, parsedType, depth+1)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -721,8 +730,7 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 		if err != nil {
 			return nil, err
 		}
-
-		return math.U256Bytes(b), nil
+		return math.U256Bytes(new(big.Int).Set(b)), nil
 	}
 
 	return nil, fmt.Errorf("unrecognized type '%s'", encType)

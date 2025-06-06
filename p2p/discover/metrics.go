@@ -34,7 +34,7 @@ const (
 )
 
 var (
-	bucketsCounter      []metrics.Counter
+	bucketsCounter      []*metrics.Counter
 	ingressTrafficMeter = metrics.NewRegisteredMeter(ingressMeterName, nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter(egressMeterName, nil)
 )
@@ -53,7 +53,7 @@ type meteredUdpConn struct {
 
 func newMeteredConn(conn UDPConn) UDPConn {
 	// Short circuit if metrics are disabled
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return conn
 	}
 	return &meteredUdpConn{udpConn: conn}

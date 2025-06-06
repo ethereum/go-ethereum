@@ -40,6 +40,7 @@ var activators = map[int]func(*JumpTable){
 	1344: enable1344,
 	1153: enable1153,
 	4762: enable4762,
+	7702: enable7702,
 }
 
 // EnableEIP enables the given EIP on the config.
@@ -351,15 +352,13 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	}
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.GetCode(addr)
-	contract := &Contract{
-		Code: code,
-		self: AccountRef(addr),
-	}
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-	statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
-	if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-		scope.Contract.Gas = 0
-		return nil, ErrOutOfGas
+	if !scope.Contract.IsSystemCall {
+		statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false)
+		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
+			scope.Contract.Gas = 0
+			return nil, ErrOutOfGas
+		}
 	}
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), paddedCodeCopy)
 
@@ -378,7 +377,7 @@ func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	if *pc < codeLen {
 		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
 
-		if !scope.Contract.IsDeployment && *pc%31 == 0 {
+		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall && *pc%31 == 0 {
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
@@ -408,7 +407,7 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 			)),
 		)
 
-		if !scope.Contract.IsDeployment {
+		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall {
 			contractAddr := scope.Contract.Address()
 			statelessGas := interpreter.evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false)
 			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
@@ -716,4 +715,12 @@ func enableEOF(jt *JumpTable) {
 		maxStack:    maxStack(3, 1),
 		memorySize:  memoryExtCall,
 	}
+}
+
+// enable7702 the EIP-7702 changes to support delegation designators.
+func enable7702(jt *JumpTable) {
+	jt[CALL].dynamicGas = gasCallEIP7702
+	jt[CALLCODE].dynamicGas = gasCallCodeEIP7702
+	jt[STATICCALL].dynamicGas = gasStaticCallEIP7702
+	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP7702
 }

@@ -19,7 +19,6 @@ package trie
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
@@ -34,9 +33,6 @@ type trieReader struct {
 // newTrieReader initializes the trie reader with the given node reader.
 func newTrieReader(stateRoot, owner common.Hash, db database.NodeDatabase) (*trieReader, error) {
 	if stateRoot == (common.Hash{}) || stateRoot == types.EmptyRootHash {
-		if stateRoot == (common.Hash{}) {
-			log.Error("Zero state root hash!")
-		}
 		return &trieReader{owner: owner}, nil
 	}
 	reader, err := db.NodeReader(stateRoot)

@@ -137,7 +137,7 @@ func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
 
 	snapRoot, err := generateTrieRoot(nil, "", accIt, common.Hash{}, stackTrieGenerate,
 		func(db ethdb.KeyValueWriter, accountHash, codeHash common.Hash, stat *generateStats) (common.Hash, error) {
-			storageIt, _ := snap.StorageIterator(accountHash, common.Hash{})
+			storageIt := snap.StorageIterator(accountHash, common.Hash{})
 			defer storageIt.Release()
 
 			hash, err := generateTrieRoot(nil, "", storageIt, accountHash, stackTrieGenerate, nil, stat, false)
@@ -665,7 +665,7 @@ func testGenerateWithManyExtraAccounts(t *testing.T, scheme string) {
 		for i := 0; i < 1000; i++ {
 			acc := &types.StateAccount{Balance: uint256.NewInt(uint64(i)), Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash.Bytes()}
 			val, _ := rlp.EncodeToBytes(acc)
-			key := hashData([]byte(fmt.Sprintf("acc-%d", i)))
+			key := hashData(fmt.Appendf(nil, "acc-%d", i))
 			rawdb.WriteAccountSnapshot(helper.diskdb, key, val)
 		}
 	}

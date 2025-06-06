@@ -274,7 +274,6 @@ func testRecvTransactions(t *testing.T, protocol uint) {
 		head    = handler.chain.CurrentBlock()
 		td      = handler.chain.GetTd(head.Hash(), head.Number.Uint64())
 	)
-
 	if err := src.Handshake(1, td, head.Hash(), genesis.Hash(), forkid.NewIDWithChain(handler.chain), forkid.NewFilter(handler.chain)); err != nil {
 		t.Fatalf("failed to run protocol handshake")
 	}
@@ -314,8 +313,8 @@ func testSendTransactions(t *testing.T, protocol uint) {
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 		insert[nonce] = tx
 	}
-	go handler.txpool.Add(insert, false, false) // Need goroutine to not block on feed
-	time.Sleep(250 * time.Millisecond)          // Wait until tx events get out of the system (can't use events, tx broadcaster races with peer join)
+	go handler.txpool.Add(insert, false) // Need goroutine to not block on feed
+	time.Sleep(250 * time.Millisecond)   // Wait until tx events get out of the system (can't use events, tx broadcaster races with peer join)
 
 	// Create a source handler to send messages through and a sink peer to receive them
 	p2pSrc, p2pSink := p2p.MsgPipe()
@@ -436,7 +435,7 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 		txs[nonce] = tx
 	}
-	source.txpool.Add(txs, false, false)
+	source.txpool.Add(txs, false)
 
 	// Iterate through all the sinks and ensure they all got the transactions
 	for i := range sinks {
@@ -514,7 +513,7 @@ func testSendTransactionAnnouncementsOnly(t *testing.T, protocol uint) {
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 		txs[nonce] = tx
 	}
-	source.txpool.Add(txs, false, false)
+	source.txpool.Add(txs, false)
 
 	// Make sure we get all the transactions as announcements
 	seen := make(map[common.Hash]struct{})

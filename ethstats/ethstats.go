@@ -737,7 +737,6 @@ func (s *Service) assembleBlockStats(header *types.Header) *blockStats {
 		if header == nil {
 			header = s.backend.CurrentHeader()
 		}
-
 		td = s.backend.GetTd(context.Background(), header.Hash())
 		txs = []txStats{}
 	}

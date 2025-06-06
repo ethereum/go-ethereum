@@ -33,22 +33,37 @@ import (
 // must be checked before diving into disk (since it basically is not yet written
 // data).
 type buffer struct {
-	layers uint64   // The number of diff layers aggregated inside
-	limit  uint64   // The maximum memory allowance in bytes
-	nodes  *nodeSet // Aggregated trie node set
+	layers uint64    // The number of diff layers aggregated inside
+	limit  uint64    // The maximum memory allowance in bytes
+	nodes  *nodeSet  // Aggregated trie node set
+	states *stateSet // Aggregated state set
 }
 
 // newBuffer initializes the buffer with the provided states and trie nodes.
-func newBuffer(limit int, nodes *nodeSet, layers uint64) *buffer {
+func newBuffer(limit int, nodes *nodeSet, states *stateSet, layers uint64) *buffer {
 	// Don't panic for lazy users if any provided set is nil
 	if nodes == nil {
 		nodes = newNodeSet(nil)
+	}
+	if states == nil {
+		states = newStates(nil, nil, false)
 	}
 	return &buffer{
 		layers: layers,
 		limit:  uint64(limit),
 		nodes:  nodes,
+		states: states,
 	}
+}
+
+// account retrieves the account blob with account address hash.
+func (b *buffer) account(hash common.Hash) ([]byte, bool) {
+	return b.states.account(hash)
+}
+
+// storage retrieves the storage slot with account address hash and slot key.
+func (b *buffer) storage(addrHash common.Hash, storageHash common.Hash) ([]byte, bool) {
+	return b.states.storage(addrHash, storageHash)
 }
 
 // node retrieves the trie node with node path and its trie identifier.
@@ -57,16 +72,17 @@ func (b *buffer) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 }
 
 // commit merges the provided states and trie nodes into the buffer.
-func (b *buffer) commit(nodes *nodeSet) *buffer {
+func (b *buffer) commit(nodes *nodeSet, states *stateSet) *buffer {
 	b.layers++
 	b.nodes.merge(nodes)
+	b.states.merge(states)
 	return b
 }
 
-// revert is the reverse operation of commit. It also merges the provided states
+// revertTo is the reverse operation of commit. It also merges the provided states
 // and trie nodes into the buffer. The key difference is that the provided state
 // set should reverse the changes made by the most recent state transition.
-func (b *buffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node) error {
+func (b *buffer) revertTo(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node, accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte) error {
 	// Short circuit if no embedded state transition to revert
 	if b.layers == 0 {
 		return errStateUnrecoverable
@@ -78,7 +94,8 @@ func (b *buffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[strin
 		b.reset()
 		return nil
 	}
-	b.nodes.revert(db, nodes)
+	b.nodes.revertTo(db, nodes)
+	b.states.revertTo(accounts, storages)
 	return nil
 }
 
@@ -86,6 +103,7 @@ func (b *buffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[strin
 func (b *buffer) reset() {
 	b.layers = 0
 	b.nodes.reset()
+	b.states.reset()
 }
 
 // empty returns an indicator if buffer is empty.
@@ -101,7 +119,7 @@ func (b *buffer) full() bool {
 
 // size returns the approximate memory size of the held content.
 func (b *buffer) size() uint64 {
-	return b.nodes.size
+	return b.states.size + b.nodes.size
 }
 
 // flush persists the in-memory dirty trie node into the disk if the configured

@@ -65,7 +65,7 @@ var (
 )
 
 var genesis = &core.Genesis{
-	Config: params.AllEthashProtocolChanges,
+	Config: params.AllDevChainProtocolChanges,
 	Alloc: types.GenesisAlloc{
 		testAddr:           {Balance: testBalance},
 		revertContractAddr: {Code: revertCode},
@@ -227,7 +227,7 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 			if got != nil && got.Number != nil && got.Number.Sign() == 0 {
 				got.Number = big.NewInt(0) // hack to make DeepEqual work
 			}
-			if !reflect.DeepEqual(got, tt.want) {
+			if got.Hash() != tt.want.Hash() {
 				t.Fatalf("HeaderByNumber(%v) got = %v, want %v", tt.block, got, tt.want)
 			}
 		})
@@ -318,7 +318,7 @@ func testChainID(t *testing.T, client *rpc.Client) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if id == nil || id.Cmp(params.AllEthashProtocolChanges.ChainID) != 0 {
+	if id == nil || id.Cmp(params.AllDevChainProtocolChanges.ChainID) != 0 {
 		t.Fatalf("ChainID returned wrong number: %+v", id)
 	}
 }
@@ -405,6 +405,15 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	}
 	if gasTipCap.Cmp(big.NewInt(234375000)) != 0 {
 		t.Fatalf("unexpected gas tip cap: %v", gasTipCap)
+	}
+
+	// BlobBaseFee
+	blobBaseFee, err := ec.BlobBaseFee(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if blobBaseFee.Cmp(big.NewInt(1)) != 0 {
+		t.Fatalf("unexpected blob base fee: %v", blobBaseFee)
 	}
 
 	// FeeHistory
@@ -585,6 +594,33 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	}
 	if !bytes.Equal(code, penCode) {
 		t.Fatalf("unexpected code: %v %v", code, penCode)
+	}
+	// Use HeaderByNumber to get a header for EstimateGasAtBlock and EstimateGasAtBlockHash
+	latestHeader, err := ec.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// EstimateGasAtBlock
+	msg := ethereum.CallMsg{
+		From:  testAddr,
+		To:    &common.Address{},
+		Gas:   21000,
+		Value: big.NewInt(1),
+	}
+	gas, err := ec.EstimateGasAtBlock(context.Background(), msg, latestHeader.Number)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gas != 21000 {
+		t.Fatalf("unexpected gas limit: %v", gas)
+	}
+	// EstimateGasAtBlockHash
+	gas, err = ec.EstimateGasAtBlockHash(context.Background(), msg, latestHeader.Hash())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gas != 21000 {
+		t.Fatalf("unexpected gas limit: %v", gas)
 	}
 }
 

@@ -50,7 +50,7 @@ func updateServeTimeHistogram(method string, success bool, elapsed time.Duration
 	metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(elapsed.Nanoseconds())
 }
 
-func newEpMetrics(service string) (metrics.Gauge, metrics.Gauge, metrics.Histogram) {
+func newEpMetrics(service string) (*metrics.Gauge, *metrics.Gauge, metrics.Histogram) {
 	epWorkerCount := fmt.Sprintf("rpc/ep/workers/%s", service)
 	epWaitingQueue := fmt.Sprintf("rpc/ep/queue/%s", service)
 	epProcessedRequests := fmt.Sprintf("rpc/ep/processed/%s", service)

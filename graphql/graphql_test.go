@@ -481,6 +481,7 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 		// set an arbitrary large ttd as chains are required to be known to be merged
 		gspec.Config.TerminalTotalDifficulty = big.NewInt(math.MaxInt64)
 	}
+
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
 		t.Fatalf("could not create eth backend: %v", err)

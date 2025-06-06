@@ -124,15 +124,24 @@ type SubPool interface {
 	// Get returns a transaction if it is contained in the pool, or nil otherwise.
 	Get(hash common.Hash) *types.Transaction
 
+	// GetRLP returns a RLP-encoded transaction if it is contained in the pool.
+	GetRLP(hash common.Hash) []byte
+
 	// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 	// This is a utility method for the engine API, enabling consensus clients to
 	// retrieve blobs from the pools directly instead of the network.
 	GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof)
 
+	// ValidateTxBasics checks whether a transaction is valid according to the consensus
+	// rules, but does not check state-dependent validation such as sufficient balance.
+	// This check is meant as a static check which can be performed without holding the
+	// pool mutex.
+	ValidateTxBasics(tx *types.Transaction) error
+
 	// Add enqueues a batch of transactions into the pool if they are valid. Due
 	// to the large transaction churn, add may postpone fully integrating the tx
 	// to a later point to batch multiple ones together.
-	Add(txs []*types.Transaction, local bool, sync bool) []error
+	Add(txs []*types.Transaction, sync bool) []error
 
 	// Pending retrieves all currently processable transactions, grouped by origin
 	// account and sorted by nonce.
@@ -161,9 +170,6 @@ type SubPool interface {
 	// ContentFrom retrieves the data content of the transaction pool, returning the
 	// pending as well as queued transactions of this address, grouped by nonce.
 	ContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction)
-
-	// Locals retrieves the accounts currently considered local by the pool.
-	Locals() []common.Address
 
 	// Status returns the known status (unknown/pending/queued) of a transaction
 	// identified by their hashes.

@@ -292,7 +292,6 @@ func TestTdStorage(t *testing.T) {
 	}
 	// Write and verify the TD in the database
 	WriteTd(db, hash, 0, td)
-
 	if entry := ReadTd(db, hash, 0); entry == nil {
 		t.Fatalf("Stored TD not found")
 	} else if entry.Cmp(td) != 0 {
@@ -300,7 +299,6 @@ func TestTdStorage(t *testing.T) {
 	}
 	// Delete the TD and verify the execution
 	DeleteTd(db, hash, 0)
-
 	if entry := ReadTd(db, hash, 0); entry != nil {
 		t.Fatalf("Deleted TD returned: %v", entry)
 	}
@@ -392,7 +390,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
 		GasUsed:         111111,
 	}
-	receipt1.Bloom = types.CreateBloom(types.Receipts{receipt1})
+	receipt1.Bloom = types.CreateBloom(receipt1)
 
 	receipt2 := &types.Receipt{
 		PostState:         common.Hash{2}.Bytes(),
@@ -405,7 +403,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
 		GasUsed:         222222,
 	}
-	receipt2.Bloom = types.CreateBloom(types.Receipts{receipt2})
+	receipt2.Bloom = types.CreateBloom(receipt2)
 	receipts := []*types.Receipt{receipt1, receipt2}
 
 	// Check that no receipt entries are in a pristine database
@@ -497,7 +495,6 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadReceiptsRLP(db, hash, number); len(blob) > 0 {
 		t.Fatalf("non existent receipts returned")
 	}
-
 	if blob := ReadTdRLP(db, hash, number); len(blob) > 0 {
 		t.Fatalf("non existent td returned")
 	}
@@ -516,7 +513,6 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadReceiptsRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no receipts returned")
 	}
-
 	if blob := ReadTdRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no td returned")
 	}
@@ -534,7 +530,6 @@ func TestAncientStorage(t *testing.T) {
 	if blob := ReadReceiptsRLP(db, fakeHash, number); len(blob) != 0 {
 		t.Fatalf("invalid receipts returned")
 	}
-
 	if blob := ReadTdRLP(db, fakeHash, number); len(blob) != 0 {
 		t.Fatalf("invalid td returned")
 	}
@@ -652,7 +647,6 @@ func BenchmarkWriteAncientBlocks(b *testing.B) {
 	// b.N. This means the resulting ns/op measurement is the time it takes to write a
 	// single block and its associated data.
 	var td = big.NewInt(55)
-
 	var totalSize int64
 
 	for i := 0; i < b.N; i += batchSize {
@@ -783,7 +777,7 @@ func TestReadLogs(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
 		GasUsed:         111111,
 	}
-	receipt1.Bloom = types.CreateBloom(types.Receipts{receipt1})
+	receipt1.Bloom = types.CreateBloom(receipt1)
 
 	receipt2 := &types.Receipt{
 		PostState:         common.Hash{2}.Bytes(),
@@ -796,7 +790,7 @@ func TestReadLogs(t *testing.T) {
 		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
 		GasUsed:         222222,
 	}
-	receipt2.Bloom = types.CreateBloom(types.Receipts{receipt2})
+	receipt2.Bloom = types.CreateBloom(receipt2)
 	receipts := []*types.Receipt{receipt1, receipt2}
 
 	hash := common.BytesToHash([]byte{0x03, 0x14})
@@ -967,6 +961,7 @@ func TestHeadersRLPStorage(t *testing.T) {
 		t.Fatalf("failed to create database with ancient backend")
 	}
 	defer db.Close()
+
 	// Create blocks
 	var chain []*types.Block
 

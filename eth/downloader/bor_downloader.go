@@ -267,7 +267,6 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 
 	current := uint64(0)
 	mode := d.getMode()
-
 	switch {
 	case d.blockchain != nil && mode == FullSync:
 		current = d.blockchain.CurrentBlock().Number.Uint64()
@@ -419,7 +418,6 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 	if d.notified.CompareAndSwap(false, true) {
 		log.Info("Block synchronisation started")
 	}
-
 	if mode == SnapSync {
 		// Snap sync will directly modify the persistent state, making the entire
 		// trie database unusable until the state is fully synced. To prevent any
@@ -603,11 +601,9 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td, ttd *
 	}
 
 	d.committed.Store(true)
-
 	if mode == SnapSync && pivot.Number.Uint64() != 0 {
 		d.committed.Store(false)
 	}
-
 	if mode == SnapSync {
 		// Set the ancient data limitation. If we are running snap sync, all block
 		// data older than ancientLimit will be written to the ancient store. More

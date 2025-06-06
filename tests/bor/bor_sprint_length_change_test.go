@@ -823,6 +823,7 @@ func InitMinerSprintLength(genesis *core.Genesis, privKey *ecdsa.PrivateKey, wit
 			GasPrice:  big.NewInt(1),
 			Recommit:  time.Second,
 		},
+		SnapshotCache:   10,
 		WithoutHeimdall: withoutHeimdall,
 	})
 

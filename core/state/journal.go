@@ -23,7 +23,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
 )
 
@@ -193,8 +193,11 @@ func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
 	})
 }
 
-func (j *journal) setCode(address common.Address) {
-	j.append(codeChange{account: address})
+func (j *journal) setCode(address common.Address, prevCode []byte) {
+	j.append(codeChange{
+		account:  address,
+		prevCode: prevCode,
+	})
 }
 
 func (j *journal) nonceChange(address common.Address, prev uint64) {
@@ -257,7 +260,8 @@ type (
 		origvalue common.Hash
 	}
 	codeChange struct {
-		account common.Address
+		account  common.Address
+		prevCode []byte
 	}
 
 	// Changes to other state values.
@@ -378,7 +382,7 @@ func (ch nonceChange) copy() journalEntry {
 }
 
 func (ch codeChange) revert(s *StateDB) {
-	s.getStateObject(ch.account).setCode(types.EmptyCodeHash, nil)
+	s.getStateObject(ch.account).setCode(crypto.Keccak256Hash(ch.prevCode), ch.prevCode)
 }
 
 func (ch codeChange) dirtied() *common.Address {
@@ -386,7 +390,10 @@ func (ch codeChange) dirtied() *common.Address {
 }
 
 func (ch codeChange) copy() journalEntry {
-	return codeChange{account: ch.account}
+	return codeChange{
+		account:  ch.account,
+		prevCode: ch.prevCode,
+	}
 }
 
 func (ch storageChange) revert(s *StateDB) {

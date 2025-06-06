@@ -17,6 +17,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -322,13 +323,7 @@ func sortChanges(changes []types.Change) {
 		if a.Action == b.Action {
 			return strings.Compare(*a.ResourceRecordSet.Name, *b.ResourceRecordSet.Name)
 		}
-		if score[string(a.Action)] < score[string(b.Action)] {
-			return -1
-		}
-		if score[string(a.Action)] > score[string(b.Action)] {
-			return 1
-		}
-		return 0
+		return cmp.Compare(score[string(a.Action)], score[string(b.Action)])
 	})
 }
 

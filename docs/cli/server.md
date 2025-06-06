@@ -256,7 +256,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```miner.extradata```: Block extra data set by the miner (default = client version)
 
-- ```miner.gaslimit```: Target gas ceiling (gas limit) for mined blocks (default: 30000000)
+- ```miner.gaslimit```: Target gas ceiling (gas limit) for mined blocks (default: 45000000)
 
 - ```miner.gasprice```: Minimum gas price for mining a transaction (default: 25000000000)
 

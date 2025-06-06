@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -37,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm/program"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -133,21 +135,17 @@ func testFork(t *testing.T, blockchain *BlockChain, i, n int, full bool, compara
 	if full {
 		cur := blockchain.CurrentBlock()
 		tdPre = blockchain.GetTd(cur.Hash(), cur.Number.Uint64())
-
 		if err := testBlockChainImport(blockChainB, blockchain); err != nil {
 			t.Fatalf("failed to import forked block chain: %v", err)
 		}
-
 		last := blockChainB[len(blockChainB)-1]
 		tdPost = blockchain.GetTd(last.Hash(), last.NumberU64())
 	} else {
 		cur := blockchain.CurrentHeader()
 		tdPre = blockchain.GetTd(cur.Hash(), cur.Number.Uint64())
-
 		if err := testHeaderChainImport(headerChainB, blockchain); err != nil {
 			t.Fatalf("failed to import forked header chain: %v", err)
 		}
-
 		last := headerChainB[len(headerChainB)-1]
 		tdPost = blockchain.GetTd(last.Hash(), last.Number.Uint64())
 	}
@@ -195,7 +193,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		blockchain.chainmu.MustLock()
 		rawdb.WriteTd(blockchain.db, block.Hash(), block.NumberU64(), new(big.Int).Add(block.Difficulty(), blockchain.GetTd(block.ParentHash(), block.NumberU64()-1)))
 		rawdb.WriteBlock(blockchain.db, block)
-		statedb.Commit(block.NumberU64(), false)
+		statedb.Commit(block.NumberU64(), false, false)
 		blockchain.chainmu.Unlock()
 	}
 
@@ -774,7 +772,6 @@ func testReorg(t *testing.T, first, second []int64, td int64, full bool, scheme 
 	}
 	// Make sure the chain total difficulty is the correct one
 	want := new(big.Int).Add(blockchain.genesisBlock.Difficulty(), big.NewInt(td))
-
 	if full {
 		cur := blockchain.CurrentBlock()
 		if have := blockchain.GetTd(cur.Hash(), cur.Number.Uint64()); have.Cmp(want) != 0 {
@@ -944,11 +941,9 @@ func testFastVsFullChains(t *testing.T, scheme string) {
 		if ftd, atd := fast.GetTd(hash, num), archive.GetTd(hash, num); ftd.Cmp(atd) != 0 {
 			t.Errorf("block #%d [%x]: td mismatch: fastdb %v, archivedb %v", num, hash, ftd, atd)
 		}
-
 		if antd, artd := ancient.GetTd(hash, num), archive.GetTd(hash, num); antd.Cmp(artd) != 0 {
 			t.Errorf("block #%d [%x]: td mismatch: ancientdb %v, archivedb %v", num, hash, antd, artd)
 		}
-
 		if fheader, aheader := fast.GetHeaderByHash(hash), archive.GetHeaderByHash(hash); fheader.Hash() != aheader.Hash() {
 			t.Errorf("block #%d [%x]: header mismatch: fastdb %v, archivedb %v", num, hash, fheader, aheader)
 		}
@@ -2297,7 +2292,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		mergeBlock = 0
 
 		// Set the terminal total difficulty in the config
-		gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
+		chain.Config().TerminalTotalDifficulty = big.NewInt(0)
 	}
 	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 2*state.TriesInMemory, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(nonce, common.HexToAddress("deadbeef"), big.NewInt(100), 21000, big.NewInt(int64(i+1)*params.GWei), nil), signer, key)
@@ -2334,7 +2329,7 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 		// Set the terminal total difficulty in the config
 		ttd := big.NewInt(int64(len(blocks)))
 		ttd.Mul(ttd, params.GenesisDifficulty)
-		gspec.Config.TerminalTotalDifficulty = ttd
+		chain.Config().TerminalTotalDifficulty = ttd
 		mergeBlock = len(blocks)
 	}
 
@@ -2917,7 +2912,7 @@ func testReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T, scheme strin
 }
 
 // Benchmarks large blocks with value transfers to non-existing accounts
-func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks int, recipientFn func(uint64) common.Address, dataFn func(uint64) []byte) {
+func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks int, recipientFn func(uint64) common.Address) {
 	var (
 		signer          = types.HomesteadSigner{}
 		testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -2991,10 +2986,7 @@ func BenchmarkBlockChain_1x1000ValueTransferToNonexisting(b *testing.B) {
 	recipientFn := func(nonce uint64) common.Address {
 		return common.BigToAddress(new(big.Int).SetUint64(1337 + nonce))
 	}
-	dataFn := func(nonce uint64) []byte {
-		return nil
-	}
-	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn)
 }
 
 func BenchmarkBlockChain_1x1000ValueTransferToExisting(b *testing.B) {
@@ -3009,10 +3001,7 @@ func BenchmarkBlockChain_1x1000ValueTransferToExisting(b *testing.B) {
 	recipientFn := func(nonce uint64) common.Address {
 		return common.BigToAddress(new(big.Int).SetUint64(1337))
 	}
-	dataFn := func(nonce uint64) []byte {
-		return nil
-	}
-	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn)
 }
 
 func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
@@ -3027,10 +3016,7 @@ func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
 	recipientFn := func(nonce uint64) common.Address {
 		return common.BigToAddress(new(big.Int).SetUint64(0xc0de))
 	}
-	dataFn := func(nonce uint64) []byte {
-		return nil
-	}
-	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn)
 }
 
 // Tests that importing a some old blocks, where all blocks are before the
@@ -4719,5 +4705,96 @@ func TestPragueRequests(t *testing.T) {
 	defer chain.Stop()
 	if n, err := chain.InsertChain(blocks); err != nil {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+}
+
+// TestEIP7702 deploys two delegation designations and calls them. It writes one
+// value to storage which is verified after.
+func TestEIP7702(t *testing.T) {
+	var (
+		config  = *params.MergedTestChainConfig
+		signer  = types.LatestSigner(&config)
+		engine  = beacon.NewFaker()
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
+		aa      = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		bb      = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+	)
+	gspec := &Genesis{
+		Config: &config,
+		Alloc: types.GenesisAlloc{
+			addr1: {Balance: funds},
+			addr2: {Balance: funds},
+			aa: { // The address 0xAAAA calls into addr2
+				Code:    program.New().Call(nil, addr2, 1, 0, 0, 0, 0).Bytes(),
+				Nonce:   0,
+				Balance: big.NewInt(0),
+			},
+			bb: { // The address 0xBBBB sstores 42 into slot 42.
+				Code:    program.New().Sstore(0x42, 0x42).Bytes(),
+				Nonce:   0,
+				Balance: big.NewInt(0),
+			},
+		},
+	}
+
+	// Sign authorization tuples.
+	// The way the auths are combined, it becomes
+	// 1. tx -> addr1 which is delegated to 0xaaaa
+	// 2. addr1:0xaaaa calls into addr2:0xbbbb
+	// 3. addr2:0xbbbb  writes to storage
+	auth1, _ := types.SignSetCode(key1, types.SetCodeAuthorization{
+		ChainID: *uint256.MustFromBig(gspec.Config.ChainID),
+		Address: aa,
+		Nonce:   1,
+	})
+	auth2, _ := types.SignSetCode(key2, types.SetCodeAuthorization{
+		Address: bb,
+		Nonce:   0,
+	})
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(aa)
+		txdata := &types.SetCodeTx{
+			ChainID:   uint256.MustFromBig(gspec.Config.ChainID),
+			Nonce:     0,
+			To:        addr1,
+			Gas:       500000,
+			GasFeeCap: uint256.MustFromBig(newGwei(5)),
+			GasTipCap: uint256.NewInt(2),
+			AuthList:  []types.SetCodeAuthorization{auth1, auth2},
+		}
+		tx := types.MustSignNewTx(key1, signer, txdata)
+		b.AddTx(tx)
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	// Verify delegation designations were deployed.
+	state, _ := chain.State()
+	code, want := state.GetCode(addr1), types.AddressToDelegation(auth1.Address)
+	if !bytes.Equal(code, want) {
+		t.Fatalf("addr1 code incorrect: got %s, want %s", common.Bytes2Hex(code), common.Bytes2Hex(want))
+	}
+	code, want = state.GetCode(addr2), types.AddressToDelegation(auth2.Address)
+	if !bytes.Equal(code, want) {
+		t.Fatalf("addr2 code incorrect: got %s, want %s", common.Bytes2Hex(code), common.Bytes2Hex(want))
+	}
+	// Verify delegation executed the correct code.
+	var (
+		fortyTwo = common.BytesToHash([]byte{0x42})
+		actual   = state.GetState(addr2, fortyTwo)
+	)
+	if actual.Cmp(fortyTwo) != 0 {
+		t.Fatalf("addr2 storage wrong: expected %d, got %d", fortyTwo, actual)
 	}
 }

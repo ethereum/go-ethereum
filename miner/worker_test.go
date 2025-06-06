@@ -111,7 +111,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	// []*types.Transaction{tx}
 	var i uint64
 	for i = 0; i < 5; i++ {
-		err = b.txPool.Add([]*types.Transaction{b.newRandomTxWithNonce(true, i)}, true, false)[0]
+		err = b.txPool.Add([]*types.Transaction{b.newRandomTxWithNonce(true, i)}, false)[0]
 		if err != nil {
 			t.Fatal("while adding a local transaction", err)
 		}
@@ -128,7 +128,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	}
 
 	for i = 5; i < 10; i++ {
-		err = b.txPool.Add([]*types.Transaction{b.newRandomTxWithNonce(false, i)}, true, false)[0]
+		err = b.txPool.Add([]*types.Transaction{b.newRandomTxWithNonce(false, i)}, false)[0]
 		if err != nil {
 			t.Fatal("while adding a remote transaction", err)
 		}
@@ -319,7 +319,7 @@ func (b *testWorkerBackend) newStorageContractCallTx(to common.Address, nonce ui
 
 func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, noempty bool, delay uint, opcodeDelay uint) (*worker, *testWorkerBackend, func()) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db)
-	backend.txPool.Add(pendingTxs, true, false)
+	backend.txPool.Add(pendingTxs, false)
 	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	if delay != 0 || opcodeDelay != 0 {
 		w.setInterruptCtx(vm.InterruptCtxDelayKey, delay)
@@ -360,8 +360,8 @@ func TestGenerateAndImportBlock(t *testing.T) {
 	w.start()
 
 	for i := 0; i < 5; i++ {
-		b.txPool.Add([]*types.Transaction{b.newRandomTx(true)}, true, false)
-		b.txPool.Add([]*types.Transaction{b.newRandomTx(false)}, true, false)
+		b.txPool.Add([]*types.Transaction{b.newRandomTx(true)}, false)
+		b.txPool.Add([]*types.Transaction{b.newRandomTx(false)}, false)
 
 		select {
 		case ev := <-sub.Chan():
@@ -751,7 +751,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 
 	// nonce 0 tx
 	tx, addr := b.newStorageCreateContractTx()
-	if err := b.txPool.Add([]*types.Transaction{tx}, false, false)[0]; err != nil {
+	if err := b.txPool.Add([]*types.Transaction{tx}, false)[0]; err != nil {
 		t.Fatal(err)
 	}
 
@@ -768,7 +768,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 	wrapped := make([]*types.Transaction, len(txs))
 	copy(wrapped, txs)
 
-	b.TxPool().Add(wrapped, false, false)
+	b.TxPool().Add(wrapped, false)
 
 	// Start mining!
 	w.start()
@@ -820,7 +820,7 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 		wrapped[i] = tx
 	}
 
-	b.TxPool().Add(wrapped, false, false)
+	b.TxPool().Add(wrapped, false)
 
 	// Start mining!
 	w.start()
@@ -880,7 +880,7 @@ func TestCommitInterruptExperimentBor_NewTxFlow(t *testing.T) {
 				w.stop()
 
 				// Add the first transaction to be mined normally via `txsCh`
-				b.TxPool().Add([]*types.Transaction{tx1}, false, false)
+				b.TxPool().Add([]*types.Transaction{tx1}, false)
 
 				// Set it to syncing mode so that it doesn't mine via the `commitWork` flow
 				w.syncing.Store(true)
@@ -898,7 +898,7 @@ func TestCommitInterruptExperimentBor_NewTxFlow(t *testing.T) {
 				w.setInterruptCtx(vm.InterruptCtxOpcodeDelayKey, uint(500))
 
 				// Send the second transaction
-				b.TxPool().Add([]*types.Transaction{tx2}, false, false)
+				b.TxPool().Add([]*types.Transaction{tx2}, false)
 
 				// Reset the delay again. By this time, we're sure that it has timed out.
 				delay = time.Until(time.Unix(int64(w.current.header.Time), 0))
@@ -911,7 +911,7 @@ func TestCommitInterruptExperimentBor_NewTxFlow(t *testing.T) {
 				w.setInterruptCtx(vm.InterruptCtxOpcodeDelayKey, uint(0))
 
 				// Send the third transaction
-				b.TxPool().Add([]*types.Transaction{tx3}, false, false)
+				b.TxPool().Add([]*types.Transaction{tx3}, false)
 			}
 		}
 	}()
@@ -974,12 +974,12 @@ func BenchmarkBorMining(b *testing.B) {
 
 	// a bit risky
 	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
-		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(true)}, true, false)[0]
+		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(true)}, false)[0]
 		if err != nil {
 			b.Fatal("while adding a local transaction", err)
 		}
 
-		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(false)}, false, false)[0]
+		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(false)}, false)[0]
 		if err != nil {
 			b.Fatal("while adding a remote transaction", err)
 		}
@@ -1080,12 +1080,12 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 
 	// a bit risky
 	for i := 0; i < 2*totalBlocks*txInBlock; i++ {
-		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(true)}, true, false)[0]
+		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(true)}, false)[0]
 		if err != nil {
 			b.Fatal("while adding a local transaction", err)
 		}
 
-		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(false)}, false, false)[0]
+		err = back.txPool.Add([]*types.Transaction{back.newRandomTx(false)}, false)[0]
 		if err != nil {
 			b.Fatal("while adding a remote transaction", err)
 		}

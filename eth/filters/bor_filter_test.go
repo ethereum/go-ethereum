@@ -33,7 +33,7 @@ func newTestReceipt(contractAddr common.Address, topicAddress common.Hash) *type
 		},
 	}
 
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.Bloom = types.CreateBloom(receipt)
 
 	return receipt
 }

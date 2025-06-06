@@ -72,6 +72,17 @@ func New(ethone consensus.Engine) *Beacon {
 	return &Beacon{ethone: ethone}
 }
 
+// isPostMerge reports whether the given block number is assumed to be post-merge.
+// Here we check the MergeNetsplitBlock to allow configuring networks with a PoW or
+// PoA chain for unit testing purposes.
+// nolint : unused
+func isPostMerge(config *params.ChainConfig, blockNum uint64, timestamp uint64) bool {
+	mergedAtGenesis := config.TerminalTotalDifficulty != nil && config.TerminalTotalDifficulty.Sign() == 0
+	return mergedAtGenesis ||
+		config.MergeNetsplitBlock != nil && blockNum >= config.MergeNetsplitBlock.Uint64() ||
+		config.ShanghaiBlock != nil && blockNum >= config.ShanghaiBlock.Uint64()
+}
+
 // Author implements consensus.Engine, returning the verified author of the block.
 func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 	if !beacon.IsPoSHeader(header) {
@@ -284,7 +295,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		if header.ParentBeaconRoot == nil {
 			return errors.New("header is missing beaconRoot")
 		}
-		if err := eip4844.VerifyEIP4844Header(parent, header); err != nil {
+		if err := eip4844.VerifyEIP4844Header(chain.Config(), parent, header); err != nil {
 			return err
 		}
 	}

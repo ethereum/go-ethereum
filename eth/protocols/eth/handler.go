@@ -87,6 +87,10 @@ type Backend interface {
 type TxPool interface {
 	// Get retrieves the transaction from the local txpool with the given hash.
 	Get(hash common.Hash) *types.Transaction
+
+	// GetRLP retrieves the RLP-encoded transaction from the local txpool with
+	// the given hash.
+	GetRLP(hash common.Hash) []byte
 }
 
 // MakeProtocols constructs the P2P protocol definitions for `eth`.
@@ -208,7 +212,7 @@ func handleMessage(backend Backend, peer *Peer) error {
 		handlers = eth68
 	}
 	// Track the amount of time it takes to serve the request and run the handler
-	if metrics.Enabled {
+	if metrics.Enabled() {
 		h := fmt.Sprintf("%s/%s/%d/%#02x", p2p.HandleHistName, ProtocolName, peer.Version(), msg.Code)
 		defer func(start time.Time) {
 			sampler := func() metrics.Sample {

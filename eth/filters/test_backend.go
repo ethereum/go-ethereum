@@ -2,12 +2,10 @@ package filters
 
 import (
 	context "context"
-	"crypto/rand"
-	"math/big"
 
 	common "github.com/ethereum/go-ethereum/common"
 	core "github.com/ethereum/go-ethereum/core"
-	bloombits "github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	types "github.com/ethereum/go-ethereum/core/types"
@@ -17,6 +15,7 @@ import (
 	rpc "github.com/ethereum/go-ethereum/rpc"
 )
 
+// nolint : unused
 type TestBackend struct {
 	DB              ethdb.Database
 	sections        uint64
@@ -29,9 +28,12 @@ type TestBackend struct {
 	stateSyncFeed event.Feed
 }
 
+// bloombits logic was removed - https://github.com/ethereum/go-ethereum/pull/31081
+/*
 func (b *TestBackend) BloomStatus() (uint64, uint64) {
 	return params.BloomBitsBlocks, b.sections
 }
+*/
 
 func (b *TestBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	number := rawdb.ReadHeaderNumber(b.DB, hash)
@@ -141,6 +143,8 @@ func (b *TestBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 	return b.chainFeed.Subscribe(ch)
 }
 
+// bloombits logic was removed - https://github.com/ethereum/go-ethereum/pull/31081
+/*
 func (b *TestBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	requests := make(chan chan *bloombits.Retrieval)
 
@@ -173,6 +177,7 @@ func (b *TestBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 		}
 	}()
 }
+*/
 
 func (b *TestBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
 	return b.stateSyncFeed.Subscribe(ch)
@@ -188,4 +193,8 @@ func (b *TestBackend) GetBody(context.Context, common.Hash, rpc.BlockNumber) (*t
 
 func (b *TestBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	panic("not implemented")
+}
+
+func (b *TestBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+	panic("implement me")
 }

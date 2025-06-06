@@ -26,6 +26,7 @@ linters:
     - reassign
     - mirror
     - tenv
+    - usetesting
     ### linters we tried and will not be using:
     ###
     # - structcheck # lots of false positives

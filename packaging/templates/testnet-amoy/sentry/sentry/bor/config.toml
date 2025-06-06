@@ -62,7 +62,7 @@ syncmode = "full"
     # pricebump = 10
 
 [miner]
-    gaslimit = 30000000
+    gaslimit = 45000000
     # gasprice = "25000000000"
     # mine = false
     # etherbase = ""

@@ -53,7 +53,7 @@ type chainFreezer struct {
 // NewChainFreezer is a small utility method around NewFreezer that sets the
 // default parameters for the chain storage.
 func NewChainFreezer(datadir string, namespace string, readonly bool, offset uint64) (*Freezer, error) {
-	return NewFreezer(datadir, namespace, readonly, offset, freezerTableSize, chainFreezerNoSnappy)
+	return NewFreezer(datadir, namespace, readonly, offset, freezerTableSize, chainFreezerTableConfigs)
 }
 
 // newChainFreezer initializes the freezer for ancient chain segment.
@@ -69,9 +69,9 @@ func newChainFreezer(datadir string, namespace string, readonly bool, offset uin
 	)
 
 	if datadir == "" {
-		freezer = NewMemoryFreezer(readonly, chainFreezerNoSnappy)
+		freezer = NewMemoryFreezer(readonly, chainFreezerTableConfigs)
 	} else {
-		freezer, err = NewFreezer(datadir, namespace, readonly, offset, freezerTableSize, chainFreezerNoSnappy)
+		freezer, err = NewFreezer(datadir, namespace, readonly, offset, freezerTableSize, chainFreezerTableConfigs)
 	}
 
 	if err != nil {
@@ -348,7 +348,6 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 			if len(receipts) == 0 {
 				return fmt.Errorf("block receipts missing, can't freeze block %d", number)
 			}
-
 			td := ReadTdRLP(nfdb, hash, number)
 			if len(td) == 0 {
 				return fmt.Errorf("total difficulty missing, can't freeze block %d", number)
@@ -371,16 +370,15 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 				return fmt.Errorf("can't write receipts to Freezer: %v", err)
 			}
 
-			if err := op.AppendRaw(ChainFreezerDifficultyTable, number, td); err != nil {
-				return fmt.Errorf("can't write td to Freezer: %v", err)
-			}
-
 			// bor block receipt
 			borBlockReceipt := ReadBorReceiptRLP(nfdb, hash, number)
 			if err := op.AppendRaw(freezerBorReceiptTable, number, borBlockReceipt); err != nil {
 				return fmt.Errorf("can't write bor-receipt to freezer: %v", err)
 			}
 
+			if err := op.AppendRaw(ChainFreezerDifficultyTable, number, td); err != nil {
+				return fmt.Errorf("can't write td to Freezer: %v", err)
+			}
 			hashes = append(hashes, hash)
 		}
 

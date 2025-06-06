@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -21,7 +21,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
@@ -66,13 +68,13 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 		// is not found.
 		switch loc.loc {
 		case locCleanCache:
-			cleanFalseMeter.Mark(1)
+			nodeCleanFalseMeter.Mark(1)
 		case locDirtyCache:
-			dirtyFalseMeter.Mark(1)
+			nodeDirtyFalseMeter.Mark(1)
 		case locDiffLayer:
-			diffFalseMeter.Mark(1)
+			nodeDiffFalseMeter.Mark(1)
 		case locDiskLayer:
-			diskFalseMeter.Mark(1)
+			nodeDiskFalseMeter.Mark(1)
 		}
 		blobHex := "nil"
 		if len(blob) > 0 {
@@ -84,6 +86,50 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 	return blob, nil
 }
 
+// AccountRLP directly retrieves the account associated with a particular hash.
+// An error will be returned if the read operation exits abnormally. Specifically,
+// if the layer is already stale.
+//
+// Note:
+// - the returned account data is not a copy, please don't modify it
+// - no error will be returned if the requested account is not found in database
+func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
+	return r.layer.account(hash, 0)
+}
+
+// Account directly retrieves the account associated with a particular hash in
+// the slim data format. An error will be returned if the read operation exits
+// abnormally. Specifically, if the layer is already stale.
+//
+// Note:
+// - the returned account object is safe to modify
+// - no error will be returned if the requested account is not found in database
+func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
+	blob, err := r.layer.account(hash, 0)
+	if err != nil {
+		return nil, err
+	}
+	if len(blob) == 0 {
+		return nil, nil
+	}
+	account := new(types.SlimAccount)
+	if err := rlp.DecodeBytes(blob, account); err != nil {
+		panic(err)
+	}
+	return account, nil
+}
+
+// Storage directly retrieves the storage data associated with a particular hash,
+// within a particular account. An error will be returned if the read operation
+// exits abnormally. Specifically, if the layer is already stale.
+//
+// Note:
+// - the returned storage data is not a copy, please don't modify it
+// - no error will be returned if the requested slot is not found in database
+func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	return r.layer.storage(accountHash, storageHash, 0)
+}
+
 // NodeReader retrieves a layer belonging to the given state root.
 func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	layer := db.tree.get(root)
@@ -91,4 +137,14 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 		return nil, fmt.Errorf("state %#x is not available", root)
 	}
 	return &reader{layer: layer, noHashCheck: db.isVerkle}, nil
+}
+
+// StateReader returns a reader that allows access to the state data associated
+// with the specified state.
+func (db *Database) StateReader(root common.Hash) (database.StateReader, error) {
+	layer := db.tree.get(root)
+	if layer == nil {
+		return nil, fmt.Errorf("state %#x is not available", root)
+	}
+	return &reader{layer: layer}, nil
 }

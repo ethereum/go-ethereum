@@ -66,7 +66,7 @@ syncmode = "full"
 
 [miner]
     mine = true
-    gaslimit = 30000000
+    gaslimit = 45000000
     # gasprice = "25000000000"
     # etherbase = ""
     # extradata = ""
