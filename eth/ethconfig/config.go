@@ -127,6 +127,7 @@ type Config struct {
 	TrieTimeout    time.Duration
 	SnapshotCache  int
 	Preimages      bool
+	TrieJournal    string
 
 	// This is the number of blocks for which logs will be cached in the filter system.
 	FilterLogCacheSize int

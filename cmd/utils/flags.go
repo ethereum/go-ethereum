@@ -1680,6 +1680,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheSnapshotFlag.Name) {
 		cfg.SnapshotCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheSnapshotFlag.Name) / 100
 	}
+	if journal := ctx.String(CacheTrieJournalFlag.Name); journal != "" {
+		cfg.TrieJournal = stack.ResolvePath(journal)
+	}
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
@@ -2202,6 +2205,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if options.ArchiveMode && !options.Preimages {
 		options.Preimages = true
 		log.Info("Enabling recording of key preimages since archive mode is used")
+	}
+	if journal := ctx.String(CacheTrieJournalFlag.Name); journal != "" {
+		options.TrieJournal = stack.ResolvePath(journal)
 	}
 	if !ctx.Bool(SnapshotFlag.Name) {
 		options.SnapshotLimit = 0 // Disabled

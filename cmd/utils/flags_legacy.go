@@ -63,6 +63,7 @@ var (
 	CacheTrieJournalFlag = &cli.StringFlag{
 		Name:     "cache.trie.journal",
 		Usage:    "Disk journal directory for trie cache to survive node restarts",
+		Value:    "trie-disklayer.rlp",
 		Category: flags.DeprecatedCategory,
 	}
 	CacheTrieRejournalFlag = &cli.DurationFlag{
