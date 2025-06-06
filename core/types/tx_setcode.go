@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -64,6 +65,26 @@ type SetCodeTx struct {
 	V *uint256.Int
 	R *uint256.Int
 	S *uint256.Int
+
+	// caches
+	auths atomic.Pointer[authCache]
+}
+
+type authCache []*common.Address
+
+// deriveAuthorities returns a list of recovered authorization signers. The
+// length is always equal to the number of authorizations. Any authorities that
+// fail to recover are set as nil in the list.
+func (tx *SetCodeTx) deriveAuthorities() authCache {
+	auths := make([]*common.Address, 0, len(tx.AuthList))
+	for _, auth := range tx.AuthList {
+		if addr, err := auth.Authority(); err == nil {
+			auths = append(auths, &addr)
+		} else {
+			auths = append(auths, nil)
+		}
+	}
+	return auths
 }
 
 //go:generate go run github.com/fjl/gencodec -type SetCodeAuthorization -field-override authorizationMarshaling -out gen_authorization.go
