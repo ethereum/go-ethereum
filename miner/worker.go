@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -59,7 +60,8 @@ type environment struct {
 	sidecars []*types.BlobTxSidecar
 	blobs    int
 
-	witness *stateless.Witness
+	witness     *stateless.Witness
+	chainConfig *params.ChainConfig
 }
 
 const (
@@ -253,12 +255,13 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
-		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
-		state:    state,
-		coinbase: coinbase,
-		header:   header,
-		witness:  state.Witness(),
-		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		signer:      types.MakeSigner(miner.chainConfig, header.Number, header.Time),
+		state:       state,
+		coinbase:    coinbase,
+		header:      header,
+		witness:     state.Witness(),
+		evm:         vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		chainConfig: miner.chainConfig,
 	}, nil
 }
 
@@ -390,6 +393,25 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			continue
 		}
 
+		// Make sure all transactions after osaka have cell proofs
+		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
+			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
+				if sidecar.Version == 0 {
+					log.Warn("Encountered Version 0 transaction post-Osaka, recompute proofs", "hash", ltx.Hash)
+					sidecar.Proofs = make([]kzg4844.Proof, 0)
+					for _, blob := range sidecar.Blobs {
+						cellProofs, err := kzg4844.ComputeCells(&blob)
+						if err != nil {
+							panic(err)
+						}
+						sidecar.Proofs = append(sidecar.Proofs, cellProofs...)
+					}
+					//txs.Pop()
+					//continue
+				}
+			}
+		}
+
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance in the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
@@ -425,6 +447,23 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 	return nil
 }
 
+// fiterTxsAboveGas removes any transactions from the set which exceed a gas threshold.
+// If a transaction is removed, all higher-nonce transactions from the same account
+// will also be filtered out.
+func filterTxsAboveGas(txs map[common.Address][]*txpool.LazyTransaction, maxGas uint64) {
+	for sender, senderTxs := range txs {
+		for i, tx := range senderTxs {
+			if tx.Gas > maxGas {
+				if i == 0 {
+					delete(txs, sender)
+				} else {
+					txs[sender] = txs[sender][:i]
+				}
+			}
+		}
+	}
+}
+
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
@@ -453,6 +492,16 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	// Split the pending transactions into locals and remotes.
 	prioPlainTxs, normalPlainTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
 	prioBlobTxs, normalBlobTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingBlobTxs
+
+	// if we have just entered the Osaka fork, it is possible due to the async
+	// nature of txpool resets that the state of the pool has not finished resetting
+	// to a post-fork block.  If so, it may not have removed txs that exceed the
+	// eip-7825 transaction maximum gas limit.
+	poolHead := miner.txpool.Head()
+	if env.chainConfig.IsOsaka(env.header.Number, env.header.Time) && !env.chainConfig.IsOsaka(poolHead.Number, poolHead.Time) {
+		filterTxsAboveGas(prioPlainTxs, params.MaxTxGas)
+		filterTxsAboveGas(prioBlobTxs, params.MaxTxGas)
+	}
 
 	for _, account := range prio {
 		if txs := normalPlainTxs[account]; len(txs) > 0 {

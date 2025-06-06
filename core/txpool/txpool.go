@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -76,6 +75,9 @@ type TxPool struct {
 	term chan struct{}           // Termination channel to detect a closed pool
 
 	sync chan chan error // Testing / simulator channel to block until internal reset is done
+
+	headLock sync.RWMutex
+	head     *types.Header // this reflects the state from the latest pool reset
 }
 
 // New creates a new transaction pool to gather, sort and filter inbound
@@ -104,6 +106,7 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 		quit:     make(chan chan error),
 		term:     make(chan struct{}),
 		sync:     make(chan chan error),
+		head:     head,
 	}
 	reserver := NewReservationTracker()
 	for i, subpool := range subpools {
@@ -203,6 +206,9 @@ func (p *TxPool) loop(head *types.Header) {
 					}
 					select {
 					case resetDone <- newHead:
+						p.headLock.Lock()
+						p.head = newHead
+						p.headLock.Unlock()
 					case <-p.term:
 					}
 				}(oldHead, newHead)
@@ -255,6 +261,14 @@ func (p *TxPool) loop(head *types.Header) {
 	}
 	// Notify the closer of termination (no error possible for now)
 	errc <- nil
+}
+
+// Head returns the header which corresponds to the most recent successful pool
+// reset.
+func (p *TxPool) Head() *types.Header {
+	p.headLock.RLock()
+	defer p.headLock.RUnlock()
+	return types.CopyHeader(p.head)
 }
 
 // SetGasTip updates the minimum gas tip required by the transaction pool for a
@@ -311,17 +325,31 @@ func (p *TxPool) GetMetadata(hash common.Hash) *TxMetadata {
 // GetBlobs returns a number of blobs are proofs for the given versioned hashes.
 // This is a utility method for the engine API, enabling consensus clients to
 // retrieve blobs from the pools directly instead of the network.
-func (p *TxPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
+func (p *TxPool) GetBlobs(vhashes []common.Hash) []*types.BlobTxSidecar {
 	for _, subpool := range p.subpools {
 		// It's an ugly to assume that only one pool will be capable of returning
-		// anything meaningful for this call, but anythingh else requires merging
+		// anything meaningful for this call, but anything else requires merging
 		// partial responses and that's too annoying to do until we get a second
 		// blobpool (probably never).
-		if blobs, proofs := subpool.GetBlobs(vhashes); blobs != nil {
-			return blobs, proofs
+		if sidecars := subpool.GetBlobs(vhashes); sidecars != nil {
+			return sidecars
 		}
 	}
-	return nil, nil
+	return nil
+}
+
+// AvailableBlobs will return the number of vhashes that are available in the same subpool.
+func (p *TxPool) AvailableBlobs(vhashes []common.Hash) int {
+	for _, subpool := range p.subpools {
+		// It's an ugly to assume that only one pool will be capable of returning
+		// anything meaningful for this call, but anything else requires merging
+		// partial responses and that's too annoying to do until we get a second
+		// blobpool (probably never).
+		if count := subpool.AvailableBlobs(vhashes); count != 0 {
+			return count
+		}
+	}
+	return 0
 }
 
 // Add enqueues a batch of transactions into the pool if they are valid. Due
