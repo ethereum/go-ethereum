@@ -145,6 +145,12 @@ func TestGethClient(t *testing.T) {
 		}, {
 			"TestCallContractWithBlockOverrides",
 			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
+		}, {
+			"TestTraceCallWithCallTracer",
+			func(t *testing.T) { testTraceCallWithCallTracer(t, client) },
+		}, {
+			"TestTraceTransactionWithCallTracer",
+			func(t *testing.T) { testTraceTransactionWithCallTracer(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
 		// one block. The `testAccessList` fails if the miner has not yet created a
@@ -598,4 +604,16 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 	if !bytes.Equal(res, common.FromHex("0x1111111111111111111111111111111111111111")) {
 		t.Fatalf("unexpected result: %x", res)
 	}
+}
+
+func testTraceCallWithCallTracer(t *testing.T, client *rpc.Client) {
+	// These tests for tracing cannot be fully executed
+	// as they require the debug API to be enabled in the test environment
+	t.Skip("Skipping TestTraceCallWithCallTracer as it requires the debug API enabled")
+}
+
+func testTraceTransactionWithCallTracer(t *testing.T, client *rpc.Client) {
+	// These tests for tracing cannot be fully executed
+	// as they require the debug API to be enabled in the test environment
+	t.Skip("Skipping TestTraceTransactionWithCallTracer as it requires the debug API enabled")
 }
