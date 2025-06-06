@@ -171,6 +171,9 @@ func validateBlobTx(tx *types.Transaction, head *types.Header, opts *ValidationO
 	if len(sidecar.Blobs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blobs compared to %d blob hashes", len(sidecar.Blobs), len(hashes))
 	}
+	if err := sidecar.ValidateBlobCommitmentHashes(hashes); err != nil {
+		return err
+	}
 	// Fork-specific sidecar checks, including proof verification.
 	if opts.Config.IsOsaka(head.Number, head.Time) {
 		return validateBlobSidecarOsaka(sidecar, hashes)
@@ -184,9 +187,6 @@ func validateBlobSidecarLegacy(sidecar *types.BlobTxSidecar, hashes []common.Has
 	}
 	if len(sidecar.Proofs) != len(hashes) {
 		return fmt.Errorf("invalid number of %d blob proofs expected %d", len(sidecar.Proofs), len(hashes))
-	}
-	if err := sidecar.ValidateBlobCommitmentHashes(hashes); err != nil {
-		return err
 	}
 	for i := range sidecar.Blobs {
 		if err := kzg4844.VerifyBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i], sidecar.Proofs[i]); err != nil {
@@ -203,13 +203,7 @@ func validateBlobSidecarOsaka(sidecar *types.BlobTxSidecar, hashes []common.Hash
 	if len(sidecar.Proofs) != len(hashes)*kzg4844.CellProofsPerBlob {
 		return fmt.Errorf("invalid number of %d blob proofs expected %d", len(sidecar.Proofs), len(hashes)*kzg4844.CellProofsPerBlob)
 	}
-	if err := sidecar.ValidateBlobCommitmentHashes(hashes); err != nil {
-		return err
-	}
-	if err := kzg4844.VerifyCellProofs(sidecar.Blobs, sidecar.Commitments, sidecar.Proofs); err != nil {
-		return err
-	}
-	return nil
+	return kzg4844.VerifyCellProofs(sidecar.Blobs, sidecar.Commitments, sidecar.Proofs)
 }
 
 // ValidationOptionsWithState define certain differences between stateful transaction
