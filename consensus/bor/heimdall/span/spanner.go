@@ -336,7 +336,7 @@ func (c *ChainSpanner) CommitSpan(ctx context.Context, heimdallSpan HeimdallSpan
 	msg := statefull.GetSystemMessage(c.validatorContractAddress, data)
 
 	// apply message
-	_, err = statefull.ApplyMessage(ctx, msg, state, header, c.chainConfig, chainContext, 0, tracer)
+	_, err = statefull.ApplyMessage(ctx, msg, state, header, c.chainConfig, chainContext, tracer)
 
 	return err
 }
