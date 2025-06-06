@@ -335,6 +335,14 @@ func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
 	}
 }
 
+// DeleteTxIndexTail deletes the number of oldest indexed block
+// from database.
+func DeleteTxIndexTail(db ethdb.KeyValueWriter) {
+	if err := db.Delete(txIndexTailKey); err != nil {
+		log.Crit("Failed to delete the transaction index tail", "err", err)
+	}
+}
+
 // ReadHeaderRange returns the rlp-encoded headers, starting at 'number', and going
 // backwards towards genesis. This method assumes that the caller already has
 // placed a cap on count, to prevent DoS issues.
@@ -596,8 +604,7 @@ func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 // ReadTdRLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
 func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
-
-	_ = db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		// Check if the data is in ancients
 		if isCanon(reader, number, hash) {
 			data, _ = reader.Ancient(ChainFreezerDifficultyTable, number)
@@ -605,10 +612,8 @@ func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 		}
 		// If not, try reading from leveldb
 		data, _ = db.Get(headerTDKey(number, hash))
-
 		return nil
 	})
-
 	return data
 }
 
@@ -618,13 +623,11 @@ func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) *big.Int {
 	if len(data) == 0 {
 		return nil
 	}
-
 	td := new(big.Int)
 	if err := rlp.DecodeBytes(data, td); err != nil {
 		log.Error("Invalid block total difficulty RLP", "hash", hash, "err", err)
 		return nil
 	}
-
 	return td
 }
 
@@ -634,7 +637,6 @@ func WriteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64, td *big.I
 	if err != nil {
 		log.Crit("Failed to RLP encode block total difficulty", "err", err)
 	}
-
 	if err := db.Put(headerTDKey(number, hash), data); err != nil {
 		log.Crit("Failed to store block total difficulty", "err", err)
 	}
@@ -869,10 +871,10 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 			}
 
 			header := block.Header()
+
 			if i > 0 {
 				tdSum.Add(tdSum, header.Difficulty)
 			}
-
 			if err := writeAncientBlock(op, block, header, stReceipts, borStReceipts, tdSum); err != nil {
 				return err
 			}
@@ -900,14 +902,13 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 		return fmt.Errorf("can't append block %d receipts: %v", num, err)
 	}
 
-	if err := op.Append(ChainFreezerDifficultyTable, num, td); err != nil {
-		return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
-	}
-
 	if err := op.Append(freezerBorReceiptTable, num, borReceipts); err != nil {
 		return fmt.Errorf("can't append block %d borReceipts: %v", num, err)
 	}
 
+	if err := op.Append(ChainFreezerDifficultyTable, num, td); err != nil {
+		return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
+	}
 	return nil
 }
 

@@ -17,8 +17,7 @@
 package types
 
 import (
-	"encoding/binary"
-	"reflect"
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -71,23 +70,26 @@ func FuzzUnpackIntoDeposit(f *testing.F) {
 		copy(sig[:], s)
 		copy(index[:], i)
 
-		want := Deposit{
-			PublicKey:             pubkey,
-			WithdrawalCredentials: wxCred,
-			Amount:                binary.LittleEndian.Uint64(amount[:]),
-			Signature:             sig,
-			Index:                 binary.LittleEndian.Uint64(index[:]),
-		}
-		out, err := depositABI.Pack("DepositEvent", want.PublicKey[:], want.WithdrawalCredentials[:], amount[:], want.Signature[:], index[:])
+		var enc []byte
+		enc = append(enc, pubkey[:]...)
+		enc = append(enc, wxCred[:]...)
+		enc = append(enc, amount[:]...)
+		enc = append(enc, sig[:]...)
+		enc = append(enc, index[:]...)
+
+		out, err := depositABI.Pack("DepositEvent", pubkey[:], wxCred[:], amount[:], sig[:], index[:])
 		if err != nil {
 			t.Fatalf("error packing deposit: %v", err)
 		}
-		got, err := UnpackIntoDeposit(out[4:])
+		got, err := DepositLogToRequest(out[4:])
 		if err != nil {
 			t.Errorf("error unpacking deposit: %v", err)
 		}
-		if !reflect.DeepEqual(want, *got) {
-			t.Errorf("roundtrip failed: want %v, got %v", want, got)
+		if len(got) != depositRequestSize {
+			t.Errorf("wrong output size: %d, want %d", len(got), depositRequestSize)
+		}
+		if !bytes.Equal(enc, got) {
+			t.Errorf("roundtrip failed: want %x, got %x", enc, got)
 		}
 	})
 }

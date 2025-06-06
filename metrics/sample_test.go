@@ -3,7 +3,6 @@ package metrics
 import (
 	"math"
 	"math/rand"
-	"runtime"
 	"testing"
 	"time"
 )
@@ -28,6 +27,7 @@ func BenchmarkCompute1000(b *testing.B) {
 		SampleVariance(mean, s)
 	}
 }
+
 func BenchmarkCompute1000000(b *testing.B) {
 	s := make([]int64, 1000000)
 	var sum int64
@@ -40,30 +40,6 @@ func BenchmarkCompute1000000(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		SampleVariance(mean, s)
-	}
-}
-func BenchmarkCopy1000(b *testing.B) {
-	s := make([]int64, 1000)
-	for i := 0; i < len(s); i++ {
-		s[i] = int64(i)
-	}
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		sCopy := make([]int64, len(s))
-		copy(sCopy, s)
-	}
-}
-func BenchmarkCopy1000000(b *testing.B) {
-	s := make([]int64, 1000000)
-	for i := 0; i < len(s); i++ {
-		s[i] = int64(i)
-	}
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		sCopy := make([]int64, len(s))
-		copy(sCopy, s)
 	}
 }
 
@@ -112,7 +88,7 @@ func TestExpDecaySample(t *testing.T) {
 		if have, want := snap.Size(), min(tc.updates, tc.reservoirSize); have != want {
 			t.Errorf("unexpected size: have %d want %d", have, want)
 		}
-		values := snap.(*sampleSnapshot).values
+		values := snap.values
 		if have, want := len(values), min(tc.updates, tc.reservoirSize); have != want {
 			t.Errorf("unexpected values length: have %d want %d", have, want)
 		}
@@ -138,8 +114,7 @@ func TestExpDecaySampleNanosecondRegression(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		sw.Update(20)
 	}
-	s := sw.Snapshot()
-	v := s.(*sampleSnapshot).values
+	v := sw.Snapshot().values
 	avg := float64(0)
 
 	for i := 0; i < len(v); i++ {
@@ -200,7 +175,7 @@ func TestUniformSample(t *testing.T) {
 	if size := s.Size(); size != 100 {
 		t.Errorf("s.Size(): 100 != %v\n", size)
 	}
-	values := s.(*sampleSnapshot).values
+	values := s.values
 
 	if l := len(values); l != 100 {
 		t.Errorf("len(s.Values()): 100 != %v\n", l)
@@ -219,8 +194,7 @@ func TestUniformSampleIncludesTail(t *testing.T) {
 	for i := 0; i < max; i++ {
 		sw.Update(int64(i))
 	}
-	s := sw.Snapshot()
-	v := s.(*sampleSnapshot).values
+	v := sw.Snapshot().values
 	sum := 0
 	exp := (max - 1) * max / 2
 
@@ -253,23 +227,12 @@ func TestUniformSampleStatistics(t *testing.T) {
 }
 
 func benchmarkSample(b *testing.B, s Sample) {
-	var memStats runtime.MemStats
-
-	runtime.ReadMemStats(&memStats)
-	pauseTotalNs := memStats.PauseTotalNs
-
-	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
 		s.Update(1)
 	}
-	b.StopTimer()
-	runtime.GC()
-	runtime.ReadMemStats(&memStats)
-	b.Logf("GC cost: %d ns/op", int(memStats.PauseTotalNs-pauseTotalNs)/b.N)
 }
 
-func testExpDecaySampleStatistics(t *testing.T, s SampleSnapshot) {
+func testExpDecaySampleStatistics(t *testing.T, s *sampleSnapshot) {
 	if sum := s.Sum(); sum != 496598 {
 		t.Errorf("s.Sum(): 496598 != %v\n", sum)
 	}
@@ -307,7 +270,7 @@ func testExpDecaySampleStatistics(t *testing.T, s SampleSnapshot) {
 	}
 }
 
-func testUniformSampleStatistics(t *testing.T, s SampleSnapshot) {
+func testUniformSampleStatistics(t *testing.T, s *sampleSnapshot) {
 	if count := s.Count(); count != 10000 {
 		t.Errorf("s.Count(): 10000 != %v\n", count)
 	}

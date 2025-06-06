@@ -76,34 +76,32 @@ type CommitteeChain struct {
 	unixNano    func() int64         // system clock (simulated clock in tests)
 	sigVerifier committeeSigVerifier // BLS sig verifier (dummy verifier in tests)
 
-	config             *types.ChainConfig
-	signerThreshold    int
+	config             *params.ChainConfig
 	minimumUpdateScore types.UpdateScore
 	enforceTime        bool // enforceTime specifies whether the age of a signed header should be checked
 }
 
 // NewCommitteeChain creates a new CommitteeChain.
-func NewCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool) *CommitteeChain {
+func NewCommitteeChain(db ethdb.KeyValueStore, config *params.ChainConfig, signerThreshold int, enforceTime bool) *CommitteeChain {
 	return newCommitteeChain(db, config, signerThreshold, enforceTime, blsVerifier{}, &mclock.System{}, func() int64 { return time.Now().UnixNano() })
 }
 
 // NewTestCommitteeChain creates a new CommitteeChain for testing.
-func NewTestCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, clock *mclock.Simulated) *CommitteeChain {
+func NewTestCommitteeChain(db ethdb.KeyValueStore, config *params.ChainConfig, signerThreshold int, enforceTime bool, clock *mclock.Simulated) *CommitteeChain {
 	return newCommitteeChain(db, config, signerThreshold, enforceTime, dummyVerifier{}, clock, func() int64 { return int64(clock.Now()) })
 }
 
 // newCommitteeChain creates a new CommitteeChain with the option of replacing the
 // clock source and signature verification for testing purposes.
-func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
+func newCommitteeChain(db ethdb.KeyValueStore, config *params.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
 	s := &CommitteeChain{
-		committeeCache:  lru.NewCache[uint64, syncCommittee](10),
-		db:              db,
-		sigVerifier:     sigVerifier,
-		clock:           clock,
-		unixNano:        unixNano,
-		config:          config,
-		signerThreshold: signerThreshold,
-		enforceTime:     enforceTime,
+		committeeCache: lru.NewCache[uint64, syncCommittee](10),
+		db:             db,
+		sigVerifier:    sigVerifier,
+		clock:          clock,
+		unixNano:       unixNano,
+		config:         config,
+		enforceTime:    enforceTime,
 		minimumUpdateScore: types.UpdateScore{
 			SignerCount:    uint32(signerThreshold),
 			SubPeriodIndex: params.SyncPeriodLength / 16,
@@ -507,7 +505,7 @@ func (s *CommitteeChain) verifySignedHeader(head types.SignedHeader) (bool, time
 	if committee == nil {
 		return false, age, nil
 	}
-	if signingRoot, err := s.config.Forks.SigningRoot(head.Header); err == nil {
+	if signingRoot, err := s.config.Forks.SigningRoot(head.Header.Epoch(), head.Header.Hash()); err == nil {
 		return s.sigVerifier.verifySignature(committee, signingRoot, &head.Signature), age, nil
 	}
 	return false, age, nil

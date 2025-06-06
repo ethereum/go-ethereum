@@ -1,4 +1,4 @@
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -28,11 +28,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // randomStateSet generates a random state change set.
-func randomStateSet(n int) *triestate.Set {
+func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[common.Hash][]byte) {
 	var (
 		accounts = make(map[common.Address][]byte)
 		storages = make(map[common.Address]map[common.Hash][]byte)
@@ -47,11 +46,12 @@ func randomStateSet(n int) *triestate.Set {
 		account := generateAccount(types.EmptyRootHash)
 		accounts[addr] = types.SlimAccountRLP(account)
 	}
-	return triestate.New(accounts, storages)
+	return accounts, storages
 }
 
-func makeHistory() *history {
-	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, randomStateSet(3))
+func makeHistory(rawStorageKey bool) *history {
+	accounts, storages := randomStateSet(3)
+	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages, rawStorageKey)
 }
 
 func makeHistories(n int) []*history {
@@ -61,7 +61,8 @@ func makeHistories(n int) []*history {
 	)
 	for i := 0; i < n; i++ {
 		root := testrand.Hash()
-		h := newHistory(root, parent, uint64(i), randomStateSet(3))
+		accounts, storages := randomStateSet(3)
+		h := newHistory(root, parent, uint64(i), accounts, storages, false)
 		parent = root
 		result = append(result, h)
 	}
@@ -69,10 +70,15 @@ func makeHistories(n int) []*history {
 }
 
 func TestEncodeDecodeHistory(t *testing.T) {
+	testEncodeDecodeHistory(t, false)
+	testEncodeDecodeHistory(t, true)
+}
+
+func testEncodeDecodeHistory(t *testing.T, rawStorageKey bool) {
 	var (
 		m   meta
 		dec history
-		obj = makeHistory()
+		obj = makeHistory(rawStorageKey)
 	)
 	// check if meta data can be correctly encode/decode
 	blob := obj.meta.encode()

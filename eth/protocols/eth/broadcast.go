@@ -155,12 +155,13 @@ func (p *Peer) announceTransactions() {
 			)
 			for count = 0; count < len(queue) && size < maxTxPacketSize; count++ {
 				tx := p.txpool.Get(queue[count])
+				meta := p.txpool.GetMetadata(queue[count])
 				// BOR specific - DO NOT REMOVE
 				// Skip PIP-15 bundled transactions
-				if tx != nil && tx.GetOptions() == nil {
+				if meta != nil && tx.GetOptions() == nil {
 					pending = append(pending, queue[count])
-					pendingTypes = append(pendingTypes, tx.Type())
-					pendingSizes = append(pendingSizes, uint32(tx.Size()))
+					pendingTypes = append(pendingTypes, meta.Type)
+					pendingSizes = append(pendingSizes, uint32(meta.Size))
 					size += common.HashLength
 				}
 			}

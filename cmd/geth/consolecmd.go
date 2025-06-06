@@ -20,14 +20,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
-
-	"github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -37,7 +36,7 @@ var (
 		Action: localConsole,
 		Name:   "console",
 		Usage:  "Start an interactive JavaScript environment",
-		Flags:  flags.Merge(nodeFlags, rpcFlags, consoleFlags),
+		Flags:  slices.Concat(nodeFlags, rpcFlags, consoleFlags),
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
@@ -49,7 +48,7 @@ See https://geth.ethereum.org/docs/interacting-with-geth/javascript-console.`,
 		Name:      "attach",
 		Usage:     "Start an interactive JavaScript environment (connect to node)",
 		ArgsUsage: "[endpoint]",
-		Flags:     flags.Merge([]cli.Flag{utils.DataDirFlag, utils.HttpHeaderFlag}, consoleFlags),
+		Flags:     slices.Concat([]cli.Flag{utils.DataDirFlag, utils.HttpHeaderFlag}, consoleFlags),
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
@@ -62,7 +61,7 @@ This command allows to open a console on a running geth node.`,
 		Name:      "js",
 		Usage:     "(DEPRECATED) Execute the specified JavaScript files",
 		ArgsUsage: "<jsfile> [jsfile...]",
-		Flags:     flags.Merge(nodeFlags, consoleFlags),
+		Flags:     slices.Concat(nodeFlags, consoleFlags),
 		Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
 JavaScript API. See https://geth.ethereum.org/docs/interacting-with-geth/javascript-console`,
@@ -177,7 +176,7 @@ func remoteConsole(ctx *cli.Context) error {
 func ephemeralConsole(ctx *cli.Context) error {
 	var b strings.Builder
 	for _, file := range ctx.Args().Slice() {
-		b.Write([]byte(fmt.Sprintf("loadScript('%s');", file)))
+		b.WriteString(fmt.Sprintf("loadScript('%s');", file))
 	}
 
 	utils.Fatalf(`The "js" command is deprecated. Please use the following instead:

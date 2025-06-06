@@ -111,6 +111,11 @@ func VerbosityStringToInt(loglevel string) int {
 
 //nolint:gocognit
 func NewServer(config *Config, opts ...serverOption) (*Server, error) {
+	// Enable metric collection if requested
+	if err := setupMetrics(config.Telemetry); err != nil {
+		return nil, err
+	}
+
 	// start pprof
 	if config.Pprof.Enabled {
 		pprof.SetMemProfileRate(config.Pprof.MemProfileRate)
@@ -126,6 +131,9 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 
 	// start the logger
 	setupLogger(config.Verbosity, *config.Logging)
+
+	// setup open telemetry collector
+	srv.setupOpenCollector()
 
 	var err error
 
@@ -281,10 +289,6 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 		}
 	}
 
-	if err := srv.setupMetrics(config.Telemetry, config.Identity); err != nil {
-		return nil, err
-	}
-
 	// Set the node instance
 	srv.node = stack
 
@@ -313,26 +317,16 @@ func (s *Server) Stop() {
 	}
 }
 
-func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error {
-	// Check the global metrics if they're matching with the provided config
-	if metrics.Enabled != config.Enabled {
-		log.Warn(
-			"Metric misconfiguration, some of them might not be visible",
-			"metrics", metrics.Enabled,
-			"config.metrics", config.Enabled,
-			"config.expensive", config.Expensive,
-		)
-	}
-
-	// Update the values anyways (for services which don't need immediate attention)
-	metrics.Enabled = config.Enabled
-
-	if !metrics.Enabled {
-		// metrics are disabled, do not set up any sink
+func setupMetrics(config *TelemetryConfig) error {
+	if !config.Enabled {
 		return nil
+	}
+	if config.Expensive {
+		log.Warn("Expensive metrics are collected by default, please remove this flag", "flag", "--metrics.expensive")
 	}
 
 	log.Info("Enabling metrics collection")
+	metrics.Enable()
 
 	// influxdb
 	if v1Enabled, v2Enabled := config.InfluxDB.V1Enabled, config.InfluxDB.V2Enabled; v1Enabled || v2Enabled {
@@ -385,14 +379,20 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 		log.Info("Enabling metrics export to prometheus", "path", fmt.Sprintf("http://%s/debug/metrics/prometheus", config.PrometheusAddr))
 	}
 
-	if config.OpenCollectorEndpoint != "" {
+	return nil
+}
+
+func (s *Server) setupOpenCollector() error {
+	config := s.config
+
+	if config.Telemetry.OpenCollectorEndpoint != "" {
 		// setup open collector tracer
 		ctx := context.Background()
 
 		res, err := resource.New(ctx,
 			resource.WithAttributes(
 				// the service name used to display traces in backends
-				semconv.ServiceNameKey.String(serviceName),
+				semconv.ServiceNameKey.String(config.Identity),
 			),
 		)
 		if err != nil {
@@ -403,7 +403,7 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 		traceExporter, err := otlptracegrpc.New(
 			ctx,
 			otlptracegrpc.WithInsecure(),
-			otlptracegrpc.WithEndpoint(config.OpenCollectorEndpoint),
+			otlptracegrpc.WithEndpoint(config.Telemetry.OpenCollectorEndpoint),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create open telemetry tracer exporter for service: %v", err)
@@ -425,9 +425,8 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 		// set the tracer
 		s.tracer = tracerProvider
 
-		log.Info("Open collector tracing started", "address", config.OpenCollectorEndpoint)
+		log.Info("Open collector tracing started", "address", config.Telemetry.OpenCollectorEndpoint)
 	}
-
 	return nil
 }
 

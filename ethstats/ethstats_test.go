@@ -120,7 +120,7 @@ func (m *MockFullNodeBackend) Stats() (pending int, queued int) {
 	return 0, 0
 }
 
-func (m *MockFullNodeBackend) SyncProgress() ethereum.SyncProgress {
+func (m *MockFullNodeBackend) SyncProgress(ctx context.Context) ethereum.SyncProgress {
 	return ethereum.SyncProgress{}
 }
 

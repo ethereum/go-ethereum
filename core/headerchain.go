@@ -214,7 +214,6 @@ func (hc *HeaderChain) WriteHeaders(headers []*types.Header) (int, error) {
 	if len(headers) == 0 {
 		return 0, nil
 	}
-
 	ptd := hc.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
 	if ptd == nil {
 		return 0, consensus.ErrUnknownAncestor
@@ -461,14 +460,12 @@ func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 	if cached, ok := hc.tdCache.Get(hash); ok {
 		return cached
 	}
-
 	td := rawdb.ReadTd(hc.chainDb, hash, number)
 	if td == nil {
 		return nil
 	}
 	// Cache the found body for next time and return
 	hc.tdCache.Add(hash, td)
-
 	return td
 }
 

@@ -99,6 +99,7 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 		Miner: miner.Config{
 			Etherbase: common.HexToAddress(testAddress),
 		},
+		SnapshotCache: 10,
 	}
 	if confOverride != nil {
 		confOverride(ethConf)

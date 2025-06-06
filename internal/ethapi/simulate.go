@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"math/big"
 	"time"
 
@@ -34,9 +33,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -45,13 +44,13 @@ const (
 	maxSimulateBlocks = 256
 
 	// timestampIncrement is the default increment between block timestamps.
-	timestampIncrement = 1
+	timestampIncrement = 12
 )
 
 // simBlock is a batch of calls to be simulated sequentially.
 type simBlock struct {
-	BlockOverrides *BlockOverrides
-	StateOverrides *StateOverride
+	BlockOverrides *override.BlockOverrides
+	StateOverrides *override.StateOverride
 	Calls          []TransactionArgs
 }
 
@@ -73,12 +72,85 @@ func (r *simCallResult) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*callResultAlias)(r))
 }
 
+// simBlockResult is the result of a simulated block.
+type simBlockResult struct {
+	fullTx      bool
+	chainConfig *params.ChainConfig
+	Block       *types.Block
+	Calls       []simCallResult
+	// senders is a map of transaction hashes to their senders.
+	senders map[common.Hash]common.Address
+}
+
+func (r *simBlockResult) MarshalJSON() ([]byte, error) {
+	blockData := RPCMarshalBlock(r.Block, true, r.fullTx, r.chainConfig, nil)
+	blockData["calls"] = r.Calls
+	// Set tx sender if user requested full tx objects.
+	if r.fullTx {
+		if raw, ok := blockData["transactions"].([]any); ok {
+			for _, tx := range raw {
+				if tx, ok := tx.(*RPCTransaction); ok {
+					tx.From = r.senders[tx.Hash]
+				} else {
+					return nil, errors.New("simulated transaction result has invalid type")
+				}
+			}
+		}
+	}
+	return json.Marshal(blockData)
+}
+
 // simOpts are the inputs to eth_simulateV1.
 type simOpts struct {
 	BlockStateCalls        []simBlock
 	TraceTransfers         bool
 	Validation             bool
 	ReturnFullTransactions bool
+}
+
+// simChainHeadReader implements ChainHeaderReader which is needed as input for FinalizeAndAssemble.
+type simChainHeadReader struct {
+	context.Context
+	Backend
+}
+
+func (m *simChainHeadReader) Config() *params.ChainConfig {
+	return m.Backend.ChainConfig()
+}
+
+func (m *simChainHeadReader) CurrentHeader() *types.Header {
+	return m.Backend.CurrentHeader()
+}
+
+func (m *simChainHeadReader) GetTd(hash common.Hash, number uint64) *big.Int {
+	return nil
+}
+
+func (m *simChainHeadReader) GetHeader(hash common.Hash, number uint64) *types.Header {
+	header, err := m.Backend.HeaderByNumber(m.Context, rpc.BlockNumber(number))
+	if err != nil || header == nil {
+		return nil
+	}
+	if header.Hash() != hash {
+		return nil
+	}
+	return header
+}
+
+func (m *simChainHeadReader) GetHeaderByNumber(number uint64) *types.Header {
+	header, err := m.Backend.HeaderByNumber(m.Context, rpc.BlockNumber(number))
+	if err != nil {
+		return nil
+	}
+	return header
+}
+
+func (m *simChainHeadReader) GetHeaderByHash(hash common.Hash) *types.Header {
+	header, err := m.Backend.HeaderByHash(m.Context, hash)
+	if err != nil {
+		return nil
+	}
+	return header
 }
 
 // simulator is a stateful object that simulates a series of blocks.
@@ -95,7 +167,7 @@ type simulator struct {
 }
 
 // execute runs the simulation of a series of blocks.
-func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[string]interface{}, error) {
+func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]*simBlockResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -123,24 +195,22 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[str
 		return nil, err
 	}
 	var (
-		results = make([]map[string]interface{}, len(blocks))
+		results = make([]*simBlockResult, len(blocks))
 		parent  = sim.base
 	)
 	for bi, block := range blocks {
-		result, callResults, err := sim.processBlock(ctx, &block, headers[bi], parent, headers[:bi], timeout)
+		result, callResults, senders, err := sim.processBlock(ctx, &block, headers[bi], parent, headers[:bi], timeout)
 		if err != nil {
 			return nil, err
 		}
-		enc := RPCMarshalBlock(result, true, sim.fullTx, sim.chainConfig, sim.b.ChainDb())
-		enc["calls"] = callResults
-		results[bi] = enc
-
-		parent = headers[bi]
+		headers[bi] = result.Header()
+		results[bi] = &simBlockResult{fullTx: sim.fullTx, chainConfig: sim.chainConfig, Block: result, Calls: callResults, senders: senders}
+		parent = result.Header()
 	}
 	return results, nil
 }
 
-func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header, parent *types.Header, headers []*types.Header, timeout time.Duration) (*types.Block, []simCallResult, error) {
+func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header, parent *types.Header, headers []*types.Header, timeout time.Duration) (*types.Block, []simCallResult, map[common.Hash]common.Address, error) {
 	// Set header fields that depend only on parent block.
 	// Parent hash is needed for evm.GetHashFn to work.
 	header.ParentHash = parent.Hash()
@@ -159,9 +229,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if sim.chainConfig.IsCancun(header.Number) {
 		var excess uint64
 		if sim.chainConfig.IsCancun(parent.Number) {
-			excess = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
-		} else {
-			excess = eip4844.CalcExcessBlobGas(0, 0)
+			excess = eip4844.CalcExcessBlobGas(sim.chainConfig, parent, header.Time)
 		}
 		header.ExcessBlobGas = &excess
 	}
@@ -172,7 +240,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	precompiles := sim.activePrecompiles(sim.base)
 	// State overrides are applied prior to execution of a block
 	if err := block.StateOverrides.Apply(sim.state, precompiles); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var (
 		gasUsed, blobGasUsed uint64
@@ -185,36 +253,55 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			NoBaseFee: !sim.validate,
 			Tracer:    tracer.Hooks(),
 		}
-		evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, sim.state, sim.chainConfig, *vmConfig)
+		// senders is a map of transaction hashes to their senders.
+		// Transaction objects contain only the signature, and we lose track
+		// of the sender when translating the arguments into a transaction object.
+		senders = make(map[common.Hash]common.Address)
 	)
-	sim.state.SetLogger(tracer.Hooks())
+	tracingStateDB := vm.StateDB(sim.state)
+	if hooks := tracer.Hooks(); hooks != nil {
+		tracingStateDB = state.NewHookedState(sim.state, hooks)
+	}
+	evm := vm.NewEVM(blockContext, tracingStateDB, sim.chainConfig, *vmConfig)
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
+	if sim.chainConfig.IsPrague(header.Number) || sim.chainConfig.IsVerkle(header.Number) {
+		// EIP-2935
+		core.ProcessParentBlockHash(header.ParentHash, evm)
+	}
+	if header.ParentBeaconRoot != nil {
+		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, evm)
+	}
+	var allLogs []*types.Log
 	for i, call := range block.Calls {
 		if err := ctx.Err(); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		if err := sim.sanitizeCall(&call, sim.state, header, blockContext, &gasUsed); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		tx := call.ToTransaction(types.DynamicFeeTxType)
+		var (
+			tx     = call.ToTransaction(types.DynamicFeeTxType)
+			txHash = tx.Hash()
+		)
 		txes[i] = tx
-		tracer.reset(tx.Hash(), uint(i))
+		senders[txHash] = call.from()
+		tracer.reset(txHash, uint(i))
+		sim.state.SetTxContext(txHash, i)
 		// EoA check is always skipped, even in validation mode.
 		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
-		evm.Reset(core.NewEVMTxContext(msg), sim.state)
-		result, err := applyMessageWithEVM(ctx, evm, msg, sim.state, timeout, sim.gp)
+		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, sim.gp)
 		if err != nil {
 			txErr := txValidationError(err)
-			return nil, nil, txErr
+			return nil, nil, nil, txErr
 		}
 		// Update the state with pending changes.
 		var root []byte
 		if sim.chainConfig.IsByzantium(blockContext.BlockNumber) {
-			sim.state.Finalise(true)
+			tracingStateDB.Finalise(true)
 		} else {
 			root = sim.state.IntermediateRoot(sim.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
 		}
@@ -234,21 +321,45 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			}
 		} else {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)
+			allLogs = append(allLogs, callRes.Logs...)
 		}
 		callResults[i] = callRes
 	}
-	header.Root = sim.state.IntermediateRoot(true)
 	header.GasUsed = gasUsed
 	if sim.chainConfig.IsCancun(header.Number) {
 		header.BlobGasUsed = &blobGasUsed
 	}
-	var withdrawals types.Withdrawals
-	if sim.chainConfig.IsShanghai(header.Number) {
-		withdrawals = make([]*types.Withdrawal, 0)
+
+	// Polygon/bor: EIP-6110, EIP-7002, and EIP-7251 are not supported
+	var requests [][]byte
+	// Process EIP-7685 requests
+	if sim.chainConfig.IsPrague(header.Number) && sim.chainConfig.Bor == nil {
+		requests = [][]byte{}
+		// EIP-6110
+		if err := core.ParseDepositLogs(&requests, allLogs, sim.chainConfig); err != nil {
+			return nil, nil, nil, err
+		}
+		// EIP-7002
+		if err := core.ProcessWithdrawalQueue(&requests, evm); err != nil {
+			return nil, nil, nil, err
+		}
+		// EIP-7251
+		if err := core.ProcessConsolidationQueue(&requests, evm); err != nil {
+			return nil, nil, nil, err
+		}
 	}
-	b := types.NewBlock(header, &types.Body{Transactions: txes, Withdrawals: withdrawals}, receipts, trie.NewStackTrie(nil))
+	if requests != nil {
+		reqHash := types.CalcRequestsHash(requests)
+		header.RequestsHash = &reqHash
+	}
+	blockBody := &types.Body{Transactions: txes, Withdrawals: *block.BlockOverrides.Withdrawals}
+	chainHeadReader := &simChainHeadReader{ctx, sim.b}
+	b, err := sim.b.Engine().FinalizeAndAssemble(chainHeadReader, header, sim.state, blockBody, receipts)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	repairLogs(callResults, b.Hash())
-	return b, callResults, nil
+	return b, callResults, senders, nil
 }
 
 // repairLogs updates the block hash in the logs present in the result of
@@ -262,7 +373,7 @@ func repairLogs(calls []simCallResult, hash common.Hash) {
 	}
 }
 
-func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, header *types.Header, blockContext vm.BlockContext, gasUsed *uint64) error {
+func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, header *types.Header, blockContext vm.BlockContext, gasUsed *uint64) error {
 	if call.Nonce == nil {
 		nonce := state.GetNonce(call.from())
 		call.Nonce = (*hexutil.Uint64)(&nonce)
@@ -286,7 +397,7 @@ func (sim *simulator) activePrecompiles(base *types.Header) vm.PrecompiledContra
 		isMerge = (base.Difficulty.Sign() == 0)
 		rules   = sim.chainConfig.Rules(base.Number, isMerge, base.Time)
 	)
-	return maps.Clone(vm.ActivePrecompiledContracts(rules))
+	return vm.ActivePrecompiledContracts(rules)
 }
 
 // sanitizeChain checks the chain integrity. Specifically it checks that
@@ -302,11 +413,14 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 	)
 	for _, block := range blocks {
 		if block.BlockOverrides == nil {
-			block.BlockOverrides = new(BlockOverrides)
+			block.BlockOverrides = new(override.BlockOverrides)
 		}
 		if block.BlockOverrides.Number == nil {
 			n := new(big.Int).Add(prevNumber, big.NewInt(1))
 			block.BlockOverrides.Number = (*hexutil.Big)(n)
+		}
+		if block.BlockOverrides.Withdrawals == nil {
+			block.BlockOverrides.Withdrawals = &types.Withdrawals{}
 		}
 		diff := new(big.Int).Sub(block.BlockOverrides.Number.ToInt(), prevNumber)
 		if diff.Cmp(common.Big0) <= 0 {
@@ -322,7 +436,13 @@ func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 			for i := uint64(0); i < gap.Uint64(); i++ {
 				n := new(big.Int).Add(prevNumber, big.NewInt(int64(i+1)))
 				t := prevTimestamp + timestampIncrement
-				b := simBlock{BlockOverrides: &BlockOverrides{Number: (*hexutil.Big)(n), Time: (*hexutil.Uint64)(&t)}}
+				b := simBlock{
+					BlockOverrides: &override.BlockOverrides{
+						Number:      (*hexutil.Big)(n),
+						Time:        (*hexutil.Uint64)(&t),
+						Withdrawals: &types.Withdrawals{},
+					},
+				}
 				prevTimestamp = t
 				res = append(res, b)
 			}
@@ -367,6 +487,9 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 		var parentBeaconRoot *common.Hash
 		if sim.chainConfig.IsCancun(overrides.Number.ToInt()) {
 			parentBeaconRoot = &common.Hash{}
+			if overrides.BeaconRoot != nil {
+				parentBeaconRoot = overrides.BeaconRoot
+			}
 		}
 		header = overrides.MakeHeader(&types.Header{
 			UncleHash:        types.EmptyUncleHash,
@@ -412,4 +535,8 @@ func (b *simBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber)
 		}
 	}
 	return nil, errors.New("header not found")
+}
+
+func (b *simBackend) ChainConfig() *params.ChainConfig {
+	return b.b.ChainConfig()
 }

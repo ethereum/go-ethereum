@@ -19,13 +19,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v5test"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
@@ -57,7 +57,7 @@ var (
 		Name:   "crawl",
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv5Crawl,
-		Flags: flags.Merge(discoveryNodeFlags, []cli.Flag{
+		Flags: slices.Concat(discoveryNodeFlags, []cli.Flag{
 			crawlTimeoutFlag,
 		}),
 	}
@@ -85,8 +85,8 @@ func discv5Ping(ctx *cli.Context) error {
 	disc, _ := startV5(ctx)
 	defer disc.Close()
 
-	fmt.Println(disc.Ping(n))
-
+	_, err := disc.Ping(n)
+	fmt.Println(err)
 	return nil
 }
 

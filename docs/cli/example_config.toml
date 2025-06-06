@@ -13,7 +13,7 @@ ancient = ""                    # Data directory for ancient chain segments (def
 keystore = ""                   # Path of the directory where keystores are located
 "rpc.batchlimit" = 100          # Maximum number of messages in a batch (default=100, use 0 for no limits)
 "rpc.returndatalimit" = 100000  # Maximum size (in bytes) a result of an rpc request could have (default=100000, use 0 for no limits)
-syncmode = "full"               # Blockchain sync mode (only "full" sync supported)
+syncmode = "full"               # Blockchain sync mode ("full" or "snap")
 gcmode = "full"                 # Blockchain garbage collection mode ("full", "archive")
 snapshot = true                 # Enables the snapshot-database mode
 "bor.logs" = false              # Enables bor log retrieval
@@ -75,7 +75,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   mine = false             # Enable mining
   etherbase = ""           # Public address for block mining rewards
   extradata = ""           # Block extra data set by the miner (default = client version)
-  gaslimit = 30000000      # Target gas ceiling for mined blocks
+  gaslimit = 45000000      # Target gas ceiling for mined blocks
   gasprice = "25000000000"  # Minimum gas price for mining a transaction. Regardless the value set, it will be enforced to 25000000000 for all networks
   recommit = "2m5s"        # The time interval for miner to re-create mining work
   commitinterrupt = true   # Interrupt the current mining work when time is exceeded and create partial blocks

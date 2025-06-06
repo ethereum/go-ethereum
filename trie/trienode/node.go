@@ -12,12 +12,13 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package trienode
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -99,6 +100,23 @@ func (set *NodeSet) AddNode(path []byte, n *Node) {
 	set.Nodes[string(path)] = n
 }
 
+// MergeSet merges this 'set' with 'other'. It assumes that the sets are disjoint,
+// and thus does not deduplicate data (count deletes, dedup leaves etc).
+func (set *NodeSet) MergeSet(other *NodeSet) error {
+	if set.Owner != other.Owner {
+		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, other.Owner)
+	}
+	maps.Copy(set.Nodes, other.Nodes)
+
+	set.deletes += other.deletes
+	set.updates += other.updates
+
+	// Since we assume the sets are disjoint, we can safely append leaves
+	// like this without deduplication.
+	set.Leaves = append(set.Leaves, other.Leaves...)
+	return nil
+}
+
 // Merge adds a set of nodes into the set.
 func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*Node) error {
 	if set.Owner != owner {
@@ -133,6 +151,15 @@ func (set *NodeSet) AddLeaf(parent common.Hash, blob []byte) {
 // Size returns the number of dirty nodes in set.
 func (set *NodeSet) Size() (int, int) {
 	return set.updates, set.deletes
+}
+
+// HashSet returns a set of trie nodes keyed by node hash.
+func (set *NodeSet) HashSet() map[common.Hash][]byte {
+	ret := make(map[common.Hash][]byte, len(set.Nodes))
+	for _, n := range set.Nodes {
+		ret[n.Hash] = n.Blob
+	}
+	return ret
 }
 
 // Summary returns a string-representation of the NodeSet.

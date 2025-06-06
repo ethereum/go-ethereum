@@ -56,7 +56,7 @@ On the evening of 17th, we discussed options on how to handle it. We made a stat
 It was decided that in this specific instance, it would be possible to make a public announcement and a patch release: 
 
 - The fix can be made pretty 'generically', e.g. always copying data on input to precompiles. 
-- The flaw is pretty difficult to find, given a generic fix in the call. The attacker needs to figure out that it concerns the precompiles, specifically the datcopy, and that it concerns the `RETURNDATA` buffer rather than the regular memory, and lastly the special circumstances to trigger it (overlapping but shifted input/output). 
+- The flaw is pretty difficult to find, given a generic fix in the call. The attacker needs to figure out that it concerns the precompiles, specifically the datacopy, and that it concerns the `RETURNDATA` buffer rather than the regular memory, and lastly the special circumstances to trigger it (overlapping but shifted input/output). 
 
 Since we had merged the removal of `ETH65`, if the entire network were to upgrade, then nodes which have not yet implemented `ETH66` would be cut off from the network. After further discussions, we decided to:
 

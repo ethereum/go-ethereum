@@ -18,8 +18,14 @@
     "shanghaiTime": 780,
     "cancunTime": 840,
     "terminalTotalDifficulty": 9454784,
-    "terminalTotalDifficultyPassed": true,
-    "ethash": {}
+    "ethash": {},
+    "blobSchedule": {
+      "cancun": {
+        "target": 3,
+        "max": 6,
+        "baseFeeUpdateFraction": 3338477
+      }
+    }
   },
   "nonce": "0x0",
   "timestamp": "0x0",

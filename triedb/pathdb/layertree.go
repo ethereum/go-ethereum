@@ -1,4 +1,4 @@
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2023 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -12,7 +12,7 @@
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package pathdb
 
@@ -22,9 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // layerTree is a group of state layers identified by the state root.
@@ -63,7 +61,7 @@ func (tree *layerTree) get(root common.Hash) layer {
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	return tree.layers[types.TrieRootHash(root)]
+	return tree.layers[root]
 }
 
 // forEach iterates the stored layers inside and applies the
@@ -86,14 +84,13 @@ func (tree *layerTree) len() int {
 }
 
 // add inserts a new layer into the tree if it can be linked to an existing old parent.
-func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *StateSetWithOrigin) error {
 	// Reject noop updates to avoid self-loops. This is a special case that can
 	// happen for clique networks and proof-of-stake networks where empty blocks
 	// don't modify the state (0 block subsidy).
 	//
 	// Although we could silently ignore this internally, it should be the caller's
 	// responsibility to avoid even attempting to insert such a layer.
-	root, parentRoot = types.TrieRootHash(root), types.TrieRootHash(parentRoot)
 	if root == parentRoot {
 		return errors.New("layer cycle")
 	}
@@ -101,7 +98,7 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint6
 	if parent == nil {
 		return fmt.Errorf("triedb parent [%#x] layer missing", parentRoot)
 	}
-	l := parent.update(root, parent.stateID()+1, block, nodes.Flatten(), states)
+	l := parent.update(root, parent.stateID()+1, block, newNodeSet(nodes.Flatten()), states)
 
 	tree.lock.Lock()
 	tree.layers[l.rootHash()] = l
@@ -113,7 +110,6 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint6
 // are crossed. All diffs beyond the permitted number are flattened downwards.
 func (tree *layerTree) cap(root common.Hash, layers int) error {
 	// Retrieve the head layer to cap from
-	root = types.TrieRootHash(root)
 	l := tree.get(root)
 	if l == nil {
 		return fmt.Errorf("triedb layer [%#x] missing", root)

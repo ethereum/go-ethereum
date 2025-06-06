@@ -15,11 +15,13 @@
       "londonBlock": 73100,
       "shanghaiBlock": 73100,
       "cancunBlock": 5423600,
+      "pragueBlock": 22765056,
       "bor": {
         "jaipurBlock": 73100,
         "delhiBlock": 73100,
         "indoreBlock": 73100,
         "ahmedabadBlock": 11865856,
+        "bhilaiBlock": 22765056,
         "stateSyncConfirmationDelay": {
           "0": 128
         },

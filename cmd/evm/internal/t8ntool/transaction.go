@@ -70,12 +70,10 @@ func (r *result) MarshalJSON() ([]byte, error) {
 }
 
 func Transaction(ctx *cli.Context) error {
-	var (
-		err error
-	)
 	// We need to load the transactions. May be either in stdin input or in files.
 	// Check if anything needs to be read from stdin
 	var (
+		err         error
 		txStr       = ctx.String(InputTxsFlag.Name)
 		inputData   = &input{}
 		chainConfig *params.ChainConfig
@@ -117,6 +115,7 @@ func Transaction(ctx *cli.Context) error {
 		}
 	}
 	signer := types.MakeSigner(chainConfig, new(big.Int), 0)
+
 	// We now have the transactions in 'body', which is supposed to be an
 	// rlp list of transactions
 	it, err := rlp.NewListIterator([]byte(body))
@@ -149,16 +148,31 @@ func Transaction(ctx *cli.Context) error {
 			r.Address = sender
 		}
 		// Check intrinsic gas
-		if gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil,
-			chainConfig.IsHomestead(new(big.Int)), chainConfig.IsIstanbul(new(big.Int)), chainConfig.IsShanghai(new(big.Int))); err != nil {
+		rules := chainConfig.Rules(common.Big0, true, 0)
+		gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+		if err != nil {
 			r.Error = err
 			results = append(results, r)
 
 			continue
-		} else {
-			r.IntrinsicGas = gas
-			if tx.Gas() < gas {
-				r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)
+		}
+		r.IntrinsicGas = gas
+		if tx.Gas() < gas {
+			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), gas)
+			results = append(results, r)
+			continue
+		}
+		// For Prague txs, validate the floor data gas.
+		// EIP-7623
+		if rules.IsPrague {
+			floorDataGas, err := core.FloorDataGas(tx.Data())
+			if err != nil {
+				r.Error = err
+				results = append(results, r)
+				continue
+			}
+			if tx.Gas() < floorDataGas {
+				r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrFloorDataGas, tx.Gas(), floorDataGas)
 				results = append(results, r)
 
 				continue

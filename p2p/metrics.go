@@ -37,19 +37,23 @@ const (
 )
 
 var (
-	activePeerGauge         metrics.Gauge = metrics.NilGauge{}
-	activeInboundPeerGauge  metrics.Gauge = metrics.NilGauge{}
-	activeOutboundPeerGauge metrics.Gauge = metrics.NilGauge{}
+	activePeerGauge         = metrics.NewRegisteredGauge("p2p/peers", nil)
+	activeInboundPeerGauge  = metrics.NewRegisteredGauge("p2p/peers/inbound", nil)
+	activeOutboundPeerGauge = metrics.NewRegisteredGauge("p2p/peers/outbound", nil)
 
 	ingressTrafficMeter = metrics.NewRegisteredMeter("p2p/ingress", nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/egress", nil)
 
 	// general ingress/egress connection meters
-	serveMeter          metrics.Meter = metrics.NilMeter{}
-	serveSuccessMeter   metrics.Meter = metrics.NilMeter{}
-	dialMeter           metrics.Meter = metrics.NilMeter{}
-	dialSuccessMeter    metrics.Meter = metrics.NilMeter{}
-	dialConnectionError metrics.Meter = metrics.NilMeter{}
+	serveMeter          = metrics.NewRegisteredMeter("p2p/serves", nil)
+	serveSuccessMeter   = metrics.NewRegisteredMeter("p2p/serves/success", nil)
+	dialMeter           = metrics.NewRegisteredMeter("p2p/dials", nil)
+	dialSuccessMeter    = metrics.NewRegisteredMeter("p2p/dials/success", nil)
+	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil) // dial timeout; no route to host; connection refused; network is unreachable
+
+	// count peers that stayed connected for at least 1 min
+	serve1MinSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success/1min", nil)
+	dial1MinSuccessMeter  = metrics.NewRegisteredMeter("p2p/dials/success/1min", nil)
 
 	// handshake error meters
 	dialTooManyPeers        = metrics.NewRegisteredMeter("p2p/dials/error/saturated", nil)
@@ -57,49 +61,41 @@ var (
 	dialSelf                = metrics.NewRegisteredMeter("p2p/dials/error/self", nil)
 	dialUselessPeer         = metrics.NewRegisteredMeter("p2p/dials/error/useless", nil)
 	dialUnexpectedIdentity  = metrics.NewRegisteredMeter("p2p/dials/error/id/unexpected", nil)
-	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)
-	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil)
+	dialEncHandshakeError   = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/enc", nil)   // EOF; connection reset during handshake; message too big; i/o timeout
+	dialProtoHandshakeError = metrics.NewRegisteredMeter("p2p/dials/error/rlpx/proto", nil) // EOF
+
+	// capture the rest of errors that are not handled by the above meters
+	dialOtherError = metrics.NewRegisteredMeter("p2p/dials/error/other", nil)
 )
 
-func init() {
-	if !metrics.Enabled {
-		return
-	}
-
-	activePeerGauge = metrics.NewRegisteredGauge("p2p/peers", nil)
-	activeInboundPeerGauge = metrics.NewRegisteredGauge("p2p/peers/inbound", nil)
-	activeOutboundPeerGauge = metrics.NewRegisteredGauge("p2p/peers/outbound", nil)
-	serveMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
-	serveSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success", nil)
-	dialMeter = metrics.NewRegisteredMeter("p2p/dials", nil)
-	dialSuccessMeter = metrics.NewRegisteredMeter("p2p/dials/success", nil)
-	dialConnectionError = metrics.NewRegisteredMeter("p2p/dials/error/connection", nil)
-}
-
-// markDialError matches errors that occur while setting up a dial connection
-// to the corresponding meter.
+// markDialError matches errors that occur while setting up a dial connection to the
+// corresponding meter. We don't maintain meters for evert possible error, just for
+// the most interesting ones.
 func markDialError(err error) {
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return
 	}
-	if err2 := errors.Unwrap(err); err2 != nil {
-		err = err2
-	}
-	switch err {
-	case DiscTooManyPeers:
+
+	var reason DiscReason
+	var handshakeErr *protoHandshakeError
+	d := errors.As(err, &reason)
+	switch {
+	case d && reason == DiscTooManyPeers:
 		dialTooManyPeers.Mark(1)
-	case DiscAlreadyConnected:
+	case d && reason == DiscAlreadyConnected:
 		dialAlreadyConnected.Mark(1)
-	case DiscSelf:
+	case d && reason == DiscSelf:
 		dialSelf.Mark(1)
-	case DiscUselessPeer:
+	case d && reason == DiscUselessPeer:
 		dialUselessPeer.Mark(1)
-	case DiscUnexpectedIdentity:
+	case d && reason == DiscUnexpectedIdentity:
 		dialUnexpectedIdentity.Mark(1)
-	case errEncHandshakeError:
-		dialEncHandshakeError.Mark(1)
-	case errProtoHandshakeError:
+	case errors.As(err, &handshakeErr):
 		dialProtoHandshakeError.Mark(1)
+	case errors.Is(err, errEncHandshakeError):
+		dialEncHandshakeError.Mark(1)
+	default:
+		dialOtherError.Mark(1)
 	}
 }
 
@@ -113,7 +109,7 @@ type meteredConn struct {
 // connection meter and also increases the metered peer count. If the metrics
 // system is disabled, function returns the original connection.
 func newMeteredConn(conn net.Conn) net.Conn {
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return conn
 	}
 	return &meteredConn{Conn: conn}

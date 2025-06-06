@@ -100,11 +100,11 @@ func (task *ExecutionTask) Execute(mvh *blockstm.MVHashMap, incarnation int) (er
 	task.statedb.SetMVHashmap(mvh)
 	task.statedb.SetIncarnation(incarnation)
 
-	evm := vm.NewEVM(task.blockContext, vm.TxContext{}, task.statedb, task.config, task.evmConfig)
+	evm := vm.NewEVM(task.blockContext, task.statedb, task.config, task.evmConfig)
 
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(&task.msg)
-	evm.Reset(txContext, task.statedb)
+	evm.SetTxContext(txContext)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -246,7 +246,7 @@ func (task *ExecutionTask) Settle() {
 
 	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = task.finalStateDB.GetLogs(task.tx.Hash(), task.blockNumber.Uint64(), task.blockHash)
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.Bloom = types.CreateBloom(receipt)
 	receipt.BlockHash = task.blockHash
 	receipt.BlockNumber = task.blockNumber
 	receipt.TransactionIndex = uint(task.finalStateDB.TxIndex())
@@ -302,10 +302,15 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	context := NewEVMBlockContext(header, p.bc.hc, nil)
-	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 
+	vmenv := vm.NewEVM(context, statedb, p.config, cfg)
+
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		ProcessBeaconBlockRoot(*beaconRoot, vmenv)
+	}
 	if p.config.IsPrague(block.Number()) {
-		ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+		// EIP-2935
+		ProcessParentBlockHash(block.ParentHash(), vmenv)
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -394,14 +399,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		return nil, err
 	}
 
-	// Read requests if Prague is enabled.
-	var requests types.Requests
-	if p.config.IsPrague(block.Number()) && p.config.Bor == nil {
-		requests, err = ParseDepositLogs(allLogs, p.config)
-		if err != nil {
-			return nil, err
-		}
-	}
+	// Polygon/bor: EIP-6110, EIP-7002, and EIP-7251 are not supported
+	var requests [][]byte
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Body(), cfg.Tracer)
