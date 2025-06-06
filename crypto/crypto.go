@@ -90,15 +90,14 @@ func HashData(kh KeccakState, data []byte) (h common.Hash) {
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
-	b := make([]byte, 32)
-	d := hasherPool.Get().(KeccakState)
-	d.Reset()
-	for _, b := range data {
-		d.Write(b)
-	}
-	d.Read(b)
-	hasherPool.Put(d)
-	return b
+	b := Keccak256Hash(data...)
+	return b[:]
+}
+
+// Keccak256RLP calculates and returns the Keccak256 hash of the input interface.
+func Keccak256RLP(x interface{}) []byte {
+	b := Keccak256RLPHash(x)
+	return b[:]
 }
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
@@ -109,6 +108,17 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	for _, b := range data {
 		d.Write(b)
 	}
+	d.Read(h[:])
+	hasherPool.Put(d)
+	return h
+}
+
+// Keccak256RLPHash calculates and returns the Keccak256 hash of the input interface,
+// converting it to an internal Hash data structure.
+func Keccak256RLPHash(x interface{}) (h common.Hash) {
+	d := hasherPool.Get().(KeccakState)
+	d.Reset()
+	rlp.Encode(d, x)
 	d.Read(h[:])
 	hasherPool.Put(d)
 	return h
@@ -125,8 +135,7 @@ func Keccak512(data ...[]byte) []byte {
 
 // CreateAddress creates an ethereum address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
-	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
-	return common.BytesToAddress(Keccak256(data)[12:])
+	return common.BytesToAddress(Keccak256RLP([]interface{}{b, nonce})[12:])
 }
 
 // CreateAddress2 creates an ethereum address given the address bytes, initial
