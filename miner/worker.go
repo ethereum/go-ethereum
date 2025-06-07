@@ -398,7 +398,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 					log.Warn("Encountered Version 0 transaction post-Osaka, recompute proofs", "hash", ltx.Hash)
 					sidecar.Proofs = make([]kzg4844.Proof, 0)
 					for _, blob := range sidecar.Blobs {
-						cellProofs, err := kzg4844.ComputeCells(&blob)
+						cellProofs, err := kzg4844.ComputeCellProofs(&blob)
 						if err != nil {
 							panic(err)
 						}

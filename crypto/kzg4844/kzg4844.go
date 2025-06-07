@@ -193,10 +193,3 @@ func CalcBlobHashV1(hasher hash.Hash, commit *Commitment) (vh [32]byte) {
 func IsValidVersionedHash(h []byte) bool {
 	return len(h) == 32 && h[0] == 0x01
 }
-
-func ComputeCells(blob *Blob) ([]Proof, error) {
-	if useCKZG.Load() {
-		return ckzgComputeCellProofs(blob)
-	}
-	return gokzgComputeCellProofs(blob)
-}

@@ -29,7 +29,7 @@ func TestBlobs(t *testing.T) {
 		emptyBlob          = new(kzg4844.Blob)
 		emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
 		emptyBlobProof, _  = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
-		emptyCellProof, _  = kzg4844.ComputeCells(emptyBlob)
+		emptyCellProof, _  = kzg4844.ComputeCellProofs(emptyBlob)
 	)
 	header := types.Header{}
 	block := types.NewBlock(&header, &types.Body{}, nil, nil)
