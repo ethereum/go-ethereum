@@ -164,6 +164,7 @@ type StateDB struct {
 	blockNumber uint64
 	// postState after appling tx
 	postStates map[int]*StateDB
+	postBAL    map[int]types.TxPostValues
 }
 
 type BALType int
@@ -178,26 +179,15 @@ const (
 )
 
 type BALs struct {
-	Pre  map[uint64]types.AccessList     `json:"pre"`
-	Post map[uint64]map[int]TxPostValues `json:"post"`
+	Pre  map[uint64]types.AccessList           `json:"pre"`
+	Post map[uint64]map[int]types.TxPostValues `json:"post"`
 }
-
-type AcctPostValues struct {
-	Nonce     uint64                      `json:"nonce"`
-	Balance   *uint256.Int                `json:"balance"`
-	Code      []byte                      `json:"code"`
-	StorageKV map[common.Hash]common.Hash `json:"storageKV"`
-	Destruct  bool                        `json:"destruct"`
-}
-
-// For acccount destruct or storage clearing corresponding values would be 0
-type TxPostValues map[common.Address]*AcctPostValues
 
 var (
 	AllBlockBal         = BALs{}
 	AllBlockAccessLists = map[uint64]types.AccessList{}
 	// Blocknumber => TxIndex => TxPostValues
-	AllBlockTxPostValues = map[uint64]map[int]TxPostValues{}
+	AllBlockTxPostValues = map[uint64]map[int]types.TxPostValues{}
 )
 
 const (
@@ -280,6 +270,46 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
 	}
 	return sdb, nil
+}
+
+func (s *StateDB) PreComputePostState(blockNumber uint64) {
+	s.blockNumber = blockNumber
+	postBal := AllBlockTxPostValues[blockNumber]
+
+	for i := 0; i < len(postBal)-1; i++ {
+		prevVals := postBal[i]
+		postVals := postBal[i+1]
+		for addr, prevAcct := range prevVals {
+			if postAcct, ok := postVals[addr]; ok {
+				for k, v := range prevAcct.StorageKV {
+					if _, exists := postAcct.StorageKV[k]; !exists {
+						postAcct.StorageKV[k] = v
+					}
+				}
+				if postAcct.Balance == nil {
+					postAcct.Balance = prevAcct.Balance
+				}
+				if postAcct.Code == nil {
+					postAcct.Code = prevAcct.Code
+				}
+				// Storage changes but nonce didn't change
+				if postAcct.Nonce == 0 {
+					postAcct.Nonce = prevAcct.Nonce
+				}
+			} else {
+				postVals[addr] = prevAcct
+			}
+		}
+	}
+	s.postBAL = postBal
+}
+
+func (s *StateDB) SetTxBALReader() error {
+	if s.postBAL == nil {
+		return errors.New("cannot set bal reader without postBAL")
+	}
+	s.reader = newReaderWithBAL(s.reader, s.txIndex, s.postBAL)
+	return nil
 }
 
 func (s *StateDB) PrefetchStateBAL(blockNumber uint64) {
@@ -1022,7 +1052,9 @@ func (s *StateDB) Copy() *StateDB {
 		transientStorage: s.transientStorage.Copy(),
 		journal:          s.journal.copy(),
 		// The update journal is not copies to avoid duplicated updates in later transactions.
+		blockNumber:   s.blockNumber,
 		updateJournal: newJournal(),
+		postBAL:       s.postBAL,
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()

@@ -18,6 +18,7 @@ package state
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -475,4 +476,174 @@ func (r *readerWithCache) Storage(addr common.Address, slot common.Hash) (common
 	bucket.lock.Unlock()
 
 	return value, nil
+}
+
+type readerWithBAL struct {
+	Reader  // Reader with cache
+	txIndex int
+	postBal map[int]types.TxPostValues // Shared accoss txs and mustn't be changed
+}
+
+func newReaderWithBAL(reader Reader, txIndex int, postBal map[int]types.TxPostValues) *readerWithBAL {
+	return &readerWithBAL{
+		reader, txIndex, postBal,
+	}
+}
+
+func (r *readerWithBAL) Account(addr common.Address) (*types.StateAccount, error) {
+	postVals, ok := r.postBal[r.txIndex-1]
+	if ok {
+		acctVal, ok := postVals[addr]
+		if ok {
+			// Cache codeHash
+			if acctVal.Code != nil {
+				if acctVal.CodeHash == nil {
+					acctVal.CodeHash = crypto.Keccak256(acctVal.Code)
+				}
+			}
+			if acctVal.Cached {
+				return &types.StateAccount{
+					Nonce:    acctVal.Nonce,
+					Balance:  acctVal.Balance,
+					Root:     acctVal.Root,
+					CodeHash: acctVal.CodeHash,
+				}, nil
+			}
+
+			acct, err := r.Reader.Account(addr)
+			acctVal.Cached = true
+			if acct == nil || err != nil {
+				// acct is nil, just return the postAcct
+				return &types.StateAccount{
+					Nonce:    acctVal.Nonce,
+					Balance:  acctVal.Balance,
+					CodeHash: acctVal.CodeHash,
+				}, nil
+			}
+
+			// acct mustn't be modified, or it'll change the cached pre-block values in readerwithcache
+			if acct.Nonce > acctVal.Nonce {
+				acctVal.Nonce = acct.Nonce
+			}
+			if acctVal.Balance == nil {
+				acctVal.Balance = acct.Balance
+			}
+			if acctVal.CodeHash == nil {
+				acctVal.CodeHash = acct.CodeHash
+			}
+			if acctVal.Root == (common.Hash{}) {
+				acctVal.Root = acct.Root
+			}
+			return &types.StateAccount{
+				Nonce:    acctVal.Nonce,
+				Balance:  acctVal.Balance,
+				Root:     acctVal.Root,
+				CodeHash: acctVal.CodeHash,
+			}, nil
+		}
+	}
+
+	acct, err := r.Reader.Account(addr)
+	if err != nil {
+		return nil, err
+	}
+	// cache account and codeHash except the first transaction
+	if postVals != nil && acct != nil {
+		postVals[addr] = &types.AcctPostValues{
+			Nonce:    acct.Nonce,
+			Balance:  acct.Balance,
+			Destruct: false,
+			CodeHash: acct.CodeHash,
+			Root:     acct.Root,
+			Cached:   true,
+		}
+	}
+	return acct, nil
+}
+
+func (r *readerWithBAL) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+	postVals, ok := r.postBal[r.txIndex-1]
+	if ok {
+		acct, ok := postVals[addr]
+		if ok {
+			val, ok := acct.StorageKV[slot]
+			if ok {
+				return val, nil
+			}
+		}
+	}
+
+	val, err := r.Reader.Storage(addr, slot)
+	// Cache storage
+	if postVals != nil && postVals[addr] != nil {
+		if postVals[addr].StorageKV != nil {
+			postVals[addr].StorageKV[slot] = val
+		} else {
+			postVals[addr].StorageKV = map[common.Hash]common.Hash{
+				slot: val,
+			}
+		}
+	}
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return val, nil
+}
+
+func (r *readerWithBAL) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	postVals, ok := r.postBal[r.txIndex-1]
+	if ok {
+		acctVal, ok := postVals[addr]
+		if ok {
+			code := acctVal.Code
+			if code != nil {
+				return code, nil
+			}
+			if acctVal.CodeHash != nil {
+				code, err := r.Reader.Code(addr, common.Hash(acctVal.CodeHash))
+				// Cache code
+				acctVal.Code = code
+				if err != nil {
+					return nil, fmt.Errorf("cannot get code from code for addr:%x, err:%v", addr, err)
+				}
+				return code, nil
+			}
+		}
+	}
+	acct, err := r.Reader.Account(addr)
+	if err != nil || acct == nil {
+		return nil, fmt.Errorf("cannot get code from acct for addr:%x, err:%v", addr, err)
+	}
+	code, err := r.Reader.Code(addr, common.Hash(acct.CodeHash))
+	// Cache account, codeHash and code except the first transaction
+	// if postVals != nil {
+	// 	if postVals[addr] != nil {
+	// 		postVals[addr].Code = code
+	// 		postVals[addr].CodeHash = codeHash[:]
+	// 	} else {
+	// 		postVals[addr] = &types.AcctPostValues{
+	// 			Nonce:    acct.Nonce,
+	// 			Balance:  acct.Balance,
+	// 			Code:     code,
+	// 			Destruct: false,
+	// 			CodeHash: acct.CodeHash,
+	// 		}
+	// 	}
+	// }
+
+	if err != nil {
+		return nil, fmt.Errorf("cannot get code from codeHash for addr:%x, err:%v", addr, err)
+	}
+	return code, nil
+
+}
+
+func (r *readerWithBAL) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	// Here codeHash is not need, cause we'll fetch it from BAL reader
+	code, err := r.Code(addr, common.Hash{})
+	if err != nil {
+		return 0, err
+	}
+	return len(code), nil
 }

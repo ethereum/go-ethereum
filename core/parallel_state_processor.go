@@ -35,7 +35,7 @@ func NewParallelStateProcessor(config *params.ChainConfig, chain *HeaderChain) *
 }
 
 func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error) {
-	fmt.Println("ParallelStateProcessor.Process called")
+	fmt.Println("ParallelStateProcessor.Process called:", block.NumberU64())
 	var (
 		header = block.Header()
 		gp     = new(GasPool).AddGas(block.GasLimit())
@@ -52,7 +52,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 
 	if preStateType == BALPreState {
 		start := time.Now()
-		statedb.PrefetchStateBAL(block.NumberU64())
+		// statedb.PrefetchStateBAL(block.NumberU64())
+		statedb.PreComputePostState(block.NumberU64())
 		PrefetchBALTime += time.Since(start)
 	}
 
@@ -93,9 +94,8 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	case BALPreState:
 		{
 			start := time.Now()
-			statedb.MergePostBal()
+			// statedb.MergePostBal()
 			PrefetchMergeBALTime += time.Since(start)
-			preStateProvider = statedb
 		}
 
 	case SeqPreState:
@@ -116,24 +116,42 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	// Parallel executing the transaction
 	exeStart := time.Now()
 	postEntries := make([][]state.JournalEntry, len(block.Transactions()))
-	for i, tx := range block.Transactions() {
-		cleanStatedb, err := preStateProvider.PrestateAtIndex(i)
-		if err != nil {
-			return nil, err
-		}
 
+	initialdb := statedb.Copy()
+	for i, tx := range block.Transactions() {
 		i := i
-		gpcp := *gp
+
 		workers.Go(func() error {
+			var (
+				cleanStatedb *state.StateDB
+				err          error
+			)
+			switch preStateType {
+			case BALPreState:
+				{
+					cleanStatedb = initialdb.Copy()
+					cleanStatedb.SetTxContext(tx.Hash(), i)
+					err = cleanStatedb.SetTxBALReader()
+				}
+			case SeqPreState:
+				{
+					cleanStatedb, err = preStateProvider.PrestateAtIndex(i)
+					cleanStatedb.SetTxContext(tx.Hash(), i)
+				}
+			}
+			if err != nil {
+				return err
+			}
+
+			evm := vm.NewEVM(context, cleanStatedb, p.config, cfg)
+
 			usedGas := new(uint64)
 			msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 			if err != nil {
 				return err
 			}
-			cleanStatedb.SetTxContext(tx.Hash(), i)
-
-			evm := vm.NewEVM(context, cleanStatedb, p.config, cfg)
-
+			// todo: handle gp race
+			gpcp := *gp
 			receipt, entries, err := ApplyTransactionWithParallelEVM(msg, &gpcp, cleanStatedb, blockNumber, blockHash, tx, usedGas, evm)
 			if err != nil {
 				return err
