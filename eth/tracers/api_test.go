@@ -1346,7 +1346,7 @@ func createTestTransactions(t *testing.T, count int) []*types.Transaction {
 	)
 
 	var transactions []*types.Transaction
-	for i := 0; i < count; i++ {
+	for i := range count {
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
 			Nonce:    uint64(i),
 			To:       &testAddr,
@@ -1361,27 +1361,6 @@ func createTestTransactions(t *testing.T, count int) []*types.Transaction {
 	return transactions
 }
 
-// createSingleTransaction creates a single transaction for testing
-func createSingleTransaction(t *testing.T, nonce uint64, value *big.Int, gasLimit uint64, data []byte) *types.Transaction {
-	t.Helper()
-
-	var (
-		key, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		testAddr = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
-	)
-
-	tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
-		Nonce:    nonce,
-		To:       &testAddr,
-		Value:    value,
-		Gas:      gasLimit,
-		GasPrice: big.NewInt(1000000000),
-		Data:     data,
-	}), types.HomesteadSigner{}, key)
-
-	return tx
-}
-
 // setupBadBlock creates a bad block and stores it in the database for testing
 func setupBadBlock(t *testing.T, backend *testBackend, transactions []*types.Transaction) (*types.Block, []common.Hash) {
 	t.Helper()
@@ -1392,23 +1371,23 @@ func setupBadBlock(t *testing.T, backend *testBackend, transactions []*types.Tra
 	}
 
 	// Get the latest block from the test chain as the parent
-	latestBlock := backend.chain.CurrentBlock()
-	parentHash := latestBlock.Hash()
-	parentNumber := latestBlock.Number.Uint64()
+	parentBlock := backend.chain.CurrentBlock()
+	parentHash := parentBlock.Hash()
+	parentNumber := parentBlock.Number.Uint64()
 
 	// Create a bad block header that references the existing parent
 	badHeader := &types.Header{
 		Number:      big.NewInt(int64(parentNumber + 1)),
-		Time:        latestBlock.Time + 1,
+		Time:        parentBlock.Time + 1,
 		Extra:       []byte("bad block for testing"),
-		GasLimit:    latestBlock.GasLimit,
+		GasLimit:    parentBlock.GasLimit,
 		GasUsed:     uint64(len(transactions) * 21000),
 		Difficulty:  big.NewInt(1000),
 		UncleHash:   types.EmptyUncleHash,
 		TxHash:      types.DeriveSha(types.Transactions(transactions), trie.NewStackTrie(nil)),
 		ReceiptHash: types.EmptyReceiptsHash,
 		ParentHash:  parentHash,
-		BaseFee:     latestBlock.BaseFee, // Copy base fee to avoid nil pointer
+		BaseFee:     parentBlock.BaseFee, // Copy base fee to avoid nil pointer
 	}
 
 	// Create the bad block
@@ -1438,7 +1417,6 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 	testAddr := common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
 	testCode := []byte{byte(vm.PUSH1), 0x42, byte(vm.POP), byte(vm.STOP)}
 
-	// Create test backend with proper accounts
 	genesis := &core.Genesis{
 		Config: params.TestChainConfig,
 		Alloc: types.GenesisAlloc{
@@ -1562,7 +1540,6 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 				t.Fatalf("Expected %d trace files, got %d", len(tc.expectedTraces), len(files))
 			}
 
-			// Verify trace content if files are expected
 			for i, fileName := range files {
 				data, err := os.ReadFile(fileName)
 				if err != nil {
