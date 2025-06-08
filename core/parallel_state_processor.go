@@ -60,7 +60,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		initialdb = statedb.Copy()
 
 		start = time.Now()
-		// Must prefetch bal before syscall or merkle root might mismatch
+		// Must prefetch bal before syscall to avoid overring syscall's state, thus merkle root might mismatch
 		statedb.PrefetchStateBAL(block.NumberU64())
 		PrefetchBALTime += time.Since(start)
 	} else {
