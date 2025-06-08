@@ -1902,18 +1902,18 @@ func (bc *BlockChain) processBlock(parentRoot common.Hash, block *types.Block, s
 
 	bc.cacheConfig.TrieCleanNoPrefetch = true
 	if bc.cacheConfig.TrieCleanNoPrefetch {
-		// statedb, err = state.New(parentRoot, bc.statedb)
+		statedb, err = state.New(parentRoot, bc.statedb)
+		if err != nil {
+			return nil, err
+		}
+		// reader, err := bc.statedb.ReaderWithCache(parentRoot)
 		// if err != nil {
 		// 	return nil, err
 		// }
-		reader, err := bc.statedb.ReaderWithCache(parentRoot)
-		if err != nil {
-			return nil, err
-		}
-		statedb, err = state.NewWithReader(parentRoot, bc.statedb, reader)
-		if err != nil {
-			return nil, err
-		}
+		// statedb, err = state.NewWithReader(parentRoot, bc.statedb, reader)
+		// if err != nil {
+		// 	return nil, err
+		// }
 	} else {
 		fmt.Println("prefetch enabled===========================")
 		// If prefetching is enabled, run that against the current state to pre-cache

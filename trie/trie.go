@@ -616,7 +616,7 @@ func (t *Trie) resolveAndTrack(n hashNode, prefix []byte) (node, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.tracer.onRead(prefix, blob)
+	// t.tracer.onRead(prefix, blob)
 
 	// The returned node blob won't be changed afterward. No need to
 	// deep-copy the slice.

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"runtime"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -304,12 +305,16 @@ func (s *StateDB) PreComputePostState(blockNumber uint64) {
 	s.postBAL = postBal
 }
 
-func (s *StateDB) SetTxBALReader() error {
+func (s *StateDB) SetTxBALReader(preblockReader Reader) error {
 	if s.postBAL == nil {
 		return errors.New("cannot set bal reader without postBAL")
 	}
-	s.reader = newReaderWithBAL(s.reader, s.txIndex, s.postBAL)
+	s.reader = newReaderWithBAL(preblockReader, s.txIndex, s.postBAL)
 	return nil
+}
+
+func (s *StateDB) SetOriginalReader(reader Reader) {
+	s.reader = reader
 }
 
 func (s *StateDB) PrefetchStateBAL(blockNumber uint64) {
@@ -330,20 +335,21 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 		val  *common.Hash
 	}
 	var (
-		preBal   = AllBlockAccessLists[s.blockNumber]
-		lenSlots = 0
-		workers  errgroup.Group
+		preBal      = AllBlockAccessLists[s.blockNumber]
+		lenMaxSlots = 0
+		lenSlots    = 0
+		workers     errgroup.Group
 	)
 
-	workers.SetLimit(25)
+	workers.SetLimit(runtime.NumCPU() - 2)
 	// Fetch pre-block acccount state
 	accounts := make(chan *stateObject, len(preBal))
 	for _, acl := range preBal {
 		addr := acl.Address
-		lenSlots += len(acl.StorageKeys)
+		lenMaxSlots += len(acl.StorageKeys)
 
 		workers.Go(func() error {
-			acct, err := s.reader.Account(addr)
+			acct, err := s.reader.AccountBAL(addr)
 			obj := newObject(s, addr, acct)
 			accounts <- obj
 			if err != nil {
@@ -361,14 +367,31 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 		s.setStateObject(obj)
 	}
 
+	close(accounts)
+
 	// Fetch pre-block storage state
-	storages := make(chan *StorageKV, lenSlots)
+	storages := make(chan *StorageKV, lenMaxSlots)
 	for _, acl := range preBal {
 		addr := acl.Address
 		keys := acl.StorageKeys
+
+		obj := s.stateObjects[addr]
+
+		if obj.origin == nil {
+			continue
+		}
+
+		lenSlots += len(acl.StorageKeys)
+
+		tr, err := trie.NewStateTrie(trie.StorageTrieID(s.originalRoot, obj.addrHash, obj.origin.Root), s.db.TrieDB())
+		if err != nil {
+			log.Error("fail to create trie for:", addr)
+			panic("fail to create trie for:")
+		}
+
 		for _, key := range keys {
 			workers.Go(func() error {
-				val, err := s.reader.Storage(addr, key)
+				val, err := s.reader.StorageBAL(addr, key, tr)
 				kv := &StorageKV{&addr, &key, &val}
 				storages <- kv
 				if err != nil {
@@ -389,6 +412,8 @@ func (s *StateDB) prefetchBalPreblockKeys() {
 			s.setStateObject(account)
 		}
 	}
+
+	close(storages)
 }
 
 var (
@@ -635,7 +660,8 @@ func (s *StateDB) MergeState(entries []JournalEntry) {
 		case codeChange:
 			s.SetCode(v.account, v.prevCode)
 		case refundChange:
-			s.setRefund(v.prev)
+			// refundchange doesn't affect stateroot
+			// s.setRefund(v.prev)
 		default:
 
 		}
@@ -1015,7 +1041,7 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 // correctly handle EIP-6780 'delete-in-same-transaction' logic.
 func (s *StateDB) CreateContract(addr common.Address) {
 	obj := s.getStateObject(addr)
-	if !obj.newContract {
+	if obj != nil && !obj.newContract {
 		obj.newContract = true
 		s.journal.createContract(addr)
 		s.updateJournal.createContract(addr)

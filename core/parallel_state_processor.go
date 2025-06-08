@@ -46,15 +46,25 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		misc.ApplyDAOHardFork(statedb)
 	}
 	var (
-		context vm.BlockContext
-		signer  = types.MakeSigner(p.config, header.Number, header.Time)
+		context   vm.BlockContext
+		signer    = types.MakeSigner(p.config, header.Number, header.Time)
+		initialdb *state.StateDB
 	)
 
 	if preStateType == BALPreState {
 		start := time.Now()
-		// statedb.PrefetchStateBAL(block.NumberU64())
 		statedb.PreComputePostState(block.NumberU64())
+		PrefetchMergeBALTime += time.Since(start)
+
+		// copy initialdb before PrefetchStateBAL to avoid redundant copy
+		initialdb = statedb.Copy()
+
+		start = time.Now()
+		// Must prefetch bal before syscall or merkle root might mismatch
+		statedb.PrefetchStateBAL(block.NumberU64())
 		PrefetchBALTime += time.Since(start)
+	} else {
+		initialdb = statedb.Copy()
 	}
 
 	// Apply pre-execution system calls.
@@ -72,10 +82,10 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
-	return p.executeParallel(block, statedb, cfg, gp, signer, context)
+	return p.executeParallel(block, statedb, cfg, gp, signer, context, initialdb)
 }
 
-func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *state.StateDB, cfg vm.Config, gp *GasPool, signer types.Signer, context vm.BlockContext) (*ProcessResult, error) {
+func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *state.StateDB, cfg vm.Config, gp *GasPool, signer types.Signer, context vm.BlockContext, initialdb *state.StateDB) (*ProcessResult, error) {
 	var (
 		receipts    = make(types.Receipts, len(block.Transactions()))
 		header      = block.Header()
@@ -85,17 +95,19 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 
 		preStateProvider PreStateProvider
 		workers          errgroup.Group
+		// statedbbal       = statedb.Copy()
 	)
-	workers.SetLimit(runtime.NumCPU() - 6)
+	workers.SetLimit(runtime.NumCPU() - 4)
+
 	// Fetch prestate for each tx
 
 	// todo: handle gp with RW lock
 	switch preStateType {
 	case BALPreState:
 		{
-			start := time.Now()
-			// statedb.MergePostBal()
-			PrefetchMergeBALTime += time.Since(start)
+			// start := time.Now()
+			// statedb.PrefetchStateBAL(block.NumberU64())
+			// PrefetchBALTime += time.Since(start)
 		}
 
 	case SeqPreState:
@@ -117,10 +129,8 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	exeStart := time.Now()
 	postEntries := make([][]state.JournalEntry, len(block.Transactions()))
 
-	initialdb := statedb.Copy()
 	for i, tx := range block.Transactions() {
 		i := i
-
 		workers.Go(func() error {
 			var (
 				cleanStatedb *state.StateDB
@@ -131,7 +141,7 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 				{
 					cleanStatedb = initialdb.Copy()
 					cleanStatedb.SetTxContext(tx.Hash(), i)
-					err = cleanStatedb.SetTxBALReader()
+					err = cleanStatedb.SetTxBALReader(statedb)
 				}
 			case SeqPreState:
 				{
@@ -174,6 +184,9 @@ func (p *ParallelStateProcessor) executeParallel(block *types.Block, statedb *st
 	// - Collect state state changes: simple overwrite
 	// - Ommit preimages for now
 	usedGas := uint64(0)
+
+	// set it to avoid read bal post state, -2 is a magic tx number
+	statedb.SetTxContext(common.Hash{}, -2)
 
 	start := time.Now()
 	for i, receipt := range receipts {
