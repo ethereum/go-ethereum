@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -1332,5 +1333,252 @@ func TestStandardTraceBlockToFile(t *testing.T) {
 				t.Fatalf("unexpected trace result.  expected\n'%s'\n\nreceived\n'%s'\n", tc.want[j], string(traceReceived))
 			}
 		}
+	}
+}
+
+// createTestTransactions creates test transactions for bad block testing
+func createTestTransactions(t *testing.T, count int) []*types.Transaction {
+	t.Helper()
+
+	var (
+		key, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		testAddr = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
+	)
+
+	var transactions []*types.Transaction
+	for i := 0; i < count; i++ {
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &testAddr,
+			Value:    big.NewInt(int64(100 * (i + 1))), // Different values for each tx
+			Gas:      21000,
+			GasPrice: big.NewInt(1000000000),
+			Data:     []byte{},
+		}), types.HomesteadSigner{}, key)
+		transactions = append(transactions, tx)
+	}
+
+	return transactions
+}
+
+// createSingleTransaction creates a single transaction for testing
+func createSingleTransaction(t *testing.T, nonce uint64, value *big.Int, gasLimit uint64, data []byte) *types.Transaction {
+	t.Helper()
+
+	var (
+		key, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		testAddr = common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
+	)
+
+	tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		To:       &testAddr,
+		Value:    value,
+		Gas:      gasLimit,
+		GasPrice: big.NewInt(1000000000),
+		Data:     data,
+	}), types.HomesteadSigner{}, key)
+
+	return tx
+}
+
+// setupBadBlock creates a bad block and stores it in the database for testing
+func setupBadBlock(t *testing.T, backend *testBackend, transactions []*types.Transaction) (*types.Block, []common.Hash) {
+	t.Helper()
+
+	var txHashes []common.Hash
+	for _, tx := range transactions {
+		txHashes = append(txHashes, tx.Hash())
+	}
+
+	// Get the latest block from the test chain as the parent
+	latestBlock := backend.chain.CurrentBlock()
+	parentHash := latestBlock.Hash()
+	parentNumber := latestBlock.Number.Uint64()
+
+	// Create a bad block header that references the existing parent
+	badHeader := &types.Header{
+		Number:      big.NewInt(int64(parentNumber + 1)),
+		Time:        latestBlock.Time + 1,
+		Extra:       []byte("bad block for testing"),
+		GasLimit:    latestBlock.GasLimit,
+		GasUsed:     uint64(len(transactions) * 21000),
+		Difficulty:  big.NewInt(1000),
+		UncleHash:   types.EmptyUncleHash,
+		TxHash:      types.DeriveSha(types.Transactions(transactions), trie.NewStackTrie(nil)),
+		ReceiptHash: types.EmptyReceiptsHash,
+		ParentHash:  parentHash,
+		BaseFee:     latestBlock.BaseFee, // Copy base fee to avoid nil pointer
+	}
+
+	// Create the bad block
+	body := &types.Body{
+		Transactions: transactions,
+		Uncles:       []*types.Header{},
+	}
+	badBlock := types.NewBlock(badHeader, body, nil, trie.NewStackTrie(nil))
+
+	// Store the bad block in the database
+	rawdb.WriteBadBlock(backend.chaindb, badBlock)
+
+	// Verify the bad block was stored
+	storedBlock := rawdb.ReadBadBlock(backend.chaindb, badBlock.Hash())
+	if storedBlock == nil {
+		t.Fatalf("Failed to store bad block in database")
+	}
+
+	return badBlock, txHashes
+}
+
+func TestStandardTraceBadBlockToFile(t *testing.T) {
+	// Set up accounts for testing
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	address := crypto.PubkeyToAddress(key.PublicKey)
+	funds := big.NewInt(1000000000000000)
+	testAddr := common.HexToAddress("0x7217d81b76bdd8707601e959454e3d776aee5f43")
+	testCode := []byte{byte(vm.PUSH1), 0x42, byte(vm.POP), byte(vm.STOP)}
+
+	// Create test backend with proper accounts
+	genesis := &core.Genesis{
+		Config: params.TestChainConfig,
+		Alloc: types.GenesisAlloc{
+			address: {Balance: funds},
+			testAddr: {
+				Code:    testCode,
+				Balance: big.NewInt(0),
+			},
+		},
+	}
+	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+		// Empty block generator
+	})
+	defer backend.chain.Stop()
+
+	api := NewAPI(backend)
+
+	// Create test transactions
+	testTxs := createTestTransactions(t, 2)
+	emptyTxs := []*types.Transaction{}
+
+	// Create bad blocks for testing
+	badBlockWithTxs, txHashes := setupBadBlock(t, backend, testTxs)
+	badBlockWithoutTxs, _ := setupBadBlock(t, backend, emptyTxs)
+	nonExistentHash := common.HexToHash("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+
+	var testSuite = []struct {
+		name           string
+		badBlockHash   common.Hash
+		config         *StdTraceConfig
+		expectError    bool
+		expectedError  string
+		expectedTraces []string
+	}{
+		{
+			name:         "BasicBadBlockTrace",
+			badBlockHash: badBlockWithTxs.Hash(),
+			config:       nil,
+			expectError:  false,
+			expectedTraces: []string{
+				`{"pc":0,"op":96,"gas":"0x0","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1","error":"out of gas"}
+{"output":"","gasUsed":"0x0","error":"out of gas"}
+`,
+				`{"pc":0,"op":96,"gas":"0x0","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1","error":"out of gas"}
+{"output":"","gasUsed":"0x0","error":"out of gas"}
+`,
+			},
+		},
+		{
+			name:          "BadBlockNotFound",
+			badBlockHash:  nonExistentHash,
+			config:        nil,
+			expectError:   true,
+			expectedError: "bad block 0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef not found",
+		},
+		{
+			name:         "BadBlockWithSpecificTransaction",
+			badBlockHash: badBlockWithTxs.Hash(),
+			config: &StdTraceConfig{
+				TxHash: txHashes[0], // Trace only first transaction
+			},
+			expectError: false,
+			expectedTraces: []string{
+				`{"pc":0,"op":96,"gas":"0x0","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1","error":"out of gas"}
+{"output":"","gasUsed":"0x0","error":"out of gas"}
+`,
+			},
+		},
+		{
+			name:         "BadBlockWithoutTransactions",
+			badBlockHash: badBlockWithoutTxs.Hash(),
+			config:       nil,
+			expectError:  false,
+		},
+		{
+			name:         "BadBlockWithConfiguration",
+			badBlockHash: badBlockWithTxs.Hash(),
+			config: &StdTraceConfig{
+				Config: logger.Config{
+					DisableStack: true,
+				},
+			},
+			expectError: false,
+			expectedTraces: []string{
+				`{"pc":0,"op":96,"gas":"0x0","gasCost":"0x3","memSize":0,"stack":null,"depth":1,"refund":0,"opName":"PUSH1","error":"out of gas"}
+{"output":"","gasUsed":"0x0","error":"out of gas"}
+`,
+				`{"pc":0,"op":96,"gas":"0x0","gasCost":"0x3","memSize":0,"stack":null,"depth":1,"refund":0,"opName":"PUSH1","error":"out of gas"}
+{"output":"","gasUsed":"0x0","error":"out of gas"}
+`,
+			},
+		},
+	}
+
+	for _, tc := range testSuite {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			files, err := api.StandardTraceBadBlockToFile(context.Background(), tc.badBlockHash, tc.config)
+
+			// Check error expectations
+			if tc.expectError {
+				if err == nil {
+					t.Fatalf("Expected error, got nil")
+				}
+				if err.Error() != tc.expectedError {
+					t.Fatalf("Expected error '%s', got '%s'", tc.expectedError, err.Error())
+				}
+				if files != nil {
+					t.Fatalf("Expected nil files for error case, got %v", files)
+				}
+				return
+			}
+
+			// Check success case
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if len(files) != len(tc.expectedTraces) {
+				t.Fatalf("Expected %d trace files, got %d", len(tc.expectedTraces), len(files))
+			}
+
+			// Verify trace content if files are expected
+			for i, fileName := range files {
+				data, err := os.ReadFile(fileName)
+				if err != nil {
+					t.Fatalf("Failed to read trace file %s: %v", fileName, err)
+				}
+
+				if i < len(tc.expectedTraces) {
+					traceContent := string(data)
+					if traceContent != tc.expectedTraces[i] {
+						t.Fatalf("Trace file %d content mismatch.\nExpected:\n%s\nGot:\n%s", i, tc.expectedTraces[i], traceContent)
+					}
+				}
+
+				// Clean up
+				os.Remove(fileName)
+			}
+		})
 	}
 }
