@@ -167,7 +167,7 @@ var PrecompiledContractsOsaka = PrecompiledContracts{
 // PrecompiledContractsP256Verify contains the precompiled Ethereum
 // contract specified in EIP-7212. This is exported for testing purposes.
 var PrecompiledContractsP256Verify = PrecompiledContracts{
-	common.BytesToAddress([]byte{0x0b}): &p256Verify{},
+	common.BytesToAddress([]byte{0x1, 0x00}): &p256Verify{},
 }
 
 var (
