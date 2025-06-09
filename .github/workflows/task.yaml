@@ -19,6 +19,11 @@ jobs:
       REPO_NAME: ${{ github.event.repository.name }}
 
     steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v4
+        with:
+          ref: master
+
       - name: Autotag
         id: autotag
         uses: anothrNick/github-tag-action@v1
