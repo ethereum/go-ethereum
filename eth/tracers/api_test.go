@@ -1516,6 +1516,11 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 			t.Parallel()
 
 			files, err := api.StandardTraceBadBlockToFile(context.Background(), tc.badBlockHash, tc.config)
+			t.Cleanup(func() {
+				for _, fileName := range files {
+					os.Remove(fileName)
+				}
+			})
 
 			// Check error expectations
 			if tc.expectError {
@@ -1552,9 +1557,6 @@ func TestStandardTraceBadBlockToFile(t *testing.T) {
 						t.Fatalf("Trace file %d content mismatch.\nExpected:\n%s\nGot:\n%s", i, tc.expectedTraces[i], traceContent)
 					}
 				}
-
-				// Clean up
-				os.Remove(fileName)
 			}
 		})
 	}
