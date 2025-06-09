@@ -178,6 +178,8 @@ const (
 	BlobBaseCost                       = 1 << 13 // Base execution gas cost for a blob.
 
 	HistoryServeWindow = 8192 // Number of blocks to serve historical block hashes for, EIP-2935.
+
+	BlockRLPSizeCap = 9_961_472 // maximum size of an RLP-encoded block
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation

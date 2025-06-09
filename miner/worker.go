@@ -19,6 +19,7 @@ package miner
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -92,6 +93,13 @@ type generateParams struct {
 	withdrawals types.Withdrawals // List of withdrawals to include in block (shanghai field)
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
+}
+
+func (env *environment) encodedSizeWithTxAndReceipt(tx *types.Transaction) uint64 {
+	body := types.Body{Transactions: append(env.txs, tx), Withdrawals: make([]*types.Withdrawal, 0)}
+	env.header.RequestsHash = &common.Hash{}
+	block := types.NewBlock(env.header, &body, env.receipts, trie.NewStackTrie(nil))
+	return block.Size()
 }
 
 // generateWork generates a sealing block based on the given parameters.
@@ -389,6 +397,10 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			log.Trace("Ignoring evicted transaction", "hash", ltx.Hash)
 			txs.Pop()
 			continue
+		}
+
+		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.encodedSizeWithTxAndReceipt(tx) > params.BlockRLPSizeCap {
+			break
 		}
 
 		// Make sure all transactions after osaka have cell proofs
