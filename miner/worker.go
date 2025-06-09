@@ -395,7 +395,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) {
 			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
 				if sidecar.Version == 0 {
-					log.Warn("Encountered Version 0 transaction post-Osaka, recompute proofs", "hash", ltx.Hash)
+					log.Info("Including blob tx with v0 sidecar, recomputing proofs", "hash", ltx.Hash)
 					sidecar.Proofs = make([]kzg4844.Proof, 0)
 					for _, blob := range sidecar.Blobs {
 						cellProofs, err := kzg4844.ComputeCellProofs(&blob)
