@@ -903,6 +903,8 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 	if !stateObject.Balance().IsZero() {
 		fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct: previous balance is non-zero (addr=%s)\n", addr)
 		stateObject.SetBalance(new(uint256.Int))
+	} else {
+		fmt.Fprintf(os.Stderr, "[Firehose] SelfDestruct: previous balance is zero! (addr=%s)\n", addr)
 	}
 	// If it is already marked as self-destructed, we do not need to add it
 	// for journalling a second time.
