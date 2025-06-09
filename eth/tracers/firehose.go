@@ -897,6 +897,7 @@ func (f *Firehose) removeLogBlockIndexOnStateRevertedCalls() {
 	for _, call := range f.transaction.Calls {
 		if call.StateReverted {
 			for _, log := range call.Logs {
+				firehoseTrace("removing block index from log %s in reverted call %d", hex.EncodeToString(log.Address), call.Index)
 				log.BlockIndex = 0
 			}
 		}
@@ -1711,7 +1712,7 @@ func (f *Firehose) OnLog(l *types.Log) {
 		}
 
 		// Polygon does add logs outside of a transaction to track native transfers, this is actually deprecated but we must support it
-		firehoseTrace("adding Polygon log to deferred call state (address=%s)", l.Address)
+		firehoseTrace("adding Polygon log to deferred call state (address=%s, blockIndex=%d)", l.Address, l.Index)
 		f.deferredCallState.logs = append(f.deferredCallState.logs, log)
 	} else {
 		firehoseTrace("adding log to call (address=%s call=%d [has already %d logs])", l.Address, activeCall.Index, len(activeCall.Logs))
