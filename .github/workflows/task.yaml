@@ -1,4 +1,4 @@
-name: Task workflow
+name: Task Linux Tests
 
 
 on:
@@ -8,11 +8,45 @@ on:
 
 
 jobs:
-  build:
+  lint:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
-      - name: echo label
-        run: echo "PR with label 'CI:Build' was merged"
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      # Cache build tools to avoid downloading them each time
+      - uses: actions/cache@v4
+        with:
+          path: build/cache
+          key: ${{ runner.os }}-build-tools-cache-${{ hashFiles('build/checksums.txt') }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.0
+          cache: false
+
+      - name: Run linters
+        run: |
+          go run build/ci.go lint
+          go run build/ci.go check_generate
+          go run build/ci.go check_baddeps
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.0
+          cache: false
+      - name: Run tests
+        run: go test -short ./...
+        env:
+          GOOS: linux
+          GOARCH: 386
