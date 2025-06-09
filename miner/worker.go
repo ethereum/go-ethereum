@@ -52,6 +52,7 @@ type environment struct {
 	signer   types.Signer
 	state    *state.StateDB // apply state changes here
 	tcount   int            // tx count in cycle
+	size     uint64         // size of the block we are building
 	gasPool  *core.GasPool  // available gas used to pack transactions
 	coinbase common.Address
 	evm      *vm.EVM
@@ -265,6 +266,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	return &environment{
 		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
 		state:    state,
+		size:     uint64(header.Size()),
 		coinbase: coinbase,
 		header:   header,
 		witness:  state.Witness(),
@@ -282,6 +284,7 @@ func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) e
 	}
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
+	env.size += tx.Size()
 	env.tcount++
 	return nil
 }
@@ -398,6 +401,10 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			log.Trace("Ignoring evicted transaction", "hash", ltx.Hash)
 			txs.Pop()
 			continue
+		}
+
+		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.size+tx.Size() > params.BlockRLPSizeCap {
+			break
 		}
 
 		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.encodedSizeWithTx(tx) > params.BlockRLPSizeCap {
