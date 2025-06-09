@@ -95,7 +95,7 @@ type generateParams struct {
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
 }
 
-func (env *environment) encodedSizeWithTxAndReceipt(tx *types.Transaction) uint64 {
+func (env *environment) encodedSizeWithTx(tx *types.Transaction) uint64 {
 	body := types.Body{Transactions: append(env.txs, tx), Withdrawals: make([]*types.Withdrawal, 0)}
 	env.header.RequestsHash = &common.Hash{}
 	block := types.NewBlock(env.header, &body, env.receipts, trie.NewStackTrie(nil))
@@ -399,7 +399,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			continue
 		}
 
-		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.encodedSizeWithTxAndReceipt(tx) > params.BlockRLPSizeCap {
+		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.encodedSizeWithTx(tx) > params.BlockRLPSizeCap {
 			break
 		}
 
