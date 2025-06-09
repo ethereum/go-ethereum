@@ -69,6 +69,11 @@ const (
 	commitInterruptNewHead
 	commitInterruptResubmit
 	commitInterruptTimeout
+
+	// cap the size of blocks we will produce below the max allowed by
+	// EIP-7934.  This gives us buffer room if the estimated size of the
+	// block we are building is off from the actual encoded size.
+	blockRLPSizeCapBuffer = 1_000_000
 )
 
 // newPayloadResult is the result of payload generation.
@@ -118,10 +123,7 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 
 	var includedWithdrawals types.Withdrawals
 	if miner.chainConfig.IsOsaka(work.header.Number, work.header.Time) {
-		// cap the size of blocks we will produce below the cap allowed by
-		// EIP-7934.  This gives us buffer room if the estimated size of the
-		// block we are building is somewhat off.
-		maxBlockSize := params.BlockRLPSizeCap - 1_000_000
+		maxBlockSize := params.BlockRLPSizeCap - blockRLPSizeCapBuffer
 
 		for _, withdrawal := range genParam.withdrawals {
 			if int(work.size)+params.WithdrawalSize > maxBlockSize {
@@ -414,7 +416,9 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			continue
 		}
 
-		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.size+tx.Size() > params.BlockRLPSizeCap {
+		// if inclusion of the transaction would put the block size over the
+		// maximum we allow, don't add any more txs to the payload.
+		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.size+tx.Size() > params.BlockRLPSizeCap-blockRLPSizeCapBuffer {
 			break
 		}
 
