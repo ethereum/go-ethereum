@@ -897,11 +897,26 @@ func (f *Firehose) removeLogBlockIndexOnStateRevertedCalls() {
 	for _, call := range f.transaction.Calls {
 		if call.StateReverted {
 			for _, log := range call.Logs {
+				if isPolygonFeeTransferLog(log) {
+					// Polygon transfer and fee transfer logs are never reverted, so we must **not** reset them here as
+					// they are properly recorded to the chain's state.
+					continue
+				}
+
 				firehoseTrace("removing block index from log %s in reverted call %d", hex.EncodeToString(log.Address), call.Index)
 				log.BlockIndex = 0
 			}
 		}
 	}
+}
+
+var (
+	polygonTransferFeeLogSig = common.HexToHash("0x4dfe1bbbcf077ddc3e01291eea2d5c70c2b422b415d95645b9adcfd678cb1d63")
+	polygonFeeAddress        = common.HexToAddress("0x0000000000000000000000000000000000001010")
+)
+
+func isPolygonFeeTransferLog(log *pbeth.Log) bool {
+	return bytes.Equal(log.Address, polygonFeeAddress[:]) && len(log.Topics) == 4 && bytes.Equal(log.Topics[0], polygonTransferFeeLogSig[:])
 }
 
 func (f *Firehose) assignOrdinalAndIndexToReceiptLogs() {
@@ -1712,7 +1727,7 @@ func (f *Firehose) OnLog(l *types.Log) {
 		}
 
 		// Polygon does add logs outside of a transaction to track native transfers, this is actually deprecated but we must support it
-		firehoseTrace("adding Polygon log to deferred call state (address=%s, blockIndex=%d)", l.Address, l.Index)
+		firehoseTrace("adding Polygon log to deferred call state (address=%s)", l.Address)
 		f.deferredCallState.logs = append(f.deferredCallState.logs, log)
 	} else {
 		firehoseTrace("adding log to call (address=%s call=%d [has already %d logs])", l.Address, activeCall.Index, len(activeCall.Logs))
