@@ -10,7 +10,7 @@ on:
 jobs:
   lint:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
-    name: Build
+    name: Lint
     runs-on: ubuntu-24.04
 
     steps:
@@ -37,9 +37,12 @@ jobs:
           go run build/ci.go check_baddeps
 
   build:
+    name: Build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: master
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
