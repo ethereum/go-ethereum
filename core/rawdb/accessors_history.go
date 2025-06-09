@@ -47,8 +47,8 @@ func DeleteStateHistoryIndexMetadata(db ethdb.KeyValueWriter) {
 
 // ReadAccountHistoryIndex retrieves the account history index with the provided
 // account address.
-func ReadAccountHistoryIndex(db ethdb.KeyValueReader, address common.Address) []byte {
-	data, err := db.Get(accountHistoryIndexKey(address))
+func ReadAccountHistoryIndex(db ethdb.KeyValueReader, addressHash common.Hash) []byte {
+	data, err := db.Get(accountHistoryIndexKey(addressHash))
 	if err != nil || len(data) == 0 {
 		return nil
 	}
@@ -56,24 +56,24 @@ func ReadAccountHistoryIndex(db ethdb.KeyValueReader, address common.Address) []
 }
 
 // WriteAccountHistoryIndex writes the provided account history index into database.
-func WriteAccountHistoryIndex(db ethdb.KeyValueWriter, address common.Address, data []byte) {
-	if err := db.Put(accountHistoryIndexKey(address), data); err != nil {
+func WriteAccountHistoryIndex(db ethdb.KeyValueWriter, addressHash common.Hash, data []byte) {
+	if err := db.Put(accountHistoryIndexKey(addressHash), data); err != nil {
 		log.Crit("Failed to store account history index", "err", err)
 	}
 }
 
 // DeleteAccountHistoryIndex deletes the specified account history index from
 // the database.
-func DeleteAccountHistoryIndex(db ethdb.KeyValueWriter, address common.Address) {
-	if err := db.Delete(accountHistoryIndexKey(address)); err != nil {
+func DeleteAccountHistoryIndex(db ethdb.KeyValueWriter, addressHash common.Hash) {
+	if err := db.Delete(accountHistoryIndexKey(addressHash)); err != nil {
 		log.Crit("Failed to delete account history index", "err", err)
 	}
 }
 
 // ReadStorageHistoryIndex retrieves the storage history index with the provided
 // account address and storage key hash.
-func ReadStorageHistoryIndex(db ethdb.KeyValueReader, address common.Address, storageHash common.Hash) []byte {
-	data, err := db.Get(storageHistoryIndexKey(address, storageHash))
+func ReadStorageHistoryIndex(db ethdb.KeyValueReader, addressHash common.Hash, storageHash common.Hash) []byte {
+	data, err := db.Get(storageHistoryIndexKey(addressHash, storageHash))
 	if err != nil || len(data) == 0 {
 		return nil
 	}
@@ -81,23 +81,23 @@ func ReadStorageHistoryIndex(db ethdb.KeyValueReader, address common.Address, st
 }
 
 // WriteStorageHistoryIndex writes the provided storage history index into database.
-func WriteStorageHistoryIndex(db ethdb.KeyValueWriter, address common.Address, storageHash common.Hash, data []byte) {
-	if err := db.Put(storageHistoryIndexKey(address, storageHash), data); err != nil {
+func WriteStorageHistoryIndex(db ethdb.KeyValueWriter, addressHash common.Hash, storageHash common.Hash, data []byte) {
+	if err := db.Put(storageHistoryIndexKey(addressHash, storageHash), data); err != nil {
 		log.Crit("Failed to store storage history index", "err", err)
 	}
 }
 
 // DeleteStorageHistoryIndex deletes the specified state index from the database.
-func DeleteStorageHistoryIndex(db ethdb.KeyValueWriter, address common.Address, storageHash common.Hash) {
-	if err := db.Delete(storageHistoryIndexKey(address, storageHash)); err != nil {
+func DeleteStorageHistoryIndex(db ethdb.KeyValueWriter, addressHash common.Hash, storageHash common.Hash) {
+	if err := db.Delete(storageHistoryIndexKey(addressHash, storageHash)); err != nil {
 		log.Crit("Failed to delete storage history index", "err", err)
 	}
 }
 
 // ReadAccountHistoryIndexBlock retrieves the index block with the provided
 // account address along with the block id.
-func ReadAccountHistoryIndexBlock(db ethdb.KeyValueReader, address common.Address, blockID uint32) []byte {
-	data, err := db.Get(accountHistoryIndexBlockKey(address, blockID))
+func ReadAccountHistoryIndexBlock(db ethdb.KeyValueReader, addressHash common.Hash, blockID uint32) []byte {
+	data, err := db.Get(accountHistoryIndexBlockKey(addressHash, blockID))
 	if err != nil || len(data) == 0 {
 		return nil
 	}
@@ -105,23 +105,23 @@ func ReadAccountHistoryIndexBlock(db ethdb.KeyValueReader, address common.Addres
 }
 
 // WriteAccountHistoryIndexBlock writes the provided index block into database.
-func WriteAccountHistoryIndexBlock(db ethdb.KeyValueWriter, address common.Address, blockID uint32, data []byte) {
-	if err := db.Put(accountHistoryIndexBlockKey(address, blockID), data); err != nil {
+func WriteAccountHistoryIndexBlock(db ethdb.KeyValueWriter, addressHash common.Hash, blockID uint32, data []byte) {
+	if err := db.Put(accountHistoryIndexBlockKey(addressHash, blockID), data); err != nil {
 		log.Crit("Failed to store account index block", "err", err)
 	}
 }
 
 // DeleteAccountHistoryIndexBlock deletes the specified index block from the database.
-func DeleteAccountHistoryIndexBlock(db ethdb.KeyValueWriter, address common.Address, blockID uint32) {
-	if err := db.Delete(accountHistoryIndexBlockKey(address, blockID)); err != nil {
+func DeleteAccountHistoryIndexBlock(db ethdb.KeyValueWriter, addressHash common.Hash, blockID uint32) {
+	if err := db.Delete(accountHistoryIndexBlockKey(addressHash, blockID)); err != nil {
 		log.Crit("Failed to delete account index block", "err", err)
 	}
 }
 
 // ReadStorageHistoryIndexBlock retrieves the index block with the provided state
 // identifier along with the block id.
-func ReadStorageHistoryIndexBlock(db ethdb.KeyValueReader, address common.Address, storageHash common.Hash, blockID uint32) []byte {
-	data, err := db.Get(storageHistoryIndexBlockKey(address, storageHash, blockID))
+func ReadStorageHistoryIndexBlock(db ethdb.KeyValueReader, addressHash common.Hash, storageHash common.Hash, blockID uint32) []byte {
+	data, err := db.Get(storageHistoryIndexBlockKey(addressHash, storageHash, blockID))
 	if err != nil || len(data) == 0 {
 		return nil
 	}
@@ -129,15 +129,15 @@ func ReadStorageHistoryIndexBlock(db ethdb.KeyValueReader, address common.Addres
 }
 
 // WriteStorageHistoryIndexBlock writes the provided index block into database.
-func WriteStorageHistoryIndexBlock(db ethdb.KeyValueWriter, address common.Address, storageHash common.Hash, id uint32, data []byte) {
-	if err := db.Put(storageHistoryIndexBlockKey(address, storageHash, id), data); err != nil {
+func WriteStorageHistoryIndexBlock(db ethdb.KeyValueWriter, addressHash common.Hash, storageHash common.Hash, id uint32, data []byte) {
+	if err := db.Put(storageHistoryIndexBlockKey(addressHash, storageHash, id), data); err != nil {
 		log.Crit("Failed to store storage index block", "err", err)
 	}
 }
 
 // DeleteStorageHistoryIndexBlock deletes the specified index block from the database.
-func DeleteStorageHistoryIndexBlock(db ethdb.KeyValueWriter, address common.Address, state common.Hash, id uint32) {
-	if err := db.Delete(storageHistoryIndexBlockKey(address, state, id)); err != nil {
+func DeleteStorageHistoryIndexBlock(db ethdb.KeyValueWriter, addressHash common.Hash, storageHash common.Hash, id uint32) {
+	if err := db.Delete(storageHistoryIndexBlockKey(addressHash, storageHash, id)); err != nil {
 		log.Crit("Failed to delete storage index block", "err", err)
 	}
 }

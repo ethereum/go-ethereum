@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestIndexReaderBasic(t *testing.T) {
@@ -32,7 +33,7 @@ func TestIndexReaderBasic(t *testing.T) {
 		1, 5, 10, 11, 20,
 	}
 	db := rawdb.NewMemoryDatabase()
-	bw, _ := newIndexWriter(db, newAccountIdent(common.Address{0xa}))
+	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
 	for i := 0; i < len(elements); i++ {
 		bw.append(elements[i])
 	}
@@ -40,7 +41,7 @@ func TestIndexReaderBasic(t *testing.T) {
 	bw.finish(batch)
 	batch.Write()
 
-	br, err := newIndexReader(db, newAccountIdent(common.Address{0xa}))
+	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}))
 	if err != nil {
 		t.Fatalf("Failed to construct the index reader, %v", err)
 	}
@@ -74,7 +75,7 @@ func TestIndexReaderLarge(t *testing.T) {
 	slices.Sort(elements)
 
 	db := rawdb.NewMemoryDatabase()
-	bw, _ := newIndexWriter(db, newAccountIdent(common.Address{0xa}))
+	bw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
 	for i := 0; i < len(elements); i++ {
 		bw.append(elements[i])
 	}
@@ -82,7 +83,7 @@ func TestIndexReaderLarge(t *testing.T) {
 	bw.finish(batch)
 	batch.Write()
 
-	br, err := newIndexReader(db, newAccountIdent(common.Address{0xa}))
+	br, err := newIndexReader(db, newAccountIdent(common.Hash{0xa}))
 	if err != nil {
 		t.Fatalf("Failed to construct the index reader, %v", err)
 	}
@@ -106,7 +107,7 @@ func TestIndexReaderLarge(t *testing.T) {
 }
 
 func TestEmptyIndexReader(t *testing.T) {
-	br, err := newIndexReader(rawdb.NewMemoryDatabase(), newAccountIdent(common.Address{0xa}))
+	br, err := newIndexReader(rawdb.NewMemoryDatabase(), newAccountIdent(common.Hash{0xa}))
 	if err != nil {
 		t.Fatalf("Failed to construct the index reader, %v", err)
 	}
@@ -121,7 +122,7 @@ func TestEmptyIndexReader(t *testing.T) {
 
 func TestIndexWriterBasic(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	iw, _ := newIndexWriter(db, newAccountIdent(common.Address{0xa}))
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
 	iw.append(2)
 	if err := iw.append(1); err == nil {
 		t.Fatal("out-of-order insertion is not expected")
@@ -133,7 +134,7 @@ func TestIndexWriterBasic(t *testing.T) {
 	iw.finish(batch)
 	batch.Write()
 
-	iw, err := newIndexWriter(db, newAccountIdent(common.Address{0xa}))
+	iw, err := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
 	if err != nil {
 		t.Fatalf("Failed to construct the block writer, %v", err)
 	}
@@ -147,7 +148,7 @@ func TestIndexWriterBasic(t *testing.T) {
 
 func TestIndexWriterDelete(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	iw, _ := newIndexWriter(db, newAccountIdent(common.Address{0xa}))
+	iw, _ := newIndexWriter(db, newAccountIdent(common.Hash{0xa}))
 	for i := 0; i < indexBlockEntriesCap*4; i++ {
 		iw.append(uint64(i + 1))
 	}
@@ -156,7 +157,7 @@ func TestIndexWriterDelete(t *testing.T) {
 	batch.Write()
 
 	// Delete unknown id, the request should be rejected
-	id, _ := newIndexDeleter(db, newAccountIdent(common.Address{0xa}))
+	id, _ := newIndexDeleter(db, newAccountIdent(common.Hash{0xa}))
 	if err := id.pop(indexBlockEntriesCap * 5); err == nil {
 		t.Fatal("Expect error to occur for unknown id")
 	}
@@ -194,23 +195,24 @@ func TestBatchIndexerWrite(t *testing.T) {
 		t.Fatal("Unexpected index position")
 	}
 	var (
-		accounts = make(map[common.Address][]uint64)
-		storages = make(map[common.Address]map[common.Hash][]uint64)
+		accounts = make(map[common.Hash][]uint64)
+		storages = make(map[common.Hash]map[common.Hash][]uint64)
 	)
 	for i, h := range histories {
 		for _, addr := range h.accountList {
-			accounts[addr] = append(accounts[addr], uint64(i+1))
+			addrHash := crypto.Keccak256Hash(addr.Bytes())
+			accounts[addrHash] = append(accounts[addrHash], uint64(i+1))
 
-			if _, ok := storages[addr]; !ok {
-				storages[addr] = make(map[common.Hash][]uint64)
+			if _, ok := storages[addrHash]; !ok {
+				storages[addrHash] = make(map[common.Hash][]uint64)
 			}
 			for _, slot := range h.storageList[addr] {
-				storages[addr][slot] = append(storages[addr][slot], uint64(i+1))
+				storages[addrHash][slot] = append(storages[addrHash][slot], uint64(i+1))
 			}
 		}
 	}
-	for addr, indexes := range accounts {
-		ir, _ := newIndexReader(db, newAccountIdent(addr))
+	for addrHash, indexes := range accounts {
+		ir, _ := newIndexReader(db, newAccountIdent(addrHash))
 		for i := 0; i < len(indexes)-1; i++ {
 			n, err := ir.readGreaterThan(indexes[i])
 			if err != nil {
@@ -228,9 +230,9 @@ func TestBatchIndexerWrite(t *testing.T) {
 			t.Fatalf("Unexpected result, want math.MaxUint64, got %d", n)
 		}
 	}
-	for addr, slots := range storages {
+	for addrHash, slots := range storages {
 		for slotHash, indexes := range slots {
-			ir, _ := newIndexReader(db, newStorageIdent(addr, slotHash))
+			ir, _ := newIndexReader(db, newStorageIdent(addrHash, slotHash))
 			for i := 0; i < len(indexes)-1; i++ {
 				n, err := ir.readGreaterThan(indexes[i])
 				if err != nil {
