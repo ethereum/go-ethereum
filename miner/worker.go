@@ -19,10 +19,11 @@ package miner
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/trie"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
