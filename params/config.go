@@ -351,6 +351,7 @@ var (
 				L1MessageQueueV2DeploymentBlock: 7773746,
 				NumL1MessagesPerBlock:           10,
 				ScrollChainAddress:              common.HexToAddress("0x2D567EcE699Eabe5afCd141eDB7A4f2D0D6ce8a0"),
+				L2SystemConfigAddress:           common.HexToAddress("0xF444cF06A3E3724e20B35c2989d3942ea8b59124"),
 			},
 			GenesisStateRoot: &ScrollSepoliaGenesisState,
 		},
@@ -401,6 +402,7 @@ var (
 				L1MessageQueueV2DeploymentBlock: 22088276,
 				NumL1MessagesPerBlock:           10,
 				ScrollChainAddress:              common.HexToAddress("0xa13BAF47339d63B743e7Da8741db5456DAc1E556"),
+				L2SystemConfigAddress:           common.HexToAddress("0x331A873a2a85219863d80d248F9e2978fE88D0Ea"),
 			},
 			GenesisStateRoot: &ScrollMainnetGenesisState,
 		},
@@ -704,11 +706,6 @@ type ScrollConfig struct {
 
 	// Genesis State Root for MPT clients
 	GenesisStateRoot *common.Hash `json:"genesisStateRoot,omitempty"`
-
-	// L2 base fee coefficients for the formula: `l2BaseFee = (l1BaseFee * scalar) / PRECISION + overhead`.
-	// These fields are populated from configuration flags, and passed to `CalcBaseFee`.
-	BaseFeeScalar   *big.Int `json:"-"`
-	BaseFeeOverhead *big.Int `json:"-"`
 }
 
 // L1Config contains the l1 parameters needed to sync l1 contract events (e.g., l1 messages, commit/revert/finalize batches) in the sequencer
@@ -719,6 +716,7 @@ type L1Config struct {
 	L1MessageQueueV2DeploymentBlock uint64         `json:"l1MessageQueueV2DeploymentBlock,omitempty"`
 	NumL1MessagesPerBlock           uint64         `json:"numL1MessagesPerBlock,string,omitempty"`
 	ScrollChainAddress              common.Address `json:"scrollChainAddress,omitempty"`
+	L2SystemConfigAddress           common.Address `json:"l2SystemConfigAddress,omitempty"`
 }
 
 func (c *L1Config) String() string {
@@ -726,8 +724,8 @@ func (c *L1Config) String() string {
 		return "<nil>"
 	}
 
-	return fmt.Sprintf("{l1ChainId: %v, l1MessageQueueAddress: %v, l1MessageQueueV2Address: %v, l1MessageQueueV2DeploymentBlock: %v, numL1MessagesPerBlock: %v, ScrollChainAddress: %v}",
-		c.L1ChainId, c.L1MessageQueueAddress.Hex(), c.L1MessageQueueV2Address.Hex(), c.L1MessageQueueV2DeploymentBlock, c.NumL1MessagesPerBlock, c.ScrollChainAddress.Hex())
+	return fmt.Sprintf("{l1ChainId: %v, l1MessageQueueAddress: %v, l1MessageQueueV2Address: %v, l1MessageQueueV2DeploymentBlock: %v, numL1MessagesPerBlock: %v, ScrollChainAddress: %v, L2SystemConfigAddress: %v}",
+		c.L1ChainId, c.L1MessageQueueAddress.Hex(), c.L1MessageQueueV2Address.Hex(), c.L1MessageQueueV2DeploymentBlock, c.NumL1MessagesPerBlock, c.ScrollChainAddress.Hex(), c.L2SystemConfigAddress.Hex())
 }
 
 func (s ScrollConfig) FeeVaultEnabled() bool {
@@ -758,18 +756,8 @@ func (s ScrollConfig) String() string {
 		genesisStateRoot = fmt.Sprintf("%v", *s.GenesisStateRoot)
 	}
 
-	baseFeeScalar := "<nil>"
-	if s.BaseFeeScalar != nil {
-		baseFeeScalar = s.BaseFeeScalar.String()
-	}
-
-	baseFeeOverhead := "<nil>"
-	if s.BaseFeeOverhead != nil {
-		baseFeeOverhead = s.BaseFeeOverhead.String()
-	}
-
-	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, MaxTxPayloadBytesPerBlock: %v, feeVaultAddress: %v, l1Config: %v, genesisStateRoot: %v, baseFeeScalar: %v, baseFeeOverhead: %v}",
-		s.UseZktrie, maxTxPerBlock, maxTxPayloadBytesPerBlock, s.FeeVaultAddress, s.L1Config.String(), genesisStateRoot, baseFeeScalar, baseFeeOverhead)
+	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, MaxTxPayloadBytesPerBlock: %v, feeVaultAddress: %v, l1Config: %v, genesisStateRoot: %v}",
+		s.UseZktrie, maxTxPerBlock, maxTxPayloadBytesPerBlock, s.FeeVaultAddress, s.L1Config.String(), genesisStateRoot)
 }
 
 // IsValidTxCount returns whether the given block's transaction count is below the limit.
@@ -786,6 +774,14 @@ func (s ScrollConfig) IsValidBlockSize(size common.StorageSize) bool {
 // IsValidBlockSizeForMining is similar to IsValidBlockSize, but it accounts for the confidence factor in Rust CCC
 func (s ScrollConfig) IsValidBlockSizeForMining(size common.StorageSize) bool {
 	return s.IsValidBlockSize(size * (1.0 / 0.95))
+}
+
+// L2SystemConfigAddress returns the configured l2 system config address, or the zero address if it is not configured.
+func (s ScrollConfig) L2SystemConfigAddress() common.Address {
+	if s.L1Config == nil {
+		return common.Address{} // only in tests
+	}
+	return s.L1Config.L2SystemConfigAddress
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

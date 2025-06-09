@@ -122,8 +122,8 @@ func TestCalcBaseFee(t *testing.T) {
 	}
 	for i, test := range tests {
 		config := config()
-		config.Scroll.BaseFeeScalar = big.NewInt(10000000)
-		config.Scroll.BaseFeeOverhead = big.NewInt(1)
+		UpdateL2BaseFeeScalar(big.NewInt(10000000))
+		UpdateL2BaseFeeOverhead(big.NewInt(1))
 		if have, want := CalcBaseFee(config, nil, big.NewInt(test.parentL1BaseFee)), big.NewInt(test.expectedL2BaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
@@ -142,6 +142,8 @@ func TestCalcBaseFee(t *testing.T) {
 		{644149677419355, 10000000000}, // cap at max L2 base fee
 	}
 	for i, test := range testsWithDefaults {
+		UpdateL2BaseFeeScalar(big.NewInt(34000000000000))
+		UpdateL2BaseFeeOverhead(big.NewInt(15680000))
 		if have, want := CalcBaseFee(config(), nil, big.NewInt(test.parentL1BaseFee)), big.NewInt(test.expectedL2BaseFee); have.Cmp(want) != 0 {
 			t.Errorf("test %d: have %d  want %d, ", i, have, want)
 		}
@@ -150,11 +152,15 @@ func TestCalcBaseFee(t *testing.T) {
 
 // TestMinBaseFee assumes all blocks are 1559-blocks
 func TestMinBaseFee(t *testing.T) {
-	if have, want := MinBaseFee(DefaultBaseFeeScalar, DefaultBaseFeeOverhead), big.NewInt(15680000); have.Cmp(want) != 0 {
+	UpdateL2BaseFeeScalar(big.NewInt(34000000000000))
+	UpdateL2BaseFeeOverhead(big.NewInt(15680000))
+	if have, want := MinBaseFee(), big.NewInt(15680000); have.Cmp(want) != 0 {
 		t.Errorf("have %d  want %d, ", have, want)
 	}
 
-	if have, want := MinBaseFee(big.NewInt(10000000), big.NewInt(1)), big.NewInt(1); have.Cmp(want) != 0 {
+	UpdateL2BaseFeeScalar(big.NewInt(10000000))
+	UpdateL2BaseFeeOverhead(big.NewInt(1))
+	if have, want := MinBaseFee(), big.NewInt(1); have.Cmp(want) != 0 {
 		t.Errorf("have %d  want %d, ", have, want)
 	}
 }

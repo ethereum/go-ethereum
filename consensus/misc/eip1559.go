@@ -19,24 +19,66 @@ package misc
 import (
 	"fmt"
 	"math/big"
+	"sync"
 
+	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
+	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
-// Protocol-enforced maximum L2 base fee.
-// We would only go above this if L1 base fee hits 2931 Gwei.
-const MaximumL2BaseFee = 10000000000
+const (
+	// Protocol-enforced maximum L2 base fee.
+	// We would only go above this if L1 base fee hits 2931 Gwei.
+	MaximumL2BaseFee = 10000000000
+
+	// L2 base fee fallback values, in case the L2 system contract
+	// is not deployed on not configured yet.
+	DefaultBaseFeeOverhead = 15680000
+	DefaultBaseFeeScalar   = 34000000000000
+)
 
 // L2 base fee formula constants and defaults.
 // l2BaseFee = (l1BaseFee * scalar) / PRECISION + overhead.
 // `scalar` accounts for finalization costs. `overhead` accounts for sequencing and proving costs.
-// we use 1e18 for precision to match the contract implementation.
 var (
-	BaseFeePrecision       = new(big.Int).SetUint64(1e18)
-	DefaultBaseFeeScalar   = new(big.Int).SetUint64(34000000000000)
-	DefaultBaseFeeOverhead = new(big.Int).SetUint64(15680000)
+	// We use 1e18 for precision to match the contract implementation.
+	BaseFeePrecision = new(big.Int).SetUint64(1e18)
+
+	// scalar and overhead are updated automatically in `Blockchain.writeBlockWithState`.
+	baseFeeScalar   = big.NewInt(0)
+	baseFeeOverhead = big.NewInt(0)
+
+	lock sync.RWMutex
 )
+
+func ReadL2BaseFeeCoefficients() (scalar *big.Int, overhead *big.Int) {
+	lock.RLock()
+	defer lock.RUnlock()
+	return new(big.Int).Set(baseFeeScalar), new(big.Int).Set(baseFeeOverhead)
+}
+
+func UpdateL2BaseFeeOverhead(newOverhead *big.Int) {
+	if newOverhead == nil {
+		log.Error("Failed to set L2 base fee overhead, new value is <nil>")
+		return
+	}
+	lock.Lock()
+	defer lock.Unlock()
+	baseFeeOverhead.Set(newOverhead)
+}
+
+func UpdateL2BaseFeeScalar(newScalar *big.Int) {
+	if newScalar == nil {
+		log.Error("Failed to set L2 base fee scalar, new value is <nil>")
+		return
+	}
+	lock.Lock()
+	defer lock.Unlock()
+	baseFeeScalar.Set(newScalar)
+}
 
 // VerifyEip1559Header verifies some header attributes which were changed in EIP-1559,
 // - gas limit check
@@ -65,20 +107,13 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, parentL1BaseF
 		return big.NewInt(10000000) // 0.01 Gwei
 	}
 
-	scalar := config.Scroll.BaseFeeScalar
-	if scalar == nil {
-		scalar = DefaultBaseFeeScalar
-	}
-	overhead := config.Scroll.BaseFeeOverhead
-	if overhead == nil {
-		overhead = DefaultBaseFeeOverhead
-	}
-
+	scalar, overhead := ReadL2BaseFeeCoefficients()
 	return calcBaseFee(scalar, overhead, parentL1BaseFee)
 }
 
-// MinBaseFee calculates the minimum L2 base fee based on the configured coefficients.
-func MinBaseFee(scalar, overhead *big.Int) *big.Int {
+// MinBaseFee calculates the minimum L2 base fee based on the current coefficients.
+func MinBaseFee() *big.Int {
+	scalar, overhead := ReadL2BaseFeeCoefficients()
 	return calcBaseFee(scalar, overhead, big.NewInt(0))
 }
 
@@ -93,4 +128,61 @@ func calcBaseFee(scalar, overhead, parentL1BaseFee *big.Int) *big.Int {
 	}
 
 	return baseFee
+}
+
+type State interface {
+	GetState(addr common.Address, hash common.Hash) common.Hash
+}
+
+func InitializeL2BaseFeeCoefficients(chainConfig *params.ChainConfig, state State) error {
+	overhead := common.Big0
+	scalar := common.Big0
+
+	if l2SystemConfig := chainConfig.Scroll.L2SystemConfigAddress(); l2SystemConfig != (common.Address{}) {
+		overhead = state.GetState(l2SystemConfig, rcfg.L2BaseFeeOverheadSlot).Big()
+		scalar = state.GetState(l2SystemConfig, rcfg.L2BaseFeeScalarSlot).Big()
+	} else {
+		log.Warn("L2SystemConfig address is not configured")
+	}
+
+	// fallback to default if contract is not deployed or configured yet
+	if overhead.Cmp(common.Big0) == 0 {
+		overhead = big.NewInt(DefaultBaseFeeOverhead)
+	}
+	if scalar.Cmp(common.Big0) == 0 {
+		scalar = big.NewInt(DefaultBaseFeeScalar)
+	}
+
+	// update local view of coefficients
+	lock.Lock()
+	defer lock.Unlock()
+	baseFeeOverhead.Set(overhead)
+	baseFeeScalar.Set(scalar)
+	log.Info("Initialized L2 base fee coefficients", "overhead", overhead, "scalar", scalar)
+	return nil
+}
+
+type API struct{}
+
+type L2BaseFeeConfig struct {
+	Scalar   *big.Int `json:"scalar,omitempty"`
+	Overhead *big.Int `json:"overhead,omitempty"`
+}
+
+func (api *API) GetL2BaseFeeConfig() *L2BaseFeeConfig {
+	scalar, overhead := ReadL2BaseFeeCoefficients()
+
+	return &L2BaseFeeConfig{
+		Scalar:   scalar,
+		Overhead: overhead,
+	}
+}
+
+func APIs() []rpc.API {
+	return []rpc.API{{
+		Namespace: "scroll",
+		Version:   "1.0",
+		Service:   &API{},
+		Public:    false,
+	}}
 }

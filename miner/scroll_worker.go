@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -341,6 +342,7 @@ func (w *worker) mainLoop() {
 		p := recover()
 		if p != nil {
 			log.Error("worker mainLoop panic", "panic", p)
+			fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
 		}
 	}()
 

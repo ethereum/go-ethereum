@@ -998,6 +998,10 @@ web3._extend({
 			name: 'localSigner',
 			getter: 'scroll_getLocalSigner',
 		}),
+		new web3._extend.Property({
+			name: 'l2BaseFeeConfig',
+			getter: 'scroll_getL2BaseFeeConfig',
+		}),
 	]
 });
 `

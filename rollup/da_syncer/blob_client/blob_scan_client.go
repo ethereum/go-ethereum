@@ -8,10 +8,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/crypto/kzg4844"
+)
+
+const (
+	BlobScanDefaultTimeout = 15 * time.Second
 )
 
 type BlobScanClient struct {
@@ -21,7 +26,7 @@ type BlobScanClient struct {
 
 func NewBlobScanClient(apiEndpoint string) *BlobScanClient {
 	return &BlobScanClient{
-		client:      http.DefaultClient,
+		client:      &http.Client{Timeout: BlobScanDefaultTimeout},
 		apiEndpoint: apiEndpoint,
 	}
 }
@@ -59,6 +64,12 @@ func (c *BlobScanClient) GetBlobByVersionedHashAndBlockTime(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode result into struct, err: %w", err)
 	}
+
+	// check that blob data is not empty
+	if len(result.Data) < 2 {
+		return nil, fmt.Errorf("blob data is too short to be valid, expected at least 2 characters, got: %s, versioned hash: %s", result.Data, versionedHash.String())
+	}
+
 	blobBytes, err := hex.DecodeString(result.Data[2:])
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode data to bytes, err: %w", err)
