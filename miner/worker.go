@@ -396,7 +396,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
 				if sidecar.Version == 0 {
 					log.Info("Including blob tx with v0 sidecar, recomputing proofs", "hash", ltx.Hash)
-					sidecar.Proofs = make([]kzg4844.Proof, 0)
+					sidecar.Proofs = make([]kzg4844.Proof, 0, len(sidecar.Blobs)*kzg4844.CellProofsPerBlob)
 					for _, blob := range sidecar.Blobs {
 						cellProofs, err := kzg4844.ComputeCellProofs(&blob)
 						if err != nil {
