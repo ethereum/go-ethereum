@@ -131,7 +131,6 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			includedWithdrawals = append(includedWithdrawals, withdrawal)
 			work.size += params.WithdrawalSize
 		}
-
 	} else {
 		includedWithdrawals = genParam.withdrawals
 	}
