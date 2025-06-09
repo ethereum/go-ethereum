@@ -127,7 +127,6 @@ func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPay
 			if int(work.size)+params.WithdrawalSize > maxBlockSize {
 				break
 			}
-
 			includedWithdrawals = append(includedWithdrawals, withdrawal)
 			work.size += params.WithdrawalSize
 		}
