@@ -34,6 +34,7 @@
     ],
     "currentDifficulty": null,
     "gasUsed": "0x5208",
-    "currentBaseFee": "0x460"
+    "currentBaseFee": "0x460",
+    "requests": null
   }
 }

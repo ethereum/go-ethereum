@@ -3,6 +3,7 @@
 package bor
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
@@ -23,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/bor/clerk"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall" //nolint:typecheck
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/checkpoint"
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/milestone"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/span"
 	"github.com/ethereum/go-ethereum/consensus/bor/valset"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -42,7 +45,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -56,12 +61,17 @@ var (
 	key2, _ = crypto.HexToECDSA(privKey2)
 	addr2   = crypto.PubkeyToAddress(key2.PublicKey) // 0x9fB29AAc15b9A4B7F17c3385939b007540f4d791
 
+	// This account is secondary validator for 1st span (0-indexed)
+	key3, _ = crypto.HexToECDSA(privKey3)
+	addr3   = crypto.PubkeyToAddress(key3.PublicKey) // 0x96C42C56fdb78294F96B0cFa33c92bed7D75F96a
+
 	keys = []*ecdsa.PrivateKey{key, key2}
 )
 
 const (
 	privKey  = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
 	privKey2 = "9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3"
+	privKey3 = "c8deb0bea5c41afe8e37b4d1bd84e31adff11b09c8c96ff4b605003cce067cd9"
 
 	// The genesis for tests was generated with following parameters
 	extraSeal = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
@@ -110,16 +120,18 @@ func setupMiner(t *testing.T, n int, genesis *core.Genesis) ([]*node.Node, []*et
 	return stacks, nodes, enodes
 }
 
-func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
+func buildEthereumInstance(t *testing.T, db ethdb.Database, updateGenesis ...func(gen *core.Genesis)) *initializeData {
 	genesisData, err := ioutil.ReadFile("./testdata/genesis.json")
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
 
 	gen := &core.Genesis{}
-
 	if err := json.Unmarshal(genesisData, gen); err != nil {
 		t.Fatalf("%s", err)
+	}
+	for _, update := range updateGenesis {
+		update(gen)
 	}
 
 	ethConf := &eth.Config{
@@ -127,7 +139,6 @@ func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
 		BorLogs:     true,
 		StateScheme: "hash",
 	}
-
 	ethConf.Genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 
 	ethereum := utils.CreateBorEthereum(ethConf)
@@ -157,7 +168,7 @@ func insertNewBlock(t *testing.T, chain *core.BlockChain, block *types.Block) {
 
 type Option func(header *types.Header)
 
-func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain, parentBlock *types.Block, signer []byte, borConfig *params.BorConfig, txs []*types.Transaction, currentValidators []*valset.Validator, opts ...Option) *types.Block {
+func buildHeader(t *testing.T, chain *core.BlockChain, parentBlock *types.Block, signer []byte, borConfig *params.BorConfig, currentValidators []*valset.Validator, opts ...Option) *types.Header {
 	t.Helper()
 
 	header := &types.Header{
@@ -172,11 +183,25 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 		signer = getSignerKey(header.Number.Uint64())
 	}
 
+	// Similar to the logic in bor consensus
 	header.Time = parentBlock.Time() + bor.CalcProducerDelay(header.Number.Uint64(), 0, borConfig)
-	header.Extra = make([]byte, 32+65) // vanity + extraSeal
+	// Keeping this causes some e2e tests to fail because they work under certain time assumptions
+	// if header.Time < uint64(time.Now().Unix()) {
+	// 	header.Time = uint64(time.Now().Unix())
+	// }
 
+	// Similar to logic in bor consensus (prepare)
+	header.Extra = make([]byte, 32+65) // vanity + extraSeal
+	if len(header.Extra) < types.ExtraVanityLength {
+		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, types.ExtraVanityLength-len(header.Extra))...)
+	}
+	header.Extra = header.Extra[:types.ExtraVanityLength]
+
+	var isSprintEnd bool
+	if (number+1)%chain.Config().Bor.CalculateSprint(number) == 0 {
+		isSprintEnd = true
+	}
 	isSpanStart := IsSpanStart(number)
-	isSprintEnd := IsSprintEnd(number)
 
 	if isSpanStart {
 		header.Difficulty = new(big.Int).SetInt64(int64(len(currentValidators)))
@@ -185,15 +210,47 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 	if isSprintEnd {
 		sort.Sort(valset.ValidatorsByAddress(currentValidators))
 
-		validatorBytes := make([]byte, len(currentValidators)*validatorHeaderBytesLength)
-		header.Extra = make([]byte, 32+len(validatorBytes)+65) // vanity + validatorBytes + extraSeal
+		// Extra data is encoded differently after cancun
+		if chain.Config().IsCancun(header.Number) {
+			var tempValidatorBytes []byte
+			for _, validator := range currentValidators {
+				tempValidatorBytes = append(tempValidatorBytes, validator.HeaderBytes()...)
+			}
 
-		for i, val := range currentValidators {
-			copy(validatorBytes[i*validatorHeaderBytesLength:], val.HeaderBytes())
+			blockExtraData := &types.BlockExtraData{
+				ValidatorBytes: tempValidatorBytes,
+				TxDependency:   nil,
+			}
+			blockExtraDataBytes, err := rlp.EncodeToBytes(blockExtraData)
+			if err != nil {
+				t.Fatalf("error while encoding block extra data: %v", err)
+			}
+			header.Extra = append(header.Extra, blockExtraDataBytes...)
+		} else {
+			validatorBytes := make([]byte, len(currentValidators)*validatorHeaderBytesLength)
+			header.Extra = make([]byte, 32+len(validatorBytes)+65) // vanity + validatorBytes + extraSeal
+
+			for i, val := range currentValidators {
+				copy(validatorBytes[i*validatorHeaderBytesLength:], val.HeaderBytes())
+			}
+
+			copy(header.Extra[32:], validatorBytes)
+		}
+	} else if chain.Config().IsCancun(header.Number) {
+		blockExtraData := &types.BlockExtraData{
+			ValidatorBytes: nil,
+			TxDependency:   nil,
 		}
 
-		copy(header.Extra[32:], validatorBytes)
+		blockExtraDataBytes, err := rlp.EncodeToBytes(blockExtraData)
+		if err != nil {
+			t.Fatalf("error while encoding block extra data: %v", err)
+		}
+
+		header.Extra = append(header.Extra, blockExtraDataBytes...)
 	}
+
+	header.Extra = append(header.Extra, make([]byte, types.ExtraSealLength)...)
 
 	if chain.Config().IsLondon(header.Number) {
 		header.BaseFee = eip1559.CalcBaseFee(chain.Config(), parentBlock.Header())
@@ -207,6 +264,15 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 	for _, opt := range opts {
 		opt(header)
 	}
+
+	return header
+}
+
+func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain, parentBlock *types.Block, signer []byte, borConfig *params.BorConfig, txs []*types.Transaction, currentValidators []*valset.Validator, skipSealing bool, opts ...Option) *types.Block {
+	t.Helper()
+
+	// Build a new header based on parent block
+	header := buildHeader(t, chain, parentBlock, signer, borConfig, currentValidators, opts...)
 
 	state, err := chain.State()
 	if err != nil {
@@ -222,13 +288,12 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 	block, err := _bor.FinalizeAndAssemble(chain, b.header, state, &types.Body{
 		Transactions: b.txs,
 	}, b.receipts)
-
 	if err != nil {
 		panic(fmt.Sprintf("error finalizing block: %v", err))
 	}
 
 	// Write state changes to db
-	root, err := state.Commit(block.NumberU64(), chain.Config().IsEIP158(b.header.Number))
+	root, err := state.Commit(block.NumberU64(), chain.Config().IsEIP158(b.header.Number), false)
 	if err != nil {
 		panic(fmt.Sprintf("state write error: %v", err))
 	}
@@ -238,6 +303,12 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 	}
 
 	res := make(chan *types.Block, 1)
+
+	if skipSealing {
+		header := block.Header()
+		sign(t, header, signer, borConfig)
+		return types.NewBlock(header, block.Body(), b.receipts, trie.NewStackTrie(nil))
+	}
 
 	err = _bor.Seal(chain, block, res, nil)
 	if err != nil {
@@ -263,7 +334,9 @@ func (b *blockGen) addTxWithChain(bc *core.BlockChain, statedb *state.StateDB, t
 
 	statedb.SetTxContext(tx.Hash(), len(b.txs))
 
-	receipt, err := core.ApplyTransaction(bc.Config(), bc, &b.header.Coinbase, b.gasPool, statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, nil)
+	context := core.NewEVMBlockContext(b.header, bc, nil)
+	evm := vm.NewEVM(context, statedb, bc.Config(), vm.Config{})
+	receipt, err := core.ApplyTransaction(evm, b.gasPool, statedb, b.header, tx, &b.header.GasUsed, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -356,6 +429,46 @@ func getMockedHeimdallClient(t *testing.T, heimdallSpan *span.HeimdallSpan) (*mo
 		Return([]*clerk.EventRecordWithTime{getSampleEventRecord(t)}, nil).AnyTimes()
 
 	return h, ctrl
+}
+
+func createMockSpan(address common.Address, chainId string) span.HeimdallSpan {
+	// Mock span 0 for heimdall calls
+	validator := valset.Validator{
+		ID:               0,
+		Address:          address,
+		VotingPower:      10,
+		ProposerPriority: 0,
+	}
+	validatorSet := valset.ValidatorSet{
+		Validators: []*valset.Validator{&validator},
+		Proposer:   &validator,
+	}
+	span0 := span.HeimdallSpan{
+		Span: span.Span{
+			ID:         0,
+			StartBlock: 0,
+			EndBlock:   255,
+		},
+		ValidatorSet:      validatorSet,
+		SelectedProducers: []valset.Validator{validator},
+		ChainID:           chainId,
+	}
+
+	return span0
+}
+
+func createMockHeimdall(ctrl *gomock.Controller, span0, span1 *span.HeimdallSpan) *mocks.MockIHeimdallClient {
+	h := mocks.NewMockIHeimdallClient(ctrl)
+
+	h.EXPECT().Close().AnyTimes()
+	h.EXPECT().Span(gomock.Any(), uint64(0)).Return(span0, nil).AnyTimes()
+	h.EXPECT().Span(gomock.Any(), uint64(1)).Return(span1, nil).AnyTimes()
+	h.EXPECT().FetchCheckpoint(gomock.Any(), int64(-1)).Return(&checkpoint.Checkpoint{}, nil).AnyTimes()
+	h.EXPECT().FetchMilestone(gomock.Any()).Return(&milestone.Milestone{}, nil).AnyTimes()
+	h.EXPECT().FetchLastNoAckMilestone(gomock.Any()).Return("", nil).AnyTimes()
+	h.EXPECT().FetchNoAckMilestone(gomock.Any(), string("test")).Return(nil).AnyTimes()
+
+	return h
 }
 
 func getMockedSpanner(t *testing.T, validators []*valset.Validator) *bor.MockSpanner {

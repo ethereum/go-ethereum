@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -45,6 +46,8 @@ import (
 )
 
 const (
+	defaultSpanLength  = 6400 // Default span length i.e. number of bor blocks in a span
+	zerothSpanEnd      = 255  // End block of 0th span
 	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
@@ -225,6 +228,8 @@ type Bor struct {
 	GenesisContractsClient GenesisContract
 	HeimdallClient         IHeimdallClient
 
+	spanStore SpanStore // Store to save previous span data from heimdall
+
 	// The fields below are for testing only
 	fakeDiff      bool // Skip difficulty verifications
 	devFakeAuthor bool
@@ -258,6 +263,9 @@ func New(
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
 
+	// Create a new span store
+	spanStore := NewSpanStore(heimdallClient, spanner, chainConfig.ChainID.String())
+
 	c := &Bor{
 		chainConfig:            chainConfig,
 		config:                 borConfig,
@@ -268,6 +276,7 @@ func New(
 		spanner:                spanner,
 		GenesisContractsClient: genesisContracts,
 		HeimdallClient:         heimdallClient,
+		spanStore:              spanStore,
 		devFakeAuthor:          devFakeAuthor,
 	}
 
@@ -340,10 +349,24 @@ func (c *Bor) verifyHeader(chain consensus.ChainHeaderReader, header *types.Head
 	}
 
 	number := header.Number.Uint64()
+	now := uint64(time.Now().Unix())
 
-	// Don't waste time checking blocks from the future
-	if header.Time > uint64(time.Now().Unix()) {
-		return consensus.ErrFutureBlock
+	// Allow early blocks if Bhilai HF is enabled
+	if c.config.IsBhilai(header.Number) {
+		// Don't waste time checking blocks from the future but allow a buffer of block time for
+		// early block announcements. Note that this is a loose check and would allow early blocks
+		// from non-primary producer. Such blocks will be rejected later when we know the succession
+		// number of the signer in the current sprint.
+		if header.Time-c.config.CalculatePeriod(number) > now {
+			log.Error("Block announced too early post bhilai", "number", number, "headerTime", header.Time, "now", now)
+			return consensus.ErrFutureBlock
+		}
+	} else {
+		// Don't waste time checking blocks from the future
+		if header.Time > now {
+			log.Error("Block announced too early", "number", number, "headerTime", header.Time, "now", now)
+			return consensus.ErrFutureBlock
+		}
 	}
 
 	if err := validateHeaderExtraField(header.Extra); err != nil {
@@ -468,14 +491,22 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 		return err
 	}
 
-	// Verify the validator list match the local contract
-	if IsSprintStart(number+1, c.config.CalculateSprint(number)) {
-		newValidators, err := c.spanner.GetCurrentValidatorsByBlockNrOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber), number+1)
-
+	// Verify if the producer set in header's extra data matches with the list in span.
+	// We skip the check for 0th span as the producer set in contract v/s producer set
+	// in heimdall span is different which will lead a mismatch. Moreover, to make the
+	// validation stateless, we use the span from heimdall (via span store) instead of
+	// span from validator set genesis contract as both are supposed to be equivalent.
+	if number > zerothSpanEnd && IsSprintStart(number+1, c.config.CalculateSprint(number)) {
+		span, err := c.spanStore.spanByBlockNumber(context.Background(), number+1)
 		if err != nil {
 			return err
 		}
 
+		// Use producer set from span as it's equivalent to the data we get from genesis contract
+		newValidators := make([]*valset.Validator, len(span.SelectedProducers))
+		for i, val := range span.SelectedProducers {
+			newValidators[i] = &val
+		}
 		sort.Sort(valset.ValidatorsByAddress(newValidators))
 
 		headerVals, err := valset.ParseValidators(header.GetValidatorBytes(c.chainConfig))
@@ -562,8 +593,6 @@ func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash co
 		// at a checkpoint block without a parent (light client CHT), or we have piled
 		// up more headers than allowed to be reorged (chain reinit from a freezer),
 		// consider the checkpoint trusted and snapshot it.
-
-		// TODO fix this
 		// nolint:nestif
 		if number == 0 {
 			checkpoint := chain.GetHeaderByNumber(number)
@@ -571,14 +600,14 @@ func (c *Bor) snapshot(chain consensus.ChainHeaderReader, number uint64, hash co
 				// get checkpoint data
 				hash := checkpoint.Hash()
 
-				// get validators and current span
-				validators, err := c.spanner.GetCurrentValidatorsByHash(context.Background(), hash, number+1)
+				// get validators from span
+				span, err := c.spanStore.spanByBlockNumber(context.Background(), number+1)
 				if err != nil {
 					return nil, err
 				}
 
 				// new snap shot
-				snap = newSnapshot(c.chainConfig, c.signatures, number, hash, validators)
+				snap = newSnapshot(c.chainConfig, c.signatures, number, hash, span.ValidatorSet.Validators)
 				if err := snap.store(c.db); err != nil {
 					return nil, err
 				}
@@ -695,7 +724,16 @@ func (c *Bor) verifySeal(chain consensus.ChainHeaderReader, header *types.Header
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
 
-	if IsBlockOnTime(parent, header, number, succession, c.config) {
+	// Post Bhilai HF, reject blocks form non-primary producers if they're earlier than the expected time
+	if c.config.IsBhilai(header.Number) && succession != 0 {
+		now := uint64(time.Now().Unix())
+		if header.Time > now {
+			log.Error("Block announced too early by non-primary producer post bhilai", "number", number, "headerTime", header.Time, "now", now)
+			return consensus.ErrFutureBlock
+		}
+	}
+
+	if IsBlockEarly(parent, header, number, succession, c.config) {
 		return &BlockTooSoonError{number, succession}
 	}
 
@@ -710,7 +748,9 @@ func (c *Bor) verifySeal(chain consensus.ChainHeaderReader, header *types.Header
 	return nil
 }
 
-func IsBlockOnTime(parent *types.Header, header *types.Header, number uint64, succession int, cfg *params.BorConfig) bool {
+// IsBlockEarly returns true if the header time is earlier than expected (according to consensus rules). This
+// can happen if the producer maliciously updates the header time.
+func IsBlockEarly(parent *types.Header, header *types.Header, number uint64, succession int, cfg *params.BorConfig) bool {
 	return parent != nil && header.Time < parent.Time+CalcProducerDelay(number, succession, cfg)
 }
 
@@ -813,6 +853,16 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 	header.Time = parent.Time + CalcProducerDelay(number, succession, c.config)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
+	} else {
+		// For primary validators, wait until the current block production window
+		// starts. This prevents bor from starting to build next block before time
+		// as we'd like to wait for new transactions. Although this change doesn't
+		// need a check for hard fork as it doesn't change any consensus rules, we
+		// still keep it for safety and testing.
+		if c.config.IsBhilai(big.NewInt(int64(number))) && succession == 0 {
+			startTime := time.Unix(int64(header.Time-c.config.CalculatePeriod(number)), 0)
+			time.Sleep(time.Until(startTime))
+		}
 	}
 
 	return nil
@@ -820,14 +870,18 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, tracer *tracing.Hooks) {
+func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, wrappedState vm.StateDB, body *types.Body, tracer *tracing.Hooks) {
 	headerNumber := header.Number.Uint64()
 	if body.Withdrawals != nil || header.WithdrawalsHash != nil {
 		return
 	}
-	if body.Requests != nil || header.RequestsHash != nil {
+	if header.RequestsHash != nil {
 		return
 	}
+
+	// Extract the underlying state to access methods like `IntermediateRoot` and `Copy`
+	// required for bor consensus operations
+	// state := wrappedState.(*state.StateDB)
 
 	var (
 		stateSyncData []*types.StateSyncData
@@ -838,31 +892,27 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 		start := time.Now()
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
 		// check and commit span
-		if err := c.checkAndCommitSpan(state, header, cx, tracer); err != nil {
+		if err := c.checkAndCommitSpan(wrappedState, header, cx, tracer); err != nil {
 			log.Error("Error while committing span", "error", err)
 			return
 		}
 
 		if c.HeimdallClient != nil {
 			// commit states
-			stateSyncData, err = c.CommitStates(state, header, cx, tracer)
+			stateSyncData, err = c.CommitStates(wrappedState, header, cx, tracer)
 			if err != nil {
 				log.Error("Error while committing states", "error", err)
 				return
 			}
 		}
 
-		state.BorConsensusTime = time.Since(start)
+		wrappedState.SetBorConsensusTime(time.Since(start))
 	}
 
-	if err = c.changeContractCodeIfNeeded(headerNumber, state); err != nil {
+	if err = c.changeContractCodeIfNeeded(headerNumber, wrappedState); err != nil {
 		log.Error("Error changing contract code", "error", err)
 		return
 	}
-
-	// No block rewards in PoA, so the state remains as is and uncles are dropped
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	header.UncleHash = types.CalcUncleHash(nil)
 
 	// Set state sync data to blockchain
 	bc := chain.(*core.BlockChain)
@@ -884,7 +934,7 @@ func decodeGenesisAlloc(i interface{}) (types.GenesisAlloc, error) {
 	return alloc, nil
 }
 
-func (c *Bor) changeContractCodeIfNeeded(headerNumber uint64, state *state.StateDB) error {
+func (c *Bor) changeContractCodeIfNeeded(headerNumber uint64, state vm.StateDB) error {
 	for blockNumber, genesisAlloc := range c.config.BlockAlloc {
 		if blockNumber == strconv.FormatUint(headerNumber, 10) {
 			allocs, err := decodeGenesisAlloc(genesisAlloc)
@@ -914,7 +964,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 	if body.Withdrawals != nil || header.WithdrawalsHash != nil {
 		return nil, consensus.ErrUnexpectedWithdrawals
 	}
-	if body.Requests != nil || header.RequestsHash != nil {
+	if header.RequestsHash != nil {
 		return nil, consensus.ErrUnexpectedRequests
 	}
 
@@ -927,7 +977,7 @@ func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *typ
 		cx := statefull.ChainContext{Chain: chain, Bor: c}
 
 		// check and commit span
-		if err = c.checkAndCommitSpan(state, header, cx, tracer); err != nil {
+		if err = c.checkAndCommitSpan(vm.StateDB(state), header, cx, tracer); err != nil {
 			log.Error("Error while committing span", "error", err)
 			return nil, err
 		}
@@ -1007,8 +1057,20 @@ func (c *Bor) Seal(chain consensus.ChainHeaderReader, block *types.Block, result
 		return err
 	}
 
+	var delay time.Duration
+
 	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
+	if c.config.IsBhilai(header.Number) {
+		delay = time.Until(time.Unix(int64(header.Time), 0)) // Wait until we reach header time for non-primary validators
+		if successionNumber == 0 {
+			// For primary producers, set the delay to `header.Time - block time` instead of `header.Time`
+			// for early block announcement instead of waiting for full block time.
+			delay = time.Until(time.Unix(int64(header.Time-c.config.CalculatePeriod(number)), 0))
+		}
+	} else {
+		delay = time.Until(time.Unix(int64(header.Time), 0)) // Wait until we reach header time
+	}
+
 	// wiggle was already accounted for in header.Time, this is just for logging
 	wiggle := time.Duration(successionNumber) * time.Duration(c.config.CalculateBackupMultiplier(number)) * time.Second
 
@@ -1106,7 +1168,7 @@ func (c *Bor) Close() error {
 }
 
 func (c *Bor) checkAndCommitSpan(
-	state *state.StateDB,
+	state vm.StateDB,
 	header *types.Header,
 	chain core.ChainContext,
 	tracer *tracing.Hooks,
@@ -1127,18 +1189,25 @@ func (c *Bor) checkAndCommitSpan(
 }
 
 func (c *Bor) needToCommitSpan(currentSpan *span.Span, headerNumber uint64) bool {
-	// if span is nil
+	// If span is nil, return false.
 	if currentSpan == nil {
 		return false
 	}
 
-	// check span is not set initially
+	// Check if span is not set initially, we commit the span with spanId 1, which will also commit the 0th span.
+	// Check: https://github.com/maticnetwork/genesis-contracts/blob/5dcbcc72f10ab847276586e629f96b8a6d369e1d/contracts/BorValidatorSet.template#L229
 	if currentSpan.EndBlock == 0 {
 		return true
 	}
 
-	// if current block is first block of last sprint in current span
+	// If the current block is the first block of the last sprint in the current span.
+	// But here we should skip the check for the 0th span, as it will cause the span to be committed to be committed twice.
 	if currentSpan.EndBlock > c.config.CalculateSprint(headerNumber) && currentSpan.EndBlock-c.config.CalculateSprint(headerNumber)+1 == headerNumber {
+		if currentSpan.ID == 0 {
+			// If the current span is the 0th span, we will skip committing the span.
+			log.Info("Skipping the last sprint commit for 0th span", "spanID", currentSpan.ID, "headerNumber", headerNumber)
+			return false
+		}
 		return true
 	}
 
@@ -1148,7 +1217,7 @@ func (c *Bor) needToCommitSpan(currentSpan *span.Span, headerNumber uint64) bool
 func (c *Bor) FetchAndCommitSpan(
 	ctx context.Context,
 	newSpanID uint64,
-	state *state.StateDB,
+	state vm.StateDB,
 	header *types.Header,
 	chain core.ChainContext,
 	tracer *tracing.Hooks,
@@ -1164,7 +1233,7 @@ func (c *Bor) FetchAndCommitSpan(
 
 		heimdallSpan = *s
 	} else {
-		response, err := c.HeimdallClient.Span(ctx, newSpanID)
+		response, err := c.spanStore.spanById(ctx, newSpanID)
 		if err != nil {
 			return err
 		}
@@ -1186,7 +1255,7 @@ func (c *Bor) FetchAndCommitSpan(
 
 // CommitStates commit states
 func (c *Bor) CommitStates(
-	state *state.StateDB,
+	state vm.StateDB,
 	header *types.Header,
 	chain statefull.ChainContext,
 	tracer *tracing.Hooks,
@@ -1203,7 +1272,7 @@ func (c *Bor) CommitStates(
 
 	if c.config.IsIndore(header.Number) {
 		// Fetch the LastStateId from contract via current state instance
-		lastStateIDBig, err = c.GenesisContractsClient.LastStateId(state.Copy(), number-1, header.ParentHash)
+		lastStateIDBig, err = c.GenesisContractsClient.LastStateId(state.Clone().(vm.StateDB), number-1, header.ParentHash)
 		if err != nil {
 			return nil, err
 		}
@@ -1296,6 +1365,8 @@ func validateEventRecord(eventRecord *clerk.EventRecordWithTime, number uint64, 
 
 func (c *Bor) SetHeimdallClient(h IHeimdallClient) {
 	c.HeimdallClient = h
+	// Update the heimdall client in span store
+	c.spanStore.setHeimdallClient(h)
 }
 
 func (c *Bor) GetCurrentValidators(ctx context.Context, headerHash common.Hash, blockNumber uint64) ([]*valset.Validator, error) {

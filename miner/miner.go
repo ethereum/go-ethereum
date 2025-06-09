@@ -58,7 +58,8 @@ type Config struct {
 
 // DefaultConfig contains default settings for miner.
 var DefaultConfig = Config{
-	GasCeil:  30_000_000,
+	// Polygon/bor: PIP-60 (increase gas limit to 45M)
+	GasCeil:  45_000_000,
 	GasPrice: big.NewInt(params.BorDefaultMinerGasPrice), // enforces minimum gas price of 25 gwei in bor
 
 	// The default recommit time is chosen as two seconds since
@@ -72,6 +73,7 @@ var DefaultConfig = Config{
 // Miner creates blocks and searches for proof-of-work values.
 // nolint:staticcheck
 type Miner struct {
+	confMu  sync.RWMutex // The lock used to protect the config fields: GasCeil, GasTip and Extradata
 	mux     *event.TypeMux
 	eth     Backend
 	engine  consensus.Engine
@@ -79,6 +81,7 @@ type Miner struct {
 	startCh chan struct{}
 	stopCh  chan chan struct{}
 	worker  *worker
+	prio    []common.Address // A list of senders to prioritize
 
 	wg sync.WaitGroup
 }
@@ -246,6 +249,14 @@ func (miner *Miner) PendingBlock() *types.Block {
 
 func (miner *Miner) SetEtherbase(addr common.Address) {
 	miner.worker.setEtherbase(addr)
+}
+
+// SetPrioAddresses sets a list of addresses to prioritize for transaction inclusion.
+func (miner *Miner) SetPrioAddresses(prio []common.Address) {
+	miner.confMu.Lock()
+	miner.prio = prio
+	miner.worker.prio = miner.prio
+	miner.confMu.Unlock()
 }
 
 // SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.

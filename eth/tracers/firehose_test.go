@@ -1,7 +1,6 @@
 package tracers
 
 import (
-	"cmp"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -112,10 +111,6 @@ var ignorePbFieldNames = map[string]bool{
 	// This was a Polygon specific field that existed for a while and has since been
 	// removed. It can be safely ignored in all protocols now.
 	"TxDependency": true,
-
-	// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
-	// (RequestsHash is actually not EIP-7702, but will probably be activated in Polygon at the same time)
-	"RequestsHash": true,
 }
 
 var pbFieldNameToGethMapping = map[string]string{
@@ -135,22 +130,12 @@ var (
 	gethHeaderType = reflect.TypeFor[types.Header]()
 )
 
-const (
-	shangaiHash = "5341947c531e5c9cf38202784b16ac66484fe1838aa6e825436b22321b927296"
-	pragueHash  = "4ced4916132bbf6a7819a310bbac4abf354062a00efc980ea4f0bab406546ac5"
-)
-
 func Test_TypesHeader_AllConsensusFieldsAreKnown(t *testing.T) {
-	inferredHash := pragueHash
-	if ignorePbFieldNames["RequestsHash"] {
-		inferredHash = shangaiHash
-	}
-
 	// This exact hash varies from protocol to protocol and also sometimes from one version to the other.
 	// When adding support for a new hard-fork that adds new block header fields, it's normal that this value
 	// changes. If you are sure the two struct are the same, then you can update the expected hash below
 	// to the new value.
-	expectedHash := common.HexToHash(inferredHash)
+	expectedHash := common.HexToHash("4ced4916132bbf6a7819a310bbac4abf354062a00efc980ea4f0bab406546ac5")
 
 	gethHeaderValue := reflect.New(gethHeaderType)
 	fillAllFieldsWithNonEmptyValues(t, gethHeaderValue, reflect.VisibleFields(gethHeaderType))
@@ -211,7 +196,7 @@ func TestFirehose_BalanceChangeAllMappedCorrectly(t *testing.T) {
 
 	for i := 0; i <= math.MaxUint8; i++ {
 		tracingReason := tracing.BalanceChangeReason(i)
-		if tracingReason == tracing.BalanceChangeUnspecified /** || tracingReason == tracing.BalanceChangeRevert */ {
+		if tracingReason == tracing.BalanceChangeUnspecified || tracingReason == tracing.BalanceChangeRevert {
 			// Should never happen in Firehose tracer, only if tracer is wrapped with [tracing.WrapWithJournal]
 			continue
 		}
@@ -318,8 +303,8 @@ func fieldsCountMismatchMessage(t *testing.T, pbFieldNames map[string]bool, geth
 			"Missing in `*types.Header`:\n%s",
 		len(pbRemappedFieldNames),
 		len(gethFieldNames),
-		asIndentedJSON(t, mapSortedKeys(pbRemappedFieldNames)),
-		asIndentedJSON(t, mapSortedKeys(gethFieldNames)),
+		asIndentedJSON(t, maps.Keys(pbRemappedFieldNames)),
+		asIndentedJSON(t, maps.Keys(gethFieldNames)),
 		asIndentedJSON(t, missingInSet(gethFieldNames, pbRemappedFieldNames)),
 		asIndentedJSON(t, missingInSet(pbRemappedFieldNames, gethFieldNames)),
 	)
@@ -361,12 +346,6 @@ func filter[S ~[]T, T any](s S, f func(T) bool) (out S) {
 	}
 
 	return out
-}
-
-func mapSortedKeys[M ~map[K]V, K cmp.Ordered, V any](m M) []K {
-	keys := maps.Keys(m)
-	slices.Sort(keys)
-	return keys
 }
 
 func TestFirehose_reorderIsolatedTransactionsAndOrdinals(t *testing.T) {

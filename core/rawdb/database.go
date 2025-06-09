@@ -20,20 +20,23 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
 )
+
+var ErrDeleteRangeInterrupted = errors.New("safe delete range operation interrupted")
 
 // freezerdb is a database wrapper that enables ancient chain segment freezing.
 type freezerdb struct {
@@ -418,39 +421,9 @@ func NewMemoryDatabase() ethdb.Database {
 	return NewDatabase(memorydb.New())
 }
 
-// NewMemoryDatabaseWithCap creates an ephemeral in-memory key-value database
-// with an initial starting capacity, but without a freezer moving immutable
-// chain segments into cold storage.
-func NewMemoryDatabaseWithCap(size int) ethdb.Database {
-	return NewDatabase(memorydb.NewWithCap(size))
-}
-
-// NewLevelDBDatabase creates a persistent key-value database without a freezer
-// moving immutable chain segments into cold storage.
-func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
-	db, err := leveldb.New(file, cache, handles, namespace, readonly)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Info("Using LevelDB as the backing database")
-
-	return NewDatabase(db), nil
-}
-
-// NewPebbleDBDatabase creates a persistent key-value database without a freezer
-// moving immutable chain segments into cold storage.
-func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly, ephemeral bool) (ethdb.Database, error) {
-	db, err := pebble.New(file, cache, handles, namespace, readonly, ephemeral)
-	if err != nil {
-		return nil, err
-	}
-	return NewDatabase(db), nil
-}
-
 const (
-	dbPebble  = "pebble"
-	dbLeveldb = "leveldb"
+	DBPebble  = "pebble"
+	DBLeveldb = "leveldb"
 )
 
 // PreexistingDatabase checks the given data directory whether a database is already
@@ -465,86 +438,9 @@ func PreexistingDatabase(path string) string {
 		if err != nil {
 			panic(err) // only possible if the pattern is malformed
 		}
-
-		return dbPebble
+		return DBPebble
 	}
-
-	return dbLeveldb
-}
-
-// OpenOptions contains the options to apply when opening a database.
-// OBS: If AncientsDirectory is empty, it indicates that no freezer is to be used.
-type OpenOptions struct {
-	Type              string // "leveldb" | "pebble"
-	Directory         string // the datadir
-	AncientsDirectory string // the ancients-dir
-	Namespace         string // the namespace for database relevant metrics
-	Cache             int    // the capacity(in megabytes) of the data caching
-	Handles           int    // number of files to be open simultaneously
-	ReadOnly          bool
-
-	// Ancient pruner related fields
-	DisableFreeze bool
-	IsLastOffset  bool
-
-	// Ephemeral means that filesystem sync operations should be avoided: data integrity in the face of
-	// a crash is not important. This option should typically be used in tests.
-	Ephemeral bool
-}
-
-// openKeyValueDatabase opens a disk-based key-value database, e.g. leveldb or pebble.
-//
-//	                      type == null          type != null
-//	                   +----------------------------------------
-//	db is non-existent |  pebble default  |  specified type
-//	db is existent     |  from db         |  specified type (if compatible)
-func openKeyValueDatabase(o OpenOptions) (ethdb.Database, error) {
-	// Reject any unsupported database type
-	if len(o.Type) != 0 && o.Type != dbLeveldb && o.Type != dbPebble {
-		return nil, fmt.Errorf("unknown db.engine %v", o.Type)
-	}
-	// Retrieve any pre-existing database's type and use that or the requested one
-	// as long as there's no conflict between the two types
-	existingDb := PreexistingDatabase(o.Directory)
-	if len(existingDb) != 0 && len(o.Type) != 0 && o.Type != existingDb {
-		return nil, fmt.Errorf("db.engine choice was %v but found pre-existing %v database in specified data directory", o.Type, existingDb)
-	}
-
-	if o.Type == dbPebble || existingDb == dbPebble {
-		log.Info("Using pebble as the backing database")
-		return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
-	}
-	if o.Type == dbLeveldb || existingDb == dbLeveldb {
-		log.Info("Using leveldb as the backing database")
-		return NewLevelDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly)
-	}
-	// No pre-existing database, no user-requested one either. Default to Pebble.
-	log.Info("Defaulting to pebble as the backing database")
-	return NewPebbleDBDatabase(o.Directory, o.Cache, o.Handles, o.Namespace, o.ReadOnly, o.Ephemeral)
-}
-
-// Open opens both a disk-based key-value database such as leveldb or pebble, but also
-// integrates it with a freezer database -- if the AncientDir option has been
-// set on the provided OpenOptions.
-// The passed o.AncientDir indicates the path of root ancient directory where
-// the chain freezer can be opened.
-func Open(o OpenOptions) (ethdb.Database, error) {
-	kvdb, err := openKeyValueDatabase(o)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(o.AncientsDirectory) == 0 {
-		return kvdb, nil
-	}
-
-	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly, o.DisableFreeze, o.IsLastOffset)
-	if err != nil {
-		kvdb.Close()
-		return nil, err
-	}
-
-	return frdb, nil
+	return DBLeveldb
 }
 
 type counter uint64
@@ -629,32 +525,31 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		logged = time.Now()
 
 		// Key-value store statistics
-		headers         stat
-		bodies          stat
-		receipts        stat
-		tds             stat
-		numHashPairings stat
-		hashNumPairings stat
-		legacyTries     stat
-		stateLookups    stat
-		accountTries    stat
-		storageTries    stat
-		codes           stat
-		txLookups       stat
-		accountSnaps    stat
-		storageSnaps    stat
-		preimages       stat
-		bloomBits       stat
-		beaconHeaders   stat
-		cliqueSnaps     stat
+		headers            stat
+		bodies             stat
+		receipts           stat
+		tds                stat
+		numHashPairings    stat
+		hashNumPairings    stat
+		legacyTries        stat
+		stateLookups       stat
+		accountTries       stat
+		storageTries       stat
+		codes              stat
+		txLookups          stat
+		accountSnaps       stat
+		storageSnaps       stat
+		preimages          stat
+		beaconHeaders      stat
+		cliqueSnaps        stat
+		bloomBits          stat
+		filterMapRows      stat
+		filterMapLastBlock stat
+		filterMapBlockLV   stat
 
 		// Verkle statistics
 		verkleTries        stat
 		verkleStateLookups stat
-
-		// Les statistic
-		chtTrieNodes   stat
-		bloomTrieNodes stat
 
 		// Meta- and unaccounted data
 		metadata    stat
@@ -662,6 +557,11 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 
 		// Totals
 		total common.StorageSize
+
+		// This map tracks example keys for unaccounted data.
+		// For each unique two-byte prefix, the first unaccounted key encountered
+		// by the iterator will be stored.
+		unaccountedKeys = make(map[[2]byte][]byte)
 	)
 	// Inspect key-value database first.
 	for it.Next() {
@@ -707,22 +607,24 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			metadata.Add(size)
 		case bytes.HasPrefix(key, genesisPrefix) && len(key) == (len(genesisPrefix)+common.HashLength):
 			metadata.Add(size)
-		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
-			bloomBits.Add(size)
-		case bytes.HasPrefix(key, BloomBitsIndexPrefix):
-			bloomBits.Add(size)
 		case bytes.HasPrefix(key, skeletonHeaderPrefix) && len(key) == (len(skeletonHeaderPrefix)+8):
 			beaconHeaders.Add(size)
 		case bytes.HasPrefix(key, CliqueSnapshotPrefix) && len(key) == 7+common.HashLength:
 			cliqueSnaps.Add(size)
-		case bytes.HasPrefix(key, ChtTablePrefix) ||
-			bytes.HasPrefix(key, ChtIndexTablePrefix) ||
-			bytes.HasPrefix(key, ChtPrefix): // Canonical hash trie
-			chtTrieNodes.Add(size)
-		case bytes.HasPrefix(key, BloomTrieTablePrefix) ||
-			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
-			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
-			bloomTrieNodes.Add(size)
+
+		// new log index
+		case bytes.HasPrefix(key, filterMapRowPrefix) && len(key) <= len(filterMapRowPrefix)+9:
+			filterMapRows.Add(size)
+		case bytes.HasPrefix(key, filterMapLastBlockPrefix) && len(key) == len(filterMapLastBlockPrefix)+4:
+			filterMapLastBlock.Add(size)
+		case bytes.HasPrefix(key, filterMapBlockLVPrefix) && len(key) == len(filterMapBlockLVPrefix)+8:
+			filterMapBlockLV.Add(size)
+
+		// old log index (deprecated)
+		case bytes.HasPrefix(key, bloomBitsPrefix) && len(key) == (len(bloomBitsPrefix)+10+common.HashLength):
+			bloomBits.Add(size)
+		case bytes.HasPrefix(key, bloomBitsMetaPrefix) && len(key) < len(bloomBitsMetaPrefix)+8:
+			bloomBits.Add(size)
 
 		// Verkle trie data is detected, determine the sub-category
 		case bytes.HasPrefix(key, VerklePrefix):
@@ -741,27 +643,18 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			default:
 				unaccounted.Add(size)
 			}
+
+		// Metadata keys
+		case slices.ContainsFunc(knownMetadataKeys, func(x []byte) bool { return bytes.Equal(x, key) }):
+			metadata.Add(size)
+
 		default:
-			var accounted bool
-
-			for _, meta := range [][]byte{
-				databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
-				lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
-				snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
-				uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
-				persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
-			} {
-				if bytes.Equal(key, meta) {
-					metadata.Add(size)
-
-					accounted = true
-
-					break
+			unaccounted.Add(size)
+			if len(key) >= 2 {
+				prefix := [2]byte(key[:2])
+				if _, ok := unaccountedKeys[prefix]; !ok {
+					unaccountedKeys[prefix] = bytes.Clone(key)
 				}
-			}
-
-			if !accounted {
-				unaccounted.Add(size)
 			}
 		}
 
@@ -780,7 +673,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count()},
 		{"Key-Value store", "Transaction index", txLookups.Size(), txLookups.Count()},
-		{"Key-Value store", "Bloombit index", bloomBits.Size(), bloomBits.Count()},
+		{"Key-Value store", "Log index filter-map rows", filterMapRows.Size(), filterMapRows.Count()},
+		{"Key-Value store", "Log index last-block-of-map", filterMapLastBlock.Size(), filterMapLastBlock.Count()},
+		{"Key-Value store", "Log index block-lv", filterMapBlockLV.Size(), filterMapBlockLV.Count()},
+		{"Key-Value store", "Log bloombits (deprecated)", bloomBits.Size(), bloomBits.Count()},
 		{"Key-Value store", "Contract codes", codes.Size(), codes.Count()},
 		{"Key-Value store", "Hash trie nodes", legacyTries.Size(), legacyTries.Count()},
 		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
@@ -794,8 +690,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Beacon sync headers", beaconHeaders.Size(), beaconHeaders.Count()},
 		{"Key-Value store", "Clique snapshots", cliqueSnaps.Size(), cliqueSnaps.Count()},
 		{"Key-Value store", "Singleton metadata", metadata.Size(), metadata.Count()},
-		{"Light client", "CHT trie nodes", chtTrieNodes.Size(), chtTrieNodes.Count()},
-		{"Light client", "Bloom trie nodes", bloomTrieNodes.Size(), bloomTrieNodes.Count()},
 	}
 	// Inspect all registered append-only file store then.
 	ancients, err := inspectFreezers(db)
@@ -827,9 +721,22 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 
 	if unaccounted.size > 0 {
 		log.Error("Database contains unaccounted data", "size", unaccounted.size, "count", unaccounted.count)
+		for _, e := range slices.SortedFunc(maps.Values(unaccountedKeys), bytes.Compare) {
+			log.Error(fmt.Sprintf("   example key: %x", e))
+		}
 	}
 
 	return nil
+}
+
+// This is the list of known 'metadata' keys stored in the databasse.
+var knownMetadataKeys = [][]byte{
+	databaseVersionKey, headHeaderKey, headBlockKey, headFastBlockKey, headFinalizedBlockKey,
+	lastPivotKey, fastTrieProgressKey, snapshotDisabledKey, SnapshotRootKey, snapshotJournalKey,
+	snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
+	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
+	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
+	filterMapsRangeKey,
 }
 
 // printChainMetadata prints out chain metadata to stderr.
@@ -871,6 +778,78 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 	if b := ReadSkeletonSyncStatus(db); b != nil {
 		data = append(data, []string{"SkeletonSyncStatus", string(b)})
 	}
-
+	if fmr, ok, _ := ReadFilterMapsRange(db); ok {
+		data = append(data, []string{"filterMapsRange", fmt.Sprintf("%+v", fmr)})
+	}
 	return data
+}
+
+// SafeDeleteRange deletes all of the keys (and values) in the range
+// [start,end) (inclusive on start, exclusive on end).
+// If hashScheme is true then it always uses an iterator and skips hashdb trie
+// node entries. If it is false and the backing db is pebble db then it uses
+// the fast native range delete.
+// In case of fallback mode (hashdb or leveldb) the range deletion might be
+// very slow depending on the number of entries. In this case stopCallback
+// is periodically called and if it returns an error then SafeDeleteRange
+// stops and also returns that error. The callback is not called if native
+// range delete is used or there are a small number of keys only. The bool
+// argument passed to the callback is true if enrties have actually been
+// deleted already.
+func SafeDeleteRange(db ethdb.KeyValueStore, start, end []byte, hashScheme bool, stopCallback func(bool) bool) error {
+	if !hashScheme {
+		// delete entire range; use fast native range delete on pebble db
+		for {
+			switch err := db.DeleteRange(start, end); {
+			case err == nil:
+				return nil
+			case errors.Is(err, ethdb.ErrTooManyKeys):
+				if stopCallback(true) {
+					return ErrDeleteRangeInterrupted
+				}
+			default:
+				return err
+			}
+		}
+	}
+
+	var (
+		count, deleted, skipped int
+		buff                    = crypto.NewKeccakState()
+		startTime               = time.Now()
+	)
+
+	batch := db.NewBatch()
+	it := db.NewIterator(nil, start)
+	defer func() {
+		it.Release() // it might be replaced during the process
+		log.Debug("SafeDeleteRange finished", "deleted", deleted, "skipped", skipped, "elapsed", common.PrettyDuration(time.Since(startTime)))
+	}()
+
+	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+		// Prevent deletion for trie nodes in hash mode
+		if len(it.Key()) != 32 || crypto.HashData(buff, it.Value()) != common.BytesToHash(it.Key()) {
+			if err := batch.Delete(it.Key()); err != nil {
+				return err
+			}
+			deleted++
+		} else {
+			skipped++
+		}
+		count++
+		if count > 10000 { // should not block for more than a second
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			if stopCallback(deleted != 0) {
+				return ErrDeleteRangeInterrupted
+			}
+			start = append(bytes.Clone(it.Key()), 0) // appending a zero gives us the next possible key
+			it.Release()
+			batch = db.NewBatch()
+			it = db.NewIterator(nil, start)
+			count = 0
+		}
+	}
+	return batch.Write()
 }

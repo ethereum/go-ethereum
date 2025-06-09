@@ -288,7 +288,6 @@ a key before startingHash (wrong order). The server should return the first avai
 	}
 
 	for i, tc := range tests {
-		tc := tc
 		if i > 0 {
 			t.Log("\n")
 		}
@@ -431,7 +430,6 @@ of the test account. The server should return slots [2,3] (i.e. the 'next availa
 	}
 
 	for i, tc := range tests {
-		tc := tc
 		if i > 0 {
 			t.Log("\n")
 		}
@@ -528,7 +526,6 @@ func (s *Suite) TestSnapGetByteCodes(t *utesting.T) {
 	}
 
 	for i, tc := range tests {
-		tc := tc
 		if i > 0 {
 			t.Log("\n")
 		}
@@ -734,7 +731,6 @@ The server should reject the request.`,
 	}
 
 	for i, tc := range tests {
-		tc := tc
 		if i > 0 {
 			t.Log("\n")
 		}

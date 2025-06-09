@@ -1,5 +1,5 @@
 {
-  "hash": "Hlau1KLprrOkaDe4TNZdPEoXeJ4UGEL1PwUY/qq+/rk=",
+  "hash": "Gv/8rxPs41NSjA5ZsmZNgeXPWPT8V6320AX3kRJrhXs=",
   "header": {
     "baseFeePerGas": {
       "bytes": "LgcbLA=="
@@ -12,22 +12,21 @@
     "excessBlobGas": "0",
     "gasLimit": "4712388",
     "gasUsed": "35126",
-    "hash": "Hlau1KLprrOkaDe4TNZdPEoXeJ4UGEL1PwUY/qq+/rk=",
-    "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "hash": "Gv/8rxPs41NSjA5ZsmZNgeXPWPT8V6320AX3kRJrhXs=",
+    "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAABAAAAIAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAYAEAAAAAAABAAAAAIAAABCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAABAAAA==",
     "mixHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "number": "2",
     "parentBeaconRoot": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-    "parentHash": "tNKSM8SZPvaEgBA4yUj9YayXYYuXnLCuHx5oWJwVOhw=",
-    "receiptRoot": "TaaZwIwiwzd65OYkLzazOIYrFN0/DnyXzNqaA/dY3pQ=",
-    "requestsHash": "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
-    "stateRoot": "C/zDETYPAXEFuq3RDENkXppoaNjfcWKHhIQqZGC0D5c=",
+    "parentHash": "lnZNsujGZsK3octVtb7QxbNPk9VVTxux2FthlTsFpdY=",
+    "receiptRoot": "ZOt7KODSjyDpKMez2KZx/8kAWK3qKCHBE+/CWL8atcM=",
+    "stateRoot": "Mfj/Q0MWSYBnt9nyJgpuklAsOJLPx+ARN7kqZrxmDKI=",
     "timestamp": "1970-01-01T00:00:20Z",
     "transactionsRoot": "5SXnkgZs4gKgt8t4GTnSeoV1i17zHn3xbZXSln9fd2E=",
     "uncleHash": "HcxN6N7HXXqrhbVntszUGtMSRRuUinQT8KFC/UDUk0c=",
     "withdrawalsRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE="
   },
   "number": "2",
-  "size": "717",
+  "size": "684",
   "systemCalls": [
     {
       "address": "AA899tcygH7xMZ+3uLuFItC+rAI=",
@@ -47,25 +46,7 @@
       "endOrdinal": "4",
       "gasLimit": "30000000",
       "index": 1,
-      "input": "tNKSM8SZPvaEgBA4yUj9YayXYYuXnLCuHx5oWJwVOhw="
-    },
-    {
-      "address": "AAAJYe9IDrVegNGa2DV5pkwAcAI=",
-      "beginOrdinal": "18",
-      "callType": "CALL",
-      "caller": "//////////////////////////4=",
-      "endOrdinal": "19",
-      "gasLimit": "30000000",
-      "index": 1
-    },
-    {
-      "address": "AAC73cfOSIZC+1efiwDzpZAAclE=",
-      "beginOrdinal": "20",
-      "callType": "CALL",
-      "caller": "//////////////////////////4=",
-      "endOrdinal": "21",
-      "gasLimit": "30000000",
-      "index": 1
+      "input": "lnZNsujGZsK3octVtb7QxbNPk9VVTxux2FthlTsFpdY="
     }
   ],
   "transactionTraces": [
@@ -95,8 +76,19 @@
               "oldValue": {
                 "bytes": "CmgYAUEtZrQ="
               },
-              "ordinal": "15",
+              "ordinal": "16",
               "reason": "REASON_GAS_REFUND"
+            },
+            {
+              "address": "AAAAAAAAAAAAAAAAAAAAAAAA3q0=",
+              "newValue": {
+                "bytes": "ibD/Y4sI"
+              },
+              "oldValue": {
+                "bytes": "cQV8WUPA"
+              },
+              "ordinal": "17",
+              "reason": "REASON_BURN"
             },
             {
               "address": "AAAAAAAAAAAAAAAAAAAAAAAAqqo=",
@@ -106,13 +98,13 @@
               "oldValue": {
                 "bytes": "BFWK"
               },
-              "ordinal": "16",
+              "ordinal": "18",
               "reason": "REASON_REWARD_TRANSACTION_FEE"
             }
           ],
           "callType": "CALL",
           "caller": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
-          "endOrdinal": "14",
+          "endOrdinal": "15",
           "gasChanges": [
             {
               "newValue": "479000",
@@ -141,13 +133,28 @@
             {
               "newValue": "464874",
               "oldValue": "7262",
-              "ordinal": "13",
+              "ordinal": "14",
               "reason": "REASON_REFUND_AFTER_EXECUTION"
             }
           ],
           "gasConsumed": "14126",
           "gasLimit": "479000",
           "index": 1,
+          "logs": [
+            {
+              "address": "AAAAAAAAAAAAAAAAAAAAAAAAEBA=",
+              "blockIndex": 1,
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5MyRUmaLgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN4EWuKwZmtQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFWKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADaH45RXf/f0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPkzJFSq+Qg==",
+              "index": 1,
+              "ordinal": "19",
+              "topics": [
+                "Tf4bu88Hfdw+ASke6i1ccMK0IrQV2VZFua3P1njLHWM=",
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBA=",
+                "AAAAAAAAAAAAAAAAcVYrcZmYc9tbKG35V68ZnslGF/c=",
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAqqo="
+              ]
+            }
+          ],
           "nonceChanges": [
             {
               "address": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
@@ -188,17 +195,30 @@
           "callType": "CALL",
           "caller": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
           "depth": 1,
-          "endOrdinal": "12",
+          "endOrdinal": "13",
           "gasConsumed": "2206",
           "gasLimit": "459818",
           "index": 2,
+          "logs": [
+            {
+              "address": "AAAAAAAAAAAAAAAAAAAAAAAAEBA=",
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKaBgBQS1mtQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA3gtrOnZAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACmgYAUEtZrQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN4Lazp2QAAg==",
+              "ordinal": "12",
+              "topics": [
+                "5kl+PuVIozchNq8vywaW2zH8bPICYHB2RQaL0/6X88Q=",
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBA=",
+                "AAAAAAAAAAAAAAAAcVYrcZmYc9tbKG35V68ZnslGF/c=",
+                "AAAAAAAAAAAAAAAAcDxLK9cMFp9XFxAcruVDKZ/JRsc="
+              ]
+            }
+          ],
           "parentIndex": 1,
           "value": {
             "bytes": "AQ=="
           }
         }
       ],
-      "endOrdinal": "17",
+      "endOrdinal": "20",
       "from": "cVYrcZmYc9tbKG35V68ZnslGF/c=",
       "gasLimit": "500000",
       "gasPrice": {
@@ -210,7 +230,33 @@
       "r": "llnySTXnLA5URm+RriiJTQ4gvkdUifLtVOIyBCpDFTw=",
       "receipt": {
         "cumulativeGasUsed": "35126",
-        "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        "logs": [
+          {
+            "address": "AAAAAAAAAAAAAAAAAAAAAAAAEBA=",
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKaBgBQS1mtQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA3gtrOnZAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACmgYAUEtZrQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN4Lazp2QAAg==",
+            "ordinal": "12",
+            "topics": [
+              "5kl+PuVIozchNq8vywaW2zH8bPICYHB2RQaL0/6X88Q=",
+              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBA=",
+              "AAAAAAAAAAAAAAAAcVYrcZmYc9tbKG35V68ZnslGF/c=",
+              "AAAAAAAAAAAAAAAAcDxLK9cMFp9XFxAcruVDKZ/JRsc="
+            ]
+          },
+          {
+            "address": "AAAAAAAAAAAAAAAAAAAAAAAAEBA=",
+            "blockIndex": 1,
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD5MyRUmaLgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN4EWuKwZmtQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABFWKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADaH45RXf/f0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPkzJFSq+Qg==",
+            "index": 1,
+            "ordinal": "19",
+            "topics": [
+              "Tf4bu88Hfdw+ASke6i1ccMK0IrQV2VZFua3P1njLHWM=",
+              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBA=",
+              "AAAAAAAAAAAAAAAAcVYrcZmYc9tbKG35V68ZnslGF/c=",
+              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAqqo="
+            ]
+          }
+        ],
+        "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAABAAAAIAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAYAEAAAAAAABAAAAAIAAABCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAABAAAA=="
       },
       "s": "SsqOfVDTp1cpwvz0g4nLhIzrWRGwh0Jgz4l9GK/UHbE=",
       "status": "SUCCEEDED",

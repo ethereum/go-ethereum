@@ -24,11 +24,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/big"
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -100,7 +100,6 @@ func (c *Chain) AccountsInHashOrder() []state.DumpAccount {
 	list := make([]state.DumpAccount, len(c.state))
 	i := 0
 	for addr, acc := range c.state {
-		addr := addr
 		list[i] = acc
 		list[i].Address = &addr
 		if len(acc.AddressHash) != 32 {
@@ -148,7 +147,6 @@ func (c *Chain) TD() *big.Int {
 	for _, block := range c.blocks[:c.Len()] {
 		sum.Add(sum, block.Difficulty())
 	}
-
 	return sum
 }
 
@@ -168,11 +166,8 @@ func (c *Chain) RootAt(height int) common.Hash {
 // GetSender returns the address associated with account at the index in the
 // pre-funded accounts list.
 func (c *Chain) GetSender(idx int) (common.Address, uint64) {
-	var accounts Addresses
-	for addr := range c.senders {
-		accounts = append(accounts, addr)
-	}
-	sort.Sort(accounts)
+	accounts := slices.SortedFunc(maps.Keys(c.senders), common.Address.Cmp)
+
 	addr := accounts[idx]
 	return addr, c.senders[addr].Nonce
 }
@@ -266,22 +261,6 @@ func loadGenesis(genesisFile string) (core.Genesis, error) {
 	}
 
 	return gen, nil
-}
-
-type Addresses []common.Address
-
-func (a Addresses) Len() int {
-	return len(a)
-}
-
-func (a Addresses) Less(i, j int) bool {
-	return bytes.Compare(a[i][:], a[j][:]) < 0
-}
-
-func (a Addresses) Swap(i, j int) {
-	tmp := a[i]
-	a[i] = a[j]
-	a[j] = tmp
 }
 
 func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, error) {

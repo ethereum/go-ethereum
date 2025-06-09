@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
+	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	ctypes "github.com/ethereum/go-ethereum/core/types"
@@ -31,14 +32,14 @@ import (
 )
 
 type engineClient struct {
-	config     *lightClientConfig
+	config     *params.ClientConfig
 	rpc        *rpc.Client
 	rootCtx    context.Context
 	cancelRoot context.CancelFunc
 	wg         sync.WaitGroup
 }
 
-func startEngineClient(config *lightClientConfig, rpc *rpc.Client, headCh <-chan types.ChainHeadEvent) *engineClient {
+func startEngineClient(config *params.ClientConfig, rpc *rpc.Client, headCh <-chan types.ChainHeadEvent) *engineClient {
 	ctx, cancel := context.WithCancel(context.Background())
 	ec := &engineClient{
 		config:     config,
@@ -92,13 +93,18 @@ func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
 }
 
 func (ec *engineClient) callNewPayload(fork string, event types.ChainHeadEvent) (string, error) {
-	execData := engine.BlockToExecutableData(event.Block, nil, nil).ExecutionPayload
+	execData := engine.BlockToExecutableData(event.Block, nil, nil, nil).ExecutionPayload
 
 	var (
 		method string
 		params = []any{execData}
 	)
 	switch fork {
+	case "electra":
+		method = "engine_newPayloadV4"
+		parentBeaconRoot := event.BeaconHead.ParentRoot
+		blobHashes := collectBlobHashes(event.Block)
+		params = append(params, blobHashes, parentBeaconRoot, event.ExecRequests)
 	case "deneb":
 		method = "engine_newPayloadV3"
 		parentBeaconRoot := event.BeaconHead.ParentRoot
@@ -134,7 +140,7 @@ func (ec *engineClient) callForkchoiceUpdated(fork string, event types.ChainHead
 
 	var method string
 	switch fork {
-	case "deneb":
+	case "deneb", "electra":
 		method = "engine_forkchoiceUpdatedV3"
 	case "capella":
 		method = "engine_forkchoiceUpdatedV2"

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"os"
 	"regexp"
@@ -85,6 +86,7 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnBlockStart:     tracer.OnBlockStart,
 		OnBlockEnd:       tracer.OnBlockEnd,
 		OnSkippedBlock:   tracer.OnSkippedBlock,
+		OnClose:          tracer.OnClose,
 
 		OnTxStart: tracer.OnTxStart,
 		OnTxEnd:   tracer.OnTxEnd,
@@ -103,16 +105,42 @@ func NewTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnSystemCallStart: tracer.OnSystemCallStart,
 		OnSystemCallEnd:   tracer.OnSystemCallEnd,
 
+		// For a reason yet to be discovered, some transactions panics when trying to
+		// compute the keccak hash from a preimage when it comes the time to retrieve
+		// the memory location by inspecting the opcode's EVM stack arguments. The panic
+		// is an index out of bound error.
+		//
+		// To avoid the problem altogether, we return to our old Firehose tracer hook directly
+		// when the instructions is called within the EVM. That has the added benefit of
+		// avoiding re-computing the keccak results of the preimage again since at this location,
+		// we have both the result and the preimage.
+		//
+		// The cons of this is that we need to keep some Geth internal changes to have the hook
+		// called. But this is minimal as we do have to maintain a fork and the changes are actually
+		// minimal.
+		//
+		// Comment 11471b22bb0b (search '11471b22bb0b' within the repository to see all related code locations)
+		OnKeccakPreimage: tracer.OnKeccakPreimage,
+
+		// Firehose backward compatibility
+		//
+		// This hook exist because some current Firehose supported chains requires it
+		// but this field is going to be deprecated and newer chains will not produced
+		// those events anymore.
+		//
 		// This should actually be conditional but it's not possible to do it in the hooks
 		// directly because the chain ID will be known only after the `OnBlockchainInit` call.
 		// So we register it unconditionally and the actual `OnNewAccount` hook will decide
 		// what it needs to do.
+		//
+		// Comment a368bc8a3737 (search 'a368bc8a3737' within the repository to see all related code locations)
 		OnNewAccount: tracer.OnNewAccount,
 	}
 }
 
 type FirehoseConfig struct {
 	ApplyBackwardCompatibility *bool `json:"applyBackwardCompatibility"`
+	ConcurrentBlockFlushing    int   `json:"concurrentBlockFlushing"`
 
 	// Only used for testing, only possible through JSON configuration
 	private *privateFirehoseConfig
@@ -133,6 +161,7 @@ func (c *FirehoseConfig) LogKeyValues() []any {
 
 	return []any{
 		"config.applyBackwardCompatibility", applyBackwardCompatibility,
+		"config.concurrentBlockFlushing", c.ConcurrentBlockFlushing,
 	}
 }
 
@@ -146,13 +175,15 @@ func (c *FirehoseConfig) ForcedBackwardCompatibility() bool {
 
 type Firehose struct {
 	// Global state
-	outputBuffer *bytes.Buffer
-	initSent     *atomic.Bool
-	config       *FirehoseConfig
-	chainConfig  *params.ChainConfig
-	hasher       crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
-	hasherBuf    common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
-	tracerID     string
+	outputBuffer              *bytes.Buffer
+	initSent                  *atomic.Bool
+	config                    *FirehoseConfig
+	chainConfig               *params.ChainConfig
+	hasher                    crypto.KeccakState // Keccak256 hasher instance shared across tracer needs (non-concurrent safe)
+	hasherBuf                 common.Hash        // Keccak256 hasher result array shared across tracer needs (non-concurrent safe)
+	tracerID                  string
+	concurrentFlushQueue      *ConcurrentFlushQueue
+	concurrentFlushBufferSize int
 	// The FirehoseTracer is used in multiple chains, some for which were produced using a legacy version
 	// of the whole tracing infrastructure. This legacy version had many small bugs here and there that
 	// we must "reproduce" on some chain to ensure that the FirehoseTracer produces the same output
@@ -162,6 +193,7 @@ type Firehose struct {
 	// here. If not set in the config, then we inspect `OnBlockchainInit` the chain config to determine
 	// if it's a network for which we must reproduce the legacy bugs.
 	applyBackwardCompatibility *bool
+	concurrentBlockFlushing    int
 
 	// Block state
 	block                       *pbeth.Block
@@ -230,6 +262,8 @@ func NewFirehose(config *FirehoseConfig) *Firehose {
 		hasher:                     crypto.NewKeccakState(),
 		tracerID:                   "global",
 		applyBackwardCompatibility: config.ApplyBackwardCompatibility,
+		concurrentBlockFlushing:    config.ConcurrentBlockFlushing,
+		concurrentFlushBufferSize:  100,
 
 		// Block state
 		blockOrdinal:        &Ordinal{},
@@ -344,6 +378,16 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 		}
 	} else {
 		applyBackwardCompatibilityLogSuffix = " (disabled)"
+	}
+
+	if f.config.ConcurrentBlockFlushing > 0 {
+		log.Info("Firehose concurrent block flushing enabled, starting goroutine")
+		f.concurrentFlushQueue = NewConcurrentFlushQueue(
+			f.concurrentFlushBufferSize,
+			f.printBlockToFirehose,
+			f.flushToFirehose,
+		)
+		f.concurrentFlushQueue.Start(f.config.ConcurrentBlockFlushing)
 	}
 
 	log.Info("Firehose tracer initialized",
@@ -489,7 +533,14 @@ func (f *Firehose) OnBlockEnd(err error) {
 		}
 
 		f.ensureInBlockAndNotInTrx()
-		f.printBlockToFirehose(f.block, f.blockFinality)
+
+		// Flush block to firehose and optionally use goroutine
+		if f.concurrentBlockFlushing > 0 {
+			f.concurrentFlushQueue.Enqueue(f.block, f.blockFinality)
+		} else {
+			f.printBlockToFirehose(f.block, f.blockFinality)
+		}
+
 	} else {
 		// An error occurred, could have happen in transaction/call context, we must not check if in trx/call, only check in block
 		f.ensureInBlock(0)
@@ -607,6 +658,13 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 	return call.EndOrdinal
 }
 
+func (f *Firehose) OnClose() {
+	if f.concurrentFlushQueue != nil {
+		log.Info("Firehose closing, flushing queued blocks to standard output")
+		f.concurrentFlushQueue.CloseChannels()
+	}
+}
+
 func (f *Firehose) OnSystemCallStart() {
 	firehoseInfo("system call start")
 	f.ensureInBlockAndNotInTrx()
@@ -690,9 +748,8 @@ func (f *Firehose) onTxStart(tx *types.Transaction, hash common.Hash, from, to c
 		trx.BlobGasFeeCap = firehoseBigIntFromNative(tx.BlobGasFeeCap())
 		trx.BlobHashes = newBlobHashesFromChain(tx.BlobHashes())
 
-		// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
-		// case types.SetCodeTxType:
-		// 	trx.SetCodeAuthorizations = newSetCodeAuthorizationsFromChain(tx.SetCodeAuthorizations())
+	case types.SetCodeTxType:
+		trx.SetCodeAuthorizations = newSetCodeAuthorizationsFromChain(tx.SetCodeAuthorizations())
 	}
 
 	f.transaction = trx
@@ -1064,6 +1121,8 @@ func (f *Firehose) invertWithdrawAndRefundBalanceChange(activeCall *pbeth.Call, 
 	withdrawChange := changes[withdrawIndex]
 	changes[withdrawIndex] = changes[refundIndex]
 	changes[refundIndex] = withdrawChange
+
+	return
 }
 
 func (f *Firehose) removeFirstWithdrawBalanceChange(activeCall *pbeth.Call, lastWithdrawIndex int) {
@@ -1126,8 +1185,9 @@ func (f *Firehose) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 		}
 
 		switch opCode {
-		case vm.KECCAK256:
-			f.onOpcodeKeccak256(activeCall, scope.StackData(), Memory(scope.MemoryData()))
+		// Bogus, search 11471b22bb0b within the repository to find all the details
+		// case vm.KECCAK256:
+		// 	f.onOpcodeKeccak256(activeCall, scope.StackData(), Memory(scope.MemoryData()))
 
 		case vm.SELFDESTRUCT:
 			f.ensureInCall()
@@ -1135,6 +1195,33 @@ func (f *Firehose) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 		}
 	}
 }
+
+func (f *Firehose) OnKeccakPreimage(hash common.Hash, preImage []byte) {
+	f.ensureInBlockAndInTrxAndInCall()
+
+	activeCall := f.callStack.Peek()
+	if activeCall.KeccakPreimages == nil {
+		activeCall.KeccakPreimages = make(map[string]string)
+	}
+
+	encodedData := hex.EncodeToString(preImage)
+	if *f.applyBackwardCompatibility {
+		// Known Firehose issue: It appears the old Firehose instrumentation have a bug
+		// where when the keccak256 preimage is empty, it is written as "." which is
+		// completely wrong.
+		//
+		// To keep the same behavior, we will write the preimage as a "." when the encoded
+		// data is an empty string.
+		if encodedData == "" {
+			encodedData = "."
+		}
+	}
+
+	activeCall.KeccakPreimages[hex.EncodeToString(hash[:])] = encodedData
+}
+
+// Unused due to bogus behavior, search 11471b22bb0b within the repository to find all the details
+var _ any = new(Firehose).onOpcodeKeccak256
 
 // onOpcodeKeccak256 is called during the SHA3 (a.k.a KECCAK256) opcode it's known
 // in Firehose tracer as Keccak preimages. The preimage is the input data that
@@ -1238,14 +1325,13 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 	if f.blockRules.IsPrague && !f.inSystemCall && !f.blockIsGenesis && callType != pbeth.CallType_CREATE {
 		firehoseTrace("call resolving delegation (from=%s)", from)
 
-		// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
-		// code := f.evm.StateDB.GetCode(to)
-		// if len(code) != 0 {
-		// 	if target, ok := types.ParseDelegation(code); ok {
-		// 		firehoseDebug("call resolved delegation (from=%s, delegates_to=%s)", from, target)
-		// 		call.AddressDelegatesTo = target.Bytes()
-		// 	}
-		// }
+		code := f.evm.StateDB.GetCode(to)
+		if len(code) != 0 {
+			if target, ok := types.ParseDelegation(code); ok {
+				firehoseDebug("call resolved delegation (from=%s, delegates_to=%s)", from, target)
+				call.AddressDelegatesTo = target.Bytes()
+			}
+		}
 	}
 
 	if *f.applyBackwardCompatibility {
@@ -1835,6 +1921,9 @@ func (f *Firehose) isChainOneOf(chainIDs ...*big.Int) bool {
 }
 
 func isChainIDOneOf(actualChainID *big.Int, chainIDs ...*big.Int) bool {
+	if actualChainID == nil {
+		return false
+	}
 	for _, chainID := range chainIDs {
 		if actualChainID.Cmp(chainID) == 0 {
 			return true
@@ -1861,14 +1950,18 @@ func (f *Firehose) panicInvalidState(msg string, callerSkip int) string {
 	panic(fmt.Errorf("%s (caller=%s, init=%t, inBlock=%t, inTransaction=%t, inCall=%t)", msg, caller, f.chainConfig != nil, f.block != nil, f.transaction != nil, f.callStack.HasActiveCall()))
 }
 
-// printBlockToFirehose is a helper function to print a block to Firehose protocl format.
+// printBlockToFirehose is a helper function to print a block to Firehose protocol format.
 func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *FinalityStatus) {
+	headerSize := 225 // FIRE BLOCK:11 <blockNum:20> <blockHash:64> <prevNum:20> <prevHash:64> <libNum:20> <timestamp:20>
+	base64Size := math.Ceil(float64(proto.Size(block)) * 8 / 6)
+	bufferSize := headerSize + int(base64Size)
+	buf := bytes.NewBuffer(make([]byte, 0, bufferSize))
+
 	marshalled, err := proto.Marshal(block)
+
 	if err != nil {
 		panic(fmt.Errorf("failed to marshal block: %w", err))
 	}
-
-	f.outputBuffer.Reset()
 
 	previousHash := block.PreviousID()
 	previousNum := 0
@@ -1888,9 +1981,9 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 	}
 
 	// **Important* The final space in the Sprintf template is mandatory!
-	f.outputBuffer.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
+	buf.WriteString(fmt.Sprintf("FIRE BLOCK %d %s %d %s %d %d ", block.Number, hex.EncodeToString(block.Hash), previousNum, previousHash, libNum, block.MustTime().UnixNano()))
 
-	encoder := base64.NewEncoder(base64.StdEncoding, f.outputBuffer)
+	encoder := base64.NewEncoder(base64.StdEncoding, buf)
 	if _, err = encoder.Write(marshalled); err != nil {
 		panic(fmt.Errorf("write to encoder should have been infaillible: %w", err))
 	}
@@ -1899,9 +1992,16 @@ func (f *Firehose) printBlockToFirehose(block *pbeth.Block, finalityStatus *Fina
 		panic(fmt.Errorf("closing encoder should have been infaillible: %w", err))
 	}
 
-	f.outputBuffer.WriteString("\n")
+	buf.WriteString("\n")
 
-	f.flushToFirehose(f.outputBuffer.Bytes())
+	if f.concurrentBlockFlushing > 0 {
+		f.concurrentFlushQueue.outputQueue <- &outputJob{
+			blockNum: block.Number,
+			data:     buf.Bytes(),
+		}
+	} else {
+		f.flushToFirehose(buf.Bytes())
+	}
 }
 
 // printToFirehose is an easy way to print to Firehose format, it essentially
@@ -1966,11 +2066,10 @@ func newBlockHeaderFromChainHeader(hash common.Hash, h *types.Header) *pbeth.Blo
 		parentBeaconRootBytes = root.Bytes()
 	}
 
-	// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
-	// var requestHashBytes []byte
-	// if hash := h.RequestsHash; hash != nil {
-	// 	requestHashBytes = hash.Bytes()
-	// }
+	var requestHashBytes []byte
+	if hash := h.RequestsHash; hash != nil {
+		requestHashBytes = hash.Bytes()
+	}
 
 	pbHead := &pbeth.BlockHeader{
 		Hash:             hash.Bytes(),
@@ -1994,7 +2093,7 @@ func newBlockHeaderFromChainHeader(hash common.Hash, h *types.Header) *pbeth.Blo
 		BlobGasUsed:      h.BlobGasUsed,
 		ExcessBlobGas:    h.ExcessBlobGas,
 		ParentBeaconRoot: parentBeaconRootBytes,
-		// RequestsHash:     requestHashBytes,
+		RequestsHash:     requestHashBytes,
 
 		// This has been removed from Geth entirely, nothing best to do here than to set to nil (e.g. 0)
 		TotalDifficulty: nil,
@@ -2021,9 +2120,8 @@ func transactionTypeFromChainTxType(txType uint8) pbeth.TransactionTrace_Type {
 		return pbeth.TransactionTrace_TRX_TYPE_LEGACY
 	case types.BlobTxType:
 		return pbeth.TransactionTrace_TRX_TYPE_BLOB
-	// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
-	// case types.SetCodeTxType:
-	// 	return pbeth.TransactionTrace_TRX_TYPE_SET_CODE
+	case types.SetCodeTxType:
+		return pbeth.TransactionTrace_TRX_TYPE_SET_CODE
 	default:
 		panic(fmt.Errorf("unknown transaction type %d", txType))
 	}
@@ -2141,37 +2239,37 @@ func newBlobHashesFromChain(blobHashes []common.Hash) (out [][]byte) {
 	return
 }
 
-// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
-// func newSetCodeAuthorizationsFromChain(authorizations []types.SetCodeAuthorization) (out []*pbeth.SetCodeAuthorization) {
-// 	if len(authorizations) == 0 {
-// 		return nil
-// 	}
+func newSetCodeAuthorizationsFromChain(authorizations []types.SetCodeAuthorization) (out []*pbeth.SetCodeAuthorization) {
+	if len(authorizations) == 0 {
+		return nil
+	}
 
-// 	out = make([]*pbeth.SetCodeAuthorization, len(authorizations))
-// 	for i, authorization := range authorizations {
-// 		pbAuthorization := &pbeth.SetCodeAuthorization{
-// 			ChainId: authorization.ChainID.Bytes(),
-// 			Nonce:   authorization.Nonce,
-// 			V:       uint32(authorization.V),
-// 			R:       normalizeSignaturePoint(authorization.R.Bytes()),
-// 			S:       normalizeSignaturePoint(authorization.S.Bytes()),
-// 		}
+	out = make([]*pbeth.SetCodeAuthorization, len(authorizations))
+	for i, authorization := range authorizations {
+		pbAuthorization := &pbeth.SetCodeAuthorization{
+			ChainId: authorization.ChainID.Bytes(),
+			Address: authorization.Address.Bytes(),
+			Nonce:   authorization.Nonce,
+			V:       uint32(authorization.V),
+			R:       normalizeSignaturePoint(authorization.R.Bytes()),
+			S:       normalizeSignaturePoint(authorization.S.Bytes()),
+		}
 
-// 		authority, err := authorization.Authority()
-// 		if err != nil {
-// 			// The node skips invalid authorizations, we do the same, at transaction's end, we will
-// 			// also remove authorizations that didn't result into a code change.
-// 			firehoseDebug("failed to compute authority for authorization at index %d (err=%s)", i, errorView(err))
-// 			pbAuthorization.Discarded = true
-// 		} else {
-// 			pbAuthorization.Authority = authority.Bytes()
-// 		}
+		authority, err := authorization.Authority()
+		if err != nil {
+			// The node skips invalid authorizations, we do the same, at transaction's end, we will
+			// also remove authorizations that didn't result into a code change.
+			firehoseDebug("failed to compute authority for authorization at index %d (err=%s)", i, errorView(err))
+			pbAuthorization.Discarded = true
+		} else {
+			pbAuthorization.Authority = authority.Bytes()
+		}
 
-// 		out[i] = pbAuthorization
-// 	}
+		out[i] = pbAuthorization
+	}
 
-// 	return
-// }
+	return
+}
 
 var balanceChangeReasonToPb = map[tracing.BalanceChangeReason]pbeth.BalanceChange_Reason{
 	tracing.BalanceIncreaseRewardMineUncle:      pbeth.BalanceChange_REASON_REWARD_MINE_UNCLE,
@@ -2188,8 +2286,7 @@ var balanceChangeReasonToPb = map[tracing.BalanceChangeReason]pbeth.BalanceChang
 	tracing.BalanceDecreaseSelfdestruct:         pbeth.BalanceChange_REASON_SUICIDE_WITHDRAW,
 	tracing.BalanceDecreaseSelfdestructBurn:     pbeth.BalanceChange_REASON_BURN,
 	tracing.BalanceIncreaseWithdrawal:           pbeth.BalanceChange_REASON_WITHDRAWAL,
-
-	tracing.BalanceChangeUnspecified: pbeth.BalanceChange_REASON_UNKNOWN,
+	tracing.BalanceChangeUnspecified:            pbeth.BalanceChange_REASON_UNKNOWN,
 
 	// Polygon specific balance change
 	tracing.BalanceChangePolygonBurn: pbeth.BalanceChange_REASON_BURN,
@@ -2204,26 +2301,24 @@ func balanceChangeReasonFromChain(reason tracing.BalanceChangeReason) pbeth.Bala
 }
 
 var gasChangeReasonToPb = map[tracing.GasChangeReason]pbeth.GasChange_Reason{
-	tracing.GasChangeTxInitialBalance:        pbeth.GasChange_REASON_TX_INITIAL_BALANCE,
-	tracing.GasChangeTxRefunds:               pbeth.GasChange_REASON_TX_REFUNDS,
-	tracing.GasChangeTxLeftOverReturned:      pbeth.GasChange_REASON_TX_LEFT_OVER_RETURNED,
-	tracing.GasChangeCallInitialBalance:      pbeth.GasChange_REASON_CALL_INITIAL_BALANCE,
-	tracing.GasChangeCallLeftOverReturned:    pbeth.GasChange_REASON_CALL_LEFT_OVER_RETURNED,
-	tracing.GasChangeTxIntrinsicGas:          pbeth.GasChange_REASON_INTRINSIC_GAS,
-	tracing.GasChangeCallContractCreation:    pbeth.GasChange_REASON_CONTRACT_CREATION,
-	tracing.GasChangeCallContractCreation2:   pbeth.GasChange_REASON_CONTRACT_CREATION2,
-	tracing.GasChangeCallCodeStorage:         pbeth.GasChange_REASON_CODE_STORAGE,
-	tracing.GasChangeCallPrecompiledContract: pbeth.GasChange_REASON_PRECOMPILED_CONTRACT,
-	tracing.GasChangeCallStorageColdAccess:   pbeth.GasChange_REASON_STATE_COLD_ACCESS,
-	tracing.GasChangeCallLeftOverRefunded:    pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
-	tracing.GasChangeCallFailedExecution:     pbeth.GasChange_REASON_FAILED_EXECUTION,
-	tracing.GasChangeWitnessContractInit:     pbeth.GasChange_REASON_WITNESS_CONTRACT_INIT,
-	tracing.GasChangeWitnessContractCreation: pbeth.GasChange_REASON_WITNESS_CONTRACT_CREATION,
-	tracing.GasChangeWitnessCodeChunk:        pbeth.GasChange_REASON_WITNESS_CODE_CHUNK,
-	// Polygon doesn't have EIP-7702 yet [Search for polygon-eip-7702 across codebase for all places to uncomment]
-	// (This is not actually EIP-7702 related but will most probably be activated at the same time as EIP-7702)
-	// tracing.GasChangeWitnessContractCollisionCheck: pbeth.GasChange_REASON_WITNESS_CONTRACT_COLLISION_CHECK,
-	// tracing.GasChangeTxDataFloor:                   pbeth.GasChange_REASON_TX_DATA_FLOOR,
+	tracing.GasChangeTxInitialBalance:              pbeth.GasChange_REASON_TX_INITIAL_BALANCE,
+	tracing.GasChangeTxRefunds:                     pbeth.GasChange_REASON_TX_REFUNDS,
+	tracing.GasChangeTxLeftOverReturned:            pbeth.GasChange_REASON_TX_LEFT_OVER_RETURNED,
+	tracing.GasChangeCallInitialBalance:            pbeth.GasChange_REASON_CALL_INITIAL_BALANCE,
+	tracing.GasChangeCallLeftOverReturned:          pbeth.GasChange_REASON_CALL_LEFT_OVER_RETURNED,
+	tracing.GasChangeTxIntrinsicGas:                pbeth.GasChange_REASON_INTRINSIC_GAS,
+	tracing.GasChangeCallContractCreation:          pbeth.GasChange_REASON_CONTRACT_CREATION,
+	tracing.GasChangeCallContractCreation2:         pbeth.GasChange_REASON_CONTRACT_CREATION2,
+	tracing.GasChangeCallCodeStorage:               pbeth.GasChange_REASON_CODE_STORAGE,
+	tracing.GasChangeCallPrecompiledContract:       pbeth.GasChange_REASON_PRECOMPILED_CONTRACT,
+	tracing.GasChangeCallStorageColdAccess:         pbeth.GasChange_REASON_STATE_COLD_ACCESS,
+	tracing.GasChangeCallLeftOverRefunded:          pbeth.GasChange_REASON_REFUND_AFTER_EXECUTION,
+	tracing.GasChangeCallFailedExecution:           pbeth.GasChange_REASON_FAILED_EXECUTION,
+	tracing.GasChangeWitnessContractInit:           pbeth.GasChange_REASON_WITNESS_CONTRACT_INIT,
+	tracing.GasChangeWitnessContractCreation:       pbeth.GasChange_REASON_WITNESS_CONTRACT_CREATION,
+	tracing.GasChangeWitnessCodeChunk:              pbeth.GasChange_REASON_WITNESS_CODE_CHUNK,
+	tracing.GasChangeWitnessContractCollisionCheck: pbeth.GasChange_REASON_WITNESS_CONTRACT_COLLISION_CHECK,
+	tracing.GasChangeTxDataFloor:                   pbeth.GasChange_REASON_TX_DATA_FLOOR,
 
 	// Ignored, we track them manually, [newGasChange] ensure that we panic if we see Unknown
 	tracing.GasChangeCallOpCode: pbeth.GasChange_REASON_UNKNOWN,
@@ -2246,7 +2341,7 @@ func maxFeePerGas(tx *types.Transaction) *pbeth.BigInt {
 	case types.LegacyTxType, types.AccessListTxType:
 		return nil
 
-	case types.DynamicFeeTxType, types.BlobTxType /*, types.SetCodeTxType*/ :
+	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
 		return firehoseBigIntFromNative(tx.GasFeeCap())
 
 	}
@@ -2259,7 +2354,7 @@ func maxPriorityFeePerGas(tx *types.Transaction) *pbeth.BigInt {
 	case types.LegacyTxType, types.AccessListTxType:
 		return nil
 
-	case types.DynamicFeeTxType, types.BlobTxType /*, types.SetCodeTxType*/ :
+	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
 		return firehoseBigIntFromNative(tx.GasTipCap())
 	}
 
@@ -2272,7 +2367,7 @@ func gasPrice(tx *types.Transaction, baseFee *big.Int) *pbeth.BigInt {
 		return firehoseBigIntFromNative(tx.GasPrice())
 
 	// In the context of dynamic fee transactions, `GasPrice() == GasFeeCap()`
-	case types.DynamicFeeTxType, types.BlobTxType /*, types.SetCodeTxType*/ :
+	case types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType:
 		if baseFee == nil {
 			return firehoseBigIntFromNative(tx.GasPrice())
 		}
@@ -2668,7 +2763,7 @@ func staticFirehoseChainValidationOnInit() {
 		types.AccessListTxType: true,
 		types.DynamicFeeTxType: true,
 		types.BlobTxType:       true,
-		//types.SetCodeTxType:    true,
+		types.SetCodeTxType:    true,
 	}
 
 	for txType := byte(0); txType < 255; txType++ {
@@ -2842,7 +2937,7 @@ func (m Memory) GetPtr(offset, size int64) []byte {
 	// work because the memory is going to be expanded before the operation is actually
 	// executed so the memory will be of the correct size.
 	//
-	// In this situtation, we must pad with zeroes when the memory is not big enough.
-	reminder := m[offset:]
+	// In this situation, we must pad with zeroes when the memory is not big enough.
+	reminder := m[min(offset, int64(len(m))):]
 	return append(reminder, make([]byte, int(size)-len(reminder))...)
 }

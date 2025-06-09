@@ -18,7 +18,6 @@
 package ethconfig
 
 import (
-	"errors"
 	"math/big"
 	"time"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -57,10 +57,12 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode:           downloader.FullSync,
+	SyncMode:           downloader.SnapSync,
+	HistoryMode:        history.KeepAll,
 	NetworkId:          0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:      2350000,
 	TransactionHistory: 2350000,
+	LogHistory:         2350000,
 	StateHistory:       params.FullImmutabilityThreshold,
 	DatabaseCache:      512,
 	TrieCleanCache:     154,
@@ -90,6 +92,9 @@ type Config struct {
 	NetworkId uint64
 	SyncMode  downloader.SyncMode
 
+	// HistoryMode configures chain history retention.
+	HistoryMode history.HistoryMode
+
 	// This can be set to list of enrtree:// URLs which will be queried for
 	// nodes to connect to.
 	EthDiscoveryURLs  []string
@@ -102,8 +107,11 @@ type Config struct {
 	// Deprecated: use 'TransactionHistory' instead.
 	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 
-	TransactionHistory uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
-	StateHistory       uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
+	TransactionHistory   uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+	LogHistory           uint64 `toml:",omitempty"` // The maximum number of blocks from head where a log search index is maintained.
+	LogNoHistory         bool   `toml:",omitempty"` // No log search index is maintained.
+	LogExportCheckpoints string // export log index checkpoints to file
+	StateHistory         uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
 
 	// State scheme represents the scheme used to store ethereum states and trie
 	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
@@ -154,9 +162,6 @@ type Config struct {
 	VMTrace           string
 	VMTraceJsonConfig string
 
-	// Miscellaneous options
-	DocRoot string `toml:"-"`
-
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64
 
@@ -170,8 +175,8 @@ type Config struct {
 	// send-transaction variants. The unit is ether.
 	RPCTxFeeCap float64
 
-	// OverrideCancun (TODO: remove after the fork)
-	OverrideCancun *big.Int `toml:",omitempty"`
+	// OverridePrague (TODO: remove after the fork)
+	OverridePrague *big.Int `toml:",omitempty"`
 
 	// URL to connect to Heimdall node
 	HeimdallURL string
@@ -240,12 +245,6 @@ func CreateConsensusEngine(chainConfig *params.ChainConfig, ethConfig *Config, d
 
 			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdallClient, genesisContractsClient, false), nil
 		}
-	}
-	// If defaulting to proof-of-work, enforce an already merged network since
-	// we cannot run PoW algorithms anymore, so we cannot even follow a chain
-	// not coordinated by a beacon node.
-	if !chainConfig.TerminalTotalDifficultyPassed {
-		return nil, errors.New("ethash is only supported as a historical component of already merged networks")
 	}
 	return beacon.New(ethash.NewFaker()), nil
 }

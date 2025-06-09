@@ -90,7 +90,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```state.scheme```: Scheme to use for storing ethereum state ('hash' or 'path') (default: path)
 
-- ```syncmode```: Blockchain sync mode (only "full" sync supported) (default: full)
+- ```syncmode```: Blockchain sync mode ("full" or "snap") (default: full)
 
 - ```verbosity```: Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit) (default: 3)
 
@@ -256,7 +256,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```miner.extradata```: Block extra data set by the miner (default = client version)
 
-- ```miner.gaslimit```: Target gas ceiling (gas limit) for mined blocks (default: 30000000)
+- ```miner.gaslimit```: Target gas ceiling (gas limit) for mined blocks (default: 45000000)
 
 - ```miner.gasprice```: Minimum gas price for mining a transaction (default: 25000000000)
 
