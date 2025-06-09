@@ -17,6 +17,7 @@ require (
 	github.com/crate-crypto/go-kzg-4844 v1.0.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v0.0.0-20180603214616-504e848d77ea
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
 	github.com/docker/docker v1.4.2-0.20180625184442-8e610b2b55bf
 	github.com/dop251/goja v0.0.0-20211011172007-d99e4b8cbf48
 	github.com/edsrzf/mmap-go v1.0.0
