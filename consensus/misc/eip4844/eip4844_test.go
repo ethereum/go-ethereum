@@ -129,14 +129,8 @@ func TestFakeExponential(t *testing.T) {
 }
 
 func TestCalcExcessBlobGasEIP7918(t *testing.T) {
-	// TODO: replace with a test config that has Osaka enabled.
-	c := *params.MainnetChainConfig
-	cfg := &c
-	cfg.OsakaTime = new(uint64)
-	pragueSchedule := *cfg.BlobScheduleConfig.Prague
-	cfg.BlobScheduleConfig.Osaka = &pragueSchedule
-
 	var (
+		cfg           = params.MergedTestChainConfig
 		targetBlobs   = targetBlobsPerBlock(cfg, *cfg.CancunTime)
 		blobGasTarget = uint64(targetBlobs) * params.BlobTxBlobGasPerBlob
 	)
