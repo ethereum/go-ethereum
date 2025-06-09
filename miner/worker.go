@@ -96,12 +96,12 @@ type generateParams struct {
 }
 
 // generateWork generates a sealing block based on the given parameters.
-func (miner *Miner) generateWork(params *generateParams, witness bool) *newPayloadResult {
-	work, err := miner.prepareWork(params, witness)
+func (miner *Miner) generateWork(genParam *generateParams, witness bool) *newPayloadResult {
+	work, err := miner.prepareWork(genParam, witness)
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
-	if !params.noTxs {
+	if !genParam.noTxs {
 		interrupt := new(atomic.Int32)
 		timer := time.AfterFunc(miner.config.Recommit, func() {
 			interrupt.Store(commitInterruptTimeout)
@@ -114,7 +114,29 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 		}
 	}
 
-	body := types.Body{Transactions: work.txs, Withdrawals: params.withdrawals}
+	body := types.Body{Transactions: work.txs}
+
+	var includedWithdrawals types.Withdrawals
+	if miner.chainConfig.IsOsaka(work.header.Number, work.header.Time) {
+		// cap the size of blocks we will produce below the cap allowed by
+		// EIP-7934.  This gives us buffer room if the estimated size of the
+		// block we are building is somewhat off.
+		maxBlockSize := params.BlockRLPSizeCap - 1_000_000
+
+		for _, withdrawal := range genParam.withdrawals {
+			if int(work.size)+params.WithdrawalSize > maxBlockSize {
+				break
+			}
+
+			includedWithdrawals = append(includedWithdrawals, withdrawal)
+			work.size += params.WithdrawalSize
+		}
+
+	} else {
+		includedWithdrawals = genParam.withdrawals
+	}
+	body.Withdrawals = includedWithdrawals
+
 	allLogs := make([]*types.Log, 0)
 	for _, r := range work.receipts {
 		allLogs = append(allLogs, r.Logs...)

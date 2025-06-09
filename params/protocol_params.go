@@ -179,6 +179,7 @@ const (
 
 	HistoryServeWindow = 8192 // Number of blocks to serve historical block hashes for, EIP-2935.
 
+	WithdrawalSize  = 23        // size of a withdrawal
 	BlockRLPSizeCap = 9_961_472 // maximum size of an RLP-encoded block
 )
 
