@@ -897,7 +897,7 @@ func (f *Firehose) removeLogBlockIndexOnStateRevertedCalls() {
 	for _, call := range f.transaction.Calls {
 		if call.StateReverted {
 			for _, log := range call.Logs {
-				if isPolygonFeeTransferLog(log) {
+				if isPolygon && isPolygonFeeTransferLog(log) {
 					// Polygon transfer and fee transfer logs are never reverted, so we must **not** reset them here as
 					// they are properly recorded to the chain's state.
 					continue
@@ -915,6 +915,7 @@ var (
 	polygonFeeAddress        = common.HexToAddress("0x0000000000000000000000000000000000001010")
 )
 
+//go:inline
 func isPolygonFeeTransferLog(log *pbeth.Log) bool {
 	return bytes.Equal(log.Address, polygonFeeAddress[:]) && len(log.Topics) == 4 && bytes.Equal(log.Topics[0], polygonTransferFeeLogSig[:])
 }
