@@ -71,19 +71,19 @@ func storeIndexMetadata(db ethdb.KeyValueWriter, last uint64) {
 // batchIndexer is a structure designed to perform batch indexing or unindexing
 // of state histories atomically.
 type batchIndexer struct {
-	accounts map[common.Address][]uint64                 // History ID list, Keyed by account address
-	storages map[common.Address]map[common.Hash][]uint64 // History ID list, Keyed by account address and the hash of raw storage key
-	counter  int                                         // The counter of processed states
-	delete   bool                                        // Index or unindex mode
-	lastID   uint64                                      // The ID of latest processed history
+	accounts map[common.Hash][]uint64                 // History ID list, Keyed by account address
+	storages map[common.Hash]map[common.Hash][]uint64 // History ID list, Keyed by account address and the hash of raw storage key
+	counter  int                                      // The counter of processed states
+	delete   bool                                     // Index or unindex mode
+	lastID   uint64                                   // The ID of latest processed history
 	db       ethdb.KeyValueStore
 }
 
 // newBatchIndexer constructs the batch indexer with the supplied mode.
 func newBatchIndexer(db ethdb.KeyValueStore, delete bool) *batchIndexer {
 	return &batchIndexer{
-		accounts: make(map[common.Address][]uint64),
-		storages: make(map[common.Address]map[common.Hash][]uint64),
+		accounts: make(map[common.Hash][]uint64),
+		storages: make(map[common.Hash]map[common.Hash][]uint64),
 		delete:   delete,
 		db:       db,
 	}
@@ -93,13 +93,14 @@ func newBatchIndexer(db ethdb.KeyValueStore, delete bool) *batchIndexer {
 // state history, tracking the mapping between state and history IDs.
 func (b *batchIndexer) process(h *history, historyID uint64) error {
 	for _, address := range h.accountList {
+		addrHash := crypto.Keccak256Hash(address.Bytes())
 		b.counter += 1
-		b.accounts[address] = append(b.accounts[address], historyID)
+		b.accounts[addrHash] = append(b.accounts[addrHash], historyID)
 
 		for _, slotKey := range h.storageList[address] {
 			b.counter += 1
-			if _, ok := b.storages[address]; !ok {
-				b.storages[address] = make(map[common.Hash][]uint64)
+			if _, ok := b.storages[addrHash]; !ok {
+				b.storages[addrHash] = make(map[common.Hash][]uint64)
 			}
 			// The hash of the storage slot key is used as the identifier because the
 			// legacy history does not include the raw storage key, therefore, the
@@ -108,7 +109,7 @@ func (b *batchIndexer) process(h *history, historyID uint64) error {
 			if h.meta.version != stateHistoryV0 {
 				slotHash = crypto.Keccak256Hash(slotKey.Bytes())
 			}
-			b.storages[address][slotHash] = append(b.storages[address][slotHash], historyID)
+			b.storages[addrHash][slotHash] = append(b.storages[addrHash][slotHash], historyID)
 		}
 	}
 	b.lastID = historyID
@@ -125,9 +126,9 @@ func (b *batchIndexer) finish(force bool) error {
 		return nil
 	}
 	batch := b.db.NewBatch()
-	for address, idList := range b.accounts {
+	for addrHash, idList := range b.accounts {
 		if !b.delete {
-			iw, err := newIndexWriter(b.db, newAccountIdent(address))
+			iw, err := newIndexWriter(b.db, newAccountIdent(addrHash))
 			if err != nil {
 				return err
 			}
@@ -138,7 +139,7 @@ func (b *batchIndexer) finish(force bool) error {
 			}
 			iw.finish(batch)
 		} else {
-			id, err := newIndexDeleter(b.db, newAccountIdent(address))
+			id, err := newIndexDeleter(b.db, newAccountIdent(addrHash))
 			if err != nil {
 				return err
 			}
@@ -150,10 +151,10 @@ func (b *batchIndexer) finish(force bool) error {
 			id.finish(batch)
 		}
 	}
-	for address, slots := range b.storages {
+	for addrHash, slots := range b.storages {
 		for storageHash, idList := range slots {
 			if !b.delete {
-				iw, err := newIndexWriter(b.db, newStorageIdent(address, storageHash))
+				iw, err := newIndexWriter(b.db, newStorageIdent(addrHash, storageHash))
 				if err != nil {
 					return err
 				}
@@ -164,7 +165,7 @@ func (b *batchIndexer) finish(force bool) error {
 				}
 				iw.finish(batch)
 			} else {
-				id, err := newIndexDeleter(b.db, newStorageIdent(address, storageHash))
+				id, err := newIndexDeleter(b.db, newStorageIdent(addrHash, storageHash))
 				if err != nil {
 					return err
 				}
@@ -191,8 +192,8 @@ func (b *batchIndexer) finish(force bool) error {
 		return err
 	}
 	b.counter = 0
-	b.accounts = make(map[common.Address][]uint64)
-	b.storages = make(map[common.Address]map[common.Hash][]uint64)
+	b.accounts = make(map[common.Hash][]uint64)
+	b.storages = make(map[common.Hash]map[common.Hash][]uint64)
 	return nil
 }
 

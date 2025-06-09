@@ -468,7 +468,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bloomBits.Add(size)
 
 		// Path-based historic state indexes
-		case bytes.HasPrefix(key, StateHistoryIndexPrefix) && len(key) >= len(StateHistoryIndexPrefix)+common.AddressLength:
+		case bytes.HasPrefix(key, StateHistoryIndexPrefix) && len(key) >= len(StateHistoryIndexPrefix)+common.HashLength:
 			stateIndex.Add(size)
 
 		// Verkle trie data is detected, determine the sub-category
