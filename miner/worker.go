@@ -23,8 +23,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/trie"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -95,13 +93,6 @@ type generateParams struct {
 	withdrawals types.Withdrawals // List of withdrawals to include in block (shanghai field)
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
-}
-
-func (env *environment) encodedSizeWithTx(tx *types.Transaction) uint64 {
-	body := types.Body{Transactions: append(env.txs, tx), Withdrawals: make([]*types.Withdrawal, 0)}
-	env.header.RequestsHash = &common.Hash{}
-	block := types.NewBlock(env.header, &body, env.receipts, trie.NewStackTrie(nil))
-	return block.Size()
 }
 
 // generateWork generates a sealing block based on the given parameters.
@@ -404,10 +395,6 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 		}
 
 		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.size+tx.Size() > params.BlockRLPSizeCap {
-			break
-		}
-
-		if miner.chainConfig.IsOsaka(env.header.Number, env.header.Time) && env.encodedSizeWithTx(tx) > params.BlockRLPSizeCap {
 			break
 		}
 
